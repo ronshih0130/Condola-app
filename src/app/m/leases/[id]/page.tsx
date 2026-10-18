@@ -1,0 +1,224 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { dictionary, makeT } from "@/i18n";
+import { PayDialog } from "@/components/dialogs";
+import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
+import { actionMessage, actionSign, actionSimulateSign } from "@/server/actions";
+import { formatDate, formatMoney } from "@/server/format";
+import { leaseDetail, threadMessages } from "@/server/queries";
+import { getSession } from "@/server/session";
+
+export const dynamic = "force-dynamic";
+
+export default async function LeasePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string; error?: string }>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const tab = query.tab || "summary";
+  const session = await getSession();
+  const t = makeT(session.locale);
+  const dict = dictionary(session.locale);
+  const detail = await leaseDetail(session, id);
+  if (!detail) notFound();
+  const { lease, signatures } = detail;
+  const money = (minor: number) => formatMoney(minor, lease.currency, session.locale);
+  const tenantSig = signatures.find((row) => row.role === "tenant");
+  const managerSig = signatures.find((row) => row.role === "manager");
+  const tabs = [
+    ["summary", "s_6b6fe14"],
+    ["ledger", "s_6ef99a0"],
+    ["sign", "s_8ecfcf9"],
+    ["msg", "s_b95abdb"],
+  ] as const;
+  const messages = tab === "msg" && lease.thread_id ? await threadMessages(session, lease.thread_id) : [];
+  return (
+    <>
+      <PageHeader
+        title={
+          <>
+            {lease.tenant} <span className="small muted">{lease.place}</span>
+          </>
+        }
+        crumb={<Link href="/m/leases">{t("s_fba85ae")}</Link>}
+      />
+      <ErrorBanner t={t} error={query.error} />
+      <div className="tabsx">
+        {tabs.map(([key, label]) => (
+          <Link key={key} className={tab === key ? "on" : ""} href={`/m/leases/${id}?tab=${key}`}>
+            {t(label)}
+          </Link>
+        ))}
+      </div>
+      {tab === "summary" ? (
+        <div className="grid2">
+          <div className="card">
+            <table className="t">
+              <tbody>
+                <tr>
+                  <td>{t("i_period")}</td>
+                  <td>
+                    {formatDate(lease.start_date, session.locale, session.calendar, dict)} – {formatDate(lease.end_date, session.locale, session.calendar, dict)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>{t("i_rent_label")}</td>
+                  <td>{money(Number(lease.rent))}</td>
+                </tr>
+                <tr>
+                  <td>{t("i_deposit_label")}</td>
+                  <td>{money(Number(lease.deposit))}</td>
+                </tr>
+                <tr>
+                  <td>{t("i_due_day_label")}</td>
+                  <td>{lease.due_day}</td>
+                </tr>
+                <tr>
+                  <td>{t("i_status")}</td>
+                  <td>
+                    <span className={`chip ${statusClass(lease.status)}`}>{t(statusKey(lease.status))}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="card pad">
+            <h3>{lease.tenant}</h3>
+            <p>{lease.phone}</p>
+            <p className="small muted">{lease.email}</p>
+            {lease.status !== "active" ? (
+              <p>
+                <Link href={`/m/leases/${id}?tab=sign`}>{t("s_8ecfcf9")}</Link>
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {tab === "ledger" ? (
+        <div className="card">
+          <div className="hd">
+            <h3>{t("i_invoice")}</h3>
+            <span className="sp" />
+            {detail.dueMinor > 0 ? (
+              <PayDialog leaseId={id} dueMinor={detail.dueMinor} currency={lease.currency} label={t("s_a924c4c")} returnTo="staff" />
+            ) : null}
+          </div>
+          {detail.invoices.length === 0 ? (
+            <div className="empty">
+              {t("i_no_invoice_yet")} <Link href={`/m/leases/${id}?tab=sign`}>{t("s_8ecfcf9")}</Link>
+            </div>
+          ) : (
+            <table className="t">
+              <tbody>
+                <tr>
+                  <td>{t("i_charge_rent")}</td>
+                  <td className="num" data-testid="invoice-rent" data-minor={detail.rentMinor}>
+                    {money(detail.rentMinor)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>{t("i_charge_utility")}</td>
+                  <td className="num" data-testid="invoice-utility" data-minor={detail.utilityMinor}>
+                    {money(detail.utilityMinor)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>{t("i_charge_deposit")}</td>
+                  <td className="num" data-testid="invoice-deposit" data-minor={detail.depositMinor}>
+                    {money(detail.depositMinor)}
+                  </td>
+                </tr>
+                {detail.lines
+                  .filter((line) => !["rent", "utility", "deposit"].includes(line.charge_type))
+                  .map((line, index) => (
+                    <tr key={`${line.invoice_id}-${index}`}>
+                      <td>{t(chargeKey(line.charge_type))}</td>
+                      <td className="num">{money(Number(line.amount))}</td>
+                    </tr>
+                  ))}
+                <tr className="grp">
+                  <td>{t("i_open_balance")}</td>
+                  <td className="num">{money(detail.invoices.reduce((sum, invoice) => sum + Number(invoice.balance), 0))}</td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+          <div className="bd">
+            <p className="small">{t("i_money_note", { brand: t("i_brand") })}</p>
+          </div>
+        </div>
+      ) : null}
+      {tab === "sign" ? (
+        <div className="grid2">
+          <div className="card pad">
+            <h3>{t("i_tenant_pending")}</h3>
+            <ul className="tl">
+              <li className={tenantSig?.status === "signed" ? "on" : ""}>
+                <b>{tenantSig?.status === "signed" ? t("i_tenant_signed") : t("i_tenant_pending")}</b>
+                <div className="small muted">{tenantSig?.signed_at ? t("i_signed_at", { time: tenantSig.signed_at }) : t("i_sign_pending")}</div>
+              </li>
+              <li className={managerSig?.status === "signed" ? "on" : ""}>
+                <b>{managerSig?.status === "signed" ? t("i_fully_signed") : t("i_await_manager")}</b>
+                <div className="small muted">{managerSig?.signed_at ? t("i_signed_at", { time: managerSig.signed_at }) : t("i_sign_pending")}</div>
+              </li>
+            </ul>
+            {tenantSig?.status !== "signed" ? (
+              <form action={actionSimulateSign}>
+                <input type="hidden" name="leaseId" value={id} />
+                <button className="btn pri lg block" type="submit" data-testid="simulate-tenant-sign">
+                  {t("s_bbba58a")}
+                </button>
+              </form>
+            ) : null}
+          </div>
+          <div className="card pad">
+            <h3>{t("i_manager_sign")}</h3>
+            {managerSig?.status === "signed" ? (
+              <div className="alert ok">{t("i_fully_signed")}</div>
+            ) : (
+              <form action={actionSign}>
+                <input type="hidden" name="leaseId" value={id} />
+                <div className="fg">
+                  <label className="f">{t("i_sign_name")}</label>
+                  <input className="inp" name="signedName" data-testid="sign-name" defaultValue="" placeholder={session.name} />
+                </div>
+                <label className="small">
+                  <input type="checkbox" name="consent" data-testid="sign-consent" /> {t("i_sign_consent")}
+                </label>
+                <div style={{ marginTop: 12 }}>
+                  <button className="btn pri" type="submit" data-testid="submit-sign">
+                    {t("s_fc0cfbd")}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      ) : null}
+      {tab === "msg" ? (
+        <div className="card pad">
+          {messages.map((message) => (
+            <p key={message.id} className={message.mine ? "b" : ""}>
+              {message.body}
+            </p>
+          ))}
+          {lease.thread_id ? (
+            <form action={actionMessage}>
+              <input type="hidden" name="threadId" value={lease.thread_id} />
+              <textarea className="inp" name="body" rows={3} placeholder={t("i_message")} />
+              <button className="btn pri" type="submit" style={{ marginTop: 8 }}>
+                {t("i_send")}
+              </button>
+            </form>
+          ) : (
+            <p className="muted">{t("i_no_invoice_yet")}</p>
+          )}
+        </div>
+      ) : null}
+    </>
+  );
+}

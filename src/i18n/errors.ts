@@ -1,0 +1,33 @@
+import type { T } from "./index";
+
+const ERRORS: Record<string, string> = {
+  "errors.forbidden": "i_forbidden",
+  "errors.required": "i_required",
+  "errors.generic": "i_generic",
+  "errors.notFound": "i_not_found",
+  "errors.capReason": "s_ab3ec53",
+  "errors.needRooms": "i_need_rooms",
+  "errors.depositCap": "i_deposit_cap",
+  "errors.ledger": "i_ledger",
+  "errors.consentRequired": "i_consent_required",
+  "errors.alreadySigned": "i_already_signed",
+  "errors.noInvoice": "i_no_invoice",
+  "errors.amount": "i_amount",
+  "errors.last5": "s_da160ee",
+  "errors.csv": "i_csv",
+  "errors.occupied": "i_occupied",
+  "errors.paymentState": "i_pay_state",
+  "errors.matchState": "i_match_state",
+  "errors.currency": "i_currency",
+  "errors.amountTooHigh": "i_amount_high",
+  "errors.email": "i_email",
+  "errors.emailTaken": "i_email_taken",
+  "errors.phone": "i_phone",
+  "errors.meter": "i_meter",
+  "errors.billExists": "i_bill_exists",
+};
+
+export function errorText(t: T, key: string | undefined) {
+  if (!key) return "";
+  return t(ERRORS[key] ?? "i_generic");
+}

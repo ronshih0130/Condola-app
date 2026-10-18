@@ -1,0 +1,181 @@
+export function toMinor(major: number): number {
+  if (!Number.isFinite(major)) return NaN;
+  return Math.round(major * 100);
+}
+
+export function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function clampRatio(value: number): number {
+  const rounded = Math.round(value * 1e10) / 1e10;
+  if (rounded < 0) return 0;
+  if (rounded > 1) return 1;
+  return rounded;
+}
+
+export type Share = {
+  key: string;
+  usage: number;
+  amount: number;
+  ratio: number;
+  days?: number;
+  sub?: number;
+};
+
+export function splitWeighted(
+  totalUsage: number,
+  totalAmount: number,
+  parts: { key: string; weight: number; days?: number; sub?: number }[],
+): Share[] {
+  const weightSum = parts.reduce((sum, part) => sum + part.weight, 0);
+  if (parts.length === 0) return [];
+  if (weightSum <= 0) {
+    return splitWeighted(
+      totalUsage,
+      totalAmount,
+      parts.map((part) => ({ ...part, weight: 1 })),
+    );
+  }
+  let usedAmount = 0;
+  let usedUsage = 0;
+  let usedRatio = 0;
+  return parts.map((part, index) => {
+    const last = index === parts.length - 1;
+    const ratio = last ? clampRatio(1 - usedRatio) : clampRatio(part.weight / weightSum);
+    const amount = last ? totalAmount - usedAmount : Math.round((totalAmount * part.weight) / weightSum);
+    const usage = last ? round3(totalUsage - usedUsage) : round3((totalUsage * part.weight) / weightSum);
+    if (!last) {
+      usedAmount += amount;
+      usedUsage += usage;
+      usedRatio += ratio;
+    }
+    return { key: part.key, amount, usage, ratio, days: part.days, sub: part.sub };
+  });
+}
+
+export function inclusiveDays(aStart: string, aEnd: string, bStart: string, bEnd: string): number {
+  const start = aStart > bStart ? aStart : bStart;
+  const end = aEnd < bEnd ? aEnd : bEnd;
+  if (end < start) return 0;
+  const ms = Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`);
+  return Math.round(ms / 86_400_000) + 1;
+}
+
+export function monthBounds(month: string): { start: string; end: string } {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const endDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  return {
+    start: `${month}-01`,
+    end: `${month}-${String(endDay).padStart(2, "0")}`,
+  };
+}
+
+export function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+export function addDays(iso: string, days: number): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+export function addCalendarMonths(iso: string, months: number): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + months, day));
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+export function taipeiToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+}
+
+export function addYears(iso: string, years: number): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCFullYear(date.getUTCFullYear() + years);
+  return addDays(date.toISOString().slice(0, 10), -1);
+}
+
+type FeeRule = {
+  kind: string;
+  hybrid_mode: string | null;
+  percent_bp: number | null;
+  fixed_amount_minor: string | number | null;
+  minimum_minor: string | number | null;
+};
+
+export function managementFeeMinor(rule: FeeRule, rentReceivedMinor: number): number {
+  const percent = Math.round((rentReceivedMinor * (rule.percent_bp ?? 0)) / 10000);
+  const fixed = Number(rule.fixed_amount_minor ?? 0);
+  const minimum = Number(rule.minimum_minor ?? 0);
+  if (rule.kind === "fixed") return fixed;
+  if (rule.kind === "percent") return percent;
+  if (rule.kind === "hybrid" && rule.hybrid_mode === "percent_with_minimum") return Math.max(percent, minimum);
+  if (rule.kind === "hybrid" && rule.hybrid_mode === "greater_of") return Math.max(percent, fixed);
+  if (rule.kind === "hybrid" && rule.hybrid_mode === "fixed_plus_percent") return fixed + percent;
+  return 0;
+}
+
+/** Outstanding rent plus billed utilities. Deposit is excluded on purpose. */
+export function rentUtilityDueMinor(
+  lines: { charge_type: string; amount_minor: number }[],
+  paidMinor: number,
+) {
+  const rent = lines.filter((line) => line.charge_type === "rent").reduce((sum, line) => sum + line.amount_minor, 0);
+  const utility = lines.filter((line) => line.charge_type === "utility").reduce((sum, line) => sum + line.amount_minor, 0);
+  const applied = attributePayment(lines, paidMinor);
+  return Math.max(0, rent - applied.rent) + Math.max(0, utility - applied.utility);
+}
+
+export function attributePayment(
+  lines: { charge_type: string; amount_minor: number }[],
+  paidMinor: number,
+) {
+  const order = ["rent", "add_on", "late_fee", "one_off", "maintenance", "utility", "deposit", "adjustment", "credit"];
+  const buckets = { rent: 0, utility: 0, deposit: 0, other: 0 };
+  let left = paidMinor;
+  const sorted = [...lines].sort(
+    (a, b) => order.indexOf(a.charge_type) - order.indexOf(b.charge_type),
+  );
+  for (const line of sorted) {
+    if (left <= 0) break;
+    const take = Math.min(left, Math.max(0, line.amount_minor));
+    left -= take;
+    if (line.charge_type === "rent") buckets.rent += take;
+    else if (line.charge_type === "utility") buckets.utility += take;
+    else if (line.charge_type === "deposit") buckets.deposit += take;
+    else buckets.other += take;
+  }
+  return buckets;
+}
+
+export function dateDeltaDays(a: string, b: string): number {
+  const ms = Date.parse(`${a.slice(0, 10)}T00:00:00Z`) - Date.parse(`${b.slice(0, 10)}T00:00:00Z`);
+  return Math.round(ms / 86_400_000);
+}
+
+export function scoreMatch(input: {
+  payAmount: number;
+  bankAmount: number;
+  payLast5: string | null;
+  bankLast5: string | null;
+  payDate: string;
+  bankDate: string;
+}) {
+  let score = 0;
+  const reasons: Record<string, string | number | boolean> = {};
+  if (input.payAmount === input.bankAmount) {
+    score += 0.5;
+    reasons.amount_exact = true;
+  }
+  if (input.payLast5 && input.bankLast5 && input.payLast5 === input.bankLast5) {
+    score += 0.4;
+    reasons.last5 = input.bankLast5;
+  }
+  const delta = Math.abs(dateDeltaDays(input.payDate, input.bankDate));
+  reasons.date_delta_days = delta;
+  if (delta <= 5) score += 0.1;
+  return { score: Math.round(score * 10000) / 10000, reasons };
+}

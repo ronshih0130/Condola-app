@@ -1,0 +1,31 @@
+/*
+ * Condola design tokens.
+ * Values come from the design handoff tokens.json, plus the chrome tokens
+ * named in DESIGN_SPEC.md (top bar, type stack). Swap this file when design
+ * updates the tokens. Components use these CSS variables through the class
+ * names in src/app/globals.css. Do not hard-code hex values in components.
+ */
+:root {
+  --bg: #f5f7fa;
+  --panel: #fff;
+  --line: #e3e8ef;
+  --ink: #16202e;
+  --ink2: #4a5668;
+  --ink3: #7b8696;
+  --pri: #0f6e6e;
+  --pri2: #e6f3f2;
+  --pri3: #0b5555;
+  --warn: #a15c00;
+  --warnbg: #fff6e5;
+  --bad: #b42318;
+  --badbg: #fdecea;
+  --ok: #127a3e;
+  --okbg: #e7f6ec;
+  --info: #1f5fbf;
+  --infobg: #e8f0fc;
+  --line-green: #06c755;
+  --r: 10px;
+  --sh: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  --top: #101828;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Noto Sans CJK TC", "Microsoft JhengHei", Roboto, Helvetica, Arial, sans-serif;
+}
