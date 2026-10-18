@@ -101,6 +101,23 @@ export async function dashboard(session: Session) {
         LIMIT 8`,
       [ORG_ID],
     );
+    const expiring = await many<{ lease_id: string; tenant: string; place: string; end_date: string }>(
+      client,
+      `SELECT l.id::text AS lease_id, c.display_name AS tenant,
+              p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
+              l.end_date::text AS end_date
+         FROM leases l
+         JOIN properties p ON p.id = l.property_id
+         JOIN units u ON u.id = l.unit_id
+         LEFT JOIN rooms r ON r.id = l.target_room_id
+         JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
+         JOIN contacts c ON c.id = lp.contact_id
+        WHERE l.org_id = $1 AND l.status = 'active' AND l.end_date IS NOT NULL
+          AND l.end_date <= (current_date + interval '11 months')::date
+        ORDER BY l.end_date
+        LIMIT 8`,
+      [ORG_ID],
+    );
     return {
       received: Number(money?.received ?? 0),
       outstanding: Number(money?.outstanding ?? 0),
@@ -111,6 +128,7 @@ export async function dashboard(session: Session) {
       occupied: Number(counts?.occupied ?? 0),
       properties,
       owing,
+      expiring,
     };
   });
 }
@@ -276,14 +294,26 @@ export async function listLeases(session: Session) {
       tenant: string;
       place: string;
       rent: string;
+      deposit: string;
       currency: string;
       start_date: string;
       end_date: string;
+      electricity: string;
     }>(
       client,
       `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, c.display_name AS tenant,
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
-              l.rent_amount_minor::text AS rent, l.currency, l.start_date::text, l.end_date::text
+              l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.currency,
+              l.start_date::text, l.end_date::text,
+              coalesce(
+                (SELECT lc.description FROM lease_charges lc
+                  WHERE lc.lease_id = l.id AND lc.charge_type = 'utility' AND lc.description IS NOT NULL
+                  LIMIT 1),
+                CASE WHEN EXISTS (
+                  SELECT 1 FROM meters m
+                   WHERE m.property_id = l.property_id AND m.utility = 'electricity' AND m.archived_at IS NULL
+                ) THEN 'shared' ELSE '' END
+              ) AS electricity
          FROM leases l
          JOIN properties p ON p.id = l.property_id
          JOIN units u ON u.id = l.unit_id
@@ -460,18 +490,171 @@ export async function listStatements(session: Session) {
       period_start: string;
       currency: string;
       rent: string;
+      other: string;
       fee: string;
+      expenses: string;
+      opening: string;
+      payouts: string;
       closing: string;
       status: string;
     }>(
       client,
       `SELECT s.id::text, s.owner_contact_id::text AS owner_id, c.display_name AS owner_name,
               s.period_start::text, s.currency, s.rent_received_minor::text AS rent,
-              s.management_fee_minor::text AS fee, s.closing_balance_minor::text AS closing, s.status::text
+              s.other_income_minor::text AS other, s.management_fee_minor::text AS fee,
+              s.expenses_minor::text AS expenses, s.opening_balance_minor::text AS opening,
+              s.payouts_minor::text AS payouts, s.closing_balance_minor::text AS closing, s.status::text
          FROM owner_statements s
          JOIN contacts c ON c.id = s.owner_contact_id
         WHERE s.org_id = $1 AND s.status <> 'void'
         ORDER BY s.period_start DESC, c.display_name`,
+      [ORG_ID],
+    ),
+  );
+}
+
+export type RosterRow = {
+  id: string | null;
+  owner_id: string;
+  owner_name: string;
+  period_start: string;
+  currency: string;
+  properties: string;
+  fee_rule: string | null;
+  rent: string | null;
+  other: string | null;
+  fee: string | null;
+  expenses: string | null;
+  opening: string | null;
+  payouts: string | null;
+  closing: string | null;
+  generated: boolean;
+};
+
+export async function statementRoster(session: Session, month: string): Promise<RosterRow[]> {
+  return tx(session.userId, async (client) => {
+    const issued = await many<RosterRow>(
+      client,
+      `SELECT s.id::text, s.owner_contact_id::text AS owner_id, c.display_name AS owner_name,
+              s.period_start::text, s.currency,
+              coalesce((
+                SELECT string_agg(DISTINCT p.name, '、' ORDER BY p.name)
+                  FROM property_owners po JOIN properties p ON p.id = po.property_id
+                 WHERE po.owner_contact_id = s.owner_contact_id
+              ), '') AS properties,
+              (
+                SELECT fr.name FROM management_agreements ma
+                  JOIN fee_rules fr ON fr.id = ma.fee_rule_id
+                 WHERE ma.owner_contact_id = s.owner_contact_id
+                 ORDER BY ma.property_id NULLS LAST
+                 LIMIT 1
+              ) AS fee_rule,
+              s.rent_received_minor::text AS rent, s.other_income_minor::text AS other,
+              s.management_fee_minor::text AS fee, s.expenses_minor::text AS expenses,
+              s.opening_balance_minor::text AS opening, s.payouts_minor::text AS payouts,
+              s.closing_balance_minor::text AS closing, true AS generated
+         FROM owner_statements s
+         JOIN contacts c ON c.id = s.owner_contact_id
+        WHERE s.org_id = $1 AND s.status <> 'void'
+        ORDER BY s.period_start DESC, c.display_name`,
+      [ORG_ID],
+    );
+    const pending = await many<RosterRow>(
+      client,
+      `SELECT NULL::text AS id, c.id::text AS owner_id, c.display_name AS owner_name,
+              ($2::date)::text AS period_start,
+              coalesce((
+                SELECT p.currency FROM property_owners po JOIN properties p ON p.id = po.property_id
+                 WHERE po.owner_contact_id = c.id LIMIT 1
+              ), 'TWD') AS currency,
+              coalesce((
+                SELECT string_agg(DISTINCT p.name, '、' ORDER BY p.name)
+                  FROM property_owners po JOIN properties p ON p.id = po.property_id
+                 WHERE po.owner_contact_id = c.id
+              ), '') AS properties,
+              (
+                SELECT fr.name FROM management_agreements ma
+                  JOIN fee_rules fr ON fr.id = ma.fee_rule_id
+                 WHERE ma.owner_contact_id = c.id
+                 ORDER BY ma.property_id NULLS LAST
+                 LIMIT 1
+              ) AS fee_rule,
+              NULL::text AS rent, NULL::text AS other, NULL::text AS fee, NULL::text AS expenses,
+              NULL::text AS opening, NULL::text AS payouts, NULL::text AS closing, false AS generated
+         FROM contacts c
+        WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL
+          AND EXISTS (SELECT 1 FROM property_owners po WHERE po.owner_contact_id = c.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM owner_statements s
+             WHERE s.owner_contact_id = c.id AND s.period_start = $2::date AND s.status <> 'void'
+          )
+        ORDER BY c.display_name`,
+      [ORG_ID, `${month}-01`],
+    );
+    return [...issued, ...pending];
+  });
+}
+
+export async function rentRoll(session: Session) {
+  return tx(session.userId, async (client) =>
+    many<{
+      property_id: string;
+      property_name: string;
+      currency: string;
+      owner_name: string;
+      space_id: string;
+      space_label: string;
+      lease_id: string | null;
+      tenant: string | null;
+      rent: string | null;
+      due: string;
+      received: string;
+      balance: string;
+      due_date: string | null;
+      reported: boolean;
+    }>(
+      client,
+      `SELECT p.id::text AS property_id, p.name AS property_name, p.currency,
+              coalesce(ow.display_name, '') AS owner_name,
+              coalesce(r.id::text, u.id::text) AS space_id,
+              CASE WHEN r.id IS NULL THEN u.label ELSE u.label || '-' || r.label END AS space_label,
+              l.id::text AS lease_id, c.display_name AS tenant, l.rent_amount_minor::text AS rent,
+              coalesce(inv.due, 0)::text AS due, coalesce(inv.received, 0)::text AS received,
+              coalesce(inv.balance, 0)::text AS balance, inv.due_date::text AS due_date,
+              coalesce(rep.reported, false) AS reported
+         FROM properties p
+         JOIN units u ON u.property_id = p.id
+         LEFT JOIN rooms r ON r.unit_id = u.id AND r.archived_at IS NULL
+         LEFT JOIN LATERAL (
+           SELECT c.display_name
+             FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
+            WHERE po.property_id = p.id AND po.is_primary
+            LIMIT 1
+         ) ow ON true
+         LEFT JOIN leases l ON l.status IN ('pending_signature','active')
+           AND ((r.id IS NOT NULL AND l.target_room_id = r.id) OR (r.id IS NULL AND l.target_unit_id = u.id))
+         LEFT JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
+         LEFT JOIN contacts c ON c.id = lp.contact_id
+         LEFT JOIN LATERAL (
+           SELECT coalesce(sum(i.total_minor), 0) AS due,
+                  coalesce(sum(i.paid_minor), 0) AS received,
+                  coalesce(sum(i.balance_minor) FILTER (WHERE i.status IN ('open','partially_paid')), 0) AS balance,
+                  min(i.due_date) FILTER (WHERE i.status IN ('open','partially_paid') AND i.balance_minor > 0) AS due_date
+             FROM invoices i
+            WHERE l.id IS NOT NULL AND i.lease_id = l.id AND i.status <> 'void'
+              AND i.period_start >= date_trunc('month', current_date)::date
+              AND i.period_start < (date_trunc('month', current_date) + interval '1 month')::date
+         ) inv ON true
+         LEFT JOIN LATERAL (
+           SELECT true AS reported FROM payments pay
+            WHERE l.id IS NOT NULL AND pay.lease_id = l.id AND pay.status = 'submitted'
+            LIMIT 1
+         ) rep ON true
+        WHERE p.org_id = $1 AND p.archived_at IS NULL
+          AND (r.id IS NOT NULL OR NOT EXISTS (
+            SELECT 1 FROM rooms rx WHERE rx.unit_id = u.id AND rx.archived_at IS NULL
+          ))
+        ORDER BY p.name, space_label`,
       [ORG_ID],
     ),
   );

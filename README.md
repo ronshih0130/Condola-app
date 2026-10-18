@@ -52,6 +52,8 @@ Schema notes for this demo:
 - The LINE rent-due card uses `leases.rent_amount_minor`. Deposit stays on its own line.
 - Shared meters use `meters.serial_number` (電號). An empty number shows an add-meter prompt. The field itself starts blank.
 - Lease template language defaults to `organizations.default_locale` (zh-TW for the Taiwan firm), not the bilingual template.
+- Manager list tables use `table.t.rf` and `data-label`. They become cards when the `.main` content column is 800px or narrower (`@container`), including a narrowed desktop window. Ledger, statement documents, and split previews stay tables.
+- An owner statement whose fee and expenses exceed confirmed rent shows 房東應補繳 / Owner owes for the shortfall. It does not show a negative payout. A zero fee is NT$0.
 - Files are references (`storage_path` like `demo/{uuid}.csv`). Bytes are not uploaded to Supabase Storage.
 - LINE deliveries are inserted as `skipped` / `demo_line`. E-invoice status stays `not_applicable`.
 - Demo reset wipes org data with `session_replication_role = replica` and reseeds. It keeps currencies, jurisdictions, platform settings, and lease templates.

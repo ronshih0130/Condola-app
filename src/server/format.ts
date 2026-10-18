@@ -11,6 +11,52 @@ export function formatMoney(minor: number | string, currency: string, locale: Lo
   }).format(value);
 }
 
+/** Absolute amount with an NT$ prefix for TWD, so zero is NT$0 and never −NT$0. */
+export function moneyLabel(minor: number | string, currency: string, locale: Locale) {
+  const amount = Math.abs(Number(minor));
+  if (currency === "TWD") {
+    const formatted = new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount / 100);
+    return `NT$${formatted}`;
+  }
+  return formatMoney(amount, currency, locale);
+}
+
+export type StatementFigures = {
+  opening: number;
+  rent: number;
+  other: number;
+  fee: number;
+  expenses: number;
+  payouts: number;
+  closing: number;
+};
+
+/** Month settlement. A negative net is what the owner owes — never a negative payout. */
+export function ownerSettlement(row: StatementFigures) {
+  const fee = Math.max(0, row.fee);
+  const expenses = Math.max(0, row.expenses);
+  const rent = Math.max(0, row.rent);
+  const other = Math.max(0, row.other);
+  const costs = fee + expenses;
+  const net = rent + other - costs;
+  return {
+    opening: row.opening,
+    rent,
+    other,
+    fee,
+    expenses,
+    payouts: Math.max(0, row.payouts),
+    closing: row.closing,
+    costs,
+    net,
+    owes: net < 0 ? -net : 0,
+    payable: net > 0 ? net : 0,
+  };
+}
+
 export function formatRate(minorPerUnit: number | string, currency: string, locale: Locale) {
   const value = Number(minorPerUnit) / 100;
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {

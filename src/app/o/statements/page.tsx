@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
-import { formatMoney } from "@/server/format";
+import { moneyLabel, ownerSettlement } from "@/server/format";
 import { listStatements } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -16,13 +16,32 @@ export default async function OwnerStatementsPage() {
       {rows.length === 0 ? (
         <p>{t("i_statement_empty")}</p>
       ) : (
-        rows.map((row) => (
-          <p key={row.id}>
-            <Link href={`/o/statements/${row.id}`}>
-              {row.period_start.slice(0, 7)} · {formatMoney(Number(row.closing), row.currency, session.locale)}
-            </Link>
-          </p>
-        ))
+        rows.map((row) => {
+          const figures = ownerSettlement({
+            opening: Number(row.opening),
+            rent: Number(row.rent),
+            other: Number(row.other),
+            fee: Number(row.fee),
+            expenses: Number(row.expenses),
+            payouts: Number(row.payouts),
+            closing: Number(row.closing),
+          });
+          const amount = moneyLabel(figures.owes > 0 ? figures.owes : Math.max(0, figures.payable), row.currency, session.locale);
+          return (
+            <p key={row.id}>
+              <Link href={`/o/statements/${row.id}`}>
+                {row.period_start.slice(0, 7)} ·{" "}
+                {figures.owes > 0 ? (
+                  <span className="chip warn" data-testid="owner-owes">
+                    {t("owner_owes", { amount })}
+                  </span>
+                ) : (
+                  amount
+                )}
+              </Link>
+            </p>
+          );
+        })
       )}
     </div>
   );

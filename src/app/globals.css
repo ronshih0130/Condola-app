@@ -142,6 +142,48 @@ table.t td.num,table.t th.num{text-align:right;font-variant-numeric:tabular-nums
   .top .tabs button{padding:6px 7px}
 }
 @media (max-width:400px){.grid5{grid-template-columns:1fr}}
+.main{container:main / inline-size}
+table.t tr.click{position:relative}
+table.t tr.click a.hit::after{content:"";position:absolute;inset:0}
+@container main (max-width:800px){
+  .card:has(table.t.rf){overflow-x:visible}
+  table.t.rf{width:100%;min-width:0}
+  table.t.rf,table.t.rf tbody,table.t.rf tr,table.t.rf td{display:block;width:100%}
+  table.t.rf thead,table.t.rf tr:has(> th){display:none}
+  table.t.rf tr{padding:10px 14px;border-bottom:1px solid var(--line);background:#fff}
+  table.t.rf td{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;text-align:right;border-bottom:0;padding:4px 0;min-width:0}
+  table.t.rf td[data-label]::before{content:attr(data-label);color:var(--ink3);font-size:12px;font-weight:600;flex:0 1 45%;max-width:45%;text-align:left}
+  table.t.rf td .v{min-width:0;overflow-wrap:anywhere;text-align:right}
+  table.t.rf td:first-child{justify-content:flex-start;align-items:center;text-align:left;font-size:15px;font-weight:650;gap:8px}
+  table.t.rf td:first-child::before{content:none;display:none}
+  table.t.rf td:first-child .v{text-align:left;font-size:15px}
+  table.t.rf td.r{flex-direction:column;align-items:stretch}
+  table.t.rf td.r form{width:100%}
+  table.t.rf td.r .btn{width:100%;min-height:44px}
+  table.t.rf td.r:not(:has(a,button)){display:none}
+  table.t.rf td .chip{white-space:normal;justify-content:flex-end}
+  table.t.rf tr.grp{background:#f3f6f9;padding:8px 14px}
+  table.t.rf tr.grp td{display:block;text-align:left;font-size:13px;font-weight:600;background:transparent;padding:2px 0}
+  table.t.rf tr.grp td::before{content:none;display:none}
+  table.t.rf td .row{flex-direction:column;align-items:stretch}
+  table.t.rf td .row .btn,table.t.rf td .row .inp,table.t.rf td .row select{width:100%}
+}
+@supports not (container-type: inline-size){
+  @media (max-width:1024px){
+    .card:has(table.t.rf){overflow-x:visible}
+    table.t.rf{width:100%;min-width:0}
+    table.t.rf,table.t.rf tbody,table.t.rf tr,table.t.rf td{display:block;width:100%}
+    table.t.rf thead,table.t.rf tr:has(> th){display:none}
+    table.t.rf tr{padding:10px 14px;border-bottom:1px solid var(--line)}
+    table.t.rf td{display:flex;justify-content:space-between;gap:12px;text-align:right;border:0;padding:4px 0}
+    table.t.rf td[data-label]::before{content:attr(data-label);color:var(--ink3);font-size:12px;font-weight:600;max-width:45%}
+    table.t.rf td:first-child{text-align:left;font-size:15px;justify-content:flex-start}
+    table.t.rf td:first-child::before{content:none}
+    table.t.rf td.r{flex-direction:column;align-items:stretch}
+    table.t.rf td.r .btn{width:100%;min-height:44px}
+    table.t.rf td.r:not(:has(a,button)){display:none}
+  }
+}
 @media print{.top,.tasks,.side,.walkbar,.consent{display:none!important}}
 .phone .doc{padding:12px;font-size:11px}.phone .doc .row.atop{flex-direction:column;align-items:flex-start;gap:4px}.phone .doc .r{text-align:left}
 .phone table.t th{white-space:normal;padding:6px}.phone table.t td{padding:6px}.phone .doc table.t{font-size:11px}

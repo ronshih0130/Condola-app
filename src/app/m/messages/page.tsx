@@ -17,7 +17,7 @@ export default async function MessagesPage() {
         {threads.length === 0 ? (
           <div className="empty">{t("i_empty")}</div>
         ) : (
-          <table className="t">
+          <table className="t rf">
             <tbody>
               {threads.map((thread) => (
                 <tr key={thread.id}>

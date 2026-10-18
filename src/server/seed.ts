@@ -481,6 +481,38 @@ export async function resetAndSeed() {
       );
     }
 
+    const acRepair = await client.query<{ id: string }>(
+      `INSERT INTO expenses (
+         org_id, property_id, category, description, currency, amount_minor, incurred_on,
+         paid_by, bill_to, status, approved_by, approved_at, created_by
+       ) VALUES (
+         $1, $2, 'repair', '冷氣維修', 'TWD', 280000,
+         (date_trunc('month', current_date) + interval '1 month')::date,
+         'manager_firm', 'owner', 'approved', $3, now(), $3
+       ) RETURNING id`,
+      [ORG_ID, ids.xinyi, USERS.admin],
+    );
+    const november = await client.query<{ id: string }>(
+      `INSERT INTO owner_statements (
+         org_id, owner_contact_id, currency, period_start, period_end, status,
+         opening_balance_minor, rent_received_minor, other_income_minor, management_fee_minor,
+         expenses_minor, payouts_minor, closing_balance_minor, fee_rule_snapshot, locale,
+         einvoice_status, issued_at, issued_by
+       ) VALUES (
+         $1, $2, 'TWD',
+         (date_trunc('month', current_date) + interval '1 month')::date,
+         (date_trunc('month', current_date) + interval '2 months' - interval '1 day')::date,
+         'issued', 0, 0, 0, 0, 280000, 0, -280000,
+         '{"name":"管理費 8%"}'::jsonb, 'zh-TW', 'not_applicable', now(), $3
+       ) RETURNING id`,
+      [ORG_ID, ids.chen, USERS.admin],
+    );
+    await client.query(
+      `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor, expense_id)
+       VALUES ($1, $2, $3, 'expense', '冷氣維修', 280000, $4)`,
+      [ORG_ID, november.rows[0].id, ids.xinyi, acRepair.rows[0].id],
+    );
+
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

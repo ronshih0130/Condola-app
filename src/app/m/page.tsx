@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { makeT } from "@/i18n";
+import { dictionary, makeT } from "@/i18n";
 import { FooterNote } from "@/components/chrome";
+import { Cell, RfTable } from "@/components/rf";
 import { PageHeader } from "@/components/ui";
-import { formatMoney } from "@/server/format";
+import { formatDate, formatMoney } from "@/server/format";
 import { dashboard } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -12,6 +13,7 @@ export default async function DashboardPage() {
   const session = await getSession();
   const t = makeT(session.locale);
   const data = await dashboard(session);
+  const dict = dictionary(session.locale);
   const money = (minor: number) => formatMoney(minor, "TWD", session.locale);
   return (
     <>
@@ -80,28 +82,66 @@ export default async function DashboardPage() {
         </div>
         <div className="card">
           <div className="hd">
-            <h3>{t("i_open_balance")}</h3>
+            <h3>{t("i_outstanding")}</h3>
           </div>
-          <table className="t">
-            <tbody>
-              {data.owing.length === 0 ? (
+          {data.owing.length === 0 ? (
+            <div className="empty">{t("i_empty")}</div>
+          ) : (
+            <RfTable testId="outstanding-list">
+              <thead>
                 <tr>
-                  <td className="empty">{t("i_empty")}</td>
+                  <th>{t("s_74f19b0")}</th>
+                  <th>{t("i_space")}</th>
+                  <th>{t("i_balance")}</th>
                 </tr>
-              ) : (
-                data.owing.map((row) => (
-                  <tr key={row.lease_id}>
-                    <td>
-                      <Link href={`/m/leases/${row.lease_id}?tab=ledger`}>{row.tenant}</Link>
-                    </td>
-                    <td className="small">{row.place}</td>
-                    <td className="num">{formatMoney(Number(row.balance), row.currency, session.locale)}</td>
+              </thead>
+              <tbody>
+                {data.owing.map((row) => (
+                  <tr key={row.lease_id} className="click">
+                    <Cell>
+                      <Link className="hit" href={`/m/leases/${row.lease_id}?tab=ledger`}>
+                        {row.tenant}
+                      </Link>
+                    </Cell>
+                    <Cell label={t("i_space")}>{row.place}</Cell>
+                    <Cell label={t("i_balance")}>{formatMoney(Number(row.balance), row.currency, session.locale)}</Cell>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </RfTable>
+          )}
         </div>
+      </div>
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="hd">
+          <h3>{t("i_expiring")}</h3>
+        </div>
+        {data.expiring.length === 0 ? (
+          <div className="empty">{t("i_empty")}</div>
+        ) : (
+          <RfTable testId="expiring-list">
+            <thead>
+              <tr>
+                <th>{t("s_74f19b0")}</th>
+                <th>{t("i_space")}</th>
+                <th>{t("i_end_date")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.expiring.map((row) => (
+                <tr key={row.lease_id} className="click">
+                  <Cell>
+                    <Link className="hit" href={`/m/leases/${row.lease_id}`}>
+                      {row.tenant}
+                    </Link>
+                  </Cell>
+                  <Cell label={t("i_space")}>{row.place}</Cell>
+                  <Cell label={t("i_end_date")}>{formatDate(row.end_date, session.locale, session.calendar, dict)}</Cell>
+                </tr>
+              ))}
+            </tbody>
+          </RfTable>
+        )}
       </div>
       <FooterNote />
     </>

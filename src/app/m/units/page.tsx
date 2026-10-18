@@ -23,16 +23,26 @@ export default async function UnitsPage() {
                 <Link href={`/m/properties/${detail.property.id}`}>{detail.property.name}</Link>
               </h3>
             </div>
-            <table className="t">
+            <table className="t rf">
+              <thead>
+                <tr>
+                  <th>{t("i_room")}</th>
+                  <th>{t("i_category")}</th>
+                  <th>{t("i_rent_label")}</th>
+                  <th>{t("s_74f19b0")}</th>
+                </tr>
+              </thead>
               <tbody>
                 {detail.rooms.map((room) => (
                   <tr key={room.id}>
                     <td>
                       {room.unit_label} {room.label}
                     </td>
-                    <td>{t(room.room_type === "suite" ? "i_suite" : room.room_type === "shared_bath" ? "i_shared" : "i_other_room")}</td>
-                    <td className="num">{formatMoney(Number(room.base_rent_minor), detail.property.currency, session.locale)}</td>
-                    <td>{room.tenant ?? t("i_vacant")}</td>
+                    <td data-label={t("i_category")}>{t(room.room_type === "suite" ? "i_suite" : room.room_type === "shared_bath" ? "i_shared" : "i_other_room")}</td>
+                    <td className="num" data-label={t("i_rent_label")}>
+                      {formatMoney(Number(room.base_rent_minor), detail.property.currency, session.locale)}
+                    </td>
+                    <td data-label={t("s_74f19b0")}>{room.tenant ?? t("i_vacant")}</td>
                   </tr>
                 ))}
               </tbody>

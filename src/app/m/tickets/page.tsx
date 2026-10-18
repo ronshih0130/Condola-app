@@ -32,7 +32,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
       <ErrorBanner t={t} error={params.error} />
       <div className="grid2">
         <div className="card">
-          <table className="t">
+          <table className="t rf">
             <tbody>
               {tickets.map((ticket) => (
                 <tr key={ticket.id}>
@@ -58,7 +58,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
                       </form>
                     ) : null}
                   </td>
-                  <td>
+                  <td data-label={t("i_status")}>
                     <span className={`chip ${statusClass(ticket.status)}`}>{t(statusKey(ticket.status))}</span>
                   </td>
                 </tr>

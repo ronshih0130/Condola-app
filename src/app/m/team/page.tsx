@@ -24,16 +24,26 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       {params.code ? <div className="alert info">{t("i_team_code", { code: params.code })}</div> : null}
       <div className="grid2">
         <div className="card">
-          <table className="t">
+          <table className="t rf">
+            <thead>
+              <tr>
+                <th>{t("i_owner")}</th>
+                <th>{t("i_invite_email")}</th>
+                <th>{t("i_role_label")}</th>
+                <th>{t("i_status")}</th>
+              </tr>
+            </thead>
             <tbody>
               {team.map((member) => (
                 <tr key={member.email ?? member.name}>
                   <td>{member.name}</td>
-                  <td className="small">{member.email}</td>
-                  <td>
+                  <td className="small" data-label={t("i_invite_email")}>
+                    {member.email}
+                  </td>
+                  <td data-label={t("i_role_label")}>
                     <span className="chip pri">{t(roleKey[member.role] ?? "i_role_label")}</span>
                   </td>
-                  <td>{member.status === "active" ? t("i_active") : member.status}</td>
+                  <td data-label={t("i_status")}>{member.status === "active" ? t("i_active") : member.status}</td>
                 </tr>
               ))}
             </tbody>

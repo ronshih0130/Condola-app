@@ -26,7 +26,7 @@ export default async function PropertiesPage() {
         }
       />
       <div className="card">
-        <table className="t">
+        <table className="t rf" data-testid="property-list">
           <thead>
             <tr>
               <th>{t("s_f19d4fb")}</th>
@@ -39,20 +39,20 @@ export default async function PropertiesPage() {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} className="click">
                 <td>
-                  <Link href={`/m/properties/${row.id}`}>
+                  <Link className="hit" href={`/m/properties/${row.id}`}>
                     <b>{row.name}</b>
                   </Link>
                   <div className="small muted">{row.address_display}</div>
                 </td>
-                <td>{row.rental_mode === "by_room" ? t("i_by_room") : t("i_whole_unit")}</td>
-                <td>{row.rooms}</td>
-                <td>
+                <td data-label={t("s_d2c40b1")}>{row.rental_mode === "by_room" ? t("i_by_room") : t("i_whole_unit")}</td>
+                <td data-label={t("i_room")}>{row.rooms}</td>
+                <td data-label={t("i_occ")}>
                   {row.occupied}/{row.rooms}
                 </td>
-                <td>{row.owner_name}</td>
-                <td>{row.currency}</td>
+                <td data-label={t("i_owner")}>{row.owner_name}</td>
+                <td data-label={t("i_currency_label")}>{row.currency}</td>
               </tr>
             ))}
           </tbody>

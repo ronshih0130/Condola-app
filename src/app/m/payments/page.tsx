@@ -21,7 +21,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         {rows.length === 0 ? (
           <div className="empty">{t("i_none_pending")}</div>
         ) : (
-          <table className="t">
+          <table className="t rf">
             <thead>
               <tr>
                 <th>{t("s_74f19b0")}</th>
@@ -39,13 +39,15 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                     {row.tenant}
                     <div className="small muted">{row.place}</div>
                   </td>
-                  <td>{row.paid_on}</td>
-                  <td>{row.last5}</td>
-                  <td className="num">{formatMoney(Number(row.amount), row.currency, session.locale)}</td>
-                  <td>
+                  <td data-label={t("i_paid_on")}>{row.paid_on}</td>
+                  <td data-label={t("i_last5")}>{row.last5}</td>
+                  <td className="num" data-label={t("i_amount_label")}>
+                    {formatMoney(Number(row.amount), row.currency, session.locale)}
+                  </td>
+                  <td data-label={t("i_status")}>
                     <span className={`chip ${statusClass(row.status)}`}>{t(statusKey(row.status))}</span>
                   </td>
-                  <td>
+                  <td className="r">
                     {canAct && row.status === "submitted" ? (
                       <div className="row">
                         <form action={actionConfirmPayment}>

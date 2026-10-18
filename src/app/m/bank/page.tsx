@@ -34,7 +34,7 @@ export default async function BankPage({ searchParams }: { searchParams: Promise
           {matches.length === 0 ? (
             <div className="empty">{t("i_bank_empty")}</div>
           ) : (
-            <table className="t">
+            <table className="t rf">
               <tbody>
                 {matches.map((match) => (
                   <tr key={match.id}>
@@ -44,8 +44,10 @@ export default async function BankPage({ searchParams }: { searchParams: Promise
                         {match.posted_on} · {match.last5} · {t("i_score", { score: match.score })}
                       </div>
                     </td>
-                    <td className="num">{formatMoney(Number(match.amount), match.currency, session.locale)}</td>
-                    <td>
+                    <td className="num" data-label={t("i_amount_label")}>
+                      {formatMoney(Number(match.amount), match.currency, session.locale)}
+                    </td>
+                    <td className="r">
                       <ApproveForm id={match.id} />
                     </td>
                   </tr>

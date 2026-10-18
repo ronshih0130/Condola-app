@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { makeT } from "@/i18n";
+import { dictionary, makeT } from "@/i18n";
+import { Cell, RfTable } from "@/components/rf";
 import { PageHeader, statusClass, statusKey } from "@/components/ui";
 import { formatDate, formatMoney } from "@/server/format";
-import { dictionary } from "@/i18n";
 import { listLeases } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -13,6 +13,7 @@ export default async function LeasesPage() {
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
   const rows = await listLeases(session);
+  const money = (minor: string, currency: string) => formatMoney(Number(minor), currency, session.locale);
   return (
     <>
       <PageHeader
@@ -24,34 +25,40 @@ export default async function LeasesPage() {
         }
       />
       <div className="card">
-        <table className="t">
+        <RfTable testId="lease-list">
           <thead>
             <tr>
               <th>{t("s_74f19b0")}</th>
-              <th>{t("s_2540915")}</th>
+              <th>{t("i_space")}</th>
+              <th>{t("i_term")}</th>
               <th>{t("i_rent_label")}</th>
-              <th>{t("i_period")}</th>
+              <th>{t("i_deposit_label")}</th>
+              <th>{t("i_elec")}</th>
               <th>{t("i_status")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id}>
-                <td>
-                  <Link href={`/m/leases/${row.id}`}>{row.tenant}</Link>
-                </td>
-                <td className="small">{row.place}</td>
-                <td className="num">{formatMoney(Number(row.rent), row.currency, session.locale)}</td>
-                <td className="small">
+              <tr key={row.id} className="click">
+                <Cell>
+                  <Link className="hit" href={`/m/leases/${row.id}`}>
+                    {row.tenant}
+                  </Link>
+                </Cell>
+                <Cell label={t("i_space")}>{row.place}</Cell>
+                <Cell label={t("i_term")}>
                   {formatDate(row.start_date, session.locale, session.calendar, dict)} – {formatDate(row.end_date, session.locale, session.calendar, dict)}
-                </td>
-                <td>
+                </Cell>
+                <Cell label={t("i_rent_label")}>{money(row.rent, row.currency)}</Cell>
+                <Cell label={t("i_deposit_label")}>{money(row.deposit, row.currency)}</Cell>
+                <Cell label={t("i_elec")}>{row.electricity === "shared" ? t("i_elec_shared") : row.electricity || t("i_elec_unset")}</Cell>
+                <Cell label={t("i_status")}>
                   <span className={`chip ${statusClass(row.status)}`}>{t(statusKey(row.status))}</span>
-                </td>
+                </Cell>
               </tr>
             ))}
           </tbody>
-        </table>
+        </RfTable>
       </div>
     </>
   );
