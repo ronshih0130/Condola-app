@@ -42,7 +42,7 @@ Swap these without hunting through pages:
 
 | What | Path |
 | --- | --- |
-| Tokens | `src/styles/tokens.css` — CSS variables (`--bg`, `--pri`, `--top`, type). `src/app/globals.css` imports them and holds the layout classes. |
+| Tokens | `src/app/tokens.css` (`--cd-*`, Window Glow). `src/app/globals.css` imports it and maps those values onto the layout classes, Tailwind, and shadcn names (`--primary`, `--ring`). `src/brand/tokens.json` is the same palette for email and PDF templates. |
 | Components | `src/components/` — chrome, wizards, dialogs, locale provider. |
 | Strings | `src/i18n/zh-TW.json` and `src/i18n/en.json`. Design keys stay `s_*`. Keys with amounts or names are `i_*` and use `{placeholders}`. `src/i18n/index.ts` is `makeT(locale)`. The prototype catalogs are vendored at `design/strings/zh-TW.json` and `design/strings/en.json`. |
 

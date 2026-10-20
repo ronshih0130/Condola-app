@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
+import { BrandImage } from "@/components/brand";
 import { requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +19,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
       ) : null}
       <div className="hero">
         <div>
-          <div className="logo" style={{ width: 48, height: 48, fontSize: 24 }}>
-            {brand === "Condola" ? "C" : "租"}
-          </div>
-          <h1 style={{ marginTop: 12 }}>{brand}</h1>
+          <h1 className="splash-logo">
+            <BrandImage variant="stacked" alt={brand} />
+          </h1>
           <p>{t("i_hero")}</p>
           <p className="small">{t("i_positioning", { brand })}</p>
         </div>

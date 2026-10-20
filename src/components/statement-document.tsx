@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Locale, T } from "@/i18n";
+import { BrandImage } from "@/components/brand";
 import { formatMoney, moneyLabel, ownerSettlement } from "@/server/format";
 
 export function StatementDocument({
@@ -44,6 +45,7 @@ export function StatementDocument({
   ] as const;
   return (
     <div className="card" style={{ maxWidth: 640 }} data-testid="statement-document">
+      <BrandImage variant="horizontal" alt={t("i_brand")} className="statement-logo" />
       <table className="t">
         <tbody>
           {summary.map(([key, value, testid]) => (

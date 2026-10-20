@@ -1,4 +1,5 @@
 import { makeT } from "@/i18n";
+import { AuthBrand } from "@/components/brand";
 import { PasswordFields } from "@/components/password-field";
 import { actionAccept } from "@/server/auth-actions";
 import { describeInvite } from "@/server/auth";
@@ -39,6 +40,7 @@ export default async function AcceptPage({
     query.error === "weak" ? t("i_pw_weak") : query.error === "mismatch" ? t("i_pw_mismatch") : query.error === "used" ? t("i_invite_used") : "";
   return (
     <div className="auth-wrap">
+      <AuthBrand name={t("i_brand")} />
       <form className="card pad" action={actionAccept}>
         <h1>{t("i_accept_title")}</h1>
         {invite.state !== "ready" ? (

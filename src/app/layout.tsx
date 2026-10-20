@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { makeT } from "@/i18n";
 import { BrandLink, LocaleLinks, ResetButton, SignOutButton } from "@/components/chrome";
 import { LocaleProvider } from "@/components/locale";
@@ -7,6 +7,8 @@ import { readSession, requestPrefs } from "@/server/session";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
+
+export const viewport: Viewport = { themeColor: "#2E2622" };
 
 export async function generateMetadata(): Promise<Metadata> {
   const prefs = await requestPrefs();

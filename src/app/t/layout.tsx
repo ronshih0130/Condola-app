@@ -1,6 +1,8 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
+import { BrandImage } from "@/components/brand";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +11,7 @@ export default async function TenantLayout({ children }: { children: React.React
   const session = await getSession();
   if (session.kind !== "tenant") redirect("/m");
   const t = makeT(session.locale);
+  const path = (await headers()).get("x-pathname") || "";
   const tiles = [
     ["/t/pay", "tenant-tile-pay", "i_rich_pay"],
     ["/t/repair", "tenant-tile-repair", "i_rich_repair"],
@@ -21,10 +24,17 @@ export default async function TenantLayout({ children }: { children: React.React
         <div className="scr">
           <div className="notch" />
           <div className="lhead">
-            <span className="logo">{t("i_brand") === "Condola" ? "C" : "租"}</span>
+            <BrandImage variant="symbolSmall" alt="" className="brand-symbol" />
             {t("i_brand")}
           </div>
-          <div className="liffb">{children}</div>
+          <div className="liffb">
+            {path === "/t" ? (
+              <div className="liff-welcome">
+                <BrandImage variant="stacked" alt={t("i_brand")} />
+              </div>
+            ) : null}
+            {children}
+          </div>
           <div className="rich">
             <div className="gridm">
               {tiles.map(([href, testid, key]) => (

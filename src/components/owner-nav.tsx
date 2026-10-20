@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BrandImage } from "./brand";
 import { useT } from "./locale";
 
 export function OwnerNav({ children }: { children: React.ReactNode }) {
@@ -19,7 +20,12 @@ export function OwnerNav({ children }: { children: React.ReactNode }) {
           <div className="liffh">
             <b>{t("i_mode_own")}</b>
           </div>
-          <div className="liffb">{children}</div>
+          <div className="liffb">
+            <div className="portal-brand">
+              <BrandImage variant="horizontal" alt={t("i_brand")} />
+            </div>
+            {children}
+          </div>
           <nav className="tnav">
             {items.map(([href, key]) => (
               <Link key={href} href={href} className={path === href ? "on" : ""}>

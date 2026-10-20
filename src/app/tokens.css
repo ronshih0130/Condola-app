@@ -1,0 +1,29 @@
+/* Condola 租多啦 · Window Glow design tokens v1. Contrast in tokens.json */
+:root{
+  --cd-primary:#B4532A;
+  --cd-primary-hover:#9C4522;
+  --cd-primary-pressed:#7F3819;
+  --cd-primary-soft:#FBEDE5;
+  --cd-accent:#F2B544;
+  --cd-accent-soft:#FDF3DC;
+  --cd-ink:#2E2622;
+  --cd-ink2:#5C4F47;
+  --cd-ink3:#7A6B61;
+  --cd-cream:#F7F1EA;
+  --cd-surface:#FFFFFF;
+  --cd-surface2:#FBF7F2;
+  --cd-border:#E8DED3;
+  --cd-border-strong:#CDBFB1;
+  --cd-success:#276B43;
+  --cd-success-bg:#E7F3EB;
+  --cd-warning:#8A5A12;
+  --cd-warning-bg:#FDF1DC;
+  --cd-danger:#B42318;
+  --cd-danger-bg:#FBE7E5;
+  --cd-info:#2F5D8A;
+  --cd-info-bg:#E8F0F8;
+  --cd-focus:#B4532A;
+  --cd-topbar:#2E2622;
+  --cd-focus-ring:0 0 0 3px rgba(180,83,42,.35);
+  --cd-radius-sm:8px;--cd-radius-md:12px;--cd-radius-lg:20px;
+}
