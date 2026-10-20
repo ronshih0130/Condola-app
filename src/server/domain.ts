@@ -2,7 +2,6 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { maybe, many, one, svc, tx } from "./db";
 import { FlowError } from "./errors";
-import { ORG_ID } from "./ids";
 import {
   attributePayment,
   inclusiveDays,
@@ -11,8 +10,10 @@ import {
   round3,
   scoreMatch,
   splitWeighted,
+  taipeiToday,
   toMinor,
 } from "./money";
+import { assertPerm } from "./perms";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
 function sha256(value: string) {
@@ -50,14 +51,14 @@ async function provisionUser(input: { name: string; email: string | null; phone:
   });
 }
 
-export async function markTryout(key: "property" | "lease" | "statement" | "repair") {
+export async function markTryout(orgId: string, key: "property" | "lease" | "statement" | "repair") {
   try {
     await svc(null, async (client) => {
       await client.query(
         `UPDATE organizations
             SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), ARRAY['tryout', $2]::text[], 'true'::jsonb, true)
           WHERE id = $1`,
-        [ORG_ID, key],
+        [orgId, key],
       );
     });
   } catch (error) {
@@ -107,7 +108,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
       `SELECT id FROM properties
         WHERE org_id = $1 AND name = $2 AND created_at > now() - interval '20 seconds'
         ORDER BY created_at DESC LIMIT 1`,
-      [ORG_ID, input.name.trim()],
+      [session.orgId, input.name.trim()],
     );
     if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[] };
     const country = input.currency === "USD" ? "US" : "TW";
@@ -131,7 +132,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
       `INSERT INTO properties (org_id, name, address, address_display, country_code, jurisdiction_id, currency, timezone, default_rental_mode)
        VALUES ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [
-        ORG_ID,
+        session.orgId,
         input.name.trim(),
         JSON.stringify(address),
         display,
@@ -149,13 +150,13 @@ export async function createProperty(session: Session, input: PropertyInput) {
         client,
         `INSERT INTO contacts (org_id, user_id, is_owner, display_name, email, phone_e164, locale, preferred_channel)
          VALUES ($1,$2,true,$3,$4,$5,$6,'email') RETURNING id`,
-        [ORG_ID, ownerUserId, input.ownerName.trim(), ownerEmail, ownerPhone, session.locale],
+        [session.orgId, ownerUserId, input.ownerName.trim(), ownerEmail, ownerPhone, session.locale],
       );
       ownerContactId = contact.id;
       await client.query(
         `INSERT INTO invitations (org_id, kind, contact_id, email, phone_e164, code_hash, invited_by)
          VALUES ($1,'owner',$2,$3,$4,$5,$6)`,
-        [ORG_ID, ownerContactId, ownerEmail, ownerPhone, sha256(inviteCode!), session.userId],
+        [session.orgId, ownerContactId, ownerEmail, ownerPhone, sha256(inviteCode!), session.userId],
       );
     }
     if (!ownerContactId) throw new FlowError("errors.required");
@@ -163,7 +164,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
     await client.query(
       `INSERT INTO property_owners (org_id, property_id, owner_contact_id, is_primary, can_view_tenant_phone)
        VALUES ($1,$2,$3,true,$4)`,
-      [ORG_ID, property.id, ownerContactId, input.canViewTenantPhone],
+      [session.orgId, property.id, ownerContactId, input.canViewTenantPhone],
     );
 
     const rule = await maybe<{ id: string }>(
@@ -171,7 +172,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
       `SELECT id FROM fee_rules
         WHERE org_id = $1 AND purpose = 'management_fee' AND currency = $2 AND archived_at IS NULL
         ORDER BY created_at LIMIT 1`,
-      [ORG_ID, input.currency],
+      [session.orgId, input.currency],
     );
     if (rule) {
       const agreement = await maybe<{ id: string }>(
@@ -181,13 +182,13 @@ export async function createProperty(session: Session, input: PropertyInput) {
             AND (property_id IS NULL OR property_id = $3)
             AND (effective_to IS NULL OR effective_to > current_date)
           LIMIT 1`,
-        [ORG_ID, ownerContactId, property.id],
+        [session.orgId, ownerContactId, property.id],
       );
       if (!agreement) {
         await client.query(
           `INSERT INTO management_agreements (org_id, owner_contact_id, property_id, fee_rule_id, effective_from)
            VALUES ($1,$2,$3,$4,current_date)`,
-          [ORG_ID, ownerContactId, property.id, rule.id],
+          [session.orgId, ownerContactId, property.id, rule.id],
         );
       }
     }
@@ -196,7 +197,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
       client,
       `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [ORG_ID, property.id, input.unitLabel.trim(), input.floor.trim() || null, input.rentalMode, country === "TW" ? "ping" : "sqft"],
+      [session.orgId, property.id, input.unitLabel.trim(), input.floor.trim() || null, input.rentalMode, country === "TW" ? "ping" : "sqft"],
     );
     const roomIds: string[] = [];
     for (const room of rooms) {
@@ -204,14 +205,14 @@ export async function createProperty(session: Session, input: PropertyInput) {
         client,
         `INSERT INTO rooms (org_id, unit_id, label, room_type, base_rent_minor, area_unit)
          VALUES ($1,$2,$3,$4::room_type,$5,$6) RETURNING id`,
-        [ORG_ID, unit.id, room.label.trim(), room.roomType || "suite", toMinor(room.baseRentMajor || 0), country === "TW" ? "ping" : "sqft"],
+        [session.orgId, unit.id, room.label.trim(), room.roomType || "suite", toMinor(room.baseRentMajor || 0), country === "TW" ? "ping" : "sqft"],
       );
       roomIds.push(inserted.id);
     }
     return { propertyId: property.id, ownerContactId, roomIds };
   });
 
-  if (input.rentalMode === "by_room" && created.roomIds.length >= 3) await markTryout("property");
+  if (input.rentalMode === "by_room" && created.roomIds.length >= 3) await markTryout(session.orgId, "property");
   return { ...created, inviteCode };
 }
 
@@ -223,7 +224,7 @@ export async function setMeterSerial(session: Session, propertyId: string, seria
     const unit = await maybe<{ id: string }>(
       client,
       `SELECT id FROM units WHERE property_id = $1 AND org_id = $2 AND archived_at IS NULL ORDER BY created_at LIMIT 1`,
-      [propertyId, ORG_ID],
+      [propertyId, session.orgId],
     );
     if (!unit) throw new FlowError("errors.notFound");
     const meter = await maybe<{ id: string }>(
@@ -234,24 +235,24 @@ export async function setMeterSerial(session: Session, propertyId: string, seria
       [propertyId],
     );
     if (meter) {
-      await client.query(`UPDATE meters SET serial_number = $2 WHERE id = $1 AND org_id = $3`, [meter.id, value, ORG_ID]);
+      await client.query(`UPDATE meters SET serial_number = $2 WHERE id = $1 AND org_id = $3`, [meter.id, value, session.orgId]);
       return;
     }
     await client.query(
       `INSERT INTO meters (
          org_id, property_id, unit_id, utility, usage_unit, label, serial_number, payer, split_method, rate_source
        ) VALUES ($1,$2,$3,'electricity','kWh','main',$4,'tenant','even','bill_average')`,
-      [ORG_ID, propertyId, unit.id, value],
+      [session.orgId, propertyId, unit.id, value],
     );
   });
 }
 
 export async function setOwnerPhoneVisibility(session: Session, propertyOwnerId: string, canView: boolean) {
-  assertStaff(session, ["admin", "manager"]);
+  assertPerm(session, "settings.edit");
   await tx(session.userId, async (client) => {
     const updated = await client.query(
       `UPDATE property_owners SET can_view_tenant_phone = $2 WHERE id = $1 AND org_id = $3`,
-      [propertyOwnerId, canView, ORG_ID],
+      [propertyOwnerId, canView, session.orgId],
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.notFound");
   });
@@ -312,7 +313,7 @@ export async function createLease(session: Session, input: LeaseInput) {
           AND l.created_at > now() - interval '2 minutes'
         ORDER BY l.created_at DESC
         LIMIT 1`,
-      [input.roomId, ORG_ID],
+      [input.roomId, session.orgId],
     );
     if (already?.tenantUserId) {
       return {
@@ -330,13 +331,13 @@ export async function createLease(session: Session, input: LeaseInput) {
       `SELECT r.id, r.unit_id, u.property_id, p.currency
          FROM rooms r JOIN units u ON u.id = r.unit_id JOIN properties p ON p.id = u.property_id
         WHERE r.id = $1 AND r.org_id = $2`,
-      [input.roomId, ORG_ID],
+      [input.roomId, session.orgId],
     );
     const contact = await one<{ id: string }>(
       client,
       `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, phone_e164, locale, preferred_channel)
        VALUES ($1,$2,true,$3,$4,$5,$6,'line') RETURNING id`,
-      [ORG_ID, tenantUserId, input.tenantName.trim(), email, phone, session.locale],
+      [session.orgId, tenantUserId, input.tenantName.trim(), email, phone, session.locale],
     );
     const rentMinor = toMinor(input.rentMajor);
     const depositMinor = Math.round(rentMinor * input.depositMonths);
@@ -359,7 +360,7 @@ export async function createLease(session: Session, input: LeaseInput) {
          $1,$2,$3,'pending_signature','sent',$4,$5,$6,$7,$8,false,$9,$10,$11,$12
        ) RETURNING id`,
       [
-        ORG_ID,
+        session.orgId,
         room.unit_id,
         room.id,
         input.startDate,
@@ -375,29 +376,29 @@ export async function createLease(session: Session, input: LeaseInput) {
     );
     await client.query(
       `INSERT INTO lease_parties (org_id, lease_id, contact_id, role) VALUES ($1,$2,$3,'primary')`,
-      [ORG_ID, lease.id, contact.id],
+      [session.orgId, lease.id, contact.id],
     );
     const member = await one<{ id: string }>(
       client,
       `SELECT id FROM org_members WHERE org_id = $1 AND user_id = $2 AND status = 'active'`,
-      [ORG_ID, session.userId],
+      [session.orgId, session.userId],
     );
     const tenantSig = await one<{ id: string }>(
       client,
       `INSERT INTO lease_signatures (org_id, lease_id, signer_role, contact_id, status, signing_order, consent_text_key)
        VALUES ($1,$2,'tenant',$3,'pending',1,'lease.consent') RETURNING id`,
-      [ORG_ID, lease.id, contact.id],
+      [session.orgId, lease.id, contact.id],
     );
     const managerSig = await one<{ id: string }>(
       client,
       `INSERT INTO lease_signatures (org_id, lease_id, signer_role, member_id, status, signing_order, consent_text_key)
        VALUES ($1,$2,'manager',$3,'pending',2,'lease.consent') RETURNING id`,
-      [ORG_ID, lease.id, member.id],
+      [session.orgId, lease.id, member.id],
     );
     await client.query(
       `INSERT INTO lease_signature_events (org_id, signature_id, event, actor_user_id, document_sha256)
        VALUES ($1,$2,'sent',$3,$4), ($1,$5,'sent',$3,$4)`,
-      [ORG_ID, tenantSig.id, session.userId, documentHash, managerSig.id],
+      [session.orgId, tenantSig.id, session.userId, documentHash, managerSig.id],
     );
 
     let meter = await maybe<{ id: string }>(
@@ -412,7 +413,7 @@ export async function createLease(session: Session, input: LeaseInput) {
            org_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit, billing_cycle_months
          ) VALUES ($1,$2,'electricity','kWh','main','tenant',$3::split_method,$4::rate_source,$5,2)
          RETURNING id`,
-        [ORG_ID, room.unit_id, input.splitMethod, input.rateSource, rateMinor],
+        [session.orgId, room.unit_id, input.splitMethod, input.rateSource, rateMinor],
       );
     }
 
@@ -422,7 +423,7 @@ export async function createLease(session: Session, input: LeaseInput) {
          org_id, meter_id, provider, period_start, period_end, currency, total_amount_minor, total_usage, entered_by
        ) VALUES ($1,$2,'Taipower',$3,$4,$5,$6,$7,$8)
        RETURNING id, avg_price_minor_per_unit::text AS avg`,
-      [ORG_ID, meter.id, input.periodStart, input.periodEnd, room.currency, billMinor, input.usageKwh, session.userId],
+      [session.orgId, meter.id, input.periodStart, input.periodEnd, room.currency, billMinor, input.usageKwh, session.userId],
     );
 
     const unitRooms = await many<{ id: string; label: string }>(
@@ -476,7 +477,7 @@ export async function createLease(session: Session, input: LeaseInput) {
          $1,$2,$3,$4,$5,$6::split_method,$7::rate_source,$8,$9,$10,'split_evenly',$11,$12,$13,$14,$15::jsonb,'draft',$16
        ) RETURNING id`,
       [
-        ORG_ID,
+        session.orgId,
         meter.id,
         bill.id,
         input.periodStart,
@@ -504,7 +505,7 @@ export async function createLease(session: Session, input: LeaseInput) {
            allocated_usage, amount_minor, bearer, explanation
          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::utility_payer,$11::jsonb)`,
         [
-          ORG_ID,
+          session.orgId,
           run.id,
           part.leaseId,
           part.key,
@@ -581,7 +582,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
       `SELECT id, document_sha256, org_id FROM leases WHERE id = $1`,
       [input.leaseId],
     );
-    if (!lease || lease.org_id !== ORG_ID) throw new FlowError("errors.notFound");
+    if (!lease || lease.org_id !== session.orgId) throw new FlowError("errors.notFound");
     const contact = await maybe<{ id: string }>(
       client,
       `SELECT c.id FROM lease_parties lp JOIN contacts c ON c.id = lp.contact_id
@@ -591,7 +592,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
     const member = await maybe<{ id: string; role: OrgRole }>(
       client,
       `SELECT id, role::text FROM org_members WHERE org_id = $1 AND user_id = $2 AND status = 'active'`,
-      [ORG_ID, session.userId],
+      [session.orgId, session.userId],
     );
     const asTenant = Boolean(contact) && session.kind === "tenant";
     const asManager = Boolean(member) && (member?.role === "admin" || member?.role === "manager") && !asTenant;
@@ -617,7 +618,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
        VALUES ($1,$2,'viewed_document',$3,'127.0.0.1','condola-demo',$4),
               ($1,$2,'consented',$3,'127.0.0.1','condola-demo',$4),
               ($1,$2,'signed',$3,'127.0.0.1','condola-demo',$4)`,
-      [ORG_ID, signature.id, session.userId, lease.document_sha256],
+      [session.orgId, signature.id, session.userId, lease.document_sha256],
     );
     const remaining = await one<{ n: string }>(
       client,
@@ -637,7 +638,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
     await queueDemoNotice(client, input.leaseId, "rent_due");
     return { esign: "fully_signed" as const, invoiceId };
   });
-  if (result.esign === "fully_signed") await markTryout("lease");
+  if (result.esign === "fully_signed") await markTryout(session.orgId, "lease");
   return result;
 }
 
@@ -654,7 +655,7 @@ export async function simulateTenantSignature(session: Session, leaseId: string)
         WHERE l.id = $1`,
       [leaseId],
     );
-    if (!row?.user_id || row.org_id !== ORG_ID) throw new FlowError("errors.notFound");
+    if (!row?.user_id || row.org_id !== session.orgId) throw new FlowError("errors.notFound");
     return row;
   });
   return signLease(
@@ -920,7 +921,7 @@ export async function recordPayment(
     const lease = await one<{ property_id: string; currency: string }>(
       client,
       `SELECT property_id::text, currency FROM leases WHERE id = $1 AND org_id = $2`,
-      [input.leaseId, ORG_ID],
+      [input.leaseId, session.orgId],
     );
     if (lease.currency === "TWD" && !/^\d{5}$/.test(input.last5)) throw new FlowError("errors.last5");
     const balance = await openBalance(client, input.leaseId);
@@ -947,7 +948,7 @@ export async function recordPayment(
          $1,$2,$3,$4,$5,$6,$7,$8::payment_method,$9,$10,'confirmed','manager_entry',$11,$11,now()
        ) RETURNING id, org_id::text, property_id::text, lease_id::text, currency, amount_minor::text, payer_contact_id::text`,
       [
-        ORG_ID,
+        session.orgId,
         lease.property_id,
         input.leaseId,
         party.contact_id,
@@ -983,7 +984,7 @@ export async function confirmPayment(session: Session, paymentId: string) {
       client,
       `SELECT id, org_id::text, property_id::text, lease_id::text, currency, amount_minor::text, payer_contact_id::text, status::text
          FROM payments WHERE id = $1 AND org_id = $2`,
-      [paymentId, ORG_ID],
+      [paymentId, session.orgId],
     );
     if (!payment) throw new FlowError("errors.notFound");
     if (payment.status === "confirmed") return payment.lease_id;
@@ -1007,7 +1008,7 @@ export async function rejectPayment(session: Session, paymentId: string, reason:
   await tx(session.userId, async (client) => {
     const updated = await client.query(
       `UPDATE payments SET status = 'rejected', rejected_reason = $2 WHERE id = $1 AND org_id = $3 AND status = 'submitted'`,
-      [paymentId, reason.trim(), ORG_ID],
+      [paymentId, reason.trim(), session.orgId],
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.paymentState");
   });
@@ -1069,20 +1070,20 @@ export function sampleCsv(payment: { paidOn: string; amountMinor: number; last5:
 }
 
 export async function importBankCsv(session: Session, csv: string) {
-  assertStaff(session, ["admin", "manager", "accountant"]);
+  assertPerm(session, "bank.reconcile");
   const rows = parseCsv(csv).filter((row) => row.date && row.amount);
   if (rows.length === 0) throw new FlowError("errors.csv");
   return tx(session.userId, async (client) => {
     const account = await one<{ id: string; currency: string }>(
       client,
       `SELECT id, currency FROM bank_accounts WHERE org_id = $1 AND archived_at IS NULL ORDER BY created_at LIMIT 1`,
-      [ORG_ID],
+      [session.orgId],
     );
     const file = await one<{ id: string }>(
       client,
       `INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, uploaded_by)
        VALUES ($1,'bank-imports',$2,'statement.csv','text/csv',$3,$4) RETURNING id`,
-      [ORG_ID, `demo/${randomUUID()}.csv`, Buffer.byteLength(csv), session.userId],
+      [session.orgId, `demo/${randomUUID()}.csv`, Buffer.byteLength(csv), session.userId],
     );
     let mapping = await maybe<{ id: string }>(
       client,
@@ -1095,14 +1096,14 @@ export async function importBankCsv(session: Session, csv: string) {
         `INSERT INTO bank_csv_mappings (org_id, bank_account_id, name, column_map)
          VALUES ($1,$2,'demo','{"date":"date","amount":"amount","last5":"last5","memo":"memo"}'::jsonb)
          RETURNING id`,
-        [ORG_ID, account.id],
+        [session.orgId, account.id],
       );
     }
     const imported = await one<{ id: string }>(
       client,
       `INSERT INTO bank_statement_imports (org_id, bank_account_id, mapping_id, file_id, status, uploaded_by)
        VALUES ($1,$2,$3,$4,'parsed',$5) RETURNING id`,
-      [ORG_ID, account.id, mapping.id, file.id, session.userId],
+      [session.orgId, account.id, mapping.id, file.id, session.userId],
     );
     let suggestions = 0;
     for (let index = 0; index < rows.length; index += 1) {
@@ -1118,9 +1119,11 @@ export async function importBankCsv(session: Session, csv: string) {
            org_id, bank_account_id, import_id, row_number, posted_on, amount_minor, currency,
            description, counterparty_account_last5, raw, dedupe_hash, status
          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,'unmatched') RETURNING id`,
-        [ORG_ID, account.id, imported.id, index + 1, row.date, minor, account.currency, row.memo || null, last5, JSON.stringify(row), hash],
+        [session.orgId, account.id, imported.id, index + 1, row.date, minor, account.currency, row.memo || null, last5, JSON.stringify(row), hash],
       );
-      if (minor > 0) suggestions += await suggestMatches(client, txn.id, { minor, last5, date: row.date, currency: account.currency });
+      if (minor > 0) {
+        suggestions += await suggestMatches(client, session.orgId, txn.id, { minor, last5, date: row.date, currency: account.currency });
+      }
     }
     await client.query(
       `UPDATE bank_statement_imports SET row_count = $2, status = 'completed' WHERE id = $1`,
@@ -1132,6 +1135,7 @@ export async function importBankCsv(session: Session, csv: string) {
 
 async function suggestMatches(
   client: PoolClient,
+  orgId: string,
   bankTransactionId: string,
   bank: { minor: number; last5: string | null; date: string; currency: string },
 ) {
@@ -1140,7 +1144,7 @@ async function suggestMatches(
     `SELECT id, amount_minor::text, payer_account_last5, paid_on::text
        FROM payments
       WHERE org_id = $1 AND currency = $2 AND bank_transaction_id IS NULL AND status IN ('submitted','confirmed')`,
-    [ORG_ID, bank.currency],
+    [orgId, bank.currency],
   );
   let count = 0;
   for (const payment of payments) {
@@ -1156,7 +1160,7 @@ async function suggestMatches(
     await client.query(
       `INSERT INTO bank_match_suggestions (org_id, bank_transaction_id, payment_id, score, reasons, status)
        VALUES ($1,$2,$3,$4,$5::jsonb,'suggested')`,
-      [ORG_ID, bankTransactionId, payment.id, scored.score, JSON.stringify(scored.reasons)],
+      [orgId, bankTransactionId, payment.id, scored.score, JSON.stringify(scored.reasons)],
     );
     count += 1;
   }
@@ -1167,7 +1171,7 @@ async function suggestMatches(
 }
 
 export async function approveMatch(session: Session, suggestionId: string) {
-  assertStaff(session, ["admin", "manager", "accountant"]);
+  assertPerm(session, "bank.reconcile");
   const leaseId = await tx(session.userId, async (client) => {
     const suggestion = await maybe<{
       id: string;
@@ -1178,7 +1182,7 @@ export async function approveMatch(session: Session, suggestionId: string) {
       client,
       `SELECT id, bank_transaction_id::text, payment_id::text, status::text
          FROM bank_match_suggestions WHERE id = $1 AND org_id = $2`,
-      [suggestionId, ORG_ID],
+      [suggestionId, session.orgId],
     );
     if (!suggestion || suggestion.status !== "suggested" || !suggestion.payment_id) {
       throw new FlowError("errors.matchState");
@@ -1226,7 +1230,7 @@ export async function approveMatch(session: Session, suggestionId: string) {
 }
 
 export async function generateStatement(session: Session, input: { ownerContactId: string; month: string }) {
-  assertStaff(session, ["admin", "manager", "accountant"]);
+  assertPerm(session, "stmt.generate");
   if (!/^\d{4}-\d{2}$/.test(input.month)) throw new FlowError("errors.required");
   const bounds = monthBounds(input.month);
   const statementId = await tx(session.userId, async (client) => {
@@ -1236,7 +1240,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
          FROM property_owners po JOIN properties p ON p.id = po.property_id
         WHERE po.org_id = $1 AND po.owner_contact_id = $2
           AND (po.effective_to IS NULL OR po.effective_to >= $3::date)`,
-      [ORG_ID, input.ownerContactId, bounds.start],
+      [session.orgId, input.ownerContactId, bounds.start],
     );
     if (properties.length === 0) throw new FlowError("errors.notFound");
     const currencies = [...new Set(properties.map((property) => property.currency))];
@@ -1266,7 +1270,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
          JOIN properties pr ON pr.id = l.property_id
         WHERE p.org_id = $1 AND p.status = 'confirmed' AND p.currency = $2
           AND p.paid_on BETWEEN $3 AND $4 AND l.property_id = ANY($5::uuid[])`,
-      [ORG_ID, currency, bounds.start, bounds.end, propertyIds],
+      [session.orgId, currency, bounds.start, bounds.end, propertyIds],
     );
     const rentByProperty = new Map<string, { name: string; rent: number; other: number }>();
     for (const property of properties) rentByProperty.set(property.property_id, { name: property.name, rent: 0, other: 0 });
@@ -1298,7 +1302,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
       `SELECT id, amount_minor::text, description, property_id::text FROM expenses
         WHERE org_id = $1 AND property_id = ANY($2::uuid[]) AND status IN ('approved','posted')
           AND incurred_on BETWEEN $3 AND $4 AND currency = $5 AND bill_to = 'owner'`,
-      [ORG_ID, propertyIds, bounds.start, bounds.end, currency],
+      [session.orgId, propertyIds, bounds.start, bounds.end, currency],
     );
     const expenseTotal = expenses.reduce((sum, expense) => sum + Number(expense.amount_minor), 0);
     const rule = await maybe<{
@@ -1317,7 +1321,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
           AND ma.effective_from <= $4 AND (ma.effective_to IS NULL OR ma.effective_to > $4)
         ORDER BY ma.property_id NULLS LAST
         LIMIT 1`,
-      [ORG_ID, input.ownerContactId, propertyIds, bounds.end],
+      [session.orgId, input.ownerContactId, propertyIds, bounds.end],
     );
     const fee = rule ? managementFeeMinor(rule, rent) : 0;
     const previous = await maybe<{ closing_balance_minor: string }>(
@@ -1340,7 +1344,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
          $1,$2,$3,$4,$5,'issued',$6,$7,$8,$9,$10,0,$11,$12::jsonb,$13,'not_applicable',now(),$14
        ) RETURNING id`,
       [
-        ORG_ID,
+        session.orgId,
         input.ownerContactId,
         currency,
         bounds.start,
@@ -1361,14 +1365,14 @@ export async function generateStatement(session: Session, input: { ownerContactI
         await client.query(
           `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor)
            VALUES ($1,$2,$3,'rent',$4,$5)`,
-          [ORG_ID, statement.id, propertyId, bucket.name, bucket.rent],
+          [session.orgId, statement.id, propertyId, bucket.name, bucket.rent],
         );
       }
       if (bucket.other) {
         await client.query(
           `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor)
            VALUES ($1,$2,$3,'other_income',$4,$5)`,
-          [ORG_ID, statement.id, propertyId, bucket.name, bucket.other],
+          [session.orgId, statement.id, propertyId, bucket.name, bucket.other],
         );
       }
     }
@@ -1376,19 +1380,19 @@ export async function generateStatement(session: Session, input: { ownerContactI
       await client.query(
         `INSERT INTO owner_statement_lines (org_id, statement_id, line_type, description, amount_minor)
          VALUES ($1,$2,'management_fee',$3,$4)`,
-        [ORG_ID, statement.id, rule?.name ?? "fee", fee],
+        [session.orgId, statement.id, rule?.name ?? "fee", fee],
       );
     }
     for (const expense of expenses) {
       await client.query(
         `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor, expense_id)
          VALUES ($1,$2,$3,'expense',$4,$5,$6)`,
-        [ORG_ID, statement.id, expense.property_id, expense.description || "expense", Number(expense.amount_minor), expense.id],
+        [session.orgId, statement.id, expense.property_id, expense.description || "expense", Number(expense.amount_minor), expense.id],
       );
     }
     return { id: statement.id, earned: rent + other > 0 };
   });
-  if (statementId.earned) await markTryout("statement");
+  if (statementId.earned) await markTryout(session.orgId, "statement");
   return { statementId: statementId.id };
 }
 
@@ -1451,14 +1455,14 @@ export async function createTicket(
         `SELECT id FROM maintenance_tickets WHERE org_id = $1 AND ticket_number = $2`,
         [lease.org_id, ticketNumber],
       );
-      await markTryout("repair");
+      await markTryout(lease.org_id, "repair");
       return ticket.id;
     }
-    assertStaff(session, ["admin", "manager", "maintenance"]);
+    assertPerm(session, "tickets.update");
     const number = await one<{ n: string }>(
       client,
       `SELECT (coalesce(max(ticket_number), 1000) + 1)::text AS n FROM maintenance_tickets WHERE org_id = $1`,
-      [ORG_ID],
+      [session.orgId],
     );
     const ticket = await one<{ id: string }>(
       client,
@@ -1466,7 +1470,7 @@ export async function createTicket(
          org_id, ticket_number, property_id, unit_id, room_id, lease_id, category, priority, status, title, description, reported_by_user
        ) VALUES ($1,$2,$3,$4,$5,$6,$7::ticket_category,$8::ticket_priority,'open',$9,$10,$11) RETURNING id`,
       [
-        ORG_ID,
+        session.orgId,
         Number(number.n),
         lease.property_id,
         lease.unit_id,
@@ -1488,12 +1492,12 @@ export async function updateTicket(
   ticketId: string,
   patch: { status?: string; assigneeMemberId?: string; note?: string },
 ) {
-  assertStaff(session, ["admin", "manager", "maintenance"]);
+  assertPerm(session, "tickets.update");
   await tx(session.userId, async (client) => {
     const current = await maybe<{ status: string }>(
       client,
       `SELECT status::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`,
-      [ticketId, ORG_ID],
+      [ticketId, session.orgId],
     );
     if (!current) throw new FlowError("errors.notFound");
     if (patch.status || patch.assigneeMemberId) {
@@ -1509,7 +1513,7 @@ export async function updateTicket(
       await client.query(
         `INSERT INTO ticket_comments (org_id, ticket_id, author_user_id, body, status_from, status_to)
          VALUES ($1,$2,$3,$4,$5::ticket_status,$6::ticket_status)`,
-        [ORG_ID, ticketId, session.userId, patch.note?.trim() || null, current.status, patch.status || null],
+        [session.orgId, ticketId, session.userId, patch.note?.trim() || null, current.status, patch.status || null],
       );
     }
   });
@@ -1536,18 +1540,18 @@ export async function postMessage(session: Session, threadId: string, body: stri
       );
       return;
     }
-    assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
+    assertPerm(session, "messages.send");
     const member = await one<{ id: string }>(
       client,
       `SELECT id FROM org_members WHERE org_id = $1 AND user_id = $2 AND status = 'active'`,
-      [ORG_ID, session.userId],
+      [session.orgId, session.userId],
     );
     await client.query(
       `INSERT INTO messages (org_id, thread_id, sender_user_id, sender_member_id, body, inbound_channel)
        VALUES ($1,$2,$3,$4,$5,'in_app')`,
-      [ORG_ID, threadId, session.userId, member.id, body.trim()],
+      [session.orgId, threadId, session.userId, member.id, body.trim()],
     );
-    await client.query(`UPDATE message_threads SET last_message_at = now() WHERE id = $1 AND org_id = $2`, [threadId, ORG_ID]);
+    await client.query(`UPDATE message_threads SET last_message_at = now() WHERE id = $1 AND org_id = $2`, [threadId, session.orgId]);
   });
 }
 
@@ -1558,10 +1562,111 @@ export async function inviteTeammate(session: Session, input: { email: string; r
   const code = `CND-${randomUUID().slice(0, 8).toUpperCase()}`;
   await tx(session.userId, async (client) => {
     await client.query(
-      `INSERT INTO invitations (org_id, kind, role, email, code_hash, invited_by)
-       VALUES ($1,'team_member',$2::org_role,$3,$4,$5)`,
-      [ORG_ID, input.role, email, sha256(code), session.userId],
+      `INSERT INTO invitations (org_id, kind, role, email, code_hash, expires_at, invited_by)
+       VALUES ($1,'team_member',$2::org_role,$3,$4, now() + interval '7 days', $5)`,
+      [session.orgId, input.role, email, sha256(code), session.userId],
     );
   });
   return { code };
+}
+
+async function firstOpenDay(client: PoolClient, orgId: string) {
+  const closed = await maybe<{ m: string | null }>(
+    client,
+    `SELECT max(period_month)::text AS m FROM month_closes WHERE org_id = $1`,
+    [orgId],
+  );
+  const today = taipeiToday();
+  if (!closed?.m) return today;
+  const closedMonth = closed.m.slice(0, 7);
+  if (today.slice(0, 7) > closedMonth) return today;
+  const [year, month] = closedMonth.split("-").map(Number);
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  return `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+}
+
+export async function addExpense(
+  session: Session,
+  input: { propertyId: string; description: string; amountMajor: number; receiptName: string },
+) {
+  assertPerm(session, "exp.add");
+  const description = input.description.trim();
+  const receiptName = input.receiptName.trim();
+  const amount = toMinor(input.amountMajor);
+  if (!description || !receiptName || !(amount > 0)) throw new FlowError("errors.required");
+  return tx(session.userId, async (client) => {
+    const property = await maybe<{ currency: string }>(
+      client,
+      `SELECT currency FROM properties WHERE id = $1 AND org_id = $2 AND archived_at IS NULL`,
+      [input.propertyId, session.orgId],
+    );
+    if (!property) throw new FlowError("errors.notFound");
+    const incurred = await firstOpenDay(client, session.orgId);
+    const file = await one<{ id: string }>(
+      client,
+      `INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, uploaded_by)
+       VALUES ($1, 'receipts', $2, $3, 'text/plain', $4, $5) RETURNING id`,
+      [session.orgId, `demo/${randomUUID()}.txt`, receiptName, Buffer.byteLength(receiptName), session.userId],
+    );
+    const expense = await one<{ id: string }>(
+      client,
+      `INSERT INTO expenses (
+         org_id, property_id, category, description, currency, amount_minor, incurred_on,
+         paid_by, bill_to, receipt_file_id, status, created_by
+       ) VALUES ($1,$2,'repair',$3,$4,$5,$6,'manager_firm','owner',$7,'posted',$8)
+       RETURNING id`,
+      [session.orgId, input.propertyId, description, property.currency, amount, incurred, file.id, session.userId],
+    );
+    const txn = await one<{ id: string }>(
+      client,
+      `INSERT INTO ledger_transactions (
+         org_id, property_id, kind, currency, effective_date, description, source_table, source_id, created_by
+       ) VALUES ($1,$2,'expense',$3,$4,$5,'expenses',$6,$7) RETURNING id`,
+      [session.orgId, input.propertyId, property.currency, incurred, description, expense.id, session.userId],
+    );
+    await client.query(
+      `INSERT INTO ledger_entries (org_id, transaction_id, account, amount_minor, currency, property_id, memo)
+       VALUES ($1,$2,'expense',$3,$4,$5,$6), ($1,$2,'owner_payable',$7,$4,$5,$6)`,
+      [session.orgId, txn.id, amount, property.currency, input.propertyId, description, -amount],
+    );
+    await client.query(`UPDATE expenses SET ledger_transaction_id = $2 WHERE id = $1`, [expense.id, txn.id]);
+    return { expenseId: expense.id, incurred };
+  });
+}
+
+export async function reversePayment(session: Session, paymentId: string, reason: string) {
+  assertPerm(session, "pay.reverse");
+  const note = reason.trim();
+  if (!note) throw new FlowError("errors.required");
+  await tx(session.userId, async (client) => {
+    const payment = await maybe<{ id: string; status: string; ledger_transaction_id: string | null }>(
+      client,
+      `SELECT id::text, status::text, ledger_transaction_id::text
+         FROM payments WHERE id = $1 AND org_id = $2`,
+      [paymentId, session.orgId],
+    );
+    if (!payment || payment.status !== "confirmed" || !payment.ledger_transaction_id) {
+      throw new FlowError("errors.paymentState");
+    }
+    await client.query(`SELECT post_reversal($1::uuid, $2)`, [payment.ledger_transaction_id, note]);
+    await client.query(`UPDATE payments SET status = 'reversed' WHERE id = $1 AND org_id = $2`, [payment.id, session.orgId]);
+  });
+}
+
+export async function closeMonth(session: Session, month: string, note: string) {
+  assertPerm(session, "month.close");
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new FlowError("errors.required");
+  await tx(session.userId, async (client) => {
+    const existing = await maybe<{ id: string }>(
+      client,
+      `SELECT id::text FROM month_closes WHERE org_id = $1 AND period_month = $2::date`,
+      [session.orgId, `${month}-01`],
+    );
+    if (existing) throw new FlowError("errors.paymentState");
+    await client.query(
+      `INSERT INTO month_closes (org_id, period_month, closed_by, note) VALUES ($1, $2::date, $3, $4)`,
+      [session.orgId, `${month}-01`, session.userId, note.trim() || null],
+    );
+  });
 }

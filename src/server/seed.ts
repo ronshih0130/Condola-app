@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { pool } from "./db";
+import { DEMO_PASSWORD } from "./demo-password";
 import { FIRM2_NAME, FIRM_NAME, ORG2_ID, ORG_ID, USERS } from "./ids";
 
 const KEEP = new Set([
@@ -57,14 +58,14 @@ export async function resetAndSeed() {
 
     for (const person of PEOPLE) {
       await client.query(
-        `INSERT INTO auth.users (id, email, raw_user_meta_data, email_confirmed_at)
-         VALUES ($1, $2, $3::jsonb, now())`,
-        [person.id, person.email, JSON.stringify({ name: person.name })],
+        `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, email_confirmed_at, role, aud)
+         VALUES ($1, $2, crypt($3, gen_salt('bf')), $4::jsonb, now(), 'authenticated', 'authenticated')`,
+        [person.id, person.email, DEMO_PASSWORD, JSON.stringify({ name: person.name })],
       );
       await client.query(
-        `INSERT INTO profiles (id, display_name, email, phone_e164, locale, timezone)
-         VALUES ($1, $2, $3, $4, $5, 'Asia/Taipei')`,
-        [person.id, person.name, person.email, person.phone ?? null, person.locale ?? "zh-TW"],
+        `INSERT INTO profiles (id, display_name, email, phone_e164, locale, timezone, line_linked)
+         VALUES ($1, $2, $3, $4, $5, 'Asia/Taipei', $6)`,
+        [person.id, person.name, person.email, person.phone ?? null, person.locale ?? "zh-TW", person.id === USERS.manager],
       );
     }
 

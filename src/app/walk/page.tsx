@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
-import { getSession } from "@/server/session";
+import { requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
 const LINKS = ["/m/properties/new", "/m/leases/new", "/m/payments", "/m/bank", "/m/statements", "/t", "/o"];
 
 export default async function WalkPage() {
-  const session = await getSession();
-  const t = makeT(session.locale);
+  const prefs = await requestPrefs();
+  const t = makeT(prefs.locale);
   const steps = Array.from({ length: 20 }, (_, index) => t(`i_w${index + 1}`));
   return (
     <div className="main">

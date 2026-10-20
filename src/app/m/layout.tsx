@@ -1,8 +1,10 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Sidebar, TaskPanel } from "@/components/chrome";
+import { demoModeEnabled } from "@/server/demo";
+import { can, permForPath } from "@/server/perms";
 import { counts, loadFirm, loadTryout } from "@/server/queries";
-import { getSession, listPersonas } from "@/server/session";
+import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +12,11 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   const session = await getSession();
   if (session.kind === "tenant") redirect("/t");
   if (session.kind === "owner") redirect("/o");
+  const path = (await headers()).get("x-pathname") || "";
+  const perm = permForPath(path);
+  if (perm && !can(session.role, perm)) redirect(`/m/noperm?need=${perm}`);
   const jar = await cookies();
-  const [flags, firm, badge, personas] = await Promise.all([
-    loadTryout(session),
-    loadFirm(session),
-    counts(session),
-    listPersonas(),
-  ]);
+  const [flags, firm, badge] = await Promise.all([loadTryout(session), loadFirm(session), counts(session)]);
   return (
     <>
       <TaskPanel flags={flags} hidden={jar.get("condola_tryout_hide")?.value === "1"} />
@@ -27,8 +27,8 @@ export default async function ManagerLayout({ children }: { children: React.Reac
           firm={firm.name}
           pending={badge.pending}
           tickets={badge.tickets}
-          personas={personas.map((persona) => ({ id: persona.id, name: persona.name }))}
-          current={session.userId}
+          role={session.role}
+          showReset={demoModeEnabled() && session.role === "admin"}
         />
         <div className="main">{children}</div>
       </div>

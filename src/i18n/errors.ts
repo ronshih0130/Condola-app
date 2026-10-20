@@ -25,6 +25,13 @@ const ERRORS: Record<string, string> = {
   "errors.phone": "i_phone",
   "errors.meter": "i_meter",
   "errors.billExists": "i_bill_exists",
+  "errors.lastAdmin": "i_last_admin",
+  "errors.ownRole": "i_own_role",
+  "errors.mismatch": "i_pw_mismatch",
+  "errors.weakPassword": "i_pw_weak",
+  "errors.authInvalid": "i_auth_invalid",
+  "errors.mfaRequired": "i_mfa_required_err",
+  "errors.confirm": "i_confirm_needed",
 };
 
 export function errorText(t: T, key: string | undefined) {

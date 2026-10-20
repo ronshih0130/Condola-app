@@ -26,6 +26,8 @@ function persona(overrides: Partial<Session> = {}): Session {
     locale: "zh-TW",
     calendar: "gregorian",
     leaseId: null,
+    sessionId: "script",
+    email: "yating.lin@songxin.demo",
     ...overrides,
   };
 }

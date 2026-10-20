@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { ACCOUNTS, resetDemo, signIn } from "./session";
 
 const locales = [
   {
@@ -22,8 +23,7 @@ const locales = [
 ] as const;
 
 test.beforeEach(async ({ page }) => {
-  const response = await page.request.post("/api/demo/reset");
-  expect(response.ok()).toBeTruthy();
+  await resetDemo(page);
 });
 
 for (const locale of locales) {
@@ -185,6 +185,7 @@ test("reset toast follows the locale", async ({ page }) => {
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByTestId("reset-demo").click();
   await expect(page.getByTestId("reset-toast")).toHaveText("Demo reset");
+  await signIn(page, ACCOUNTS.admin);
   await page.goto("/api/demo/locale?set=zh-TW&next=/");
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByTestId("reset-demo").click();
@@ -194,7 +195,7 @@ test("reset toast follows the locale", async ({ page }) => {
 test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {
   await page.goto("/api/demo/locale?set=zh-TW&next=/m");
   await page.screenshot({ path: "/opt/cursor/artifacts/dashboard.png", fullPage: true });
-  await page.getByTestId("persona-select").selectOption({ label: "張雅文" });
+  await signIn(page, ACCOUNTS.tenant);
   await expect(page.getByTestId("liff-frame")).toBeVisible();
   await expect(page.getByTestId("lease-picker")).toBeVisible();
   await expect(page.getByTestId("lease-picker")).toContainText("松信住宅管理");
@@ -209,27 +210,26 @@ test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {
   await expect(page.getByText("已送出")).toBeVisible();
   await page.screenshot({ path: "/opt/cursor/artifacts/tenant-liff.png", fullPage: true });
 
-  await page.goto("/api/demo/mode?mode=own");
+  await signIn(page, ACCOUNTS.owner);
+  await page.goto("/o");
   const phone = page.getByRole("row", { name: /王小美/ }).getByTestId("tenant-phone");
   await expect(phone).toHaveAttribute("data-visible", "false");
   await expect(phone).not.toContainText("912111002");
   await page.screenshot({ path: "/opt/cursor/artifacts/owner-portal.png", fullPage: true });
 
-  await Promise.all([
-    page.waitForURL(/\/m/),
-    page.getByTestId("persona-select").selectOption({ label: "吳大維" }),
-  ]);
+  await signIn(page, ACCOUNTS.maintenance);
   await page.goto("/m/properties/new");
   await expect(page.getByTestId("forbidden")).toBeVisible();
   await expect(page.getByTestId("property-name")).toHaveCount(0);
 
-  await page.goto("/api/demo/mode?mode=mgr");
+  await signIn(page, ACCOUNTS.admin);
+  await page.goto("/m");
   await expect(page.getByTestId("tryout-task-bonus")).toHaveAttribute("data-complete", "true");
 });
 
 test("rent due notice shows rent only", async ({ page }) => {
-  await page.goto("/api/demo/locale?set=zh-TW&next=/m");
-  await page.getByTestId("persona-select").selectOption({ label: "王小美" });
+  await signIn(page, ACCOUNTS.tenant2);
+  await page.goto("/api/demo/locale?set=zh-TW&next=/t");
   const notice = page.getByTestId("rent-due-notice");
   await expect(notice).toContainText("房租即將到期");
   const amount = page.getByTestId("rent-due-amount");

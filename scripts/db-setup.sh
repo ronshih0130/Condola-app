@@ -20,7 +20,9 @@ sudo -u postgres psql -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FR
 sudo -u postgres psql -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS condola;"
 sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE condola OWNER condola;"
 sudo -u postgres psql -d condola -v ON_ERROR_STOP=1 -f supabase/stub/supabase_stub.sql
-sudo -u postgres psql -d condola -v ON_ERROR_STOP=1 -f supabase/migrations/20261018120000_schema.sql
+for migration in supabase/migrations/*.sql; do
+  sudo -u postgres psql -d condola -v ON_ERROR_STOP=1 -f "$migration"
+done
 
 npm run db:reset
 echo "Database condola is ready."

@@ -6,10 +6,12 @@ export function StatementDocument({
   t,
   locale,
   row,
+  lines,
   note,
 }: {
   t: T;
   locale: Locale;
+  lines?: { line_type: string; description: string | null; amount: string }[];
   row: {
     currency: string;
     opening: string;
@@ -33,7 +35,7 @@ export function StatementDocument({
   });
   const money = (minor: number) => formatMoney(minor, row.currency, locale);
   const labeled = (minor: number) => moneyLabel(minor, row.currency, locale);
-  const lines = [
+  const summary = [
     ["i_opening", money(figures.opening), ""],
     ["i_rent_received", money(figures.rent), "statement-rent"],
     ["i_other_income", money(figures.other), ""],
@@ -44,7 +46,7 @@ export function StatementDocument({
     <div className="card" style={{ maxWidth: 640 }} data-testid="statement-document">
       <table className="t">
         <tbody>
-          {lines.map(([key, value, testid]) => (
+          {summary.map(([key, value, testid]) => (
             <tr key={key}>
               <td>{t(key)}</td>
               <td className="num" data-testid={testid || undefined}>
@@ -83,6 +85,18 @@ export function StatementDocument({
             {t("owner_owes_reason", { costs: labeled(figures.costs), rent: labeled(figures.rent) })}
           </p>
         </div>
+      ) : null}
+      {lines && lines.length > 0 ? (
+        <table className="t">
+          <tbody>
+            {lines.map((line, index) => (
+              <tr key={`${line.line_type}-${index}`}>
+                <td data-testid="statement-line">{line.description || t("i_expenses")}</td>
+                <td className="num">{money(Number(line.amount))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       ) : null}
       {note ? <div className="bd">{note}</div> : null}
     </div>
