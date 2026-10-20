@@ -5,7 +5,7 @@ import { isLocale, type Locale } from "@/i18n";
 import { withClient } from "./db";
 import { SESSION_COOKIE } from "./auth";
 import { ENV_COOKIE, ORG_COOKIE, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
-import { ensureSandbox } from "./sandbox";
+import { openSandboxFirm } from "./sandbox";
 import type { CalendarMode, Session } from "./types";
 
 export type Prefs = { locale: Locale; calendar: CalendarMode; leaseId: string | null };
@@ -120,7 +120,7 @@ export async function readSession(): Promise<Session | null> {
       return null;
     });
     if (session && "needsSandbox" in session && session.needsSandbox) {
-      const sandboxId = await ensureSandbox(session);
+      const sandboxId = await openSandboxFirm(session);
       return { ...session, orgId: sandboxId, environment: "sandbox", needsSandbox: false };
     }
     return session;

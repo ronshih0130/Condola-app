@@ -7,7 +7,7 @@ import { USERS } from "./ids";
 import { SANDBOX_NOT_SENT } from "./outbound";
 import { loadSampleRows, sampleCounts } from "./sandbox-data";
 import { runSandboxSeed } from "./sandbox-seed";
-import { ensureSandbox, goLive, loadSampleData } from "./sandbox";
+import { ensureSandbox, goLive, loadSampleData, openSandboxFirm } from "./sandbox";
 import { recordLeaseNotice } from "./domain";
 import type { Session } from "./types";
 
@@ -416,5 +416,79 @@ test("sandbox rows stay hidden, copy resets owner portal logins, and five live u
     assert.equal(blockAudit.rows[0].new_row.owners, "not_copied");
   } finally {
     await cleanup();
+  }
+});
+
+test("opening a missing sandbox creates the firm and seeds the sample once", async () => {
+  const orgId = "90000000-0000-4000-8000-000000000003";
+  const userId = "90000000-0000-4000-8000-0000000000cc";
+  const wipe = async () => {
+    const rows = await query<{ id: string }>(
+      `SELECT id::text FROM organizations WHERE id = $1 OR live_org_id = $1`,
+      [orgId],
+    );
+    const ids = rows.rows.map((row) => row.id);
+    await withClient(async (client) => {
+      await client.query("BEGIN");
+      await client.query("SET session_replication_role = replica");
+      if (ids.length) {
+        const tables = await client.query<{ table_name: string }>(
+          `SELECT c.table_name
+             FROM information_schema.columns c
+             JOIN information_schema.tables t
+               ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+            WHERE c.table_schema = 'public' AND c.column_name = 'org_id' AND t.table_type = 'BASE TABLE'`,
+        );
+        for (const { table_name } of tables.rows) {
+          if (!/^[a-z0-9_]+$/i.test(table_name)) continue;
+          await client.query(`DELETE FROM public."${table_name}" WHERE org_id = ANY($1::uuid[])`, [ids]);
+        }
+        await client.query(`DELETE FROM organizations WHERE id = ANY($1::uuid[])`, [ids]);
+      }
+      await client.query(`DELETE FROM profiles WHERE id = $1`, [userId]);
+      await client.query(`DELETE FROM auth.users WHERE id = $1`, [userId]);
+      await client.query("SET session_replication_role = DEFAULT");
+      await client.query("COMMIT");
+    });
+  };
+
+  await wipe();
+  try {
+    const tw = await query<{ id: string }>(`SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
+    await query(
+      `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, email_confirmed_at, role, aud)
+       VALUES ($1, 'sandbox-first@example.com', crypt('Demo1234', gen_salt('bf')), '{}'::jsonb, now(), 'authenticated', 'authenticated')`,
+      [userId],
+    );
+    await query(`INSERT INTO profiles (id, display_name, email) VALUES ($1, 'First Login', 'sandbox-first@example.com')`, [userId]);
+    await query(
+      `INSERT INTO organizations (
+         id, name, country_code, jurisdiction_id, default_currency, timezone, plan_tier, created_by, settings, live_enabled
+       ) VALUES ($1, '首次登入公司', 'TW', $2, 'TWD', 'Asia/Taipei', 'beta', $3, '{}'::jsonb, true)`,
+      [orgId, tw.rows[0].id, userId],
+    );
+    await query(
+      `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status)
+       VALUES ($1, $2, 'admin', true, 'active')`,
+      [orgId, userId],
+    );
+    const staff = session(orgId, orgId, "live");
+    staff.userId = userId;
+    const sandboxId = await openSandboxFirm(staff);
+    assert.notEqual(sandboxId, orgId);
+    const expected = sampleCounts(loadSampleRows());
+    assert.equal(await count(sandboxId, "properties"), expected.properties);
+    assert.equal(await count(sandboxId, "leases"), expected.leases);
+    await openSandboxFirm(staff);
+    assert.equal(await count(sandboxId, "properties"), expected.properties);
+    const marked = await query<{ loaded: boolean; prompt: string }>(
+      `SELECT sample_loaded_at IS NOT NULL AS loaded, settings->>'sandboxPrompt' AS prompt
+         FROM organizations WHERE id = $1`,
+      [sandboxId],
+    );
+    assert.equal(marked.rows[0].loaded, true);
+    assert.equal(marked.rows[0].prompt, "loaded");
+  } finally {
+    await wipe();
   }
 });

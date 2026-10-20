@@ -76,6 +76,12 @@ test("a firm without live data, or with live mode locked, always opens in test m
   assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
 });
 
+test("a first login with no env cookie opens in test mode, and an explicit choice sticks", () => {
+  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: true, liveEnabled: true }), "sandbox");
+  assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: true, liveEnabled: true }), "sandbox");
+  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
+});
+
 test("sample names stay tagged once and phones become E.164", () => {
   assert.equal(withSampleName("中壢範例分租公寓"), `中壢範例分租公寓〔${SAMPLE_LABEL}〕`);
   assert.equal(withSampleName(`中壢範例分租公寓〔${SAMPLE_LABEL}〕`), `中壢範例分租公寓〔${SAMPLE_LABEL}〕`);

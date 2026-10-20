@@ -101,6 +101,13 @@ export async function ensureSandbox(session: Session) {
   return sandboxId;
 }
 
+/** First visit: create the linked sandbox, if it is missing, and load the sample portfolio once. */
+export async function openSandboxFirm(session: Session) {
+  const sandboxId = await ensureSandbox(session);
+  await loadSampleData({ ...session, orgId: sandboxId, environment: "sandbox" });
+  return sandboxId;
+}
+
 export async function countActiveUnits(orgId: string) {
   const row = await query<{ n: number }>(
     `SELECT count(DISTINCT coalesce(target_room_id::text, target_unit_id::text))::int AS n
@@ -168,22 +175,22 @@ export async function dismissSamplePrompt(session: Session) {
 export async function loadSampleData(session: Session) {
   if (session.environment !== "sandbox") throw new FlowError("errors.forbidden");
   assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
-  const loaded = await query<{ sample_loaded_at: Date | null }>(
-    `SELECT sample_loaded_at FROM organizations WHERE id = $1`,
-    [session.orgId],
-  );
-  if (loaded.rows[0]?.sample_loaded_at) return;
   await withClient(async (client) => {
+    await client.query("BEGIN");
     try {
-      await client.query("BEGIN");
-      await runSandboxSeed(client, { orgId: session.orgId, actorUserId: session.userId });
-      await client.query(
+      const claim = await client.query<{ id: string }>(
         `UPDATE organizations
             SET sample_loaded_at = now(),
                 settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{sandboxPrompt}', '"loaded"'::jsonb, true)
-          WHERE id = $1`,
+          WHERE id = $1 AND environment = 'sandbox' AND sample_loaded_at IS NULL
+          RETURNING id::text`,
         [session.orgId],
       );
+      if (!claim.rows[0]) {
+        await client.query("COMMIT");
+        return;
+      }
+      await runSandboxSeed(client, { orgId: session.orgId, actorUserId: session.userId });
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
