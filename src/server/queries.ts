@@ -1,4 +1,4 @@
-import { pool, maybe, many, tx } from "./db";
+import { query, maybe, many, tx } from "./db";
 import { rentUtilityDueMinor } from "./money";
 import type { Session } from "./types";
 
@@ -827,7 +827,7 @@ export async function listTeam(session: Session) {
   const ids = rows.map((row) => row.user_id).filter((id): id is string => Boolean(id));
   const extra = new Map<string, { mfa: boolean; last_sign_in: string | null }>();
   if (ids.length) {
-    const facts = await pool.query<{ user_id: string; mfa: boolean; last_sign_in: string | null }>(
+    const facts = await query<{ user_id: string; mfa: boolean; last_sign_in: string | null }>(
       `SELECT u.id::text AS user_id, coalesce(f.enabled, false) AS mfa,
               (SELECT max(s.last_active_at)::text FROM auth_sessions s WHERE s.user_id = u.id) AS last_sign_in
          FROM auth.users u

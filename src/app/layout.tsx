@@ -34,7 +34,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <BrandLink />
             {session?.kind === "staff" ? <EnvSwitch environment={session.environment} /> : null}
             <span className="top-extra">
-              <span className="demo-pill">{t("s_f269874")}</span>
               {session ? <span className="small">{session.name}</span> : <a href="/login">{t("i_sign_in")}</a>}
             </span>
             <span className="locale-slot">

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { PoolClient } from "pg";
-import { pool } from "./db";
+import type { Client } from "pg";
+import { withClient } from "./db";
 import { DEMO_PASSWORD } from "./demo-password";
 import { FIRM2_NAME, FIRM_NAME, ORG2_ID, ORG_ID, USERS } from "./ids";
 
@@ -17,7 +17,7 @@ function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-async function wipe(client: PoolClient) {
+async function wipe(client: Client) {
   const tables = await client.query<{ tablename: string }>(
     `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
   );
@@ -51,7 +51,7 @@ const PEOPLE: UserSeed[] = [
 ];
 
 export async function resetAndSeed() {
-  const client = await pool.connect();
+  await withClient(async (client) => {
   try {
     await client.query("BEGIN");
     await wipe(client);
@@ -518,9 +518,8 @@ export async function resetAndSeed() {
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
-  } finally {
-    client.release();
   }
+  });
 }
 
 const isDirect = process.argv[1]?.endsWith("seed.ts");
@@ -528,11 +527,9 @@ if (isDirect) {
   resetAndSeed()
     .then(() => {
       console.log("Seeded Condola demo data.");
-      return pool.end();
     })
-    .catch(async (error) => {
+    .catch((error) => {
       console.error(error);
-      await pool.end();
       process.exit(1);
     });
 }

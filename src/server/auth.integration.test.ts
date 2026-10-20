@@ -12,7 +12,7 @@ import {
   signIn,
   signInWithLine,
 } from "./auth";
-import { pool } from "./db";
+import { query } from "./db";
 import { lineLoginEnabled } from "./demo";
 import { DEMO_PASSWORD } from "./demo-password";
 import { FlowError } from "./errors";
@@ -49,12 +49,12 @@ test("unknown email and wrong password share one error; the fifth failure locks 
   const wrong = await signIn("yating.lin@songxin.demo", "Wrongpass1", false, meta);
   assert.deepEqual(unknown, { ok: false, error: "invalid" });
   assert.deepEqual(wrong, { ok: false, error: "invalid" });
-  await pool.query(`DELETE FROM auth_login_attempts WHERE email = 'lock@example.com'`);
+  await query(`DELETE FROM auth_login_attempts WHERE email = 'lock@example.com'`);
   let last: Awaited<ReturnType<typeof signIn>> = { ok: false, error: "invalid" };
   for (let i = 0; i < 5; i += 1) last = await signIn("lock@example.com", "Wrongpass1", false, meta);
   assert.equal(last.ok, false);
   if (!last.ok && "error" in last) assert.equal(last.error, "locked");
-  const row = await pool.query<{ locked_until: Date }>(
+  const row = await query<{ locked_until: Date }>(
     `SELECT locked_until FROM auth_login_attempts WHERE email = 'lock@example.com'`,
   );
   const remaining = row.rows[0].locked_until.getTime() - Date.now();
@@ -63,13 +63,13 @@ test("unknown email and wrong password share one error; the fifth failure locks 
 });
 
 test("a correct password signs the admin in", async () => {
-  await pool.query(`DELETE FROM auth_login_attempts WHERE email = 'yating.lin@songxin.demo'`);
+  await query(`DELETE FROM auth_login_attempts WHERE email = 'yating.lin@songxin.demo'`);
   const result = await signIn("yating.lin@songxin.demo", DEMO_PASSWORD, false, meta);
   assert.equal(result.ok, true);
 });
 
 test("deactivated members cannot sign in", async () => {
-  const member = await pool.query<{ id: string }>(
+  const member = await query<{ id: string }>(
     `SELECT id::text FROM org_members WHERE org_id = $1 AND user_id = $2`,
     [ORG_ID, USERS.manager],
   );
@@ -80,7 +80,7 @@ test("deactivated members cannot sign in", async () => {
 });
 
 test("the last admin cannot be demoted", async () => {
-  const member = await pool.query<{ id: string }>(
+  const member = await query<{ id: string }>(
     `SELECT id::text FROM org_members WHERE org_id = $1 AND user_id = $2`,
     [ORG_ID, USERS.admin],
   );
@@ -105,7 +105,7 @@ test("invite rejects a duplicate and accept signs the member in once", async () 
 });
 
 test("deactivating a member without confirmation is rejected", async () => {
-  const member = await pool.query<{ id: string; status: string }>(
+  const member = await query<{ id: string; status: string }>(
     `SELECT id::text, status::text FROM org_members WHERE org_id = $1 AND user_id = $2`,
     [ORG_ID, USERS.maintenance],
   );
@@ -114,7 +114,7 @@ test("deactivating a member without confirmation is rejected", async () => {
     assert.equal(error.key, "errors.confirm");
     return true;
   });
-  const after = await pool.query<{ status: string }>(`SELECT status::text FROM org_members WHERE id = $1`, [member.rows[0].id]);
+  const after = await query<{ status: string }>(`SELECT status::text FROM org_members WHERE id = $1`, [member.rows[0].id]);
   assert.equal(after.rows[0].status, "active");
 });
 
@@ -151,7 +151,7 @@ test("demo LINE sign-in does nothing when the environment is production", async 
 test("password reset expires, and a valid reset signs out every session", async () => {
   const issued = await requestPasswordReset("yating.lin@songxin.demo");
   assert.ok(issued.token);
-  await pool.query(
+  await query(
     `UPDATE auth_password_resets SET expires_at = now() - interval '1 minute'
       WHERE user_id = $1 AND used_at IS NULL`,
     [USERS.admin],
@@ -161,7 +161,7 @@ test("password reset expires, and a valid reset signs out every session", async 
   assert.equal(fresh.token, null);
   const older = await requestPasswordReset("meiling.zhou@songxin.demo");
   const live = await requestPasswordReset("meiling.zhou@songxin.demo");
-  await pool.query(
+  await query(
     `INSERT INTO auth_login_attempts (email, failed_count, locked_until)
      VALUES ('meiling.zhou@songxin.demo', 5, now() + interval '15 minutes')
      ON CONFLICT (email) DO UPDATE SET failed_count = 5, locked_until = now() + interval '15 minutes'`,
@@ -170,13 +170,13 @@ test("password reset expires, and a valid reset signs out every session", async 
   assert.deepEqual(mismatch, { ok: false, error: "mismatch" });
   const weak = await resetPassword(live.token!, "password1", "password1");
   assert.deepEqual(weak, { ok: false, error: "weak" });
-  await pool.query(
+  await query(
     `INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES ($1, 'stale-token', now() + interval '1 day')`,
     [USERS.accountant],
   );
   const saved = await resetPassword(live.token!, "Fresh1234", "Fresh1234");
   assert.equal(saved.ok, true);
-  const sessions = await pool.query(
+  const sessions = await query(
     `SELECT count(*)::int AS n FROM auth_sessions WHERE user_id = $1 AND revoked_at IS NULL`,
     [USERS.accountant],
   );
@@ -184,6 +184,6 @@ test("password reset expires, and a valid reset signs out every session", async 
   const reused = await resetPassword(live.token!, "Fresh1234", "Fresh1234");
   assert.deepEqual(reused, { ok: false, error: "expired" });
   assert.equal(await describeReset(older.token!), "expired");
-  const lock = await pool.query(`SELECT 1 FROM auth_login_attempts WHERE email = 'meiling.zhou@songxin.demo'`);
+  const lock = await query(`SELECT 1 FROM auth_login_attempts WHERE email = 'meiling.zhou@songxin.demo'`);
   assert.equal(lock.rows.length, 0);
 });

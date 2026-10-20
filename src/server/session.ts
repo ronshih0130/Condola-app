@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { isLocale, type Locale } from "@/i18n";
-import { pool } from "./db";
+import { withClient } from "./db";
 import { SESSION_COOKIE } from "./auth";
 import { ENV_COOKIE, ORG_COOKIE, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
 import type { CalendarMode, Session } from "./types";
@@ -34,78 +34,80 @@ export async function readSession(): Promise<Session | null> {
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   try {
-    const found = await pool.query<IdentityRow>(
-      `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
-              coalesce(p.email::text, u.email) AS email
-         FROM auth_sessions s
-         JOIN auth.users u ON u.id = s.user_id
-         LEFT JOIN profiles p ON p.id = u.id
-        WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
-      [sha256(token)],
-    );
-    const identity = found.rows[0];
-    if (!identity) return null;
-    await pool.query(`UPDATE auth_sessions SET last_active_at = now() WHERE id = $1`, [identity.session_id]);
-    const preferredOrg = jar.get(ORG_COOKIE)?.value ?? null;
-    const envChoice: OrgEnvironment = jar.get(ENV_COOKIE)?.value === "sandbox" ? "sandbox" : "live";
-    const base = {
-      userId: identity.user_id,
-      sessionId: identity.session_id,
-      email: identity.email ?? "",
-      name: identity.name ?? "",
-      locale: prefs.locale,
-      calendar: prefs.calendar,
-      leaseId: prefs.leaseId,
-    };
-    const firm = await resolveStaffOrg(pool, identity.user_id, preferredOrg, envChoice);
-    if (firm) {
-      return { ...base, kind: "staff", role: firm.role, orgId: firm.orgId, liveOrgId: firm.liveOrgId, environment: firm.environment };
-    }
-    const contact = await pool.query<{
-      org_id: string;
-      environment: OrgEnvironment;
-      live_org_id: string;
-      is_tenant: boolean;
-      is_owner: boolean;
-    }>(
-      `SELECT c.org_id::text,
-              o.environment::text AS environment,
-              coalesce(o.live_org_id::text, c.org_id::text) AS live_org_id,
-              bool_or(c.is_tenant) AS is_tenant,
-              bool_or(c.is_owner) AS is_owner
-         FROM contacts c
-         JOIN organizations o ON o.id = c.org_id
-        WHERE c.user_id = $1 AND c.archived_at IS NULL
-        GROUP BY c.org_id, o.environment, o.live_org_id
-        ORDER BY c.org_id
-        LIMIT 1`,
-      [identity.user_id],
-    );
-    const portal = contact.rows[0];
-    if (!portal) return null;
-    let orgId = portal.org_id;
-    let environment: OrgEnvironment = portal.environment === "sandbox" ? "sandbox" : "live";
-    let liveOrgId = portal.live_org_id;
-    if (prefs.leaseId) {
-      const leaseOrg = await pool.query<{ org_id: string; environment: OrgEnvironment; live_org_id: string }>(
-        `SELECT l.org_id::text, o.environment::text AS environment, coalesce(o.live_org_id::text, l.org_id::text) AS live_org_id
-           FROM leases l
-           JOIN organizations o ON o.id = l.org_id
-           JOIN lease_parties lp ON lp.lease_id = l.id
-           JOIN contacts c ON c.id = lp.contact_id
-          WHERE l.id = $1 AND c.user_id = $2
-          LIMIT 1`,
-        [prefs.leaseId, identity.user_id],
+    return await withClient(async (client) => {
+      const found = await client.query<IdentityRow>(
+        `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
+                coalesce(p.email::text, u.email) AS email
+           FROM auth_sessions s
+           JOIN auth.users u ON u.id = s.user_id
+           LEFT JOIN profiles p ON p.id = u.id
+          WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
+        [sha256(token)],
       );
-      if (leaseOrg.rows[0]) {
-        orgId = leaseOrg.rows[0].org_id;
-        environment = leaseOrg.rows[0].environment === "sandbox" ? "sandbox" : "live";
-        liveOrgId = leaseOrg.rows[0].live_org_id;
+      const identity = found.rows[0];
+      if (!identity) return null;
+      await client.query(`UPDATE auth_sessions SET last_active_at = now() WHERE id = $1`, [identity.session_id]);
+      const preferredOrg = jar.get(ORG_COOKIE)?.value ?? null;
+      const envChoice: OrgEnvironment = jar.get(ENV_COOKIE)?.value === "sandbox" ? "sandbox" : "live";
+      const base = {
+        userId: identity.user_id,
+        sessionId: identity.session_id,
+        email: identity.email ?? "",
+        name: identity.name ?? "",
+        locale: prefs.locale,
+        calendar: prefs.calendar,
+        leaseId: prefs.leaseId,
+      };
+      const firm = await resolveStaffOrg(client, identity.user_id, preferredOrg, envChoice);
+      if (firm) {
+        return { ...base, kind: "staff", role: firm.role, orgId: firm.orgId, liveOrgId: firm.liveOrgId, environment: firm.environment };
       }
-    }
-    if (portal.is_tenant) return { ...base, kind: "tenant", role: null, orgId, liveOrgId, environment };
-    if (portal.is_owner) return { ...base, kind: "owner", role: null, orgId, liveOrgId, environment };
-    return null;
+      const contact = await client.query<{
+        org_id: string;
+        environment: OrgEnvironment;
+        live_org_id: string;
+        is_tenant: boolean;
+        is_owner: boolean;
+      }>(
+        `SELECT c.org_id::text,
+                o.environment::text AS environment,
+                coalesce(o.live_org_id::text, c.org_id::text) AS live_org_id,
+                bool_or(c.is_tenant) AS is_tenant,
+                bool_or(c.is_owner) AS is_owner
+           FROM contacts c
+           JOIN organizations o ON o.id = c.org_id
+          WHERE c.user_id = $1 AND c.archived_at IS NULL
+          GROUP BY c.org_id, o.environment, o.live_org_id
+          ORDER BY c.org_id
+          LIMIT 1`,
+        [identity.user_id],
+      );
+      const portal = contact.rows[0];
+      if (!portal) return null;
+      let orgId = portal.org_id;
+      let environment: OrgEnvironment = portal.environment === "sandbox" ? "sandbox" : "live";
+      let liveOrgId = portal.live_org_id;
+      if (prefs.leaseId) {
+        const leaseOrg = await client.query<{ org_id: string; environment: OrgEnvironment; live_org_id: string }>(
+          `SELECT l.org_id::text, o.environment::text AS environment, coalesce(o.live_org_id::text, l.org_id::text) AS live_org_id
+             FROM leases l
+             JOIN organizations o ON o.id = l.org_id
+             JOIN lease_parties lp ON lp.lease_id = l.id
+             JOIN contacts c ON c.id = lp.contact_id
+            WHERE l.id = $1 AND c.user_id = $2
+            LIMIT 1`,
+          [prefs.leaseId, identity.user_id],
+        );
+        if (leaseOrg.rows[0]) {
+          orgId = leaseOrg.rows[0].org_id;
+          environment = leaseOrg.rows[0].environment === "sandbox" ? "sandbox" : "live";
+          liveOrgId = leaseOrg.rows[0].live_org_id;
+        }
+      }
+      if (portal.is_tenant) return { ...base, kind: "tenant", role: null, orgId, liveOrgId, environment };
+      if (portal.is_owner) return { ...base, kind: "owner", role: null, orgId, liveOrgId, environment };
+      return null;
+    });
   } catch (error) {
     if (process.env.NEXT_PHASE === "phase-production-build") return null;
     throw error;

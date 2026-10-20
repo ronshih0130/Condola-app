@@ -12,7 +12,7 @@ import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; step?: string; next?: string; reset?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; step?: string; next?: string; reset?: string; demoReset?: string }> }) {
   const params = await searchParams;
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
@@ -29,6 +29,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <AuthBrand name={t("i_brand")} />
       <form className="card pad" action={params.step === "2fa" || params.step === "enroll" ? actionSecondFactor : actionSignIn}>
         <h1>{t("i_sign_in")}</h1>
+        {params.demoReset === "1" ? (
+          <div className="toast" data-testid="reset-toast">
+            {t("s_fe71059")}
+          </div>
+        ) : null}
         {params.reset === "1" ? <div className="alert ok">{t("i_password_updated")}</div> : null}
         {errorKey ? (
           <div className="alert bad" data-testid="login-error">

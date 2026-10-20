@@ -1,4 +1,4 @@
-import { pool, tx } from "../src/server/db";
+import { tx } from "../src/server/db";
 import {
   approveMatch,
   confirmPayment,
@@ -187,9 +187,7 @@ async function main() {
   console.log("smoke ok");
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(() => pool.end());
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
