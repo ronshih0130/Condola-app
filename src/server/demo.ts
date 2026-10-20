@@ -1,4 +1,4 @@
-const REAL_ENVS = new Set(["production", "staging-real"]);
+const REAL_ENVS = new Set(["production", "staging", "staging-real"]);
 
 /**
  * A real deployment. `next build` / `next start` / Workers set NODE_ENV=production.
@@ -14,7 +14,7 @@ export function demoModeRequested() {
   return process.env.DEMO_MODE === "true";
 }
 
-/** True only for a local/dev demo. Production and staging-real ignore DEMO_MODE. */
+/** True only for a local/dev demo. Production and staging ignore DEMO_MODE. */
 export function demoModeEnabled() {
   return demoModeRequested() && !productionLikeEnv();
 }
@@ -33,7 +33,7 @@ export function warnDemoMode() {
       "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
       "DEMO_MODE is ON.",
       "The authenticator accepts 123456 and POST /api/demo/reset can wipe the database.",
-      "Never set DEMO_MODE when NODE_ENV=production or CONDOLA_ENV is production or staging-real.",
+      "Never set DEMO_MODE when NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real.",
       "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
     ].join("\n"),
   );
@@ -52,7 +52,7 @@ export function enforceDemoSafety() {
   if (building()) return;
   if (productionLikeEnv() && (demoModeRequested() || lineLoginRequested())) {
     const message =
-      "Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production/staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.";
+      "Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.";
     console.error(`\n${"!".repeat(72)}\n${message}\n${"!".repeat(72)}\n`);
     throw new Error(message);
   }
@@ -66,7 +66,7 @@ export function enforceDemoSafety() {
  * LINE Login is not a real OAuth client. When enabled it signs in the member
  * whose profile is marked line-linked, with no password. It follows the same
  * production guard as DEMO_MODE: ignored, and the process refuses to start,
- * when NODE_ENV=production or CONDOLA_ENV is production or staging-real.
+ * when NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real.
  */
 export function lineLoginEnabled() {
   if (productionLikeEnv()) return false;

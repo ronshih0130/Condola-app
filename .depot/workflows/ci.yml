@@ -53,3 +53,51 @@ jobs:
       - run: npm run test:rls
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
+  # Staging Worker only. This job never deploys production.
+  # It runs after `check` succeeds, and only on a push to main, when the
+  # repository variable STAGING_AUTODEPLOY is exactly "true". Unset, empty,
+  # or any other value skips the job (the default is off).
+  # CLOUDFLARE_API_TOKEN is required; the job fails before deploy when it is missing.
+  deploy-staging:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_AUTODEPLOY == 'true'
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Require the Cloudflare API token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [[ -z "${CLOUDFLARE_API_TOKEN}" ]]; then
+            echo "CLOUDFLARE_API_TOKEN is required to deploy staging." >&2
+            exit 1
+          fi
+      - name: Build the OpenNext bundle
+        run: |
+          if [[ -n "${DATABASE_URL:-}" || -n "${SUPABASE_URL:-}" || -n "${SUPABASE_ANON_KEY:-}" || -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || -n "${CLOUDFLARE_API_TOKEN:-}" || "${DEMO_MODE:-}" == "true" ]]; then
+            echo "Refusing to build with database secrets, the Cloudflare token, or DEMO_MODE=true in the environment." >&2
+            exit 1
+          fi
+          npm run cf:build
+      - name: Apply staging migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [[ -z "${DATABASE_URL}" ]]; then
+            echo "DATABASE_URL is required to apply staging migrations. Use the Tokyo session connection (port 5432). The value is not printed." >&2
+            exit 1
+          fi
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          bash scripts/db-migrate.sh
+      - name: Deploy the staging Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/cf-deploy-staging.sh
