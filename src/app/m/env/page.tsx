@@ -16,6 +16,7 @@ export default async function GoLivePage({ searchParams }: { searchParams: Promi
       <PageHeader title={t("i_golive_title")} />
       <ErrorBanner t={t} error={query.error} />
       <div className="card pad" style={{ maxWidth: 720 }}>
+        <p data-testid="golive-ready">{t("i_golive_ready")}</p>
         <GoLiveForm
           allowed={preview.allowed}
           activeUnits={preview.activeUnits}

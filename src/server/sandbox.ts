@@ -1,7 +1,10 @@
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
+import { seatLimit } from "./billing";
 import { query, withClient } from "./db";
 import { FlowError } from "./errors";
+import { recordFunnel } from "./funnel";
+import { goLiveLocked } from "./platform";
 import {
   COPY_KINDS,
   FREE_ACTIVE_UNITS,
@@ -404,9 +407,39 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
   });
 }
 
-export async function liveModeEnabled(orgId: string) {
-  const row = await query<{ live_enabled: boolean }>(`SELECT live_enabled FROM organizations WHERE id = $1`, [orgId]);
-  return Boolean(row.rows[0]?.live_enabled);
+/** Go-live stays open unless the platform emergency pause is on. The per-firm live_enabled column is no longer the gate. */
+export async function liveModeEnabled(orgId?: string) {
+  void orgId;
+  return !(await goLiveLocked());
+}
+
+async function dropExtraLiveInvites(liveOrgId: string, actorId: string) {
+  const plan = await readPlan(liveOrgId);
+  const limit = seatLimit(plan.tier);
+  if (limit == null) return;
+  const usage = await query<{ members: number; pending: number }>(
+    `SELECT
+       (SELECT count(*)::int FROM org_members WHERE org_id = $1 AND status = 'active') AS members,
+       (SELECT count(*)::int FROM invitations
+         WHERE org_id = $1 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()) AS pending`,
+    [liveOrgId],
+  );
+  const overflow = (usage.rows[0]?.members ?? 0) + (usage.rows[0]?.pending ?? 0) - limit;
+  if (overflow <= 0) return;
+  const dropped = await query<{ email: string }>(
+    `UPDATE invitations SET status = 'revoked'
+      WHERE id IN (
+        SELECT id FROM invitations
+         WHERE org_id = $1 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()
+         ORDER BY created_at DESC
+         LIMIT $2
+      )
+      RETURNING email::text AS email`,
+    [liveOrgId, overflow],
+  );
+  if (dropped.rows.length) {
+    await writeAudit(liveOrgId, actorId, "go_live_invites_dropped", { emails: dropped.rows.map((row) => row.email) });
+  }
 }
 
 export async function goLive(session: Session, copy: boolean) {
@@ -418,12 +451,17 @@ export async function goLive(session: Session, copy: boolean) {
   const plan = await readPlan(session.liveOrgId);
   if (!goLiveAllowed({ activeUnits, plan, now: new Date() })) throw new FlowError("errors.planLimit");
   if (copy && session.role !== "admin") throw new FlowError("errors.forbidden");
-  if (copy) await copySandboxSetup(sandboxId, session.liveOrgId, session.userId);
+  if (copy) {
+    await copySandboxSetup(sandboxId, session.liveOrgId, session.userId);
+    await dropExtraLiveInvites(session.liveOrgId, session.userId);
+  }
+  await query(`UPDATE organizations SET live_started_at = coalesce(live_started_at, now()) WHERE id = $1`, [session.liveOrgId]);
   await writeAudit(session.liveOrgId, session.userId, "go_live", {
     copy,
     copied: copy ? [...COPY_KINDS] : [],
     notCopied: [...NEVER_KINDS],
     owners: copy ? "copied_without_portal_login" : "not_copied",
   });
+  await recordFunnel("golive", { userId: session.userId, orgId: session.liveOrgId, email: session.email, detail: { copy } });
   return sandboxId;
 }

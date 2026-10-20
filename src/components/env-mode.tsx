@@ -100,7 +100,7 @@ export function GoLiveForm({
           <div className="alert warn" data-testid="gl-blocked">
             <div>
               <p>{t("i_golive_blocked", { free: freeUnits })}</p>
-              <a href={`/api/env?set=live&next=${encodeURIComponent("/m/settings?upgrade=1")}`} data-testid="gl-upgrade">
+              <a href="/m/upgrade" data-testid="gl-upgrade">
                 {t("i_golive_upgrade")}
               </a>
             </div>
@@ -146,7 +146,13 @@ export function GoLiveForm({
       {liveEnabled ? null : (
         <p data-testid="gl-live-locked">{t("i_live_locked")}</p>
       )}
-      <button className="btn pri" type="submit" data-testid="gl-confirm" disabled={!allowed || !liveEnabled}>
+      <button
+        className="btn pri"
+        type="submit"
+        data-testid="gl-confirm"
+        disabled={!allowed || !liveEnabled}
+        style={{ opacity: 1 }}
+      >
         {t("i_golive_start")}
       </button>
     </form>

@@ -1,0 +1,226 @@
+"use server";
+
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { sessionCookie, type RequestMeta } from "./auth";
+import { FlowError } from "./errors";
+import { ENV_COOKIE, ORG_COOKIE } from "./org-scope";
+import {
+  clearFirmOverride,
+  createPartnerCode,
+  previewPartnerCode,
+  requestUpgrade,
+  setFirmOverride,
+} from "./partners";
+import { isPlatformAdmin, setGoLiveLock } from "./platform";
+import { appCookieOptions } from "./public-origin";
+import { getSession } from "./session";
+import {
+  changeSignupEmail,
+  confirmSignupToken,
+  confirmSupabaseAccessToken,
+  confirmSupabaseTokenHash,
+  createFirm,
+  readSignupIdentity,
+  resendSignup,
+  startSignup,
+} from "./signup";
+
+function text(value: FormDataEntryValue | null) {
+  return String(value ?? "").trim();
+}
+
+function isRedirect(error: unknown) {
+  return typeof error === "object" && error !== null && "digest" in error && String((error as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT");
+}
+
+async function meta(): Promise<RequestMeta> {
+  const h = await headers();
+  return { ua: h.get("user-agent"), ip: h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") };
+}
+
+async function origin() {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host") || "";
+  const proto = h.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+  return host ? `${proto}://${host}` : "";
+}
+
+async function setSession(token: string) {
+  const jar = await cookies();
+  const cookie = sessionCookie(token, true);
+  jar.set(cookie.name, cookie.value, cookie.options);
+}
+
+function bounce(path: string, error: unknown): never {
+  if (isRedirect(error)) throw error;
+  const key = error instanceof FlowError ? error.key : "errors.generic";
+  const [pathname, query = ""] = path.split("?");
+  const params = new URLSearchParams(query);
+  params.set("error", key);
+  redirect(`${pathname}?${params.toString()}`);
+}
+
+export async function actionPreviewCode(code: string) {
+  return previewPartnerCode(code);
+}
+
+export async function actionStartSignup(formData: FormData) {
+  const result = await startSignup({
+    email: text(formData.get("email")),
+    password: String(formData.get("password") ?? ""),
+    confirm: String(formData.get("confirm") ?? ""),
+    partnerCode: text(formData.get("partnerCode")),
+    origin: await origin(),
+    meta: await meta(),
+  });
+  if (!result.ok) redirect(`/signup?error=${result.error}`);
+  if (result.status === "firm") {
+    await setSession(result.token);
+    redirect("/signup/firm");
+  }
+  const params = new URLSearchParams({ email: result.email });
+  if (result.devToken) params.set("dev", result.devToken);
+  redirect(`/signup/verify?${params.toString()}`);
+}
+
+export async function actionResendSignup(formData: FormData) {
+  const email = text(formData.get("email"));
+  const sent = await resendSignup(email, await origin());
+  const params = new URLSearchParams({ email, resent: "1" });
+  if (sent.devToken) params.set("dev", sent.devToken);
+  redirect(`/signup/verify?${params.toString()}`);
+}
+
+export async function actionChangeSignupEmail(formData: FormData) {
+  const result = await changeSignupEmail({
+    currentEmail: text(formData.get("email")),
+    password: String(formData.get("password") ?? ""),
+    nextEmail: text(formData.get("nextEmail")),
+    origin: await origin(),
+  });
+  if (!result.ok) redirect(`/signup/verify?email=${encodeURIComponent(text(formData.get("email")))}&error=${result.error}`);
+  const params = new URLSearchParams({ email: result.email, resent: "1" });
+  if (result.devToken) params.set("dev", result.devToken);
+  redirect(`/signup/verify?${params.toString()}`);
+}
+
+export async function actionConfirmToken(token: string) {
+  const result = await confirmSignupToken(token, await meta());
+  if (!result.ok) redirect("/signup/confirm?expired=1");
+  await setSession(result.token);
+  redirect("/signup/firm");
+}
+
+export async function actionConfirmSupabaseHash(tokenHash: string) {
+  const result = await confirmSupabaseTokenHash(tokenHash, await meta());
+  if (!result.ok) redirect("/signup/confirm?expired=1");
+  await setSession(result.token);
+  redirect("/signup/firm");
+}
+
+export async function actionConfirmSupabase(accessToken: string) {
+  const result = await confirmSupabaseAccessToken(accessToken, await meta());
+  if (!result.ok) redirect("/signup/confirm?expired=1");
+  await setSession(result.token);
+  redirect("/signup/firm");
+}
+
+export async function actionCreateFirm(formData: FormData) {
+  const identity = await readSignupIdentity();
+  if (!identity) redirect("/signup");
+  if (!identity.confirmed) redirect(`/signup/verify?email=${encodeURIComponent(identity.email)}`);
+  if (identity.org_id) redirect("/m");
+  try {
+    const created = await createFirm({
+      userId: identity.user_id,
+      email: identity.email,
+      kind: text(formData.get("kind")),
+      name: text(formData.get("name")),
+      contactName: text(formData.get("contactName")),
+      phone: text(formData.get("phone")),
+      partnerCode: text(formData.get("partnerCode")) || identity.partner_code || "",
+    });
+    if (!created.ok) redirect("/signup/firm?error=required");
+    const jar = await cookies();
+    jar.set(ENV_COOKIE, "sandbox", appCookieOptions({ httpOnly: false }));
+    jar.set(ORG_COOKIE, created.orgId, appCookieOptions({ httpOnly: false }));
+    const params = new URLSearchParams();
+    if (created.dupName) params.set("dupFirm", "1");
+    if (created.codeIgnored) params.set("code", "list");
+    redirect(params.size ? `/m?${params.toString()}` : "/m");
+  } catch (error) {
+    bounce("/signup/firm", error);
+  }
+}
+
+export async function actionRequestUpgrade(formData: FormData) {
+  const session = await getSession();
+  const tier = text(formData.get("tier")) === "pro" ? "pro" : "standard";
+  try {
+    const result = await requestUpgrade(session, tier, text(formData.get("partnerCode")));
+    const params = new URLSearchParams({ sent: "1", tier });
+    if (result.codeIgnored) params.set("code", "list");
+    redirect(`/m/upgrade?${params.toString()}`);
+  } catch (error) {
+    bounce("/m/upgrade", error);
+  }
+}
+
+async function requirePlatformAdmin() {
+  const session = await getSession();
+  if (!isPlatformAdmin(session.email)) redirect("/m/noperm");
+  return session;
+}
+
+export async function actionCreatePartnerCode(formData: FormData) {
+  const session = await requirePlatformAdmin();
+  const number = (name: string, fallback: number) => {
+    const raw = text(formData.get(name));
+    if (!raw) return fallback;
+    const value = Number(raw);
+    return Number.isInteger(value) ? value : Number.NaN;
+  };
+  try {
+    await createPartnerCode(session.userId, {
+      code: text(formData.get("code")),
+      partnerName: text(formData.get("partnerName")),
+      standardPrice: number("standardPrice", 0),
+      proPrice: number("proPrice", 0),
+      freeUnits: number("freeUnits", 4),
+      trialMonths: number("trialMonths", 3),
+      lockMonths: number("lockMonths", 12),
+      maxUses: number("maxUses", 1),
+      expiresAt: text(formData.get("expiresAt")) || null,
+    });
+  } catch (error) {
+    bounce("/m/admin", error);
+  }
+  redirect("/m/admin?saved=1");
+}
+
+export async function actionSetGoLiveLock(formData: FormData) {
+  const session = await requirePlatformAdmin();
+  await setGoLiveLock(session.userId, formData.get("locked") === "on");
+  redirect("/m/admin?saved=1");
+}
+
+export async function actionSetPriceOverride(formData: FormData) {
+  const session = await requirePlatformAdmin();
+  try {
+    await setFirmOverride(session.userId, text(formData.get("orgId")), Number(text(formData.get("rate"))));
+  } catch (error) {
+    bounce("/m/admin", error);
+  }
+  redirect("/m/admin?saved=1");
+}
+
+export async function actionClearPriceOverride(formData: FormData) {
+  const session = await requirePlatformAdmin();
+  try {
+    await clearFirmOverride(session.userId, text(formData.get("orgId")));
+  } catch (error) {
+    bounce("/m/admin", error);
+  }
+  redirect("/m/admin?saved=1");
+}

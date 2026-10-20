@@ -7,6 +7,7 @@ import { outboundNote } from "./outbound";
 import { FlowError } from "./errors";
 import { LOCKOUT_LIMIT, lockActive, nextFailure } from "./lockout";
 import { passwordAcceptable } from "./password";
+import { assertSeatAvailable } from "./seats";
 import { assertPerm } from "./perms";
 import { appCookieOptions } from "./public-origin";
 import { privacyFromSettings, type OwnerPrivacy } from "./privacy";
@@ -405,6 +406,7 @@ export async function inviteMember(session: Session, input: { email: string; nam
     [session.orgId, email],
   );
   if (duplicate.rows[0]) throw new FlowError("errors.emailTaken");
+  await assertSeatAvailable(session.orgId, session.environment);
   const token = newToken();
   await query(
     `INSERT INTO invitations (org_id, kind, role, email, code_hash, expires_at, invited_by)
@@ -472,6 +474,7 @@ export async function setMemberActive(session: Session, memberId: string, active
     await writeAudit(session.orgId, session.userId, "deactivate", { memberId });
     return;
   }
+  await assertSeatAvailable(session.orgId, session.environment);
   await query(`UPDATE org_members SET status = 'active' WHERE id = $1 AND org_id = $2`, [memberId, session.orgId]);
   await writeAudit(session.orgId, session.userId, "reactivate", { memberId });
 }

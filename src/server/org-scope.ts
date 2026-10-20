@@ -22,9 +22,10 @@ export type EnvChoice = {
 };
 
 /**
- * A firm with no live rows, or with live mode still locked, always opens in
- * test mode. Otherwise the cookie is that user's last explicit choice. The
- * first request, with no cookie, also opens in test mode.
+ * A firm that has not started live, or while the emergency pause is on, always
+ * opens in test mode. Otherwise the cookie is that user's last explicit choice.
+ * The first request, with no cookie, also opens in test mode. live_started_at
+ * counts as live data so go-live without copied rows stays on the live firm.
  */
 export function resolveStaffEnvironment(input: {
   cookie: OrgEnvironment | null;
@@ -70,9 +71,11 @@ export async function resolveStaffOrg(
   cookie: OrgEnvironment | null,
 ): Promise<FirmContext | null> {
   const live = await sql.query<{ org_id: string; role: OrgRole; live_enabled: boolean; has_live_data: boolean }>(
-    `SELECT m.org_id::text, m.role::text AS role, o.live_enabled,
+    `SELECT m.org_id::text, m.role::text AS role,
+            NOT coalesce((SELECT value = 'true'::jsonb FROM platform_settings WHERE key = 'go_live_lock'), false) AS live_enabled,
             (
-              EXISTS (SELECT 1 FROM properties p WHERE p.org_id = o.id)
+              o.live_started_at IS NOT NULL
+              OR EXISTS (SELECT 1 FROM properties p WHERE p.org_id = o.id)
               OR EXISTS (SELECT 1 FROM leases l WHERE l.org_id = o.id)
             ) AS has_live_data
        FROM org_members m

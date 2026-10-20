@@ -208,6 +208,7 @@ export function Sidebar({
         </div>
       ))}
       <div className="side-tools">
+        <Link href="/pricing">{t("i_nav_pricing")}</Link>
         <Link href="/m/account">{t("i_account")}</Link>
         <Link href="/m/roles">{t("i_roles_title")}</Link>
         <SignOutButton testId="sign-out-drawer" />

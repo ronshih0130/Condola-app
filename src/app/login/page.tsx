@@ -111,8 +111,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               </button>
             )}
             <p className="tiny muted">{lineLoginEnabled() ? t("i_line_demo") : t("i_line_login_todo")}</p>
-            <p className="small" data-testid="login-invite">{t("i_login_invite")}</p>
-            <p className="small" data-testid="login-pricing">{t("i_login_pricing")}</p>
+            <p className="small" data-testid="login-invite">
+              {t("i_login_invite_lead")}{" "}
+              <a href="/signup" data-testid="login-signup">{t("i_login_signup")}</a>
+              {t("i_login_invite_tail")}
+            </p>
+            <p className="small" data-testid="login-pricing">
+              <a href="/pricing">{t("i_login_pricing")}</a>
+            </p>
           </>
         )}
       </form>

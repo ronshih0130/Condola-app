@@ -9,7 +9,11 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ golive?: string }> }) {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ golive?: string; dupFirm?: string; code?: string }>;
+}) {
   const session = await getSession();
   const query = await searchParams;
   const t = makeT(session.locale);
@@ -34,6 +38,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {query.golive === "1" ? (
         <p className="alert info" data-testid="golive-note">
           {t("i_golive_note")}
+        </p>
+      ) : null}
+      {query.dupFirm === "1" ? (
+        <p className="alert warn" data-testid="dup-firm">
+          {t("i_signup_dup_firm")}
+        </p>
+      ) : null}
+      {query.code === "list" ? (
+        <p className="alert warn" data-testid="code-list">
+          {t("i_signup_code_list")}
         </p>
       ) : null}
       <div className="grid5" style={{ marginBottom: 16 }}>

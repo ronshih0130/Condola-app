@@ -35,6 +35,7 @@ const ERRORS: Record<string, string> = {
   "errors.mfaRequired": "i_mfa_required_err",
   "errors.confirm": "i_confirm_needed",
   "errors.planLimit": "i_plan_limit",
+  "errors.seatLimit": "i_seat_limit",
 };
 
 export function errorText(t: T, key: string | undefined) {

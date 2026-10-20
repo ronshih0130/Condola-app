@@ -5,7 +5,9 @@ import { actionInvite, actionMemberActive, actionMemberRole, actionResendInvite,
 import { formatTaipei, formatTaipeiDate } from "@/server/time";
 import { mfaStatus } from "@/server/auth";
 import { demoModeEnabled } from "@/server/demo";
+import { seatLimit } from "@/server/billing";
 import { listTeam } from "@/server/queries";
+import { commercialTier, seatUsage } from "@/server/seats";
 import { getSession } from "@/server/session";
 import type { OrgRole } from "@/server/types";
 
@@ -21,7 +23,14 @@ export default async function TeamPage({
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
-  const [team, factor] = await Promise.all([listTeam(session), mfaStatus(session.userId)]);
+  const [team, factor, usage, tier] = await Promise.all([
+    listTeam(session),
+    mfaStatus(session.userId),
+    seatUsage(session.orgId),
+    commercialTier(session.orgId),
+  ]);
+  const seatCap = session.environment === "sandbox" ? null : seatLimit(tier);
+  const seatBlocked = seatCap != null && usage.used >= seatCap;
   const activeAdmins = team.filter((member) => member.role === "admin" && member.status === "active").length;
   const roleKey: Record<string, string> = {
     admin: "i_role_admin",
@@ -134,7 +143,7 @@ export default async function TeamPage({
                           note={t("i_deactivate_note")}
                         />
                       ) : null}
-                      {member.member_id && member.status === "suspended" ? (
+                      {member.member_id && member.status === "suspended" && !seatBlocked ? (
                         <form action={actionMemberActive}>
                           <input type="hidden" name="memberId" value={member.member_id} />
                           <input type="hidden" name="active" value="1" />
@@ -150,6 +159,19 @@ export default async function TeamPage({
             </tbody>
           </table>
         </div>
+        <div className="card pad" data-testid="seat-meter">
+          {session.environment === "sandbox" ? <p>{t("i_seat_test")}</p> : null}
+          <p>
+            {seatCap == null ? t("i_seat_unlimited", { used: usage.used }) : t("i_seat_meter", { used: usage.used, limit: seatCap })}
+          </p>
+          <p className="small">{t("i_price_pending", { n: usage.pending })}</p>
+        </div>
+        {seatBlocked ? (
+          <div className="card pad" data-testid="seat-upsell">
+            <p>{t("i_seat_upsell")}</p>
+            <a className="btn pri" href="/m/upgrade">{t("i_price_upgrade")}</a>
+          </div>
+        ) : (
         <form className="card pad" action={actionInvite}>
           <h3>{t("s_f320582")}</h3>
           <div className="fg">
@@ -174,6 +196,7 @@ export default async function TeamPage({
             {t("s_1af94ab")}
           </button>
         </form>
+        )}
       </div>
     </>
   );

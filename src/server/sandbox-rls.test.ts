@@ -309,13 +309,17 @@ test("sandbox rows stay hidden, copy resets owner portal logins, and five live u
       [sandboxId],
     );
 
-    await query(`UPDATE organizations SET live_enabled = false WHERE id = $1`, [LIVE_ID]);
+    await query(
+      `INSERT INTO platform_settings (key, value, description)
+       VALUES ('go_live_lock', 'true'::jsonb, 'test')
+       ON CONFLICT (key) DO UPDATE SET value = 'true'::jsonb`,
+    );
     await assert.rejects(() => goLive(session(sandboxId, LIVE_ID, "sandbox"), false), (error: unknown) => {
       assert.ok(error instanceof FlowError);
       assert.equal(error.key, "errors.forbidden");
       return true;
     });
-    await query(`UPDATE organizations SET live_enabled = true WHERE id = $1`, [LIVE_ID]);
+    await query(`UPDATE platform_settings SET value = 'false'::jsonb WHERE key = 'go_live_lock'`);
 
     await assert.rejects(() => goLive(session(sandboxId, LIVE_ID, "sandbox", "manager"), true), (error: unknown) => {
       assert.ok(error instanceof FlowError);
