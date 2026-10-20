@@ -251,17 +251,35 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
       base_rent_minor: string;
     }>(
       client,
-      `SELECT r.id::text, r.label, u.id::text AS unit_id, u.label AS unit_label, p.name AS property_name,
-              p.currency, r.base_rent_minor::text
-         FROM rooms r
-         JOIN units u ON u.id = r.unit_id
-         JOIN properties p ON p.id = u.property_id
-        WHERE r.org_id = $1 AND r.archived_at IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM leases l
-             WHERE l.target_room_id = r.id AND l.status IN ('pending_signature','active')
-          )
-        ORDER BY p.created_at DESC, r.label`,
+      `SELECT id, label, unit_id, unit_label, property_name, currency, base_rent_minor
+         FROM (
+           SELECT r.id::text AS id, r.label, u.id::text AS unit_id, u.label AS unit_label,
+                  p.name AS property_name, p.currency, r.base_rent_minor::text AS base_rent_minor,
+                  p.created_at, 0 AS rank
+             FROM rooms r
+             JOIN units u ON u.id = r.unit_id
+             JOIN properties p ON p.id = u.property_id
+            WHERE r.org_id = $1 AND r.archived_at IS NULL AND p.archived_at IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM leases l
+                 WHERE l.status IN ('pending_signature','active')
+                   AND (l.target_room_id = r.id OR l.target_unit_id = u.id)
+              )
+           UNION ALL
+           SELECT u.id::text, ''::text, u.id::text, u.label, p.name, p.currency,
+                  u.base_rent_minor::text, p.created_at, 1
+             FROM units u
+             JOIN properties p ON p.id = u.property_id
+            WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
+              AND u.rental_mode = 'whole_unit'
+              AND NOT EXISTS (SELECT 1 FROM rooms live WHERE live.unit_id = u.id AND live.archived_at IS NULL)
+              AND NOT EXISTS (
+                SELECT 1 FROM leases l
+                 WHERE l.status IN ('pending_signature','active')
+                   AND (l.target_unit_id = u.id OR (l.unit_id = u.id AND l.target_room_id IS NOT NULL))
+              )
+         ) spaces
+        ORDER BY created_at DESC, rank, label`,
       [session.orgId],
     );
     const unitIds = [...new Set(rows.map((row) => row.unit_id))];
@@ -343,6 +361,8 @@ export async function leaseDetail(session: Session, id: string) {
       tenant: string;
       phone: string | null;
       email: string | null;
+      line_user_id: string | null;
+      signed_pdf: string | null;
       thread_id: string | null;
     }>(
       client,
@@ -353,6 +373,11 @@ export async function leaseDetail(session: Session, id: string) {
               c.display_name AS tenant,
               CASE WHEN app.has_role(l.org_id, '{admin,manager,maintenance}') THEN c.phone_e164 END AS phone,
               c.email,
+              c.line_user_id,
+              (SELECT f.file_name FROM lease_signed_pdfs pdf
+                 JOIN files f ON f.id = pdf.file_id
+                WHERE pdf.lease_id = l.id
+                ORDER BY pdf.created_at DESC LIMIT 1) AS signed_pdf,
               (SELECT t.id::text FROM message_threads t WHERE t.lease_id = l.id AND t.kind = 'lease' LIMIT 1) AS thread_id
          FROM leases l
          JOIN properties p ON p.id = l.property_id
@@ -413,6 +438,21 @@ export async function leaseDetail(session: Session, id: string) {
       depositMinor: sumType("deposit"),
     };
   });
+}
+
+export async function signedLeasePdf(session: Session, leaseId: string) {
+  return tx(session.userId, async (client) =>
+    maybe<{ file_name: string; content: Buffer }>(
+      client,
+      `SELECT f.file_name, pdf.content
+         FROM lease_signed_pdfs pdf
+         JOIN files f ON f.id = pdf.file_id
+        WHERE pdf.lease_id = $1 AND pdf.org_id = $2
+        ORDER BY pdf.created_at DESC
+        LIMIT 1`,
+      [leaseId, session.orgId],
+    ),
+  );
 }
 
 export async function listPayments(session: Session) {

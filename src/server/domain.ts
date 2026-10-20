@@ -15,6 +15,7 @@ import {
   taipeiToday,
   toMinor,
 } from "./money";
+import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
@@ -265,10 +266,12 @@ export type LeaseInput = {
   tenantName: string;
   tenantPhone: string;
   tenantEmail: string;
+  lineUserId: string;
   startDate: string;
   endDate: string;
   rentMajor: number;
   depositMonths: number;
+  depositReason: string;
   dueDay: number;
   splitMethod: "even" | "days_occupied" | "sub_meter";
   periodStart: string;
@@ -291,6 +294,9 @@ export async function createLease(session: Session, input: LeaseInput) {
     throw new FlowError("errors.amount");
   }
   if (input.periodEnd <= input.periodStart || input.endDate < input.startDate) throw new FlowError("errors.required");
+  if (!depositReasonOk(input.depositMonths, input.depositReason ?? "")) throw new FlowError("errors.depositCap");
+  const lineId = normalizeLineId(input.lineUserId ?? "");
+  if (!lineId.ok) throw new FlowError("errors.lineId");
   const phone = cleanPhone(input.tenantPhone);
   if (!phone) throw new FlowError("errors.required");
   const email = cleanEmail(input.tenantEmail);
@@ -310,7 +316,7 @@ export async function createLease(session: Session, input: LeaseInput) {
          FROM leases l
          JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
          JOIN contacts c ON c.id = lp.contact_id
-        WHERE l.target_room_id = $1 AND l.org_id = $2
+        WHERE (l.target_room_id = $1 OR l.target_unit_id = $1) AND l.org_id = $2
           AND l.status = 'pending_signature'
           AND l.created_at > now() - interval '2 minutes'
         ORDER BY l.created_at DESC
@@ -328,50 +334,83 @@ export async function createLease(session: Session, input: LeaseInput) {
         reused: true,
       };
     }
-    const room = await one<{ id: string; unit_id: string; property_id: string; currency: string }>(
+    const space = await one<{
+      id: string;
+      unit_id: string;
+      property_id: string;
+      currency: string;
+      kind: string;
+      label: string;
+    }>(
       client,
-      `SELECT r.id, r.unit_id, u.property_id, p.currency
-         FROM rooms r JOIN units u ON u.id = r.unit_id JOIN properties p ON p.id = u.property_id
-        WHERE r.id = $1 AND r.org_id = $2`,
+      `SELECT id, unit_id, property_id, currency, kind, label
+         FROM (
+           SELECT r.id, r.unit_id, u.property_id, p.currency, 'room'::text AS kind, r.label, 0 AS rank
+             FROM rooms r
+             JOIN units u ON u.id = r.unit_id
+             JOIN properties p ON p.id = u.property_id
+            WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL
+           UNION ALL
+           SELECT u.id, u.id, u.property_id, p.currency, 'whole_unit'::text, u.label, 1
+             FROM units u
+             JOIN properties p ON p.id = u.property_id
+            WHERE u.id = $1 AND u.org_id = $2 AND u.archived_at IS NULL
+              AND u.rental_mode = 'whole_unit'
+              AND NOT EXISTS (
+                SELECT 1 FROM rooms live WHERE live.unit_id = u.id AND live.archived_at IS NULL
+              )
+         ) spaces
+        ORDER BY rank
+        LIMIT 1`,
       [input.roomId, session.orgId],
     );
     const contact = await one<{ id: string }>(
       client,
-      `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, phone_e164, locale, preferred_channel)
-       VALUES ($1,$2,true,$3,$4,$5,$6,'line') RETURNING id`,
-      [session.orgId, tenantUserId, input.tenantName.trim(), email, phone, session.locale],
+      `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, phone_e164, line_user_id, locale, preferred_channel)
+       VALUES ($1,$2,true,$3,$4,$5,$6,$7,'line') RETURNING id`,
+      [session.orgId, tenantUserId, input.tenantName.trim(), email, phone, lineId.value, session.locale],
     );
     const rentMinor = toMinor(input.rentMajor);
     const depositMinor = Math.round(rentMinor * input.depositMonths);
+    const depositOver = depositExceedsCap(input.depositMonths);
+    const depositReason = depositOver ? (input.depositReason ?? "").trim() : null;
     const documentHash = sha256(
       JSON.stringify({
-        room: room.id,
+        room: space.id,
         rentMinor,
         depositMinor,
         start: input.startDate,
         end: input.endDate,
       }),
     );
+    if (depositReason) {
+      await client.query(`SELECT set_config('app.change_reason', $1, true)`, [depositReason]);
+    }
     const lease = await one<{ id: string }>(
       client,
       `INSERT INTO leases (
-         org_id, unit_id, target_room_id, status, esign_status, start_date, end_date, currency,
+         org_id, unit_id, target_unit_id, target_room_id, status, esign_status, start_date, end_date, currency,
          rent_amount_minor, due_day, prorate_first_period, deposit_amount_minor, deposit_months,
+         deposit_override_reason, deposit_overridden_by, deposit_overridden_at,
          document_sha256, created_by
        ) VALUES (
-         $1,$2,$3,'pending_signature','sent',$4,$5,$6,$7,$8,false,$9,$10,$11,$12
+         $1,$2,$3,$4,'pending_signature','sent',$5,$6,$7,$8,$9,false,$10,$11,$12,$13,$14,$15,$16
        ) RETURNING id`,
       [
         session.orgId,
-        room.unit_id,
-        room.id,
+        space.unit_id,
+        space.kind === "whole_unit" ? space.id : null,
+        space.kind === "room" ? space.id : null,
         input.startDate,
         input.endDate,
-        room.currency,
+        space.currency,
         rentMinor,
         input.dueDay,
         depositMinor,
         input.depositMonths,
+        depositReason,
+        depositReason ? session.userId : null,
+        depositReason ? new Date() : null,
         documentHash,
         session.userId,
       ],
@@ -406,7 +445,7 @@ export async function createLease(session: Session, input: LeaseInput) {
     let meter = await maybe<{ id: string }>(
       client,
       `SELECT id FROM meters WHERE unit_id = $1 AND utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL LIMIT 1`,
-      [room.unit_id],
+      [space.unit_id],
     );
     if (!meter) {
       meter = await one<{ id: string }>(
@@ -415,7 +454,7 @@ export async function createLease(session: Session, input: LeaseInput) {
            org_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit, billing_cycle_months
          ) VALUES ($1,$2,'electricity','kWh','main','tenant',$3::split_method,$4::rate_source,$5,2)
          RETURNING id`,
-        [session.orgId, room.unit_id, input.splitMethod, input.rateSource, rateMinor],
+        [session.orgId, space.unit_id, input.splitMethod, input.rateSource, rateMinor],
       );
     }
 
@@ -425,13 +464,13 @@ export async function createLease(session: Session, input: LeaseInput) {
          org_id, meter_id, provider, period_start, period_end, currency, total_amount_minor, total_usage, entered_by
        ) VALUES ($1,$2,'Taipower',$3,$4,$5,$6,$7,$8)
        RETURNING id, avg_price_minor_per_unit::text AS avg`,
-      [session.orgId, meter.id, input.periodStart, input.periodEnd, room.currency, billMinor, input.usageKwh, session.userId],
+      [session.orgId, meter.id, input.periodStart, input.periodEnd, space.currency, billMinor, input.usageKwh, session.userId],
     );
 
     const unitRooms = await many<{ id: string; label: string }>(
       client,
       `SELECT id, label FROM rooms WHERE unit_id = $1 AND archived_at IS NULL ORDER BY label`,
-      [room.unit_id],
+      [space.unit_id],
     );
     const others = await many<{ id: string; target_room_id: string; start_date: string; end_date: string }>(
       client,
@@ -439,7 +478,7 @@ export async function createLease(session: Session, input: LeaseInput) {
          FROM leases
         WHERE unit_id = $1 AND id <> $2 AND status IN ('pending_signature','active')
           AND daterange(start_date, coalesce(end_date, start_date), '[]') && daterange($3::date, $4::date, '[]')`,
-      [room.unit_id, lease.id, input.periodStart, input.periodEnd],
+      [space.unit_id, lease.id, input.periodStart, input.periodEnd],
     );
 
     const usageByRoom = new Map(input.subUsages.map((row) => [row.roomId, row.kwh]));
@@ -448,7 +487,7 @@ export async function createLease(session: Session, input: LeaseInput) {
     const common = input.splitMethod === "sub_meter" ? round3(Math.max(0, input.usageKwh - subTotal)) : 0;
     const parts = unitRooms.map((item) => {
       const linked =
-        item.id === room.id
+        item.id === space.id
           ? { id: lease.id, start_date: input.startDate, end_date: input.endDate }
           : others.find((row) => row.target_room_id === item.id);
       const days = linked
@@ -461,8 +500,20 @@ export async function createLease(session: Session, input: LeaseInput) {
           : input.splitMethod === "sub_meter"
             ? sub + common / unitRooms.length
             : 1;
-      return { key: item.id, label: item.label, leaseId: linked?.id ?? null, weight, days, sub };
+      return { key: item.id, roomId: item.id as string | null, label: item.label, leaseId: linked?.id ?? null, weight, days, sub };
     });
+    if (parts.length === 0) {
+      const days = inclusiveDays(input.startDate, input.endDate, input.periodStart, input.periodEnd);
+      parts.push({
+        key: space.id,
+        roomId: null,
+        label: space.label,
+        leaseId: lease.id,
+        weight: input.splitMethod === "days_occupied" ? days : input.splitMethod === "sub_meter" ? input.usageKwh : 1,
+        days,
+        sub: input.splitMethod === "sub_meter" ? input.usageKwh : 0,
+      });
+    }
     const totalAmount = Math.round(input.usageKwh * rateMinor);
     const shares = splitWeighted(input.usageKwh, totalAmount, parts);
 
@@ -486,7 +537,7 @@ export async function createLease(session: Session, input: LeaseInput) {
         input.periodEnd,
         input.splitMethod,
         input.rateSource,
-        room.currency,
+        space.currency,
         input.usageKwh,
         common,
         rateMinor,
@@ -510,7 +561,7 @@ export async function createLease(session: Session, input: LeaseInput) {
           session.orgId,
           run.id,
           part.leaseId,
-          part.key,
+          part.roomId,
           part.days,
           input.splitMethod === "sub_meter" ? part.sub : null,
           share.ratio,
@@ -658,6 +709,72 @@ export async function signLease(session: Session, input: { leaseId: string; sign
     return { esign: "fully_signed" as const, invoiceId };
   });
   if (result.esign === "fully_signed") await markTryout(session.orgId, "lease");
+  return result;
+}
+
+/** Paper pilot: store the signed PDF in private per-firm storage and mark the lease executed. */
+export async function uploadSignedLeasePdf(
+  session: Session,
+  leaseId: string,
+  file: { bytes: Uint8Array; fileName: string },
+) {
+  assertStaff(session, ["admin", "manager"]);
+  if (!isSignedPdf(file.bytes)) throw new FlowError("errors.pdf");
+  const fileName = signedPdfName(file.fileName);
+  const hash = createHash("sha256").update(file.bytes).digest("hex");
+  const result = await tx(session.userId, async (client) => {
+    const lease = await maybe<{ id: string; status: string }>(
+      client,
+      `SELECT id::text, status::text FROM leases WHERE id = $1 AND org_id = $2`,
+      [leaseId, session.orgId],
+    );
+    if (!lease) throw new FlowError("errors.notFound");
+    const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
+    const stored = await one<{ id: string }>(
+      client,
+      `INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, sha256, uploaded_by)
+       VALUES ($1,'lease-documents-private',$2,$3,'application/pdf',$4,$5,$6) RETURNING id`,
+      [session.orgId, path, fileName, file.bytes.length, hash, session.userId],
+    );
+    await client.query(
+      `INSERT INTO lease_signed_pdfs (org_id, lease_id, file_id, bucket, object_path, content)
+       VALUES ($1,$2,$3,'lease-documents-private',$4,$5)`,
+      [session.orgId, leaseId, stored.id, path, Buffer.from(file.bytes)],
+    );
+    await client.query(
+      `UPDATE lease_signatures
+          SET status = 'signed', signed_name = coalesce(signed_name, 'paper'), document_sha256 = $2,
+              consent_text_key = 'lease.paper', signed_at = coalesce(signed_at, now())
+        WHERE lease_id = $1 AND status <> 'signed'`,
+      [leaseId, hash],
+    );
+    await client.query(
+      `INSERT INTO lease_signature_events (org_id, signature_id, event, actor_user_id, document_sha256, details)
+       SELECT org_id, id, 'signed', $2, $3, '{"medium":"paper"}'::jsonb
+         FROM lease_signatures
+        WHERE lease_id = $1 AND document_sha256 = $3 AND signed_at IS NOT NULL`,
+      [leaseId, session.userId, hash],
+    );
+    const activated = lease.status === "draft" || lease.status === "pending_signature";
+    await client.query(
+      `UPDATE leases
+          SET document_file_id = $2, document_sha256 = $3, esign_status = 'fully_signed',
+              status = CASE WHEN status IN ('draft','pending_signature') THEN 'active'::lease_status ELSE status END,
+              signed_at = coalesce(signed_at, now())
+        WHERE id = $1 AND org_id = $4`,
+      [leaseId, stored.id, hash, session.orgId],
+    );
+    if (activated) {
+      await ensureThread(client, leaseId);
+      const invoiceId = await issueMoveInInvoice(client, leaseId);
+      return { activated: true, invoiceId };
+    }
+    return { activated: false, invoiceId: null as string | null };
+  });
+  if (result.activated) {
+    await svc(session.userId, (client) => queueDemoNotice(client, leaseId, "rent_due"));
+    await markTryout(session.orgId, "lease");
+  }
   return result;
 }
 

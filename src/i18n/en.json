@@ -1269,5 +1269,16 @@
  "i_rate_reason": "Reason the rate exceeds the cap",
  "i_property_edit": "Edit property",
  "i_ph_floor_unit": "2F",
- "i_ph_area": "8"
+ "i_ph_area": "8",
+ "lease_deposit_over": "Deposit is about {months} months' rent, above the {cap}-month cap. Type a reason to save.",
+ "lease_deposit_reason": "Reason for more than two months",
+ "lease_ph_deposit_reason": "For example: the owner agreed to more than two months",
+ "lease_line_id": "LINE ID (optional)",
+ "lease_ph_line": "Optional, for example U1234abcd",
+ "lease_paper_upload": "Upload the signed paper PDF",
+ "lease_paper_hint": "This pilot signs on paper. The PDF stays in this firm's private storage. Other firms cannot read it.",
+ "lease_paper_signed": "Signed paper lease uploaded",
+ "lease_deposit_cap": "The deposit is over two months' rent. Type a reason, then save.",
+ "lease_line_invalid": "That LINE ID can't be saved. Use 64 characters or fewer, with no line breaks.",
+ "lease_pdf_invalid": "Upload a PDF (it has to start with a PDF header and be under 8 MB)."
 }
