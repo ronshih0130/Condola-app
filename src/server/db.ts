@@ -2,6 +2,83 @@ import { Client, type QueryResultRow } from "pg";
 import { mapDbError } from "./errors";
 import { readEnvChoice, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
 
+function closedSocket(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /socket has been closed|Connection terminated/i.test(message);
+}
+
+/** pg's terminate (X) message. Sent once, then the socket is closed. */
+const TERMINATE = Buffer.from([88, 0, 0, 0, 4]);
+
+/**
+ * Workers close the socket as the request finishes. pg then writes a goodbye
+ * and emits `This socket has been closed` once per client. Swallow that, wait
+ * until the query that was already awaited has left the connection, and end once.
+ */
+function guardSocketClose(client: Client) {
+  client.on("error", () => {});
+  const connection = client.connection as Client["connection"] & { _ending?: boolean };
+  const stream = connection.stream;
+  stream.on("error", () => {});
+  let ending = false;
+  connection.end = () => {
+    if (ending) return;
+    ending = true;
+    connection._ending = true;
+    const finish = () => {
+      try {
+        stream.end();
+      } catch (error) {
+        if (!closedSocket(error)) throw error;
+        try {
+          stream.destroy();
+        } catch {
+          // The runtime already closed it.
+        }
+      }
+    };
+    try {
+      if (!stream.writable) {
+        finish();
+        return;
+      }
+      stream.write(TERMINATE, () => {
+        try {
+          finish();
+        } catch {
+          // close callback can run after the Worker has dropped the socket
+        }
+      });
+    } catch (error) {
+      if (!closedSocket(error)) throw error;
+      finish();
+    }
+  };
+}
+
+async function endOnce(client: Client, ended: { current: boolean }) {
+  if (ended.current) return;
+  ended.current = true;
+  const active = (client as Client & { _activeQuery?: { once?: (event: string, fn: () => void) => void } })._activeQuery;
+  if (active) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 2000);
+      client.once("drain", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+  try {
+    await Promise.race([
+      client.end(),
+      new Promise<void>((resolve) => setTimeout(resolve, 250)),
+    ]);
+  } catch (error) {
+    if (!closedSocket(error)) throw error;
+  }
+}
+
 /**
  * One database connection for a single operation.
  * Cloudflare Workers close sockets when a request ends, so a module-level Pool
@@ -9,11 +86,14 @@ import { readEnvChoice, resolveStaffOrg, type OrgEnvironment } from "./org-scope
  */
 export async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const ended = { current: false };
+  client.on("error", () => {});
   await client.connect();
+  guardSocketClose(client);
   try {
     return await fn(client);
   } finally {
-    await client.end();
+    await endOnce(client, ended);
   }
 }
 

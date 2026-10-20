@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { SANDBOX_SAMPLE_CSV } from "../data/sandbox-sample";
 import { demoModeEnabled, enforceDemoSafety } from "./demo";
+import { resolveStaffEnvironment } from "./org-scope";
 import { SANDBOX_NOT_SENT, canSendReal, deliveryPlan } from "./outbound";
 import {
   COPY_KINDS,
@@ -33,11 +35,15 @@ function derive(rows: SampleRow[]): SampleCounts {
   };
 }
 
-test("sample counts come from the dataset and move when a row is added", () => {
-  const file = readFileSync(new URL("../data/sandbox-sample.csv", import.meta.url), "utf8");
-  const parsed = parseSampleCsv(file);
+test("sandbox sample is bundled and loads without reading the filesystem", () => {
+  const source = readFileSync(new URL("./sandbox-data.ts", import.meta.url), "utf8");
+  assert.equal(source.includes("node:fs"), false);
+  assert.equal(source.includes("readFile"), false);
+  assert.equal(source.includes("process.cwd"), false);
+  const parsed = parseSampleCsv(SANDBOX_SAMPLE_CSV);
   const loaded = loadSampleRows();
   assert.deepEqual(parsed, loaded);
+  assert.ok(parsed.length > 0);
   const counts = sampleCounts(parsed);
   assert.deepEqual(counts, derive(parsed));
   assert.ok(counts.properties > 0);
@@ -59,6 +65,15 @@ test("sample counts come from the dataset and move when a row is added", () => {
   assert.equal(next.tenants, counts.tenants + 1);
   assert.equal(next.leases, counts.leases + 1);
   assert.equal(next.bills, counts.bills + 1);
+});
+
+test("a firm without live data, or with live mode locked, always opens in test mode", () => {
+  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: false, liveEnabled: false }), "sandbox");
+  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: false, liveEnabled: true }), "sandbox");
+  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: false }), "sandbox");
+  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: true, liveEnabled: true }), "sandbox");
+  assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: true, liveEnabled: true }), "sandbox");
+  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
 });
 
 test("sample names stay tagged once and phones become E.164", () => {

@@ -77,19 +77,19 @@ export async function resetAndSeed() {
     await client.query(
       `INSERT INTO organizations (
          id, name, legal_name, tax_id, country_code, jurisdiction_id, default_currency, default_locale,
-         timezone, is_rental_mgmt_business, rental_mgmt_license_no, plan_tier, created_by, settings, feature_flags
+         timezone, is_rental_mgmt_business, rental_mgmt_license_no, plan_tier, created_by, settings, feature_flags, live_enabled
        ) VALUES (
          $1, $2, $3, '82838485', 'TW', $4, 'TWD', 'zh-TW', 'Asia/Taipei', true, '北市租管字第1234號', 'beta', $5,
          '{"tryout":{"property":false,"lease":false,"statement":false}}'::jsonb,
-         '{"line_alerts":true,"branded_line_oa":false}'::jsonb
+         '{"line_alerts":true,"branded_line_oa":false}'::jsonb, true
        )`,
       [ORG_ID, FIRM_NAME, `${FIRM_NAME}有限公司`, twId, USERS.admin],
     );
     await client.query(
       `INSERT INTO organizations (
          id, name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
-         is_rental_mgmt_business, rental_mgmt_license_no, created_by
-       ) VALUES ($1, $2, $2, 'TW', $3, 'TWD', 'zh-TW', 'Asia/Taipei', true, '北市租管字第5678號', $4)`,
+         is_rental_mgmt_business, rental_mgmt_license_no, created_by, live_enabled
+       ) VALUES ($1, $2, $2, 'TW', $3, 'TWD', 'zh-TW', 'Asia/Taipei', true, '北市租管字第5678號', $4, true)`,
       [ORG2_ID, FIRM2_NAME, twId, USERS.coastAdmin],
     );
 

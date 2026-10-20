@@ -21,6 +21,7 @@ export default async function GoLivePage({ searchParams }: { searchParams: Promi
           activeUnits={preview.activeUnits}
           freeUnits={preview.freeUnits}
           canCopy={session.role === "admin"}
+          liveEnabled={session.liveEnabled === true}
         />
       </div>
     </>

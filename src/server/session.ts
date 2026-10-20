@@ -5,6 +5,7 @@ import { isLocale, type Locale } from "@/i18n";
 import { withClient } from "./db";
 import { SESSION_COOKIE } from "./auth";
 import { ENV_COOKIE, ORG_COOKIE, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
+import { ensureSandbox } from "./sandbox";
 import type { CalendarMode, Session } from "./types";
 
 export type Prefs = { locale: Locale; calendar: CalendarMode; leaseId: string | null };
@@ -34,7 +35,7 @@ export async function readSession(): Promise<Session | null> {
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   try {
-    return await withClient(async (client) => {
+    const session = await withClient(async (client): Promise<(Session & { needsSandbox?: boolean }) | null> => {
       const found = await client.query<IdentityRow>(
         `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
                 coalesce(p.email::text, u.email) AS email
@@ -48,7 +49,8 @@ export async function readSession(): Promise<Session | null> {
       if (!identity) return null;
       await client.query(`UPDATE auth_sessions SET last_active_at = now() WHERE id = $1`, [identity.session_id]);
       const preferredOrg = jar.get(ORG_COOKIE)?.value ?? null;
-      const envChoice: OrgEnvironment = jar.get(ENV_COOKIE)?.value === "sandbox" ? "sandbox" : "live";
+      const rawEnv = jar.get(ENV_COOKIE)?.value;
+      const envChoice: OrgEnvironment | null = rawEnv === "sandbox" ? "sandbox" : rawEnv === "live" ? "live" : null;
       const base = {
         userId: identity.user_id,
         sessionId: identity.session_id,
@@ -60,7 +62,16 @@ export async function readSession(): Promise<Session | null> {
       };
       const firm = await resolveStaffOrg(client, identity.user_id, preferredOrg, envChoice);
       if (firm) {
-        return { ...base, kind: "staff", role: firm.role, orgId: firm.orgId, liveOrgId: firm.liveOrgId, environment: firm.environment };
+        return {
+          ...base,
+          kind: "staff" as const,
+          role: firm.role,
+          orgId: firm.orgId,
+          liveOrgId: firm.liveOrgId,
+          environment: firm.environment,
+          liveEnabled: firm.liveEnabled,
+          needsSandbox: firm.needsSandbox,
+        };
       }
       const contact = await client.query<{
         org_id: string;
@@ -108,6 +119,11 @@ export async function readSession(): Promise<Session | null> {
       if (portal.is_owner) return { ...base, kind: "owner", role: null, orgId, liveOrgId, environment };
       return null;
     });
+    if (session && "needsSandbox" in session && session.needsSandbox) {
+      const sandboxId = await ensureSandbox(session);
+      return { ...session, orgId: sandboxId, environment: "sandbox", needsSandbox: false };
+    }
+    return session;
   } catch (error) {
     if (process.env.NEXT_PHASE === "phase-production-build") return null;
     throw error;

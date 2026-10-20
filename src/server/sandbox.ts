@@ -54,33 +54,42 @@ export async function ensureSandbox(session: Session) {
   );
   const firm = live.rows[0];
   if (!firm) throw new FlowError("errors.notFound");
-  const inserted = await query<{ id: string }>(
-    `INSERT INTO organizations (
-       name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
-       date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
-       plan_tier, feature_flags, settings, environment, live_org_id, created_by
-     ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8::calendar_display,$9,$10,$11,'free',$12::jsonb,'{"sandboxPrompt":"open"}'::jsonb,
-       'sandbox',$13,$14
-     ) RETURNING id::text`,
-    [
-      firm.name,
-      firm.legal_name,
-      firm.country_code,
-      firm.jurisdiction_id,
-      firm.default_currency,
-      firm.default_locale,
-      firm.timezone,
-      firm.date_calendar,
-      firm.id_doc_retention_days,
-      firm.is_rental_mgmt_business,
-      firm.rental_mgmt_license_no,
-      JSON.stringify(firm.feature_flags ?? {}),
-      session.liveOrgId,
-      session.userId,
-    ],
-  );
-  const sandboxId = inserted.rows[0].id;
+  let sandboxId: string;
+  try {
+    const inserted = await query<{ id: string }>(
+      `INSERT INTO organizations (
+         name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
+         date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
+         plan_tier, feature_flags, settings, environment, live_org_id, created_by
+       ) VALUES (
+         $1,$2,$3,$4,$5,$6,$7,$8::calendar_display,$9,$10,$11,'free',$12::jsonb,'{"sandboxPrompt":"open"}'::jsonb,
+         'sandbox',$13,$14
+       ) RETURNING id::text`,
+      [
+        firm.name,
+        firm.legal_name,
+        firm.country_code,
+        firm.jurisdiction_id,
+        firm.default_currency,
+        firm.default_locale,
+        firm.timezone,
+        firm.date_calendar,
+        firm.id_doc_retention_days,
+        firm.is_rental_mgmt_business,
+        firm.rental_mgmt_license_no,
+        JSON.stringify(firm.feature_flags ?? {}),
+        session.liveOrgId,
+        session.userId,
+      ],
+    );
+    sandboxId = inserted.rows[0].id;
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    if (code !== "23505") throw error;
+    const winner = await sandboxForLive(session.liveOrgId);
+    if (!winner) throw error;
+    sandboxId = winner;
+  }
   await query(
     `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status, title)
      SELECT $1, user_id, role, is_billing_owner, status, title
@@ -348,8 +357,14 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
   });
 }
 
+export async function liveModeEnabled(orgId: string) {
+  const row = await query<{ live_enabled: boolean }>(`SELECT live_enabled FROM organizations WHERE id = $1`, [orgId]);
+  return Boolean(row.rows[0]?.live_enabled);
+}
+
 export async function goLive(session: Session, copy: boolean) {
   assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
+  if (!(await liveModeEnabled(session.liveOrgId))) throw new FlowError("errors.forbidden");
   const sandboxId = await sandboxForLive(session.liveOrgId);
   if (!sandboxId) throw new FlowError("errors.notFound");
   const activeUnits = await countActiveUnits(session.liveOrgId);

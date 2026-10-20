@@ -303,7 +303,8 @@ table.t tr.click a.hit::after{content:"";position:absolute;inset:0}
 .env-menu{position:fixed;z-index:80;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:10px;min-width:280px;padding:6px;box-shadow:0 12px 32px rgba(46,38,34,.18)}
 .env-menu a{display:block;padding:8px 10px;border-radius:8px;color:var(--ink)}
 .env-menu a:hover{background:var(--pri2)}
-.env-menu a small{display:block;color:var(--ink3);font-weight:400}
+.env-menu a small,.env-pick-disabled small{display:block;color:var(--ink3);font-weight:400}
+.env-pick-disabled{display:block;padding:8px 10px;border-radius:8px;background:var(--cd-surface2);color:var(--cd-ink3);cursor:not-allowed;opacity:1}
 .env-banner{position:sticky;top:var(--top-h);z-index:45;background:var(--cd-accent-soft);color:var(--ink);border-bottom:2px solid var(--cd-accent);padding:8px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px}
 .env-banner a{color:var(--pri3);font-weight:600;min-height:44px;display:inline-flex;align-items:center}
 body:has(.env-banner) .side{top:88px;height:calc(100vh - 88px)}

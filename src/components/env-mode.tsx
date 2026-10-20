@@ -7,7 +7,7 @@ import type { OrgEnvironment } from "@/server/org-scope";
 import type { SampleCounts } from "@/server/sandbox-data";
 import { useT } from "./locale";
 
-export function EnvSwitch({ environment }: { environment: OrgEnvironment }) {
+export function EnvSwitch({ environment, liveEnabled }: { environment: OrgEnvironment; liveEnabled: boolean }) {
   const t = useT();
   const sandbox = environment === "sandbox";
   const long = sandbox ? t("i_env_test") : t("i_env_live");
@@ -36,10 +36,17 @@ export function EnvSwitch({ environment }: { environment: OrgEnvironment }) {
       </button>
       {menu ? (
       <div className="env-menu" id="envMenu" data-testid="env-menu" style={menu}>
-        <a href="/api/env?set=live&next=/m" data-testid="env-pick-live">
-          <b>{t("i_env_live")}</b>
-          <small>{t("i_env_live_hint")}</small>
-        </a>
+        {liveEnabled ? (
+          <a href="/api/env?set=live&next=/m" data-testid="env-pick-live">
+            <b>{t("i_env_live")}</b>
+            <small>{t("i_env_live_hint")}</small>
+          </a>
+        ) : (
+          <span className="env-pick-disabled" data-testid="env-pick-live" aria-disabled="true">
+            <b>{t("i_env_live")}</b>
+            <small>{t("i_live_locked")}</small>
+          </span>
+        )}
         <a href="/api/env?set=sandbox&next=/m" data-testid="env-pick-sandbox">
           <b>{t("i_env_test")}</b>
           <small>{t("i_env_test_hint")}</small>
@@ -64,7 +71,7 @@ export function EnvBanner() {
       </span>
       <span>{t("i_env_banner_body")}</span>
       <Link href="/m/env" data-testid="env-banner-live">
-        {t("i_env_to_live")} →
+        {t("i_golive_start")} →
       </Link>
     </div>
   );
@@ -104,11 +111,13 @@ export function GoLiveForm({
   activeUnits,
   freeUnits,
   canCopy,
+  liveEnabled,
 }: {
   allowed: boolean;
   activeUnits: number;
   freeUnits: number;
   canCopy: boolean;
+  liveEnabled: boolean;
 }) {
   const t = useT();
   const [copy, setCopy] = useState(canCopy);
@@ -164,8 +173,11 @@ export function GoLiveForm({
         <p>{t("i_golive_never_items")}</p>
         <p className="small muted">{t("i_golive_never_reason")}</p>
       </div>
-      <button className="btn pri" type="submit" data-testid="gl-confirm" disabled={!allowed}>
-        {t("i_env_to_live")}
+      {liveEnabled ? null : (
+        <p data-testid="gl-live-locked">{t("i_live_locked")}</p>
+      )}
+      <button className="btn pri" type="submit" data-testid="gl-confirm" disabled={!allowed || !liveEnabled}>
+        {t("i_golive_start")}
       </button>
     </form>
   );

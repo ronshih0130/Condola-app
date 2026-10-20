@@ -32,7 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span aria-hidden="true">☰</span>
             </label>
             <BrandLink />
-            {session?.kind === "staff" ? <EnvSwitch environment={session.environment} /> : null}
+            {session?.kind === "staff" ? <EnvSwitch environment={session.environment} liveEnabled={session.liveEnabled === true} /> : null}
             <span className="top-extra">
               {session ? <span className="small">{session.name}</span> : <a href="/login">{t("i_sign_in")}</a>}
             </span>

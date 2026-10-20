@@ -98,10 +98,10 @@ test("sandbox rows stay hidden, copy resets owner portal logins, and five live u
     );
     await query(
       `INSERT INTO organizations (
-         id, name, country_code, jurisdiction_id, default_currency, timezone, plan_tier, created_by, settings
+         id, name, country_code, jurisdiction_id, default_currency, timezone, plan_tier, created_by, settings, live_enabled
        ) VALUES
-         ($1, '沙盒測試公司', 'TW', $3, 'TWD', 'Asia/Taipei', 'beta', $4, '{}'::jsonb),
-         ($2, '超額測試公司', 'TW', $3, 'TWD', 'Asia/Taipei', 'free', $4, '{}'::jsonb)`,
+         ($1, '沙盒測試公司', 'TW', $3, 'TWD', 'Asia/Taipei', 'beta', $4, '{}'::jsonb, true),
+         ($2, '超額測試公司', 'TW', $3, 'TWD', 'Asia/Taipei', 'free', $4, '{}'::jsonb, true)`,
       [LIVE_ID, BLOCK_ID, jurisdictionId, USER_ID],
     );
     await query(
@@ -288,6 +288,14 @@ test("sandbox rows stay hidden, copy resets owner portal logins, and five live u
         WHERE id = $1`,
       [sandboxId],
     );
+
+    await query(`UPDATE organizations SET live_enabled = false WHERE id = $1`, [LIVE_ID]);
+    await assert.rejects(() => goLive(session(sandboxId, LIVE_ID, "sandbox"), false), (error: unknown) => {
+      assert.ok(error instanceof FlowError);
+      assert.equal(error.key, "errors.forbidden");
+      return true;
+    });
+    await query(`UPDATE organizations SET live_enabled = true WHERE id = $1`, [LIVE_ID]);
 
     await assert.rejects(() => goLive(session(sandboxId, LIVE_ID, "sandbox", "manager"), true), (error: unknown) => {
       assert.ok(error instanceof FlowError);
