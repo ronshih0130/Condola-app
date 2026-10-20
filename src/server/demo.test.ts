@@ -43,7 +43,7 @@ test("the 123456 bypass and demo mode are rejected when DEMO_MODE is unset or th
     assert.throws(() => enforceDemoSafety(), /Refusing to start/);
 
     setEnv("NODE_ENV", "development");
-    for (const flag of ["production", "staging-real"]) {
+    for (const flag of ["production", "staging", "staging-real"]) {
       process.env.CONDOLA_ENV = flag;
       assert.equal(demoModeEnabled(), false);
       assert.equal(acceptSecondFactor(secret, "123456", at), false);
@@ -75,7 +75,7 @@ test("LINE_LOGIN_ENABLED is ignored and refuses to start in production", () => {
     assert.throws(() => enforceDemoSafety(), /LINE_LOGIN_ENABLED/);
 
     setEnv("NODE_ENV", "development");
-    for (const flag of ["production", "staging-real"]) {
+    for (const flag of ["production", "staging", "staging-real"]) {
       process.env.CONDOLA_ENV = flag;
       assert.equal(lineLoginEnabled(), false);
       assert.throws(() => enforceDemoSafety(), /Refusing to start/);

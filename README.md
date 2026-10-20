@@ -84,16 +84,13 @@ Sessions are a `condola_session` cookie checked against `auth_sessions`. Queries
 
 The permission table is `PERMS` in `src/server/perms.ts` (18 rows, the same keys as the prototype). Nav items the role cannot open are omitted. A direct URL without the permission redirects to `/m/noperm`. Tickets is an exception: every staff role can open the list; creating and updating tickets stay on `tickets.update` (Admin, Manager, Maintenance). Those controls are disabled, with 「需要以下角色：…」, and the server checks the same table. Other actions the role can see but not perform stay on screen the same way.
 
-2FA is optional for every role, including Admin. An Admin can require it for the firm (`require_2fa` in organization settings, off by default). With `DEMO_MODE=true` outside production, the authenticator step also accepts `123456`, matching the prototype, and the process logs a warning. `NODE_ENV=production` or `CONDOLA_ENV=production` / `staging-real` ignores `DEMO_MODE` and `LINE_LOGIN_ENABLED`, and refuses to start if either is still set, so the authenticator bypass, `POST /api/demo/reset`, and the demo LINE sign-in cannot run there. `next build` does not refuse (it only ignores the flags) so a demo `.env.local` can still produce a bundle. LINE Login does not call LINE. Outside production, when the flag is on (or unset while demo mode is on) it signs in the member with `profiles.line_linked` (the seeded Manager), with no password and no 2FA.
+2FA is optional for every role, including Admin. An Admin can require it for the firm (`require_2fa` in organization settings, off by default). With `DEMO_MODE=true` outside production, the authenticator step also accepts `123456`, matching the prototype, and the process logs a warning. `NODE_ENV=production` or `CONDOLA_ENV=production`, `staging`, or `staging-real` ignores `DEMO_MODE` and `LINE_LOGIN_ENABLED`, and refuses to start if either is still set, so the authenticator bypass, `POST /api/demo/reset`, and the demo LINE sign-in cannot run there. `next build` does not refuse (it only ignores the flags) so a demo `.env.local` can still produce a bundle. LINE Login does not call LINE. Outside production, when the flag is on (or unset while demo mode is on) it signs in the member with `profiles.line_linked` (the seeded Manager), with no password and no 2FA.
 
-## Staging on Cloudflare (not deployed from this repo)
+## Staging on Cloudflare
 
-The app is prepared for [OpenNext Cloudflare](https://opennext.js.org/cloudflare). `wrangler.jsonc` has no secrets. `npm run cf:build` runs `@opennextjs/cloudflare` and writes `.open-next/` (gitignored).
+The app is prepared for [OpenNext Cloudflare](https://opennext.js.org/cloudflare). `npm run cf:build` writes `.open-next/` (gitignored). The staging Worker, Tokyo Supabase project, secret names, and Depot gate are in [docs/STAGING.md](docs/STAGING.md).
 
-1. Create a **separate** Supabase project for staging. Apply `supabase/migrations/*.sql` only. Do not apply `supabase/stub/supabase_stub.sql`.
-2. Put `DATABASE_URL` on the Worker as a secret (`npx wrangler secret put DATABASE_URL`). Use the Supabase **transaction** pooler (port 6543). `SET LOCAL` does not survive a session-mode checkout. The database role must be allowed to `SET ROLE authenticated` and `SET ROLE service_role`.
-3. Do not set `DEMO_MODE` or `LINE_LOGIN_ENABLED` on the Worker. Set `CONDOLA_ENV=staging-real` (or `production`) so a leftover `DEMO_MODE=true` or `LINE_LOGIN_ENABLED=true` cannot enable the authenticator bypass, demo reset, or demo LINE sign-in; the Worker will refuse to start if either variable is still true. Leave `SUPABASE_SERVICE_ROLE_KEY` unset unless you want password updates to go through the Supabase Auth admin API. Do not commit either value.
-4. `npx wrangler deploy` after `npm run cf:build`. This repository does not run that command.
+`.depot/workflows/ci.yml` deploys the Wrangler env `staging` only after the `check` job passes, and only on a push to `main` when the repository variable `STAGING_AUTODEPLOY` is exactly `true` and the `CLOUDFLARE_API_TOKEN` secret is set. An unset variable leaves deploys off. Production is not an environment in `wrangler.jsonc` and is never auto-deployed.
 
 Next.js notes for Workers:
 
@@ -103,4 +100,4 @@ Next.js notes for Workers:
 - `next/image` is not used. Adding it later needs `images.unoptimized` or a custom loader; the Cloudflare adapter does not run the default image optimizer.
 - There is no Node filesystem cache and no `fs` writes. Demo reset and seed stay operator commands, not Worker routes, when `DEMO_MODE` is false.
 
-This repository does not deploy and does not create a hosted project.
+This repository does not create the hosted Supabase project or the Cloudflare account. Production is never deployed from CI.

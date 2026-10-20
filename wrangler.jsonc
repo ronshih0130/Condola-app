@@ -13,5 +13,38 @@
       "binding": "WORKER_SELF_REFERENCE",
       "service": "condola"
     }
-  ]
+  ],
+  // Staging Worker only. There is no production environment in this file.
+  // Depot CI deploys this env and never production. See docs/STAGING.md.
+  // Secret values are not stored here. Set each name with:
+  //   npx wrangler secret put <NAME> --env staging
+  "env": {
+    "staging": {
+      "compatibility_flags": ["nodejs_compat"],
+      "workers_dev": true,
+      "placement": {
+        "mode": "targeted",
+        "region": "aws:ap-northeast-1"
+      },
+      "vars": {
+        "CONDOLA_ENV": "staging",
+        "DEMO_MODE": "false",
+        "LINE_LOGIN_ENABLED": "false"
+      },
+      "secrets": {
+        "required": [
+          "DATABASE_URL",
+          "SUPABASE_URL",
+          "SUPABASE_ANON_KEY",
+          "SUPABASE_SERVICE_ROLE_KEY"
+        ]
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "condola-staging"
+        }
+      ]
+    }
+  }
 }
