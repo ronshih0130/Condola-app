@@ -7,7 +7,7 @@ import { USERS } from "./ids";
 import { SANDBOX_NOT_SENT } from "./outbound";
 import { loadSampleRows, sampleCounts } from "./sandbox-data";
 import { runSandboxSeed } from "./sandbox-seed";
-import { ensureSandbox, goLive, loadSampleData, openSandboxFirm } from "./sandbox";
+import { ensureSampleLoaded, ensureSandbox, goLive, loadSampleData, openSandboxFirm } from "./sandbox";
 import { recordLeaseNotice } from "./domain";
 import type { Session } from "./types";
 
@@ -488,6 +488,105 @@ test("opening a missing sandbox creates the firm and seeds the sample once", asy
     );
     assert.equal(marked.rows[0].loaded, true);
     assert.equal(marked.rows[0].prompt, "loaded");
+  } finally {
+    await wipe();
+  }
+});
+
+test("an existing empty sandbox is seeded once, and a sandbox that already has rows is left alone", async () => {
+  const orgId = "90000000-0000-4000-8000-000000000004";
+  const busyId = "90000000-0000-4000-8000-000000000005";
+  const userId = "90000000-0000-4000-8000-0000000000dd";
+  const orgIds = [orgId, busyId];
+  const wipe = async () => {
+    const rows = await query<{ id: string }>(
+      `SELECT id::text FROM organizations WHERE id = ANY($1::uuid[]) OR live_org_id = ANY($1::uuid[])`,
+      [orgIds],
+    );
+    const ids = rows.rows.map((row) => row.id);
+    await withClient(async (client) => {
+      await client.query("BEGIN");
+      await client.query("SET session_replication_role = replica");
+      if (ids.length) {
+        const tables = await client.query<{ table_name: string }>(
+          `SELECT c.table_name
+             FROM information_schema.columns c
+             JOIN information_schema.tables t
+               ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+            WHERE c.table_schema = 'public' AND c.column_name = 'org_id' AND t.table_type = 'BASE TABLE'`,
+          );
+        for (const { table_name } of tables.rows) {
+          if (!/^[a-z0-9_]+$/i.test(table_name)) continue;
+          await client.query(`DELETE FROM public."${table_name}" WHERE org_id = ANY($1::uuid[])`, [ids]);
+        }
+        await client.query(`DELETE FROM organizations WHERE id = ANY($1::uuid[])`, [ids]);
+      }
+      await client.query(`DELETE FROM profiles WHERE id = $1`, [userId]);
+      await client.query(`DELETE FROM auth.users WHERE id = $1`, [userId]);
+      await client.query("SET session_replication_role = DEFAULT");
+      await client.query("COMMIT");
+    });
+  };
+
+  await wipe();
+  try {
+    const tw = await query<{ id: string }>(`SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
+    await query(
+      `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, email_confirmed_at, role, aud)
+       VALUES ($1, 'sandbox-empty@example.com', crypt('Demo1234', gen_salt('bf')), '{}'::jsonb, now(), 'authenticated', 'authenticated')`,
+      [userId],
+    );
+    await query(`INSERT INTO profiles (id, display_name, email) VALUES ($1, 'Empty Sandbox', 'sandbox-empty@example.com')`, [userId]);
+    await query(
+      `INSERT INTO organizations (
+         id, name, country_code, jurisdiction_id, default_currency, timezone, plan_tier, created_by, settings, live_enabled
+       ) VALUES
+         ($1, '空沙盒公司', 'TW', $3, 'TWD', 'Asia/Taipei', 'beta', $4, '{}'::jsonb, true),
+         ($2, '已有資料公司', 'TW', $3, 'TWD', 'Asia/Taipei', 'beta', $4, '{}'::jsonb, true)`,
+      [orgId, busyId, tw.rows[0].id, userId],
+    );
+    await query(
+      `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status)
+       VALUES ($1, $3, 'admin', true, 'active'), ($2, $3, 'admin', true, 'active')`,
+      [orgId, busyId, userId],
+    );
+    const emptyStaff = session(orgId, orgId, "live");
+    emptyStaff.userId = userId;
+    const sandboxId = await ensureSandbox(emptyStaff);
+    const sandboxStaff = session(sandboxId, orgId, "sandbox");
+    sandboxStaff.userId = userId;
+    const before = await query<{ loaded: Date | null }>(
+      `SELECT sample_loaded_at AS loaded FROM organizations WHERE id = $1`,
+      [sandboxId],
+    );
+    assert.equal(before.rows[0].loaded, null);
+    await Promise.all([ensureSampleLoaded(sandboxStaff), ensureSampleLoaded(sandboxStaff)]);
+    const expected = sampleCounts(loadSampleRows());
+    assert.equal(await count(sandboxId, "properties"), expected.properties);
+    await ensureSampleLoaded(sandboxStaff);
+    assert.equal(await count(sandboxId, "properties"), expected.properties);
+
+    const busyStaff = session(busyId, busyId, "live");
+    busyStaff.userId = userId;
+    const busySandbox = await ensureSandbox(busyStaff);
+    await query(
+      `INSERT INTO properties (org_id, name, address_display, country_code, jurisdiction_id, currency, timezone)
+       VALUES ($1, '自建物件', '台北市', 'TW', $2, 'TWD', 'Asia/Taipei')`,
+      [busySandbox, tw.rows[0].id],
+    );
+    const busySession = session(busySandbox, busyId, "sandbox");
+    busySession.userId = userId;
+    await ensureSampleLoaded(busySession);
+    assert.equal(await count(busySandbox, "properties"), 1);
+    const untouched = await query<{ loaded: Date | null; name: string }>(
+      `SELECT o.sample_loaded_at AS loaded, p.name
+         FROM organizations o
+         JOIN properties p ON p.org_id = o.id
+        WHERE o.id = $1`,
+      [busySandbox],
+    );
+    assert.equal(untouched.rows[0].loaded, null);
+    assert.equal(untouched.rows[0].name, "自建物件");
   } finally {
     await wipe();
   }

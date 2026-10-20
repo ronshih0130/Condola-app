@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useState, type CSSProperties } from "react";
-import { actionBlankSandbox, actionGoLive, actionLoadSample } from "@/server/env-actions";
+import { actionGoLive } from "@/server/env-actions";
 import type { OrgEnvironment } from "@/server/org-scope";
-import type { SampleCounts } from "@/server/sandbox-data";
 import { useT } from "./locale";
 
 export function EnvSwitch({ environment, liveEnabled }: { environment: OrgEnvironment; liveEnabled: boolean }) {
@@ -73,35 +72,6 @@ export function EnvBanner() {
       <Link href="/m/env" data-testid="env-banner-live">
         {t("i_golive_start")} →
       </Link>
-    </div>
-  );
-}
-
-export function EnvLoadModal({ counts }: { counts: SampleCounts }) {
-  const t = useT();
-  return (
-    <div className="modal-bg" id="envLoad" data-testid="env-load" role="dialog" aria-modal="true" aria-labelledby="env-load-title">
-      <div className="modal">
-        <div className="hd">
-          <h3 id="env-load-title">{t("i_env_load_title")}</h3>
-        </div>
-        <div className="bd">
-          <p data-testid="env-load-counts">{t("i_env_load_counts", counts)}</p>
-          <p>{t("i_env_load_tag")}</p>
-        </div>
-        <div className="ft">
-          <form action={actionBlankSandbox}>
-            <button className="btn" type="submit" data-testid="env-blank">
-              {t("i_env_blank")}
-            </button>
-          </form>
-          <form action={actionLoadSample}>
-            <button className="btn pri" type="submit" data-testid="env-load-sample">
-              {t("i_env_load")}
-            </button>
-          </form>
-        </div>
-      </div>
     </div>
   );
 }

@@ -104,7 +104,7 @@ export async function ensureSandbox(session: Session) {
 /** First visit: create the linked sandbox, if it is missing, and load the sample portfolio once. */
 export async function openSandboxFirm(session: Session) {
   const sandboxId = await ensureSandbox(session);
-  await loadSampleData({ ...session, orgId: sandboxId, environment: "sandbox" });
+  await ensureSampleLoaded({ ...session, orgId: sandboxId, environment: "sandbox" });
   return sandboxId;
 }
 
@@ -172,12 +172,48 @@ export async function dismissSamplePrompt(session: Session) {
   );
 }
 
-export async function loadSampleData(session: Session) {
+const SANDBOX_PORTFOLIO = `
+  EXISTS (SELECT 1 FROM properties p WHERE p.org_id = o.id)
+  OR EXISTS (SELECT 1 FROM leases l WHERE l.org_id = o.id)
+  OR EXISTS (SELECT 1 FROM units u WHERE u.org_id = o.id)
+  OR EXISTS (SELECT 1 FROM contacts c WHERE c.org_id = o.id)
+`;
+
+async function sandboxLoadState(client: Client, orgId: string) {
+  const row = await client.query<{ loaded: Date | null; has_data: boolean }>(
+    `SELECT o.sample_loaded_at AS loaded, (${SANDBOX_PORTFOLIO}) AS has_data
+       FROM organizations o
+      WHERE o.id = $1 AND o.environment = 'sandbox'`,
+    [orgId],
+  );
+  return row.rows[0] ?? null;
+}
+
+/**
+ * Load the sample portfolio when this sandbox has never been seeded and still
+ * has no portfolio rows. A conditional update plus a transaction advisory lock
+ * lets concurrent requests seed at most once.
+ */
+export async function ensureSampleLoaded(session: Session) {
   if (session.environment !== "sandbox") throw new FlowError("errors.forbidden");
   assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
+  const peek = await query<{ loaded: Date | null; has_data: boolean }>(
+    `SELECT o.sample_loaded_at AS loaded, (${SANDBOX_PORTFOLIO}) AS has_data
+       FROM organizations o
+      WHERE o.id = $1 AND o.environment = 'sandbox'`,
+    [session.orgId],
+  );
+  const first = peek.rows[0];
+  if (!first || first.loaded || first.has_data) return;
   await withClient(async (client) => {
     await client.query("BEGIN");
     try {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1::text))`, [session.orgId]);
+      const state = await sandboxLoadState(client, session.orgId);
+      if (!state || state.loaded || state.has_data) {
+        await client.query("COMMIT");
+        return;
+      }
       const claim = await client.query<{ id: string }>(
         `UPDATE organizations
             SET sample_loaded_at = now(),
@@ -197,6 +233,10 @@ export async function loadSampleData(session: Session) {
       throw error;
     }
   });
+}
+
+export async function loadSampleData(session: Session) {
+  await ensureSampleLoaded(session);
 }
 
 async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: string) {

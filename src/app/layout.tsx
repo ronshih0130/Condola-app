@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { makeT } from "@/i18n";
 import { BrandLink, LocaleLinks, ResetButton, SignOutButton } from "@/components/chrome";
-import { EnvBanner, EnvLoadModal, EnvSwitch } from "@/components/env-mode";
+import { EnvBanner, EnvSwitch } from "@/components/env-mode";
 import { LocaleProvider } from "@/components/locale";
 import { demoModeEnabled } from "@/server/demo";
 import { sandboxChrome } from "@/server/sandbox";
@@ -45,7 +45,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </span>
           </header>
           {chrome.environment === "sandbox" ? <EnvBanner /> : null}
-          {chrome.prompt === "open" && chrome.counts ? <EnvLoadModal counts={chrome.counts} /> : null}
           {children}
         </LocaleProvider>
       </body>

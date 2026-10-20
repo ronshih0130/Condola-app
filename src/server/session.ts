@@ -5,7 +5,7 @@ import { isLocale, type Locale } from "@/i18n";
 import { withClient } from "./db";
 import { SESSION_COOKIE } from "./auth";
 import { ENV_COOKIE, ORG_COOKIE, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
-import { openSandboxFirm } from "./sandbox";
+import { ensureSampleLoaded, ensureSandbox } from "./sandbox";
 import type { CalendarMode, Session } from "./types";
 
 export type Prefs = { locale: Locale; calendar: CalendarMode; leaseId: string | null };
@@ -119,9 +119,11 @@ export async function readSession(): Promise<Session | null> {
       if (portal.is_owner) return { ...base, kind: "owner", role: null, orgId, liveOrgId, environment };
       return null;
     });
-    if (session && "needsSandbox" in session && session.needsSandbox) {
-      const sandboxId = await openSandboxFirm(session);
-      return { ...session, orgId: sandboxId, environment: "sandbox", needsSandbox: false };
+    if (session?.kind === "staff" && session.environment === "sandbox") {
+      const sandboxId = session.needsSandbox ? await ensureSandbox(session) : session.orgId;
+      const opened = { ...session, orgId: sandboxId, environment: "sandbox" as const, needsSandbox: false };
+      await ensureSampleLoaded(opened);
+      return opened;
     }
     return session;
   } catch (error) {
