@@ -4,7 +4,7 @@ import { requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function ForgotPage({ searchParams }: { searchParams: Promise<{ sent?: string }> }) {
+export default async function ForgotPage({ searchParams }: { searchParams: Promise<{ sent?: string; email?: string }> }) {
   const params = await searchParams;
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
@@ -14,7 +14,7 @@ export default async function ForgotPage({ searchParams }: { searchParams: Promi
         <h1>{t("i_forgot")}</h1>
         {params.sent === "1" ? (
           <div className="alert info" data-testid="forgot-sent">
-            {t("i_forgot_sent")}
+            {t("i_forgot_sent", { email: params.email ?? "" })}
           </div>
         ) : (
           <>

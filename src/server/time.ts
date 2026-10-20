@@ -1,4 +1,4 @@
-/** Team sign-in times are shown in the firm's zone, Asia/Taipei (UTC+8, no DST). */
+/** Team sign-in times and invite expiry are shown in Asia/Taipei (UTC+8, no DST). */
 export function formatTaipei(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -11,4 +11,9 @@ export function formatTaipei(value: string | Date) {
     minute: "2-digit",
     hourCycle: "h23",
   }).format(date);
+}
+
+/** Calendar date in Asia/Taipei, `YYYY-MM-DD`. */
+export function formatTaipeiDate(value: string | Date) {
+  return formatTaipei(value).slice(0, 10);
 }

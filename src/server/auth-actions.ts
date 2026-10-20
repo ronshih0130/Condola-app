@@ -135,8 +135,9 @@ export async function actionSecondFactor(formData: FormData) {
 }
 
 export async function actionForgot(formData: FormData) {
-  await requestPasswordReset(text(formData.get("email")));
-  redirect("/forgot?sent=1");
+  const email = text(formData.get("email"));
+  await requestPasswordReset(email);
+  redirect(`/forgot?sent=1&email=${encodeURIComponent(email)}`);
 }
 
 export async function actionReset(formData: FormData) {

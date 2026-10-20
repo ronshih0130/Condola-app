@@ -2,7 +2,7 @@ import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { ConfirmDeactivate } from "@/components/confirm-deactivate";
 import { actionInvite, actionMemberActive, actionMemberRole, actionResendInvite, actionRevokeInvite } from "@/server/auth-actions";
-import { formatTaipei } from "@/server/time";
+import { formatTaipei, formatTaipeiDate } from "@/server/time";
 import { mfaStatus } from "@/server/auth";
 import { demoModeEnabled } from "@/server/demo";
 import { listTeam } from "@/server/queries";
@@ -96,7 +96,9 @@ export default async function TeamPage({
                     <td data-label={t("i_status")}>
                       {t(statusKey[member.status] ?? "i_status")}
                       {member.expires_at && member.status === "pending" ? (
-                        <div className="tiny muted">{member.expires_at.slice(0, 10)}</div>
+                        <div className="tiny muted" data-testid={`invite-expiry-${member.email ?? member.invitation_id}`}>
+                          {t("i_invite_expiry", { d: formatTaipeiDate(member.expires_at) })}
+                        </div>
                       ) : null}
                     </td>
                     <td data-label={t("i_mfa")}>
