@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
+import { writeAudit } from "./audit";
 import { maybe, many, one, svc, tx } from "./db";
 import { FlowError } from "./errors";
+import { deliveryPlan, outboundNote, SANDBOX_NOT_SENT } from "./outbound";
 import {
   attributePayment,
   inclusiveDays,
@@ -557,6 +559,12 @@ async function queueDemoNotice(client: PoolClient, leaseId: string, eventType: s
   );
   if (!contact) return;
   const dedupe = `${eventType}:${leaseId}:${randomUUID()}`;
+  const org = await maybe<{ environment: string }>(
+    client,
+    `SELECT environment::text AS environment FROM organizations WHERE id = $1`,
+    [contact.org_id],
+  );
+  const plan = deliveryPlan(org?.environment === "sandbox" ? "sandbox" : "live");
   const notice = await one<{ id: string }>(
     client,
     `INSERT INTO notifications (
@@ -567,9 +575,20 @@ async function queueDemoNotice(client: PoolClient, leaseId: string, eventType: s
   );
   await client.query(
     `INSERT INTO deliveries (org_id, notification_id, channel, recipient_contact_id, recipient_user_id, status, provider, counts_toward_quota, error)
-     VALUES ($1,$2,'line',$3,$4,'skipped','demo_line',false,'demo_not_sent')`,
-    [contact.org_id, notice.id, contact.id, contact.user_id],
+     VALUES ($1,$2,'line',$3,$4,$5,$6,false,$7)`,
+    [contact.org_id, notice.id, contact.id, contact.user_id, plan.status, plan.provider, plan.error],
   );
+  if (plan.error === SANDBOX_NOT_SENT) {
+    await writeAudit(contact.org_id, contact.user_id, "notice_not_sent", {
+      channel: "line",
+      leaseId,
+      note: plan.error,
+    });
+  }
+}
+
+export async function recordLeaseNotice(leaseId: string, eventType: string) {
+  await svc(null, (client) => queueDemoNotice(client, leaseId, eventType));
 }
 
 export async function signLease(session: Session, input: { leaseId: string; signedName: string; consent: boolean }) {
@@ -1571,6 +1590,8 @@ export async function inviteTeammate(session: Session, input: { email: string; r
       [session.orgId, input.role, email, sha256(code), session.userId],
     );
   });
+  const note = outboundNote(session.environment);
+  if (note) await writeAudit(session.orgId, session.userId, "invite", { email, role: input.role, note });
   return { code };
 }
 

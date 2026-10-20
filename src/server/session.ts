@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { isLocale, type Locale } from "@/i18n";
 import { pool } from "./db";
 import { SESSION_COOKIE } from "./auth";
-import type { CalendarMode, OrgRole, Session } from "./types";
+import { ENV_COOKIE, ORG_COOKIE, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
+import type { CalendarMode, Session } from "./types";
 
 export type Prefs = { locale: Locale; calendar: CalendarMode; leaseId: string | null };
 
@@ -45,15 +46,8 @@ export async function readSession(): Promise<Session | null> {
     const identity = found.rows[0];
     if (!identity) return null;
     await pool.query(`UPDATE auth_sessions SET last_active_at = now() WHERE id = $1`, [identity.session_id]);
-    const preferredOrg = jar.get("condola_org")?.value ?? null;
-    const member = await pool.query<{ org_id: string; role: OrgRole }>(
-      `SELECT org_id::text, role::text AS role
-         FROM org_members
-        WHERE user_id = $1 AND status = 'active'
-        ORDER BY CASE WHEN org_id::text = $2 THEN 0 ELSE 1 END, created_at
-        LIMIT 1`,
-      [identity.user_id, preferredOrg],
-    );
+    const preferredOrg = jar.get(ORG_COOKIE)?.value ?? null;
+    const envChoice: OrgEnvironment = jar.get(ENV_COOKIE)?.value === "sandbox" ? "sandbox" : "live";
     const base = {
       userId: identity.user_id,
       sessionId: identity.session_id,
@@ -63,37 +57,54 @@ export async function readSession(): Promise<Session | null> {
       calendar: prefs.calendar,
       leaseId: prefs.leaseId,
     };
-    if (member.rows[0]) {
-      return { ...base, kind: "staff", role: member.rows[0].role, orgId: member.rows[0].org_id };
+    const firm = await resolveStaffOrg(pool, identity.user_id, preferredOrg, envChoice);
+    if (firm) {
+      return { ...base, kind: "staff", role: firm.role, orgId: firm.orgId, liveOrgId: firm.liveOrgId, environment: firm.environment };
     }
-    const contact = await pool.query<{ org_id: string; is_tenant: boolean; is_owner: boolean }>(
-      `SELECT org_id::text,
-              bool_or(is_tenant) AS is_tenant,
-              bool_or(is_owner) AS is_owner
-         FROM contacts
-        WHERE user_id = $1 AND archived_at IS NULL
-        GROUP BY org_id
-        ORDER BY org_id
+    const contact = await pool.query<{
+      org_id: string;
+      environment: OrgEnvironment;
+      live_org_id: string;
+      is_tenant: boolean;
+      is_owner: boolean;
+    }>(
+      `SELECT c.org_id::text,
+              o.environment::text AS environment,
+              coalesce(o.live_org_id::text, c.org_id::text) AS live_org_id,
+              bool_or(c.is_tenant) AS is_tenant,
+              bool_or(c.is_owner) AS is_owner
+         FROM contacts c
+         JOIN organizations o ON o.id = c.org_id
+        WHERE c.user_id = $1 AND c.archived_at IS NULL
+        GROUP BY c.org_id, o.environment, o.live_org_id
+        ORDER BY c.org_id
         LIMIT 1`,
       [identity.user_id],
     );
     const portal = contact.rows[0];
     if (!portal) return null;
     let orgId = portal.org_id;
+    let environment: OrgEnvironment = portal.environment === "sandbox" ? "sandbox" : "live";
+    let liveOrgId = portal.live_org_id;
     if (prefs.leaseId) {
-      const leaseOrg = await pool.query<{ org_id: string }>(
-        `SELECT l.org_id::text
+      const leaseOrg = await pool.query<{ org_id: string; environment: OrgEnvironment; live_org_id: string }>(
+        `SELECT l.org_id::text, o.environment::text AS environment, coalesce(o.live_org_id::text, l.org_id::text) AS live_org_id
            FROM leases l
+           JOIN organizations o ON o.id = l.org_id
            JOIN lease_parties lp ON lp.lease_id = l.id
            JOIN contacts c ON c.id = lp.contact_id
           WHERE l.id = $1 AND c.user_id = $2
           LIMIT 1`,
         [prefs.leaseId, identity.user_id],
       );
-      if (leaseOrg.rows[0]) orgId = leaseOrg.rows[0].org_id;
+      if (leaseOrg.rows[0]) {
+        orgId = leaseOrg.rows[0].org_id;
+        environment = leaseOrg.rows[0].environment === "sandbox" ? "sandbox" : "live";
+        liveOrgId = leaseOrg.rows[0].live_org_id;
+      }
     }
-    if (portal.is_tenant) return { ...base, kind: "tenant", role: null, orgId };
-    if (portal.is_owner) return { ...base, kind: "owner", role: null, orgId };
+    if (portal.is_tenant) return { ...base, kind: "tenant", role: null, orgId, liveOrgId, environment };
+    if (portal.is_owner) return { ...base, kind: "owner", role: null, orgId, liveOrgId, environment };
     return null;
   } catch (error) {
     if (process.env.NEXT_PHASE === "phase-production-build") return null;

@@ -32,6 +32,7 @@ const ERRORS: Record<string, string> = {
   "errors.authInvalid": "i_auth_invalid",
   "errors.mfaRequired": "i_mfa_required_err",
   "errors.confirm": "i_confirm_needed",
+  "errors.planLimit": "i_plan_limit",
 };
 
 export function errorText(t: T, key: string | undefined) {

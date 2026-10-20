@@ -12,6 +12,9 @@ export type Session = {
   kind: "staff" | "tenant" | "owner";
   role: OrgRole | null;
   orgId: string;
+  /** Live firm when this session is inside its sandbox. */
+  liveOrgId: string;
+  environment: "live" | "sandbox";
   locale: Locale;
   calendar: CalendarMode;
   leaseId: string | null;

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { actionPhoneVisibility, actionSetMeter } from "@/server/actions";
+import { SampleTag } from "@/components/sample-tag";
 import { ErrorBanner, PageHeader } from "@/components/ui";
+import { isSampleName } from "@/server/sandbox-data";
 import { formatMoney } from "@/server/format";
 import { propertyDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -25,7 +27,11 @@ export default async function PropertyPage({
   return (
     <>
       <PageHeader
-        title={detail.property.name}
+        title={
+          <>
+            {detail.property.name} <SampleTag show={isSampleName(detail.property.name)} label={t("i_sample_tag")} />
+          </>
+        }
         crumb={<Link href="/m/properties">{t("s_e03a6ec")}</Link>}
         actions={
           <Link className="btn pri" href="/m/leases/new">
