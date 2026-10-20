@@ -126,7 +126,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                     <Cell label={t("i_net_owner")}>
                       {figures && figures.owes > 0 ? (
                         <span className="chip warn" data-testid="owner-owes">
-                          {t("owner_owes", { amount: label(figures.owes) })}
+                          {t("owner_owes")} {label(figures.owes)}
                         </span>
                       ) : figures ? (
                         label(figures.payable)

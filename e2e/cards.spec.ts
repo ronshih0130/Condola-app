@@ -6,9 +6,9 @@ const widths = [400, 480, 640, 960] as const;
 const locales = [
   {
     code: "zh-TW" as const,
-    owes: "房東應補繳",
+    owes: "屋主應補繳",
     reason: "代墊費用與代管費",
-    labels: ["物件", "代管費規則", "本月實收租金", "應付房東", "狀態"],
+    labels: ["物件", "代管費規則", "本月實收租金", "應付屋主", "狀態"],
     rentLabels: ["租客", "月租", "本月應收", "已收", "餘額", "狀態"],
     leaseLabels: ["物件／房間", "租期", "月租", "押金", "電費", "狀態"],
     dashLabels: ["物件／房間", "餘額"],
@@ -16,7 +16,7 @@ const locales = [
   {
     code: "en" as const,
     owes: "Owner owes",
-    reason: "fronted expenses",
+    reason: "expenses and fee",
     labels: ["Property", "Fee rule", "Rent received", "Net to owner", "Status"],
     rentLabels: ["Tenant", "Rent", "Due", "Received", "Balance", "Status"],
     leaseLabels: ["Property / space", "Term", "Rent", "Deposit", "Electricity", "Status"],
@@ -117,8 +117,12 @@ for (const locale of locales) {
     expect(documentText).toContain("NT$0");
     expect(documentText).not.toMatch(/[-−]\s*NT\$/);
     expect(documentText).not.toContain("−NT$");
-    await expect(page.getByTestId("owner-owes-reason")).toContainText("NT$2,800");
-    await expect(page.getByTestId("owner-owes-reason")).toContainText("NT$0");
+    const reason = page.getByTestId("owner-owes-reason");
+    await expect(reason).toHaveClass(/alert/);
+    await expect(reason).toHaveClass(/warn/);
+    await expect(reason).toContainText("⚠");
+    await expect(reason).toContainText("NT$2,800");
+    await expect(reason).toContainText("NT$0");
     await page.screenshot({ path: `/opt/cursor/artifacts/owner-owes-${locale.code}.png`, fullPage: true });
 
     await signIn(page, ACCOUNTS.owner);

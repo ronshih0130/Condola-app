@@ -44,9 +44,17 @@ Swap these without hunting through pages:
 | --- | --- |
 | Tokens | `src/styles/tokens.css` — CSS variables (`--bg`, `--pri`, `--top`, type). `src/app/globals.css` imports them and holds the layout classes. |
 | Components | `src/components/` — chrome, wizards, dialogs, locale provider. |
-| Strings | `src/i18n/zh-TW.json` and `src/i18n/en.json`. Design keys stay `s_*`. Keys with amounts or names are `i_*` and use `{placeholders}`. `src/i18n/index.ts` is `makeT(locale)`. |
+| Strings | `src/i18n/zh-TW.json` and `src/i18n/en.json`. Design keys stay `s_*`. Keys with amounts or names are `i_*` and use `{placeholders}`. `src/i18n/index.ts` is `makeT(locale)`. The prototype catalogs are vendored at `design/strings/zh-TW.json` and `design/strings/en.json`. |
 
 User-facing copy goes through those dictionaries. Do not hardcode labels in pages.
+
+When Design sends a fresh `strings/zh-TW.json` and `strings/en.json` (sandbox, subscription, and ID keys are landing in that catalog), re-sync from the directory that contains both files:
+
+```bash
+npm run strings:sync -- /path/to/prototype/strings
+```
+
+That copies the two files into `design/strings/` and rewrites every shared key in `src/i18n`. Keys that exist only in the prototype stay in the vendored catalogs until the app uses them. Then run `npm run test:unit`. Shared keys must match the vendored files, including `{placeholder}` names.
 
 ## Data model
 
@@ -65,7 +73,7 @@ Schema notes for this demo:
 - Shared meters use `meters.serial_number` (電號). An empty number shows an add-meter prompt. The field itself starts blank.
 - Lease template language defaults to `organizations.default_locale` (zh-TW for the Taiwan firm), not the bilingual template.
 - Manager list tables use `table.t.rf` and `data-label`. They become cards when the `.main` content column is 800px or narrower (`@container`), including a narrowed desktop window. Ledger, statement documents, and split previews stay tables.
-- An owner statement whose fee and expenses exceed confirmed rent shows 房東應補繳 / Owner owes for the shortfall. It does not show a negative payout. A zero fee is NT$0.
+- An owner statement whose fee and expenses exceed confirmed rent shows 屋主應補繳 / Owner owes for the shortfall, with the amount beside that label. It does not show a negative payout. A zero fee is NT$0.
 - Files are references (`storage_path` like `demo/{uuid}.csv`). Bytes are not uploaded to Supabase Storage.
 - LINE deliveries are inserted as `skipped` / `demo_line`. E-invoice status stays `not_applicable`.
 - Demo reset wipes org data with `session_replication_role = replica` and reseeds. It keeps currencies, jurisdictions, platform settings, and lease templates.
