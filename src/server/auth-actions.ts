@@ -29,6 +29,7 @@ import {
   type RequestMeta,
 } from "./auth";
 import { BACKUP_COOKIE } from "./backup";
+import { forgotSentLocation, RESET_FLASH_COOKIE, resetFlashCookie } from "./reset-flash";
 import { demoModeEnabled } from "./demo";
 import { addExpense, closeMonth, reversePayment } from "./domain";
 import { FlowError } from "./errors";
@@ -137,7 +138,10 @@ export async function actionSecondFactor(formData: FormData) {
 export async function actionForgot(formData: FormData) {
   const email = text(formData.get("email"));
   await requestPasswordReset(email);
-  redirect(`/forgot?sent=1&email=${encodeURIComponent(email)}`);
+  const jar = await cookies();
+  const cookie = resetFlashCookie(email);
+  jar.set(cookie.name, cookie.value, cookie.options);
+  redirect(forgotSentLocation());
 }
 
 export async function actionReset(formData: FormData) {
@@ -307,6 +311,11 @@ export async function actionRevokeOthers() {
 export async function actionClearBackup() {
   const jar = await cookies();
   jar.delete(BACKUP_COOKIE);
+}
+
+export async function actionClearResetFlash() {
+  const jar = await cookies();
+  jar.delete({ name: RESET_FLASH_COOKIE, path: "/forgot" });
 }
 
 export async function actionSignOut() {
