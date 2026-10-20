@@ -59,7 +59,7 @@ export function StatementDocument({
               <td>{t("i_net_owner")}</td>
               <td className="num">
                 <span className="chip warn" data-testid="owner-owes">
-                  {t("owner_owes", { amount: labeled(figures.owes) })}
+                  {t("owner_owes")} {labeled(figures.owes)}
                 </span>
               </td>
             </tr>
@@ -82,7 +82,7 @@ export function StatementDocument({
       {figures.owes > 0 ? (
         <div className="bd">
           <p className="small" data-testid="owner-owes-reason">
-            {t("owner_owes_reason", { costs: labeled(figures.costs), rent: labeled(figures.rent) })}
+            {t("owner_owes_reason", { cost: labeled(figures.costs), rent: labeled(figures.rent) })}
           </p>
         </div>
       ) : null}

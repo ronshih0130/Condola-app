@@ -1,0 +1,15 @@
+# Fixture note: property/owner spreadsheet import is not in the app yet.
+#
+# TODO: when that importer is added, its column-header map (src/server/owner-import.ts)
+# must keep accepting these legacy headers so older spreadsheet exports still import.
+# They are aliases, not UI copy. zh-TW UI strings use 屋主 and must not contain 房東.
+# The prototype writes the legacy headers with \u escapes so product source can stay
+# free of the literal characters. Primary headers are 屋主姓名 / 屋主 / 屋主email / 屋主信箱.
+# "房東 email" (with a space) is the extra form the prototype still accepts.
+#
+# Required legacy aliases:
+房東姓名
+房東
+房東email
+房東 email
+房東信箱

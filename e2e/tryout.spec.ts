@@ -189,7 +189,7 @@ test("reset toast follows the locale", async ({ page }) => {
   await page.goto("/api/demo/locale?set=zh-TW&next=/");
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByTestId("reset-demo").click();
-  await expect(page.getByTestId("reset-toast")).toHaveText("已重置示範資料");
+  await expect(page.getByTestId("reset-toast")).toHaveText("已重設示範資料");
 });
 
 test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {
@@ -231,7 +231,7 @@ test("rent due notice shows rent only", async ({ page }) => {
   await signIn(page, ACCOUNTS.tenant2);
   await page.goto("/api/demo/locale?set=zh-TW&next=/t");
   const notice = page.getByTestId("rent-due-notice");
-  await expect(notice).toContainText("房租即將到期");
+  await expect(notice).toContainText("租金即將到期");
   const amount = page.getByTestId("rent-due-amount");
   const deposit = page.getByTestId("rent-due-deposit");
   await expect(amount).toHaveAttribute("data-minor", "1200000");

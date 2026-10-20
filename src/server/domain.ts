@@ -1014,6 +1014,10 @@ export async function rejectPayment(session: Session, paymentId: string, reason:
   });
 }
 
+// TODO(owner-import): Property and owner spreadsheet import is not built yet.
+// Bank CSV below is the only importer. When the owner column-header map is added,
+// put it in src/server/owner-import.ts and keep every legacy alias listed in
+// design/strings/import-column-headers.txt. Those aliases are not UI copy.
 export function parseCsv(text: string) {
   const lines = text.trim().split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) return [];

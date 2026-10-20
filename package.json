@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "db:reset": "bash scripts/db-reset.sh",
     "db:setup": "bash scripts/db-setup.sh",
-    "test:unit": "tsx --test src/server/password.test.ts src/server/lockout.test.ts src/server/perms.test.ts src/server/privacy.test.ts src/server/demo.test.ts src/server/review.test.ts src/server/reset-flash.test.ts",
+    "test:unit": "tsx --test src/server/password.test.ts src/server/lockout.test.ts src/server/perms.test.ts src/server/privacy.test.ts src/server/demo.test.ts src/server/review.test.ts src/server/reset-flash.test.ts src/i18n/strings.test.ts",
     "test:rls": "tsx --test src/server/rls.test.ts && tsx --test src/server/auth.integration.test.ts",
     "cf:build": "opennextjs-cloudflare build",
     "test:e2e": "playwright test"
