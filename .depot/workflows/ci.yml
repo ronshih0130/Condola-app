@@ -1,0 +1,55 @@
+# Migrated from .github/workflows/ci.yml.
+# Changes:
+# - runs-on: ubuntu-latest -> depot-ubuntu-latest
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  check:
+    # Remapped from ubuntu-latest. Depot CI runs its own runner labels.
+    runs-on: depot-ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: condola
+          POSTGRES_PASSWORD: condola
+          POSTGRES_DB: condola
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U condola -d condola"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://condola:condola@127.0.0.1:5432/condola
+      DEMO_MODE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test:unit
+      - name: Apply schema and seed
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/stub/supabase_stub.sql
+          for migration in supabase/migrations/*.sql; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+          npm run db:reset
+      - run: npm run test:rls
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
