@@ -22,6 +22,7 @@ import {
   type LeaseInput,
   type PropertyInput,
 } from "./domain";
+import { createOwner, createSpace, updateOwner, updateProperty, updateSpace, type SpaceKind } from "./portfolio";
 import { FlowError } from "./errors";
 import { addCalendarMonths, monthBounds, taipeiToday } from "./money";
 import { getSession } from "./session";
@@ -52,6 +53,36 @@ function num(value: FormDataEntryValue | null) {
 
 function text(value: FormDataEntryValue | null) {
   return String(value ?? "");
+}
+
+function optionalNum(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function propertyIds(formData: FormData) {
+  return formData.getAll("propertyId").map((value) => String(value));
+}
+
+function spaceInput(formData: FormData) {
+  return {
+    propertyId: text(formData.get("propertyId")),
+    ownerContactId: text(formData.get("ownerContactId")),
+    kind: text(formData.get("kind")),
+    floor: text(formData.get("floor")),
+    roomLabel: text(formData.get("roomLabel")),
+    roomType: text(formData.get("roomType")),
+    area: optionalNum(formData.get("area")),
+    rentMajor: num(formData.get("rent")),
+    electricityMethod: text(formData.get("electricityMethod")),
+    ratePerKwh: optionalNum(formData.get("ratePerKwh")),
+    rateCapReason: text(formData.get("rateCapReason")),
+    taipowerKwh: optionalNum(formData.get("taipowerKwh")),
+    taipowerAmountMajor: optionalNum(formData.get("taipowerAmount")),
+    notes: text(formData.get("notes")),
+  };
 }
 
 export async function actionCreateProperty(formData: FormData) {
@@ -300,6 +331,81 @@ export async function actionPhoneVisibility(formData: FormData) {
     redirect(`/m/properties/${propertyId}`);
   } catch (error) {
     bounce(`/m/properties/${propertyId}`, error);
+  }
+}
+
+export async function actionCreateOwner(formData: FormData) {
+  const back = "/m/owners/new";
+  try {
+    const session = await getSession();
+    await createOwner(session, {
+      name: text(formData.get("name")),
+      email: text(formData.get("email")),
+      phone: text(formData.get("phone")),
+      propertyIds: propertyIds(formData),
+    });
+    redirect("/m/owners");
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionUpdateOwner(formData: FormData) {
+  const ownerId = text(formData.get("ownerId"));
+  const back = `/m/owners/${ownerId}`;
+  try {
+    const session = await getSession();
+    await updateOwner(session, ownerId, {
+      name: text(formData.get("name")),
+      email: text(formData.get("email")),
+      phone: text(formData.get("phone")),
+      propertyIds: propertyIds(formData),
+    });
+    redirect("/m/owners");
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionUpdateProperty(formData: FormData) {
+  const propertyId = text(formData.get("propertyId"));
+  const back = `/m/properties/${propertyId}/edit`;
+  try {
+    const session = await getSession();
+    await updateProperty(session, propertyId, {
+      name: text(formData.get("name")),
+      city: text(formData.get("city")),
+      district: text(formData.get("district")),
+      street: text(formData.get("street")),
+      ownerContactId: text(formData.get("ownerContactId")),
+    });
+    redirect(`/m/properties/${propertyId}`);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionCreateSpace(formData: FormData) {
+  const back = "/m/units/new";
+  try {
+    const session = await getSession();
+    await createSpace(session, spaceInput(formData));
+    redirect("/m/units");
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionUpdateSpace(formData: FormData) {
+  const kind = text(formData.get("kind")) === "whole_unit" ? "whole_unit" : "room";
+  const spaceId = text(formData.get("spaceId"));
+  const back = kind === "whole_unit" ? `/m/units/whole/${spaceId}` : `/m/units/room/${spaceId}`;
+  try {
+    const session = await getSession();
+    await updateSpace(session, kind satisfies SpaceKind, spaceId, spaceInput(formData));
+    redirect("/m/units");
+  } catch (error) {
+    bounce(back, error);
   }
 }
 

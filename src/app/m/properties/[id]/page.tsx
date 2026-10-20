@@ -6,6 +6,7 @@ import { SampleTag } from "@/components/sample-tag";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { isSampleName } from "@/server/sandbox-data";
 import { formatMoney } from "@/server/format";
+import { can } from "@/server/perms";
 import { propertyDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -34,9 +35,16 @@ export default async function PropertyPage({
         }
         crumb={<Link href="/m/properties">{t("s_e03a6ec")}</Link>}
         actions={
-          <Link className="btn pri" href="/m/leases/new">
-            + {t("s_e96eefc")}
-          </Link>
+          <>
+            {can(session.role, "props.edit") ? (
+              <Link className="btn" href={`/m/properties/${id}/edit`} data-testid="edit-property">
+                {t("i_edit")}
+              </Link>
+            ) : null}
+            <Link className="btn pri" href="/m/leases/new">
+              + {t("s_e96eefc")}
+            </Link>
+          </>
         }
       />
       <p className="muted">{detail.property.address_display}</p>
@@ -65,7 +73,13 @@ export default async function PropertyPage({
         </div>
         <div className="card pad">
           <h3>{t("i_owner")}</h3>
-          <p>{detail.owner?.name}</p>
+          <p>
+            {detail.owner && can(session.role, "props.edit") ? (
+              <Link href={`/m/owners/${detail.owner.contact_id}`}>{detail.owner.name}</Link>
+            ) : (
+              detail.owner?.name
+            )}
+          </p>
           {detail.owner && (session.role === "admin" || session.role === "manager") ? (
             <form action={actionPhoneVisibility}>
               <input type="hidden" name="propertyId" value={id} />

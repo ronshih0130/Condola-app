@@ -74,6 +74,7 @@ Schema notes for this demo:
 - Lease template language defaults to `organizations.default_locale` (zh-TW for the Taiwan firm), not the bilingual template.
 - Manager list tables use `table.t.rf` and `data-label`. They become cards when the `.main` content column is 800px or narrower (`@container`), including a narrowed desktop window. Ledger, statement documents, and split previews stay tables.
 - An owner statement whose fee and expenses exceed confirmed rent shows 屋主應補繳 / Owner owes for the shortfall, with the amount beside that label. It does not show a negative payout. A zero fee is NT$0.
+- Buildings, rooms, and whole units are edited by Admin and Manager. 屋主 belong to one firm and can own several properties. `listing_terms` stores the sample CSV's lease columns so a file can be seeded; those screens do not create tenants.
 - Files are references (`storage_path` like `demo/{uuid}.csv`). Bytes are not uploaded to Supabase Storage.
 - LINE deliveries are inserted as `skipped` / `demo_line`. E-invoice status stays `not_applicable`.
 - Demo reset wipes org data with `session_replication_role = replica` and reseeds. It keeps currencies, jurisdictions, platform settings, and lease templates.
