@@ -74,6 +74,8 @@ test("seeded portfolio rows stay inside the firm and only admin or manager can w
     kind: "staff",
     role: "admin",
     orgId: ORG_ID,
+    liveOrgId: ORG_ID,
+    environment: "live",
     locale: "zh-TW",
     calendar: "gregorian",
     leaseId: null,
