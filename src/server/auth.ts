@@ -361,8 +361,10 @@ export async function resetPassword(token: string, password: string, confirm: st
     return { ok: false as const, error: "expired" as const };
   }
   await setUserPassword(reset.user_id, password);
-  await pool.query(`UPDATE auth_password_resets SET used_at = now() WHERE id = $1`, [reset.id]);
+  await pool.query(`UPDATE auth_password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, [reset.user_id]);
   await pool.query(`UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, [reset.user_id]);
+  const account = await pool.query<{ email: string }>(`SELECT email FROM auth.users WHERE id = $1`, [reset.user_id]);
+  if (account.rows[0]?.email) await clearFailures(account.rows[0].email);
   await writeAudit(await primaryOrg(reset.user_id), reset.user_id, "password_reset", {});
   return { ok: true as const };
 }
@@ -455,8 +457,9 @@ export async function setMemberRole(session: Session, memberId: string, role: Or
   await writeAudit(session.orgId, session.userId, "role_change", { memberId, role });
 }
 
-export async function setMemberActive(session: Session, memberId: string, active: boolean) {
+export async function setMemberActive(session: Session, memberId: string, active: boolean, confirmed = false) {
   assertPerm(session, "team.manage");
+  if (!active && !confirmed) throw new FlowError("errors.confirm");
   const member = await pool.query<{ user_id: string; role: OrgRole }>(
     `SELECT user_id::text, role::text FROM org_members WHERE id = $1 AND org_id = $2`,
     [memberId, session.orgId],

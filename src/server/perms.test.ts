@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { totpCode, verifyTotp } from "./totp";
-import { PERMS, ROLE_KEYS, can, navCount, visibleNav } from "./perms";
+import { PERMS, ROLE_KEYS, can, navCount, permForPath, visibleNav } from "./perms";
 
 test("permission matrix matches the prototype table", () => {
   assert.equal(PERMS.length, 18);
@@ -22,6 +22,7 @@ test("permission matrix matches the prototype table", () => {
 test("navigation follows the matrix", () => {
   assert.equal(navCount("admin"), 15);
   const accountant = visibleNav("accountant").flatMap((section) => section.links.map((link) => link.href));
+  assert.ok(accountant.includes("/m/tickets"));
   assert.ok(accountant.includes("/m/bank"));
   assert.ok(accountant.includes("/m/close"));
   assert.ok(!accountant.includes("/m/team"));
@@ -31,6 +32,12 @@ test("navigation follows the matrix", () => {
     visibleNav("maintenance").flatMap((section) => section.links.map((link) => link.href)),
     ["/m/tickets"],
   );
+  assert.equal(permForPath("/m/tickets"), null);
+  assert.equal(permForPath("/m/tickets/1"), null);
+  assert.equal(can("accountant", "tickets.update"), false);
+  assert.equal(can("maintenance", "tickets.update"), true);
+  assert.equal(can("admin", "tickets.update"), true);
+  assert.equal(can("manager", "tickets.update"), true);
 });
 
 test("totp accepts the current code and rejects a wrong one", () => {

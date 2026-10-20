@@ -1,12 +1,8 @@
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
-import {
-  actionInvite,
-  actionMemberActive,
-  actionMemberRole,
-  actionResendInvite,
-  actionRevokeInvite,
-} from "@/server/auth-actions";
+import { ConfirmDeactivate } from "@/components/confirm-deactivate";
+import { actionInvite, actionMemberActive, actionMemberRole, actionResendInvite, actionRevokeInvite } from "@/server/auth-actions";
+import { formatTaipei } from "@/server/time";
 import { mfaStatus } from "@/server/auth";
 import { demoModeEnabled } from "@/server/demo";
 import { listTeam } from "@/server/queries";
@@ -51,7 +47,7 @@ export default async function TeamPage({
           {t("i_invite_link", { path: `/accept/${params.token}` })}
         </div>
       ) : null}
-      <div className="grid2">
+      <div className="col">
         <div className="card">
           <table className="t rf" data-testid="team-table">
             <thead>
@@ -106,8 +102,8 @@ export default async function TeamPage({
                     <td data-label={t("i_mfa")}>
                       {member.user_id ? (member.mfa ? t("i_on") : factor.required ? requireNote : t("i_mfa_off")) : "—"}
                     </td>
-                    <td className="small" data-label={t("i_last_sign_in")}>
-                      {member.last_sign_in ? member.last_sign_in.slice(0, 16).replace("T", " ") : "—"}
+                    <td className="small" data-label={t("i_last_sign_in")} data-testid={`last-sign-in-${member.email ?? member.member_id}`}>
+                      {member.last_sign_in ? formatTaipei(member.last_sign_in) : "—"}
                     </td>
                     <td className="r">
                       {member.invitation_id && member.status === "pending" ? (
@@ -127,13 +123,14 @@ export default async function TeamPage({
                         </div>
                       ) : null}
                       {member.member_id && member.status === "active" && !locked ? (
-                        <form action={actionMemberActive}>
-                          <input type="hidden" name="memberId" value={member.member_id} />
-                          <input type="hidden" name="active" value="0" />
-                          <button className="btn sm danger" type="submit" data-testid={`deactivate-${member.email}`}>
-                            {t("i_deactivate")}
-                          </button>
-                        </form>
+                        <ConfirmDeactivate
+                          memberId={member.member_id}
+                          email={member.email ?? ""}
+                          label={t("i_deactivate")}
+                          confirmLabel={t("i_deactivate_confirm")}
+                          cancelLabel={t("i_cancel")}
+                          note={t("i_deactivate_note")}
+                        />
                       ) : null}
                       {member.member_id && member.status === "suspended" ? (
                         <form action={actionMemberActive}>

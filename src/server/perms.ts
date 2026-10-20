@@ -74,7 +74,7 @@ export const MANAGER_NAV = [
   {
     section: "i_sec_ops",
     links: [
-      { href: "/m/tickets", key: "i_nav_tickets", perm: "tickets.update" },
+      { href: "/m/tickets", key: "i_nav_tickets" },
       { href: "/m/messages", key: "i_nav_msg", perm: "messages.send" },
     ],
   },
@@ -88,13 +88,13 @@ export const MANAGER_NAV = [
   },
 ] as const;
 
-export type NavLink = { href: string; key: string; perm: PermKey };
+export type NavLink = { href: string; key: string; perm?: PermKey };
 
 export function visibleNav(role: OrgRole | null): { section: string; links: NavLink[] }[] {
   if (!role) return [];
   return MANAGER_NAV.map((section) => ({
     section: section.section,
-    links: section.links.filter((link) => can(role, link.perm)),
+    links: section.links.filter((link) => !("perm" in link) || can(role, link.perm)),
   })).filter((section) => section.links.length > 0);
 }
 
@@ -122,7 +122,6 @@ const ROUTE_PERM: { prefix: string; perm: PermKey; exact?: boolean }[] = [
   { prefix: "/m/bank", perm: "bank.reconcile" },
   { prefix: "/m/statements", perm: "stmt.view" },
   { prefix: "/m/close", perm: "month.close" },
-  { prefix: "/m/tickets", perm: "tickets.update" },
   { prefix: "/m/messages", perm: "messages.send" },
   { prefix: "/m/team", perm: "team.manage" },
   { prefix: "/m/notify", perm: "settings.edit" },

@@ -39,28 +39,37 @@ export function warnDemoMode() {
   );
 }
 
+export function lineLoginRequested() {
+  return process.env.LINE_LOGIN_ENABLED === "true";
+}
+
 /**
  * Call once when the server starts. A real environment that still has
- * DEMO_MODE=true does not boot. `next build` only ignores the flag so the
- * bundle can be produced from a demo .env.local.
+ * DEMO_MODE or LINE_LOGIN_ENABLED set does not boot. `next build` only
+ * ignores the flags so the bundle can be produced from a demo .env.local.
  */
 export function enforceDemoSafety() {
   if (building()) return;
-  if (demoModeRequested() && productionLikeEnv()) {
+  if (productionLikeEnv() && (demoModeRequested() || lineLoginRequested())) {
     const message =
-      "Refusing to start: DEMO_MODE=true while NODE_ENV=production or CONDOLA_ENV is production/staging-real. Unset DEMO_MODE. The TOTP bypass and demo reset stay off.";
+      "Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production/staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.";
     console.error(`\n${"!".repeat(72)}\n${message}\n${"!".repeat(72)}\n`);
     throw new Error(message);
   }
   warnDemoMode();
+  if (lineLoginEnabled()) {
+    console.warn("DEMO LINE LOGIN is ON. It signs in the linked member with no password and no 2FA. It does not call LINE.");
+  }
 }
 
 /**
  * LINE Login is not a real OAuth client. When enabled it signs in the member
- * whose profile is marked line-linked (the prototype behavior). Default follows
- * DEMO_MODE. Set LINE_LOGIN_ENABLED=false to hide it even in the demo.
+ * whose profile is marked line-linked, with no password. It follows the same
+ * production guard as DEMO_MODE: ignored, and the process refuses to start,
+ * when NODE_ENV=production or CONDOLA_ENV is production or staging-real.
  */
 export function lineLoginEnabled() {
+  if (productionLikeEnv()) return false;
   if (process.env.LINE_LOGIN_ENABLED === "false") return false;
   if (process.env.LINE_LOGIN_ENABLED === "true") return true;
   return demoModeEnabled();

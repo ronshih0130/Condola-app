@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { makeT } from "@/i18n";
+import { BackupCodes } from "@/components/backup-codes";
 import { PasswordFields } from "@/components/password-field";
+import { BACKUP_COOKIE, backupDisplay } from "@/server/backup";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import {
   actionBeginMfa,
@@ -29,7 +31,7 @@ export default async function AccountPage({
   const [sessions, factor] = await Promise.all([listSessions(session.userId), mfaStatus(session.userId)]);
   const jar = await cookies();
   const challenge = params.enroll === "1" ? await peekChallenge(jar.get(CHALLENGE_COOKIE)?.value ?? "") : null;
-  const backup = params.backup === "1" ? jar.get("condola_backup")?.value ?? "" : "";
+  const backup = params.backup === "1" ? backupDisplay(jar.get(BACKUP_COOKIE)?.value) : null;
   return (
     <>
       <PageHeader title={t("i_account")} />
@@ -61,18 +63,7 @@ export default async function AccountPage({
         <div className="card pad">
           <h3>{t("i_mfa")}</h3>
           <p>{factor.enabled ? t("i_mfa_on") : t("i_mfa_off")}</p>
-          {backup ? (
-            <div data-testid="backup-codes">
-              <p>{t("i_backup_once")}</p>
-              <ul>
-                {backup.split(" ").filter(Boolean).map((code) => (
-                  <li key={code}>
-                    <code>{code}</code>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          {backup?.clearCookie ? <BackupCodes codes={backup.codes} note={t("i_backup_once")} /> : null}
           {challenge?.secret ? (
             <form action={actionConfirmMfa}>
               <div className="alert info">

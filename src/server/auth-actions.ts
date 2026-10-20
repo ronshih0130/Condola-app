@@ -28,6 +28,7 @@ import {
   SESSION_COOKIE,
   type RequestMeta,
 } from "./auth";
+import { BACKUP_COOKIE } from "./backup";
 import { demoModeEnabled } from "./demo";
 import { addExpense, closeMonth, reversePayment } from "./domain";
 import { FlowError } from "./errors";
@@ -73,7 +74,7 @@ function bounce(path: string, error: unknown): never {
 
 async function rememberBackup(codes: string[]) {
   const jar = await cookies();
-  jar.set("condola_backup", codes.join(" "), {
+  jar.set(BACKUP_COOKIE, codes.join(" "), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -207,7 +208,8 @@ export async function actionMemberRole(formData: FormData) {
 export async function actionMemberActive(formData: FormData) {
   try {
     const session = await getSession();
-    await setMemberActive(session, text(formData.get("memberId")), text(formData.get("active")) === "1");
+    const active = text(formData.get("active")) === "1";
+    await setMemberActive(session, text(formData.get("memberId")), active, text(formData.get("confirm")) === "yes");
     redirect("/m/team");
   } catch (error) {
     bounce("/m/team", error);
@@ -299,6 +301,11 @@ export async function actionRevokeOthers() {
   const session = await getSession();
   await revokeOtherSessions(session.userId, session.sessionId);
   redirect("/m/account?saved=1");
+}
+
+export async function actionClearBackup() {
+  const jar = await cookies();
+  jar.delete(BACKUP_COOKIE);
 }
 
 export async function actionSignOut() {

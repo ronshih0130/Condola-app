@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
+import { BackupCodes } from "@/components/backup-codes";
+import { BACKUP_COOKIE, backupDisplay } from "@/server/backup";
 import { actionLineLogin, actionSecondFactor, actionSignIn } from "@/server/auth-actions";
 import { CHALLENGE_COOKIE, peekChallenge } from "@/server/auth";
 import { demoModeEnabled, lineLoginEnabled } from "@/server/demo";
@@ -17,7 +19,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (session && params.step !== "backup") redirect(roleHome(session.kind, session.role));
   const jar = await cookies();
   const challenge = params.step === "2fa" || params.step === "enroll" ? await peekChallenge(jar.get(CHALLENGE_COOKIE)?.value ?? "") : null;
-  const backup = params.step === "backup" ? (jar.get("condola_backup")?.value ?? "") : "";
+  const backup = params.step === "backup" ? backupDisplay(jar.get(BACKUP_COOKIE)?.value) : null;
   const next = params.next && params.next.startsWith("/") ? params.next : "";
   const errorKey =
     params.error === "locked" ? "i_auth_locked" : params.error === "disabled" ? "i_auth_disabled" : params.error ? "i_auth_invalid" : "";
@@ -31,20 +33,13 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             {t(errorKey)}
           </div>
         ) : null}
-        {params.step === "backup" ? (
-          <div data-testid="backup-codes">
-            <p>{t("i_backup_once")}</p>
-            <ul>
-              {backup.split(" ").filter(Boolean).map((code) => (
-                <li key={code}>
-                  <code>{code}</code>
-                </li>
-              ))}
-            </ul>
+        {params.step === "backup" && backup?.clearCookie ? (
+          <>
+            <BackupCodes codes={backup.codes} note={t("i_backup_once")} />
             <a className="btn pri" href="/auth/continue">
               {t("i_continue")}
             </a>
-          </div>
+          </>
         ) : params.step === "2fa" || params.step === "enroll" ? (
           <>
             <input type="hidden" name="step" value={params.step} />

@@ -1458,7 +1458,7 @@ export async function createTicket(
       await markTryout(lease.org_id, "repair");
       return ticket.id;
     }
-    assertStaff(session, ["admin", "manager", "maintenance"]);
+    assertPerm(session, "tickets.update");
     const number = await one<{ n: string }>(
       client,
       `SELECT (coalesce(max(ticket_number), 1000) + 1)::text AS n FROM maintenance_tickets WHERE org_id = $1`,
@@ -1492,7 +1492,7 @@ export async function updateTicket(
   ticketId: string,
   patch: { status?: string; assigneeMemberId?: string; note?: string },
 ) {
-  assertStaff(session, ["admin", "manager", "maintenance"]);
+  assertPerm(session, "tickets.update");
   await tx(session.userId, async (client) => {
     const current = await maybe<{ status: string }>(
       client,

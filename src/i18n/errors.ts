@@ -31,6 +31,7 @@ const ERRORS: Record<string, string> = {
   "errors.weakPassword": "i_pw_weak",
   "errors.authInvalid": "i_auth_invalid",
   "errors.mfaRequired": "i_mfa_required_err",
+  "errors.confirm": "i_confirm_needed",
 };
 
 export function errorText(t: T, key: string | undefined) {
