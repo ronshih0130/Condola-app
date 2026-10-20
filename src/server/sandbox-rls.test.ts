@@ -174,6 +174,26 @@ test("sandbox rows stay hidden, copy resets owner portal logins, and five live u
     const expected = sampleCounts(loadSampleRows());
     assert.equal(await count(sandboxId, "properties"), expected.properties);
     assert.equal(await count(sandboxId, "leases"), expected.leases);
+    const occupancy = await query<{ spaces: number; occupied: number }>(
+      `SELECT
+         (
+           (SELECT count(*) FROM rooms r WHERE r.org_id = $1 AND r.archived_at IS NULL)
+           + (SELECT count(*) FROM units u
+               WHERE u.org_id = $1 AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit'
+                 AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+         )::int AS spaces,
+         (
+           (SELECT count(DISTINCT target_room_id) FROM leases
+             WHERE org_id = $1 AND status IN ('pending_signature','active') AND target_room_id IS NOT NULL)
+           + (SELECT count(DISTINCT l.target_unit_id) FROM leases l
+               JOIN units u ON u.id = l.target_unit_id
+              WHERE l.org_id = $1 AND l.status IN ('pending_signature','active')
+                AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+         )::int AS occupied`,
+      [sandboxId],
+    );
+    assert.equal(occupancy.rows[0].spaces, 38);
+    assert.equal(occupancy.rows[0].occupied, 31);
     const owners = await query<{ n: number }>(
       `SELECT count(*)::int AS n FROM contacts WHERE org_id = $1 AND is_owner`,
       [sandboxId],

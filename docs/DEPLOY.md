@@ -1,0 +1,57 @@
+# Deploy
+
+CI deploys **staging only**, and only when `STAGING_AUTODEPLOY` is exactly `true`. See [STAGING.md](STAGING.md). Production is a separate Wrangler env. Nothing in this repository deploys it.
+
+Do not put database URLs, Supabase keys, or Cloudflare tokens in git.
+
+## Production
+
+Worker name: `condola-prod`. Wrangler env: `production`.
+
+Hostnames, both custom domains on that Worker:
+
+- `https://app.condola.app`
+- `https://condola.app`
+
+Until a marketing site exists, `condola.app` serves this app. `/` redirects to `/login`, or to `/m` when a session cookie is present.
+
+Tokyo placement is the same as staging: `aws:ap-northeast-1`. Use a **production** Supabase project in that region, not the staging project.
+
+Plain vars:
+
+| Name | Value |
+| --- | --- |
+| `CONDOLA_ENV` | `production` |
+| `DEMO_MODE` | `false` |
+| `LINE_LOGIN_ENABLED` | `false` |
+| `STAGING_AUTODEPLOY` | `false` |
+
+`CONDOLA_ENV=production` refuses to start if `DEMO_MODE` or `LINE_LOGIN_ENABLED` is `true`. `workers.dev` is off.
+
+Required secret names. There are no `ID_DOC_*` secrets in this config.
+
+- `DATABASE_URL` — production transaction pooler, port **6543**, Tokyo
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+In production the session cookie `Domain` is `.condola.app`, so a sign-in on either hostname is sent to the other. Server Actions allow those two hosts as origins. Redirect targets that are absolute URLs are accepted only for `https://app.condola.app` and `https://condola.app`, and only as a path on this app.
+
+Apply `supabase/migrations/*.sql` in filename order to the production database before the first deploy. Use the session connection (port 5432) for migrations. Do not run `npm run db:reset`. Do not apply `supabase/stub/supabase_stub.sql`.
+
+```bash
+npx wrangler@4.151.2 secret put DATABASE_URL --env production
+npx wrangler@4.151.2 secret put SUPABASE_URL --env production
+npx wrangler@4.151.2 secret put SUPABASE_ANON_KEY --env production
+npx wrangler@4.151.2 secret put SUPABASE_SERVICE_ROLE_KEY --env production
+```
+
+Build, then check the bundle, then deploy. `--env production` is required. Without it, Wrangler publishes the top-level name `condola`.
+
+```bash
+npm run cf:build
+npx wrangler@4.151.2 deploy --env production --dry-run
+npx wrangler@4.151.2 deploy --env production
+```
+
+Export `CLOUDFLARE_API_TOKEN` for the deploy. Export `CLOUDFLARE_ACCOUNT_ID` only when the token can see more than one account. Do not export `DATABASE_URL` or the Supabase keys in that shell. The Worker reads them from the secrets above.

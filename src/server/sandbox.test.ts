@@ -82,6 +82,18 @@ test("a first login with no env cookie opens in test mode, and an explicit choic
   assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
 });
 
+test("rentable spaces are rooms plus whole units that have no rooms", () => {
+  const rows = loadSampleRows();
+  const rooms = rows.filter((row) => row.rentalMode !== "整層");
+  const whole = rows.filter((row) => row.rentalMode === "整層");
+  const occupied = rows.filter((row) => row.tenantName && row.start);
+  assert.equal(rooms.length, 31);
+  assert.equal(whole.length, 7);
+  assert.equal(whole.filter((row) => row.room).length, 0);
+  assert.equal(rooms.length + whole.length, 38);
+  assert.equal(occupied.length, 31);
+});
+
 test("sample names stay tagged once and phones become E.164", () => {
   assert.equal(withSampleName("中壢範例分租公寓"), `中壢範例分租公寓〔${SAMPLE_LABEL}〕`);
   assert.equal(withSampleName(`中壢範例分租公寓〔${SAMPLE_LABEL}〕`), `中壢範例分租公寓〔${SAMPLE_LABEL}〕`);

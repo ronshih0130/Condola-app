@@ -8,6 +8,7 @@ import { FlowError } from "./errors";
 import { LOCKOUT_LIMIT, lockActive, nextFailure } from "./lockout";
 import { passwordAcceptable } from "./password";
 import { assertPerm } from "./perms";
+import { appCookieOptions } from "./public-origin";
 import { privacyFromSettings, type OwnerPrivacy } from "./privacy";
 import { backupCodes, acceptSecondFactor, otpauthUrl, randomBase32 } from "./totp";
 import type { OrgRole, Session } from "./types";
@@ -40,12 +41,7 @@ export function normalizeEmail(value: string) {
 }
 
 function cookieBase() {
-  return {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-  };
+  return appCookieOptions();
 }
 
 export function sessionCookie(token: string, remember: boolean) {

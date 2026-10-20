@@ -91,7 +91,7 @@ The permission table is `PERMS` in `src/server/perms.ts` (18 rows, the same keys
 
 The app is prepared for [OpenNext Cloudflare](https://opennext.js.org/cloudflare). `npm run cf:build` writes `.open-next/` (gitignored). The staging Worker, Tokyo Supabase project, secret names, and Depot gate are in [docs/STAGING.md](docs/STAGING.md).
 
-`.depot/workflows/ci.yml` deploys the Wrangler env `staging` only after the `check` job passes, and only on a push to `main` when the repository variable `STAGING_AUTODEPLOY` is exactly `true` and the `CLOUDFLARE_API_TOKEN` secret is set. An unset variable leaves deploys off. Production is not an environment in `wrangler.jsonc` and is never auto-deployed.
+`.depot/workflows/ci.yml` deploys the Wrangler env `staging` only after the `check` job passes, and only on a push to `main` when the repository variable `STAGING_AUTODEPLOY` is exactly `true` and the `CLOUDFLARE_API_TOKEN` secret is set. An unset variable leaves deploys off. The `production` env in `wrangler.jsonc` is manual. CI never deploys it. See [docs/DEPLOY.md](docs/DEPLOY.md).
 
 Next.js notes for Workers:
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { appCookieOptions } from "./public-origin";
 import { redirect } from "next/navigation";
 import {
   approveMatch,
@@ -151,7 +152,7 @@ export async function actionCreateLease(formData: FormData) {
     };
     const created = await createLease(session, input);
     const jar = await cookies();
-    jar.set("condola_tenant_focus", created.tenantUserId, { path: "/", sameSite: "lax" });
+    jar.set("condola_tenant_focus", created.tenantUserId, appCookieOptions({ httpOnly: false }));
     redirect(`/m/leases/${created.leaseId}?tab=sign`);
   } catch (error) {
     bounce(back, error);
@@ -430,6 +431,6 @@ export async function actionUpdateSpace(formData: FormData) {
 export async function actionPickLease(formData: FormData) {
   const leaseId = text(formData.get("leaseId"));
   const jar = await cookies();
-  jar.set("condola_lease", leaseId, { path: "/", sameSite: "lax" });
+  jar.set("condola_lease", leaseId, appCookieOptions({ httpOnly: false }));
   redirect("/t");
 }

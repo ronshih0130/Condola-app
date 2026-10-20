@@ -63,10 +63,21 @@ export async function dashboard(session: Session) {
       `SELECT
          (SELECT count(*)::text FROM payments WHERE org_id = $1 AND status = 'submitted') AS pending,
          (SELECT count(*)::text FROM maintenance_tickets WHERE org_id = $1 AND status NOT IN ('resolved','closed','cancelled')) AS tickets,
-         (SELECT count(*)::text FROM rooms r JOIN units u ON u.id = r.unit_id
-           WHERE r.org_id = $1 AND r.archived_at IS NULL) AS rooms,
-         (SELECT count(DISTINCT target_room_id)::text FROM leases
-           WHERE org_id = $1 AND status IN ('pending_signature','active') AND target_room_id IS NOT NULL) AS occupied`,
+         (
+           (SELECT count(*) FROM rooms r JOIN units u ON u.id = r.unit_id
+             WHERE r.org_id = $1 AND r.archived_at IS NULL)
+           + (SELECT count(*) FROM units u
+               WHERE u.org_id = $1 AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit'
+                 AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+         )::text AS rooms,
+         (
+           (SELECT count(DISTINCT target_room_id) FROM leases
+             WHERE org_id = $1 AND status IN ('pending_signature','active') AND target_room_id IS NOT NULL)
+           + (SELECT count(DISTINCT l.target_unit_id) FROM leases l
+               JOIN units u ON u.id = l.target_unit_id
+              WHERE l.org_id = $1 AND l.status IN ('pending_signature','active')
+                AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+         )::text AS occupied`,
       [session.orgId],
     );
     const properties = await many<{ id: string; name: string; received: string; billed: string }>(
@@ -147,10 +158,21 @@ export async function listProperties(session: Session) {
       client,
       `SELECT p.id::text, p.name, coalesce(p.address_display,'') AS address_display, p.currency,
               p.default_rental_mode::text AS rental_mode,
-              (SELECT count(*)::text FROM rooms r JOIN units u ON u.id = r.unit_id
-                WHERE u.property_id = p.id AND r.archived_at IS NULL) AS rooms,
-              (SELECT count(DISTINCT l.target_room_id)::text FROM leases l
-                WHERE l.property_id = p.id AND l.status IN ('pending_signature','active') AND l.target_room_id IS NOT NULL) AS occupied,
+              (
+                (SELECT count(*) FROM rooms r JOIN units u ON u.id = r.unit_id
+                  WHERE u.property_id = p.id AND r.archived_at IS NULL)
+                + (SELECT count(*) FROM units u
+                    WHERE u.property_id = p.id AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit'
+                      AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+              )::text AS rooms,
+              (
+                (SELECT count(DISTINCT l.target_room_id) FROM leases l
+                  WHERE l.property_id = p.id AND l.status IN ('pending_signature','active') AND l.target_room_id IS NOT NULL)
+                + (SELECT count(DISTINCT l.target_unit_id) FROM leases l
+                    JOIN units u ON u.id = l.target_unit_id
+                   WHERE l.property_id = p.id AND l.status IN ('pending_signature','active')
+                     AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+              )::text AS occupied,
               (SELECT c.display_name FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
                 WHERE po.property_id = p.id AND po.is_primary LIMIT 1) AS owner_name
          FROM properties p

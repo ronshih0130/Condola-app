@@ -1,6 +1,6 @@
 # Staging
 
-Staging is a Cloudflare Worker built with `@opennextjs/cloudflare` and a Supabase Postgres database in **Tokyo** (`ap-northeast-1`). Production is not configured in `wrangler.jsonc` and is never deployed by CI.
+Staging is a Cloudflare Worker built with `@opennextjs/cloudflare` and a Supabase Postgres database in **Tokyo** (`ap-northeast-1`). The production Worker is a separate Wrangler env and is never deployed by CI. See [DEPLOY.md](DEPLOY.md).
 
 Nothing in this repository contains a database URL, a Supabase key, or a Cloudflare token. The names below are the only thing that is committed.
 
