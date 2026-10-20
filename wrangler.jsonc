@@ -14,10 +14,10 @@
       "service": "condola"
     }
   ],
-  // Staging Worker only. There is no production environment in this file.
-  // Depot CI deploys this env and never production. See docs/STAGING.md.
+  // Depot CI deploys the staging env only. Production is manual. See docs/DEPLOY.md.
   // Secret values are not stored here. Set each name with:
   //   npx wrangler secret put <NAME> --env staging
+  //   npx wrangler secret put <NAME> --env production
   "env": {
     "staging": {
       "compatibility_flags": ["nodejs_compat"],
@@ -44,6 +44,39 @@
           "binding": "WORKER_SELF_REFERENCE",
           "service": "condola-staging"
         }
+      ]
+    },
+    "production": {
+      "name": "condola-prod",
+      "compatibility_flags": ["nodejs_compat"],
+      "workers_dev": false,
+      "placement": {
+        "mode": "targeted",
+        "region": "aws:ap-northeast-1"
+      },
+      "vars": {
+        "CONDOLA_ENV": "production",
+        "DEMO_MODE": "false",
+        "LINE_LOGIN_ENABLED": "false",
+        "STAGING_AUTODEPLOY": "false"
+      },
+      "secrets": {
+        "required": [
+          "DATABASE_URL",
+          "SUPABASE_URL",
+          "SUPABASE_ANON_KEY",
+          "SUPABASE_SERVICE_ROLE_KEY"
+        ]
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "condola-prod"
+        }
+      ],
+      "routes": [
+        { "pattern": "app.condola.app", "custom_domain": true },
+        { "pattern": "condola.app", "custom_domain": true }
       ]
     }
   }

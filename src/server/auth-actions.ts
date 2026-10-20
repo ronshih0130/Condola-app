@@ -33,6 +33,7 @@ import { forgotSentLocation, RESET_FLASH_COOKIE, resetFlashCookie } from "./rese
 import { demoModeEnabled } from "./demo";
 import { addExpense, closeMonth, reversePayment } from "./domain";
 import { FlowError } from "./errors";
+import { appCookieOptions, sameAppPath } from "./public-origin";
 import { getSession, readSession } from "./session";
 import type { OrgRole } from "./types";
 
@@ -50,10 +51,9 @@ function text(value: FormDataEntryValue | null) {
 }
 
 function safeNext(value: string) {
-  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/login") || value.startsWith("/auth/continue")) {
-    return "";
-  }
-  return value;
+  const path = sameAppPath(value);
+  if (!path || path.startsWith("/login") || path.startsWith("/auth/continue")) return "";
+  return path;
 }
 
 async function meta(): Promise<RequestMeta> {
@@ -75,13 +75,7 @@ function bounce(path: string, error: unknown): never {
 
 async function rememberBackup(codes: string[]) {
   const jar = await cookies();
-  jar.set(BACKUP_COOKIE, codes.join(" "), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 300,
-  });
+  jar.set(BACKUP_COOKIE, codes.join(" "), appCookieOptions({ maxAge: 300 }));
 }
 
 export async function actionSignIn(formData: FormData) {

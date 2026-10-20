@@ -1,25 +1,27 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { sessionCookie } from "./auth";
+import { PRODUCTION_HOSTS, sameAppPath } from "./public-origin";
 
 function read(path: string) {
   return readFileSync(path, "utf8");
 }
 
+type WorkerEnv = {
+  name?: string;
+  compatibility_flags?: string[];
+  workers_dev?: boolean;
+  vars?: Record<string, string>;
+  secrets?: { required?: string[] };
+  services?: { service?: string }[];
+  placement?: { mode?: string; region?: string };
+  routes?: { pattern?: string; custom_domain?: boolean }[];
+};
+
 function parseJsonc(raw: string) {
   const json = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  return JSON.parse(json) as {
-    env?: {
-      staging?: {
-        compatibility_flags?: string[];
-        vars?: Record<string, string>;
-        secrets?: { required?: string[] };
-        services?: { service?: string }[];
-        placement?: { mode?: string; region?: string };
-      };
-      production?: unknown;
-    };
-  };
+  return JSON.parse(json) as { env?: { staging?: WorkerEnv; production?: WorkerEnv } };
 }
 
 test("the staging wrangler env names secrets and keeps demo mode off", () => {
@@ -39,11 +41,61 @@ test("the staging wrangler env names secrets and keeps demo mode off", () => {
   assert.equal(staging.services?.[0]?.service, "condola-staging");
   assert.equal(staging.placement?.mode, "targeted");
   assert.equal(staging.placement?.region, "aws:ap-northeast-1");
-  assert.equal(parseJsonc(raw).env?.production, undefined);
   assert.doesNotMatch(raw, /postgres:\/\//i);
   assert.doesNotMatch(raw, /eyJ/);
   assert.doesNotMatch(raw, /sb_secret_/);
   assert.doesNotMatch(raw, /supabase\.co/);
+});
+
+test("the production wrangler env serves both public hosts and keeps demo mode off", () => {
+  const production = parseJsonc(read("wrangler.jsonc")).env?.production;
+  assert.ok(production);
+  assert.equal(production.name, "condola-prod");
+  assert.ok(production.compatibility_flags?.includes("nodejs_compat"));
+  assert.equal(production.workers_dev, false);
+  assert.equal(production.vars?.CONDOLA_ENV, "production");
+  assert.equal(production.vars?.DEMO_MODE, "false");
+  assert.equal(production.vars?.LINE_LOGIN_ENABLED, "false");
+  assert.equal(production.vars?.STAGING_AUTODEPLOY, "false");
+  assert.deepEqual(production.secrets?.required, [
+    "DATABASE_URL",
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+  ]);
+  assert.equal(production.secrets?.required?.some((name) => name.startsWith("ID_DOC_")), false);
+  assert.equal(production.services?.[0]?.service, "condola-prod");
+  assert.equal(production.placement?.mode, "targeted");
+  assert.equal(production.placement?.region, "aws:ap-northeast-1");
+  assert.deepEqual(
+    production.routes?.map((route) => route.pattern),
+    ["app.condola.app", "condola.app"],
+  );
+  assert.equal(production.routes?.every((route) => route.custom_domain === true), true);
+});
+
+test("production redirects and cookies accept app.condola.app and condola.app", () => {
+  assert.deepEqual([...PRODUCTION_HOSTS], ["app.condola.app", "condola.app"]);
+  assert.equal(sameAppPath("https://app.condola.app/m/properties?x=1"), "/m/properties?x=1");
+  assert.equal(sameAppPath("https://condola.app/login"), "/login");
+  assert.equal(sameAppPath("https://evil.example/m"), "");
+  assert.equal(sameAppPath("http://condola.app/m"), "");
+  const previous = process.env.CONDOLA_ENV;
+  try {
+    process.env.CONDOLA_ENV = "production";
+    const cookie = sessionCookie("token", false);
+    assert.equal(cookie.options.domain, ".condola.app");
+    assert.equal(cookie.options.secure, true);
+    assert.equal(cookie.options.path, "/");
+    process.env.CONDOLA_ENV = "staging";
+    assert.equal(sessionCookie("token", false).options.domain, undefined);
+  } finally {
+    if (previous === undefined) delete process.env.CONDOLA_ENV;
+    else process.env.CONDOLA_ENV = previous;
+  }
+  const config = read("next.config.ts");
+  assert.match(config, /allowedOrigins/);
+  assert.match(config, /PRODUCTION_HOSTS/);
 });
 
 test("Depot deploys staging only after tests, behind a default-off variable", () => {
