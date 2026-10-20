@@ -49,13 +49,14 @@ export function rolesFor(key: PermKey): readonly OrgRole[] {
   return PERM_ROLES[key];
 }
 
-/** Sidebar entries. Admin sees 15. Empty sections are dropped by the caller. */
+/** Sidebar entries. Admin sees 16. Empty sections are dropped by the caller. */
 export const MANAGER_NAV = [
   {
     section: "i_sec_rentals",
     links: [
       { href: "/m", key: "i_nav_dash", perm: "dash.view" },
       { href: "/m/properties", key: "i_nav_props", perm: "props.view" },
+      { href: "/m/owners", key: "i_nav_owners", perm: "props.view" },
       { href: "/m/units", key: "i_nav_units", perm: "props.view" },
       { href: "/m/tenants", key: "i_nav_tenants", perm: "props.view" },
       { href: "/m/leases", key: "i_nav_leases", perm: "props.view" },
@@ -113,6 +114,11 @@ export function roleHome(kind: "staff" | "tenant" | "owner", role: OrgRole | nul
 const ROUTE_PERM: { prefix: string; perm: PermKey; exact?: boolean }[] = [
   { prefix: "/m/properties/new", perm: "props.edit" },
   { prefix: "/m/leases/new", perm: "leases.edit" },
+  { prefix: "/m/owners", perm: "props.view", exact: true },
+  { prefix: "/m/owners", perm: "props.edit" },
+  { prefix: "/m/units/new", perm: "props.edit" },
+  { prefix: "/m/units/room", perm: "props.edit" },
+  { prefix: "/m/units/whole", perm: "props.edit" },
   { prefix: "/m/properties", perm: "props.view" },
   { prefix: "/m/units", perm: "props.view" },
   { prefix: "/m/tenants", perm: "props.view" },
@@ -131,6 +137,7 @@ const ROUTE_PERM: { prefix: string; perm: PermKey; exact?: boolean }[] = [
 
 export function permForPath(pathname: string): PermKey | null {
   const path = pathname.split("?")[0] || "/";
+  if (/^\/m\/properties\/[^/]+\/edit\/?$/.test(path)) return "props.edit";
   for (const route of ROUTE_PERM) {
     if (route.exact) {
       if (path === route.prefix) return route.perm;

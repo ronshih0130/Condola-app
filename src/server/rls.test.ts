@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { writeAudit } from "./audit";
-import { tx } from "./db";
+import { svc, tx } from "./db";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
+import { seedPortfolio } from "./portfolio";
+import type { Session } from "./types";
 
 test("one organization cannot read another's properties", async () => {
   const songxin = await tx(USERS.admin, async (client) => {
@@ -56,4 +59,112 @@ test("audit events store an action type and only an admin can read them", async 
     client.query<{ n: string }>(`SELECT count(*)::text AS n FROM maintenance_tickets`),
   );
   assert.ok(Number(visible.rows[0].n) > 0);
+});
+
+const SEEDED_NAMES = ["中壢範例分租公寓", "桃園區範例學舍", "青埔範例住宅大樓"];
+const SEEDED_EMAILS = ["owner1.demo@example.com", "owner2.demo@example.com", "owner3.demo@example.com"];
+
+test("seeded portfolio rows stay inside the firm and only admin or manager can write them", async () => {
+  const csv = readFileSync(new URL("./fixtures/portfolio-sample.csv", import.meta.url), "utf8");
+  const admin: Session = {
+    userId: USERS.admin,
+    sessionId: "rls",
+    email: "yating.lin@songxin.demo",
+    name: "Admin",
+    kind: "staff",
+    role: "admin",
+    orgId: ORG_ID,
+    locale: "zh-TW",
+    calendar: "gregorian",
+    leaseId: null,
+  };
+  try {
+    await seedPortfolio(admin, csv);
+    const own = await tx(USERS.admin, async (client) => {
+      const properties = await client.query<{ name: string }>(
+        `SELECT name FROM properties WHERE name = ANY($1::text[])`,
+        [SEEDED_NAMES],
+      );
+      const rooms = await client.query<{ n: string }>(
+        `SELECT count(*)::text AS n
+           FROM rooms r
+           JOIN units u ON u.id = r.unit_id
+           JOIN properties p ON p.id = u.property_id
+          WHERE p.name = '中壢範例分租公寓'`,
+      );
+      const wholes = await client.query<{ n: string }>(
+        `SELECT count(*)::text AS n
+           FROM units u
+           JOIN properties p ON p.id = u.property_id
+          WHERE p.name = '青埔範例住宅大樓' AND u.rental_mode = 'whole_unit'`,
+      );
+      const room = await client.query<{ method: string; rate: string; rent: string; area: string }>(
+        `SELECT r.electricity_method AS method, r.rate_per_kwh::text AS rate,
+                r.base_rent_minor::text AS rent, r.area_value::text AS area
+           FROM rooms r
+           JOIN units u ON u.id = r.unit_id
+           JOIN properties p ON p.id = u.property_id
+          WHERE p.name = '中壢範例分租公寓' AND u.label = '2F' AND r.label = 'A'`,
+      );
+      const whole = await client.query<{ method: string | null; rate: string | null; rent: string; tenant: string | null }>(
+        `SELECT u.electricity_method AS method, u.rate_per_kwh::text AS rate, u.base_rent_minor::text AS rent,
+                lt.tenant_name AS tenant
+           FROM units u
+           JOIN properties p ON p.id = u.property_id
+           LEFT JOIN listing_terms lt ON lt.unit_id = u.id
+          WHERE p.name = '青埔範例住宅大樓' AND u.label = '3F'`,
+      );
+      return { properties: properties.rows.map((row) => row.name), rooms: rooms.rows[0].n, wholes: wholes.rows[0].n, room: room.rows[0], whole: whole.rows[0] };
+    });
+    assert.deepEqual(own.properties.sort(), [...SEEDED_NAMES].sort());
+    assert.equal(own.rooms, "16");
+    assert.equal(own.wholes, "7");
+    assert.equal(own.room.method, "submeter");
+    assert.equal(Number(own.room.rate), 4);
+    assert.equal(own.room.rent, "1050000");
+    assert.equal(Number(own.room.area), 8);
+    assert.equal(own.whole.method, "tenant_direct");
+    assert.equal(own.whole.rate, null);
+    assert.equal(own.whole.rent, "1890000");
+    assert.equal(own.whole.tenant, "試測七三（範例）");
+
+    const coast = await tx(USERS.coastAdmin, async (client) => {
+      const properties = await client.query(`SELECT id FROM properties WHERE name = ANY($1::text[])`, [SEEDED_NAMES]);
+      const terms = await client.query(`SELECT id FROM listing_terms WHERE tenant_email = 'tenant1.demo@example.com'`);
+      const owners = await client.query(`SELECT id FROM contacts WHERE lower(email::text) = ANY($1::text[])`, [SEEDED_EMAILS]);
+      return { properties: properties.rows.length, terms: terms.rows.length, owners: owners.rows.length };
+    });
+    assert.equal(coast.properties, 0);
+    assert.equal(coast.terms, 0);
+    assert.equal(coast.owners, 0);
+
+    const manager = await tx(USERS.manager, (client) =>
+      client.query<{ n: string }>(`SELECT count(*)::text AS n FROM listing_terms WHERE org_id = $1`, [ORG_ID]),
+    );
+    assert.equal(manager.rows[0].n, "38");
+    const accountantRead = await tx(USERS.accountant, (client) => client.query(`SELECT id FROM listing_terms`));
+    assert.equal(accountantRead.rows.length, 0);
+
+    await assert.rejects(
+      tx(USERS.accountant, (client) =>
+        client.query(
+          `INSERT INTO listing_terms (org_id, room_id, opening_arrears_minor)
+           SELECT r.org_id, r.id, 0
+             FROM rooms r
+             JOIN units u ON u.id = r.unit_id
+             JOIN properties p ON p.id = u.property_id
+            WHERE p.name = '中壢範例分租公寓'
+            LIMIT 1`,
+        ),
+      ),
+    );
+  } finally {
+    await svc(null, async (client) => {
+      await client.query(`DELETE FROM properties WHERE org_id = $1 AND name = ANY($2::text[])`, [ORG_ID, SEEDED_NAMES]);
+      await client.query(`DELETE FROM contacts WHERE org_id = $1 AND lower(email::text) = ANY($2::text[])`, [
+        ORG_ID,
+        SEEDED_EMAILS,
+      ]);
+    });
+  }
 });

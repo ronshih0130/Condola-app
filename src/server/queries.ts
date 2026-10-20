@@ -176,9 +176,10 @@ export async function propertyDetail(session: Session, id: string) {
       [id, session.orgId],
     );
     if (!property) return null;
-    const owner = await maybe<{ id: string; name: string; phone_visible: boolean }>(
+    const owner = await maybe<{ id: string; contact_id: string; name: string; phone_visible: boolean }>(
       client,
-      `SELECT po.id::text, c.display_name AS name, po.can_view_tenant_phone AS phone_visible
+      `SELECT po.id::text, po.owner_contact_id::text AS contact_id, c.display_name AS name,
+              po.can_view_tenant_phone AS phone_visible
          FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
         WHERE po.property_id = $1 AND po.is_primary LIMIT 1`,
       [id],
@@ -903,6 +904,187 @@ export async function ownerHome(session: Session) {
         ORDER BY property_name, unit_label, room_label`,
     ),
   );
+}
+
+export type OwnerRow = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  properties: string;
+};
+
+export async function listOwnerDirectory(session: Session) {
+  return tx(session.userId, async (client) =>
+    many<OwnerRow>(
+      client,
+      `SELECT c.id::text, c.display_name AS name, c.email::text AS email, c.phone_e164 AS phone,
+              coalesce((
+                SELECT string_agg(p.name, '、' ORDER BY p.name)
+                  FROM property_owners po
+                  JOIN properties p ON p.id = po.property_id AND p.archived_at IS NULL
+                 WHERE po.owner_contact_id = c.id
+              ), '') AS properties
+         FROM contacts c
+        WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL
+        ORDER BY c.display_name`,
+      [session.orgId],
+    ),
+  );
+}
+
+export async function ownerEditor(session: Session, id: string) {
+  return tx(session.userId, async (client) => {
+    const owner = await maybe<{ id: string; name: string; email: string | null; phone: string | null }>(
+      client,
+      `SELECT id::text, display_name AS name, email::text, phone_e164 AS phone
+         FROM contacts
+        WHERE id = $1 AND org_id = $2 AND is_owner AND archived_at IS NULL`,
+      [id, session.orgId],
+    );
+    if (!owner) return null;
+    const linked = await many<{ property_id: string }>(
+      client,
+      `SELECT property_id::text FROM property_owners WHERE owner_contact_id = $1`,
+      [id],
+    );
+    return { ...owner, propertyIds: linked.map((row) => row.property_id) };
+  });
+}
+
+export async function propertyEditor(session: Session, id: string) {
+  return tx(session.userId, async (client) => {
+    const property = await maybe<{
+      id: string;
+      name: string;
+      address: { city?: string; district?: string; street?: string; line?: string };
+      country_code: string;
+      owner_contact_id: string | null;
+    }>(
+      client,
+      `SELECT p.id::text, p.name, p.address, p.country_code,
+              (SELECT po.owner_contact_id::text FROM property_owners po
+                WHERE po.property_id = p.id AND po.is_primary LIMIT 1) AS owner_contact_id
+         FROM properties p
+        WHERE p.id = $1 AND p.org_id = $2 AND p.archived_at IS NULL`,
+      [id, session.orgId],
+    );
+    return property;
+  });
+}
+
+export type SpaceRow = {
+  kind: "room" | "whole_unit";
+  id: string;
+  property_id: string;
+  property_name: string;
+  currency: string;
+  floor: string;
+  room_label: string | null;
+  room_type: string | null;
+  area_value: string | null;
+  area_unit: string | null;
+  base_rent_minor: string | null;
+  electricity_method: string | null;
+  owner_name: string | null;
+};
+
+export async function listSpaces(session: Session) {
+  return tx(session.userId, async (client) =>
+    many<SpaceRow>(
+      client,
+      `SELECT * FROM (
+         SELECT 'room'::text AS kind, r.id::text, p.id::text AS property_id, p.name AS property_name, p.currency,
+                u.label AS floor, r.label AS room_label, r.room_type::text, r.area_value::text, r.area_unit,
+                r.base_rent_minor::text, r.electricity_method,
+                (SELECT string_agg(c.display_name, '、' ORDER BY po.is_primary DESC, c.display_name)
+                   FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
+                  WHERE po.property_id = p.id) AS owner_name,
+                p.created_at, u.label AS sort_floor, r.label AS sort_room
+           FROM rooms r
+           JOIN units u ON u.id = r.unit_id
+           JOIN properties p ON p.id = u.property_id
+          WHERE r.org_id = $1 AND r.archived_at IS NULL AND p.archived_at IS NULL
+         UNION ALL
+         SELECT 'whole_unit'::text, u.id::text, p.id::text, p.name, p.currency,
+                u.label, NULL::text, NULL::text, u.area_value::text, u.area_unit,
+                u.base_rent_minor::text, u.electricity_method,
+                (SELECT string_agg(c.display_name, '、' ORDER BY po.is_primary DESC, c.display_name)
+                   FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
+                  WHERE po.property_id = p.id),
+                p.created_at, u.label, ''
+           FROM units u
+           JOIN properties p ON p.id = u.property_id
+          WHERE u.org_id = $1 AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit' AND p.archived_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL)
+       ) spaces
+       ORDER BY created_at, sort_floor, sort_room`,
+      [session.orgId],
+    ),
+  );
+}
+
+export type SpaceEditor = {
+  kind: "room" | "whole_unit";
+  id: string;
+  propertyId: string;
+  ownerContactId: string | null;
+  floor: string;
+  roomLabel: string;
+  roomType: string;
+  area: string;
+  rentMinor: string | null;
+  electricityMethod: string;
+  ratePerKwh: string;
+  rateCapReason: string;
+  taipowerKwh: string;
+  taipowerAmountMinor: string | null;
+  notes: string;
+  currency: string;
+};
+
+export async function spaceEditor(session: Session, kind: "room" | "whole_unit", id: string) {
+  return tx(session.userId, async (client) => {
+    if (kind === "whole_unit") {
+      return maybe<SpaceEditor>(
+        client,
+        `SELECT 'whole_unit'::text AS kind, u.id::text, u.property_id::text AS "propertyId",
+                (SELECT po.owner_contact_id::text FROM property_owners po
+                  WHERE po.property_id = u.property_id AND po.is_primary LIMIT 1) AS "ownerContactId",
+                u.label AS floor, '' AS "roomLabel", '' AS "roomType",
+                coalesce(u.area_value::text, '') AS area, u.base_rent_minor::text AS "rentMinor",
+                coalesce(u.electricity_method, '') AS "electricityMethod",
+                coalesce(u.rate_per_kwh::text, '') AS "ratePerKwh",
+                coalesce(u.rate_cap_reason, '') AS "rateCapReason",
+                coalesce(u.taipower_kwh::text, '') AS "taipowerKwh",
+                u.taipower_amount_minor::text AS "taipowerAmountMinor",
+                coalesce(u.notes, '') AS notes, p.currency
+           FROM units u
+           JOIN properties p ON p.id = u.property_id
+          WHERE u.id = $1 AND u.org_id = $2 AND u.rental_mode = 'whole_unit' AND u.archived_at IS NULL`,
+        [id, session.orgId],
+      );
+    }
+    return maybe<SpaceEditor>(
+      client,
+      `SELECT 'room'::text AS kind, r.id::text, u.property_id::text AS "propertyId",
+              (SELECT po.owner_contact_id::text FROM property_owners po
+                WHERE po.property_id = u.property_id AND po.is_primary LIMIT 1) AS "ownerContactId",
+              u.label AS floor, r.label AS "roomLabel", r.room_type::text AS "roomType",
+              coalesce(r.area_value::text, '') AS area, r.base_rent_minor::text AS "rentMinor",
+              coalesce(r.electricity_method, '') AS "electricityMethod",
+              coalesce(r.rate_per_kwh::text, '') AS "ratePerKwh",
+              coalesce(r.rate_cap_reason, '') AS "rateCapReason",
+              coalesce(r.taipower_kwh::text, '') AS "taipowerKwh",
+              r.taipower_amount_minor::text AS "taipowerAmountMinor",
+              coalesce(r.notes, '') AS notes, p.currency
+         FROM rooms r
+         JOIN units u ON u.id = r.unit_id
+         JOIN properties p ON p.id = u.property_id
+        WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL`,
+      [id, session.orgId],
+    );
+  });
 }
 
 export async function counts(session: Session) {

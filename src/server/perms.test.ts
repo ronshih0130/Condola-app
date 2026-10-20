@@ -20,11 +20,12 @@ test("permission matrix matches the prototype table", () => {
 });
 
 test("navigation follows the matrix", () => {
-  assert.equal(navCount("admin"), 15);
+  assert.equal(navCount("admin"), 16);
   const accountant = visibleNav("accountant").flatMap((section) => section.links.map((link) => link.href));
   assert.ok(accountant.includes("/m/tickets"));
   assert.ok(accountant.includes("/m/bank"));
   assert.ok(accountant.includes("/m/close"));
+  assert.ok(accountant.includes("/m/owners"));
   assert.ok(!accountant.includes("/m/team"));
   assert.ok(!accountant.includes("/m/settings"));
   assert.ok(!accountant.includes("/m/messages"));
@@ -32,6 +33,15 @@ test("navigation follows the matrix", () => {
     visibleNav("maintenance").flatMap((section) => section.links.map((link) => link.href)),
     ["/m/tickets"],
   );
+  assert.equal(permForPath("/m/owners"), "props.view");
+  assert.equal(permForPath("/m/owners/new"), "props.edit");
+  assert.equal(permForPath("/m/owners/abc"), "props.edit");
+  assert.equal(permForPath("/m/units/new"), "props.edit");
+  assert.equal(permForPath("/m/units/room/abc"), "props.edit");
+  assert.equal(permForPath("/m/units/whole/abc"), "props.edit");
+  assert.equal(permForPath("/m/units"), "props.view");
+  assert.equal(permForPath("/m/properties/abc/edit"), "props.edit");
+  assert.equal(permForPath("/m/properties/abc"), "props.view");
   assert.equal(permForPath("/m/tickets"), null);
   assert.equal(permForPath("/m/tickets/1"), null);
   assert.equal(can("accountant", "tickets.update"), false);
