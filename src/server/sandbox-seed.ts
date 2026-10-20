@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { PoolClient } from "pg";
+import type { Client } from "pg";
 import {
   SAMPLE_LABEL,
   loadSampleRows,
@@ -27,7 +27,7 @@ export type SeedResult = {
 };
 
 export type SeedContext = {
-  client: PoolClient;
+  client: Client;
   orgId: string;
   actorUserId: string;
   memberId: string | null;
@@ -57,12 +57,12 @@ export function emptySeedResult(): SeedResult {
   };
 }
 
-async function tableExists(client: PoolClient, name: string) {
+async function tableExists(client: Client, name: string) {
   const found = await client.query<{ rel: string | null }>(`SELECT to_regclass($1) AS rel`, [`public.${name}`]);
   return Boolean(found.rows[0]?.rel);
 }
 
-async function mark(client: PoolClient, orgId: string, table: string, id: string) {
+async function mark(client: Client, orgId: string, table: string, id: string) {
   await client.query(
     `INSERT INTO sample_marks (org_id, entity_table, entity_id, label)
      VALUES ($1, $2, $3, $4)
@@ -316,7 +316,7 @@ export const firmSetupSeedPlugin: SandboxSeedPlugin = { id: "firm-setup", seed: 
 export const defaultSandboxPlugins: SandboxSeedPlugin[] = [portfolioSeedPlugin, firmSetupSeedPlugin];
 
 export async function runSandboxSeed(
-  client: PoolClient,
+  client: Client,
   input: { orgId: string; actorUserId: string; rows?: SampleRow[]; plugins?: SandboxSeedPlugin[] },
 ) {
   const org = await client.query<{ jurisdiction_id: string | null; currency: string; timezone: string }>(

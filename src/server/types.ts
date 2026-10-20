@@ -15,6 +15,9 @@ export type Session = {
   /** Live firm when this session is inside its sandbox. */
   liveOrgId: string;
   environment: "live" | "sandbox";
+  /** Live mode is unlocked for this firm. Absent on portal sessions. */
+  liveEnabled?: boolean;
+  needsSandbox?: boolean;
   locale: Locale;
   calendar: CalendarMode;
   leaseId: string | null;

@@ -10,12 +10,31 @@ export type FirmContext = {
   liveOrgId: string;
   environment: OrgEnvironment;
   role: OrgRole;
+  liveEnabled: boolean;
+  /** Sandbox was chosen and the linked sandbox firm does not exist yet. */
+  needsSandbox: boolean;
 };
 
 export type EnvChoice = {
   preferred: string | null;
-  environment: OrgEnvironment;
+  /** Null when the browser has not picked a mode yet. */
+  environment: OrgEnvironment | null;
 };
+
+/**
+ * A firm with no live rows, or with live mode still locked, always opens in
+ * test mode. Otherwise the cookie is that user's last explicit choice. The
+ * first request, with no cookie, also opens in test mode.
+ */
+export function resolveStaffEnvironment(input: {
+  cookie: OrgEnvironment | null;
+  hasLiveData: boolean;
+  liveEnabled: boolean;
+}): OrgEnvironment {
+  if (!input.liveEnabled || !input.hasLiveData) return "sandbox";
+  if (input.cookie === "live" || input.cookie === "sandbox") return input.cookie;
+  return "sandbox";
+}
 
 type SqlClient = {
   query<T extends Record<string, unknown> = Record<string, unknown>>(
@@ -29,9 +48,10 @@ export async function readEnvChoice(): Promise<EnvChoice | null> {
   try {
     const { cookies } = await import("next/headers");
     const jar = await cookies();
+    const raw = jar.get(ENV_COOKIE)?.value;
     return {
       preferred: jar.get(ORG_COOKIE)?.value ?? null,
-      environment: jar.get(ENV_COOKIE)?.value === "sandbox" ? "sandbox" : "live",
+      environment: raw === "sandbox" ? "sandbox" : raw === "live" ? "live" : null,
     };
   } catch {
     return null;
@@ -47,10 +67,14 @@ export async function resolveStaffOrg(
   sql: SqlClient,
   userId: string,
   preferredOrg: string | null,
-  environment: OrgEnvironment,
+  cookie: OrgEnvironment | null,
 ): Promise<FirmContext | null> {
-  const live = await sql.query<{ org_id: string; role: OrgRole }>(
-    `SELECT m.org_id::text, m.role::text AS role
+  const live = await sql.query<{ org_id: string; role: OrgRole; live_enabled: boolean; has_live_data: boolean }>(
+    `SELECT m.org_id::text, m.role::text AS role, o.live_enabled,
+            (
+              EXISTS (SELECT 1 FROM properties p WHERE p.org_id = o.id)
+              OR EXISTS (SELECT 1 FROM leases l WHERE l.org_id = o.id)
+            ) AS has_live_data
        FROM org_members m
        JOIN organizations o ON o.id = m.org_id
       WHERE m.user_id = $1 AND m.status = 'active' AND o.environment = 'live'
@@ -60,8 +84,15 @@ export async function resolveStaffOrg(
   );
   const member = live.rows[0];
   if (!member) return null;
+  const liveEnabled = Boolean(member.live_enabled);
+  const environment = resolveStaffEnvironment({
+    cookie,
+    hasLiveData: Boolean(member.has_live_data),
+    liveEnabled,
+  });
+  const base = { liveOrgId: member.org_id, role: member.role, liveEnabled };
   if (environment !== "sandbox") {
-    return { orgId: member.org_id, liveOrgId: member.org_id, environment: "live", role: member.role };
+    return { ...base, orgId: member.org_id, environment: "live", needsSandbox: false };
   }
   const sandbox = await sql.query<{ id: string }>(
     `SELECT id::text FROM organizations WHERE live_org_id = $1 AND environment = 'sandbox'`,
@@ -69,7 +100,7 @@ export async function resolveStaffOrg(
   );
   const sandboxId = sandbox.rows[0]?.id;
   if (!sandboxId) {
-    return { orgId: member.org_id, liveOrgId: member.org_id, environment: "live", role: member.role };
+    return { ...base, orgId: member.org_id, environment: "sandbox", needsSandbox: true };
   }
-  return { orgId: sandboxId, liveOrgId: member.org_id, environment: "sandbox", role: member.role };
+  return { ...base, orgId: sandboxId, environment: "sandbox", needsSandbox: false };
 }

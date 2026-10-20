@@ -1,7 +1,5 @@
 import { makeT } from "@/i18n";
 import { PageHeader } from "@/components/ui";
-import { actionLoadSample } from "@/server/env-actions";
-import { sandboxChrome } from "@/server/sandbox";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +7,6 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ upgrade?: string }> }) {
   const session = await getSession();
   const query = await searchParams;
-  const chrome = await sandboxChrome(session);
   const t = makeT(session.locale);
   return (
     <>
@@ -24,13 +21,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p>{t("i_rules_note")}</p>
         <p className="small">{t("s_c6a6031")}</p>
         <p className="small muted">{t("s_ff6ff46")}</p>
-        {session.environment === "sandbox" && !chrome.loaded ? (
-          <form action={actionLoadSample}>
-            <button className="btn pri" type="submit" data-testid="settings-load-sample">
-              {t("i_env_load")}
-            </button>
-          </form>
-        ) : null}
       </div>
     </>
   );

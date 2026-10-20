@@ -1,6 +1,6 @@
-import type { PoolClient } from "pg";
+import type { Client } from "pg";
 import { writeAudit } from "./audit";
-import { pool } from "./db";
+import { query, withClient } from "./db";
 import { FlowError } from "./errors";
 import {
   COPY_KINDS,
@@ -16,13 +16,13 @@ import {
 import { runSandboxSeed } from "./sandbox-seed";
 import { assertStaff, type Session } from "./types";
 
-async function tableExists(client: PoolClient, name: string) {
+async function tableExists(client: Client, name: string) {
   const found = await client.query<{ rel: string | null }>(`SELECT to_regclass($1) AS rel`, [`public.${name}`]);
   return Boolean(found.rows[0]?.rel);
 }
 
 export async function sandboxForLive(liveOrgId: string) {
-  const row = await pool.query<{ id: string }>(
+  const row = await query<{ id: string }>(
     `SELECT id::text FROM organizations WHERE live_org_id = $1 AND environment = 'sandbox'`,
     [liveOrgId],
   );
@@ -33,7 +33,7 @@ export async function ensureSandbox(session: Session) {
   assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
   const existing = await sandboxForLive(session.liveOrgId);
   if (existing) return existing;
-  const live = await pool.query<{
+  const live = await query<{
     name: string;
     legal_name: string | null;
     country_code: string;
@@ -54,34 +54,43 @@ export async function ensureSandbox(session: Session) {
   );
   const firm = live.rows[0];
   if (!firm) throw new FlowError("errors.notFound");
-  const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO organizations (
-       name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
-       date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
-       plan_tier, feature_flags, settings, environment, live_org_id, created_by
-     ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8::calendar_display,$9,$10,$11,'free',$12::jsonb,'{"sandboxPrompt":"open"}'::jsonb,
-       'sandbox',$13,$14
-     ) RETURNING id::text`,
-    [
-      firm.name,
-      firm.legal_name,
-      firm.country_code,
-      firm.jurisdiction_id,
-      firm.default_currency,
-      firm.default_locale,
-      firm.timezone,
-      firm.date_calendar,
-      firm.id_doc_retention_days,
-      firm.is_rental_mgmt_business,
-      firm.rental_mgmt_license_no,
-      JSON.stringify(firm.feature_flags ?? {}),
-      session.liveOrgId,
-      session.userId,
-    ],
-  );
-  const sandboxId = inserted.rows[0].id;
-  await pool.query(
+  let sandboxId: string;
+  try {
+    const inserted = await query<{ id: string }>(
+      `INSERT INTO organizations (
+         name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
+         date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
+         plan_tier, feature_flags, settings, environment, live_org_id, created_by
+       ) VALUES (
+         $1,$2,$3,$4,$5,$6,$7,$8::calendar_display,$9,$10,$11,'free',$12::jsonb,'{"sandboxPrompt":"open"}'::jsonb,
+         'sandbox',$13,$14
+       ) RETURNING id::text`,
+      [
+        firm.name,
+        firm.legal_name,
+        firm.country_code,
+        firm.jurisdiction_id,
+        firm.default_currency,
+        firm.default_locale,
+        firm.timezone,
+        firm.date_calendar,
+        firm.id_doc_retention_days,
+        firm.is_rental_mgmt_business,
+        firm.rental_mgmt_license_no,
+        JSON.stringify(firm.feature_flags ?? {}),
+        session.liveOrgId,
+        session.userId,
+      ],
+    );
+    sandboxId = inserted.rows[0].id;
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    if (code !== "23505") throw error;
+    const winner = await sandboxForLive(session.liveOrgId);
+    if (!winner) throw error;
+    sandboxId = winner;
+  }
+  await query(
     `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status, title)
      SELECT $1, user_id, role, is_billing_owner, status, title
        FROM org_members
@@ -92,8 +101,15 @@ export async function ensureSandbox(session: Session) {
   return sandboxId;
 }
 
+/** First visit: create the linked sandbox, if it is missing, and load the sample portfolio once. */
+export async function openSandboxFirm(session: Session) {
+  const sandboxId = await ensureSandbox(session);
+  await ensureSampleLoaded({ ...session, orgId: sandboxId, environment: "sandbox" });
+  return sandboxId;
+}
+
 export async function countActiveUnits(orgId: string) {
-  const row = await pool.query<{ n: number }>(
+  const row = await query<{ n: number }>(
     `SELECT count(DISTINCT coalesce(target_room_id::text, target_unit_id::text))::int AS n
        FROM leases
       WHERE org_id = $1 AND status = 'active' AND signed_at IS NOT NULL
@@ -104,7 +120,7 @@ export async function countActiveUnits(orgId: string) {
 }
 
 export async function readPlan(orgId: string): Promise<PlanSnapshot> {
-  const row = await pool.query<{ plan_tier: string; settings: unknown }>(
+  const row = await query<{ plan_tier: string; settings: unknown }>(
     `SELECT plan_tier::text, settings FROM organizations WHERE id = $1`,
     [orgId],
   );
@@ -130,7 +146,7 @@ export async function sandboxChrome(session: Session | null): Promise<{
   if (!session || session.environment !== "sandbox") {
     return { environment: "live", prompt: "closed", loaded: false, counts: null };
   }
-  const row = await pool.query<{ settings: { sandboxPrompt?: string } | null; sample_loaded_at: Date | null }>(
+  const row = await query<{ settings: { sandboxPrompt?: string } | null; sample_loaded_at: Date | null }>(
     `SELECT settings, sample_loaded_at FROM organizations WHERE id = $1`,
     [session.orgId],
   );
@@ -148,7 +164,7 @@ export async function sandboxChrome(session: Session | null): Promise<{
 export async function dismissSamplePrompt(session: Session) {
   if (session.environment !== "sandbox") throw new FlowError("errors.forbidden");
   assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
-  await pool.query(
+  await query(
     `UPDATE organizations
         SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{sandboxPrompt}', '"blank"'::jsonb, true)
       WHERE id = $1`,
@@ -156,36 +172,75 @@ export async function dismissSamplePrompt(session: Session) {
   );
 }
 
-export async function loadSampleData(session: Session) {
+const SANDBOX_PORTFOLIO = `
+  EXISTS (SELECT 1 FROM properties p WHERE p.org_id = o.id)
+  OR EXISTS (SELECT 1 FROM leases l WHERE l.org_id = o.id)
+  OR EXISTS (SELECT 1 FROM units u WHERE u.org_id = o.id)
+  OR EXISTS (SELECT 1 FROM contacts c WHERE c.org_id = o.id)
+`;
+
+async function sandboxLoadState(client: Client, orgId: string) {
+  const row = await client.query<{ loaded: Date | null; has_data: boolean }>(
+    `SELECT o.sample_loaded_at AS loaded, (${SANDBOX_PORTFOLIO}) AS has_data
+       FROM organizations o
+      WHERE o.id = $1 AND o.environment = 'sandbox'`,
+    [orgId],
+  );
+  return row.rows[0] ?? null;
+}
+
+/**
+ * Load the sample portfolio when this sandbox has never been seeded and still
+ * has no portfolio rows. A conditional update plus a transaction advisory lock
+ * lets concurrent requests seed at most once.
+ */
+export async function ensureSampleLoaded(session: Session) {
   if (session.environment !== "sandbox") throw new FlowError("errors.forbidden");
   assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
-  const loaded = await pool.query<{ sample_loaded_at: Date | null }>(
-    `SELECT sample_loaded_at FROM organizations WHERE id = $1`,
+  const peek = await query<{ loaded: Date | null; has_data: boolean }>(
+    `SELECT o.sample_loaded_at AS loaded, (${SANDBOX_PORTFOLIO}) AS has_data
+       FROM organizations o
+      WHERE o.id = $1 AND o.environment = 'sandbox'`,
     [session.orgId],
   );
-  if (loaded.rows[0]?.sample_loaded_at) return;
-  const client = await pool.connect();
-  try {
+  const first = peek.rows[0];
+  if (!first || first.loaded || first.has_data) return;
+  await withClient(async (client) => {
     await client.query("BEGIN");
-    await runSandboxSeed(client, { orgId: session.orgId, actorUserId: session.userId });
-    await client.query(
-      `UPDATE organizations
-          SET sample_loaded_at = now(),
-              settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{sandboxPrompt}', '"loaded"'::jsonb, true)
-        WHERE id = $1`,
-      [session.orgId],
-    );
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+    try {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1::text))`, [session.orgId]);
+      const state = await sandboxLoadState(client, session.orgId);
+      if (!state || state.loaded || state.has_data) {
+        await client.query("COMMIT");
+        return;
+      }
+      const claim = await client.query<{ id: string }>(
+        `UPDATE organizations
+            SET sample_loaded_at = now(),
+                settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{sandboxPrompt}', '"loaded"'::jsonb, true)
+          WHERE id = $1 AND environment = 'sandbox' AND sample_loaded_at IS NULL
+          RETURNING id::text`,
+        [session.orgId],
+      );
+      if (!claim.rows[0]) {
+        await client.query("COMMIT");
+        return;
+      }
+      await runSandboxSeed(client, { orgId: session.orgId, actorUserId: session.userId });
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
+}
+
+export async function loadSampleData(session: Session) {
+  await ensureSampleLoaded(session);
 }
 
 async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: string) {
-  const client = await pool.connect();
+  await withClient(async (client) => {
   try {
     await client.query("BEGIN");
     await client.query(
@@ -345,13 +400,18 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
-  } finally {
-    client.release();
   }
+  });
+}
+
+export async function liveModeEnabled(orgId: string) {
+  const row = await query<{ live_enabled: boolean }>(`SELECT live_enabled FROM organizations WHERE id = $1`, [orgId]);
+  return Boolean(row.rows[0]?.live_enabled);
 }
 
 export async function goLive(session: Session, copy: boolean) {
   assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
+  if (!(await liveModeEnabled(session.liveOrgId))) throw new FlowError("errors.forbidden");
   const sandboxId = await sandboxForLive(session.liveOrgId);
   if (!sandboxId) throw new FlowError("errors.notFound");
   const activeUnits = await countActiveUnits(session.liveOrgId);

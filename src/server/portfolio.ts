@@ -3,7 +3,7 @@ import { FlowError } from "./errors";
 import { toMinor } from "./money";
 import { assertPerm } from "./perms";
 import type { Session } from "./types";
-import type { PoolClient } from "pg";
+import type { Client } from "pg";
 
 export type SpaceKind = "room" | "whole_unit";
 export type ElectricityMethod = "submeter" | "tenant_direct";
@@ -314,7 +314,7 @@ function cleanRoomType(value: string): PortfolioRoomType {
   throw new FlowError("errors.required");
 }
 
-async function ensureOwner(client: PoolClient, orgId: string, propertyId: string, ownerContactId: string) {
+async function ensureOwner(client: Client, orgId: string, propertyId: string, ownerContactId: string) {
   const owner = await maybe<{ id: string }>(
     client,
     `SELECT id::text FROM contacts
@@ -335,7 +335,7 @@ async function ensureOwner(client: PoolClient, orgId: string, propertyId: string
   );
 }
 
-async function syncOwnerProperties(client: PoolClient, orgId: string, ownerId: string, propertyIds: string[]) {
+async function syncOwnerProperties(client: Client, orgId: string, ownerId: string, propertyIds: string[]) {
   const unique = [...new Set(propertyIds.filter(Boolean))];
   for (const propertyId of unique) {
     const property = await maybe<{ id: string }>(
@@ -512,7 +512,7 @@ function spaceWrite(input: SpaceInput): SpaceWrite {
   };
 }
 
-async function propertyCountry(client: PoolClient, orgId: string, propertyId: string) {
+async function propertyCountry(client: Client, orgId: string, propertyId: string) {
   const property = await maybe<{ country_code: string }>(
     client,
     `SELECT country_code FROM properties WHERE id = $1 AND org_id = $2 AND archived_at IS NULL`,
@@ -522,7 +522,7 @@ async function propertyCountry(client: PoolClient, orgId: string, propertyId: st
   return property.country_code.trim();
 }
 
-async function unitForFloor(client: PoolClient, orgId: string, propertyId: string, floor: string, kind: SpaceKind) {
+async function unitForFloor(client: Client, orgId: string, propertyId: string, floor: string, kind: SpaceKind) {
   const areaUnit = (await propertyCountry(client, orgId, propertyId)) === "TW" ? "ping" : "sqft";
   const existing = await maybe<{ id: string; rental_mode: string }>(
     client,
@@ -687,7 +687,7 @@ export async function updateSpace(session: Session, kind: SpaceKind, spaceId: st
 }
 
 async function upsertTerms(
-  client: PoolClient,
+  client: Client,
   orgId: string,
   target: { unitId: string | null; roomId: string | null },
   row: PortfolioRow,
@@ -731,7 +731,7 @@ async function upsertTerms(
 }
 
 async function applySpaceColumns(
-  client: PoolClient,
+  client: Client,
   table: "units" | "rooms",
   id: string,
   orgId: string,

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
@@ -12,7 +13,12 @@ import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; step?: string; next?: string; reset?: string }> }) {
+export async function generateMetadata(): Promise<Metadata> {
+  const prefs = await requestPrefs();
+  return { title: { absolute: makeT(prefs.locale)("i_login_title") } };
+}
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; step?: string; next?: string; reset?: string; demoReset?: string }> }) {
   const params = await searchParams;
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
@@ -28,7 +34,13 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <div className="auth-wrap">
       <AuthBrand name={t("i_brand")} />
       <form className="card pad" action={params.step === "2fa" || params.step === "enroll" ? actionSecondFactor : actionSignIn}>
-        <h1>{t("i_sign_in")}</h1>
+        <h1>{t("i_login_headline")}</h1>
+        <p>{t("i_login_sub")}</p>
+        {params.demoReset === "1" ? (
+          <div className="toast" data-testid="reset-toast">
+            {t("s_fe71059")}
+          </div>
+        ) : null}
         {params.reset === "1" ? <div className="alert ok">{t("i_password_updated")}</div> : null}
         {errorKey ? (
           <div className="alert bad" data-testid="login-error">
@@ -99,9 +111,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               </button>
             )}
             <p className="tiny muted">{lineLoginEnabled() ? t("i_line_demo") : t("i_line_login_todo")}</p>
+            <p className="small" data-testid="login-invite">{t("i_login_invite")}</p>
+            <p className="small" data-testid="login-pricing">{t("i_login_pricing")}</p>
           </>
         )}
       </form>
+      <p className="foot" data-testid="login-footer">{t("i_login_footer")}</p>
     </div>
   );
 }

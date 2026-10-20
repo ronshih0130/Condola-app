@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { makeT } from "@/i18n";
 import { BrandLink, LocaleLinks, ResetButton, SignOutButton } from "@/components/chrome";
-import { EnvBanner, EnvLoadModal, EnvSwitch } from "@/components/env-mode";
+import { EnvBanner, EnvSwitch } from "@/components/env-mode";
 import { LocaleProvider } from "@/components/locale";
 import { demoModeEnabled } from "@/server/demo";
 import { sandboxChrome } from "@/server/sandbox";
@@ -32,9 +32,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span aria-hidden="true">☰</span>
             </label>
             <BrandLink />
-            {session?.kind === "staff" ? <EnvSwitch environment={session.environment} /> : null}
+            {session?.kind === "staff" ? <EnvSwitch environment={session.environment} liveEnabled={session.liveEnabled === true} /> : null}
             <span className="top-extra">
-              <span className="demo-pill">{t("s_f269874")}</span>
               {session ? <span className="small">{session.name}</span> : <a href="/login">{t("i_sign_in")}</a>}
             </span>
             <span className="locale-slot">
@@ -46,7 +45,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </span>
           </header>
           {chrome.environment === "sandbox" ? <EnvBanner /> : null}
-          {chrome.prompt === "open" && chrome.counts ? <EnvLoadModal counts={chrome.counts} /> : null}
           {children}
         </LocaleProvider>
       </body>

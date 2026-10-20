@@ -19,6 +19,7 @@ export async function signIn(page: Page, email: string) {
   await page.getByTestId("login-password").fill(DEMO_PASSWORD);
   await page.getByTestId("login-submit").click();
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
+  await page.goto("/api/env?set=live&next=/m");
 }
 
 export async function resetDemo(page: Page) {

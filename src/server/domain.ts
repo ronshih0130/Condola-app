@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { PoolClient } from "pg";
+import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { maybe, many, one, svc, tx } from "./db";
 import { FlowError } from "./errors";
@@ -597,7 +597,7 @@ export async function createLease(session: Session, input: LeaseInput) {
   return result;
 }
 
-async function queueDemoNotice(client: PoolClient, leaseId: string, eventType: string) {
+async function queueDemoNotice(client: Client, leaseId: string, eventType: string) {
   const contact = await maybe<{ id: string; user_id: string | null; locale: string; org_id: string }>(
     client,
     `SELECT c.id, c.user_id, c.locale, l.org_id
@@ -800,7 +800,7 @@ export async function simulateTenantSignature(session: Session, leaseId: string)
   );
 }
 
-async function ensureThread(client: PoolClient, leaseId: string) {
+async function ensureThread(client: Client, leaseId: string) {
   const existing = await maybe<{ id: string }>(
     client,
     `SELECT id FROM message_threads WHERE lease_id = $1 AND kind = 'lease'`,
@@ -838,7 +838,7 @@ async function ensureThread(client: PoolClient, leaseId: string) {
   return thread.id;
 }
 
-async function issueMoveInInvoice(client: PoolClient, leaseId: string) {
+async function issueMoveInInvoice(client: Client, leaseId: string) {
   const existing = await maybe<{ id: string }>(
     client,
     `SELECT id FROM invoices WHERE lease_id = $1 AND source = 'move_in' AND status <> 'void' LIMIT 1`,
@@ -941,7 +941,7 @@ async function issueMoveInInvoice(client: PoolClient, leaseId: string) {
   return invoice.id;
 }
 
-async function openBalance(client: PoolClient, leaseId: string) {
+async function openBalance(client: Client, leaseId: string) {
   const row = await one<{ balance: string }>(
     client,
     `SELECT coalesce(sum(balance_minor), 0)::text AS balance
@@ -952,7 +952,7 @@ async function openBalance(client: PoolClient, leaseId: string) {
 }
 
 async function allocateAndLedger(
-  client: PoolClient,
+  client: Client,
   payment: { id: string; org_id: string; property_id: string; lease_id: string; currency: string; amount_minor: string; payer_contact_id: string | null },
   userId: string,
 ) {
@@ -1274,7 +1274,7 @@ export async function importBankCsv(session: Session, csv: string) {
 }
 
 async function suggestMatches(
-  client: PoolClient,
+  client: Client,
   orgId: string,
   bankTransactionId: string,
   bank: { minor: number; last5: string | null; date: string; currency: string },
@@ -1712,7 +1712,7 @@ export async function inviteTeammate(session: Session, input: { email: string; r
   return { code };
 }
 
-async function firstOpenDay(client: PoolClient, orgId: string) {
+async function firstOpenDay(client: Client, orgId: string) {
   const closed = await maybe<{ m: string | null }>(
     client,
     `SELECT max(period_month)::text AS m FROM month_closes WHERE org_id = $1`,

@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { SANDBOX_SAMPLE_CSV } from "../data/sandbox-sample";
 import type { OrgEnvironment } from "./org-scope";
 
 export const SAMPLE_LABEL = "範例資料";
@@ -169,8 +168,7 @@ export function parseSampleCsv(text: string): SampleRow[] {
 
 export function loadSampleRows() {
   if (cachedRows) return cachedRows;
-  const file = path.join(process.cwd(), "src/data/sandbox-sample.csv");
-  cachedRows = parseSampleCsv(readFileSync(file, "utf8"));
+  cachedRows = parseSampleCsv(SANDBOX_SAMPLE_CSV);
   return cachedRows;
 }
 
