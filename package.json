@@ -7,8 +7,12 @@
     "build": "next build",
     "start": "next start -p 43123 -H 0.0.0.0",
     "lint": "eslint",
-    "db:reset": "tsx --env-file=.env.local src/server/seed.ts",
+    "typecheck": "tsc --noEmit",
+    "db:reset": "bash scripts/db-reset.sh",
     "db:setup": "bash scripts/db-setup.sh",
+    "test:unit": "tsx --test src/server/password.test.ts src/server/lockout.test.ts src/server/perms.test.ts src/server/privacy.test.ts",
+    "test:rls": "tsx --test src/server/rls.test.ts && tsx --test src/server/auth.integration.test.ts",
+    "cf:build": "opennextjs-cloudflare build",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -19,6 +23,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@opennextjs/cloudflare": "^1.20.12",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
@@ -29,6 +34,7 @@
     "eslint-config-next": "15.5.28",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.151.2"
   }
 }

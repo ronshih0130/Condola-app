@@ -87,17 +87,21 @@ export function StatementForm({
   owners,
   existing,
   month,
+  canGenerate = true,
+  deniedReason = "",
 }: {
   owners: { id: string; name: string }[];
   existing: { ownerId: string; month: string }[];
   month: string;
+  canGenerate?: boolean;
+  deniedReason?: string;
 }) {
   const t = useT();
   const [owner, setOwner] = useState("");
   const [value, setValue] = useState(month);
   const exists = existing.some((row) => row.ownerId === owner && row.month === `${value}-01`);
   return (
-    <form action={actionStatement} className="card pad" style={{ maxWidth: 640 }}>
+    <form action={canGenerate ? actionStatement : undefined} className="card pad" style={{ maxWidth: 640 }}>
       <div className="fg">
         <label className="f">{t("i_owner")}</label>
         <select className="inp" name="ownerContactId" data-testid="statement-owner" value={owner} onChange={(event) => setOwner(event.target.value)}>
@@ -114,9 +118,17 @@ export function StatementForm({
         <input className="inp" type="month" name="month" data-testid="statement-month" value={value} onChange={(event) => setValue(event.target.value)} />
       </div>
       <p className="hint">{t("i_regenerate_hint")}</p>
-      <button className="btn pri" type="submit" data-testid="submit-statement" disabled={!owner}>
+      <button
+        className="btn pri"
+        type="submit"
+        data-testid="submit-statement"
+        disabled={!owner || !canGenerate}
+        title={canGenerate ? undefined : deniedReason}
+        aria-disabled={!canGenerate}
+      >
         {exists ? t("s_1bd133f") : t("s_705a524")}
       </button>
+      {!canGenerate ? <p className="hint">{deniedReason}</p> : null}
     </form>
   );
 }

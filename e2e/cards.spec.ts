@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { ACCOUNTS, resetDemo, signIn } from "./session";
 
 const widths = [400, 480, 640, 960] as const;
 
@@ -31,8 +32,7 @@ test.use({
 });
 
 test.beforeEach(async ({ page }) => {
-  const response = await page.request.post("/api/demo/reset");
-  expect(response.ok()).toBeTruthy();
+  await resetDemo(page);
 });
 
 async function assertNoOverflow(page: Page) {
@@ -121,7 +121,7 @@ for (const locale of locales) {
     await expect(page.getByTestId("owner-owes-reason")).toContainText("NT$0");
     await page.screenshot({ path: `/opt/cursor/artifacts/owner-owes-${locale.code}.png`, fullPage: true });
 
-    await page.goto("/api/demo/persona?id=20000000-0000-4000-8000-000000000007");
+    await signIn(page, ACCOUNTS.owner);
     await page.goto(`/api/demo/locale?set=${locale.code}&next=/o/statements`);
     await expect(page.getByTestId("owner-owes")).toContainText(locale.owes);
     await expect(page.getByTestId("owner-owes")).toContainText("2,800");

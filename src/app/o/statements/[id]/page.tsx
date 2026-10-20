@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { StatementDocument } from "@/components/statement-document";
+import { ownerPrivacy, tenantDisplayNames } from "@/server/auth";
+import { maskTenantNames } from "@/server/privacy";
 import { statementDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -13,6 +15,13 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
   const t = makeT(session.locale);
   const detail = await statementDetail(session, id);
   if (!detail) notFound();
+  const privacy = await ownerPrivacy(session.orgId);
+  const hidden = t("i_tenant_hidden");
+  const names = privacy.showName ? [] : await tenantDisplayNames(session.orgId);
+  const lines = detail.lines.map((line) => ({
+    ...line,
+    description: line.description && !privacy.showName ? maskTenantNames(line.description, names, hidden) : line.description,
+  }));
   const row = detail.statement;
   return (
     <div>
@@ -24,6 +33,7 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
         t={t}
         locale={session.locale}
         row={row}
+        lines={lines}
         note={<p className="small">{t("i_actor")}</p>}
       />
     </div>

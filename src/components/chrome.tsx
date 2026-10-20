@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { actionSignOut } from "@/server/auth-actions";
+import { can, visibleNav, type PermKey } from "@/server/perms";
+import type { OrgRole } from "@/server/types";
 import { useT } from "./locale";
 
 export function BrandLink() {
@@ -70,6 +73,17 @@ export function PersonaSelect({
   );
 }
 
+export function SignOutButton({ testId = "sign-out" }: { testId?: string }) {
+  const t = useT();
+  return (
+    <form action={actionSignOut}>
+      <button className="btn sm" type="submit" data-testid={testId}>
+        {t("i_sign_out")}
+      </button>
+    </form>
+  );
+}
+
 export function ResetButton({ testId = "reset-demo" }: { testId?: string }) {
   const t = useT();
   return (
@@ -112,7 +126,7 @@ export function TaskPanel({
     ["property", flags.property, t("i_task1"), "/m/properties/new"],
     ["lease", flags.lease, t("i_task2"), "/m/leases/new"],
     ["statement", flags.statement, t("i_task3"), "/m/statements"],
-    ["bonus", flags.repair, t("i_task4"), "/api/demo/mode?mode=ten&next=/t/repair"],
+    ["bonus", flags.repair, t("i_task4"), "/t/repair"],
   ] as const;
   return (
     <div className="tasks" data-testid="tryout-panel">
@@ -136,43 +150,18 @@ export function TaskPanel({
   );
 }
 
-const NAV = [
-  ["i_sec_rentals", [
-    ["/m", "i_nav_dash"],
-    ["/m/properties", "i_nav_props"],
-    ["/m/units", "i_nav_units"],
-    ["/m/tenants", "i_nav_tenants"],
-    ["/m/leases", "i_nav_leases"],
-  ]],
-  ["i_sec_acct", [
-    ["/m/rent", "i_nav_rent"],
-    ["/m/payments", "i_nav_inbox"],
-    ["/m/bank", "i_nav_bank"],
-    ["/m/statements", "i_nav_stmt"],
-  ]],
-  ["i_sec_ops", [
-    ["/m/tickets", "i_nav_tickets"],
-    ["/m/messages", "i_nav_msg"],
-  ]],
-  ["i_sec_set", [
-    ["/m/team", "i_nav_team"],
-    ["/m/notify", "i_nav_notify"],
-    ["/m/settings", "i_nav_settings"],
-  ]],
-] as const;
-
 export function Sidebar({
   firm,
   pending,
   tickets,
-  personas,
-  current,
+  role,
+  showReset,
 }: {
   firm: string;
   pending: number;
   tickets: number;
-  personas: { id: string; name: string }[];
-  current: string;
+  role: OrgRole | null;
+  showReset: boolean;
 }) {
   const t = useT();
   const path = usePathname() || "/m";
@@ -180,6 +169,7 @@ export function Sidebar({
     const box = document.getElementById("nav-open") as HTMLInputElement | null;
     if (box) box.checked = false;
   };
+  const sections = visibleNav(role);
   return (
     <aside className="side">
       <div className="org">
@@ -189,22 +179,25 @@ export function Sidebar({
           <div className="tiny muted">{t("i_demo_only")}</div>
         </div>
       </div>
-      <Link className="btn block" href="/m/properties/new">
-        + {t("s_aed91da")}
-      </Link>
-      <div style={{ height: 8 }} />
-      <Link className="btn block" href="/m/leases/new">
-        + {t("s_e96eefc")}
-      </Link>
-      {NAV.map(([section, links]) => (
-        <div key={section}>
-          <div className="sec">{t(section)}</div>
-          {links.map(([href, key]) => {
-            const on = href === "/m" ? path === "/m" : path === href || path.startsWith(`${href}/`);
-            const badge = href === "/m/payments" ? pending : href === "/m/tickets" ? tickets : 0;
+      {can(role, "props.edit" as PermKey) ? (
+        <Link className="btn block" href="/m/properties/new">
+          + {t("s_aed91da")}
+        </Link>
+      ) : null}
+      {can(role, "leases.edit") ? (
+        <Link className="btn block" href="/m/leases/new" style={{ marginTop: 8 }}>
+          + {t("s_e96eefc")}
+        </Link>
+      ) : null}
+      {sections.map((section) => (
+        <div key={section.section}>
+          <div className="sec">{t(section.section)}</div>
+          {section.links.map((link) => {
+            const on = link.href === "/m" ? path === "/m" : path === link.href || path.startsWith(`${link.href}/`);
+            const badge = link.href === "/m/payments" ? pending : link.href === "/m/tickets" ? tickets : 0;
             return (
-              <Link key={href} href={href} className={`it${on ? " on" : ""}`} onClick={closeNav}>
-                <span>{t(key)}</span>
+              <Link key={link.href} href={link.href} className={`it${on ? " on" : ""}`} onClick={closeNav}>
+                <span>{t(link.key)}</span>
                 {badge > 0 ? <span className="badge">{badge}</span> : null}
               </Link>
             );
@@ -212,9 +205,10 @@ export function Sidebar({
         </div>
       ))}
       <div className="side-tools">
-        <ModeLinks />
-        <PersonaSelect personas={personas} current={current} testId="persona-select-drawer" />
-        <ResetButton testId="reset-demo-drawer" />
+        <Link href="/m/account">{t("i_account")}</Link>
+        <Link href="/m/roles">{t("i_roles_title")}</Link>
+        <SignOutButton testId="sign-out-drawer" />
+        {showReset ? <ResetButton testId="reset-demo-drawer" /> : null}
       </div>
     </aside>
   );

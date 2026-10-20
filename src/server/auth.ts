@@ -1,0 +1,724 @@
+import { createHash, randomBytes } from "node:crypto";
+import type { PoolClient } from "pg";
+import { writeAudit } from "./audit";
+import { pool } from "./db";
+import { lineLoginEnabled } from "./demo";
+import { FlowError } from "./errors";
+import { LOCKOUT_LIMIT, lockActive, nextFailure } from "./lockout";
+import { passwordAcceptable } from "./password";
+import { assertPerm } from "./perms";
+import { privacyFromSettings, type OwnerPrivacy } from "./privacy";
+import { backupCodes, acceptSecondFactor, otpauthUrl, randomBase32 } from "./totp";
+import type { OrgRole, Session } from "./types";
+
+export const SESSION_COOKIE = "condola_session";
+export const CHALLENGE_COOKIE = "condola_challenge";
+
+const RESET_MINUTES = 30;
+const INVITE_DAYS = 7;
+
+export type RequestMeta = { ua: string | null; ip: string | null };
+
+export type SignInResult =
+  | { ok: true; token: string; remember: boolean }
+  | { ok: false; error: "invalid" | "locked" | "disabled" }
+  | { ok: false; step: "2fa" | "enroll"; challengeId: string; secret?: string; otpauth?: string };
+
+function sha256(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function newToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+export function normalizeEmail(value: string) {
+  const email = value.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  return email;
+}
+
+function cookieBase() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  };
+}
+
+export function sessionCookie(token: string, remember: boolean) {
+  return {
+    name: SESSION_COOKIE,
+    value: token,
+    options: remember ? { ...cookieBase(), maxAge: 60 * 60 * 24 * 30 } : cookieBase(),
+  };
+}
+
+export function challengeCookie(id: string) {
+  return { name: CHALLENGE_COOKIE, value: id, options: { ...cookieBase(), maxAge: 60 * 10 } };
+}
+
+function supabaseUrl() {
+  return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+}
+
+async function verifyPassword(email: string, password: string) {
+  const url = supabaseUrl();
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  if (url && anon) {
+    const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: { apikey: anon, "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { user?: { id?: string } };
+    return body.user?.id ?? null;
+  }
+  const result = await pool.query<{ id: string }>(
+    `SELECT id::text AS id FROM auth.users
+      WHERE lower(email) = lower($1)
+        AND encrypted_password IS NOT NULL
+        AND encrypted_password = crypt($2, encrypted_password)`,
+    [email, password],
+  );
+  return result.rows[0]?.id ?? null;
+}
+
+export async function setUserPassword(userId: string, password: string) {
+  const url = supabaseUrl();
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (url && service) {
+    const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/admin/users/${userId}`, {
+      method: "PUT",
+      headers: {
+        apikey: service,
+        Authorization: `Bearer ${service}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+    if (!response.ok) throw new FlowError("errors.generic");
+    return;
+  }
+  await pool.query(
+    `UPDATE auth.users SET encrypted_password = crypt($2, gen_salt('bf')), updated_at = now() WHERE id = $1`,
+    [userId, password],
+  );
+}
+
+async function primaryOrg(userId: string) {
+  const member = await pool.query<{ org_id: string }>(
+    `SELECT org_id::text FROM org_members WHERE user_id = $1 AND status = 'active' ORDER BY created_at LIMIT 1`,
+    [userId],
+  );
+  if (member.rows[0]) return member.rows[0].org_id;
+  const contact = await pool.query<{ org_id: string }>(
+    `SELECT org_id::text FROM contacts WHERE user_id = $1 AND archived_at IS NULL ORDER BY created_at LIMIT 1`,
+    [userId],
+  );
+  return contact.rows[0]?.org_id ?? null;
+}
+
+async function failureState(email: string, now = new Date()) {
+  const row = await pool.query<{ failed_count: number; locked_until: Date | null }>(
+    `SELECT failed_count, locked_until FROM auth_login_attempts WHERE email = $1`,
+    [email],
+  );
+  const current = row.rows[0];
+  if (current && lockActive(current.locked_until, now)) {
+    return { locked: true as const, failedCount: current.failed_count };
+  }
+  const base = current && current.locked_until && !lockActive(current.locked_until, now) ? 0 : (current?.failed_count ?? 0);
+  const next = nextFailure(base, now);
+  await pool.query(
+    `INSERT INTO auth_login_attempts (email, failed_count, locked_until, updated_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (email) DO UPDATE
+       SET failed_count = EXCLUDED.failed_count, locked_until = EXCLUDED.locked_until, updated_at = now()`,
+    [email, next.failedCount, next.lockedUntil],
+  );
+  return { locked: next.locked, failedCount: next.failedCount };
+}
+
+async function clearFailures(email: string) {
+  await pool.query(`DELETE FROM auth_login_attempts WHERE email = $1`, [email]);
+}
+
+async function accessState(userId: string) {
+  const members = await pool.query<{ status: string }>(
+    `SELECT status::text FROM org_members WHERE user_id = $1`,
+    [userId],
+  );
+  const activeMember = members.rows.some((row) => row.status === "active");
+  const suspended = members.rows.some((row) => row.status === "suspended");
+  if (activeMember) return "active" as const;
+  if (suspended) return "disabled" as const;
+  const portal = await pool.query(
+    `SELECT 1 FROM contacts WHERE user_id = $1 AND archived_at IS NULL AND (is_tenant OR is_owner) LIMIT 1`,
+    [userId],
+  );
+  return portal.rows[0] ? ("portal" as const) : ("none" as const);
+}
+
+async function firmRequiresMfa(userId: string) {
+  const row = await pool.query<{ required: boolean }>(
+    `SELECT coalesce(bool_or(coalesce(o.settings->>'require_2fa', 'false') = 'true'), false) AS required
+       FROM org_members m JOIN organizations o ON o.id = m.org_id
+      WHERE m.user_id = $1 AND m.status = 'active'`,
+    [userId],
+  );
+  return Boolean(row.rows[0]?.required);
+}
+
+async function mfaRow(userId: string) {
+  const row = await pool.query<{ totp_secret: string | null; enabled: boolean; backup_code_hashes: string[] }>(
+    `SELECT totp_secret, enabled, backup_code_hashes FROM user_mfa WHERE user_id = $1`,
+    [userId],
+  );
+  return row.rows[0] ?? null;
+}
+
+export async function createSession(userId: string, remember: boolean, meta: RequestMeta) {
+  const token = newToken();
+  const hours = remember ? 24 * 30 : 12;
+  await pool.query(
+    `INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip, expires_at)
+     VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5))`,
+    [userId, sha256(token), meta.ua?.slice(0, 300) ?? null, meta.ip, hours],
+  );
+  await writeAudit(await primaryOrg(userId), userId, "sign_in", { remember });
+  return token;
+}
+
+async function openChallenge(userId: string, purpose: "2fa" | "enroll", remember: boolean, secret?: string) {
+  const inserted = await pool.query<{ id: string }>(
+    `INSERT INTO auth_challenges (user_id, purpose, remember, totp_secret, expires_at)
+     VALUES ($1, $2, $3, $4, now() + interval '10 minutes') RETURNING id::text`,
+    [userId, purpose, remember, secret ?? null],
+  );
+  return inserted.rows[0].id;
+}
+
+export async function signIn(emailRaw: string, password: string, remember: boolean, meta: RequestMeta): Promise<SignInResult> {
+  const email = normalizeEmail(emailRaw);
+  if (!email || !password) {
+    return { ok: false, error: "invalid" };
+  }
+  const existing = await pool.query<{ failed_count: number; locked_until: Date | null }>(
+    `SELECT failed_count, locked_until FROM auth_login_attempts WHERE email = $1`,
+    [email],
+  );
+  if (existing.rows[0] && lockActive(existing.rows[0].locked_until, new Date())) {
+    return { ok: false, error: "locked" };
+  }
+  const userId = await verifyPassword(email, password);
+  if (!userId) {
+    const failed = await failureState(email);
+    return { ok: false, error: failed.locked || failed.failedCount >= LOCKOUT_LIMIT ? "locked" : "invalid" };
+  }
+  await clearFailures(email);
+  return continueSignIn(userId, email, remember, meta);
+}
+
+async function continueSignIn(userId: string, email: string, remember: boolean, meta: RequestMeta): Promise<SignInResult> {
+  const access = await accessState(userId);
+  if (access === "disabled") return { ok: false, error: "disabled" };
+  if (access === "none") return { ok: false, error: "invalid" };
+  const factor = await mfaRow(userId);
+  if (factor?.enabled && factor.totp_secret) {
+    const challengeId = await openChallenge(userId, "2fa", remember);
+    return { ok: false, step: "2fa", challengeId };
+  }
+  if (await firmRequiresMfa(userId)) {
+    const secret = randomBase32();
+    const profile = await pool.query<{ email: string }>(`SELECT email FROM auth.users WHERE id = $1`, [userId]);
+    const challengeId = await openChallenge(userId, "enroll", remember, secret);
+    return {
+      ok: false,
+      step: "enroll",
+      challengeId,
+      secret,
+      otpauth: otpauthUrl(secret, profile.rows[0]?.email ?? email),
+    };
+  }
+  const token = await createSession(userId, remember, meta);
+  return { ok: true, token, remember };
+}
+
+/** Demo LINE Login: signs in the linked member. Does not call LINE. */
+export async function signInWithLine(meta: RequestMeta): Promise<SignInResult> {
+  if (!lineLoginEnabled()) return { ok: false, error: "invalid" };
+  const linked = await pool.query<{ id: string; email: string }>(
+    `SELECT u.id::text AS id, u.email
+       FROM profiles p
+       JOIN auth.users u ON u.id = p.id
+       JOIN org_members m ON m.user_id = p.id AND m.status = 'active'
+      WHERE p.line_linked = true
+      ORDER BY m.created_at
+      LIMIT 1`,
+  );
+  const person = linked.rows[0];
+  if (!person) return { ok: false, error: "invalid" };
+  await writeAudit(await primaryOrg(person.id), person.id, "line_sign_in", {});
+  return continueSignIn(person.id, person.email, true, meta);
+}
+
+export async function peekChallenge(id: string) {
+  const row = await loadChallenge(id);
+  if (!row) return null;
+  if (row.purpose === "enroll" && row.totp_secret) {
+    return { purpose: row.purpose, secret: row.totp_secret, otpauth: otpauthUrl(row.totp_secret, row.email) };
+  }
+  return { purpose: row.purpose, secret: null as string | null, otpauth: null as string | null };
+}
+
+async function loadChallenge(id: string) {
+  const row = await pool.query<{
+    id: string;
+    user_id: string;
+    purpose: "2fa" | "enroll";
+    remember: boolean;
+    totp_secret: string | null;
+    email: string;
+  }>(
+    `SELECT c.id::text, c.user_id::text, c.purpose, c.remember, c.totp_secret, u.email
+       FROM auth_challenges c JOIN auth.users u ON u.id = c.user_id
+      WHERE c.id = $1 AND c.expires_at > now()`,
+    [id],
+  );
+  return row.rows[0] ?? null;
+}
+
+async function consumeBackup(userId: string, code: string) {
+  const factor = await mfaRow(userId);
+  if (!factor) return false;
+  const hash = sha256(code.trim().toUpperCase());
+  if (!factor.backup_code_hashes.includes(hash)) return false;
+  await pool.query(
+    `UPDATE user_mfa SET backup_code_hashes = array_remove(backup_code_hashes, $2), updated_at = now() WHERE user_id = $1`,
+    [userId, hash],
+  );
+  return true;
+}
+
+export async function completeSecondFactor(challengeId: string, code: string, meta: RequestMeta): Promise<SignInResult & { backupCodes?: string[] }> {
+  const challenge = await loadChallenge(challengeId);
+  if (!challenge) return { ok: false, error: "invalid" };
+  if (challenge.purpose === "2fa") {
+    const factor = await mfaRow(challenge.user_id);
+    const totpOk = acceptSecondFactor(factor?.totp_secret, code);
+    const backupOk = totpOk ? false : await consumeBackup(challenge.user_id, code);
+    if (!totpOk && !backupOk) return { ok: false, error: "invalid" };
+  } else {
+    if (!acceptSecondFactor(challenge.totp_secret, code)) return { ok: false, error: "invalid" };
+  }
+  await pool.query(`DELETE FROM auth_challenges WHERE id = $1`, [challenge.id]);
+  let codes: string[] | undefined;
+  if (challenge.purpose === "enroll" && challenge.totp_secret) {
+    codes = backupCodes();
+    await pool.query(
+      `INSERT INTO user_mfa (user_id, totp_secret, enabled, backup_code_hashes, confirmed_at)
+       VALUES ($1, $2, true, $3, now())
+       ON CONFLICT (user_id) DO UPDATE
+         SET totp_secret = EXCLUDED.totp_secret, enabled = true, backup_code_hashes = EXCLUDED.backup_code_hashes,
+             confirmed_at = now(), updated_at = now()`,
+      [challenge.user_id, challenge.totp_secret, codes.map((item) => sha256(item))],
+    );
+    await writeAudit(await primaryOrg(challenge.user_id), challenge.user_id, "mfa_enabled", {});
+  }
+  const token = await createSession(challenge.user_id, challenge.remember, meta);
+  return { ok: true, token, remember: challenge.remember, backupCodes: codes };
+}
+
+export async function requestPasswordReset(emailRaw: string) {
+  const email = normalizeEmail(emailRaw);
+  if (!email) return { token: null as string | null };
+  const user = await pool.query<{ id: string }>(
+    `SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`,
+    [email],
+  );
+  if (!user.rows[0]) return { token: null };
+  const token = newToken();
+  await pool.query(
+    `INSERT INTO auth_password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, now() + make_interval(mins => $3))`,
+    [user.rows[0].id, sha256(token), RESET_MINUTES],
+  );
+  await writeAudit(await primaryOrg(user.rows[0].id), user.rows[0].id, "password_reset_requested", {});
+  return { token };
+}
+
+export async function resetPassword(token: string, password: string, confirm: string) {
+  if (password !== confirm) return { ok: false as const, error: "mismatch" as const };
+  if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const };
+  const row = await pool.query<{ id: string; user_id: string; expires_at: Date; used_at: Date | null }>(
+    `SELECT id::text, user_id::text, expires_at, used_at FROM auth_password_resets WHERE token_hash = $1`,
+    [sha256(token)],
+  );
+  const reset = row.rows[0];
+  if (!reset || reset.used_at || reset.expires_at.getTime() <= Date.now()) {
+    return { ok: false as const, error: "expired" as const };
+  }
+  await setUserPassword(reset.user_id, password);
+  await pool.query(`UPDATE auth_password_resets SET used_at = now() WHERE id = $1`, [reset.id]);
+  await pool.query(`UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, [reset.user_id]);
+  await writeAudit(await primaryOrg(reset.user_id), reset.user_id, "password_reset", {});
+  return { ok: true as const };
+}
+
+export async function describeReset(token: string) {
+  const row = await pool.query<{ expires_at: Date; used_at: Date | null }>(
+    `SELECT expires_at, used_at FROM auth_password_resets WHERE token_hash = $1`,
+    [sha256(token)],
+  );
+  const reset = row.rows[0];
+  if (!reset || reset.used_at || reset.expires_at.getTime() <= Date.now()) return "expired" as const;
+  return "ready" as const;
+}
+
+const TEAM_ROLES = new Set<OrgRole>(["admin", "manager", "accountant", "maintenance"]);
+
+async function assertLastAdmin(orgId: string, userId: string, nextRole: OrgRole | null) {
+  const row = await pool.query<{ id: string; n: string }>(
+    `SELECT user_id::text AS id, count(*) OVER ()::text AS n
+       FROM org_members WHERE org_id = $1 AND role = 'admin' AND status = 'active'`,
+    [orgId],
+  );
+  const admins = row.rows;
+  const isAdmin = admins.some((admin) => admin.id === userId);
+  const count = admins.length;
+  if (isAdmin && count <= 1 && nextRole !== "admin") throw new FlowError("errors.lastAdmin");
+}
+
+export async function inviteMember(session: Session, input: { email: string; name: string; role: string }) {
+  assertPerm(session, "team.manage");
+  const email = normalizeEmail(input.email);
+  if (!email) throw new FlowError("errors.email");
+  if (!TEAM_ROLES.has(input.role as OrgRole)) throw new FlowError("errors.required");
+  const role = input.role as OrgRole;
+  const duplicate = await pool.query(
+    `SELECT 1 FROM profiles p JOIN org_members m ON m.user_id = p.id
+      WHERE m.org_id = $1 AND lower(p.email::text) = lower($2) AND m.status <> 'removed'
+     UNION ALL
+     SELECT 1 FROM invitations
+      WHERE org_id = $1 AND lower(email::text) = lower($2) AND status = 'pending' AND expires_at > now()`,
+    [session.orgId, email],
+  );
+  if (duplicate.rows[0]) throw new FlowError("errors.emailTaken");
+  const token = newToken();
+  await pool.query(
+    `INSERT INTO invitations (org_id, kind, role, email, code_hash, expires_at, invited_by)
+     VALUES ($1, 'team_member', $2::org_role, $3, $4, now() + make_interval(days => $5), $6)`,
+    [session.orgId, role, email, sha256(token), INVITE_DAYS, session.userId],
+  );
+  await writeAudit(session.orgId, session.userId, "invite", { email, role });
+  return { token, email };
+}
+
+export async function resendInvite(session: Session, invitationId: string) {
+  assertPerm(session, "team.manage");
+  const token = newToken();
+  const updated = await pool.query(
+    `UPDATE invitations SET code_hash = $3, expires_at = now() + make_interval(days => $4), status = 'pending'
+      WHERE id = $1 AND org_id = $2 AND kind = 'team_member' AND status = 'pending'`,
+    [invitationId, session.orgId, sha256(token), INVITE_DAYS],
+  );
+  if (updated.rowCount !== 1) throw new FlowError("errors.notFound");
+  await writeAudit(session.orgId, session.userId, "invite_resend", { invitationId });
+  return { token };
+}
+
+export async function revokeInvite(session: Session, invitationId: string) {
+  assertPerm(session, "team.manage");
+  const updated = await pool.query(
+    `UPDATE invitations SET status = 'revoked' WHERE id = $1 AND org_id = $2 AND kind = 'team_member' AND status = 'pending'`,
+    [invitationId, session.orgId],
+  );
+  if (updated.rowCount !== 1) throw new FlowError("errors.notFound");
+  await writeAudit(session.orgId, session.userId, "invite_revoke", { invitationId });
+}
+
+export async function setMemberRole(session: Session, memberId: string, role: OrgRole) {
+  assertPerm(session, "team.manage");
+  if (!TEAM_ROLES.has(role)) throw new FlowError("errors.required");
+  const member = await pool.query<{ user_id: string; role: OrgRole; is_billing_owner: boolean }>(
+    `SELECT user_id::text, role::text, is_billing_owner FROM org_members WHERE id = $1 AND org_id = $2 AND status = 'active'`,
+    [memberId, session.orgId],
+  );
+  const row = member.rows[0];
+  if (!row) throw new FlowError("errors.notFound");
+  if (row.is_billing_owner && role !== "admin") throw new FlowError("errors.lastAdmin");
+  await assertLastAdmin(session.orgId, row.user_id, role);
+  if (row.user_id === session.userId) throw new FlowError("errors.ownRole");
+  await pool.query(`UPDATE org_members SET role = $3::org_role WHERE id = $1 AND org_id = $2`, [memberId, session.orgId, role]);
+  await writeAudit(session.orgId, session.userId, "role_change", { memberId, role });
+}
+
+export async function setMemberActive(session: Session, memberId: string, active: boolean) {
+  assertPerm(session, "team.manage");
+  const member = await pool.query<{ user_id: string; role: OrgRole }>(
+    `SELECT user_id::text, role::text FROM org_members WHERE id = $1 AND org_id = $2`,
+    [memberId, session.orgId],
+  );
+  const row = member.rows[0];
+  if (!row) throw new FlowError("errors.notFound");
+  if (!active) {
+    await assertLastAdmin(session.orgId, row.user_id, null);
+    if (row.user_id === session.userId) throw new FlowError("errors.ownRole");
+    await pool.query(`UPDATE org_members SET status = 'suspended' WHERE id = $1 AND org_id = $2`, [memberId, session.orgId]);
+    await pool.query(`UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, [row.user_id]);
+    await writeAudit(session.orgId, session.userId, "deactivate", { memberId });
+    return;
+  }
+  await pool.query(`UPDATE org_members SET status = 'active' WHERE id = $1 AND org_id = $2`, [memberId, session.orgId]);
+  await writeAudit(session.orgId, session.userId, "reactivate", { memberId });
+}
+
+export type InviteView =
+  | { state: "ready"; email: string; role: OrgRole; firm: string; inviter: string }
+  | { state: "expired" | "revoked" | "used" | "invalid" };
+
+export async function describeInvite(token: string): Promise<InviteView> {
+  const row = await pool.query<{
+    status: string;
+    expires_at: Date;
+    email: string;
+    role: OrgRole;
+    firm: string;
+    inviter: string | null;
+  }>(
+    `SELECT i.status::text, i.expires_at, i.email::text, i.role::text, o.name AS firm, p.display_name AS inviter
+       FROM invitations i
+       JOIN organizations o ON o.id = i.org_id
+       LEFT JOIN profiles p ON p.id = i.invited_by
+      WHERE i.code_hash = $1 AND i.kind = 'team_member'`,
+    [sha256(token)],
+  );
+  const invite = row.rows[0];
+  if (!invite) return { state: "invalid" };
+  if (invite.status === "accepted") return { state: "used" };
+  if (invite.status === "revoked") return { state: "revoked" };
+  if (invite.status !== "pending" || invite.expires_at.getTime() <= Date.now()) return { state: "expired" };
+  return { state: "ready", email: invite.email, role: invite.role, firm: invite.firm, inviter: invite.inviter ?? "" };
+}
+
+async function upsertInvitedUser(client: PoolClient, email: string, name: string, password: string) {
+  const existing = await client.query<{ id: string }>(
+    `SELECT id::text FROM auth.users WHERE lower(email) = lower($1)`,
+    [email],
+  );
+  if (existing.rows[0]) {
+    await setUserPassword(existing.rows[0].id, password);
+    await client.query(
+      `INSERT INTO profiles (id, display_name, email, locale) VALUES ($1, $2, $3, 'zh-TW')
+       ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, email = EXCLUDED.email`,
+      [existing.rows[0].id, name, email],
+    );
+    return existing.rows[0].id;
+  }
+  const inserted = await client.query<{ id: string }>(
+    `INSERT INTO auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
+     VALUES ($1, crypt($2, gen_salt('bf')), now(), $3::jsonb, 'authenticated', 'authenticated')
+     RETURNING id::text`,
+    [email, password, JSON.stringify({ name })],
+  );
+  const id = inserted.rows[0].id;
+  await client.query(
+    `INSERT INTO profiles (id, display_name, email, locale) VALUES ($1, $2, $3, 'zh-TW')`,
+    [id, name, email],
+  );
+  return id;
+}
+
+export async function acceptInvite(token: string, name: string, password: string, confirm: string, meta: RequestMeta) {
+  if (!name.trim()) return { ok: false as const, error: "required" as const };
+  if (password !== confirm) return { ok: false as const, error: "mismatch" as const };
+  if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const };
+  const view = await describeInvite(token);
+  if (view.state !== "ready") return { ok: false as const, error: view.state };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const invite = await client.query<{ id: string; org_id: string; role: OrgRole; email: string }>(
+      `SELECT id::text, org_id::text, role::text, email::text FROM invitations
+        WHERE code_hash = $1 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()
+        FOR UPDATE`,
+      [sha256(token)],
+    );
+    const row = invite.rows[0];
+    if (!row) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, error: "used" as const };
+    }
+    const userId = await upsertInvitedUser(client, row.email, name.trim(), password);
+    const member = await client.query(
+      `SELECT status::text FROM org_members WHERE org_id = $1 AND user_id = $2`,
+      [row.org_id, userId],
+    );
+    if (member.rows[0]?.status === "active") {
+      await client.query("ROLLBACK");
+      return { ok: false as const, error: "used" as const };
+    }
+    if (member.rows[0]) {
+      await client.query(
+        `UPDATE org_members SET role = $3::org_role, status = 'active' WHERE org_id = $1 AND user_id = $2`,
+        [row.org_id, userId, row.role],
+      );
+    } else {
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, status) VALUES ($1, $2, $3::org_role, 'active')`,
+        [row.org_id, userId, row.role],
+      );
+    }
+    await client.query(
+      `UPDATE invitations SET status = 'accepted', accepted_by = $2, accepted_at = now() WHERE id = $1`,
+      [row.id, userId],
+    );
+    await client.query("COMMIT");
+    await writeAudit(row.org_id, userId, "invite_accept", { role: row.role });
+    const sessionToken = await createSession(userId, true, meta);
+    return { ok: true as const, token: sessionToken, role: row.role };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function listSessions(userId: string) {
+  const result = await pool.query<{
+    id: string;
+    user_agent: string | null;
+    ip: string | null;
+    last_active_at: Date;
+    created_at: Date;
+  }>(
+    `SELECT id::text, user_agent, ip, last_active_at, created_at
+       FROM auth_sessions
+      WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+      ORDER BY last_active_at DESC`,
+    [userId],
+  );
+  return result.rows;
+}
+
+export async function revokeSession(userId: string, sessionId: string) {
+  await pool.query(
+    `UPDATE auth_sessions SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+    [sessionId, userId],
+  );
+  await writeAudit(await primaryOrg(userId), userId, "sign_out", { sessionId });
+}
+
+export async function revokeOtherSessions(userId: string, currentSessionId: string) {
+  await pool.query(
+    `UPDATE auth_sessions SET revoked_at = now()
+      WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL`,
+    [userId, currentSessionId],
+  );
+  await writeAudit(await primaryOrg(userId), userId, "sign_out_others", {});
+}
+
+export async function changePassword(session: Session, current: string, password: string, confirm: string) {
+  if (password !== confirm) throw new FlowError("errors.mismatch");
+  if (!passwordAcceptable(password)) throw new FlowError("errors.weakPassword");
+  const email = session.email;
+  const userId = await verifyPassword(email, current);
+  if (userId !== session.userId) throw new FlowError("errors.authInvalid");
+  await setUserPassword(session.userId, password);
+  await pool.query(
+    `UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL`,
+    [session.userId, session.sessionId],
+  );
+  await writeAudit(session.orgId, session.userId, "password_change", {});
+}
+
+export async function beginMfa(session: Session) {
+  const required = await firmRequiresMfa(session.userId);
+  const factor = await mfaRow(session.userId);
+  if (factor?.enabled && required) throw new FlowError("errors.mfaRequired");
+  const secret = randomBase32();
+  const challengeId = await openChallenge(session.userId, "enroll", true, secret);
+  return { challengeId, secret, otpauth: otpauthUrl(secret, session.email) };
+}
+
+export async function confirmMfa(session: Session, challengeId: string, code: string) {
+  const challenge = await loadChallenge(challengeId);
+  if (!challenge || challenge.user_id !== session.userId || challenge.purpose !== "enroll" || !challenge.totp_secret) {
+    throw new FlowError("errors.authInvalid");
+  }
+  if (!acceptSecondFactor(challenge.totp_secret, code)) throw new FlowError("errors.authInvalid");
+  const codes = backupCodes();
+  await pool.query(
+    `INSERT INTO user_mfa (user_id, totp_secret, enabled, backup_code_hashes, confirmed_at)
+     VALUES ($1, $2, true, $3, now())
+     ON CONFLICT (user_id) DO UPDATE
+       SET totp_secret = EXCLUDED.totp_secret, enabled = true, backup_code_hashes = EXCLUDED.backup_code_hashes,
+           confirmed_at = now(), updated_at = now()`,
+    [session.userId, challenge.totp_secret, codes.map((item) => sha256(item))],
+  );
+  await pool.query(`DELETE FROM auth_challenges WHERE id = $1`, [challengeId]);
+  await writeAudit(session.orgId, session.userId, "mfa_enabled", {});
+  return codes;
+}
+
+export async function disableMfa(session: Session) {
+  if (await firmRequiresMfa(session.userId)) throw new FlowError("errors.mfaRequired");
+  await pool.query(
+    `UPDATE user_mfa SET enabled = false, totp_secret = NULL, backup_code_hashes = '{}', updated_at = now() WHERE user_id = $1`,
+    [session.userId],
+  );
+  await writeAudit(session.orgId, session.userId, "mfa_disabled", {});
+}
+
+export async function setRequireMfa(session: Session, required: boolean) {
+  assertPerm(session, "settings.edit");
+  const { tx } = await import("./db");
+  await tx(session.userId, async (client) => {
+    await client.query(
+      `UPDATE organizations
+          SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{require_2fa}', to_jsonb($2::boolean), true)
+        WHERE id = $1`,
+      [session.orgId, required],
+    );
+  });
+  await writeAudit(session.orgId, session.userId, "require_2fa", { required });
+}
+
+export async function ownerPrivacy(orgId: string): Promise<OwnerPrivacy> {
+  const row = await pool.query<{ settings: unknown }>(`SELECT settings FROM organizations WHERE id = $1`, [orgId]);
+  return privacyFromSettings(row.rows[0]?.settings ?? null);
+}
+
+export async function setOwnerPrivacy(session: Session, input: OwnerPrivacy) {
+  assertPerm(session, "settings.edit");
+  const { tx } = await import("./db");
+  await tx(session.userId, async (client) => {
+    await client.query(
+      `UPDATE organizations
+          SET settings = jsonb_set(
+                jsonb_set(coalesce(settings, '{}'::jsonb), '{show_tenant_name}', to_jsonb($2::boolean), true),
+                '{show_tenant_phone}', to_jsonb($3::boolean), true)
+        WHERE id = $1`,
+      [session.orgId, input.showName, input.showPhone],
+    );
+  });
+  await writeAudit(session.orgId, session.userId, "owner_privacy", input);
+}
+
+export async function tenantDisplayNames(orgId: string) {
+  const rows = await pool.query<{ display_name: string }>(
+    `SELECT display_name FROM contacts WHERE org_id = $1 AND is_tenant AND archived_at IS NULL`,
+    [orgId],
+  );
+  return rows.rows.map((row) => row.display_name);
+}
+
+export async function mfaStatus(userId: string) {
+  const factor = await mfaRow(userId);
+  return { enabled: Boolean(factor?.enabled), required: await firmRequiresMfa(userId) };
+}
+
+export { sha256 };

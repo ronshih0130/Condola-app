@@ -1,6 +1,5 @@
+import { pool, maybe, many, tx } from "./db";
 import { rentUtilityDueMinor } from "./money";
-import { maybe, many, tx } from "./db";
-import { ORG_ID } from "./ids";
 import type { Session } from "./types";
 
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
@@ -13,7 +12,7 @@ export async function loadTryout(session: Session): Promise<Tryout> {
       const row = await maybe<{ settings: { tryout?: Partial<Tryout> } }>(
         client,
         `SELECT settings FROM organizations WHERE id = $1`,
-        [ORG_ID],
+        [session.orgId],
       );
       const flags = row?.settings?.tryout ?? {};
       return {
@@ -33,13 +32,13 @@ export async function loadFirm(session: Session) {
     const org = await maybe<{ name: string; default_locale: string }>(
       client,
       `SELECT name, default_locale FROM organizations WHERE id = $1`,
-      [ORG_ID],
+      [session.orgId],
     );
     const bank = await maybe<{ bank_name: string; account_last5: string }>(
       client,
       `SELECT bank_name, account_last5 FROM bank_accounts
         WHERE org_id = $1 AND archived_at IS NULL AND show_to_tenants ORDER BY created_at LIMIT 1`,
-      [ORG_ID],
+      [session.orgId],
     );
     const locale = org?.default_locale === "en" ? "en" : "zh-TW";
     return { name: org?.name ?? "", bankName: bank?.bank_name ?? "", last5: bank?.account_last5 ?? "", defaultLocale: locale as "zh-TW" | "en" };
@@ -57,7 +56,7 @@ export async function dashboard(session: Session) {
            WHERE org_id = $1 AND status IN ('open','partially_paid')) AS outstanding,
          (SELECT count(DISTINCT lease_id)::text FROM invoices
            WHERE org_id = $1 AND status IN ('open','partially_paid') AND balance_minor > 0) AS owing`,
-      [ORG_ID],
+      [session.orgId],
     );
     const counts = await maybe<{ pending: string; tickets: string; rooms: string; occupied: string }>(
       client,
@@ -68,7 +67,7 @@ export async function dashboard(session: Session) {
            WHERE r.org_id = $1 AND r.archived_at IS NULL) AS rooms,
          (SELECT count(DISTINCT target_room_id)::text FROM leases
            WHERE org_id = $1 AND status IN ('pending_signature','active') AND target_room_id IS NOT NULL) AS occupied`,
-      [ORG_ID],
+      [session.orgId],
     );
     const properties = await many<{ id: string; name: string; received: string; billed: string }>(
       client,
@@ -83,7 +82,7 @@ export async function dashboard(session: Session) {
          FROM properties p
         WHERE p.org_id = $1 AND p.archived_at IS NULL
         ORDER BY p.name`,
-      [ORG_ID],
+      [session.orgId],
     );
     const owing = await many<{ lease_id: string; tenant: string; place: string; balance: string; currency: string }>(
       client,
@@ -99,7 +98,7 @@ export async function dashboard(session: Session) {
         WHERE i.org_id = $1 AND i.status IN ('open','partially_paid') AND i.balance_minor > 0
         ORDER BY i.due_date
         LIMIT 8`,
-      [ORG_ID],
+      [session.orgId],
     );
     const expiring = await many<{ lease_id: string; tenant: string; place: string; end_date: string }>(
       client,
@@ -116,7 +115,7 @@ export async function dashboard(session: Session) {
           AND l.end_date <= (current_date + interval '11 months')::date
         ORDER BY l.end_date
         LIMIT 8`,
-      [ORG_ID],
+      [session.orgId],
     );
     return {
       received: Number(money?.received ?? 0),
@@ -157,7 +156,7 @@ export async function listProperties(session: Session) {
          FROM properties p
         WHERE p.org_id = $1 AND p.archived_at IS NULL
         ORDER BY p.created_at`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -174,7 +173,7 @@ export async function propertyDetail(session: Session, id: string) {
       client,
       `SELECT id::text, name, coalesce(address_display,'') AS address_display, currency, default_rental_mode::text AS rental_mode
          FROM properties WHERE id = $1 AND org_id = $2`,
-      [id, ORG_ID],
+      [id, session.orgId],
     );
     if (!property) return null;
     const owner = await maybe<{ id: string; name: string; phone_visible: boolean }>(
@@ -224,7 +223,7 @@ export async function listOwners(session: Session) {
       `SELECT id::text, display_name AS name FROM contacts
         WHERE org_id = $1 AND is_owner AND archived_at IS NULL
         ORDER BY display_name`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -262,7 +261,7 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
              WHERE l.target_room_id = r.id AND l.status IN ('pending_signature','active')
           )
         ORDER BY p.created_at DESC, r.label`,
-      [ORG_ID],
+      [session.orgId],
     );
     const unitIds = [...new Set(rows.map((row) => row.unit_id))];
     const siblings = unitIds.length
@@ -322,7 +321,7 @@ export async function listLeases(session: Session) {
          JOIN contacts c ON c.id = lp.contact_id
         WHERE l.org_id = $1
         ORDER BY l.created_at DESC`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -350,7 +349,9 @@ export async function leaseDetail(session: Session, id: string) {
               l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.due_day,
               l.start_date::text, l.end_date::text,
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
-              c.display_name AS tenant, c.phone_e164 AS phone, c.email,
+              c.display_name AS tenant,
+              CASE WHEN app.has_role(l.org_id, '{admin,manager,maintenance}') THEN c.phone_e164 END AS phone,
+              c.email,
               (SELECT t.id::text FROM message_threads t WHERE t.lease_id = l.id AND t.kind = 'lease' LIMIT 1) AS thread_id
          FROM leases l
          JOIN properties p ON p.id = l.property_id
@@ -359,7 +360,7 @@ export async function leaseDetail(session: Session, id: string) {
          JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
          JOIN contacts c ON c.id = lp.contact_id
         WHERE l.id = $1 AND l.org_id = $2`,
-      [id, ORG_ID],
+      [id, session.orgId],
     );
     if (!lease) return null;
     const signatures = await many<{ role: string; status: string; signed_name: string | null; signed_at: string | null }>(
@@ -437,7 +438,7 @@ export async function listPayments(session: Session) {
         WHERE p.org_id = $1
         ORDER BY p.created_at DESC
         LIMIT 40`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -463,7 +464,7 @@ export async function listMatches(session: Session) {
          LEFT JOIN contacts c ON c.id = p.payer_contact_id
         WHERE s.org_id = $1 AND s.status = 'suggested'
         ORDER BY s.score DESC, s.created_at DESC`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -476,7 +477,7 @@ export async function latestUnmatchedPayment(session: Session) {
          FROM payments
         WHERE org_id = $1 AND bank_transaction_id IS NULL AND status IN ('submitted','confirmed')
         ORDER BY created_at DESC LIMIT 1`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -508,7 +509,7 @@ export async function listStatements(session: Session) {
          JOIN contacts c ON c.id = s.owner_contact_id
         WHERE s.org_id = $1 AND s.status <> 'void'
         ORDER BY s.period_start DESC, c.display_name`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -557,7 +558,7 @@ export async function statementRoster(session: Session, month: string): Promise<
          JOIN contacts c ON c.id = s.owner_contact_id
         WHERE s.org_id = $1 AND s.status <> 'void'
         ORDER BY s.period_start DESC, c.display_name`,
-      [ORG_ID],
+      [session.orgId],
     );
     const pending = await many<RosterRow>(
       client,
@@ -589,7 +590,7 @@ export async function statementRoster(session: Session, month: string): Promise<
              WHERE s.owner_contact_id = c.id AND s.period_start = $2::date AND s.status <> 'void'
           )
         ORDER BY c.display_name`,
-      [ORG_ID, `${month}-01`],
+      [session.orgId, `${month}-01`],
     );
     return [...issued, ...pending];
   });
@@ -655,7 +656,7 @@ export async function rentRoll(session: Session) {
             SELECT 1 FROM rooms rx WHERE rx.unit_id = u.id AND rx.archived_at IS NULL
           ))
         ORDER BY p.name, space_label`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -718,7 +719,7 @@ export async function listTickets(session: Session) {
          LEFT JOIN rooms r ON r.id = t.room_id
         WHERE t.org_id = $1
         ORDER BY t.created_at DESC`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -739,7 +740,7 @@ export async function listThreads(session: Session) {
          JOIN contacts c ON c.id = lp.contact_id
         WHERE t.org_id = $1
         ORDER BY t.last_message_at DESC NULLS LAST`,
-      [ORG_ID],
+      [session.orgId],
     ),
   );
 }
@@ -756,16 +757,50 @@ export async function threadMessages(session: Session, threadId: string) {
 }
 
 export async function listTeam(session: Session) {
-  return tx(session.userId, async (client) =>
-    many<{ name: string; email: string | null; role: string; status: string }>(
+  const rows = await tx(session.userId, async (client) =>
+    many<{
+      member_id: string | null;
+      invitation_id: string | null;
+      name: string;
+      email: string | null;
+      role: string;
+      status: string;
+      expires_at: string | null;
+      user_id: string | null;
+    }>(
       client,
-      `SELECT p.display_name AS name, p.email, m.role::text, m.status::text
-         FROM org_members m JOIN profiles p ON p.id = m.user_id
-        WHERE m.org_id = $1
-        ORDER BY m.created_at`,
-      [ORG_ID],
+      `SELECT m.id::text AS member_id, NULL::text AS invitation_id, p.display_name AS name, p.email::text AS email,
+              m.role::text, m.status::text, NULL::text AS expires_at, m.user_id::text
+         FROM org_members m
+         JOIN profiles p ON p.id = m.user_id
+        WHERE m.org_id = $1 AND m.status <> 'removed'
+        UNION ALL
+        SELECT NULL::text, i.id::text, coalesce(i.email::text, ''), i.email::text, i.role::text, i.status::text,
+               i.expires_at::text, NULL::text
+          FROM invitations i
+         WHERE i.org_id = $1 AND i.kind = 'team_member' AND i.status IN ('pending', 'revoked')
+         ORDER BY 3`,
+      [session.orgId],
     ),
   );
+  const ids = rows.map((row) => row.user_id).filter((id): id is string => Boolean(id));
+  const extra = new Map<string, { mfa: boolean; last_sign_in: string | null }>();
+  if (ids.length) {
+    const facts = await pool.query<{ user_id: string; mfa: boolean; last_sign_in: string | null }>(
+      `SELECT u.id::text AS user_id, coalesce(f.enabled, false) AS mfa,
+              (SELECT max(s.last_active_at)::text FROM auth_sessions s WHERE s.user_id = u.id) AS last_sign_in
+         FROM auth.users u
+         LEFT JOIN user_mfa f ON f.user_id = u.id
+        WHERE u.id = ANY($1::uuid[])`,
+      [ids],
+    );
+    for (const fact of facts.rows) extra.set(fact.user_id, { mfa: fact.mfa, last_sign_in: fact.last_sign_in });
+  }
+  return rows.map((row) => ({
+    ...row,
+    mfa: row.user_id ? (extra.get(row.user_id)?.mfa ?? false) : false,
+    last_sign_in: row.user_id ? (extra.get(row.user_id)?.last_sign_in ?? null) : null,
+  }));
 }
 
 export async function tenantLeases(session: Session) {
@@ -878,7 +913,7 @@ export async function counts(session: Session) {
       `SELECT
          (SELECT count(*)::text FROM payments WHERE org_id = $1 AND status = 'submitted') AS pending,
          (SELECT count(*)::text FROM maintenance_tickets WHERE org_id = $1 AND status NOT IN ('resolved','closed','cancelled')) AS tickets`,
-      [ORG_ID],
+      [session.orgId],
     );
     return { pending: Number(row?.pending ?? 0), tickets: Number(row?.tickets ?? 0) };
   });

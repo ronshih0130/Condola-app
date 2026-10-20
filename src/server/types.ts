@@ -6,6 +6,8 @@ export type CalendarMode = "gregorian" | "roc";
 
 export type Session = {
   userId: string;
+  sessionId: string;
+  email: string;
   name: string;
   kind: "staff" | "tenant" | "owner";
   role: OrgRole | null;

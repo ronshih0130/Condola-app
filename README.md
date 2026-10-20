@@ -16,13 +16,25 @@ npm run db:reset
 npm run dev
 ```
 
-Open http://127.0.0.1:43123. The header switches language (繁中 / EN), persona, and manager / tenant LINE / owner portal. **重置示範** restores the seed. Demo mode is on when `DEMO_MODE=true`.
+Open http://127.0.0.1:43123 and sign in. Seeded passwords are `Demo1234` (demo only). The header switches language (繁中 / EN). An Admin sees **重置示範**, which restores the seed. `POST /api/demo/reset` returns 404 unless `DEMO_MODE=true` and the caller is an Admin.
+
+| Role | Email |
+| --- | --- |
+| Admin | `yating.lin@songxin.demo` |
+| Manager (LINE-linked, for the demo LINE button) | `zhiming.huang@songxin.demo` |
+| Accountant | `meiling.zhou@songxin.demo` |
+| Maintenance | `dawei.wu@songxin.demo` |
+| Tenant | `yawen.zhang@tenant.demo` |
+| Owner | `jianhong.chen@owner.demo` |
 
 ```bash
+npm run typecheck
+npm run test:unit
+npm run test:rls
 npm run test:e2e
 ```
 
-Playwright covers the three try-out tasks in zh-TW and English, plus the phone-width manager shell, the rent-only LINE notice, empty forms, and the lease-signed checklist.
+Playwright covers the three try-out tasks in zh-TW and English, plus the phone-width manager shell, the rent-only LINE notice, empty forms, and the lease-signed checklist. It signs in through `/login`.
 
 ## Where the design lives
 
@@ -58,12 +70,29 @@ Schema notes for this demo:
 - LINE deliveries are inserted as `skipped` / `demo_line`. E-invoice status stays `not_applicable`.
 - Demo reset wipes org data with `session_replication_role = replica` and reseeds. It keeps currencies, jurisdictions, platform settings, and lease templates.
 
-## Deploy sketch (not run from this repo)
+## Sign-in and roles
 
-1. Create a Supabase project. Apply **only** the migration, not `supabase_stub.sql`.
-2. Use the session or transaction pooler in `DATABASE_URL`. `SET LOCAL` is transaction-scoped and does not stick on a session-mode-incompatible transaction pooler checkout. The database role must be allowed to `SET ROLE authenticated` and `SET ROLE service_role`.
-3. Set `DEMO_MODE=false`. Reset deletes the database contents.
-4. Seed inserts `auth.users`. Hosted Auth has extra token columns that usually default to empty strings; if a column is `NOT NULL` without a default, give the seed a value before running it.
-5. Deploy the Next.js app (Vercel or any Node host) with `DATABASE_URL` and `DEMO_MODE`. One currency per property. No FX conversion.
+Sessions are a `condola_session` cookie checked against `auth_sessions`. Queries run as that user (`request.jwt.claim.sub` + `SET LOCAL ROLE authenticated`), so RLS is the org boundary. There is no hard-coded organization in request handlers.
+
+The permission table is `PERMS` in `src/server/perms.ts` (18 rows, the same keys as the prototype). Nav items the role cannot open are omitted. A direct URL without the permission redirects to `/m/noperm`. Actions the role can see but not perform stay on screen, disabled, with 「需要以下角色：…」. The server checks the same table.
+
+2FA is optional for every role, including Admin. An Admin can require it for the firm (`require_2fa` in organization settings, off by default). With `DEMO_MODE=true`, the authenticator step also accepts `123456`, matching the prototype. LINE Login does not call LINE. When the flag is on it signs in the member with `profiles.line_linked` (the seeded Manager).
+
+## Staging on Cloudflare (not deployed from this repo)
+
+The app is prepared for [OpenNext Cloudflare](https://opennext.js.org/cloudflare). `wrangler.jsonc` has no secrets. `npm run cf:build` runs `@opennextjs/cloudflare` and writes `.open-next/` (gitignored).
+
+1. Create a **separate** Supabase project for staging. Apply `supabase/migrations/*.sql` only. Do not apply `supabase/stub/supabase_stub.sql`.
+2. Put `DATABASE_URL` on the Worker as a secret (`npx wrangler secret put DATABASE_URL`). Use the Supabase **transaction** pooler (port 6543). `SET LOCAL` does not survive a session-mode checkout. The database role must be allowed to `SET ROLE authenticated` and `SET ROLE service_role`.
+3. Set `DEMO_MODE=false` for staging. Leave `SUPABASE_SERVICE_ROLE_KEY` unset unless you want password updates to go through the Supabase Auth admin API. Do not commit either value.
+4. `npx wrangler deploy` after `npm run cf:build`. This repository does not run that command.
+
+Next.js notes for Workers:
+
+- Pages are `force-dynamic` because the session cookie is read on each request. OpenNext supports that. Do not switch these routes to static rendering.
+- `src/middleware.ts` only forwards `x-pathname`. It does not call the database.
+- The server uses `pg` over TCP. Workers need the `nodejs_compat` flag in `wrangler.jsonc`. If a direct Postgres connection fails at runtime, attach a Cloudflare Hyperdrive config to the same `DATABASE_URL` and point the Worker at the Hyperdrive connection string. Do not switch the app to the edge runtime.
+- `next/image` is not used. Adding it later needs `images.unoptimized` or a custom loader; the Cloudflare adapter does not run the default image optimizer.
+- There is no Node filesystem cache and no `fs` writes. Demo reset and seed stay operator commands, not Worker routes, when `DEMO_MODE` is false.
 
 This repository does not deploy and does not create a hosted project.

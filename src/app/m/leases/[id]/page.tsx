@@ -88,7 +88,7 @@ export default async function LeasePage({
           </div>
           <div className="card pad">
             <h3>{lease.tenant}</h3>
-            <p>{lease.phone}</p>
+            <p data-testid="tenant-phone">{lease.phone || "•••"}</p>
             <p className="small muted">{lease.email}</p>
             {lease.status !== "active" ? (
               <p>
