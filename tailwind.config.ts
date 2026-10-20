@@ -49,6 +49,12 @@ const config: Config = {
           bg: "var(--cd-info-bg)",
         },
         line: "#06C755",
+        topbar: {
+          DEFAULT: "var(--cd-topbar)",
+          2: "var(--cd-topbar-2)",
+          3: "var(--cd-topbar-3)",
+          4: "var(--cd-topbar-4)",
+        },
       },
       borderRadius: {
         sm: "var(--cd-radius-sm)",

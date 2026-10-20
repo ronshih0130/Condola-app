@@ -24,6 +24,9 @@
   --cd-info-bg:#E8F0F8;
   --cd-focus:#B4532A;
   --cd-topbar:#2E2622;
+  --cd-topbar-2:#3A312C;
+  --cd-topbar-3:#3F342E;
+  --cd-topbar-4:#4A3F38;
   --cd-focus-ring:0 0 0 3px rgba(180,83,42,.35);
   --cd-radius-sm:8px;--cd-radius-md:12px;--cd-radius-lg:20px;
 }
