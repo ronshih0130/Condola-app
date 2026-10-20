@@ -23,6 +23,8 @@ function persona(overrides: Partial<Session> = {}): Session {
     kind: "staff",
     role: "admin",
     orgId: ORG_ID,
+    liveOrgId: ORG_ID,
+    environment: "live",
     locale: "zh-TW",
     calendar: "gregorian",
     leaseId: null,

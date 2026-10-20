@@ -12,8 +12,8 @@
     "db:setup": "bash scripts/db-setup.sh",
     "db:migrate": "bash scripts/db-migrate.sh",
     "strings:sync": "tsx scripts/sync-strings.ts",
-    "test:unit": "tsx --test src/server/password.test.ts src/server/lockout.test.ts src/server/perms.test.ts src/server/privacy.test.ts src/server/demo.test.ts src/server/review.test.ts src/server/reset-flash.test.ts src/server/staging-config.test.ts src/i18n/strings.test.ts",
-    "test:rls": "tsx --test src/server/rls.test.ts && tsx --test src/server/auth.integration.test.ts",
+    "test:unit": "tsx --test src/server/password.test.ts src/server/lockout.test.ts src/server/perms.test.ts src/server/privacy.test.ts src/server/demo.test.ts src/server/review.test.ts src/server/reset-flash.test.ts src/server/staging-config.test.ts src/i18n/strings.test.ts src/server/sandbox.test.ts",
+    "test:rls": "tsx --test src/server/rls.test.ts && tsx --test src/server/auth.integration.test.ts && tsx --test src/server/sandbox-rls.test.ts",
     "cf:build": "opennextjs-cloudflare build",
     "cf:deploy:staging": "bash scripts/cf-deploy-staging.sh",
     "test:e2e": "playwright test"

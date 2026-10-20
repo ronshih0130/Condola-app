@@ -295,7 +295,26 @@ table.t tr.click a.hit::after{content:"";position:absolute;inset:0}
     table.t.rf td.r:not(:has(a,button)){display:none}
   }
 }
-@media print{.top,.tasks,.side,.walkbar,.consent{display:none!important}}
+@media print{.top,.tasks,.side,.walkbar,.consent,.env-banner{display:none!important}}
+.env-switch{position:relative}
+.env-switch summary,.env-switch .env-toggle{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:var(--top-2);border:1px solid var(--ink2);color:#fff;border-radius:8px;padding:4px 10px;min-height:32px;font:inherit}
+.env-switch summary::-webkit-details-marker{display:none}
+.env-short{display:none}
+.env-menu{position:fixed;z-index:80;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:10px;min-width:280px;padding:6px;box-shadow:0 12px 32px rgba(46,38,34,.18)}
+.env-menu a{display:block;padding:8px 10px;border-radius:8px;color:var(--ink)}
+.env-menu a:hover{background:var(--pri2)}
+.env-menu a small{display:block;color:var(--ink3);font-weight:400}
+.env-banner{position:sticky;top:var(--top-h);z-index:45;background:var(--cd-accent-soft);color:var(--ink);border-bottom:2px solid var(--cd-accent);padding:8px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px}
+.env-banner a{color:var(--pri3);font-weight:600;min-height:44px;display:inline-flex;align-items:center}
+body:has(.env-banner) .side{top:88px;height:calc(100vh - 88px)}
+body:has(.env-banner) .nav-check:checked ~ .app .side{top:88px}
+body:has(.env-banner) .nav-check:checked ~ .app .nav-backdrop{inset:88px 0 0 0}
+@media (max-width:820px){
+  .env-switch summary,.env-switch .env-toggle{min-height:44px;min-width:44px;padding:0 12px}
+  .env-long{display:none}
+  .env-short{display:inline}
+  .env-menu{width:min(300px,86vw)}
+}
 .phone .doc{padding:12px;font-size:11px}.phone .doc .row.atop{flex-direction:column;align-items:flex-start;gap:4px}.phone .doc .r{text-align:left}
 .phone table.t th{white-space:normal;padding:6px}.phone table.t td{padding:6px}.phone .doc table.t{font-size:11px}
 .auth-brand{display:flex;justify-content:center;margin:12px 0 16px}

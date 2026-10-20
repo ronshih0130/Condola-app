@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { writeAudit } from "./audit";
 import { pool } from "./db";
 import { lineLoginEnabled } from "./demo";
+import { outboundNote } from "./outbound";
 import { FlowError } from "./errors";
 import { LOCKOUT_LIMIT, lockActive, nextFailure } from "./lockout";
 import { passwordAcceptable } from "./password";
@@ -414,7 +415,8 @@ export async function inviteMember(session: Session, input: { email: string; nam
      VALUES ($1, 'team_member', $2::org_role, $3, $4, now() + make_interval(days => $5), $6)`,
     [session.orgId, role, email, sha256(token), INVITE_DAYS, session.userId],
   );
-  await writeAudit(session.orgId, session.userId, "invite", { email, role });
+  const note = outboundNote(session.environment);
+  await writeAudit(session.orgId, session.userId, "invite", { email, role, ...(note ? { note } : {}) });
   return { token, email };
 }
 

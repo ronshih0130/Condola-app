@@ -1,5 +1,6 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 import { mapDbError } from "./errors";
+import { readEnvChoice, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
 
 const globalPool = globalThis as unknown as { condolaPool?: Pool };
 
@@ -43,13 +44,40 @@ export async function maybe<T extends QueryResultRow>(
   return rows[0] ?? null;
 }
 
+export type TxScope = { orgId: string; environment?: OrgEnvironment } | { pin: false };
+
+async function pinOrg(client: PoolClient, orgId: string, environment: OrgEnvironment) {
+  await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [orgId]);
+  await client.query(`SELECT set_config('app.env', $1, true)`, [environment]);
+}
+
 /** Run as the signed-in persona so Postgres RLS applies. */
-export async function tx<T>(userId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
+export async function tx<T>(userId: string, fn: (client: PoolClient) => Promise<T>, scope?: TxScope): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [userId]);
     await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
+    if (scope && "pin" in scope) {
+      // Explicitly unpinned: sandbox rows stay hidden, live membership is unchanged.
+    } else if (scope && "orgId" in scope) {
+      const environment =
+        scope.environment ??
+        (
+          await client.query<{ environment: OrgEnvironment }>(
+            `SELECT environment::text AS environment FROM organizations WHERE id = $1`,
+            [scope.orgId],
+          )
+        ).rows[0]?.environment ??
+        "live";
+      await pinOrg(client, scope.orgId, environment);
+    } else {
+      const choice = await readEnvChoice();
+      if (choice) {
+        const firm = await resolveStaffOrg(client, userId, choice.preferred, choice.environment);
+        if (firm) await pinOrg(client, firm.orgId, firm.environment);
+      }
+    }
     await client.query("SET LOCAL ROLE authenticated");
     const result = await fn(client);
     await client.query("COMMIT");

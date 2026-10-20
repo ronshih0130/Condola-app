@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
+import { SampleTag } from "@/components/sample-tag";
 import { PageHeader } from "@/components/ui";
+import { isSampleName } from "@/server/sandbox-data";
 import { listProperties } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -43,7 +45,8 @@ export default async function PropertiesPage() {
                 <td>
                   <Link className="hit" href={`/m/properties/${row.id}`}>
                     <b>{row.name}</b>
-                  </Link>
+                  </Link>{" "}
+                  <SampleTag show={isSampleName(row.name)} label={t("i_sample_tag")} />
                   <div className="small muted">{row.address_display}</div>
                 </td>
                 <td data-label={t("s_d2c40b1")}>{row.rental_mode === "by_room" ? t("i_by_room") : t("i_whole_unit")}</td>

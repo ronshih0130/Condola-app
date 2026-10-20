@@ -9,8 +9,9 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ golive?: string }> }) {
   const session = await getSession();
+  const query = await searchParams;
   const t = makeT(session.locale);
   const data = await dashboard(session);
   const dict = dictionary(session.locale);
@@ -30,6 +31,11 @@ export default async function DashboardPage() {
           </>
         }
       />
+      {query.golive === "1" ? (
+        <p className="alert info" data-testid="golive-note">
+          {t("i_golive_note")}
+        </p>
+      ) : null}
       <div className="grid5" style={{ marginBottom: 16 }}>
         <Link className="card kpi" href="/m/rent">
           <div className="lbl">{t("i_paid")}</div>

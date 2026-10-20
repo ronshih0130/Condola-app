@@ -324,6 +324,7 @@ export async function actionSignOut() {
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
   jar.delete(CHALLENGE_COOKIE);
+  jar.delete("condola_env");
   redirect("/login");
 }
 
