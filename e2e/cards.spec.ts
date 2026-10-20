@@ -117,8 +117,12 @@ for (const locale of locales) {
     expect(documentText).toContain("NT$0");
     expect(documentText).not.toMatch(/[-−]\s*NT\$/);
     expect(documentText).not.toContain("−NT$");
-    await expect(page.getByTestId("owner-owes-reason")).toContainText("NT$2,800");
-    await expect(page.getByTestId("owner-owes-reason")).toContainText("NT$0");
+    const reason = page.getByTestId("owner-owes-reason");
+    await expect(reason).toHaveClass(/alert/);
+    await expect(reason).toHaveClass(/warn/);
+    await expect(reason).toContainText("⚠");
+    await expect(reason).toContainText("NT$2,800");
+    await expect(reason).toContainText("NT$0");
     await page.screenshot({ path: `/opt/cursor/artifacts/owner-owes-${locale.code}.png`, fullPage: true });
 
     await signIn(page, ACCOUNTS.owner);

@@ -18,14 +18,59 @@ function catalog(kind: "app" | "prototype", locale: (typeof locales)[number]) {
   return JSON.parse(read(path)) as Record<string, string>;
 }
 
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".next",
+  ".open-next",
+  ".git",
+  "coverage",
+  "playwright-report",
+  "test-results",
+  ".wrangler",
+  "out",
+  "dist",
+]);
+
 function filesUnder(dir: string): string[] {
+  if (!existsSync(dir)) return [];
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP_DIRS.has(entry.name)) continue;
     const path = join(dir, entry.name);
     if (entry.isDirectory()) out.push(...filesUnder(path));
     else out.push(path);
   }
   return out;
+}
+
+/** Import-column aliases. Bare 房東 is allowed only as its own quoted header, not inside a sentence. */
+const OWNER_IMPORT_ALIASES = ["房東姓名", "房東email", "房東 email", "房東信箱", "房東"];
+
+function residualOwnerTerm(source: string) {
+  let text = decodeUnicodeEscapes(source);
+  for (const alias of OWNER_IMPORT_ALIASES) {
+    for (const quote of ['"', "'", "`"]) text = text.split(`${quote}${alias}${quote}`).join(`${quote}${quote}`);
+  }
+  const at = text.indexOf("房東");
+  if (at < 0) return "";
+  return text.slice(Math.max(0, at - 24), at + 24).replaceAll("\n", " ");
+}
+
+function ownerTermScanFiles() {
+  const files = new Set<string>();
+  for (const dir of ["src/app", "src/components", "src/server", "e2e"]) {
+    for (const file of filesUnder(join(root, dir))) {
+      if (/\.(ts|tsx|js|jsx|mjs|cjs|json|sql)$/.test(file)) files.add(file);
+    }
+  }
+  for (const file of filesUnder(root)) {
+    if (file.endsWith(".json")) files.add(file);
+  }
+  return [...files];
+}
+
+function placeholders(value: string) {
+  return [...value.matchAll(/\{[A-Za-z0-9_]+\}/g)].map((match) => match[0]).sort();
 }
 
 function decodeUnicodeEscapes(source: string) {
@@ -59,18 +104,37 @@ test("shared catalog keys match the vendored prototype", () => {
   }
 });
 
-test("zh-TW UI strings do not use 房東", () => {
-  const catalogPath = join(root, "src/i18n/zh-TW.json");
-  assert.equal(read(catalogPath).includes("房東"), false, "src/i18n/zh-TW.json");
-
-  const roots = [join(root, "src/app"), join(root, "src/components")];
-  const hits: string[] = [];
-  for (const dir of roots) {
-    for (const file of filesUnder(dir)) {
-      if (!/\.(tsx|ts)$/.test(file)) continue;
-      if (read(file).includes("房東")) hits.push(relative(root, file));
+test("shared keys use the prototype placeholders", () => {
+  for (const locale of locales) {
+    const app = catalog("app", locale);
+    const proto = catalog("prototype", locale);
+    const mismatches: string[] = [];
+    for (const key of Object.keys(app)) {
+      if (!Object.prototype.hasOwnProperty.call(proto, key)) continue;
+      const appPlaceholders = placeholders(String(app[key]));
+      const protoPlaceholders = placeholders(String(proto[key]));
+      if (appPlaceholders.join(" ") !== protoPlaceholders.join(" ")) {
+        mismatches.push(`${key} app [${appPlaceholders.join(" ")}] prototype [${protoPlaceholders.join(" ")}]`);
+      }
     }
+    assert.deepEqual(mismatches, [], `${locale} placeholder mismatch`);
   }
+});
+
+test("房東 is absent outside import-header aliases", () => {
+  assert.equal(residualOwnerTerm('請選擇房東'), "請選擇房東");
+  assert.equal(residualOwnerTerm('"房東姓名"'), "");
+  assert.equal(residualOwnerTerm("'房東'"), "");
+  assert.equal(residualOwnerTerm('"房東email"'), "");
+  assert.equal(residualOwnerTerm('"房東信箱"'), "");
+  assert.equal(residualOwnerTerm('"\\u623f\\u6771"'), "");
+
+  const hits = ownerTermScanFiles()
+    .map((file) => {
+      const snippet = residualOwnerTerm(read(file));
+      return snippet ? `${relative(root, file)}: ${snippet}` : "";
+    })
+    .filter(Boolean);
   assert.deepEqual(hits, []);
 });
 

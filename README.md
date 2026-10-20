@@ -44,9 +44,17 @@ Swap these without hunting through pages:
 | --- | --- |
 | Tokens | `src/styles/tokens.css` — CSS variables (`--bg`, `--pri`, `--top`, type). `src/app/globals.css` imports them and holds the layout classes. |
 | Components | `src/components/` — chrome, wizards, dialogs, locale provider. |
-| Strings | `src/i18n/zh-TW.json` and `src/i18n/en.json`. Design keys stay `s_*`. Keys with amounts or names are `i_*` and use `{placeholders}`. `src/i18n/index.ts` is `makeT(locale)`. |
+| Strings | `src/i18n/zh-TW.json` and `src/i18n/en.json`. Design keys stay `s_*`. Keys with amounts or names are `i_*` and use `{placeholders}`. `src/i18n/index.ts` is `makeT(locale)`. The prototype catalogs are vendored at `design/strings/zh-TW.json` and `design/strings/en.json`. |
 
 User-facing copy goes through those dictionaries. Do not hardcode labels in pages.
+
+When Design sends a fresh `strings/zh-TW.json` and `strings/en.json` (sandbox, subscription, and ID keys are landing in that catalog), re-sync from the directory that contains both files:
+
+```bash
+npm run strings:sync -- /path/to/prototype/strings
+```
+
+That copies the two files into `design/strings/` and rewrites every shared key in `src/i18n`. Keys that exist only in the prototype stay in the vendored catalogs until the app uses them. Then run `npm run test:unit`. Shared keys must match the vendored files, including `{placeholder}` names.
 
 ## Data model
 
