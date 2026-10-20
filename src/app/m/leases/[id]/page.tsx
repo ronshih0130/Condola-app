@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { dictionary, makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
-import { actionMessage, actionSign, actionSimulateSign } from "@/server/actions";
+import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
 import { formatDate, formatMoney } from "@/server/format";
 import { leaseDetail, threadMessages } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -90,6 +90,7 @@ export default async function LeasePage({
             <h3>{lease.tenant}</h3>
             <p data-testid="tenant-phone">{lease.phone || "•••"}</p>
             <p className="small muted">{lease.email}</p>
+            {lease.line_user_id ? <p data-testid="tenant-line-id">{lease.line_user_id}</p> : null}
             {lease.status !== "active" ? (
               <p>
                 <Link href={`/m/leases/${id}?tab=sign`}>{t("s_8ecfcf9")}</Link>
@@ -174,6 +175,25 @@ export default async function LeasePage({
                 </button>
               </form>
             ) : null}
+            <div style={{ marginTop: 16 }} data-testid="paper-sign">
+              <h3>{t("lease_paper_upload")}</h3>
+              <p className="small muted">{t("lease_paper_hint")}</p>
+              {lease.signed_pdf ? (
+                <p data-testid="paper-signed">
+                  {t("lease_paper_signed")}{" "}
+                  <a href={`/m/leases/${id}/signed`}>{lease.signed_pdf}</a>
+                </p>
+              ) : null}
+              {session.role === "admin" || session.role === "manager" ? (
+                <form action={actionUploadSignedPdf}>
+                  <input type="hidden" name="leaseId" value={id} />
+                  <input className="inp" type="file" name="signedPdf" accept="application/pdf,.pdf" data-testid="signed-pdf" />
+                  <button className="btn" type="submit" data-testid="upload-signed-pdf" style={{ marginTop: 8 }}>
+                    {t("lease_paper_upload")}
+                  </button>
+                </form>
+              ) : null}
+            </div>
           </div>
           <div className="card pad">
             <h3>{t("i_manager_sign")}</h3>

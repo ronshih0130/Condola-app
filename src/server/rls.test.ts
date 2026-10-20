@@ -170,3 +170,104 @@ test("seeded portfolio rows stay inside the firm and only admin or manager can w
     });
   }
 });
+
+test("a deposit over two months of rent is saved only with a reason", async () => {
+  const room = await tx(USERS.admin, async (client) => {
+    const found = await client.query<{ id: string; unit_id: string; currency: string }>(
+      `SELECT r.id::text, r.unit_id::text, p.currency
+         FROM rooms r
+         JOIN units u ON u.id = r.unit_id
+         JOIN properties p ON p.id = u.property_id
+        WHERE r.org_id = $1 AND p.name = '信義松仁' AND r.label = 'C'`,
+      [ORG_ID],
+    );
+    return found.rows[0];
+  });
+  assert.ok(room);
+
+  const insertOverCap = (reason: string | null) =>
+    tx(USERS.admin, (client) =>
+      client.query<{ id: string }>(
+        `INSERT INTO leases (
+           org_id, unit_id, target_room_id, status, start_date, end_date, currency,
+           rent_amount_minor, due_day, deposit_amount_minor, deposit_months,
+           deposit_override_reason, deposit_overridden_by, deposit_overridden_at, created_by
+         ) VALUES (
+           $1,$2,$3,'pending_signature', current_date, current_date + 120, $4,
+           1200000, 5, 3600000, 3,
+           $5, CASE WHEN $5::text IS NULL THEN NULL ELSE $6::uuid END,
+           CASE WHEN $5::text IS NULL THEN NULL ELSE now() END, $6
+         ) RETURNING id::text`,
+        [ORG_ID, room.unit_id, room.id, room.currency, reason, USERS.admin],
+      ),
+    );
+
+  await assert.rejects(() => insertOverCap(null), /errors\.depositCap/);
+
+  const created = await insertOverCap("屋主同意兩個月以上押金");
+  const leaseId = created.rows[0].id;
+  try {
+    const check = await tx(USERS.admin, (client) =>
+      client.query<{ outcome: string }>(
+        `SELECT outcome::text FROM rule_check_results
+          WHERE entity_table = 'leases' AND entity_id = $1
+          ORDER BY checked_at DESC LIMIT 1`,
+        [leaseId],
+      ),
+    );
+    assert.equal(check.rows[0]?.outcome, "overridden");
+
+    const lineId = "U-rls-line";
+    await tx(USERS.admin, (client) =>
+      client.query(
+        `INSERT INTO contacts (org_id, is_tenant, display_name, phone_e164, line_user_id, locale)
+         VALUES ($1, true, '押金測試房客', '+886912300099', $2, 'zh-TW')`,
+        [ORG_ID, lineId],
+      ),
+    );
+    const leakedLine = await tx(USERS.coastAdmin, (client) =>
+      client.query(`SELECT id FROM contacts WHERE line_user_id = $1`, [lineId]),
+    );
+    assert.equal(leakedLine.rows.length, 0);
+
+    const pdf = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
+    const path = `${ORG_ID}/${leaseId}/rls-test.pdf`;
+    await tx(USERS.admin, (client) =>
+      client.query(
+        `WITH stored AS (
+           INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, uploaded_by)
+           VALUES ($1, 'lease-documents-private', $2, 'signed.pdf', 'application/pdf', $3, $4)
+           RETURNING id
+         )
+         INSERT INTO lease_signed_pdfs (org_id, lease_id, file_id, object_path, content)
+         SELECT $1, $5, stored.id, $2, $6 FROM stored`,
+        [ORG_ID, path, pdf.length, USERS.admin, leaseId, pdf],
+      ),
+    );
+    const own = await tx(USERS.admin, (client) =>
+      client.query(`SELECT id FROM lease_signed_pdfs WHERE lease_id = $1`, [leaseId]),
+    );
+    const leaked = await tx(USERS.coastAdmin, (client) =>
+      client.query(`SELECT id FROM lease_signed_pdfs WHERE lease_id = $1 OR org_id = $2`, [leaseId, ORG_ID]),
+    );
+    assert.equal(own.rows.length, 1);
+    assert.equal(leaked.rows.length, 0);
+    await assert.rejects(
+      () =>
+        tx(USERS.accountant, (client) =>
+          client.query(
+            `INSERT INTO lease_signed_pdfs (org_id, lease_id, file_id, object_path, content)
+             SELECT org_id, lease_id, file_id, object_path || '-copy', content FROM lease_signed_pdfs WHERE lease_id = $1`,
+            [leaseId],
+          ),
+        ),
+      /errors\.forbidden/,
+    );
+  } finally {
+    await tx(USERS.admin, async (client) => {
+      await client.query(`DELETE FROM leases WHERE id = $1`, [leaseId]);
+      await client.query(`DELETE FROM contacts WHERE org_id = $1 AND line_user_id = 'U-rls-line'`, [ORG_ID]);
+      await client.query(`DELETE FROM files WHERE org_id = $1 AND storage_path LIKE $2`, [ORG_ID, `${ORG_ID}/${leaseId}/%`]);
+    });
+  }
+});

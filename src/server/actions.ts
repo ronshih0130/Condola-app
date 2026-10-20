@@ -18,6 +18,7 @@ import {
   setOwnerPhoneVisibility,
   signLease,
   simulateTenantSignature,
+  uploadSignedLeasePdf,
   updateTicket,
   type LeaseInput,
   type PropertyInput,
@@ -129,10 +130,12 @@ export async function actionCreateLease(formData: FormData) {
       tenantName: text(formData.get("tenantName")),
       tenantPhone: text(formData.get("tenantPhone")),
       tenantEmail: text(formData.get("tenantEmail")),
+      lineUserId: text(formData.get("lineUserId")),
       startDate: start,
       endDate: end,
       rentMajor: num(formData.get("rent")),
       depositMonths: num(formData.get("depositMonths")),
+      depositReason: text(formData.get("depositReason")),
       dueDay: num(formData.get("dueDay")),
       splitMethod: (["even", "days_occupied", "sub_meter"].includes(text(formData.get("splitMethod")))
         ? text(formData.get("splitMethod"))
@@ -162,6 +165,21 @@ export async function actionSimulateSign(formData: FormData) {
     const session = await getSession();
     const result = await simulateTenantSignature(session, leaseId);
     redirect(result.invoiceId ? `/m/leases/${leaseId}?tab=ledger` : back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionUploadSignedPdf(formData: FormData) {
+  const leaseId = text(formData.get("leaseId"));
+  const back = `/m/leases/${leaseId}?tab=sign`;
+  try {
+    const session = await getSession();
+    const file = formData.get("signedPdf");
+    if (!(file instanceof File) || file.size === 0) throw new FlowError("errors.pdf");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    await uploadSignedLeasePdf(session, leaseId, { bytes, fileName: file.name || "signed.pdf" });
+    redirect(`/m/leases/${leaseId}?tab=sign`);
   } catch (error) {
     bounce(back, error);
   }

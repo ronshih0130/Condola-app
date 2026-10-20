@@ -32,10 +32,12 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
   const [roomId, setRoomId] = useState("");
   const [tenant, setTenant] = useState("");
   const [phone, setPhone] = useState("");
+  const [lineId, setLineId] = useState("");
   const [rent, setRent] = useState("");
   const [months, setMonths] = useState("");
   const [start, setStart] = useState("");
   const [depositMonths, setDepositMonths] = useState("");
+  const [depositReason, setDepositReason] = useState("");
   const [dueDay, setDueDay] = useState("");
   const [split, setSplit] = useState("");
   const [bill, setBill] = useState("");
@@ -52,16 +54,19 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
   const rateN = Number(rate);
   const average = usageN > 0 && bill !== "" ? billN / usageN : null;
   const over = average !== null && rate !== "" && rateN > average + 1e-9;
-  const blocked = step >= 6 && (split === "" || (over && reason.trim() === ""));
+  const depositOver = Number(depositMonths) > 2;
+  const depositBlocked = depositOver && depositReason.trim() === "";
+  const blocked = depositBlocked || (step >= 6 && (split === "" || (over && reason.trim() === "")));
 
   const preview = useMemo(() => {
     if (!room || !(usageN > 0) || rate === "") return null;
     const charged = usageN * rateN;
-    const count = Math.max(room.unitRooms.length, 1);
+    const shareRooms = room.unitRooms.length ? room.unitRooms : [{ id: room.id, label: room.unitLabel }];
+    const count = shareRooms.length;
     return {
       charged,
       bill: Number.isFinite(billN) ? billN : 0,
-      shares: room.unitRooms.map((item) => ({ label: item.label, amount: charged / count })),
+      shares: shareRooms.map((item) => ({ label: item.label, amount: charged / count })),
     };
   }, [room, usageN, rate, rateN, billN]);
 
@@ -71,10 +76,12 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
       <input type="hidden" name="roomId" value={roomId} />
       <input type="hidden" name="tenantName" value={tenant} />
       <input type="hidden" name="tenantPhone" value={phone} />
+      <input type="hidden" name="lineUserId" value={lineId} />
       <input type="hidden" name="rent" value={rent} />
       <input type="hidden" name="months" value={months} />
       <input type="hidden" name="startDate" value={start} />
       <input type="hidden" name="depositMonths" value={depositMonths} />
+      <input type="hidden" name="depositReason" value={depositReason} />
       <input type="hidden" name="dueDay" value={dueDay} />
       <input type="hidden" name="splitMethod" value={split} />
       <input type="hidden" name="billTotal" value={bill} />
@@ -90,7 +97,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
             <option value="">{t("i_choose")}</option>
             {rooms.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.propertyName} · {item.unitLabel} {item.label}
+                {item.propertyName} · {item.unitLabel}{item.label ? ` ${item.label}` : ""}
               </option>
             ))}
           </select>
@@ -107,6 +114,10 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
               <label className="f">{t("s_522cf12")}</label>
               <input className="inp" data-testid="tenant-phone" placeholder={t("i_ph_phone")} value={phone} onChange={(event) => setPhone(event.target.value)} />
             </div>
+          </div>
+          <div className="fg">
+            <label className="f">{t("lease_line_id")}</label>
+            <input className="inp" data-testid="tenant-line" placeholder={t("lease_ph_line")} value={lineId} onChange={(event) => setLineId(event.target.value)} />
           </div>
           <div className="fg">
             <label className="f">{t("i_email_label")}</label>
@@ -140,7 +151,19 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
             <label className="f">{t("s_8ed103e")}</label>
             <input className="inp" data-testid="deposit-months" inputMode="decimal" placeholder={t("i_ph_dep")} value={depositMonths} onChange={(event) => setDepositMonths(event.target.value)} />
           </div>
-          {Number(depositMonths) > 2 ? <div className="alert warn">{t("i_deposit_over", { months: depositMonths, cap: 2 })}</div> : null}
+          {depositOver ? (
+            <div className="alert warn" data-testid="deposit-alert">
+              <div>{t("lease_deposit_over", { months: depositMonths, cap: 2 })}</div>
+              <label className="f" style={{ marginTop: 8 }}>{t("lease_deposit_reason")}</label>
+              <textarea
+                className="inp"
+                data-testid="deposit-reason"
+                placeholder={t("lease_ph_deposit_reason")}
+                value={depositReason}
+                onChange={(event) => setDepositReason(event.target.value)}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
       <div hidden={step !== 5}>
