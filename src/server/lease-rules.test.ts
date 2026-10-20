@@ -29,7 +29,7 @@ test("only a PDF header within the size cap is a signed lease", () => {
   assert.equal(signedPdfName("scan"), "scan.pdf");
 });
 
-test("traditional Chinese copy says 屋主 and never 房東", () => {
+test("traditional Chinese copy says 屋主", () => {
   const zh = readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8");
   assert.equal(zh.includes("房東"), false);
   assert.equal(zh.includes("屋主"), true);
