@@ -5,14 +5,18 @@ import { usePathname } from "next/navigation";
 import { actionSignOut } from "@/server/auth-actions";
 import { can, visibleNav, type PermKey } from "@/server/perms";
 import type { OrgRole } from "@/server/types";
+import { BrandImage } from "./brand";
 import { useT } from "./locale";
 
 export function BrandLink() {
   const t = useT();
+  const name = t("i_brand");
   return (
-    <Link href="/" className="brand" data-testid="brand-name">
-      <span className="logo">{t("i_brand") === "Condola" ? "C" : "租"}</span>
-      {t("i_brand")}
+    <Link href="/" className="brand" data-testid="brand-name" aria-label={name}>
+      <span className="brand-frame">
+        <BrandImage variant="horizontalDark" alt="" className="brand-lockup" />
+        <BrandImage variant="symbolSmall" alt="" className="brand-symbol" />
+      </span>
     </Link>
   );
 }
@@ -55,14 +59,13 @@ export function PersonaSelect({
 }) {
   return (
     <select
-      className="inp"
+      className="inp top-field"
       data-testid={testId}
       value={current}
       aria-label="persona"
       onChange={(event) => {
         window.location.href = `/api/demo/persona?id=${event.target.value}`;
       }}
-      style={{ width: "auto", background: "#1b2535", color: "#fff", borderColor: "#3a4658", padding: "4px 8px" }}
     >
       {personas.map((persona) => (
         <option key={persona.id} value={persona.id}>
