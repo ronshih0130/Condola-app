@@ -76,7 +76,7 @@ Sessions are a `condola_session` cookie checked against `auth_sessions`. Queries
 
 The permission table is `PERMS` in `src/server/perms.ts` (18 rows, the same keys as the prototype). Nav items the role cannot open are omitted. A direct URL without the permission redirects to `/m/noperm`. Actions the role can see but not perform stay on screen, disabled, with 「需要以下角色：…」. The server checks the same table.
 
-2FA is optional for every role, including Admin. An Admin can require it for the firm (`require_2fa` in organization settings, off by default). With `DEMO_MODE=true`, the authenticator step also accepts `123456`, matching the prototype. LINE Login does not call LINE. When the flag is on it signs in the member with `profiles.line_linked` (the seeded Manager).
+2FA is optional for every role, including Admin. An Admin can require it for the firm (`require_2fa` in organization settings, off by default). With `DEMO_MODE=true` outside production, the authenticator step also accepts `123456`, matching the prototype, and the process logs a warning. `NODE_ENV=production` or `CONDOLA_ENV=production` / `staging-real` ignores `DEMO_MODE` and refuses to start if it is still set, so the code and `POST /api/demo/reset` cannot run there. `next build` does not refuse (it only ignores the flag) so a demo `.env.local` can still produce a bundle. LINE Login does not call LINE. When the flag is on it signs in the member with `profiles.line_linked` (the seeded Manager).
 
 ## Staging on Cloudflare (not deployed from this repo)
 
@@ -84,7 +84,7 @@ The app is prepared for [OpenNext Cloudflare](https://opennext.js.org/cloudflare
 
 1. Create a **separate** Supabase project for staging. Apply `supabase/migrations/*.sql` only. Do not apply `supabase/stub/supabase_stub.sql`.
 2. Put `DATABASE_URL` on the Worker as a secret (`npx wrangler secret put DATABASE_URL`). Use the Supabase **transaction** pooler (port 6543). `SET LOCAL` does not survive a session-mode checkout. The database role must be allowed to `SET ROLE authenticated` and `SET ROLE service_role`.
-3. Set `DEMO_MODE=false` for staging. Leave `SUPABASE_SERVICE_ROLE_KEY` unset unless you want password updates to go through the Supabase Auth admin API. Do not commit either value.
+3. Do not set `DEMO_MODE` on the Worker. Set `CONDOLA_ENV=staging-real` (or `production`) so a leftover `DEMO_MODE=true` cannot enable the authenticator bypass or demo reset; the Worker will refuse to start if that variable is still present. Leave `SUPABASE_SERVICE_ROLE_KEY` unset unless you want password updates to go through the Supabase Auth admin API. Do not commit either value.
 4. `npx wrangler deploy` after `npm run cf:build`. This repository does not run that command.
 
 Next.js notes for Workers:

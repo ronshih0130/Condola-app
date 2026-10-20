@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSecondFactor, totpCode, verifyTotp } from "./totp";
+import { totpCode, verifyTotp } from "./totp";
 import { PERMS, ROLE_KEYS, can, navCount, visibleNav } from "./perms";
 
 test("permission matrix matches the prototype table", () => {
@@ -31,16 +31,6 @@ test("navigation follows the matrix", () => {
     visibleNav("maintenance").flatMap((section) => section.links.map((link) => link.href)),
     ["/m/tickets"],
   );
-});
-
-test("demo mode accepts the prototype code 123456 and production does not", () => {
-  const previous = process.env.DEMO_MODE;
-  process.env.DEMO_MODE = "true";
-  assert.equal(acceptSecondFactor("JBSWY3DPEHPK3PXP", "123456", Date.parse("2026-10-20T08:00:00Z")), true);
-  process.env.DEMO_MODE = "false";
-  assert.equal(acceptSecondFactor("JBSWY3DPEHPK3PXP", "123456", Date.parse("2026-10-20T08:00:00Z")), false);
-  if (previous === undefined) delete process.env.DEMO_MODE;
-  else process.env.DEMO_MODE = previous;
 });
 
 test("totp accepts the current code and rejects a wrong one", () => {

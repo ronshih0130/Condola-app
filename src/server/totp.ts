@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { demoModeEnabled } from "./demo";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
@@ -53,10 +54,10 @@ export function verifyTotp(secret: string, token: string, at = Date.now()) {
   return [-1, 0, 1].some((window) => totpCode(secret, at + window * 30_000) === normalized);
 }
 
-/** The clickable prototype accepts 123456 as the demo authenticator code. Production does not. */
+/** The clickable prototype accepts 123456 only while demo mode is actually on. */
 export function acceptSecondFactor(secret: string | null | undefined, token: string, at = Date.now()) {
   const normalized = token.trim();
-  if (process.env.DEMO_MODE === "true" && normalized === "123456") return true;
+  if (demoModeEnabled() && normalized === "123456") return true;
   if (!secret) return false;
   return verifyTotp(secret, normalized, at);
 }
