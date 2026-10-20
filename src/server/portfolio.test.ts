@@ -68,7 +68,7 @@ test("portfolio CSV rejects a room without a number and a whole unit with one", 
   );
 });
 
-test("the Traditional Chinese UI does not call an owner 房東", () => {
+test("the Traditional Chinese UI names the owner role 屋主", () => {
   const zh = readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8");
   assert.equal(zh.includes("房東"), false);
   assert.equal(zh.includes("屋主"), true);
