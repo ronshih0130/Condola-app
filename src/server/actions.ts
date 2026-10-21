@@ -37,7 +37,7 @@ import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
 
-export type ActionState = { error: string; field?: string; step?: number; vars?: Record<string, string> };
+export type ActionState = { error: string; field?: string; step?: number; vars?: Record<string, string>; propertyId?: string };
 
 const EMPTY_ACTION: ActionState = { error: "" };
 
@@ -587,10 +587,24 @@ function utilityInput(formData: FormData) {
   };
 }
 
+function utilityBack(formData: FormData) {
+  const params = new URLSearchParams();
+  const unitId = text(formData.get("unitId"));
+  const month = text(formData.get("periodStart")).slice(0, 7);
+  if (unitId) params.set("unit", unitId);
+  if (/^\d{4}-\d{2}$/.test(month)) params.set("month", month);
+  const bill = text(formData.get("billTotal")).trim().slice(0, 16);
+  const kwh = text(formData.get("totalKwh")).trim().slice(0, 16);
+  if (bill) params.set("bill", bill);
+  if (kwh) params.set("kwh", kwh);
+  const query = params.toString();
+  return query ? `/m/rent/utilities?${query}` : "/m/rent/utilities";
+}
+
 export async function actionPrepareUtility(formData: FormData) {
   const unitId = text(formData.get("unitId"));
   const month = text(formData.get("periodStart")).slice(0, 7);
-  const back = `/m/rent/utilities?unit=${encodeURIComponent(unitId)}&month=${encodeURIComponent(month)}`;
+  const back = utilityBack(formData);
   try {
     const session = await getSession();
     const result = await prepareUtilityRun(session, utilityInput(formData));
@@ -611,6 +625,8 @@ export async function actionConfirmUtility(formData: FormData) {
     const session = await getSession();
     await confirmUtilityRun(session, runId);
     revalidatePath("/m/rent/utilities");
+    revalidatePath("/m/expenses");
+    revalidatePath("/m/statements");
     next.set("saved", "posted");
     redirect(`/m/rent/utilities?${next.toString()}`);
   } catch (error) {

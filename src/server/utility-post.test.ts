@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   allocateUtilityMinor,
+  billAverageBelowRate,
   billGapExceedsWarning,
   billGapMinor,
   billMinorCeil,
   chargedRateExceedsBill,
+  evenBillUsageMilli,
   evenSplitMinor,
   isPostableMethod,
   meterUsageKwh,
@@ -293,4 +295,11 @@ test("平均分攤 divides the bill across every room and leaves the remainder",
   assert.deepEqual(evenSplitMinor("TWD", 300000, 3), { shareMinor: 100000, remainderMinor: 0 });
   assert.deepEqual(evenSplitMinor("TWD", 100000, 3), { shareMinor: 33300, remainderMinor: 100 });
   assert.equal(evenSplitMinor("TWD", 100, 0), null);
+});
+
+test("a blank even-split total still stores a positive bill usage at least the rate", () => {
+  assert.equal(evenBillUsageMilli(300000, 5), 600000);
+  assert.equal(billAverageBelowRate(300000, 600000, 5), false);
+  assert.equal(evenBillUsageMilli(0, 5), 1);
+  assert.equal(billAverageBelowRate(0, 1, 5), true);
 });

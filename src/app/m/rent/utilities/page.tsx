@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionPrepareUtility, actionVoidUtility } from "@/server/actions";
@@ -10,6 +11,7 @@ import { listUtilityBoard, utilityRunDetail } from "@/server/utility-posting";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 function utilityStatusLabel(t: (key: string) => string, status: string | undefined) {
   if (status === "posted") return t("i_utility_posted");
@@ -49,8 +51,9 @@ function readingValue(value: number | null | undefined) {
 export default async function UtilityPostingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ unit?: string; run?: string; error?: string; saved?: string; page?: string; month?: string }>;
+  searchParams: Promise<{ unit?: string; run?: string; error?: string; saved?: string; page?: string; month?: string; bill?: string; kwh?: string }>;
 }) {
+  await connection();
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
@@ -85,7 +88,7 @@ export default async function UtilityPostingPage({
     <>
       <PageHeader title={t("i_utility_title")} crumb={<Link href="/m/rent">{t("i_rentroll_title")}</Link>} />
       <ErrorBanner t={t} error={params.error} />
-      {params.saved === "posted" ? <div className="alert ok" data-testid="utility-saved">{t("i_utility_saved")}</div> : null}
+      {params.saved === "posted" && detail?.run.status === "posted" ? <div className="alert ok" data-testid="utility-saved">{t("i_utility_saved")}</div> : null}
       {params.saved === "void" ? <div className="alert ok">{t("i_utility_voided")}</div> : null}
       <p className="small">{t("i_utility_hint")}</p>
       <form method="get" action="/m/rent/utilities" className="card pad" data-testid="utility-month-form" style={{ maxWidth: 760 }}>
@@ -136,11 +139,11 @@ export default async function UtilityPostingPage({
           <div className="grid2">
             <div className="fg">
               <label className="f">{t("i_bill_total")}</label>
-              <input className="inp" name="billTotal" data-testid="utility-bill" inputMode="decimal" />
+              <input className="inp" name="billTotal" data-testid="utility-bill" inputMode="decimal" defaultValue={params.bill ?? ""} />
             </div>
             <div className="fg">
               <label className="f">{t("i_utility_total_kwh")}</label>
-              <input className="inp" name="totalKwh" data-testid="utility-total-kwh" inputMode="decimal" />
+              <input className="inp" name="totalKwh" data-testid="utility-total-kwh" inputMode="decimal" defaultValue={params.kwh ?? ""} />
             </div>
           </div>
           {selected.spaces.every((space) => space.method === "even") ? (
@@ -195,9 +198,9 @@ export default async function UtilityPostingPage({
           </div>
           {detail.run.status === "posted" ? (
             <div className="alert ok" data-testid="utility-posted-lock">{t("i_utility_posted_locked")}</div>
-          ) : (
-            <p className="small">{t("i_utility_repost")}</p>
-          )}
+          ) : detail.run.status === "pending_repost" ? (
+            <p className="small" data-testid="utility-repost">{t("i_utility_repost")}</p>
+          ) : null}
           {detail.adjustments.publicKwhMilli < 0 ? (
             <div className="alert warn" data-testid="utility-public-warn">{t("i_utility_public_warn")}</div>
           ) : null}

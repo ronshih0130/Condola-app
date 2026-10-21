@@ -25,6 +25,7 @@ test("a manager confirms 電費 and the tenant sees it on the bill", async ({ pa
   await page.getByTestId("kwh-curr-B").fill("50");
   await page.getByTestId("utility-preview").click();
   await expect(page.getByTestId("utility-review")).toBeVisible();
+  await expect(page.getByTestId("utility-repost")).toHaveCount(0);
   await expect(page.getByTestId("utility-share-desc").nth(0)).toContainText("電費 100 度 × 4 元");
   await expect(page.getByTestId("utility-share-desc").nth(1)).toContainText("電費 50 度 × 4 元");
   await page.getByTestId("utility-confirm").click();
@@ -34,6 +35,7 @@ test("a manager confirms 電費 and the tenant sees it on the bill", async ({ pa
   await page.getByTestId("kwh-curr-A").fill("90");
   await page.getByTestId("utility-preview").click();
   await expect(page.getByTestId("utility-status")).toContainText("待重新入帳");
+  await expect(page.getByTestId("utility-repost")).toContainText("確認後會先沖銷已入帳的電費");
   await page.getByTestId("kwh-prev-A").fill("0");
   await page.getByTestId("kwh-curr-A").fill("100");
   await page.getByTestId("kwh-prev-B").fill("0");
@@ -98,6 +100,12 @@ test("平均分攤 saves from the property wizard and splits the bill with no ro
   await expect(page.getByTestId("utility-bill")).toBeVisible();
   await expect(page.getByTestId("utility-total-kwh")).toBeVisible();
   await page.getByTestId("utility-rate").fill("5");
+  await page.getByTestId("utility-bill").fill("3000");
+  await page.getByTestId("utility-preview").click();
+  await expect(page.getByTestId("utility-review")).toBeVisible();
+  await expect(page.getByTestId("error-banner")).toHaveCount(0);
+  await expect(page.getByTestId("utility-gap")).toHaveCount(0);
+  await expect(page.getByTestId("utility-share")).toHaveCount(3);
   await page.getByTestId("utility-bill").fill("3000");
   await page.getByTestId("utility-total-kwh").fill("100");
   await page.getByTestId("utility-preview").click();

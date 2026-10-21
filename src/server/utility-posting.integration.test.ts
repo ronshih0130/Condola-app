@@ -1503,6 +1503,74 @@ test("公共用電 and 電費（帳單差額） are separate owner lines, includ
   }
 });
 
+test("平均分攤 accepts a blank total kWh and the owner expense is visible when confirm returns", async () => {
+  const stamp = Date.now().toString(36);
+  const period = currentUtilityPeriod();
+  const propertyIds: string[] = [];
+  try {
+    const created = await createProperty(admin, {
+      name: `均分 ${stamp}`,
+      city: "台北市",
+      district: "松山區",
+      street: `松德路${stamp}`,
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "均分屋主",
+      ownerPhone: "0912000777",
+      ownerEmail: `even.blank.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "3F",
+      floor: "3",
+      rentalMode: "by_room",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 10000 },
+        { label: "B", roomType: "suite", baseRentMajor: 10000 },
+        { label: "C", roomType: "suite", baseRentMajor: 10000 },
+      ],
+      split: "even",
+      rateMajor: 5,
+    });
+    propertyIds.push(created.propertyId);
+    const unit = await query<{ id: string }>(`SELECT id::text AS id FROM units WHERE property_id = $1`, [created.propertyId]);
+    const prepared = await prepareUtilityRun(admin, {
+      unitId: unit.rows[0].id,
+      periodStart: period.start,
+      periodEnd: period.end,
+      rateMajor: 5,
+      totalKwh: null,
+      billTotalMajor: 3000,
+      overrideReason: "",
+      readings: [],
+    });
+    const detail = await utilityRunDetail(admin, prepared.runId);
+    assert.equal(detail?.lines.length, 3);
+    assert.equal(detail?.lines.every((line) => line.bearer === "owner" && Number(line.amount) === 100000), true);
+    assert.equal(detail?.adjustments.billGapMinor, 0);
+    assert.equal(detail?.adjustments.billGapWarn, false);
+    const posted = await confirmUtilityRun(admin, prepared.runId);
+    assert.ok(posted.changed >= 1);
+    const expense = await query<{ amount: string; status: string }>(
+      `SELECT e.amount_minor::text AS amount, r.status::text AS status
+         FROM expenses e
+         JOIN utility_allocation_runs r ON r.id = e.utility_run_id
+        WHERE e.utility_run_id = $1 AND e.description = $2 AND e.status <> 'void'`,
+      [prepared.runId, VACANT_ELECTRICITY_DESCRIPTION],
+    );
+    assert.equal(expense.rows.length, 1);
+    assert.equal(expense.rows[0].amount, "300000");
+    assert.equal(expense.rows[0].status, "posted");
+    const bill = await query<{ usage: string }>(
+      `SELECT total_usage::text AS usage
+         FROM utility_bills
+        WHERE id = (SELECT utility_bill_id FROM utility_allocation_runs WHERE id = $1)`,
+      [prepared.runId],
+    );
+    assert.ok(Number(bill.rows[0].usage) > 0);
+  } finally {
+    await cleanupFixture({ propertyIds, userIds: [], importId: null, stamp });
+  }
+});
+
 test("monthly invoice numbers ignore seed invoices and share one sequence", async () => {
   const seq = await tx(
     admin.userId,

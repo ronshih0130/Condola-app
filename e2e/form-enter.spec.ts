@@ -25,6 +25,8 @@ test("Enter in electricity does not advance, and ordinary buttons still activate
   await expect(page.getByTestId("utility-monthly-note")).toBeHidden();
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("utility-monthly-note")).toBeVisible();
+  await expect(page.getByTestId("utility-monthly-note")).toContainText("平均分攤只填台電帳單金額");
+  await expect(page.getByTestId("utility-monthly-note")).not.toContainText("平均分攤只填台電帳單金額和總度數");
   await expect(page.getByTestId("bill-total")).toHaveCount(0);
   await expect(page.getByTestId("usage")).toHaveCount(0);
   await expect(page.getByTestId("wizard-next")).toBeEnabled();

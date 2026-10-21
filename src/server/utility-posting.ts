@@ -11,6 +11,8 @@ import {
   billGapExceedsWarning,
   billGapMinor,
   billMinorCeil,
+  billAverageBelowRate,
+  evenBillUsageMilli,
   evenSplitMinor,
   isPostableMethod,
   kwhMilli,
@@ -524,14 +526,22 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       gapWarn = billGapExceedsWarning(enteredBill, pureGap);
     }
     if (!Number.isSafeInteger(gapMinor) || !Number.isSafeInteger(pureGap)) throw new FlowError("errors.amount");
+    // A blank even-split total still needs a positive bill usage. That figure is not a reading.
+    const storedUsageMilli =
+      usageMilli > 0 ? usageMilli : evenMode && enteredBill != null ? evenBillUsageMilli(enteredBill, rateMajor) : 0;
+    const averageBelow =
+      evenMode &&
+      enteredBill != null &&
+      input.totalKwh == null &&
+      billAverageBelowRate(enteredBill, storedUsageMilli, rateMajor);
     // The rate-cap trigger still blocks a line when the rate is above the bill average.
     // A lower bill is the owner credit 「電費（帳單差額）」, so record that reason and continue.
-    const capReason = pureGap < 0 ? input.overrideReason.trim() || "帳單低於每度電價，差額記入屋主" : "";
+    const capReason = pureGap < 0 || averageBelow ? input.overrideReason.trim() || "帳單低於每度電價，差額記入屋主" : "";
 
     let billId = existing?.utility_bill_id ?? null;
     const exceeds = capReason !== "";
     if (exceeds) await client.query(`SELECT set_config('app.change_reason', $1, true)`, [capReason]);
-    if (usageMilli > 0 || enteredBill != null) {
+    if (storedUsageMilli > 0 && (usageMilli > 0 || enteredBill != null)) {
       const synthetic = usageMilli > 0 ? billMinorCeil(usageMilli, rateMajor) : 0;
       const billMinor = enteredBill ?? synthetic;
       const saved = await one<{ id: string }>(
@@ -543,7 +553,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
            SET total_amount_minor = EXCLUDED.total_amount_minor,
                total_usage = EXCLUDED.total_usage
          RETURNING id::text`,
-        [session.orgId, meter.id, input.periodStart, input.periodEnd, unit.currency, billMinor, milliText(Math.max(0, usageMilli)), session.userId],
+        [session.orgId, meter.id, input.periodStart, input.periodEnd, unit.currency, billMinor, milliText(storedUsageMilli), session.userId],
       );
       billId = saved.id;
     }
@@ -554,7 +564,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     const inputs = {
       version: "whole-ntd-v2",
       rate: rateMajor,
-      totalKwh: totalMilli / 1000,
+      totalKwh: evenMode && input.totalKwh == null ? null : totalMilli / 1000,
       publicKwhMilli: publicMilli,
       publicAmountMinor,
       billGapMinor: gapMinor,
@@ -673,7 +683,7 @@ const POSTED_LINE_SQL = `SELECT l.id::text, l.lease_id::text, l.amount_minor::te
 export async function confirmUtilityRun(session: Session, runId: string) {
   assertStaff(session, ["admin", "manager"]);
   if (!runId) throw new FlowError("errors.required");
-  return tx(session.userId, async (client) => {
+  const posted = await tx(session.userId, async (client) => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`utility-post:${runId}`]);
     const run = await maybe<{ id: string; status: string; utility_bill_id: string | null }>(
       client,
@@ -796,6 +806,18 @@ export async function confirmUtilityRun(session: Session, runId: string) {
     }
     return { runId, changed, reversed };
   }, scope(session));
+  const visible = await tx(
+    session.userId,
+    async (client) =>
+      maybe<{ status: string }>(
+        client,
+        `SELECT status::text FROM utility_allocation_runs WHERE id = $1 AND org_id = $2`,
+        [runId, session.orgId],
+      ),
+    scope(session),
+  );
+  if (visible?.status !== "posted") throw new FlowError("errors.generic");
+  return posted;
 }
 
 export async function voidUtilityRun(session: Session, runId: string, reason: string) {

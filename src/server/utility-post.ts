@@ -86,6 +86,28 @@ export function evenSplitMinor(
   return { shareMinor: share * spec.minorPerUnit, remainderMinor: remainder * spec.minorPerUnit };
 }
 
+/**
+ * Bill usage when 平均分攤 has a bill and no total kWh.
+ * utility_bills.total_usage must be > 0. Flooring to 0.001 kWh keeps the bill average at or above the rate.
+ */
+export function evenBillUsageMilli(billMinor: number, rateMajor: number): number {
+  if (!Number.isSafeInteger(billMinor) || billMinor <= 0 || !(rateMajor > 0)) return 1;
+  const rateMinor = Math.round(rateMajor * 100 * 1e6) / 1e6;
+  if (!(rateMinor > 0)) return 1;
+  const usageMilli = Math.floor((billMinor * 1000) / rateMinor);
+  if (!Number.isSafeInteger(usageMilli) || usageMilli < 1) return 1;
+  return usageMilli;
+}
+
+/** True when the stored bill average is below the charged rate, so the cap trigger would block a line. */
+export function billAverageBelowRate(billMinor: number, usageMilli: number, rateMajor: number): boolean {
+  if (!Number.isSafeInteger(billMinor) || billMinor < 0 || !Number.isSafeInteger(usageMilli) || usageMilli < 1 || !(rateMajor > 0)) {
+    return true;
+  }
+  const average = (billMinor * 1000) / usageMilli;
+  return rateMajor * 100 > average + 1e-6;
+}
+
 export function kwhMilli(kwh: number): number {
   if (!Number.isFinite(kwh) || kwh < 0 || kwh > MAX_KWH) return NaN;
   const milli = Math.round(kwh * KWH_SCALE);
