@@ -20,7 +20,10 @@ import { officialLeaseTemplateText } from "../assets/leases/moi-residential-1130
  * The Worker bundles src/assets/leases/moi-residential-1130708.ts, generated from
  * that file by scripts/embed-lease-template.mjs. Do not read the .txt at request time.
  * Paper signing only. This printout is not an electronic signature.
- * Only blanks and checkboxes are filled. Missing data stays blank.
+ * Blanks and checkboxes are filled. Missing data stays blank.
+ * On the door plate, the template 號 is left out when the typed house number
+ * already contains 號, and a trailing 之 is left out when there is no sub-floor.
+ * Both omissions are recorded patches, so the official file can be restored.
  */
 
 export type LeaseFieldPatch = { index: number; blank: string; value: string };
@@ -173,11 +176,12 @@ const FLOOR_CN = "一二三四五六七八九十";
 const FLOOR_TOKEN = `0-9０-９${FLOOR_CN}`;
 
 /**
- * 號, 樓, and 之 are separate cells. The house-number segment is copied as
- * typed, so 88號之1 is never rewritten as 88之1號. The floor field fills 樓
- * and, when it says 之N, the 之 cell. A tail that would have to be split
- * across those cells is printed whole in the 街(路) blank, and the floor
- * still uses its own cell.
+ * The house-number segment is copied as typed, so 88號之1 is never rewritten
+ * as 88之1號. If that segment already contains 號, the template 號 is not
+ * printed again. A floor follows in its own cell; 號之N gets a comma before
+ * the floor so 之1 cannot be read as part of it. 樓之 keeps 之 only when
+ * there is a sub-floor. A tail the cells cannot hold is printed whole in
+ * the 街(路) blank, and the floor still uses its own cell.
  */
 function parseRoad(street: string, unitFloor: string | null | undefined): RoadFill | null {
   const trimmed = street.trim();
@@ -240,12 +244,10 @@ function splitDoor(rest: string): { door: string; streetFloor: string; streetSuf
   return { door: rest, streetFloor: "", streetSuffix: "" };
 }
 
-/** Keep 號之N and 之N號 intact. A trailing 號 is the template label, not a second 號. */
+/** Keep 號之N and 之N號 intact, including a 號 the owner already typed. */
 function numberCell(door: string) {
   if (!door) return "";
-  const marks = door.match(/號/g) ?? [];
-  if (marks.length > 1) return null;
-  if (marks.length === 1 && door.endsWith("號")) return door.slice(0, -1);
+  if ((door.match(/號/g) ?? []).length > 1) return null;
   return door;
 }
 
@@ -305,6 +307,35 @@ function periodMonths(frequency: string | null | undefined) {
   return "";
 }
 
+/** Drop a template label at the cursor. The patch puts it back on restore. */
+function omitAtCursor(state: State, label: string) {
+  if (!state.text.startsWith(label, state.cursor)) throw new Error(`lease template is missing 「${label}」`);
+  state.text = state.text.slice(0, state.cursor) + state.text.slice(state.cursor + label.length);
+  state.patches.push({ index: state.cursor, blank: label, value: "" });
+}
+
+/**
+ * Print the house number exactly as typed. A second template 號 would turn
+ * 88號之1 into 88號之1號, so that label is removed when 號 is already present.
+ * 號之1 and the floor are separated with a comma. 樓之 loses 之 when the
+ * sub-floor cell is empty, so 3樓 is not printed as 3樓之.
+ */
+function fillDoorPlate(state: State, number: string, floor: string, suffix: string) {
+  const containsHao = number.includes("號");
+  const separate = containsHao && !number.endsWith("號") && floor !== "";
+  fillSlot(state, "弄", "號", number);
+  if (containsHao) omitAtCursor(state, "號");
+  fillSlot(state, containsHao ? "" : "號", "樓之", separate ? `，${floor}` : floor);
+  if (floor && !suffix) {
+    if (!state.text.startsWith("樓之", state.cursor)) throw new Error("lease template is missing 「樓之」");
+    state.cursor += "樓".length;
+    omitAtCursor(state, "之");
+    fillSlot(state, "", "(基地坐落", "");
+    return;
+  }
+  fillSlot(state, "樓之", "(基地坐落", suffix);
+}
+
 function fillElectricity(region: State, method: string, rate: string) {
   const submeter = method === "submeter";
   const direct = method === "tenant_direct";
@@ -335,9 +366,12 @@ export function renderOfficialLease(input: OfficialLeaseInput = {}) {
   fillSlot(state, "段", "巷", road?.lane ?? "");
   fillSlot(state, "巷", "弄", road?.alley ?? "");
   const looseFloor = parseUnitFloor(input.floor);
-  fillSlot(state, "弄", "號", road?.number ?? "");
-  fillSlot(state, "號", "樓之", road ? road.doorFloor : (looseFloor?.floor ?? ""));
-  fillSlot(state, "樓之", "(基地坐落", road ? road.doorSuffix : (looseFloor?.suffix ?? ""));
+  fillDoorPlate(
+    state,
+    road?.number ?? "",
+    road ? road.doorFloor : (looseFloor?.floor ?? ""),
+    road ? road.doorSuffix : (looseFloor?.suffix ?? ""),
+  );
 
   const partial = input.scope === "partial";
   const room = partial ? clean(input.roomLabel) : "";
