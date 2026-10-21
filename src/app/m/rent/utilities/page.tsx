@@ -12,13 +12,14 @@ export const dynamic = "force-dynamic";
 export default async function UtilityPostingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ unit?: string; run?: string; error?: string; saved?: string }>;
+  searchParams: Promise<{ unit?: string; run?: string; error?: string; saved?: string; page?: string }>;
 }) {
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
   const period = currentUtilityPeriod();
-  const board = await listUtilityBoard(session, period.start, period.end);
+  const page = Number(params.page ?? "1");
+  const board = await listUtilityBoard(session, period.start, period.end, Number.isInteger(page) ? page : 1);
   const detail = params.run ? await utilityRunDetail(session, params.run) : null;
   const canPost = can(session.role, "leases.edit");
   const units = new Map<string, { id: string; label: string; currency: string; rate: string; spaces: typeof board.spaces }>();
@@ -46,6 +47,20 @@ export default async function UtilityPostingPage({
       {params.saved === "void" ? <div className="alert ok">{t("i_utility_voided")}</div> : null}
       <p className="small">{t("i_utility_hint")}</p>
       {units.size === 0 ? <div className="empty">{t("i_utility_empty")}</div> : null}
+      {board.page > 1 || board.hasMore ? (
+        <div className="row" style={{ margin: "8px 0" }}>
+          {board.page > 1 ? (
+            <Link className="btn sm" href={`/m/rent/utilities?page=${board.page - 1}`}>
+              {t("i_utility_prev")}
+            </Link>
+          ) : null}
+          {board.hasMore ? (
+            <Link className="btn sm" href={`/m/rent/utilities?page=${board.page + 1}`}>
+              {t("i_utility_next")}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       {canPost && selected ? (
         <form className="card pad" action={actionPrepareUtility} style={{ maxWidth: 760 }} data-testid="utility-form">
           <input type="hidden" name="unitId" value={selected.id} />
@@ -62,7 +77,7 @@ export default async function UtilityPostingPage({
             </select>
             <div className="row" style={{ marginTop: 8 }}>
               {[...units.values()].map((unit) => (
-                <Link key={unit.id} className={unit.id === selected.id ? "btn pri sm" : "btn sm"} href={`/m/rent/utilities?unit=${unit.id}`}>
+                <Link key={unit.id} className={unit.id === selected.id ? "btn pri sm" : "btn sm"} href={`/m/rent/utilities?unit=${unit.id}&page=${board.page}`}>
                   {unit.label}
                 </Link>
               ))}

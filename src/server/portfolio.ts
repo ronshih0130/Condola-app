@@ -499,6 +499,11 @@ async function savePropertyElectricity(
       `INSERT INTO meters (
          org_id, property_id, unit_id, utility, usage_unit, label, serial_number, payer, split_method, rate_source, rate_minor_per_unit
        ) VALUES ($1,$2,$3,'electricity','kWh','main',NULLIF($4, ''),'tenant',$5::split_method,$6::rate_source,$7)
+       ON CONFLICT (unit_id) WHERE utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL
+       DO UPDATE SET serial_number = EXCLUDED.serial_number,
+                     split_method = EXCLUDED.split_method,
+                     rate_source = EXCLUDED.rate_source,
+                     rate_minor_per_unit = EXCLUDED.rate_minor_per_unit
        RETURNING id::text`,
       [session.orgId, propertyId, unit.id, serial, split, rateSource, rateMinor],
     );

@@ -512,7 +512,9 @@ export async function setMeterSerial(session: Session, propertyId: string, seria
     await client.query(
       `INSERT INTO meters (
          org_id, property_id, unit_id, utility, usage_unit, label, serial_number, payer, split_method, rate_source
-       ) VALUES ($1,$2,$3,'electricity','kWh','main',$4,'tenant','even','bill_average')`,
+       ) VALUES ($1,$2,$3,'electricity','kWh','main',$4,'tenant','even','bill_average')
+       ON CONFLICT (unit_id) WHERE utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL
+       DO UPDATE SET serial_number = EXCLUDED.serial_number`,
       [session.orgId, propertyId, unit.id, value],
     );
   });
@@ -998,6 +1000,10 @@ export async function createLease(session: Session, input: LeaseInput) {
 
     let tenantAmount = 0;
     if (electricity) {
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [
+      session.orgId,
+      `${space.unit_id}|${input.periodStart}|${input.periodEnd}`,
+    ]);
     let meter = await maybe<{ id: string }>(
       client,
       `SELECT id FROM meters WHERE unit_id = $1 AND utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL LIMIT 1`,
@@ -1009,6 +1015,8 @@ export async function createLease(session: Session, input: LeaseInput) {
         `INSERT INTO meters (
            org_id, property_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit, billing_cycle_months
          ) VALUES ($1,$2,$3,'electricity','kWh','main','tenant',$4::split_method,$5::rate_source,$6,2)
+         ON CONFLICT (unit_id) WHERE utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL
+         DO UPDATE SET label = COALESCE(meters.label, EXCLUDED.label)
          RETURNING id`,
         [session.orgId, space.property_id, space.unit_id, input.splitMethod, rateSource, rateMinor],
       );
@@ -1085,59 +1093,109 @@ export async function createLease(session: Session, input: LeaseInput) {
     const shares = splitWeighted(electricity.usageKwh, totalAmount, parts);
 
     if (exceeds) await noteChange(client, input.overrideReason);
-    const run = await one<{ id: string }>(
+    const existingRun = await maybe<{ id: string; status: string }>(
       client,
-      `INSERT INTO utility_allocation_runs (
-         org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
-         total_usage, common_area_usage, common_area_policy, rate_minor_per_unit,
-         cap_override_reason, cap_overridden_by, total_amount_minor, inputs, status, computed_by
-       ) VALUES (
-         $1,$2,$3,$4,$5,$6::split_method,$7::rate_source,$8,$9,$10,'split_evenly',$11,$12,$13,$14,$15::jsonb,'draft',$16
-       ) RETURNING id`,
-      [
-        session.orgId,
-        meter.id,
-        bill.id,
-        input.periodStart,
-        input.periodEnd,
-        input.splitMethod,
-        rateSource,
-        space.currency,
-        electricity.usageKwh,
-        common,
-        rateMinor,
-        exceeds ? input.overrideReason.trim() : null,
-        exceeds ? session.userId : null,
-        totalAmount,
-        JSON.stringify({ rooms: parts.map((part) => ({ room: part.label, days: part.days, sub: part.sub })) }),
-        session.userId,
-      ],
+      `SELECT id, status::text
+         FROM utility_allocation_runs
+        WHERE meter_id = $1 AND period_start = $2::date AND period_end = $3::date AND status <> 'void'
+        ORDER BY computed_at DESC
+        LIMIT 1
+        FOR UPDATE`,
+      [meter.id, input.periodStart, input.periodEnd],
     );
-
-    for (let index = 0; index < shares.length; index += 1) {
-      const share = shares[index];
-      const part = parts[index];
-      await client.query(
-        `INSERT INTO utility_allocation_lines (
-           org_id, run_id, lease_id, room_id, days_occupied, sub_meter_usage, share_ratio,
-           allocated_usage, amount_minor, bearer, explanation
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::utility_payer,$11::jsonb)`,
-        [
-          session.orgId,
-          run.id,
-          part.leaseId,
-          part.roomId,
-          part.days,
-          input.splitMethod === "sub_meter" ? part.sub : null,
-          share.ratio,
-          Math.max(0, share.usage),
-          Math.max(0, share.amount),
-          part.leaseId ? "tenant" : "owner",
-          JSON.stringify({ kwh: share.usage, rate_minor_per_unit: rateMinor, method: input.splitMethod, room: part.label }),
-        ],
+    const runInputs = JSON.stringify({ rooms: parts.map((part) => ({ room: part.label, days: part.days, sub: part.sub })) });
+    if (!existingRun || existingRun.status === "draft") {
+      const run = existingRun
+        ? existingRun
+        : await one<{ id: string }>(
+            client,
+            `INSERT INTO utility_allocation_runs (
+               org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
+               total_usage, common_area_usage, common_area_policy, rate_minor_per_unit,
+               cap_override_reason, cap_overridden_by, total_amount_minor, inputs, status, computed_by
+             ) VALUES (
+               $1,$2,$3,$4,$5,$6::split_method,$7::rate_source,$8,$9,$10,'split_evenly',$11,$12,$13,$14,$15::jsonb,'draft',$16
+             ) RETURNING id`,
+            [
+              session.orgId,
+              meter.id,
+              bill.id,
+              input.periodStart,
+              input.periodEnd,
+              input.splitMethod,
+              rateSource,
+              space.currency,
+              electricity.usageKwh,
+              common,
+              rateMinor,
+              exceeds ? input.overrideReason.trim() : null,
+              exceeds ? session.userId : null,
+              totalAmount,
+              runInputs,
+              session.userId,
+            ],
+          );
+      if (existingRun) {
+        await client.query(
+          `UPDATE utility_allocation_runs SET
+             utility_bill_id = $2, split_method = $3::split_method, rate_source = $4::rate_source, currency = $5,
+             total_usage = $6, common_area_usage = $7, rate_minor_per_unit = $8,
+             cap_override_reason = $9, cap_overridden_by = $10, total_amount_minor = $11, inputs = $12::jsonb,
+             computed_by = $13, computed_at = now()
+           WHERE id = $1 AND status = 'draft'`,
+          [
+            existingRun.id,
+            bill.id,
+            input.splitMethod,
+            rateSource,
+            space.currency,
+            electricity.usageKwh,
+            common,
+            rateMinor,
+            exceeds ? input.overrideReason.trim() : null,
+            exceeds ? session.userId : null,
+            totalAmount,
+            runInputs,
+            session.userId,
+          ],
+        );
+        await client.query(
+          `DELETE FROM utility_allocation_lines WHERE run_id = $1 AND posted_ledger_transaction_id IS NULL`,
+          [existingRun.id],
+        );
+      }
+      for (let index = 0; index < shares.length; index += 1) {
+        const share = shares[index];
+        const part = parts[index];
+        await client.query(
+          `INSERT INTO utility_allocation_lines (
+             org_id, run_id, lease_id, room_id, days_occupied, sub_meter_usage, share_ratio,
+             allocated_usage, amount_minor, bearer, explanation
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::utility_payer,$11::jsonb)`,
+          [
+            session.orgId,
+            run.id,
+            part.leaseId,
+            part.roomId,
+            part.days,
+            input.splitMethod === "sub_meter" ? part.sub : null,
+            share.ratio,
+            Math.max(0, share.usage),
+            Math.max(0, share.amount),
+            part.leaseId ? "tenant" : "owner",
+            JSON.stringify({ kwh: share.usage, rate_minor_per_unit: rateMinor, method: input.splitMethod, room: part.label }),
+          ],
+        );
+      }
+      tenantAmount = shares.find((share) => parts[shares.indexOf(share)]?.leaseId === lease.id)?.amount ?? 0;
+    } else {
+      const prior = await maybe<{ amount: string }>(
+        client,
+        `SELECT amount_minor::text AS amount FROM utility_allocation_lines WHERE run_id = $1 AND lease_id = $2`,
+        [existingRun.id, lease.id],
       );
+      tenantAmount = prior ? Number(prior.amount) : 0;
     }
-    tenantAmount = shares.find((share) => parts[shares.indexOf(share)]?.leaseId === lease.id)?.amount ?? 0;
     }
 
     return {
@@ -2108,13 +2166,17 @@ export async function generateStatement(session: Session, input: { ownerContactI
         [payment.id],
       );
       for (const allocation of allocations) {
-        const lines = await many<{ charge_type: string; amount_minor: string }>(
+        const lines = await many<{ charge_type: string; amount_minor: string; description: string }>(
           client,
-          `SELECT charge_type::text, amount_minor::text FROM invoice_lines WHERE invoice_id = $1`,
+          `SELECT charge_type::text, amount_minor::text, description FROM invoice_lines WHERE invoice_id = $1`,
           [allocation.invoice_id],
         );
         const buckets = attributePayment(
-          lines.map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount_minor) })),
+          lines.map((line) => ({
+            charge_type: line.charge_type,
+            amount_minor: Number(line.amount_minor),
+            description: line.description,
+          })),
           Number(allocation.amount_minor),
         );
         const bucket = rentByProperty.get(payment.property_id)!;

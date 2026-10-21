@@ -1892,5 +1892,7 @@
  "i_utility_method_skip": "This space uses a shared meter or the tenant pays the utility, so it is not added to the rent bill. Choose submeter or per kWh.",
  "i_utility_state": "This run is void. Start a new review for the period.",
  "i_utility_runs": "Recent runs",
+ "i_utility_prev": "Previous",
+ "i_utility_next": "Next",
  "i_utility_saved": "Electricity is on the tenant bill for this period."
 }

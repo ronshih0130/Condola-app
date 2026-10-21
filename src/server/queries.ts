@@ -678,11 +678,14 @@ export async function leaseDetail(session: Session, id: string) {
     const dueMinor = open.reduce((sum, invoice) => {
       const invoiceLines = lines
         .filter((line) => line.invoice_id === invoice.id)
-        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount) }));
+        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount), description: line.description }));
       return sum + rentUtilityDueMinor(invoiceLines, Number(invoice.paid));
     }, 0);
     const sumType = (type: string) =>
       lines.filter((line) => line.charge_type === type).reduce((sum, line) => sum + Number(line.amount), 0);
+    const electricityCredit = lines
+      .filter((line) => line.charge_type === "credit" && line.description.startsWith("沖銷電費"))
+      .reduce((sum, line) => sum + Number(line.amount), 0);
     return {
       lease,
       signatures,
@@ -690,7 +693,7 @@ export async function leaseDetail(session: Session, id: string) {
       lines,
       dueMinor,
       rentMinor: sumType("rent"),
-      utilityMinor: sumType("utility"),
+      utilityMinor: sumType("utility") + electricityCredit,
       depositMinor: sumType("deposit"),
     };
   });
@@ -1327,7 +1330,7 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
     const dueMinor = invoices.reduce((sum, invoice) => {
       const invoiceLines = lines
         .filter((line) => line.invoice_id === invoice.id)
-        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount) }));
+        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount), description: line.description }));
       return sum + rentUtilityDueMinor(invoiceLines, Number(invoice.paid));
     }, 0);
     const balance = invoices.reduce((sum, invoice) => sum + Number(invoice.balance), 0);

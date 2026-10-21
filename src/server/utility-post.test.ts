@@ -5,6 +5,10 @@ import {
   billMinorCeil,
   chargedRateExceedsBill,
   isPostableMethod,
+  normalizeRateMajor,
+  prorateMilli,
+  rateMajorFromStored,
+  rateMinorText,
   spreadCommonMilli,
   usageMilliFromText,
   utilityLineDescription,
@@ -132,6 +136,32 @@ test("other currencies round to cents", () => {
 test("the invoice line names the kWh and the rate in Traditional Chinese", () => {
   assert.equal(utilityLineDescription(100500, 4.5), "電費 100.5 度 × 4.5 元");
   assert.equal(utilityLineDescription(100000, 4), "電費 100 度 × 4 元");
+});
+
+test("the rate is stored at four decimal places", () => {
+  assert.equal(normalizeRateMajor(1.23456), 1.2346);
+  assert.equal(rateMinorText(1.23456), "123.460000");
+  assert.equal(rateMajorFromStored("123.460000"), 1.2346);
+  assert.equal(utilityLineDescription(1000, normalizeRateMajor(1.23456)!), "電費 1 度 × 1.2346 元");
+  assert.equal(normalizeRateMajor(0), null);
+  assert.equal(normalizeRateMajor(10000.01), null);
+  assert.equal(normalizeRateMajor(Number.POSITIVE_INFINITY), null);
+});
+
+test("turnover splits one reading by occupancy days", () => {
+  assert.deepEqual(prorateMilli([{ key: "only", days: 3 }], 1000), [{ key: "only", kwhMilli: 1000 }]);
+  const split = prorateMilli(
+    [
+      { key: "b", days: 1 },
+      { key: "a", days: 1 },
+    ],
+    3,
+  );
+  assert.deepEqual(split, [
+    { key: "b", kwhMilli: 1 },
+    { key: "a", kwhMilli: 2 },
+  ]);
+  assert.equal(prorateMilli([{ key: "a", days: 0 }, { key: "b", days: 0 }], 10), null);
 });
 
 test("the synthetic bill average is at least the charged rate", () => {

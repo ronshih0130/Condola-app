@@ -1892,5 +1892,7 @@
  "i_utility_method_skip": "這個空間是共同電表或租客自繳，電費不會計入租金帳單。請改成分表或依電表度數。",
  "i_utility_state": "這次分攤已經作廢，不能再入帳。請重新試算一期。",
  "i_utility_runs": "最近的分攤",
+ "i_utility_prev": "上一頁",
+ "i_utility_next": "下一頁",
  "i_utility_saved": "電費已記入租客本期帳單。"
 }

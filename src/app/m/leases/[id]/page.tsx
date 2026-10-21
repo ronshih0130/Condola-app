@@ -214,6 +214,7 @@ export default async function LeasePage({
                 </tr>
                 {detail.lines
                   .filter((line) => !["rent", "utility", "deposit"].includes(line.charge_type))
+                  .filter((line) => !(line.charge_type === "credit" && line.description.startsWith("沖銷電費")))
                   .map((line, index) => (
                     <tr key={`${line.invoice_id}-${index}`}>
                       <td>{t(chargeKey(line.charge_type))}</td>

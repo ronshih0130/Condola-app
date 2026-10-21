@@ -118,25 +118,44 @@ export function managementFeeMinor(rule: FeeRule, rentReceivedMinor: number): nu
   return 0;
 }
 
+type ChargeLine = { charge_type: string; amount_minor: number; description?: string };
+
+/** A reversed 電費 line stays on the invoice. Its credit reduces what the tenant still owes. */
+function netElectricityCredits(lines: ChargeLine[]): ChargeLine[] {
+  let offset = lines
+    .filter((line) => line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費"))
+    .reduce((sum, line) => sum - line.amount_minor, 0);
+  if (offset === 0) {
+    return lines.filter((line) => !(line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費")));
+  }
+  const netted: ChargeLine[] = [];
+  for (const line of lines) {
+    if (line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費")) continue;
+    if (line.charge_type === "utility" && offset > 0 && line.amount_minor > 0) {
+      const take = Math.min(offset, line.amount_minor);
+      offset -= take;
+      netted.push({ ...line, amount_minor: line.amount_minor - take });
+    } else {
+      netted.push(line);
+    }
+  }
+  return netted;
+}
+
 /** Outstanding rent plus billed utilities. Deposit is excluded on purpose. */
-export function rentUtilityDueMinor(
-  lines: { charge_type: string; amount_minor: number }[],
-  paidMinor: number,
-) {
-  const rent = lines.filter((line) => line.charge_type === "rent").reduce((sum, line) => sum + line.amount_minor, 0);
-  const utility = lines.filter((line) => line.charge_type === "utility").reduce((sum, line) => sum + line.amount_minor, 0);
-  const applied = attributePayment(lines, paidMinor);
+export function rentUtilityDueMinor(lines: ChargeLine[], paidMinor: number) {
+  const netted = netElectricityCredits(lines);
+  const rent = netted.filter((line) => line.charge_type === "rent").reduce((sum, line) => sum + line.amount_minor, 0);
+  const utility = netted.filter((line) => line.charge_type === "utility").reduce((sum, line) => sum + line.amount_minor, 0);
+  const applied = attributePayment(netted, paidMinor);
   return Math.max(0, rent - applied.rent) + Math.max(0, utility - applied.utility);
 }
 
-export function attributePayment(
-  lines: { charge_type: string; amount_minor: number }[],
-  paidMinor: number,
-) {
+export function attributePayment(lines: ChargeLine[], paidMinor: number) {
   const order = ["rent", "add_on", "late_fee", "one_off", "maintenance", "utility", "deposit", "adjustment", "credit"];
   const buckets = { rent: 0, utility: 0, deposit: 0, other: 0 };
   let left = paidMinor;
-  const sorted = [...lines].sort(
+  const sorted = netElectricityCredits(lines).sort(
     (a, b) => order.indexOf(a.charge_type) - order.indexOf(b.charge_type),
   );
   for (const line of sorted) {
