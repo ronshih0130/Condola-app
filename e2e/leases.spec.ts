@@ -43,12 +43,26 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await page.getByTestId("rate").fill("4");
   await expect(page.getByTestId("cap-alert")).toHaveCount(0);
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("wizard-next").click();
+  await expect(page.getByTestId("lease-template")).toBeVisible();
+  await page.getByTestId("template-lang-zh").press("Enter");
+  await expect(page.getByTestId("lease-template")).toBeVisible();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  const nextBox = await page.getByTestId("wizard-next").boundingBox();
+  expect(nextBox).toBeTruthy();
+  await page.mouse.click(nextBox!.x + nextBox!.width / 2, nextBox!.y + nextBox!.height / 2, { clickCount: 2 });
+  const submit = page.getByTestId("submit-lease");
+  await expect(submit).toBeVisible();
+  await expect(submit).toBeDisabled();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.getByText("確認後送出給租客簽名")).toBeVisible();
+  await expect(submit).toBeEnabled();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.getByTestId("paper-sign")).toHaveCount(0);
   // Two clicks in one turn. The second must not dispatch another action: that
   // races the redirect and has thrown a client exception. Playwright does not
   // observe this Next server-action POST, so the guard itself is unit-tested
   // and this checks the page does not crash and opens one signing screen.
-  await page.getByTestId("submit-lease").evaluate((button: HTMLButtonElement) => {
+  await submit.evaluate((button: HTMLButtonElement) => {
     button.click();
     button.click();
   });

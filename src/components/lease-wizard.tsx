@@ -29,6 +29,8 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
   const locale = useLocale();
   const submitGuard = useRef(false);
   const idempotencyKey = useRef("");
+  const [submitReady, setSubmitReady] = useState(false);
+  const armSubmit = useRef<number | null>(null);
   const [state, formAction, pending] = useActionState(
     (prev: { error: string; field?: string }, formData: FormData) =>
       callSubmitAction(submitGuard, () => actionCreateLease(prev, formData)),
@@ -134,13 +136,37 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
         if (billBad || usageBad || rateBad) return;
       }
     }
-    setStep(step + 1);
+    const next = step + 1;
+    if (next === 8) {
+      setSubmitReady(false);
+      if (armSubmit.current) window.clearTimeout(armSubmit.current);
+      armSubmit.current = window.setTimeout(() => setSubmitReady(true), 600);
+    }
+    setStep(next);
+  }
+
+  function goBack() {
+    if (armSubmit.current) window.clearTimeout(armSubmit.current);
+    armSubmit.current = null;
+    setSubmitReady(false);
+    setStep(step - 1);
   }
 
   return (
     <form
       action={formAction}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter") return;
+        if (event.target instanceof HTMLTextAreaElement) return;
+        if (event.target instanceof HTMLButtonElement && event.target.type === "submit") return;
+        event.preventDefault();
+      }}
       onSubmit={(event) => {
+        const submitter = (event.nativeEvent as SubmitEvent).submitter;
+        if (step !== 8 || !submitReady || !(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-lease") {
+          event.preventDefault();
+          return;
+        }
         if (!amountOk(rent) || !amountOk(depositMonths)) {
           event.preventDefault();
           setRentError(!amountOk(rent));
@@ -407,17 +433,18 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
       </div>
       <div className="row" style={{ marginTop: 16, maxWidth: 760 }}>
         {step > 1 ? (
-          <button className="btn" type="button" onClick={() => setStep(step - 1)}>
+          <button className="btn" type="button" onClick={goBack}>
             ← {t("s_5bf6faa")}
           </button>
         ) : null}
         <span className="sp" />
+        {/* A new node on the last step. Updating the next button in place turns this click into a submit. */}
         {step < 8 ? (
-          <button className="btn pri" type="button" data-testid="wizard-next" disabled={blocked || (step === 1 && !roomId)} onClick={goNext}>
+          <button key="wizard-next" className="btn pri" type="button" data-testid="wizard-next" disabled={blocked || (step === 1 && !roomId)} onClick={goNext}>
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending} aria-busy={pending || undefined}>
+          <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady} aria-busy={pending || undefined}>
             {t("s_79b6c1d")}
           </button>
         )}

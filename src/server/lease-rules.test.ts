@@ -72,7 +72,13 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(wizard, /callSubmitAction\(submitGuard/);
   assert.match(wizard, /ensureIdempotencyKey\(idempotencyKey\)/);
   assert.match(wizard, /name="idempotencyKey"/);
-  assert.match(wizard, /disabled=\{blocked \|\| pending\}/);
+  assert.match(wizard, /disabled=\{blocked \|\| pending \|\| !submitReady\}/);
+  assert.match(wizard, /key="wizard-next"/);
+  assert.match(wizard, /key="submit-lease"/);
+  assert.match(wizard, /type="button"/);
+  assert.match(wizard, /setTimeout\(\(\) => setSubmitReady\(true\), 600\)/);
+  assert.match(wizard, /event\.key !== "Enter"/);
+  assert.match(wizard, /submitter\.dataset\.testid !== "submit-lease"/);
   assert.match(edit, /callSubmitAction\(guard/);
   assert.match(domain, /idempotency_key/);
   assert.match(domain, /leases_org_idempotency_key_uidx/);

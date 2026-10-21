@@ -103,6 +103,13 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
     setStep(next);
   }
 
+  function goBack() {
+    if (armSubmit.current) window.clearTimeout(armSubmit.current);
+    armSubmit.current = null;
+    setSubmitReady(false);
+    setStep(step - 1);
+  }
+
   const namedField = fieldError || (state.field && (state.error === "errors.required" || state.error === "errors.amount") ? state.field : "");
   const banner = namedField
     ? t("i_field_incomplete", { field: t(namedField) })
@@ -359,17 +366,18 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
       </div>
       <div className="row" style={{ marginTop: 16, maxWidth: 760 }}>
         {step > 1 ? (
-          <button className="btn" type="button" onClick={() => setStep(step - 1)}>
+          <button className="btn" type="button" onClick={goBack}>
             ← {t("s_5bf6faa")}
           </button>
         ) : null}
         <span className="sp" />
+        {/* A new node on the last step. Updating the next button in place turns this click into a submit. */}
         {step < 4 ? (
-          <button className="btn pri" type="button" data-testid="wizard-next" disabled={blocked || (step === 2 && !rentalMode) || (step === 1 && !ownerMode)} onClick={goNext}>
+          <button key="wizard-next" className="btn pri" type="button" data-testid="wizard-next" disabled={blocked || (step === 2 && !rentalMode) || (step === 1 && !ownerMode)} onClick={goNext}>
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button className="btn pri" type="submit" data-testid="submit-property" disabled={blocked || !submitReady}>
+          <button key="submit-property" className="btn pri" type="submit" data-testid="submit-property" disabled={blocked || !submitReady}>
             {t("s_aed91da")}
           </button>
         )}
