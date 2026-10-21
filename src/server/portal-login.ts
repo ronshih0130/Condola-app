@@ -9,7 +9,7 @@ export function portalLoginEmail(input: {
   emailTaken: boolean;
 }) {
   if (input.environment === "sandbox" || input.emailTaken || !input.contactEmail) return null;
-  return input.contactEmail;
+  return input.contactEmail.trim().toLowerCase();
 }
 
 /** Unique violation on auth.users.email. A contact-email index is a different error. */

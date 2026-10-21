@@ -123,6 +123,8 @@ for (const locale of locales) {
     await expect(page.getByTestId("template-bilingual")).not.toBeChecked();
     await page.getByTestId("wizard-next").click();
     await page.getByTestId("submit-lease").click();
+    await expect(page.getByTestId("lease-created")).toBeVisible();
+    await page.locator(".tabsx a[href*='tab=sign']").click();
 
     const error = page.getByTestId("error-banner");
     if (await error.isVisible().catch(() => false)) {

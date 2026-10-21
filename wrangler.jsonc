@@ -45,7 +45,10 @@
           "binding": "WORKER_SELF_REFERENCE",
           "service": "condola-staging"
         }
-      ]
+      ],
+      "observability": {
+        "enabled": true
+      }
     },
     "production": {
       "name": "condola-prod",
@@ -78,7 +81,10 @@
       ],
       "routes": [
         { "pattern": "app.condola.app", "custom_domain": true }
-      ]
+      ],
+      "observability": {
+        "enabled": true
+      }
     }
   }
 }

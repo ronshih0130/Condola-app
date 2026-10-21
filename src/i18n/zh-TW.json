@@ -753,6 +753,10 @@
  "i_lease_failed": "租約沒有儲存成功，請稍後再試；若持續發生請聯絡 service@condola.app",
  "i_lease_whole_unit": "此戶為整層出租，請選擇整層而不是房間。",
  "i_field_incomplete": "{field}未完成，請確認後再送出。",
+ "i_step_incomplete": "{field}未完成，請確認後再繼續。",
+ "i_deposit_half_step": "押金以 0.5 個月為單位",
+ "i_lease_created": "租約已建立，簽署邀請已送出",
+ "i_lease_slow": "處理時間較長，請到租約列表確認",
  "i_not_found": "找不到這筆資料。請回到列表再打開一次。",
  "i_amount": "請輸入金額（數字，可填 0）",
  "i_amount_high": "金額超過未結餘額。",
@@ -1619,5 +1623,6 @@
  "i_photo_type": "只接受 JPG、PNG 或 WEBP。",
  "i_photo_storage": "目前無法儲存照片。儲存空間無法使用，檔案沒有寫入。",
  "i_photo_limit": "每筆報修最多 8 張照片。",
- "i_date_invalid": "請輸入有效的日期。"
+ "i_date_invalid": "請輸入有效的日期。",
+ "i_tenant_use_existing": "改選這位租客"
 }

@@ -753,6 +753,10 @@
  "i_lease_failed": "The lease was not saved. Please try again later, or contact service@condola.app if it keeps happening.",
  "i_lease_whole_unit": "This home is rented as a whole unit. Please choose the whole unit, not a room.",
  "i_field_incomplete": "{field} is incomplete. Please check it and submit again.",
+ "i_step_incomplete": "{field} is incomplete. Please check it before continuing.",
+ "i_deposit_half_step": "Deposit months must be in steps of 0.5.",
+ "i_lease_created": "Lease created. The signing invitation was sent.",
+ "i_lease_slow": "This is taking longer than usual. Please check the lease list.",
  "i_not_found": "We couldn't find that record. Please go back to the list and open it again.",
  "i_amount": "Enter an amount (a number, 0 is allowed).",
  "i_amount_high": "The amount is above the open balance.",
@@ -1619,5 +1623,6 @@
  "i_photo_type": "Use a JPG, PNG, or WEBP.",
  "i_photo_storage": "Photos can't be saved right now. Storage is unavailable, so the file was not stored.",
  "i_photo_limit": "Each repair can have up to 8 photos.",
- "i_date_invalid": "Enter a valid date."
+ "i_date_invalid": "Enter a valid date.",
+ "i_tenant_use_existing": "Choose this tenant"
 }

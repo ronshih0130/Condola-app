@@ -113,7 +113,7 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
 
   const namedField = fieldError || (state.field && (state.error === "errors.required" || state.error === "errors.amount") ? state.field : "");
   const banner = namedField
-    ? t("i_field_incomplete", { field: t(namedField) })
+    ? t("i_step_incomplete", { field: t(namedField) })
     : state.error
       ? errorText(t, state.error)
       : "";
@@ -168,7 +168,7 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
             <div className="fg">
               <label className="f">{t("i_street")}</label>
               <input className="inp" name="street" data-testid="property-street" placeholder={t("i_ph_street")} value={street} onChange={(event) => { setStreet(event.target.value); setFieldError(""); }} />
-              {namedField === "i_address" ? <p className="hint" data-testid="property-address-error">{t("i_field_incomplete", { field: t("i_address") })}</p> : null}
+              {namedField === "i_address" ? <p className="hint" data-testid="property-address-error">{t("i_step_incomplete", { field: t("i_address") })}</p> : null}
             </div>
             <div className="fg">
               <label className="f">{t("i_number")}</label>

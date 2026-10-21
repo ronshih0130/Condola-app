@@ -8,7 +8,9 @@ test("Enter cancels text fields and submit buttons, and activates ordinary butto
   assert.equal(enterKeyAction("INPUT", "text"), "prevent");
   assert.equal(enterKeyAction("input", "radio"), "prevent");
   assert.equal(enterKeyAction("input", "checkbox"), "allow");
-  assert.equal(enterKeyAction("select", ""), "prevent");
+  assert.equal(enterKeyAction("select", ""), "allow");
+  assert.equal(enterKeyAction("select", "select-one"), "allow");
+  assert.equal(enterKeyAction("option", ""), "allow");
   assert.equal(enterKeyAction("textarea", ""), "allow");
   assert.equal(enterKeyAction("a", ""), "allow");
   assert.equal(enterKeyAction("button", "button"), "allow");

@@ -77,12 +77,12 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
           <div className="fg">
             <label className="f">{kind === "self" ? t("i_signup_name_self") : t("i_signup_name_firm")}</label>
             <input className="inp" name="name" data-testid="firm-name" onChange={() => setNameError(false)} />
-            {nameError ? <p className="hint" data-testid="firm-name-error">{t("i_field_incomplete", { field: t(kind === "self" ? "i_signup_name_self" : "i_signup_name_firm") })}</p> : null}
+            {nameError ? <p className="hint" data-testid="firm-name-error">{t("i_step_incomplete", { field: t(kind === "self" ? "i_signup_name_self" : "i_signup_name_firm") })}</p> : null}
           </div>
           <div className="fg">
             <label className="f">{t("i_signup_contact")}</label>
             <input className="inp" name="contactName" data-testid="firm-contact" onChange={() => setContactError(false)} />
-            {contactError ? <p className="hint" data-testid="firm-contact-error">{t("i_field_incomplete", { field: t("i_signup_contact") })}</p> : null}
+            {contactError ? <p className="hint" data-testid="firm-contact-error">{t("i_step_incomplete", { field: t("i_signup_contact") })}</p> : null}
           </div>
           <div className="fg">
             <label className="f">{t("i_signup_phone")}</label>

@@ -15,6 +15,13 @@ export function tenantSearchText(tenant: TenantOption) {
   return `${tenant.name} ${phone} ${localPhone(phone)} ${tenant.email ?? ""}`.toLowerCase();
 }
 
+/** Case-insensitive match against an active 租客 email. Empty and non-emails do not match. */
+export function tenantByEmail(tenants: readonly TenantOption[], email: string): TenantOption | null {
+  const needle = email.trim().toLowerCase();
+  if (!needle.includes("@")) return null;
+  return tenants.find((row) => (row.email ?? "").trim().toLowerCase() === needle) ?? null;
+}
+
 /** Empty once the search no longer contains the picked contact, so that id cannot be submitted. */
 export function activeTenantPick(contactId: string, matches: readonly { id: string }[]) {
   if (!contactId) return "";

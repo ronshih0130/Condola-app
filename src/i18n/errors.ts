@@ -19,6 +19,7 @@ export const ERRORS: Record<string, string> = {
   "errors.alreadySigned": "i_already_signed",
   "errors.noInvoice": "i_no_invoice",
   "errors.amount": "i_amount",
+  "errors.depositStep": "i_deposit_half_step",
   "errors.expenseAmount": "i_expense_amount",
   "errors.monthClosed": "i_month_locked",
   "errors.expenseVoid": "i_expense_void_done",

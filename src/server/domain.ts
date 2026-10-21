@@ -14,6 +14,7 @@ import {
   splitWeighted,
   toMinor,
 } from "./money";
+import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/lease-confirm";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
@@ -37,6 +38,11 @@ function cleanEmail(email: string) {
   if (!value) return null;
   if (!value.includes("@")) throw new FlowError("errors.email");
   return value;
+}
+
+function assertLeaseMoney(currency: string, rentMajor: number, depositMonths: number) {
+  if (!depositMonthsOnHalfStep(depositMonths)) throw new FlowError("errors.depositStep");
+  if (!twdRentIsWhole(currency, rentMajor)) throw new FlowError("errors.amount", { field: "i_base_rent" });
 }
 
 /** Insert the portal user on the caller's transaction so a later failure rolls it back. */
@@ -425,7 +431,9 @@ async function linkTenant(
     );
     if (duplicate) throw new FlowError("errors.tenantExists");
   }
-  const tenantUserId = await insertPortalUser(client, { name: input.name, email: input.email, phone: input.phone });
+  const tenantUserId = input.email
+    ? await insertPortalUserUnlessEmailTaken(client, { name: input.name, email: input.email, phone: input.phone })
+    : await insertPortalUser(client, { name: input.name, email: null, phone: input.phone });
   const contact = await one<{ id: string }>(
     client,
     `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, phone_e164, line_user_id, locale, preferred_channel)
@@ -448,7 +456,11 @@ async function attachPortalUser(client: Client, session: Session, contact: Tenan
     emailTaken: false,
   });
   const tenantUserId = loginEmail
-    ? await insertPortalUserUnlessEmailTaken(client, contact, loginEmail)
+    ? await insertPortalUserUnlessEmailTaken(client, {
+        name: contact.display_name,
+        email: loginEmail,
+        phone: contact.phone_e164,
+      })
     : await insertPortalUser(client, {
         name: contact.display_name,
         email: null,
@@ -475,14 +487,17 @@ async function attachPortalUser(client: Client, session: Session, contact: Tenan
  * mint a new login. The first statement in the catch must be the savepoint
  * rollback: the transaction is aborted, so a role change cannot run before it.
  */
-async function insertPortalUserUnlessEmailTaken(client: Client, contact: TenantContactRow, email: string) {
+async function insertPortalUserUnlessEmailTaken(
+  client: Client,
+  input: { name: string; email: string; phone: string | null },
+) {
   await client.query(`SAVEPOINT attach_portal_login`);
   try {
     await client.query(`SET LOCAL ROLE service_role`);
     const user = await one<{ id: string }>(
       client,
       `SELECT app.provision_portal_user($1, $2, $3) AS id`,
-      [email, contact.display_name, contact.phone_e164],
+      [input.email, input.name, input.phone],
     );
     await client.query(`RELEASE SAVEPOINT attach_portal_login`);
     await client.query(`SET LOCAL ROLE authenticated`);
@@ -490,11 +505,7 @@ async function insertPortalUserUnlessEmailTaken(client: Client, contact: TenantC
   } catch (error) {
     await client.query(`ROLLBACK TO SAVEPOINT attach_portal_login`);
     if (!authEmailTaken(error)) throw error;
-    return insertPortalUser(client, {
-      name: contact.display_name,
-      email: null,
-      phone: contact.phone_e164,
-    });
+    return insertPortalUser(client, { name: input.name, email: null, phone: input.phone });
   }
 }
 
@@ -588,6 +599,7 @@ export async function createLease(session: Session, input: LeaseInput) {
         LIMIT 1`,
       [input.roomId, session.orgId],
     );
+    assertLeaseMoney(space.currency, rentMajor, depositMonths);
     const linked = await linkTenant(client, session, {
       tenantContactId,
       name: input.tenantName.trim(),
@@ -598,7 +610,7 @@ export async function createLease(session: Session, input: LeaseInput) {
     const tenantUserId = linked.tenantUserId;
     const contact = { id: linked.contactId };
     const rentMinor = toMinor(rentMajor);
-    const depositMinor = Math.round(rentMinor * depositMonths);
+    const depositMinor = depositAmountMinor(space.currency, rentMajor, depositMonths);
     const documentHash = sha256(
       JSON.stringify({
         room: space.id,
@@ -867,6 +879,7 @@ export async function updateLease(
         target_unit_id: string | null;
         start_date: string;
         end_date: string | null;
+        currency: string;
         reason: string | null;
         by: string | null;
         at: Date | null;
@@ -875,7 +888,7 @@ export async function updateLease(
       }>(
         client,
         `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, l.signed_at::text,
-                l.target_room_id::text, l.target_unit_id::text, l.start_date::text, l.end_date::text,
+                l.target_room_id::text, l.target_unit_id::text, l.start_date::text, l.end_date::text, l.currency,
                 l.deposit_override_reason AS reason, l.deposit_overridden_by::text AS by, l.deposit_overridden_at AS at,
                 (l.updated_at = $3::timestamptz) AS same_version,
                 EXISTS (
@@ -891,10 +904,11 @@ export async function updateLease(
         throw new FlowError("errors.leaseLocked");
       }
       if (!existing.same_version) throw new FlowError("errors.staleLease");
+      assertLeaseMoney(existing.currency, rentMajor, depositMonths);
       const override = leaseDepositOverride(depositMonths, input.depositReason ?? "", session.userId, existing);
       await noteChange(client, override.reason);
       const rentMinor = toMinor(rentMajor);
-      const depositMinor = Math.round(rentMinor * depositMonths);
+      const depositMinor = depositAmountMinor(existing.currency, rentMajor, depositMonths);
       const documentHash = sha256(
         JSON.stringify({
           room: existing.target_room_id ?? existing.target_unit_id,
