@@ -9,12 +9,14 @@ import {
   actionChangePassword,
   actionConfirmMfa,
   actionDisableMfa,
+  actionEmailPrefs,
   actionRequireMfa,
   actionRevokeOthers,
   actionRevokeSession,
 } from "@/server/auth-actions";
 import { CHALLENGE_COOKIE, listSessions, mfaStatus, peekChallenge } from "@/server/auth";
 import { lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
+import { memberEmailPrefs } from "@/server/mail-settings";
 import { can } from "@/server/perms";
 import { getSession } from "@/server/session";
 
@@ -28,7 +30,12 @@ export default async function AccountPage({
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
-  const [sessions, factor] = await Promise.all([listSessions(session.userId), mfaStatus(session.userId)]);
+  const showMailPrefs = session.kind === "staff" && (session.role === "admin" || session.role === "manager");
+  const [sessions, factor, mailPrefs] = await Promise.all([
+    listSessions(session.userId),
+    mfaStatus(session.userId),
+    showMailPrefs ? memberEmailPrefs(session.orgId, session.userId) : Promise.resolve(null),
+  ]);
   const jar = await cookies();
   const challenge = params.enroll === "1" ? await peekChallenge(jar.get(CHALLENGE_COOKIE)?.value ?? "") : null;
   const backup = params.backup === "1" ? backupDisplay(jar.get(BACKUP_COOKIE)?.value) : null;
@@ -115,6 +122,23 @@ export default async function AccountPage({
             </form>
           ) : null}
         </div>
+        {mailPrefs ? (
+          <form className="card pad" action={actionEmailPrefs}>
+            <h3>{t("i_mail_heading")}</h3>
+            <label className="row">
+              <input type="checkbox" name="leaseExpiry" defaultChecked={mailPrefs.leaseExpiry} data-testid="mail-lease" />
+              {t("i_mail_lease")}
+            </label>
+            <label className="row">
+              <input type="checkbox" name="rentOverdue" defaultChecked={mailPrefs.rentOverdue} data-testid="mail-overdue" />
+              {t("i_mail_overdue")}
+            </label>
+            <p className="small muted">{t("i_mail_off_hint")}</p>
+            <button className="btn sm" type="submit">
+              {t("i_save")}
+            </button>
+          </form>
+        ) : null}
         <div className="card pad">
           <h3>{t("i_devices")}</h3>
           <form action={actionRevokeOthers}>

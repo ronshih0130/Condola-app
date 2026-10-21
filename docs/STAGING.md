@@ -53,6 +53,7 @@ Plain vars (not secrets):
 | `CONDOLA_SITE_URL` | `https://staging.condola.app` |
 | `DEMO_MODE` | `false` |
 | `LINE_LOGIN_ENABLED` | `false` |
+| `MAIL_PROVIDER` | `cloudflare` |
 
 `CONDOLA_ENV=staging` is a locked environment: demo mode and the demo LINE sign-in stay off, and the process refuses to start if either flag is `true`. The same lock applies to `production` and the older name `staging-real`.
 
@@ -61,7 +62,13 @@ Required secret **names** on the staging Worker. Set them with Wrangler. Do not 
 - `DATABASE_URL` — transaction pooler, port 6543, Tokyo, as above
 - `SUPABASE_URL` — `https://<project-ref>.supabase.co`
 - `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` — password updates call the Auth admin API when this is set with `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` — password updates and password-reset links call the Auth admin API when this is set with `SUPABASE_URL`
+
+Optional Worker secrets. Deploy does not require them.
+
+- `CRON_SECRET` — the daily reminder cron sends this to `POST /api/cron/reminders`. If it is unset, the cron logs and does nothing.
+- `BREVO_API_KEY` — used only when `MAIL_PROVIDER` is `brevo`. That is the fallback if Cloudflare Email Sending blocks reminders. The Worker posts to Brevo's SMTP API (`https://api.brevo.com/v3/smtp/email`) as `租多啦 Condola <no-reply@condola.app>`, the same sender Supabase already uses on `smtp-relay.brevo.com`. A missing key logs and skips the send.
+- `RESEND_API_KEY` — used only when `MAIL_PROVIDER` is `resend`. The default provider is Cloudflare Email Sending (`MAIL_PROVIDER=cloudflare`), which needs no API token. The sender is `"租多啦 Condola" <noreply@send.condola.app>`. The staging and production envs bind `send_email` as `EMAIL`.
 
 Do not set `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Those would be inlined into the client bundle. The server reads the secret names above.
 

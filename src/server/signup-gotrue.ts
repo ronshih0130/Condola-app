@@ -100,6 +100,17 @@ export function gotrueVerifyBody(type: "signup" | "email" | "recovery", tokenHas
   return { type, token_hash: tokenHash.trim() };
 }
 
+/** Admin generate_link does not send mail. hashed_token is the /reset token_hash. */
+export function parseGenerateLink(body: unknown): { hashedToken: string; userId: string } | null {
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const hashed = typeof record.hashed_token === "string" ? record.hashed_token.trim() : "";
+  if (!hashed) return null;
+  const nested = record.user && typeof record.user === "object" ? (record.user as Record<string, unknown>) : null;
+  const userId =
+    (typeof record.id === "string" && record.id) || (typeof nested?.id === "string" && nested.id) || "";
+  return { hashedToken: hashed, userId };
+}
+
 /** User id from a GoTrue verify response. Nested user.id and a top-level id both count. */
 export function parseGotrueUserId(body: unknown): { id: string; email: string } | null {
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};

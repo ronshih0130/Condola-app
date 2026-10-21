@@ -24,6 +24,7 @@ Plain vars:
 | `DEMO_MODE` | `false` |
 | `LINE_LOGIN_ENABLED` | `false` |
 | `STAGING_AUTODEPLOY` | `false` |
+| `MAIL_PROVIDER` | `cloudflare` |
 
 `CONDOLA_ENV=production` refuses to start if `DEMO_MODE` or `LINE_LOGIN_ENABLED` is `true`. `workers.dev` is off.
 
@@ -36,7 +37,10 @@ Required secret names. There are no `ID_DOC_*` secrets in this config.
 
 Optional, not required to boot, and not one of the four secrets above:
 
-- `CONDOLA_PLATFORM_ADMIN_EMAILS` — comma-separated emails allowed to open `/m/admin` (create partner codes, per-firm price overrides, and the 「緊急暫停正式使用」 switch). Leave it unset to keep that screen closed. Set it as a Worker var or secret on staging and production when you want the screen. Sign-up confirmation uses the existing Supabase URL and anon key; there is no new email provider secret.
+- `CONDOLA_PLATFORM_ADMIN_EMAILS` — comma-separated emails allowed to open `/m/admin` (create partner codes, per-firm price overrides, and the 「緊急暫停正式使用」 switch). Leave it unset to keep that screen closed. Set it as a Worker var or secret on staging and production when you want the screen. Sign-up confirmation uses the existing Supabase URL and anon key.
+- `CRON_SECRET` — protects `POST /api/cron/reminders`. The Worker cron (`0 1 * * *`, 09:00 Asia/Taipei) sends it. Leave it unset and the job logs and skips.
+- `BREVO_API_KEY` — fallback mail provider for this round. Leave it unset unless Cloudflare Email Sending blocks reminders. Then set `MAIL_PROVIDER` to `brevo`. The Worker calls Brevo's transactional API (`https://api.brevo.com/v3/smtp/email`), which delivers through the same `smtp-relay.brevo.com` relay Supabase already uses. The sender is `租多啦 Condola <no-reply@condola.app>`. A missing key logs and skips the send.
+- `RESEND_API_KEY` — additional backup. Leave it unset unless `MAIL_PROVIDER` is `resend`. Cloudflare Email Sending is the default (`MAIL_PROVIDER=cloudflare`). It uses the `EMAIL` binding (`send_email`) and does not need a token. The sender is `"租多啦 Condola" <noreply@send.condola.app>`.
 - `CONDOLA_SITE_URL` — public origin for the confirmation link when the request host is not already `staging.condola.app` or `app.condola.app`. Non-app hosts, including `condola.app` and `*.workers.dev`, use this value. Wrangler sets `https://staging.condola.app` on staging and `https://app.condola.app` on production. The mail link is `{origin}/signup/confirm`, which must stay in the Supabase redirect allow-list. Not a secret.
 
 In production the session cookie `Domain` is `.condola.app`, so a sign-in on either hostname is sent to the other. Server Actions allow those two hosts as origins. Redirect targets that are absolute URLs are accepted only for `https://app.condola.app` and `https://condola.app`, and only as a path on this app.

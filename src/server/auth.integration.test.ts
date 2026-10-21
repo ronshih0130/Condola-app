@@ -149,6 +149,11 @@ test("demo LINE sign-in does nothing when the environment is production", async 
 });
 
 test("password reset expires, and a valid reset signs out every session", async () => {
+  await query(
+    `DELETE FROM password_reset_attempts WHERE email_key IN (
+       'yating.lin@songxin.demo', 'nobody-reset@example.com', 'meiling.zhou@songxin.demo'
+     )`,
+  );
   const issued = await requestPasswordReset("yating.lin@songxin.demo");
   assert.ok(issued.token);
   await query(
