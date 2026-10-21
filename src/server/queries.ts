@@ -879,7 +879,33 @@ export async function listTicketProperties(session: Session) {
   );
 }
 
-export async function listTickets(session: Session, propertyId?: string | null) {
+export async function listTicketFilters(session: Session) {
+  return tx(session.userId, async (client) => {
+    const units = await many<{ id: string; property_id: string; label: string }>(
+      client,
+      `SELECT u.id::text, u.property_id::text, u.label
+         FROM units u
+        WHERE u.org_id = $1 AND u.archived_at IS NULL
+        ORDER BY u.label`,
+      [session.orgId],
+    );
+    const rooms = await many<{ id: string; unit_id: string; property_id: string; label: string; unit_label: string }>(
+      client,
+      `SELECT r.id::text, r.unit_id::text, u.property_id::text, r.label, u.label AS unit_label
+         FROM rooms r
+         JOIN units u ON u.id = r.unit_id
+        WHERE r.org_id = $1 AND r.archived_at IS NULL AND u.archived_at IS NULL AND u.rental_mode = 'by_room'
+        ORDER BY u.label, r.label`,
+      [session.orgId],
+    );
+    return { units, rooms };
+  });
+}
+
+export async function listTickets(
+  session: Session,
+  filters: { propertyId?: string | null; unitId?: string | null; roomId?: string | null } = {},
+) {
   return tx(session.userId, async (client) =>
     many<{
       id: string;
@@ -904,9 +930,40 @@ export async function listTickets(session: Session, propertyId?: string | null) 
          FROM maintenance_tickets t
          JOIN properties p ON p.id = t.property_id
          LEFT JOIN rooms r ON r.id = t.room_id
-        WHERE t.org_id = $1 AND ($2::uuid IS NULL OR t.property_id = $2)
+        WHERE t.org_id = $1
+          AND ($2::uuid IS NULL OR t.property_id = $2)
+          AND ($3::uuid IS NULL OR t.unit_id = $3)
+          AND ($4::uuid IS NULL OR t.room_id = $4)
         ORDER BY t.created_at DESC`,
-      [session.orgId, propertyId || null],
+      [session.orgId, filters.propertyId || null, filters.unitId || null, filters.roomId || null],
+    ),
+  );
+}
+
+/** Recent repairs for one room, or for a whole unit that has no rooms. */
+export async function spaceRepairs(session: Session, target: { roomId: string } | { unitId: string }) {
+  const roomId = "roomId" in target ? target.roomId : null;
+  const unitId = "unitId" in target ? target.unitId : null;
+  return tx(session.userId, async (client) =>
+    many<{
+      id: string;
+      number: string;
+      title: string;
+      vendor_name: string | null;
+      final_cost: string | null;
+      currency: string;
+    }>(
+      client,
+      `SELECT t.id::text, t.ticket_number::text AS number, t.title, t.vendor_name,
+              t.final_cost_minor::text AS final_cost, coalesce(t.currency, p.currency) AS currency
+         FROM maintenance_tickets t
+         JOIN properties p ON p.id = t.property_id
+        WHERE t.org_id = $1
+          AND ($2::uuid IS NULL OR t.room_id = $2)
+          AND ($3::uuid IS NULL OR (t.unit_id = $3 AND t.room_id IS NULL))
+        ORDER BY t.created_at DESC
+        LIMIT 8`,
+      [session.orgId, roomId, unitId],
     ),
   );
 }

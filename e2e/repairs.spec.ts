@@ -66,4 +66,21 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
   await page.getByTestId("repair-property").click();
   await expect(page.getByTestId("repair-history")).toContainText("廚房漏水測試");
   await expect(page.getByTestId("repair-history")).toContainText("老張水電");
+
+  await page.goto("/m/expenses");
+  await expect(page.getByTestId("expense-row").filter({ hasText: "廚房漏水測試" })).toContainText("3F · A");
+
+  await page.goto("/m/tickets");
+  await page.getByTestId("repair-filter-room").selectOption({ label: "3F · A" });
+  await page.getByTestId("repair-filter-apply").click();
+  await expect(page.getByRole("link", { name: /廚房漏水測試/ })).toBeVisible();
+  await page.getByTestId("repair-filter-room").selectOption({ label: "3F · C" });
+  await page.getByTestId("repair-filter-apply").click();
+  await expect(page.getByRole("link", { name: /廚房漏水測試/ })).toHaveCount(0);
+
+  await page.goto("/m/units");
+  await page.getByTestId("space-row-3F-A").getByRole("link", { name: "編輯" }).click();
+  await expect(page.getByTestId("space-repairs")).toContainText("廚房漏水測試");
+  await expect(page.getByTestId("space-repairs")).toContainText("老張水電");
+  await expect(page.getByTestId("space-repairs")).toContainText("$1,800");
 });

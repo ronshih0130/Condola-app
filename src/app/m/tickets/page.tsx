@@ -6,21 +6,40 @@ import { actionTicket, actionUpdateTicket } from "@/server/actions";
 import { formatMoney } from "@/server/format";
 import { can, rolesFor } from "@/server/perms";
 import { isUuid } from "@/server/repair-rules";
-import { listLeases, listTicketProperties, listTickets } from "@/server/queries";
+import { listLeases, listTicketFilters, listTicketProperties, listTickets } from "@/server/queries";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function TicketsPage({ searchParams }: { searchParams: Promise<{ error?: string; property?: string }> }) {
+export default async function TicketsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; property?: string; unit?: string; room?: string }>;
+}) {
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
   const propertyId = params.property && isUuid(params.property) ? params.property : "";
-  const [tickets, leases, properties] = await Promise.all([
-    listTickets(session, propertyId || null),
+  const requestedUnit = params.unit && isUuid(params.unit) ? params.unit : "";
+  const requestedRoom = params.room && isUuid(params.room) ? params.room : "";
+  const [leases, properties, filters] = await Promise.all([
     listLeases(session),
     listTicketProperties(session),
+    listTicketFilters(session),
   ]);
+  const units = propertyId ? filters.units.filter((unit) => unit.property_id === propertyId) : filters.units;
+  const unitId = units.some((unit) => unit.id === requestedUnit) ? requestedUnit : "";
+  const rooms = filters.rooms.filter((room) => {
+    if (unitId) return room.unit_id === unitId;
+    if (propertyId) return room.property_id === propertyId;
+    return true;
+  });
+  const roomId = rooms.some((room) => room.id === requestedRoom) ? requestedRoom : "";
+  const tickets = await listTickets(session, {
+    propertyId: propertyId || null,
+    unitId: unitId || null,
+    roomId: roomId || null,
+  });
   const canWrite = can(session.role, "tickets.update");
   const roleLabel: Record<string, string> = {
     admin: "i_role_admin",
@@ -38,7 +57,13 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
       <PageHeader title={t("i_repair_history")} />
       <ErrorBanner t={t} error={params.error} />
       <form method="get" className="row" style={{ marginBottom: 12 }} data-testid="repair-property-filter">
-        <select className="inp" name="property" defaultValue={propertyId} aria-label={t("i_repair_filter")}>
+        <select
+          className="inp"
+          name="property"
+          defaultValue={propertyId}
+          aria-label={t("i_repair_filter")}
+          data-testid="repair-filter-property"
+        >
           <option value="">{t("i_repair_all")}</option>
           {properties.map((property) => (
             <option key={property.id} value={property.id}>
@@ -46,7 +71,23 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
             </option>
           ))}
         </select>
-        <button className="btn sm" type="submit">
+        <select className="inp" name="unit" defaultValue={unitId} aria-label={t("i_expense_unit")} data-testid="repair-filter-unit">
+          <option value="">{t("i_expense_all")}</option>
+          {units.map((unit) => (
+            <option key={unit.id} value={unit.id}>
+              {unit.label}
+            </option>
+          ))}
+        </select>
+        <select className="inp" name="room" defaultValue={roomId} aria-label={t("i_room_no")} data-testid="repair-filter-room">
+          <option value="">{t("i_expense_all")}</option>
+          {rooms.map((room) => (
+            <option key={room.id} value={room.id}>
+              {room.unit_label} · {room.label}
+            </option>
+          ))}
+        </select>
+        <button className="btn sm" type="submit" data-testid="repair-filter-apply">
           {t("i_repair_filter")}
         </button>
       </form>

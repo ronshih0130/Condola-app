@@ -197,6 +197,11 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   const expenses = readFileSync(new URL("./expenses.ts", import.meta.url), "utf8");
   assert.match(domain, /STATEMENT_EXPENSE_SQL/);
   assert.match(expenses, /status IN \('approved','posted'\)/);
+  assert.match(expenses, /u\.label \|\| ' · ' \|\| rm\.label/);
+  assert.match(expenses, /LEFT JOIN rooms rm ON rm\.id = t\.room_id/);
+  const queries = readFileSync(new URL("./queries.ts", import.meta.url), "utf8");
+  assert.match(queries, /\$3::uuid IS NULL OR t\.unit_id = \$3/);
+  assert.match(queries, /\$4::uuid IS NULL OR t\.room_id = \$4/);
 
   const page = readFileSync(new URL("../app/m/tickets/[id]/page.tsx", import.meta.url), "utf8");
   assert.match(page, /expense_id && ticket\.expense_status !== "void"/);

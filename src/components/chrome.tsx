@@ -128,7 +128,6 @@ export function TaskPanel({
     ["property", flags.property, t("i_task1"), "/m/properties/new"],
     ["lease", flags.lease, t("i_task2"), "/m/leases/new"],
     ["statement", flags.statement, t("i_task3"), "/m/statements"],
-    ["bonus", flags.repair, t("i_task4"), "/t/repair"],
   ] as const;
   return (
     <div className="tasks" data-testid="tryout-panel">
