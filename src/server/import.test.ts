@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import { buildXlsx, csvDocument, decodeBytes, readSpreadsheet, SpreadsheetError } from "../lib/spreadsheet";
 import { FlowError } from "./errors";
-import { hashIdNumber, parseIdHmacKey } from "./id-hash";
+import { readFileSync } from "node:fs";
+import { HMAC_KEY_REF, hashIdNumber, parseIdHmacKey } from "./id-hash";
 import { ORG2_ID, ORG_ID } from "./ids";
-import { IMPORT_BODY_MAX_BYTES, readImportBody } from "./import-batch";
+import { IMPORT_BODY_MAX_BYTES, commitImportBatch, dryRunImport, readImportBody } from "./import-batch";
 import {
   IMPORT_COMMIT_BATCH,
+  IMPORT_DRY_BATCH,
   IMPORT_FIELDS,
   IMPORT_FIELD_MAX,
   IMPORT_MAX_ROWS,
@@ -21,6 +22,7 @@ import {
   validateImportRows,
   type ImportRequestRow,
 } from "./owner-import";
+import type { Session } from "./types";
 
 const BIG5_CSV = Buffer.from(
   "qqul86ZXutkspmGnfSyrzqVEqW2mVyyrzqVEIEVtYWlsLKVYr7KrrLpBLKThp0+h/rzTvGgsqdC4uSyp0KusLKlXvMYspOuvsiyvsqvIqW2mVyyvsqvIuXG43CyvsqvIIEVtYWlsLK+yq8ioraTAw9Kmcri5LLBfr7Kk6Syo7LTBpOksqeOq9yzDuq+ypOksuXG2T6TopqEsqEOr17lxu/kspXi5cbFis+ar17zGLKV4uXGxYrPmqvfDQiy0warspO202iyp46r3tle5TKRXra2t7KZdLLlxu/m2V7lMpFetra3spl0ss8a1+Qq216RKpL20SiyleKVfpaukaqZ3sM+216RKuPQ4uLkstPq41avOpUQsb3duZXIuYmlnNUBleGFtcGxlLmNvbSykwK+yLDJGLEEsLCwxMDAwMCyp46r3r7KryCwwOTEyMDAwMTExLGRlcC5iaWc1QGV4YW1wbGUuY29tLEExMjM0NTY3ODksMjAyNi0xMS0wMSwyMDI3LTEwLTMxLDMwMDAwLDUspMCq7Sw2LDEwMCw0MDAsLCy5cbv5reymXSwKttekSqS9tEospXilX6WrpGqmd7DPttekSrj0OLi5LLT6uNWrzqVELG93bmVyLmJpZzVAZXhhbXBsZS5jb20spMCvsiwyRixCLCwsMTAwMDAsqOy0wa+yq8gsMDkxMjAwMDMzMyxlbmQuYmlnNUBleGFtcGxlLmNvbSxCMTIzNDU2NzgwLDIwMjQtMDEtMDEsMjAyNS0wMS0wMSwyMDAwMCw1LKTAqu0sLCwsLCwsCrbXpEqkvbRKLKV4pV+lq6Rqpnewz7bXpEq49Di4uSy0+rjVq86lRCxvd25lci5iaWc1QGV4YW1wbGUuY29tLKTAr7IsM0YsQSwsLDEwMDAwLKazrsSvsqvILDA5MTIwMDAyMjIsb2suYmlnNUBleGFtcGxlLmNvbSxDMTIzNDU2NzgxLDIwMjYtMTEtMDEsMjAyNy0xMC0zMSwyMDAwMCw1LCwsLCwsLCwK",
@@ -133,7 +135,8 @@ test("column match accepts legacy owner headers and ignores a client org id", ()
   assert.equal(Object.prototype.hasOwnProperty.call(coerced[0], "orgId"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(coerced[0], "extra"), false);
   assert.equal(IMPORT_MAX_ROWS, 2000);
-  assert.equal(IMPORT_COMMIT_BATCH, 50);
+  assert.equal(IMPORT_COMMIT_BATCH, 10);
+  assert.equal(IMPORT_DRY_BATCH, 25);
 });
 
 test("row checks cover deposit cap, ended leases, duplicates, due day, and phone", () => {
@@ -181,8 +184,8 @@ test("an existing unit, tenant, and lease are reused", () => {
   index.properties.set(parsed.propertyName, { id: "prop-1", addressKey: parsed.addressKey });
   index.units.set(`${parsed.addressKey}\n${parsed.unitLabel}`, { id: "unit-1", propertyId: "prop-1", mode: "whole_unit" });
   index.ownersByEmail.set(parsed.ownerEmail ?? "", "owner-1");
-  index.tenantsByPhone.set(parsed.phoneE164 ?? "", ["tenant-1"]);
-  index.tenantsByHash.set("abc", ["tenant-1"]);
+  index.tenantsByPhone.set(parsed.phoneE164 ?? "", [{ id: "tenant-1", name: parsed.tenantName ?? "" }]);
+  index.tenantsByHash.set("abc", [{ id: "tenant-1", name: parsed.tenantName ?? "" }]);
   index.leases.push({
     spaceKey: "unit:unit-1",
     start: "2026-11-01",
@@ -216,23 +219,33 @@ test("an ID that misses does not fall back to the phone, and a shared phone is n
   parsed.tenantId = null;
   parsed.tenantIdHash = "hash-new";
   const index = emptyIndex();
-  index.tenantsByPhone.set(parsed.phoneE164 ?? "", ["tenant-phone"]);
+  index.tenantsByPhone.set(parsed.phoneE164 ?? "", [{ id: "tenant-phone", name: parsed.tenantName ?? "" }]);
   const mismatch = planOne(parsed, index);
   assert.equal(mismatch.blocked, true);
   assert.equal(mismatch.reuseTenant, false);
   assert.ok(mismatch.issues.some((issue) => issue.key === "im_e_tenant"));
 
   const phoneOnly = { ...parsed, tenantId: null, tenantIdHash: null };
-  index.tenantsByPhone.set(parsed.phoneE164 ?? "", ["tenant-a", "tenant-b"]);
+  index.tenantsByPhone.set(parsed.phoneE164 ?? "", [
+    { id: "tenant-a", name: "甲" },
+    { id: "tenant-b", name: "乙" },
+  ]);
   const dup = planOne(phoneOnly, index);
   assert.equal(dup.blocked, true);
   assert.ok(dup.issues.some((issue) => issue.key === "im_e_phone_dup"));
 
-  index.tenantsByPhone.set(parsed.phoneE164 ?? "", ["tenant-only"]);
+  index.tenantsByPhone.set(parsed.phoneE164 ?? "", [{ id: "tenant-only", name: parsed.tenantName ?? "" }]);
   const unique = planOne(phoneOnly, index);
   assert.equal(unique.blocked, false);
   assert.equal(unique.reuseTenant, true);
   assert.equal(unique.tenantId, "tenant-only");
+
+  index.tenantsByPhone.set(parsed.phoneE164 ?? "", [{ id: "tenant-other", name: "別的租客" }]);
+  const wrongName = planOne(phoneOnly, index);
+  assert.equal(wrongName.blocked, true);
+  assert.equal(wrongName.reuseTenant, false);
+  assert.equal(wrongName.createTenant, false);
+  assert.ok(wrongName.issues.some((issue) => issue.key === "im_e_phone_name"));
 });
 
 test("over-long fields and out-of-range amounts are rejected", () => {
@@ -245,17 +258,72 @@ test("over-long fields and out-of-range amounts are rejected", () => {
   assert.equal(huge.issues.some((issue) => issue.key === "im_e_len"), false);
 });
 
-test("ID hashes are org-bound HMAC values, not plain SHA-256", () => {
+test("ID hashes match the uploader HMAC and fail closed without a key", () => {
   const number = "A123456789";
-  const raw = process.env.ID_DOC_HMAC_KEY?.trim();
-  const key = raw ? parseIdHmacKey(raw) : createHash("sha256").update("condola-demo-id-hmac").digest();
-  assert.ok(key);
-  const expected = createHmac("sha256", key).update(`${ORG_ID}\n${number}`).digest("hex");
-  assert.equal(hashIdNumber(`  ${number.toLowerCase()} `, ORG_ID), expected);
-  assert.notEqual(hashIdNumber(number, ORG_ID), hashIdNumber(number, ORG2_ID));
-  assert.notEqual(expected, createHash("sha256").update(number).digest("hex"));
-  assert.notEqual(expected, createHash("sha256").update(`${ORG_ID}\n${number}`).digest("hex"));
+  const saved = {
+    key: process.env.ID_DOC_HMAC_KEY,
+    phase: process.env.NEXT_PHASE,
+    demo: process.env.DEMO_MODE,
+    nodeEnv: process.env.NODE_ENV,
+    condola: process.env.CONDOLA_ENV,
+  };
+  const restore = () => {
+    restoreEnv("ID_DOC_HMAC_KEY", saved.key);
+    restoreEnv("NEXT_PHASE", saved.phase);
+    restoreEnv("DEMO_MODE", saved.demo);
+    restoreEnv("NODE_ENV", saved.nodeEnv);
+    restoreEnv("CONDOLA_ENV", saved.condola);
+  };
+  try {
+    process.env.ID_DOC_HMAC_KEY = "22".repeat(32);
+    delete process.env.NEXT_PHASE;
+    const key = parseIdHmacKey(process.env.ID_DOC_HMAC_KEY);
+    assert.ok(key);
+    const expected = createHmac("sha256", key).update(`${HMAC_KEY_REF}\n${ORG_ID}\n${number}`).digest("hex");
+    assert.equal(hashIdNumber(`  ${number.toLowerCase()} `, ORG_ID), expected);
+    assert.notEqual(hashIdNumber(number, ORG_ID), hashIdNumber(number, ORG2_ID));
+    assert.notEqual(expected, createHmac("sha256", key).update(`${ORG_ID}\n${number}`).digest("hex"));
+    assert.notEqual(expected, createHash("sha256").update(`${HMAC_KEY_REF}\n${ORG_ID}\n${number}`).digest("hex"));
+
+    delete process.env.ID_DOC_HMAC_KEY;
+    restoreEnv("NODE_ENV", "production");
+    process.env.NEXT_PHASE = "phase-production-build";
+    process.env.DEMO_MODE = "true";
+    assert.throws(() => hashIdNumber(number, ORG_ID), /ID_DOC_HMAC_KEY is required/);
+
+    restoreEnv("NODE_ENV", "test");
+    delete process.env.NEXT_PHASE;
+    delete process.env.CONDOLA_ENV;
+    process.env.DEMO_MODE = "true";
+    const demoKey = createHash("sha256").update("condola-demo-id-hmac").digest();
+    const demoExpected = createHmac("sha256", demoKey).update(`${HMAC_KEY_REF}\n${ORG_ID}\n${number}`).digest("hex");
+    assert.equal(hashIdNumber(number, ORG_ID), demoExpected);
+  } finally {
+    restore();
+  }
 });
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
+
+function adminSession(): Session {
+  return {
+    userId: "20000000-0000-4000-8000-000000000001",
+    sessionId: "import-unit",
+    email: "admin@example.com",
+    name: "Admin",
+    kind: "staff",
+    role: "admin",
+    orgId: ORG_ID,
+    liveOrgId: ORG_ID,
+    environment: "live",
+    locale: "zh-TW",
+    calendar: "gregorian",
+    leaseId: null,
+  };
+}
 
 test("import requests reject a null body, an unknown mode, and a body over the byte cap", async () => {
   const url = "http://local/api/import";
@@ -267,14 +335,74 @@ test("import requests reject a null body, an unknown mode, and a body over the b
     () => readImportBody(new Request(url, { method: "POST", body: JSON.stringify({ mode: "wipe", rows: [] }) })),
     (error: unknown) => error instanceof FlowError && error.key === "im_bad_mode",
   );
-  const oversized = {
-    headers: new Headers({ "content-length": String(IMPORT_BODY_MAX_BYTES + 1) }),
-    text: async () => "{}",
+  const payload = JSON.stringify({ mode: "dry", fileName: "a.csv", rows: [] });
+  const lyingLarge = {
+    headers: new Headers({ "content-length": String(IMPORT_BODY_MAX_BYTES + 50) }),
+    body: streamOf(new TextEncoder().encode(payload)),
+  } as Request;
+  const accepted = await readImportBody(lyingLarge);
+  assert.equal(accepted.mode, "dry");
+  assert.equal(accepted.fileName, "a.csv");
+
+  const chunk = new Uint8Array(64 * 1024);
+  const parts: Uint8Array[] = [];
+  let sent = 0;
+  while (sent <= IMPORT_BODY_MAX_BYTES) {
+    parts.push(chunk);
+    sent += chunk.byteLength;
+  }
+  const lyingSmall = {
+    headers: new Headers({ "content-length": "16" }),
+    body: streamOf(...parts),
   } as Request;
   await assert.rejects(
-    () => readImportBody(oversized),
+    () => readImportBody(lyingSmall),
     (error: unknown) => error instanceof FlowError && error.key === "im_body",
   );
+});
+
+function streamOf(...parts: Uint8Array[]) {
+  let index = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index >= parts.length) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(parts[index]);
+      index += 1;
+    },
+  });
+}
+
+test("the 2000-row cap counts parsed rows for csv and xlsx names", async () => {
+  const session = adminSession();
+  const many = (count: number) => Array.from({ length: count }, (_, index) => ({ line: index + 2, propertyName: "x" }));
+  await assert.rejects(
+    () => dryRunImport(session, { fileName: "too-many.csv", rows: many(IMPORT_MAX_ROWS + 1) }),
+    (error: unknown) => error instanceof FlowError && error.key === "im_too_many" && error.vars?.max === IMPORT_MAX_ROWS,
+  );
+  await assert.rejects(
+    () => commitImportBatch(session, { fileName: "too-many.xlsx", rows: many(IMPORT_MAX_ROWS + 1) }),
+    (error: unknown) => error instanceof FlowError && error.key === "im_too_many" && error.vars?.max === IMPORT_MAX_ROWS,
+  );
+  await assert.rejects(
+    () => dryRunImport(session, { fileName: "batch.csv", rows: many(IMPORT_DRY_BATCH + 1) }),
+    (error: unknown) => error instanceof FlowError && error.key === "im_too_many" && error.vars?.max === IMPORT_DRY_BATCH,
+  );
+  await assert.rejects(
+    () => commitImportBatch(session, { fileName: "batch.xlsx", rows: many(IMPORT_COMMIT_BATCH + 1) }),
+    (error: unknown) => error instanceof FlowError && error.key === "im_too_many" && error.vars?.max === IMPORT_COMMIT_BATCH,
+  );
+});
+
+test("active-unit billing counts include imported leases", () => {
+  const sandbox = readFileSync(new URL("./sandbox.ts", import.meta.url), "utf8");
+  const partners = readFileSync(new URL("./partners.ts", import.meta.url), "utf8");
+  assert.match(sandbox, /countActiveUnits[\s\S]*BILLABLE_ACTIVE_LEASE/);
+  assert.match(partners, /requestUpgrade[\s\S]*BILLABLE_ACTIVE_LEASE/);
+  const billing = readFileSync(new URL("./billing.ts", import.meta.url), "utf8");
+  assert.match(billing, /esign_status = 'imported'/);
 });
 
 test("error CSV cells neutralize formula injection", () => {

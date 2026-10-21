@@ -6,6 +6,7 @@ import { useT } from "./locale";
 import { csvDocument, buildXlsx, readSpreadsheet, SpreadsheetError } from "@/lib/spreadsheet";
 import {
   IMPORT_COMMIT_BATCH,
+  IMPORT_DRY_BATCH,
   IMPORT_FIELDS,
   IMPORT_MAX_ROWS,
   fieldLabel,
@@ -78,6 +79,7 @@ export function ImportWizard() {
         setTable([]);
         return;
       }
+      // Parsed data rows, for csv and xlsx. The file name and type are not the cap.
       if (read.rows.length - 1 > IMPORT_MAX_ROWS) {
         setNotice(t("im_too_many", { n: read.rows.length - 1, max: IMPORT_MAX_ROWS }));
         setTable([]);
@@ -159,8 +161,9 @@ export function ImportWizard() {
 
   async function runBatched(mode: "dry" | "commit", rows: ImportRequestRow[]) {
     const combined = emptyResult(fileName);
-    for (let offset = 0; offset < rows.length; offset += IMPORT_COMMIT_BATCH) {
-      const batch = rows.slice(offset, offset + IMPORT_COMMIT_BATCH);
+    const size = mode === "commit" ? IMPORT_COMMIT_BATCH : IMPORT_DRY_BATCH;
+    for (let offset = 0; offset < rows.length; offset += size) {
+      const batch = rows.slice(offset, offset + size);
       setProgress(`${Math.min(offset + batch.length, rows.length)} / ${rows.length}`);
       mergeResult(combined, await postImport(mode, fileName, batch));
     }

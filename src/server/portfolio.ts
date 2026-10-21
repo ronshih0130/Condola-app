@@ -3,6 +3,7 @@ import { maybe, one, tx } from "./db";
 import { FlowError } from "./errors";
 import { normalizePhone } from "./lease-rules";
 import { toMinor } from "./money";
+import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
 import type { Session } from "./types";
 import type { Client } from "pg";
@@ -644,8 +645,23 @@ async function propertyCountry(client: Client, orgId: string, propertyId: string
   return property.country_code.trim();
 }
 
+async function propertyAddressKey(client: Client, orgId: string, propertyId: string) {
+  const property = await maybe<{ address_key: string | null; address_display: string | null }>(
+    client,
+    `SELECT address_key, address_display FROM properties WHERE id = $1 AND org_id = $2`,
+    [propertyId, orgId],
+  );
+  if (!property) return null;
+  const key = property.address_key || addressKey(property.address_display ?? "");
+  if (key && !property.address_key) {
+    await client.query(`UPDATE properties SET address_key = $2 WHERE id = $1 AND address_key IS NULL`, [propertyId, key]);
+  }
+  return key || null;
+}
+
 async function unitForFloor(client: Client, orgId: string, propertyId: string, floor: string, kind: SpaceKind) {
   const areaUnit = (await propertyCountry(client, orgId, propertyId)) === "TW" ? "ping" : "sqft";
+  const key = await propertyAddressKey(client, orgId, propertyId);
   const existing = await maybe<{ id: string; rental_mode: string }>(
     client,
     `SELECT id::text, rental_mode::text FROM units
@@ -655,11 +671,17 @@ async function unitForFloor(client: Client, orgId: string, propertyId: string, f
   if (!existing) {
     const created = await one<{ id: string }>(
       client,
-      `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit)
-       VALUES ($1, $2, $3, $3, $4, $5) RETURNING id::text`,
-      [orgId, propertyId, floor, kind === "room" ? "by_room" : "whole_unit", areaUnit],
+      `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit, import_address_key)
+       VALUES ($1, $2, $3, $3, $4, $5, $6) RETURNING id::text`,
+      [orgId, propertyId, floor, kind === "room" ? "by_room" : "whole_unit", areaUnit, key],
     );
     return { id: created.id, areaUnit, created: true };
+  }
+  if (key) {
+    await client.query(
+      `UPDATE units SET import_address_key = COALESCE(import_address_key, $2) WHERE id = $1 AND org_id = $3`,
+      [existing.id, key, orgId],
+    );
   }
   if (kind === "room" && existing.rental_mode === "whole_unit") throw new FlowError("errors.wholeUnit");
   if (kind === "whole_unit" && existing.rental_mode !== "whole_unit") throw new FlowError("errors.generic");
@@ -927,13 +949,14 @@ export async function seedPortfolio(session: Session, csv: string) {
         const created = await one<{ id: string }>(
           client,
           `INSERT INTO properties (
-             org_id, name, address, address_display, country_code, jurisdiction_id, currency, timezone, default_rental_mode
-           ) VALUES ($1,$2,$3::jsonb,$4,'TW',$5,'TWD','Asia/Taipei',$6) RETURNING id::text`,
+             org_id, name, address, address_display, address_key, country_code, jurisdiction_id, currency, timezone, default_rental_mode
+           ) VALUES ($1,$2,$3::jsonb,$4,$5,'TW',$6,'TWD','Asia/Taipei',$7) RETURNING id::text`,
           [
             session.orgId,
             property.name,
             JSON.stringify({ country: "TW", line: property.address }),
             property.address,
+            addressKey(property.address),
             jurisdiction.id,
             property.defaultKind === "room" ? "by_room" : "whole_unit",
           ],

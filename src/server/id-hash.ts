@@ -1,17 +1,27 @@
 import { createHash, createHmac } from "node:crypto";
-import { demoModeEnabled } from "./demo";
+import { demoModeEnabled, productionLikeEnv } from "./demo";
+
+/**
+ * Byte-identical to hashIdNumber() on the tenant ID uploader
+ * (src/server/id-crypto.ts, HMAC_KEY_REF). After that change merges, replace
+ * this module with: export { hashIdNumber } from "./id-crypto";
+ */
+export const HMAC_KEY_REF = "env:ID_DOC_HMAC_KEY:v1";
 
 const DEMO_HMAC_MATERIAL = "condola-demo-id-hmac";
 const KEY_BYTES = 32;
 
 /**
- * Same HMAC as hashIdNumber() on the tenant ID uploader: HMAC-SHA256 with
- * ID_DOC_HMAC_KEY, over org id + newline + the trimmed uppercased number.
- * Demo mode with the key unset uses the same demo material, hashed to 32 bytes.
+ * HMAC-SHA256(ID_DOC_HMAC_KEY) over `env:ID_DOC_HMAC_KEY:v1\norgId\nID`.
+ * The ID is trimmed and uppercased. A missing or malformed key fails closed.
+ * Demo mode with the key unset uses sha256("condola-demo-id-hmac"), the same
+ * 32 bytes as the uploader. `next build` (NEXT_PHASE=phase-production-build)
+ * does not substitute that demo key.
  */
-export function hashIdNumber(number: string, orgId: string) {
+export function hashIdNumber(number: string, orgId: string, keyRef = HMAC_KEY_REF) {
+  if (keyRef !== HMAC_KEY_REF) throw new Error("Unknown hmac key ref");
   return createHmac("sha256", hmacKey())
-    .update(`${orgId}\n${number.trim().toUpperCase()}`)
+    .update(`${keyRef}\n${orgId}\n${number.trim().toUpperCase()}`)
     .digest("hex");
 }
 
@@ -27,12 +37,16 @@ export function parseIdHmacKey(raw: string): Buffer | null {
 function hmacKey() {
   const raw = process.env.ID_DOC_HMAC_KEY?.trim();
   if (!raw) {
-    if (demoModeEnabled() || process.env.NEXT_PHASE === "phase-production-build") {
+    if (!productionLikeEnv() && demoModeEnabled()) {
       return createHash("sha256").update(DEMO_HMAC_MATERIAL).digest();
     }
-    throw new Error("ID_DOC_HMAC_KEY is required");
+    throw new Error("Refusing to start: ID_DOC_HMAC_KEY is required outside demo mode.");
   }
   const parsed = parseIdHmacKey(raw);
-  if (!parsed) throw new Error("ID_DOC_HMAC_KEY must be exactly 32 bytes");
+  if (!parsed) {
+    throw new Error(
+      "Refusing to start: ID_DOC_HMAC_KEY must be exactly 32 bytes (64 hex characters, or standard base64 that decodes to 32 bytes).",
+    );
+  }
   return parsed;
 }

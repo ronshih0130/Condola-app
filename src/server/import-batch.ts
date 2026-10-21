@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { maybe, one, tx } from "./db";
@@ -5,8 +6,8 @@ import { FlowError } from "./errors";
 import { hashIdNumber } from "./id-hash";
 import { DEPOSIT_CAP_MONTHS, depositExceedsCap } from "./lease-rules";
 import {
-  IMPORT_MAX_ROWS,
-  IMPORT_REQUEST_ROWS,
+  IMPORT_COMMIT_BATCH,
+  IMPORT_DRY_BATCH,
   addTenantKey,
   addressKey,
   coerceImportRows,
@@ -28,14 +29,14 @@ import type { Session } from "./types";
 
 export type { ImportResult };
 
-/** Reject uploads before JSON.parse. 50 rows of bounded fields fit under this. */
+/** Reject uploads before JSON.parse. Counted from the stream, not Content-Length. */
 export const IMPORT_BODY_MAX_BYTES = 512 * 1024;
 
+/** Same normalization as addressKey(), evaluated in Postgres for units that have no stored key. */
+const COMPUTED_ADDRESS_KEY = `NULLIF(lower(regexp_replace(normalize(coalesce(p.address_display, ''), NFKC), '\\s+', '', 'g')), '')`;
+
 export async function readImportBody(request: Request): Promise<{ mode: "dry" | "commit"; fileName: string; rows: unknown }> {
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > IMPORT_BODY_MAX_BYTES) throw new FlowError("im_body");
-  const text = await request.text();
-  if (new TextEncoder().encode(text).byteLength > IMPORT_BODY_MAX_BYTES) throw new FlowError("im_body");
+  const text = await readCappedText(request, IMPORT_BODY_MAX_BYTES);
   if (!text.trim()) throw new FlowError("im_body");
   let body: unknown;
   try {
@@ -53,90 +54,73 @@ export async function readImportBody(request: Request): Promise<{ mode: "dry" | 
 
 /** Validated JSON only. File bytes stay in the browser. */
 export async function dryRunImport(session: Session, input: { fileName: string; rows: unknown }): Promise<ImportResult> {
-  assertImport(session);
-  const rows = coerceImportRows(input.rows);
-  assertRequestRows(rows);
-  const parsed = stampHashes(validateImportRows(rows), session.orgId);
-  forgetRawIds(rows);
-  const fileName = cleanName(input.fileName);
-  if (parsed.length === 0) return totalsFromPlans([], fileName, true);
-  return tx(session.userId, async (client) => {
-    const index = await loadIndex(client, session.orgId, parsed);
-    return totalsFromPlans(planRows(parsed, index), fileName, true);
-  }, scope(session));
+  const started = performance.now();
+  let counted = 0;
+  try {
+    assertImport(session);
+    const rows = coerceImportRows(input.rows, IMPORT_DRY_BATCH);
+    counted = rows.length;
+    const parsed = stampHashes(validateImportRows(rows), session.orgId);
+    forgetRawIds(rows);
+    const fileName = cleanName(input.fileName);
+    if (parsed.length === 0) return totalsFromPlans([], fileName, true);
+    return await tx(session.userId, async (client) => {
+      const index = await loadIndex(client, session.orgId, parsed);
+      return totalsFromPlans(planRows(parsed, index), fileName, true);
+    }, scope(session));
+  } finally {
+    logImportTiming("dry", counted, started);
+  }
 }
 
 /** One audit row for this batch. Callers send at most IMPORT_COMMIT_BATCH rows. */
 export async function commitImportBatch(session: Session, input: { fileName: string; rows: unknown }): Promise<ImportResult> {
-  assertImport(session);
-  const rows = coerceImportRows(input.rows);
-  assertRequestRows(rows);
-  const parsed = stampHashes(validateImportRows(rows), session.orgId);
-  forgetRawIds(rows);
-  const fileName = cleanName(input.fileName);
-  if (parsed.length === 0) return totalsFromPlans([], fileName, false);
-  const result = await tx(session.userId, async (client) => {
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`import:${session.orgId}`]);
-    const prior = await client.query<{ n: number }>(
-      `SELECT coalesce(sum(rows_total), 0)::int AS n
-         FROM import_jobs
-        WHERE org_id = $1 AND entity = 'bulk' AND column_map->>'fileName' = $2`,
-      [session.orgId, fileName],
-    );
-    const already = Number(prior.rows[0]?.n ?? 0);
-    if (already + parsed.length > IMPORT_MAX_ROWS) {
-      throw new FlowError("im_too_many", { n: already + parsed.length, max: IMPORT_MAX_ROWS });
-    }
-    const index = await loadIndex(client, session.orgId, parsed);
-    const jurisdiction = await one<{ id: string }>(client, `SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
-    const plans: RowPlan[] = [];
-    for (const row of parsed) {
-      const plan = planOne(row, index);
-      if (plan.blocked) {
-        plans.push(plan);
-        continue;
-      }
-      await client.query("SAVEPOINT import_row");
-      try {
-        await writeRow(client, session, plan, jurisdiction.id);
-        await client.query("RELEASE SAVEPOINT import_row");
-        rememberPlan(index, plan);
-        plans.push(plan);
-      } catch (error) {
-        await client.query("ROLLBACK TO SAVEPOINT import_row");
-        await client.query("RELEASE SAVEPOINT import_row");
-        fail(plan, issueFromDb(row.line, error));
-        plans.push(plan);
-      }
-    }
-    const totals = totalsFromPlans(plans, fileName, false);
-    const failed = plans.filter((plan) => plan.blocked).length;
-    await client.query(
-      `INSERT INTO import_jobs (
-         org_id, entity, column_map, status, rows_total, rows_ok, rows_failed, error_report, requested_by, finished_at
-       ) VALUES ($1, 'bulk', $2::jsonb, $3, $4, $5, $6, $7::jsonb, $8, now())`,
-      [
-        session.orgId,
-        JSON.stringify({ fileName }),
-        failed > 0 && failed === plans.length ? "failed" : "succeeded",
-        plans.length,
-        plans.length - failed,
-        failed,
-        JSON.stringify(totals.errors.map((issue) => ({ line: issue.line, key: issue.key }))),
-        session.userId,
-      ],
-    );
-    return totals;
-  }, scope(session));
-  await writeAudit(session.orgId, session.userId, "import_batch", {
-    fileName,
-    rows: parsed.length,
-    created: result.created,
-    reused: result.reused,
-    errors: result.errors.length,
-    environment: session.environment,
-  });
-  return result;
+  const started = performance.now();
+  let counted = 0;
+  try {
+    assertImport(session);
+    const rows = coerceImportRows(input.rows, IMPORT_COMMIT_BATCH);
+    counted = rows.length;
+    const parsed = stampHashes(validateImportRows(rows), session.orgId);
+    forgetRawIds(rows);
+    const fileName = cleanName(input.fileName);
+    if (parsed.length === 0) return totalsFromPlans([], fileName, false);
+    const result = await tx(session.userId, async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`import:${session.orgId}`]);
+      const index = await loadIndex(client, session.orgId, parsed);
+      const jurisdiction = await one<{ id: string }>(client, `SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
+      const plans = await persistPlans(client, session, parsed, index, jurisdiction.id);
+      const totals = totalsFromPlans(plans, fileName, false);
+      const failed = plans.filter((plan) => plan.blocked).length;
+      await client.query(
+        `INSERT INTO import_jobs (
+           org_id, entity, column_map, status, rows_total, rows_ok, rows_failed, error_report, requested_by, finished_at
+         ) VALUES ($1, 'bulk', $2::jsonb, $3, $4, $5, $6, $7::jsonb, $8, now())`,
+        [
+          session.orgId,
+          JSON.stringify({ fileName }),
+          failed > 0 && failed === plans.length ? "failed" : "succeeded",
+          plans.length,
+          plans.length - failed,
+          failed,
+          JSON.stringify(totals.errors.map((issue) => ({ line: issue.line, key: issue.key }))),
+          session.userId,
+        ],
+      );
+      return totals;
+    }, scope(session));
+    await writeAudit(session.orgId, session.userId, "import_batch", {
+      fileName,
+      rows: parsed.length,
+      created: result.created,
+      reused: result.reused,
+      errors: result.errors.length,
+      environment: session.environment,
+    });
+    return result;
+  } finally {
+    logImportTiming("commit", counted, started);
+  }
 }
 
 function assertImport(session: Session) {
@@ -150,12 +134,6 @@ function scope(session: Session) {
 
 function cleanName(value: string) {
   return value.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 200) || "import";
-}
-
-function assertRequestRows(rows: ImportRequestRow[]) {
-  if (rows.length > IMPORT_REQUEST_ROWS) throw new FlowError("im_too_many", { n: rows.length, max: IMPORT_REQUEST_ROWS });
-  const farthest = rows.reduce((max, row) => Math.max(max, row.line), 0);
-  if (farthest > IMPORT_MAX_ROWS + 1) throw new FlowError("im_too_many", { n: Math.max(0, farthest - 1), max: IMPORT_MAX_ROWS });
 }
 
 function forgetRawIds(rows: ImportRequestRow[]) {
@@ -230,13 +208,15 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[])
     address_display: string | null;
   }>(
     `SELECT u.id::text, u.property_id::text, u.label, u.rental_mode::text AS rental_mode,
-            coalesce(u.import_address_key, p.address_key, '') AS address_key, p.address_display
+            coalesce(u.import_address_key, p.address_key, ${COMPUTED_ADDRESS_KEY}, '') AS address_key,
+            p.address_display
        FROM units u
        JOIN properties p ON p.id = u.property_id
       WHERE u.org_id = $1 AND u.archived_at IS NULL
         AND (
           u.import_address_key = ANY($2::text[])
           OR p.address_key = ANY($2::text[])
+          OR ${COMPUTED_ADDRESS_KEY} = ANY($2::text[])
           OR p.name = ANY($3::text[])
         )`,
     [orgId, keys, names],
@@ -313,19 +293,431 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[])
     }
   }
   if (phones.length || hashes.length) {
-    const tenants = await client.query<{ id: string; phone_e164: string | null; id_number_hash: string | null }>(
-      `SELECT id::text, phone_e164, id_number_hash
+    const tenants = await client.query<{ id: string; phone_e164: string | null; id_number_hash: string | null; display_name: string }>(
+      `SELECT id::text, phone_e164, id_number_hash, display_name
          FROM contacts
         WHERE org_id = $1 AND is_tenant AND archived_at IS NULL
           AND (phone_e164 = ANY($2::text[]) OR id_number_hash = ANY($3::text[]))`,
       [orgId, phones, hashes],
     );
     for (const tenant of tenants.rows) {
-      addTenantKey(index.tenantsByPhone, tenant.phone_e164, tenant.id);
-      addTenantKey(index.tenantsByHash, tenant.id_number_hash, tenant.id);
+      const ref = { id: tenant.id, name: tenant.display_name };
+      addTenantKey(index.tenantsByPhone, tenant.phone_e164, ref);
+      addTenantKey(index.tenantsByHash, tenant.id_number_hash, ref);
     }
   }
   return index;
+}
+
+async function readCappedText(request: Request, maxBytes: number) {
+  const stream = request.body;
+  if (!stream) throw new FlowError("im_body");
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+      total += value.byteLength;
+      if (total > maxBytes) throw new FlowError("im_body");
+      chunks.push(value);
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      // The stream is already closed or the caller cancelled it.
+    }
+  }
+  if (total === 0) throw new FlowError("im_body");
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function logImportTiming(mode: "dry" | "commit", rows: number, started: number) {
+  if (process.env.NODE_ENV !== "development") return;
+  console.info(`[import] ${mode} ${rows} rows in ${Math.round(performance.now() - started)}ms`);
+}
+
+async function persistPlans(client: Client, session: Session, parsed: ParsedImportRow[], index: ReturnType<typeof emptyIndex>, jurisdictionId: string) {
+  const planned = planRows(parsed, index);
+  if (!planned.some((plan) => !plan.blocked)) return planned;
+  try {
+    await client.query("SAVEPOINT import_bulk");
+    await bulkWrite(client, session, planned, jurisdictionId);
+    await client.query("RELEASE SAVEPOINT import_bulk");
+    return planned;
+  } catch (error) {
+    await client.query("ROLLBACK TO SAVEPOINT import_bulk");
+    await client.query("RELEASE SAVEPOINT import_bulk");
+    if (process.env.NODE_ENV !== "production") {
+      console.error("import bulk insert fell back", error instanceof Error ? error.message : error);
+    }
+    return writePlansPerRow(client, session, parsed, jurisdictionId);
+  }
+}
+
+async function writePlansPerRow(client: Client, session: Session, parsed: ParsedImportRow[], jurisdictionId: string) {
+  const index = await loadIndex(client, session.orgId, parsed);
+  const plans: RowPlan[] = [];
+  for (const row of parsed) {
+    const plan = planOne(row, index);
+    if (!plan.blocked) {
+      await client.query("SAVEPOINT import_row");
+      try {
+        await writeRow(client, session, plan, jurisdictionId);
+        await client.query("RELEASE SAVEPOINT import_row");
+        rememberPlan(index, plan);
+      } catch (error) {
+        await client.query("ROLLBACK TO SAVEPOINT import_row");
+        await client.query("RELEASE SAVEPOINT import_row");
+        fail(plan, issueFromDb(row.line, error));
+      }
+    }
+    plans.push(plan);
+  }
+  return plans;
+}
+
+function materializeIds(plans: RowPlan[]) {
+  const ids = new Map<string, string>();
+  const real = (id: string | null) => {
+    if (!id || !id.startsWith("new-")) return id;
+    let next = ids.get(id);
+    if (!next) {
+      next = randomUUID();
+      ids.set(id, next);
+    }
+    return next;
+  };
+  for (const plan of plans) {
+    plan.propertyId = real(plan.propertyId);
+    plan.unitId = real(plan.unitId);
+    plan.roomId = real(plan.roomId);
+    plan.ownerId = real(plan.ownerId);
+    plan.tenantId = real(plan.tenantId);
+  }
+}
+
+async function bulkWrite(client: Client, session: Session, plans: RowPlan[], jurisdictionId: string) {
+  const live = plans.filter((plan) => !plan.blocked);
+  materializeIds(live);
+  await insertProperties(client, session, live, jurisdictionId);
+  await insertPeople(client, session, live);
+  await insertPropertyOwners(client, session, live);
+  await insertUnits(client, session, live);
+  await insertRooms(client, session, live);
+  const leaseIds = new Map<RowPlan, string>();
+  await insertLeases(client, session, live, leaseIds);
+  await insertParties(client, session, live, leaseIds);
+  await upsertListingsBulk(client, session.orgId, live);
+}
+
+async function insertProperties(client: Client, session: Session, plans: RowPlan[], jurisdictionId: string) {
+  const rows = uniquePlans(plans.filter((plan) => plan.createProperty && plan.propertyId), (plan) => plan.propertyId ?? "");
+  if (rows.length === 0) return;
+  await client.query(
+    `INSERT INTO properties (
+       id, org_id, name, address, address_display, address_key, country_code, jurisdiction_id, currency, timezone, default_rental_mode
+     )
+     SELECT t.id, $1, t.name, t.address::jsonb, t.address_display, t.address_key, 'TW', $2, 'TWD', 'Asia/Taipei', t.mode::rental_mode
+       FROM unnest($3::uuid[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[])
+         AS t(id, name, address, address_display, address_key, mode)`,
+    [
+      session.orgId,
+      jurisdictionId,
+      rows.map((plan) => plan.propertyId),
+      rows.map((plan) => plan.row.propertyName),
+      rows.map((plan) => JSON.stringify({ country: "TW", line: plan.row.address })),
+      rows.map((plan) => plan.row.address),
+      rows.map((plan) => plan.row.addressKey),
+      rows.map((plan) => dbMode(plan.row.kind)),
+    ],
+  );
+}
+
+async function insertPeople(client: Client, session: Session, plans: RowPlan[]) {
+  const people: { id: string; owner: boolean; tenant: boolean; name: string; email: string; phone: string; hash: string }[] = [];
+  const seen = new Set<string>();
+  for (const plan of plans) {
+    if (plan.createOwner && plan.ownerId && !seen.has(plan.ownerId)) {
+      seen.add(plan.ownerId);
+      people.push({
+        id: plan.ownerId,
+        owner: true,
+        tenant: false,
+        name: plan.row.ownerName,
+        email: plan.row.ownerEmail ?? "",
+        phone: "",
+        hash: "",
+      });
+    }
+    if (plan.createTenant && plan.tenantId && !seen.has(plan.tenantId)) {
+      seen.add(plan.tenantId);
+      people.push({
+        id: plan.tenantId,
+        owner: false,
+        tenant: true,
+        name: plan.row.tenantName ?? "",
+        email: plan.row.tenantEmail ?? "",
+        phone: plan.row.phoneE164 ?? "",
+        hash: plan.row.tenantIdHash ?? "",
+      });
+    }
+  }
+  if (people.length === 0) return;
+  await client.query(
+    `INSERT INTO contacts (id, org_id, is_owner, is_tenant, display_name, email, phone_e164, id_number_hash, locale)
+     SELECT t.id, $1, t.is_owner, t.is_tenant, t.display_name, NULLIF(t.email, ''), NULLIF(t.phone, ''), NULLIF(t.hash, ''), $2
+       FROM unnest($3::uuid[], $4::bool[], $5::bool[], $6::text[], $7::text[], $8::text[], $9::text[])
+         AS t(id, is_owner, is_tenant, display_name, email, phone, hash)`,
+    [
+      session.orgId,
+      session.locale,
+      people.map((person) => person.id),
+      people.map((person) => person.owner),
+      people.map((person) => person.tenant),
+      people.map((person) => person.name),
+      people.map((person) => person.email),
+      people.map((person) => person.phone),
+      people.map((person) => person.hash),
+    ],
+  );
+}
+
+async function insertPropertyOwners(client: Client, session: Session, plans: RowPlan[]) {
+  const links = uniquePlans(
+    plans.filter((plan) => plan.propertyId && plan.ownerId),
+    (plan) => `${plan.propertyId}:${plan.ownerId}`,
+  );
+  if (links.length === 0) return;
+  await client.query(
+    `WITH incoming AS (
+       SELECT DISTINCT property_id, owner_id
+         FROM unnest($2::uuid[], $3::uuid[]) AS t(property_id, owner_id)
+     ), ranked AS (
+       SELECT property_id, owner_id, row_number() OVER (PARTITION BY property_id ORDER BY owner_id) AS n
+         FROM incoming
+     )
+     INSERT INTO property_owners (org_id, property_id, owner_contact_id, is_primary)
+     SELECT $1, r.property_id, r.owner_id,
+            r.n = 1 AND NOT EXISTS (SELECT 1 FROM property_owners po WHERE po.property_id = r.property_id)
+       FROM ranked r
+      WHERE NOT EXISTS (
+        SELECT 1 FROM property_owners po
+         WHERE po.property_id = r.property_id AND po.owner_contact_id = r.owner_id
+      )`,
+    [session.orgId, links.map((plan) => plan.propertyId), links.map((plan) => plan.ownerId)],
+  );
+}
+
+async function insertUnits(client: Client, session: Session, plans: RowPlan[]) {
+  const rows = uniquePlans(plans.filter((plan) => plan.createUnit && plan.unitId && plan.propertyId), (plan) => plan.unitId ?? "");
+  if (rows.length === 0) return;
+  await client.query(
+    `INSERT INTO units (
+       id, org_id, property_id, label, floor, rental_mode, area_value, area_unit, base_rent_minor, import_address_key,
+       electricity_method, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
+     )
+     SELECT t.id, $1, t.property_id, t.label, t.floor, t.mode::rental_mode, t.area, 'ping', t.rent, t.address_key,
+            NULLIF(t.electricity, ''), t.rate, t.kwh, t.bill, NULLIF(t.rate_reason, ''), NULLIF(t.notes, '')
+       FROM unnest(
+         $2::uuid[], $3::uuid[], $4::text[], $5::text[], $6::text[],
+         $7::numeric[], $8::bigint[], $9::text[],
+         $10::text[], $11::numeric[], $12::numeric[], $13::bigint[], $14::text[], $15::text[]
+       ) AS t(id, property_id, label, floor, mode, area, rent, address_key, electricity, rate, kwh, bill, rate_reason, notes)`,
+    [
+      session.orgId,
+      rows.map((plan) => plan.unitId),
+      rows.map((plan) => plan.propertyId),
+      rows.map((plan) => plan.row.unitLabel),
+      rows.map((plan) => plan.row.unitLabel),
+      rows.map((plan) => dbMode(plan.row.kind)),
+      rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.area : null)),
+      rows.map((plan) => plan.row.rentMinor),
+      rows.map((plan) => plan.row.addressKey),
+      rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.electricity ?? "" : "")),
+      rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.rate : null)),
+      rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.billKwh : null)),
+      rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.billAmountMinor : null)),
+      rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.rateReason ?? "" : "")),
+      rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.notes ?? "" : "")),
+    ],
+  );
+}
+
+async function insertRooms(client: Client, session: Session, plans: RowPlan[]) {
+  const rows = uniquePlans(
+    plans.filter((plan) => plan.createRoom && plan.roomId && plan.unitId && plan.row.roomLabel),
+    (plan) => plan.roomId ?? "",
+  );
+  if (rows.length === 0) return;
+  await client.query(
+    `INSERT INTO rooms (
+       id, org_id, unit_id, label, room_type, area_value, area_unit, base_rent_minor,
+       electricity_method, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
+     )
+     SELECT t.id, $1, t.unit_id, t.label, t.room_type::room_type, t.area, 'ping', t.rent,
+            NULLIF(t.electricity, ''), t.rate, t.kwh, t.bill, NULLIF(t.rate_reason, ''), NULLIF(t.notes, '')
+       FROM unnest(
+         $2::uuid[], $3::uuid[], $4::text[], $5::text[], $6::numeric[], $7::bigint[],
+         $8::text[], $9::numeric[], $10::numeric[], $11::bigint[], $12::text[], $13::text[]
+       ) AS t(id, unit_id, label, room_type, area, rent, electricity, rate, kwh, bill, rate_reason, notes)`,
+    [
+      session.orgId,
+      rows.map((plan) => plan.roomId),
+      rows.map((plan) => plan.unitId),
+      rows.map((plan) => plan.row.roomLabel),
+      rows.map((plan) => plan.row.roomType),
+      rows.map((plan) => plan.row.area),
+      rows.map((plan) => plan.row.rentMinor),
+      rows.map((plan) => plan.row.electricity ?? ""),
+      rows.map((plan) => plan.row.rate),
+      rows.map((plan) => plan.row.billKwh),
+      rows.map((plan) => plan.row.billAmountMinor),
+      rows.map((plan) => plan.row.rateReason ?? ""),
+      rows.map((plan) => plan.row.notes ?? ""),
+    ],
+  );
+}
+
+function leaseRows(plans: RowPlan[]) {
+  return plans.filter(
+    (plan) => plan.createLease && plan.tenantId && plan.propertyId && plan.unitId && plan.row.startDate && plan.row.endDate && plan.row.dueDay !== null,
+  );
+}
+
+async function insertLeases(client: Client, session: Session, plans: RowPlan[], leaseIds: Map<RowPlan, string>) {
+  const rows = leaseRows(plans);
+  if (rows.length === 0) return;
+  for (const plan of rows) if (!leaseIds.has(plan)) leaseIds.set(plan, randomUUID());
+  const reasons = [...new Set(rows.map((plan) => plan.row.depositReason).filter((reason): reason is string => Boolean(reason)))];
+  if (reasons.length === 1) await client.query(`SELECT set_config('app.change_reason', $1, true)`, [reasons[0]]);
+  try {
+    await client.query(
+      `INSERT INTO leases (
+         id, org_id, property_id, unit_id, target_unit_id, target_room_id, status, esign_status,
+         start_date, end_date, currency, rent_amount_minor, due_day, prorate_first_period,
+         deposit_amount_minor, deposit_months, deposit_override_reason, deposit_overridden_by, deposit_overridden_at,
+         notes, created_by
+       )
+       SELECT t.id, $1, t.property_id, t.unit_id, NULLIF(t.target_unit, '')::uuid, NULLIF(t.target_room, '')::uuid,
+              'active', 'imported', t.start_date::date, t.end_date::date, 'TWD', t.rent, t.due_day::smallint, false,
+              t.deposit, t.months, NULLIF(t.reason, ''), NULLIF(t.by_user, '')::uuid, NULLIF(t.at, '')::timestamptz,
+              NULLIF(t.notes, ''), $2
+         FROM unnest(
+           $3::uuid[], $4::uuid[], $5::uuid[], $6::text[], $7::text[],
+           $8::text[], $9::text[], $10::bigint[], $11::text[], $12::bigint[], $13::numeric[],
+           $14::text[], $15::text[], $16::text[], $17::text[]
+         ) AS t(id, property_id, unit_id, target_unit, target_room, start_date, end_date, rent, due_day, deposit, months, reason, by_user, at, notes)`,
+      [
+        session.orgId,
+        session.userId,
+        rows.map((plan) => leaseIds.get(plan)),
+        rows.map((plan) => plan.propertyId),
+        rows.map((plan) => plan.unitId),
+        rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.unitId : "")),
+        rows.map((plan) => (plan.row.kind === "room" ? plan.roomId ?? "" : "")),
+        rows.map((plan) => plan.row.startDate),
+        rows.map((plan) => plan.row.endDate),
+        rows.map((plan) => plan.row.rentMinor),
+        rows.map((plan) => String(plan.row.dueDay)),
+        rows.map((plan) => plan.row.depositMinor),
+        rows.map((plan) => plan.row.depositMonths),
+        rows.map((plan) => (depositExceedsCap(plan.row.depositMonths) ? plan.row.depositReason ?? "" : "")),
+        rows.map((plan) => (depositExceedsCap(plan.row.depositMonths) && plan.row.depositReason ? session.userId : "")),
+        rows.map((plan) => (depositExceedsCap(plan.row.depositMonths) && plan.row.depositReason ? new Date().toISOString() : "")),
+        rows.map((plan) => plan.row.notes ?? ""),
+      ],
+    );
+  } finally {
+    if (reasons.length === 1) await client.query(`SELECT set_config('app.change_reason', '', true)`);
+  }
+}
+
+async function insertParties(client: Client, session: Session, plans: RowPlan[], leaseIds: Map<RowPlan, string>) {
+  const rows = leaseRows(plans);
+  if (rows.length === 0) return;
+  await client.query(
+    `INSERT INTO lease_parties (org_id, lease_id, contact_id, role)
+     SELECT $1, t.lease_id, t.contact_id, 'primary'
+       FROM unnest($2::uuid[], $3::uuid[]) AS t(lease_id, contact_id)`,
+    [session.orgId, rows.map((plan) => leaseIds.get(plan)), rows.map((plan) => plan.tenantId)],
+  );
+}
+
+async function upsertListingsBulk(client: Client, orgId: string, plans: RowPlan[]) {
+  const wanted = plans.filter((plan) => plan.createLease || plan.createUnit || plan.createRoom);
+  const units = new Map<string, RowPlan>();
+  const rooms = new Map<string, RowPlan>();
+  for (const plan of wanted) {
+    if (plan.row.kind === "room" && plan.roomId) rooms.set(plan.roomId, plan);
+    else if (plan.unitId) units.set(plan.unitId, plan);
+  }
+  await upsertListingGroup(client, orgId, [...units.values()], "unit");
+  await upsertListingGroup(client, orgId, [...rooms.values()], "room");
+}
+
+async function upsertListingGroup(client: Client, orgId: string, plans: RowPlan[], kind: "unit" | "room") {
+  if (plans.length === 0) return;
+  const conflict = kind === "unit" ? "(unit_id) WHERE unit_id IS NOT NULL" : "(room_id) WHERE room_id IS NOT NULL";
+  await client.query(
+    `INSERT INTO listing_terms (
+       org_id, unit_id, room_id, tenant_name, tenant_phone, tenant_email, lease_start, lease_end,
+       deposit_minor, rent_due_day, deposit_cap_reason, opening_arrears_minor
+     )
+     SELECT $1, NULLIF(t.unit_id, '')::uuid, NULLIF(t.room_id, '')::uuid, NULLIF(t.tenant_name, ''), NULLIF(t.phone, ''),
+            NULLIF(t.email, ''), NULLIF(t.lease_start, '')::date, NULLIF(t.lease_end, '')::date,
+            NULLIF(t.deposit, '')::bigint, NULLIF(t.due_day, '')::smallint, NULLIF(t.reason, ''), t.opening
+       FROM unnest(
+         $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[], $11::text[], $12::bigint[]
+       ) AS t(unit_id, room_id, tenant_name, phone, email, lease_start, lease_end, deposit, due_day, reason, opening)
+     ON CONFLICT ${conflict}
+     DO UPDATE SET
+       tenant_name = EXCLUDED.tenant_name,
+       tenant_phone = EXCLUDED.tenant_phone,
+       tenant_email = EXCLUDED.tenant_email,
+       lease_start = EXCLUDED.lease_start,
+       lease_end = EXCLUDED.lease_end,
+       deposit_minor = EXCLUDED.deposit_minor,
+       rent_due_day = EXCLUDED.rent_due_day,
+       deposit_cap_reason = EXCLUDED.deposit_cap_reason,
+       opening_arrears_minor = EXCLUDED.opening_arrears_minor,
+       updated_at = now()`,
+    [
+      orgId,
+      plans.map((plan) => (kind === "unit" ? plan.unitId ?? "" : "")),
+      plans.map((plan) => (kind === "room" ? plan.roomId ?? "" : "")),
+      plans.map((plan) => plan.row.tenantName ?? ""),
+      plans.map((plan) => plan.row.phoneE164 ?? ""),
+      plans.map((plan) => plan.row.tenantEmail ?? ""),
+      plans.map((plan) => (plan.row.lease ? plan.row.startDate ?? "" : "")),
+      plans.map((plan) => (plan.row.lease ? plan.row.endDate ?? "" : "")),
+      plans.map((plan) => (plan.row.lease ? String(plan.row.depositMinor) : "")),
+      plans.map((plan) => (plan.row.dueDay === null ? "" : String(plan.row.dueDay))),
+      plans.map((plan) => plan.row.depositReason ?? ""),
+      plans.map((plan) => plan.row.openingMinor),
+    ],
+  );
+}
+
+function uniquePlans(plans: RowPlan[], key: (plan: RowPlan) => string) {
+  const seen = new Set<string>();
+  const out: RowPlan[] = [];
+  for (const plan of plans) {
+    const id = key(plan);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(plan);
+  }
+  return out;
 }
 
 async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdictionId: string) {

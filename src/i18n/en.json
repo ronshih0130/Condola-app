@@ -29,6 +29,7 @@
  "im_e_idkey": "The server has no ID hash key, so rows with an ID cannot be imported.",
  "im_e_len": "\"{f}\" is longer than {max} characters",
  "im_e_phone_dup": "This phone matches more than one tenant. Add an ID or skip the row.",
+ "im_e_phone_name": "This phone matches a tenant with a different name. Add an ID or skip the row.",
  "im_e_terms": "This tenant already has a lease here, but the rent, deposit, due day, or dates differ.",
  "im_e_dup": "Same unit/room as line {n}",
  "im_e_elec": "Electricity \"{v}\" not recognised (meter / included / tenant)",

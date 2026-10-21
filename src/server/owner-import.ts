@@ -47,10 +47,11 @@ export const IMPORT_FIELDS = [
 
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
-/** Rows per dry-run or commit request. Sized for the Workers free-plan CPU budget. */
-export const IMPORT_REQUEST_ROWS = 50;
-export const IMPORT_COMMIT_BATCH = IMPORT_REQUEST_ROWS;
-/** Whole file, across every batched request. */
+/** Commit rows per request. Kept small for the Workers free-plan 10ms CPU budget. */
+export const IMPORT_COMMIT_BATCH = 10;
+/** Dry-run rows per request. No writes, so a slightly larger batch still fits. */
+export const IMPORT_DRY_BATCH = 25;
+/** Whole file, counted on parsed data rows (csv and xlsx alike). */
 export const IMPORT_MAX_ROWS = 2000;
 export const IMPORT_FIELD_MAX = 500;
 export const IMPORT_MONEY_MAX = 100_000_000;
@@ -205,9 +206,11 @@ export function tableToRows(table: string[][], mapping: ColumnMapping): ImportRe
   });
 }
 
-export function coerceImportRows(input: unknown): ImportRequestRow[] {
+export function coerceImportRows(input: unknown, maxRows = IMPORT_MAX_ROWS): ImportRequestRow[] {
   if (!Array.isArray(input)) return [];
-  return input.slice(0, IMPORT_MAX_ROWS + 1).map((item, index) => {
+  if (input.length > IMPORT_MAX_ROWS) throw new FlowError("im_too_many", { n: input.length, max: IMPORT_MAX_ROWS });
+  if (input.length > maxRows) throw new FlowError("im_too_many", { n: input.length, max: maxRows });
+  return input.map((item, index) => {
     const source = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
     const row = { line: index + 2 } as ImportRequestRow;
     const line = Number(source.line);
@@ -426,10 +429,12 @@ export type ExistingIndex = {
   rooms: Map<string, { id: string; unitId: string }>;
   ownersByEmail: Map<string, string>;
   ownersByName: Map<string, string>;
-  tenantsByPhone: Map<string, string[]>;
-  tenantsByHash: Map<string, string[]>;
+  tenantsByPhone: Map<string, TenantRef[]>;
+  tenantsByHash: Map<string, TenantRef[]>;
   leases: IndexedLease[];
 };
+
+export type TenantRef = { id: string; name: string };
 
 export type IndexedLease = {
   spaceKey: string;
@@ -578,6 +583,10 @@ function roomSpaceKey(row: ParsedImportRow, unitId: string | null) {
   return `unit:${unitId ?? `new:${row.addressKey}:${row.unitLabel}`}`;
 }
 
+function nameKey(value: string | null | undefined) {
+  return (value ?? "").normalize("NFKC").trim().toLowerCase();
+}
+
 function matchTenant(row: ParsedImportRow, index: ExistingIndex, issues: ImportIssue[]): string | null | "blocked" {
   const phones = row.phoneE164 ? (index.tenantsByPhone.get(row.phoneE164) ?? []) : [];
   if (row.tenantIdHash) {
@@ -587,11 +596,11 @@ function matchTenant(row: ParsedImportRow, index: ExistingIndex, issues: ImportI
       return "blocked";
     }
     if (hashes.length === 1) {
-      if (phones.some((id) => id !== hashes[0])) {
+      if (phones.some((tenant) => tenant.id !== hashes[0].id)) {
         issues.push({ line: row.line, severity: "error", key: "im_e_tenant" });
         return "blocked";
       }
-      return hashes[0];
+      return hashes[0].id;
     }
     if (phones.length > 0) {
       issues.push({ line: row.line, severity: "error", key: "im_e_tenant" });
@@ -603,7 +612,13 @@ function matchTenant(row: ParsedImportRow, index: ExistingIndex, issues: ImportI
     issues.push({ line: row.line, severity: "error", key: "im_e_phone_dup" });
     return "blocked";
   }
-  return phones[0] ?? null;
+  const hit = phones[0];
+  if (!hit) return null;
+  if (nameKey(hit.name) !== nameKey(row.tenantName)) {
+    issues.push({ line: row.line, severity: "error", key: "im_e_phone_name" });
+    return "blocked";
+  }
+  return hit.id;
 }
 
 function sameLeaseTerms(lease: IndexedLease, row: ParsedImportRow, tenantId: string | null) {
@@ -653,8 +668,9 @@ function remember(index: ExistingIndex, plan: RowPlan) {
   if (plan.createTenant) {
     const id = plan.tenantId ?? `new-tenant:${row.phoneE164 ?? row.tenantIdHash ?? row.line}`;
     plan.tenantId = id;
-    addTenantKey(index.tenantsByPhone, row.phoneE164, id);
-    addTenantKey(index.tenantsByHash, row.tenantIdHash, id);
+    const tenant = { id, name: row.tenantName ?? "" };
+    addTenantKey(index.tenantsByPhone, row.phoneE164, tenant);
+    addTenantKey(index.tenantsByHash, row.tenantIdHash, tenant);
   }
   if (plan.createLease && row.startDate && row.endDate && plan.tenantId) {
     index.leases.push({
@@ -671,14 +687,14 @@ function remember(index: ExistingIndex, plan: RowPlan) {
   }
 }
 
-export function addTenantKey(map: Map<string, string[]>, key: string | null, id: string) {
-  if (!key) return;
+export function addTenantKey(map: Map<string, TenantRef[]>, key: string | null, tenant: TenantRef) {
+  if (!key || !tenant.id) return;
   const list = map.get(key);
   if (!list) {
-    map.set(key, [id]);
+    map.set(key, [tenant]);
     return;
   }
-  if (!list.includes(id)) list.push(id);
+  if (!list.some((item) => item.id === tenant.id)) list.push(tenant);
 }
 
 export type ImportTotals = {
