@@ -1,5 +1,5 @@
 import { dictionary, makeT } from "@/i18n";
-import { PdfDownloadButton } from "@/components/pdf-download";
+import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { formatDate, formatMoney } from "@/server/format";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";

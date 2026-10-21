@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
-import { PdfDownloadButton } from "@/components/pdf-download";
+import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { StatementDocument } from "@/components/statement-document";
 import { ownerPrivacy, tenantDisplayNames } from "@/server/auth";
 import { maskTenantNames } from "@/server/privacy";
