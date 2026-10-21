@@ -18,6 +18,12 @@ function optionalNum(value: FormDataEntryValue | null) {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
+function tenantContactFromForm(formData: FormData) {
+  const mode = text(formData.get("tenantMode")).trim();
+  if (!mode || mode === "new") return "";
+  return mode;
+}
+
 export function leaseInputFromForm(formData: FormData): LeaseInput {
   const start = text(formData.get("startDate")).trim() || taipeiToday();
   const months = num(formData.get("months"));
@@ -29,6 +35,7 @@ export function leaseInputFromForm(formData: FormData): LeaseInput {
     tenantName: text(formData.get("tenantName")),
     tenantPhone: text(formData.get("tenantPhone")),
     tenantEmail: text(formData.get("tenantEmail")),
+    tenantContactId: tenantContactFromForm(formData),
     lineUserId: text(formData.get("lineUserId")),
     startDate: start,
     endDate: end,

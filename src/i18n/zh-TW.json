@@ -1415,5 +1415,11 @@
  "i_seat_meter": "席次 {used}/{limit}",
  "i_seat_unlimited": "席次 {used}（不限）",
  "i_seat_upsell": "免費方案 1 個席次已滿。升級後才能再邀請。",
- "i_seat_test": "測試模式不限席次。"
+ "i_seat_test": "測試模式不限席次。",
+ "i_new_tenant": "新租客",
+ "i_existing_tenant": "現有租客",
+ "i_tenant_search": "搜尋姓名、電話或 Email",
+ "i_tenant_pick": "選擇租客",
+ "i_tenant_none": "沒有符合的租客",
+ "i_tenant_exists": "這位租客已在事務所中。請改選現有租客，不要再建立一筆聯絡人。"
 }

@@ -1415,5 +1415,11 @@
  "i_seat_meter": "Seats {used}/{limit}",
  "i_seat_unlimited": "Seats {used} (no limit)",
  "i_seat_upsell": "The free plan’s 1 seat is full. Upgrade before inviting someone.",
- "i_seat_test": "Test mode has no seat limit."
+ "i_seat_test": "Test mode has no seat limit.",
+ "i_new_tenant": "New tenant",
+ "i_existing_tenant": "Existing tenant",
+ "i_tenant_search": "Search name, phone, or email",
+ "i_tenant_pick": "Choose a tenant",
+ "i_tenant_none": "No matching tenant",
+ "i_tenant_exists": "This tenant is already in the firm. Choose the existing tenant instead of creating another contact."
 }

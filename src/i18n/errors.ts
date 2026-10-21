@@ -28,6 +28,7 @@ export const ERRORS: Record<string, string> = {
   "errors.amountTooHigh": "i_amount_high",
   "errors.email": "i_email",
   "errors.emailTaken": "i_email_taken",
+  "errors.tenantExists": "i_tenant_exists",
   "errors.phone": "i_phone",
   "errors.meter": "i_meter",
   "errors.billExists": "i_bill_exists",
