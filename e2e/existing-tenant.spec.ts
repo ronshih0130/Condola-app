@@ -43,7 +43,7 @@ test("staff can lease a vacant room to an existing 租客", async ({ page }) => 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
   await page.getByTestId("start-date").fill(today);
   await page.getByTestId("term-months").fill("12");
-  await page.getByTestId("rent").fill("10000");
+  await page.getByTestId("rent").fill("12000");
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("deposit-months").fill("2");
   await page.getByTestId("wizard-next").click();
@@ -54,8 +54,8 @@ test("staff can lease a vacant room to an existing 租客", async ({ page }) => 
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("lease-confirm-tenant")).toHaveText("王小美");
   await expect(page.getByTestId("lease-confirm-space")).toContainText("信義松仁");
-  await expect(page.getByTestId("lease-confirm-rent")).toHaveText("NT$10,000");
-  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("2 個月（NT$20,000）");
+  await expect(page.getByTestId("lease-confirm-rent")).toHaveText("$12,000");
+  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("2 個月");
   await page.getByTestId("submit-lease").click();
 
   const error = page.getByTestId("lease-error");

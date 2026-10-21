@@ -9,12 +9,16 @@ export function twdAmountsAreWhole(currency: string, rentMajor: number, depositM
   return Number.isFinite(depositMinor) && depositMinor % 100 === 0;
 }
 
-/** TWD is written NT$20,000. zh-TW Intl would otherwise print $20,000. */
+/** TWD on the lease wizard is $12,000: a dollar sign, thousands separators, and whole dollars. */
 export function formatMajor(major: number, currency: string, locale: string) {
   if (!Number.isFinite(major)) return "";
   if (currency === "TWD") {
-    const grouped = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(major));
-    return `NT$${grouped}`;
+    return new Intl.NumberFormat("zh-Hant-TW", {
+      style: "currency",
+      currency: "TWD",
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(Math.round(major));
   }
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
     style: "currency",
@@ -38,7 +42,7 @@ export function confirmDeposit(
   const rent = Number(rentRaw);
   const amount = Number.isFinite(months) && Number.isFinite(rent) ? format(months * rent, currency, locale) : "";
   const monthsLabel = monthsRaw.trim();
-  if (locale === "zh-TW") return amount ? `${monthsLabel} 個月（${amount}）` : `${monthsLabel} 個月`;
+  if (locale === "zh-TW") return `${monthsLabel} 個月`;
   const unit = months === 1 ? "month" : "months";
   return amount ? `${monthsLabel} ${unit} (${amount})` : `${monthsLabel} ${unit}`;
 }
