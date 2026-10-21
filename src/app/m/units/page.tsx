@@ -2,7 +2,7 @@ import Link from "next/link";
 import { makeT } from "@/i18n";
 import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { PageHeader } from "@/components/ui";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { can } from "@/server/perms";
 import { searchSpaces } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -71,7 +71,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
                 <td data-label={t("i_room_type")}>{row.room_type ? t(roomTypeKey[row.room_type] ?? "i_other_room") : "—"}</td>
                 <td data-label={t("i_area_ping")}>{row.area_value || "—"}</td>
                 <td className="num" data-label={t("i_base_rent")}>
-                  {row.base_rent_minor ? formatMoney(Number(row.base_rent_minor), row.currency, session.locale) : "—"}
+                  {row.base_rent_minor ? moneyLabel(Number(row.base_rent_minor), row.currency, session.locale) : "—"}
                 </td>
                 <td data-label={t("i_owner")}>{row.owner_name ? displaySampleName(row.owner_name) : "—"}</td>
                 <td data-label={t("i_elec_method")}>

@@ -3,7 +3,7 @@ import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
 import { REPAIR_CATS, REPAIR_CAT_KEY } from "@/lib/repair-labels";
 import { actionTicket, actionUpdateTicket } from "@/server/actions";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { can, rolesFor } from "@/server/perms";
 import { isUuid } from "@/server/repair-rules";
 import { listLeases, listTicketFilters, listTicketProperties, listTickets } from "@/server/queries";
@@ -110,7 +110,7 @@ export default async function TicketsPage({
                       {ticket.scheduled_on ? ` · ${ticket.scheduled_on}` : ""}
                     </div>
                     {ticket.final_cost ? (
-                      <div className="small">{formatMoney(ticket.final_cost, ticket.currency || "TWD", session.locale)}</div>
+                      <div className="small">{moneyLabel(ticket.final_cost, ticket.currency || "TWD", session.locale)}</div>
                     ) : null}
                     <form action={canWrite ? actionUpdateTicket : undefined} className="row" style={{ marginTop: 6 }}>
                       <input type="hidden" name="ticketId" value={ticket.id} />

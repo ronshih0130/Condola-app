@@ -1,27 +1,27 @@
 import { translate, type Dict, type Locale } from "@/i18n";
 
+function groupedAmount(minor: number | string, locale: Locale, digits: number) {
+  return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Math.abs(Number(minor)) / 100);
+}
+
+/** TWD is an absolute NT$ amount, so zero is NT$0 and never −NT$0. Other currencies keep the ICU symbol. */
 export function formatMoney(minor: number | string, currency: string, locale: Locale) {
-  const value = Number(minor) / 100;
-  const decimals = currency === "TWD" ? 0 : 2;
+  if (currency === "TWD") return `NT$${groupedAmount(minor, locale, 0)}`;
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
     style: "currency",
     currency,
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(value);
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(minor) / 100);
 }
 
 /** Absolute amount with an NT$ prefix for TWD, so zero is NT$0 and never −NT$0. */
 export function moneyLabel(minor: number | string, currency: string, locale: Locale) {
-  const amount = Math.abs(Number(minor));
-  if (currency === "TWD") {
-    const formatted = new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount / 100);
-    return `NT$${formatted}`;
-  }
-  return formatMoney(amount, currency, locale);
+  if (currency === "TWD") return formatMoney(minor, currency, locale);
+  return formatMoney(Math.abs(Number(minor)), currency, locale);
 }
 
 export type StatementFigures = {
@@ -58,13 +58,13 @@ export function ownerSettlement(row: StatementFigures) {
 }
 
 export function formatRate(minorPerUnit: number | string, currency: string, locale: Locale) {
-  const value = Number(minorPerUnit) / 100;
+  if (currency === "TWD") return `NT$${groupedAmount(minorPerUnit, locale, 2)}`;
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value);
+  }).format(Number(minorPerUnit) / 100);
 }
 
 export function formatDate(

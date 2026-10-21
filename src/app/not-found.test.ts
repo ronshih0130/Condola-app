@@ -34,8 +34,10 @@ test("the Chinese missing page is the only copy on / and /m", () => {
 
   const publicPage = read("./not-found.tsx");
   const managerPage = read("./m/not-found.tsx");
+  assert.match(publicPage, /找不到這個頁面｜租多啦/);
   assert.match(publicPage, /<MissingPage href="\/" \/>/);
   assert.match(publicPage, /className="main"/);
+  assert.match(managerPage, /找不到這個頁面｜租多啦/);
   assert.match(managerPage, /<MissingPage href="\/m" \/>/);
   assert.doesNotMatch(managerPage, /className="main"/);
   for (const source of [publicPage, managerPage, block]) {
@@ -56,7 +58,7 @@ test("dashboard money uses an NT$ prefix and the received tile says 已繳", () 
   for (const word of ["收款", "收租", "入帳", "測試模式", "示範"]) {
     assert.equal(zh.i_paid.includes(word), false);
   }
-  assert.equal(formatMoney(0, "TWD", "zh-TW"), "$0");
+  assert.equal(formatMoney(0, "TWD", "zh-TW"), "NT$0");
   assert.equal(moneyLabel(0, "TWD", "zh-TW"), "NT$0");
   assert.equal(moneyLabel(1_200_000, "TWD", "zh-TW"), "NT$12,000");
   assert.equal(moneyLabel(0, "TWD", "en"), "NT$0");

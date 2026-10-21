@@ -54,8 +54,8 @@ test("staff can lease a vacant room to an existing 租客", async ({ page }) => 
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("lease-confirm-tenant")).toHaveText("王小美");
   await expect(page.getByTestId("lease-confirm-space")).toContainText("信義松仁");
-  await expect(page.getByTestId("lease-confirm-rent")).toHaveText("$12,000");
-  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("1.5 個月（$18,000）");
+  await expect(page.getByTestId("lease-confirm-rent")).toHaveText("NT$12,000");
+  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("1.5 個月（NT$18,000）");
   await page.getByTestId("submit-lease").click();
   await expect(page).toHaveURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1$/);
   await expect(page.getByTestId("lease-created")).toHaveText("租約已建立，請將簽署連結傳給租客");
@@ -156,8 +156,8 @@ test("a deposit of zero months still opens the new lease", async ({ page }) => {
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("lease-confirm-space")).toContainText("信義松仁");
-  await expect(page.getByTestId("lease-confirm-rent")).toHaveText("$12,000");
-  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("0 個月（$0）");
+  await expect(page.getByTestId("lease-confirm-rent")).toHaveText("NT$12,000");
+  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("0 個月（NT$0）");
   await page.getByTestId("submit-lease").click();
   await expect(page).toHaveURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1$/);
   await expect(page.getByTestId("lease-created")).toHaveText("租約已建立，請將簽署連結傳給租客");

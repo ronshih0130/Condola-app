@@ -20,16 +20,15 @@ export function depositAmountMinor(currency: string, rentMajor: number, depositM
   return Math.round(toMinor(rentMajor) * depositMonths);
 }
 
-/** TWD on the lease wizard is $12,000: a dollar sign, thousands separators, and whole dollars. */
+/** TWD on the lease wizard is NT$12,000: an NT$ prefix, thousands separators, and whole dollars. */
 export function formatMajor(major: number, currency: string, locale: string) {
   if (!Number.isFinite(major)) return "";
   if (currency === "TWD") {
-    return new Intl.NumberFormat("zh-Hant-TW", {
-      style: "currency",
-      currency: "TWD",
+    const formatted = new Intl.NumberFormat("zh-Hant-TW", {
       maximumFractionDigits: 0,
       minimumFractionDigits: 0,
-    }).format(Math.round(major));
+    }).format(Math.round(Math.abs(major)));
+    return `NT$${formatted}`;
   }
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
     style: "currency",

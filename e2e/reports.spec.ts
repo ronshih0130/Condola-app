@@ -16,9 +16,9 @@ test("staff compare income and expenses for a period and export csv", async ({ p
   await page.getByTestId("report-to").fill(`${year + 1}-12-31`);
   await page.getByTestId("report-apply").click();
   const xinyi = page.getByTestId("report-row").filter({ hasText: "信義松仁" });
-  await expect(xinyi).toContainText("$10,000");
-  await expect(xinyi).toContainText("$2,800");
-  await expect(xinyi).toContainText("$7,200");
+  await expect(xinyi).toContainText("NT$10,000");
+  await expect(xinyi).toContainText("NT$2,800");
+  await expect(xinyi).toContainText("NT$7,200");
   await expect(page.getByTestId("report-row").filter({ hasText: "大安和平" })).toBeVisible();
   await page.screenshot({ path: "/opt/cursor/artifacts/income-expense-report.png", fullPage: true });
 

@@ -3,7 +3,7 @@ import { dictionary, makeT } from "@/i18n";
 import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader, statusClass, statusKey } from "@/components/ui";
-import { formatDate, formatMoney } from "@/server/format";
+import { formatDate, moneyLabel } from "@/server/format";
 import { searchLeases } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -18,7 +18,7 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
   const result = await searchLeases(session, raw);
   const { rows, q, page, hasNext, total, from, to } = result;
   const summary = listSummary(t, result);
-  const money = (minor: string, currency: string) => formatMoney(Number(minor), currency, session.locale);
+  const money = (minor: string, currency: string) => moneyLabel(Number(minor), currency, session.locale);
   return (
     <>
       <PageHeader

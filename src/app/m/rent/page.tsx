@@ -3,7 +3,7 @@ import Link from "next/link";
 import { makeT } from "@/i18n";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader } from "@/components/ui";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { taipeiToday } from "@/server/money";
 import { rentRoll } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -52,7 +52,7 @@ export default async function RentPage() {
                   </tr>
                 ) : null;
               lastProperty = row.property_id;
-              const money = (minor: string | null) => formatMoney(Number(minor ?? 0), row.currency, session.locale);
+              const money = (minor: string | null) => moneyLabel(Number(minor ?? 0), row.currency, session.locale);
               if (!row.lease_id) {
                 return (
                   <Fragment key={row.space_id}>
