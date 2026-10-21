@@ -111,7 +111,7 @@ test("receipt, closed-month, sample, repair, and tenant-name screens use the agr
     "../app/m/properties/[id]/page.tsx",
   ]) {
     const source = readFileSync(new URL(path, import.meta.url), "utf8");
-    assert.match(source, /SampleTag/, path);
-    assert.match(source, /isSampleName/, path);
+    assert.match(source, /displaySampleName/, path);
+    assert.equal(source.includes("SampleTag"), false, path);
   }
 });

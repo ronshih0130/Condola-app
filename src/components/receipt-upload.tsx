@@ -33,9 +33,11 @@ function messageFor(key: string | undefined, messages: { size: string; type: str
 export function ReceiptUpload({
   kind,
   existing,
+  labelKey = "i_receipt_label",
 }: {
   kind: "expense" | "payment";
   existing?: { id: string; name: string; size: number | null } | null;
+  labelKey?: string;
 }) {
   const t = useT();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -156,7 +158,7 @@ export function ReceiptUpload({
   const showReady = ready && !busy && !errorText;
   return (
     <div ref={rootRef} data-testid="receipt-upload">
-      <label className="f">{t("i_receipt_label")}</label>
+      <label className="f">{t(labelKey)}</label>
       <label
         className={`receipt-drop${over ? " on" : ""}`}
         data-testid="receipt-drop"

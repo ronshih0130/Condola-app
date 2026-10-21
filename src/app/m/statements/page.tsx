@@ -78,7 +78,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             <label className="f">{t("i_amount_label")}</label>
             <input className="inp" name="amount" data-testid="expense-amount" inputMode="decimal" required />
           </div>
-          <ReceiptUpload kind="expense" />
+          <ReceiptUpload kind="expense" labelKey="i_receipt" />
           <button className="btn pri" type="submit">
             {t("i_add_expense")}
           </button>
