@@ -148,8 +148,8 @@ test("picking an existing 租客 reuses that contact and portal user inside the 
     );
     assert.equal(copies.rows[0]?.contacts, "1");
     assert.equal(copies.rows[0]?.users, "1");
-    const listed = await searchTenants(admin, { q: "可再用租客" });
-    const summary = listed.rows.filter((row) => row.contact_id === contactId);
+    const found = await searchTenants(admin, { q: "可再用租客" });
+    const summary = found.rows.filter((row) => row.contact_id === contactId);
     assert.equal(summary.length, 1);
     assert.equal(Number(summary[0]?.lease_count), 2);
     assert.equal(summary[0]?.tenant, "可再用租客");
