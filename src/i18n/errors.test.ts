@@ -22,7 +22,7 @@ test("every error key has a translation, and an empty amount uses the amount sen
   assert.equal(zh.i_lease_whole_unit, "此戶為整層出租，請選擇整層而不是房間。");
   assert.match(zh.i_charged_total, /^向租客收取 /);
   assert.equal(zh.i_rooms_hint, "請填寫每間的房號與月租（可新增或刪除房間）");
-  assert.equal(zh.i_task1, "任務一：新增一間物件，新增一個物件，依實際情況設定房間（整層或分租皆可），並加入一位屋主。");
+  assert.equal(zh.i_task1, "任務一：新增一個物件，依實際情況設定房間（整層或分租皆可），並加入一位屋主。");
   assert.equal(makeT("zh-TW")("i_field_incomplete", { field: zh.i_address }), "地址未完成，請確認後再送出。");
   for (const key of ["i_footer", "i_positioning", "i_pending_reports", "i_money_note"]) {
     assert.equal(zh[key].includes("房客"), false, key);
