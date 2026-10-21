@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "condola",
-  "main": ".open-next/worker.js",
+  "main": "./custom-worker.mjs",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
@@ -30,8 +30,11 @@
         "CONDOLA_ENV": "staging",
         "CONDOLA_SITE_URL": "https://staging.condola.app",
         "DEMO_MODE": "false",
-        "LINE_LOGIN_ENABLED": "false"
+        "LINE_LOGIN_ENABLED": "false",
+        "MAIL_PROVIDER": "cloudflare"
       },
+      "send_email": [{ "name": "EMAIL", "remote": true }],
+      "triggers": { "crons": ["0 1 * * *"] },
       "secrets": {
         "required": [
           "DATABASE_URL",
@@ -63,8 +66,11 @@
         "CONDOLA_SITE_URL": "https://app.condola.app",
         "DEMO_MODE": "false",
         "LINE_LOGIN_ENABLED": "false",
-        "STAGING_AUTODEPLOY": "false"
+        "STAGING_AUTODEPLOY": "false",
+        "MAIL_PROVIDER": "cloudflare"
       },
+      "send_email": [{ "name": "EMAIL", "remote": true }],
+      "triggers": { "crons": ["0 1 * * *"] },
       "secrets": {
         "required": [
           "DATABASE_URL",

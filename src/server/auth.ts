@@ -3,7 +3,10 @@ import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { query, withClient } from "./db";
 import { recordFunnel } from "./funnel";
-import { classifyPasswordGrant, gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, passwordResetUrl } from "./signup-gotrue";
+import { SERVICE_EMAIL, sendMail } from "./mail";
+import { passwordResetMail } from "./mail-copy";
+import { consumePasswordReset } from "./reset-limit";
+import { classifyPasswordGrant, gotrueVerifyBody, parseGenerateLink, parseGotrueUserId, passwordResetUrl } from "./signup-gotrue";
 import { lineLoginEnabled } from "./demo";
 import { outboundNote } from "./outbound";
 import { FlowError } from "./errors";
@@ -30,7 +33,7 @@ import type { OrgRole, Session } from "./types";
 export const SESSION_COOKIE = "condola_session";
 export const CHALLENGE_COOKIE = "condola_challenge";
 
-const RESET_MINUTES = 30;
+const RESET_MINUTES = 60;
 const INVITE_DAYS = 7;
 
 export type RequestMeta = { ua: string | null; ip: string | null };
@@ -415,6 +418,62 @@ export async function completeSecondFactor(challengeId: string, code: string, me
   return { ok: true, token, remember: challenge.remember, backupCodes: codes };
 }
 
+async function sandboxOnlyAccount(email: string) {
+  if (!process.env.DATABASE_URL) return false;
+  try {
+    const row = await query<{ live: boolean | null; sandbox: boolean | null }>(
+      `SELECT bool_or(o.environment = 'live') AS live,
+              bool_or(o.environment = 'sandbox') AS sandbox
+         FROM auth.users u
+         LEFT JOIN org_members m ON m.user_id = u.id AND m.status = 'active'
+         LEFT JOIN organizations o ON o.id = m.org_id
+        WHERE lower(u.email::text) = lower($1)
+        GROUP BY u.id`,
+      [email],
+    );
+    const found = row.rows[0];
+    return Boolean(found && found.sandbox === true && found.live !== true);
+  } catch (error) {
+    console.error("password reset org", error instanceof Error ? error.message : "failed");
+    return false;
+  }
+}
+
+async function logPasswordReset(email: string, userId: string, messageId: string) {
+  const id = userId || (await query<{ id: string }>(`SELECT id::text AS id FROM auth.users WHERE lower(email::text) = lower($1)`, [email])).rows[0]?.id || "";
+  if (!id) return;
+  try {
+    const org = await query<{ id: string }>(
+      `SELECT m.org_id::text AS id
+         FROM org_members m
+         JOIN organizations o ON o.id = m.org_id
+        WHERE m.user_id = $1 AND m.status = 'active' AND o.environment = 'live'
+        ORDER BY m.created_at
+        LIMIT 1`,
+      [id],
+    );
+    await query(
+      `INSERT INTO email_log (org_id, kind, target_id, threshold, message_id)
+       VALUES ($1, 'password_reset', $2, 0, $3)`,
+      [org.rows[0]?.id ?? null, id, messageId],
+    );
+  } catch (error) {
+    console.error("email_log", error instanceof Error ? error.message : "failed");
+  }
+}
+
+async function deliverResetLink(email: string, link: string, userId: string) {
+  const rendered = passwordResetMail(link);
+  const sent = await sendMail({
+    to: email,
+    subject: rendered.subject,
+    text: rendered.text,
+    html: rendered.html,
+    replyTo: SERVICE_EMAIL,
+  });
+  if (sent.ok) await logPasswordReset(email, userId, sent.messageId);
+}
+
 /** POST the recovery token. GET must not call this. A local reset token is minted only after GoTrue accepts it. */
 export async function verifyRecoveryTokenHash(tokenHash: string) {
   const url = supabaseUrl();
@@ -437,22 +496,45 @@ export async function verifyRecoveryTokenHash(tokenHash: string) {
   return { ok: true as const, token };
 }
 
-export async function requestPasswordReset(emailRaw: string, requestOrigin = "") {
+export async function requestPasswordReset(emailRaw: string, requestOrigin = "", meta: { ip?: string | null } = {}) {
   const email = normalizeEmail(emailRaw);
   if (!email) return { token: null as string | null };
+  if (!(await consumePasswordReset(email, meta.ip))) {
+    console.warn("password reset rate limited");
+    return { token: null };
+  }
+  if (await sandboxOnlyAccount(email)) {
+    console.warn("password reset skipped: sandbox org");
+    return { token: null };
+  }
   const url = supabaseUrl();
-  const anon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  if (url && anon) {
-    // GoTrue sends the Supabase recovery template. The response stays generic
-    // whether or not the address exists, and a failed call does not change that.
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (url && service) {
+    // Admin generate_link does not send. The message goes out through our mail module.
+    // A missing address, a failed call, and a sent message all look the same to the caller.
     try {
-      await fetch(gotrueEndpoint(url, "/auth/v1/recover", passwordResetUrl(requestOrigin)), {
+      const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/admin/generate_link`, {
         method: "POST",
-        headers: { apikey: anon, "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        headers: {
+          apikey: service,
+          Authorization: `Bearer ${service}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "recovery",
+          email,
+          options: { redirect_to: passwordResetUrl(requestOrigin) },
+        }),
       });
+      const link = response.ok ? parseGenerateLink(await response.json().catch(() => ({}))) : null;
+      if (link) {
+        const landing = new URL(passwordResetUrl(requestOrigin));
+        landing.searchParams.set("token_hash", link.hashedToken);
+        landing.searchParams.set("type", "recovery");
+        await deliverResetLink(email, landing.toString(), link.userId);
+      }
     } catch (error) {
-      console.error("password recover", error);
+      console.error("password reset", error instanceof Error ? error.message : "failed");
     }
     return { token: null };
   }
@@ -467,7 +549,35 @@ export async function requestPasswordReset(emailRaw: string, requestOrigin = "")
     [user.rows[0].id, sha256(token), RESET_MINUTES],
   );
   await writeAudit(await primaryOrg(user.rows[0].id), user.rows[0].id, "password_reset_requested", {});
+  const link = `${passwordResetUrl(requestOrigin)}/${encodeURIComponent(token)}`;
+  try {
+    await deliverResetLink(email, link, user.rows[0].id);
+  } catch (error) {
+    console.error("password reset", error instanceof Error ? error.message : "failed");
+  }
   return { token };
+}
+
+/** Check the new password before a recovery token is consumed. */
+export async function completePasswordReset(input: {
+  token?: string;
+  tokenHash?: string;
+  type?: string;
+  password: string;
+  confirm: string;
+}) {
+  if (input.password !== input.confirm) return { ok: false as const, error: "mismatch" as const };
+  if (!passwordAcceptable(input.password)) return { ok: false as const, error: "weak" as const };
+  let token = (input.token ?? "").trim();
+  if (!token) {
+    if ((input.type ?? "").trim() !== "recovery" || !(input.tokenHash ?? "").trim()) {
+      return { ok: false as const, error: "expired" as const };
+    }
+    const verified = await verifyRecoveryTokenHash(input.tokenHash ?? "");
+    if (!verified.ok) return { ok: false as const, error: "expired" as const };
+    token = verified.token;
+  }
+  return resetPassword(token, input.password, input.confirm);
 }
 
 export async function resetPassword(token: string, password: string, confirm: string) {

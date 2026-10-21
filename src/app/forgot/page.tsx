@@ -18,18 +18,19 @@ export default async function ForgotPage() {
       <AuthBrand name={t("i_brand")} />
       <form className="card pad" action={actionForgot}>
         <h1>{t("i_forgot")}</h1>
-        {flash.email ? (
+        {flash.sent ? (
           <>
             <div className="alert info" data-testid="forgot-sent">
-              {t("i_forgot_sent", { email: flash.email })}
+              {t("i_forgot_sent")}
             </div>
             {flash.clearCookie ? <ClearResetFlash /> : null}
           </>
         ) : (
           <>
+            <p className="small">{t("i_forgot_sub")}</p>
             <div className="fg">
               <label className="f">{t("i_email_label")}</label>
-              <input className="inp" name="email" type="email" data-testid="forgot-email" />
+              <input className="inp" name="email" type="email" placeholder="you@example.com" data-testid="forgot-email" />
             </div>
             <button className="btn pri block" type="submit">
               {t("i_send_reset")}

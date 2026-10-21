@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { normalizeEmail, requestPasswordReset } from "./auth";
+import { useEmailBinding } from "./mail";
 import {
   classifyPasswordGrant,
   confirmHashTarget,
   gotrueEndpoint,
   gotrueVerifyBody,
+  parseGenerateLink,
   parseSupabaseSignup,
   passwordResetUrl,
   signupConfirmUrl,
@@ -114,9 +116,11 @@ test("confirmation verify is a POST body and GET pages do not call it", () => {
   assert.match(verify, /n:\s*2/);
   assert.match(verify, /name="nextEmail"[\s\S]*name="password"/);
   const reset = readFileSync(new URL("../app/reset/page.tsx", import.meta.url), "utf8");
-  assert.match(reset, /actionVerifyRecovery/);
-  assert.match(reset, /type=recovery|name="type" value="recovery"/);
+  assert.match(reset, /actionReset/);
+  assert.match(reset, /name="type" value="recovery"/);
+  assert.match(reset, /name="token_hash"/);
   assert.doesNotMatch(reset, /verifyRecoveryTokenHash\(/);
+  assert.doesNotMatch(reset, /actionVerifyRecovery/);
 });
 
 test("a hash access_token is forwarded to /signup/confirm and not looped", () => {
@@ -130,22 +134,44 @@ test("a hash access_token is forwarded to /signup/confirm and not looped", () =>
   assert.equal(confirmHashTarget("/m", ""), null);
 });
 
-test("password reset asks GoTrue to send the recovery email and stays generic", async () => {
+test("generate_link keeps the hashed token and ignores a body without one", () => {
+  assert.deepEqual(parseGenerateLink({ id: "user-1", hashed_token: " hash " }), { hashedToken: "hash", userId: "user-1" });
+  assert.deepEqual(parseGenerateLink({ user: { id: "user-2" }, hashed_token: "abc" }), { hashedToken: "abc", userId: "user-2" });
+  assert.equal(parseGenerateLink({ id: "user-1" }), null);
+});
+
+test("password reset asks GoTrue for a link and sends it through the mail module", async () => {
   const saved = {
     url: process.env.SUPABASE_URL,
+    service: process.env.SUPABASE_SERVICE_ROLE_KEY,
     anon: process.env.SUPABASE_ANON_KEY,
-    publicUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    publicAnon: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    provider: process.env.MAIL_PROVIDER,
+    resend: process.env.RESEND_API_KEY,
+    database: process.env.DATABASE_URL,
     fetch: global.fetch,
   };
-  const calls: { url: string; method: string; body: string }[] = [];
+  const calls: { url: string; method: string; body: string; authorization: string }[] = [];
   process.env.SUPABASE_URL = "https://example.supabase.co";
-  process.env.SUPABASE_ANON_KEY = "anon-test";
-  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-  delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-test";
+  delete process.env.SUPABASE_ANON_KEY;
+  delete process.env.DATABASE_URL;
+  process.env.MAIL_PROVIDER = "resend";
+  process.env.RESEND_API_KEY = "re_test";
+  useEmailBinding(undefined);
   global.fetch = async (input, init) => {
-    calls.push({ url: String(input), method: String(init?.method), body: String(init?.body ?? "") });
-    return new Response("{}", { status: calls.length === 1 ? 200 : 500 });
+    const headers = new Headers(init?.headers);
+    calls.push({
+      url: String(input),
+      method: String(init?.method),
+      body: String(init?.body ?? ""),
+      authorization: headers.get("authorization") || "",
+    });
+    if (String(input).includes("generate_link")) {
+      const email = JSON.parse(String(init?.body)).email as string;
+      if (email === "missing@example.com") return new Response("{}", { status: 404 });
+      return Response.json({ id: "user-1", hashed_token: "hashed-token" });
+    }
+    return Response.json({ id: "msg_1" });
   };
   try {
     const known = await requestPasswordReset("  User+Tag@Example.com ", "https://staging.condola.app");
@@ -154,24 +180,40 @@ test("password reset asks GoTrue to send the recovery email and stays generic", 
     assert.equal(known.token, null);
     assert.equal(missing.token, null);
     assert.equal(blank.token, null);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 3);
     const first = new URL(calls[0].url);
     assert.equal(first.origin, "https://example.supabase.co");
-    assert.equal(first.pathname, "/auth/v1/recover");
-    assert.equal(first.searchParams.get("redirect_to"), "https://staging.condola.app/reset");
+    assert.equal(first.pathname, "/auth/v1/admin/generate_link");
     assert.equal(calls[0].method, "POST");
-    assert.deepEqual(JSON.parse(calls[0].body), { email: "user+tag@example.com" });
-    assert.equal(new URL(calls[1].url).searchParams.get("redirect_to"), "https://app.condola.app/reset");
-    assert.deepEqual(JSON.parse(calls[1].body), { email: "missing@example.com" });
+    assert.equal(calls[0].authorization, "Bearer service-test");
+    assert.deepEqual(JSON.parse(calls[0].body), {
+      type: "recovery",
+      email: "user+tag@example.com",
+      options: { redirect_to: "https://staging.condola.app/reset" },
+    });
+    assert.equal(calls[1].url, "https://api.resend.com/emails");
+    const mailed = JSON.parse(calls[1].body) as { from: string; to: string[]; subject: string; text: string };
+    assert.equal(mailed.from, "\"租多啦 Condola\" <noreply@send.condola.app>");
+    assert.deepEqual(mailed.to, ["user+tag@example.com"]);
+    assert.equal(mailed.subject, "重設您的租多啦密碼");
+    assert.match(mailed.text, /https:\/\/staging\.condola\.app\/reset\?token_hash=hashed-token&type=recovery/);
+    assert.equal(mailed.text.includes("收款"), false);
+    assert.equal(calls[2].url.includes("/auth/v1/recover"), false);
+    assert.equal(calls.some((call) => call.url.includes("/auth/v1/recover")), false);
   } finally {
     global.fetch = saved.fetch;
+    useEmailBinding(undefined);
     if (saved.url === undefined) delete process.env.SUPABASE_URL;
     else process.env.SUPABASE_URL = saved.url;
+    if (saved.service === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = saved.service;
     if (saved.anon === undefined) delete process.env.SUPABASE_ANON_KEY;
     else process.env.SUPABASE_ANON_KEY = saved.anon;
-    if (saved.publicUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-    else process.env.NEXT_PUBLIC_SUPABASE_URL = saved.publicUrl;
-    if (saved.publicAnon === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    else process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = saved.publicAnon;
+    if (saved.provider === undefined) delete process.env.MAIL_PROVIDER;
+    else process.env.MAIL_PROVIDER = saved.provider;
+    if (saved.resend === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = saved.resend;
+    if (saved.database === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = saved.database;
   }
 });

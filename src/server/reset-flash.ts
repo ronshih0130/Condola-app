@@ -10,15 +10,16 @@ export function forgotSentLocation() {
   return "/forgot";
 }
 
-export function resetFlashCookie(email: string) {
+/** The confirmation does not include the address, so the cookie is only a flag. */
+export function resetFlashCookie() {
   return {
     name: RESET_FLASH_COOKIE,
-    value: email.trim(),
+    value: "1",
     options: appCookieOptions({ path: "/forgot", maxAge: MAX_AGE_SECONDS }),
   };
 }
 
-/** Showing the address is one-time. The cookie is cleared immediately after. */
+/** Any non-empty value shows the same sentence. The cookie is cleared immediately after. */
 export function resetFlashDisplay(value: string | undefined) {
-  return { email: (value ?? "").trim(), clearCookie: true as const };
+  return { sent: (value ?? "").trim().length > 0, clearCookie: true as const };
 }

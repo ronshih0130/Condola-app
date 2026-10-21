@@ -18,11 +18,13 @@ type WorkerEnv = {
   placement?: { mode?: string; region?: string };
   routes?: { pattern?: string; custom_domain?: boolean }[];
   observability?: { enabled?: boolean };
+  send_email?: { name?: string; remote?: boolean }[];
+  triggers?: { crons?: string[] };
 };
 
 function parseJsonc(raw: string) {
   const json = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  return JSON.parse(json) as { env?: { staging?: WorkerEnv; production?: WorkerEnv } };
+  return JSON.parse(json) as { main?: string; env?: { staging?: WorkerEnv; production?: WorkerEnv } };
 }
 
 test("the staging wrangler env names secrets and keeps demo mode off", () => {
@@ -44,6 +46,11 @@ test("the staging wrangler env names secrets and keeps demo mode off", () => {
   assert.equal(staging.placement?.mode, "targeted");
   assert.equal(staging.placement?.region, "aws:ap-northeast-1");
   assert.equal(staging.observability?.enabled, true);
+  assert.equal(staging.vars?.MAIL_PROVIDER, "cloudflare");
+  assert.deepEqual(staging.send_email, [{ name: "EMAIL", remote: true }]);
+  assert.deepEqual(staging.triggers?.crons, ["0 1 * * *"]);
+  assert.equal(staging.secrets?.required?.includes("RESEND_API_KEY"), false);
+  assert.equal(staging.secrets?.required?.includes("BREVO_API_KEY"), false);
   assert.doesNotMatch(raw, /postgres:\/\//i);
   assert.doesNotMatch(raw, /eyJ/);
   assert.doesNotMatch(raw, /sb_secret_/);
@@ -77,6 +84,20 @@ test("the production wrangler env serves app.condola.app and keeps demo mode off
   );
   assert.equal(production.routes?.every((route) => route.custom_domain === true), true);
   assert.equal(production.observability?.enabled, true);
+  assert.equal(production.vars?.MAIL_PROVIDER, "cloudflare");
+  assert.deepEqual(production.send_email, [{ name: "EMAIL", remote: true }]);
+  assert.deepEqual(production.triggers?.crons, ["0 1 * * *"]);
+});
+
+test("the worker cron calls the protected reminder route", () => {
+  const config = parseJsonc(read("wrangler.jsonc"));
+  assert.equal(config.main, "./custom-worker.mjs");
+  const worker = read("custom-worker.mjs");
+  assert.match(worker, /scheduled/);
+  assert.match(worker, /0 1 \* \* \*/);
+  assert.match(worker, /\/api\/cron\/reminders/);
+  assert.match(worker, /CRON_SECRET/);
+  assert.match(worker, /x-cron-secret/);
 });
 
 test("production redirects and cookies accept app.condola.app and condola.app", () => {

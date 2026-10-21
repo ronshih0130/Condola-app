@@ -109,8 +109,12 @@ test("invite expiry, lockout, reset, and no-access copy match the prototype", ()
   assert.equal(en.i_invite_expiry, "Expires {d}");
   assert.equal(zh.i_auth_locked, "嘗試次數過多，請 15 分鐘後再試或重設密碼");
   assert.equal(en.i_auth_locked, "Too many attempts. Try again in 15 minutes or reset your password");
-  assert.equal(zh.i_forgot_sent, "如果 {email} 有帳號，我們已寄出重設連結，30 分鐘內有效。");
-  assert.equal(en.i_forgot_sent, "If {email} has an account, we’ve sent a reset link. It works for 30 minutes.");
+  assert.equal(zh.i_forgot_sent, "如果這個 Email 有租多啦帳號，重設連結已寄出，請於 60 分鐘內使用。沒收到請檢查垃圾郵件。");
+  assert.equal(en.i_forgot_sent, "If this email has a 租多啦 account, a reset link has been sent. Use it within 60 minutes. If it doesn’t arrive, check your spam folder.");
+  assert.equal(zh.i_forgot_sent.includes("{email}"), false);
+  assert.equal(zh.i_reset_expired, "這個連結已失效或已使用，請重新申請重設密碼。");
+  assert.equal(zh.i_reset_save, "儲存新密碼");
+  assert.equal(zh.i_password_updated, "密碼已更新，請重新登入");
   assert.match(zh.i_auth_invalid, /^Email /);
   assert.doesNotMatch(zh.i_auth_invalid, /帳號/);
   assert.match(en.i_auth_invalid, /^Email /);

@@ -12,10 +12,9 @@ import {
   confirmMfa,
   disableMfa,
   inviteMember,
+  completePasswordReset,
   requestPasswordReset,
   resendInvite,
-  resetPassword,
-  verifyRecoveryTokenHash,
   revokeInvite,
   revokeAllSessions,
   revokeOtherSessions,
@@ -32,6 +31,7 @@ import {
   type RequestMeta,
 } from "./auth";
 import { BACKUP_COOKIE } from "./backup";
+import { saveMemberEmailPrefs, saveOrgMailSettings } from "./mail-settings";
 import { forgotSentLocation, resetFlashCookie } from "./reset-flash";
 import { demoModeEnabled } from "./demo";
 import { closeMonth, reversePayment } from "./domain";
@@ -109,14 +109,6 @@ export async function actionSignIn(formData: FormData) {
   redirect(`/login?error=${result.error}${nextQuery}`);
 }
 
-export async function actionVerifyRecovery(formData: FormData) {
-  const type = text(formData.get("type")).trim();
-  if (type !== "recovery") redirect("/reset?expired=1");
-  const result = await verifyRecoveryTokenHash(text(formData.get("token_hash")));
-  if (!result.ok) redirect("/reset?expired=1");
-  redirect(`/reset/${encodeURIComponent(result.token)}`);
-}
-
 export async function actionLineLogin() {
   const result = await signInWithLine(await meta());
   const jar = await cookies();
@@ -161,20 +153,63 @@ async function requestOrigin() {
 
 export async function actionForgot(formData: FormData) {
   const email = text(formData.get("email"));
-  await requestPasswordReset(email, await requestOrigin());
+  const info = await meta();
+  await requestPasswordReset(email, await requestOrigin(), info);
   const jar = await cookies();
-  const cookie = resetFlashCookie(email);
+  const cookie = resetFlashCookie();
   jar.set(cookie.name, cookie.value, cookie.options);
   redirect(forgotSentLocation());
 }
 
 export async function actionReset(formData: FormData) {
   const token = text(formData.get("token"));
-  const result = await resetPassword(token, text(formData.get("password")), text(formData.get("confirm")));
-  if (!result.ok) redirect(`/reset/${encodeURIComponent(token)}?error=${result.error}`);
+  const tokenHash = text(formData.get("token_hash")).trim();
+  const type = text(formData.get("type")).trim();
+  const result = await completePasswordReset({
+    token,
+    tokenHash,
+    type,
+    password: text(formData.get("password")),
+    confirm: text(formData.get("confirm")),
+  });
+  if (!result.ok) {
+    if (tokenHash) {
+      if (result.error === "expired") redirect("/reset?expired=1");
+      redirect(`/reset?token_hash=${encodeURIComponent(tokenHash)}&type=recovery&error=${result.error}`);
+    }
+    redirect(`/reset/${encodeURIComponent(token)}?error=${result.error}`);
+  }
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
   redirect("/login?reset=1");
+}
+
+export async function actionEmailPrefs(formData: FormData) {
+  try {
+    const session = await getSession();
+    await saveMemberEmailPrefs(session, {
+      leaseExpiry: formData.get("leaseExpiry") === "on",
+      rentOverdue: formData.get("rentOverdue") === "on",
+    });
+    redirect("/m/account?saved=1");
+  } catch (error) {
+    bounce("/m/account", error);
+  }
+}
+
+export async function actionOrgMail(formData: FormData) {
+  try {
+    const session = await getSession();
+    await saveOrgMailSettings(session, {
+      tenantLease: formData.get("tenantLease") === "on",
+      tenantOverdue: formData.get("tenantOverdue") === "on",
+      contactEmail: text(formData.get("contactEmail")),
+      contactPhone: text(formData.get("contactPhone")),
+    });
+    redirect("/m/settings?saved=1");
+  } catch (error) {
+    bounce("/m/settings", error);
+  }
 }
 
 export async function actionAccept(formData: FormData) {

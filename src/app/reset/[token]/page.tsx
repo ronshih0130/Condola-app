@@ -27,16 +27,21 @@ export default async function ResetPage({
       <form className="card pad" action={actionReset}>
         <h1>{t("i_reset_title")}</h1>
         {state === "expired" ? (
-          <div className="alert bad" data-testid="reset-expired">
-            {t("i_reset_expired")}
-          </div>
+          <>
+            <div className="alert bad" data-testid="reset-expired">
+              {t("i_reset_expired")}
+            </div>
+            <a className="btn pri block" href="/forgot">
+              {t("i_forgot")}
+            </a>
+          </>
         ) : (
           <>
             {error ? <div className="alert bad">{error}</div> : null}
             <input type="hidden" name="token" value={token} />
             <PasswordFields />
             <button className="btn pri block" type="submit" data-testid="reset-submit">
-              {t("i_save_password")}
+              {t("i_reset_save")}
             </button>
           </>
         )}
