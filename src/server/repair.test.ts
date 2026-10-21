@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { FlowError } from "./errors";
 import {
@@ -86,10 +86,19 @@ test("photo rules cap size and type and never describe a re-encode", () => {
     assert.equal(source.includes("toDataURL"), false);
     assert.equal(source.includes("OffscreenCanvas"), false);
   }
-  assert.match(client, /form\.set\("file", file\)/);
+  assert.match(client, /\/api\/tickets\/photos\/sign/);
+  assert.match(client, /\/api\/tickets\/photos\/confirm/);
+  assert.match(client, /body: file/);
+  assert.doesNotMatch(client, /FormData/);
+  assert.doesNotMatch(client, /\/api\/tickets\/photos"/);
   assert.match(client, /sniffPhotoMime/);
   assert.match(server, /bytes=0-/);
+  assert.match(server, /AbortSignal\.timeout/);
+  assert.match(server, /object\/info/);
+  assert.match(server, /signTicketPhotoUrls/);
   assert.match(server, /ticketPhotoPaths/);
+  assert.doesNotMatch(server, /storeTicketPhoto/);
+  assert.doesNotMatch(server, /content: input\.bytes/);
   assert.doesNotMatch(client, /image\/gif/);
   assert.doesNotMatch(server, /image\/gif/);
   assert.match(view, /no-img-element/);
@@ -154,7 +163,10 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   assert.match(sql, /FOR UPDATE/);
   assert.match(sql, /portal_ticket_photo_read/);
   assert.match(sql, /ADD COLUMN IF NOT EXISTS content bytea/);
+  assert.match(sql, /COMMENT ON COLUMN ticket_attachments\.content/);
+  assert.match(sql, /Do not write this column/);
   assert.match(sql, /ticket_attachments_photo_bytes/);
+  assert.doesNotMatch(sql, /DROP COLUMN/);
   assert.match(sql, /count\(\*\)/);
   assert.doesNotMatch(sql, /is_internal[\s\S]{0,80}ticket photo limit/);
   assert.doesNotMatch(sql, /expense_id uuid NOT NULL/);
@@ -175,6 +187,12 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   assert.match(repairs, /ticket_id/);
   assert.doesNotMatch(repairs, /'(submitted|approved|posted|rejected)'/);
   assert.doesNotMatch(repairs, /ledger_transactions/);
+  assert.match(repairs, /does not write/);
+  assert.doesNotMatch(repairs, /INSERT INTO ticket_attachments \([^)]*content/);
+  const photoRoute = readFileSync(new URL("../app/api/tickets/photos/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(photoRoute, /NextResponse\.redirect/);
+  assert.doesNotMatch(photoRoute, /photo\.bytes/);
+  assert.equal(existsSync(new URL("../app/api/tickets/photos/route.ts", import.meta.url)), false);
   const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
   const expenses = readFileSync(new URL("./expenses.ts", import.meta.url), "utf8");
   assert.match(domain, /STATEMENT_EXPENSE_SQL/);

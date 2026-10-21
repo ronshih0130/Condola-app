@@ -94,7 +94,7 @@ export function RepairThread({
             const href = `/api/tickets/photos/${photo.id}`;
             return (
               <a key={photo.id} href={href} target="_blank" rel="noreferrer">
-                {/* Original bytes from the upload. The image optimizer would re-encode them on the server. */}
+                {/* The browser follows a short-lived signed URL. The image optimizer would re-encode the file on the server. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={href} alt={photo.name} data-testid="repair-photo-preview" />
                 <span className="tiny">

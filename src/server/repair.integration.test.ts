@@ -7,7 +7,7 @@ import { ORG_ID, USERS } from "./ids";
 import { propertyDetail, tenantRepairs, ticketDetail } from "./queries";
 import { PHOTO_BUCKET, PHOTO_MAX_BYTES, ticketPhotoPath } from "./repair-rules";
 import { addTicketComment, attachRepairPhoto, readRepairPhoto, saveRepairRecord } from "./repairs";
-import { confirmTicketPhoto, storeTicketPhoto } from "./ticket-photos";
+import { confirmTicketPhoto } from "./ticket-photos";
 import type { Session } from "./types";
 
 const ORG = ORG_ID;
@@ -324,23 +324,15 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
       client.query(`SELECT id FROM files WHERE storage_path = $1`, [path]),
     );
     assert.equal(stillThere.rowCount, 1);
-    const photoBytes = Buffer.from(
-      "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxISEhUQEhIVFhUVFRUVFRUVFRUVFRUWFxUVFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OGhAQGy0lHyUtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAMBAAMBIgACEQEDEQH/xAAbAAACAgMBAAAAAAAAAAAAAAADBAECBQYAB//EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJr0X/9k=",
-      "base64",
-    );
-    const storedId = await storeTicketPhoto(wangSession, {
-      ticketId,
-      fileName: `${title}-upload.jpg`,
-      mime: "image/jpeg",
-      bytes: new Uint8Array(photoBytes),
-      internal: false,
-    });
-    const storedPhoto = await readRepairPhoto(wangSession, storedId);
-    assert.equal(storedPhoto?.name, `${title}-upload.jpg`);
+    const storedPhoto = await readRepairPhoto(wangSession, seen.rows[0].id);
+    assert.equal(storedPhoto?.name, `${title}.jpg`);
     assert.equal(storedPhoto?.mime, "image/jpeg");
-    assert.ok(storedPhoto?.content && storedPhoto.content[0] === 0xff && storedPhoto.content[1] === 0xd8 && storedPhoto.content[2] === 0xff);
-    assert.equal(storedPhoto?.content?.length, photoBytes.length);
-    assert.equal(await readRepairPhoto(zhangSession, storedId), null);
+    assert.equal(storedPhoto?.ticket_id, ticketId);
+    const storedBytes = await tx(USERS.tenant2, (client) =>
+      client.query<{ empty: boolean }>(`SELECT content IS NULL AS empty FROM ticket_attachments WHERE id = $1`, [seen.rows[0].id]),
+    );
+    assert.equal(storedBytes.rows[0]?.empty, true);
+    assert.equal(await readRepairPhoto(zhangSession, seen.rows[0].id), null);
     const ghost = ticketPhotoPath(ORG, ticketId, "40000000-0000-4000-8000-000000000094", "image/jpeg");
     await assert.rejects(
       confirmTicketPhoto(wangSession, {
@@ -395,12 +387,12 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
       (error: unknown) => error instanceof FlowError && error.key === "errors.photoType",
     );
     const tenantPhotos = await ticketDetail(wangSession, ticketId);
-    assert.equal(tenantPhotos?.photos.length, 3);
-    assert.ok(tenantPhotos?.photos.some((photo) => photo.name === `${title}-upload.jpg`));
+    assert.equal(tenantPhotos?.photos.length, 2);
+    assert.ok(tenantPhotos?.photos.some((photo) => photo.name === `${title}.jpg`));
     assert.ok(tenantPhotos?.photos.some((photo) => photo.name === `${title}-public.webp`));
     assert.equal(tenantPhotos?.photos.some((photo) => photo.internal), false);
     const staffPhotos = await ticketDetail(admin, ticketId);
-    assert.equal(staffPhotos?.photos.length, 4);
+    assert.equal(staffPhotos?.photos.length, 3);
     const tenantFile = await tx(USERS.tenant2, (client) =>
       client.query(`SELECT id FROM files WHERE storage_path = $1`, [publicPath]),
     );
@@ -414,7 +406,7 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
     );
     assert.equal(otherTenantFile.rowCount, 0);
 
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       const fileId = `40000000-0000-4000-8000-0000000000${10 + index}`;
       await attachRepairPhoto(admin, {
         ticketId,

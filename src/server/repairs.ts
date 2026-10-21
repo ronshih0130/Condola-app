@@ -347,8 +347,9 @@ export async function repairPhotoTarget(session: Session, ticketId: string) {
 }
 
 /**
- * Records the storage object. Bytes stay in the private bucket; this inserts
- * the files and ticket_attachments rows only.
+ * Inserts the files and ticket_attachments rows for an object that is already
+ * in ticket-photos-private. The image stays in that bucket. This does not write
+ * ticket_attachments.content.
  */
 export async function attachRepairPhoto(
   session: Session,
@@ -361,7 +362,6 @@ export async function attachRepairPhoto(
     size: number;
     internal: boolean;
     header: Uint8Array;
-    content?: Uint8Array;
   },
 ) {
   assertTicketActor(session);
@@ -405,15 +405,9 @@ export async function attachRepairPhoto(
     );
     const attachment = await one<{ id: string }>(
       client,
-      `INSERT INTO ticket_attachments (org_id, ticket_id, file_id, is_internal, content)
-       VALUES ($1,$2,$3,$4,$5) RETURNING id::text`,
-      [
-        ticket.org_id,
-        ticket.id,
-        fileId,
-        session.kind === "staff" && input.internal,
-        input.content ? Buffer.from(input.content) : null,
-      ],
+      `INSERT INTO ticket_attachments (org_id, ticket_id, file_id, is_internal)
+       VALUES ($1,$2,$3,$4) RETURNING id::text`,
+      [ticket.org_id, ticket.id, fileId, session.kind === "staff" && input.internal],
     );
     return attachment.id;
   });
@@ -428,9 +422,9 @@ export async function readRepairPhoto(session: Session, attachmentId: string) {
   assertTicketActor(session);
   if (!isUuid(attachmentId)) return null;
   return tx(session.userId, async (client) =>
-    maybe<{ name: string; mime: string | null; path: string; content: Buffer | null }>(
+    maybe<{ name: string; mime: string | null; path: string; ticket_id: string }>(
       client,
-      `SELECT f.file_name AS name, f.mime_type AS mime, f.storage_path AS path, a.content
+      `SELECT f.file_name AS name, f.mime_type AS mime, f.storage_path AS path, a.ticket_id::text
          FROM ticket_attachments a
          JOIN files f ON f.id = a.file_id
         WHERE a.id = $1 AND a.org_id = $2`,

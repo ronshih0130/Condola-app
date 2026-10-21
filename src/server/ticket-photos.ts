@@ -5,7 +5,6 @@ import {
   PHOTO_BUCKET,
   PHOTO_HEADER_BYTES,
   PHOTO_LIMIT,
-  PHOTO_MAX_BYTES,
   acceptPhotoObject,
   assertPhotoMeta,
   isTicketPhotoPath,
@@ -42,6 +41,7 @@ async function storageRequest(method: string, path: string, body?: unknown) {
   if (!cfg) throw new FlowError("errors.photoStorage");
   const response = await fetch(`${cfg.url}/storage/v1${path}`, {
     method,
+    cache: "no-store",
     headers: {
       authorization: `Bearer ${cfg.key}`,
       apikey: cfg.key,
@@ -107,14 +107,22 @@ async function readObjectHeader(path: string) {
   const cfg = storageConfig();
   if (!cfg) throw new FlowError("errors.photoStorage");
   const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
-  const response = await fetch(`${cfg.url}/storage/v1/object/${PHOTO_BUCKET}/${encoded}`, {
-    method: "GET",
-    headers: {
-      authorization: `Bearer ${cfg.key}`,
-      apikey: cfg.key,
-      range: `bytes=0-${PHOTO_HEADER_BYTES - 1}`,
-    },
-  });
+  // A signal skips Next's fetch dedupe, which tees the body and stalls on a 206.
+  let response: Response;
+  try {
+    response = await fetch(`${cfg.url}/storage/v1/object/${PHOTO_BUCKET}/${encoded}`, {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        authorization: `Bearer ${cfg.key}`,
+        apikey: cfg.key,
+        range: `bytes=0-${PHOTO_HEADER_BYTES - 1}`,
+      },
+    });
+  } catch {
+    throw new FlowError("errors.photoStorage");
+  }
   if (response.status !== 200 && response.status !== 206) {
     await response.body?.cancel().catch(() => undefined);
     throw new FlowError("errors.photoStorage");
@@ -209,111 +217,18 @@ export async function confirmTicketPhoto(
   }
 }
 
-async function mirrorPhotoObject(path: string, bytes: Uint8Array, mime: string) {
-  const cfg = storageConfig();
-  if (!cfg) return false;
-  const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
-  const response = await fetch(`${cfg.url}/storage/v1/object/${PHOTO_BUCKET}/${encoded}`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${cfg.key}`,
-      apikey: cfg.key,
-      "content-type": mime,
-      "cache-control": "no-store",
-    },
-    body: new Blob([Buffer.from(bytes)], { type: mime }),
-  });
-  if (!response.ok) {
-    await response.body?.cancel().catch(() => undefined);
-    throw new FlowError("errors.photoStorage");
-  }
-  await response.body?.cancel().catch(() => undefined);
-  return true;
-}
-
 /**
- * Keeps the original file. The bytes are stored on the attachment so the
- * photo can be opened, and copied to the private bucket when storage is configured.
- * Nothing here decodes or re-encodes the image.
+ * Short-lived read URL after the org and ticket path check.
+ * The browser loads the object from the bucket. This does not read ticket_attachments.content.
  */
-export async function storeTicketPhoto(
-  session: Session,
-  input: { ticketId: string; fileName: string; mime: string; bytes: Uint8Array; internal: boolean },
-) {
-  if (input.bytes.length > PHOTO_MAX_BYTES) throw new FlowError("errors.photoSize");
-  const header = input.bytes.subarray(0, PHOTO_HEADER_BYTES);
-  const meta = assertPhotoMeta({ fileName: input.fileName, mime: input.mime, size: input.bytes.length });
-  const accepted = acceptPhotoObject({ size: input.bytes.length, mime: meta.mime, header }, meta.mime);
-  const ticket = await repairPhotoTarget(session, input.ticketId);
-  if (!ticket) throw new FlowError("errors.notFound");
-  if (Number(ticket.count) >= PHOTO_LIMIT) throw new FlowError("errors.photoLimit");
-  const path = ticketPhotoPath(ticket.org_id, input.ticketId, newPhotoFileId(), accepted.mime);
-  const mirrored = await mirrorPhotoObject(path, input.bytes, accepted.mime);
-  try {
-    return await attachRepairPhoto(session, {
-      ticketId: input.ticketId,
-      path,
-      fileName: meta.fileName,
-      mime: meta.mime,
-      storedMime: accepted.mime,
-      size: accepted.size,
-      internal: input.internal,
-      header,
-      content: input.bytes,
-    });
-  } catch (error) {
-    if (mirrored) await deleteObject(path);
-    throw error;
-  }
-}
-
-function photoBytes(value: Buffer | string | null) {
-  if (!value) return null;
-  if (Buffer.isBuffer(value)) return value.length ? value : null;
-  const text = value.startsWith("\\x") ? value.slice(2) : value;
-  const bytes = Buffer.from(text, "hex");
-  return bytes.length ? bytes : null;
-}
-
-/** Original file for preview. Storage is only a fallback when the row has no bytes. */
 export async function openTicketPhoto(session: Session, attachmentId: string) {
   const row = await readRepairPhoto(session, attachmentId);
-  if (!row) return null;
-  const stored = photoBytes(row.content);
-  if (stored) return { name: row.name, mime: row.mime || "application/octet-stream", bytes: stored };
   const cfg = storageConfig();
-  const prefix = `org/${session.orgId}/tickets/`;
-  if (!cfg || !row.path.toLowerCase().startsWith(prefix.toLowerCase())) return null;
-  const encoded = row.path.split("/").map((part) => encodeURIComponent(part)).join("/");
-  const response = await fetch(`${cfg.url}/storage/v1/object/${PHOTO_BUCKET}/${encoded}`, {
-    headers: { authorization: `Bearer ${cfg.key}`, apikey: cfg.key },
-  });
-  if (!response.ok || !response.body) {
-    await response.body?.cancel().catch(() => undefined);
-    return null;
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (total <= PHOTO_MAX_BYTES) {
-      const { done, value } = await reader.read();
-      if (done || !value) break;
-      total += value.length;
-      if (total > PHOTO_MAX_BYTES) return null;
-      chunks.push(value);
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-  }
-  if (!total) return null;
-  const bytes = Buffer.alloc(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return { name: row.name, mime: row.mime || "application/octet-stream", bytes };
+  if (!row || !cfg || !isTicketPhotoPath(row.path, session.orgId, row.ticket_id)) return null;
+  const signed = await signTicketPhotoUrls(session.orgId, row.ticket_id, [row.path]);
+  const url = signed[row.path];
+  if (!url || !url.startsWith(`${cfg.url}/`)) return null;
+  return { url, name: row.name, mime: row.mime || "application/octet-stream" };
 }
 
 /** One batch of short-lived read URLs. The service key only signs this ticket's paths. */

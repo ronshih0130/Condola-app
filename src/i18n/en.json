@@ -1608,7 +1608,7 @@
  "i_repair_all": "All properties",
  "i_photo_size": "That photo is over 5 MB. Please choose a smaller one.",
  "i_photo_type": "Use a JPG, PNG, or WEBP.",
- "i_photo_storage": "The photo could not be uploaded. Please try again later.",
+ "i_photo_storage": "Photos can't be saved right now. Storage is unavailable, so the file was not stored.",
  "i_photo_limit": "Each repair can have up to 8 photos.",
  "i_date_invalid": "Enter a valid date."
 }

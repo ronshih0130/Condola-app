@@ -261,9 +261,11 @@ CREATE POLICY portal_ticket_photo_read ON files FOR SELECT TO authenticated
     )
   );
 
--- The original bytes, so a photo can be opened without a storage signed URL.
--- Null only for a row whose object lives solely in the private bucket.
+-- Kept so a database that already applied this version does not need a new migration.
+-- Uploads do not write it. The object lives in ticket-photos-private.
 ALTER TABLE ticket_attachments ADD COLUMN IF NOT EXISTS content bytea;
+COMMENT ON COLUMN ticket_attachments.content IS
+  'Unused. Ticket photos are objects in ticket-photos-private. Do not write this column.';
 ALTER TABLE ticket_attachments DROP CONSTRAINT IF EXISTS ticket_attachments_photo_bytes;
 ALTER TABLE ticket_attachments
   ADD CONSTRAINT ticket_attachments_photo_bytes
