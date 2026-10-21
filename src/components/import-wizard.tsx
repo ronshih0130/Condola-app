@@ -468,7 +468,7 @@ export function ImportWizard() {
               {t("im_dl_problems")}
             </button>
             <button className="btn pri" type="button" data-testid="import-run" disabled={busy || !canRun} onClick={() => void runCommit()}>
-              {t("im_run", { n: importableCount })}
+              {importableCount > 0 ? t("im_run", { n: importableCount }) : t("im_run_empty")}
             </button>
           </div>
         </div>

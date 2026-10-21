@@ -109,6 +109,7 @@
  "im_reused_units": "Reused existing units {n}",
  "im_rows_n": "{n} rows",
  "im_run": "Import {n} rows",
+ "im_run_empty": "Import",
  "im_s1": "Download template",
  "im_s2": "Upload file",
  "im_s3": "Confirm import",

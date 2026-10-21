@@ -109,6 +109,7 @@
  "im_reused_units": "沿用既有戶別 {n}",
  "im_rows_n": "{n} 列",
  "im_run": "匯入 {n} 筆",
+ "im_run_empty": "匯入",
  "im_s1": "下載範本",
  "im_s2": "上傳檔案",
  "im_s3": "確認匯入",
