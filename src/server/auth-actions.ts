@@ -35,7 +35,7 @@ import { BACKUP_COOKIE } from "./backup";
 import { forgotSentLocation, resetFlashCookie } from "./reset-flash";
 import { demoModeEnabled } from "./demo";
 import { closeMonth, reversePayment } from "./domain";
-import { addExpense, createExpense, parseAmountMajor, updateExpense, voidExpense } from "./expenses";
+import { addExpense, approveExpense, createExpense, parseAmountMajor, updateExpense, voidExpense } from "./expenses";
 import { FlowError } from "./errors";
 import { clearStoredEnvChoice } from "./org-scope";
 import { appCookieOptions, sameAppPath } from "./public-origin";
@@ -395,6 +395,17 @@ export async function actionUpdateExpense(formData: FormData) {
     const session = await getSession();
     await updateExpense(session, id, expenseFields(formData));
     redirect(`/m/expenses/${id}?saved=1`);
+  } catch (error) {
+    bounce(id ? `/m/expenses/${id}` : "/m/expenses", error);
+  }
+}
+
+export async function actionApproveExpense(formData: FormData) {
+  const id = text(formData.get("expenseId"));
+  try {
+    const session = await getSession();
+    await approveExpense(session, id);
+    redirect(`/m/expenses/${id}?approved=1`);
   } catch (error) {
     bounce(id ? `/m/expenses/${id}` : "/m/expenses", error);
   }

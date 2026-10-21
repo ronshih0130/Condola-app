@@ -4,13 +4,15 @@ import { svc, tx } from "./db";
 import { FlowError } from "./errors";
 import {
   STATEMENT_EXPENSE_SQL,
+  approveExpense,
   createExpense,
   getExpense,
+  listExpenses,
   updateExpense,
   voidExpense,
   type ExpenseDetail,
 } from "./expenses";
-import { ORG_ID, USERS } from "./ids";
+import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import type { OrgRole, Session } from "./types";
 
 function staff(userId: string, role: OrgRole, orgId = ORG_ID): Session {
@@ -34,6 +36,7 @@ const admin = staff(USERS.admin, "admin");
 const manager = staff(USERS.manager, "manager");
 const accountant = staff(USERS.accountant, "accountant");
 const maintenance = staff(USERS.maintenance, "maintenance");
+const coast = staff(USERS.coastAdmin, "admin", ORG2_ID);
 
 function draftFrom(row: ExpenseDetail, patch: Partial<{ description: string; amountMajor: number }> = {}) {
   return {
@@ -132,10 +135,10 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     );
     assert.equal(hiddenAudit.rows.length, 0);
 
-    const coast = await tx(USERS.coastAdmin, (client) =>
+    const coastHidden = await tx(USERS.coastAdmin, (client) =>
       client.query(`SELECT id FROM expenses WHERE description = $1`, [note]),
     );
-    assert.equal(coast.rows.length, 0);
+    assert.equal(coastHidden.rows.length, 0);
 
     await updateExpense(accountant, created.expenseId, draftFrom(row, { description: `${note}改` }));
     const edited = await getExpense(admin, created.expenseId);
@@ -214,6 +217,93 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     assert.equal(await draftCount("posted"), 1);
     assert.equal(await draftCount("void"), 0);
 
+    const ticket = await tx(USERS.admin, async (client) => {
+      const found = await client.query<{ id: string; ticket_number: string }>(
+        `SELECT id::text, ticket_number::text FROM maintenance_tickets
+          WHERE org_id = $1 AND ticket_number = 1002`,
+        [ORG_ID],
+      );
+      return found.rows[0];
+    });
+    assert.ok(ticket, "seeded repair 1002");
+    const repairNote = `ticket-draft-${stamp}`;
+    const repairId = await tx(USERS.admin, async (client) => {
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO expenses (
+           org_id, property_id, unit_id, ticket_id, category, description, currency, amount_minor,
+           incurred_on, paid_by, bill_to, status, created_by
+         ) VALUES ($1,$2,$3,$4,'repair',$5,'TWD',50000,'2099-10-01','manager_firm','owner','draft',$6)
+         RETURNING id::text`,
+        [ORG_ID, place.id, place.unit_id, ticket.id, repairNote, USERS.admin],
+      );
+      return inserted.rows[0].id;
+    });
+    const repairDraft = await getExpense(manager, repairId);
+    assert.equal(repairDraft?.status, "draft");
+    assert.equal(repairDraft?.included, false);
+    assert.equal(repairDraft?.ticket_id, ticket.id);
+    assert.equal(repairDraft?.ticket_number, "1002");
+    const listed = await listExpenses(manager, { status: "draft" });
+    assert.ok(listed.some((row) => row.id === repairId && row.ticket_number === "1002" && row.included === false));
+    await updateExpense(manager, repairId, draftFrom(repairDraft!, { description: `${repairNote}改` }));
+    const editedDraft = await getExpense(admin, repairId);
+    assert.equal(editedDraft?.description, `${repairNote}改`);
+    assert.equal(editedDraft?.ticket_id, ticket.id);
+    assert.equal(editedDraft?.status, "draft");
+    await assert.rejects(
+      () => approveExpense(maintenance, repairId),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+    );
+    assert.equal(await getExpense(coast, repairId), null);
+    await approveExpense(manager, repairId);
+    const postedRepair = await getExpense(accountant, repairId);
+    assert.equal(postedRepair?.status, "posted");
+    assert.equal(postedRepair?.included, true);
+    assert.equal(postedRepair?.ticket_id, ticket.id);
+    assert.equal(postedRepair?.amount_minor, "50000");
+    const postedCount = await tx(USERS.admin, (client) =>
+      client.query(`SELECT id FROM expenses WHERE id = $1 AND ${STATEMENT_EXPENSE_SQL}`, [repairId]),
+    );
+    assert.equal(postedCount.rows.length, 1);
+    const repairLedger = await tx(USERS.admin, (client) =>
+      client.query(`SELECT ledger_transaction_id FROM expenses WHERE id = $1 AND ledger_transaction_id IS NOT NULL`, [repairId]),
+    );
+    assert.equal(repairLedger.rows.length, 1);
+    const approveAudit = await tx(USERS.admin, (client) =>
+      client.query(
+        `SELECT reason FROM audit_log WHERE table_name = 'expenses' AND row_id = $1 AND reason = 'expense_approve'`,
+        [repairId],
+      ),
+    );
+    assert.equal(approveAudit.rows.length > 0, true);
+    await assert.rejects(
+      () => approveExpense(admin, repairId),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.expenseState",
+    );
+
+    const tenantNote = `tenant-draft-${stamp}`;
+    const tenantId = await tx(USERS.admin, async (client) => {
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO expenses (
+           org_id, property_id, ticket_id, category, description, currency, amount_minor,
+           incurred_on, paid_by, bill_to, status, created_by
+         ) VALUES ($1,$2,$3,'repair',$4,'TWD',8000,'2099-10-02','manager_firm','tenant','draft',$5)
+         RETURNING id::text`,
+        [ORG_ID, place.id, ticket.id, tenantNote, USERS.admin],
+      );
+      return inserted.rows[0].id;
+    });
+    await approveExpense(accountant, tenantId);
+    const tenantPosted = await getExpense(admin, tenantId);
+    assert.equal(tenantPosted?.status, "posted");
+    assert.equal(tenantPosted?.included, false);
+    assert.equal(tenantPosted?.ticket_id, ticket.id);
+    assert.equal(tenantPosted?.bill_to, "tenant");
+    const tenantLedger = await tx(USERS.admin, (client) =>
+      client.query(`SELECT ledger_transaction_id FROM expenses WHERE id = $1`, [tenantId]),
+    );
+    assert.equal(tenantLedger.rows[0]?.ledger_transaction_id ?? null, null);
+
     await svc(null, async (client) => {
       await client.query(
         `INSERT INTO month_closes (org_id, period_month, closed_by) VALUES ($1, '2020-01-01', $2)
@@ -247,6 +337,20 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     });
     await assert.rejects(
       () => voidExpense(admin, closedRow, "too late"),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.monthClosed",
+    );
+    const closedDraft = await tx(USERS.admin, async (client) => {
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO expenses (
+           org_id, property_id, category, description, currency, amount_minor, incurred_on, paid_by, bill_to, status, created_by
+         ) VALUES ($1,$2,'repair',$3,'TWD',100,'2020-01-20','manager_firm','owner','draft',$4)
+         RETURNING id::text`,
+        [ORG_ID, place.id, `closed-draft-${stamp}`, USERS.admin],
+      );
+      return inserted.rows[0].id;
+    });
+    await assert.rejects(
+      () => approveExpense(admin, closedDraft),
       (error: unknown) => error instanceof FlowError && error.key === "errors.monthClosed",
     );
     const stillOpen = await createExpense(admin, {
@@ -291,6 +395,7 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
       await client.query(`DELETE FROM month_closes WHERE org_id = $1 AND period_month = '2020-01-01'`, [ORG_ID]);
       await client.query(`DELETE FROM expenses WHERE org_id = $1 AND description = $2`, [ORG_ID, draftNote]);
       await client.query(`DELETE FROM expenses WHERE org_id = $1 AND description = $2`, [ORG_ID, `closed-${stamp}`]);
+      await client.query(`DELETE FROM expenses WHERE org_id = $1 AND description LIKE $2`, [ORG_ID, `%${stamp}%`]);
     });
   }
 });

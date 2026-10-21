@@ -16,6 +16,13 @@ export const EXPENSE_CATEGORIES = ["repair", "cleaning", "utility", "tax", "insu
 
 export const EXPENSE_STATUSES = ["draft", "submitted", "approved", "rejected", "posted", "void"] as const;
 
+/** Repair drafts and other unposted rows staff can approve onto the books. */
+export const APPROVABLE_EXPENSE_STATUSES = ["draft", "submitted", "rejected"] as const;
+
+export function expenseCanBeApproved(status: string) {
+  return (APPROVABLE_EXPENSE_STATUSES as readonly string[]).includes(status);
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function expenseCountsOnStatement(status: string, billTo: string) {
@@ -99,6 +106,8 @@ export type ExpenseListRow = {
   bill_to: string;
   vendor_name: string | null;
   receipt_name: string | null;
+  ticket_id: string | null;
+  ticket_number: string | null;
   included: boolean;
 };
 
@@ -233,12 +242,14 @@ async function onIssuedStatement(client: Client, orgId: string, expenseId: strin
 const LIST_SQL = `SELECT e.id::text, e.property_id::text, p.name AS property_name,
             e.unit_id::text, u.label AS unit_label, e.category, coalesce(e.description, '') AS description,
             e.currency, e.amount_minor::text, e.incurred_on::text, e.status::text, e.bill_to::text,
-            c.display_name AS vendor_name, f.file_name AS receipt_name
+            c.display_name AS vendor_name, f.file_name AS receipt_name,
+            e.ticket_id::text, t.ticket_number::text AS ticket_number
        FROM expenses e
        JOIN properties p ON p.id = e.property_id
        LEFT JOIN units u ON u.id = e.unit_id
        LEFT JOIN contacts c ON c.id = e.vendor_contact_id
-       LEFT JOIN files f ON f.id = e.receipt_file_id`;
+       LEFT JOIN files f ON f.id = e.receipt_file_id
+       LEFT JOIN maintenance_tickets t ON t.id = e.ticket_id AND t.org_id = e.org_id`;
 
 function mapRow(row: Omit<ExpenseListRow, "included" | "incurred_on"> & { incurred_on: string }): ExpenseListRow {
   const incurred_on = day(row.incurred_on);
@@ -371,13 +382,17 @@ type StoredExpense = {
   incurred_on: string;
   ledger_transaction_id: string | null;
   category: string;
+  bill_to: string;
+  currency: string;
+  description: string | null;
+  ticket_id: string | null;
 };
 
 async function loadStored(client: Client, orgId: string, expenseId: string) {
   const row = await maybe<StoredExpense>(
     client,
     `SELECT id::text, property_id::text, status::text, amount_minor::text, incurred_on::text,
-            ledger_transaction_id::text, category
+            ledger_transaction_id::text, category, bill_to::text, currency, description, ticket_id::text
        FROM expenses WHERE id = $1 AND org_id = $2`,
     [expenseId, orgId],
   );
@@ -481,6 +496,43 @@ export async function voidExpense(session: Session, expenseId: string, reason: s
       [expenseId, session.orgId],
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.expenseVoid");
+  });
+}
+
+/**
+ * Move a repair draft (or a submitted/rejected row) to posted.
+ * Owner-billed rows get a ledger entry so they match a new staff expense.
+ * ticket_id is left as the repair recorded it.
+ */
+export async function approveExpense(session: Session, expenseId: string) {
+  assertPerm(session, "exp.add");
+  if (!UUID.test(expenseId)) throw new FlowError("errors.notFound");
+  return tx(session.userId, async (client) => {
+    const current = await loadStored(client, session.orgId, expenseId);
+    if (current.status === "void") throw new FlowError("errors.expenseVoid");
+    if (!expenseCanBeApproved(current.status)) throw new FlowError("errors.expenseState");
+    const closed = await closedThrough(client, session.orgId);
+    if (monthIsClosed(current.incurred_on, closed)) throw new FlowError("errors.monthClosed");
+    await setReason(client, "expense_approve");
+    const updated = await client.query(
+      `UPDATE expenses
+          SET status = 'posted', approved_by = $3, approved_at = now()
+        WHERE id = $1 AND org_id = $2
+          AND status = ANY($4::expense_status[])`,
+      [expenseId, session.orgId, session.userId, APPROVABLE_EXPENSE_STATUSES],
+    );
+    if (updated.rowCount !== 1) throw new FlowError("errors.expenseState");
+    if (current.bill_to === "owner" && !current.ledger_transaction_id) {
+      await postLedger(client, session, {
+        expenseId,
+        propertyId: current.property_id,
+        currency: current.currency.trim(),
+        incurred: current.incurred_on,
+        memo: current.description?.trim() || current.category,
+        amount: Number(current.amount_minor),
+      });
+    }
+    return { expenseId, ticketId: current.ticket_id };
   });
 }
 

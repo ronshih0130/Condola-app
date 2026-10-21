@@ -109,6 +109,13 @@ export default async function ExpensesPage({
                   <Cell label={t("i_note")}>
                     {row.description || dash}
                     {row.receipt_name ? <div className="small muted">{row.receipt_name}</div> : null}
+                    {row.ticket_id && row.ticket_number ? (
+                      <div className="small">
+                        <Link href={`/m/tickets/${row.ticket_id}`} data-testid="expense-ticket">
+                          {t("i_expense_ticket", { number: row.ticket_number })}
+                        </Link>
+                      </div>
+                    ) : null}
                   </Cell>
                   <Cell label={t("i_amount_label")} className="num">
                     {formatMoney(row.amount_minor, row.currency, session.locale)}

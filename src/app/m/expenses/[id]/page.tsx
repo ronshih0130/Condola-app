@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { ExpenseForm } from "@/components/expense-form";
 import { ErrorBanner, PageHeader, expenseCategoryKey, expenseStatusClass, expenseStatusKey } from "@/components/ui";
-import { actionUpdateExpense, actionVoidExpense } from "@/server/auth-actions";
-import { EXPENSE_CATEGORIES, expenseFormOptions, getExpense, majorInput } from "@/server/expenses";
+import { actionApproveExpense, actionUpdateExpense, actionVoidExpense } from "@/server/auth-actions";
+import { EXPENSE_CATEGORIES, expenseCanBeApproved, expenseFormOptions, getExpense, majorInput } from "@/server/expenses";
 import { formatMoney } from "@/server/format";
 import { getSession } from "@/server/session";
 
@@ -15,7 +15,7 @@ export default async function ExpenseDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; voided?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; voided?: string; approved?: string }>;
 }) {
   const session = await getSession();
   const t = makeT(session.locale);
@@ -30,6 +30,7 @@ export default async function ExpenseDetailPage({
   ];
   const categoryLabel = expenseCategoryKey(row.category) ? t(expenseCategoryKey(row.category)) : row.category;
   const editable = row.status !== "void" && !row.month_closed;
+  const canApprove = expenseCanBeApproved(row.status) && !row.month_closed;
   return (
     <>
       <PageHeader title={categoryLabel} crumb={<Link href="/m/expenses">{t("i_nav_expenses")}</Link>} />
@@ -42,6 +43,11 @@ export default async function ExpenseDetailPage({
       {query.voided === "1" ? (
         <div className="alert ok" data-testid="expense-voided">
           {t("i_expense_voided")}
+        </div>
+      ) : null}
+      {query.approved === "1" ? (
+        <div className="alert ok" data-testid="expense-approved">
+          {t("i_expense_approved")}
         </div>
       ) : null}
       <div className="card pad" style={{ maxWidth: 640, margin: "16px 0" }} data-testid="expense-summary">
@@ -57,6 +63,13 @@ export default async function ExpenseDetailPage({
         </p>
         {row.vendor_name ? <p className="small">{row.vendor_name}</p> : null}
         {row.description ? <p>{row.description}</p> : null}
+        {row.ticket_id && row.ticket_number ? (
+          <p>
+            <Link href={`/m/tickets/${row.ticket_id}`} data-testid="expense-ticket">
+              {t("i_expense_ticket", { number: row.ticket_number })}
+            </Link>
+          </p>
+        ) : null}
       </div>
       {row.status === "void" ? null : row.month_closed ? (
         <p className="small" data-testid="expense-closed">
@@ -65,6 +78,15 @@ export default async function ExpenseDetailPage({
       ) : (
         <>
           {row.on_issued ? <p className="small">{t("i_expense_issued_hint")}</p> : null}
+          {canApprove ? (
+            <form className="card pad" action={actionApproveExpense} data-testid="expense-approve-form" style={{ maxWidth: 640, marginBottom: 16 }}>
+              <input type="hidden" name="expenseId" value={row.id} />
+              <button className="btn pri" type="submit" data-testid="expense-approve">
+                {t("i_expense_approve")}
+              </button>
+              <p className="small muted">{t("i_expense_approve_hint")}</p>
+            </form>
+          ) : null}
           <ExpenseForm
             action={actionUpdateExpense}
             properties={choices.properties}

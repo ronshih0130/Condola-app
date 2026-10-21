@@ -3,8 +3,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { FlowError } from "./errors";
 import {
+  APPROVABLE_EXPENSE_STATUSES,
   STATEMENT_EXPENSE_SQL,
   STATEMENT_EXPENSE_STATUSES,
+  expenseCanBeApproved,
   expenseCountsOnStatement,
   majorInput,
   monthIsClosed,
@@ -27,12 +29,14 @@ test("the statement query uses the shared status predicate", () => {
   const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
   assert.match(domain, /\$\{STATEMENT_EXPENSE_SQL\}/);
   assert.doesNotMatch(domain, /status IN \('approved','posted'\)/);
-  const migration = readFileSync(new URL("../../supabase/migrations/20261023100000_expense_statement_index.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../../supabase/migrations/20261023160000_expense_statement_index.sql", import.meta.url), "utf8");
+  assert.match(migration, /-- Version 20261023160000\./);
   assert.ok(migration.includes(STATEMENT_EXPENSE_SQL));
   const names = readdirSync(new URL("../../supabase/migrations/", import.meta.url))
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  const expense = names.find((name) => name.startsWith("20261023100000"));
+  assert.equal(names.some((name) => name.startsWith("20261023100000")), false);
+  const expense = names.find((name) => name.startsWith("20261023160000"));
   const prior = names.filter((name) => name < (expense ?? ""));
   assert.ok(prior.some((name) => name.startsWith("20261023090000")));
 });
@@ -79,4 +83,24 @@ test("expense amounts and dates are checked before they are saved", () => {
     "custom_trade",
   );
   assert.equal(kept.category, "custom_trade");
+});
+
+test("approving a draft posts it and leaves the repair ticket link alone", () => {
+  assert.deepEqual(APPROVABLE_EXPENSE_STATUSES, ["draft", "submitted", "rejected"]);
+  assert.equal(expenseCanBeApproved("draft"), true);
+  assert.equal(expenseCanBeApproved("submitted"), true);
+  assert.equal(expenseCanBeApproved("rejected"), true);
+  assert.equal(expenseCanBeApproved("approved"), false);
+  assert.equal(expenseCanBeApproved("posted"), false);
+  assert.equal(expenseCanBeApproved("void"), false);
+  const src = readFileSync(new URL("./expenses.ts", import.meta.url), "utf8");
+  const approve = src.slice(src.indexOf("export async function approveExpense"));
+  const update = src.slice(src.indexOf("export async function updateExpense"), src.indexOf("export async function voidExpense"));
+  assert.match(approve, /status = 'posted'/);
+  assert.doesNotMatch(approve, /ticket_id\s*=/);
+  assert.doesNotMatch(update, /ticket_id\s*=/);
+  const page = readFileSync(new URL("../app/m/expenses/[id]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /expense-approve/);
+  assert.match(page, /expenseCanBeApproved/);
+  assert.match(page, /expense-ticket/);
 });

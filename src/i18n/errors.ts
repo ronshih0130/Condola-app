@@ -23,6 +23,7 @@ export const ERRORS: Record<string, string> = {
   "errors.monthClosed": "i_month_locked",
   "errors.expenseVoid": "i_expense_void_done",
   "errors.expenseLocked": "i_expense_locked",
+  "errors.expenseState": "i_expense_state",
   "errors.last5": "s_da160ee",
   "errors.csv": "i_csv",
   "errors.occupied": "i_occupied",
