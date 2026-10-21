@@ -128,6 +128,78 @@ test("房東 is absent outside import-header aliases", () => {
   assert.deepEqual(hits, []);
 });
 
+const OWNER_STATEMENT_REASON =
+  "本月代墊費用與代管費（{cost}）高於已繳租金（{rent}），差額請屋主補繳，或依委託約定從下期租金扣抵。";
+
+const STATEMENT_COPY_KEYS = [
+  "owner_owes",
+  "owner_owes_reason",
+  "i_opening",
+  "i_rent_received",
+  "i_other_income",
+  "i_fee",
+  "i_expenses",
+  "i_payouts",
+  "i_closing",
+  "i_net_owner",
+  "i_actor",
+  "i_einvoice",
+  "i_rent_this_month",
+  "i_statement_list",
+  "i_statement_empty",
+  "i_generated",
+  "i_not_generated",
+  "i_preview",
+  "i_preview_pending",
+  "i_owner_nav_stmt",
+  "i_nav_stmt",
+  "i_back_list",
+  "s_423eca6",
+  "s_9baf5e0",
+  "s_1bd133f",
+  "s_705a524",
+];
+
+/** Page, owner portal, and print all render statement-document. There is no separate statement PDF. */
+function statementSurfaceFiles() {
+  const files = [
+    join(root, "src/components/statement-document.tsx"),
+    ...filesUnder(join(root, "src/app/m/statements")),
+    ...filesUnder(join(root, "src/app/o/statements")),
+  ];
+  for (const dir of ["src", "design", "supabase"]) {
+    for (const file of filesUnder(join(root, dir))) {
+      if (/statement/i.test(file) && /\.(html|pdf|tsx|ts|txt)$/.test(file)) files.push(file);
+    }
+  }
+  return [...new Set(files)].filter((file) => !/\.test\.[cm]?[jt]sx?$/.test(file));
+}
+
+test("owner statements say 已繳租金 and not 已收租金", () => {
+  const zh = catalog("app", "zh-TW");
+  const proto = catalog("prototype", "zh-TW");
+  assert.equal(zh.owner_owes_reason, OWNER_STATEMENT_REASON);
+  assert.equal(proto.owner_owes_reason, OWNER_STATEMENT_REASON);
+
+  const oldPhrase = "已收" + "租金";
+  const files = statementSurfaceFiles();
+  assert.ok(files.some((file) => file.endsWith(`${join("components", "statement-document.tsx")}`)));
+  const hits: string[] = [];
+  for (const file of files) {
+    const source = decodeUnicodeEscapes(read(file));
+    if (source.includes(oldPhrase)) hits.push(relative(root, file));
+  }
+  for (const key of STATEMENT_COPY_KEYS) {
+    assert.equal(typeof zh[key], "string", key);
+    if (zh[key].includes(oldPhrase)) hits.push(key);
+    if (proto[key]?.includes(oldPhrase)) hits.push(`design ${key}`);
+  }
+  assert.deepEqual(hits, []);
+  assert.match(read(join(root, "src/components/statement-document.tsx")), /owner_owes_reason/);
+  assert.match(read(join(root, "src/app/m/statements/page.tsx")), /owner_owes/);
+  assert.match(read(join(root, "src/app/o/statements/[id]/page.tsx")), /StatementDocument/);
+});
+
 test("legacy 房東 import headers stay aliases when the owner importer exists", async () => {
   const aliases = legacyImportAliases();
   for (const required of ["房東姓名", "房東", "房東email", "房東信箱"]) {

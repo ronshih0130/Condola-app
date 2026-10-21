@@ -114,6 +114,7 @@ for (const locale of locales) {
     await expect(page.getByTestId("statement-fee")).toHaveText("NT$0");
     const documentText = await page.getByTestId("statement-document").innerText();
     expect(documentText).toContain(locale.reason);
+    if (locale.code === "zh-TW") expect(documentText).not.toContain("已收租金");
     expect(documentText).toContain("NT$0");
     expect(documentText).not.toMatch(/[-−]\s*NT\$/);
     expect(documentText).not.toContain("−NT$");
