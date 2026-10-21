@@ -1,0 +1,84 @@
+import { expect, test } from "@playwright/test";
+import { resetDemo } from "./session";
+
+test("Enter in electricity does not advance, and ordinary buttons still activate", async ({ page }) => {
+  await resetDemo(page);
+  await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases/new");
+  const room = page.getByTestId("lease-room");
+  const roomValue = await room.locator("option", { hasText: "信義松仁" }).first().getAttribute("value");
+  expect(roomValue).toBeTruthy();
+  await room.selectOption(roomValue ?? "");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("tenant-name").fill("鍵盤租客");
+  await page.getByTestId("tenant-phone").fill("0912300099");
+  await page.getByTestId("wizard-next").click();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+  await page.getByTestId("start-date").fill(today);
+  await page.getByTestId("term-months").fill("12");
+  await page.getByTestId("rent").fill("10000");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("deposit-months").fill("2");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("due-day").fill("5");
+  await page.getByTestId("wizard-next").click();
+
+  await expect(page.getByTestId("split-method")).toBeVisible();
+  await page.getByTestId("split-method").selectOption("even");
+  await page.getByTestId("bill-total").fill("2000");
+  await page.getByTestId("usage").fill("400");
+  await page.getByTestId("rate").fill("4");
+  await expect(page.getByTestId("wizard-next")).toBeEnabled();
+  await page.getByTestId("bill-total").press("Enter");
+  await page.getByTestId("usage").press("Enter");
+  await page.getByTestId("rate").press("Enter");
+  await expect(page.getByTestId("split-method")).toBeVisible();
+  await expect(page.getByTestId("lease-template")).toBeHidden();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.getByTestId("bill-total")).toHaveValue("2000");
+
+  await page.getByTestId("wizard-next").focus();
+  await page.getByTestId("wizard-next").press("Enter");
+  await expect(page.getByTestId("lease-template")).toBeVisible();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+
+  await page.getByTestId("wizard-next").focus();
+  await page.getByTestId("wizard-next").press("Enter");
+  const submit = page.getByTestId("submit-lease");
+  await expect(submit).toBeVisible();
+  await expect(submit).toBeDisabled();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.getByTestId("paper-sign")).toHaveCount(0);
+  await expect(submit).toBeEnabled();
+  await submit.focus();
+  await submit.press("Enter");
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.getByTestId("paper-sign")).toHaveCount(0);
+
+  await page.goto("/m/properties/new");
+  await page.getByText("新屋主", { exact: true }).click();
+  await page.getByTestId("property-name").fill("鍵盤物件");
+  await page.getByTestId("property-city").fill("台北市");
+  await page.getByTestId("property-street").fill("測試路");
+  await page.getByTestId("owner-name").fill("鍵盤屋主");
+  await expect(page.getByTestId("wizard-next")).toBeEnabled();
+  await page.getByTestId("property-name").press("Enter");
+  await expect(page.locator('input[name="rentalMode"]').first()).toBeHidden();
+  await expect(page.getByTestId("submit-property")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/m\/properties\/new/);
+
+  await page.getByTestId("wizard-next").click();
+  await page.locator('input[name="rentalMode"][value="by_room"]').check();
+  await page.getByTestId("wizard-next").click();
+  await expect(page.getByTestId("add-room")).toBeVisible();
+  await expect(page.getByTestId("room-0-label")).toBeVisible();
+  await expect(page.getByTestId("room-1-label")).toHaveCount(0);
+  await page.getByTestId("unit-label").fill("8F");
+  await page.getByTestId("unit-label").press("Enter");
+  await expect(page.getByTestId("unit-label")).toBeVisible();
+  await expect(page.getByTestId("submit-property")).toHaveCount(0);
+  await page.getByTestId("add-room").focus();
+  await page.getByTestId("add-room").press("Enter");
+  await expect(page.getByTestId("room-1-label")).toBeVisible();
+  await expect(page).toHaveURL(/\/m\/properties\/new/);
+});

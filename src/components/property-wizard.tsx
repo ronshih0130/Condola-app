@@ -4,6 +4,7 @@ import { useActionState, useMemo, useRef, useState } from "react";
 import { errorText } from "@/i18n/errors";
 import { actionCreateProperty } from "@/server/actions";
 import { useLocale, useT } from "./locale";
+import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
 import { Stepper } from "./ui";
 
 const ROOM_TYPES = ["suite", "shared_bath", "studio", "other"] as const;
@@ -126,12 +127,7 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
     <form
       action={formAction}
       noValidate
-      onKeyDown={(event) => {
-        if (event.key !== "Enter") return;
-        if (event.target instanceof HTMLTextAreaElement) return;
-        if (event.target instanceof HTMLButtonElement && event.target.type === "submit") return;
-        event.preventDefault();
-      }}
+      onKeyDownCapture={blockImplicitEnter}
       onSubmit={(event) => {
         const submitter = (event.nativeEvent as SubmitEvent).submitter;
         if (!(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-property" || !submitReady) {
@@ -145,6 +141,7 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
         }
       }}
     >
+      <ImplicitSubmitSink />
       <Stepper steps={steps} current={step} />
       {banner ? (
         <div className="alert bad" data-testid="property-error" style={{ marginBottom: 12 }}>

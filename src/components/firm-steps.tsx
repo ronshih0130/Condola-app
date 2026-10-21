@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
 import { PendingSubmit } from "./pending-submit";
 import { useT } from "./locale";
 import { actionCreateFirm } from "@/server/signup-actions";
@@ -27,12 +28,7 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
       action={actionCreateFirm}
       className="col"
       data-testid="firm-form"
-      onKeyDown={(event) => {
-        if (event.key !== "Enter") return;
-        if (event.target instanceof HTMLTextAreaElement) return;
-        if (event.target instanceof HTMLButtonElement && event.target.type === "submit") return;
-        event.preventDefault();
-      }}
+      onKeyDownCapture={blockImplicitEnter}
       onSubmit={(event) => {
         const submitter = (event.nativeEvent as SubmitEvent).submitter;
         if (step !== 4 || !submitReady || !(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "firm-submit") {
@@ -49,6 +45,7 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
         if (needName || needContact) event.preventDefault();
       }}
     >
+      <ImplicitSubmitSink />
       <ol className="steps" data-testid="signup-steps">
         <li className="on">1</li>
         <li className="on">2</li>

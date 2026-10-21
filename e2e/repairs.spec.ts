@@ -35,7 +35,9 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
 
   await signIn(page, ACCOUNTS.tenant);
   await page.getByRole("button", { name: /松信住宅管理/ }).click();
+  await expect(page.getByTestId("lease-picker")).toHaveCount(0);
   await page.getByTestId("tenant-tile-repair").click();
+  await expect(page.getByRole("heading", { name: "報修" })).toBeVisible();
   await expect(page.getByTestId("tenant-repairs")).not.toContainText("廚房漏水測試");
   await expect(page.getByTestId("tenant-repairs")).not.toContainText("浴室水龍頭滲水");
 
