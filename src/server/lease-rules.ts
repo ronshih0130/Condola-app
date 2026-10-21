@@ -14,6 +14,16 @@ export function depositReasonOk(depositMonths: number, reason: string) {
   return reason.trim().length > 0;
 }
 
+/** +E.164 as typed, or a Taiwan mobile 09xxxxxxxx (spaces and dashes allowed) as +886. */
+export function normalizePhone(phone: string): string | null {
+  const value = phone.trim();
+  if (!value) return null;
+  if (/^\+[1-9]\d{6,14}$/.test(value)) return value;
+  const digits = value.replace(/\D/g, "");
+  if (/^09\d{8}$/.test(digits)) return `+886${digits.slice(1)}`;
+  return null;
+}
+
 export function normalizeLineId(value: string): { ok: true; value: string | null } | { ok: false } {
   const trimmed = value.trim();
   if (!trimmed) return { ok: true, value: null };

@@ -15,7 +15,7 @@ import {
   taipeiToday,
   toMinor,
 } from "./money";
-import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, signedPdfName } from "./lease-rules";
+import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
@@ -24,9 +24,9 @@ function sha256(value: string) {
 }
 
 function cleanPhone(phone: string) {
-  const value = phone.trim();
-  if (!value) return null;
-  if (!/^\+[1-9]\d{6,14}$/.test(value)) throw new FlowError("errors.phone");
+  if (!phone.trim()) return null;
+  const value = normalizePhone(phone);
+  if (!value) throw new FlowError("errors.phone");
   return value;
 }
 
@@ -37,21 +37,20 @@ function cleanEmail(email: string) {
   return value;
 }
 
-async function provisionUser(input: { name: string; email: string | null; phone: string | null }) {
-  return svc(null, async (client) => {
-    const email = input.email ?? `portal-${randomUUID()}@demo.condola.local`;
+/** Insert the portal user on the caller's transaction so a later failure rolls it back. */
+async function insertPortalUser(client: Client, input: { name: string; email: string | null; phone: string | null }) {
+  const email = input.email ?? `portal-${randomUUID()}@demo.condola.local`;
+  await client.query(`SET LOCAL ROLE service_role`);
+  try {
     const user = await one<{ id: string }>(
       client,
-      `INSERT INTO auth.users (email, raw_user_meta_data, email_confirmed_at)
-       VALUES ($1, $2::jsonb, now()) RETURNING id`,
-      [email, JSON.stringify({ name: input.name })],
-    );
-    await client.query(
-      `INSERT INTO profiles (id, display_name, email, phone_e164, locale) VALUES ($1,$2,$3,$4,'zh-TW')`,
-      [user.id, input.name, email, input.phone],
+      `SELECT app.provision_portal_user($1, $2, $3) AS id`,
+      [email, input.name, input.phone],
     );
     return user.id;
-  });
+  } finally {
+    await client.query(`SET LOCAL ROLE authenticated`);
+  }
 }
 
 export async function markTryout(orgId: string, key: "property" | "lease" | "statement" | "repair") {
@@ -88,21 +87,19 @@ export type PropertyInput = {
 
 export async function createProperty(session: Session, input: PropertyInput) {
   assertStaff(session, ["admin", "manager"]);
-  if (!input.name.trim() || !input.city.trim() || !input.street.trim() || !input.unitLabel.trim()) {
-    throw new FlowError("errors.required");
-  }
-  const rooms = input.rooms.filter((room) => room.label.trim());
-  if (input.rentalMode === "by_room" && rooms.length < 2) throw new FlowError("errors.needRooms");
+  if (!input.name.trim()) throw new FlowError("errors.required", { field: "i_property_name" });
+  if (!input.city.trim()) throw new FlowError("errors.required", { field: "i_city" });
+  if (!input.street.trim()) throw new FlowError("errors.required", { field: "i_address" });
+  if (!input.unitLabel.trim()) throw new FlowError("errors.required", { field: "i_unit_label" });
+  const posted = input.rentalMode === "whole_unit" ? [] : input.rooms;
+  const rooms = posted.filter((room) => room.label.trim() || room.baseRentMajor > 0);
+  if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  if (input.rentalMode === "by_room" && rooms.length < 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
 
-  let ownerUserId: string | null = null;
-  let inviteCode: string | null = null;
   const ownerPhone = cleanPhone(input.ownerPhone);
   const ownerEmail = cleanEmail(input.ownerEmail);
-  if (input.ownerMode === "new") {
-    if (!input.ownerName.trim() || !ownerPhone) throw new FlowError("errors.required");
-    ownerUserId = await provisionUser({ name: input.ownerName.trim(), email: ownerEmail, phone: ownerPhone });
-    inviteCode = `CND-${randomUUID().slice(0, 8).toUpperCase()}`;
-  }
+  if (input.ownerMode === "new" && !input.ownerName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
+  if (input.ownerMode === "new" && !ownerPhone) throw new FlowError("errors.required", { field: "i_phone_label" });
 
   const created = await tx(session.userId, async (client) => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property:${session.userId}:${input.name.trim()}`]);
@@ -113,7 +110,13 @@ export async function createProperty(session: Session, input: PropertyInput) {
         ORDER BY created_at DESC LIMIT 1`,
       [session.orgId, input.name.trim()],
     );
-    if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[] };
+    if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
+    let ownerUserId: string | null = null;
+    let inviteCode: string | null = null;
+    if (input.ownerMode === "new") {
+      ownerUserId = await insertPortalUser(client, { name: input.ownerName.trim(), email: ownerEmail, phone: ownerPhone });
+      inviteCode = `CND-${randomUUID().slice(0, 8).toUpperCase()}`;
+    }
     const country = input.currency === "USD" ? "US" : "TW";
     const jurisdiction = await one<{ id: string }>(
       client,
@@ -212,11 +215,11 @@ export async function createProperty(session: Session, input: PropertyInput) {
       );
       roomIds.push(inserted.id);
     }
-    return { propertyId: property.id, ownerContactId, roomIds };
-  });
+    return { propertyId: property.id, ownerContactId, roomIds, inviteCode };
+  }, { orgId: session.orgId, environment: session.environment });
 
   if (input.rentalMode === "by_room" && created.roomIds.length >= 3) await markTryout(session.orgId, "property");
-  return { ...created, inviteCode };
+  return created;
 }
 
 export async function setMeterSerial(session: Session, propertyId: string, serial: string) {
@@ -269,46 +272,81 @@ export type LeaseInput = {
   lineUserId: string;
   startDate: string;
   endDate: string;
-  rentMajor: number;
-  depositMonths: number;
+  rentMajor: number | null;
+  depositMonths: number | null;
   depositReason: string;
-  dueDay: number;
+  dueDay: number | null;
   splitMethod: "even" | "days_occupied" | "sub_meter";
   periodStart: string;
   periodEnd: string;
-  billTotalMajor: number;
-  usageKwh: number;
-  rateMajor: number;
+  billTotalMajor: number | null;
+  usageKwh: number | null;
+  rateMajor: number | null;
   rateSource: "fixed_rate" | "bill_average";
   overrideReason: string;
   subUsages: { roomId: string; kwh: number }[];
 };
 
+function finiteNumber(value: number | null): value is number {
+  return value != null && Number.isFinite(value);
+}
+
+/** Blank electricity is optional. A partial bill still needs a positive usage; a missing rate uses the bill average. */
+function readElectricity(input: LeaseInput) {
+  const bill = input.billTotalMajor;
+  const usage = input.usageKwh;
+  const rate = input.rateMajor;
+  const billOk = finiteNumber(bill);
+  const usageOk = finiteNumber(usage);
+  const rateOk = finiteNumber(rate);
+  if (!billOk && !usageOk && !rateOk) return null;
+  if (billOk && usageOk && rateOk && bill === 0 && usage === 0 && rate === 0) return null;
+  if ((bill != null && !Number.isFinite(bill)) || (usage != null && !Number.isFinite(usage)) || (rate != null && !Number.isFinite(rate))) {
+    const field = bill != null && !Number.isFinite(bill) ? "i_bill_total" : usage != null && !Number.isFinite(usage) ? "i_usage" : "i_rate";
+    throw new FlowError("errors.amount", { field });
+  }
+  if (!billOk || bill < 0) throw new FlowError("errors.amount", { field: "i_bill_total" });
+  if (!usageOk || usage <= 0) throw new FlowError("errors.amount", { field: "i_usage" });
+  if (rateOk && rate < 0) throw new FlowError("errors.amount", { field: "i_rate" });
+  return { billMajor: bill, usageKwh: usage, rateMajor: rateOk ? rate : null };
+}
+
 export async function createLease(session: Session, input: LeaseInput) {
   assertStaff(session, ["admin", "manager"]);
-  if (!input.tenantName.trim() || !input.roomId || !input.startDate || !input.endDate) {
-    throw new FlowError("errors.required");
+  if (!input.roomId || !input.startDate || !input.endDate) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  if (!input.tenantName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
+  const dueDay = input.dueDay;
+  if (!finiteNumber(dueDay) || dueDay < 1 || dueDay > 31 || Math.floor(dueDay) !== dueDay) {
+    throw new FlowError("errors.required", { field: "s_aa47e23" });
   }
-  if (!(input.dueDay >= 1 && input.dueDay <= 31)) throw new FlowError("errors.required");
-  if (!(input.rentMajor > 0) || !(input.usageKwh > 0) || !(input.billTotalMajor >= 0)) {
-    throw new FlowError("errors.amount");
-  }
+  const rentMajor = input.rentMajor;
+  const depositMonths = input.depositMonths;
+  if (!finiteNumber(rentMajor) || rentMajor < 0) throw new FlowError("errors.amount", { field: "i_base_rent" });
+  if (!finiteNumber(depositMonths) || depositMonths < 0) throw new FlowError("errors.amount", { field: "s_8ed103e" });
   if (input.periodEnd <= input.periodStart || input.endDate < input.startDate) throw new FlowError("errors.required");
-  if (!depositReasonOk(input.depositMonths, input.depositReason ?? "")) throw new FlowError("errors.depositCap");
+  if (!depositReasonOk(depositMonths, input.depositReason ?? "")) throw new FlowError("errors.depositCap");
   const lineId = normalizeLineId(input.lineUserId ?? "");
   if (!lineId.ok) throw new FlowError("errors.lineId");
   const phone = cleanPhone(input.tenantPhone);
-  if (!phone) throw new FlowError("errors.required");
+  if (!phone) throw new FlowError("errors.required", { field: "s_522cf12" });
   const email = cleanEmail(input.tenantEmail);
-  const tenantUserId = await provisionUser({ name: input.tenantName.trim(), email, phone });
-
-  const billMinor = toMinor(input.billTotalMajor);
-  const average = Math.round((billMinor / input.usageKwh) * 1e6) / 1e6;
-  const rateMinor = input.rateSource === "bill_average" ? average : Math.round(input.rateMajor * 100 * 1e6) / 1e6;
-  const exceeds = input.rateSource === "fixed_rate" && rateMinor > average + 1e-9;
+  const electricity = readElectricity(input);
+  const billMinor = electricity ? toMinor(electricity.billMajor) : 0;
+  const average = electricity ? Math.round((billMinor / electricity.usageKwh) * 1e6) / 1e6 : 0;
+  const rateSource = !electricity || electricity.rateMajor == null ? "bill_average" : input.rateSource;
+  const rateMinor = !electricity
+    ? 0
+    : rateSource === "bill_average"
+      ? average
+      : Math.round(electricity.rateMajor! * 100 * 1e6) / 1e6;
+  if (electricity && (!Number.isFinite(billMinor) || !Number.isFinite(rateMinor))) {
+    throw new FlowError("errors.amount", { field: "i_bill_total" });
+  }
+  const exceeds = Boolean(electricity) && rateSource === "fixed_rate" && rateMinor > average + 1e-9;
   if (exceeds && !input.overrideReason.trim()) throw new FlowError("errors.capReason");
-
-  const result = await tx(session.userId, async (client) => {
+  let result;
+  try {
+    result = await tx(session.userId, async (client) => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`lease:${input.roomId}`]);
     const already = await maybe<{ id: string; tenantUserId: string }>(
       client,
@@ -350,29 +388,28 @@ export async function createLease(session: Session, input: LeaseInput) {
              JOIN units u ON u.id = r.unit_id
              JOIN properties p ON p.id = u.property_id
             WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL
+              AND u.rental_mode = 'by_room'
            UNION ALL
            SELECT u.id, u.id, u.property_id, p.currency, 'whole_unit'::text, u.label, 1
              FROM units u
              JOIN properties p ON p.id = u.property_id
             WHERE u.id = $1 AND u.org_id = $2 AND u.archived_at IS NULL
               AND u.rental_mode = 'whole_unit'
-              AND NOT EXISTS (
-                SELECT 1 FROM rooms live WHERE live.unit_id = u.id AND live.archived_at IS NULL
-              )
          ) spaces
         ORDER BY rank
         LIMIT 1`,
       [input.roomId, session.orgId],
     );
+    const tenantUserId = await insertPortalUser(client, { name: input.tenantName.trim(), email, phone });
     const contact = await one<{ id: string }>(
       client,
       `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, phone_e164, line_user_id, locale, preferred_channel)
        VALUES ($1,$2,true,$3,$4,$5,$6,$7,'line') RETURNING id`,
       [session.orgId, tenantUserId, input.tenantName.trim(), email, phone, lineId.value, session.locale],
     );
-    const rentMinor = toMinor(input.rentMajor);
-    const depositMinor = Math.round(rentMinor * input.depositMonths);
-    const depositOver = depositExceedsCap(input.depositMonths);
+    const rentMinor = toMinor(rentMajor);
+    const depositMinor = Math.round(rentMinor * depositMonths);
+    const depositOver = depositExceedsCap(depositMonths);
     const depositReason = depositOver ? (input.depositReason ?? "").trim() : null;
     const documentHash = sha256(
       JSON.stringify({
@@ -405,9 +442,9 @@ export async function createLease(session: Session, input: LeaseInput) {
         input.endDate,
         space.currency,
         rentMinor,
-        input.dueDay,
+        dueDay,
         depositMinor,
-        input.depositMonths,
+        depositMonths,
         depositReason,
         depositReason ? session.userId : null,
         depositReason ? new Date() : null,
@@ -442,6 +479,8 @@ export async function createLease(session: Session, input: LeaseInput) {
       [session.orgId, tenantSig.id, session.userId, documentHash, managerSig.id],
     );
 
+    let tenantAmount = 0;
+    if (electricity) {
     let meter = await maybe<{ id: string }>(
       client,
       `SELECT id FROM meters WHERE unit_id = $1 AND utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL LIMIT 1`,
@@ -451,25 +490,36 @@ export async function createLease(session: Session, input: LeaseInput) {
       meter = await one<{ id: string }>(
         client,
         `INSERT INTO meters (
-           org_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit, billing_cycle_months
-         ) VALUES ($1,$2,'electricity','kWh','main','tenant',$3::split_method,$4::rate_source,$5,2)
+           org_id, property_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit, billing_cycle_months
+         ) VALUES ($1,$2,$3,'electricity','kWh','main','tenant',$4::split_method,$5::rate_source,$6,2)
          RETURNING id`,
-        [session.orgId, space.unit_id, input.splitMethod, input.rateSource, rateMinor],
+        [session.orgId, space.property_id, space.unit_id, input.splitMethod, rateSource, rateMinor],
       );
     }
 
-    const bill = await one<{ id: string; avg: string }>(
+    const insertedBill = await maybe<{ id: string; avg: string }>(
       client,
       `INSERT INTO utility_bills (
          org_id, meter_id, provider, period_start, period_end, currency, total_amount_minor, total_usage, entered_by
        ) VALUES ($1,$2,'Taipower',$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (meter_id, period_start, period_end) DO NOTHING
        RETURNING id, avg_price_minor_per_unit::text AS avg`,
-      [session.orgId, meter.id, input.periodStart, input.periodEnd, space.currency, billMinor, input.usageKwh, session.userId],
+      [session.orgId, meter.id, input.periodStart, input.periodEnd, space.currency, billMinor, electricity.usageKwh, session.userId],
+    );
+    const bill = insertedBill ?? await one<{ id: string; avg: string }>(
+      client,
+      `SELECT id, avg_price_minor_per_unit::text AS avg
+         FROM utility_bills
+        WHERE meter_id = $1 AND period_start = $2 AND period_end = $3`,
+      [meter.id, input.periodStart, input.periodEnd],
     );
 
     const unitRooms = await many<{ id: string; label: string }>(
       client,
-      `SELECT id, label FROM rooms WHERE unit_id = $1 AND archived_at IS NULL ORDER BY label`,
+      `SELECT r.id, r.label FROM rooms r
+         JOIN units u ON u.id = r.unit_id
+        WHERE r.unit_id = $1 AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
+        ORDER BY r.label`,
       [space.unit_id],
     );
     const others = await many<{ id: string; target_room_id: string; start_date: string; end_date: string }>(
@@ -483,8 +533,8 @@ export async function createLease(session: Session, input: LeaseInput) {
 
     const usageByRoom = new Map(input.subUsages.map((row) => [row.roomId, row.kwh]));
     const subTotal = unitRooms.reduce((sum, item) => sum + (usageByRoom.get(item.id) ?? 0), 0);
-    if (input.splitMethod === "sub_meter" && subTotal - input.usageKwh > 0.001) throw new FlowError("errors.meter");
-    const common = input.splitMethod === "sub_meter" ? round3(Math.max(0, input.usageKwh - subTotal)) : 0;
+    if (input.splitMethod === "sub_meter" && subTotal - electricity.usageKwh > 0.001) throw new FlowError("errors.meter");
+    const common = input.splitMethod === "sub_meter" ? round3(Math.max(0, electricity.usageKwh - subTotal)) : 0;
     const parts = unitRooms.map((item) => {
       const linked =
         item.id === space.id
@@ -509,13 +559,13 @@ export async function createLease(session: Session, input: LeaseInput) {
         roomId: null,
         label: space.label,
         leaseId: lease.id,
-        weight: input.splitMethod === "days_occupied" ? days : input.splitMethod === "sub_meter" ? input.usageKwh : 1,
+        weight: input.splitMethod === "days_occupied" ? days : input.splitMethod === "sub_meter" ? electricity.usageKwh : 1,
         days,
-        sub: input.splitMethod === "sub_meter" ? input.usageKwh : 0,
+        sub: input.splitMethod === "sub_meter" ? electricity.usageKwh : 0,
       });
     }
-    const totalAmount = Math.round(input.usageKwh * rateMinor);
-    const shares = splitWeighted(input.usageKwh, totalAmount, parts);
+    const totalAmount = Math.round(electricity.usageKwh * rateMinor);
+    const shares = splitWeighted(electricity.usageKwh, totalAmount, parts);
 
     if (exceeds) {
       await client.query(`SELECT set_config('app.change_reason', $1, true)`, [input.overrideReason.trim()]);
@@ -536,9 +586,9 @@ export async function createLease(session: Session, input: LeaseInput) {
         input.periodStart,
         input.periodEnd,
         input.splitMethod,
-        input.rateSource,
+        rateSource,
         space.currency,
-        input.usageKwh,
+        electricity.usageKwh,
         common,
         rateMinor,
         exceeds ? input.overrideReason.trim() : null,
@@ -565,12 +615,14 @@ export async function createLease(session: Session, input: LeaseInput) {
           part.days,
           input.splitMethod === "sub_meter" ? part.sub : null,
           share.ratio,
-          share.usage,
-          share.amount,
+          Math.max(0, share.usage),
+          Math.max(0, share.amount),
           part.leaseId ? "tenant" : "owner",
           JSON.stringify({ kwh: share.usage, rate_minor_per_unit: rateMinor, method: input.splitMethod, room: part.label }),
         ],
       );
+    }
+    tenantAmount = shares.find((share) => parts[shares.indexOf(share)]?.leaseId === lease.id)?.amount ?? 0;
     }
 
     const depositCheck = await maybe<{ outcome: string }>(
@@ -586,10 +638,14 @@ export async function createLease(session: Session, input: LeaseInput) {
       depositWarn: depositCheck?.outcome === "warn",
       exceeds,
       average,
-      tenantAmount: shares.find((share) => parts[shares.indexOf(share)]?.leaseId === lease.id)?.amount ?? 0,
+      tenantAmount,
       reused: false,
     };
-  });
+  }, { orgId: session.orgId, environment: session.environment });
+  } catch (error) {
+    if (error instanceof FlowError && error.key === "errors.generic") throw new FlowError("errors.leaseFailed");
+    throw error;
+  }
 
   if (!result.reused) {
     await svc(session.userId, (client) => queueDemoNotice(client, result.leaseId, "lease_to_sign"));

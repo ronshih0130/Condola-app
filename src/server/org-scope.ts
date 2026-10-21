@@ -1,7 +1,23 @@
+import { appCookieOptions } from "./public-origin";
 import type { OrgRole } from "./types";
 
 export const ENV_COOKIE = "condola_env";
 export const ORG_COOKIE = "condola_org";
+/** Last environment choice. A session cookie was dropped on browser quit and a live firm then opened in test mode. */
+export const ENV_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+
+type EnvCookieJar = {
+  set: (
+    name: string,
+    value: string,
+    options: { httpOnly: boolean; sameSite: "lax"; secure: boolean; path: string; domain?: string; maxAge: number },
+  ) => void;
+};
+
+/** Drop a leftover test-mode cookie. Sign-in must not keep sandbox selected. */
+export function clearStoredEnvChoice(jar: EnvCookieJar) {
+  jar.set(ENV_COOKIE, "", appCookieOptions({ httpOnly: false, maxAge: 0 }));
+}
 
 export type OrgEnvironment = "live" | "sandbox";
 
@@ -22,9 +38,12 @@ export type EnvChoice = {
 };
 
 /**
- * A firm with no live rows, or with live mode still locked, always opens in
- * test mode. Otherwise the cookie is that user's last explicit choice. The
- * first request, with no cookie, also opens in test mode.
+ * A firm that has not started live, or while the emergency pause is on, always
+ * opens in test mode. A live firm with data, including one whose live_started_at
+ * is set, opens in live mode when the cookie is missing. Sign-in clears
+ * condola_env first, so an old sandbox cookie cannot hide that firm. An explicit
+ * sandbox cookie still opens test mode until the next sign-in. live_started_at
+ * counts as live data so go-live without copied rows stays on the live firm.
  */
 export function resolveStaffEnvironment(input: {
   cookie: OrgEnvironment | null;
@@ -32,8 +51,8 @@ export function resolveStaffEnvironment(input: {
   liveEnabled: boolean;
 }): OrgEnvironment {
   if (!input.liveEnabled || !input.hasLiveData) return "sandbox";
-  if (input.cookie === "live" || input.cookie === "sandbox") return input.cookie;
-  return "sandbox";
+  if (input.cookie === "sandbox") return "sandbox";
+  return "live";
 }
 
 type SqlClient = {
@@ -70,9 +89,11 @@ export async function resolveStaffOrg(
   cookie: OrgEnvironment | null,
 ): Promise<FirmContext | null> {
   const live = await sql.query<{ org_id: string; role: OrgRole; live_enabled: boolean; has_live_data: boolean }>(
-    `SELECT m.org_id::text, m.role::text AS role, o.live_enabled,
+    `SELECT m.org_id::text, m.role::text AS role,
+            NOT coalesce((SELECT value = 'true'::jsonb FROM platform_settings WHERE key = 'go_live_lock'), false) AS live_enabled,
             (
-              EXISTS (SELECT 1 FROM properties p WHERE p.org_id = o.id)
+              o.live_started_at IS NOT NULL
+              OR EXISTS (SELECT 1 FROM properties p WHERE p.org_id = o.id)
               OR EXISTS (SELECT 1 FROM leases l WHERE l.org_id = o.id)
             ) AS has_live_data
        FROM org_members m

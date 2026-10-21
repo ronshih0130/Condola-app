@@ -1,5 +1,6 @@
 import { maybe, one, tx } from "./db";
 import { FlowError } from "./errors";
+import { normalizePhone } from "./lease-rules";
 import { toMinor } from "./money";
 import { assertPerm } from "./perms";
 import type { Session } from "./types";
@@ -293,9 +294,9 @@ function cleanEmail(email: string) {
 }
 
 function cleanPhone(phone: string) {
-  const value = phone.trim();
-  if (!value) return null;
-  if (!/^\+[1-9]\d{6,14}$/.test(value)) throw new FlowError("errors.phone");
+  if (!phone.trim()) return null;
+  const value = normalizePhone(phone);
+  if (!value) throw new FlowError("errors.phone");
   return value;
 }
 
@@ -539,7 +540,7 @@ async function unitForFloor(client: Client, orgId: string, propertyId: string, f
     );
     return { id: created.id, areaUnit, created: true };
   }
-  if (kind === "room" && existing.rental_mode === "whole_unit") throw new FlowError("errors.generic");
+  if (kind === "room" && existing.rental_mode === "whole_unit") throw new FlowError("errors.wholeUnit");
   if (kind === "whole_unit" && existing.rental_mode !== "whole_unit") throw new FlowError("errors.generic");
   return { id: existing.id, areaUnit, created: false };
 }

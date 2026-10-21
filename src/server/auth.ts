@@ -2,11 +2,14 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { query, withClient } from "./db";
+import { recordFunnel } from "./funnel";
+import { classifyPasswordGrant, gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, passwordResetUrl } from "./signup-gotrue";
 import { lineLoginEnabled } from "./demo";
 import { outboundNote } from "./outbound";
 import { FlowError } from "./errors";
 import { LOCKOUT_LIMIT, lockActive, nextFailure } from "./lockout";
 import { passwordAcceptable } from "./password";
+import { assertSeatAvailable } from "./seats";
 import { assertPerm } from "./perms";
 import { appCookieOptions } from "./public-origin";
 import { privacyFromSettings, type OwnerPrivacy } from "./privacy";
@@ -22,8 +25,8 @@ const INVITE_DAYS = 7;
 export type RequestMeta = { ua: string | null; ip: string | null };
 
 export type SignInResult =
-  | { ok: true; token: string; remember: boolean }
-  | { ok: false; error: "invalid" | "locked" | "disabled" }
+  | { ok: true; token: string; remember: boolean; destination?: "firm" }
+  | { ok: false; error: "invalid" | "locked" | "disabled" | "unconfirmed" | "unavailable" }
   | { ok: false; step: "2fa" | "enroll"; challengeId: string; secret?: string; otpauth?: string };
 
 function sha256(value: string) {
@@ -35,7 +38,13 @@ function newToken() {
 }
 
 export function normalizeEmail(value: string) {
-  const email = value.trim().toLowerCase();
+  const trimmed = value.trim().toLowerCase();
+  const at = trimmed.indexOf("@");
+  if (at <= 0 || at !== trimmed.lastIndexOf("@")) return null;
+  // application/x-www-form-urlencoded turns "+" into a space. A local-part cannot contain spaces.
+  const local = trimmed.slice(0, at).replaceAll(/\s+/g, "+");
+  const domain = trimmed.slice(at + 1).trim();
+  const email = `${local}@${domain}`;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
   return email;
 }
@@ -60,27 +69,43 @@ function supabaseUrl() {
   return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 }
 
-async function verifyPassword(email: string, password: string) {
-  const url = supabaseUrl();
-  const anon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  if (url && anon) {
-    const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: { apikey: anon, "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!response.ok) return null;
-    const body = (await response.json()) as { user?: { id?: string } };
-    return body.user?.id ?? null;
-  }
-  const result = await query<{ id: string }>(
-    `SELECT id::text AS id FROM auth.users
+async function localPasswordCheck(email: string, password: string): Promise<string | "unconfirmed" | null> {
+  const result = await query<{ id: string; email_confirmed_at: Date | null }>(
+    `SELECT id::text AS id, email_confirmed_at FROM auth.users
       WHERE lower(email) = lower($1)
         AND encrypted_password IS NOT NULL
         AND encrypted_password = crypt($2, encrypted_password)`,
     [email, password],
   );
-  return result.rows[0]?.id ?? null;
+  const row = result.rows[0];
+  if (!row) return null;
+  if (!row.email_confirmed_at) return "unconfirmed";
+  return row.id;
+}
+
+async function verifyPassword(email: string, password: string): Promise<string | "unconfirmed" | "unavailable" | null> {
+  const url = supabaseUrl();
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  if (url && anon) {
+    let remote: ReturnType<typeof classifyPasswordGrant> = "unavailable";
+    try {
+      const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: { apikey: anon, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const body = await response.json().catch(() => ({}));
+      remote = classifyPasswordGrant(response.status, body);
+    } catch {
+      remote = "unavailable";
+    }
+    if (typeof remote === "object") return remote.userId;
+    const local = await localPasswordCheck(email, password);
+    if (remote === "unconfirmed" || local === "unconfirmed") return "unconfirmed";
+    if (remote === "unavailable" && typeof local === "string") return local;
+    return null;
+  }
+  return localPasswordCheck(email, password);
 }
 
 export async function setUserPassword(userId: string, password: string) {
@@ -211,6 +236,8 @@ export async function signIn(emailRaw: string, password: string, remember: boole
     return { ok: false, error: "locked" };
   }
   const userId = await verifyPassword(email, password);
+  if (userId === "unconfirmed") return { ok: false, error: "unconfirmed" };
+  if (userId === "unavailable") return { ok: false, error: "unavailable" };
   if (!userId) {
     const failed = await failureState(email);
     return { ok: false, error: failed.locked || failed.failedCount >= LOCKOUT_LIMIT ? "locked" : "invalid" };
@@ -222,7 +249,22 @@ export async function signIn(emailRaw: string, password: string, remember: boole
 async function continueSignIn(userId: string, email: string, remember: boolean, meta: RequestMeta): Promise<SignInResult> {
   const access = await accessState(userId);
   if (access === "disabled") return { ok: false, error: "disabled" };
-  if (access === "none") return { ok: false, error: "invalid" };
+  if (access === "none") {
+    const row = await query<{ email: string; email_confirmed_at: Date | null }>(
+      `SELECT email, email_confirmed_at FROM auth.users WHERE id = $1`,
+      [userId],
+    );
+    const account = row.rows[0];
+    if (!account?.email_confirmed_at) {
+      await query(
+        `UPDATE auth.users SET email_confirmed_at = now(), updated_at = now() WHERE id = $1 AND email_confirmed_at IS NULL`,
+        [userId],
+      );
+      await recordFunnel("email_confirmed", { userId, email: account?.email || email });
+    }
+    const token = await createSession(userId, remember, meta);
+    return { ok: true, token, remember, destination: "firm" };
+  }
   const factor = await mfaRow(userId);
   if (factor?.enabled && factor.totp_secret) {
     const challengeId = await openChallenge(userId, "2fa", remember);
@@ -329,9 +371,47 @@ export async function completeSecondFactor(challengeId: string, code: string, me
   return { ok: true, token, remember: challenge.remember, backupCodes: codes };
 }
 
-export async function requestPasswordReset(emailRaw: string) {
+/** POST the recovery token. GET must not call this. A local reset token is minted only after GoTrue accepts it. */
+export async function verifyRecoveryTokenHash(tokenHash: string) {
+  const url = supabaseUrl();
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  const hash = tokenHash.trim();
+  if (!url || !anon || !hash) return { ok: false as const, error: "expired" as const };
+  const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/verify`, {
+    method: "POST",
+    headers: { apikey: anon, "Content-Type": "application/json" },
+    body: JSON.stringify(gotrueVerifyBody("recovery", hash)),
+  });
+  if (!response.ok) return { ok: false as const, error: "expired" as const };
+  const user = parseGotrueUserId(await response.json().catch(() => ({})));
+  if (!user) return { ok: false as const, error: "expired" as const };
+  const token = newToken();
+  await query(
+    `INSERT INTO auth_password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, now() + make_interval(mins => $3))`,
+    [user.id, sha256(token), RESET_MINUTES],
+  );
+  return { ok: true as const, token };
+}
+
+export async function requestPasswordReset(emailRaw: string, requestOrigin = "") {
   const email = normalizeEmail(emailRaw);
   if (!email) return { token: null as string | null };
+  const url = supabaseUrl();
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  if (url && anon) {
+    // GoTrue sends the Supabase recovery template. The response stays generic
+    // whether or not the address exists, and a failed call does not change that.
+    try {
+      await fetch(gotrueEndpoint(url, "/auth/v1/recover", passwordResetUrl(requestOrigin)), {
+        method: "POST",
+        headers: { apikey: anon, "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch (error) {
+      console.error("password recover", error);
+    }
+    return { token: null };
+  }
   const user = await query<{ id: string }>(
     `SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`,
     [email],
@@ -405,6 +485,7 @@ export async function inviteMember(session: Session, input: { email: string; nam
     [session.orgId, email],
   );
   if (duplicate.rows[0]) throw new FlowError("errors.emailTaken");
+  await assertSeatAvailable(session.orgId, session.environment);
   const token = newToken();
   await query(
     `INSERT INTO invitations (org_id, kind, role, email, code_hash, expires_at, invited_by)
@@ -472,6 +553,7 @@ export async function setMemberActive(session: Session, memberId: string, active
     await writeAudit(session.orgId, session.userId, "deactivate", { memberId });
     return;
   }
+  await assertSeatAvailable(session.orgId, session.environment);
   await query(`UPDATE org_members SET status = 'active' WHERE id = $1 AND org_id = $2`, [memberId, session.orgId]);
   await writeAudit(session.orgId, session.userId, "reactivate", { memberId });
 }
@@ -519,8 +601,8 @@ async function upsertInvitedUser(client: Client, email: string, name: string, pa
     return existing.rows[0].id;
   }
   const inserted = await client.query<{ id: string }>(
-    `INSERT INTO auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
-     VALUES ($1, crypt($2, gen_salt('bf')), now(), $3::jsonb, 'authenticated', 'authenticated')
+    `INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
+     VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), now(), $3::jsonb, 'authenticated', 'authenticated')
      RETURNING id::text`,
     [email, password, JSON.stringify({ name })],
   );
@@ -610,6 +692,23 @@ export async function revokeSession(userId: string, sessionId: string) {
     [sessionId, userId],
   );
   await writeAudit(await primaryOrg(userId), userId, "sign_out", { sessionId });
+}
+
+export async function revokeAllSessions(userId: string) {
+  await query(
+    `UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`,
+    [userId],
+  );
+  try {
+    await query(`SELECT app.end_auth_sessions($1::uuid)`, [userId]);
+  } catch (error) {
+    console.error("end_auth_sessions", error);
+  }
+  try {
+    await writeAudit(await primaryOrg(userId), userId, "sign_out", { scope: "all" });
+  } catch (error) {
+    console.error("sign_out audit", error);
+  }
 }
 
 export async function revokeOtherSessions(userId: string, currentSessionId: string) {

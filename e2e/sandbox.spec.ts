@@ -23,7 +23,8 @@ test("a first login with no env cookie opens in test mode and keeps a later choi
 
   const banner = page.getByTestId("env-banner");
   await expect(banner).toBeVisible();
-  await expect(banner).toContainText("Test mode 測試模式");
+  await expect(banner).toContainText("測試模式");
+  await expect(banner).not.toContainText("Test mode");
   await expect(page.getByTestId("env-switch")).toContainText("測試模式");
   await expect(page.getByTestId("env-load")).toHaveCount(0);
   await page.goto("/m/properties");
@@ -48,7 +49,8 @@ test("staff can open the seeded sandbox and go live without copying it", async (
   await expect(page.getByTestId("env-load")).toHaveCount(0);
   const banner = page.getByTestId("env-banner");
   await expect(banner).toBeVisible();
-  await expect(banner).toContainText("Test mode 測試模式");
+  await expect(banner).toContainText("測試模式");
+  await expect(banner).not.toContainText("Test mode");
   await expect(banner).toHaveCSS("background-color", "rgb(253, 243, 220)");
   await expect(banner).toHaveCSS("border-bottom-color", "rgb(242, 181, 68)");
   await page.goto("/m/properties");

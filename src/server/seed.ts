@@ -7,6 +7,7 @@ import { FIRM2_NAME, FIRM_NAME, ORG2_ID, ORG_ID, USERS } from "./ids";
 const KEEP = new Set([
   "currencies",
   "platform_settings",
+  "partner_codes",
   "jurisdictions",
   "jurisdiction_rules",
   "lease_templates",

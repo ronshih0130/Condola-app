@@ -35,6 +35,11 @@ Required secret names. There are no `ID_DOC_*` secrets in this config.
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+Optional, not required to boot, and not one of the four secrets above:
+
+- `CONDOLA_PLATFORM_ADMIN_EMAILS` — comma-separated emails allowed to open `/m/admin` (create partner codes, per-firm price overrides, and the 「緊急暫停正式使用」 switch). Leave it unset to keep that screen closed. Set it as a Worker var or secret on staging and production when you want the screen. Sign-up confirmation uses the existing Supabase URL and anon key; there is no new email provider secret.
+- `CONDOLA_SITE_URL` — public origin for the confirmation link when the request host is not already `staging.condola.app`, `app.condola.app`, or `condola.app`. Wrangler sets `https://staging.condola.app` on staging and `https://app.condola.app` on production. The mail link is `{origin}/signup/confirm`, which must stay in the Supabase redirect allow-list. Not a secret.
+
 In production the session cookie `Domain` is `.condola.app`, so a sign-in on either hostname is sent to the other. Server Actions allow those two hosts as origins. Redirect targets that are absolute URLs are accepted only for `https://app.condola.app` and `https://condola.app`, and only as a path on this app.
 
 Apply `supabase/migrations/*.sql` in filename order to the production database before the first deploy. Use the session connection (port 5432) for migrations. Do not run `npm run db:reset`. Do not apply `supabase/stub/supabase_stub.sql`.

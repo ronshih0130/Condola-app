@@ -15,7 +15,9 @@ import {
   requestPasswordReset,
   resendInvite,
   resetPassword,
+  verifyRecoveryTokenHash,
   revokeInvite,
+  revokeAllSessions,
   revokeOtherSessions,
   revokeSession,
   sessionCookie,
@@ -23,17 +25,20 @@ import {
   setMemberRole,
   setOwnerPrivacy,
   setRequireMfa,
+  normalizeEmail,
   signIn,
   signInWithLine,
   SESSION_COOKIE,
   type RequestMeta,
 } from "./auth";
 import { BACKUP_COOKIE } from "./backup";
-import { forgotSentLocation, RESET_FLASH_COOKIE, resetFlashCookie } from "./reset-flash";
+import { forgotSentLocation, resetFlashCookie } from "./reset-flash";
 import { demoModeEnabled } from "./demo";
 import { addExpense, closeMonth, reversePayment } from "./domain";
 import { FlowError } from "./errors";
+import { clearStoredEnvChoice } from "./org-scope";
 import { appCookieOptions, sameAppPath } from "./public-origin";
+import { clearAuthCookies } from "./sign-out";
 import { getSession, readSession } from "./session";
 import type { OrgRole } from "./types";
 
@@ -80,20 +85,34 @@ async function rememberBackup(codes: string[]) {
 
 export async function actionSignIn(formData: FormData) {
   const next = safeNext(text(formData.get("next")));
+  const email = normalizeEmail(text(formData.get("email"))) || text(formData.get("email")).trim();
   const result = await signIn(text(formData.get("email")), text(formData.get("password")), formData.get("remember") === "on", await meta());
   const jar = await cookies();
+  const nextQuery = next ? `&next=${encodeURIComponent(next)}` : "";
   if (result.ok) {
     const cookie = sessionCookie(result.token, result.remember);
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
-    redirect(next || "/auth/continue");
+    clearStoredEnvChoice(jar);
+    redirect(result.destination === "firm" ? "/signup/firm" : next || "/auth/continue");
   }
   if ("step" in result) {
     const cookie = challengeCookie(result.challengeId);
     jar.set(cookie.name, cookie.value, cookie.options);
-    redirect(`/login?step=${result.step}${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+    redirect(`/login?step=${result.step}${nextQuery}`);
   }
-  redirect(`/login?error=${result.error}${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+  if (result.error === "unconfirmed") {
+    redirect(`/login?error=unconfirmed&email=${encodeURIComponent(email)}${nextQuery}`);
+  }
+  redirect(`/login?error=${result.error}${nextQuery}`);
+}
+
+export async function actionVerifyRecovery(formData: FormData) {
+  const type = text(formData.get("type")).trim();
+  if (type !== "recovery") redirect("/reset?expired=1");
+  const result = await verifyRecoveryTokenHash(text(formData.get("token_hash")));
+  if (!result.ok) redirect("/reset?expired=1");
+  redirect(`/reset/${encodeURIComponent(result.token)}`);
 }
 
 export async function actionLineLogin() {
@@ -103,6 +122,7 @@ export async function actionLineLogin() {
     const cookie = sessionCookie(result.token, result.remember);
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
+    clearStoredEnvChoice(jar);
     redirect("/auth/continue");
   }
   if ("step" in result) {
@@ -125,13 +145,21 @@ export async function actionSecondFactor(formData: FormData) {
   const cookie = sessionCookie(result.token, result.remember);
   jar.set(cookie.name, cookie.value, cookie.options);
   jar.delete(CHALLENGE_COOKIE);
+  clearStoredEnvChoice(jar);
   if (result.backupCodes?.length) await rememberBackup(result.backupCodes);
   redirect(result.backupCodes?.length ? "/login?step=backup" : next || "/auth/continue");
 }
 
+async function requestOrigin() {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host") || "";
+  const proto = h.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+  return host ? `${proto}://${host}` : "";
+}
+
 export async function actionForgot(formData: FormData) {
   const email = text(formData.get("email"));
-  await requestPasswordReset(email);
+  await requestPasswordReset(email, await requestOrigin());
   const jar = await cookies();
   const cookie = resetFlashCookie(email);
   jar.set(cookie.name, cookie.value, cookie.options);
@@ -154,6 +182,7 @@ export async function actionAccept(formData: FormData) {
   const jar = await cookies();
   const cookie = sessionCookie(result.token, true);
   jar.set(cookie.name, cookie.value, cookie.options);
+  clearStoredEnvChoice(jar);
   redirect("/auth/continue");
 }
 
@@ -290,7 +319,7 @@ export async function actionRevokeSession(formData: FormData) {
   await revokeSession(session.userId, id);
   if (id === session.sessionId) {
     const jar = await cookies();
-    jar.delete(SESSION_COOKIE);
+    clearAuthCookies(jar);
     redirect("/login");
   }
   redirect("/m/account");
@@ -307,18 +336,17 @@ export async function actionClearBackup() {
   jar.delete(BACKUP_COOKIE);
 }
 
-export async function actionClearResetFlash() {
-  const jar = await cookies();
-  jar.delete({ name: RESET_FLASH_COOKIE, path: "/forgot" });
-}
-
 export async function actionSignOut() {
   const session = await readSession();
-  if (session) await revokeSession(session.userId, session.sessionId);
   const jar = await cookies();
-  jar.delete(SESSION_COOKIE);
-  jar.delete(CHALLENGE_COOKIE);
-  jar.delete("condola_env");
+  clearAuthCookies(jar);
+  if (session) {
+    try {
+      await revokeAllSessions(session.userId);
+    } catch (error) {
+      console.error("sign out", error);
+    }
+  }
   redirect("/login");
 }
 

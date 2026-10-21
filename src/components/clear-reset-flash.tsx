@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { actionClearResetFlash } from "@/server/auth-actions";
 
+/** A server action would refresh /forgot and hide the confirmation immediately. */
 export function ClearResetFlash() {
   useEffect(() => {
-    void actionClearResetFlash();
+    void fetch("/api/reset-flash", { method: "POST" });
   }, []);
   return null;
 }

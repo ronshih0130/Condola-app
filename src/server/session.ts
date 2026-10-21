@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { isLocale, type Locale } from "@/i18n";
 import { withClient } from "./db";
 import { SESSION_COOKIE } from "./auth";
@@ -29,12 +30,13 @@ type IdentityRow = {
   email: string | null;
 };
 
-export async function readSession(): Promise<Session | null> {
+async function readSessionOnce(): Promise<Session | null> {
   const prefs = await requestPrefs();
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   try {
+    let seedSample = false;
     const session = await withClient(async (client): Promise<(Session & { needsSandbox?: boolean }) | null> => {
       const found = await client.query<IdentityRow>(
         `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
@@ -47,7 +49,13 @@ export async function readSession(): Promise<Session | null> {
       );
       const identity = found.rows[0];
       if (!identity) return null;
-      await client.query(`UPDATE auth_sessions SET last_active_at = now() WHERE id = $1`, [identity.session_id]);
+      await client.query(
+        `UPDATE auth_sessions
+            SET last_active_at = now(),
+                expires_at = greatest(expires_at, now() + interval '12 hours')
+          WHERE id = $1`,
+        [identity.session_id],
+      );
       const preferredOrg = jar.get(ORG_COOKIE)?.value ?? null;
       const rawEnv = jar.get(ENV_COOKIE)?.value;
       const envChoice: OrgEnvironment | null = rawEnv === "sandbox" ? "sandbox" : rawEnv === "live" ? "live" : null;
@@ -62,6 +70,22 @@ export async function readSession(): Promise<Session | null> {
       };
       const firm = await resolveStaffOrg(client, identity.user_id, preferredOrg, envChoice);
       if (firm) {
+        if (firm.environment === "sandbox" && !firm.needsSandbox) {
+          const peek = await client.query<{ needed: boolean }>(
+            `SELECT (o.sample_loaded_at IS NULL AND NOT (
+                EXISTS (SELECT 1 FROM properties p WHERE p.org_id = o.id)
+                OR EXISTS (SELECT 1 FROM leases l WHERE l.org_id = o.id)
+                OR EXISTS (SELECT 1 FROM units u WHERE u.org_id = o.id)
+                OR EXISTS (SELECT 1 FROM contacts c WHERE c.org_id = o.id)
+              )) AS needed
+               FROM organizations o
+              WHERE o.id = $1 AND o.environment = 'sandbox'`,
+            [firm.orgId],
+          );
+          seedSample = Boolean(peek.rows[0]?.needed);
+        } else if (firm.environment === "sandbox") {
+          seedSample = true;
+        }
         return {
           ...base,
           kind: "staff" as const,
@@ -122,7 +146,7 @@ export async function readSession(): Promise<Session | null> {
     if (session?.kind === "staff" && session.environment === "sandbox") {
       const sandboxId = session.needsSandbox ? await ensureSandbox(session) : session.orgId;
       const opened = { ...session, orgId: sandboxId, environment: "sandbox" as const, needsSandbox: false };
-      await ensureSampleLoaded(opened);
+      if (seedSample) await ensureSampleLoaded(opened);
       return opened;
     }
     return session;
@@ -131,6 +155,9 @@ export async function readSession(): Promise<Session | null> {
     throw error;
   }
 }
+
+/** One session lookup per request. Root layout and the page used to each open a database connection. */
+export const readSession = cache(readSessionOnce);
 
 export async function getSession(): Promise<Session> {
   const session = await readSession();

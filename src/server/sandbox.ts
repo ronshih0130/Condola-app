@@ -1,7 +1,10 @@
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
+import { seatLimit } from "./billing";
 import { query, withClient } from "./db";
 import { FlowError } from "./errors";
+import { recordFunnel } from "./funnel";
+import { goLiveLocked } from "./platform";
 import {
   COPY_KINDS,
   FREE_ACTIVE_UNITS,
@@ -29,76 +32,81 @@ export async function sandboxForLive(liveOrgId: string) {
   return row.rows[0]?.id ?? null;
 }
 
-export async function ensureSandbox(session: Session) {
-  assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
-  const existing = await sandboxForLive(session.liveOrgId);
-  if (existing) return existing;
-  const live = await query<{
-    name: string;
-    legal_name: string | null;
-    country_code: string;
-    jurisdiction_id: string | null;
-    default_currency: string;
-    default_locale: string;
-    timezone: string;
-    date_calendar: string;
-    id_doc_retention_days: number;
-    is_rental_mgmt_business: boolean;
-    rental_mgmt_license_no: string | null;
-    feature_flags: unknown;
-  }>(
-    `SELECT name, legal_name, country_code, jurisdiction_id::text, default_currency, default_locale, timezone,
-            date_calendar::text, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no, feature_flags
-       FROM organizations WHERE id = $1 AND environment = 'live'`,
-    [session.liveOrgId],
+/** Create the linked sandbox and copy active members. The live firm must already be visible on this client. */
+export async function insertSandboxOrg(client: Client, liveOrgId: string, userId: string) {
+  const inserted = await client.query<{ id: string }>(
+    `INSERT INTO organizations (
+       name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
+       date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
+       plan_tier, feature_flags, settings, environment, live_org_id, created_by
+     )
+     SELECT name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
+            date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
+            'free', feature_flags, '{"sandboxPrompt":"open"}'::jsonb,
+            'sandbox', id, $2
+       FROM organizations
+      WHERE id = $1 AND environment = 'live'
+     RETURNING id::text`,
+    [liveOrgId, userId],
   );
-  const firm = live.rows[0];
-  if (!firm) throw new FlowError("errors.notFound");
-  let sandboxId: string;
-  try {
-    const inserted = await query<{ id: string }>(
-      `INSERT INTO organizations (
-         name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
-         date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
-         plan_tier, feature_flags, settings, environment, live_org_id, created_by
-       ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8::calendar_display,$9,$10,$11,'free',$12::jsonb,'{"sandboxPrompt":"open"}'::jsonb,
-         'sandbox',$13,$14
-       ) RETURNING id::text`,
-      [
-        firm.name,
-        firm.legal_name,
-        firm.country_code,
-        firm.jurisdiction_id,
-        firm.default_currency,
-        firm.default_locale,
-        firm.timezone,
-        firm.date_calendar,
-        firm.id_doc_retention_days,
-        firm.is_rental_mgmt_business,
-        firm.rental_mgmt_license_no,
-        JSON.stringify(firm.feature_flags ?? {}),
-        session.liveOrgId,
-        session.userId,
-      ],
-    );
-    sandboxId = inserted.rows[0].id;
-  } catch (error) {
-    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
-    if (code !== "23505") throw error;
-    const winner = await sandboxForLive(session.liveOrgId);
-    if (!winner) throw error;
-    sandboxId = winner;
-  }
-  await query(
+  const sandboxId = inserted.rows[0]?.id;
+  if (!sandboxId) throw new FlowError("errors.notFound");
+  await client.query(
     `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status, title)
      SELECT $1, user_id, role, is_billing_owner, status, title
        FROM org_members
       WHERE org_id = $2 AND status = 'active'
      ON CONFLICT (org_id, user_id) DO NOTHING`,
-    [sandboxId, session.liveOrgId],
+    [sandboxId, liveOrgId],
   );
   return sandboxId;
+}
+
+/** Sandbox plus its sample portfolio, in the caller's transaction. */
+export async function seedSandboxForNewFirm(client: Client, liveOrgId: string, userId: string) {
+  const sandboxId = await insertSandboxOrg(client, liveOrgId, userId);
+  await client.query(
+    `UPDATE organizations
+        SET sample_loaded_at = now(),
+            settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{sandboxPrompt}', '"loaded"'::jsonb, true)
+      WHERE id = $1 AND environment = 'sandbox'`,
+    [sandboxId],
+  );
+  await runSandboxSeed(client, { orgId: sandboxId, actorUserId: userId });
+  return sandboxId;
+}
+
+export async function ensureSandbox(session: Session) {
+  assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
+  const existing = await sandboxForLive(session.liveOrgId);
+  if (existing) return existing;
+  try {
+    return await withClient(async (client) => {
+      await client.query("BEGIN");
+      try {
+        const again = await client.query<{ id: string }>(
+          `SELECT id::text FROM organizations WHERE live_org_id = $1 AND environment = 'sandbox'`,
+          [session.liveOrgId],
+        );
+        if (again.rows[0]) {
+          await client.query("COMMIT");
+          return again.rows[0].id;
+        }
+        const sandboxId = await insertSandboxOrg(client, session.liveOrgId, session.userId);
+        await client.query("COMMIT");
+        return sandboxId;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    });
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    if (code !== "23505") throw error;
+    const winner = await sandboxForLive(session.liveOrgId);
+    if (!winner) throw error;
+    return winner;
+  }
 }
 
 /** First visit: create the linked sandbox, if it is missing, and load the sample portfolio once. */
@@ -274,7 +282,14 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
 
       await client.query(
         `INSERT INTO map_fee (old_id, new_id)
-         SELECT id, gen_random_uuid() FROM fee_rules WHERE org_id = $1 AND archived_at IS NULL`,
+         SELECT f.id, gen_random_uuid()
+           FROM fee_rules f
+          WHERE f.org_id = $1 AND f.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = f.org_id AND sm.entity_table = 'fee_rules' AND sm.entity_id = f.id
+            )
+            AND f.name NOT LIKE '%範例資料%' AND f.name NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -293,7 +308,12 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
          SELECT DISTINCT c.id, gen_random_uuid()
            FROM contacts c
            JOIN property_owners po ON po.owner_contact_id = c.id AND po.org_id = c.org_id
-          WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL`,
+          WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = c.org_id AND sm.entity_table = 'contacts' AND sm.entity_id = c.id
+            )
+            AND c.display_name NOT LIKE '%範例資料%' AND c.display_name NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -307,7 +327,14 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
 
       await client.query(
         `INSERT INTO map_property (old_id, new_id)
-         SELECT id, gen_random_uuid() FROM properties WHERE org_id = $1 AND archived_at IS NULL`,
+         SELECT p.id, gen_random_uuid()
+           FROM properties p
+          WHERE p.org_id = $1 AND p.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = p.org_id AND sm.entity_table = 'properties' AND sm.entity_id = p.id
+            )
+            AND p.name NOT LIKE '%範例資料%' AND p.name NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -321,7 +348,15 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
 
       await client.query(
         `INSERT INTO map_unit (old_id, new_id)
-         SELECT id, gen_random_uuid() FROM units WHERE org_id = $1 AND archived_at IS NULL`,
+         SELECT u.id, gen_random_uuid()
+           FROM units u
+           JOIN map_property mp ON mp.old_id = u.property_id
+          WHERE u.org_id = $1 AND u.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = u.org_id AND sm.entity_table = 'units' AND sm.entity_id = u.id
+            )
+            AND u.label NOT LIKE '%範例資料%' AND u.label NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -337,7 +372,15 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
 
       await client.query(
         `INSERT INTO map_room (old_id, new_id)
-         SELECT id, gen_random_uuid() FROM rooms WHERE org_id = $1 AND archived_at IS NULL`,
+         SELECT r.id, gen_random_uuid()
+           FROM rooms r
+           JOIN map_unit mu ON mu.old_id = r.unit_id
+          WHERE r.org_id = $1 AND r.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = r.org_id AND sm.entity_table = 'rooms' AND sm.entity_id = r.id
+            )
+            AND r.label NOT LIKE '%範例資料%' AND r.label NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -359,7 +402,11 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
            FROM property_owners po
            JOIN map_property mp ON mp.old_id = po.property_id
            JOIN map_contact mc ON mc.old_id = po.owner_contact_id
-          WHERE po.org_id = $2`,
+          WHERE po.org_id = $2
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = po.org_id AND sm.entity_table = 'property_owners' AND sm.entity_id = po.id
+            )`,
         [liveOrgId, sandboxId],
       );
 
@@ -370,7 +417,11 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
            JOIN map_contact mc ON mc.old_id = a.owner_contact_id
            JOIN map_fee mf ON mf.old_id = a.fee_rule_id
            LEFT JOIN map_property mp ON mp.old_id = a.property_id
-          WHERE a.org_id = $2 AND (a.property_id IS NULL OR mp.new_id IS NOT NULL)`,
+          WHERE a.org_id = $2 AND (a.property_id IS NULL OR mp.new_id IS NOT NULL)
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = a.org_id AND sm.entity_table = 'management_agreements' AND sm.entity_id = a.id
+            )`,
         [liveOrgId, sandboxId],
       );
 
@@ -384,7 +435,13 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
            LEFT JOIN map_contact mc ON mc.old_id = b.owner_contact_id
           WHERE b.org_id = $2 AND b.archived_at IS NULL
             AND (b.property_id IS NULL OR mp.new_id IS NOT NULL)
-            AND (b.owner_contact_id IS NULL OR mc.new_id IS NOT NULL)`,
+            AND (b.owner_contact_id IS NULL OR mc.new_id IS NOT NULL)
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = b.org_id AND sm.entity_table = 'bank_accounts' AND sm.entity_id = b.id
+            )
+            AND coalesce(b.nickname, '') NOT LIKE '%範例資料%'
+            AND coalesce(b.nickname, '') NOT LIKE '%[Sample data]%'`,
         [liveOrgId, sandboxId],
       );
     }
@@ -393,7 +450,11 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
       `INSERT INTO invitations (org_id, kind, role, email, code_hash, status, expires_at, invited_by)
        SELECT $1, 'team_member', role, email, encode(gen_random_bytes(32), 'hex'), 'pending', expires_at, $3
          FROM invitations
-        WHERE org_id = $2 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()`,
+        WHERE org_id = $2 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()
+          AND NOT EXISTS (
+            SELECT 1 FROM sample_marks sm
+             WHERE sm.org_id = invitations.org_id AND sm.entity_table = 'invitations' AND sm.entity_id = invitations.id
+          )`,
       [liveOrgId, sandboxId, actorId],
     );
     await client.query("COMMIT");
@@ -404,9 +465,39 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
   });
 }
 
-export async function liveModeEnabled(orgId: string) {
-  const row = await query<{ live_enabled: boolean }>(`SELECT live_enabled FROM organizations WHERE id = $1`, [orgId]);
-  return Boolean(row.rows[0]?.live_enabled);
+/** Go-live stays open unless the platform emergency pause is on. The per-firm live_enabled column is no longer the gate. */
+export async function liveModeEnabled(orgId?: string) {
+  void orgId;
+  return !(await goLiveLocked());
+}
+
+async function dropExtraLiveInvites(liveOrgId: string, actorId: string) {
+  const plan = await readPlan(liveOrgId);
+  const limit = seatLimit(plan.tier);
+  if (limit == null) return;
+  const usage = await query<{ members: number; pending: number }>(
+    `SELECT
+       (SELECT count(*)::int FROM org_members WHERE org_id = $1 AND status = 'active') AS members,
+       (SELECT count(*)::int FROM invitations
+         WHERE org_id = $1 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()) AS pending`,
+    [liveOrgId],
+  );
+  const overflow = (usage.rows[0]?.members ?? 0) + (usage.rows[0]?.pending ?? 0) - limit;
+  if (overflow <= 0) return;
+  const dropped = await query<{ email: string }>(
+    `UPDATE invitations SET status = 'revoked'
+      WHERE id IN (
+        SELECT id FROM invitations
+         WHERE org_id = $1 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()
+         ORDER BY created_at DESC
+         LIMIT $2
+      )
+      RETURNING email::text AS email`,
+    [liveOrgId, overflow],
+  );
+  if (dropped.rows.length) {
+    await writeAudit(liveOrgId, actorId, "go_live_invites_dropped", { emails: dropped.rows.map((row) => row.email) });
+  }
 }
 
 export async function goLive(session: Session, copy: boolean) {
@@ -418,12 +509,17 @@ export async function goLive(session: Session, copy: boolean) {
   const plan = await readPlan(session.liveOrgId);
   if (!goLiveAllowed({ activeUnits, plan, now: new Date() })) throw new FlowError("errors.planLimit");
   if (copy && session.role !== "admin") throw new FlowError("errors.forbidden");
-  if (copy) await copySandboxSetup(sandboxId, session.liveOrgId, session.userId);
+  if (copy) {
+    await copySandboxSetup(sandboxId, session.liveOrgId, session.userId);
+    await dropExtraLiveInvites(session.liveOrgId, session.userId);
+  }
+  await query(`UPDATE organizations SET live_started_at = coalesce(live_started_at, now()) WHERE id = $1`, [session.liveOrgId]);
   await writeAudit(session.liveOrgId, session.userId, "go_live", {
     copy,
     copied: copy ? [...COPY_KINDS] : [],
     notCopied: [...NEVER_KINDS],
     owners: copy ? "copied_without_portal_login" : "not_copied",
   });
+  await recordFunnel("golive", { userId: session.userId, orgId: session.liveOrgId, email: session.email, detail: { copy } });
   return sandboxId;
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type CSSProperties } from "react";
 import { actionGoLive } from "@/server/env-actions";
+import { PendingSubmit } from "./pending-submit";
 import type { OrgEnvironment } from "@/server/org-scope";
 import { useT } from "./locale";
 
@@ -65,10 +66,7 @@ export function EnvBanner() {
   const t = useT();
   return (
     <div className="env-banner" id="envBanner" data-testid="env-banner" role="status">
-      <span>
-        🧪 <b>{t("i_env_banner_title")}</b>
-      </span>
-      <span>{t("i_env_banner_body")}</span>
+      <b>{t("i_env_banner_title")}</b>
       <Link href="/m/env" data-testid="env-banner-live">
         {t("i_golive_start")} →
       </Link>
@@ -100,7 +98,7 @@ export function GoLiveForm({
           <div className="alert warn" data-testid="gl-blocked">
             <div>
               <p>{t("i_golive_blocked", { free: freeUnits })}</p>
-              <a href={`/api/env?set=live&next=${encodeURIComponent("/m/settings?upgrade=1")}`} data-testid="gl-upgrade">
+              <a href="/m/upgrade" data-testid="gl-upgrade">
                 {t("i_golive_upgrade")}
               </a>
             </div>
@@ -146,9 +144,14 @@ export function GoLiveForm({
       {liveEnabled ? null : (
         <p data-testid="gl-live-locked">{t("i_live_locked")}</p>
       )}
-      <button className="btn pri" type="submit" data-testid="gl-confirm" disabled={!allowed || !liveEnabled}>
-        {t("i_golive_start")}
-      </button>
+      <PendingSubmit
+        className="btn pri"
+        idle={t("i_golive_start")}
+        pending={t("i_golive_pending")}
+        testId="gl-confirm"
+        disabled={!allowed || !liveEnabled}
+        style={{ opacity: 1 }}
+      />
     </form>
   );
 }

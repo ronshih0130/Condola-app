@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { actionSignOut } from "@/server/auth-actions";
 import { can, visibleNav, type PermKey } from "@/server/perms";
 import type { OrgRole } from "@/server/types";
 import { BrandImage } from "./brand";
@@ -79,7 +78,7 @@ export function PersonaSelect({
 export function SignOutButton({ testId = "sign-out" }: { testId?: string }) {
   const t = useT();
   return (
-    <form action={actionSignOut}>
+    <form action="/api/auth/sign-out" method="post">
       <button className="btn sm" type="submit" data-testid={testId}>
         {t("i_sign_out")}
       </button>
@@ -159,12 +158,14 @@ export function Sidebar({
   tickets,
   role,
   showReset,
+  showDemo,
 }: {
   firm: string;
   pending: number;
   tickets: number;
   role: OrgRole | null;
   showReset: boolean;
+  showDemo: boolean;
 }) {
   const t = useT();
   const path = usePathname() || "/m";
@@ -179,7 +180,11 @@ export function Sidebar({
         <div className="av">{firm.slice(0, 1)}</div>
         <div>
           <div className="b">{firm}</div>
-          <div className="tiny muted">{t("i_demo_only")}</div>
+          {showDemo ? (
+            <div className="tiny muted" data-testid="demo-badge">
+              {t("i_demo_only")}
+            </div>
+          ) : null}
         </div>
       </div>
       {can(role, "props.edit" as PermKey) ? (
@@ -208,6 +213,7 @@ export function Sidebar({
         </div>
       ))}
       <div className="side-tools">
+        <Link href="/pricing">{t("i_nav_pricing")}</Link>
         <Link href="/m/account">{t("i_account")}</Link>
         <Link href="/m/roles">{t("i_roles_title")}</Link>
         <SignOutButton testId="sign-out-drawer" />

@@ -28,6 +28,7 @@
       },
       "vars": {
         "CONDOLA_ENV": "staging",
+        "CONDOLA_SITE_URL": "https://staging.condola.app",
         "DEMO_MODE": "false",
         "LINE_LOGIN_ENABLED": "false"
       },
@@ -56,6 +57,7 @@
       },
       "vars": {
         "CONDOLA_ENV": "production",
+        "CONDOLA_SITE_URL": "https://app.condola.app",
         "DEMO_MODE": "false",
         "LINE_LOGIN_ENABLED": "false",
         "STAGING_AUTODEPLOY": "false"

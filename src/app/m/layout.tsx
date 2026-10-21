@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Sidebar, TaskPanel } from "@/components/chrome";
 import { demoModeEnabled } from "@/server/demo";
 import { can, permForPath } from "@/server/perms";
-import { counts, loadFirm, loadTryout } from "@/server/queries";
+import { loadManagerChrome } from "@/server/queries";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +16,12 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   const perm = permForPath(path);
   if (perm && !can(session.role, perm)) redirect(`/m/noperm?need=${perm}`);
   const jar = await cookies();
-  const [flags, firm, badge] = await Promise.all([loadTryout(session), loadFirm(session), counts(session)]);
+  const { flags, firm, badge } = await loadManagerChrome(session);
   return (
     <>
-      <TaskPanel flags={flags} hidden={jar.get("condola_tryout_hide")?.value === "1"} />
+      {session.environment === "live" ? null : (
+        <TaskPanel flags={flags} hidden={jar.get("condola_tryout_hide")?.value === "1"} />
+      )}
       <input id="nav-open" className="nav-check" type="checkbox" />
       <div className="app">
         <label htmlFor="nav-open" className="nav-backdrop" aria-hidden="true" />
@@ -29,6 +31,7 @@ export default async function ManagerLayout({ children }: { children: React.Reac
           tickets={badge.tickets}
           role={session.role}
           showReset={demoModeEnabled() && session.role === "admin"}
+          showDemo={session.environment !== "live"}
         />
         <div className="main">{children}</div>
       </div>

@@ -187,3 +187,48 @@ test("password reset expires, and a valid reset signs out every session", async 
   const lock = await query(`SELECT 1 FROM auth_login_attempts WHERE email = 'meiling.zhou@songxin.demo'`);
   assert.equal(lock.rows.length, 0);
 });
+
+test("a plus-addressed email signs in, including when the form turned + into a space", async () => {
+  const stamp = Date.now().toString(36);
+  const email = `plus.tag+qa.${stamp}@example.com`;
+  const unconfirmed = `plus.tag+wait.${stamp}@example.com`;
+  const noFirm = `plus.tag+firm.${stamp}@example.com`;
+  const inserted = await query<{ id: string }>(
+    `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, email_confirmed_at, role, aud)
+     VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), '{}'::jsonb, now(), 'authenticated', 'authenticated'),
+            (gen_random_uuid(), $3, crypt($2, gen_salt('bf')), '{}'::jsonb, NULL, 'authenticated', 'authenticated'),
+            (gen_random_uuid(), $4, crypt($2, gen_salt('bf')), '{}'::jsonb, now(), 'authenticated', 'authenticated')
+     RETURNING id::text`,
+    [email, DEMO_PASSWORD, unconfirmed, noFirm],
+  );
+  const ids = inserted.rows.map((row) => row.id);
+  try {
+    await query(`INSERT INTO profiles (id, display_name, email) VALUES ($1, 'Plus', $2), ($3, 'Firm', $4)`, [
+      ids[0],
+      email,
+      ids[2],
+      noFirm,
+    ]);
+    await query(
+      `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status) VALUES ($1, $2, 'admin', false, 'active')`,
+      [ORG_ID, ids[0]],
+    );
+    const fromSpace = await signIn(email.replace("+", " "), DEMO_PASSWORD, false, meta);
+    assert.equal(fromSpace.ok, true);
+    const direct = await signIn(email.toUpperCase(), DEMO_PASSWORD, false, meta);
+    assert.equal(direct.ok, true);
+    const wrong = await signIn(email, "Wrongpass1", false, meta);
+    assert.deepEqual(wrong, { ok: false, error: "invalid" });
+    const waiting = await signIn(unconfirmed.replace("+", " "), DEMO_PASSWORD, false, meta);
+    assert.deepEqual(waiting, { ok: false, error: "unconfirmed" });
+    const confirmedNoFirm = await signIn(`  ${noFirm.replace("+", " ").toUpperCase()}  `, DEMO_PASSWORD, false, meta);
+    assert.equal(confirmedNoFirm.ok, true);
+    if (confirmedNoFirm.ok) assert.equal(confirmedNoFirm.destination, "firm");
+  } finally {
+    await query(`DELETE FROM auth_sessions WHERE user_id = ANY($1::uuid[])`, [ids]);
+    await query(`DELETE FROM org_members WHERE user_id = ANY($1::uuid[])`, [ids]);
+    await query(`DELETE FROM profiles WHERE id = ANY($1::uuid[])`, [ids]);
+    await query(`DELETE FROM auth_login_attempts WHERE email = ANY($1::text[])`, [[email, unconfirmed, noFirm]]);
+    await query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [ids]);
+  }
+});
