@@ -54,7 +54,7 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.equal(domain.includes("set_config('app.change_reason', $1, true)`, [\"\"]"), false);
   assert.match(edit, /lease_terms_locked|updatedAt/);
   assert.match(readFileSync(new URL("../app/m/leases/[id]/page.tsx", import.meta.url), "utf8"), /lease_terms_locked/);
-  const guard = readFileSync(new URL("../../supabase/migrations/20261022180000_lease_deposit_override_check.sql", import.meta.url), "utf8");
+  const guard = readFileSync(new URL("../../supabase/migrations/20261023090000_lease_deposit_override_check.sql", import.meta.url), "utf8");
   const earlier = readFileSync(new URL("../../supabase/migrations/20261021140000_basic_leases.sql", import.meta.url), "utf8");
   assert.match(earlier, /CREATE TRIGGER trg_lease_deposit_check/);
   assert.match(earlier, /fn_lease_deposit_check/);

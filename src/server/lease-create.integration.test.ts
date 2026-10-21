@@ -829,7 +829,7 @@ test("every lease save path rejects a deposit over two months without a reason",
     });
     assert.equal(noised.depositWarn, false);
 
-    // CHECK leases_deposit_over_cap_requires_override (20261022180000) and the
+    // CHECK leases_deposit_over_cap_requires_override (20261023090000) and the
     // earlier trigger trg_lease_deposit_check / fn_lease_deposit_check
     // (20261021140000_basic_leases.sql). query() does not map to FlowError.
     const guard = await query<{ trigger_name: string; constraint_name: string }>(

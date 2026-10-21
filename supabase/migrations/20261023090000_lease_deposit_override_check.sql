@@ -1,4 +1,5 @@
 -- Deposit months above 2 need a trimmed reason plus who and when.
+-- Version 20261023090000. 20261022180000 is tenant_id_check and is already recorded on staging.
 --
 -- A guard already exists. Migration 20261021140000_basic_leases.sql replaced
 -- fn_lease_deposit_check() and trigger trg_lease_deposit_check. For
