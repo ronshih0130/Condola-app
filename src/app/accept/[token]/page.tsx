@@ -5,7 +5,6 @@ import { PasswordFields } from "@/components/password-field";
 import { actionAccept } from "@/server/auth-actions";
 import { describeInvite } from "@/server/auth";
 import { lineLoginEnabled } from "@/server/demo";
-import { mintedLoginEmail } from "@/server/portal-invite";
 import { requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +43,17 @@ export default async function AcceptPage({
             ? t("i_invite_invalid")
             : "";
   const error =
-    query.error === "weak" ? t("i_pw_weak") : query.error === "mismatch" ? t("i_pw_mismatch") : !portal && query.error === "used" ? t("i_invite_used") : "";
+    query.error === "weak"
+      ? t("i_pw_weak")
+      : query.error === "mismatch"
+        ? t("i_pw_mismatch")
+        : query.error === "email"
+          ? t("i_email")
+          : query.error === "emailTaken"
+            ? t("i_email_taken")
+            : !portal && query.error === "used"
+              ? t("i_invite_used")
+              : "";
   return (
     <div className="auth-wrap">
       <AuthBrand name={t("i_brand")} />
@@ -64,8 +73,14 @@ export default async function AcceptPage({
             <input type="hidden" name="token" value={token} />
             <div className="fg">
               <label className="f">{t("i_portal_login_email")}</label>
-              <input className="inp" name="email" type="email" value={invite.email} readOnly data-testid="portal-email" autoComplete="username" />
-              {mintedLoginEmail(invite.email) ? <p className="small muted">{t("i_portal_minted_email")}</p> : null}
+              {invite.collectEmail ? (
+                <>
+                  <input className="inp" name="email" type="email" defaultValue="" data-testid="portal-email" autoComplete="username" />
+                  <p className="small muted">{t("i_portal_choose_email")}</p>
+                </>
+              ) : (
+                <input className="inp" name="email" type="email" value={invite.email} readOnly data-testid="portal-email" autoComplete="username" />
+              )}
             </div>
             <PasswordFields />
             <button className="btn pri block" type="submit" data-testid="portal-submit">

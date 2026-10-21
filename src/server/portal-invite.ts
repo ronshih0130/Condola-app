@@ -17,11 +17,9 @@ const DIRECT_HOSTS = new Set([
 ]);
 
 /**
- * A minted portal-<uuid>@demo.condola.local login still gets a link.
- * The manager hands the link over themselves, and the set-password page
- * shows that login email. Refusing until a real inbox exists would leave
- * the contact unable to sign in. An email that already belongs to another
- * login is never attached; provision mints a new address instead.
+ * A contact with no free inbox still gets a link. Provision mints an internal
+ * address so the row can exist. That address is never shown. The accept page
+ * asks for a real email and refuses one that already belongs to another login.
  */
 export const MINTED_LOGIN_HOST = "demo.condola.local";
 
@@ -39,6 +37,11 @@ export function hashInviteToken(token: string) {
 
 export function mintedLoginEmail(email: string) {
   return email.trim().toLowerCase().endsWith(`@${MINTED_LOGIN_HOST}`);
+}
+
+/** Blank a minted address so a page cannot render it. */
+export function portalInviteDisplayEmail(email: string) {
+  return mintedLoginEmail(email) ? "" : email;
 }
 
 /** Request host when it is this app. Anything else uses the site URL config. */

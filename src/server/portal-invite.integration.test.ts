@@ -117,11 +117,19 @@ test("an owner without a password gets a login on the link, including a minted a
   assert.equal(issued.activated, false);
   if (issued.activated) return;
   assert.equal(issued.email, "morgan.lee@owner.demo");
-  const accepted = await acceptInvite(issued.token, "", "Owner1234", "Owner1234", meta);
+  const morganView = await describeInvite(issued.token, meta);
+  assert.equal(morganView.state, "ready");
+  if (morganView.state === "ready" && morganView.kind !== "team_member") {
+    assert.equal(morganView.collectEmail, false);
+    assert.equal(morganView.email, "morgan.lee@owner.demo");
+  }
+  const accepted = await acceptInvite(issued.token, "", "Owner1234", "Owner1234", meta, "other.person@example.com");
   assert.equal(accepted.ok, true);
   if (accepted.ok && accepted.kind !== "team_member") assert.equal(accepted.destination, "/o/statements");
   const signedIn = await signIn("morgan.lee@owner.demo", "Owner1234", false, meta);
   assert.equal(signedIn.ok, true);
+  const unchanged = await signIn("other.person@example.com", "Owner1234", false, meta);
+  assert.equal(unchanged.ok, false);
 
   const minted = await query<{ id: string }>(
     `INSERT INTO contacts (org_id, is_owner, display_name, locale)
@@ -134,7 +142,30 @@ test("an owner without a password gets a login on the link, including a minted a
   assert.match(link.email, /^portal-[0-9a-f-]{36}@demo\.condola\.local$/);
   const view = await describeInvite(link.token, meta);
   assert.equal(view.state, "ready");
-  if (view.state === "ready" && view.kind !== "team_member") assert.equal(view.email, link.email);
+  if (view.state === "ready" && view.kind !== "team_member") {
+    assert.equal(view.collectEmail, true);
+    assert.equal(view.email, "");
+    assert.equal(JSON.stringify(view).includes("demo.condola.local"), false);
+  }
+  const missing = await acceptInvite(link.token, "", "Owner1234", "Owner1234", meta, "");
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.error, "email");
+  const taken = await acceptInvite(link.token, "", "Owner1234", "Owner1234", meta, "jianhong.chen@owner.demo");
+  assert.equal(taken.ok, false);
+  if (!taken.ok) assert.equal(taken.error, "emailTaken");
+  const chosen = `owner.${Date.now().toString(36)}@example.com`;
+  const acceptedMint = await acceptInvite(link.token, "", "Owner1234", "Owner1234", meta, chosen);
+  assert.equal(acceptedMint.ok, true);
+  if (acceptedMint.ok && acceptedMint.kind !== "team_member") assert.equal(acceptedMint.destination, "/o/statements");
+  const mintedSignIn = await signIn(chosen, "Owner1234", false, meta);
+  assert.equal(mintedSignIn.ok, true);
+  const leftover = await query(`SELECT 1 FROM auth.users WHERE lower(email) = lower($1)`, [link.email]);
+  assert.equal(leftover.rowCount, 0);
+  const stored = await query<{ email: string }>(
+    `SELECT email::text AS email FROM contacts WHERE id = $1`,
+    [minted.rows[0].id],
+  );
+  assert.equal(stored.rows[0].email, chosen);
 });
 
 test("another firm and an accountant cannot issue a portal link", async () => {

@@ -1634,7 +1634,7 @@
  "i_portal_invite_title": "{firm} invited you to use 租多啦",
  "i_portal_invite_invalid": "This link no longer works. Ask the management company for a new one.",
  "i_portal_login_email": "Login email",
- "i_portal_minted_email": "This is the email you sign in with. After you set a password, use it to sign in.",
+ "i_portal_choose_email": "Enter your email. After you set a password, use it to sign in.",
  "i_portal_set_password": "Set password",
  "i_audit_ev_portal_invite": "Create invite link",
  "i_audit_ev_portal_invite_accept": "Use invite link"

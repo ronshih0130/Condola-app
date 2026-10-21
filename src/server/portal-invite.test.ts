@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { inviteTokenBytes, mintedLoginEmail, newInviteToken, portalInviteOrigin, portalInviteUrl } from "./portal-invite";
+import { inviteTokenBytes, mintedLoginEmail, newInviteToken, portalInviteDisplayEmail, portalInviteOrigin, portalInviteUrl } from "./portal-invite";
 
 const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
 
@@ -33,6 +33,8 @@ test("portal tokens are at least 32 bytes and minted logins stay recognizable", 
   assert.equal(token.includes("/"), false);
   assert.equal(mintedLoginEmail("portal-11111111-1111-4111-8111-111111111111@demo.condola.local"), true);
   assert.equal(mintedLoginEmail("tenant@example.com"), false);
+  assert.equal(portalInviteDisplayEmail("portal-11111111-1111-4111-8111-111111111111@demo.condola.local"), "");
+  assert.equal(portalInviteDisplayEmail("tenant@example.com"), "tenant@example.com");
 });
 
 test("portal invite copy hands the link over and stays on the locked wording", () => {
@@ -46,7 +48,7 @@ test("portal invite copy hands the link over and stays on the locked wording", (
     "i_portal_invite_title",
     "i_portal_invite_invalid",
     "i_portal_login_email",
-    "i_portal_minted_email",
+    "i_portal_choose_email",
     "i_portal_set_password",
   ];
   assert.equal(zh.i_portal_copy, "複製邀請連結");
@@ -57,6 +59,9 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(zh.i_portal_hand_owner, "傳給屋主");
   assert.equal(zh.i_portal_invite_title, "{firm} 邀請你使用租多啦");
   assert.equal(zh.i_portal_invite_invalid, "這個連結已失效，請向管理公司索取新的連結");
+  assert.equal(zh.i_portal_choose_email, "請填寫你的 Email。設定密碼後，用它和密碼登入。");
+  assert.equal(zh.i_portal_choose_email.includes("demo.condola.local"), false);
+  assert.equal(zh.i_portal_choose_email.includes("portal-"), false);
   for (const key of keys) {
     assert.equal(zh[key].includes("房東"), false, key);
     assert.equal(zh[key].includes("房客"), false, key);

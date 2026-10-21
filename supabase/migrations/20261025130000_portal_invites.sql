@@ -1,4 +1,4 @@
--- Version 20261025120000.
+-- Version 20261025130000.
 -- One-time 租客 and 屋主 invite links.
 --
 -- The invitations table already stores owner and tenant links. This shortens

@@ -179,10 +179,18 @@ export async function actionReset(formData: FormData) {
 
 export async function actionAccept(formData: FormData) {
   const token = text(formData.get("token"));
-  const result = await acceptInvite(token, text(formData.get("name")), text(formData.get("password")), text(formData.get("confirm")), await meta());
+  const result = await acceptInvite(
+    token,
+    text(formData.get("name")),
+    text(formData.get("password")),
+    text(formData.get("confirm")),
+    await meta(),
+    text(formData.get("email")),
+  );
   if (!result.ok) {
     const portal = result.kind === "owner" || result.kind === "tenant" || result.kind === "unknown";
-    if (portal && result.error !== "weak" && result.error !== "mismatch") {
+    const fieldError = result.error === "weak" || result.error === "mismatch" || result.error === "email" || result.error === "emailTaken";
+    if (portal && !fieldError) {
       redirect(`/accept/${encodeURIComponent(token)}`);
     }
     redirect(`/accept/${encodeURIComponent(token)}?error=${result.error}`);

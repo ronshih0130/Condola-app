@@ -9,6 +9,23 @@ function tokenFrom(url: string) {
   return decodeURIComponent(new URL(url).pathname.split("/").pop() || "");
 }
 
+async function insertOwnerWithoutEmail() {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola",
+  });
+  await client.connect();
+  try {
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO contacts (org_id, is_owner, display_name, locale)
+       SELECT id, true, '無信箱屋主', 'zh-TW' FROM organizations WHERE name = '松信住宅管理'
+       RETURNING id::text`,
+    );
+    return inserted.rows[0].id;
+  } finally {
+    await client.end();
+  }
+}
+
 async function expireInvite(url: string) {
   const hash = createHash("sha256").update(tokenFrom(url)).digest("hex");
   const client = new Client({
@@ -63,6 +80,7 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
   await expect(guestPage.getByTestId("portal-invite-title")).toHaveText("松信住宅管理 邀請你使用租多啦");
   await expect(guestPage.getByTestId("portal-email")).toHaveValue("ailing.li@tenant.demo");
   await expect(guestPage.getByTestId("portal-email")).toHaveAttribute("readonly", "");
+  await expect(guestPage.locator("body")).not.toContainText("demo.condola.local");
   await expect(guestPage.locator("body")).not.toContainText("LINE");
   await guestPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-password.png", fullPage: true });
   await guestPage.getByTestId("new-password").fill("Fresh1234");
@@ -89,6 +107,35 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
   await page.goto("/m/owners");
   await page.locator("[data-testid='owner-row-chen.owner@demo.mail'] a").click();
   await expect(page.getByTestId("portal-invite-activated")).toHaveText("已啟用");
+
+  const ownerId = await insertOwnerWithoutEmail();
+  await page.goto(`/m/owners/${ownerId}`);
+  await page.getByTestId("portal-invite-copy").click();
+  const ownerCopied = page.getByTestId("portal-invite-copied");
+  await expect(ownerCopied).toBeVisible();
+  const ownerUrl = await ownerCopied.getAttribute("data-url");
+  expect(ownerUrl).toMatch(/\/accept\//);
+  const ownerGuest = await browser.newContext();
+  const ownerPage = await ownerGuest.newPage();
+  await ownerPage.goto(ownerUrl || "/");
+  const ownerEmail = ownerPage.getByTestId("portal-email");
+  await expect(ownerEmail).toHaveValue("");
+  await expect(ownerEmail).not.toHaveAttribute("readonly", "");
+  await expect(ownerPage.locator("body")).not.toContainText("demo.condola.local");
+  await expect(ownerPage.locator("body")).toContainText("請填寫你的 Email。設定密碼後，用它和密碼登入。");
+  await ownerPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-choose-email.png", fullPage: true });
+  await ownerEmail.fill("jianhong.chen@owner.demo");
+  await ownerPage.getByTestId("new-password").fill("Owner1234");
+  await ownerPage.getByTestId("password-confirm").fill("Owner1234");
+  await ownerPage.getByTestId("portal-submit").click();
+  await expect(ownerPage.locator(".alert.bad")).toContainText("這個電子郵件已經用過");
+  const freshEmail = `invite.${Date.now().toString(36)}@example.com`;
+  await ownerPage.getByTestId("portal-email").fill(freshEmail);
+  await ownerPage.getByTestId("new-password").fill("Owner1234");
+  await ownerPage.getByTestId("password-confirm").fill("Owner1234");
+  await ownerPage.getByTestId("portal-submit").click();
+  await ownerPage.waitForURL(/\/o\/statements/);
+  await ownerGuest.close();
 
   await signIn(page, ACCOUNTS.owner);
   await page.goto("/o");
