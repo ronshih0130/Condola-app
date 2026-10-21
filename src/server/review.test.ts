@@ -74,6 +74,7 @@ const ERROR_KEYS = [
   "i_expense_locked",
   "i_expense_amount",
   "i_expense_state",
+  "i_report_range",
 ];
 
 test("sign-in times render in Asia/Taipei", () => {

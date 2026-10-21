@@ -49,7 +49,7 @@ export function rolesFor(key: PermKey): readonly OrgRole[] {
   return PERM_ROLES[key];
 }
 
-/** Sidebar entries. Admin sees 18, including 操作紀錄. Empty sections are dropped by the caller. */
+/** Sidebar entries. Admin sees 19, including 操作紀錄. Empty sections are dropped by the caller. */
 export const MANAGER_NAV = [
   {
     section: "i_sec_rentals",
@@ -70,6 +70,7 @@ export const MANAGER_NAV = [
       { href: "/m/bank", key: "i_nav_bank", perm: "bank.reconcile" },
       { href: "/m/statements", key: "i_nav_stmt", perm: "stmt.view" },
       { href: "/m/expenses", key: "i_nav_expenses", perm: "exp.add" },
+      { href: "/m/reports", key: "i_nav_reports", perm: "reports.export" },
       { href: "/m/close", key: "i_nav_close", perm: "month.close" },
     ],
   },
@@ -151,6 +152,7 @@ const ROUTE_PERM: { prefix: string; perm: PermKey; exact?: boolean }[] = [
   { prefix: "/m/bank", perm: "bank.reconcile" },
   { prefix: "/m/statements", perm: "stmt.view" },
   { prefix: "/m/expenses", perm: "exp.add" },
+  { prefix: "/m/reports", perm: "reports.export" },
   { prefix: "/m/close", perm: "month.close" },
   { prefix: "/m/messages", perm: "messages.send" },
   { prefix: "/m/team", perm: "team.manage" },
