@@ -42,6 +42,20 @@ export function confirmSpace(room: { propertyName: string; unitLabel: string; la
   return `${room.propertyName} · ${room.unitLabel}${room.label ? ` ${room.label}` : ""}`;
 }
 
+/** Copy the room at the moment it is picked. A later vacant-room refresh must not erase it. */
+export function nextSpaceSnapshot<T extends { id: string }>(rooms: readonly T[], roomId: string, current: T | null): T | null {
+  if (!roomId) return null;
+  const match = rooms.find((item) => item.id === roomId);
+  if (match) return { ...match };
+  return current?.id === roomId ? current : null;
+}
+
+/** Step 8 reads this snapshot, including after the room leaves the vacant list. */
+export function confirmSpaceFromSnapshot<T extends { id: string }>(roomId: string, snapshot: T | null): T | null {
+  if (!roomId || snapshot?.id !== roomId) return null;
+  return snapshot;
+}
+
 export function confirmDeposit(
   monthsRaw: string,
   rentRaw: string,

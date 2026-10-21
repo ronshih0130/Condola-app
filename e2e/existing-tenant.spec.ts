@@ -131,3 +131,35 @@ test("TWD rent and deposit stay whole dollars", async ({ page }) => {
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("due-day")).toBeVisible();
 });
+
+test("a deposit of zero months still opens the new lease", async ({ page }) => {
+  await resetDemo(page);
+  await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases/new");
+  const room = page.getByTestId("lease-room");
+  const roomValue = await room.locator("option", { hasText: "信義松仁" }).first().getAttribute("value");
+  expect(roomValue).toBeTruthy();
+  await room.selectOption(roomValue ?? "");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("tenant-name").fill("零押金");
+  await page.getByTestId("tenant-phone").fill("0912000777");
+  await page.getByTestId("wizard-next").click();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+  await page.getByTestId("start-date").fill(today);
+  await page.getByTestId("term-months").fill("12");
+  await page.getByTestId("rent").fill("12000");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("deposit-months").fill("0");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("due-day").fill("5");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("split-method").selectOption("even");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("wizard-next").click();
+  await expect(page.getByTestId("lease-confirm-space")).toContainText("信義松仁");
+  await expect(page.getByTestId("lease-confirm-rent")).toHaveText("$12,000");
+  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("0 個月（$0）");
+  await page.getByTestId("submit-lease").click();
+  await expect(page).toHaveURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1$/);
+  await expect(page.getByTestId("lease-created")).toHaveText("租約已建立，簽署邀請已送出");
+  await expect(page.getByRole("heading", { level: 1, name: /零押金/ })).toBeVisible();
+});

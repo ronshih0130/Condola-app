@@ -43,7 +43,7 @@ test("wizard forms use the Enter split and still guard the create button", () =>
   assert.match(lease, /claimFormSubmit\(submitGuard\)/);
   assert.match(lease, /tenantMode === "existing" && pickedId === ""/);
   assert.match(lease, /submitter\.dataset\.testid !== "submit-lease"/);
-  assert.match(lease, /disabled=\{blocked \|\| pending \|\| !submitReady \|\| Boolean\(state\.leaseId\)\}/);
+  assert.match(lease, /disabled=\{blocked \|\| pending \|\| !submitReady\}/);
   assert.match(property, /submitter\.dataset\.testid !== "submit-property"/);
   assert.match(property, /disabled=\{blocked \|\| !submitReady\}/);
   assert.match(firm, /submitter\.dataset\.testid !== "firm-submit"/);

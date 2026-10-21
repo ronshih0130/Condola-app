@@ -17,6 +17,7 @@ type WorkerEnv = {
   services?: { service?: string }[];
   placement?: { mode?: string; region?: string };
   routes?: { pattern?: string; custom_domain?: boolean }[];
+  observability?: { enabled?: boolean };
 };
 
 function parseJsonc(raw: string) {
@@ -42,6 +43,7 @@ test("the staging wrangler env names secrets and keeps demo mode off", () => {
   assert.equal(staging.services?.[0]?.service, "condola-staging");
   assert.equal(staging.placement?.mode, "targeted");
   assert.equal(staging.placement?.region, "aws:ap-northeast-1");
+  assert.equal(staging.observability?.enabled, true);
   assert.doesNotMatch(raw, /postgres:\/\//i);
   assert.doesNotMatch(raw, /eyJ/);
   assert.doesNotMatch(raw, /sb_secret_/);
@@ -74,6 +76,7 @@ test("the production wrangler env serves app.condola.app and keeps demo mode off
     ["app.condola.app"],
   );
   assert.equal(production.routes?.every((route) => route.custom_domain === true), true);
+  assert.equal(production.observability?.enabled, true);
 });
 
 test("production redirects and cookies accept app.condola.app and condola.app", () => {

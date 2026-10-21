@@ -21,6 +21,7 @@ test("every error key has a translation, and an empty amount uses the amount sen
   assert.equal(zh.i_step_incomplete, "{field}未完成，請確認後再繼續。");
   assert.equal(zh.i_deposit_half_step, "押金以 0.5 個月為單位");
   assert.equal(zh.i_lease_created, "租約已建立，簽署邀請已送出");
+  assert.equal(zh.i_lease_slow, "處理時間較長，請到租約列表確認");
   assert.equal(zh.i_lease_failed, "租約沒有儲存成功，請稍後再試；若持續發生請聯絡 service@condola.app");
   assert.equal(zh.i_lease_whole_unit, "此戶為整層出租，請選擇整層而不是房間。");
   assert.match(zh.i_charged_total, /^向租客收取 /);

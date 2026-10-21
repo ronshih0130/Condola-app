@@ -44,7 +44,13 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(actions, /createLeaseFromForm\(session, formData\)/);
   assert.match(actions, /updateLease\(session,/);
   assert.match(wizard, /claimFormSubmit\(submitGuard\)/);
-  assert.match(wizard, /disabled=\{blocked \|\| pending \|\| !submitReady \|\| Boolean\(state\.leaseId\)\}/);
+  assert.match(actions, /redirect\(`\/m\/leases\/\$\{created\.leaseId\}\?created=1`\)/);
+  assert.doesNotMatch(wizard, /router\.push/);
+  assert.match(wizard, /i_lease_slow/);
+  assert.match(wizard, /setTimeout\(\(\) => setSlowSubmit\(true\), 8000\)/);
+  assert.match(wizard, /href="\/m\/leases"/);
+  assert.match(wizard, /confirmSpaceFromSnapshot/);
+  assert.match(wizard, /disabled=\{blocked \|\| pending \|\| !submitReady\}/);
   assert.match(wizard, /key="wizard-next"/);
   assert.match(wizard, /key="submit-lease"/);
   assert.match(wizard, /type="button"/);

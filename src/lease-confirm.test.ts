@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { confirmDeposit, confirmSpace, depositAmountMinor, depositMonthsOnHalfStep, formatMajor, twdRentIsWhole } from "./lease-confirm";
+import { confirmDeposit, confirmSpace, confirmSpaceFromSnapshot, depositAmountMinor, depositMonthsOnHalfStep, formatMajor, nextSpaceSnapshot, twdRentIsWhole } from "./lease-confirm";
 
 test("the lease confirmation names the room and writes rent and deposit with units", () => {
   assert.equal(formatMajor(12000, "TWD", "zh-TW"), "$12,000");
   assert.equal(formatMajor(20000, "TWD", "en"), "$20,000");
   assert.equal(confirmSpace({ propertyName: "信義松仁", unitLabel: "3F", label: "C" }), "信義松仁 · 3F C");
   assert.equal(confirmDeposit("1.5", "12000", "TWD", "zh-TW"), "1.5 個月（$18,000）");
+  assert.equal(confirmDeposit("0", "12000", "TWD", "zh-TW"), "0 個月（$0）");
   assert.equal(confirmDeposit("2", "12000", "TWD", "zh-TW"), "2 個月（$24,000）");
   assert.equal(confirmDeposit("1", "1500", "USD", "en"), "1 month ($1,500.00)");
   assert.equal(confirmDeposit("2", "12000", "TWD", "en"), "2 months ($24,000)");
@@ -24,4 +25,14 @@ test("the lease confirmation names the room and writes rent and deposit with uni
   assert.equal(depositAmountMinor("TWD", 12000, 1.5), 1_800_000);
   assert.equal(depositAmountMinor("TWD", 10001, 1.5), 1_500_200);
   assert.equal(depositAmountMinor("TWD", 12000, 0), 0);
+  const room = { id: "c", propertyName: "信義松仁", unitLabel: "3F", label: "C", currency: "TWD" };
+  const snapshot = nextSpaceSnapshot([room], "c", null);
+  assert.deepEqual(snapshot, room);
+  assert.notEqual(snapshot, room);
+  assert.equal(nextSpaceSnapshot([], "c", snapshot), snapshot);
+  assert.equal(confirmSpace(confirmSpaceFromSnapshot("c", snapshot)!), "信義松仁 · 3F C");
+  assert.equal(confirmSpaceFromSnapshot("c", snapshot)?.currency, "TWD");
+  assert.equal(nextSpaceSnapshot([], "", snapshot), null);
+  assert.equal(confirmSpaceFromSnapshot("", snapshot), null);
+  assert.equal(nextSpaceSnapshot([{ id: "a", propertyName: "其他", unitLabel: "1F", label: "A", currency: "TWD" }], "a", snapshot)?.id, "a");
 });

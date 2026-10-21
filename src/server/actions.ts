@@ -31,7 +31,7 @@ import { addTicketComment, saveRepairRecord } from "./repairs";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
 
-export type ActionState = { error: string; field?: string; leaseId?: string };
+export type ActionState = { error: string; field?: string };
 
 const EMPTY_ACTION: ActionState = { error: "" };
 
@@ -141,7 +141,7 @@ export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formDa
     const created = await createLeaseFromForm(session, formData);
     const jar = await cookies();
     jar.set("condola_tenant_focus", created.tenantUserId, appCookieOptions({ httpOnly: false }));
-    return { error: "", leaseId: created.leaseId };
+    redirect(`/m/leases/${created.leaseId}?created=1`);
   } catch (error) {
     return actionError(error, "errors.leaseFailed");
   }

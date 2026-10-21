@@ -756,6 +756,7 @@
  "i_step_incomplete": "{field}未完成，請確認後再繼續。",
  "i_deposit_half_step": "押金以 0.5 個月為單位",
  "i_lease_created": "租約已建立，簽署邀請已送出",
+ "i_lease_slow": "處理時間較長，請到租約列表確認",
  "i_not_found": "找不到這筆資料。請回到列表再打開一次。",
  "i_amount": "請輸入金額（數字，可填 0）",
  "i_amount_high": "金額超過未結餘額。",
