@@ -179,7 +179,7 @@ export function Sidebar({
   };
   const sections = visibleNav(role);
   const next = encodeURIComponent(path);
-  const label = sandbox ? `${firm}${t("i_sandbox_suffix")}` : firm;
+  const label = sandbox ? t("i_sandbox_company") : firm;
   return (
     <aside className="side">
       <div className="org">
@@ -194,8 +194,7 @@ export function Sidebar({
               {firm}
             </a>
             <a href={`/api/env?set=sandbox&next=${next}`} data-testid="org-pick-sandbox">
-              <span>{t("i_sandbox_company")}</span>
-              <span className="org-tag">{t("i_sandbox_suffix")}</span>
+              {t("i_sandbox_company")}
             </a>
           </div>
         </details>

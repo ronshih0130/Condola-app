@@ -93,7 +93,8 @@ test("sandbox chrome uses the sample company, the amber banner, and a native swi
   assert.match(chrome, /<details className="org-switch">/);
   assert.match(chrome, /<summary className="org-toggle" data-testid="org-switch">/);
   assert.match(chrome, /data-testid="org-pick-sandbox"/);
-  assert.match(chrome, /i_sandbox_suffix/);
+  assert.match(chrome, /sandbox \? t\("i_sandbox_company"\) : firm/);
+  assert.doesNotMatch(chrome, /i_sandbox_suffix/);
   assert.doesNotMatch(chrome, /EnvSwitch|env-switch|useState/);
   const layout = read(join(root, "src/app/layout.tsx"));
   assert.doesNotMatch(layout, /EnvSwitch|env-switch/);

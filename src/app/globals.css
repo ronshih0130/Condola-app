@@ -176,7 +176,6 @@ table.t td.mine,table.t th.mine{background:var(--pri2)}
 .side .org-caret{margin-left:auto;color:var(--ink3);font-size:12px}
 .side .org-menu{display:flex;flex-direction:column;gap:4px;margin:4px 0 8px}
 .side .org-menu a{display:flex;align-items:center;padding:8px 10px;border-radius:8px;color:var(--ink);background:var(--bg);min-height:44px}
-.side .org-tag{margin-left:6px;color:var(--ink3);font-size:12px}
 .side a.it{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;color:var(--ink2);font-weight:500}.side a.it:hover{background:var(--cream);color:var(--ink)}.side a.it.on{background:var(--pri2);color:var(--pri3)}
 .side a.it .ic{width:18px;text-align:center;opacity:.8}.side .badge{margin-left:auto;background:var(--bad);color:#fff;border-radius:99px;font-size:11px;padding:0 7px;font-weight:600}
 .main{flex:1;min-width:0;padding:20px 28px 40px}
