@@ -308,10 +308,14 @@ ALTER TABLE invoices VALIDATE CONSTRAINT invoices_owner_statement_fk;
 CREATE INDEX IF NOT EXISTS invoices_owner_statement_idx
   ON invoices (owner_statement_id) WHERE owner_statement_id IS NOT NULL;
 
--- p_invoice retargets the reversed entries at a credit invoice. Two-argument callers keep the original invoice.
-DROP FUNCTION IF EXISTS post_reversal(uuid, text);
-CREATE OR REPLACE FUNCTION post_reversal(p_txn uuid, p_reason text, p_invoice uuid DEFAULT NULL) RETURNS uuid
-LANGUAGE plpgsql AS $$
+-- p_invoice retargets the reversed entries at a credit invoice. There is no default:
+-- 20261023160000 keeps post_reversal(uuid, text) for payment and expense reversals,
+-- and a default would make a two-argument call ambiguous. Callers pass NULL::uuid
+-- to keep the original invoice. Re-applying this file must not drop that overload.
+CREATE OR REPLACE FUNCTION post_reversal(p_txn uuid, p_reason text, p_invoice uuid) RETURNS uuid
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 DECLARE t ledger_transactions; new_id uuid;
 BEGIN
   SELECT * INTO t FROM ledger_transactions WHERE id = p_txn;

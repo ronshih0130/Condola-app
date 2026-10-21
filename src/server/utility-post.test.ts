@@ -173,7 +173,9 @@ test("the electricity migration fails closed on posted duplicates and unknown me
   assert.match(sql, /AND r\.status = 'draft'/);
   assert.match(sql, /ADD VALUE IF NOT EXISTS 'pending_repost'/);
   assert.match(sql, /owner_statement_id/);
-  assert.match(sql, /CREATE OR REPLACE FUNCTION post_reversal\(p_txn uuid, p_reason text, p_invoice uuid DEFAULT NULL\)/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION post_reversal\(p_txn uuid, p_reason text, p_invoice uuid\)/);
+  assert.equal(sql.includes("p_invoice uuid DEFAULT"), false);
+  assert.equal(sql.includes("DROP FUNCTION IF EXISTS post_reversal(uuid, text)"), false);
   assert.equal(sql.includes("\nCREATE FUNCTION post_reversal"), false);
   const postedLineDrop = sql.indexOf("DROP CONSTRAINT IF EXISTS utility_allocation_lines_posted_line_fk");
   const orgUniqDrop = sql.indexOf("DROP CONSTRAINT IF EXISTS invoice_lines_org_uniq");

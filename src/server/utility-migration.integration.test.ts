@@ -52,6 +52,23 @@ test("the electricity migration applies twice, including inside one transaction"
       { cwd: root },
     );
     assert.equal(check.stdout.trim(), "1");
+    const reversals = await exec(
+      "psql",
+      [
+        databaseUrl(database),
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-tA",
+        "-c",
+        `SELECT pronargs::text || ':' || pronargdefaults::text
+           FROM pg_proc p
+           JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname = 'public' AND p.proname = 'post_reversal'
+          ORDER BY 1`,
+      ],
+      { cwd: root },
+    );
+    assert.equal(reversals.stdout.trim(), "2:0\n3:0");
   } finally {
     await psql("postgres", ["-c", `DROP DATABASE IF EXISTS ${database} WITH (FORCE)`]);
   }
