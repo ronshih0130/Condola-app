@@ -48,6 +48,8 @@ export type ImportField = (typeof IMPORT_FIELDS)[number];
 
 /** Dry-run rows per request. Commit sends the whole file in one transaction. */
 export const IMPORT_DRY_BATCH = 25;
+/** Rows compared with stored tenants and leases per preview request. */
+export const IMPORT_PREVIEW_BATCH = 100;
 /** Whole file, counted on parsed data rows (csv and xlsx alike). */
 export const IMPORT_MAX_ROWS = 2000;
 export const IMPORT_FIELD_MAX = 500;
@@ -632,6 +634,7 @@ function planRow(row: ParsedImportRow, index: ExistingIndex): RowPlan {
       return base;
     } else base.createLease = true;
   } else base.vacant = true;
+  if (planIsDuplicate(base)) issues.push({ line: row.line, severity: "warn", key: "im_row_exists" });
   return base;
 }
 
@@ -653,7 +656,7 @@ function matchTenant(row: ParsedImportRow, index: ExistingIndex, issues: ImportI
   const hit = phones[0];
   if (!hit) return null;
   if (nameKey(hit.name) !== nameKey(row.tenantName)) {
-    issues.push({ line: row.line, severity: "error", key: "im_e_phone_name" });
+    issues.push({ line: row.line, severity: "error", key: "im_e_phone_name", vars: { n: row.line, name: hit.name } });
     return "blocked";
   }
   return hit.id;

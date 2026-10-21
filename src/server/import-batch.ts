@@ -7,6 +7,7 @@ import { depositExceedsCap } from "./lease-rules";
 import {
   IMPORT_DRY_BATCH,
   IMPORT_MAX_ROWS,
+  IMPORT_PREVIEW_BATCH,
   addTenantKey,
   addressKey,
   coerceImportRows,
@@ -14,6 +15,7 @@ import {
   planRows,
   totalsFromPlans,
   validateImportRows,
+  type ImportIssue,
   type ImportResult,
   type ParsedImportRow,
   type RowPlan,
@@ -30,10 +32,20 @@ export type { ImportResult };
  */
 export const IMPORT_BODY_MAX_BYTES = 4 * 1024 * 1024;
 
+/**
+ * Rows per INSERT inside the single commit transaction. A 500-row statement
+ * was cancelled at the staging statement timeout (~10s) and saved nothing.
+ * Smaller statements stay under that limit; the transaction still commits
+ * once, or rolls every statement back.
+ */
+export const IMPORT_WRITE_CHUNK = 100;
+
+export type ImportProgress = (done: number, total: number) => void;
+
 /** Same normalization as addressKey(), evaluated in Postgres for units that have no stored key. */
 const COMPUTED_ADDRESS_KEY = `NULLIF(lower(regexp_replace(normalize(coalesce(p.address_display, ''), NFKC), '\\s+', '', 'g')), '')`;
 
-export async function readImportBody(request: Request): Promise<{ mode: "dry" | "commit"; fileName: string; rows: unknown }> {
+export async function readImportBody(request: Request): Promise<{ mode: "dry" | "preview" | "commit"; fileName: string; rows: unknown }> {
   const text = await readCappedText(request, IMPORT_BODY_MAX_BYTES);
   if (!text.trim()) throw new FlowError("im_body");
   let body: unknown;
@@ -44,7 +56,7 @@ export async function readImportBody(request: Request): Promise<{ mode: "dry" | 
   }
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new FlowError("im_body");
   const record = body as { mode?: unknown; fileName?: unknown; rows?: unknown };
-  if (record.mode !== "dry" && record.mode !== "commit") throw new FlowError("im_bad_mode");
+  if (record.mode !== "dry" && record.mode !== "preview" && record.mode !== "commit") throw new FlowError("im_bad_mode");
   const fileName = typeof record.fileName === "string" ? record.fileName : "";
   if (fileName.length > 200) throw new FlowError("im_e_len", { f: "file", max: 200 });
   return { mode: record.mode, fileName, rows: record.rows };
@@ -71,12 +83,47 @@ export async function dryRunImport(session: Session, input: { fileName: string; 
 }
 
 /**
- * One transaction for the whole confirmed file. Inserts are bulk statements on
- * that connection, so 500 rows finish well under the 120s limit and a failure
- * rolls every statement back. Background batches are not used: a batch that
- * committed on its own would leave a partial file.
+ * Same plan as commit, read only. Issues include phone conflicts and rows that
+ * already exist, so the preview does not mark them ready to insert.
  */
-export async function commitImportBatch(session: Session, input: { fileName: string; rows: unknown }): Promise<ImportResult> {
+export async function previewImport(session: Session, input: { fileName: string; rows: unknown }): Promise<ImportIssue[]> {
+  const started = performance.now();
+  let counted = 0;
+  try {
+    assertImport(session);
+    const rows = coerceImportRows(input.rows, IMPORT_PREVIEW_BATCH);
+    counted = rows.length;
+    const parsed = validateImportRows(rows);
+    if (parsed.length === 0) return [];
+    return await tx(session.userId, async (client) => {
+      const index = await loadIndex(client, session.orgId, parsed);
+      return previewIssues(planRows(parsed, index));
+    }, scope(session));
+  } finally {
+    logImportTiming("preview", counted, started);
+  }
+}
+
+function previewIssues(plans: RowPlan[]) {
+  const issues: ImportIssue[] = [];
+  for (const plan of plans) {
+    for (const issue of plan.issues) {
+      if (issue.severity === "error" || issue.key === "im_row_exists") issues.push(issue);
+    }
+  }
+  return issues;
+}
+
+/**
+ * One transaction for the whole confirmed file. Inserts are chunked statements
+ * on that connection. Progress is reported after each chunk, and a failure
+ * rolls every statement back. A chunk is not its own commit.
+ */
+export async function commitImportBatch(
+  session: Session,
+  input: { fileName: string; rows: unknown },
+  onProgress?: ImportProgress,
+): Promise<ImportResult> {
   const started = performance.now();
   let counted = 0;
   try {
@@ -87,10 +134,11 @@ export async function commitImportBatch(session: Session, input: { fileName: str
     const fileName = cleanName(input.fileName);
     if (parsed.length === 0) return totalsFromPlans([], fileName, false);
     const result = await tx(session.userId, async (client) => {
+      await client.query(`SELECT set_config('statement_timeout', '60s', true)`);
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`import:${session.orgId}`]);
       const index = await loadIndex(client, session.orgId, parsed);
       const jurisdiction = await one<{ id: string }>(client, `SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
-      const plans = await persistPlans(client, session, parsed, index, jurisdiction.id);
+      const plans = await persistPlans(client, session, parsed, index, jurisdiction.id, onProgress);
       const totals = totalsFromPlans(plans, fileName, false);
       const rejected = plans.some((plan) => plan.blocked);
       if (!rejected) {
@@ -104,14 +152,18 @@ export async function commitImportBatch(session: Session, input: { fileName: str
       return { totals, saved: !rejected };
     }, scope(session));
     if (result.saved) {
-      await writeAudit(session.orgId, session.userId, "import_batch", {
-        fileName,
-        rows: parsed.length,
-        created: result.totals.created,
-        reused: result.totals.reused,
-        errors: result.totals.errors.length,
-        environment: session.environment,
-      });
+      try {
+        await writeAudit(session.orgId, session.userId, "import_batch", {
+          fileName,
+          rows: parsed.length,
+          created: result.totals.created,
+          reused: result.totals.reused,
+          errors: result.totals.errors.length,
+          environment: session.environment,
+        });
+      } catch (error) {
+        console.error("import audit failed", error);
+      }
     }
     return result.totals;
   } finally {
@@ -292,15 +344,22 @@ async function readCappedText(request: Request, maxBytes: number) {
   return new TextDecoder().decode(bytes);
 }
 
-function logImportTiming(mode: "dry" | "commit", rows: number, started: number) {
+function logImportTiming(mode: "dry" | "preview" | "commit", rows: number, started: number) {
   if (process.env.NODE_ENV !== "development") return;
   console.info(`[import] ${mode} ${rows} rows in ${Math.round(performance.now() - started)}ms`);
 }
 
-async function persistPlans(client: Client, session: Session, parsed: ParsedImportRow[], index: ReturnType<typeof emptyIndex>, jurisdictionId: string) {
+async function persistPlans(
+  client: Client,
+  session: Session,
+  parsed: ParsedImportRow[],
+  index: ReturnType<typeof emptyIndex>,
+  jurisdictionId: string,
+  onProgress?: ImportProgress,
+) {
   const planned = planRows(parsed, index);
   if (planned.length === 0 || planned.some((plan) => plan.blocked)) return planned;
-  await bulkWrite(client, session, planned, jurisdictionId);
+  await bulkWrite(client, session, planned, jurisdictionId, onProgress);
   return planned;
 }
 
@@ -324,18 +383,23 @@ function materializeIds(plans: RowPlan[]) {
   }
 }
 
-async function bulkWrite(client: Client, session: Session, plans: RowPlan[], jurisdictionId: string) {
+async function bulkWrite(client: Client, session: Session, plans: RowPlan[], jurisdictionId: string, onProgress?: ImportProgress) {
   const live = plans.filter((plan) => !plan.blocked);
   materializeIds(live);
-  await insertProperties(client, session, live, jurisdictionId);
-  await insertPeople(client, session, live);
-  await insertPropertyOwners(client, session, live);
-  await insertUnits(client, session, live);
-  await insertRooms(client, session, live);
-  const leaseIds = new Map<RowPlan, string>();
-  await insertLeases(client, session, live, leaseIds);
-  await insertParties(client, session, live, leaseIds);
-  await upsertListingsBulk(client, session.orgId, live);
+  const total = live.length;
+  for (let offset = 0; offset < total; offset += IMPORT_WRITE_CHUNK) {
+    const chunk = live.slice(offset, offset + IMPORT_WRITE_CHUNK);
+    await insertProperties(client, session, chunk, jurisdictionId);
+    await insertPeople(client, session, chunk);
+    await insertPropertyOwners(client, session, chunk);
+    await insertUnits(client, session, chunk);
+    await insertRooms(client, session, chunk);
+    const leaseIds = new Map<RowPlan, string>();
+    await insertLeases(client, session, chunk, leaseIds);
+    await insertParties(client, session, chunk, leaseIds);
+    await upsertListingsBulk(client, session.orgId, chunk);
+    onProgress?.(offset + chunk.length, total);
+  }
 }
 
 async function insertProperties(client: Client, session: Session, plans: RowPlan[], jurisdictionId: string) {

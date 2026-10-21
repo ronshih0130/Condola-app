@@ -6,13 +6,14 @@ import { FlowError } from "./errors";
 import { readFileSync } from "node:fs";
 import { HMAC_KEY_REF, hashIdNumber, parseIdHmacKey } from "./id-hash";
 import { ORG2_ID, ORG_ID } from "./ids";
-import { IMPORT_BODY_MAX_BYTES, commitImportBatch, dryRunImport, readImportBody } from "./import-batch";
+import { IMPORT_BODY_MAX_BYTES, IMPORT_WRITE_CHUNK, commitImportBatch, dryRunImport, previewImport, readImportBody } from "./import-batch";
 import {
   IMPORT_DRY_BATCH,
   IMPORT_FIELDS,
   IMPORT_FIELD_MAX,
   IMPORT_MAX_ROWS,
   IMPORT_MONEY_MAX,
+  IMPORT_PREVIEW_BATCH,
   coerceImportRows,
   emptyIndex,
   ignoredNationalIdHeaders,
@@ -223,6 +224,8 @@ test("an existing unit, tenant, and lease are reused and counted as already pres
   const totals = totalsFromPlans([plan], "again.xlsx", false);
   assert.equal(totals.duplicateRows, 1);
   assert.equal(totals.created.leases, 0);
+  assert.ok(plan.issues.some((issue) => issue.key === "im_row_exists" && issue.severity === "warn"));
+  assert.equal(plan.blocked, false);
 
   const changed = planOne({ ...parsed, rentMinor: parsed.rentMinor + 100 }, index);
   assert.equal(changed.blocked, true);
@@ -257,7 +260,10 @@ test("a shared phone is not reused, and full-width numbers, ROC dates, and Excel
   assert.equal(wrongName.blocked, true);
   assert.equal(wrongName.reuseTenant, false);
   assert.equal(wrongName.createTenant, false);
-  assert.ok(wrongName.issues.some((issue) => issue.key === "im_e_phone_name"));
+  const phoneIssue = wrongName.issues.find((issue) => issue.key === "im_e_phone_name");
+  assert.ok(phoneIssue);
+  assert.equal(phoneIssue?.vars?.n, phoneOnly.line);
+  assert.equal(phoneIssue?.vars?.name, "別的租客");
 
   const wide = validateImportRows(
     [lease({ rent: "１２，０００", deposit: "２４，０００", dueDay: "５", startDate: "115/01/05", endDate: "民國116年1月5日", tenantPhone: "９１２０００２２２", unitLabel: "11F" })],
@@ -443,18 +449,46 @@ test("the 2000-row cap counts parsed rows for csv and xlsx names", async () => {
     () => dryRunImport(session, { fileName: "batch.csv", rows: many(IMPORT_DRY_BATCH + 1) }),
     (error: unknown) => error instanceof FlowError && error.key === "im_too_many" && error.vars?.max === IMPORT_DRY_BATCH,
   );
+  await assert.rejects(
+    () => previewImport(session, { fileName: "preview.csv", rows: many(IMPORT_PREVIEW_BATCH + 1) }),
+    (error: unknown) => error instanceof FlowError && error.key === "im_too_many" && error.vars?.max === IMPORT_PREVIEW_BATCH,
+  );
+  const previewBody = await readImportBody(
+    new Request("http://local/api/import", { method: "POST", body: JSON.stringify({ mode: "preview", fileName: "a.csv", rows: [] }) }),
+  );
+  assert.equal(previewBody.mode, "preview");
   assert.equal(coerceImportRows(many(500), IMPORT_MAX_ROWS).length, 500);
+  assert.equal(IMPORT_WRITE_CHUNK, 100);
 });
 
 test("a confirmed import is one transaction and the screen posts it once", () => {
   const source = readFileSync(new URL("./import-batch.ts", import.meta.url), "utf8");
   const wizard = readFileSync(new URL("../components/import-wizard.tsx", import.meta.url), "utf8");
-  assert.equal(source.match(/await tx\(/g)?.length, 2);
+  const route = readFileSync(new URL("../app/api/import/route.ts", import.meta.url), "utf8");
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  assert.equal(source.match(/await tx\(/g)?.length, 3);
+  const commitStart = source.indexOf("export async function commitImportBatch");
+  const commitFn = source.slice(commitStart);
+  assert.equal(commitFn.match(/await tx\(/g)?.length, 1);
+  assert.match(source, /IMPORT_WRITE_CHUNK/);
+  assert.match(source, /statement_timeout/);
   assert.doesNotMatch(source, /SAVEPOINT/i);
   assert.doesNotMatch(source, /IMPORT_COMMIT_BATCH/);
   assert.equal(wizard.match(/postImport\("commit"/g)?.length, 1);
   assert.match(wizard, /import-ignored-id/);
-  assert.match(wizard, /im_saving/);
+  assert.match(wizard, /im_progress_n/);
+  assert.match(wizard, /im_none/);
+  assert.match(wizard, /import-retry/);
+  assert.match(wizard, /claimFormSubmit\(submitGuard\)/);
+  assert.match(wizard, /releaseFormSubmit\(submitGuard\)/);
+  assert.match(wizard, /disabled=\{busy/);
+  assert.match(route, /console\.error\("import failed"/);
+  assert.match(route, /application\/x-ndjson/);
+  assert.equal(zh.im_progress_n, "已處理 {done}／{total} 筆");
+  assert.equal(zh.im_none, "沒有任何資料匯入");
+  assert.equal(zh.im_retry, "再試一次");
+  assert.match(zh.im_e_phone_name, /\{n\}/);
+  assert.match(zh.im_e_phone_name, /\{name\}/);
 });
 
 test("active-unit billing counts include imported leases", () => {

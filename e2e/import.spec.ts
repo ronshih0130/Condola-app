@@ -139,6 +139,9 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
     mimeType: "text/csv",
     buffer: BIG5_CSV,
   });
+  await expect(page.getByTestId("import-preview")).toContainText("已經存在");
+  await expect(page.getByTestId("import-ok-count")).toHaveText("0");
+  await expect(page.getByTestId("import-run")).toBeEnabled();
   await page.getByTestId("import-run").click();
   await expect(page.getByTestId("import-result")).toBeVisible();
   await expect(page.getByTestId("import-count-leases")).toHaveText("0");

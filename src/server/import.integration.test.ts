@@ -7,7 +7,7 @@ import { query, tx, withClient } from "./db";
 import { FlowError } from "./errors";
 import { BILLABLE_ACTIVE_LEASE } from "./billing";
 import { createProperty, uploadSignedLeasePdf } from "./domain";
-import { commitImportBatch, dryRunImport } from "./import-batch";
+import { IMPORT_WRITE_CHUNK, commitImportBatch, dryRunImport, previewImport } from "./import-batch";
 import { addressKey, matchColumns, tableToRows, templateHeaders } from "./owner-import";
 import { countActiveUnits } from "./sandbox";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
@@ -509,7 +509,9 @@ test("a spreadsheet national ID is ignored and not stored", async () => {
         },
       ],
     });
-    assert.ok(result.errors.some((issue) => issue.key === "im_e_phone_name"));
+    const phoneIssue = result.errors.find((issue) => issue.key === "im_e_phone_name");
+    assert.equal(phoneIssue?.vars?.n, 2);
+    assert.equal(phoneIssue?.vars?.name, `既有${stamp}`);
     assert.equal(result.created.leases, 0);
     const contact = await query<{ hash: string; display_name: string; n: string }>(
       `SELECT id_number_hash AS hash, display_name, (SELECT count(*) FROM contacts c2 WHERE c2.org_id = $1 AND c2.phone_e164 = $2)::text AS n
@@ -572,7 +574,16 @@ test("a phone-only match with a different name is a row error", async () => {
       fileName,
       rows: [row({ propertyName: name, address: `台北市松山區姓名路${stamp}號`, ownerName: "姓名屋主", ownerEmail: `nown.${stamp}@example.com`, tenantName: "不同姓名", tenantPhone: phone, tenantEmail: `nnew.${stamp}@example.com` })],
     });
-    assert.ok(result.errors.some((issue) => issue.key === "im_e_phone_name"));
+    const phoneIssue = result.errors.find((issue) => issue.key === "im_e_phone_name");
+    assert.equal(phoneIssue?.vars?.n, 2);
+    assert.equal(phoneIssue?.vars?.name, kept);
+    const preview = await previewImport(admin, {
+      fileName,
+      rows: [row({ propertyName: name, address: `台北市松山區姓名路${stamp}號`, ownerName: "姓名屋主", ownerEmail: `nown.${stamp}@example.com`, tenantName: "不同姓名", tenantPhone: phone, tenantEmail: `nnew.${stamp}@example.com` })],
+    });
+    const previewIssue = preview.find((issue) => issue.key === "im_e_phone_name");
+    assert.equal(previewIssue?.vars?.n, 2);
+    assert.equal(previewIssue?.vars?.name, kept);
     assert.equal(result.created.tenants, 0);
     assert.equal(result.created.leases, 0);
     const contact = await query<{ display_name: string; n: string }>(
@@ -719,6 +730,47 @@ test("a failure inside the import writes none of the rows", async () => {
   }
 });
 
+test("a failure after the first chunk saves nothing", async () => {
+  const stamp = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}z`;
+  const name = `中斷${stamp}`;
+  const ownerEmail = `chunk.${stamp}@example.com`;
+  const fileName = `chunk-${stamp}.csv`;
+  const count = IMPORT_WRITE_CHUNK + 1;
+  const emails = [ownerEmail];
+  const rows: ImportRequestRow[] = [];
+  for (let i = 1; i <= count; i += 1) {
+    const email = `c${i}.${stamp}@example.com`;
+    emails.push(email);
+    rows.push(
+      row({
+        line: i + 1,
+        propertyName: name,
+        address: `台北市中正區中斷路${stamp}號`,
+        ownerName: "中斷屋主",
+        ownerEmail,
+        unitLabel: `C${String(i).padStart(4, "0")}`,
+        tenantName: `租客${i}`,
+        tenantPhone: `09${String(61000000 + i).slice(-8)}`,
+        tenantEmail: email,
+        notes: i === count ? "bad\u0000byte" : "",
+      }),
+    );
+  }
+  const seen: { done: number; total: number }[] = [];
+  try {
+    await assert.rejects(() =>
+      commitImportBatch(admin, { fileName, rows }, (done, total) => {
+        seen.push({ done, total });
+      }),
+    );
+    assert.deepEqual(seen, [{ done: IMPORT_WRITE_CHUNK, total: count }]);
+    const props = await query<{ n: string }>(`SELECT count(*)::text AS n FROM properties WHERE name = $1`, [name]);
+    assert.equal(props.rows[0].n, "0");
+  } finally {
+    await cleanup([name], emails, [fileName]);
+  }
+});
+
 test("one blocked row rejects the whole confirmed file", async () => {
   const stamp = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}y`;
   const name = `整批拒絕${stamp}`;
@@ -781,6 +833,17 @@ test("an xlsx with numeric cells saves the confirmed row", async () => {
     assert.equal(saved.rows[0].start, "2026-11-01");
     assert.equal(saved.rows[0].phone, "+886912000555");
     assert.equal(saved.rows[0].hash, null);
+    const before = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM leases l JOIN properties p ON p.id = l.property_id WHERE p.name = $1`,
+      [name],
+    );
+    const preview = await previewImport(admin, { fileName, rows });
+    assert.ok(preview.some((issue) => issue.key === "im_row_exists" && issue.severity === "warn"));
+    const afterPreview = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM leases l JOIN properties p ON p.id = l.property_id WHERE p.name = $1`,
+      [name],
+    );
+    assert.equal(afterPreview.rows[0].n, before.rows[0].n);
     const again = await commitImportBatch(admin, { fileName, rows });
     assert.equal(again.created.leases, 0);
     assert.equal(again.duplicateRows, 1);
@@ -820,8 +883,15 @@ test("five hundred rows commit in one transaction", async () => {
   }
   try {
     const started = performance.now();
-    const result = await commitImportBatch(admin, { fileName, rows });
+    const seen: number[] = [];
+    const result = await commitImportBatch(admin, { fileName, rows }, (done, total) => {
+      assert.equal(total, 500);
+      seen.push(done);
+    });
     const elapsed = performance.now() - started;
+    const expected: number[] = [];
+    for (let done = IMPORT_WRITE_CHUNK; done <= 500; done += IMPORT_WRITE_CHUNK) expected.push(done);
+    assert.deepEqual(seen, expected);
     assert.equal(result.errors.length, 0);
     assert.equal(result.created.properties, 1);
     assert.equal(result.created.leases, 500);

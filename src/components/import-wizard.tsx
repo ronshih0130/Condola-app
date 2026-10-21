@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
 import { useT } from "./locale";
 import { csvDocument, buildXlsx, readSpreadsheet, SpreadsheetError } from "@/lib/spreadsheet";
 import {
   IMPORT_FIELDS,
   IMPORT_MAX_ROWS,
+  IMPORT_PREVIEW_BATCH,
   issuePreviewColumns,
   ignoredNationalIdHeaders,
   matchColumns,
@@ -47,21 +49,88 @@ export function ImportWizard() {
   const [table, setTable] = useState<string[][]>([]);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [progress, setProgress] = useState("");
   const [done, setDone] = useState<ImportResult>(EMPTY);
+  const [serverIssues, setServerIssues] = useState<ImportIssue[]>([]);
   const [serverErrors, setServerErrors] = useState<ImportIssue[]>([]);
+  const submitGuard = useRef(false);
+  const tRef = useRef(t);
+  tRef.current = t;
 
   const mapping = useMemo(() => (table[0] ? matchColumns(table[0]) : null), [table]);
   const ignoredIds = useMemo(() => ignoredNationalIdHeaders(table[0] ?? []), [table]);
   const parsed = useMemo(() => (mapping ? validateImportRows(tableToRows(table, mapping)) : []), [mapping, table]);
   const missing = mapping ? missingRequired(mapping) : [];
-  const problemRows = parsed.filter((row) => rowHasError(row));
-  const validRows = parsed.filter((row) => !rowHasError(row));
-  const preview = parsed.slice(0, PREVIEW_ROWS);
+  const serverByLine = useMemo(() => {
+    const map = new Map<number, ImportIssue[]>();
+    for (const issue of serverIssues) {
+      const list = map.get(issue.line) ?? [];
+      list.push(issue);
+      map.set(issue.line, list);
+    }
+    return map;
+  }, [serverIssues]);
+  const viewed = useMemo(
+    () =>
+      parsed.map((row) => {
+        const extra = serverByLine.get(row.line);
+        if (!extra?.length) return row;
+        return { ...row, issues: [...row.issues, ...extra] };
+      }),
+    [parsed, serverByLine],
+  );
+  const problemRows = viewed.filter((row) => rowHasError(row));
+  const sendable = viewed.filter((row) => !rowHasError(row));
+  const importableCount = sendable.filter((row) => !row.issues.some((issue) => issue.key === "im_row_exists")).length;
+  const preview = viewed.slice(0, PREVIEW_ROWS);
   const stepperAt = step >= 2 ? 3 : step + 1;
+  const canRun = !busy && !previewing && !previewFailed && sendable.length > 0;
+
+  useEffect(() => {
+    if (step !== 2) return;
+    const headers = table[0];
+    if (!headers) return;
+    const matched = matchColumns(headers);
+    if (missingRequired(matched).length) return;
+    const rows = validateImportRows(tableToRows(table, matched)).filter((row) => !rowHasError(row));
+    let cancelled = false;
+    setPreviewing(true);
+    setPreviewFailed(false);
+    setServerIssues([]);
+    if (rows.length === 0) {
+      setPreviewing(false);
+      return;
+    }
+    void (async () => {
+      const found: ImportIssue[] = [];
+      for (let offset = 0; offset < rows.length; offset += IMPORT_PREVIEW_BATCH) {
+        const issues = await postPreview(fileName, requestRows(rows.slice(offset, offset + IMPORT_PREVIEW_BATCH)));
+        found.push(...issues);
+      }
+      if (!cancelled) setServerIssues(found);
+    })()
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setPreviewFailed(true);
+        setNotice(messageFrom(tRef.current, error));
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, table, fileName]);
 
   async function loadFile(file: File, choice: "auto" | "utf-8" | "big5") {
     setNotice("");
+    setFailed(false);
+    setPreviewFailed(false);
+    setProgress("");
+    setServerIssues([]);
     setServerErrors([]);
     const buffer = new Uint8Array(await file.arrayBuffer());
     setBytes(buffer);
@@ -86,9 +155,11 @@ export function ImportWizard() {
       setTable(read.rows);
       if (absent.length) {
         setNotice(t("im_map_miss", { n: absent.length }));
+        setPreviewing(false);
         setStep(1);
         return;
       }
+      setPreviewing(true);
       setStep(2);
     } catch (error) {
       const code = error instanceof SpreadsheetError ? error.code : "xlsx";
@@ -113,13 +184,20 @@ export function ImportWizard() {
   }
 
   async function runCommit() {
-    const rows = requestRows(validRows);
-    if (rows.length === 0 || missing.length > 0) return;
+    if (!claimFormSubmit(submitGuard)) return;
+    const rows = requestRows(sendable);
+    if (rows.length === 0 || missing.length > 0 || previewing || previewFailed) {
+      releaseFormSubmit(submitGuard);
+      return;
+    }
     setBusy(true);
+    setFailed(false);
     setNotice("");
-    setProgress(String(rows.length));
+    setProgress(t("im_progress_n", { done: 0, total: rows.length }));
     try {
-      const result = await postImport("commit", fileName, rows);
+      const result = await postImport("commit", fileName, rows, (doneRows, total) => {
+        setProgress(t("im_progress_n", { done: doneRows, total }));
+      });
       const errors = result.errors.filter((issue) => issue.severity === "error");
       setServerErrors(errors);
       const created =
@@ -130,22 +208,28 @@ export function ImportWizard() {
         result.created.tenants +
         result.created.owners;
       if (errors.length > 0 && created === 0 && result.duplicateRows === 0) {
-        setNotice(errors.map((issue) => t(issue.key, issue.vars)).slice(0, 3).join("；"));
+        setFailed(true);
+        setNotice(t("im_none"));
+        setProgress("");
         return;
       }
       setDone(result);
+      setProgress("");
       setStep(3);
-    } catch (error) {
-      setNotice(messageFrom(t, error));
+    } catch {
+      setFailed(true);
+      setNotice(t("im_none"));
+      setProgress("");
     } finally {
       setBusy(false);
-      setProgress("");
+      releaseFormSubmit(submitGuard);
     }
   }
 
   function downloadProblems() {
     const extra = new Map<number, string>();
-    for (const issue of serverErrors) {
+    for (const issue of [...serverIssues, ...serverErrors]) {
+      if (issue.severity !== "error") continue;
       const text = t(issue.key, issue.vars);
       extra.set(issue.line, extra.has(issue.line) ? `${extra.get(issue.line)}；${text}` : text);
     }
@@ -184,6 +268,11 @@ export function ImportWizard() {
       {notice ? (
         <div className="alert bad" data-testid="import-notice" style={{ margin: "12px 0" }}>
           {notice}
+          {failed && !busy ? (
+            <button className="btn" type="button" data-testid="import-retry" style={{ marginLeft: 12 }} onClick={() => void runCommit()}>
+              {t("im_retry")}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -286,7 +375,7 @@ export function ImportWizard() {
             <span>
               {t("im_can")}{" "}
               <b className="import-ok" data-testid="import-ok-count">
-                {validRows.length}
+                {importableCount}
               </b>{" "}
               {t("im_unit")}、{t("im_problem")}{" "}
               <b className="import-danger" data-testid="import-err-count">
@@ -350,15 +439,15 @@ export function ImportWizard() {
           </div>
           {progress ? (
             <p data-testid="import-progress" role="status">
-              {t("im_saving", { n: progress })}
+              {progress}
             </p>
           ) : null}
           <div className="import-foot">
             <button className="btn" type="button" data-testid="import-errors-csv" disabled={problemRows.length === 0} onClick={downloadProblems}>
               {t("im_dl_problems")}
             </button>
-            <button className="btn pri" type="button" data-testid="import-run" disabled={busy || validRows.length === 0} onClick={() => void runCommit()}>
-              {t("im_run", { n: validRows.length })}
+            <button className="btn pri" type="button" data-testid="import-run" disabled={busy || !canRun} onClick={() => void runCommit()}>
+              {t("im_run", { n: sendable.length })}
             </button>
           </div>
         </div>
@@ -453,6 +542,7 @@ function Summary({ result }: { result: ImportResult }) {
 
 function rowStatus(row: ParsedImportRow, t: ReturnType<typeof useT>) {
   const error = row.issues.find((issue) => issue.severity === "error");
+  if (!error && row.issues.some((issue) => issue.key === "im_row_exists")) return { ok: false, text: t("im_already") };
   if (!error) return { ok: true, text: t("im_row_ok") };
   const field = String(error.vars?.f ?? "");
   if (error.key === "im_e_req" && (field === "月租" || field === "Rent")) return { ok: false, text: t("im_rent_blank") };
@@ -518,15 +608,67 @@ function requestRows(rows: ParsedImportRow[]): ImportRequestRow[] {
   }));
 }
 
-async function postImport(mode: "dry" | "commit", fileName: string, rows: ImportRequestRow[]) {
+async function postPreview(fileName: string, rows: ImportRequestRow[]) {
+  const response = await fetch("/api/import", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ mode: "preview", fileName, rows }),
+  });
+  const body = (await response.json()) as { issues?: ImportIssue[]; error?: string; vars?: Record<string, string | number> };
+  if (!response.ok) throw body;
+  return body.issues ?? [];
+}
+
+async function postImport(
+  mode: "commit",
+  fileName: string,
+  rows: ImportRequestRow[],
+  onProgress: (done: number, total: number) => void,
+): Promise<ImportResult> {
   const response = await fetch("/api/import", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ mode, fileName, rows }),
   });
-  const body = (await response.json()) as ImportResult & { error?: string; vars?: Record<string, string | number> };
-  if (!response.ok) throw body;
-  return body;
+  if (!response.ok || !response.body) {
+    const body = await response.json().catch(() => ({ error: "im_none" }));
+    throw body;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: ImportResult | null = null;
+  const consume = (line: string) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line) as {
+      type?: string;
+      done?: number;
+      total?: number;
+      result?: ImportResult;
+      error?: string;
+    };
+    if (event.type === "progress" && typeof event.done === "number" && typeof event.total === "number") {
+      onProgress(event.done, event.total);
+      return;
+    }
+    if (event.type === "result" && event.result) {
+      result = event.result;
+      return;
+    }
+    if (event.type === "error") throw event;
+  };
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) consume(line);
+  }
+  buffer += decoder.decode();
+  if (buffer.trim()) consume(buffer);
+  if (!result) throw { error: "im_none" };
+  return result;
 }
 
 function messageFrom(t: ReturnType<typeof useT>, error: unknown) {
