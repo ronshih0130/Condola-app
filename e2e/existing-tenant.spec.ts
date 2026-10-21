@@ -58,7 +58,7 @@ test("staff can lease a vacant room to an existing 租客", async ({ page }) => 
   await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("1.5 個月（$18,000）");
   await page.getByTestId("submit-lease").click();
   await expect(page).toHaveURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1$/);
-  await expect(page.getByTestId("lease-created")).toHaveText("租約已建立，簽署邀請已送出");
+  await expect(page.getByTestId("lease-created")).toHaveText("租約已建立，請將簽署連結傳給租客");
 
   const error = page.getByTestId("lease-error");
   if (await error.isVisible().catch(() => false)) {
@@ -160,6 +160,6 @@ test("a deposit of zero months still opens the new lease", async ({ page }) => {
   await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("0 個月（$0）");
   await page.getByTestId("submit-lease").click();
   await expect(page).toHaveURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1$/);
-  await expect(page.getByTestId("lease-created")).toHaveText("租約已建立，簽署邀請已送出");
+  await expect(page.getByTestId("lease-created")).toHaveText("租約已建立，請將簽署連結傳給租客");
   await expect(page.getByRole("heading", { level: 1, name: /零押金/ })).toBeVisible();
 });
