@@ -139,8 +139,9 @@ table.t td.mine,table.t th.mine{background:var(--pri2)}
   .btn,.inp,select.inp,textarea.inp{min-height:44px;font-size:16px}
   .auth-wrap .btn{width:100%}
 }
-.modal-bg{position:fixed;inset:0;background:rgba(46,38,34,.45);z-index:150;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+.modal-bg{position:fixed;inset:0;background:rgba(46,38,34,.45);z-index:150;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;touch-action:manipulation}
 .modal{background:var(--panel);border-radius:12px;width:min(640px,100%);box-shadow:0 20px 60px rgba(46,38,34,.25)}.modal .hd{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center}.modal .bd{padding:18px}.modal .ft{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.modal-x{width:44px;height:44px;padding:0;font-size:22px;line-height:1;flex:none}
 /* top bar — ink #2E2622. Horizontal lockup stays ≥140px; narrower slots use the small symbol only. */
 .top{position:sticky;top:0;z-index:50;background:var(--top);color:#fff;display:flex;align-items:center;gap:10px;padding:0 14px;height:var(--top-h);overflow:hidden}
 .top a{color:#fff}
@@ -229,7 +230,7 @@ table.t td.mine,table.t th.mine{background:var(--pri2)}
 .lin{flex:none;display:flex;gap:8px;align-items:center;padding:6px 10px;background:var(--panel);border-top:1px solid var(--line);font-size:12px;color:var(--ink3)}
 /* LIFF */
 .liffh{flex:none;height:44px;display:flex;align-items:center;padding:0 10px;gap:8px;background:var(--panel);border-bottom:1px solid var(--line)}.liffh .x{font-size:20px;cursor:pointer;width:24px}.liffh .tt{flex:1;text-align:center;line-height:1.1}.liffh .tt b{display:block;font-size:14px}.liffh .tt small{font-size:10px;color:var(--ink3)}
-.liffb{flex:1;overflow:auto;padding:14px;background:var(--cream)}
+.liffb{flex:1;overflow:auto;overflow-anchor:none;padding:14px;background:var(--cream)}
 .liffb .card{box-shadow:none}
 .fn{font-size:11px;color:var(--ink3);background:var(--bg);border-radius:8px;padding:8px 10px;margin-top:10px}
 .pbar{flex:none;height:36px;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--bg);border-bottom:1px solid var(--line);font-size:12px;color:var(--ink3)}.pbar .url{flex:1;background:var(--panel);border-radius:8px;padding:3px 10px}
