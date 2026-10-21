@@ -67,6 +67,13 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   if (await error.isVisible().catch(() => false)) {
     throw new Error(await error.innerText());
   }
+  await expect(page).toHaveURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1$/);
+  await expect(page.getByTestId("lease-created")).toHaveText("租約已建立，簽署邀請已送出");
+  const createdUrl = page.url();
+  await page.goto("/m/leases?q=" + encodeURIComponent("紙本房客"));
+  await expect(page.getByTestId("lease-list").locator("tr", { hasText: "紙本房客" })).toHaveCount(1);
+  await page.goto(createdUrl);
+  await page.locator(".tabsx a[href*='tab=sign']").click();
   await expect(page.getByTestId("paper-sign")).toBeVisible();
   expect(crashes).toEqual([]);
 

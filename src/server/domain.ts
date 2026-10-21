@@ -14,7 +14,7 @@ import {
   splitWeighted,
   toMinor,
 } from "./money";
-import { twdAmountsAreWhole } from "@/lease-confirm";
+import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/lease-confirm";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
@@ -40,12 +40,9 @@ function cleanEmail(email: string) {
   return value;
 }
 
-function assertTwdAmounts(currency: string, rentMajor: number, depositMonths: number) {
-  if (twdAmountsAreWhole(currency, rentMajor, depositMonths)) return;
-  const rentMinor = toMinor(rentMajor);
-  throw new FlowError("errors.amount", {
-    field: currency === "TWD" && Number.isFinite(rentMinor) && rentMinor % 100 === 0 ? "s_8ed103e" : "i_base_rent",
-  });
+function assertLeaseMoney(currency: string, rentMajor: number, depositMonths: number) {
+  if (!depositMonthsOnHalfStep(depositMonths)) throw new FlowError("errors.depositStep");
+  if (!twdRentIsWhole(currency, rentMajor)) throw new FlowError("errors.amount", { field: "i_base_rent" });
 }
 
 /** Insert the portal user on the caller's transaction so a later failure rolls it back. */
@@ -602,7 +599,7 @@ export async function createLease(session: Session, input: LeaseInput) {
         LIMIT 1`,
       [input.roomId, session.orgId],
     );
-    assertTwdAmounts(space.currency, rentMajor, depositMonths);
+    assertLeaseMoney(space.currency, rentMajor, depositMonths);
     const linked = await linkTenant(client, session, {
       tenantContactId,
       name: input.tenantName.trim(),
@@ -613,7 +610,7 @@ export async function createLease(session: Session, input: LeaseInput) {
     const tenantUserId = linked.tenantUserId;
     const contact = { id: linked.contactId };
     const rentMinor = toMinor(rentMajor);
-    const depositMinor = Math.round(rentMinor * depositMonths);
+    const depositMinor = depositAmountMinor(space.currency, rentMajor, depositMonths);
     const documentHash = sha256(
       JSON.stringify({
         room: space.id,
@@ -907,11 +904,11 @@ export async function updateLease(
         throw new FlowError("errors.leaseLocked");
       }
       if (!existing.same_version) throw new FlowError("errors.staleLease");
-      assertTwdAmounts(existing.currency, rentMajor, depositMonths);
+      assertLeaseMoney(existing.currency, rentMajor, depositMonths);
       const override = leaseDepositOverride(depositMonths, input.depositReason ?? "", session.userId, existing);
       await noteChange(client, override.reason);
       const rentMinor = toMinor(rentMajor);
-      const depositMinor = Math.round(rentMinor * depositMonths);
+      const depositMinor = depositAmountMinor(existing.currency, rentMajor, depositMonths);
       const documentHash = sha256(
         JSON.stringify({
           room: existing.target_room_id ?? existing.target_unit_id,

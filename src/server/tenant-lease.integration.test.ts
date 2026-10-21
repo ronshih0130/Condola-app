@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { query, tx, withClient } from "./db";
-import { createProperty } from "./domain";
+import { createProperty, updateLease } from "./domain";
 import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { createLeaseFromForm } from "./lease-form";
@@ -191,10 +191,10 @@ test("picking an existing 租客 reuses that contact and portal user inside the 
             tenantPhone: "0912000223",
             tenantEmail: "",
             rent: "10001",
-            depositMonths: "1.5",
+            depositMonths: "1.3",
           }),
         ),
-      (error: unknown) => error instanceof FlowError && error.key === "errors.amount" && error.vars?.field === "s_8ed103e",
+      (error: unknown) => error instanceof FlowError && error.key === "errors.depositStep",
     );
 
     await assert.rejects(
@@ -674,6 +674,153 @@ test("a new 租客 whose email already logs in at another firm gets a fresh port
     assert.equal(byEmail.get(mixedContact)?.user_id, mixed.tenantUserId);
     assert.match(byEmail.get(mixedContact)?.auth_email ?? "", /^portal-.+@demo\.condola\.local$/);
     assert.equal(byEmail.get(mixedContact)?.n, "1");
+  } finally {
+    await withClient(async (client) => {
+      await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      try {
+        for (const propertyId of propertyIds) {
+          await client.query(
+            `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_allocation_runs
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_bills
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(`DELETE FROM meters WHERE unit_id IN (SELECT id FROM units WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM notifications WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM leases WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM management_agreements WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM properties WHERE id = $1`, [propertyId]);
+        }
+        await client.query(`DELETE FROM contacts WHERE lower(email::text) LIKE $1`, [`%${stamp}@example.com`]);
+        if (userIds.length) await client.query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [userIds]);
+        await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
+      } finally {
+        await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
+      }
+    });
+  }
+});
+
+test("deposit months step by half a month and TWD deposit dollars are rounded", async () => {
+  const stamp = Date.now().toString(36);
+  const propertyIds: string[] = [];
+  const userIds: string[] = [];
+  try {
+    const rooms = await createProperty(admin, {
+      name: `押金半個月 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路11號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "押金屋主",
+      ownerPhone: "0912000555",
+      ownerEmail: `owner.deposit.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "11F",
+      floor: "11",
+      rentalMode: "by_room",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 10001 },
+        { label: "B", roomType: "suite", baseRentMajor: 12000 },
+      ],
+    });
+    propertyIds.push(rooms.propertyId);
+
+    await assert.rejects(
+      () =>
+        createLeaseFromForm(
+          admin,
+          form({
+            ...base,
+            roomId: rooms.roomIds[0],
+            tenantName: "非整步押金",
+            tenantPhone: "0912000661",
+            tenantEmail: `bad.step.${stamp}@example.com`,
+            rent: "10001",
+            depositMonths: "1.3",
+          }),
+        ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.depositStep",
+    );
+    await assert.rejects(
+      () =>
+        createLeaseFromForm(
+          admin,
+          form({
+            ...base,
+            roomId: rooms.roomIds[0],
+            tenantName: "超過兩個月",
+            tenantPhone: "0912000662",
+            tenantEmail: `over.cap.${stamp}@example.com`,
+            rent: "10001",
+            depositMonths: "2.5",
+            depositReason: "",
+          }),
+        ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.depositCap",
+    );
+
+    const half = await createLeaseFromForm(
+      admin,
+      form({
+        ...base,
+        roomId: rooms.roomIds[0],
+        tenantName: "一個半月",
+        tenantPhone: "0912000663",
+        tenantEmail: `half.month.${stamp}@example.com`,
+        rent: "10001",
+        depositMonths: "1.5",
+      }),
+    );
+    userIds.push(half.tenantUserId);
+    const zero = await createLeaseFromForm(
+      admin,
+      form({
+        ...base,
+        roomId: rooms.roomIds[1],
+        tenantName: "零押金",
+        tenantPhone: "0912000664",
+        tenantEmail: `zero.month.${stamp}@example.com`,
+        rent: "12000",
+        depositMonths: "0",
+      }),
+    );
+    userIds.push(zero.tenantUserId);
+
+    const saved = await query<{ id: string; deposit_amount_minor: string; deposit_months: string }>(
+      `SELECT id::text, deposit_amount_minor::text, deposit_months::text
+         FROM leases
+        WHERE id = ANY($1::uuid[])`,
+      [[half.leaseId, zero.leaseId]],
+    );
+    const byId = new Map(saved.rows.map((row) => [row.id, row]));
+    assert.equal(byId.get(half.leaseId)?.deposit_amount_minor, "1500200");
+    assert.equal(Number(byId.get(half.leaseId)?.deposit_months), 1.5);
+    assert.equal(byId.get(zero.leaseId)?.deposit_amount_minor, "0");
+    assert.equal(Number(byId.get(zero.leaseId)?.deposit_months), 0);
+
+    const version = await query<{ updated_at: string }>(`SELECT updated_at::text FROM leases WHERE id = $1`, [half.leaseId]);
+    const updatedAt = version.rows[0]?.updated_at ?? "";
+    await assert.rejects(
+      () => updateLease(admin, { leaseId: half.leaseId, rentMajor: 10001, depositMonths: "1.3", depositReason: "", updatedAt }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.depositStep",
+    );
+    await updateLease(admin, { leaseId: half.leaseId, rentMajor: 10001, depositMonths: "0.5", depositReason: "", updatedAt });
+    const revised = await query<{ deposit_amount_minor: string; deposit_months: string }>(
+      `SELECT deposit_amount_minor::text, deposit_months::text FROM leases WHERE id = $1`,
+      [half.leaseId],
+    );
+    assert.equal(revised.rows[0]?.deposit_amount_minor, "500100");
+    assert.equal(Number(revised.rows[0]?.deposit_months), 0.5);
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);

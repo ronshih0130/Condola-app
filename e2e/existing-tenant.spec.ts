@@ -45,7 +45,7 @@ test("staff can lease a vacant room to an existing 租客", async ({ page }) => 
   await page.getByTestId("term-months").fill("12");
   await page.getByTestId("rent").fill("12000");
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("deposit-months").fill("2");
+  await page.getByTestId("deposit-months").fill("1.5");
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("due-day").fill("5");
   await page.getByTestId("wizard-next").click();
@@ -55,14 +55,16 @@ test("staff can lease a vacant room to an existing 租客", async ({ page }) => 
   await expect(page.getByTestId("lease-confirm-tenant")).toHaveText("王小美");
   await expect(page.getByTestId("lease-confirm-space")).toContainText("信義松仁");
   await expect(page.getByTestId("lease-confirm-rent")).toHaveText("$12,000");
-  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("2 個月");
+  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("1.5 個月（$18,000）");
   await page.getByTestId("submit-lease").click();
+  await expect(page).toHaveURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1$/);
+  await expect(page.getByTestId("lease-created")).toHaveText("租約已建立，簽署邀請已送出");
 
   const error = page.getByTestId("lease-error");
   if (await error.isVisible().catch(() => false)) {
     throw new Error(await error.innerText());
   }
-  await expect(page.getByRole("heading", { name: /王小美/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /王小美/ })).toBeVisible();
   await expect(page.locator("body")).not.toContainText("房客");
 
   await page.goto("/m/tenants");
@@ -115,13 +117,17 @@ test("TWD rent and deposit stay whole dollars", async ({ page }) => {
   await page.getByTestId("term-months").fill("12");
   await page.getByTestId("rent").fill("10000.5");
   await page.getByTestId("wizard-next").click();
-  await expect(page.getByTestId("rent-error")).toBeVisible();
+  await expect(page.getByTestId("rent-error")).toHaveText("月租未完成，請確認後再繼續。");
   await expect(page.getByTestId("deposit-months")).toBeHidden();
 
   await page.getByTestId("rent").fill("10001");
   await page.getByTestId("wizard-next").click();
+  await page.getByTestId("deposit-months").fill("1.3");
+  await page.getByTestId("wizard-next").click();
+  await expect(page.getByTestId("deposit-error")).toHaveText("押金以 0.5 個月為單位");
+  await expect(page.getByTestId("due-day")).toBeHidden();
+
   await page.getByTestId("deposit-months").fill("1.5");
   await page.getByTestId("wizard-next").click();
-  await expect(page.getByTestId("deposit-error")).toBeVisible();
-  await expect(page.getByTestId("due-day")).toBeHidden();
+  await expect(page.getByTestId("due-day")).toBeVisible();
 });

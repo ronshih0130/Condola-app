@@ -19,7 +19,7 @@ export default async function LeasePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; error?: string; audit?: string }>;
+  searchParams: Promise<{ tab?: string; error?: string; audit?: string; created?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -51,6 +51,11 @@ export default async function LeasePage({
         crumb={<Link href="/m/leases">{t("s_fba85ae")}</Link>}
       />
       <ErrorBanner t={t} error={query.error} />
+      {query.created === "1" ? (
+        <div className="alert ok" data-testid="lease-created">
+          {t("i_lease_created")}
+        </div>
+      ) : null}
       <div className="tabsx">
         {tabs.map(([key, label]) => (
           <Link key={key} className={tab === key ? "on" : ""} href={`/m/leases/${id}?tab=${key}`}>

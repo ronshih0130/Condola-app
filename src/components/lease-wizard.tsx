@@ -1,8 +1,9 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { errorText } from "@/i18n/errors";
-import { confirmDeposit, confirmSpace, formatMajor, twdAmountsAreWhole } from "@/lease-confirm";
+import { confirmDeposit, confirmSpace, depositMonthsOnHalfStep, formatMajor, twdRentIsWhole } from "@/lease-confirm";
 import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
 import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
@@ -33,6 +34,7 @@ export function LeaseWizard({
 }) {
   const t = useT();
   const locale = useLocale();
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(actionCreateLease, { error: "" });
   const submitGuard = useRef(false);
   const [submitReady, setSubmitReady] = useState(false);
@@ -74,7 +76,7 @@ export function LeaseWizard({
   const [phoneError, setPhoneError] = useState(false);
   const [tenantPickError, setTenantPickError] = useState(false);
   const [rentError, setRentError] = useState(false);
-  const [depositError, setDepositError] = useState(false);
+  const [depositError, setDepositError] = useState<false | "incomplete" | "step">(false);
   const [dueError, setDueError] = useState(false);
   const [billError, setBillError] = useState(false);
   const [usageError, setUsageError] = useState(false);
@@ -110,6 +112,11 @@ export function LeaseWizard({
   useEffect(() => {
     if (!pending && state.error) releaseFormSubmit(submitGuard);
   }, [pending, state.error]);
+
+  useEffect(() => {
+    if (!state.leaseId) return;
+    router.push(`/m/leases/${state.leaseId}?created=1`);
+  }, [router, state.leaseId]);
 
   function chooseNewTenant() {
     setTenantMode("new");
@@ -169,13 +176,19 @@ export function LeaseWizard({
         if (nameBad || phoneBad || duplicate) return;
       }
     }
-    if (step === 3 && (!amountOk(rent) || !twdAmountsAreWhole(currency, Number(rent), 0))) {
+    if (step === 3 && (!amountOk(rent) || !twdRentIsWhole(currency, Number(rent)))) {
       setRentError(true);
       return;
     }
-    if (step === 4 && (!amountOk(depositMonths) || !twdAmountsAreWhole(currency, Number(rent), Number(depositMonths)))) {
-      setDepositError(true);
-      return;
+    if (step === 4) {
+      if (!amountOk(depositMonths)) {
+        setDepositError("incomplete");
+        return;
+      }
+      if (!depositMonthsOnHalfStep(Number(depositMonths))) {
+        setDepositError("step");
+        return;
+      }
     }
     if (step === 5) {
       const day = Number(dueDay);
@@ -228,17 +241,18 @@ export function LeaseWizard({
           event.preventDefault();
           return;
         }
-        const rentBad = !amountOk(rent) || !twdAmountsAreWhole(currency, Number(rent), 0);
-        const depositBad = !amountOk(depositMonths) || !twdAmountsAreWhole(currency, Number(rent), Number(depositMonths));
-        if (rentBad || depositBad) {
+        const rentBad = !amountOk(rent) || !twdRentIsWhole(currency, Number(rent));
+        const depositIncomplete = !amountOk(depositMonths);
+        const depositStep = !depositIncomplete && !depositMonthsOnHalfStep(Number(depositMonths));
+        if (rentBad || depositIncomplete || depositStep) {
           event.preventDefault();
           setRentError(rentBad);
-          setDepositError(depositBad);
+          setDepositError(depositStep ? "step" : depositIncomplete ? "incomplete" : false);
           if (rentBad) setStep(3);
           else setStep(4);
           return;
         }
-        if (pending || !claimFormSubmit(submitGuard)) event.preventDefault();
+        if (pending || state.leaseId || !claimFormSubmit(submitGuard)) event.preventDefault();
       }}
     >
       <ImplicitSubmitSink />
@@ -349,7 +363,7 @@ export function LeaseWizard({
               </div>
               {tenantMatches.length === 0 ? <p className="hint" data-testid="tenant-none">{t("i_tenant_none")}</p> : null}
               {pickedTenant ? <p className="hint" data-testid="tenant-picked">{pickedTenant.name}</p> : null}
-              {tenantPickError ? <p className="hint" data-testid="tenant-pick-error">{t("i_field_incomplete", { field: t("i_existing_tenant") })}</p> : null}
+              {tenantPickError ? <p className="hint" data-testid="tenant-pick-error">{t("i_step_incomplete", { field: t("i_existing_tenant") })}</p> : null}
             </div>
           ) : (
             <>
@@ -357,12 +371,12 @@ export function LeaseWizard({
                 <div className="fg">
                   <label className="f">{t("s_0c5acea")}</label>
                   <input className="inp" data-testid="tenant-name" placeholder={t("i_ph_tenant")} value={tenant} onChange={(event) => { setTenant(event.target.value); setTenantError(false); }} />
-                  {tenantError ? <p className="hint" data-testid="tenant-name-error">{t("i_field_incomplete", { field: t("s_0c5acea") })}</p> : null}
+                  {tenantError ? <p className="hint" data-testid="tenant-name-error">{t("i_step_incomplete", { field: t("s_0c5acea") })}</p> : null}
                 </div>
                 <div className="fg">
                   <label className="f">{t("s_522cf12")}</label>
                   <input className="inp" data-testid="tenant-phone" placeholder={t("i_ph_phone")} value={phone} onChange={(event) => { setPhone(event.target.value); setPhoneError(false); }} />
-                  {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_field_incomplete", { field: t("s_522cf12") })}</p> : null}
+                  {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_step_incomplete", { field: t("s_522cf12") })}</p> : null}
                 </div>
               </div>
               <div className="fg">
@@ -407,7 +421,7 @@ export function LeaseWizard({
             <div className="fg">
               <label className="f">{t("i_base_rent")}</label>
               <input className="inp" data-testid="rent" inputMode="decimal" placeholder={t("i_ph_rent")} value={rent} onChange={(event) => { setRent(event.target.value); setRentError(false); }} />
-              {rentError ? <p className="hint" data-testid="rent-error">{t("i_field_incomplete", { field: t("i_base_rent") })}</p> : null}
+              {rentError ? <p className="hint" data-testid="rent-error">{t("i_step_incomplete", { field: t("i_base_rent") })}</p> : null}
               <div className="hint">{t("s_759b7ba")}</div>
               {room ? <div className="hint">{t("i_base_hint", { amount: money(room.baseRentMinor / 100, currency, locale) })}</div> : null}
             </div>
@@ -419,7 +433,11 @@ export function LeaseWizard({
           <div className="fg">
             <label className="f">{t("s_8ed103e")}</label>
             <input className="inp" data-testid="deposit-months" inputMode="decimal" placeholder={t("i_ph_dep")} value={depositMonths} onChange={(event) => { setDepositMonths(event.target.value); setDepositError(false); }} />
-            {depositError ? <p className="hint" data-testid="deposit-error">{t("i_field_incomplete", { field: t("s_8ed103e") })}</p> : null}
+            {depositError ? (
+              <p className="hint" data-testid="deposit-error">
+                {depositError === "step" ? t("i_deposit_half_step") : t("i_step_incomplete", { field: t("s_8ed103e") })}
+              </p>
+            ) : null}
           </div>
           {depositOver ? (
             <div className="alert warn" data-testid="deposit-alert">
@@ -441,7 +459,7 @@ export function LeaseWizard({
           <div className="fg">
             <label className="f">{t("s_aa47e23")}</label>
             <input className="inp" data-testid="due-day" inputMode="numeric" placeholder={t("i_ph_due")} value={dueDay} onChange={(event) => { setDueDay(event.target.value); setDueError(false); }} />
-            {dueError ? <p className="hint" data-testid="due-error">{t("i_field_incomplete", { field: t("s_aa47e23") })}</p> : null}
+            {dueError ? <p className="hint" data-testid="due-error">{t("i_step_incomplete", { field: t("s_aa47e23") })}</p> : null}
           </div>
           <p className="hint">{t("s_c6a6031")}</p>
         </div>
@@ -461,17 +479,17 @@ export function LeaseWizard({
             <div className="fg">
               <label className="f">{t("i_bill_total")}</label>
               <input className="inp" data-testid="bill-total" inputMode="decimal" placeholder={t("i_ph_bill")} value={bill} onChange={(event) => { setBill(event.target.value); setBillError(false); }} />
-              {billError ? <p className="hint" data-testid="bill-error">{t("i_field_incomplete", { field: t("i_bill_total") })}</p> : null}
+              {billError ? <p className="hint" data-testid="bill-error">{t("i_step_incomplete", { field: t("i_bill_total") })}</p> : null}
             </div>
             <div className="fg">
               <label className="f">{t("i_usage")}</label>
               <input className="inp" data-testid="usage" inputMode="decimal" placeholder={t("i_ph_kwh")} value={usage} onChange={(event) => { setUsage(event.target.value); setUsageError(false); }} />
-              {usageError ? <p className="hint" data-testid="usage-error">{t("i_field_incomplete", { field: t("i_usage") })}</p> : null}
+              {usageError ? <p className="hint" data-testid="usage-error">{t("i_step_incomplete", { field: t("i_usage") })}</p> : null}
             </div>
             <div className="fg">
               <label className="f">{t("i_rate")}</label>
               <input className="inp" data-testid="rate" inputMode="decimal" placeholder={t("i_ph_rate")} value={rate} onChange={(event) => { setRate(event.target.value); setRateError(false); }} />
-              {rateError ? <p className="hint" data-testid="rate-error">{t("i_field_incomplete", { field: t("i_rate") })}</p> : null}
+              {rateError ? <p className="hint" data-testid="rate-error">{t("i_step_incomplete", { field: t("i_rate") })}</p> : null}
             </div>
           </div>
           {over ? (
@@ -600,7 +618,7 @@ export function LeaseWizard({
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady} aria-busy={pending || undefined}>
+          <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady || Boolean(state.leaseId)} aria-busy={pending || state.leaseId ? true : undefined}>
             {t("s_79b6c1d")}
           </button>
         )}

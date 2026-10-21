@@ -18,6 +18,9 @@ test("every error key has a translation, and an empty amount uses the amount sen
   }
   assert.equal(zh.i_amount, "請輸入金額（數字，可填 0）");
   assert.equal(zh.i_field_incomplete, "{field}未完成，請確認後再送出。");
+  assert.equal(zh.i_step_incomplete, "{field}未完成，請確認後再繼續。");
+  assert.equal(zh.i_deposit_half_step, "押金以 0.5 個月為單位");
+  assert.equal(zh.i_lease_created, "租約已建立，簽署邀請已送出");
   assert.equal(zh.i_lease_failed, "租約沒有儲存成功，請稍後再試；若持續發生請聯絡 service@condola.app");
   assert.equal(zh.i_lease_whole_unit, "此戶為整層出租，請選擇整層而不是房間。");
   assert.match(zh.i_charged_total, /^向租客收取 /);
@@ -61,6 +64,8 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.ok(envLines.every((line) => line.startsWith("condola_env=")));
   const wizard = readFileSync(new URL("../components/lease-wizard.tsx", import.meta.url), "utf8");
   assert.match(wizard, /data-testid="rent-error"/);
+  assert.match(wizard, /depositMonthsOnHalfStep/);
+  assert.match(wizard, /i_deposit_half_step/);
   assert.match(wizard, /i_field_incomplete/);
   assert.match(wizard, /split === "sub_meter" && bill\.trim\(\) === ""/);
   assert.doesNotMatch(wizard, /t\("i_amount"\)/);
@@ -73,7 +78,7 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(property, /blockImplicitEnter/);
   assert.match(property, /ImplicitSubmitSink/);
   assert.match(property, /useActionState/);
-  assert.match(property, /i_field_incomplete/);
+  assert.match(property, /i_step_incomplete/);
   assert.match(property, /data-testid="property-address-error"/);
   assert.match(property, /split === "sub" && bill\.trim\(\) === ""/);
   assert.doesNotMatch(property, /ownerPhone\.trim\(\)/);
@@ -110,7 +115,7 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   const firm = readFileSync(new URL("../components/firm-steps.tsx", import.meta.url), "utf8");
   assert.match(firm, /noValidate/);
   assert.match(firm, /data-testid="firm-contact-error"/);
-  assert.match(firm, /i_field_incomplete/);
+  assert.match(firm, /i_step_incomplete/);
   assert.doesNotMatch(firm, /\srequired(?:\s|=|{|>)/);
   assert.match(firm, /key="kind-next"/);
   assert.match(firm, /type="button"/);

@@ -1,12 +1,23 @@
 import { toMinor } from "@/server/money";
 
-/** TWD rent and the deposit (months × rent) are whole dollars. USD may use cents. */
-export function twdAmountsAreWhole(currency: string, rentMajor: number, depositMonths: number) {
+/** TWD rent is a whole dollar. USD may use cents. */
+export function twdRentIsWhole(currency: string, rentMajor: number) {
   if (currency !== "TWD") return true;
   const rentMinor = toMinor(rentMajor);
-  if (!Number.isFinite(rentMinor) || rentMinor % 100 !== 0) return false;
-  const depositMinor = Math.round(rentMinor * depositMonths);
-  return Number.isFinite(depositMinor) && depositMinor % 100 === 0;
+  return Number.isFinite(rentMinor) && rentMinor % 100 === 0;
+}
+
+/** 0, 0.5, 1, 1.5, … are allowed. 1.3 is not. */
+export function depositMonthsOnHalfStep(months: number) {
+  if (!Number.isFinite(months) || months < 0) return false;
+  const doubled = months * 2;
+  return Math.abs(doubled - Math.round(doubled)) < 1e-6;
+}
+
+/** TWD deposit dollars are round(rent × months). Other currencies keep cents. */
+export function depositAmountMinor(currency: string, rentMajor: number, depositMonths: number) {
+  if (currency === "TWD") return toMinor(Math.round(rentMajor * depositMonths));
+  return Math.round(toMinor(rentMajor) * depositMonths);
 }
 
 /** TWD on the lease wizard is $12,000: a dollar sign, thousands separators, and whole dollars. */
@@ -40,9 +51,11 @@ export function confirmDeposit(
 ) {
   const months = Number(monthsRaw);
   const rent = Number(rentRaw);
-  const amount = Number.isFinite(months) && Number.isFinite(rent) ? format(months * rent, currency, locale) : "";
+  const product = Number.isFinite(months) && Number.isFinite(rent) ? months * rent : Number.NaN;
+  const major = currency === "TWD" ? Math.round(product) : product;
+  const amount = Number.isFinite(major) ? format(major, currency, locale) : "";
   const monthsLabel = monthsRaw.trim();
-  if (locale === "zh-TW") return `${monthsLabel} 個月`;
+  if (locale === "zh-TW") return amount ? `${monthsLabel} 個月（${amount}）` : `${monthsLabel} 個月`;
   const unit = months === 1 ? "month" : "months";
   return amount ? `${monthsLabel} ${unit} (${amount})` : `${monthsLabel} ${unit}`;
 }
