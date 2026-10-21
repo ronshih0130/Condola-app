@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { query, tx, withClient } from "./db";
 import { FlowError } from "./errors";
@@ -335,7 +336,7 @@ test("one import batch writes one import_batch audit row", async () => {
     );
     assert.equal(audits.rows[0].n, "1");
     const jobs = await query<{ n: string }>(
-      `SELECT count(*)::text AS n FROM import_jobs WHERE entity = 'bulk' AND column_map->>'fileName' = $1`,
+      `SELECT count(*)::text AS n FROM import_jobs WHERE column_map->>'kind' = 'bulk' AND column_map->>'fileName' = $1`,
       [fileName],
     );
     assert.equal(jobs.rows[0].n, "1");
@@ -524,8 +525,8 @@ test("a previous file name does not block the next import", async () => {
   const ownerEmail = `cap.${stamp}@example.com`;
   await query(
     `INSERT INTO import_jobs (org_id, entity, column_map, status, rows_total, rows_ok, rows_failed, requested_by, finished_at)
-     VALUES ($1, 'bulk', $2::jsonb, 'succeeded', 2000, 2000, 0, $3, now())`,
-    [ORG_ID, JSON.stringify({ fileName }), USERS.admin],
+     VALUES ($1, 'portfolio', $2::jsonb, 'succeeded', 2000, 2000, 0, $3, now())`,
+    [ORG_ID, JSON.stringify({ fileName, kind: "bulk" }), USERS.admin],
   );
   try {
     const committed = await commitImportBatch(admin, {
@@ -640,4 +641,41 @@ test("a UI unit is reused by the import address key, including when the key was 
   } finally {
     await cleanup([uiName, `匯入別名${stamp}`, bareName, `另一個名字${stamp}`], [ownerEmail, `keyt.${stamp}@example.com`, `bare.${stamp}@example.com`, `baret.${stamp}@example.com`], [fileName, `bare-${fileName}`]);
   }
+});
+
+test("included electricity stays off the existing method check", async () => {
+  const stamp = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}e`;
+  const name = `電費包含${stamp}`;
+  const ownerEmail = `elec.${stamp}@example.com`;
+  const fileName = `elec-${stamp}.csv`;
+  try {
+    const result = await commitImportBatch(admin, {
+      fileName,
+      rows: [row({ propertyName: name, address: `台北市文山區電費路${stamp}號`, ownerName: "電費屋主", ownerEmail, electricity: "包含", unitLabel: "9F" })],
+    });
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.created.units, 1);
+    const stored = await query<{ method: string | null; included: boolean }>(
+      `SELECT u.electricity_method AS method, u.electricity_included AS included
+         FROM units u JOIN properties p ON p.id = u.property_id
+        WHERE p.name = $1 AND u.label = '9F'`,
+      [name],
+    );
+    assert.equal(stored.rows[0].method, null);
+    assert.equal(stored.rows[0].included, true);
+  } finally {
+    await cleanup([name], [ownerEmail], [fileName]);
+  }
+});
+
+test("the bulk import migration applies a second time", async () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/20261023120000_bulk_import.sql", import.meta.url), "utf8");
+  await withClient(async (client) => {
+    await client.query(sql);
+  });
+  const column = await query<{ n: string }>(
+    `SELECT count(*)::text AS n FROM information_schema.columns
+      WHERE table_name = 'units' AND column_name = 'import_address_key'`,
+  );
+  assert.equal(column.rows[0].n, "1");
 });

@@ -423,6 +423,55 @@ export function rowHasError(row: ParsedImportRow) {
   return row.issues.some((issue) => issue.severity === "error");
 }
 
+/** Columns on the confirm-step preview. Other errors stay on the status cell. */
+export type PreviewColumn = "property" | "space" | "tenant" | "rent";
+
+const PREVIEW_FIELD: Partial<Record<ImportField, PreviewColumn>> = {
+  propertyName: "property",
+  address: "property",
+  rentalMode: "space",
+  unitLabel: "space",
+  roomLabel: "space",
+  rent: "rent",
+  tenantName: "tenant",
+  tenantPhone: "tenant",
+  tenantEmail: "tenant",
+  tenantId: "tenant",
+};
+
+export function issuePreviewColumns(issue: ImportIssue): PreviewColumn[] {
+  const field = String(issue.vars?.f ?? "");
+  for (const key of IMPORT_FIELDS) {
+    if (PREVIEW_FIELD[key] && (field === ZH_HEADERS[key] || field === EN_HEADERS[key])) return [PREVIEW_FIELD[key]];
+  }
+  switch (issue.key) {
+    case "im_e_type":
+    case "im_e_whole_room":
+    case "im_e_dup":
+    case "im_e_mode":
+      return ["space"];
+    case "im_e_phone":
+    case "im_e_phone_dup":
+    case "im_e_phone_name":
+    case "im_e_tenant":
+    case "im_e_id_dup":
+      return ["tenant"];
+    case "im_e_exists":
+      return ["property"];
+    default:
+      return [];
+  }
+}
+
+export function previewBadColumns(row: ParsedImportRow) {
+  const bad = new Set<PreviewColumn>();
+  for (const issue of row.issues) {
+    if (issue.severity !== "error") continue;
+    for (const column of issuePreviewColumns(issue)) bad.add(column);
+  }
+  return bad;
+}
+
 export type ExistingIndex = {
   properties: Map<string, { id: string; addressKey: string }>;
   units: Map<string, { id: string; propertyId: string; mode: SpaceKind }>;

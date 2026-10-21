@@ -366,3 +366,15 @@ body:has(.env-banner) .nav-check:checked ~ .app .nav-backdrop{inset:88px 0 0 0}
 .repair-timeline li{border-left:2px solid var(--line);padding:0 0 12px 12px;margin-left:6px}
 .repair-photos{display:flex;flex-wrap:wrap;gap:8px}
 .repair-photos img{width:120px;height:90px;object-fit:cover;border-radius:8px;background:var(--cd-surface2)}
+.import-steps{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
+.import-steps .st{display:flex;align-items:center;gap:8px;color:var(--ink3);flex:1;min-width:140px;padding:10px 12px;border-radius:12px;background:var(--panel);border:1px solid var(--line)}
+.import-steps .st b{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--line);font-size:12px;flex:none}
+.import-steps .st.on{color:var(--pri);border-color:var(--pri);font-weight:700}
+.import-steps .st.on b{background:var(--pri);color:#fff}
+.import-steps .st.done b{background:var(--accent);color:var(--ink)}
+.import-preview-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.import-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+.import-ok{color:var(--ok)}
+.import-danger{color:var(--bad)}
+.import-warn{color:var(--warn)}
+.import-bad{outline:2px solid var(--bad);background:var(--badbg);border-radius:4px}

@@ -143,7 +143,10 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   const repair = names.find((name) => name.includes("repair_records"));
   assert.equal(repair, "20261023150000_repair_records.sql");
   assert.ok(repair > "20261023090000");
-  assert.equal(names.some((name) => name.startsWith("20261023120000")), false);
+  assert.deepEqual(
+    names.filter((name) => name.startsWith("20261023120000")),
+    ["20261023120000_bulk_import.sql"],
+  );
   assert.ok(names.includes("20261023090000_lease_deposit_override_check.sql"));
   const sql = readFileSync(new URL(`supabase/migrations/${repair}`, root), "utf8");
   assert.match(sql, /^-- Version 20261023150000\./);

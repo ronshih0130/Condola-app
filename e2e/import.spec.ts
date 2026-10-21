@@ -43,7 +43,7 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
   await expect(page.locator(".main")).not.toContainText("房東");
   await expect(page.locator(".main")).not.toContainText("房客");
   await page.getByTestId("import-link").click();
-  await expect(page.getByRole("heading", { name: "匯入物件與租約" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Excel 匯入" })).toBeVisible();
   await expect(page.locator(".main")).not.toContainText("房東");
   await expect(page.locator(".main")).not.toContainText("房客");
 
@@ -58,21 +58,53 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
   expect(template).not.toContain("房東");
   expect(template).not.toContain("房客");
 
+  await expect(page.locator(".import-steps .st")).toHaveCount(3);
+  await expect(page.locator(".import-steps")).toContainText("下載範本");
+  await expect(page.locator(".import-steps")).toContainText("上傳檔案");
+  await expect(page.locator(".import-steps")).toContainText("確認匯入");
+
+  await page.getByTestId("import-to-upload").click();
+  const blankRent = [
+    "物件名稱,地址,屋主姓名,出租型態,戶別／樓層,月租,租客姓名,租客電話,起租日,到期日,押金,繳租日",
+    "中山北路公寓,台北市中山區中山北路1號,王屋主,整層,3F,9500,陳美玲,0912000111,2026-11-01,2027-10-31,19000,5",
+    "民生東路套房,台北市松山區民生東路2號,王屋主,整層,2F,,黃怡君,0912000222,2026-11-01,2027-10-31,,5",
+  ].join("\n");
+  await page.getByTestId("import-file").setInputFiles({
+    name: "租金空白.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(blankRent, "utf8"),
+  });
+  await expect(page.getByTestId("import-preview-table")).toContainText("狀態");
+  await expect(page.getByTestId("import-preview-table")).toContainText("單位／房間");
+  await expect(page.getByTestId("import-preview")).toContainText("預覽前 5 列");
+  await expect(page.getByTestId("import-bad-cell")).toHaveText("（空白）");
+  await expect(page.getByTestId("import-bad-cell")).toHaveAttribute("title", "此儲存格必填");
+  await expect(page.getByTestId("import-preview")).toContainText("⚠ 租金空白");
+  await expect(page.getByTestId("import-ok-count")).toHaveText("1");
+  await expect(page.getByTestId("import-err-count")).toHaveText("1");
+  await expect(page.getByTestId("import-run")).toHaveText("匯入 1 筆");
+  await expect(page.getByTestId("import-errors-csv")).toBeEnabled();
+  const problemDownload = page.waitForEvent("download");
+  await page.getByTestId("import-errors-csv").click();
+  const problems = await problemDownload;
+  const problemPath = `/tmp/condola-import-problems-${Date.now()}.csv`;
+  await problems.saveAs(problemPath);
+  const problemCsv = readFileSync(problemPath, "utf8");
+  expect(problemCsv).toContain("黃怡君");
+  expect(problemCsv).toContain("問題");
+  expect(problemCsv).not.toContain("陳美玲");
+
+  await page.getByTestId("import-restart").click();
   await page.getByTestId("import-file").setInputFiles({
     name: "owners.big5.csv",
     mimeType: "text/csv",
     buffer: BIG5_CSV,
   });
-  await expect(page.getByTestId("import-map")).toBeVisible();
+  await expect(page.getByTestId("import-preview")).toBeVisible();
   await expect(page.getByTestId("import-encoding-value")).toContainText("big5");
-  await expect(page.getByLabel("屋主姓名")).toHaveValue("ownerName");
-  await page.getByTestId("import-to-preview").click();
   await expect(page.getByTestId("import-preview")).toContainText("押金約 3 個月");
   await expect(page.getByTestId("import-preview")).toContainText("租約已到期");
-  await page.getByTestId("import-skip-all").click();
-  await page.getByTestId("import-to-dry").click();
-  await expect(page.getByRole("heading", { name: "試算：尚未寫入任何資料" })).toBeVisible();
-  await expect(page.getByTestId("import-count-leases")).toHaveText("1");
+  await expect(page.getByTestId("import-preview")).toContainText("✓ 可匯入");
   await page.getByTestId("import-run").click();
   await expect(page.getByTestId("import-result")).toBeVisible();
   await expect(page.getByRole("heading", { name: "匯入完成" })).toBeVisible();
@@ -97,14 +129,12 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
   await expect(page.getByTestId("paper-sign")).toBeVisible();
 
   await page.goto("/m/import");
+  await page.getByTestId("import-to-upload").click();
   await page.getByTestId("import-file").setInputFiles({
     name: "owners.big5.csv",
     mimeType: "text/csv",
     buffer: BIG5_CSV,
   });
-  await page.getByTestId("import-to-preview").click();
-  await page.getByTestId("import-skip-all").click();
-  await page.getByTestId("import-to-dry").click();
   await page.getByTestId("import-run").click();
   await expect(page.getByTestId("import-result")).toBeVisible();
   await expect(page.getByTestId("import-count-leases")).toHaveText("0");
@@ -121,6 +151,7 @@ test("a 500-row workbook imports in batches", async ({ page }) => {
   test.setTimeout(180_000);
   await resetDemo(page);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/import");
+  await page.getByTestId("import-to-upload").click();
   const rows = [HEADERS];
   for (let i = 1; i <= 500; i += 1) {
     const label = `U${String(i).padStart(4, "0")}`;
@@ -162,11 +193,9 @@ test("a 500-row workbook imports in batches", async ({ page }) => {
   });
   await expect(page.getByTestId("import-encoding-value")).toContainText("xlsx");
   await expect(page.getByTestId("import-row-count")).toContainText("500");
-  await page.getByTestId("import-to-preview").click();
   await expect(page.getByTestId("import-ok-count")).toContainText("500");
   await expect(page.getByTestId("import-err-count")).toContainText("0");
-  await page.getByTestId("import-to-dry").click();
-  await expect(page.getByTestId("import-count-leases")).toHaveText("500");
+  await expect(page.getByTestId("import-run")).toContainText("500");
   await page.getByTestId("import-run").click();
   await expect(page.getByTestId("import-result")).toBeVisible({ timeout: 150_000 });
   await expect(page.getByTestId("import-count-properties")).toHaveText("1");

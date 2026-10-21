@@ -16,8 +16,11 @@ import {
   IMPORT_MONEY_MAX,
   coerceImportRows,
   emptyIndex,
+  issuePreviewColumns,
   matchColumns,
   planOne,
+  previewBadColumns,
+  rowHasError,
   templateHeaders,
   validateImportRows,
   type ImportRequestRow,
@@ -413,6 +416,38 @@ test("error CSV cells neutralize formula injection", () => {
   assert.match(csv, /'@x/);
   assert.match(csv, /'\tok/);
   assert.equal(/^[=+\-@\t\r]/m.test(csv.replace(/^\uFEFF/, "")), false);
+});
+
+test("confirm preview highlights the blank rent cell and keeps valid rows", () => {
+  const rows = validateImportRows([
+    lease({ line: 2, rent: "" }),
+    lease({ line: 3, unitLabel: "6F", tenantName: "另一租客", tenantPhone: "0912000333", tenantEmail: "b@example.com" }),
+  ]);
+  assert.equal(rowHasError(rows[0]), true);
+  assert.equal(rowHasError(rows[1]), false);
+  assert.equal(previewBadColumns(rows[0]).has("rent"), true);
+  assert.equal(previewBadColumns(rows[1]).size, 0);
+  const rentIssue = rows[0].issues.find((issue) => issue.key === "im_e_req" && issue.vars?.f === "月租");
+  assert.ok(rentIssue);
+  assert.deepEqual(issuePreviewColumns(rentIssue), ["rent"]);
+});
+
+test("bulk import migration is additive and idempotent", () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/20261023120000_bulk_import.sql", import.meta.url), "utf8");
+  const code = sql.replace(/--.*$/gm, "");
+  assert.match(sql, /20261023120000/);
+  assert.match(code, /ADD COLUMN IF NOT EXISTS address_key/);
+  assert.match(code, /ADD COLUMN IF NOT EXISTS import_address_key/);
+  assert.match(code, /ADD COLUMN IF NOT EXISTS id_number_hash/);
+  assert.match(code, /ADD COLUMN IF NOT EXISTS electricity_included/);
+  assert.match(code, /ADD VALUE IF NOT EXISTS 'imported'/);
+  assert.match(code, /CREATE OR REPLACE FUNCTION/);
+  assert.match(code, /IF NOT EXISTS \(/);
+  assert.doesNotMatch(code, /\bDROP\b/i);
+  assert.doesNotMatch(code, /\bUNIQUE\b/i);
+  assert.doesNotMatch(code, /SET NOT NULL/i);
+  assert.doesNotMatch(code, /ADD COLUMN[^;]*\bNOT NULL\b/i);
+  assert.doesNotMatch(code, /ADD CONSTRAINT/i);
 });
 
 test("zh-TW import copy uses 屋主 and 租客", () => {

@@ -95,10 +95,10 @@ export async function commitImportBatch(session: Session, input: { fileName: str
       await client.query(
         `INSERT INTO import_jobs (
            org_id, entity, column_map, status, rows_total, rows_ok, rows_failed, error_report, requested_by, finished_at
-         ) VALUES ($1, 'bulk', $2::jsonb, $3, $4, $5, $6, $7::jsonb, $8, now())`,
+         ) VALUES ($1, 'portfolio', $2::jsonb, $3, $4, $5, $6, $7::jsonb, $8, now())`,
         [
           session.orgId,
-          JSON.stringify({ fileName }),
+          JSON.stringify({ fileName, kind: "bulk" }),
           failed > 0 && failed === plans.length ? "failed" : "succeeded",
           plans.length,
           plans.length - failed,
@@ -518,21 +518,27 @@ async function insertPropertyOwners(client: Client, session: Session, plans: Row
   );
 }
 
+/** 'included' is not in the existing electricity_method check. Store it on the nullable flag. */
+function electricityStored(method: string | null | undefined) {
+  if (method === "included") return { method: "", included: true };
+  return { method: method ?? "", included: false };
+}
+
 async function insertUnits(client: Client, session: Session, plans: RowPlan[]) {
   const rows = uniquePlans(plans.filter((plan) => plan.createUnit && plan.unitId && plan.propertyId), (plan) => plan.unitId ?? "");
   if (rows.length === 0) return;
   await client.query(
     `INSERT INTO units (
        id, org_id, property_id, label, floor, rental_mode, area_value, area_unit, base_rent_minor, import_address_key,
-       electricity_method, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
+       electricity_method, electricity_included, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
      )
      SELECT t.id, $1, t.property_id, t.label, t.floor, t.mode::rental_mode, t.area, 'ping', t.rent, t.address_key,
-            NULLIF(t.electricity, ''), t.rate, t.kwh, t.bill, NULLIF(t.rate_reason, ''), NULLIF(t.notes, '')
+            NULLIF(t.electricity, ''), t.included, t.rate, t.kwh, t.bill, NULLIF(t.rate_reason, ''), NULLIF(t.notes, '')
        FROM unnest(
          $2::uuid[], $3::uuid[], $4::text[], $5::text[], $6::text[],
          $7::numeric[], $8::bigint[], $9::text[],
-         $10::text[], $11::numeric[], $12::numeric[], $13::bigint[], $14::text[], $15::text[]
-       ) AS t(id, property_id, label, floor, mode, area, rent, address_key, electricity, rate, kwh, bill, rate_reason, notes)`,
+         $10::text[], $11::boolean[], $12::numeric[], $13::numeric[], $14::bigint[], $15::text[], $16::text[]
+       ) AS t(id, property_id, label, floor, mode, area, rent, address_key, electricity, included, rate, kwh, bill, rate_reason, notes)`,
     [
       session.orgId,
       rows.map((plan) => plan.unitId),
@@ -543,7 +549,8 @@ async function insertUnits(client: Client, session: Session, plans: RowPlan[]) {
       rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.area : null)),
       rows.map((plan) => plan.row.rentMinor),
       rows.map((plan) => plan.row.addressKey),
-      rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.electricity ?? "" : "")),
+      rows.map((plan) => (plan.row.kind === "whole_unit" ? electricityStored(plan.row.electricity).method : "")),
+      rows.map((plan) => (plan.row.kind === "whole_unit" ? electricityStored(plan.row.electricity).included : false)),
       rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.rate : null)),
       rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.billKwh : null)),
       rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.billAmountMinor : null)),
@@ -562,14 +569,14 @@ async function insertRooms(client: Client, session: Session, plans: RowPlan[]) {
   await client.query(
     `INSERT INTO rooms (
        id, org_id, unit_id, label, room_type, area_value, area_unit, base_rent_minor,
-       electricity_method, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
+       electricity_method, electricity_included, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
      )
      SELECT t.id, $1, t.unit_id, t.label, t.room_type::room_type, t.area, 'ping', t.rent,
-            NULLIF(t.electricity, ''), t.rate, t.kwh, t.bill, NULLIF(t.rate_reason, ''), NULLIF(t.notes, '')
+            NULLIF(t.electricity, ''), t.included, t.rate, t.kwh, t.bill, NULLIF(t.rate_reason, ''), NULLIF(t.notes, '')
        FROM unnest(
          $2::uuid[], $3::uuid[], $4::text[], $5::text[], $6::numeric[], $7::bigint[],
-         $8::text[], $9::numeric[], $10::numeric[], $11::bigint[], $12::text[], $13::text[]
-       ) AS t(id, unit_id, label, room_type, area, rent, electricity, rate, kwh, bill, rate_reason, notes)`,
+         $8::text[], $9::boolean[], $10::numeric[], $11::numeric[], $12::bigint[], $13::text[], $14::text[]
+       ) AS t(id, unit_id, label, room_type, area, rent, electricity, included, rate, kwh, bill, rate_reason, notes)`,
     [
       session.orgId,
       rows.map((plan) => plan.roomId),
@@ -578,7 +585,8 @@ async function insertRooms(client: Client, session: Session, plans: RowPlan[]) {
       rows.map((plan) => plan.row.roomType),
       rows.map((plan) => plan.row.area),
       rows.map((plan) => plan.row.rentMinor),
-      rows.map((plan) => plan.row.electricity ?? ""),
+      rows.map((plan) => electricityStored(plan.row.electricity).method),
+      rows.map((plan) => electricityStored(plan.row.electricity).included),
       rows.map((plan) => plan.row.rate),
       rows.map((plan) => plan.row.billKwh),
       rows.map((plan) => plan.row.billAmountMinor),
@@ -766,9 +774,9 @@ async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdi
       client,
       `INSERT INTO units (
          org_id, property_id, label, floor, rental_mode, area_value, area_unit, base_rent_minor, import_address_key,
-         electricity_method, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
+         electricity_method, electricity_included, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,'ping',$7,$8,$9,$10,$11,$12,$13,$14
+         $1,$2,$3,$4,$5,$6,'ping',$7,$8,$9,$10,$11,$12,$13,$14,$15
        ) RETURNING id::text`,
       [
         session.orgId,
@@ -779,7 +787,8 @@ async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdi
         row.kind === "whole_unit" ? row.area : null,
         row.rentMinor,
         row.addressKey,
-        row.kind === "whole_unit" ? row.electricity : null,
+        row.kind === "whole_unit" ? electricityStored(row.electricity).method || null : null,
+        row.kind === "whole_unit" ? electricityStored(row.electricity).included : false,
         row.kind === "whole_unit" ? row.rate : null,
         row.kind === "whole_unit" ? row.billKwh : null,
         row.kind === "whole_unit" ? row.billAmountMinor : null,
@@ -795,8 +804,8 @@ async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdi
       client,
       `INSERT INTO rooms (
          org_id, unit_id, label, room_type, area_value, area_unit, base_rent_minor,
-         electricity_method, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
-       ) VALUES ($1,$2,$3,$4::room_type,$5,'ping',$6,$7,$8,$9,$10,$11,$12)
+         electricity_method, electricity_included, rate_per_kwh, taipower_kwh, taipower_amount_minor, rate_cap_reason, notes
+       ) VALUES ($1,$2,$3,$4::room_type,$5,'ping',$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING id::text`,
       [
         session.orgId,
@@ -805,7 +814,8 @@ async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdi
         row.roomType,
         row.area,
         row.rentMinor,
-        row.electricity,
+        electricityStored(row.electricity).method || null,
+        electricityStored(row.electricity).included,
         row.rate,
         row.billKwh,
         row.billAmountMinor,
