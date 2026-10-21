@@ -118,6 +118,14 @@ test("income and expense stay in SQL, per property, owner, and currency", async 
   assert.equal(coastRows.some((row) => row.property_name === "信義松仁"), false);
   assert.equal(propertyRow(coastRows, "延平北路")?.income_minor, "0");
 
+  const otherFirm = await tx(USERS.coastAdmin, (client) =>
+    client.query(
+      `SELECT property_id FROM app.income_expense_report($1::uuid, NULL, NULL, $2::date, $3::date)`,
+      [ORG_ID, from, to],
+    ),
+  );
+  assert.equal(otherFirm.rows.length, 0);
+
   await assert.rejects(
     () => loadIncomeExpense(maintenance, { start: from, end: to }),
     (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",

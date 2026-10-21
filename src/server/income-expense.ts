@@ -52,8 +52,14 @@ export function reportPeriod(
   return { mode: "month", month, start: bounds.start, end: bounds.end };
 }
 
-function csvCell(value: string) {
+function csvQuote(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+/** Stop a spreadsheet from treating a text cell as a formula. Numbers stay as entered. */
+function csvText(value: string) {
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return csvQuote(safe);
 }
 
 function major(minor: string) {
@@ -63,13 +69,18 @@ function major(minor: string) {
 /** CSV from the SQL rows. Totals are the rows Postgres already returned. */
 export function reportCsv(rows: ReportRow[], labels: ReportLabels) {
   const header = [labels.property, labels.owner, labels.currency, labels.income, labels.expense, labels.net]
-    .map(csvCell)
+    .map(csvText)
     .join(",");
   const lines = rows.map((row) => {
     const name = row.property_id ? (row.property_name ?? "") : labels.total;
-    return [name, row.owner_name ?? "", row.currency, major(row.income_minor), major(row.expense_minor), major(row.net_minor)]
-      .map(csvCell)
-      .join(",");
+    return [
+      csvText(name),
+      csvText(row.owner_name ?? ""),
+      csvText(row.currency),
+      csvQuote(major(row.income_minor)),
+      csvQuote(major(row.expense_minor)),
+      csvQuote(major(row.net_minor)),
+    ].join(",");
   });
   return `\uFEFF${[header, ...lines].join("\n")}\n`;
 }

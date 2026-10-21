@@ -1,7 +1,9 @@
 -- Version 20261023170000.
 -- Income vs expense by property, computed in Postgres so the Worker does not sum rows.
 -- Income follows the same charge waterfall as attributePayment and skips deposit.
--- deposit_refund has no waterfall rank, so it is taken first and counts as income.
+-- deposit_refund is not a waterfall charge. attributePayment sorts that unknown type
+-- first because its rank is -1, then counts it as other income rather than deposit.
+-- ord 0 matches that sort. The income sum keeps every charge except deposit.
 -- Expenses use the owner-statement predicate: approved/posted and bill_to = owner.
 
 CREATE INDEX IF NOT EXISTS payments_confirmed_period_idx
@@ -47,6 +49,7 @@ AS $$
       ) AS owner_name
       FROM properties p
      WHERE p.org_id = p_org
+       AND app.is_member(p.org_id)
        AND p.archived_at IS NULL
        AND (p_property IS NULL OR p.id = p_property)
        AND (

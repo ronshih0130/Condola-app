@@ -76,6 +76,42 @@ test("csv quotes fields and keeps the totals the query already returned", () => 
   assert.equal(withTotal.replace(/^\uFEFF/, "").trim().split("\n").length, 3);
 });
 
+test("csv prefixes formula text and leaves numeric cells unchanged", () => {
+  const csv = reportCsv(
+    [
+      {
+        property_id: "10000000-0000-4000-8000-000000000001",
+        property_name: "=SUM(A1)",
+        owner_name: "+evil",
+        currency: "@TWD",
+        income_minor: "0",
+        expense_minor: "280000",
+        net_minor: "-280000",
+      },
+      {
+        property_id: "10000000-0000-4000-8000-000000000002",
+        property_name: "\tcmd",
+        owner_name: "\rbad",
+        currency: "-USD",
+        income_minor: "0",
+        expense_minor: "0",
+        net_minor: "0",
+      },
+    ],
+    labels,
+  );
+  assert.match(csv, /"'=SUM\(A1\)"/);
+  assert.match(csv, /"'\+evil"/);
+  assert.match(csv, /"'@TWD"/);
+  assert.match(csv, /"'\tcmd"/);
+  assert.match(csv, /"'\rbad"/);
+  assert.match(csv, /"'-USD"/);
+  assert.match(csv, /"-2800.00"/);
+  assert.doesNotMatch(csv, /"'-2800.00"/);
+  assert.match(csv, /"2800.00"/);
+  assert.match(csv, /"0.00"/);
+});
+
 test("the report migration is SQL, shares the statement predicate, and sorts after the expense migration", () => {
   const names = readdirSync(new URL("../../supabase/migrations/", import.meta.url))
     .filter((name) => name.endsWith(".sql"))
@@ -88,6 +124,9 @@ test("the report migration is SQL, shares the statement predicate, and sorts aft
   assert.match(sql, /-- Version 20261023170000\./);
   assert.ok(sql.includes(STATEMENT_EXPENSE_SQL));
   assert.match(sql, /SECURITY INVOKER/);
+  assert.match(sql, /app\.is_member\(p\.org_id\)/);
+  assert.match(sql, /other income rather than deposit/);
+  assert.doesNotMatch(sql, /taken first/);
   const src = readFileSync(new URL("./income-expense.ts", import.meta.url), "utf8");
   assert.match(src, /app\.income_expense_report/);
   assert.equal(src.includes("attributePayment"), false);

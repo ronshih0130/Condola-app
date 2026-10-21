@@ -35,8 +35,11 @@ export function monthIsClosed(isoDate: string, closedThrough: string | null) {
   return isoDate.slice(0, 7) <= closedThrough.slice(0, 7);
 }
 
+/** Major units from a form field. Scientific and hex notation are rejected. */
 export function parseAmountMajor(raw: string) {
-  return Number(raw.replace(/,/g, "").trim());
+  const text = raw.replace(/,/g, "").trim();
+  if (!/^\d+(\.\d+)?$/.test(text)) return Number.NaN;
+  return Number(text);
 }
 
 /** Major-unit string for an edit field. Whole amounts stay without a decimal. */
@@ -202,6 +205,7 @@ async function firstOpenDay(client: Client, orgId: string) {
   return `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
 }
 
+/** Owner-billed expenses only. Posts expense debit and owner_payable credit. */
 async function postLedger(
   client: Client,
   session: Session,
@@ -393,7 +397,8 @@ async function loadStored(client: Client, orgId: string, expenseId: string) {
     client,
     `SELECT id::text, property_id::text, status::text, amount_minor::text, incurred_on::text,
             ledger_transaction_id::text, category, bill_to::text, currency, description, ticket_id::text
-       FROM expenses WHERE id = $1 AND org_id = $2`,
+       FROM expenses WHERE id = $1 AND org_id = $2
+       FOR UPDATE`,
     [expenseId, orgId],
   );
   if (!row) throw new FlowError("errors.notFound");
@@ -423,7 +428,8 @@ export async function updateExpense(session: Session, expenseId: string, input: 
     }
     const vendorId = await vendorIdFor(client, session.orgId, fields.vendorName);
     const receiptId = fields.receiptName ? await insertReceipt(client, session, fields.receiptName) : null;
-    if (financial && current.ledger_transaction_id) {
+    const ownerLedger = current.bill_to === "owner" && (current.status === "posted" || Boolean(current.ledger_transaction_id));
+    if (financial && ownerLedger && current.ledger_transaction_id) {
       const reversed = await maybe<{ id: string }>(
         client,
         `SELECT id::text FROM ledger_transactions WHERE reverses_transaction_id = $1 LIMIT 1`,
@@ -458,7 +464,7 @@ export async function updateExpense(session: Session, expenseId: string, input: 
       ],
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.expenseVoid");
-    if (financial && (current.status === "posted" || current.ledger_transaction_id)) {
+    if (financial && ownerLedger) {
       await postLedger(client, session, {
         expenseId,
         propertyId: fields.propertyId,
@@ -480,10 +486,11 @@ export async function voidExpense(session: Session, expenseId: string, reason: s
   await tx(session.userId, async (client) => {
     const current = await loadStored(client, session.orgId, expenseId);
     if (current.status === "void") throw new FlowError("errors.expenseVoid");
+    if (await onIssuedStatement(client, session.orgId, expenseId)) throw new FlowError("errors.expenseLocked");
     const closed = await closedThrough(client, session.orgId);
     if (monthIsClosed(current.incurred_on, closed)) throw new FlowError("errors.monthClosed");
     await setReason(client, note);
-    if (current.ledger_transaction_id) {
+    if (current.bill_to === "owner" && current.ledger_transaction_id) {
       const reversed = await maybe<{ id: string }>(
         client,
         `SELECT id::text FROM ledger_transactions WHERE reverses_transaction_id = $1 LIMIT 1`,
@@ -492,11 +499,38 @@ export async function voidExpense(session: Session, expenseId: string, reason: s
       if (!reversed) await client.query(`SELECT post_reversal($1::uuid, $2)`, [current.ledger_transaction_id, note]);
     }
     const updated = await client.query(
-      `UPDATE expenses SET status = 'void' WHERE id = $1 AND org_id = $2 AND status <> 'void'`,
+      `UPDATE expenses SET status = 'void', ticket_id = NULL WHERE id = $1 AND org_id = $2 AND status <> 'void'`,
       [expenseId, session.orgId],
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.expenseVoid");
+    await releaseRepairLink(client, session.orgId, expenseId, current.ticket_id);
   });
+}
+
+/** Drop this row's repair link and point the ticket at another open expense, if that column exists. */
+async function releaseRepairLink(client: Client, orgId: string, expenseId: string, ticketId: string | null) {
+  if (!ticketId) return;
+  const column = await maybe<{ ok: boolean }>(
+    client,
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'maintenance_tickets' AND column_name = 'expense_id'
+     ) AS ok`,
+  );
+  if (!column?.ok) return;
+  const next = await maybe<{ id: string }>(
+    client,
+    `SELECT id::text FROM expenses
+      WHERE org_id = $1 AND ticket_id = $2 AND id <> $3 AND status <> 'void'
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [orgId, ticketId, expenseId],
+  );
+  await client.query(`UPDATE maintenance_tickets SET expense_id = $3::uuid WHERE org_id = $1 AND expense_id = $2`, [
+    orgId,
+    expenseId,
+    next?.id ?? null,
+  ]);
 }
 
 /**

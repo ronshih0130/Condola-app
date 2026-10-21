@@ -107,7 +107,7 @@ export default async function ExpenseDetailPage({
               receiptName: row.receipt_name ?? "",
             }}
           />
-          {editable ? (
+          {editable && !row.on_issued ? (
             <form className="card pad" action={actionVoidExpense} data-testid="expense-void-form" style={{ maxWidth: 640, marginTop: 16 }}>
               <h3>{t("i_expense_void")}</h3>
               <input type="hidden" name="expenseId" value={row.id} />
