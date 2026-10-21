@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useRef, useState } from "react";
 import { errorText } from "@/i18n/errors";
 import { actionCreateProperty } from "@/server/actions";
 import { useLocale, useT } from "./locale";
@@ -55,6 +55,8 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
   const [floor, setFloor] = useState("");
   const [rooms, setRooms] = useState<RoomDraft[]>([{ label: "", type: "", rent: "" }]);
   const [fieldError, setFieldError] = useState("");
+  const [submitReady, setSubmitReady] = useState(true);
+  const armSubmit = useRef<number | null>(null);
 
   const billN = Number(bill);
   const usageN = Number(usage);
@@ -78,7 +80,6 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
     if (!city.trim()) return "i_city";
     if (!street.trim() && !number.trim()) return "i_address";
     if (ownerMode === "new" && !ownerName.trim()) return "s_0c5acea";
-    if (ownerMode === "new" && !ownerPhone.trim()) return "i_phone_label";
     if (throughStep >= 3 && !unitLabel.trim()) return "i_unit_label";
     if (throughStep >= 3 && rentalMode === "by_room") {
       if (!filledRooms.length || filledRooms.some((room) => !room.label.trim())) return "s_8569bc8";
@@ -93,7 +94,13 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
       return;
     }
     setFieldError("");
-    setStep(step + 1);
+    const next = step + 1;
+    if (next === 4) {
+      setSubmitReady(false);
+      if (armSubmit.current) window.clearTimeout(armSubmit.current);
+      armSubmit.current = window.setTimeout(() => setSubmitReady(true), 600);
+    }
+    setStep(next);
   }
 
   const namedField = fieldError || (state.field && (state.error === "errors.required" || state.error === "errors.amount") ? state.field : "");
@@ -120,7 +127,7 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
       }}
       onSubmit={(event) => {
         const submitter = (event.nativeEvent as SubmitEvent).submitter;
-        if (!(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-property") {
+        if (!(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-property" || !submitReady) {
           event.preventDefault();
           return;
         }
@@ -362,7 +369,7 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button className="btn pri" type="submit" data-testid="submit-property" disabled={blocked}>
+          <button className="btn pri" type="submit" data-testid="submit-property" disabled={blocked || !submitReady}>
             {t("s_aed91da")}
           </button>
         )}

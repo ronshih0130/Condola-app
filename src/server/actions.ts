@@ -383,6 +383,13 @@ export async function actionUpdateProperty(formData: FormData) {
       district: text(formData.get("district")),
       street: text(formData.get("street")),
       ownerContactId: text(formData.get("ownerContactId")),
+      electricity: {
+        serial: text(formData.get("meterSerial")),
+        split: text(formData.get("split")),
+        bill: text(formData.get("bill")),
+        usage: text(formData.get("usage")),
+        rate: text(formData.get("rate")),
+      },
     });
     redirect(`/m/properties/${propertyId}`);
   } catch (error) {

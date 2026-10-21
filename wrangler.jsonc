@@ -77,8 +77,7 @@
         }
       ],
       "routes": [
-        { "pattern": "app.condola.app", "custom_domain": true },
-        { "pattern": "condola.app", "custom_domain": true }
+        { "pattern": "app.condola.app", "custom_domain": true }
       ]
     }
   }

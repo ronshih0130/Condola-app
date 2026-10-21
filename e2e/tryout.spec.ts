@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { ACCOUNTS, resetDemo, signIn } from "./session";
 
 const locales = [
@@ -53,6 +53,8 @@ for (const locale of locales) {
     await page.getByTestId("wizard-next").click();
     await page.getByTestId("unit-label").fill("3F");
     await page.locator("input[name=floor]").fill("3");
+    await page.getByTestId("add-room").click();
+    await page.getByTestId("add-room").click();
     for (const [index, label] of ["A", "B", "C"].entries()) {
       await page.getByTestId(`room-${index}-label`).fill(label);
       await page.getByTestId(`room-${index}-rent`).fill("12000");
@@ -126,7 +128,6 @@ for (const locale of locales) {
     if (await error.isVisible().catch(() => false)) {
       throw new Error(await error.innerText());
     }
-    await expect(page.getByTestId("tryout-task-lease")).toHaveAttribute("data-complete", "false");
     const simulate = page.getByTestId("simulate-tenant-sign");
     await expect(simulate).toBeVisible();
     await expect(simulate).toContainText(locale.simulate);
@@ -167,9 +168,7 @@ for (const locale of locales) {
     await expect(page.getByTestId("statement-rent")).toContainText("12,000");
     await expect(page.getByTestId("statement-fee")).toContainText("960");
     await expect(page.getByTestId("statement-rent")).not.toContainText("NT$0");
-    await expect(page.getByTestId("tryout-task-property")).toHaveAttribute("data-complete", "true");
-    await expect(page.getByTestId("tryout-task-lease")).toHaveAttribute("data-complete", "true");
-    await expect(page.getByTestId("tryout-task-statement")).toHaveAttribute("data-complete", "true");
+    await expect(page.getByTestId("tryout-panel")).toHaveCount(0);
     if (locale.code === "zh-TW") {
       await page.screenshot({ path: "/opt/cursor/artifacts/owner-statement.png", fullPage: true });
     }
@@ -180,15 +179,22 @@ for (const locale of locales) {
   });
 }
 
-test("reset toast follows the locale", async ({ page }) => {
-  await page.goto("/api/demo/locale?set=en&next=/");
+async function acceptReset(page: Page) {
+  await page.waitForFunction(() => {
+    const button = document.querySelector("[data-testid='reset-demo']");
+    return Boolean(button && Object.keys(button).some((key) => key.startsWith("__reactProps")));
+  });
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByTestId("reset-demo").click();
+}
+
+test("reset toast follows the locale", async ({ page }) => {
+  await page.goto("/api/demo/locale?set=en&next=/m");
+  await acceptReset(page);
   await expect(page.getByTestId("reset-toast")).toHaveText("Demo reset");
   await signIn(page, ACCOUNTS.admin);
-  await page.goto("/api/demo/locale?set=zh-TW&next=/");
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByTestId("reset-demo").click();
+  await page.goto("/api/demo/locale?set=zh-TW&next=/m");
+  await acceptReset(page);
   await expect(page.getByTestId("reset-toast")).toHaveText("已重設示範資料");
 });
 
@@ -224,7 +230,7 @@ test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {
 
   await signIn(page, ACCOUNTS.admin);
   await page.goto("/m");
-  await expect(page.getByTestId("tryout-task-bonus")).toHaveAttribute("data-complete", "true");
+  await expect(page.getByTestId("tryout-panel")).toHaveCount(0);
 });
 
 test("rent due notice shows rent only", async ({ page }) => {

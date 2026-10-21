@@ -55,16 +55,24 @@ function previewFrom(row: CodeRow | undefined, now: Date): PartnerPreview {
   };
 }
 
+const PARTNER_CODE_SQL = `SELECT code, partner_name, standard_price, pro_price, free_units, trial_months, price_lock_months,
+            max_uses, uses, expires_at, active
+       FROM partner_codes WHERE code = $1`;
+
+/** Same lookup as previewPartnerCode, on a connection the caller already holds. */
+export async function previewPartnerCodeOn(client: Client, raw: string, now = new Date()): Promise<PartnerPreview> {
+  const code = normalizePartnerCode(raw);
+  if (code == null) return { state: "invalid", reason: "format" };
+  if (!code) return { state: "empty" };
+  const row = await client.query<CodeRow>(PARTNER_CODE_SQL, [code]);
+  return previewFrom(row.rows[0], now);
+}
+
 export async function previewPartnerCode(raw: string, now = new Date()): Promise<PartnerPreview> {
   const code = normalizePartnerCode(raw);
   if (code == null) return { state: "invalid", reason: "format" };
   if (!code) return { state: "empty" };
-  const row = await query<CodeRow>(
-    `SELECT code, partner_name, standard_price, pro_price, free_units, trial_months, price_lock_months,
-            max_uses, uses, expires_at, active
-       FROM partner_codes WHERE code = $1`,
-    [code],
-  );
+  const row = await query<CodeRow>(PARTNER_CODE_SQL, [code]);
   return previewFrom(row.rows[0], now);
 }
 

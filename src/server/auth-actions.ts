@@ -38,7 +38,7 @@ import { addExpense, closeMonth, reversePayment } from "./domain";
 import { FlowError } from "./errors";
 import { clearStoredEnvChoice } from "./org-scope";
 import { appCookieOptions, sameAppPath } from "./public-origin";
-import { clearAuthCookies } from "./sign-out";
+import { clearAuthCookies, sessionEntryPath } from "./sign-out";
 import { getSession, readSession } from "./session";
 import type { OrgRole } from "./types";
 
@@ -94,7 +94,7 @@ export async function actionSignIn(formData: FormData) {
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
     clearStoredEnvChoice(jar);
-    redirect(result.destination === "firm" ? "/signup/firm" : next || "/auth/continue");
+    redirect(sessionEntryPath(result.destination === "firm" ? "/signup/firm" : next || "/auth/continue"));
   }
   if ("step" in result) {
     const cookie = challengeCookie(result.challengeId);
@@ -123,7 +123,7 @@ export async function actionLineLogin() {
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
     clearStoredEnvChoice(jar);
-    redirect("/auth/continue");
+    redirect(sessionEntryPath("/auth/continue"));
   }
   if ("step" in result) {
     const cookie = challengeCookie(result.challengeId);
@@ -147,7 +147,7 @@ export async function actionSecondFactor(formData: FormData) {
   jar.delete(CHALLENGE_COOKIE);
   clearStoredEnvChoice(jar);
   if (result.backupCodes?.length) await rememberBackup(result.backupCodes);
-  redirect(result.backupCodes?.length ? "/login?step=backup" : next || "/auth/continue");
+  redirect(sessionEntryPath(result.backupCodes?.length ? "/login?step=backup" : next || "/auth/continue"));
 }
 
 async function requestOrigin() {
@@ -183,7 +183,7 @@ export async function actionAccept(formData: FormData) {
   const cookie = sessionCookie(result.token, true);
   jar.set(cookie.name, cookie.value, cookie.options);
   clearStoredEnvChoice(jar);
-  redirect("/auth/continue");
+  redirect(sessionEntryPath("/auth/continue"));
 }
 
 export async function actionInvite(formData: FormData) {

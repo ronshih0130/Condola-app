@@ -41,7 +41,9 @@ export type EnvChoice = {
  * A firm that has not started live, or while the emergency pause is on, always
  * opens in test mode. A live firm with data, including one whose live_started_at
  * is set, opens in live mode when the cookie is missing. Sign-in clears
- * condola_env first, so an old sandbox cookie cannot hide that firm. An explicit
+ * condola_env first. A host-only sandbox cookie from before Domain=.condola.app
+ * is not the cookie the jar expires, so sign-in also redirects through
+ * /api/auth/enter, which expires every domain variant. An explicit
  * sandbox cookie still opens test mode until the next sign-in. live_started_at
  * counts as live data so go-live without copied rows stays on the live firm.
  */

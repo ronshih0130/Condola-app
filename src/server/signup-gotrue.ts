@@ -2,8 +2,8 @@
 
 const CONFIRM_PATH = "/signup/confirm";
 
-/** Hosts Supabase is allowed to send a confirmation link back to. */
-const CONFIRM_HOSTS = ["staging.condola.app", "app.condola.app", "condola.app"] as const;
+/** Hosts this app serves. condola.app is the marketing site, not an app host. */
+const APP_HOSTS = ["staging.condola.app", "app.condola.app"] as const;
 
 export function parseSupabaseSignup(
   status: number,
@@ -43,10 +43,8 @@ function canonicalConfirmOrigin(value: string): string | null {
   try {
     const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
     const host = url.hostname.toLowerCase();
-    if (url.protocol !== "https:" || !(CONFIRM_HOSTS as readonly string[]).includes(host)) return null;
-    // Production mail uses the allow-listed app host. condola.app serves the same app.
-    if (host === "condola.app" || host === "app.condola.app") return "https://app.condola.app";
-    return "https://staging.condola.app";
+    if (url.protocol !== "https:" || !(APP_HOSTS as readonly string[]).includes(host)) return null;
+    return `https://${host}`;
   } catch {
     return null;
   }
@@ -64,8 +62,9 @@ function loopbackOrigin(value: string): string | null {
 }
 
 /**
- * Allow-listed site origin. A public request origin wins. Otherwise
- * CONDOLA_SITE_URL, then CONDOLA_ENV. Loopback is kept only for local dev.
+ * Allow-listed site origin. An app host on the request wins. A non-app host
+ * (workers.dev, condola.app, anything else) uses CONDOLA_SITE_URL, then
+ * CONDOLA_ENV. Loopback is kept only for local dev.
  */
 export function publicSiteOrigin(requestOrigin: string) {
   const fromRequest = canonicalConfirmOrigin(requestOrigin);

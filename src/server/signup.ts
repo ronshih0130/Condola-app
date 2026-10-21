@@ -1,11 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
+import type { Client } from "pg";
 import { cookies } from "next/headers";
 import { writeAudit } from "./audit";
 import { createSession, normalizeEmail, SESSION_COOKIE, type RequestMeta } from "./auth";
 import { firmDisplayName, normalizePartnerCode } from "./billing";
 import { query, withClient } from "./db";
 import { recordFunnel } from "./funnel";
-import { previewPartnerCode, redeemPartnerCode } from "./partners";
+import { previewPartnerCodeOn, redeemPartnerCode } from "./partners";
 import { normalizePhone } from "./lease-rules";
 import { passwordAcceptable } from "./password";
 import { seedSandboxForNewFirm } from "./sandbox";
@@ -37,14 +38,25 @@ export function signupLinksExposed() {
   return name !== "production" && name !== "staging" && name !== "staging-real";
 }
 
-async function spendPasswordTime(password: string) {
-  await query(`SELECT crypt($1, gen_salt('bf'))`, [password]);
-}
-
 type ExistingUser = { id: string; email_confirmed_at: Date | null; has_firm: boolean; encrypted_password: string | null };
 
-async function findUser(email: string) {
-  const row = await query<ExistingUser>(
+/** One connection and one transaction. Each query() used to open its own socket. */
+async function inTx<T>(fn: (client: Client) => Promise<T>): Promise<T> {
+  return withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const value = await fn(client);
+      await client.query("COMMIT");
+      return value;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
+}
+
+async function findUser(client: Client, email: string) {
+  const row = await client.query<ExistingUser>(
     `SELECT u.id::text AS id, u.email_confirmed_at, u.encrypted_password,
             EXISTS (
               SELECT 1 FROM org_members m
@@ -58,8 +70,8 @@ async function findUser(email: string) {
   return row.rows[0] ?? null;
 }
 
-async function passwordMatches(userId: string, password: string) {
-  const row = await query<{ ok: boolean }>(
+async function passwordMatches(client: Client, userId: string, password: string) {
+  const row = await client.query<{ ok: boolean }>(
     `SELECT encrypted_password IS NOT NULL AND encrypted_password = crypt($2, encrypted_password) AS ok
        FROM auth.users WHERE id = $1`,
     [userId, password],
@@ -67,24 +79,61 @@ async function passwordMatches(userId: string, password: string) {
   return Boolean(row.rows[0]?.ok);
 }
 
-async function rememberDraft(userId: string, partnerCode: string | null) {
-  await query(
-    `INSERT INTO signup_drafts (user_id, partner_code) VALUES ($1, $2)
-     ON CONFLICT (user_id) DO UPDATE SET partner_code = EXCLUDED.partner_code`,
-    [userId, partnerCode],
-  );
+async function draftCode(client: Client, raw: string) {
+  const preview = await previewPartnerCodeOn(client, raw);
+  return preview.state === "valid" ? preview.code : null;
 }
 
-async function issueVerification(userId: string, email: string) {
+/** New confirm token only. Does not send mail and does not touch the partner draft. */
+async function rotateVerification(client: Client, userId: string, email: string) {
   const token = newToken();
-  await query(
-    `UPDATE signup_verifications SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`,
-    [userId],
-  );
-  await query(
-    `INSERT INTO signup_verifications (user_id, email, token_hash, expires_at)
-     VALUES ($1, $2, $3, now() + make_interval(hours => $4))`,
+  await client.query(
+    `WITH closed AS (
+       UPDATE signup_verifications SET used_at = now() WHERE user_id = $1 AND used_at IS NULL
+       RETURNING id
+     )
+     INSERT INTO signup_verifications (user_id, email, token_hash, expires_at)
+     SELECT $1, $2, $3, now() + make_interval(hours => $4::int)
+      WHERE (SELECT count(*) FROM closed) >= 0`,
     [userId, email, sha256(token), VERIFY_HOURS],
+  );
+  return token;
+}
+
+/**
+ * Profile, funnel row, partner draft, and the confirm token. One statement.
+ * Does not send mail. GoTrue already did that on the signup call.
+ */
+async function finishUnconfirmed(client: Client, userId: string, email: string, partnerCode: string | null) {
+  const token = newToken();
+  await client.query(
+    `WITH profile AS (
+       INSERT INTO profiles (id, display_name, email, locale)
+       VALUES ($1, $2, $3, 'zh-TW')
+       ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email
+       RETURNING id
+     ), funnel AS (
+       INSERT INTO funnel_events (event_type, user_id, email, detail)
+       SELECT 'signup_started', $1::uuid, $3, '{}'::jsonb
+        WHERE NOT EXISTS (
+          SELECT 1 FROM funnel_events WHERE event_type = 'signup_started' AND user_id = $1::uuid
+        )
+       RETURNING id
+     ), draft AS (
+       INSERT INTO signup_drafts (user_id, partner_code) VALUES ($1, $4)
+       ON CONFLICT (user_id) DO UPDATE SET partner_code = EXCLUDED.partner_code
+       RETURNING user_id
+     ), closed AS (
+       UPDATE signup_verifications SET used_at = now() WHERE user_id = $1 AND used_at IS NULL
+       RETURNING id
+     )
+     INSERT INTO signup_verifications (user_id, email, token_hash, expires_at)
+     SELECT $1, $3, $5, now() + make_interval(hours => $6::int)
+      WHERE (SELECT count(*) FROM profile)
+          + (SELECT count(*) FROM funnel)
+          + (SELECT count(*) FROM draft)
+          + (SELECT count(*) FROM closed) >= 0`,
+    [userId, email.split("@")[0], email, partnerCode, sha256(token), VERIFY_HOURS],
   );
   return token;
 }
@@ -115,44 +164,24 @@ async function supabaseResend(email: string, requestOrigin: string) {
   });
 }
 
-/** Profile and the first funnel row. Safe to call again for an unconfirmed account. */
-async function ensureSignupStarted(userId: string, email: string) {
-  await query(
-    `INSERT INTO profiles (id, display_name, email, locale)
-     VALUES ($1, $2, $3, 'zh-TW')
-     ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
-    [userId, email.split("@")[0], email],
-  );
-  await query(
-    `INSERT INTO funnel_events (event_type, user_id, email, detail)
-     SELECT 'signup_started', $1::uuid, $2, '{}'::jsonb
-      WHERE NOT EXISTS (
-        SELECT 1 FROM funnel_events WHERE event_type = 'signup_started' AND user_id = $1::uuid
-      )`,
-    [userId, email],
-  );
-}
-
 async function markConfirmed(userId: string, email: string) {
-  const updated = await query(
-    `UPDATE auth.users SET email_confirmed_at = now(), updated_at = now()
-      WHERE id = $1 AND email_confirmed_at IS NULL`,
-    [userId],
-  );
-  if (updated.rowCount === 1) {
-    await recordFunnel("email_confirmed", { userId, email });
-    await writeAudit(null, userId, "email_confirmed", { email });
-    return;
-  }
-  const prior = await query(`SELECT 1 FROM funnel_events WHERE event_type = 'email_confirmed' AND user_id = $1 LIMIT 1`, [userId]);
-  if (!prior.rows[0]) await recordFunnel("email_confirmed", { userId, email });
-}
-
-async function storeCode(raw: string) {
-  const code = normalizePartnerCode(raw);
-  if (!code) return null;
-  const preview = await previewPartnerCode(code);
-  return preview.state === "valid" ? preview.code : null;
+  await inTx(async (client) => {
+    const updated = await client.query(
+      `UPDATE auth.users SET email_confirmed_at = now(), updated_at = now()
+        WHERE id = $1 AND email_confirmed_at IS NULL`,
+      [userId],
+    );
+    if (updated.rowCount === 1) {
+      await recordFunnel("email_confirmed", { userId, email }, client);
+      await writeAudit(null, userId, "email_confirmed", { email }, client);
+      return;
+    }
+    const prior = await client.query(
+      `SELECT 1 FROM funnel_events WHERE event_type = 'email_confirmed' AND user_id = $1 LIMIT 1`,
+      [userId],
+    );
+    if (!prior.rows[0]) await recordFunnel("email_confirmed", { userId, email }, client);
+  });
 }
 
 export async function startSignup(input: {
@@ -168,27 +197,32 @@ export async function startSignup(input: {
   | { ok: false; error: SignupError }
 > {
   const email = normalizeEmail(input.email);
-  if (!email) {
-    await spendPasswordTime(input.password || "placeholder");
-    return { ok: false, error: "email" };
-  }
-  if (input.password !== input.confirm) {
-    await spendPasswordTime(input.password || "placeholder");
-    return { ok: false, error: "mismatch" };
-  }
-  if (!passwordAcceptable(input.password)) {
-    await spendPasswordTime(input.password);
-    return { ok: false, error: "weak" };
-  }
-  await spendPasswordTime(input.password);
-  const existing = await findUser(email);
-  const draftCode = await storeCode(input.partnerCode);
+  const looked = await inTx(async (client) => {
+    await client.query(`SELECT crypt($1, gen_salt('bf'))`, [input.password || "placeholder"]);
+    if (!email) return { kind: "email" as const };
+    if (input.password !== input.confirm) return { kind: "mismatch" as const };
+    if (!passwordAcceptable(input.password)) return { kind: "weak" as const };
+    const existing = await findUser(client, email);
+    const code = await draftCode(client, input.partnerCode);
+    if (!existing) return { kind: "new" as const, code };
+    const matches = await passwordMatches(client, existing.id, input.password);
+    return { kind: "existing" as const, existing, matches, code };
+  });
+  if (looked.kind === "email" || !email) return { ok: false, error: "email" };
+  if (looked.kind === "mismatch") return { ok: false, error: "mismatch" };
+  if (looked.kind === "weak") return { ok: false, error: "weak" };
 
-  if (existing) {
-    const matches = await passwordMatches(existing.id, input.password);
+  if (looked.kind === "existing") {
+    const { existing, matches, code } = looked;
     if (existing.has_firm || existing.email_confirmed_at) {
       if (existing.email_confirmed_at && matches && !existing.has_firm) {
-        await rememberDraft(existing.id, draftCode);
+        await inTx((client) =>
+          client.query(
+            `INSERT INTO signup_drafts (user_id, partner_code) VALUES ($1, $2)
+             ON CONFLICT (user_id) DO UPDATE SET partner_code = EXCLUDED.partner_code`,
+            [existing.id, code],
+          ),
+        );
         const token = await createSession(existing.id, true, input.meta);
         return { ok: true, status: "firm", token };
       }
@@ -196,9 +230,7 @@ export async function startSignup(input: {
     }
     // Leave auth.users alone. An admin password update clears confirmation_token and
     // confirmation_sent_at, which expires the link already in the inbox, and this path does not send a new email.
-    await rememberDraft(existing.id, draftCode);
-    await ensureSignupStarted(existing.id, email);
-    const token = await issueVerification(existing.id, email);
+    const token = await inTx((client) => finishUnconfirmed(client, existing.id, email, code));
     return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
   }
 
@@ -207,65 +239,75 @@ export async function startSignup(input: {
   if (remote === "unavailable") return { ok: false, error: "required" };
   let userId = remote?.id ?? "";
   const confirmed = remote?.confirmed ?? false;
-  if (!remote) {
-    try {
-      const inserted = await query<{ id: string }>(
+  const saved = await inTx(async (client) => {
+    if (!remote) {
+      const inserted = await client.query<{ id: string }>(
         `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
          VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
          RETURNING id::text`,
         [email, input.password],
       );
       userId = inserted.rows[0].id;
-    } catch (error) {
-      const code = typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
-      if (code === "23505") return { ok: false, error: "duplicate" };
-      throw error;
     }
-  }
-  await ensureSignupStarted(userId, email);
-  await rememberDraft(userId, draftCode);
+    const token = await finishUnconfirmed(client, userId, email, looked.code);
+    return token;
+  }).catch((error: unknown) => {
+    const code = typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
+    if (code === "23505") return "duplicate" as const;
+    throw error;
+  });
+  if (saved === "duplicate") return { ok: false, error: "duplicate" };
   if (confirmed) {
     await markConfirmed(userId, email);
     const token = await createSession(userId, true, input.meta);
     return { ok: true, status: "firm", token };
   }
-  const token = await issueVerification(userId, email);
-  return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
+  return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null };
 }
 
 export async function resendSignup(emailRaw: string, origin: string) {
   const email = normalizeEmail(emailRaw);
   if (!email) return { devToken: null as string | null };
-  const existing = await findUser(email);
-  if (!existing || existing.email_confirmed_at || existing.has_firm) return { devToken: null as string | null };
-  const token = await issueVerification(existing.id, email);
+  const sent = await inTx(async (client) => {
+    const existing = await findUser(client, email);
+    if (!existing || existing.email_confirmed_at || existing.has_firm) return null;
+    return rotateVerification(client, existing.id, email);
+  });
+  if (!sent) return { devToken: null as string | null };
   await supabaseResend(email, origin);
-  return { devToken: signupLinksExposed() ? token : null };
+  return { devToken: signupLinksExposed() ? sent : null };
 }
 
 export async function changeSignupEmail(input: { currentEmail: string; password: string; nextEmail: string; origin: string }) {
   const current = normalizeEmail(input.currentEmail);
   const next = normalizeEmail(input.nextEmail);
   if (!current || !next) return { ok: false as const, error: "email" as const };
-  await spendPasswordTime(input.password);
-  const existing = await findUser(current);
-  if (!existing || existing.email_confirmed_at || existing.has_firm) return { ok: false as const, error: "duplicate" as const };
-  if (!(await passwordMatches(existing.id, input.password))) return { ok: false as const, error: "duplicate" as const };
-  const taken = await findUser(next);
-  if (taken && taken.id !== existing.id) return { ok: false as const, error: "duplicate" as const };
+  const checked = await inTx(async (client) => {
+    await client.query(`SELECT crypt($1, gen_salt('bf'))`, [input.password || "placeholder"]);
+    const existing = await findUser(client, current);
+    if (!existing || existing.email_confirmed_at || existing.has_firm) return { ok: false as const, error: "duplicate" as const };
+    if (!(await passwordMatches(client, existing.id, input.password))) return { ok: false as const, error: "duplicate" as const };
+    const taken = await findUser(client, next);
+    if (taken && taken.id !== existing.id) return { ok: false as const, error: "duplicate" as const };
+    return { ok: true as const, id: existing.id };
+  });
+  if (!checked.ok) return checked;
   const { url, service } = supabaseAuth();
   if (url && service) {
-    const response = await fetch(`${url}/auth/v1/admin/users/${existing.id}`, {
+    const response = await fetch(`${url}/auth/v1/admin/users/${checked.id}`, {
       method: "PUT",
       headers: { apikey: service, Authorization: `Bearer ${service}`, "Content-Type": "application/json" },
       body: JSON.stringify({ email: next, email_confirm: false }),
     });
     if (!response.ok) return { ok: false as const, error: "required" as const };
-  } else {
-    await query(`UPDATE auth.users SET email = $2, email_confirmed_at = NULL, updated_at = now() WHERE id = $1`, [existing.id, next]);
   }
-  await query(`UPDATE profiles SET email = $2 WHERE id = $1`, [existing.id, next]);
-  const token = await issueVerification(existing.id, next);
+  const token = await inTx(async (client) => {
+    if (!url || !service) {
+      await client.query(`UPDATE auth.users SET email = $2, email_confirmed_at = NULL, updated_at = now() WHERE id = $1`, [checked.id, next]);
+    }
+    await client.query(`UPDATE profiles SET email = $2 WHERE id = $1`, [checked.id, next]);
+    return rotateVerification(client, checked.id, next);
+  });
   await supabaseResend(next, input.origin);
   return { ok: true as const, email: next, devToken: signupLinksExposed() ? token : null };
 }
@@ -407,28 +449,27 @@ export async function createFirm(input: {
       if (usableCode) redeemed = await redeemPartnerCode(client, { orgId, code: usableCode, where: "signup" });
       await client.query(`DELETE FROM signup_drafts WHERE user_id = $1`, [input.userId]);
       const sandboxId = await seedSandboxForNewFirm(client, orgId, input.userId);
+      await writeAudit(orgId, input.userId, "firm_created", {
+        kind,
+        name: firmName,
+        dupName: Boolean(dup.rows[0]),
+        code: redeemed && !redeemed.already ? redeemed.code : null,
+      }, client);
+      if (redeemed && !redeemed.already) {
+        await writeAudit(orgId, input.userId, "code_redeemed", { code: redeemed.code, where: "signup" }, client);
+      }
+      await recordFunnel("firm_created", {
+        userId: input.userId,
+        orgId,
+        email: input.email,
+        detail: { kind, dupName: Boolean(dup.rows[0]) },
+      }, client);
       await client.query("COMMIT");
       return { orgId, sandboxId, firmName, dupName: Boolean(dup.rows[0]), redeemed, requestedCode: input.partnerCode.trim() || null };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
     }
-  });
-
-  await writeAudit(created.orgId, input.userId, "firm_created", {
-    kind,
-    name: created.firmName,
-    dupName: created.dupName,
-    code: created.redeemed && !created.redeemed.already ? created.redeemed.code : null,
-  });
-  if (created.redeemed && !created.redeemed.already) {
-    await writeAudit(created.orgId, input.userId, "code_redeemed", { code: created.redeemed.code, where: "signup" });
-  }
-  await recordFunnel("firm_created", {
-    userId: input.userId,
-    orgId: created.orgId,
-    email: input.email,
-    detail: { kind, dupName: created.dupName },
   });
 
   const codeApplied = Boolean(created.redeemed && !created.redeemed.already);
