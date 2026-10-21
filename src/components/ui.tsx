@@ -92,3 +92,34 @@ export function statusClass(status: string) {
   if (status === "open") return "warn";
   return "";
 }
+
+const EXPENSE_CATEGORY_KEYS: Record<string, string> = {
+  repair: "i_exp_cat_repair",
+  cleaning: "i_exp_cat_cleaning",
+  utility: "i_exp_cat_utility",
+  tax: "i_exp_cat_tax",
+  insurance: "i_exp_cat_insurance",
+  other: "i_exp_cat_other",
+};
+
+export function expenseCategoryKey(category: string) {
+  return EXPENSE_CATEGORY_KEYS[category] ?? "";
+}
+
+export function expenseStatusKey(status: string) {
+  const map: Record<string, string> = {
+    draft: "i_exp_st_draft",
+    submitted: "i_exp_st_submitted",
+    approved: "i_exp_st_approved",
+    rejected: "i_exp_st_rejected",
+    posted: "i_exp_st_posted",
+    void: "i_exp_st_void",
+  };
+  return map[status] ?? "i_status";
+}
+
+export function expenseStatusClass(status: string) {
+  if (status === "approved" || status === "posted") return "ok";
+  if (status === "void" || status === "rejected") return "bad";
+  return "warn";
+}
