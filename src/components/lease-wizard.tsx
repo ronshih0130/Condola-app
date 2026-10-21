@@ -2,9 +2,10 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "@/i18n/errors";
+import { confirmDeposit, confirmSpace, formatMajor } from "@/lease-confirm";
 import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
-import { activeTenantPick, filterTenants, type TenantOption } from "@/tenant-pick";
+import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
 import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
@@ -57,6 +58,8 @@ export function LeaseWizard({
   const [tenantContactId, setTenantContactId] = useState("");
   const [tenantQuery, setTenantQuery] = useState("");
   const [tenant, setTenant] = useState("");
+  const [tenantEmail, setTenantEmail] = useState("");
+  const [duplicateTenant, setDuplicateTenant] = useState<TenantOption | null>(null);
   const [phone, setPhone] = useState("");
   const [lineId, setLineId] = useState("");
   const [rent, setRent] = useState("");
@@ -120,9 +123,30 @@ export function LeaseWizard({
     setPhone("");
     setLineId("");
     setTenantQuery("");
+    setTenantEmail("");
+    setDuplicateTenant(null);
     setTenantError(false);
     setPhoneError(false);
     setTenantPickError(false);
+  }
+
+  function adoptTenant(match: TenantOption) {
+    setTenantMode("existing");
+    setTenantContactId(match.id);
+    setTenant(match.name);
+    setPhone(match.phone ?? "");
+    setLineId("");
+    setTenantQuery(match.name);
+    setTenantEmail("");
+    setDuplicateTenant(null);
+    setTenantError(false);
+    setPhoneError(false);
+    setTenantPickError(false);
+  }
+
+  function noteTenantEmail(value: string) {
+    setTenantEmail(value);
+    setDuplicateTenant(tenantByEmail(tenants, value));
   }
 
   function chooseExistingTenant() {
@@ -143,9 +167,11 @@ export function LeaseWizard({
       } else {
         const nameBad = tenant.trim() === "";
         const phoneBad = phone.trim() === "";
+        const duplicate = tenantByEmail(tenants, tenantEmail);
         setTenantError(nameBad);
         setPhoneError(phoneBad);
-        if (nameBad || phoneBad) return;
+        setDuplicateTenant(duplicate);
+        if (nameBad || phoneBad || duplicate) return;
       }
     }
     if (step === 3 && !amountOk(rent)) {
@@ -248,7 +274,15 @@ export function LeaseWizard({
         <div className="card pad" style={{ maxWidth: 760 }}>
           {rooms.length === 0 ? <div className="alert warn">{t("i_empty")}</div> : null}
           <label className="f">{t("s_8569bc8")}</label>
-          <select className="inp" data-testid="lease-room" value={roomId} onChange={(event) => setRoomId(event.target.value)}>
+          <select
+            className="inp"
+            data-testid="lease-room"
+            value={roomId}
+            onChange={(event) => setRoomId(event.currentTarget.value)}
+            onBlur={(event) => {
+              if (event.currentTarget.value) setRoomId(event.currentTarget.value);
+            }}
+          >
             <option value="">{t("i_choose")}</option>
             {rooms.map((item) => (
               <option key={item.id} value={item.id}>
@@ -340,7 +374,23 @@ export function LeaseWizard({
               </div>
               <div className="fg">
                 <label className="f">{t("i_email_label")}</label>
-                <input className="inp" name="tenantEmail" placeholder={t("i_ph_email")} defaultValue="" />
+                <input
+                  className="inp"
+                  name="tenantEmail"
+                  data-testid="tenant-email"
+                  placeholder={t("i_ph_email")}
+                  value={tenantEmail}
+                  onChange={(event) => noteTenantEmail(event.target.value)}
+                  onBlur={(event) => setDuplicateTenant(tenantByEmail(tenants, event.target.value))}
+                />
+                {duplicateTenant ? (
+                  <div className="alert bad" data-testid="tenant-email-exists" style={{ marginTop: 8 }}>
+                    <p>{t("i_tenant_exists")}</p>
+                    <button className="btn" type="button" data-testid="tenant-use-existing" onClick={() => adoptTenant(duplicateTenant)}>
+                      {t("i_tenant_use_existing")}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </>
           )}
@@ -514,17 +564,23 @@ export function LeaseWizard({
           <p>{t("i_confirm_lease")}</p>
           <table className="t">
             <tbody>
+              {room ? (
+                <tr>
+                  <td>{t("i_space")}</td>
+                  <td data-testid="lease-confirm-space">{confirmSpace(room)}</td>
+                </tr>
+              ) : null}
               <tr>
                 <td>{t("s_74f19b0")}</td>
                 <td data-testid="lease-confirm-tenant">{tenant}</td>
               </tr>
               <tr>
                 <td>{t("i_rent_label")}</td>
-                <td>{rent}</td>
+                <td data-testid="lease-confirm-rent">{formatMajor(Number(rent), currency, locale)}</td>
               </tr>
               <tr>
                 <td>{t("i_deposit_label")}</td>
-                <td>{depositMonths}</td>
+                <td data-testid="lease-confirm-deposit">{confirmDeposit(depositMonths, rent, currency, locale)}</td>
               </tr>
               <tr>
                 <td>{t("i_rate")}</td>

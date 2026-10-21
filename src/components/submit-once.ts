@@ -13,3 +13,15 @@ export function claimFormSubmit(guard: { current: boolean }) {
 export function releaseFormSubmit(guard: { current: boolean }) {
   guard.current = false;
 }
+
+/**
+ * Enter commits a select, a textarea newline, and the real submit button.
+ * Cancelling it on a select drops the first unit choice, so 下一步 stays disabled.
+ */
+export function enterCommitsControl(target: unknown) {
+  if (!target || typeof target !== "object" || !("tagName" in target)) return false;
+  const tag = String((target as { tagName?: string }).tagName || "").toUpperCase();
+  if (tag === "TEXTAREA" || tag === "SELECT" || tag === "OPTION") return true;
+  if (tag === "BUTTON") return (target as { type?: string }).type === "submit";
+  return false;
+}

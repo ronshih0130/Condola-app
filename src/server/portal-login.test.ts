@@ -16,6 +16,10 @@ test("a sandbox firm or a taken email mints a new portal login", () => {
     portalLoginEmail({ environment: "live", contactEmail: "free@example.com", emailTaken: false }),
     "free@example.com",
   );
+  assert.equal(
+    portalLoginEmail({ environment: "live", contactEmail: "  Free@Example.com ", emailTaken: false }),
+    "free@example.com",
+  );
 });
 
 test("only an auth email collision counts as a taken login", () => {

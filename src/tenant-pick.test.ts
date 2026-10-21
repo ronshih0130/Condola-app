@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activeTenantPick, filterTenants, type TenantOption } from "./tenant-pick";
+import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "./tenant-pick";
 
 const tenants: TenantOption[] = [
   { id: "1", name: "王小美", phone: "+886912111002", email: "xiaomei.wang@tenant.demo" },
@@ -23,4 +23,11 @@ test("a pick is kept only while that tenant is still in the filtered list", () =
   assert.equal(activeTenantPick("1", filterTenants(tenants, "沒有這個人")), "");
   assert.equal(activeTenantPick("", filterTenants(tenants, "")), "");
   assert.equal(activeTenantPick("1", filterTenants(tenants, "")), "1");
+});
+
+test("a duplicate tenant email matches ignoring case", () => {
+  assert.equal(tenantByEmail(tenants, "  Xiaomei.Wang@tenant.demo ")?.id, "1");
+  assert.equal(tenantByEmail(tenants, "nobody@example.com"), null);
+  assert.equal(tenantByEmail(tenants, "小美"), null);
+  assert.equal(tenantByEmail(tenants, ""), null);
 });

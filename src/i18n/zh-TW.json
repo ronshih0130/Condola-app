@@ -1619,5 +1619,7 @@
  "i_photo_type": "只接受 JPG、PNG 或 WEBP。",
  "i_photo_storage": "目前無法儲存照片。儲存空間無法使用，檔案沒有寫入。",
  "i_photo_limit": "每筆報修最多 8 張照片。",
- "i_date_invalid": "請輸入有效的日期。"
+ "i_date_invalid": "請輸入有效的日期。",
+ "i_tenant_use_existing": "改選這位租客",
+ "i_lease_count": "租約"
 }

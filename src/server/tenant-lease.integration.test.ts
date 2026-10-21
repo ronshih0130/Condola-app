@@ -7,7 +7,7 @@ import { createProperty } from "./domain";
 import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { createLeaseFromForm } from "./lease-form";
-import { listTenants } from "./queries";
+import { listTenants, searchTenants } from "./queries";
 import { ensureSandbox } from "./sandbox";
 import type { Session } from "./types";
 
@@ -148,6 +148,12 @@ test("picking an existing 租客 reuses that contact and portal user inside the 
     );
     assert.equal(copies.rows[0]?.contacts, "1");
     assert.equal(copies.rows[0]?.users, "1");
+    const listed = await searchTenants(admin, { q: "可再用租客" });
+    const summary = listed.rows.filter((row) => row.contact_id === contactId);
+    assert.equal(summary.length, 1);
+    assert.equal(Number(summary[0]?.lease_count), 2);
+    assert.equal(summary[0]?.tenant, "可再用租客");
+    assert.equal(summary[0]?.id, again.leaseId);
 
     await assert.rejects(
       () =>
@@ -423,6 +429,48 @@ test("a taken or sandbox email gets a new portal login, and an archived contact 
       [takenEmail],
     );
     assert.equal(holders.rows[0]?.n, "1");
+
+    const mixedAuth = `Mixed.Case.${stamp}@example.com`;
+    const mixedContact = `mixed.case.${stamp}@example.com`;
+    const mixedUserId = randomUUID();
+    userIds.push(mixedUserId);
+    await query(
+      `INSERT INTO auth.users (id, aud, role, email, raw_app_meta_data, raw_user_meta_data)
+       VALUES ($1, 'authenticated', 'authenticated', $2, '{}'::jsonb, '{}'::jsonb)`,
+      [mixedUserId, mixedAuth],
+    );
+    const mixed = await query<{ id: string }>(
+      `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, phone_e164, locale)
+       VALUES ($1, NULL, true, '大小寫不同', $2, '+886912000337', 'zh-TW')
+       RETURNING id::text`,
+      [ORG_ID, mixedContact],
+    );
+    const mixedId = mixed.rows[0]?.id ?? "";
+    const mixedLease = await createLeaseFromForm(
+      admin,
+      form({
+        ...base,
+        roomId: rooms.roomIds[1],
+        tenantMode: mixedId,
+        tenantName: "",
+        tenantPhone: "",
+        tenantEmail: "",
+      }),
+    );
+    userIds.push(mixedLease.tenantUserId);
+    assert.notEqual(mixedLease.tenantUserId, mixedUserId);
+    assert.notEqual(mixedLease.tenantUserId, existingUserId);
+    const mixedRow = await query<{ contact_email: string; auth_email: string; n: string }>(
+      `SELECT c.email::text AS contact_email, u.email AS auth_email,
+              (SELECT count(*)::text FROM auth.users WHERE lower(email) = lower($2)) AS n
+         FROM contacts c
+         JOIN auth.users u ON u.id = c.user_id
+        WHERE c.id = $1`,
+      [mixedId, mixedAuth],
+    );
+    assert.equal(mixedRow.rows[0]?.contact_email, mixedContact);
+    assert.match(mixedRow.rows[0]?.auth_email ?? "", /^portal-.+@demo\.condola\.local$/);
+    assert.equal(mixedRow.rows[0]?.n, "1");
 
     const sandboxId = await ensureSandbox(admin);
     const sandbox: Session = {
