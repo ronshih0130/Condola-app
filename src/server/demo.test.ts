@@ -154,10 +154,11 @@ test("demo LINE copy is live-hidden and shown for DEMO_MODE or a sandbox firm", 
   const tenant = readFileSync(new URL("../app/t/layout.tsx", import.meta.url), "utf8");
   const notify = readFileSync(new URL("../app/m/notify/page.tsx", import.meta.url), "utf8");
   const account = readFileSync(new URL("../app/m/account/page.tsx", import.meta.url), "utf8");
+  const settings = readFileSync(new URL("../app/m/settings/page.tsx", import.meta.url), "utf8");
   const login = readFileSync(new URL("../app/login/page.tsx", import.meta.url), "utf8");
-  for (const source of [tenant, account]) {
-    assert.match(source, /showDemoLineCopy\(session\.environment\)/);
-  }
+  assert.match(tenant, /showDemoLineCopy\(session\.environment\)/);
+  assert.doesNotMatch(account, /showDemoLineCopy|LINE/);
+  assert.doesNotMatch(settings, /LINE/);
   assert.match(login, /showDemoLineCopy\(null\)/);
   assert.match(notify, /i_notify_empty/);
   assert.doesNotMatch(notify, /i_line_stub/);
@@ -262,7 +263,9 @@ test("live screens do not render LINE product copy, including the app footer", (
   assert.equal((login.match(/data-testid="line-login"/g) ?? []).length, 1);
   assert.doesNotMatch(login, /disabled[^>\n]*line-login|line-login"[^>\n]*disabled/);
   const account = readFileSync(new URL("../app/m/account/page.tsx", import.meta.url), "utf8");
-  assert.match(account, /showDemoLineCopy\(session\.environment\)/);
+  const settings = readFileSync(new URL("../app/m/settings/page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(account, /LINE/);
+  assert.doesNotMatch(settings, /LINE/);
   const accept = readFileSync(new URL("../app/accept/[token]/page.tsx", import.meta.url), "utf8");
   assert.match(accept, /showDemoLineCopy\(null\) && lineLoginEnabled\(\)/);
   const walk = readFileSync(new URL("../app/walk/page.tsx", import.meta.url), "utf8");

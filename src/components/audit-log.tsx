@@ -5,12 +5,6 @@ import { showDemoLineCopy } from "@/server/demo";
 import { displaySampleName } from "@/sample-name";
 import { getSession } from "@/server/session";
 
-function lineSafeKey(key: string) {
-  if (key === "i_audit_ev_line_sign_in") return "i_audit_ev_sign_in";
-  if (key === "i_audit_rec_line") return "i_audit_rec_other";
-  return key;
-}
-
 export function AuditRows({ entries, t, testId }: { entries: AuditView[]; t: T; testId: string; demoLine?: boolean }) {
   return (
     <table className="t rf" data-testid={testId}>
@@ -25,12 +19,12 @@ export function AuditRows({ entries, t, testId }: { entries: AuditView[]; t: T; 
       <tbody>
         {entries.map((entry) => {
           const recordText = entry.recordText ? displaySampleName(entry.recordText) : "";
-          const record = `${t(lineSafeKey(entry.recordKey))}${recordText ? ` ${recordText}` : ""}${entry.found ? "" : ` ${t("i_audit_deleted")}`}`;
+          const record = `${t(entry.recordKey)}${recordText ? ` ${recordText}` : ""}${entry.found ? "" : ` ${t("i_audit_deleted")}`}`;
           return (
             <tr key={entry.cursor} data-testid="audit-row">
               <td>{entry.who || (entry.whoKey ? t(entry.whoKey) : "")}</td>
               <td>
-                <div>{t(lineSafeKey(entry.actionKey))}</div>
+                <div>{t(entry.actionKey)}</div>
                 {entry.fields.length ? <div className="small muted">{entry.fields.map((key) => t(key)).join(t("i_list_sep"))}</div> : null}
                 {entry.other ? <div className="small muted">{t("i_audit_f_other")}</div> : null}
                 {entry.masked ? <div className="small muted">{t("i_audit_masked")}</div> : null}

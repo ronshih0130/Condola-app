@@ -78,10 +78,12 @@ export default async function DashboardPage({
           <div style={{ textAlign: "center", marginTop: 16 }}>
             <Link className="btn pri" href="/m/properties/new" data-testid="dash-first-property">
               {t("i_dash_first")}
-            </Link>{" "}
-            <a className="btn" href="/api/env?set=sandbox&next=/m" data-testid="dash-sample">
-              {t("i_dash_sample")}
-            </a>
+            </Link>
+            <p className="small">
+              <a href="/api/env?set=sandbox&next=/m" data-testid="dash-sample">
+                {t("i_dash_sample")}
+              </a>
+            </p>
             <p className="hint" data-testid="dash-free">{t("i_dash_free")}</p>
             <p className="hint">
               <Link href="/m/import" data-testid="dash-import">

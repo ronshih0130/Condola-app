@@ -21,6 +21,8 @@ test("live mode hides demo LINE copy and sandbox shows it", async ({ page }) => 
   await expect(page.getByTestId("line-demo-note")).toHaveCount(0);
   await expect(page.getByTestId("line-link")).toHaveCount(0);
   await expect(page.locator(".main")).not.toContainText("LINE");
+  await page.goto("/m/settings");
+  await expect(page.locator(".main")).not.toContainText("LINE");
 
   await page.goto("/m/leases/new");
   await expect(page.getByTestId("tenant-line")).toHaveCount(0);
@@ -39,8 +41,11 @@ test("live mode hides demo LINE copy and sandbox shows it", async ({ page }) => 
   await expect(page.locator(".main")).not.toContainText("開始正式使用");
 
   await page.goto("/m/account");
-  await expect(page.getByTestId("line-demo-note")).toHaveText(DEMO);
-  await expect(page.getByTestId("line-link")).toBeVisible();
+  await expect(page.getByTestId("line-demo-note")).toHaveCount(0);
+  await expect(page.getByTestId("line-link")).toHaveCount(0);
+  await expect(page.locator(".main")).not.toContainText("LINE");
+  await page.goto("/m/settings");
+  await expect(page.locator(".main")).not.toContainText("LINE");
   await page.goto("/m/leases/new");
   await expect(page.getByTestId("tenant-line")).toHaveCount(1);
 

@@ -99,6 +99,78 @@ test("sandbox chrome uses the sample company, the amber banner, and a native swi
   assert.doesNotMatch(banner, /function EnvSwitch|env-switch/);
 });
 
+test("login, an empty live company, the sidebar, and audit use the live-company wording", () => {
+  const zh = JSON.parse(read(join(root, "src/i18n/zh-TW.json"))) as Record<string, string>;
+  assert.equal(zh.i_dash_first, "新增第一個物件");
+  assert.equal(zh.i_dash_sample, "先看看範例公司");
+  assert.equal(zh.i_login_invite_lead, "還沒有帳號？");
+  assert.equal(zh.i_login_signup, "免費註冊");
+  assert.equal(zh.i_login_invite_tail, "（前 4 戶永遠免費，可先看範例公司）");
+  assert.equal(`${zh.i_login_invite_lead}${zh.i_login_signup}${zh.i_login_invite_tail}`, "還沒有帳號？免費註冊（前 4 戶永遠免費，可先看範例公司）");
+  assert.equal(zh.i_nav_inbox, "繳款紀錄");
+  assert.equal(zh.i_audit_ev_line_sign_in, "租客登入");
+  assert.equal(zh.i_audit_rec_line, "邀請連結");
+  assert.equal(zh.i_sandbox_suffix, "（範例）");
+  const dash = read(join(root, "src/app/m/page.tsx"));
+  assert.match(dash, /session\.environment === "live" && data\.properties\.length === 0/);
+  assert.match(dash, /data-testid="dash-first-property"/);
+  assert.match(dash, /i_dash_step1/);
+  assert.match(dash, /i_dash_step2/);
+  assert.match(dash, /i_dash_step3/);
+  assert.match(dash, /<p className="small">\s*<a href="\/api\/env\?set=sandbox&next=\/m" data-testid="dash-sample">/);
+  assert.doesNotMatch(dash, /className="btn"[^"]*" data-testid="dash-sample"/);
+  const login = read(join(root, "src/app/login/page.tsx"));
+  assert.match(login, /href="\/signup" data-testid="login-signup"/);
+  assert.doesNotMatch(login, /先在測試模式試用全部功能/);
+  const banner = read(join(root, "src/components/env-mode.tsx"));
+  assert.doesNotMatch(banner, /🧪|測試模式|示範/);
+  assert.match(banner, /i_sandbox_banner/);
+  const audit = read(join(root, "src/app/m/audit/page.tsx"));
+  assert.match(audit, /event !== "go_live"/);
+  assert.doesNotMatch(audit, /line_sign_in|line_account_links/);
+  const signIn = read(join(root, "src/server/auth-actions.ts"));
+  assert.match(signIn, /clearStoredEnvChoice\(jar\)/);
+  const surfaces = [
+    "src/app/m/account/page.tsx",
+    "src/app/m/settings/page.tsx",
+    "src/app/m/audit/page.tsx",
+    "src/components/audit-log.tsx",
+    "src/components/env-mode.tsx",
+    "src/components/chrome.tsx",
+  ];
+  const renderedKeys = [
+    "i_footer",
+    "i_login_footer",
+    "i_price_footer",
+    "i_nav_inbox",
+    "i_audit_ev_line_sign_in",
+    "i_audit_rec_line",
+    "i_dash_first",
+    "i_dash_sample",
+    "i_login_invite",
+    "i_login_invite_lead",
+    "i_login_signup",
+    "i_login_invite_tail",
+    "i_sandbox_banner",
+    "i_sandbox_suffix",
+    "i_sandbox_plan",
+    "i_rules_note",
+  ];
+  for (const rel of surfaces) {
+    const text = read(join(root, rel)).split("LINE @644odqoe").join("");
+    assert.equal(text.includes("LINE"), false, rel);
+    assert.equal(text.includes("待確認收款"), false, rel);
+    assert.equal(text.includes("🧪 測試模式"), false, rel);
+  }
+  for (const key of renderedKeys) {
+    const stripped = String(zh[key]).split("LINE @644odqoe").join("");
+    assert.equal(stripped.includes("LINE"), false, key);
+    assert.equal(stripped.includes("待確認收款"), false, key);
+    assert.equal(stripped.includes("示範"), false, key);
+    assert.equal(stripped.includes("測試模式"), false, key);
+  }
+});
+
 test("the build stamps a short git SHA into the staff footer and /api/version", () => {
   const config = read(join(root, "next.config.ts"));
   assert.match(config, /NEXT_PUBLIC_BUILD_SHA/);
