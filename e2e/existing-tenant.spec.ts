@@ -97,3 +97,31 @@ test("a duplicate tenant email stays on the tenant step and can switch to that �
   await expect(page.getByTestId("tenant-picked")).toHaveText("王小美");
   await expect(page.getByTestId("tenant-email")).toHaveCount(0);
 });
+
+test("TWD rent and deposit stay whole dollars", async ({ page }) => {
+  await resetDemo(page);
+  await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases/new");
+  const room = page.getByTestId("lease-room");
+  const roomValue = await room.locator("option", { hasText: "信義松仁" }).first().getAttribute("value");
+  expect(roomValue).toBeTruthy();
+  await room.selectOption(roomValue ?? "");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("tenant-name").fill("小數");
+  await page.getByTestId("tenant-phone").fill("0912000888");
+  await page.getByTestId("wizard-next").click();
+
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+  await page.getByTestId("start-date").fill(today);
+  await page.getByTestId("term-months").fill("12");
+  await page.getByTestId("rent").fill("10000.5");
+  await page.getByTestId("wizard-next").click();
+  await expect(page.getByTestId("rent-error")).toBeVisible();
+  await expect(page.getByTestId("deposit-months")).toBeHidden();
+
+  await page.getByTestId("rent").fill("10001");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("deposit-months").fill("1.5");
+  await page.getByTestId("wizard-next").click();
+  await expect(page.getByTestId("deposit-error")).toBeVisible();
+  await expect(page.getByTestId("due-day")).toBeHidden();
+});

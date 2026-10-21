@@ -176,6 +176,31 @@ test("picking an existing 租客 reuses that contact and portal user inside the 
       () =>
         createLeaseFromForm(
           admin,
+          form({ ...base, roomId: rooms.roomIds[2], tenantName: "小數租金", tenantPhone: "0912000222", tenantEmail: "", rent: "10000.5" }),
+        ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.amount" && error.vars?.field === "i_base_rent",
+    );
+    await assert.rejects(
+      () =>
+        createLeaseFromForm(
+          admin,
+          form({
+            ...base,
+            roomId: rooms.roomIds[2],
+            tenantName: "小數押金",
+            tenantPhone: "0912000223",
+            tenantEmail: "",
+            rent: "10001",
+            depositMonths: "1.5",
+          }),
+        ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.amount" && error.vars?.field === "s_8ed103e",
+    );
+
+    await assert.rejects(
+      () =>
+        createLeaseFromForm(
+          admin,
           form({
             ...base,
             roomId: rooms.roomIds[2],
@@ -527,6 +552,128 @@ test("a taken or sandbox email gets a new portal login, and an archived contact 
     assert.match(sandboxRow.rows[0]?.auth_email ?? "", /^portal-.+@demo\.condola\.local$/);
     assert.equal(sandboxRow.rows[0]?.same, "0");
     assert.notEqual(sandboxLease.tenantUserId, existingUserId);
+  } finally {
+    await withClient(async (client) => {
+      await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      try {
+        for (const propertyId of propertyIds) {
+          await client.query(
+            `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_allocation_runs
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_bills
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(`DELETE FROM meters WHERE unit_id IN (SELECT id FROM units WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM notifications WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM leases WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM management_agreements WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM properties WHERE id = $1`, [propertyId]);
+        }
+        await client.query(`DELETE FROM contacts WHERE lower(email::text) LIKE $1`, [`%${stamp}@example.com`]);
+        if (userIds.length) await client.query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [userIds]);
+        await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
+      } finally {
+        await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
+      }
+    });
+  }
+});
+
+test("a new 租客 whose email already logs in at another firm gets a fresh portal user", async () => {
+  const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(domain, /FROM auth\.users/i);
+  assert.match(domain, /insertPortalUserUnlessEmailTaken/);
+
+  const stamp = Date.now().toString(36);
+  const exactEmail = `cross.exact.${stamp}@example.com`;
+  const mixedAuth = `Other.Org.${stamp}@example.com`;
+  const mixedContact = `other.org.${stamp}@example.com`;
+  const exactUserId = randomUUID();
+  const mixedUserId = randomUUID();
+  const propertyIds: string[] = [];
+  const userIds: string[] = [exactUserId, mixedUserId];
+  try {
+    await query(
+      `INSERT INTO auth.users (id, aud, role, email, raw_app_meta_data, raw_user_meta_data)
+       VALUES ($1, 'authenticated', 'authenticated', $2, '{}'::jsonb, '{}'::jsonb),
+              ($3, 'authenticated', 'authenticated', $4, '{}'::jsonb, '{}'::jsonb)`,
+      [exactUserId, exactEmail, mixedUserId, mixedAuth],
+    );
+    await query(
+      `INSERT INTO org_members (org_id, user_id, role, status) VALUES ($1, $2, 'manager', 'active'), ($1, $3, 'manager', 'active')`,
+      [ORG2_ID, exactUserId, mixedUserId],
+    );
+    const rooms = await createProperty(admin, {
+      name: `跨所登入 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路13號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "跨所屋主",
+      ownerPhone: "",
+      ownerEmail: `owner.cross.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "13F",
+      floor: "13",
+      rentalMode: "by_room",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 9000 },
+        { label: "B", roomType: "suite", baseRentMajor: 9000 },
+      ],
+    });
+    propertyIds.push(rooms.propertyId);
+
+    const exact = await createLeaseFromForm(
+      admin,
+      form({
+        ...base,
+        roomId: rooms.roomIds[0],
+        tenantName: "跨所同信箱",
+        tenantPhone: "0912000441",
+        tenantEmail: exactEmail,
+      }),
+    );
+    userIds.push(exact.tenantUserId);
+    const mixed = await createLeaseFromForm(
+      admin,
+      form({
+        ...base,
+        roomId: rooms.roomIds[1],
+        tenantName: "跨所大小寫",
+        tenantPhone: "0912000442",
+        tenantEmail: mixedAuth,
+      }),
+    );
+    userIds.push(mixed.tenantUserId);
+    assert.notEqual(exact.tenantUserId, exactUserId);
+    assert.notEqual(mixed.tenantUserId, mixedUserId);
+
+    const rows = await query<{ contact_email: string; auth_email: string; n: string; user_id: string }>(
+      `SELECT c.email::text AS contact_email, u.email AS auth_email, c.user_id::text AS user_id,
+              (SELECT count(*)::text FROM auth.users WHERE lower(email) = lower(c.email::text)) AS n
+         FROM contacts c
+         JOIN auth.users u ON u.id = c.user_id
+        WHERE c.user_id = ANY($1::uuid[])
+        ORDER BY c.email`,
+      [[exact.tenantUserId, mixed.tenantUserId]],
+    );
+    assert.equal(rows.rows.length, 2);
+    const byEmail = new Map(rows.rows.map((row) => [row.contact_email, row]));
+    assert.equal(byEmail.get(exactEmail)?.user_id, exact.tenantUserId);
+    assert.match(byEmail.get(exactEmail)?.auth_email ?? "", /^portal-.+@demo\.condola\.local$/);
+    assert.equal(byEmail.get(exactEmail)?.n, "1");
+    assert.equal(byEmail.get(mixedContact)?.user_id, mixed.tenantUserId);
+    assert.match(byEmail.get(mixedContact)?.auth_email ?? "", /^portal-.+@demo\.condola\.local$/);
+    assert.equal(byEmail.get(mixedContact)?.n, "1");
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);

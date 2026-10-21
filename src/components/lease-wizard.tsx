@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "@/i18n/errors";
-import { confirmDeposit, confirmSpace, formatMajor } from "@/lease-confirm";
+import { confirmDeposit, confirmSpace, formatMajor, twdAmountsAreWhole } from "@/lease-confirm";
 import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
 import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
@@ -19,12 +19,7 @@ function amountOk(raw: string) {
 }
 
 function money(major: number, currency: string, locale: string) {
-  if (!Number.isFinite(major)) return "";
-  return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: currency === "TWD" ? 0 : 2,
-  }).format(major);
+  return formatMajor(major, currency, locale);
 }
 
 export function LeaseWizard({
@@ -174,11 +169,11 @@ export function LeaseWizard({
         if (nameBad || phoneBad || duplicate) return;
       }
     }
-    if (step === 3 && !amountOk(rent)) {
+    if (step === 3 && (!amountOk(rent) || !twdAmountsAreWhole(currency, Number(rent), 0))) {
       setRentError(true);
       return;
     }
-    if (step === 4 && !amountOk(depositMonths)) {
+    if (step === 4 && (!amountOk(depositMonths) || !twdAmountsAreWhole(currency, Number(rent), Number(depositMonths)))) {
       setDepositError(true);
       return;
     }
@@ -233,11 +228,13 @@ export function LeaseWizard({
           event.preventDefault();
           return;
         }
-        if (!amountOk(rent) || !amountOk(depositMonths)) {
+        const rentBad = !amountOk(rent) || !twdAmountsAreWhole(currency, Number(rent), 0);
+        const depositBad = !amountOk(depositMonths) || !twdAmountsAreWhole(currency, Number(rent), Number(depositMonths));
+        if (rentBad || depositBad) {
           event.preventDefault();
-          setRentError(!amountOk(rent));
-          setDepositError(!amountOk(depositMonths));
-          if (!amountOk(rent)) setStep(3);
+          setRentError(rentBad);
+          setDepositError(depositBad);
+          if (rentBad) setStep(3);
           else setStep(4);
           return;
         }
@@ -576,11 +573,11 @@ export function LeaseWizard({
               </tr>
               <tr>
                 <td>{t("i_rent_label")}</td>
-                <td data-testid="lease-confirm-rent">{formatMajor(Number(rent), currency, locale)}</td>
+                <td data-testid="lease-confirm-rent">{money(Number(rent), currency, locale)}</td>
               </tr>
               <tr>
                 <td>{t("i_deposit_label")}</td>
-                <td data-testid="lease-confirm-deposit">{confirmDeposit(depositMonths, rent, currency, locale)}</td>
+                <td data-testid="lease-confirm-deposit">{confirmDeposit(depositMonths, rent, currency, locale, money)}</td>
               </tr>
               <tr>
                 <td>{t("i_rate")}</td>

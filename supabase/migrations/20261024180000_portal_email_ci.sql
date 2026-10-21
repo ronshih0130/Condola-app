@@ -6,6 +6,8 @@
 -- function still inserts a new user. It never returns an existing id.
 -- A taken address, in any case, raises unique_violation so the caller can
 -- mint portal-<uuid>@demo.condola.local instead of linking that login.
+-- The advisory lock closes the gap between the case-insensitive check and the
+-- case-sensitive unique index.
 
 CREATE OR REPLACE FUNCTION app.provision_portal_user(p_email text, p_name text, p_phone text)
 RETURNS uuid
@@ -20,6 +22,7 @@ BEGIN
   IF login_email = '' THEN
     RAISE EXCEPTION 'email required';
   END IF;
+  PERFORM pg_advisory_xact_lock(hashtext(login_email));
   IF EXISTS (SELECT 1 FROM auth.users WHERE lower(email) = login_email) THEN
     RAISE EXCEPTION 'duplicate key value violates unique constraint "users_email_key"'
       USING ERRCODE = 'unique_violation';

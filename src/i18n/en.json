@@ -1620,6 +1620,5 @@
  "i_photo_storage": "Photos can't be saved right now. Storage is unavailable, so the file was not stored.",
  "i_photo_limit": "Each repair can have up to 8 photos.",
  "i_date_invalid": "Enter a valid date.",
- "i_tenant_use_existing": "Choose this tenant",
- "i_lease_count": "Leases"
+ "i_tenant_use_existing": "Choose this tenant"
 }
