@@ -82,6 +82,8 @@ export function buildLeasePdf(source: LeasePdfSource, t: T): PdfDocument {
     electricityMethod: source.electricityMethod,
     ratePerKwh: source.ratePerKwh,
     bankName: source.bankName,
+    // bank_accounts has no holder column. Do not copy the 屋主 name into 戶名.
+    accountHolder: null,
   });
   const preface = [t("pdf_paper_note")];
   if (source.depositOverrideReason) preface.push(`${t("pdf_deposit_reason")}：${source.depositOverrideReason}`);

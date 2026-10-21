@@ -48,11 +48,20 @@ test("lease and statement PDFs download, and another firm is denied", async ({ p
   await expect(page.getByTestId("lease-picker")).toHaveCount(0);
   await page.getByTestId("tenant-tile-lease").click();
   await expect(page.getByTestId("download-lease-pdf")).toBeVisible();
+  const tenantMetaPromise = page.waitForResponse(
+    (response) => response.url().includes("/api/pdf/leases/") && response.request().method() === "GET",
+  );
   const tenantDownload = page.waitForEvent("download");
   await page.getByTestId("download-lease-pdf").click();
+  const tenantMeta = await tenantMetaPromise;
+  const tenantLeaseId = new URL(tenantMeta.url()).pathname.split("/").pop();
+  expect(tenantLeaseId).toBeTruthy();
   const tenantFile = await tenantDownload;
   const tenantBytes = readFileSync((await tenantFile.path()) ?? "");
   expect(tenantBytes.subarray(0, 5).toString()).toBe("%PDF-");
+
+  await signIn(page, ACCOUNTS.tenant2);
+  expect((await page.request.get(`/api/pdf/leases/${tenantLeaseId}`)).status()).toBe(404);
 
   await signIn(page, ACCOUNTS.owner);
   await page.goto("/api/demo/locale?set=zh-TW&next=/o/statements");
@@ -79,5 +88,7 @@ test("lease and statement PDFs download, and another firm is denied", async ({ p
   expect((await page.request.get(`/api/pdf/statements/${statementId}`)).status()).toBe(404);
   await signIn(page, ACCOUNTS.tenant);
   await page.goto("/t");
+  expect((await page.request.get(`/api/pdf/statements/${statementId}`)).status()).toBe(404);
+  await signIn(page, "xiuying.lin@owner.demo");
   expect((await page.request.get(`/api/pdf/statements/${statementId}`)).status()).toBe(404);
 });

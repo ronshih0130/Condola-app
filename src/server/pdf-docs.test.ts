@@ -81,7 +81,7 @@ test("a lease PDF prints the official form, the deposit reason, and the stored h
   const sublessor = "二" + "房東";
   assert.equal(doc.title, "住宅租賃契約書範本");
   assert.equal(doc.footerHash, HASH);
-  assert.equal(doc.footerLabel, "文件雜湊");
+  assert.equal(doc.footerLabel, "租約紀錄雜湊");
   assert.match(text, /紙本簽署/);
   assert.match(text, /承租人/);
   assert.match(text, /出租人/);
@@ -116,7 +116,7 @@ test("a missing hash is labeled and omitted fields stay blank", () => {
   );
   const text = JSON.stringify(doc);
   assert.equal(doc.footerHash, "");
-  assert.equal(doc.footerLabel, "文件雜湊尚未產生");
+  assert.equal(doc.footerLabel, "租約紀錄雜湊尚未產生");
   assert.equal(text.includes("押金調整原因"), false);
   assert.match(text, /民國__年__月__日經承租人攜回審閱__日/);
   assert.match(text, /□所有權人□轉租人/);
@@ -133,6 +133,7 @@ test("an English lease PDF localizes the paper note and keeps the official claus
   assert.match(text, /第一條/);
   assert.match(text, /承租人/);
   assert.equal(doc.footerHash, HASH);
+  assert.equal(doc.footerLabel, "Stored lease record hash");
   assert.equal(text.includes(sublessor), true);
   assert.equal(text.split(sublessor).join("").includes("房東"), false);
 });

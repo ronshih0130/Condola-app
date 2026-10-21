@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { officialLeaseTemplateText } from "../assets/leases/moi-residential-1130708";
 import { makeT } from "@/i18n";
 import { buildLeasePdf, type LeasePdfSource } from "@/server/pdf-docs";
 import { officialLeaseTemplate, renderOfficialLease, type LeaseFieldPatch, type OfficialLeaseInput } from "@/server/official-lease";
@@ -77,6 +79,12 @@ const filled: OfficialLeaseInput = {
   bankName: "玉山銀行",
 };
 
+test("the bundled template hash matches the stored official text", () => {
+  const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+  assert.equal(hash(officialLeaseTemplateText), hash(stored));
+  assert.equal(officialLeaseTemplate(), stored);
+});
+
 test("an empty lease leaves the official text unchanged", () => {
   const rendered = renderOfficialLease({});
   assert.equal(rendered.text, stored);
@@ -102,7 +110,8 @@ test("filled blanks are the only difference from the stored official text", () =
     rendered.text.includes("承租人每月租金為新臺幣(下同)10000元整，每期應繳納1個月租金，並於■每月5日□每期"),
     true,
   );
-  assert.equal(rendered.text.includes("□現金繳付■轉帳繳付：金融機構：玉山銀行，戶名：陳建宏，帳號："), true);
+  assert.equal(rendered.text.includes("□現金繳付■轉帳繳付：金融機構：玉山銀行，戶名：     ，帳號：     。"), true);
+  assert.equal(rendered.text.includes("戶名：陳建宏"), false);
   assert.equal(rendered.text.includes("88921"), false);
   assert.equal(rendered.text.includes("押金由租賃雙方約定為3個月租金，金額為30000元整(最高不得超過二個月租金之總額)"), true);
   assert.equal(rendered.text.includes("3.00"), false);
@@ -155,6 +164,44 @@ test("missing data and the other fee choices stay blank", () => {
   });
   assert.equal(restore(unparsed.text, unparsed.patches), stored);
   assert.equal(unparsed.text.includes("1、門牌__縣(市)__鄉（鎮、市、區）__街(路)__段__巷__弄__號__樓之"), true);
+});
+
+test("號之N stays out of the floor-suffix blank, and 戶名 is only a stored holder", () => {
+  const door = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號之1" },
+    floor: "3",
+  });
+  assert.equal(restore(door.text, door.patches), stored);
+  assert.equal(door.text.includes("松仁街(路)__段__巷__弄88號3樓之    (基地坐落"), true);
+  assert.equal(door.text.includes("樓之1"), false);
+
+  const explicit = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號3樓之2" },
+    floor: "3樓",
+  });
+  assert.equal(restore(explicit.text, explicit.patches), stored);
+  assert.equal(explicit.text.includes("88號3樓之2(基地坐落"), true);
+
+  const conflict = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號3樓之2" },
+    floor: "4",
+  });
+  assert.equal(restore(conflict.text, conflict.patches), stored);
+  assert.equal(conflict.text.includes("88號4樓之    (基地坐落"), true);
+  assert.equal(conflict.text.includes("樓之2"), false);
+
+  const unsure = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號之1三樓" },
+    floor: "3",
+  });
+  assert.equal(restore(unsure.text, unsure.patches), stored);
+  assert.equal(unsure.text.includes("鄉（鎮、市、區）__街(路)__段__巷__弄__號3樓之    (基地坐落"), true);
+
+  const holder = renderOfficialLease({ ...filled, accountHolder: "林秀英" });
+  assert.equal(restore(holder.text, holder.patches), stored);
+  assert.equal(holder.text.includes("戶名：林秀英，帳號：     。"), true);
+  assert.equal(holder.text.includes("戶名：陳建宏"), false);
+  assert.equal(holder.text.includes("出租人陳建宏"), true);
 });
 
 test("the lease PDF prints the official form and keeps the deposit reason outside it", () => {

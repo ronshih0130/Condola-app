@@ -35,6 +35,7 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
           href={`/api/pdf/statements/${id}`}
           label={t("s_874a842")}
           failed={t("pdf_failed")}
+          fontFailed={t("pdf_font_missing")}
           testId="download-statement-pdf"
         />
       </p>

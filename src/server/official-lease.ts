@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { officialLeaseTemplateText } from "../assets/leases/moi-residential-1130708";
 
 /**
  * 內政部「住宅租賃契約書範本」, revision 113-07-08
@@ -18,13 +17,11 @@ import { join } from "node:path";
  * Article 17 of the 113-07-08 template already uses that wording. Do not edit it.
  *
  * Stored text: src/assets/leases/moi-residential-1130708.txt
+ * The Worker bundles src/assets/leases/moi-residential-1130708.ts, generated from
+ * that file by scripts/embed-lease-template.mjs. Do not read the .txt at request time.
  * Paper signing only. This printout is not an electronic signature.
  * Only blanks and checkboxes are filled. Missing data stays blank.
  */
-
-// A string path: the Next server fs rejects URL objects. outputFileTracingIncludes
-// copies this file into the Worker bundle next to the project root.
-const TEMPLATE_PATH = join(process.cwd(), "src/assets/leases/moi-residential-1130708.txt");
 
 export type LeaseFieldPatch = { index: number; blank: string; value: string };
 
@@ -46,15 +43,14 @@ export type OfficialLeaseInput = {
   electricityMethod?: string | null;
   ratePerKwh?: string | null;
   bankName?: string | null;
+  /** Stored account holder. Never the 屋主 display name. */
+  accountHolder?: string | null;
 };
 
 type State = { text: string; patches: LeaseFieldPatch[]; cursor: number };
 
-let cached: string | undefined;
-
 export function officialLeaseTemplate() {
-  if (cached === undefined) cached = readFileSync(TEMPLATE_PATH, "utf8");
-  return cached;
+  return officialLeaseTemplateText;
 }
 
 const DIRECT_POWER = "「承租人自行向台灣電力股份有限公司繳納」";
@@ -157,10 +153,19 @@ function districtStem(district: string) {
   return /(?:區|鄉|鎮|市)$/.test(district) && district.length > 1 ? district.slice(0, -1) : "";
 }
 
+const ROAD_DIGIT = "0-9０-９";
+const ROAD_SECTION = "0-9０-９一二三四五六七八九十";
+
+/**
+ * 號之N is a door-number suffix, not 樓之N. Only an explicit 樓之N may fill the
+ * floor-suffix blank, and only when it does not disagree with the unit floor.
+ */
 function parseRoad(street: string) {
-  const match = street
-    .trim()
-    .match(/^(.+?)(?:路|街)(?:([0-9０-９一二三四五六七八九十]+)段)?(?:([0-9０-９]+)巷)?(?:([0-9０-９]+)弄)?([0-9０-９]+)號(?:之([0-9０-９]+))?$/);
+  const match = street.trim().match(
+    new RegExp(
+      `^(.+?)(?:路|街)(?:([${ROAD_SECTION}]+)段)?(?:([${ROAD_DIGIT}]+)巷)?(?:([${ROAD_DIGIT}]+)弄)?([${ROAD_DIGIT}]+)號(?:之[${ROAD_DIGIT}]+)?(?:([${ROAD_DIGIT}]+)樓(?:之([${ROAD_DIGIT}]+))?)?$`,
+    ),
+  );
   if (!match) return null;
   return {
     name: match[1] ?? "",
@@ -168,8 +173,16 @@ function parseRoad(street: string) {
     lane: match[3] ?? "",
     alley: match[4] ?? "",
     number: match[5] ?? "",
-    sub: match[6] ?? "",
+    floor: match[6] ?? "",
+    floorSuffix: match[7] ?? "",
   };
+}
+
+function agreedFloorSuffix(streetFloor: string, streetSuffix: string, unitFloor: string | null | undefined) {
+  if (!streetSuffix) return "";
+  const fromUnit = floorStem(unitFloor);
+  if (fromUnit && fromUnit !== streetFloor) return "";
+  return streetSuffix;
 }
 
 function floorStem(floor: string | null | undefined) {
@@ -247,7 +260,7 @@ export function renderOfficialLease(input: OfficialLeaseInput = {}) {
   fillSlot(state, "巷", "弄", road?.alley ?? "");
   fillSlot(state, "弄", "號", road?.number ?? "");
   fillSlot(state, "號", "樓之", floorStem(input.floor));
-  fillSlot(state, "樓之", "(基地坐落", road?.sub ?? "");
+  fillSlot(state, "樓之", "(基地坐落", agreedFloorSuffix(road?.floor ?? "", road?.floorSuffix ?? "", input.floor));
 
   const partial = input.scope === "partial";
   const room = partial ? clean(input.roomLabel) : "";
@@ -275,7 +288,7 @@ export function renderOfficialLease(input: OfficialLeaseInput = {}) {
   const bank = clean(input.bankName);
   markBox(state, "現金繳付", "轉帳繳付", Boolean(bank));
   fillSlot(state, "金融機構：", "，戶名", bank);
-  fillSlot(state, "戶名：", "，帳號", bank ? owner : "");
+  fillSlot(state, "戶名：", "，帳號", clean(input.accountHolder));
 
   fillSlot(state, "約定為", "個月租金", monthsText(input.depositMonths));
   fillSlot(state, "金額為", "元整(最高不得超過二個月租金之總額)", yuan(input.depositMinor));

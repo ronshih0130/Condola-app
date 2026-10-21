@@ -1,29 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { PdfDocument } from "@/lib/pdf-document";
 
 export function PdfDownloadButton({
   href,
   label,
   failed,
+  fontFailed,
   testId,
 }: {
   href: string;
   label: string;
   failed: string;
+  fontFailed?: string;
   testId: string;
 }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    void import("@/lib/pdf-client").then((mod) => mod.preloadPdfFont().catch(() => undefined));
-  }, []);
+  const [error, setError] = useState<"failed" | "font" | null>(null);
 
   async function onClick() {
     setBusy(true);
-    setError(false);
+    setError(null);
     try {
       const { downloadPdf, preloadPdfFont } = await import("@/lib/pdf-client");
       const [response] = await Promise.all([
@@ -33,8 +31,8 @@ export function PdfDownloadButton({
       if (!response.ok) throw new Error(String(response.status));
       const doc = (await response.json()) as PdfDocument;
       await downloadPdf(doc);
-    } catch {
-      setError(true);
+    } catch (err) {
+      setError(err instanceof Error && err.name === "PdfFontError" ? "font" : "failed");
     } finally {
       setBusy(false);
     }
@@ -47,7 +45,7 @@ export function PdfDownloadButton({
       </button>
       {error ? (
         <span className="small" data-testid="pdf-error" role="alert" style={{ marginLeft: 8 }}>
-          {failed}
+          {error === "font" ? (fontFailed ?? failed) : failed}
         </span>
       ) : null}
     </span>

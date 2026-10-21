@@ -612,6 +612,7 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.equal(managerText.includes(sublessor), true);
   assert.equal(managerText.split(sublessor).join("").includes("房東"), false);
   assert.equal(managerText.includes("88921"), false);
+  assert.equal(managerText.includes("戶名：陳建宏"), false);
 
   const tenant = pdfSession(USERS.tenant, "tenant", null, ORG_ID);
   const tenantDoc = await leasePdfForSession(tenant, leaseId);
@@ -621,6 +622,9 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.match(tenantText, /出租人/);
   assert.match(tenantText, /陳建宏/);
   assert.equal(tenantText.includes("88921"), false);
+  assert.equal(await pdfAuditCount("leases", leaseId), before + 2);
+  const otherTenant = pdfSession(USERS.tenant2, "tenant", null, ORG_ID);
+  assert.equal(await leasePdfForSession(otherTenant, leaseId), null);
   assert.equal(await pdfAuditCount("leases", leaseId), before + 2);
 
   const statement = await tx(USERS.owner, (client) =>
@@ -640,6 +644,9 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.equal(JSON.stringify(ownerDoc).includes("房東"), false);
   const managerStatement = await statementPdfForSession(manager, statementId);
   assert.ok(managerStatement);
+  assert.equal(await pdfAuditCount("owner_statements", statementId), statementBefore + 2);
+  const otherOwner = pdfSession(USERS.owner2, "owner", null, ORG_ID);
+  assert.equal(await statementPdfForSession(otherOwner, statementId), null);
   assert.equal(await pdfAuditCount("owner_statements", statementId), statementBefore + 2);
   const coastRead = await tx(USERS.coastAdmin, (client) =>
     client.query(`SELECT id FROM owner_statements WHERE id = $1`, [statementId]),

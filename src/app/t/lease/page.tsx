@@ -22,6 +22,7 @@ export default async function TenantLeasePage() {
           href={`/api/pdf/leases/${lease.lease_id}`}
           label={t("s_874a842")}
           failed={t("pdf_failed")}
+          fontFailed={t("pdf_font_missing")}
           testId="download-lease-pdf"
         />
       </p>

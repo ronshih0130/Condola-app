@@ -18,6 +18,17 @@ type FontkitApi = FontkitLike & {
   create(buffer: Uint8Array, postscriptName?: string): GlyphFont;
 };
 
+/** A character in the PDF is not in the embedded face or in Helvetica. */
+export class PdfFontError extends Error {
+  readonly missing: string[];
+
+  constructor(missing: string[]) {
+    super(`font is missing ${missing.join("")}`);
+    this.name = "PdfFontError";
+    this.missing = missing;
+  }
+}
+
 /**
  * The published ESM build is `export default fontkit`. Webpack's namespace import
  * only exposes that default; Node's loader also surfaces `create` as a named export.
@@ -61,14 +72,24 @@ export async function renderPdf(doc: PdfDocument, fontBytes: Uint8Array): Promis
   }
 
   function normalize(text: string) {
+    const missing: string[] = [];
+    const seen = new Set<string>();
     let out = "";
     for (const ch of text.replaceAll("\r", "")) {
       if (ch === "\n" || ch === "□" || ch === "■") {
         out += ch;
         continue;
       }
-      out += hasCjk(ch) || canLatin(ch) ? ch : "?";
+      if (hasCjk(ch) || canLatin(ch)) {
+        out += ch;
+        continue;
+      }
+      if (!seen.has(ch)) {
+        seen.add(ch);
+        missing.push(ch);
+      }
     }
+    if (missing.length) throw new PdfFontError(missing);
     return out;
   }
 

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { makeT } from "@/i18n";
 import { pdfContainsAscii } from "@/lib/pdf-text";
-import { renderPdf } from "@/lib/pdf-render";
+import { PdfFontError, renderPdf } from "@/lib/pdf-render";
 import { buildLeasePdf, type LeasePdfSource } from "@/server/pdf-docs";
 
 const HASH = "cd".repeat(32);
@@ -36,7 +36,7 @@ test("the client PDF embeds the hash and Traditional Chinese without a server re
     bankName: null,
   };
   const doc = buildLeasePdf(source, makeT("zh-TW"));
-  const bytes = await renderPdf({ ...doc, subtitle: `${doc.subtitle} 😀` }, font);
+  const bytes = await renderPdf(doc, font);
   assert.equal(Buffer.from(bytes.subarray(0, 5)).toString(), "%PDF-");
   assert.equal(pdfContainsAscii(bytes, HASH), true);
   const decoded = (await import("@/lib/pdf-text")).pdfDecoded(bytes).toString("latin1");
@@ -45,4 +45,42 @@ test("the client PDF embeds the hash and Traditional Chinese without a server re
   assert.match(decoded, /338F/);
   // □/■ are rectangles (move + line), not missing-glyph question marks.
   assert.ok((decoded.match(/ m\n/g) ?? []).length > 100);
+});
+
+test("a glyph missing from the font rejects the PDF", async () => {
+  const font = readFileSync(new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url));
+  const doc = buildLeasePdf(
+    {
+      id: "10000000-0000-4000-8000-000000000099",
+      orgId: "10000000-0000-4000-8000-000000000001",
+      documentSha256: HASH,
+      currency: "TWD",
+      rentMinor: 0,
+      depositMinor: 0,
+      depositMonths: null,
+      depositOverrideReason: null,
+      dueDay: 1,
+      rentFrequency: "monthly",
+      startDate: "2026-03-01",
+      endDate: null,
+      place: "信義松仁",
+      tenant: "",
+      ownerName: null,
+      address: null,
+      addressDisplay: "",
+      floor: null,
+      roomLabel: null,
+      scope: "whole",
+      electricityMethod: null,
+      ratePerKwh: null,
+      bankName: null,
+    },
+    makeT("zh-TW"),
+  );
+  await assert.rejects(renderPdf({ ...doc, subtitle: "😀" }, font), (err: unknown) => {
+    assert.ok(err instanceof PdfFontError);
+    assert.equal(err.name, "PdfFontError");
+    assert.equal(err.missing.includes("😀"), true);
+    return true;
+  });
 });
