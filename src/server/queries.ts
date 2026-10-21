@@ -1,5 +1,16 @@
 import type { TenantOption } from "@/tenant-pick";
 import { query, maybe, many, tx } from "./db";
+import {
+  LIST_PAGE_SIZE,
+  bindList,
+  leaseSearchSql,
+  pageRows,
+  parseListQuery,
+  propertySearchSql,
+  spaceSearchSql,
+  tenantContactSearchSql,
+  type ListOpts,
+} from "./list-search";
 import { rentUtilityDueMinor } from "./money";
 import type { Session } from "./types";
 
@@ -192,20 +203,18 @@ export async function dashboard(session: Session) {
   });
 }
 
-export async function listProperties(session: Session) {
-  return tx(session.userId, async (client) =>
-    many<{
-      id: string;
-      name: string;
-      address_display: string;
-      currency: string;
-      rental_mode: string;
-      rooms: string;
-      occupied: string;
-      owner_name: string | null;
-    }>(
-      client,
-      `SELECT p.id::text, p.name, coalesce(p.address_display,'') AS address_display, p.currency,
+type PropertyListRow = {
+  id: string;
+  name: string;
+  address_display: string;
+  currency: string;
+  rental_mode: string;
+  rooms: string;
+  occupied: string;
+  owner_name: string | null;
+};
+
+const PROPERTY_LIST_SQL = `SELECT p.id::text, p.name, coalesce(p.address_display,'') AS address_display, p.currency,
               p.default_rental_mode::text AS rental_mode,
               (
                 (SELECT count(*) FROM rooms r JOIN units u ON u.id = r.unit_id
@@ -226,10 +235,33 @@ export async function listProperties(session: Session) {
                 WHERE po.property_id = p.id AND po.is_primary LIMIT 1) AS owner_name
          FROM properties p
         WHERE p.org_id = $1 AND p.archived_at IS NULL
-        ORDER BY p.created_at`,
-      [session.orgId],
-    ),
+          ${propertySearchSql()}
+        ORDER BY p.created_at, p.id`;
+
+function listScope(session: Session) {
+  return { orgId: session.orgId, environment: session.environment };
+}
+
+async function queryProperties(session: Session, opts?: ListOpts) {
+  const bound = bindList(session.orgId, opts);
+  return tx(
+    session.userId,
+    async (client) => {
+      const rows = await many<PropertyListRow>(client, `${PROPERTY_LIST_SQL} ${bound.pageSql}`, bound.params);
+      return pageRows(rows, bound.limit);
+    },
+    listScope(session),
   );
+}
+
+export async function listProperties(session: Session) {
+  return (await queryProperties(session)).rows;
+}
+
+export async function searchProperties(session: Session, raw?: { q?: string; page?: string | number; limit?: number }) {
+  const parsed = parseListQuery(raw);
+  const result = await queryProperties(session, { q: parsed.q, page: parsed.page, limit: raw?.limit ?? LIST_PAGE_SIZE });
+  return { ...result, q: parsed.q, page: parsed.page };
 }
 
 export async function propertyDetail(session: Session, id: string) {
@@ -341,6 +373,50 @@ export async function listTenants(session: Session): Promise<TenantOption[]> {
   );
 }
 
+type TenantListRow = {
+  id: string;
+  tenant: string;
+  contact_id: string;
+  place: string;
+  status: string;
+};
+
+/**
+ * Lease rows for the 租客 page, filtered by the contact predicate.
+ * That predicate is only `contacts c` columns, so a one-row-per-tenant
+ * query can keep `${tenantContactSearchSql()}` and drop the lease joins.
+ */
+const TENANT_LIST_SQL = `SELECT l.id::text, c.display_name AS tenant, c.id::text AS contact_id,
+              p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
+              l.status::text AS status
+         FROM contacts c
+         JOIN lease_parties lp ON lp.contact_id = c.id AND lp.role = 'primary' AND lp.org_id = c.org_id
+         JOIN leases l ON l.id = lp.lease_id
+         JOIN properties p ON p.id = l.property_id
+         JOIN units u ON u.id = l.unit_id
+         LEFT JOIN rooms r ON r.id = l.target_room_id
+        WHERE c.org_id = $1 AND c.is_tenant AND c.archived_at IS NULL
+          ${tenantContactSearchSql()}
+        ORDER BY c.display_name, c.id, l.created_at DESC, l.id`;
+
+async function queryTenants(session: Session, opts?: ListOpts) {
+  const bound = bindList(session.orgId, opts);
+  return tx(
+    session.userId,
+    async (client) => {
+      const rows = await many<TenantListRow>(client, `${TENANT_LIST_SQL} ${bound.pageSql}`, bound.params);
+      return pageRows(rows, bound.limit);
+    },
+    listScope(session),
+  );
+}
+
+export async function searchTenants(session: Session, raw?: { q?: string; page?: string | number; limit?: number }) {
+  const parsed = parseListQuery(raw);
+  const result = await queryTenants(session, { q: parsed.q, page: parsed.page, limit: raw?.limit ?? LIST_PAGE_SIZE });
+  return { ...result, q: parsed.q, page: parsed.page };
+}
+
 export type RoomOption = {
   id: string;
   label: string;
@@ -417,24 +493,22 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
   }, { orgId: session.orgId, environment: session.environment });
 }
 
-export async function listLeases(session: Session) {
-  return tx(session.userId, async (client) =>
-    many<{
-      id: string;
-      status: string;
-      esign: string;
-      tenant: string;
-      contact_id: string;
-      place: string;
-      rent: string;
-      deposit: string;
-      currency: string;
-      start_date: string;
-      end_date: string;
-      electricity: string;
-    }>(
-      client,
-      `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, c.display_name AS tenant,
+type LeaseListRow = {
+  id: string;
+  status: string;
+  esign: string;
+  tenant: string;
+  contact_id: string;
+  place: string;
+  rent: string;
+  deposit: string;
+  currency: string;
+  start_date: string;
+  end_date: string;
+  electricity: string;
+};
+
+const LEASE_LIST_SQL = `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, c.display_name AS tenant,
               c.id::text AS contact_id,
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
               l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.currency,
@@ -444,7 +518,8 @@ export async function listLeases(session: Session) {
                    FROM utility_allocation_lines line
                    JOIN utility_allocation_runs r ON r.id = line.run_id
                   WHERE line.lease_id = l.id
-                  ORDER BY r.period_start DESC
+                  -- Same period: keep the split saved with this lease, not a later sibling share.
+                  ORDER BY r.period_start DESC, r.computed_at ASC, r.id
                   LIMIT 1),
                 (SELECT m.split_method::text
                    FROM meters m
@@ -461,10 +536,29 @@ export async function listLeases(session: Session) {
          JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
          JOIN contacts c ON c.id = lp.contact_id
         WHERE l.org_id = $1
-        ORDER BY l.created_at DESC`,
-      [session.orgId],
-    ),
+          ${leaseSearchSql()}
+        ORDER BY l.created_at DESC, l.id`;
+
+async function queryLeases(session: Session, opts?: ListOpts) {
+  const bound = bindList(session.orgId, opts);
+  return tx(
+    session.userId,
+    async (client) => {
+      const rows = await many<LeaseListRow>(client, `${LEASE_LIST_SQL} ${bound.pageSql}`, bound.params);
+      return pageRows(rows, bound.limit);
+    },
+    listScope(session),
   );
+}
+
+export async function listLeases(session: Session) {
+  return (await queryLeases(session)).rows;
+}
+
+export async function searchLeases(session: Session, raw?: { q?: string; page?: string | number; limit?: number }) {
+  const parsed = parseListQuery(raw);
+  const result = await queryLeases(session, { q: parsed.q, page: parsed.page, limit: raw?.limit ?? LIST_PAGE_SIZE });
+  return { ...result, q: parsed.q, page: parsed.page };
 }
 
 export async function leaseDetail(session: Session, id: string) {
@@ -1339,17 +1433,24 @@ export type SpaceRow = {
   owner_name: string | null;
 };
 
-export async function listSpaces(session: Session) {
-  return tx(session.userId, async (client) =>
-    many<SpaceRow>(
-      client,
-      `SELECT * FROM (
+const SPACE_LIST_SQL = `SELECT kind, id, property_id, property_name, currency, floor, room_label, room_type,
+              area_value, area_unit, base_rent_minor, electricity_method, owner_name
+         FROM (
          SELECT 'room'::text AS kind, r.id::text, p.id::text AS property_id, p.name AS property_name, p.currency,
                 u.label AS floor, r.label AS room_label, r.room_type::text, r.area_value::text, r.area_unit,
                 r.base_rent_minor::text, r.electricity_method,
                 (SELECT string_agg(c.display_name, '、' ORDER BY po.is_primary DESC, c.display_name)
                    FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
                   WHERE po.property_id = p.id) AS owner_name,
+                coalesce(p.address_display, '') AS address_display,
+                coalesce(p.address::text, '') AS address_text,
+                (SELECT string_agg(c.phone_e164, ' ' ORDER BY po.is_primary DESC, c.display_name)
+                   FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
+                  WHERE po.property_id = p.id) AS owner_phone,
+                (SELECT string_agg(c.email::text, ' ' ORDER BY po.is_primary DESC, c.display_name)
+                   FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
+                  WHERE po.property_id = p.id) AS owner_email,
+                p.org_id,
                 p.created_at, u.label AS sort_floor, r.label AS sort_room
            FROM rooms r
            JOIN units u ON u.id = r.unit_id
@@ -1362,15 +1463,44 @@ export async function listSpaces(session: Session) {
                 (SELECT string_agg(c.display_name, '、' ORDER BY po.is_primary DESC, c.display_name)
                    FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
                   WHERE po.property_id = p.id),
+                coalesce(p.address_display, ''),
+                coalesce(p.address::text, ''),
+                (SELECT string_agg(c.phone_e164, ' ' ORDER BY po.is_primary DESC, c.display_name)
+                   FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
+                  WHERE po.property_id = p.id),
+                (SELECT string_agg(c.email::text, ' ' ORDER BY po.is_primary DESC, c.display_name)
+                   FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
+                  WHERE po.property_id = p.id),
+                p.org_id,
                 p.created_at, u.label, ''
            FROM units u
            JOIN properties p ON p.id = u.property_id
           WHERE u.org_id = $1 AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit' AND p.archived_at IS NULL
        ) spaces
-       ORDER BY created_at, sort_floor, sort_room`,
-      [session.orgId],
-    ),
-  { orgId: session.orgId, environment: session.environment });
+       WHERE TRUE
+         ${spaceSearchSql()}
+       ORDER BY created_at, sort_floor, sort_room, id`;
+
+async function querySpaces(session: Session, opts?: ListOpts) {
+  const bound = bindList(session.orgId, opts);
+  return tx(
+    session.userId,
+    async (client) => {
+      const rows = await many<SpaceRow>(client, `${SPACE_LIST_SQL} ${bound.pageSql}`, bound.params);
+      return pageRows(rows, bound.limit);
+    },
+    listScope(session),
+  );
+}
+
+export async function listSpaces(session: Session) {
+  return (await querySpaces(session)).rows;
+}
+
+export async function searchSpaces(session: Session, raw?: { q?: string; page?: string | number; limit?: number }) {
+  const parsed = parseListQuery(raw);
+  const result = await querySpaces(session, { q: parsed.q, page: parsed.page, limit: raw?.limit ?? LIST_PAGE_SIZE });
+  return { ...result, q: parsed.q, page: parsed.page };
 }
 
 export type SpaceEditor = {

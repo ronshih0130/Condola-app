@@ -70,7 +70,8 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(property, /data-testid="add-room"/);
   assert.match(property, /type="button"/);
   assert.match(property, /submitter\.dataset\.testid !== "submit-property"/);
-  assert.match(property, /event\.key !== "Enter"/);
+  assert.match(property, /blockImplicitEnter/);
+  assert.match(property, /ImplicitSubmitSink/);
   assert.match(property, /useActionState/);
   assert.match(property, /i_field_incomplete/);
   assert.match(property, /data-testid="property-address-error"/);
@@ -114,7 +115,8 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(firm, /key="kind-next"/);
   assert.match(firm, /type="button"/);
   assert.match(firm, /setTimeout\(\(\) => setSubmitReady\(true\), 600\)/);
-  assert.match(firm, /event\.key !== "Enter"/);
+  assert.match(firm, /blockImplicitEnter/);
+  assert.match(firm, /ImplicitSubmitSink/);
   assert.match(firm, /submitter\.dataset\.testid !== "firm-submit"/);
   assert.match(firm, /disabled=\{!submitReady\}/);
   const envRoute = readFileSync(new URL("../app/api/env/route.ts", import.meta.url), "utf8");

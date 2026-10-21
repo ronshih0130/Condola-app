@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
+import { ListPager, ListSearch } from "@/components/list-search";
 import { SampleTag } from "@/components/sample-tag";
 import { PageHeader } from "@/components/ui";
+import { searchProperties } from "@/server/queries";
 import { isSampleName } from "@/server/sandbox-data";
-import { listProperties } from "@/server/queries";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function PropertiesPage() {
+export default async function PropertiesPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
   const session = await getSession();
+  const raw = await searchParams;
   const t = makeT(session.locale);
-  const rows = await listProperties(session);
+  const { rows, q, page, hasNext } = await searchProperties(session, raw);
   return (
     <>
       <PageHeader
@@ -28,6 +30,7 @@ export default async function PropertiesPage() {
         }
       />
       <div className="card">
+        <ListSearch action="/m/properties" q={q} label={t("i_search")} placeholder={t("i_search_ph_properties")} />
         <table className="t rf" data-testid="property-list">
           <thead>
             <tr>
@@ -40,6 +43,11 @@ export default async function PropertiesPage() {
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={6}>{q ? t("i_search_none") : t("i_empty")}</td>
+              </tr>
+            ) : null}
             {rows.map((row) => (
               <tr key={row.id} className="click">
                 <td>
@@ -61,6 +69,7 @@ export default async function PropertiesPage() {
           </tbody>
         </table>
       </div>
+      <ListPager path="/m/properties" q={q} page={page} hasNext={hasNext} prevLabel={t("i_search_prev")} nextLabel={t("i_search_next")} />
     </>
   );
 }

@@ -208,6 +208,7 @@ test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {
   await expect(page.getByTestId("lease-picker")).toContainText("海岸公寓管理");
   await expect(page.getByTestId("tenant-tile-pay")).toHaveText("繳租");
   await page.getByRole("button", { name: /松信住宅管理/ }).click();
+  await expect(page.getByTestId("lease-picker")).toHaveCount(0);
   await page.getByTestId("tenant-tile-repair").click();
   await expect(page.getByTestId("repair-category")).toHaveValue("");
   await expect(page.getByTestId("repair-title")).toHaveValue("");

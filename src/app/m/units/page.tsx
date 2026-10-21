@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
+import { ListPager, ListSearch } from "@/components/list-search";
 import { PageHeader } from "@/components/ui";
 import { formatMoney } from "@/server/format";
 import { can } from "@/server/perms";
-import { listSpaces } from "@/server/queries";
+import { searchSpaces } from "@/server/queries";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function UnitsPage() {
+export default async function UnitsPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
   const session = await getSession();
+  const raw = await searchParams;
   const t = makeT(session.locale);
-  const rows = await listSpaces(session);
+  const { rows, q, page, hasNext } = await searchSpaces(session, raw);
   const editable = can(session.role, "props.edit");
   const roomTypeKey: Record<string, string> = {
     suite: "i_suite",
@@ -32,6 +34,7 @@ export default async function UnitsPage() {
         }
       />
       <div className="card">
+        <ListSearch action="/m/units" q={q} label={t("i_search")} placeholder={t("i_search_ph_units")} />
         <table className="t rf" data-testid="space-list">
           <thead>
             <tr>
@@ -50,7 +53,7 @@ export default async function UnitsPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={10}>{t("i_empty")}</td>
+                <td colSpan={10}>{q ? t("i_search_none") : t("i_empty")}</td>
               </tr>
             ) : null}
             {rows.map((row) => (
@@ -86,6 +89,7 @@ export default async function UnitsPage() {
           </tbody>
         </table>
       </div>
+      <ListPager path="/m/units" q={q} page={page} hasNext={hasNext} prevLabel={t("i_search_prev")} nextLabel={t("i_search_next")} />
     </>
   );
 }

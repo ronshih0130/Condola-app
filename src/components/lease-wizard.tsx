@@ -7,6 +7,7 @@ import type { RoomOption } from "@/server/queries";
 import { activeTenantPick, filterTenants, type TenantOption } from "@/tenant-pick";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
+import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
 import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
 
 function amountOk(raw: string) {
@@ -193,12 +194,7 @@ export function LeaseWizard({
   return (
     <form
       action={formAction}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter") return;
-        if (event.target instanceof HTMLTextAreaElement) return;
-        if (event.target instanceof HTMLButtonElement && event.target.type === "submit") return;
-        event.preventDefault();
-      }}
+      onKeyDownCapture={blockImplicitEnter}
       onSubmit={(event) => {
         if (tenantMode === "existing" && pickedId === "") {
           event.preventDefault();
@@ -222,6 +218,7 @@ export function LeaseWizard({
         if (pending || !claimFormSubmit(submitGuard)) event.preventDefault();
       }}
     >
+      <ImplicitSubmitSink />
       <Stepper steps={steps} current={step} />
       {state.error ? (
         <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>

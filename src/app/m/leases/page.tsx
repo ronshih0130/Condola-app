@@ -1,18 +1,20 @@
 import Link from "next/link";
 import { dictionary, makeT } from "@/i18n";
+import { ListPager, ListSearch } from "@/components/list-search";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader, statusClass, statusKey } from "@/components/ui";
 import { formatDate, formatMoney } from "@/server/format";
-import { listLeases } from "@/server/queries";
+import { searchLeases } from "@/server/queries";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function LeasesPage() {
+export default async function LeasesPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
   const session = await getSession();
+  const raw = await searchParams;
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
-  const rows = await listLeases(session);
+  const { rows, q, page, hasNext } = await searchLeases(session, raw);
   const money = (minor: string, currency: string) => formatMoney(Number(minor), currency, session.locale);
   return (
     <>
@@ -25,6 +27,7 @@ export default async function LeasesPage() {
         }
       />
       <div className="card">
+        <ListSearch action="/m/leases" q={q} label={t("i_search")} placeholder={t("i_search_ph_leases")} />
         <RfTable testId="lease-list">
           <thead>
             <tr>
@@ -38,6 +41,11 @@ export default async function LeasesPage() {
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={7}>{q ? t("i_search_none") : t("i_empty")}</td>
+              </tr>
+            ) : null}
             {rows.map((row) => (
               <tr key={row.id} className="click">
                 <Cell>
@@ -70,6 +78,7 @@ export default async function LeasesPage() {
           </tbody>
         </RfTable>
       </div>
+      <ListPager path="/m/leases" q={q} page={page} hasNext={hasNext} prevLabel={t("i_search_prev")} nextLabel={t("i_search_next")} />
     </>
   );
 }
