@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Client } from "pg";
 import { auditPageQuery, encodeCursor, loadAuditHistory, loadAuditScreen } from "./audit-read";
 import { query, tx } from "./db";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
@@ -106,6 +107,59 @@ test("an invalid cursor opens the first page", async () => {
     assert.equal(page.entries[0]?.cursor, first.entries[0]?.cursor);
     assert.equal(page.entries.length, first.entries.length);
   }
+});
+
+async function queryCount(run: () => Promise<unknown>) {
+  const orig = Client.prototype.query as (queryText: string, values?: unknown[]) => Promise<unknown>;
+  let n = 0;
+  Client.prototype.query = function (this: Client, queryText: string, values?: unknown[]) {
+    if (!/^\s*(BEGIN|COMMIT|ROLLBACK|SET\b|SELECT set_config\()/i.test(String(queryText))) n += 1;
+    return values === undefined ? orig.call(this, queryText) : orig.call(this, queryText, values);
+  } as typeof Client.prototype.query;
+  try {
+    await run();
+  } finally {
+    Client.prototype.query = orig as typeof Client.prototype.query;
+  }
+  return n;
+}
+
+test("the audit page stays within three queries", async () => {
+  const tables = [
+    "leases",
+    "contacts",
+    "properties",
+    "units",
+    "rooms",
+    "property_owners",
+    "payments",
+    "invoices",
+    "owner_statements",
+    "maintenance_tickets",
+    "org_members",
+    "lease_signatures",
+    "lease_parties",
+    "lease_charges",
+    "ledger_transactions",
+    "management_agreements",
+  ];
+  const rowId = "10000000-0000-4000-8000-0000000000c9";
+  const values = tables
+    .map((table, index) => `($1, $2, 'app', '${table}', $3, 'update', 'qcount', NULL, '{}'::jsonb, timestamptz '2099-01-01' + (${index} || ' seconds')::interval)`)
+    .join(",\n");
+  await query(
+    `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, reason, changed_cols, new_row, occurred_at)
+     VALUES ${values}`,
+    [ORG_ID, USERS.admin, rowId],
+  );
+  const screen = await queryCount(() => loadAuditScreen(admin, {}));
+  assert.equal(screen, 2);
+  const history = await queryCount(() => loadAuditHistory(admin, "leases", "10000000-0000-4000-8000-0000000000c1"));
+  assert.ok(history <= 2);
+  const empty = await queryCount(() => loadAuditScreen(admin, { from: "1990-01-01", to: "1990-01-01" }));
+  assert.equal(empty, 1);
+  const denied = await queryCount(() => loadAuditScreen(accountant, {}));
+  assert.equal(denied, 0);
 });
 
 test("keyset plans seek an index and do not sort", async () => {

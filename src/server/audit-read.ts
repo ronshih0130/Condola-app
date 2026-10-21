@@ -5,8 +5,9 @@ import type { Session } from "./types";
 /**
  * Admin-only read model for audit_log.
  * One indexed page, no OFFSET, and no old_row/new_row so the Worker does not
- * parse full snapshots. Identity numbers and other sensitive values are masked
- * before they leave this module.
+ * parse full snapshots. The screen is two round trips: the page plus the member
+ * list, then one UNION for every record name on that page. Identity numbers and
+ * other sensitive values are masked before they leave this module.
  */
 
 export const AUDIT_PAGE_SIZE = 25;
@@ -505,249 +506,170 @@ export function auditPageQuery(input: AuditQueryInput) {
   return { sql, params };
 }
 
-type HitRow = RecordHit & { id: string };
+const LEASE_TEXT = `btrim(c.display_name || ' ' || p.name || ' ' || u.label || coalesce(' ' || r.label, ''))`;
+const LEASE_JOINS = `
+  JOIN properties p ON p.id = l.property_id
+  JOIN units u ON u.id = l.unit_id
+  LEFT JOIN rooms r ON r.id = l.target_room_id
+  JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
+  JOIN contacts c ON c.id = lp.contact_id`;
+
+const NULLS = `NULL::text AS parent, NULL::boolean AS is_tenant, NULL::boolean AS is_owner, NULL::text AS mode`;
+
+function leaseChild(table: "lease_signatures" | "lease_parties" | "lease_charges" | "invoices" | "payments") {
+  return `SELECT '${table}' AS src, src.id::text AS id, ${LEASE_TEXT} AS text, l.id::text AS parent, NULL::boolean AS is_tenant, NULL::boolean AS is_owner, NULL::text AS mode
+    FROM ${table} src
+    JOIN leases l ON l.id = src.lease_id
+    ${LEASE_JOINS}
+   WHERE src.org_id = $1 AND src.id = ANY($IDS::uuid[])`;
+}
+
+/** Fixed SQL per table. The table name is never taken from the request. */
+const LOOKUP_SQL: Record<string, string> = {
+  leases: `SELECT 'leases' AS src, l.id::text AS id, ${LEASE_TEXT} AS text, ${NULLS}
+    FROM leases l
+    ${LEASE_JOINS}
+   WHERE l.org_id = $1 AND l.id = ANY($IDS::uuid[])`,
+  contacts: `SELECT 'contacts' AS src, id::text AS id, display_name AS text, NULL::text AS parent, is_tenant, is_owner, NULL::text AS mode
+    FROM contacts
+   WHERE org_id = $1 AND id = ANY($IDS::uuid[])`,
+  properties: `SELECT 'properties' AS src, id::text AS id, name AS text, ${NULLS}
+    FROM properties
+   WHERE org_id = $1 AND id = ANY($IDS::uuid[])`,
+  units: `SELECT 'units' AS src, u.id::text AS id, btrim(p.name || ' ' || u.label) AS text, NULL::text AS parent, NULL::boolean AS is_tenant, NULL::boolean AS is_owner, u.rental_mode::text AS mode
+    FROM units u
+    JOIN properties p ON p.id = u.property_id
+   WHERE u.org_id = $1 AND u.id = ANY($IDS::uuid[])`,
+  rooms: `SELECT 'rooms' AS src, r.id::text AS id, btrim(p.name || ' ' || u.label || ' ' || r.label) AS text, ${NULLS}
+    FROM rooms r
+    JOIN units u ON u.id = r.unit_id
+    JOIN properties p ON p.id = u.property_id
+   WHERE r.org_id = $1 AND r.id = ANY($IDS::uuid[])`,
+  owner_statements: `SELECT 'owner_statements' AS src, id::text AS id, period_start::text || '–' || period_end::text AS text, ${NULLS}
+    FROM owner_statements
+   WHERE org_id = $1 AND id = ANY($IDS::uuid[])`,
+  property_owners: `SELECT 'property_owners' AS src, po.id::text AS id, btrim(c.display_name || ' ' || p.name) AS text, p.id::text AS parent, NULL::boolean AS is_tenant, NULL::boolean AS is_owner, NULL::text AS mode
+    FROM property_owners po
+    JOIN contacts c ON c.id = po.owner_contact_id
+    JOIN properties p ON p.id = po.property_id
+   WHERE po.org_id = $1 AND po.id = ANY($IDS::uuid[])`,
+  maintenance_tickets: `SELECT 'maintenance_tickets' AS src, id::text AS id, title AS text, property_id::text AS parent, NULL::boolean AS is_tenant, NULL::boolean AS is_owner, NULL::text AS mode
+    FROM maintenance_tickets
+   WHERE org_id = $1 AND id = ANY($IDS::uuid[])`,
+  org_members: `SELECT 'org_members' AS src, m.id::text AS id, coalesce(nullif(btrim(pr.display_name), ''), '') AS text, ${NULLS}
+    FROM org_members m
+    LEFT JOIN profiles pr ON pr.id = m.user_id
+   WHERE m.org_id = $1 AND m.id = ANY($IDS::uuid[])`,
+  ledger_transactions: `SELECT 'ledger_transactions' AS src, id::text AS id, coalesce(description, '') AS text, lease_id::text AS parent, NULL::boolean AS is_tenant, NULL::boolean AS is_owner, NULL::text AS mode
+    FROM ledger_transactions
+   WHERE org_id = $1 AND id = ANY($IDS::uuid[])`,
+  management_agreements: `SELECT 'management_agreements' AS src, a.id::text AS id, c.display_name AS text, c.id::text AS parent, NULL::boolean AS is_tenant, NULL::boolean AS is_owner, NULL::text AS mode
+    FROM management_agreements a
+    JOIN contacts c ON c.id = a.owner_contact_id
+   WHERE a.org_id = $1 AND a.id = ANY($IDS::uuid[])`,
+  lease_signatures: leaseChild("lease_signatures"),
+  lease_parties: leaseChild("lease_parties"),
+  lease_charges: leaseChild("lease_charges"),
+  invoices: leaseChild("invoices"),
+  payments: leaseChild("payments"),
+};
+
+const LEASE_LINK = new Set(["lease_signatures", "lease_parties", "lease_charges", "invoices", "payments", "ledger_transactions"]);
+const PROPERTY_LINK = new Set(["property_owners", "maintenance_tickets"]);
+
+type LookupHit = {
+  src: string;
+  id: string;
+  text: string | null;
+  parent: string | null;
+  is_tenant: boolean | null;
+  is_owner: boolean | null;
+  mode: string | null;
+};
+
+function recordGroups(rows: RawAudit[]) {
+  const groups = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!LOOKUP_SQL[row.table_name] || !UUID.test(row.row_id)) continue;
+    const list = groups.get(row.table_name);
+    if (!list) groups.set(row.table_name, [row.row_id]);
+    else if (!list.includes(row.row_id)) list.push(row.row_id);
+  }
+  return groups;
+}
+
+/** One statement for every record name on the page. Null when the page has nothing to resolve. */
+export function recordLookupQuery(orgId: string, groups: Map<string, string[]>) {
+  const params: unknown[] = [orgId];
+  const parts: string[] = [];
+  for (const [table, ids] of groups) {
+    const body = LOOKUP_SQL[table];
+    if (!body || ids.length === 0) continue;
+    params.push(ids);
+    parts.push(body.split("$IDS").join(`$${params.length}`));
+  }
+  if (!parts.length) return null;
+  return { sql: parts.join("\nUNION ALL\n"), params };
+}
+
+function lookupHit(row: LookupHit): RecordHit {
+  const hit: RecordHit = { text: row.text ?? "" };
+  if (row.src === "contacts") {
+    hit.tenant = Boolean(row.is_tenant);
+    hit.owner = Boolean(row.is_owner);
+  } else if (row.src === "units") {
+    hit.whole = row.mode === "whole_unit";
+  } else if (row.src === "org_members") {
+    hit.href = "/m/team";
+  } else if (LEASE_LINK.has(row.src)) {
+    hit.href = row.parent && UUID.test(row.parent) ? `/m/leases/${row.parent}` : null;
+  } else if (PROPERTY_LINK.has(row.src)) {
+    hit.href = row.parent && UUID.test(row.parent) ? `/m/properties/${row.parent}` : null;
+  } else if (row.src === "management_agreements") {
+    hit.href = row.parent && UUID.test(row.parent) ? `/m/owners/${row.parent}` : null;
+  }
+  return hit;
+}
 
 async function lookupRecords(
   client: Parameters<typeof many>[0],
   orgId: string,
   rows: RawAudit[],
 ): Promise<Map<string, RecordHit>> {
-  const ids = (table: string) =>
-    [...new Set(rows.filter((row) => row.table_name === table && UUID.test(row.row_id)).map((row) => row.row_id))];
   const found = new Map<string, RecordHit>();
-  const take = (table: string, hits: HitRow[]) => {
-    for (const hit of hits) found.set(`${table}:${hit.id}`, hit);
-  };
-  const leaseIds = ids("leases");
-  if (leaseIds.length) {
-    take(
-      "leases",
-      await many<HitRow>(
-        client,
-        `SELECT l.id::text AS id,
-                btrim(c.display_name || ' ' || p.name || ' ' || u.label || coalesce(' ' || r.label, '')) AS text
-           FROM leases l
-           JOIN properties p ON p.id = l.property_id
-           JOIN units u ON u.id = l.unit_id
-           LEFT JOIN rooms r ON r.id = l.target_room_id
-           JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
-           JOIN contacts c ON c.id = lp.contact_id
-          WHERE l.org_id = $1 AND l.id = ANY($2::uuid[])`,
-        [orgId, leaseIds],
-      ),
-    );
-  }
-  const contactIds = ids("contacts");
-  if (contactIds.length) {
-    take(
-      "contacts",
-      await many<HitRow & { is_tenant: boolean; is_owner: boolean }>(
-        client,
-        `SELECT id::text AS id, display_name AS text, is_tenant, is_owner
-           FROM contacts
-          WHERE org_id = $1 AND id = ANY($2::uuid[])`,
-        [orgId, contactIds],
-      ).then((hits) => hits.map((hit) => ({ ...hit, tenant: hit.is_tenant, owner: hit.is_owner }))),
-    );
-  }
-  const propertyIds = ids("properties");
-  if (propertyIds.length) {
-    take(
-      "properties",
-      await many<HitRow>(
-        client,
-        `SELECT id::text AS id, name AS text FROM properties WHERE org_id = $1 AND id = ANY($2::uuid[])`,
-        [orgId, propertyIds],
-      ),
-    );
-  }
-  const unitIds = ids("units");
-  if (unitIds.length) {
-    take(
-      "units",
-      await many<HitRow & { mode: string }>(
-        client,
-        `SELECT u.id::text AS id, btrim(p.name || ' ' || u.label) AS text, u.rental_mode::text AS mode
-           FROM units u
-           JOIN properties p ON p.id = u.property_id
-          WHERE u.org_id = $1 AND u.id = ANY($2::uuid[])`,
-        [orgId, unitIds],
-      ).then((hits) => hits.map((hit) => ({ ...hit, whole: hit.mode === "whole_unit" }))),
-    );
-  }
-  const roomIds = ids("rooms");
-  if (roomIds.length) {
-    take(
-      "rooms",
-      await many<HitRow>(
-        client,
-        `SELECT r.id::text AS id, btrim(p.name || ' ' || u.label || ' ' || r.label) AS text
-           FROM rooms r
-           JOIN units u ON u.id = r.unit_id
-           JOIN properties p ON p.id = u.property_id
-          WHERE r.org_id = $1 AND r.id = ANY($2::uuid[])`,
-        [orgId, roomIds],
-      ),
-    );
-  }
-  const leaseParentSql: Record<"lease_signatures" | "lease_parties" | "lease_charges" | "invoices" | "payments", string> = {
-    lease_signatures: `SELECT src.id::text AS id,
-            btrim(c.display_name || ' ' || p.name || ' ' || u.label || coalesce(' ' || r.label, '')) AS text,
-            l.id::text AS parent
-       FROM lease_signatures src
-       JOIN leases l ON l.id = src.lease_id
-       JOIN properties p ON p.id = l.property_id
-       JOIN units u ON u.id = l.unit_id
-       LEFT JOIN rooms r ON r.id = l.target_room_id
-       JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
-       JOIN contacts c ON c.id = lp.contact_id
-      WHERE src.org_id = $1 AND src.id = ANY($2::uuid[])`,
-    lease_parties: `SELECT src.id::text AS id,
-            btrim(c.display_name || ' ' || p.name || ' ' || u.label || coalesce(' ' || r.label, '')) AS text,
-            l.id::text AS parent
-       FROM lease_parties src
-       JOIN leases l ON l.id = src.lease_id
-       JOIN properties p ON p.id = l.property_id
-       JOIN units u ON u.id = l.unit_id
-       LEFT JOIN rooms r ON r.id = l.target_room_id
-       JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
-       JOIN contacts c ON c.id = lp.contact_id
-      WHERE src.org_id = $1 AND src.id = ANY($2::uuid[])`,
-    lease_charges: `SELECT src.id::text AS id,
-            btrim(c.display_name || ' ' || p.name || ' ' || u.label || coalesce(' ' || r.label, '')) AS text,
-            l.id::text AS parent
-       FROM lease_charges src
-       JOIN leases l ON l.id = src.lease_id
-       JOIN properties p ON p.id = l.property_id
-       JOIN units u ON u.id = l.unit_id
-       LEFT JOIN rooms r ON r.id = l.target_room_id
-       JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
-       JOIN contacts c ON c.id = lp.contact_id
-      WHERE src.org_id = $1 AND src.id = ANY($2::uuid[])`,
-    invoices: `SELECT src.id::text AS id,
-            btrim(c.display_name || ' ' || p.name || ' ' || u.label || coalesce(' ' || r.label, '')) AS text,
-            l.id::text AS parent
-       FROM invoices src
-       JOIN leases l ON l.id = src.lease_id
-       JOIN properties p ON p.id = l.property_id
-       JOIN units u ON u.id = l.unit_id
-       LEFT JOIN rooms r ON r.id = l.target_room_id
-       JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
-       JOIN contacts c ON c.id = lp.contact_id
-      WHERE src.org_id = $1 AND src.id = ANY($2::uuid[])`,
-    payments: `SELECT src.id::text AS id,
-            btrim(c.display_name || ' ' || p.name || ' ' || u.label || coalesce(' ' || r.label, '')) AS text,
-            l.id::text AS parent
-       FROM payments src
-       JOIN leases l ON l.id = src.lease_id
-       JOIN properties p ON p.id = l.property_id
-       JOIN units u ON u.id = l.unit_id
-       LEFT JOIN rooms r ON r.id = l.target_room_id
-       JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
-       JOIN contacts c ON c.id = lp.contact_id
-      WHERE src.org_id = $1 AND src.id = ANY($2::uuid[])`,
-  };
-  const withLease = async (table: keyof typeof leaseParentSql) => {
-    const rowIds = ids(table);
-    if (!rowIds.length) return;
-    const hits = await many<HitRow & { parent: string }>(client, leaseParentSql[table], [orgId, rowIds]);
-    take(
-      table,
-      hits.map((hit) => ({ ...hit, href: UUID.test(hit.parent) ? `/m/leases/${hit.parent}` : null })),
-    );
-  };
-  await withLease("lease_signatures");
-  await withLease("lease_parties");
-  await withLease("lease_charges");
-  await withLease("invoices");
-  await withLease("payments");
-  const ownerLinkIds = ids("property_owners");
-  if (ownerLinkIds.length) {
-    const hits = await many<HitRow & { parent: string }>(
-      client,
-      `SELECT po.id::text AS id, btrim(c.display_name || ' ' || p.name) AS text, p.id::text AS parent
-         FROM property_owners po
-         JOIN contacts c ON c.id = po.owner_contact_id
-         JOIN properties p ON p.id = po.property_id
-        WHERE po.org_id = $1 AND po.id = ANY($2::uuid[])`,
-      [orgId, ownerLinkIds],
-    );
-    take(
-      "property_owners",
-      hits.map((hit) => ({ ...hit, href: UUID.test(hit.parent) ? `/m/properties/${hit.parent}` : null })),
-    );
-  }
-  const ticketIds = ids("maintenance_tickets");
-  if (ticketIds.length) {
-    const hits = await many<HitRow & { parent: string }>(
-      client,
-      `SELECT id::text AS id, title AS text, property_id::text AS parent
-         FROM maintenance_tickets
-        WHERE org_id = $1 AND id = ANY($2::uuid[])`,
-      [orgId, ticketIds],
-    );
-    take(
-      "maintenance_tickets",
-      hits.map((hit) => ({ ...hit, href: UUID.test(hit.parent) ? `/m/properties/${hit.parent}` : null })),
-    );
-  }
-  const memberIds = ids("org_members");
-  if (memberIds.length) {
-    take(
-      "org_members",
-      await many<HitRow>(
-        client,
-        `SELECT m.id::text AS id, coalesce(nullif(btrim(pr.display_name), ''), '') AS text
-           FROM org_members m
-           LEFT JOIN profiles pr ON pr.id = m.user_id
-          WHERE m.org_id = $1 AND m.id = ANY($2::uuid[])`,
-        [orgId, memberIds],
-      ).then((hits) => hits.map((hit) => ({ ...hit, href: "/m/team" }))),
-    );
-  }
-  const ledgerIds = ids("ledger_transactions");
-  if (ledgerIds.length) {
-    const hits = await many<HitRow & { parent: string | null }>(
-      client,
-      `SELECT id::text AS id, coalesce(description, '') AS text, lease_id::text AS parent
-         FROM ledger_transactions
-        WHERE org_id = $1 AND id = ANY($2::uuid[])`,
-      [orgId, ledgerIds],
-    );
-    take(
-      "ledger_transactions",
-      hits.map((hit) => ({ ...hit, href: hit.parent && UUID.test(hit.parent) ? `/m/leases/${hit.parent}` : null })),
-    );
-  }
-  const agreementIds = ids("management_agreements");
-  if (agreementIds.length) {
-    const hits = await many<HitRow & { parent: string }>(
-      client,
-      `SELECT a.id::text AS id, c.display_name AS text, c.id::text AS parent
-         FROM management_agreements a
-         JOIN contacts c ON c.id = a.owner_contact_id
-        WHERE a.org_id = $1 AND a.id = ANY($2::uuid[])`,
-      [orgId, agreementIds],
-    );
-    take(
-      "management_agreements",
-      hits.map((hit) => ({ ...hit, href: UUID.test(hit.parent) ? `/m/owners/${hit.parent}` : null })),
-    );
-  }
-  const statementIds = ids("owner_statements");
-  if (statementIds.length) {
-    take(
-      "owner_statements",
-      await many<HitRow>(
-        client,
-        `SELECT id::text AS id, period_start::text || '–' || period_end::text AS text
-           FROM owner_statements
-          WHERE org_id = $1 AND id = ANY($2::uuid[])`,
-        [orgId, statementIds],
-      ),
-    );
-  }
+  const query = recordLookupQuery(orgId, recordGroups(rows));
+  if (!query) return found;
+  const hits = await many<LookupHit>(client, query.sql, query.params);
+  for (const hit of hits) found.set(`${hit.src}:${hit.id}`, lookupHit(hit));
   return found;
+}
+
+type ScreenBundle = { page: RawAudit[] | string; actors: { id: string; name: string }[] | string };
+
+function asJson<T>(value: T | string): T {
+  return typeof value === "string" ? (JSON.parse(value) as T) : value;
+}
+
+/** Page rows and the member filter, in one statement. Record names are a second statement. */
+export function auditScreenQuery(input: AuditQueryInput) {
+  const page = auditPageQuery(input);
+  const sql = `SELECT COALESCE((
+      SELECT json_agg((to_jsonb(s) - 'ord') ORDER BY s.ord)
+        FROM (
+          SELECT q.*, row_number() OVER (ORDER BY q.occurred_at DESC, q.id::bigint DESC) AS ord
+            FROM (${page.sql}) q
+        ) s
+    ), '[]'::json) AS page,
+    COALESCE((
+      SELECT json_agg(json_build_object(
+               'id', m.user_id::text,
+               'name', coalesce(nullif(btrim(p.display_name), ''), '')
+             ) ORDER BY coalesce(nullif(btrim(p.display_name), ''), ''), m.user_id)
+        FROM org_members m
+        LEFT JOIN profiles p ON p.id = m.user_id
+       WHERE m.org_id = $1 AND m.status = 'active'
+    ), '[]'::json) AS actors`;
+  return { sql, params: page.params };
 }
 
 export type AuditActor = { id: string; name: string };
@@ -759,16 +681,9 @@ export type AuditPage = {
   filters: AuditFilters;
 };
 
-async function readPage(
-  client: Parameters<typeof many>[0],
-  session: Session,
-  filters: AuditFilters,
-  rowId: string | null,
-  pageSize: number,
-) {
+function pageInput(session: Session, filters: AuditFilters, rowId: string | null, pageSize: number): AuditQueryInput {
   const range = taipeiRange(filters.from, filters.to);
-  const cursor = decodeCursor(filters.cursor);
-  const { sql, params } = auditPageQuery({
+  return {
     orgId: session.orgId,
     actorId: filters.actorId,
     action: filters.action,
@@ -777,17 +692,31 @@ async function readPage(
     rowId,
     from: range.start,
     to: range.end,
-    cursor,
+    cursor: decodeCursor(filters.cursor),
     limit: pageSize + 1,
-  });
-  const rows = await many<RawAudit>(client, sql, params);
+  };
+}
+
+async function presentPage(client: Parameters<typeof many>[0], orgId: string, rows: RawAudit[], pageSize: number) {
   const hasMore = rows.length > pageSize;
   const page = hasMore ? rows.slice(0, pageSize) : rows;
-  const labels = await lookupRecords(client, session.orgId, page);
+  const labels = await lookupRecords(client, orgId, page);
   return {
     entries: page.map((row) => presentAudit(row, labels.get(`${row.table_name}:${row.row_id}`) ?? null)),
     hasMore,
   };
+}
+
+async function readPage(
+  client: Parameters<typeof many>[0],
+  session: Session,
+  filters: AuditFilters,
+  rowId: string | null,
+  pageSize: number,
+) {
+  const { sql, params } = auditPageQuery(pageInput(session, filters, rowId, pageSize));
+  const rows = await many<RawAudit>(client, sql, params);
+  return presentPage(client, session.orgId, rows, pageSize);
 }
 
 function scope(session: Session) {
@@ -803,16 +732,19 @@ export async function loadAuditScreen(
   return tx(
     session.userId,
     async (client) => {
-      const actors = await many<{ id: string; name: string }>(
-        client,
-        `SELECT m.user_id::text AS id, coalesce(nullif(btrim(p.display_name), ''), '') AS name
-           FROM org_members m
-           LEFT JOIN profiles p ON p.id = m.user_id
-          WHERE m.org_id = $1 AND m.status = 'active'
-          ORDER BY name, m.user_id`,
-        [session.orgId],
-      );
-      const page = await readPage(client, session, filters, null, AUDIT_PAGE_SIZE);
+      const built = auditScreenQuery(pageInput(session, filters, null, AUDIT_PAGE_SIZE));
+      const [bundle] = await many<ScreenBundle>(client, built.sql, built.params);
+      const rows = asJson<RawAudit[]>(bundle?.page ?? []).map((row) => ({
+        ...row,
+        id: String(row.id),
+        actor_name: row.actor_name ?? "",
+        has_actor: Boolean(row.has_actor),
+        changed_cols: Array.isArray(row.changed_cols) ? row.changed_cols : null,
+        reason: row.reason ?? null,
+        event_type: row.event_type ?? null,
+      }));
+      const page = await presentPage(client, session.orgId, rows, AUDIT_PAGE_SIZE);
+      const actors = asJson<{ id: string; name: string }[]>(bundle?.actors ?? []);
       return {
         ...page,
         actors: actors.map((actor) => ({ id: actor.id, name: maskAuditText(actor.name).text })),

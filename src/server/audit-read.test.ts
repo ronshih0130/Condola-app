@@ -4,6 +4,7 @@ import {
   AUDIT_PAGE_SIZE,
   actionKey,
   auditPageQuery,
+  auditScreenQuery,
   decodeCursor,
   encodeCursor,
   maskAuditText,
@@ -11,6 +12,7 @@ import {
   presentAudit,
   recordHref,
   recordKey,
+  recordLookupQuery,
   resolveRecord,
   summarizeChanges,
   taipeiRange,
@@ -207,4 +209,32 @@ test("the page query is a keyset seek and does not read snapshots", () => {
   assert.equal(narrowed.params.at(-1), 9);
   assert.equal(narrowed.sql.includes("drop table"), false);
   assert.equal(JSON.stringify(narrowed.params).includes("old_row"), false);
+});
+
+test("the screen and its record names are one statement each", () => {
+  const orgId = "10000000-0000-4000-8000-000000000001";
+  const rowId = "10000000-0000-4000-8000-0000000000bb";
+  const screen = auditScreenQuery({
+    orgId,
+    actorId: null,
+    action: null,
+    eventType: null,
+    tableName: null,
+    rowId: null,
+    from: null,
+    to: null,
+    cursor: null,
+    limit: AUDIT_PAGE_SIZE + 1,
+  });
+  assert.equal(screen.sql.includes(";"), false);
+  assert.match(screen.sql, /FROM audit_log a/);
+  assert.match(screen.sql, /FROM org_members m/);
+  assert.doesNotMatch(screen.sql, /OFFSET/i);
+  const tables = ["leases", "contacts", "properties", "payments", "maintenance_tickets", "org_members"];
+  const lookup = recordLookupQuery(orgId, new Map(tables.map((table) => [table, [rowId]])));
+  assert.ok(lookup);
+  assert.equal(lookup.sql.includes(";"), false);
+  assert.equal(lookup.sql.split("UNION ALL").length, tables.length);
+  assert.equal(lookup.params.length, 1 + tables.length);
+  assert.equal(recordLookupQuery(orgId, new Map()), null);
 });
