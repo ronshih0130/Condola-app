@@ -1,9 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { actionApproveMatch, actionImportCsv, actionRecordPayment, actionStatement } from "@/server/actions";
 import { taipeiToday } from "@/server/money";
 import { useT } from "./locale";
+
+type ScrollMark = { el: HTMLElement | Window; left: number; top: number };
+
+function captureScroll(from: HTMLElement | null): ScrollMark[] {
+  const marks: ScrollMark[] = [{ el: window, left: window.scrollX, top: window.scrollY }];
+  let node = from?.parentElement ?? null;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    if (/(auto|scroll|overlay)/.test(`${style.overflowY} ${style.overflowX}`)) {
+      marks.push({ el: node, left: node.scrollLeft, top: node.scrollTop });
+    }
+    node = node.parentElement;
+  }
+  return marks;
+}
+
+function restoreScroll(marks: ScrollMark[]) {
+  for (const mark of marks) {
+    const el = mark.el;
+    if (!(el instanceof HTMLElement)) {
+      window.scrollTo(mark.left, mark.top);
+      continue;
+    }
+    if (el.isConnected) el.scrollTo(mark.left, mark.top);
+  }
+}
+
+/** Keep the saved position through the browser's focus scroll, which can land a frame later. */
+function restoreAndHold(marks: ScrollMark[]) {
+  restoreScroll(marks);
+  const until = performance.now() + 500;
+  const onScroll = () => {
+    if (performance.now() > until) {
+      window.removeEventListener("scroll", onScroll, true);
+      return;
+    }
+    restoreScroll(marks);
+  };
+  window.addEventListener("scroll", onScroll, true);
+  window.setTimeout(() => window.removeEventListener("scroll", onScroll, true), 520);
+}
 
 export function PayDialog({
   leaseId,
@@ -19,20 +60,64 @@ export function PayDialog({
   returnTo: "staff" | "tenant";
 }) {
   const t = useT();
-  const [open, setOpen] = useState(returnTo === "tenant");
+  const [open, setOpen] = useState(false);
+  const titleId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const scrollMarks = useRef<ScrollMark[]>([]);
   const major = currency === "TWD" ? String(Math.round(dueMinor / 100)) : (dueMinor / 100).toFixed(2);
   const [amount, setAmount] = useState(major);
+
+  useEffect(() => {
+    if (!open) return;
+    const marks = scrollMarks.current;
+    const trigger = triggerRef.current;
+    const dialog = dialogRef.current;
+    dialog?.focus({ preventScroll: true });
+    restoreScroll(marks);
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      scrollMarks.current = [];
+      restoreScroll(marks);
+      trigger?.focus({ preventScroll: true });
+      restoreAndHold(marks);
+    };
+  }, [open]);
+
+  function rememberScroll() {
+    scrollMarks.current = captureScroll(triggerRef.current);
+  }
+
+  function openDialog() {
+    if (scrollMarks.current.length === 0) rememberScroll();
+    setOpen(true);
+  }
+
   const dialog = open ? (
-    <div className="modal-bg" role="dialog">
-      <form className="modal" action={actionRecordPayment}>
+    <div
+      className="modal-bg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      ref={dialogRef}
+      tabIndex={-1}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) setOpen(false);
+      }}
+    >
+      <form className="modal" action={actionRecordPayment} onClick={(event) => event.stopPropagation()}>
         <div className="hd">
-          <h3>{label}</h3>
+          <h3 id={titleId}>{label}</h3>
           <span className="sp" />
-          {returnTo === "staff" ? (
-            <button className="btn ghost" type="button" onClick={() => setOpen(false)}>
-              {t("i_close")}
-            </button>
-          ) : null}
+          <button className="btn ghost" type="button" data-testid="pay-dialog-close" aria-label={t("i_close")} onClick={() => setOpen(false)}>
+            ✕
+          </button>
         </div>
         <div className="bd">
           <input type="hidden" name="leaseId" value={leaseId} />
@@ -48,7 +133,7 @@ export function PayDialog({
               inputMode="decimal"
               onChange={(event) => setAmount(event.target.value)}
             />
-            <div className="hint">{t("i_pay_hint")}</div>
+            <div className="hint">{t(returnTo === "tenant" ? "i_pay_hint_tenant" : "i_pay_hint")}</div>
           </div>
           <div className="fg">
             <label className="f">{t("i_paid_on")}</label>
@@ -72,10 +157,9 @@ export function PayDialog({
       </form>
     </div>
   ) : null;
-  if (returnTo === "tenant") return dialog;
   return (
     <>
-      <button className="btn sm pri" type="button" data-testid="record-payment" onClick={() => setOpen(true)}>
+      <button ref={triggerRef} className="btn sm pri" type="button" data-testid="record-payment" onPointerDown={rememberScroll} onClick={openDialog}>
         {label}
       </button>
       {dialog}
