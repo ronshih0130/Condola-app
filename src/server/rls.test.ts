@@ -664,8 +664,9 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.equal(managerText.includes(`、${coTenant}，出租人`), true);
   assert.equal(managerText.includes(guarantor), false);
   assert.equal(managerText.includes(cosigner), false);
-  assert.equal(managerText.includes("弄__88號之1 3樓"), true);
-  assert.equal(managerText.includes("弄88"), false);
+  assert.equal(managerText.includes("松仁路 88號之1 3樓"), true);
+  assert.equal(managerText.includes("基地坐落"), false);
+  assert.equal(managerText.includes("__弄"), false);
   assert.equal(managerText.includes("88號之1，"), false);
   assert.equal(managerText.includes("88號之1號"), false);
   assert.equal(managerText.includes("弄88之1號"), false);
