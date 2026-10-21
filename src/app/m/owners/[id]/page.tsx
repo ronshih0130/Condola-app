@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { OwnerForm } from "@/components/owner-form";
+import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionUpdateOwner } from "@/server/actions";
+import { portalLoginReady } from "@/server/portal-invite";
 import { listProperties, ownerEditor } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -21,10 +23,14 @@ export default async function EditOwnerPage({
   const t = makeT(session.locale);
   const [owner, properties] = await Promise.all([ownerEditor(session, id), listProperties(session)]);
   if (!owner) notFound();
+  const activated = session.role === "admin" || session.role === "manager" ? await portalLoginReady(owner.user_id) : false;
   return (
     <>
       <PageHeader title={t("i_owner_edit")} crumb={t("i_owners_title")} />
       <ErrorBanner t={t} error={query.error} />
+      {session.role === "admin" || session.role === "manager" ? (
+        <PortalInviteButton kind="owner" contactId={owner.id} activated={activated} />
+      ) : null}
       <OwnerForm
         t={t}
         action={actionUpdateOwner}

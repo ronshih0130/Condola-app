@@ -37,6 +37,7 @@ import { demoModeEnabled } from "./demo";
 import { closeMonth, reversePayment } from "./domain";
 import { addExpense, approveExpense, createExpense, updateExpense, voidExpense } from "./expenses";
 import { FlowError } from "./errors";
+import { issuePortalInvite } from "./portal-invite";
 import { clearStoredEnvChoice } from "./org-scope";
 import { appCookieOptions, sameAppPath } from "./public-origin";
 import { clearAuthCookies, sessionEntryPath } from "./sign-out";
@@ -179,12 +180,38 @@ export async function actionReset(formData: FormData) {
 export async function actionAccept(formData: FormData) {
   const token = text(formData.get("token"));
   const result = await acceptInvite(token, text(formData.get("name")), text(formData.get("password")), text(formData.get("confirm")), await meta());
-  if (!result.ok) redirect(`/accept/${encodeURIComponent(token)}?error=${result.error}`);
+  if (!result.ok) {
+    const portal = result.kind === "owner" || result.kind === "tenant" || result.kind === "unknown";
+    if (portal && result.error !== "weak" && result.error !== "mismatch") {
+      redirect(`/accept/${encodeURIComponent(token)}`);
+    }
+    redirect(`/accept/${encodeURIComponent(token)}?error=${result.error}`);
+  }
   const jar = await cookies();
   const cookie = sessionCookie(result.token, true);
   jar.set(cookie.name, cookie.value, cookie.options);
   clearStoredEnvChoice(jar);
+  if ("destination" in result && result.destination) redirect(result.destination);
   redirect(sessionEntryPath("/auth/continue"));
+}
+
+export async function actionIssuePortalInvite(input: { kind: string; contactId: string; leaseId?: string }) {
+  try {
+    const session = await getSession();
+    const kind = input.kind === "owner" || input.kind === "tenant" ? input.kind : "";
+    if (!kind || !input.contactId) return { ok: false as const, error: "errors.required" };
+    const issued = await issuePortalInvite(
+      session,
+      { kind, contactId: input.contactId, leaseId: input.leaseId || undefined },
+      await requestOrigin(),
+    );
+    if (issued.activated) return { ok: true as const, activated: true as const };
+    return { ok: true as const, activated: false as const, url: issued.url };
+  } catch (error) {
+    if (isRedirect(error)) throw error;
+    const key = error instanceof FlowError ? error.key : "errors.generic";
+    return { ok: false as const, error: key };
+  }
 }
 
 export async function actionInvite(formData: FormData) {

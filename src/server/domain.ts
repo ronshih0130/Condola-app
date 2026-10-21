@@ -19,6 +19,7 @@ import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
+import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS } from "./portal-invite";
 import { assertTicketStatus } from "./repair-rules";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
@@ -119,10 +120,8 @@ export async function createProperty(session: Session, input: PropertyInput) {
     );
     if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
     let ownerUserId: string | null = null;
-    let inviteCode: string | null = null;
     if (input.ownerMode === "new") {
       ownerUserId = await insertPortalUser(client, { name: input.ownerName.trim(), email: ownerEmail, phone: ownerPhone });
-      inviteCode = `CND-${randomUUID().slice(0, 8).toUpperCase()}`;
     }
     const country = input.currency === "USD" ? "US" : "TW";
     const jurisdiction = await one<{ id: string }>(
@@ -166,10 +165,11 @@ export async function createProperty(session: Session, input: PropertyInput) {
         [session.orgId, ownerUserId, input.ownerName.trim(), ownerEmail, ownerPhone, session.locale],
       );
       ownerContactId = contact.id;
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`portal-invite:${ownerContactId}`]);
       await client.query(
-        `INSERT INTO invitations (org_id, kind, contact_id, email, phone_e164, code_hash, invited_by)
-         VALUES ($1,'owner',$2,$3,$4,$5,$6)`,
-        [session.orgId, ownerContactId, ownerEmail, ownerPhone, sha256(inviteCode!), session.userId],
+        `INSERT INTO invitations (org_id, kind, contact_id, email, phone_e164, code_hash, expires_at, invited_by)
+         VALUES ($1,'owner',$2,$3,$4,$5, now() + make_interval(days => $6), $7)`,
+        [session.orgId, ownerContactId, ownerEmail, ownerPhone, hashInviteToken(newInviteToken()), PORTAL_INVITE_DAYS, session.userId],
       );
     }
     if (!ownerContactId) throw new FlowError("errors.required");
@@ -222,7 +222,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
       );
       roomIds.push(inserted.id);
     }
-    return { propertyId: property.id, ownerContactId, roomIds, inviteCode };
+    return { propertyId: property.id, ownerContactId, roomIds, inviteCode: null as string | null };
   }, { orgId: session.orgId, environment: session.environment });
 
   if (input.rentalMode === "by_room" && created.roomIds.length >= 3) await markTryout(session.orgId, "property");

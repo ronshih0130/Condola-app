@@ -6,6 +6,7 @@ import { query, svc, tx, withClient } from "./db";
 import { createLease, createProperty } from "./domain";
 import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
+import { hashInviteToken, issuePortalInvite } from "./portal-invite";
 import { seedPortfolio } from "./portfolio";
 import type { Session } from "./types";
 
@@ -459,5 +460,89 @@ test("creating a property with a new owner works as service_role without write a
         await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
       }
     });
+  }
+});
+
+test("another firm cannot issue or redeem a portal invite, and anon cannot read the lockout table", async () => {
+  const admin: Session = {
+    userId: USERS.admin,
+    sessionId: "rls-invite",
+    email: "yating.lin@songxin.demo",
+    name: "Admin",
+    kind: "staff",
+    role: "admin",
+    orgId: ORG_ID,
+    liveOrgId: ORG_ID,
+    environment: "live",
+    locale: "zh-TW",
+    calendar: "gregorian",
+    leaseId: null,
+  };
+  const contact = await tx(USERS.admin, (client) =>
+    client.query<{ id: string }>(
+      `INSERT INTO contacts (org_id, is_owner, display_name, email, locale)
+       VALUES ($1, true, '隔離屋主', 'rls.owner@example.com', 'zh-TW') RETURNING id::text`,
+      [ORG_ID],
+    ),
+  );
+  const contactId = contact.rows[0].id;
+  let userId: string | null = null;
+  try {
+    const issued = await issuePortalInvite(admin, { kind: "owner", contactId }, "https://app.condola.app");
+    assert.equal(issued.activated, false);
+    if (issued.activated) return;
+    const owner = await query<{ user_id: string }>(`SELECT user_id::text AS user_id FROM contacts WHERE id = $1`, [contactId]);
+    userId = owner.rows[0].user_id;
+
+    const coast = await tx(USERS.coastAdmin, async (client) => {
+      const selected = await client.query(`SELECT id FROM invitations WHERE contact_id = $1`, [contactId]);
+      const updated = await client.query(`UPDATE invitations SET status = 'accepted' WHERE code_hash = $1`, [hashInviteToken(issued.token)]);
+      return { selected: selected.rowCount, updated: updated.rowCount };
+    });
+    assert.equal(coast.selected, 0);
+    assert.equal(coast.updated, 0);
+
+    await assert.rejects(
+      () =>
+        tx(USERS.coastAdmin, (client) =>
+          client.query(
+            `INSERT INTO invitations (org_id, kind, contact_id, email, code_hash, expires_at, invited_by)
+             VALUES ($1, 'owner', $2, 'rls.owner@example.com', $3, now() + interval '7 days', $4)`,
+            [ORG_ID, contactId, hashInviteToken("other-firm"), USERS.coastAdmin],
+          ),
+        ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+    );
+    await assert.rejects(
+      () =>
+        tx(USERS.accountant, (client) =>
+          client.query(
+            `INSERT INTO invitations (org_id, kind, contact_id, email, code_hash, expires_at, invited_by)
+             VALUES ($1, 'owner', $2, 'accountant.rls@example.com', $3, now() + interval '7 days', $4)`,
+            [ORG_ID, contactId, hashInviteToken("accountant"), USERS.accountant],
+          ),
+        ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+    );
+
+    const grants = await query<{ grantee: string }>(
+      `SELECT grantee FROM information_schema.role_table_grants
+        WHERE table_name = 'portal_invite_attempts' AND grantee IN ('anon', 'authenticated', 'PUBLIC')`,
+    );
+    assert.equal(grants.rows.length, 0);
+    await withClient(async (client) => {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL ROLE anon");
+      await assert.rejects(() => client.query(`SELECT ip FROM portal_invite_attempts`), /permission denied/i);
+      await client.query("ROLLBACK");
+    });
+  } finally {
+    await query(`DELETE FROM invitations WHERE contact_id = $1`, [contactId]);
+    await query(`UPDATE contacts SET user_id = NULL WHERE id = $1`, [contactId]);
+    if (userId) {
+      await query(`DELETE FROM profiles WHERE id = $1`, [userId]);
+      await query(`DELETE FROM auth.users WHERE id = $1`, [userId]);
+    }
+    await query(`DELETE FROM contacts WHERE id = $1`, [contactId]);
   }
 });

@@ -9,6 +9,7 @@ import { outboundNote } from "./outbound";
 import { FlowError } from "./errors";
 import { LOCKOUT_LIMIT, lockActive, nextFailure } from "./lockout";
 import { passwordAcceptable } from "./password";
+import { hashInviteToken, inviteAttemptLocked, noteBadInvite } from "./portal-invite";
 import { assertSeatAvailable } from "./seats";
 import { assertPerm } from "./perms";
 import { appCookieOptions } from "./public-origin";
@@ -112,17 +113,20 @@ export async function setUserPassword(userId: string, password: string) {
   const url = supabaseUrl();
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   if (url && service) {
-    const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/admin/users/${userId}`, {
-      method: "PUT",
-      headers: {
-        apikey: service,
-        Authorization: `Bearer ${service}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ password }),
-    });
-    if (!response.ok) throw new FlowError("errors.generic");
-    return;
+    try {
+      const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/admin/users/${userId}`, {
+        method: "PUT",
+        headers: {
+          apikey: service,
+          Authorization: `Bearer ${service}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
+      if (response.ok) return;
+    } catch {
+      // Sign-in reads auth.users. A missing admin API still has to set that row.
+    }
   }
   await query(
     `UPDATE auth.users SET encrypted_password = crypt($2, gen_salt('bf')), updated_at = now() WHERE id = $1`,
@@ -558,32 +562,49 @@ export async function setMemberActive(session: Session, memberId: string, active
   await writeAudit(session.orgId, session.userId, "reactivate", { memberId });
 }
 
-export type InviteView =
-  | { state: "ready"; email: string; role: OrgRole; firm: string; inviter: string }
-  | { state: "expired" | "revoked" | "used" | "invalid" };
+export type InviteKind = "team_member" | "owner" | "tenant" | "unknown";
 
-export async function describeInvite(token: string): Promise<InviteView> {
+export type InviteView =
+  | { state: "ready"; kind: "team_member"; email: string; role: OrgRole; firm: string; inviter: string }
+  | { state: "ready"; kind: "owner" | "tenant"; email: string; firm: string }
+  | { state: "expired" | "revoked" | "used" | "invalid"; kind: InviteKind };
+
+export async function describeInvite(token: string, meta?: { ip: string | null }): Promise<InviteView> {
+  if (meta && (await inviteAttemptLocked(meta.ip))) return { state: "invalid", kind: "unknown" };
   const row = await query<{
     status: string;
     expires_at: Date;
-    email: string;
-    role: OrgRole;
+    kind: string;
+    email: string | null;
+    role: OrgRole | null;
     firm: string;
     inviter: string | null;
   }>(
-    `SELECT i.status::text, i.expires_at, i.email::text, i.role::text, o.name AS firm, p.display_name AS inviter
+    `SELECT i.status::text, i.expires_at, i.kind::text, i.email::text, i.role::text, o.name AS firm, p.display_name AS inviter
        FROM invitations i
        JOIN organizations o ON o.id = i.org_id
        LEFT JOIN profiles p ON p.id = i.invited_by
-      WHERE i.code_hash = $1 AND i.kind = 'team_member'`,
-    [sha256(token)],
+      WHERE i.code_hash = $1`,
+    [hashInviteToken(token)],
   );
   const invite = row.rows[0];
-  if (!invite) return { state: "invalid" };
-  if (invite.status === "accepted") return { state: "used" };
-  if (invite.status === "revoked") return { state: "revoked" };
-  if (invite.status !== "pending" || invite.expires_at.getTime() <= Date.now()) return { state: "expired" };
-  return { state: "ready", email: invite.email, role: invite.role, firm: invite.firm, inviter: invite.inviter ?? "" };
+  const kind: InviteKind =
+    invite?.kind === "team_member" || invite?.kind === "owner" || invite?.kind === "tenant" ? invite.kind : "unknown";
+  const reject = async (state: "expired" | "revoked" | "used" | "invalid", badKind: InviteKind): Promise<InviteView> => {
+    if (meta) await noteBadInvite(meta.ip);
+    return { state, kind: badKind };
+  };
+  if (!invite) return reject("invalid", "unknown");
+  if (invite.status === "accepted") return reject("used", kind);
+  if (invite.status === "revoked") return reject("revoked", kind);
+  if (invite.status !== "pending" || invite.expires_at.getTime() <= Date.now()) return reject("expired", kind);
+  if (kind === "team_member" && invite.role && invite.email) {
+    return { state: "ready", kind, email: invite.email, role: invite.role, firm: invite.firm, inviter: invite.inviter ?? "" };
+  }
+  if ((kind === "owner" || kind === "tenant") && invite.email) {
+    return { state: "ready", kind, email: invite.email, firm: invite.firm };
+  }
+  return reject("invalid", kind);
 }
 
 async function upsertInvitedUser(client: Client, email: string, name: string, password: string) {
@@ -614,12 +635,64 @@ async function upsertInvitedUser(client: Client, email: string, name: string, pa
   return id;
 }
 
+async function acceptPortalInvite(token: string, password: string, meta: RequestMeta, kind: "owner" | "tenant") {
+  const saved = await withClient(async (client) => {
+    try {
+      await client.query("BEGIN");
+      const invite = await client.query<{
+        id: string;
+        org_id: string;
+        contact_id: string;
+        user_id: string | null;
+      }>(
+        `SELECT i.id::text, i.org_id::text, i.contact_id::text, c.user_id::text AS user_id
+           FROM invitations i
+           JOIN contacts c ON c.id = i.contact_id AND c.org_id = i.org_id
+          WHERE i.code_hash = $1 AND i.kind = $2::invitation_kind
+            AND i.status = 'pending' AND i.expires_at > now()
+          FOR UPDATE OF i`,
+        [hashInviteToken(token), kind],
+      );
+      const row = invite.rows[0];
+      if (!row?.user_id) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      await setUserPassword(row.user_id, password);
+      await client.query(
+        `UPDATE invitations SET status = 'accepted', accepted_by = $2, accepted_at = now() WHERE id = $1`,
+        [row.id, row.user_id],
+      );
+      await client.query("COMMIT");
+      return row;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
+  if (!saved?.user_id) return { ok: false as const, error: "invalid" as const, kind };
+  await writeAudit(saved.org_id, saved.user_id, "portal_invite_accept", {
+    kind,
+    contactId: saved.contact_id,
+    invitationId: saved.id,
+  });
+  const sessionToken = await createSession(saved.user_id, true, meta);
+  return {
+    ok: true as const,
+    token: sessionToken,
+    role: null,
+    kind,
+    destination: kind === "tenant" ? "/t" : "/o/statements",
+  };
+}
+
 export async function acceptInvite(token: string, name: string, password: string, confirm: string, meta: RequestMeta) {
-  if (!name.trim()) return { ok: false as const, error: "required" as const };
-  if (password !== confirm) return { ok: false as const, error: "mismatch" as const };
-  if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const };
-  const view = await describeInvite(token);
-  if (view.state !== "ready") return { ok: false as const, error: view.state };
+  const view = await describeInvite(token, meta);
+  if (view.state !== "ready") return { ok: false as const, error: view.state, kind: view.kind };
+  if (password !== confirm) return { ok: false as const, error: "mismatch" as const, kind: view.kind };
+  if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const, kind: view.kind };
+  if (view.kind === "owner" || view.kind === "tenant") return acceptPortalInvite(token, password, meta, view.kind);
+  if (!name.trim()) return { ok: false as const, error: "required" as const, kind: "team_member" as const };
   return withClient(async (client) => {
   try {
     await client.query("BEGIN");
@@ -627,12 +700,12 @@ export async function acceptInvite(token: string, name: string, password: string
       `SELECT id::text, org_id::text, role::text, email::text FROM invitations
         WHERE code_hash = $1 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()
         FOR UPDATE`,
-      [sha256(token)],
+      [hashInviteToken(token)],
     );
     const row = invite.rows[0];
     if (!row) {
       await client.query("ROLLBACK");
-      return { ok: false as const, error: "used" as const };
+      return { ok: false as const, error: "used" as const, kind: "team_member" as const };
     }
     const userId = await upsertInvitedUser(client, row.email, name.trim(), password);
     const member = await client.query(
@@ -641,7 +714,7 @@ export async function acceptInvite(token: string, name: string, password: string
     );
     if (member.rows[0]?.status === "active") {
       await client.query("ROLLBACK");
-      return { ok: false as const, error: "used" as const };
+      return { ok: false as const, error: "used" as const, kind: "team_member" as const };
     }
     if (member.rows[0]) {
       await client.query(
@@ -661,7 +734,7 @@ export async function acceptInvite(token: string, name: string, password: string
     await client.query("COMMIT");
     await writeAudit(row.org_id, userId, "invite_accept", { role: row.role });
     const sessionToken = await createSession(userId, true, meta);
-    return { ok: true as const, token: sessionToken, role: row.role };
+    return { ok: true as const, token: sessionToken, role: row.role, kind: "team_member" as const };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

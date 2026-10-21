@@ -596,6 +596,8 @@ export async function leaseDetail(session: Session, id: string) {
       start_date: string;
       end_date: string;
       place: string;
+      tenant_contact_id: string;
+      tenant_user_id: string | null;
       tenant: string;
       phone: string | null;
       email: string | null;
@@ -614,6 +616,8 @@ export async function leaseDetail(session: Session, id: string) {
               l.updated_at::text AS updated_at, l.signed_at::text AS signed_at,
               l.start_date::text, l.end_date::text,
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
+              c.id::text AS tenant_contact_id,
+              c.user_id::text AS tenant_user_id,
               c.display_name AS tenant,
               CASE WHEN app.has_role(l.org_id, '{admin,manager,maintenance}') THEN c.phone_e164 END AS phone,
               c.email,
@@ -1377,9 +1381,9 @@ export async function listOwnerDirectory(session: Session) {
 
 export async function ownerEditor(session: Session, id: string) {
   return tx(session.userId, async (client) => {
-    const owner = await maybe<{ id: string; name: string; email: string | null; phone: string | null }>(
+    const owner = await maybe<{ id: string; name: string; email: string | null; phone: string | null; user_id: string | null }>(
       client,
-      `SELECT id::text, display_name AS name, email::text, phone_e164 AS phone
+      `SELECT id::text, display_name AS name, email::text, phone_e164 AS phone, user_id::text AS user_id
          FROM contacts
         WHERE id = $1 AND org_id = $2 AND is_owner AND archived_at IS NULL`,
       [id, session.orgId],
