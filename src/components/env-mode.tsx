@@ -1,75 +1,23 @@
 "use client";
 
-import Link from "next/link";
-import { useState, type CSSProperties } from "react";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { actionGoLive } from "@/server/env-actions";
 import { PendingSubmit } from "./pending-submit";
-import type { OrgEnvironment } from "@/server/org-scope";
 import { useT } from "./locale";
 
-export function EnvSwitch({ environment, liveEnabled }: { environment: OrgEnvironment; liveEnabled: boolean }) {
+export function EnvBanner({ showBack }: { showBack: boolean }) {
   const t = useT();
-  const sandbox = environment === "sandbox";
-  const long = sandbox ? t("i_env_test") : t("i_env_live");
-  const short = sandbox ? t("i_env_test_short") : t("i_env_live_short");
-  const [menu, setMenu] = useState<CSSProperties | null>(null);
-  return (
-    <div className="env-switch" id="envSwitch">
-      <button
-        type="button"
-        className="env-toggle"
-        data-testid="env-switch"
-        aria-label={t("i_env_menu")}
-        aria-expanded={menu ? true : false}
-        onClick={(event) => {
-          if (menu) {
-            setMenu(null);
-            return;
-          }
-          const rect = event.currentTarget.getBoundingClientRect();
-          setMenu({ top: rect.bottom + 6, left: Math.max(8, rect.left) });
-        }}
-      >
-        <span className="env-long">{long}</span>
-        <span className="env-short">{short}</span>
-        <span aria-hidden="true"> ▾</span>
-      </button>
-      {menu ? (
-      <div className="env-menu" id="envMenu" data-testid="env-menu" style={menu}>
-        {liveEnabled ? (
-          <a href="/api/env?set=live&next=/m" data-testid="env-pick-live">
-            <b>{t("i_env_live")}</b>
-            <small>{t("i_env_live_hint")}</small>
-          </a>
-        ) : (
-          <span className="env-pick-disabled" data-testid="env-pick-live" aria-disabled="true">
-            <b>{t("i_env_live")}</b>
-            <small>{t("i_live_locked")}</small>
-          </span>
-        )}
-        <a href="/api/env?set=sandbox&next=/m" data-testid="env-pick-sandbox">
-          <b>{t("i_env_test")}</b>
-          <small>{t("i_env_test_hint")}</small>
-        </a>
-        {sandbox ? (
-          <a href="/m/env" data-testid="env-go-live">
-            <b>{t("i_env_to_live")}</b>
-          </a>
-        ) : null}
-      </div>
-      ) : null}
-    </div>
-  );
-}
-
-export function EnvBanner() {
-  const t = useT();
+  const path = usePathname() || "/m";
+  const href = `/api/env?set=live&next=${encodeURIComponent(path)}`;
   return (
     <div className="env-banner" id="envBanner" data-testid="env-banner" role="status">
-      <b>{t("i_env_banner_title")}</b>
-      <Link href="/m/env" data-testid="env-banner-live">
-        {t("i_golive_start")} →
-      </Link>
+      <b>{t("i_sandbox_banner")}</b>
+      {showBack ? (
+        <a href={href} data-testid="env-banner-live">
+          {t("i_sandbox_back")}
+        </a>
+      ) : null}
     </div>
   );
 }
@@ -96,12 +44,7 @@ export function GoLiveForm({
           <div className="alert ok">{t("i_golive_req_ok", { n: activeUnits, free: freeUnits })}</div>
         ) : (
           <div className="alert warn" data-testid="gl-blocked">
-            <div>
-              <p>{t("i_golive_blocked", { free: freeUnits })}</p>
-              <a href="/m/upgrade" data-testid="gl-upgrade">
-                {t("i_golive_upgrade")}
-              </a>
-            </div>
+            <p>{t("i_golive_blocked", { free: freeUnits })}</p>
           </div>
         )}
       </div>

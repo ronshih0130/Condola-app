@@ -65,7 +65,7 @@ export default async function PricingPage() {
       );
     }
     return (
-      <Link className="btn pri" href={signedIn ? `/m/upgrade?tier=${plan}` : "/signup"} data-testid={`plan-upgrade-${plan}`}>
+      <Link className="btn pri" href={signedIn ? "/m/settings" : "/signup"} data-testid={`plan-upgrade-${plan}`}>
         {t("i_price_upgrade")}
       </Link>
     );

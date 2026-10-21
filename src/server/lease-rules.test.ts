@@ -84,6 +84,8 @@ test("a Taiwan mobile becomes +886 and an international number stays", () => {
   assert.equal(normalizePhone("+886912345678"), "+886912345678");
   assert.equal(normalizePhone("  "), null);
   assert.equal(normalizePhone("0212345678"), null);
+  assert.equal(normalizePhone("0912345678", "+886"), "+886912345678");
+  assert.equal(normalizePhone("4155552671", "+1"), "+14155552671");
 });
 
 test("LINE id is optional and bounded", () => {

@@ -5,6 +5,7 @@ import { ErrorBanner, PageHeader } from "@/components/ui";
 import { FlowError } from "@/server/errors";
 import { formatMoney } from "@/server/format";
 import { loadIncomeExpense, reportFilterOptions, reportPeriod, type ReportPeriod, type ReportRow } from "@/server/income-expense";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -139,7 +140,7 @@ export default async function IncomeExpenseReportPage({
             <tbody>
               {rows.map((row) => {
                 const total = !row.property_id;
-                const label = total ? t("i_report_total") : (row.property_name ?? "");
+                const label = total ? t("i_report_total") : displaySampleName(row.property_name ?? "");
                 return (
                   <tr
                     key={`${row.currency}-${row.property_id ?? "total"}`}

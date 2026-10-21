@@ -7,6 +7,7 @@ import { firmDisplayName, normalizePartnerCode } from "./billing";
 import { query, withClient } from "./db";
 import { recordFunnel } from "./funnel";
 import { previewPartnerCodeOn, redeemPartnerCode } from "./partners";
+import { countryByCode } from "@/countries";
 import { normalizePhone } from "./lease-rules";
 import { passwordAcceptable } from "./password";
 import { seedSandboxForNewFirm } from "./sandbox";
@@ -398,6 +399,8 @@ export async function createFirm(input: {
   contactName: string;
   phone: string;
   partnerCode: string;
+  country?: string;
+  phoneCountry?: string;
 }) {
   const kind = input.kind === "firm" || input.kind === "self" ? input.kind : null;
   const contactName = input.contactName.trim();
@@ -406,6 +409,8 @@ export async function createFirm(input: {
   if (!firmName) return { ok: false as const, error: "required" as const };
   const code = normalizePartnerCode(input.partnerCode);
   const usableCode = code || null;
+  const profile = countryByCode(input.country);
+  const callingCode = input.phoneCountry?.trim() || profile.callingCode;
 
   const created = await withClient(async (client) => {
     await client.query("BEGIN");
@@ -414,26 +419,30 @@ export async function createFirm(input: {
         `SELECT 1 FROM organizations WHERE environment = 'live' AND lower(btrim(name)) = lower(btrim($1)) LIMIT 1`,
         [firmName],
       );
-      const jurisdiction = await client.query<{ id: string }>(`SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
+      const jurisdiction = await client.query<{ id: string }>(`SELECT id::text FROM jurisdictions WHERE code = $1`, [profile.jurisdiction]);
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO organizations (
            name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
            is_rental_mgmt_business, plan_tier, settings, created_by,
            firm_kind, contact_name, contact_phone, contact_email, dup_name_flag, signup_source
          ) VALUES (
-           $1, 'TW', $2, 'TWD', 'zh-TW', 'Asia/Taipei',
-           $3, 'free', $4::jsonb, $5,
-           $6, $7, $8, $9, $10, 'v2'
+           $1, $2, $3, $4, $5, $6,
+           $7, 'free', $8::jsonb, $9,
+           $10, $11, $12, $13, $14, 'v2'
          ) RETURNING id::text`,
         [
           firmName,
+          profile.code,
           jurisdiction.rows[0]?.id ?? null,
+          profile.currency,
+          profile.locale,
+          profile.timezone,
           kind === "firm",
-          JSON.stringify({ plan: { tier: "free", trialUntil: null }, signup: { source: "v2" } }),
+          JSON.stringify({ plan: { tier: "free", trialUntil: null }, signup: { source: "v2" }, country: profile.code }),
           input.userId,
           kind,
           contactName,
-          normalizePhone(input.phone) ?? (input.phone.trim() || null),
+          normalizePhone(input.phone, callingCode) ?? (input.phone.trim() || null),
           input.email,
           Boolean(dup.rows[0]),
         ],

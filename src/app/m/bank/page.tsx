@@ -4,6 +4,7 @@ import { ErrorBanner, PageHeader } from "@/components/ui";
 import { sampleCsv } from "@/server/domain";
 import { formatMoney } from "@/server/format";
 import { latestUnmatchedPayment, listMatches } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ export default async function BankPage({ searchParams }: { searchParams: Promise
                 {matches.map((match) => (
                   <tr key={match.id}>
                     <td>
-                      {match.tenant}
+                      {displaySampleName(match.tenant)}
                       <div className="small muted">
                         {match.posted_on} · {match.last5} · {t("i_score", { score: match.score })}
                       </div>

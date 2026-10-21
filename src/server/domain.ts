@@ -12,9 +12,12 @@ import {
   round3,
   scoreMatch,
   splitWeighted,
+  taipeiToday,
   toMinor,
 } from "./money";
 import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/lease-confirm";
+import { claimIdempotentSubmit, idempotencyLockKey, stableStringify } from "@/idempotency";
+import { typedAddressDisplay } from "@/property-address";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
@@ -90,35 +93,235 @@ export type PropertyInput = {
   canViewTenantPhone: boolean;
   unitLabel: string;
   floor: string;
+  doorSupplement?: string;
   rentalMode: "whole_unit" | "by_room";
   rooms: { label: string; roomType: string; baseRentMajor: number }[];
+  extraUnits?: { label: string; floor: string; door: string; rooms: { label: string; roomType: string; baseRentMajor: number }[] }[];
+  electric?: {
+    split: "even" | "sub" | "owner";
+    rateMajor: number | null;
+    openings: (number | null)[];
+  } | null;
+  submitToken?: string;
 };
+
+const PROPERTY_ROOM_TYPES = new Set(["whole_home", "studio", "suite", "shared_bath"]);
+
+function assertPropertyRoomTypes(rooms: { roomType: string }[]) {
+  if (rooms.some((room) => !PROPERTY_ROOM_TYPES.has(room.roomType))) {
+    throw new FlowError("errors.required", { field: "i_room_type" });
+  }
+}
+
+function uniqueUnitLabel(label: string, floor: string, door: string, used: Set<string>) {
+  const base = label.trim() || [floor.trim(), door.trim()].filter(Boolean).join(" ") || "1";
+  let next = base;
+  let suffix = 2;
+  while (used.has(next)) {
+    next = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  used.add(next);
+  return next;
+}
+
+async function insertPropertyUnit(
+  client: Client,
+  input: {
+    orgId: string;
+    propertyId: string;
+    label: string;
+    floor: string | null;
+    door: string;
+    rentalMode: "whole_unit" | "by_room";
+    areaUnit: string;
+    baseRentMinor: number | null;
+    rooms: { label: string; roomType: string; baseRentMajor: number }[];
+  },
+) {
+  const door = input.door.trim();
+  const unit = door
+    ? await one<{ id: string }>(
+        client,
+        `INSERT INTO units (org_id, property_id, label, floor, door_supplement, rental_mode, area_unit, base_rent_minor)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [input.orgId, input.propertyId, input.label, input.floor, door, input.rentalMode, input.areaUnit, input.baseRentMinor],
+      )
+    : await one<{ id: string }>(
+        client,
+        `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit, base_rent_minor)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [input.orgId, input.propertyId, input.label, input.floor, input.rentalMode, input.areaUnit, input.baseRentMinor],
+      );
+  const roomIds: string[] = [];
+  for (const room of input.rooms) {
+    const inserted = await one<{ id: string }>(
+      client,
+      `INSERT INTO rooms (org_id, unit_id, label, room_type, base_rent_minor, area_unit)
+       VALUES ($1,$2,$3,$4::room_type,$5,$6) RETURNING id`,
+      [input.orgId, unit.id, room.label.trim(), room.roomType, toMinor(room.baseRentMajor || 0), input.areaUnit],
+    );
+    roomIds.push(inserted.id);
+  }
+  return { unitId: unit.id, roomIds };
+}
+
+async function insertPropertyElectric(
+  client: Client,
+  session: Session,
+  propertyId: string,
+  unitId: string,
+  roomIds: string[],
+  electric: NonNullable<PropertyInput["electric"]>,
+) {
+  const rateMinor = electric.rateMajor == null ? null : toMinor(electric.rateMajor);
+  const ownerPays = electric.split === "owner";
+  const payer = ownerPays ? "owner" : "tenant";
+  const splitMethod = electric.split === "even" ? "even" : electric.split === "sub" ? "sub_meter" : "none";
+  const rateSource = ownerPays && rateMinor == null ? "fixed_rate" : rateMinor == null ? "bill_average" : "fixed_rate";
+  const meter = await one<{ id: string }>(
+    client,
+    `INSERT INTO meters (
+       org_id, property_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit
+     ) VALUES ($1,$2,$3,'electricity','kWh','main',$4,$5::split_method,$6::rate_source,$7) RETURNING id`,
+    [session.orgId, propertyId, unitId, payer, splitMethod, rateSource, rateMinor],
+  );
+  if (electric.split !== "sub") return;
+  for (let index = 0; index < roomIds.length; index += 1) {
+    const opening = electric.openings[index];
+    if (opening == null || !Number.isFinite(opening)) continue;
+    const sub = await one<{ id: string }>(
+      client,
+      `INSERT INTO meters (
+         org_id, property_id, unit_id, room_id, parent_meter_id, utility, usage_unit, label,
+         payer, split_method, rate_source, rate_minor_per_unit
+       ) VALUES ($1,$2,$3,$4,$5,'electricity','kWh',$6,'tenant','none'::split_method,$7::rate_source,$8) RETURNING id`,
+      [session.orgId, propertyId, unitId, roomIds[index], meter.id, `sub-${index + 1}`, rateSource, rateMinor],
+    );
+    await client.query(
+      `INSERT INTO meter_readings (org_id, meter_id, read_on, value, read_by) VALUES ($1,$2,$3,$4,$5)`,
+      [session.orgId, sub.id, taipeiToday(), opening, session.userId],
+    );
+  }
+}
+
+function propertySubmitPayload(input: PropertyInput) {
+  return {
+    name: input.name.trim(),
+    city: input.city.trim(),
+    district: input.district.trim(),
+    street: input.street.trim(),
+    currency: input.currency,
+    ownerMode: input.ownerMode,
+    ownerName: input.ownerName.trim(),
+    ownerPhone: input.ownerPhone.trim(),
+    ownerEmail: input.ownerEmail.trim(),
+    canViewTenantPhone: input.canViewTenantPhone,
+    unitLabel: input.unitLabel.trim(),
+    floor: input.floor.trim(),
+    door: (input.doorSupplement ?? "").trim(),
+    rentalMode: input.rentalMode,
+    rooms: input.rooms.map((room) => ({
+      label: room.label.trim(),
+      roomType: room.roomType,
+      baseRentMajor: room.baseRentMajor,
+    })),
+    extraUnits: (input.extraUnits ?? []).map((unit) => ({
+      label: unit.label.trim(),
+      floor: unit.floor.trim(),
+      door: unit.door.trim(),
+      rooms: unit.rooms.map((room) => ({
+        label: room.label.trim(),
+        roomType: room.roomType,
+        baseRentMajor: room.baseRentMajor,
+      })),
+    })),
+    electric: input.electric ?? null,
+  };
+}
 
 export async function createProperty(session: Session, input: PropertyInput) {
   assertStaff(session, ["admin", "manager"]);
   if (!input.name.trim()) throw new FlowError("errors.required", { field: "i_property_name" });
   if (!input.city.trim()) throw new FlowError("errors.required", { field: "i_city" });
   if (!input.street.trim()) throw new FlowError("errors.required", { field: "i_address" });
-  if (!input.unitLabel.trim()) throw new FlowError("errors.required", { field: "i_unit_label" });
-  const posted = input.rentalMode === "whole_unit" ? [] : input.rooms;
+  if (!input.unitLabel.trim() && !input.floor.trim()) throw new FlowError("errors.required", { field: "i_floor" });
+  const wholeUnit = input.rentalMode === "whole_unit";
+  const posted = wholeUnit ? input.rooms.slice(0, 1) : input.rooms;
   const rooms = posted.filter((room) => room.label.trim() || room.baseRentMajor > 0);
   if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  if (wholeUnit && rooms.length !== 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
   if (input.rentalMode === "by_room" && rooms.length < 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  if (input.rentalMode === "by_room") assertPropertyRoomTypes(rooms);
+  if (rooms.some((room) => room.roomType === "whole_home") && rooms.length !== 1) {
+    throw new FlowError("errors.required", { field: "s_8569bc8" });
+  }
+  for (const extra of input.rentalMode === "by_room" ? (input.extraUnits ?? []) : []) {
+    const extraRooms = extra.rooms.filter((room) => room.label.trim() || room.baseRentMajor > 0);
+    if (!extra.floor.trim() && !extra.label.trim() && extraRooms.length === 0) continue;
+    assertPropertyRoomTypes(extraRooms);
+  }
+  if (input.electric?.rateMajor != null && (!Number.isFinite(input.electric.rateMajor) || input.electric.rateMajor < 0)) {
+    throw new FlowError("errors.amount", { field: "i_rate" });
+  }
 
   const ownerPhone = cleanPhone(input.ownerPhone);
   const ownerEmail = cleanEmail(input.ownerEmail);
   if (input.ownerMode === "new" && !input.ownerName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
 
   const created = await tx(session.userId, async (client) => {
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property:${session.userId}:${input.name.trim()}`]);
-    const recent = await maybe<{ id: string }>(
-      client,
-      `SELECT id FROM properties
-        WHERE org_id = $1 AND name = $2 AND created_at > now() - interval '20 seconds'
-        ORDER BY created_at DESC LIMIT 1`,
-      [session.orgId, input.name.trim()],
-    );
-    if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
+    const submitToken = (input.submitToken || "").trim().slice(0, 80);
+    const submitHash = submitToken ? sha256(stableStringify(propertySubmitPayload(input))) : "";
+    if (submitToken) {
+      // One indexed lookup, not a scan under RLS. Permissive property policies
+      // call tenant/owner functions per row, and that scan is what stretched
+      // a create from about two seconds into the tens. service_role skips
+      // those policies; org_id keeps the read inside this firm.
+      await client.query(`SET LOCAL ROLE service_role`);
+      let prior: { id: string } | null = null;
+      try {
+        prior = await maybe<{ id: string }>(
+          client,
+          `WITH locked AS (
+             SELECT pg_advisory_xact_lock(hashtext($1))
+           )
+           SELECT id::text
+             FROM properties, locked
+            WHERE org_id = $2
+              AND address->>'submitUser' = $3
+              AND address->>'submitToken' = $4
+              AND address->>'submitHash' = $5
+            ORDER BY created_at DESC
+            LIMIT 1`,
+          [
+            idempotencyLockKey("property", session.orgId, session.userId, submitToken),
+            session.orgId,
+            session.userId,
+            submitToken,
+            submitHash,
+          ],
+        );
+      } finally {
+        await client.query(`SET LOCAL ROLE authenticated`);
+      }
+      const claim = claimIdempotentSubmit(
+        prior ? [{ id: prior.id, orgId: session.orgId, userId: session.userId, token: submitToken, hash: submitHash }] : [],
+        { orgId: session.orgId, userId: session.userId, token: submitToken, hash: submitHash },
+      );
+      if (claim.action === "replay") {
+        return { propertyId: claim.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
+      }
+    } else {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property:${session.userId}:${input.name.trim()}`]);
+      const recent = await maybe<{ id: string }>(
+        client,
+        `SELECT id FROM properties
+          WHERE org_id = $1 AND name = $2 AND created_at > now() - interval '20 seconds'
+          ORDER BY created_at DESC LIMIT 1`,
+        [session.orgId, input.name.trim()],
+      );
+      if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
+    }
     let ownerUserId: string | null = null;
     if (input.ownerMode === "new") {
       ownerUserId = await insertPortalUser(client, { name: input.ownerName.trim(), email: ownerEmail, phone: ownerPhone });
@@ -134,10 +337,11 @@ export async function createProperty(session: Session, input: PropertyInput) {
       city: input.city.trim(),
       district: input.district.trim(),
       street: input.street.trim(),
+      ...(submitToken ? { submitToken, submitUser: session.userId, submitHash } : {}),
     };
     const display =
       country === "TW"
-        ? `${address.city}${address.district}${address.street}`
+        ? typedAddressDisplay(address.city, address.district, address.street)
         : [address.street, address.city, address.district].filter(Boolean).join(", ");
     const property = await one<{ id: string }>(
       client,
@@ -206,21 +410,52 @@ export async function createProperty(session: Session, input: PropertyInput) {
       }
     }
 
-    const unit = await one<{ id: string }>(
-      client,
-      `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [session.orgId, property.id, input.unitLabel.trim(), input.floor.trim() || null, input.rentalMode, country === "TW" ? "ping" : "sqft"],
-    );
+    const areaUnit = country === "TW" ? "ping" : "sqft";
+    const usedLabels = new Set<string>();
     const roomIds: string[] = [];
-    for (const room of rooms) {
-      const inserted = await one<{ id: string }>(
-        client,
-        `INSERT INTO rooms (org_id, unit_id, label, room_type, base_rent_minor, area_unit)
-         VALUES ($1,$2,$3,$4::room_type,$5,$6) RETURNING id`,
-        [session.orgId, unit.id, room.label.trim(), room.roomType || "suite", toMinor(room.baseRentMajor || 0), country === "TW" ? "ping" : "sqft"],
-      );
-      roomIds.push(inserted.id);
+    const first = await insertPropertyUnit(client, {
+      orgId: session.orgId,
+      propertyId: property.id,
+      label: uniqueUnitLabel(wholeUnit ? rooms[0].label : input.unitLabel, input.floor, input.doorSupplement ?? "", usedLabels),
+      floor: input.floor.trim() || null,
+      door: input.doorSupplement ?? "",
+      rentalMode: input.rentalMode,
+      areaUnit,
+      baseRentMinor: wholeUnit ? toMinor(rooms[0]?.baseRentMajor || 0) : null,
+      rooms: wholeUnit ? [] : rooms,
+    });
+    roomIds.push(...first.roomIds);
+    for (const extra of wholeUnit ? [] : (input.extraUnits ?? [])) {
+      const extraRooms = extra.rooms.filter((room) => room.label.trim() || room.baseRentMajor > 0);
+      if (!extra.floor.trim() && !extra.label.trim() && extraRooms.length === 0) continue;
+      if (!extra.floor.trim() && !extra.label.trim()) throw new FlowError("errors.required", { field: "i_floor" });
+      if (extraRooms.some((room) => room.roomType === "whole_home") && extraRooms.length !== 1) {
+        throw new FlowError("errors.required", { field: "s_8569bc8" });
+      }
+      const inserted = await insertPropertyUnit(client, {
+        orgId: session.orgId,
+        propertyId: property.id,
+        label: uniqueUnitLabel(extra.label, extra.floor, extra.door, usedLabels),
+        floor: extra.floor.trim() || null,
+        door: extra.door,
+        rentalMode: "by_room",
+        areaUnit,
+        baseRentMinor: null,
+        rooms: extraRooms,
+      });
+      roomIds.push(...inserted.roomIds);
+    }
+    if (input.electric?.split) {
+      const openings =
+        input.rentalMode === "whole_unit"
+          ? []
+          : input.rooms.flatMap((room, index) =>
+              room.label.trim() || room.baseRentMajor > 0 ? [input.electric?.openings[index] ?? null] : [],
+            );
+      await insertPropertyElectric(client, session, property.id, first.unitId, first.roomIds, {
+        ...input.electric,
+        openings,
+      });
     }
     return { propertyId: property.id, ownerContactId, roomIds, inviteCode: null as string | null };
   }, { orgId: session.orgId, environment: session.environment });

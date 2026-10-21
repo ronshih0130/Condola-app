@@ -1,3 +1,4 @@
+import { typedAddressDisplay } from "@/property-address";
 import { maybe, one, tx } from "./db";
 import { FlowError } from "./errors";
 import { normalizePhone } from "./lease-rules";
@@ -8,7 +9,7 @@ import type { Client } from "pg";
 
 export type SpaceKind = "room" | "whole_unit";
 export type ElectricityMethod = "submeter" | "tenant_direct";
-export type PortfolioRoomType = "suite" | "shared_bath" | "studio" | "other";
+export type PortfolioRoomType = "whole_home" | "suite" | "shared_bath" | "studio" | "other";
 
 export type PortfolioRow = {
   line: number;
@@ -79,7 +80,7 @@ const CSV_HEADERS = [
   "備註",
 ] as const;
 
-const ROOM_TYPES = new Set(["suite", "shared_bath", "studio", "other"]);
+const ROOM_TYPES = new Set(["whole_home", "suite", "shared_bath", "studio", "other"]);
 
 export function majorField(minor: string | null | undefined, currency: string) {
   if (minor === null || minor === undefined || minor === "") return "";
@@ -199,7 +200,16 @@ export function parsePortfolioCsv(text: string): PortfolioPlan {
     let roomType: PortfolioRoomType | null = null;
     if (kind === "room") {
       if (!roomLabel) throw new PortfolioError(`第 ${line} 列的分租空間需要房號`);
-      const mapped = roomTypeRaw === "套房" ? "suite" : roomTypeRaw === "雅房" ? "shared_bath" : roomTypeRaw;
+      const mapped =
+        roomTypeRaw === "套房" || roomTypeRaw === "分租套房"
+          ? "suite"
+          : roomTypeRaw === "雅房"
+            ? "shared_bath"
+            : roomTypeRaw === "獨立套房"
+              ? "studio"
+              : roomTypeRaw === "整層住家"
+                ? "whole_home"
+                : roomTypeRaw;
       if (!mapped || !ROOM_TYPES.has(mapped)) throw new PortfolioError(`第 ${line} 列的房型不正確`);
       roomType = mapped as PortfolioRoomType;
     } else if (roomLabel || roomTypeRaw) {
@@ -542,7 +552,7 @@ export async function updateProperty(
     const city = input.city.trim();
     const district = input.district.trim();
     const street = input.street.trim();
-    const display = country === "TW" ? `${city}${district}${street}` : [street, city, district].filter(Boolean).join(", ");
+    const display = country === "TW" ? typedAddressDisplay(city, district, street) : [street, city, district].filter(Boolean).join(", ");
     await client.query(
       `UPDATE properties
           SET name = $3,

@@ -2,6 +2,7 @@ import { makeT } from "@/i18n";
 import { ownerPrivacy } from "@/server/auth";
 import { formatMoney } from "@/server/format";
 import { ownerHome } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +20,9 @@ export default async function OwnerHomePage() {
           {rows.map((row) => (
             <tr key={row.lease_id}>
               <td>
-                <b data-testid="tenant-name">{privacy.showName ? row.tenant_name : t("i_tenant_hidden")}</b>
+                <b data-testid="tenant-name">{privacy.showName ? displaySampleName(row.tenant_name) : t("i_tenant_hidden")}</b>
                 <div className="small muted">
-                  {row.property_name} {row.unit_label} {row.room_label}
+                  {displaySampleName([row.property_name, row.unit_label, row.room_label].filter(Boolean).join(" "))}
                 </div>
               </td>
               <td className="num">{formatMoney(Number(row.rent), row.currency, session.locale)}</td>

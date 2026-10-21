@@ -5,6 +5,7 @@ import { Cell, RfTable } from "@/components/rf";
 import { PageHeader, statusClass, statusKey } from "@/components/ui";
 import { formatDate, formatMoney } from "@/server/format";
 import { searchLeases } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -52,10 +53,10 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
               <tr key={row.id} className="click">
                 <Cell>
                   <Link className="hit" href={`/m/leases/${row.id}`}>
-                    {row.tenant}
+                    {displaySampleName(row.tenant)}
                   </Link>
                 </Cell>
-                <Cell label={t("i_space")}>{row.place}</Cell>
+                <Cell label={t("i_space")}>{displaySampleName(row.place)}</Cell>
                 <Cell label={t("i_term")}>
                   {formatDate(row.start_date, session.locale, session.calendar, dict)} – {formatDate(row.end_date, session.locale, session.calendar, dict)}
                 </Cell>

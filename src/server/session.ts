@@ -6,7 +6,7 @@ import { isLocale, type Locale } from "@/i18n";
 import { withClient } from "./db";
 import { SESSION_COOKIE } from "./auth";
 import { ENV_COOKIE, ORG_COOKIE, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
-import { ensureSampleLoaded, ensureSandbox } from "./sandbox";
+import { correctRetiredSampleAddresses, ensureSampleLoaded, ensureSandbox } from "./sandbox";
 import type { CalendarMode, Session } from "./types";
 
 export type Prefs = { locale: Locale; calendar: CalendarMode; leaseId: string | null };
@@ -71,6 +71,7 @@ async function readSessionOnce(): Promise<Session | null> {
       const firm = await resolveStaffOrg(client, identity.user_id, preferredOrg, envChoice);
       if (firm) {
         if (firm.environment === "sandbox" && !firm.needsSandbox) {
+          await correctRetiredSampleAddresses(client, firm.orgId);
           const peek = await client.query<{ needed: boolean }>(
             `SELECT (o.sample_loaded_at IS NULL AND NOT (
                 EXISTS (SELECT 1 FROM properties p WHERE p.org_id = o.id)
@@ -147,6 +148,7 @@ async function readSessionOnce(): Promise<Session | null> {
       const sandboxId = session.needsSandbox ? await ensureSandbox(session) : session.orgId;
       const opened = { ...session, orgId: sandboxId, environment: "sandbox" as const, needsSandbox: false };
       if (seedSample) await ensureSampleLoaded(opened);
+      if (session.needsSandbox) await withClient((client) => correctRetiredSampleAddresses(client, sandboxId));
       return opened;
     }
     return session;

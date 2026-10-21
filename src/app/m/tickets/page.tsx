@@ -7,6 +7,7 @@ import { formatMoney } from "@/server/format";
 import { can, rolesFor } from "@/server/perms";
 import { isUuid } from "@/server/repair-rules";
 import { listLeases, listTicketFilters, listTicketProperties, listTickets } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -83,7 +84,7 @@ export default async function TicketsPage({
           <option value="">{t("i_expense_all")}</option>
           {rooms.map((room) => (
             <option key={room.id} value={room.id}>
-              {room.unit_label} · {room.label}
+              {displaySampleName(room.unit_label)} · {displaySampleName(room.label)}
             </option>
           ))}
         </select>
@@ -104,7 +105,7 @@ export default async function TicketsPage({
                       </Link>
                     </b>
                     <div className="small muted">
-                      {ticket.place} · {t(REPAIR_CAT_KEY[ticket.category] ?? "i_cat_other")}
+                      {displaySampleName(ticket.place)} · {t(REPAIR_CAT_KEY[ticket.category] ?? "i_cat_other")}
                       {ticket.vendor_name ? ` · ${ticket.vendor_name}` : ""}
                       {ticket.scheduled_on ? ` · ${ticket.scheduled_on}` : ""}
                     </div>
@@ -154,7 +155,7 @@ export default async function TicketsPage({
               <option value="">{t("i_choose")}</option>
               {leases.map((lease) => (
                 <option key={lease.id} value={lease.id}>
-                  {lease.tenant} · {lease.place}
+                  {displaySampleName(lease.tenant)} · {displaySampleName(lease.place)}
                 </option>
               ))}
             </select>

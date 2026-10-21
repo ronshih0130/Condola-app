@@ -9,6 +9,7 @@ import {
   COPY_KINDS,
   NEVER_KINDS,
   SAMPLE_LABEL,
+  displaySampleName,
   goLiveAllowed,
   isSampleName,
   loadSampleRows,
@@ -67,18 +68,13 @@ test("sandbox sample is bundled and loads without reading the filesystem", () =>
   assert.equal(next.bills, counts.bills + 1);
 });
 
-test("a firm without live data, or with live mode locked, always opens in test mode", () => {
-  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: false, liveEnabled: false }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: false, liveEnabled: true }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: false }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: true, liveEnabled: true }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
-});
-
-test("a live firm with data opens in live mode when no cookie is set, and an explicit test-mode choice sticks", () => {
+test("login and sign-up open the live org unless the user chose the sample company", () => {
+  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: false, liveEnabled: false }), "live");
+  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: false, liveEnabled: true }), "live");
+  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: false }), "live");
   assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: true, liveEnabled: true }), "live");
+  assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: false, liveEnabled: false }), "sandbox");
   assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: true, liveEnabled: true }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
 });
 
 test("rentable spaces are rooms plus whole units that have no rooms", () => {
@@ -99,6 +95,8 @@ test("sample names stay tagged once and phones become E.164", () => {
   assert.equal(withSampleName("Oakland [Sample data]"), "Oakland [Sample data]");
   assert.equal(isSampleName(`甲〔${SAMPLE_LABEL}〕`), true);
   assert.equal(isSampleName("信義松仁"), false);
+  assert.equal(displaySampleName(`中壢範例分租公寓〔${SAMPLE_LABEL}〕`), "中壢範例分租公寓");
+  assert.equal(displaySampleName("Oakland [Sample data]"), "Oakland");
   assert.equal(toE164("0900-000-101"), "+886900000101");
   assert.equal(toE164(""), null);
   assert.equal(sampleIdMask(1), "A00****001");
@@ -146,6 +144,29 @@ function setEnv(key: string, value: string | undefined) {
   if (value === undefined) delete process.env[key];
   else process.env[key] = value;
 }
+
+test("a sandbox session rewrites a retired sample avenue to the Taichung sample street", () => {
+  const sandbox = readFileSync(new URL("./sandbox.ts", import.meta.url), "utf8");
+  const session = readFileSync(new URL("./session.ts", import.meta.url), "utf8");
+  assert.match(sandbox, /export const RETIRED_SAMPLE_ADDRESS = "台中市西區範例路 1 號"/);
+  assert.match(sandbox, /export const SECOND_SAMPLE_ADDRESS = "台中市西區範例路 2 號"/);
+  assert.match(sandbox, /address_display LIKE '%' \|\| \$4 \|\| '%'/);
+  assert.match(sandbox, /範例大道/);
+  assert.match(sandbox, /sampleAddressRev/);
+  assert.match(session, /correctRetiredSampleAddresses\(client, firm\.orgId\)/);
+  assert.match(session, /correctRetiredSampleAddresses\(client, sandboxId\)/);
+  const building = parseSampleCsv(SANDBOX_SAMPLE_CSV).filter((row) => row.property.includes("青埔"));
+  assert.ok(building.length > 0);
+  for (const row of building) assert.equal(row.address, "台中市西區範例路 1 號");
+  const second = parseSampleCsv(SANDBOX_SAMPLE_CSV).filter((row) => row.property.includes("桃園區範例學舍"));
+  assert.ok(second.length > 0);
+  for (const row of second) assert.equal(row.address, "台中市西區範例路 2 號");
+  const first = parseSampleCsv(SANDBOX_SAMPLE_CSV).filter((row) => row.property.includes("中壢範例分租公寓"));
+  assert.ok(first.length > 0);
+  for (const row of first) assert.equal(row.address, "桃園市中壢區範例路1號");
+  assert.equal(SANDBOX_SAMPLE_CSV.includes("（虛構）"), false);
+  assert.equal(SANDBOX_SAMPLE_CSV.includes("示" + "範"), false);
+});
 
 test("the demo production guard still refuses to start", () => {
   const previous = {

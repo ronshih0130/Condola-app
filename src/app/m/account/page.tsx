@@ -15,7 +15,6 @@ import {
   actionRevokeSession,
 } from "@/server/auth-actions";
 import { CHALLENGE_COOKIE, listSessions, mfaStatus, peekChallenge } from "@/server/auth";
-import { lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
 import { memberEmailPrefs } from "@/server/mail-settings";
 import { can } from "@/server/perms";
 import { getSession } from "@/server/session";
@@ -51,18 +50,6 @@ export default async function AccountPage({
             <b>{session.name}</b>
           </p>
           <p className="small">{session.email}</p>
-          {showDemoLineCopy(session.environment) ? (
-            <div data-demo-line="true">
-              <p className="small muted" data-testid="line-demo-note">
-                {t("i_line_demo")}
-              </p>
-              {lineLoginEnabled() ? (
-                <button className="btn" type="button" data-testid="line-link">
-                  LINE
-                </button>
-              ) : null}
-            </div>
-          ) : null}
         </div>
         <form className="card pad" action={actionChangePassword}>
           <h3>{t("i_change_password")}</h3>
