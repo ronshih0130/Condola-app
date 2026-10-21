@@ -339,3 +339,7 @@ body:has(.env-banner) .nav-check:checked ~ .app .nav-backdrop{inset:88px 0 0 0}
 @media (max-width:800px){
   .price-grid{grid-template-columns:1fr}
 }
+.repair-timeline{list-style:none;padding:0;margin:0}
+.repair-timeline li{border-left:2px solid var(--line);padding:0 0 12px 12px;margin-left:6px}
+.repair-photos{display:flex;flex-wrap:wrap;gap:8px}
+.repair-photos img{width:120px;height:90px;object-fit:cover;border-radius:8px;background:var(--cd-surface2)}

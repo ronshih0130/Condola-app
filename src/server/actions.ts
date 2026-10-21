@@ -27,6 +27,7 @@ import { createOwner, createSpace, updateOwner, updateProperty, updateSpace, typ
 import { FlowError } from "./errors";
 import { taipeiToday } from "./money";
 import { createLeaseFromForm } from "./lease-form";
+import { addTicketComment, saveRepairRecord } from "./repairs";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
 
@@ -286,14 +287,49 @@ export async function actionTicket(formData: FormData) {
   const back = text(formData.get("returnTo")) === "staff" ? "/m/tickets" : "/t/repair";
   try {
     const session = await getSession();
-    await createTicket(session, {
+    const id = await createTicket(session, {
       leaseId,
       category: text(formData.get("category")) || "other",
       title: text(formData.get("title")),
       description: text(formData.get("description")),
       priority: text(formData.get("priority")) || "normal",
     });
-    redirect(back === "/m/tickets" ? "/m/tickets" : "/t/repair?done=1");
+    redirect(back === "/m/tickets" ? `/m/tickets/${id}` : `/t/repair?done=1&id=${id}`);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionSaveRepair(formData: FormData) {
+  const ticketId = text(formData.get("ticketId"));
+  const back = `/m/tickets/${ticketId}`;
+  try {
+    const session = await getSession();
+    await saveRepairRecord(session, ticketId, {
+      status: text(formData.get("status")),
+      note: text(formData.get("note")),
+      internal: formData.get("internal") === "on",
+      vendorName: text(formData.get("vendorName")),
+      estimated: text(formData.get("estimated")),
+      finalCost: text(formData.get("finalCost")),
+      costBearer: text(formData.get("costBearer")) || "undecided",
+      scheduledOn: text(formData.get("scheduledOn")),
+      completedOn: text(formData.get("completedOn")),
+      postExpense: formData.get("postExpense") === "on",
+    });
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionTicketComment(formData: FormData) {
+  const ticketId = text(formData.get("ticketId"));
+  const back = text(formData.get("returnTo")) === "tenant" ? `/t/repair?id=${ticketId}` : `/m/tickets/${ticketId}`;
+  try {
+    const session = await getSession();
+    await addTicketComment(session, ticketId, text(formData.get("body")), formData.get("internal") === "on");
+    redirect(back);
   } catch (error) {
     bounce(back, error);
   }

@@ -47,6 +47,11 @@ export const ERRORS: Record<string, string> = {
   "errors.confirm": "i_confirm_needed",
   "errors.planLimit": "i_plan_limit",
   "errors.seatLimit": "i_seat_limit",
+  "errors.photoType": "i_photo_type",
+  "errors.photoSize": "i_photo_size",
+  "errors.photoStorage": "i_photo_storage",
+  "errors.photoLimit": "i_photo_limit",
+  "errors.date": "i_date_invalid",
 };
 
 export function errorText(t: T, key: string | undefined) {

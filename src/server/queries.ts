@@ -284,7 +284,31 @@ export async function propertyDetail(session: Session, id: string) {
       [id],
     );
     const meterSerial = meter?.serial_number?.trim() ? meter.serial_number.trim() : null;
-    return { property, owner, rooms, meterSerial };
+    const repairs = await many<{
+      id: string;
+      number: string;
+      title: string;
+      status: string;
+      place: string;
+      vendor_name: string | null;
+      scheduled_on: string | null;
+      completed_on: string | null;
+      final_cost: string | null;
+      currency: string | null;
+    }>(
+      client,
+      `SELECT t.id::text, t.ticket_number::text AS number, t.title, t.status::text,
+              coalesce(r.label, u.label, '') AS place, t.vendor_name,
+              t.scheduled_on::text, t.completed_on::text, t.final_cost_minor::text AS final_cost, t.currency
+         FROM maintenance_tickets t
+         LEFT JOIN units u ON u.id = t.unit_id
+         LEFT JOIN rooms r ON r.id = t.room_id
+        WHERE t.property_id = $1
+        ORDER BY t.created_at DESC
+        LIMIT 50`,
+      [id],
+    );
+    return { property, owner, rooms, meterSerial, repairs };
   });
 }
 
@@ -845,7 +869,17 @@ export async function statementDetail(session: Session, id: string) {
   });
 }
 
-export async function listTickets(session: Session) {
+export async function listTicketProperties(session: Session) {
+  return tx(session.userId, async (client) =>
+    many<{ id: string; name: string }>(
+      client,
+      `SELECT id::text, name FROM properties WHERE org_id = $1 AND archived_at IS NULL ORDER BY name`,
+      [session.orgId],
+    ),
+  );
+}
+
+export async function listTickets(session: Session, propertyId?: string | null) {
   return tx(session.userId, async (client) =>
     many<{
       id: string;
@@ -855,18 +889,106 @@ export async function listTickets(session: Session) {
       category: string;
       priority: string;
       place: string;
+      property_id: string;
+      vendor_name: string | null;
+      scheduled_on: string | null;
+      completed_on: string | null;
+      final_cost: string | null;
+      currency: string | null;
     }>(
       client,
       `SELECT t.id::text, t.ticket_number::text AS number, t.title, t.status::text, t.category::text, t.priority::text,
-              p.name || coalesce(' ' || r.label, '') AS place
+              p.name || coalesce(' ' || r.label, '') AS place, t.property_id::text,
+              t.vendor_name, t.scheduled_on::text, t.completed_on::text,
+              t.final_cost_minor::text AS final_cost, t.currency
          FROM maintenance_tickets t
          JOIN properties p ON p.id = t.property_id
          LEFT JOIN rooms r ON r.id = t.room_id
-        WHERE t.org_id = $1
+        WHERE t.org_id = $1 AND ($2::uuid IS NULL OR t.property_id = $2)
         ORDER BY t.created_at DESC`,
-      [session.orgId],
+      [session.orgId, propertyId || null],
     ),
   );
+}
+
+export async function tenantRepairs(session: Session, leaseId: string) {
+  return tx(session.userId, async (client) =>
+    many<{ id: string; number: string; title: string; status: string; category: string; created_at: string }>(
+      client,
+      `SELECT t.id::text, t.ticket_number::text AS number, t.title, t.status::text, t.category::text,
+              t.created_at::text
+         FROM maintenance_tickets t
+        WHERE t.lease_id = $1 AND t.org_id = $2
+        ORDER BY t.created_at DESC`,
+      [leaseId, session.orgId],
+    ),
+  );
+}
+
+export async function ticketDetail(session: Session, ticketId: string) {
+  return tx(session.userId, async (client) => {
+    const ticket = await maybe<{
+      id: string;
+      number: string;
+      title: string;
+      description: string | null;
+      status: string;
+      category: string;
+      place: string;
+      property_id: string;
+      property_name: string;
+      currency: string | null;
+      property_currency: string;
+      vendor_name: string | null;
+      estimated_cost: string | null;
+      final_cost: string | null;
+      cost_bearer: string;
+      scheduled_on: string | null;
+      completed_on: string | null;
+      expense_id: string | null;
+    }>(
+      client,
+      `SELECT t.id::text, t.ticket_number::text AS number, t.title, t.description, t.status::text, t.category::text,
+              p.name || coalesce(' ' || r.label, '') AS place, t.property_id::text, p.name AS property_name,
+              t.currency, p.currency AS property_currency, t.vendor_name,
+              t.estimated_cost_minor::text AS estimated_cost, t.final_cost_minor::text AS final_cost,
+              t.cost_bearer::text, t.scheduled_on::text, t.completed_on::text, t.expense_id::text
+         FROM maintenance_tickets t
+         JOIN properties p ON p.id = t.property_id
+         LEFT JOIN rooms r ON r.id = t.room_id
+        WHERE t.id = $1 AND t.org_id = $2`,
+      [ticketId, session.orgId],
+    );
+    if (!ticket) return null;
+    const comments = await many<{
+      id: string;
+      body: string | null;
+      internal: boolean;
+      status_from: string | null;
+      status_to: string | null;
+      at: string;
+      author: string;
+    }>(
+      client,
+      `SELECT c.id::text, c.body, c.is_internal AS internal, c.status_from::text, c.status_to::text,
+              c.created_at::text AS at, coalesce(p.display_name, '') AS author
+         FROM ticket_comments c
+         LEFT JOIN profiles p ON p.id = c.author_user_id
+        WHERE c.ticket_id = $1
+        ORDER BY c.created_at, c.id`,
+      [ticket.id],
+    );
+    const photos = await many<{ id: string; name: string; path: string; mime: string | null; internal: boolean }>(
+      client,
+      `SELECT a.id::text, f.file_name AS name, f.storage_path AS path, f.mime_type AS mime, a.is_internal AS internal
+         FROM ticket_attachments a
+         JOIN files f ON f.id = a.file_id
+        WHERE a.ticket_id = $1
+        ORDER BY a.created_at`,
+      [ticket.id],
+    );
+    return { ticket, comments, photos };
+  });
 }
 
 export async function listThreads(session: Session) {

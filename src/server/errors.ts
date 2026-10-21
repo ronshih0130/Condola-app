@@ -34,6 +34,9 @@ export function mapDbError(error: unknown): Error {
     return new FlowError("errors.billExists");
   }
   if (/invalid input syntax for type numeric/i.test(message)) return new FlowError("errors.amount");
+  if (/ticket photo limit/i.test(message)) return new FlowError("errors.photoLimit");
+  if (/files_ticket_photo_cap/i.test(message)) return new FlowError("errors.photoSize");
+  if (/maintenance_tickets_schedule_order/i.test(message)) return new FlowError("errors.date");
   if (/rented as whole_unit/i.test(message)) return new FlowError("errors.wholeUnit");
   if (/month is closed|month_closed/i.test(message)) return new FlowError("errors.monthClosed");
   if (/expense is on an issued statement/i.test(message)) return new FlowError("errors.expenseLocked");

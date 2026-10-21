@@ -18,6 +18,7 @@ import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
+import { assertTicketStatus } from "./repair-rules";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
 function sha256(value: string) {
@@ -1940,6 +1941,7 @@ export async function createTicket(
         `SELECT id FROM maintenance_tickets WHERE org_id = $1 AND ticket_number = $2`,
         [lease.org_id, ticketNumber],
       );
+      await client.query(`SELECT app.note_ticket_opened($1::uuid)`, [ticket.id]);
       await markTryout(lease.org_id, "repair");
       return ticket.id;
     }
@@ -1968,6 +1970,7 @@ export async function createTicket(
         session.userId,
       ],
     );
+    await client.query(`SELECT app.note_ticket_opened($1::uuid)`, [ticket.id]);
     return ticket.id;
   });
 }
@@ -1978,6 +1981,7 @@ export async function updateTicket(
   patch: { status?: string; assigneeMemberId?: string; note?: string },
 ) {
   assertPerm(session, "tickets.update");
+  if (patch.status) assertTicketStatus(patch.status);
   await tx(session.userId, async (client) => {
     const current = await maybe<{ status: string }>(
       client,
@@ -1985,20 +1989,31 @@ export async function updateTicket(
       [ticketId, session.orgId],
     );
     if (!current) throw new FlowError("errors.notFound");
-    if (patch.status || patch.assigneeMemberId) {
+    const statusChanged = Boolean(patch.status && patch.status !== current.status);
+    if (statusChanged || patch.assigneeMemberId) {
       await client.query(
         `UPDATE maintenance_tickets
             SET status = coalesce($2::ticket_status, status),
-                assigned_member_id = coalesce($3::uuid, assigned_member_id)
-          WHERE id = $1`,
-        [ticketId, patch.status || null, patch.assigneeMemberId || null],
+                assigned_member_id = coalesce($3::uuid, assigned_member_id),
+                resolved_at = CASE
+                  WHEN $2::ticket_status IN ('resolved','closed') THEN coalesce(resolved_at, now())
+                  ELSE resolved_at END,
+                closed_at = CASE
+                  WHEN $2::ticket_status = 'closed' THEN coalesce(closed_at, now())
+                  ELSE closed_at END,
+                completed_on = CASE
+                  WHEN $2::ticket_status IN ('resolved','closed') THEN coalesce(completed_on, (timezone('Asia/Taipei', now()))::date)
+                  ELSE completed_on END
+          WHERE id = $1 AND org_id = $4`,
+        [ticketId, statusChanged ? patch.status : null, patch.assigneeMemberId || null, session.orgId],
       );
     }
-    if (patch.note?.trim() || patch.status) {
+    const note = patch.note?.trim() || null;
+    if (note || statusChanged) {
       await client.query(
         `INSERT INTO ticket_comments (org_id, ticket_id, author_user_id, body, status_from, status_to)
          VALUES ($1,$2,$3,$4,$5::ticket_status,$6::ticket_status)`,
-        [session.orgId, ticketId, session.userId, patch.note?.trim() || null, current.status, patch.status || null],
+        [session.orgId, ticketId, session.userId, note, statusChanged ? current.status : null, statusChanged ? patch.status : null],
       );
     }
   });
