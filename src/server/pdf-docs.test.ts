@@ -92,7 +92,7 @@ test("a lease PDF prints the official form, the deposit reason, and the stored h
   assert.match(text, /屋主同意兩個月以上押金/);
   assert.match(text, /第一條/);
   assert.match(text, /第二十三條/);
-  assert.match(text, /10000元整/);
+  assert.match(text, /10,000元整/);
   assert.match(text, /30000元整/);
   assert.equal(text.includes(sublessor), true);
   assert.equal(text.split(sublessor).join("").includes("房東"), false);
@@ -154,6 +154,7 @@ test("a shortfall statement says 屋主應補繳 and a zero fee is NT$0", () => 
     payouts: 0,
     closing: -280000,
     lines: [{ lineType: "expense", description: "冷氣維修", amount: 280000 }],
+    addresses: ["台北市信義區松仁路88號"],
     audience: "owner",
   };
   const doc = buildStatementPdf(source, "zh-TW", "gregorian", makeT("zh-TW"));
@@ -163,6 +164,7 @@ test("a shortfall statement says 屋主應補繳 and a zero fee is NT$0", () => 
   assert.match(text, new RegExp(moneyLabel(280000, "TWD", "zh-TW").replace("$", "\\$")));
   assert.match(text, /NT\$0/);
   assert.match(text, /冷氣維修/);
+  assert.match(text, /地址：台北市信義區松仁路88號/);
   assert.equal(text.includes("期末"), false);
   assert.equal(text.includes("電子發票"), false);
   assert.equal(text.includes("房東"), false);

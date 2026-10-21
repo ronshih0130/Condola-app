@@ -664,9 +664,9 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.equal(managerText.includes(`、${coTenant}，出租人`), true);
   assert.equal(managerText.includes(guarantor), false);
   assert.equal(managerText.includes(cosigner), false);
-  assert.equal(managerText.includes("88號之1"), true);
-  assert.equal(managerText.includes("88之1號"), false);
-  assert.equal(managerText.includes("樓之1"), false);
+  assert.equal(managerText.includes("弄88號之1號3樓之"), true);
+  assert.equal(managerText.includes("弄88號之1樓之"), false);
+  assert.equal(managerText.includes("弄88之1號"), false);
 
   const tenant = pdfSession(USERS.tenant, "tenant", null, ORG_ID);
   const tenantDoc = await leasePdfForSession(tenant, leaseId);
@@ -694,8 +694,10 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
 
   const owner = pdfSession(USERS.owner, "owner", null, ORG_ID);
   const ownerDoc = await statementPdfForSession(owner, statementId);
-  assert.match(JSON.stringify(ownerDoc), /屋主應補繳/);
-  assert.equal(JSON.stringify(ownerDoc).includes("房東"), false);
+  const ownerText = JSON.stringify(ownerDoc);
+  assert.match(ownerText, /屋主應補繳/);
+  assert.match(ownerText, /地址：台北市信義區松仁路88號之1/);
+  assert.equal(ownerText.includes("房東"), false);
   const managerStatement = await statementPdfForSession(manager, statementId);
   assert.ok(managerStatement);
   assert.equal(await pdfAuditCount("owner_statements", statementId), statementBefore + 2);

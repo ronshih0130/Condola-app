@@ -60,6 +60,7 @@ export type StatementPdfSource = {
   payouts: number;
   closing: number;
   lines: StatementPdfLine[];
+  addresses: string[];
   audience: "owner" | "staff";
 };
 
@@ -127,7 +128,12 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     rows.push({ label: t("i_net_owner"), value: labeled(figures.payable) });
     rows.push({ label: t("i_closing"), value: labeled(Math.max(0, figures.closing)) });
   }
-  const blocks: PdfBlock[] = [{ kind: "rows", heading: "", rows }];
+  const blocks: PdfBlock[] = [];
+  const addresses = source.addresses.map((address) => address.trim()).filter(Boolean);
+  if (addresses.length) {
+    blocks.push({ kind: "text", heading: "", lines: addresses.map((address) => `${t("i_address")}：${address}`) });
+  }
+  blocks.push({ kind: "rows", heading: "", rows });
   if (figures.owes > 0) {
     blocks.push({
       kind: "text",

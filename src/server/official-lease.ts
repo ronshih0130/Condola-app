@@ -161,18 +161,23 @@ type RoadFill = {
   section: string;
   lane: string;
   alley: string;
+  /** Blank before the template 號. The typed house number, not the floor. */
   number: string;
-  /** Text between the template 號 and 樓之. */
+  /** Blank before 樓. */
   doorFloor: string;
-  /** Text after the template 樓之. */
+  /** Blank after 樓之. */
   doorSuffix: string;
 };
 
+const FLOOR_CN = "一二三四五六七八九十";
+const FLOOR_TOKEN = `0-9０-９${FLOOR_CN}`;
+
 /**
- * 88號之1 and 88之1號 are different registered addresses. Keep every character
- * the owner entered on its original side of 號 and of 樓之. The unit floor may
- * fill 樓 only when the street itself stops at 號. A tail the blanks would
- * rewrite is printed verbatim in the 街(路) blank instead.
+ * 號, 樓, and 之 are separate cells. The house-number segment is copied as
+ * typed, so 88號之1 is never rewritten as 88之1號. The floor field fills 樓
+ * and, when it says 之N, the 之 cell. A tail that would have to be split
+ * across those cells is printed whole in the 街(路) blank, and the floor
+ * still uses its own cell.
  */
 function parseRoad(street: string, unitFloor: string | null | undefined): RoadFill | null {
   const trimmed = street.trim();
@@ -182,9 +187,9 @@ function parseRoad(street: string, unitFloor: string | null | undefined): RoadFi
       `^(.+?)(?:路|街)(?:([${ROAD_SECTION}]+)段)?(?:([${ROAD_DIGIT}]+)巷)?(?:([${ROAD_DIGIT}]+)弄)?(.*)$`,
     ),
   );
-  if (!match) return verbatimRoad(trimmed);
+  if (!match) return verbatimRoad(trimmed, unitFloor);
   const placed = placeDoor(match[5] ?? "", unitFloor);
-  if (!placed) return verbatimRoad(trimmed);
+  if (!placed) return verbatimRoad(trimmed, unitFloor);
   return {
     name: match[1] ?? "",
     section: match[2] ?? "",
@@ -196,36 +201,77 @@ function parseRoad(street: string, unitFloor: string | null | undefined): RoadFi
   };
 }
 
-function verbatimRoad(street: string): RoadFill | null {
+function verbatimRoad(street: string, unitFloor: string | null | undefined): RoadFill | null {
   if (!/[路街]/.test(street) || !street.includes("號")) return null;
-  return { name: street, section: "", lane: "", alley: "", number: "", doorFloor: "", doorSuffix: "" };
+  const floor = parseUnitFloor(unitFloor);
+  return {
+    name: street,
+    section: "",
+    lane: "",
+    alley: "",
+    number: "",
+    doorFloor: floor?.floor ?? "",
+    doorSuffix: floor?.suffix ?? "",
+  };
 }
 
 function placeDoor(rest: string, unitFloor: string | null | undefined) {
-  if (!rest) return { number: "", doorFloor: floorStem(unitFloor), doorSuffix: "" };
-  const mark = rest.indexOf("號");
-  if (mark <= 0 || rest.indexOf("號", mark + 1) !== -1) return null;
-  const number = rest.slice(0, mark);
-  const after = rest.slice(mark + 1);
-  const floorMark = after.indexOf("樓之");
-  if (floorMark >= 0) {
-    return { number, doorFloor: after.slice(0, floorMark), doorSuffix: after.slice(floorMark + 2) };
-  }
-  if (!after) return { number, doorFloor: floorStem(unitFloor), doorSuffix: "" };
-  if (after.endsWith("樓")) return { number, doorFloor: after.slice(0, -1), doorSuffix: "" };
-  if (!after.includes("樓")) return { number, doorFloor: after, doorSuffix: "" };
-  return null;
+  const split = splitDoor(rest);
+  if (!split) return null;
+  const number = numberCell(split.door);
+  if (number == null) return null;
+  const floor = floorCells(split, unitFloor);
+  return { number, doorFloor: floor.floor, doorSuffix: floor.suffix };
 }
 
-function floorStem(floor: string | null | undefined) {
-  const value = (floor ?? "").trim().replace(/(?:樓|層|[Ff])$/, "");
-  return /^[0-9０-９一二三四五六七八九十]+$/.test(value) ? value : "";
+function splitDoor(rest: string): { door: string; streetFloor: string; streetSuffix: string } | null {
+  if (!rest) return { door: "", streetFloor: "", streetSuffix: "" };
+  if ((rest.match(/號/g) ?? []).length > 1) return null;
+  // A floor is a run of digits or a run of Chinese numerals, never both.
+  // 88號之1三樓 keeps 之1 on the house number; 1三 must not become the floor.
+  const floorRun = `(?:[${ROAD_DIGIT}]+|[${FLOOR_CN}]+)`;
+  const withFloor = rest.match(new RegExp(`^(.*?)(${floorRun})樓(?:之([${ROAD_DIGIT}]+))?$`));
+  if (withFloor && rest.includes("樓")) {
+    return { door: withFloor[1] ?? "", streetFloor: withFloor[2] ?? "", streetSuffix: withFloor[3] ?? "" };
+  }
+  const suffixOnly = rest.match(new RegExp(`^(.*?)樓之([${ROAD_DIGIT}]+)$`));
+  if (suffixOnly) return { door: suffixOnly[1] ?? "", streetFloor: "", streetSuffix: suffixOnly[2] ?? "" };
+  if (rest.includes("樓")) return null;
+  return { door: rest, streetFloor: "", streetSuffix: "" };
+}
+
+/** Keep 號之N and 之N號 intact. A trailing 號 is the template label, not a second 號. */
+function numberCell(door: string) {
+  if (!door) return "";
+  const marks = door.match(/號/g) ?? [];
+  if (marks.length > 1) return null;
+  if (marks.length === 1 && door.endsWith("號")) return door.slice(0, -1);
+  return door;
+}
+
+function floorCells(split: { streetFloor: string; streetSuffix: string }, unitFloor: string | null | undefined) {
+  const unit = parseUnitFloor(unitFloor);
+  if (!unit) return { floor: split.streetFloor, suffix: split.streetSuffix };
+  const sameFloor = !split.streetFloor || split.streetFloor === unit.floor;
+  return { floor: unit.floor, suffix: unit.suffix || (sameFloor ? split.streetSuffix : "") };
+}
+
+function parseUnitFloor(floor: string | null | undefined) {
+  const value = (floor ?? "").trim();
+  if (!value) return null;
+  const match = value.match(new RegExp(`^([${FLOOR_TOKEN}]+)(?:樓|層|[Ff])?(?:之([${ROAD_DIGIT}]+))?$`));
+  if (!match) return null;
+  return { floor: match[1] ?? "", suffix: match[2] ?? "" };
 }
 
 /** Whole dollars only. A fractional minor unit, or cents, stays blank. */
 function yuan(minor: number | null | undefined) {
   if (minor == null || !Number.isInteger(minor) || minor < 0 || minor % 100 !== 0) return "";
   return String(minor / 100);
+}
+
+function yuanGrouped(minor: number | null | undefined) {
+  return yuan(minor).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 function monthsText(value: string | null | undefined) {
@@ -288,15 +334,16 @@ export function renderOfficialLease(input: OfficialLeaseInput = {}) {
   fillSlot(state, "街(路)", "段", road?.section ?? "");
   fillSlot(state, "段", "巷", road?.lane ?? "");
   fillSlot(state, "巷", "弄", road?.alley ?? "");
+  const looseFloor = parseUnitFloor(input.floor);
   fillSlot(state, "弄", "號", road?.number ?? "");
-  fillSlot(state, "號", "樓之", road ? road.doorFloor : floorStem(input.floor));
-  fillSlot(state, "樓之", "(基地坐落", road?.doorSuffix ?? "");
+  fillSlot(state, "號", "樓之", road ? road.doorFloor : (looseFloor?.floor ?? ""));
+  fillSlot(state, "樓之", "(基地坐落", road ? road.doorSuffix : (looseFloor?.suffix ?? ""));
 
   const partial = input.scope === "partial";
   const room = partial ? clean(input.roomLabel) : "";
   markBox(state, "租賃住宅", "全部", input.scope === "whole");
   markBox(state, "全部", "部分", partial);
-  fillSlot(state, "部分：第", "層", floorStem(input.floor));
+  fillSlot(state, "部分：第", "層", parseUnitFloor(input.floor)?.floor ?? "");
   markBox(state, "間", "第", Boolean(room));
   fillSlot(state, "第", "室", room);
 
@@ -310,7 +357,7 @@ export function renderOfficialLease(input: OfficialLeaseInput = {}) {
   fillSlot(state, "月", "日", end?.day ?? "");
 
   const due = Number.isInteger(input.dueDay) && (input.dueDay ?? 0) >= 1 && (input.dueDay ?? 0) <= 31 ? String(input.dueDay) : "";
-  fillSlot(state, "(下同)", "元整", yuan(input.rentMinor));
+  fillSlot(state, "(下同)", "元整", yuanGrouped(input.rentMinor));
   fillSlot(state, "應繳納", "個月", input.rentMinor == null ? "" : periodMonths(input.rentFrequency));
   markBox(state, "並於", "每月", Boolean(due));
   fillSlot(state, "每月", "日", due);

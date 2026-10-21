@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { makeT } from "@/i18n";
 import { pdfContainsAscii } from "@/lib/pdf-text";
 import { PdfFontError, renderPdf } from "@/lib/pdf-render";
-import { buildLeasePdf, type LeasePdfSource } from "@/server/pdf-docs";
+import { buildLeasePdf, buildStatementPdf, type LeasePdfSource, type StatementPdfSource } from "@/server/pdf-docs";
 
 const HASH = "cd".repeat(32);
 
@@ -46,6 +49,62 @@ test("the client PDF embeds the hash and Traditional Chinese without a server re
   // □/■ are rectangles (move + line), not missing-glyph question marks.
   assert.ok((decoded.match(/ m\n/g) ?? []).length > 100);
 });
+
+test("a statement PDF paints Traditional Chinese instead of blank glyphs", async () => {
+  const font = readFileSync(new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url));
+  const source: StatementPdfSource = {
+    id: "10000000-0000-4000-8000-000000000088",
+    orgId: "10000000-0000-4000-8000-000000000001",
+    ownerName: "陳建宏",
+    periodStart: "2026-10-01",
+    periodEnd: "2026-10-31",
+    currency: "TWD",
+    opening: 0,
+    rent: 0,
+    other: 0,
+    fee: 0,
+    expenses: 277700,
+    payouts: 0,
+    closing: -277700,
+    lines: [{ lineType: "expense", description: "冷氣維修", amount: 277700 }],
+    addresses: ["台北市信義區松仁路88號"],
+    audience: "owner",
+  };
+  const bytes = await renderPdf(buildStatementPdf(source, "zh-TW", "gregorian", makeT("zh-TW")), font);
+  const dir = mkdtempSync(join(tmpdir(), "stmt-pdf-"));
+  const pdf = join(dir, "stmt.pdf");
+  writeFileSync(pdf, bytes);
+  execFileSync("pdftoppm", ["-r", "72", "-f", "1", "-l", "1", pdf, join(dir, "page")]);
+  const dark = darkPixels(readFileSync(join(dir, "page-1.ppm")), 40, 130, 40, 420);
+  // A fontkit subset of this face leaves the title band nearly blank (~260 px).
+  assert.ok(dark > 800, `title band has ${dark} dark pixels`);
+});
+
+function darkPixels(ppm: Buffer, y0: number, y1: number, x0: number, x1: number) {
+  assert.equal(ppm.subarray(0, 3).toString("ascii"), "P6\n");
+  let offset = 3;
+  const token = () => {
+    const start = offset;
+    while (ppm[offset] !== 0x20 && ppm[offset] !== 0x0a && ppm[offset] !== 0x0d) offset += 1;
+    const value = ppm.subarray(start, offset).toString("ascii");
+    while (ppm[offset] === 0x20 || ppm[offset] === 0x0a || ppm[offset] === 0x0d) offset += 1;
+    return value;
+  };
+  const width = Number(token());
+  const height = Number(token());
+  assert.equal(Number(token()), 255);
+  const pixels = ppm.subarray(offset);
+  let dark = 0;
+  const yStop = Math.min(height, y1);
+  const xStop = Math.min(width, x1);
+  for (let y = y0; y < yStop; y += 1) {
+    for (let x = x0; x < xStop; x += 1) {
+      const i = (y * width + x) * 3;
+      if (pixels[i]! < 180 && pixels[i + 1]! < 180 && pixels[i + 2]! < 180) dark += 1;
+    }
+  }
+  return dark;
+}
 
 test("a glyph missing from the font rejects the PDF", async () => {
   const font = readFileSync(new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url));

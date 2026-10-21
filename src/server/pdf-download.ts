@@ -13,6 +13,22 @@ import {
 import { leasePdfSource, statementPdfSource } from "@/server/queries";
 import type { Session } from "@/server/types";
 
+/** Addresses of the properties already on a statement the caller is allowed to read. */
+async function statementAddresses(statementId: string) {
+  const rows = await svc(null, (client) =>
+    client.query<{ address: string }>(
+      `SELECT DISTINCT btrim(p.address_display) AS address
+         FROM owner_statement_lines l
+         JOIN properties p ON p.id = l.property_id
+        WHERE l.statement_id = $1
+          AND btrim(coalesce(p.address_display, '')) <> ''
+        ORDER BY 1`,
+      [statementId],
+    ),
+  );
+  return rows.rows.map((row) => row.address);
+}
+
 function actorRole(session: Session) {
   return session.role ?? session.kind;
 }
@@ -115,6 +131,7 @@ export async function statementPdfForSession(session: Session, id: string) {
         description: line.description,
         amount: Number(line.amount),
       })),
+      addresses: await statementAddresses(statement.id),
       audience: session.kind === "owner" ? "owner" : "staff",
     },
     session.locale,

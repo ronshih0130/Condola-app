@@ -48,7 +48,10 @@ export async function renderPdf(doc: PdfDocument, fontBytes: Uint8Array): Promis
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const source = fontkit.create(fontBytes);
-  const cjk = await pdf.embedFont(fontBytes, { subset: true });
+  // fontkit's subsetter drops CJK outlines, so poppler and some phone viewers
+  // paint blank glyphs while ToUnicode still extracts. Embed the face whole:
+  // CIDToGIDMap stays Identity and glyph ids match the font program.
+  const cjk = await pdf.embedFont(fontBytes, { subset: false });
   const latin = await pdf.embedFont(StandardFonts.Helvetica);
   const latinOk = new Map<string, boolean>();
 
