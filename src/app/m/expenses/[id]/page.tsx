@@ -104,7 +104,6 @@ export default async function ExpenseDetailPage({
               incurredOn: row.incurred_on,
               vendorName: row.vendor_name ?? "",
               note: row.description,
-              receiptName: row.receipt_name ?? "",
             }}
           />
           {editable && !row.on_issued ? (

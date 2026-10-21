@@ -31,7 +31,6 @@ export function ExpenseForm({
     incurredOn: string;
     vendorName: string;
     note: string;
-    receiptName: string;
   };
   lockFinancial: boolean;
   submitLabel: string;
@@ -138,15 +137,6 @@ export function ExpenseForm({
       <div className="fg">
         <label className="f">{t("i_note")}</label>
         <input className="inp" name="note" data-testid="expense-note" defaultValue={defaults.note} />
-      </div>
-      <div className="fg">
-        <label className="f">{t("i_expense_receipt")}</label>
-        {defaults.receiptName ? (
-          <p className="small" data-testid="expense-current-receipt">
-            {t("i_expense_current_receipt", { name: defaults.receiptName })}
-          </p>
-        ) : null}
-        <input className="inp" name="receipt" data-testid="expense-receipt" />
       </div>
       <button className="btn pri" type="submit" data-testid="expense-save">
         {submitLabel}

@@ -20,14 +20,14 @@ test("staff record, edit, and void an expense in zh-TW", async ({ page }) => {
   await page.getByTestId("expense-date").fill("2099-06-15");
   await page.getByTestId("expense-vendor").fill("老張水電");
   await page.getByTestId("expense-note").fill("e2e 水管檢修");
-  await page.getByTestId("expense-receipt").fill("e2e-receipt.txt");
+  await expect(page.getByTestId("expense-receipt")).toHaveCount(0);
   await page.getByTestId("expense-save").click();
   await expect(page.getByTestId("expense-saved")).toBeVisible();
   await expect(page.getByTestId("expense-included")).toHaveText("計入屋主報表");
   await expect(page.getByTestId("expense-status")).toHaveText("已入帳");
   await expect(page.getByTestId("expense-summary")).toContainText("e2e 水管檢修");
   await expect(page.getByTestId("expense-summary")).toContainText("3F");
-  await expect(page.getByTestId("expense-current-receipt")).toContainText("e2e-receipt.txt");
+  await expect(page.getByTestId("expense-receipt")).toHaveCount(0);
   await page.screenshot({ path: "/opt/cursor/artifacts/expense-detail.png", fullPage: true });
 
   await page.getByTestId("expense-note").fill("e2e 水管檢修改");

@@ -1527,8 +1527,6 @@
  "i_expense_vendor": "Vendor",
  "i_expense_date": "Expense date",
  "i_expense_unit": "Unit",
- "i_expense_receipt": "Receipt (optional file name)",
- "i_expense_current_receipt": "Current receipt: {name}",
  "i_expense_included": "On the owner statement",
  "i_expense_excluded": "Not on the owner statement",
  "i_expense_hint": "Approved and posted expenses billed to the owner appear on the monthly owner statement. Draft, submitted, rejected, and void do not. A draft created from a repair can be approved and posted here.",

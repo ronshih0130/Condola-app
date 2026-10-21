@@ -1527,8 +1527,6 @@
  "i_expense_vendor": "廠商",
  "i_expense_date": "支出日期",
  "i_expense_unit": "單位",
- "i_expense_receipt": "收據（選填，檔名）",
- "i_expense_current_receipt": "目前收據：{name}",
  "i_expense_included": "計入屋主報表",
  "i_expense_excluded": "不計入屋主報表",
  "i_expense_hint": "已核准與已入帳、且由屋主負擔的支出，會出現在屋主月報表。草稿、已送出、已退回與已作廢不會。修繕紀錄建立的草稿可以在這裡核准並入帳。",

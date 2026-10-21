@@ -40,7 +40,6 @@ export default async function NewExpensePage({
           incurredOn: taipeiToday(),
           vendorName: "",
           note: "",
-          receiptName: "",
         }}
       />
     </>

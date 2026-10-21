@@ -360,7 +360,6 @@ function expenseFields(formData: FormData) {
     incurredOn: text(formData.get("incurredOn")),
     vendorName: text(formData.get("vendorName")),
     description: text(formData.get("note")),
-    receiptName: text(formData.get("receipt")),
   };
 }
 

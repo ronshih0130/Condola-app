@@ -108,7 +108,6 @@ export default async function ExpensesPage({
                   <Cell label={t("i_expense_vendor")}>{row.vendor_name || dash}</Cell>
                   <Cell label={t("i_note")}>
                     {row.description || dash}
-                    {row.receipt_name ? <div className="small muted">{row.receipt_name}</div> : null}
                     {row.ticket_id && row.ticket_number ? (
                       <div className="small">
                         <Link href={`/m/tickets/${row.ticket_id}`} data-testid="expense-ticket">
