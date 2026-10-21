@@ -946,16 +946,19 @@ export async function ticketDetail(session: Session, ticketId: string) {
       scheduled_on: string | null;
       completed_on: string | null;
       expense_id: string | null;
+      expense_status: string | null;
     }>(
       client,
       `SELECT t.id::text, t.ticket_number::text AS number, t.title, t.description, t.status::text, t.category::text,
               p.name || coalesce(' ' || r.label, '') AS place, t.property_id::text, p.name AS property_name,
               t.currency, p.currency AS property_currency, t.vendor_name,
               t.estimated_cost_minor::text AS estimated_cost, t.final_cost_minor::text AS final_cost,
-              t.cost_bearer::text, t.scheduled_on::text, t.completed_on::text, t.expense_id::text
+              t.cost_bearer::text, t.scheduled_on::text, t.completed_on::text, t.expense_id::text,
+              e.status::text AS expense_status
          FROM maintenance_tickets t
          JOIN properties p ON p.id = t.property_id
          LEFT JOIN rooms r ON r.id = t.room_id
+         LEFT JOIN expenses e ON e.id = t.expense_id AND e.org_id = t.org_id
         WHERE t.id = $1 AND t.org_id = $2`,
       [ticketId, session.orgId],
     );

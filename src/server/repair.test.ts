@@ -21,6 +21,8 @@ import {
   sniffPhotoMime,
   ticketPhotoPath,
 } from "./repair-rules";
+import { confirmTicketPhoto, discardUploadAllowed, issueUploadGrant, uploadGrantMatches } from "./ticket-photos";
+import type { Session } from "./types";
 
 const root = new URL("../../", import.meta.url);
 
@@ -170,4 +172,138 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   assert.doesNotMatch(repairs, /ledger_transactions/);
   const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
   assert.match(domain, /status IN \('approved','posted'\)/);
+
+  const page = readFileSync(new URL("../app/m/tickets/[id]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /expense_id && ticket\.expense_status !== "void"/);
+  assert.match(page, /data-testid="repair-post-expense"/);
+});
+
+test("confirm returns an attached photo and deletes only an unattached upload issued to this caller", async () => {
+  const previous = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "repair-grant-test-key";
+  const org = "10000000-0000-4000-8000-000000000001";
+  const ticketId = "30000000-0000-4000-8000-000000000002";
+  const path = ticketPhotoPath(org, ticketId, "40000000-0000-4000-8000-000000000003", "image/jpeg");
+  const userId = "20000000-0000-4000-8000-000000000004";
+  const session: Session = {
+    userId,
+    sessionId: "repair-confirm",
+    email: "tenant@demo",
+    name: "租客",
+    kind: "tenant",
+    role: null,
+    orgId: org,
+    liveOrgId: org,
+    environment: "live",
+    locale: "zh-TW",
+    calendar: "gregorian",
+    leaseId: null,
+  };
+  const target = async () => ({ org_id: org, count: "1" });
+  try {
+    assert.equal(discardUploadAllowed("att", true), false);
+    assert.equal(discardUploadAllowed("att", false), false);
+    assert.equal(discardUploadAllowed(null, false), false);
+    assert.equal(discardUploadAllowed(null, true), true);
+    const token = issueUploadGrant(userId, ticketId, path);
+    assert.equal(uploadGrantMatches(userId, ticketId, path, token), true);
+    assert.equal(uploadGrantMatches(userId, ticketId, path, "not-issued"), false);
+    assert.equal(uploadGrantMatches("20000000-0000-4000-8000-000000000099", ticketId, path, token), false);
+    const other = ticketPhotoPath(org, ticketId, "40000000-0000-4000-8000-000000000009", "image/jpeg");
+    assert.equal(uploadGrantMatches(userId, ticketId, other, token), false);
+
+    const removed: string[] = [];
+    const remove = async (stored: string) => {
+      removed.push(stored);
+    };
+    const kept = await confirmTicketPhoto(
+      session,
+      { ticketId, path, fileName: "wrong.png", mime: "image/png", size: 12, internal: false, uploadToken: token },
+      {
+        target,
+        existing: async () => "att",
+        remove,
+        info: async () => {
+          throw new Error("storage");
+        },
+        header: async () => {
+          throw new Error("storage");
+        },
+      },
+    );
+    assert.equal(kept, "att");
+    assert.deepEqual(removed, []);
+
+    await assert.rejects(
+      confirmTicketPhoto(
+        session,
+        { ticketId, path, fileName: "wrong.png", mime: "image/png", size: 12, internal: false, uploadToken: "not-issued" },
+        { target, existing: async () => null, remove },
+      ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+    );
+    assert.deepEqual(removed, []);
+
+    await assert.rejects(
+      confirmTicketPhoto(
+        session,
+        { ticketId, path, fileName: "a.jpg", mime: "image/jpeg", size: 40, internal: false, uploadToken: token },
+        {
+          target,
+          existing: async () => null,
+          info: async () => ({ ok: true, size: 40, mime: "image/jpeg" }),
+          header: async () => Uint8Array.of(0x25, 0x50, 0x44, 0x46),
+          remove,
+        },
+      ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.photoType",
+    );
+    assert.deepEqual(removed, [path]);
+
+    removed.length = 0;
+    await assert.rejects(
+      confirmTicketPhoto(
+        session,
+        { ticketId, path, fileName: "a.jpg", mime: "image/jpeg", size: 40, internal: false, uploadToken: token },
+        {
+          target,
+          existing: async () => null,
+          info: async () => ({ ok: true, size: 40, mime: "image/jpeg" }),
+          header: async () => {
+            throw new FlowError("errors.photoStorage");
+          },
+          remove,
+        },
+      ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.photoStorage",
+    );
+    assert.deepEqual(removed, [path]);
+
+    removed.length = 0;
+    let lookups = 0;
+    await assert.rejects(
+      confirmTicketPhoto(
+        session,
+        { ticketId, path, fileName: "a.jpg", mime: "image/jpeg", size: 40, internal: false, uploadToken: token },
+        {
+          target,
+          existing: async () => {
+            lookups += 1;
+            return lookups === 1 ? null : "att";
+          },
+          info: async () => ({ ok: true, size: 40, mime: "image/jpeg" }),
+          header: async () => {
+            throw new FlowError("errors.photoStorage");
+          },
+          remove,
+        },
+      ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.photoStorage",
+    );
+    assert.equal(lookups, 2);
+    assert.deepEqual(removed, []);
+  } finally {
+    if (previous === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = previous;
+  }
 });

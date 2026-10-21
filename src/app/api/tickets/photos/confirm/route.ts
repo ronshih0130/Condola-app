@@ -22,6 +22,7 @@ export async function POST(request: Request) {
       mime?: string;
       size?: number;
       internal?: boolean;
+      uploadToken?: string;
     };
     const id = await confirmTicketPhoto(session, {
       ticketId: String(body.ticketId ?? ""),
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       mime: String(body.mime ?? ""),
       size: Number(body.size),
       internal: Boolean(body.internal),
+      uploadToken: String(body.uploadToken ?? ""),
     });
     return NextResponse.json({ ok: true, id });
   } catch (error) {

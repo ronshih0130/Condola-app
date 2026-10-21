@@ -58,8 +58,14 @@ export function TicketPhotoUpload({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ticketId, fileName: file.name, mime: sniffed, size: file.size }),
       });
-      const signBody = (await signed.json()) as { error?: string; uploadUrl?: string; token?: string; path?: string };
-      if (!signed.ok || !signBody.uploadUrl || !signBody.path) {
+      const signBody = (await signed.json()) as {
+        error?: string;
+        uploadUrl?: string;
+        token?: string;
+        path?: string;
+        uploadToken?: string;
+      };
+      if (!signed.ok || !signBody.uploadUrl || !signBody.path || !signBody.uploadToken) {
         setError(messageFor(signBody.error, messages));
         return;
       }
@@ -80,6 +86,7 @@ export function TicketPhotoUpload({
           mime: sniffed,
           size: file.size,
           internal: Boolean(allowInternal && internalRef.current?.checked),
+          uploadToken: signBody.uploadToken,
         }),
       });
       const confirmBody = (await confirmed.json()) as { error?: string };

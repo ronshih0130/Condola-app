@@ -7,6 +7,7 @@ import { ORG_ID, USERS } from "./ids";
 import { propertyDetail, tenantRepairs, ticketDetail } from "./queries";
 import { PHOTO_BUCKET, PHOTO_MAX_BYTES, ticketPhotoPath } from "./repair-rules";
 import { addTicketComment, attachRepairPhoto, saveRepairRecord } from "./repairs";
+import { confirmTicketPhoto } from "./ticket-photos";
 import type { Session } from "./types";
 
 const ORG = ORG_ID;
@@ -250,6 +251,9 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
     await tx(USERS.admin, (client) =>
       client.query(`UPDATE expenses SET status = 'void' WHERE ticket_id = $1 AND status = 'draft'`, [ticketId]),
     );
+    const voided = await ticketDetail(admin, ticketId);
+    assert.equal(voided?.ticket.expense_id != null, true);
+    assert.equal(voided?.ticket.expense_status, "void");
     await saveRepairRecord(admin, ticketId, {
       status: "resolved",
       note: "",
@@ -303,9 +307,36 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
       header: JPEG,
     });
     const seen = await tx(USERS.tenant2, (client) =>
-      client.query(`SELECT a.id FROM ticket_attachments a WHERE a.ticket_id = $1`, [ticketId]),
+      client.query<{ id: string }>(`SELECT a.id::text FROM ticket_attachments a WHERE a.ticket_id = $1`, [ticketId]),
     );
     assert.equal(seen.rowCount, 1);
+    const replayed = await confirmTicketPhoto(wangSession, {
+      ticketId,
+      path,
+      fileName: "wrong.png",
+      mime: "image/png",
+      size: 12,
+      internal: false,
+      uploadToken: "not-issued",
+    });
+    assert.equal(replayed, seen.rows[0].id);
+    const stillThere = await tx(USERS.tenant2, (client) =>
+      client.query(`SELECT id FROM files WHERE storage_path = $1`, [path]),
+    );
+    assert.equal(stillThere.rowCount, 1);
+    const ghost = ticketPhotoPath(ORG, ticketId, "40000000-0000-4000-8000-000000000094", "image/jpeg");
+    await assert.rejects(
+      confirmTicketPhoto(wangSession, {
+        ticketId,
+        path: ghost,
+        fileName: "ghost.jpg",
+        mime: "image/jpeg",
+        size: 12,
+        internal: false,
+        uploadToken: "not-issued",
+      }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+    );
     const hiddenPhoto = await tx(USERS.tenant, (client) =>
       client.query(`SELECT id FROM ticket_attachments WHERE ticket_id = $1`, [ticketId]),
     );

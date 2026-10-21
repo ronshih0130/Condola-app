@@ -1,9 +1,11 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { FlowError } from "./errors";
-import { attachRepairPhoto, newPhotoFileId, repairPhotoTarget } from "./repairs";
+import { attachRepairPhoto, findRepairPhoto, newPhotoFileId, repairPhotoTarget } from "./repairs";
 import {
   PHOTO_BUCKET,
   PHOTO_HEADER_BYTES,
   PHOTO_LIMIT,
+  acceptPhotoObject,
   assertPhotoMeta,
   isTicketPhotoPath,
   ticketPhotoPath,
@@ -68,7 +70,30 @@ export async function prepareTicketPhotoUpload(
     token: payload.token ?? "",
     uploadUrl: absoluteStorageUrl(storageConfig()?.url ?? "", payload.url),
     mime: meta.mime,
+    uploadToken: issueUploadGrant(session.userId, input.ticketId, path),
   };
+}
+
+function grantKey() {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+}
+
+/** Proves this user was given an upload URL for this ticket path. */
+export function issueUploadGrant(userId: string, ticketId: string, path: string) {
+  const key = grantKey();
+  if (!key) return "";
+  return createHmac("sha256", key).update(`${userId}\n${ticketId}\n${path}`).digest("base64url");
+}
+
+export function uploadGrantMatches(userId: string, ticketId: string, path: string, token: string) {
+  const expected = issueUploadGrant(userId, ticketId, path);
+  if (!expected || !token || expected.length !== token.length) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(token));
+}
+
+/** An attached object is never removed. A storage delete needs a grant from sign. */
+export function discardUploadAllowed(attachmentId: string | null, issued: boolean) {
+  return attachmentId == null && issued;
 }
 
 async function deleteObject(path: string) {
@@ -111,45 +136,74 @@ async function readObjectHeader(path: string) {
   return header.subarray(0, offset);
 }
 
+type ConfirmDeps = {
+  target?: typeof repairPhotoTarget;
+  existing?: typeof findRepairPhoto;
+  info?: (path: string) => Promise<{ ok: boolean; size?: number; mime?: string }>;
+  header?: (path: string) => Promise<Uint8Array>;
+  remove?: (path: string) => Promise<void>;
+  attach?: typeof attachRepairPhoto;
+};
+
+const DISCARD_KEYS = new Set(["errors.photoLimit", "errors.photoType", "errors.photoSize", "errors.photoStorage"]);
+
+async function objectInfo(path: string) {
+  const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
+  const infoResponse = await storageRequest("GET", `/object/info/${PHOTO_BUCKET}/${encoded}`);
+  if (!infoResponse.ok) return { ok: false as const };
+  const info = (await infoResponse.json()) as { size?: number; contentType?: string; metadata?: { mimetype?: string } };
+  return { ok: true as const, size: Number(info.size), mime: info.contentType || info.metadata?.mimetype || "" };
+}
+
 export async function confirmTicketPhoto(
   session: Session,
-  input: { ticketId: string; path: string; fileName: string; mime: string; size: number; internal: boolean },
+  input: {
+    ticketId: string;
+    path: string;
+    fileName: string;
+    mime: string;
+    size: number;
+    internal: boolean;
+    uploadToken?: string;
+  },
+  deps?: ConfirmDeps,
 ) {
-  const meta = assertPhotoMeta({ fileName: input.fileName, mime: input.mime, size: input.size });
-  const ticket = await repairPhotoTarget(session, input.ticketId);
-  if (!ticket) throw new FlowError("errors.notFound");
-  if (!isTicketPhotoPath(input.path, ticket.org_id, input.ticketId)) throw new FlowError("errors.forbidden");
+  const target = await (deps?.target ?? repairPhotoTarget)(session, input.ticketId);
+  if (!target) throw new FlowError("errors.notFound");
+  if (!isTicketPhotoPath(input.path, target.org_id, input.ticketId)) throw new FlowError("errors.forbidden");
 
-  const encoded = input.path.split("/").map((part) => encodeURIComponent(part)).join("/");
-  const infoResponse = await storageRequest("GET", `/object/info/${PHOTO_BUCKET}/${encoded}`);
-  if (!infoResponse.ok) throw new FlowError("errors.photoStorage");
-  const info = (await infoResponse.json()) as { size?: number; contentType?: string; metadata?: { mimetype?: string } };
-  const mime = info.contentType || info.metadata?.mimetype || "";
-  let header: Uint8Array;
+  const lookup = deps?.existing ?? findRepairPhoto;
+  const existing = await lookup(session, input.ticketId, input.path);
+  if (existing) return existing;
+
+  const issued = uploadGrantMatches(session.userId, input.ticketId, input.path, input.uploadToken ?? "");
+  if (!issued) throw new FlowError("errors.forbidden");
+
+  const remove = deps?.remove ?? deleteObject;
+  const discard = async () => {
+    const again = await lookup(session, input.ticketId, input.path);
+    if (!discardUploadAllowed(again, uploadGrantMatches(session.userId, input.ticketId, input.path, input.uploadToken ?? ""))) return;
+    await remove(input.path);
+  };
+
   try {
-    header = await readObjectHeader(input.path);
-  } catch (error) {
-    await deleteObject(input.path);
-    throw error;
-  }
-  try {
-    return await attachRepairPhoto(session, {
+    const meta = assertPhotoMeta({ fileName: input.fileName, mime: input.mime, size: input.size });
+    const info = await (deps?.info ?? objectInfo)(input.path);
+    if (!info.ok) throw new FlowError("errors.photoStorage");
+    const header = await (deps?.header ?? readObjectHeader)(input.path);
+    const accepted = acceptPhotoObject({ size: info.size ?? 0, mime: info.mime ?? "", header }, meta.mime);
+    return await (deps?.attach ?? attachRepairPhoto)(session, {
       ticketId: input.ticketId,
       path: input.path,
       fileName: meta.fileName,
       mime: meta.mime,
-      storedMime: mime,
-      size: Number(info.size),
+      storedMime: info.mime ?? "",
+      size: accepted.size,
       internal: input.internal,
       header,
     });
   } catch (error) {
-    if (
-      error instanceof FlowError &&
-      (error.key === "errors.photoLimit" || error.key === "errors.photoType" || error.key === "errors.photoSize")
-    ) {
-      await deleteObject(input.path);
-    }
+    if (error instanceof FlowError && DISCARD_KEYS.has(error.key)) await discard();
     throw error;
   }
 }

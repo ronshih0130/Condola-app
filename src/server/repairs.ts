@@ -309,6 +309,28 @@ export async function addTicketComment(session: Session, ticketId: string, body:
   });
 }
 
+export async function findRepairPhoto(session: Session, ticketId: string, path: string) {
+  assertTicketActor(session);
+  if (!isUuid(ticketId)) return null;
+  return tx(session.userId, async (client) => {
+    const ticket = await maybe<{ id: string; org_id: string }>(
+      client,
+      `SELECT id::text, org_id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`,
+      [ticketId, session.orgId],
+    );
+    if (!ticket || !isTicketPhotoPath(path, ticket.org_id, ticket.id)) return null;
+    const existing = await maybe<{ id: string }>(
+      client,
+      `SELECT a.id::text
+         FROM ticket_attachments a
+         JOIN files f ON f.id = a.file_id
+        WHERE a.ticket_id = $1 AND f.storage_path = $2 AND f.storage_bucket = $3`,
+      [ticket.id, path, PHOTO_BUCKET],
+    );
+    return existing?.id ?? null;
+  });
+}
+
 export async function repairPhotoTarget(session: Session, ticketId: string) {
   assertTicketActor(session);
   if (!isUuid(ticketId)) return null;

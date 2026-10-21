@@ -127,7 +127,7 @@ export default async function TicketDetailPage({
               <input type="checkbox" name="internal" /> {t("i_repair_internal")}
             </label>
           ) : null}
-          {ticket.expense_id ? (
+          {ticket.expense_id && ticket.expense_status !== "void" ? (
             <p data-testid="repair-expense-linked">{t("i_repair_expense_linked")}</p>
           ) : canPost && canWrite ? (
             <label className="small">
