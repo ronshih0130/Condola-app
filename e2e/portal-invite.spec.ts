@@ -26,7 +26,9 @@ async function expireInvite(url: string) {
 test("manager copies a tenant invite, the tenant sets a password, and used or expired links fail", async ({ page, browser }) => {
   await resetDemo(page);
   await signIn(page, ACCOUNTS.manager);
-  await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases?q=" + encodeURIComponent("李愛玲"));
+  await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases");
+  await page.goto("/m/leases?q=912111003");
+  await expect(page.getByTestId("lease-list")).toContainText("李愛玲");
   await page.getByRole("link", { name: "李愛玲" }).click();
   await expect(page.getByTestId("portal-invite-handoff")).toHaveText("傳給租客");
   await expect(page.getByTestId("portal-invite-copy")).toHaveText("複製邀請連結");
@@ -50,10 +52,9 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
   await expiredContext.close();
 
   await page.getByTestId("portal-invite-regenerate").click();
-  await expect(copied).toHaveAttribute("data-url", /.+/);
+  await expect(copied).not.toHaveAttribute("data-url", firstUrl || "");
   const liveUrl = await copied.getAttribute("data-url");
-  expect(liveUrl).toBeTruthy();
-  expect(liveUrl).not.toBe(firstUrl);
+  expect(liveUrl).toMatch(/\/accept\//);
   await page.screenshot({ path: "/opt/cursor/artifacts/portal-invite-copied.png", fullPage: true });
 
   const guest = await browser.newContext();
