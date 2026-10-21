@@ -8,7 +8,7 @@ test("an unknown url shows the Chinese not-found page", async ({ page }) => {
   expect(response?.status()).toBe(404);
   const card = page.getByTestId("not-found");
   await expect(card).toContainText("找不到這個頁面");
-  await expect(card).toContainText("這個頁面可能已經移除，或網址有誤。");
+  await expect(card).toContainText("可能是網址打錯，或這筆資料已經不在了。");
   await expect(card).not.toContainText("404");
   await expect(card).not.toContainText(/[A-Za-z]/);
   const home = page.getByTestId("not-found-home");
@@ -26,7 +26,7 @@ test("missing lease and owner ids show the manager not-found page", async ({ pag
     expect(response?.status()).toBe(404);
     const card = page.getByTestId("not-found");
     await expect(card).toContainText("找不到這個頁面");
-    await expect(card).toContainText("這個頁面可能已經移除，或網址有誤。");
+    await expect(card).toContainText("可能是網址打錯，或這筆資料已經不在了。");
     await expect(card).not.toContainText(/[A-Za-z]/);
     await expect(page.getByTestId("not-found-home")).toHaveText("回到首頁");
     await expect(page.getByTestId("not-found-home")).toHaveAttribute("href", "/m");

@@ -16,7 +16,7 @@ const BANNED = ["收款", "收租", "入帳", "測試模式", "示範", "404", "
 
 test("the Chinese missing page is the only copy on / and /m", () => {
   assert.equal(zh.i_page_missing_title, "找不到這個頁面");
-  assert.equal(zh.i_page_missing_body, "這個頁面可能已經移除，或網址有誤。");
+  assert.equal(zh.i_page_missing_body, "可能是網址打錯，或這筆資料已經不在了。");
   assert.equal(zh.i_page_missing_home, "回到首頁");
   for (const key of ["i_page_missing_title", "i_page_missing_body", "i_page_missing_home"]) {
     assert.equal(en[key], zh[key], key);
