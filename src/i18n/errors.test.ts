@@ -44,6 +44,12 @@ test("every error key has a translation, and an empty amount uses the amount sen
   const guard = mapDbError(new Error("unit 3F is rented as whole_unit; switch it to by_room before leasing a room"));
   assert.ok(guard instanceof FlowError);
   assert.equal(guard.key, "errors.wholeUnit");
+  const period = mapDbError(new Error('duplicate key value violates unique constraint "utility_allocation_runs_open_period_uidx"'));
+  assert.ok(period instanceof FlowError);
+  assert.equal(period.key, "errors.utilityPeriod");
+  const overlap = mapDbError(new Error('conflicting key value violates exclusion constraint "utility_allocation_runs_unit_period_excl"'));
+  assert.ok(overlap instanceof FlowError);
+  assert.equal(overlap.key, "errors.utilityOverlap");
 });
 
 test("confirmation mail uses the locked button and body", () => {

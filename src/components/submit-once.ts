@@ -48,6 +48,27 @@ export function ensureIdempotencyKey(holder: { current: string }) {
 }
 
 /**
+ * A second onSubmit for the same click must not preventDefault. That cancel
+ * drops the first action's error, so the button only looks idle until the
+ * next click. A later click while the guard is held is a real duplicate.
+ */
+export function duplicateSubmitAction(guardHeld: boolean, sameEvent: boolean) {
+  if (sameEvent) return "continue" as const;
+  if (guardHeld) return "block" as const;
+  return "start" as const;
+}
+
+export function revealFormAlert(node: {
+  scrollIntoView: (options?: ScrollIntoViewOptions) => void;
+  focus: (options?: FocusOptions) => void;
+  tabIndex: number;
+}) {
+  node.tabIndex = -1;
+  node.scrollIntoView({ block: "center" });
+  node.focus({ preventScroll: true });
+}
+
+/**
  * Enter commits a select, a textarea newline, and the real submit button.
  * Cancelling it on a select drops the first unit choice, so 下一步 stays disabled.
  */

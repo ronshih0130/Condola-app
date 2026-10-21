@@ -158,6 +158,8 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     );
     userIds.push(even.tenantUserId);
     assert.equal(even.reused, false);
+    assert.equal(even.utilityKept, false);
+    assert.equal(even.billKept, false);
 
     const sub = await createLeaseFromForm(
       admin,
@@ -171,6 +173,8 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     );
     userIds.push(sub.tenantUserId);
     assert.equal(sub.reused, false);
+    assert.equal(sub.utilityKept, false);
+    assert.equal(sub.billKept, false);
     assert.notEqual(sub.leaseId, even.leaseId);
 
     const saved = await query<{
@@ -558,6 +562,194 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
           );
           await client.query(
             `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses' AND kind = 'reversal'`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_allocation_runs
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_bills
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(`DELETE FROM meters WHERE unit_id IN (SELECT id FROM units WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM notifications WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM leases WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM management_agreements WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM properties WHERE id = $1`, [propertyId]);
+        }
+        if (userIds.length) {
+          await client.query(`DELETE FROM contacts WHERE user_id = ANY($1::uuid[])`, [userIds]);
+          await client.query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [userIds]);
+        }
+        await client.query(`DELETE FROM contacts WHERE lower(email::text) LIKE $1`, [`%${stamp}@example.com`]);
+        await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
+      } finally {
+        await client.query(`ALTER TABLE ledger_entries ENABLE TRIGGER trg_ledger_entries_append_only`);
+        await client.query(`ALTER TABLE ledger_transactions ENABLE TRIGGER trg_ledger_transactions_append_only`);
+        await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
+      }
+    });
+  }
+});
+
+test("a second lease in the same unit and period updates the draft run, and a posted run is left unchanged", async () => {
+  const stamp = Date.now().toString(36);
+  const propertyIds: string[] = [];
+  const userIds: string[] = [];
+  try {
+    const rooms = await createProperty(admin, {
+      name: `同期電費 ${stamp}`,
+      city: "桃園市",
+      district: "中壢區",
+      street: "分期路9號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "分期屋主",
+      ownerPhone: "0912000111",
+      ownerEmail: `period.owner.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "9F",
+      floor: "9",
+      rentalMode: "by_room",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 8000 },
+        { label: "B", roomType: "suite", baseRentMajor: 8000 },
+        { label: "C", roomType: "suite", baseRentMajor: 8000 },
+      ],
+    });
+    propertyIds.push(rooms.propertyId);
+    assert.equal(rooms.roomIds.length, 3);
+
+    const first = await createLeaseFromForm(
+      admin,
+      form({
+        ...base,
+        roomId: rooms.roomIds[0],
+        tenantName: "第一期租客",
+        tenantEmail: `period.a.${stamp}@example.com`,
+        billTotal: "1000",
+        usage: "100",
+        rate: "4",
+      }),
+    );
+    userIds.push(first.tenantUserId);
+    assert.equal(first.utilityKept, false);
+    assert.equal(first.billKept, false);
+
+    const second = await createLeaseFromForm(
+      admin,
+      form({
+        ...base,
+        roomId: rooms.roomIds[1],
+        tenantName: "第二期租客",
+        tenantEmail: `period.b.${stamp}@example.com`,
+        billTotal: "1800",
+        usage: "300",
+        rate: "4",
+      }),
+    );
+    userIds.push(second.tenantUserId);
+    assert.equal(second.utilityKept, false);
+    assert.equal(second.billKept, true);
+
+    const open = await query<{
+      id: string;
+      status: string;
+      usage: string;
+      amount: string;
+      n: string;
+      bill_amount: string;
+      bill_usage: string;
+    }>(
+      `SELECT r.id::text, r.status::text, r.total_usage::text AS usage, r.total_amount_minor::text AS amount,
+              (SELECT count(*)::text FROM utility_allocation_runs x
+                WHERE x.meter_id = r.meter_id AND x.period_start = r.period_start AND x.period_end = r.period_end
+                  AND x.status <> 'void') AS n,
+              b.total_amount_minor::text AS bill_amount, b.total_usage::text AS bill_usage
+         FROM utility_allocation_runs r
+         JOIN utility_bills b ON b.id = r.utility_bill_id
+         JOIN utility_allocation_lines line ON line.run_id = r.id AND line.lease_id = $1`,
+      [first.leaseId],
+    );
+    assert.equal(open.rows.length, 1);
+    assert.equal(open.rows[0]?.status, "draft");
+    assert.equal(open.rows[0]?.n, "1");
+    assert.equal(Number(open.rows[0]?.usage), 300);
+    assert.equal(open.rows[0]?.amount, "120000");
+    assert.equal(open.rows[0]?.bill_amount, "100000");
+    assert.equal(Number(open.rows[0]?.bill_usage), 100);
+
+    const lines = await query<{ lease_id: string | null; bearer: string }>(
+      `SELECT lease_id::text, bearer::text FROM utility_allocation_lines WHERE run_id = $1`,
+      [open.rows[0].id],
+    );
+    assert.ok(lines.rows.some((row) => row.lease_id === first.leaseId && row.bearer === "tenant"));
+    assert.ok(lines.rows.some((row) => row.lease_id === second.leaseId && row.bearer === "tenant"));
+    assert.equal(lines.rows.filter((row) => row.bearer === "owner").length, 1);
+
+    await query(
+      `UPDATE utility_allocation_runs
+          SET status = 'posted', approved_by = $2, approved_at = now()
+        WHERE id = $1`,
+      [open.rows[0].id, USERS.admin],
+    );
+
+    const third = await createLeaseFromForm(
+      admin,
+      form({
+        ...base,
+        roomId: rooms.roomIds[2],
+        tenantName: "已入帳租客",
+        tenantEmail: `period.c.${stamp}@example.com`,
+        billTotal: "1000",
+        usage: "100",
+        rate: "4",
+      }),
+    );
+    userIds.push(third.tenantUserId);
+    assert.equal(third.utilityKept, true);
+    assert.equal(third.billKept, false);
+
+    const kept = await query<{ status: string; usage: string; amount: string; n: string; third_line: string }>(
+      `SELECT r.status::text, r.total_usage::text AS usage, r.total_amount_minor::text AS amount,
+              (SELECT count(*)::text FROM utility_allocation_runs x
+                WHERE x.meter_id = r.meter_id AND x.status <> 'void') AS n,
+              (SELECT count(*)::text FROM utility_allocation_lines line
+                WHERE line.run_id = r.id AND line.lease_id = $2) AS third_line
+         FROM utility_allocation_runs r
+        WHERE r.id = $1`,
+      [open.rows[0].id, third.leaseId],
+    );
+    assert.equal(kept.rows[0]?.status, "posted");
+    assert.equal(Number(kept.rows[0]?.usage), 300);
+    assert.equal(kept.rows[0]?.amount, "120000");
+    assert.equal(kept.rows[0]?.n, "1");
+    assert.equal(kept.rows[0]?.third_line, "0");
+  } finally {
+    await withClient(async (client) => {
+      await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      await client.query(`ALTER TABLE ledger_entries DISABLE TRIGGER trg_ledger_entries_append_only`);
+      await client.query(`ALTER TABLE ledger_transactions DISABLE TRIGGER trg_ledger_transactions_append_only`);
+      try {
+        for (const propertyId of propertyIds) {
+          await client.query(`UPDATE expenses SET ledger_transaction_id = NULL WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM expenses WHERE property_id = $1`, [propertyId]);
+          await client.query(
+            `DELETE FROM ledger_entries
+              WHERE transaction_id IN (
+                SELECT id FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'
+              )`,
             [propertyId],
           );
           await client.query(

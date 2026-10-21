@@ -25,7 +25,7 @@ export default async function LeasePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; error?: string; audit?: string; created?: string }>;
+  searchParams: Promise<{ tab?: string; error?: string; audit?: string; created?: string; utility?: string; bill?: string }>;
 }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
@@ -72,6 +72,16 @@ export default async function LeasePage({
       {query.created === "1" ? (
         <div className="alert ok" data-testid="lease-created">
           {t("i_lease_created")}
+        </div>
+      ) : null}
+      {query.utility === "kept" ? (
+        <div className="alert warn" data-testid="utility-run-kept">
+          {t("i_utility_run_kept")}
+        </div>
+      ) : null}
+      {query.bill === "kept" ? (
+        <div className="alert warn" data-testid="utility-bill-kept">
+          {t("i_utility_bill_kept")}
         </div>
       ) : null}
       <div className="tabsx">

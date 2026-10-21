@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { callSubmitAction, claimFormSubmit, ensureIdempotencyKey, enterCommitsControl, isNextRedirect, releaseFormSubmit } from "./submit-once";
+import { callSubmitAction, claimFormSubmit, duplicateSubmitAction, ensureIdempotencyKey, enterCommitsControl, isNextRedirect, releaseFormSubmit, revealFormAlert } from "./submit-once";
 
 test("a second submit in the same turn is refused until the guard is released", () => {
   const guard = { current: false };
@@ -112,6 +112,31 @@ test("the idempotency key is created once per wizard attempt", () => {
   assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   const another = ensureIdempotencyKey({ current: "" });
   assert.notEqual(another, first);
+});
+
+test("the same click does not cancel the first submit, and a later click is blocked until release", () => {
+  const first = { kind: "click-1" } as unknown as Event;
+  const second = { kind: "click-2" } as unknown as Event;
+  assert.equal(duplicateSubmitAction(false, false), "start");
+  assert.equal(duplicateSubmitAction(true, true), "continue");
+  assert.equal(duplicateSubmitAction(true, false), "block");
+  assert.equal(duplicateSubmitAction(false, second === first), "start");
+});
+
+test("a failed submit scrolls the alert into view and focuses it", () => {
+  const calls: string[] = [];
+  const node = {
+    tabIndex: 0,
+    scrollIntoView(options?: ScrollIntoViewOptions) {
+      calls.push(`scroll:${options?.block}`);
+    },
+    focus(options?: FocusOptions) {
+      calls.push(`focus:${options?.preventScroll}`);
+    },
+  };
+  revealFormAlert(node);
+  assert.equal(node.tabIndex, -1);
+  assert.deepEqual(calls, ["scroll:center", "focus:true"]);
 });
 
 test("Enter still commits a select, so the first unit choice is not discarded", () => {

@@ -872,6 +872,8 @@ export async function createLease(session: Session, input: LeaseInput) {
         average,
         tenantAmount: 0,
         reused: true,
+        utilityKept: false,
+        billKept: false,
       };
     }
     const space = await one<{
@@ -1001,6 +1003,8 @@ export async function createLease(session: Session, input: LeaseInput) {
     );
 
     let tenantAmount = 0;
+    let utilityKept = false;
+    let billKept = false;
     if (electricity) {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [
       session.orgId,
@@ -1033,13 +1037,21 @@ export async function createLease(session: Session, input: LeaseInput) {
        RETURNING id, avg_price_minor_per_unit::text AS avg`,
       [session.orgId, meter.id, input.periodStart, input.periodEnd, space.currency, billMinor, electricity.usageKwh, session.userId],
     );
-    const bill = insertedBill ?? await one<{ id: string; avg: string }>(
-      client,
-      `SELECT id, avg_price_minor_per_unit::text AS avg
-         FROM utility_bills
-        WHERE meter_id = $1 AND period_start = $2 AND period_end = $3`,
-      [meter.id, input.periodStart, input.periodEnd],
-    );
+    let bill: { id: string; avg: string };
+    if (insertedBill) {
+      bill = insertedBill;
+    } else {
+      const existingBill = await one<{ id: string; avg: string; amount: string; usage: string }>(
+        client,
+        `SELECT id, avg_price_minor_per_unit::text AS avg,
+                total_amount_minor::text AS amount, total_usage::text AS usage
+           FROM utility_bills
+          WHERE meter_id = $1 AND period_start = $2 AND period_end = $3`,
+        [meter.id, input.periodStart, input.periodEnd],
+      );
+      bill = existingBill;
+      billKept = Number(existingBill.amount) !== billMinor || Math.abs(Number(existingBill.usage) - electricity.usageKwh) > 0.001;
+    }
 
     const unitRooms = await many<{ id: string; label: string }>(
       client,
@@ -1095,79 +1107,104 @@ export async function createLease(session: Session, input: LeaseInput) {
     const shares = splitWeighted(electricity.usageKwh, totalAmount, parts);
 
     if (exceeds) await noteChange(client, input.overrideReason);
-    const existingRun = await maybe<{ id: string; status: string }>(
-      client,
-      `SELECT id, status::text
+    const openRunSql = `SELECT id, status::text
          FROM utility_allocation_runs
         WHERE meter_id = $1 AND period_start = $2::date AND period_end = $3::date AND status <> 'void'
         ORDER BY computed_at DESC
-        LIMIT 1
-        FOR UPDATE`,
-      [meter.id, input.periodStart, input.periodEnd],
-    );
+        LIMIT 1`;
+    const existingRun = await maybe<{ id: string; status: string }>(client, `${openRunSql} FOR UPDATE`, [
+      meter.id,
+      input.periodStart,
+      input.periodEnd,
+    ]);
     const runInputs = JSON.stringify({ rooms: parts.map((part) => ({ room: part.label, days: part.days, sub: part.sub })) });
-    if (!existingRun || existingRun.status === "draft") {
-      const run = existingRun
-        ? existingRun
-        : await one<{ id: string }>(
-            client,
-            `INSERT INTO utility_allocation_runs (
-               org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
-               total_usage, common_area_usage, common_area_policy, rate_minor_per_unit,
-               cap_override_reason, cap_overridden_by, total_amount_minor, inputs, status, computed_by, unit_id
-             ) VALUES (
-               $1,$2,$3,$4,$5,$6::split_method,$7::rate_source,$8,$9,$10,'split_evenly',$11,$12,$13,$14,$15::jsonb,'draft',$16,$17
-             ) RETURNING id`,
-            [
-              session.orgId,
-              meter.id,
-              bill.id,
-              input.periodStart,
-              input.periodEnd,
-              input.splitMethod,
-              rateSource,
-              space.currency,
-              electricity.usageKwh,
-              common,
-              rateMinor,
-              exceeds ? input.overrideReason.trim() : null,
-              exceeds ? session.userId : null,
-              totalAmount,
-              runInputs,
-              session.userId,
-              space.unit_id,
-            ],
-          );
-      if (existingRun) {
-        await client.query(
-          `UPDATE utility_allocation_runs SET
-             utility_bill_id = $2, split_method = $3::split_method, rate_source = $4::rate_source, currency = $5,
-             total_usage = $6, common_area_usage = $7, rate_minor_per_unit = $8,
-             cap_override_reason = $9, cap_overridden_by = $10, total_amount_minor = $11, inputs = $12::jsonb,
-             computed_by = $13, computed_at = now(), unit_id = $14
-           WHERE id = $1 AND status = 'draft'`,
-          [
-            existingRun.id,
-            bill.id,
-            input.splitMethod,
-            rateSource,
-            space.currency,
-            electricity.usageKwh,
-            common,
-            rateMinor,
-            exceeds ? input.overrideReason.trim() : null,
-            exceeds ? session.userId : null,
-            totalAmount,
-            runInputs,
-            session.userId,
-            space.unit_id,
-          ],
-        );
-        await client.query(
-          `DELETE FROM utility_allocation_lines WHERE run_id = $1 AND posted_ledger_transaction_id IS NULL`,
-          [existingRun.id],
-        );
+    const replaceDraft = async (runId: string) => {
+      await client.query(`SELECT id FROM utility_allocation_runs WHERE id = $1 AND status = 'draft' FOR UPDATE`, [runId]);
+      await client.query(
+        `UPDATE utility_allocation_runs SET
+           utility_bill_id = $2, split_method = $3::split_method, rate_source = $4::rate_source, currency = $5,
+           total_usage = $6, common_area_usage = $7, rate_minor_per_unit = $8,
+           cap_override_reason = $9, cap_overridden_by = $10, total_amount_minor = $11, inputs = $12::jsonb,
+           computed_by = $13, computed_at = now(), unit_id = $14
+         WHERE id = $1 AND status = 'draft'`,
+        [
+          runId,
+          bill.id,
+          input.splitMethod,
+          rateSource,
+          space.currency,
+          electricity.usageKwh,
+          common,
+          rateMinor,
+          exceeds ? input.overrideReason.trim() : null,
+          exceeds ? session.userId : null,
+          totalAmount,
+          runInputs,
+          session.userId,
+          space.unit_id,
+        ],
+      );
+      await client.query(
+        `DELETE FROM utility_allocation_lines WHERE run_id = $1 AND posted_ledger_transaction_id IS NULL`,
+        [runId],
+      );
+    };
+    let runId: string | null = null;
+    if (existingRun && existingRun.status !== "draft") {
+      utilityKept = true;
+    } else if (existingRun) {
+      runId = existingRun.id;
+      await replaceDraft(runId);
+    } else {
+      const inserted = await maybe<{ id: string }>(
+        client,
+        `INSERT INTO utility_allocation_runs (
+           org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
+           total_usage, common_area_usage, common_area_policy, rate_minor_per_unit,
+           cap_override_reason, cap_overridden_by, total_amount_minor, inputs, status, computed_by, unit_id
+         ) VALUES (
+           $1,$2,$3,$4,$5,$6::split_method,$7::rate_source,$8,$9,$10,'split_evenly',$11,$12,$13,$14,$15::jsonb,'draft',$16,$17
+         )
+         ON CONFLICT (meter_id, period_start, period_end) WHERE status <> 'void' DO NOTHING
+         RETURNING id`,
+        [
+          session.orgId,
+          meter.id,
+          bill.id,
+          input.periodStart,
+          input.periodEnd,
+          input.splitMethod,
+          rateSource,
+          space.currency,
+          electricity.usageKwh,
+          common,
+          rateMinor,
+          exceeds ? input.overrideReason.trim() : null,
+          exceeds ? session.userId : null,
+          totalAmount,
+          runInputs,
+          session.userId,
+          space.unit_id,
+        ],
+      );
+      if (inserted) {
+        runId = inserted.id;
+      } else {
+        const raced = await maybe<{ id: string; status: string }>(client, `${openRunSql} FOR UPDATE`, [
+          meter.id,
+          input.periodStart,
+          input.periodEnd,
+        ]);
+        if (!raced || raced.status !== "draft") {
+          utilityKept = true;
+        } else {
+          runId = raced.id;
+          await replaceDraft(runId);
+        }
       }
+    }
+    if (runId) {
+      const run = { id: runId };
       for (let index = 0; index < shares.length; index += 1) {
         const share = shares[index];
         const part = parts[index];
@@ -1204,13 +1241,6 @@ export async function createLease(session: Session, input: LeaseInput) {
         amountMinor: ownerMinor,
       });
       tenantAmount = shares.find((share) => parts[shares.indexOf(share)]?.leaseId === lease.id)?.amount ?? 0;
-    } else {
-      const prior = await maybe<{ amount: string }>(
-        client,
-        `SELECT amount_minor::text AS amount FROM utility_allocation_lines WHERE run_id = $1 AND lease_id = $2`,
-        [existingRun.id, lease.id],
-      );
-      tenantAmount = prior ? Number(prior.amount) : 0;
     }
     }
 
@@ -1222,6 +1252,8 @@ export async function createLease(session: Session, input: LeaseInput) {
       average,
       tenantAmount,
       reused: false,
+      utilityKept,
+      billKept,
     };
   }, { orgId: session.orgId, environment: session.environment });
   } catch (error) {

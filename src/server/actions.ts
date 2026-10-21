@@ -196,7 +196,11 @@ export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formDa
     const created = await createLeaseFromForm(session, formData);
     const jar = await cookies();
     jar.set("condola_tenant_focus", created.tenantUserId, appCookieOptions({ httpOnly: false }));
-    redirect(`/m/leases/${created.leaseId}?created=1`);
+    const notice = new URLSearchParams();
+    if (created.utilityKept) notice.set("utility", "kept");
+    if (created.billKept) notice.set("bill", "kept");
+    const extra = notice.toString();
+    redirect(`/m/leases/${created.leaseId}?created=1${extra ? `&${extra}` : ""}`);
   } catch (error) {
     return actionError(error, "errors.leaseFailed");
   }

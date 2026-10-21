@@ -1902,5 +1902,8 @@
  "i_utility_next": "Next",
  "i_utility_saved": "Electricity is on the tenant bill for this period.",
  "i_utility_pending": "Pending repost",
- "i_utility_overlap": "This period overlaps an electricity run for the same unit. Edit that period, or choose dates that do not overlap."
+ "i_utility_overlap": "This period overlaps an electricity run for the same unit. Edit that period, or choose dates that do not overlap.",
+ "i_utility_period": "This meter already has an electricity run for that period. Edit that run instead of creating another.",
+ "i_utility_run_kept": "The lease was saved. Electricity for this period is already confirmed, so that run was left unchanged. Review it under Post electricity.",
+ "i_utility_bill_kept": "A Taipower bill already exists for this period. The amount and kWh entered this time did not replace it."
 }
