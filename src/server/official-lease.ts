@@ -157,24 +157,28 @@ const ROAD_DIGIT = "0-9０-９";
 const ROAD_SECTION = "0-9０-９一二三四五六七八九十";
 
 /**
- * 號之N is a door-number suffix, not 樓之N. Only an explicit 樓之N may fill the
- * floor-suffix blank, and only when it does not disagree with the unit floor.
+ * 號之N belongs in the 號 blank (88之1), never in 樓之. A suffix that is not a
+ * plain number means the door number cannot be filled safely, so the street
+ * stays blank. Only an explicit 樓之N may fill the floor-suffix blank, and only
+ * when it does not disagree with the unit floor.
  */
 function parseRoad(street: string) {
   const match = street.trim().match(
     new RegExp(
-      `^(.+?)(?:路|街)(?:([${ROAD_SECTION}]+)段)?(?:([${ROAD_DIGIT}]+)巷)?(?:([${ROAD_DIGIT}]+)弄)?([${ROAD_DIGIT}]+)號(?:之[${ROAD_DIGIT}]+)?(?:([${ROAD_DIGIT}]+)樓(?:之([${ROAD_DIGIT}]+))?)?$`,
+      `^(.+?)(?:路|街)(?:([${ROAD_SECTION}]+)段)?(?:([${ROAD_DIGIT}]+)巷)?(?:([${ROAD_DIGIT}]+)弄)?([${ROAD_DIGIT}]+)號(?:之([${ROAD_DIGIT}]+))?(?:([${ROAD_DIGIT}]+)樓(?:之([${ROAD_DIGIT}]+))?)?$`,
     ),
   );
   if (!match) return null;
+  const number = match[5] ?? "";
+  const doorSuffix = match[6] ?? "";
   return {
     name: match[1] ?? "",
     section: match[2] ?? "",
     lane: match[3] ?? "",
     alley: match[4] ?? "",
-    number: match[5] ?? "",
-    floor: match[6] ?? "",
-    floorSuffix: match[7] ?? "",
+    number: doorSuffix ? `${number}之${doorSuffix}` : number,
+    floor: match[7] ?? "",
+    floorSuffix: match[8] ?? "",
   };
 }
 
@@ -190,12 +194,10 @@ function floorStem(floor: string | null | undefined) {
   return /^[0-9０-９一二三四五六七八九十]+$/.test(value) ? value : "";
 }
 
+/** Whole dollars only. A fractional minor unit, or cents, stays blank. */
 function yuan(minor: number | null | undefined) {
-  if (minor == null || !Number.isFinite(minor) || minor < 0) return "";
-  const major = minor / 100;
-  if (!Number.isFinite(major)) return "";
-  if (Number.isInteger(major)) return String(major);
-  return major.toFixed(2).replace(/\.?0+$/, "");
+  if (minor == null || !Number.isInteger(minor) || minor < 0 || minor % 100 !== 0) return "";
+  return String(minor / 100);
 }
 
 function monthsText(value: string | null | undefined) {

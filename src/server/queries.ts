@@ -1663,6 +1663,7 @@ export async function leasePdfSource(session: Session, id: string) {
                   FROM lease_parties lp
                   JOIN contacts c ON c.id = lp.contact_id
                  WHERE lp.lease_id = l.id
+                   AND lp.role IN ('primary', 'co_tenant')
               ), '') AS tenant,
               (
                 SELECT oc.display_name

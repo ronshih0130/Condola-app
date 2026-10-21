@@ -587,6 +587,34 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.ok(leaseId);
   assert.match(hash ?? "", /^[a-f0-9]{64}$/);
 
+  const coTenant = "共同承租李四";
+  const guarantor = "保證人王大明";
+  const cosigner = "連署人林小安";
+  const contactIds = await svc(USERS.admin, async (client) => {
+    const ids: string[] = [];
+    for (const [role, name, isTenant] of [
+      ["co_tenant", coTenant, true],
+      ["guarantor", guarantor, false],
+      ["occupant", cosigner, false],
+    ] as const) {
+      const contact = await client.query<{ id: string }>(
+        `INSERT INTO contacts (org_id, is_tenant, display_name, locale)
+         VALUES ($1, $2, $3, 'zh-TW') RETURNING id::text`,
+        [ORG_ID, isTenant, name],
+      );
+      const id = contact.rows[0]?.id;
+      assert.ok(id);
+      ids.push(id);
+      await client.query(
+        `INSERT INTO lease_parties (org_id, lease_id, contact_id, role)
+         VALUES ($1, $2, $3, $4::lease_party_role)`,
+        [ORG_ID, leaseId, id, role],
+      );
+    }
+    return ids;
+  });
+
+  try {
   const before = await pdfAuditCount("leases", leaseId);
   const maintenance = pdfSession(USERS.maintenance, "staff", "maintenance", ORG_ID);
   const visibleToMaintenance = await tx(USERS.maintenance, (client) =>
@@ -613,6 +641,9 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.equal(managerText.split(sublessor).join("").includes("房東"), false);
   assert.equal(managerText.includes("88921"), false);
   assert.equal(managerText.includes("戶名：陳建宏"), false);
+  assert.equal(managerText.includes(`、${coTenant}，出租人`), true);
+  assert.equal(managerText.includes(guarantor), false);
+  assert.equal(managerText.includes(cosigner), false);
 
   const tenant = pdfSession(USERS.tenant, "tenant", null, ORG_ID);
   const tenantDoc = await leasePdfForSession(tenant, leaseId);
@@ -652,4 +683,10 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
     client.query(`SELECT id FROM owner_statements WHERE id = $1`, [statementId]),
   );
   assert.equal(coastRead.rows.length, 0);
+  } finally {
+    await svc(USERS.admin, async (client) => {
+      await client.query(`DELETE FROM lease_parties WHERE contact_id = ANY($1::uuid[])`, [contactIds]);
+      await client.query(`DELETE FROM contacts WHERE id = ANY($1::uuid[])`, [contactIds]);
+    });
+  }
 });

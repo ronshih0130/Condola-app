@@ -172,7 +172,8 @@ test("號之N stays out of the floor-suffix blank, and 戶名 is only a stored h
     floor: "3",
   });
   assert.equal(restore(door.text, door.patches), stored);
-  assert.equal(door.text.includes("松仁街(路)__段__巷__弄88號3樓之    (基地坐落"), true);
+  assert.equal(door.text.includes("松仁街(路)__段__巷__弄88之1號3樓之    (基地坐落"), true);
+  assert.equal(door.text.includes("88號3樓"), false);
   assert.equal(door.text.includes("樓之1"), false);
 
   const explicit = renderOfficialLease({
@@ -197,11 +198,47 @@ test("號之N stays out of the floor-suffix blank, and 戶名 is only a stored h
   assert.equal(restore(unsure.text, unsure.patches), stored);
   assert.equal(unsure.text.includes("鄉（鎮、市、區）__街(路)__段__巷__弄__號3樓之    (基地坐落"), true);
 
+  const unsafe = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號之甲" },
+    floor: "3",
+  });
+  assert.equal(restore(unsafe.text, unsafe.patches), stored);
+  assert.equal(unsafe.text.includes("鄉（鎮、市、區）__街(路)__段__巷__弄__號3樓之    (基地坐落"), true);
+  assert.equal(unsafe.text.includes("88"), false);
+
   const holder = renderOfficialLease({ ...filled, accountHolder: "林秀英" });
   assert.equal(restore(holder.text, holder.patches), stored);
   assert.equal(holder.text.includes("戶名：林秀英，帳號：     。"), true);
   assert.equal(holder.text.includes("戶名：陳建宏"), false);
   assert.equal(holder.text.includes("出租人陳建宏"), true);
+});
+
+function blankBetween(text: string, before: string, after: string) {
+  const start = text.indexOf(before);
+  assert.ok(start >= 0, before);
+  const from = start + before.length;
+  const end = text.indexOf(after, from);
+  assert.ok(end >= 0, after);
+  return text.slice(from, end);
+}
+
+test("rent and deposit print only a whole number of dollars", () => {
+  const whole = renderOfficialLease({ rentMinor: 1_000_000, depositMinor: 3_000_000 });
+  assert.equal(restore(whole.text, whole.patches), stored);
+  assert.equal(blankBetween(whole.text, "(下同)", "元整"), "10000");
+  assert.equal(blankBetween(whole.text, "金額為", "元整(最高不得超過二個月租金之總額)"), "30000");
+
+  const cents = renderOfficialLease({ rentMinor: 1_000_050, depositMinor: 250 });
+  assert.equal(restore(cents.text, cents.patches), stored);
+  assert.equal(blankBetween(cents.text, "(下同)", "元整"), blankBetween(stored, "(下同)", "元整"));
+  assert.equal(blankBetween(cents.text, "金額為", "元整(最高不得超過二個月租金之總額)"), blankBetween(stored, "金額為", "元整(最高不得超過二個月租金之總額)"));
+  assert.equal(cents.text.includes("10000.5"), false);
+  assert.equal(cents.text.includes("2.5"), false);
+
+  const fractional = renderOfficialLease({ rentMinor: 1000.5, depositMinor: 200.25 });
+  assert.equal(restore(fractional.text, fractional.patches), stored);
+  assert.equal(blankBetween(fractional.text, "(下同)", "元整"), blankBetween(stored, "(下同)", "元整"));
+  assert.equal(blankBetween(fractional.text, "金額為", "元整(最高不得超過二個月租金之總額)"), blankBetween(stored, "金額為", "元整(最高不得超過二個月租金之總額)"));
 });
 
 test("the lease PDF prints the official form and keeps the deposit reason outside it", () => {
