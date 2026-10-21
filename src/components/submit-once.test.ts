@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { callSubmitAction, claimFormSubmit, duplicateSubmitAction, ensureIdempotencyKey, enterCommitsControl, isNextRedirect, releaseFormSubmit, revealFormAlert } from "./submit-once";
+import { callSubmitAction, claimFormSubmit, duplicateSubmitAction, ensureIdempotencyKey, enterCommitsControl, isNextRedirect, releaseFormSubmit, revealFormAlert, submitEcho } from "./submit-once";
 
 test("a second submit in the same turn is refused until the guard is released", () => {
   const guard = { current: false };
@@ -121,6 +121,15 @@ test("the same click does not cancel the first submit, and a later click is bloc
   assert.equal(duplicateSubmitAction(true, true), "continue");
   assert.equal(duplicateSubmitAction(true, false), "block");
   assert.equal(duplicateSubmitAction(false, second === first), "start");
+});
+
+test("a second submit event in the same click is not cancelled", () => {
+  const now = 1_000;
+  assert.equal(submitEcho(true, now, now + 40), true);
+  assert.equal(submitEcho(true, now, now + 80), false);
+  assert.equal(submitEcho(false, now, now + 10), false);
+  assert.equal(submitEcho(true, 0, now), false);
+  assert.equal(duplicateSubmitAction(true, true), "continue");
 });
 
 test("a failed submit scrolls the alert into view and focuses it", () => {

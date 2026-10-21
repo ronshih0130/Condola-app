@@ -55,7 +55,7 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await expect(page.locator("body")).not.toContainText("房東");
 
   const room = page.getByTestId("lease-room");
-  const roomValue = await room.locator("option", { hasText: "信義松仁" }).first().getAttribute("value");
+  const roomValue = await room.locator("option", { hasText: "3F C" }).first().getAttribute("value");
   expect(roomValue).toBeTruthy();
   await room.selectOption(roomValue ?? "");
   await page.getByTestId("wizard-next").click();
@@ -69,6 +69,7 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await page.getByTestId("rent").fill("10000");
   await page.getByTestId("wizard-next").click();
 
+  await expect(page.getByTestId("deposit-months")).toHaveValue("2");
   await page.getByTestId("deposit-months").fill("3");
   const alert = page.getByTestId("deposit-alert");
   await expect(alert).toBeVisible();
@@ -81,13 +82,11 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await expect(page.getByTestId("wizard-next")).toBeEnabled();
   await page.getByTestId("wizard-next").click();
 
-  await page.getByTestId("due-day").fill("5");
+  await expect(page.getByTestId("due-day")).toHaveValue("5");
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("split-method").selectOption("even");
-  await page.getByTestId("bill-total").fill("2000");
-  await page.getByTestId("usage").fill("400");
-  await page.getByTestId("rate").fill("4");
-  await expect(page.getByTestId("cap-alert")).toHaveCount(0);
+  await expect(page.getByTestId("utility-monthly-note")).toBeVisible();
+  await expect(page.getByTestId("bill-total")).toHaveCount(0);
+  await expect(page.getByTestId("usage")).toHaveCount(0);
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("lease-template")).toBeVisible();
   await page.getByTestId("template-lang-zh").press("Enter");

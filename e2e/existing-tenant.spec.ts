@@ -8,7 +8,7 @@ test("staff can lease a vacant room to an existing 租客", async ({ page }) => 
   await expect(page.locator("body")).not.toContainText("房客");
 
   const room = page.getByTestId("lease-room");
-  const roomValue = await room.locator("option", { hasText: "信義松仁" }).first().getAttribute("value");
+  const roomValue = await room.locator("option", { hasText: "3F C" }).first().getAttribute("value");
   expect(roomValue).toBeTruthy();
   await room.selectOption(roomValue ?? "");
   await expect(page.getByTestId("wizard-next")).toBeEnabled();
@@ -49,7 +49,7 @@ test("staff can lease a vacant room to an existing 租客", async ({ page }) => 
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("due-day").fill("5");
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("split-method").selectOption("even");
+  await expect(page.getByTestId("utility-monthly-note")).toBeVisible();
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("lease-confirm-tenant")).toHaveText("王小美");
@@ -78,7 +78,7 @@ test("a duplicate tenant email stays on the tenant step and can switch to that �
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases/new");
 
   const room = page.getByTestId("lease-room");
-  const roomValue = await room.locator("option", { hasText: "信義松仁" }).first().getAttribute("value");
+  const roomValue = await room.locator("option", { hasText: "3F C" }).first().getAttribute("value");
   expect(roomValue).toBeTruthy();
   await room.selectOption(roomValue ?? "");
   await expect(page.getByTestId("wizard-next")).toBeEnabled();
@@ -104,7 +104,7 @@ test("TWD rent and deposit stay whole dollars", async ({ page }) => {
   await resetDemo(page);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases/new");
   const room = page.getByTestId("lease-room");
-  const roomValue = await room.locator("option", { hasText: "信義松仁" }).first().getAttribute("value");
+  const roomValue = await room.locator("option", { hasText: "3F C" }).first().getAttribute("value");
   expect(roomValue).toBeTruthy();
   await room.selectOption(roomValue ?? "");
   await page.getByTestId("wizard-next").click();
@@ -136,7 +136,7 @@ test("a deposit of zero months still opens the new lease", async ({ page }) => {
   await resetDemo(page);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases/new");
   const room = page.getByTestId("lease-room");
-  const roomValue = await room.locator("option", { hasText: "信義松仁" }).first().getAttribute("value");
+  const roomValue = await room.locator("option", { hasText: "3F C" }).first().getAttribute("value");
   expect(roomValue).toBeTruthy();
   await room.selectOption(roomValue ?? "");
   await page.getByTestId("wizard-next").click();
@@ -152,7 +152,7 @@ test("a deposit of zero months still opens the new lease", async ({ page }) => {
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("due-day").fill("5");
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("split-method").selectOption("even");
+  await expect(page.getByTestId("utility-monthly-note")).toBeVisible();
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("lease-confirm-space")).toContainText("信義松仁");

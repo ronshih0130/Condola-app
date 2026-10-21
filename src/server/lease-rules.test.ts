@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { depositCapSaveAllowed, depositExceedsCap, depositReasonEditorOpen, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
+import { depositCapSaveAllowed, depositExceedsCap, depositReasonEditorOpen, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermEnd, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, overlappingLease, signedPdfName } from "./lease-rules";
 
 test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositExceedsCap(2), false);
@@ -56,6 +56,7 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(wizard, /errors\.leaseNetwork/);
   assert.match(wizard, /ensureIdempotencyKey\(idempotencyKey\)/);
   assert.match(wizard, /name="idempotencyKey"/);
+  assert.match(wizard, /overlappingLease\(room\?\.leases, start, termEnd\)/);
   assert.match(wizard, /data-testid="lease-error"/);
   assert.match(wizard, /role="alert"/);
   assert.match(actions, /redirect\(`\/m\/leases\/\$\{created\.leaseId\}\?created=1/);
@@ -150,6 +151,15 @@ test("the lease idempotency migration is additive and later than shared staging 
   assert.equal(sql.includes("測試模式"), false);
   assert.equal(sql.includes("範例沙盒"), false);
   assert.equal(sql.includes("示範"), false);
+});
+
+test("a later term is allowed and an overlapping term names the existing dates", () => {
+  const current = { start: "2026-11-01", end: "2027-10-31" };
+  assert.equal(leaseTermEnd("2027-11-01", "12"), "2028-10-31");
+  assert.equal(overlappingLease([current], "2027-11-01", "2028-10-31"), null);
+  assert.deepEqual(overlappingLease([current], "2026-11-01", "2027-10-31"), current);
+  assert.deepEqual(overlappingLease([current], "2027-10-31", "2028-10-30"), current);
+  assert.equal(overlappingLease([current], "2027-11-01", "2027-10-31"), null);
 });
 
 test("a Taiwan mobile becomes +886 and an international number stays", () => {

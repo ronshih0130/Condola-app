@@ -5,7 +5,7 @@ test("Enter in electricity does not advance, and ordinary buttons still activate
   await resetDemo(page);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases/new");
   const room = page.getByTestId("lease-room");
-  const roomValue = await room.locator("option", { hasText: "信義松仁" }).first().getAttribute("value");
+  const roomValue = await room.locator("option", { hasText: "3F C" }).first().getAttribute("value");
   expect(roomValue).toBeTruthy();
   await room.selectOption(roomValue ?? "");
   await page.getByTestId("wizard-next").click();
@@ -20,21 +20,16 @@ test("Enter in electricity does not advance, and ordinary buttons still activate
   await page.getByTestId("deposit-months").fill("2");
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("due-day").fill("5");
+  await page.getByTestId("due-day").press("Enter");
+  await expect(page.getByTestId("due-day")).toBeVisible();
+  await expect(page.getByTestId("utility-monthly-note")).toBeHidden();
   await page.getByTestId("wizard-next").click();
-
-  await expect(page.getByTestId("split-method")).toBeVisible();
-  await page.getByTestId("split-method").selectOption("even");
-  await page.getByTestId("bill-total").fill("2000");
-  await page.getByTestId("usage").fill("400");
-  await page.getByTestId("rate").fill("4");
+  await expect(page.getByTestId("utility-monthly-note")).toBeVisible();
+  await expect(page.getByTestId("bill-total")).toHaveCount(0);
+  await expect(page.getByTestId("usage")).toHaveCount(0);
   await expect(page.getByTestId("wizard-next")).toBeEnabled();
-  await page.getByTestId("bill-total").press("Enter");
-  await page.getByTestId("usage").press("Enter");
-  await page.getByTestId("rate").press("Enter");
-  await expect(page.getByTestId("split-method")).toBeVisible();
   await expect(page.getByTestId("lease-template")).toBeHidden();
   await expect(page).toHaveURL(/\/m\/leases\/new/);
-  await expect(page.getByTestId("bill-total")).toHaveValue("2000");
 
   await page.getByTestId("wizard-next").focus();
   await page.getByTestId("wizard-next").press("Enter");

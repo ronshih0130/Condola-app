@@ -422,6 +422,9 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     );
     userIds.push(sandboxLease.tenantUserId);
     assert.equal(sandboxLease.reused, false);
+    const leasedWhole = await vacantRooms(sandbox);
+    assert.ok(leasedWhole.some((row) => row.id === sandboxUnitId && row.leases.length > 0));
+    assert.equal(leasedWhole.some((row) => stray.includes(row.id)), false);
 
     await query(
       `UPDATE rooms r
@@ -474,7 +477,9 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     userIds.push(roomLease.tenantUserId);
     const stillOpen = await vacantRooms(sandbox);
     assert.ok(stillOpen.some((row) => row.id === byRoom.roomIds[1]));
-    assert.equal(stillOpen.some((row) => row.id === byRoom.roomIds[0]), false);
+    const leasedRoom = stillOpen.find((row) => row.id === byRoom.roomIds[0]);
+    assert.ok(leasedRoom);
+    assert.ok(leasedRoom.leases.some((span) => span.start === "2026-11-01" && span.end === "2027-10-31"));
     assert.equal(stillOpen.some((row) => stray.includes(row.id)), false);
 
     const liveWhole = await createProperty(admin, {
@@ -537,8 +542,30 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
           sandbox,
           form({ ...base, roomId: byRoom.roomIds[0], tenantName: "衝突租客", tenantEmail: clashEmail }),
         ),
-      (error: unknown) => error instanceof FlowError && error.key === "errors.occupied",
+      (error: unknown) =>
+        error instanceof FlowError &&
+        error.key === "errors.roomLease" &&
+        error.vars?.start === "2026-11-01" &&
+        error.vars?.end === "2027-10-31",
     );
+    const renewal = await createLeaseFromForm(
+      sandbox,
+      form({
+        ...base,
+        roomId: byRoom.roomIds[0],
+        tenantName: "續約租客",
+        tenantEmail: `renew.${stamp}@example.com`,
+        startDate: "2027-11-01",
+      }),
+    );
+    userIds.push(renewal.tenantUserId);
+    assert.equal(renewal.reused, false);
+    const renewalRow = await query<{ start_date: string; end_date: string }>(
+      `SELECT start_date::text, end_date::text FROM leases WHERE id = $1`,
+      [renewal.leaseId],
+    );
+    assert.equal(renewalRow.rows[0]?.start_date, "2027-11-01");
+    assert.equal(renewalRow.rows[0]?.end_date, "2028-10-31");
     const clashUser = await query<{ n: string }>(
       `SELECT count(*)::text AS n FROM auth.users WHERE lower(email) = $1`,
       [clashEmail],

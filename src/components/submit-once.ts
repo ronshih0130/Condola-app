@@ -58,6 +58,15 @@ export function duplicateSubmitAction(guardHeld: boolean, sameEvent: boolean) {
   return "start" as const;
 }
 
+/**
+ * React can deliver a second submit event for one click, with a different
+ * Event object. preventDefault on that echo cancels the action that was
+ * just claimed, so the button re-enables and the save looks like it failed.
+ */
+export function submitEcho(guardHeld: boolean, claimedAt: number, now = Date.now(), windowMs = 80) {
+  return guardHeld && claimedAt > 0 && now - claimedAt < windowMs;
+}
+
 export function revealFormAlert(node: {
   scrollIntoView: (options?: ScrollIntoViewOptions) => void;
   focus: (options?: FocusOptions) => void;

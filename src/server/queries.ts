@@ -447,6 +447,8 @@ export async function searchTenants(session: Session, raw?: { q?: string; page?:
   return { ...result, q: parsed.q, page: parsed.page };
 }
 
+export type RoomLeaseSpan = { start: string; end: string };
+
 export type RoomOption = {
   id: string;
   label: string;
@@ -455,6 +457,7 @@ export type RoomOption = {
   currency: string;
   baseRentMinor: number;
   unitRooms: { id: string; label: string; occupied: boolean }[];
+  leases: RoomLeaseSpan[];
 };
 
 export async function vacantRooms(session: Session): Promise<RoomOption[]> {
@@ -467,40 +470,56 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
       property_name: string;
       currency: string;
       base_rent_minor: string;
+      kind: string;
     }>(
       client,
-      `SELECT id, label, unit_id, unit_label, property_name, currency, base_rent_minor
+      `SELECT id, label, unit_id, unit_label, property_name, currency, base_rent_minor, kind
          FROM (
            SELECT r.id::text AS id, r.label, u.id::text AS unit_id, u.label AS unit_label,
                   p.name AS property_name, p.currency, r.base_rent_minor::text AS base_rent_minor,
-                  p.created_at, 0 AS rank
+                  'room'::text AS kind, p.created_at, 0 AS rank
              FROM rooms r
              JOIN units u ON u.id = r.unit_id
              JOIN properties p ON p.id = u.property_id
             WHERE r.org_id = $1 AND r.archived_at IS NULL AND p.archived_at IS NULL
               AND u.rental_mode = 'by_room'
-              AND NOT EXISTS (
-                SELECT 1 FROM leases l
-                 WHERE l.status IN ('pending_signature','active')
-                   AND (l.target_room_id = r.id OR l.target_unit_id = u.id)
-              )
            UNION ALL
            SELECT u.id::text, ''::text, u.id::text, u.label, p.name, p.currency,
-                  u.base_rent_minor::text, p.created_at, 1
+                  u.base_rent_minor::text, 'whole_unit'::text, p.created_at, 1
              FROM units u
              JOIN properties p ON p.id = u.property_id
             WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
               AND u.rental_mode = 'whole_unit'
-              AND NOT EXISTS (
-                SELECT 1 FROM leases l
-                 WHERE l.status IN ('pending_signature','active')
-                   AND (l.target_unit_id = u.id OR (l.unit_id = u.id AND l.target_room_id IS NOT NULL))
-              )
          ) spaces
         ORDER BY created_at DESC, rank, label`,
       [session.orgId],
     );
     const unitIds = [...new Set(rows.map((row) => row.unit_id))];
+    const spaceIds = rows.map((row) => row.id);
+    const leaseRows = spaceIds.length
+      ? await many<{
+          id: string;
+          unit_id: string;
+          target_room_id: string | null;
+          target_unit_id: string | null;
+          start_date: string;
+          end_date: string;
+        }>(
+          client,
+          `SELECT l.id::text, l.unit_id::text, l.target_room_id::text, l.target_unit_id::text,
+                  l.start_date::text AS start_date, coalesce(l.end_date, l.start_date)::text AS end_date
+             FROM leases l
+            WHERE l.org_id = $1
+              AND l.status IN ('pending_signature','active')
+              AND (
+                l.target_room_id = ANY($2::uuid[])
+                OR l.target_unit_id = ANY($2::uuid[])
+                OR l.unit_id = ANY($2::uuid[])
+              )
+            ORDER BY l.start_date, l.id`,
+          [session.orgId, [...new Set([...spaceIds, ...unitIds])]],
+        )
+      : [];
     const siblings = unitIds.length
       ? await many<{ id: string; unit_id: string; label: string; occupied: boolean }>(
           client,
@@ -527,6 +546,13 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
       unitRooms: siblings
         .filter((room) => room.unit_id === row.unit_id)
         .map((room) => ({ id: room.id, label: room.label, occupied: room.occupied })),
+      leases: leaseRows
+        .filter((lease) =>
+          row.kind === "room"
+            ? lease.target_room_id === row.id || lease.target_unit_id === row.unit_id
+            : lease.target_unit_id === row.id || (lease.unit_id === row.unit_id && lease.target_room_id !== null),
+        )
+        .map((lease) => ({ start: lease.start_date, end: lease.end_date })),
     }));
   }, { orgId: session.orgId, environment: session.environment });
 }

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
-import { actionConfirmUtility, actionPrepareUtility, actionVoidUtility } from "@/server/actions";
+import { actionPrepareUtility, actionVoidUtility } from "@/server/actions";
+import { UtilityConfirmForm } from "@/components/utility-confirm";
 import { formatMoney } from "@/server/format";
 import { monthBounds, taipeiToday } from "@/server/money";
 import { can } from "@/server/perms";
@@ -179,7 +180,7 @@ export default async function UtilityPostingPage({
         </form>
       ) : null}
       {detail ? (
-        <div className="card" style={{ marginTop: 16 }} data-testid="utility-review">
+        <div className="card" style={{ marginTop: 16 }} data-testid="utility-review" key={`${detail.run.id}-${detail.run.status}-${params.saved ?? ""}`}>
           <div className="hd">
             <h3>
               {detail.run.property_name} · {detail.run.unit_label}
@@ -204,12 +205,12 @@ export default async function UtilityPostingPage({
           </table>
           {canPost && detail.run.status !== "void" ? (
             <div className="bd">
-              <form action={actionConfirmUtility}>
-                <input type="hidden" name="runId" value={detail.run.id} />
-                <button className="btn pri" type="submit" data-testid="utility-confirm">
-                  {t("i_utility_confirm")}
-                </button>
-              </form>
+              <UtilityConfirmForm
+                runId={detail.run.id}
+                month={(detail.run.period_start || monthValue).slice(0, 7)}
+                unitId={detail.run.unit_id}
+                label={t("i_utility_confirm")}
+              />
               <form action={actionVoidUtility} style={{ marginTop: 12 }}>
                 <input type="hidden" name="runId" value={detail.run.id} />
                 <label className="f">{t("i_utility_void_reason")}</label>

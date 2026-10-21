@@ -37,7 +37,7 @@ import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
 
-export type ActionState = { error: string; field?: string; step?: number };
+export type ActionState = { error: string; field?: string; step?: number; vars?: Record<string, string> };
 
 const EMPTY_ACTION: ActionState = { error: "" };
 
@@ -169,7 +169,19 @@ function actionError(error: unknown, fallback = "errors.generic"): ActionState {
   const key = error.key === "errors.generic" ? fallback : error.key;
   const field = typeof error.vars?.field === "string" ? error.vars.field : undefined;
   const step = typeof error.vars?.step === "number" ? error.vars.step : undefined;
-  return { error: key, ...(field ? { field } : {}), ...(step != null ? { step } : {}) };
+  const vars: Record<string, string> = {};
+  if (error.vars) {
+    for (const [name, value] of Object.entries(error.vars)) {
+      if (name === "field" || name === "step") continue;
+      vars[name] = String(value);
+    }
+  }
+  return {
+    error: key,
+    ...(field ? { field } : {}),
+    ...(step != null ? { step } : {}),
+    ...(Object.keys(vars).length ? { vars } : {}),
+  };
 }
 
 export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
@@ -200,6 +212,8 @@ export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formDa
     if (created.utilityKept) notice.set("utility", "kept");
     if (created.billKept) notice.set("bill", "kept");
     const extra = notice.toString();
+    revalidatePath("/m/leases");
+    revalidatePath(`/m/leases/${created.leaseId}`);
     redirect(`/m/leases/${created.leaseId}?created=1${extra ? `&${extra}` : ""}`);
   } catch (error) {
     return actionError(error, "errors.leaseFailed");
@@ -336,6 +350,9 @@ export async function actionStatement(formData: FormData) {
       ownerContactId: text(formData.get("ownerContactId")),
       month: text(formData.get("month")),
     });
+    revalidatePath("/m/statements");
+    revalidatePath("/m/statements/preview");
+    revalidatePath(`/m/statements/${result.statementId}`);
     redirect(`/m/statements/${result.statementId}`);
   } catch (error) {
     bounce("/m/statements", error);
@@ -585,12 +602,19 @@ export async function actionPrepareUtility(formData: FormData) {
 
 export async function actionConfirmUtility(formData: FormData) {
   const runId = text(formData.get("runId"));
+  const month = text(formData.get("month"));
+  const unitId = text(formData.get("unitId"));
+  const next = new URLSearchParams({ run: runId });
+  if (/^\d{4}-\d{2}$/.test(month)) next.set("month", month);
+  if (unitId) next.set("unit", unitId);
   try {
     const session = await getSession();
     await confirmUtilityRun(session, runId);
-    redirect(`/m/rent/utilities?run=${runId}&saved=posted`);
+    revalidatePath("/m/rent/utilities");
+    next.set("saved", "posted");
+    redirect(`/m/rent/utilities?${next.toString()}`);
   } catch (error) {
-    bounce(`/m/rent/utilities?run=${runId}`, error);
+    bounce(`/m/rent/utilities?${next.toString()}`, error);
   }
 }
 

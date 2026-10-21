@@ -77,7 +77,13 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(wizard, /depositMonthsOnHalfStep/);
   assert.match(wizard, /i_deposit_half_step/);
   assert.match(wizard, /i_field_incomplete/);
-  assert.match(wizard, /split === "sub_meter" && bill\.trim\(\) === ""/);
+  assert.doesNotMatch(wizard, /data-testid="bill-total"/);
+  assert.doesNotMatch(wizard, /data-testid="usage"/);
+  assert.doesNotMatch(wizard, /name="billTotal"/);
+  assert.match(wizard, /i_utility_monthly/);
+  assert.match(wizard, /useState\("2"\)/);
+  assert.match(wizard, /useState\("5"\)/);
+  assert.match(wizard, /i_room_lease_exists/);
   assert.doesNotMatch(wizard, /t\("i_amount"\)/);
   assert.match(wizard, /useActionState/);
   const property = readFileSync(new URL("../components/property-wizard.tsx", import.meta.url), "utf8");

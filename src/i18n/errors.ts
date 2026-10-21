@@ -30,6 +30,7 @@ export const ERRORS: Record<string, string> = {
   "errors.last5": "s_da160ee",
   "errors.csv": "i_csv",
   "errors.occupied": "i_occupied",
+  "errors.roomLease": "i_room_lease_exists",
   "errors.paymentState": "i_pay_state",
   "errors.matchState": "i_match_state",
   "errors.currency": "i_currency",

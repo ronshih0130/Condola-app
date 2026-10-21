@@ -859,9 +859,10 @@ export async function createLease(session: Session, input: LeaseInput) {
         WHERE (l.target_room_id = $1 OR l.target_unit_id = $1) AND l.org_id = $2
           AND l.status = 'pending_signature'
           AND l.created_at > now() - interval '2 minutes'
+          AND daterange(l.start_date, coalesce(l.end_date, l.start_date), '[]') && daterange($3::date, $4::date, '[]')
         ORDER BY l.created_at DESC
         LIMIT 1`,
-      [input.roomId, session.orgId],
+      [input.roomId, session.orgId, input.startDate, input.endDate],
     );
     if (already?.tenantUserId) {
       return {
@@ -905,6 +906,22 @@ export async function createLease(session: Session, input: LeaseInput) {
       [input.roomId, session.orgId],
     );
     assertLeaseMoney(space.currency, rentMajor, depositMonths);
+    const clash = await maybe<{ start_date: string; end_date: string }>(
+      client,
+      `SELECT l.start_date::text AS start_date, coalesce(l.end_date, l.start_date)::text AS end_date
+         FROM leases l
+        WHERE l.org_id = $1
+          AND l.status IN ('pending_signature','active')
+          AND daterange(l.start_date, coalesce(l.end_date, l.start_date), '[]') && daterange($2::date, $3::date, '[]')
+          AND (
+            ($4 = 'room' AND (l.target_room_id = $5::uuid OR l.target_unit_id = $6::uuid))
+            OR ($4 = 'whole_unit' AND (l.target_unit_id = $5::uuid OR (l.unit_id = $6::uuid AND l.target_room_id IS NOT NULL)))
+          )
+        ORDER BY l.start_date, l.id
+        LIMIT 1`,
+      [session.orgId, input.startDate, input.endDate, space.kind, space.id, space.unit_id],
+    );
+    if (clash) throw new FlowError("errors.roomLease", { start: clash.start_date, end: clash.end_date });
     const linked = await linkTenant(client, session, {
       tenantContactId,
       name: input.tenantName.trim(),
