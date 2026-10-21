@@ -78,7 +78,6 @@ export default async function PricingPage() {
           <p className="b">{t("i_price_free_amt")}</p>
           <p>{t("i_price_fit_free")}</p>
           <p>{t("i_price_seat_free")}</p>
-          <p>{t("i_price_free_feat")}</p>
           {cta("free")}
         </section>
         <section className="card pad">

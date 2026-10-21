@@ -44,15 +44,21 @@ export default async function UpgradePage({
         <p data-testid="upgrade-estimate">
           {t("i_price_you", { n: units, money: formatNt(estimate.monthly) })}
         </p>
-        <form action={actionRequestUpgrade} className="col">
+        <form action={actionRequestUpgrade} className="col" data-testid="upgrade-form">
           <label className="radio">
             <input type="radio" name="tier" value="standard" defaultChecked={tier === "standard"} />
             <span>{t("i_price_standard")}</span>
           </label>
+          <p className="small" data-testid="upgrade-standard-copy">
+            {t("i_price_fit_std")} · {t("i_price_trial")} · {t("i_price_seat_std")}
+          </p>
           <label className="radio">
             <input type="radio" name="tier" value="pro" defaultChecked={tier === "pro"} />
             <span>{t("i_price_pro")}</span>
           </label>
+          <p className="small" data-testid="upgrade-pro-copy">
+            {t("i_price_fit_pro")} · {t("i_price_trial")} · {t("i_price_seat_pro")}
+          </p>
           {inputs.code ? (
             <p data-testid="upgrade-code-locked">{t("i_upgrade_code_locked", { name: inputs.partnerName || inputs.code, code: inputs.code })}</p>
           ) : (

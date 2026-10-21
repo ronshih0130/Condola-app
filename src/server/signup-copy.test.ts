@@ -34,6 +34,29 @@ test("sign-up, pricing, and go-live copy stay on the handoff wording", () => {
   assert.equal(zh.i_login_invite_tail, "（前 4 戶免費，先在測試模式試用全部功能）");
   assert.equal(zh.i_admin_pause, "緊急暫停正式使用");
   assert.equal(zh.i_price_footer, "本服務為軟體工具，不代為管理物業、收取租金或保證法規遵循。");
+  assert.equal(zh.i_price_fit_pro, "多據點、人數較多的團隊");
+  assert.equal(zh.i_price_seat_free, "1 個席次（待接受的邀請也計入）");
+  assert.equal(zh.i_price_seat_std, "5 個席次");
+  assert.equal(zh.i_price_seat_pro, "不限席次");
+  assert.equal(zh.i_price_free_amt, "NT$0");
+  assert.equal(zh.i_price_std_amt, "第 5 戶起每戶每月 NT$30");
+  assert.equal(zh.i_price_pro_amt, "第 5 戶起每戶每月 NT$40");
+  assert.equal(zh.i_price_trial, "前 3 個月免費");
+  assert.equal(zh.s_de922fa, "匯出物件（CSV）");
+  assert.equal("i_price_free_feat" in zh, false);
+  const planCopy = [
+    zh.i_price_fit_free,
+    zh.i_price_fit_std,
+    zh.i_price_fit_pro,
+    zh.i_price_seat_free,
+    zh.i_price_seat_std,
+    zh.i_price_seat_pro,
+    zh.i_price_trial,
+    zh.s_de922fa,
+  ].join("\n");
+  for (const banned of ["LINE 官方", "品牌報表", "優先支援", "進階報表", "即將推出", "Excel", "房東", "房客", "CSV/ZIP"]) {
+    assert.equal(planCopy.includes(banned), false, banned);
+  }
 });
 
 test("the emergency pause defaults off and the go-live button stays solid when disabled", () => {
