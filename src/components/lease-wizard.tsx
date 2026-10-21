@@ -6,7 +6,7 @@ import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
-import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
+import { callSubmitAction, claimFormSubmit, ensureIdempotencyKey, releaseFormSubmit } from "./submit-once";
 
 function amountOk(raw: string) {
   const trimmed = raw.trim();
@@ -27,8 +27,13 @@ function money(major: number, currency: string, locale: string) {
 export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLocale: "zh-TW" | "en" }) {
   const t = useT();
   const locale = useLocale();
-  const [state, formAction, pending] = useActionState(actionCreateLease, { error: "" });
   const submitGuard = useRef(false);
+  const idempotencyKey = useRef("");
+  const [state, formAction, pending] = useActionState(
+    (prev: { error: string; field?: string }, formData: FormData) =>
+      callSubmitAction(submitGuard, () => actionCreateLease(prev, formData)),
+    { error: "" },
+  );
   const steps = [
     t("s_4fabbda"),
     t("s_74f19b0"),
@@ -144,6 +149,8 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
           else setStep(4);
           return;
         }
+        const field = event.currentTarget.elements.namedItem("idempotencyKey");
+        if (field instanceof HTMLInputElement) field.value = ensureIdempotencyKey(idempotencyKey);
         if (pending || !claimFormSubmit(submitGuard)) event.preventDefault();
       }}
     >
@@ -155,6 +162,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
             : errorText(t, state.error)}
         </div>
       ) : null}
+      <input type="hidden" name="idempotencyKey" defaultValue="" />
       <input type="hidden" name="roomId" value={roomId} />
       <input type="hidden" name="tenantName" value={tenant} />
       <input type="hidden" name="tenantPhone" value={phone} />

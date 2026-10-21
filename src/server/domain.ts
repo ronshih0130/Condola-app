@@ -15,7 +15,7 @@ import {
   taipeiToday,
   toMinor,
 } from "./money";
-import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
+import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
@@ -284,6 +284,8 @@ export type LeaseInput = {
   rateSource: "fixed_rate" | "bill_average";
   overrideReason: string;
   subUsages: { roomId: string; kwh: number }[];
+  /** Client UUID for this create attempt. A retry with the same key returns the first lease. */
+  idempotencyKey?: string | null;
 };
 
 function finiteNumber(value: number | null): value is number {
@@ -365,6 +367,25 @@ function readElectricity(input: LeaseInput) {
   return { billMajor: bill, usageKwh: usage, rateMajor: rateOk ? rate : null };
 }
 
+function isIdempotencyConflict(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const row = error as { code?: string; constraint?: string };
+  return row.code === "23505" && row.constraint === "leases_org_idempotency_key_uidx";
+}
+
+async function leaseForIdempotencyKey(client: Client, orgId: string, key: string) {
+  return maybe<{ id: string; tenantUserId: string | null }>(
+    client,
+    `SELECT l.id::text, c.user_id::text AS "tenantUserId"
+       FROM leases l
+       JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
+       JOIN contacts c ON c.id = lp.contact_id
+      WHERE l.org_id = $1 AND l.idempotency_key = $2
+      LIMIT 1`,
+    [orgId, key],
+  );
+}
+
 export async function createLease(session: Session, input: LeaseInput) {
   assertStaff(session, ["admin", "manager"]);
   if (!input.roomId || !input.startDate || !input.endDate) throw new FlowError("errors.required", { field: "s_8569bc8" });
@@ -398,11 +419,30 @@ export async function createLease(session: Session, input: LeaseInput) {
   }
   const exceeds = Boolean(electricity) && rateSource === "fixed_rate" && rateMinor > average + 1e-9;
   if (exceeds && !input.overrideReason.trim()) throw new FlowError("errors.capReason");
+  const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+  if (!idempotencyKey.ok) throw new FlowError("errors.leaseFailed");
   let result;
   try {
     result = await tx(session.userId, async (client) => {
+    if (idempotencyKey.value) {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`lease-key:${session.orgId}:${idempotencyKey.value}`]);
+    }
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`lease:${input.roomId}`]);
-    const already = await maybe<{ id: string; tenantUserId: string }>(
+    const replay = idempotencyKey.value ? await leaseForIdempotencyKey(client, session.orgId, idempotencyKey.value) : null;
+    if (replay?.tenantUserId) {
+      return {
+        leaseId: replay.id,
+        tenantUserId: replay.tenantUserId,
+        depositWarn: false,
+        exceeds,
+        average,
+        tenantAmount: 0,
+        reused: true,
+      };
+    }
+    const already = idempotencyKey.value
+      ? null
+      : await maybe<{ id: string; tenantUserId: string }>(
       client,
       `SELECT l.id::text, c.user_id::text AS "tenantUserId"
          FROM leases l
@@ -473,35 +513,55 @@ export async function createLease(session: Session, input: LeaseInput) {
       }),
     );
     await noteChange(client, override.reason);
-    const lease = await one<{ id: string }>(
-      client,
-      `INSERT INTO leases (
-         org_id, unit_id, target_unit_id, target_room_id, status, esign_status, start_date, end_date, currency,
-         rent_amount_minor, due_day, prorate_first_period, deposit_amount_minor, deposit_months,
-         deposit_override_reason, deposit_overridden_by, deposit_overridden_at,
-         document_sha256, created_by
-       ) VALUES (
-         $1,$2,$3,$4,'pending_signature','sent',$5,$6,$7,$8,$9,false,$10,$11,$12,$13,$14,$15,$16
-       ) RETURNING id`,
-      [
-        session.orgId,
-        space.unit_id,
-        space.kind === "whole_unit" ? space.id : null,
-        space.kind === "room" ? space.id : null,
-        input.startDate,
-        input.endDate,
-        space.currency,
-        rentMinor,
-        dueDay,
-        depositMinor,
-        depositMonths,
-        override.reason,
-        override.by,
-        override.at,
-        documentHash,
-        session.userId,
-      ],
-    );
+    await client.query("SAVEPOINT lease_idempotency");
+    let lease: { id: string };
+    try {
+      lease = await one<{ id: string }>(
+        client,
+        `INSERT INTO leases (
+           org_id, unit_id, target_unit_id, target_room_id, status, esign_status, start_date, end_date, currency,
+           rent_amount_minor, due_day, prorate_first_period, deposit_amount_minor, deposit_months,
+           deposit_override_reason, deposit_overridden_by, deposit_overridden_at,
+           document_sha256, idempotency_key, created_by
+         ) VALUES (
+           $1,$2,$3,$4,'pending_signature','sent',$5,$6,$7,$8,$9,false,$10,$11,$12,$13,$14,$15,$16,$17
+         ) RETURNING id`,
+        [
+          session.orgId,
+          space.unit_id,
+          space.kind === "whole_unit" ? space.id : null,
+          space.kind === "room" ? space.id : null,
+          input.startDate,
+          input.endDate,
+          space.currency,
+          rentMinor,
+          dueDay,
+          depositMinor,
+          depositMonths,
+          override.reason,
+          override.by,
+          override.at,
+          documentHash,
+          idempotencyKey.value,
+          session.userId,
+        ],
+      );
+      await client.query("RELEASE SAVEPOINT lease_idempotency");
+    } catch (error) {
+      await client.query("ROLLBACK TO SAVEPOINT lease_idempotency");
+      if (!isIdempotencyConflict(error) || !idempotencyKey.value) throw error;
+      const existing = await leaseForIdempotencyKey(client, session.orgId, idempotencyKey.value);
+      if (!existing?.tenantUserId) throw error;
+      return {
+        leaseId: existing.id,
+        tenantUserId: existing.tenantUserId,
+        depositWarn: false,
+        exceeds,
+        average,
+        tenantAmount: 0,
+        reused: true,
+      };
+    }
     await client.query(
       `INSERT INTO lease_parties (org_id, lease_id, contact_id, role) VALUES ($1,$2,$3,'primary')`,
       [session.orgId, lease.id, contact.id],

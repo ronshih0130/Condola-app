@@ -6,7 +6,7 @@ import { errorText } from "@/i18n/errors";
 import { actionUpdateLease } from "@/server/actions";
 import { depositReasonEditorOpen } from "@/server/lease-rules";
 import { useT } from "./locale";
-import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
+import { callSubmitAction, claimFormSubmit, releaseFormSubmit } from "./submit-once";
 
 function monthsInput(value: string) {
   if (!value.trim()) return "";
@@ -29,11 +29,14 @@ export function LeaseTermsForm({
 }) {
   const t = useT();
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(actionUpdateLease, { error: "" });
+  const guard = useRef(false);
+  const [state, formAction, pending] = useActionState(
+    (prev: { error: string; field?: string }, formData: FormData) => callSubmitAction(guard, () => actionUpdateLease(prev, formData)),
+    { error: "" },
+  );
   const [rentValue, setRentValue] = useState(rent);
   const [months, setMonths] = useState(monthsInput(depositMonths));
   const [reason, setReason] = useState("");
-  const guard = useRef(false);
   const wasPending = useRef(false);
   const showReason = depositReasonEditorOpen(months, depositMonths);
   const blocked = showReason && reason.trim() === "";

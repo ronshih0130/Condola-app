@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { depositCapSaveAllowed, depositExceedsCap, depositReasonEditorOpen, depositReasonOk, depositWarnFlag, isSignedPdf, LEASE_STATUSES, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
+import { depositCapSaveAllowed, depositExceedsCap, depositReasonEditorOpen, depositReasonOk, depositWarnFlag, isSignedPdf, LEASE_STATUSES, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 
 test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositExceedsCap(2), false);
@@ -69,7 +69,17 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(actions, /updateLease\(session,/);
   assert.match(actions, /revalidatePath\(`\/m\/leases\/\$\{leaseId\}`\)/);
   assert.match(wizard, /claimFormSubmit\(submitGuard\)/);
+  assert.match(wizard, /callSubmitAction\(submitGuard/);
+  assert.match(wizard, /ensureIdempotencyKey\(idempotencyKey\)/);
+  assert.match(wizard, /name="idempotencyKey"/);
   assert.match(wizard, /disabled=\{blocked \|\| pending\}/);
+  assert.match(edit, /callSubmitAction\(guard/);
+  assert.match(domain, /idempotency_key/);
+  assert.match(domain, /leases_org_idempotency_key_uidx/);
+  const idempotency = readFileSync(new URL("../../supabase/migrations/20261023140000_lease_idempotency_key.sql", import.meta.url), "utf8");
+  assert.match(idempotency, /20261023090000/);
+  assert.match(idempotency, /CREATE UNIQUE INDEX leases_org_idempotency_key_uidx/);
+  assert.match(idempotency, /WHERE idempotency_key IS NOT NULL/);
   assert.match(edit, /router\.refresh\(\)/);
   assert.match(edit, /depositReasonEditorOpen/);
   assert.match(page, /data-testid="deposit-override-reason"/);
@@ -100,6 +110,17 @@ test("a Taiwan mobile becomes +886 and an international number stays", () => {
   assert.equal(normalizePhone("+886912345678"), "+886912345678");
   assert.equal(normalizePhone("  "), null);
   assert.equal(normalizePhone("0212345678"), null);
+});
+
+test("a lease idempotency key is a UUID or absent", () => {
+  assert.deepEqual(normalizeIdempotencyKey("  "), { ok: true, value: null });
+  assert.deepEqual(normalizeIdempotencyKey(null), { ok: true, value: null });
+  assert.deepEqual(normalizeIdempotencyKey("00000000-0000-4000-8000-000000000001"), {
+    ok: true,
+    value: "00000000-0000-4000-8000-000000000001",
+  });
+  assert.deepEqual(normalizeIdempotencyKey("00000000-0000-4000-8000-00000000000G"), { ok: false });
+  assert.deepEqual(normalizeIdempotencyKey("retry-1"), { ok: false });
 });
 
 test("LINE id is optional and bounded", () => {

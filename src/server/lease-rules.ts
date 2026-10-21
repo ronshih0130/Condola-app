@@ -74,6 +74,16 @@ export function normalizePhone(phone: string): string | null {
   return null;
 }
 
+const IDEMPOTENCY_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Blank means this create has no retry key. Anything else must be a UUID. */
+export function normalizeIdempotencyKey(value: string | null | undefined): { ok: true; value: string | null } | { ok: false } {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return { ok: true, value: null };
+  if (!IDEMPOTENCY_KEY.test(trimmed)) return { ok: false };
+  return { ok: true, value: trimmed.toLowerCase() };
+}
+
 export function normalizeLineId(value: string): { ok: true; value: string | null } | { ok: false } {
   const trimmed = value.trim();
   if (!trimmed) return { ok: true, value: null };

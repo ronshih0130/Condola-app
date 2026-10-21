@@ -13,3 +13,27 @@ export function claimFormSubmit(guard: { current: boolean }) {
 export function releaseFormSubmit(guard: { current: boolean }) {
   guard.current = false;
 }
+
+/**
+ * Release the guard when the server action throws. A redirect throws too, so a
+ * retry is not stuck; the lease idempotency key keeps that retry from inserting
+ * a second row. A resolved error state keeps the guard until the form effect
+ * sees the error.
+ */
+export async function callSubmitAction<T>(guard: { current: boolean }, run: () => Promise<T>): Promise<T> {
+  let thrown = false;
+  try {
+    return await run();
+  } catch (error) {
+    thrown = true;
+    throw error;
+  } finally {
+    if (thrown) releaseFormSubmit(guard);
+  }
+}
+
+/** One key for this wizard instance. The hidden field is filled before FormData is read. */
+export function ensureIdempotencyKey(holder: { current: string }) {
+  if (!holder.current) holder.current = crypto.randomUUID();
+  return holder.current;
+}
