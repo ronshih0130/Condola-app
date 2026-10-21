@@ -26,11 +26,13 @@ export default async function TenantsPage() {
             {leases.map((lease) => (
               <tr key={lease.id} className="click">
                 <td>
-                  <Link className="hit" href={`/m/leases/${lease.id}`}>
+                  <Link className="hit" href={`/m/tenants/${lease.contact_id}`}>
                     {lease.tenant}
                   </Link>
                 </td>
-                <td data-label={t("i_space")}>{lease.place}</td>
+                <td data-label={t("i_space")}>
+                  <Link href={`/m/leases/${lease.id}`}>{lease.place}</Link>
+                </td>
                 <td data-label={t("i_status")}>{t(lease.status === "active" ? "i_st_active" : "i_st_pending")}</td>
               </tr>
             ))}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { actionPhoneVisibility, actionSetMeter } from "@/server/actions";
+import { AuditHistory } from "@/components/audit-log";
 import { SampleTag } from "@/components/sample-tag";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { isSampleName } from "@/server/sandbox-data";
@@ -17,7 +18,7 @@ export default async function PropertyPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; audit?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -118,6 +119,7 @@ export default async function PropertyPage({
           ) : null}
         </div>
       </div>
+      <AuditHistory table="properties" rowId={id} cursor={query.audit} path={`/m/properties/${id}`} preserve={{ error: query.error }} />
     </>
   );
 }
