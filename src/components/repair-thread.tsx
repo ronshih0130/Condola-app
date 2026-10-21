@@ -15,7 +15,7 @@ type Comment = {
   author: string;
 };
 
-type Photo = { id: string; name: string; path: string; url?: string; internal: boolean };
+type Photo = { id: string; name: string; internal: boolean };
 
 export function RepairThread({
   ticketId,
@@ -90,18 +90,20 @@ export function RepairThread({
       <h3 style={{ marginTop: 16 }}>{t("i_repair_photos")}</h3>
       {photos.length ? (
         <div className="repair-photos" data-testid="repair-photos">
-          {photos.map((photo) =>
-            photo.url ? (
-              // Signed URL of the original object. The image optimizer would re-encode it on the server.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={photo.id} src={photo.url} alt={photo.name} />
-            ) : (
-              <span key={photo.id} className="small">
-                {photo.name}
-                {photo.internal ? ` (${t("i_repair_internal")})` : ""}
-              </span>
-            ),
-          )}
+          {photos.map((photo) => {
+            const href = `/api/tickets/photos/${photo.id}`;
+            return (
+              <a key={photo.id} href={href} target="_blank" rel="noreferrer">
+                {/* Original bytes from the upload. The image optimizer would re-encode them on the server. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={href} alt={photo.name} data-testid="repair-photo-preview" />
+                <span className="tiny">
+                  {photo.name}
+                  {photo.internal ? ` (${t("i_repair_internal")})` : ""}
+                </span>
+              </a>
+            );
+          })}
         </div>
       ) : (
         <p className="small muted">{t("i_repair_none")}</p>

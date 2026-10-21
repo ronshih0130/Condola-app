@@ -16,6 +16,22 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
   await page.getByTestId("repair-comment-send").click();
   await expect(page.getByTestId("repair-timeline")).toContainText("請盡快處理");
   await expect(page.getByTestId("repair-photo")).toBeVisible();
+  const jpeg = Buffer.from(
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxISEhUQEhIVFhUVFRUVFRUVFRUVFRUWFxUVFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OGhAQGy0lHyUtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAMBAAMBIgACEQEDEQH/xAAbAAACAgMBAAAAAAAAAAAAAAADBAECBQYAB//EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJr0X/9k=",
+    "base64",
+  );
+  await page.getByTestId("repair-photo").setInputFiles({ name: "leak.jpg", mimeType: "image/jpeg", buffer: jpeg });
+  const preview = page.getByTestId("repair-photo-preview");
+  await expect(preview).toBeVisible();
+  const src = await preview.getAttribute("src");
+  expect(src).toContain("/api/tickets/photos/");
+  const image = await page.request.get(src || "");
+  expect(image.ok()).toBeTruthy();
+  expect(image.headers()["content-type"]).toContain("image/jpeg");
+  const body = await image.body();
+  expect(body[0]).toBe(0xff);
+  expect(body[1]).toBe(0xd8);
+  expect(body[2]).toBe(0xff);
 
   await signIn(page, ACCOUNTS.tenant);
   await page.getByRole("button", { name: /松信住宅管理/ }).click();
@@ -39,6 +55,11 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
   await page.getByTestId("repair-save").click();
   await expect(page.getByTestId("repair-expense-linked")).toHaveText("已連結支出");
   await expect(page.getByTestId("repair-vendor")).toHaveValue("老張水電");
+  await expect(page.getByTestId("repair-photo-preview")).toBeVisible();
+  const staffSrc = await page.getByTestId("repair-photo-preview").getAttribute("src");
+  const staffImage = await page.request.get(staffSrc || "");
+  expect(staffImage.ok()).toBeTruthy();
+  expect(staffImage.headers()["content-type"]).toContain("image/jpeg");
   await expect(page.getByTestId("repair-timeline")).toContainText("已完成");
   await expect(page.getByTestId("repair-timeline")).toContainText("已更換龍頭");
 

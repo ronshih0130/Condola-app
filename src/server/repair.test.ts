@@ -86,13 +86,15 @@ test("photo rules cap size and type and never describe a re-encode", () => {
     assert.equal(source.includes("toDataURL"), false);
     assert.equal(source.includes("OffscreenCanvas"), false);
   }
-  assert.match(client, /body: file/);
+  assert.match(client, /form\.set\("file", file\)/);
   assert.match(client, /sniffPhotoMime/);
   assert.match(server, /bytes=0-/);
   assert.match(server, /ticketPhotoPaths/);
   assert.doesNotMatch(client, /image\/gif/);
   assert.doesNotMatch(server, /image\/gif/);
   assert.match(view, /no-img-element/);
+  assert.match(view, /\/api\/tickets\/photos\//);
+  assert.match(view, /repair-photo-preview/);
   assert.doesNotMatch(view, /from "next\/image"/);
 });
 
@@ -144,12 +146,15 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   assert.match(sql, /file_size_limit/);
   assert.match(sql, /5242880/);
   assert.match(sql, /expense_id uuid/);
-  assert.match(sql, /expenses_one_live_ticket_idx/);
-  assert.match(sql, /status <> 'void'/);
+  assert.match(sql, /expenses_one_draft_ticket_idx/);
+  assert.match(sql, /status = 'draft'/);
+  assert.match(sql, /DROP INDEX IF EXISTS expenses_one_live_ticket_idx/);
   assert.match(sql, /files_ticket_photo_path/);
   assert.match(sql, /fn_ticket_photo_attachment/);
   assert.match(sql, /FOR UPDATE/);
   assert.match(sql, /portal_ticket_photo_read/);
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS content bytea/);
+  assert.match(sql, /ticket_attachments_photo_bytes/);
   assert.match(sql, /count\(\*\)/);
   assert.doesNotMatch(sql, /is_internal[\s\S]{0,80}ticket photo limit/);
   assert.doesNotMatch(sql, /expense_id uuid NOT NULL/);
@@ -171,7 +176,9 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   assert.doesNotMatch(repairs, /'(submitted|approved|posted|rejected)'/);
   assert.doesNotMatch(repairs, /ledger_transactions/);
   const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
-  assert.match(domain, /status IN \('approved','posted'\)/);
+  const expenses = readFileSync(new URL("./expenses.ts", import.meta.url), "utf8");
+  assert.match(domain, /STATEMENT_EXPENSE_SQL/);
+  assert.match(expenses, /status IN \('approved','posted'\)/);
 
   const page = readFileSync(new URL("../app/m/tickets/[id]/page.tsx", import.meta.url), "utf8");
   assert.match(page, /expense_id && ticket\.expense_status !== "void"/);

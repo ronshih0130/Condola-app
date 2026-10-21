@@ -62,10 +62,12 @@ CREATE INDEX IF NOT EXISTS maintenance_tickets_expense_idx
   ON maintenance_tickets (expense_id) WHERE expense_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS expenses_ticket_idx
   ON expenses (ticket_id) WHERE ticket_id IS NOT NULL;
--- One live expense per ticket. Voided rows stay, so a later opt-in can insert a new draft.
-CREATE UNIQUE INDEX IF NOT EXISTS expenses_one_live_ticket_idx
+-- One draft per ticket. A posted repair can still share the ticket with another
+-- charge (for example a tenant-billed row). Voided drafts stay out of the index.
+DROP INDEX IF EXISTS expenses_one_live_ticket_idx;
+CREATE UNIQUE INDEX IF NOT EXISTS expenses_one_draft_ticket_idx
   ON expenses (ticket_id)
-  WHERE ticket_id IS NOT NULL AND status <> 'void';
+  WHERE ticket_id IS NOT NULL AND status = 'draft';
 
 -- A ticket photo row cannot exceed the same cap the private bucket enforces.
 ALTER TABLE files DROP CONSTRAINT IF EXISTS files_ticket_photo_cap;
@@ -258,6 +260,14 @@ CREATE POLICY portal_ticket_photo_read ON files FOR SELECT TO authenticated
          AND app.tenant_owns_ticket(a.ticket_id)
     )
   );
+
+-- The original bytes, so a photo can be opened without a storage signed URL.
+-- Null only for a row whose object lives solely in the private bucket.
+ALTER TABLE ticket_attachments ADD COLUMN IF NOT EXISTS content bytea;
+ALTER TABLE ticket_attachments DROP CONSTRAINT IF EXISTS ticket_attachments_photo_bytes;
+ALTER TABLE ticket_attachments
+  ADD CONSTRAINT ticket_attachments_photo_bytes
+  CHECK (content IS NULL OR (octet_length(content) > 0 AND octet_length(content) <= 5242880));
 
 DROP POLICY IF EXISTS portal_ticket_att_insert ON ticket_attachments;
 CREATE POLICY portal_ticket_att_insert ON ticket_attachments FOR INSERT TO authenticated

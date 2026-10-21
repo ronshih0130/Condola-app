@@ -53,45 +53,15 @@ export function TicketPhotoUpload({
     }
     setPending(true);
     try {
-      const signed = await fetch("/api/tickets/photos/sign", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ticketId, fileName: file.name, mime: sniffed, size: file.size }),
-      });
-      const signBody = (await signed.json()) as {
-        error?: string;
-        uploadUrl?: string;
-        token?: string;
-        path?: string;
-        uploadToken?: string;
-      };
-      if (!signed.ok || !signBody.uploadUrl || !signBody.path || !signBody.uploadToken) {
-        setError(messageFor(signBody.error, messages));
-        return;
-      }
-      const headers: Record<string, string> = { "content-type": sniffed };
-      if (signBody.token) headers.authorization = `Bearer ${signBody.token}`;
-      const uploaded = await fetch(signBody.uploadUrl, { method: "PUT", headers, body: file });
+      const form = new FormData();
+      form.set("ticketId", ticketId);
+      form.set("mime", sniffed);
+      form.set("internal", allowInternal && internalRef.current?.checked ? "1" : "");
+      form.set("file", file);
+      const uploaded = await fetch("/api/tickets/photos", { method: "POST", body: form });
+      const uploadedBody = (await uploaded.json()) as { error?: string };
       if (!uploaded.ok) {
-        setError(messages.storage);
-        return;
-      }
-      const confirmed = await fetch("/api/tickets/photos/confirm", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ticketId,
-          path: signBody.path,
-          fileName: file.name,
-          mime: sniffed,
-          size: file.size,
-          internal: Boolean(allowInternal && internalRef.current?.checked),
-          uploadToken: signBody.uploadToken,
-        }),
-      });
-      const confirmBody = (await confirmed.json()) as { error?: string };
-      if (!confirmed.ok) {
-        setError(messageFor(confirmBody.error, messages));
+        setError(messageFor(uploadedBody.error, messages));
         return;
       }
       if (internalRef.current) internalRef.current.checked = false;

@@ -9,7 +9,6 @@ import { can, rolesFor } from "@/server/perms";
 import { isUuid, minorToInput } from "@/server/repair-rules";
 import { ticketDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
-import { signTicketPhotoUrls } from "@/server/ticket-photos";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +26,6 @@ export default async function TicketDetailPage({
   const query = await searchParams;
   const detail = await ticketDetail(session, id);
   if (!detail) notFound();
-  const signed = await signTicketPhotoUrls(session.orgId, detail.ticket.id, detail.photos.map((photo) => photo.path));
   const canWrite = can(session.role, "tickets.update");
   const canPost = can(session.role, "exp.add");
   const ticket = detail.ticket;
@@ -153,7 +151,7 @@ export default async function TicketDetailPage({
           <RepairThread
             ticketId={ticket.id}
             comments={detail.comments}
-            photos={detail.photos.map((photo) => ({ ...photo, url: signed[photo.path] }))}
+            photos={detail.photos}
             t={t}
             locale={session.locale}
             calendar={session.calendar}

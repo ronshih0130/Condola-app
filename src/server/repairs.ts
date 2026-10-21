@@ -361,6 +361,7 @@ export async function attachRepairPhoto(
     size: number;
     internal: boolean;
     header: Uint8Array;
+    content?: Uint8Array;
   },
 ) {
   assertTicketActor(session);
@@ -404,9 +405,15 @@ export async function attachRepairPhoto(
     );
     const attachment = await one<{ id: string }>(
       client,
-      `INSERT INTO ticket_attachments (org_id, ticket_id, file_id, is_internal)
-       VALUES ($1,$2,$3,$4) RETURNING id::text`,
-      [ticket.org_id, ticket.id, fileId, session.kind === "staff" && input.internal],
+      `INSERT INTO ticket_attachments (org_id, ticket_id, file_id, is_internal, content)
+       VALUES ($1,$2,$3,$4,$5) RETURNING id::text`,
+      [
+        ticket.org_id,
+        ticket.id,
+        fileId,
+        session.kind === "staff" && input.internal,
+        input.content ? Buffer.from(input.content) : null,
+      ],
     );
     return attachment.id;
   });
@@ -414,4 +421,20 @@ export async function attachRepairPhoto(
 
 export function newPhotoFileId() {
   return randomUUID();
+}
+
+/** The stored photo, if this session is allowed to see the attachment. */
+export async function readRepairPhoto(session: Session, attachmentId: string) {
+  assertTicketActor(session);
+  if (!isUuid(attachmentId)) return null;
+  return tx(session.userId, async (client) =>
+    maybe<{ name: string; mime: string | null; path: string; content: Buffer | null }>(
+      client,
+      `SELECT f.file_name AS name, f.mime_type AS mime, f.storage_path AS path, a.content
+         FROM ticket_attachments a
+         JOIN files f ON f.id = a.file_id
+        WHERE a.id = $1 AND a.org_id = $2`,
+      [attachmentId, session.orgId],
+    ),
+  );
 }

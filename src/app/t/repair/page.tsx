@@ -7,7 +7,6 @@ import { selectedLease } from "@/lib/tenant-lease";
 import { actionTicket } from "@/server/actions";
 import { isUuid } from "@/server/repair-rules";
 import { tenantRepairs, ticketDetail } from "@/server/queries";
-import { signTicketPhotoUrls } from "@/server/ticket-photos";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +23,6 @@ export default async function RepairPage({
   const selectedId = params.id && isUuid(params.id) ? params.id : "";
   const detail = selectedId ? await ticketDetail(session, selectedId) : null;
   const own = detail && repairs.some((repair) => repair.id === detail.ticket.id) ? detail : null;
-  const signed = own ? await signTicketPhotoUrls(session.orgId, own.ticket.id, own.photos.map((photo) => photo.path)) : {};
   return (
     <div>
       <h2>{t("i_rich_repair")}</h2>
@@ -42,7 +40,7 @@ export default async function RepairPage({
           <RepairThread
             ticketId={own.ticket.id}
             comments={own.comments}
-            photos={own.photos.map((photo) => ({ ...photo, url: signed[photo.path] }))}
+            photos={own.photos}
             t={t}
             locale={session.locale}
             calendar={session.calendar}
