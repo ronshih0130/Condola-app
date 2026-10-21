@@ -1704,12 +1704,7 @@
  "pdf_hash_label": "Document hash",
  "pdf_hash_missing": "Document hash not recorded yet",
  "pdf_deposit_reason": "Reason for the deposit",
- "pdf_clause_rent": "Rent is {rent}, due on day {day} of each month.",
- "pdf_clause_deposit": "The deposit is {amount}.",
- "pdf_clause_deposit_months": "The deposit is {amount} ({months} months of rent).",
- "pdf_clause_reason": "Reason the deposit is above the cap: {reason}",
- "pdf_clause_term": "The term runs from {start} to {end}.",
- "pdf_clause_open": "The term starts on {start} and has no end date.",
+ "pdf_paper_note": "This copy is for signing on paper. It is not an electronic signature.",
  "pdf_statement_title": "Owner monthly statement",
  "pdf_lines": "Details",
  "pdf_failed": "The PDF could not be created. Try again."

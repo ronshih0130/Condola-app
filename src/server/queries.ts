@@ -1611,12 +1611,18 @@ export async function leasePdfSource(session: Session, id: string) {
       depositMonths: string | null;
       depositOverrideReason: string | null;
       dueDay: number;
+      rentFrequency: string;
       startDate: string;
       endDate: string | null;
-      notes: string | null;
-      templateBody: string | null;
       place: string;
-      firm: string;
+      addressDisplay: string;
+      address: unknown;
+      floor: string | null;
+      roomLabel: string | null;
+      partial: boolean;
+      electricityMethod: string | null;
+      ratePerKwh: string | null;
+      bankName: string | null;
       tenant: string;
       ownerName: string | null;
     }>(
@@ -1630,12 +1636,28 @@ export async function leasePdfSource(session: Session, id: string) {
               l.deposit_months::text AS "depositMonths",
               nullif(btrim(l.deposit_override_reason), '') AS "depositOverrideReason",
               l.due_day AS "dueDay",
+              l.rent_frequency::text AS "rentFrequency",
               l.start_date::text AS "startDate",
               l.end_date::text AS "endDate",
-              nullif(btrim(l.notes), '') AS notes,
-              nullif(btrim(tv.body), '') AS "templateBody",
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
-              o.name AS firm,
+              coalesce(p.address_display, '') AS "addressDisplay",
+              p.address AS address,
+              nullif(btrim(u.floor), '') AS floor,
+              nullif(btrim(r.label), '') AS "roomLabel",
+              (l.target_room_id IS NOT NULL) AS partial,
+              CASE WHEN l.target_room_id IS NOT NULL THEN r.electricity_method ELSE u.electricity_method END AS "electricityMethod",
+              CASE WHEN l.target_room_id IS NOT NULL THEN r.rate_per_kwh::text ELSE u.rate_per_kwh::text END AS "ratePerKwh",
+              (
+                SELECT b.bank_name
+                  FROM bank_accounts b
+                 WHERE b.org_id = l.org_id
+                   AND b.archived_at IS NULL
+                   AND b.show_to_tenants
+                   AND b.currency = l.currency
+                   AND (b.property_id = l.property_id OR b.property_id IS NULL)
+                 ORDER BY (b.property_id = l.property_id) DESC, b.created_at
+                 LIMIT 1
+              ) AS "bankName",
               coalesce((
                 SELECT string_agg(c.display_name, '、' ORDER BY lp.role, c.display_name)
                   FROM lease_parties lp
@@ -1650,11 +1672,9 @@ export async function leasePdfSource(session: Session, id: string) {
                  LIMIT 1
               ) AS "ownerName"
          FROM leases l
-         JOIN organizations o ON o.id = l.org_id
          JOIN properties p ON p.id = l.property_id
          JOIN units u ON u.id = l.unit_id
          LEFT JOIN rooms r ON r.id = l.target_room_id
-         LEFT JOIN lease_template_versions tv ON tv.id = l.template_version_id
         WHERE l.id = $1`,
       [id],
     ),

@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_BUILD_SHA: buildSha(),
   },
+  outputFileTracingIncludes: {
+    "/api/pdf/**/*": ["./src/assets/leases/moi-residential-1130708.txt"],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "8mb",

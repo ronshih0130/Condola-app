@@ -1,6 +1,7 @@
 import { dictionary, type Locale, type T } from "@/i18n";
 import type { PdfBlock, PdfDocument, PdfRow } from "@/lib/pdf-document";
 import { formatDate, formatMoney, moneyLabel, ownerSettlement } from "@/server/format";
+import { renderOfficialLease } from "@/server/official-lease";
 import { can } from "@/server/perms";
 import type { CalendarMode, Session } from "@/server/types";
 
@@ -26,14 +27,20 @@ export type LeasePdfSource = {
   depositMonths: string | null;
   depositOverrideReason: string | null;
   dueDay: number;
+  rentFrequency: string;
   startDate: string;
   endDate: string | null;
-  notes: string | null;
-  templateBody: string | null;
   place: string;
-  firm: string;
   tenant: string;
   ownerName: string | null;
+  address: unknown;
+  addressDisplay: string;
+  floor: string | null;
+  roomLabel: string | null;
+  scope: "whole" | "partial";
+  electricityMethod: string | null;
+  ratePerKwh: string | null;
+  bankName: string | null;
 };
 
 export type StatementPdfLine = { lineType: string; description: string | null; amount: number };
@@ -56,67 +63,37 @@ export type StatementPdfSource = {
   audience: "owner" | "staff";
 };
 
-function splitLines(value: string | null) {
-  if (!value) return [];
-  return value
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function monthsText(value: string | null) {
-  if (!value) return null;
-  const months = Number(value);
-  if (!Number.isFinite(months)) return null;
-  return Number.isInteger(months) ? String(months) : String(months);
-}
-
-export function buildLeasePdf(source: LeasePdfSource, locale: Locale, calendar: CalendarMode, t: T): PdfDocument {
-  const dict = dictionary(locale);
-  const rent = formatMoney(source.rentMinor, source.currency, locale);
-  const deposit = formatMoney(source.depositMinor, source.currency, locale);
-  const start = formatDate(source.startDate, locale, calendar, dict);
-  const end = source.endDate ? formatDate(source.endDate, locale, calendar, dict) : "";
-  const term = end ? `${start} - ${end}` : t("pdf_clause_open", { start });
-  const months = monthsText(source.depositMonths);
-  const rows: PdfRow[] = [
-    { label: t("s_74f19b0"), value: source.tenant || t("i_empty") },
-  ];
-  if (source.ownerName) rows.push({ label: t("i_owner"), value: source.ownerName });
-  rows.push(
-    { label: t("i_firm_label"), value: source.firm },
-    { label: t("i_space"), value: source.place },
-    { label: t("i_term"), value: term },
-    { label: t("i_rent_label"), value: rent },
-    { label: t("i_deposit_label"), value: deposit },
-  );
-  if (source.depositOverrideReason) {
-    rows.push({ label: t("pdf_deposit_reason"), value: source.depositOverrideReason });
-  }
-  rows.push({ label: t("i_due_day_label"), value: t("i_due_day", { day: source.dueDay }) });
-
-  const synthesized = [
-    t("pdf_clause_rent", { rent, day: source.dueDay }),
-    months ? t("pdf_clause_deposit_months", { amount: deposit, months }) : t("pdf_clause_deposit", { amount: deposit }),
-  ];
-  if (source.depositOverrideReason) synthesized.push(t("pdf_clause_reason", { reason: source.depositOverrideReason }));
-  synthesized.push(end ? t("pdf_clause_term", { start, end }) : t("pdf_clause_open", { start }));
-  const templateLines = splitLines(source.templateBody);
-  const noteLines = splitLines(source.notes).filter((line) => !templateLines.includes(line) && !synthesized.includes(line));
-  const clauseLines = templateLines.length
-    ? [...templateLines, ...noteLines]
-    : [...synthesized, ...noteLines].map((line, index) => `${index + 1}. ${line}`);
-
+export function buildLeasePdf(source: LeasePdfSource, t: T): PdfDocument {
+  const rendered = renderOfficialLease({
+    tenantName: source.tenant,
+    ownerName: source.ownerName,
+    address: source.address,
+    addressDisplay: source.addressDisplay,
+    floor: source.floor,
+    roomLabel: source.roomLabel,
+    scope: source.scope,
+    startDate: source.startDate,
+    endDate: source.endDate,
+    rentMinor: source.rentMinor,
+    rentFrequency: source.rentFrequency,
+    dueDay: source.dueDay,
+    depositMinor: source.depositMinor,
+    depositMonths: source.depositMonths,
+    electricityMethod: source.electricityMethod,
+    ratePerKwh: source.ratePerKwh,
+    bankName: source.bankName,
+  });
+  const preface = [t("pdf_paper_note")];
+  if (source.depositOverrideReason) preface.push(`${t("pdf_deposit_reason")}：${source.depositOverrideReason}`);
   const hash = source.documentSha256?.trim() || "";
-  const blocks: PdfBlock[] = [
-    { kind: "rows", heading: t("s_a44f330"), rows },
-    { kind: "text", heading: t("s_22b6bac"), lines: clauseLines },
-  ];
   return {
     filename: "lease.pdf",
-    title: t("s_a611841"),
+    title: "住宅租賃契約書範本",
     subtitle: source.place,
-    blocks,
+    blocks: [
+      { kind: "text", heading: "", lines: preface },
+      { kind: "text", heading: "", lines: rendered.text.split("\n") },
+    ],
     footerLabel: hash ? t("pdf_hash_label") : t("pdf_hash_missing"),
     footerHash: hash,
   };

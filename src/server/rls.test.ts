@@ -603,16 +603,24 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
 
   const manager = pdfSession(USERS.manager, "staff", "manager", ORG_ID);
   const managerDoc = await leasePdfForSession(manager, leaseId);
+  const managerText = JSON.stringify(managerDoc);
+  const sublessor = "二" + "房東";
   assert.equal(managerDoc?.footerHash, hash);
-  assert.match(JSON.stringify(managerDoc), /屋主/);
-  assert.equal(JSON.stringify(managerDoc).includes("房東"), false);
+  assert.match(managerText, /出租人/);
+  assert.match(managerText, /承租人/);
+  assert.match(managerText, /陳建宏/);
+  assert.equal(managerText.includes(sublessor), true);
+  assert.equal(managerText.split(sublessor).join("").includes("房東"), false);
+  assert.equal(managerText.includes("88921"), false);
 
   const tenant = pdfSession(USERS.tenant, "tenant", null, ORG_ID);
   const tenantDoc = await leasePdfForSession(tenant, leaseId);
+  const tenantText = JSON.stringify(tenantDoc);
   assert.equal(tenantDoc?.footerHash, hash);
-  assert.match(JSON.stringify(tenantDoc), /租客/);
-  assert.match(JSON.stringify(tenantDoc), /屋主/);
-  assert.match(JSON.stringify(tenantDoc), /陳建宏/);
+  assert.match(tenantText, /承租人/);
+  assert.match(tenantText, /出租人/);
+  assert.match(tenantText, /陳建宏/);
+  assert.equal(tenantText.includes("88921"), false);
   assert.equal(await pdfAuditCount("leases", leaseId), before + 2);
 
   const statement = await tx(USERS.owner, (client) =>

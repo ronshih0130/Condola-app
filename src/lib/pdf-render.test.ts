@@ -20,21 +20,29 @@ test("the client PDF embeds the hash and Traditional Chinese without a server re
     depositMonths: "2",
     depositOverrideReason: null,
     dueDay: 5,
+    rentFrequency: "monthly",
     startDate: "2026-03-01",
     endDate: "2027-02-28",
-    notes: null,
-    templateBody: null,
     place: "信義松仁 3F A",
-    firm: "松信住宅管理",
     tenant: "張雅文",
     ownerName: "陳建宏",
+    address: { city: "台北市", district: "信義區", street: "松仁路88號" },
+    addressDisplay: "台北市信義區松仁路88號",
+    floor: "3",
+    roomLabel: "A",
+    scope: "partial",
+    electricityMethod: null,
+    ratePerKwh: null,
+    bankName: null,
   };
-  const doc = buildLeasePdf(source, "zh-TW", "gregorian", makeT("zh-TW"));
+  const doc = buildLeasePdf(source, makeT("zh-TW"));
   const bytes = await renderPdf({ ...doc, subtitle: `${doc.subtitle} 😀` }, font);
   assert.equal(Buffer.from(bytes.subarray(0, 5)).toString(), "%PDF-");
   assert.equal(pdfContainsAscii(bytes, HASH), true);
-  assert.equal(pdfContainsAscii(bytes, "房東"), false);
   const decoded = (await import("@/lib/pdf-text")).pdfDecoded(bytes).toString("latin1");
   assert.match(decoded, /5C4B/);
   assert.match(decoded, /4E3B/);
+  assert.match(decoded, /338F/);
+  // □/■ are rectangles (move + line), not missing-glyph question marks.
+  assert.ok((decoded.match(/ m\n/g) ?? []).length > 100);
 });

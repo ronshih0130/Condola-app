@@ -4,12 +4,8 @@ import { dictionary, makeT } from "@/i18n";
 import { AuditHistory } from "@/components/audit-log";
 import { PayDialog } from "@/components/dialogs";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
-<<<<<<< HEAD
-import { PdfDownloadButton } from "@/components/pdf-download";
-import { PortalInviteButton } from "@/components/portal-invite-button";
-=======
 import { PdfDownloadButton } from "@/components/pdf-download-button";
->>>>>>> 0ff06a8 (Keep pdf-lib out of the Worker by loading the download button in the browser.)
+import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
 import { showDemoLineCopy } from "@/server/demo";

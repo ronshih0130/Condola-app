@@ -63,8 +63,8 @@ export async function renderPdf(doc: PdfDocument, fontBytes: Uint8Array): Promis
   function normalize(text: string) {
     let out = "";
     for (const ch of text.replaceAll("\r", "")) {
-      if (ch === "\n") {
-        out += "\n";
+      if (ch === "\n" || ch === "□" || ch === "■") {
+        out += ch;
         continue;
       }
       out += hasCjk(ch) || canLatin(ch) ? ch : "?";
@@ -72,27 +72,61 @@ export async function renderPdf(doc: PdfDocument, fontBytes: Uint8Array): Promis
     return out;
   }
 
-  type Piece = { text: string; font: PDFFont };
+  /** The embedded face has no ballot box. □ and ■ are drawn, not substituted. */
+  type Piece = { text: string; font: PDFFont | null; box: "empty" | "checked" | null };
 
   function pieces(text: string): Piece[] {
     const out: Piece[] = [];
     for (const ch of normalize(text).replaceAll("\n", "")) {
+      if (ch === "□" || ch === "■") {
+        out.push({ text: ch, font: null, box: ch === "■" ? "checked" : "empty" });
+        continue;
+      }
       const font = hasCjk(ch) ? cjk : latin;
       const last = out[out.length - 1];
-      if (last && last.font === font) last.text += ch;
-      else out.push({ text: ch, font });
+      if (last && last.font === font && !last.box) last.text += ch;
+      else out.push({ text: ch, font, box: null });
     }
     return out;
   }
 
+  function pieceWidth(piece: Piece, size: number) {
+    if (piece.box) return size * 0.95;
+    return piece.font!.widthOfTextAtSize(piece.text, size);
+  }
+
   function measure(text: string, size: number) {
-    return pieces(text).reduce((sum, piece) => sum + piece.font.widthOfTextAtSize(piece.text, size), 0);
+    return pieces(text).reduce((sum, piece) => sum + pieceWidth(piece, size), 0);
   }
 
   function drawAt(target: PDFPage, text: string, x: number, y: number, size: number, color: ReturnType<typeof rgb>) {
     let cursor = x;
     for (const piece of pieces(text)) {
-      if (!piece.text) continue;
+      if (piece.box) {
+        const side = size * 0.72;
+        const bottom = y + size * 0.06;
+        target.drawRectangle({
+          x: cursor,
+          y: bottom,
+          width: side,
+          height: side,
+          borderColor: color,
+          borderWidth: 0.7,
+        });
+        if (piece.box === "checked") {
+          const inset = side * 0.22;
+          target.drawRectangle({
+            x: cursor + inset,
+            y: bottom + inset,
+            width: side - inset * 2,
+            height: side - inset * 2,
+            color,
+          });
+        }
+        cursor += pieceWidth(piece, size);
+        continue;
+      }
+      if (!piece.text || !piece.font) continue;
       target.drawText(piece.text, { font: piece.font, size, x: cursor, y, color });
       cursor += piece.font.widthOfTextAtSize(piece.text, size);
     }

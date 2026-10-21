@@ -45,14 +45,20 @@ function leaseSource(row: NonNullable<Awaited<ReturnType<typeof leasePdfSource>>
     depositMonths: row.depositMonths,
     depositOverrideReason: row.depositOverrideReason,
     dueDay: row.dueDay,
+    rentFrequency: row.rentFrequency,
     startDate: row.startDate,
     endDate: row.endDate,
-    notes: row.notes,
-    templateBody: row.templateBody,
     place: row.place,
-    firm: row.firm,
     tenant: row.tenant,
     ownerName,
+    address: row.address,
+    addressDisplay: row.addressDisplay,
+    floor: row.floor,
+    roomLabel: row.roomLabel,
+    scope: row.partial ? "partial" : "whole",
+    electricityMethod: row.electricityMethod,
+    ratePerKwh: row.ratePerKwh,
+    bankName: row.bankName,
   };
 }
 
@@ -62,7 +68,7 @@ export async function leasePdfForSession(session: Session, id: string) {
   if (!row) return null;
   if (session.kind === "staff" && row.orgId !== session.orgId) return null;
   const ownerName = row.ownerName ?? (session.kind === "tenant" ? await ownerNameForLease(session, row.id) : null);
-  const doc = buildLeasePdf(leaseSource(row, ownerName), session.locale, session.calendar, makeT(session.locale));
+  const doc = buildLeasePdf(leaseSource(row, ownerName), makeT(session.locale));
   await writePdfDownload(session.orgId, session.userId, actorRole(session), "leases", row.id, {
     document: "lease",
     document_sha256: doc.footerHash,

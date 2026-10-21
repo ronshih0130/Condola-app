@@ -22,9 +22,13 @@ test("lease and statement PDFs download, and another firm is denied", async ({ p
   const body = (await meta.json()) as { footerHash: string; blocks: unknown };
   expect(body.footerHash).toMatch(/^[a-f0-9]{64}$/);
   const copy = JSON.stringify(body);
-  expect(copy).toContain("租客");
-  expect(copy).toContain("屋主");
-  expect(copy).not.toContain("房東");
+  const sublessor = "二" + "房東";
+  expect(copy).toContain("承租人");
+  expect(copy).toContain("出租人");
+  expect(copy).toContain("紙本簽署");
+  expect(copy).toContain(sublessor);
+  expect(copy.split(sublessor).join("")).not.toContain("房東");
+  expect(copy).not.toContain("88921");
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("lease.pdf");
   const bytes = readFileSync((await download.path()) ?? "");

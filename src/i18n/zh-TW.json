@@ -1704,12 +1704,7 @@
  "pdf_hash_label": "文件雜湊",
  "pdf_hash_missing": "文件雜湊尚未產生",
  "pdf_deposit_reason": "押金調整原因",
- "pdf_clause_rent": "租金為 {rent}，於每月 {day} 日繳納。",
- "pdf_clause_deposit": "押金為 {amount}。",
- "pdf_clause_deposit_months": "押金為 {amount}（{months} 個月租金）。",
- "pdf_clause_reason": "押金超過上限的原因：{reason}",
- "pdf_clause_term": "租期自 {start} 至 {end}。",
- "pdf_clause_open": "租期自 {start} 起，未訂結束日。",
+ "pdf_paper_note": "本文件依內政部住宅租賃契約書範本列印，供紙本簽署，不是電子簽章。",
  "pdf_statement_title": "屋主月結報表",
  "pdf_lines": "明細",
  "pdf_failed": "無法產生 PDF，請再試一次。"

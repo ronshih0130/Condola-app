@@ -3,8 +3,8 @@ Copyright 2006, 2007, 2008, 2009, 2010 Google Corp.
 Droid is a trademark of Google Corp.
 
 This file is a subset of DroidSansFallbackFull for client-side PDF embedding.
-Kept: Latin-1 if present, punctuation, Bopomofo, and CJK Unified Ideographs U+4E00-U+9FFF.
-The source face has no Latin glyphs; digits are drawn with Helvetica.
+Kept: the CJK, kana, bopomofo, and punctuation already in this subset, plus U+338F (㎏) from the same face.
+The source face has no Latin glyphs and no ballot box; digits are drawn with Helvetica and checkboxes are drawn as rectangles.
 Subset with fontTools pyftsubset from the Debian fonts-droid-fallback package.
 
 

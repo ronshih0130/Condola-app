@@ -42,14 +42,20 @@ function lease(overrides: Partial<LeasePdfSource> = {}): LeasePdfSource {
     depositMonths: "3.00",
     depositOverrideReason: "屋主同意兩個月以上押金",
     dueDay: 5,
+    rentFrequency: "monthly",
     startDate: "2026-01-01",
     endDate: "2026-12-31",
-    notes: "備註一行",
-    templateBody: null,
     place: "信義松仁 3F A",
-    firm: "松信住宅管理",
     tenant: "張雅文",
     ownerName: "陳建宏",
+    address: { city: "台北市", district: "信義區", street: "松仁路88號" },
+    addressDisplay: "台北市信義區松仁路88號",
+    floor: "3",
+    roomLabel: "A",
+    scope: "partial",
+    electricityMethod: "submeter",
+    ratePerKwh: "4",
+    bankName: "玉山銀行",
     ...overrides,
   };
 }
@@ -69,53 +75,66 @@ test("lease and statement PDFs follow the same roles as the pages", () => {
   assert.equal(canDownloadStatementPdf(session("tenant", null)), false);
 });
 
-test("a lease PDF lists parties, deposit reason, clauses, and the stored hash", () => {
-  const doc = buildLeasePdf(lease(), "zh-TW", "gregorian", makeT("zh-TW"));
+test("a lease PDF prints the official form, the deposit reason, and the stored hash", () => {
+  const doc = buildLeasePdf(lease(), makeT("zh-TW"));
   const text = JSON.stringify(doc);
+  const sublessor = "二" + "房東";
+  assert.equal(doc.title, "住宅租賃契約書範本");
   assert.equal(doc.footerHash, HASH);
   assert.equal(doc.footerLabel, "文件雜湊");
-  assert.match(text, /租客/);
-  assert.match(text, /屋主/);
+  assert.match(text, /紙本簽署/);
+  assert.match(text, /承租人/);
+  assert.match(text, /出租人/);
   assert.match(text, /陳建宏/);
   assert.match(text, /張雅文/);
   assert.match(text, /信義松仁 3F A/);
   assert.match(text, /押金調整原因/);
   assert.match(text, /屋主同意兩個月以上押金/);
-  assert.match(text, /重點條款/);
-  assert.match(text, /3 個月租金/);
-  assert.match(text, /備註一行/);
-  assert.equal(text.includes("房東"), false);
+  assert.match(text, /第一條/);
+  assert.match(text, /第二十三條/);
+  assert.match(text, /10000元整/);
+  assert.match(text, /30000元整/);
+  assert.equal(text.includes(sublessor), true);
+  assert.equal(text.split(sublessor).join("").includes("房東"), false);
   assert.equal(text.includes("3.00"), false);
+  assert.equal(text.includes("難以繼續居住"), false);
 });
 
-test("template clauses replace the generated ones and a missing hash is labeled", () => {
+test("a missing hash is labeled and omitted fields stay blank", () => {
   const doc = buildLeasePdf(
     lease({
       documentSha256: "  ",
-      templateBody: "第一條 租賃標的\n第二條 租金",
       depositOverrideReason: null,
-      notes: null,
+      ownerName: null,
+      tenant: "",
+      bankName: null,
+      electricityMethod: null,
+      ratePerKwh: null,
+      endDate: null,
     }),
-    "zh-TW",
-    "gregorian",
     makeT("zh-TW"),
   );
-  const clauses = doc.blocks.find((block) => block.kind === "text");
-  assert.ok(clauses && clauses.kind === "text");
-  assert.deepEqual(clauses.lines, ["第一條 租賃標的", "第二條 租金"]);
+  const text = JSON.stringify(doc);
   assert.equal(doc.footerHash, "");
   assert.equal(doc.footerLabel, "文件雜湊尚未產生");
-  assert.equal(JSON.stringify(doc).includes("押金調整原因"), false);
+  assert.equal(text.includes("押金調整原因"), false);
+  assert.match(text, /民國__年__月__日經承租人攜回審閱__日/);
+  assert.match(text, /□所有權人□轉租人/);
+  assert.match(text, /至民國     年     月     日止/);
+  assert.match(text, /第一條/);
 });
 
-test("an English lease PDF still names the owner and the tenant", () => {
-  const doc = buildLeasePdf(lease(), "en", "gregorian", makeT("en"));
+test("an English lease PDF localizes the paper note and keeps the official clauses", () => {
+  const doc = buildLeasePdf(lease(), makeT("en"));
   const text = JSON.stringify(doc);
-  assert.match(text, /Tenant/);
-  assert.match(text, /Owner/);
+  const sublessor = "二" + "房東";
+  assert.match(text, /This copy is for signing on paper/);
   assert.match(text, /Reason for the deposit/);
+  assert.match(text, /第一條/);
+  assert.match(text, /承租人/);
   assert.equal(doc.footerHash, HASH);
-  assert.equal(text.includes("房東"), false);
+  assert.equal(text.includes(sublessor), true);
+  assert.equal(text.split(sublessor).join("").includes("房東"), false);
 });
 
 test("a shortfall statement says 屋主應補繳 and a zero fee is NT$0", () => {
