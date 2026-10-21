@@ -43,8 +43,22 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await page.getByTestId("rate").fill("4");
   await expect(page.getByTestId("cap-alert")).toHaveCount(0);
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("wizard-next").click();
-  await page.getByTestId("submit-lease").evaluate((button: HTMLButtonElement) => {
+  await expect(page.getByTestId("lease-template")).toBeVisible();
+  await page.getByTestId("template-lang-zh").press("Enter");
+  await expect(page.getByTestId("lease-template")).toBeVisible();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  const nextBox = await page.getByTestId("wizard-next").boundingBox();
+  expect(nextBox).toBeTruthy();
+  await page.mouse.click(nextBox!.x + nextBox!.width / 2, nextBox!.y + nextBox!.height / 2, { clickCount: 2 });
+  const submit = page.getByTestId("submit-lease");
+  await expect(submit).toBeVisible();
+  await expect(submit).toBeDisabled();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.getByText("確認後送出給租客簽名")).toBeVisible();
+  await expect(submit).toBeEnabled();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.getByTestId("paper-sign")).toHaveCount(0);
+  await submit.evaluate((button: HTMLButtonElement) => {
     button.click();
     button.click();
   });
