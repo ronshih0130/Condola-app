@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { can, visibleNav, type PermKey } from "@/server/perms";
 import type { OrgRole } from "@/server/types";
+import { appFooterText, footerHasProductLine } from "@/line-copy";
 import { BrandImage } from "./brand";
 import { useT } from "./locale";
 
@@ -36,12 +37,16 @@ export function LocaleLinks() {
   );
 }
 
-export function ModeLinks() {
+export function ModeLinks({ demoLine = false }: { demoLine?: boolean }) {
   const t = useT();
   return (
     <span className="tabs">
       <a href="/api/demo/mode?mode=mgr">{t("i_mode_mgr")}</a>
-      <a href="/api/demo/mode?mode=ten">{t("i_mode_ten")}</a>
+      {demoLine ? (
+        <a href="/api/demo/mode?mode=ten" data-demo-line="true">
+          {t("i_mode_ten")}
+        </a>
+      ) : null}
       <a href="/api/demo/mode?mode=own">{t("i_mode_own")}</a>
     </span>
   );
@@ -222,7 +227,12 @@ export function Sidebar({
   );
 }
 
-export function FooterNote() {
+export function FooterNote({ demoLine = false }: { demoLine?: boolean }) {
   const t = useT();
-  return <div className="foot">{t("i_footer", { brand: t("i_brand") })}</div>;
+  const text = appFooterText(t("i_footer", { brand: t("i_brand") }), demoLine);
+  return (
+    <div className="foot" data-testid="app-footer" {...(footerHasProductLine(text) ? { "data-demo-line": "true" } : {})}>
+      {text}
+    </div>
+  );
 }

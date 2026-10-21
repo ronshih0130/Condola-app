@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { AuditRows } from "@/components/audit-log";
 import { PageHeader } from "@/components/ui";
+import { showDemoLineCopy } from "@/server/demo";
 import {
   AUDIT_ACTIONS,
   AUDIT_EVENTS,
@@ -27,6 +28,9 @@ export default async function AuditPage({
   if (denied) redirect(denied);
   const query = await searchParams;
   const t = makeT(session.locale);
+  const demoLine = showDemoLineCopy(session.environment);
+  const events = AUDIT_EVENTS.filter((event) => demoLine || event !== "line_sign_in");
+  const tables = AUDIT_TABLES.filter((table) => demoLine || table !== "line_account_links");
   const page = await loadAuditScreen(session, query);
   const { filters } = page;
   const selectedAction = filters.eventType || filters.action || "";
@@ -55,7 +59,7 @@ export default async function AuditPage({
               {t(actionKey(action, null))}
             </option>
           ))}
-          {AUDIT_EVENTS.map((event) => (
+          {events.map((event) => (
             <option key={event} value={event}>
               {t(actionKey("insert", event))}
             </option>
@@ -63,7 +67,7 @@ export default async function AuditPage({
         </select>
         <select className="inp" name="record" aria-label={t("i_audit_record_type")} defaultValue={filters.tableName ?? ""}>
           <option value="">{t("i_audit_all")}</option>
-          {AUDIT_TABLES.map((table) => (
+          {tables.map((table) => (
             <option key={table} value={table}>
               {t(recordKey(table))}
             </option>
@@ -81,7 +85,7 @@ export default async function AuditPage({
             {t("i_audit_empty")}
           </div>
         ) : (
-          <AuditRows entries={page.entries} t={t} testId="audit-list" />
+          <AuditRows entries={page.entries} t={t} testId="audit-list" demoLine={demoLine} />
         )}
         {filters.cursor || next ? (
           <div className="bd">

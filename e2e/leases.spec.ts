@@ -15,7 +15,7 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("tenant-name").fill("紙本房客");
   await page.getByTestId("tenant-phone").fill("+886912300088");
-  await page.getByTestId("tenant-line").fill("U-pilot-line");
+  await expect(page.getByTestId("tenant-line")).toHaveCount(0);
   await page.getByTestId("wizard-next").click();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
   await page.getByTestId("start-date").fill(today);
@@ -108,7 +108,7 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await expect(page.getByTestId("paper-signed")).toContainText("signed-lease.pdf");
 
   await page.getByRole("link", { name: "摘要" }).click();
-  await expect(page.getByTestId("tenant-line-id")).toHaveText("U-pilot-line");
+  await expect(page.getByTestId("tenant-line-id")).toHaveCount(0);
   await expect(page.getByText("生效中")).toBeVisible();
   await expect(page.getByTestId("lease-terms-locked")).toContainText("已簽署或已生效");
   await expect(page.getByTestId("lease-terms-locked")).not.toContainText("房東");

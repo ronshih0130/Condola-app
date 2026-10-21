@@ -19,6 +19,16 @@ export function demoModeEnabled() {
   return demoModeRequested() && !productionLikeEnv();
 }
 
+/**
+ * Demo LINE sentences (the stub, the notify note, and the linked-member sign-in)
+ * belong on a sandbox firm, or on a screen with no firm while DEMO_MODE is on.
+ * A live firm renders none of them, even when this process is a local demo.
+ */
+export function showDemoLineCopy(environment: "live" | "sandbox" | null) {
+  if (environment === "live") return false;
+  return demoModeEnabled() || environment === "sandbox";
+}
+
 function building() {
   return process.env.NEXT_PHASE === "phase-production-build";
 }
