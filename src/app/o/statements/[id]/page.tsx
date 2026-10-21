@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
+import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { StatementDocument } from "@/components/statement-document";
 import { ownerPrivacy, tenantDisplayNames } from "@/server/auth";
 import { maskTenantNames } from "@/server/privacy";
@@ -29,6 +30,15 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
         <Link href="/o/statements">{t("i_back_list")}</Link>
       </p>
       <h2>{row.period_start.slice(0, 7)}</h2>
+      <p>
+        <PdfDownloadButton
+          href={`/api/pdf/statements/${id}`}
+          label={t("s_874a842")}
+          failed={t("pdf_failed")}
+          fontFailed={t("pdf_font_missing")}
+          testId="download-statement-pdf"
+        />
+      </p>
       <StatementDocument
         t={t}
         locale={session.locale}

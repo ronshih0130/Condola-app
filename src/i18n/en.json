@@ -1700,5 +1700,13 @@
  "i_sec_rooms": "Units and rooms",
  "i_sec_meter": "Shared meter and split",
  "i_import_title": "Import Excel",
- "i_import_help": "Upload a CSV (Excel can save as CSV). Use the same columns as the property import."
+ "i_import_help": "Upload a CSV (Excel can save as CSV). Use the same columns as the property import.",
+ "pdf_hash_label": "Stored lease record hash",
+ "pdf_hash_missing": "Stored lease record hash is not recorded yet",
+ "pdf_deposit_reason": "Reason for the deposit",
+ "pdf_paper_note": "This copy is for signing on paper. It is not an electronic signature.",
+ "pdf_statement_title": "Owner monthly statement",
+ "pdf_lines": "Details",
+ "pdf_failed": "The PDF could not be created. Try again.",
+ "pdf_font_missing": "The font is missing some characters, so the PDF was not created."
 }

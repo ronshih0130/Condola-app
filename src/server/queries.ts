@@ -1599,6 +1599,131 @@ export async function spaceEditor(session: Session, kind: "room" | "whole_unit",
   });
 }
 
+export async function leasePdfSource(session: Session, id: string) {
+  return tx(session.userId, async (client) =>
+    maybe<{
+      id: string;
+      orgId: string;
+      documentSha256: string | null;
+      currency: string;
+      rentMinor: string;
+      depositMinor: string;
+      depositMonths: string | null;
+      depositOverrideReason: string | null;
+      dueDay: number;
+      rentFrequency: string;
+      startDate: string;
+      endDate: string | null;
+      place: string;
+      addressDisplay: string;
+      address: unknown;
+      floor: string | null;
+      roomLabel: string | null;
+      partial: boolean;
+      electricityMethod: string | null;
+      ratePerKwh: string | null;
+      bankName: string | null;
+      tenant: string;
+      ownerName: string | null;
+    }>(
+      client,
+      `SELECT l.id::text AS id,
+              l.org_id::text AS "orgId",
+              nullif(btrim(l.document_sha256), '') AS "documentSha256",
+              l.currency,
+              l.rent_amount_minor::text AS "rentMinor",
+              l.deposit_amount_minor::text AS "depositMinor",
+              l.deposit_months::text AS "depositMonths",
+              nullif(btrim(l.deposit_override_reason), '') AS "depositOverrideReason",
+              l.due_day AS "dueDay",
+              l.rent_frequency::text AS "rentFrequency",
+              l.start_date::text AS "startDate",
+              l.end_date::text AS "endDate",
+              p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
+              coalesce(p.address_display, '') AS "addressDisplay",
+              p.address AS address,
+              nullif(btrim(u.floor), '') AS floor,
+              nullif(btrim(r.label), '') AS "roomLabel",
+              (l.target_room_id IS NOT NULL) AS partial,
+              CASE WHEN l.target_room_id IS NOT NULL THEN r.electricity_method ELSE u.electricity_method END AS "electricityMethod",
+              CASE WHEN l.target_room_id IS NOT NULL THEN r.rate_per_kwh::text ELSE u.rate_per_kwh::text END AS "ratePerKwh",
+              (
+                SELECT b.bank_name
+                  FROM bank_accounts b
+                 WHERE b.org_id = l.org_id
+                   AND b.archived_at IS NULL
+                   AND b.show_to_tenants
+                   AND b.currency = l.currency
+                   AND (b.property_id = l.property_id OR b.property_id IS NULL)
+                 ORDER BY (b.property_id = l.property_id) DESC, b.created_at
+                 LIMIT 1
+              ) AS "bankName",
+              coalesce((
+                SELECT string_agg(c.display_name, '、' ORDER BY lp.role, c.display_name)
+                  FROM lease_parties lp
+                  JOIN contacts c ON c.id = lp.contact_id
+                 WHERE lp.lease_id = l.id
+                   AND lp.role IN ('primary', 'co_tenant')
+              ), '') AS tenant,
+              (
+                SELECT oc.display_name
+                  FROM property_owners po
+                  JOIN contacts oc ON oc.id = po.owner_contact_id
+                 WHERE po.property_id = l.property_id AND po.is_primary
+                 LIMIT 1
+              ) AS "ownerName"
+         FROM leases l
+         JOIN properties p ON p.id = l.property_id
+         JOIN units u ON u.id = l.unit_id
+         LEFT JOIN rooms r ON r.id = l.target_room_id
+        WHERE l.id = $1`,
+      [id],
+    ),
+  );
+}
+
+export async function statementPdfSource(session: Session, id: string) {
+  return tx(session.userId, async (client) => {
+    const statement = await maybe<{
+      id: string;
+      orgId: string;
+      ownerName: string;
+      periodStart: string;
+      periodEnd: string;
+      currency: string;
+      opening: string;
+      rent: string;
+      other: string;
+      fee: string;
+      expenses: string;
+      payouts: string;
+      closing: string;
+    }>(
+      client,
+      `SELECT s.id::text AS id, s.org_id::text AS "orgId", c.display_name AS "ownerName",
+              s.period_start::text AS "periodStart", s.period_end::text AS "periodEnd", s.currency,
+              s.opening_balance_minor::text AS opening, s.rent_received_minor::text AS rent,
+              s.other_income_minor::text AS other, s.management_fee_minor::text AS fee,
+              s.expenses_minor::text AS expenses, s.payouts_minor::text AS payouts,
+              s.closing_balance_minor::text AS closing
+         FROM owner_statements s
+         JOIN contacts c ON c.id = s.owner_contact_id
+        WHERE s.id = $1`,
+      [id],
+    );
+    if (!statement) return null;
+    const lines = await many<{ lineType: string; description: string | null; amount: string }>(
+      client,
+      `SELECT line_type AS "lineType", description, amount_minor::text AS amount
+         FROM owner_statement_lines
+        WHERE statement_id = $1
+        ORDER BY line_type, description`,
+      [id],
+    );
+    return { statement, lines };
+  });
+}
+
 export async function counts(session: Session) {
   if (session.kind !== "staff") return { pending: 0, tickets: 0 };
   return tx(session.userId, async (client) => {

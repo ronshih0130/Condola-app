@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -29,6 +29,8 @@ function decode(source: string) {
 
 function sourceFiles() {
   const out: string[] = [];
+  // Verbatim 內政部 contract text, including the required 「二房東」 note. Not product copy.
+  const officialLease = join(root, "src", "assets", "leases") + sep;
   const walk = (dir: string) => {
     if (!existsSync(dir)) return;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -38,6 +40,7 @@ function sourceFiles() {
         walk(path);
         continue;
       }
+      if (path.startsWith(officialLease)) continue;
       if (/\.test\.tsx?$|\.spec\.tsx?$/.test(entry.name)) continue;
       if (/\.(ts|tsx|json)$/.test(entry.name)) out.push(path);
     }

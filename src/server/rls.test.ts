@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { writeAudit } from "./audit";
+import { leasePdfForSession, statementPdfForSession } from "./pdf-download";
 import { query, svc, tx, withClient } from "./db";
 import { createLease, createProperty } from "./domain";
 import { FlowError } from "./errors";
@@ -544,5 +545,181 @@ test("another firm cannot issue or redeem a portal invite, and anon cannot read 
       await query(`DELETE FROM auth.users WHERE id = $1`, [userId]);
     }
     await query(`DELETE FROM contacts WHERE id = $1`, [contactId]);
+  }
+});
+
+function pdfSession(userId: string, kind: Session["kind"], role: Session["role"], orgId: string): Session {
+  return {
+    userId,
+    sessionId: "pdf",
+    email: "pdf@test",
+    name: "Pdf",
+    kind,
+    role,
+    orgId,
+    liveOrgId: orgId,
+    environment: "live",
+    locale: "zh-TW",
+    calendar: "gregorian",
+    leaseId: null,
+  };
+}
+
+async function pdfAuditCount(table: string, rowId: string) {
+  const rows = await tx(USERS.admin, (client) =>
+    client.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM audit_log WHERE table_name = $1 AND row_id = $2 AND event_type = 'pdf_download'`,
+      [table, rowId],
+    ),
+  );
+  return Number(rows.rows[0]?.n ?? 0);
+}
+
+test("PDF download follows RLS, records an audit row, and stays inside the firm", async () => {
+  const lease = await tx(USERS.tenant, (client) =>
+    client.query<{ id: string; document_sha256: string }>(
+      `SELECT id::text, document_sha256 FROM leases WHERE org_id = $1 LIMIT 1`,
+      [ORG_ID],
+    ),
+  );
+  const leaseId = lease.rows[0]?.id;
+  const hash = lease.rows[0]?.document_sha256;
+  assert.ok(leaseId);
+  assert.match(hash ?? "", /^[a-f0-9]{64}$/);
+
+  const coTenant = "共同承租李四";
+  const guarantor = "保證人王大明";
+  const cosigner = "連署人林小安";
+  const property = await svc(USERS.admin, async (client) => {
+    const row = await client.query<{ id: string; address: unknown; display: string | null }>(
+      `SELECT p.id::text, p.address, p.address_display AS display
+         FROM leases l
+         JOIN properties p ON p.id = l.property_id
+        WHERE l.id = $1`,
+      [leaseId],
+    );
+    const saved = row.rows[0];
+    assert.ok(saved);
+    await client.query(
+      `UPDATE properties
+          SET address = jsonb_set(coalesce(address, '{}'::jsonb), '{street}', to_jsonb($2::text), true),
+              address_display = $3
+        WHERE id = $1`,
+      [saved.id, "松仁路88號之1", "台北市信義區松仁路88號之1"],
+    );
+    return saved;
+  });
+  let contactIds: string[] = [];
+  try {
+  contactIds = await svc(USERS.admin, async (client) => {
+    const ids: string[] = [];
+    for (const [role, name, isTenant] of [
+      ["co_tenant", coTenant, true],
+      ["guarantor", guarantor, false],
+      ["occupant", cosigner, false],
+    ] as const) {
+      const contact = await client.query<{ id: string }>(
+        `INSERT INTO contacts (org_id, is_tenant, display_name, locale)
+         VALUES ($1, $2, $3, 'zh-TW') RETURNING id::text`,
+        [ORG_ID, isTenant, name],
+      );
+      const id = contact.rows[0]?.id;
+      assert.ok(id);
+      ids.push(id);
+      await client.query(
+        `INSERT INTO lease_parties (org_id, lease_id, contact_id, role)
+         VALUES ($1, $2, $3, $4::lease_party_role)`,
+        [ORG_ID, leaseId, id, role],
+      );
+    }
+    return ids;
+  });
+
+  const before = await pdfAuditCount("leases", leaseId);
+  const maintenance = pdfSession(USERS.maintenance, "staff", "maintenance", ORG_ID);
+  const visibleToMaintenance = await tx(USERS.maintenance, (client) =>
+    client.query(`SELECT id FROM leases WHERE id = $1`, [leaseId]),
+  );
+  assert.equal(visibleToMaintenance.rows.length, 1);
+  assert.equal(await leasePdfForSession(maintenance, leaseId), null);
+
+  const coast = pdfSession(USERS.coastAdmin, "staff", "admin", ORG2_ID);
+  const leaked = await tx(USERS.coastAdmin, (client) => client.query(`SELECT id FROM leases WHERE id = $1`, [leaseId]));
+  assert.equal(leaked.rows.length, 0);
+  assert.equal(await leasePdfForSession(coast, leaseId), null);
+  assert.equal(await pdfAuditCount("leases", leaseId), before);
+
+  const manager = pdfSession(USERS.manager, "staff", "manager", ORG_ID);
+  const managerDoc = await leasePdfForSession(manager, leaseId);
+  const managerText = JSON.stringify(managerDoc);
+  const sublessor = "二" + "房東";
+  assert.equal(managerDoc?.footerHash, hash);
+  assert.match(managerText, /出租人/);
+  assert.match(managerText, /承租人/);
+  assert.match(managerText, /陳建宏/);
+  assert.equal(managerText.includes(sublessor), true);
+  assert.equal(managerText.split(sublessor).join("").includes("房東"), false);
+  assert.equal(managerText.includes("88921"), false);
+  assert.equal(managerText.includes("戶名：陳建宏"), false);
+  assert.equal(managerText.includes(`、${coTenant}，出租人`), true);
+  assert.equal(managerText.includes(guarantor), false);
+  assert.equal(managerText.includes(cosigner), false);
+  assert.equal(managerText.includes("弄__88號之1 3樓"), true);
+  assert.equal(managerText.includes("弄88"), false);
+  assert.equal(managerText.includes("88號之1，"), false);
+  assert.equal(managerText.includes("88號之1號"), false);
+  assert.equal(managerText.includes("弄88之1號"), false);
+  assert.equal(managerText.includes("3樓之"), false);
+
+  const tenant = pdfSession(USERS.tenant, "tenant", null, ORG_ID);
+  const tenantDoc = await leasePdfForSession(tenant, leaseId);
+  const tenantText = JSON.stringify(tenantDoc);
+  assert.equal(tenantDoc?.footerHash, hash);
+  assert.match(tenantText, /承租人/);
+  assert.match(tenantText, /出租人/);
+  assert.match(tenantText, /陳建宏/);
+  assert.equal(tenantText.includes("88921"), false);
+  assert.equal(await pdfAuditCount("leases", leaseId), before + 2);
+  const otherTenant = pdfSession(USERS.tenant2, "tenant", null, ORG_ID);
+  assert.equal(await leasePdfForSession(otherTenant, leaseId), null);
+  assert.equal(await pdfAuditCount("leases", leaseId), before + 2);
+
+  const statement = await tx(USERS.owner, (client) =>
+    client.query<{ id: string }>(`SELECT id::text FROM owner_statements LIMIT 1`),
+  );
+  const statementId = statement.rows[0]?.id;
+  assert.ok(statementId);
+  const statementBefore = await pdfAuditCount("owner_statements", statementId);
+  assert.equal(await statementPdfForSession(tenant, statementId), null);
+  assert.equal(await statementPdfForSession(coast, statementId), null);
+  assert.equal(await statementPdfForSession(maintenance, statementId), null);
+  assert.equal(await pdfAuditCount("owner_statements", statementId), statementBefore);
+
+  const owner = pdfSession(USERS.owner, "owner", null, ORG_ID);
+  const ownerDoc = await statementPdfForSession(owner, statementId);
+  const ownerText = JSON.stringify(ownerDoc);
+  assert.match(ownerText, /屋主應補繳/);
+  assert.match(ownerText, /地址：台北市信義區松仁路88號之1/);
+  assert.equal(ownerText.includes("房東"), false);
+  const managerStatement = await statementPdfForSession(manager, statementId);
+  assert.ok(managerStatement);
+  assert.equal(await pdfAuditCount("owner_statements", statementId), statementBefore + 2);
+  const otherOwner = pdfSession(USERS.owner2, "owner", null, ORG_ID);
+  assert.equal(await statementPdfForSession(otherOwner, statementId), null);
+  assert.equal(await pdfAuditCount("owner_statements", statementId), statementBefore + 2);
+  const coastRead = await tx(USERS.coastAdmin, (client) =>
+    client.query(`SELECT id FROM owner_statements WHERE id = $1`, [statementId]),
+  );
+  assert.equal(coastRead.rows.length, 0);
+  } finally {
+    await svc(USERS.admin, async (client) => {
+      await client.query(`UPDATE properties SET address = $2::jsonb, address_display = $3 WHERE id = $1`, [
+        property.id,
+        property.address == null ? null : JSON.stringify(property.address),
+        property.display,
+      ]);
+      await client.query(`DELETE FROM lease_parties WHERE contact_id = ANY($1::uuid[])`, [contactIds]);
+      await client.query(`DELETE FROM contacts WHERE id = ANY($1::uuid[])`, [contactIds]);
+    });
   }
 });
