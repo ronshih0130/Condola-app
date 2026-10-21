@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 import { can, visibleNav, type PermKey } from "@/server/perms";
 import type { OrgRole } from "@/server/types";
 import { appFooterText, footerHasProductLine } from "@/line-copy";
@@ -174,7 +173,6 @@ export function Sidebar({
 }) {
   const t = useT();
   const path = usePathname() || "/m";
-  const [orgOpen, setOrgOpen] = useState(false);
   const closeNav = () => {
     const box = document.getElementById("nav-open") as HTMLInputElement | null;
     if (box) box.checked = false;
@@ -186,27 +184,21 @@ export function Sidebar({
     <aside className="side">
       <div className="org">
         <div className="av">{firm.slice(0, 1)}</div>
-        <div className="org-switch">
-          <button
-            type="button"
-            className="org-toggle"
-            data-testid="org-switch"
-            aria-expanded={orgOpen}
-            onClick={() => setOrgOpen((open) => !open)}
-          >
+        <details className="org-switch">
+          <summary className="org-toggle" data-testid="org-switch">
             <span className="b">{label}</span>
-          </button>
-          {orgOpen ? (
-            <div className="org-menu" data-testid="org-menu">
-              <a href={`/api/env?set=live&next=${next}`} data-testid="org-pick-live">
-                {firm}
-              </a>
-              <a href={`/api/env?set=sandbox&next=${next}`} data-testid="org-pick-sandbox">
-                {t("i_sandbox_company")}
-              </a>
-            </div>
-          ) : null}
-        </div>
+            <span className="org-caret" aria-hidden="true">▾</span>
+          </summary>
+          <div className="org-menu" data-testid="org-menu">
+            <a href={`/api/env?set=live&next=${next}`} data-testid="org-pick-live">
+              {firm}
+            </a>
+            <a href={`/api/env?set=sandbox&next=${next}`} data-testid="org-pick-sandbox">
+              <span>{t("i_sandbox_company")}</span>
+              <span className="org-tag">{t("i_sandbox_suffix")}</span>
+            </a>
+          </div>
+        </details>
       </div>
       {can(role, "props.edit" as PermKey) ? (
         <Link className="btn block" href="/m/properties/new">
@@ -234,7 +226,7 @@ export function Sidebar({
         </div>
       ))}
       <div className="side-tools">
-        <Link href="/pricing">{t("i_nav_pricing")}</Link>
+        {sandbox ? null : <Link href="/pricing">{t("i_nav_pricing")}</Link>}
         <Link href="/m/account">{t("i_account")}</Link>
         <Link href="/m/roles">{t("i_roles_title")}</Link>
         <SignOutButton testId="sign-out-drawer" />

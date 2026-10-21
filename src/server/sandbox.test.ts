@@ -9,6 +9,7 @@ import {
   COPY_KINDS,
   NEVER_KINDS,
   SAMPLE_LABEL,
+  displaySampleName,
   goLiveAllowed,
   isSampleName,
   loadSampleRows,
@@ -94,6 +95,8 @@ test("sample names stay tagged once and phones become E.164", () => {
   assert.equal(withSampleName("Oakland [Sample data]"), "Oakland [Sample data]");
   assert.equal(isSampleName(`甲〔${SAMPLE_LABEL}〕`), true);
   assert.equal(isSampleName("信義松仁"), false);
+  assert.equal(displaySampleName(`中壢範例分租公寓〔${SAMPLE_LABEL}〕`), "中壢範例分租公寓");
+  assert.equal(displaySampleName("Oakland [Sample data]"), "Oakland");
   assert.equal(toE164("0900-000-101"), "+886900000101");
   assert.equal(toE164(""), null);
   assert.equal(sampleIdMask(1), "A00****001");

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { FIRM_NAME } from "../src/server/ids";
-import { loadSampleRows, withSampleName } from "../src/server/sandbox-data";
+import { displaySampleName, loadSampleRows, withSampleName } from "../src/server/sandbox-data";
 import { ACCOUNTS, DEMO_PASSWORD, resetDemo, signIn } from "./session";
 
 test.beforeEach(async ({ page }) => {
@@ -14,7 +14,7 @@ test.afterAll(async ({ browser }) => {
 });
 
 test("a live firm opens live with no env cookie, and sign-in drops a leftover test-mode choice", async ({ page }) => {
-  const sampleProperty = withSampleName(loadSampleRows()[0].property);
+  const sampleProperty = displaySampleName(withSampleName(loadSampleRows()[0].property));
   await page.context().clearCookies();
   await page.goto("/login");
   await page.getByTestId("login-email").fill(ACCOUNTS.admin);
@@ -34,7 +34,8 @@ test("a live firm opens live with no env cookie, and sign-in drops a leftover te
   await expect(banner).toContainText("回到正式公司");
   await expect(page.getByTestId("org-switch")).toContainText("（範例）");
   await expect(page.getByRole("link", { name: sampleProperty })).toBeVisible();
-  await expect(page.getByTestId("sample-tag").first()).toHaveText("範例資料");
+  await expect(page.getByTestId("sample-tag")).toHaveCount(0);
+  await expect(page.getByTestId("property-list")).not.toContainText("範例資料");
   await page.reload();
   await expect(banner).toContainText("範例環境");
 
@@ -52,7 +53,7 @@ test("a live firm opens live with no env cookie, and sign-in drops a leftover te
 });
 
 test("staff can open the seeded sandbox and go live without copying it", async ({ page }) => {
-  const sampleProperty = withSampleName(loadSampleRows()[0].property);
+  const sampleProperty = displaySampleName(withSampleName(loadSampleRows()[0].property));
   await expect(page.getByTestId("env-banner")).toHaveCount(0);
   await expect(page.getByTestId("org-switch")).toContainText(FIRM_NAME);
 
@@ -68,7 +69,7 @@ test("staff can open the seeded sandbox and go live without copying it", async (
   await page.goto("/m/properties");
   await expect(page.getByTestId("property-list")).toBeVisible();
   await expect(page.getByRole("link", { name: sampleProperty })).toBeVisible();
-  await expect(page.getByTestId("sample-tag").first()).toHaveText("範例資料");
+  await expect(page.getByTestId("sample-tag")).toHaveCount(0);
 
   await page.goto("/m/env");
   await expect(page.getByTestId("gl-req")).toHaveAttribute("data-allowed", "true");
@@ -91,7 +92,7 @@ test("staff can open the seeded sandbox and go live without copying it", async (
   await expect(page.getByTestId("env-banner")).toBeVisible();
   await page.goto("/m/properties");
   await expect(page.getByRole("link", { name: sampleProperty })).toBeVisible();
-  await expect(page.getByTestId("sample-tag").first()).toBeVisible();
+  await expect(page.getByTestId("sample-tag")).toHaveCount(0);
 });
 
 test.describe("phone", () => {

@@ -16,6 +16,7 @@ import {
   toMinor,
 } from "./money";
 import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/lease-confirm";
+import { typedAddressDisplay } from "@/property-address";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
@@ -100,6 +101,7 @@ export type PropertyInput = {
     rateMajor: number | null;
     openings: (number | null)[];
   } | null;
+  submitToken?: string;
 };
 
 function uniqueUnitLabel(label: string, floor: string, door: string, used: Set<string>) {
@@ -198,7 +200,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
   if (!input.name.trim()) throw new FlowError("errors.required", { field: "i_property_name" });
   if (!input.city.trim()) throw new FlowError("errors.required", { field: "i_city" });
   if (!input.street.trim()) throw new FlowError("errors.required", { field: "i_address" });
-  if (!input.unitLabel.trim()) throw new FlowError("errors.required", { field: "i_unit_label" });
+  if (!input.unitLabel.trim() && !input.floor.trim()) throw new FlowError("errors.required", { field: "i_floor" });
   const posted = input.rentalMode === "whole_unit" ? [] : input.rooms;
   const rooms = posted.filter((room) => room.label.trim() || room.baseRentMajor > 0);
   if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8" });
@@ -215,6 +217,19 @@ export async function createProperty(session: Session, input: PropertyInput) {
   if (input.ownerMode === "new" && !input.ownerName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
 
   const created = await tx(session.userId, async (client) => {
+    const submitToken = (input.submitToken || "").trim().slice(0, 80);
+    if (submitToken) {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property-submit:${session.orgId}:${submitToken}`]);
+      const sameSubmit = await maybe<{ id: string }>(
+        client,
+        `SELECT id FROM properties
+          WHERE org_id = $1 AND address->>'submitToken' = $2
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [session.orgId, submitToken],
+      );
+      if (sameSubmit) return { propertyId: sameSubmit.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
+    }
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property:${session.userId}:${input.name.trim()}`]);
     const recent = await maybe<{ id: string }>(
       client,
@@ -239,10 +254,11 @@ export async function createProperty(session: Session, input: PropertyInput) {
       city: input.city.trim(),
       district: input.district.trim(),
       street: input.street.trim(),
+      ...(submitToken ? { submitToken } : {}),
     };
     const display =
       country === "TW"
-        ? `${address.city}${address.district}${address.street}`
+        ? typedAddressDisplay(address.city, address.district, address.street)
         : [address.street, address.city, address.district].filter(Boolean).join(", ");
     const property = await one<{ id: string }>(
       client,

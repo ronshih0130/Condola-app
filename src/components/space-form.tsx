@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { displaySampleName } from "@/sample-name";
 import { useT } from "./locale";
 
 const ROOM_TYPES = ["whole_home", "studio", "suite", "shared_bath", "other"] as const;
@@ -119,7 +120,7 @@ export function SpaceForm({
               <option value="">{t("i_choose")}</option>
               {properties.map((property) => (
                 <option key={property.id} value={property.id}>
-                  {property.name}
+                  {displaySampleName(property.name)}
                 </option>
               ))}
             </select>

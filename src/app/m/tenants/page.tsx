@@ -3,6 +3,7 @@ import { makeT } from "@/i18n";
 import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { PageHeader } from "@/components/ui";
 import { searchTenants } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -43,11 +44,11 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
               <tr key={lease.id} className="click">
                 <td>
                   <Link className="hit" href={`/m/tenants/${lease.contact_id}`}>
-                    {lease.tenant}
+                    {displaySampleName(lease.tenant)}
                   </Link>
                 </td>
                 <td data-label={t("i_space")}>
-                  <Link href={`/m/leases/${lease.id}`}>{lease.place}</Link>
+                  <Link href={`/m/leases/${lease.id}`}>{displaySampleName(lease.place)}</Link>
                   {Number(lease.lease_count) > 1 ? (
                     <>
                       {" "}

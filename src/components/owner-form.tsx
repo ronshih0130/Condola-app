@@ -1,4 +1,5 @@
 import type { T } from "@/i18n";
+import { displaySampleName } from "@/sample-name";
 import { PhoneField } from "./phone-field";
 
 export function OwnerForm({
@@ -50,7 +51,7 @@ export function OwnerForm({
                 data-testid={`owner-property-${property.id}`}
                 defaultChecked={selected.includes(property.id)}
               />{" "}
-              {property.name}
+              {displaySampleName(property.name)}
             </label>
           ))}
         </div>

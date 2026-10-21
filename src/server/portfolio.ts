@@ -1,3 +1,4 @@
+import { typedAddressDisplay } from "@/property-address";
 import { maybe, one, tx } from "./db";
 import { FlowError } from "./errors";
 import { normalizePhone } from "./lease-rules";
@@ -551,7 +552,7 @@ export async function updateProperty(
     const city = input.city.trim();
     const district = input.district.trim();
     const street = input.street.trim();
-    const display = country === "TW" ? `${city}${district}${street}` : [street, city, district].filter(Boolean).join(", ");
+    const display = country === "TW" ? typedAddressDisplay(city, district, street) : [street, city, district].filter(Boolean).join(", ");
     await client.query(
       `UPDATE properties
           SET name = $3,

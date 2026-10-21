@@ -27,6 +27,7 @@ import { createOwner, createSpace, updateOwner, updateProperty, updateSpace, typ
 import { FlowError } from "./errors";
 import { normalizePhone } from "./lease-rules";
 import { taipeiToday } from "./money";
+import { typedStreet } from "@/property-address";
 import { loadOrgCountry } from "./org-country";
 import { createLeaseFromForm } from "./lease-form";
 import { addTicketComment, saveRepairRecord } from "./repairs";
@@ -121,7 +122,7 @@ function propertyInput(formData: FormData): PropertyInput {
     name: text(formData.get("name")),
     city: text(formData.get("city")),
     district: text(formData.get("district")),
-    street: `${text(formData.get("street")).trim()}${text(formData.get("number")).trim()}`,
+    street: typedStreet(text(formData.get("street")), text(formData.get("number"))),
     currency: rawCurrency === "USD" ? "USD" : "TWD",
     ownerMode: text(formData.get("ownerMode")) || "new",
     ownerName: text(formData.get("ownerName")),
@@ -155,6 +156,7 @@ function propertyInput(formData: FormData): PropertyInput {
           }),
         }
       : null,
+    submitToken: text(formData.get("submitToken")).trim().slice(0, 80),
   };
 }
 

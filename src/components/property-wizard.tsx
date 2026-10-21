@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import { exampleRoomCharges, exampleSamplesForRooms } from "@/electric-example";
 import { errorText } from "@/i18n/errors";
 import { phoneInputInvalid } from "@/server/lease-rules";
@@ -77,15 +77,23 @@ export function PropertyWizard({
   const [extras, setExtras] = useState<UnitDraft[]>([]);
   const [fieldError, setFieldError] = useState("");
   const [submitReady, setSubmitReady] = useState(true);
+  const [saving, setSaving] = useState(false);
   const armSubmit = useRef<number | null>(null);
+  const submitToken = useId();
   const blocked = false;
+
+  useEffect(() => {
+    if (!state.error) return;
+    setSaving(false);
+    setSubmitReady(true);
+  }, [state.error]);
 
   const filledRooms = rooms.filter((room) => !blankRoom(room));
   const rateN = Number(rate);
   const wholeHome = rooms.some((room) => room.type === "whole_home");
 
   const preview = useMemo(() => {
-    const pricedRate = rateN > 0 ? rateN : 5;
+    const pricedRate = rateN > 0 ? rateN : 6;
     const labels = filledRooms.length ? filledRooms.map((room, index) => room.label.trim() || String.fromCharCode(65 + index)) : ["A", "B"];
     const samples = exampleSamplesForRooms(labels.length);
     const priced = exampleRoomCharges(pricedRate, samples, currency === "TWD");
@@ -103,7 +111,6 @@ export function PropertyWizard({
     if (!street.trim() && !number.trim()) return "i_address";
     if (phoneInputInvalid(ownerPhone, phoneCode)) return "i_phone_mobile";
     if (ownerMode === "new" && !ownerName.trim()) return "s_0c5acea";
-    if (throughStep >= 3 && !unitLabel.trim()) return "i_unit_label";
     if (throughStep >= 3 && !floor.trim()) return "i_floor";
     if (throughStep >= 3 && rentalMode === "by_room") {
       if (wholeHome && filledRooms.length !== 1) return "s_8569bc8";
@@ -159,7 +166,7 @@ export function PropertyWizard({
       onKeyDownCapture={blockImplicitEnter}
       onSubmit={(event) => {
         const submitter = (event.nativeEvent as SubmitEvent).submitter;
-        if (!(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-property" || !submitReady) {
+        if (!(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-property" || !submitReady || saving) {
           event.preventDefault();
           return;
         }
@@ -167,13 +174,18 @@ export function PropertyWizard({
         if (missing) {
           event.preventDefault();
           setFieldError(missing);
+          return;
         }
+        setSaving(true);
+        setSubmitReady(false);
       }}
     >
+      <input type="hidden" name="submitToken" value={submitToken} />
       <ImplicitSubmitSink />
       <Stepper steps={steps} current={step} errorStep={namedField ? stepOf(namedField) : undefined} />
       <div hidden={step !== 1}>
         <div className="card pad" style={{ maxWidth: 760 }}>
+          <h3>{t("i_sec_property")}</h3>
           <div className={fieldClass("i_property_name")}>
             <label className="f">{t("i_property_name")}</label>
             <input className="inp" name="name" data-testid="property-name" placeholder={t("i_ph_street")} value={name} onChange={(event) => { setName(event.target.value); setFieldError(""); }} />
@@ -202,6 +214,7 @@ export function PropertyWizard({
             </div>
           </div>
           <input type="hidden" name="ownerMode" value={ownerMode === "new" ? "new" : existingId} />
+          <h3>{t("i_owner")}</h3>
           <label className="radio">
             <input type="radio" checked={ownerMode === "new"} onChange={() => setOwnerMode("new")} />
             <span>{t("i_new_owner")}</span>
@@ -264,22 +277,25 @@ export function PropertyWizard({
       </div>
       <div hidden={step !== 3}>
         <div className="card pad" style={{ maxWidth: 760 }}>
+          <h3>{t("i_sec_rooms")}</h3>
           <p className="hint">{t("i_units_hint")}</p>
           <input type="hidden" name="unitCount" value={1 + extras.length} />
+          <input type="hidden" name="unitLabel" data-testid="unit-label" value={unitLabel || floor} onChange={(event) => setUnitLabel(event.target.value)} />
           <div className="unit-card">
             <div className="grid2">
-              <div className={fieldClass("i_unit_label")}>
-                <label className="f">{t("i_unit_label")}</label>
-                <input className="inp" name="unitLabel" data-testid="unit-label" placeholder={t("i_ph_unit")} value={unitLabel} onChange={(event) => { setUnitLabel(event.target.value); setFieldError(""); }} />
-              </div>
               <div className={fieldClass("i_floor")}>
                 <label className="f">{t("i_floor")}</label>
-                <input className="inp" name="floor" placeholder={t("i_floor_ph")} value={floor} onChange={(event) => { setFloor(event.target.value); setFieldError(""); }} />
+                <input className="inp" name="floor" data-testid="unit-floor" placeholder={t("i_floor_ph")} value={floor} onChange={(event) => {
+                  const next = event.target.value;
+                  setFloor(next);
+                  setUnitLabel((current) => (current.trim() === "" || current === floor ? next : current));
+                  setFieldError("");
+                }} />
               </div>
-            </div>
             <div className="fg">
               <label className="f">{t("i_door")} {t("i_owner_email_opt")}</label>
               <input className="inp" name="doorSupplement" placeholder={t("i_door_ph")} value={door} onChange={(event) => setDoor(event.target.value)} />
+            </div>
             </div>
             <input type="hidden" name="roomCount" value={rentalMode === "whole_unit" ? 0 : rooms.length} />
             {rentalMode === "whole_unit" ? null : rooms.map((room, index) => (
@@ -329,7 +345,7 @@ export function PropertyWizard({
                 </button>
               </div>
             ))}
-            {wholeHome ? <p className="hint">{t("i_whole_home_hint")}</p> : null}
+            {wholeHome ? <p className="hint" data-testid="whole-home-hint">{t("i_whole_home_hint")}</p> : null}
             {namedField === "s_8569bc8" || namedField === "i_unit_label" || namedField === "i_floor" ? (
               <p className="errmsg">{t("i_step_incomplete", { field: t(namedField) })}</p>
             ) : null}
@@ -386,6 +402,7 @@ export function PropertyWizard({
       </div>
       <div hidden={step !== 4}>
         <div className="card pad" style={{ maxWidth: 760 }}>
+          <h3>{t("i_sec_meter")}</h3>
           <div className="fg">
             <label className="f">{t("i_split")}</label>
             <select
@@ -404,10 +421,12 @@ export function PropertyWizard({
               <option value="owner">{t("i_split_owner")}</option>
             </select>
           </div>
+          {split === "owner" ? null : (
           <div className="fg">
             <label className="f">{t("i_rate")}</label>
             <input className="inp" name="electricRate" data-testid="property-rate" inputMode="decimal" placeholder={t("i_ph_rate")} value={rate} onChange={(event) => setRate(event.target.value)} />
           </div>
+          )}
           {split === "sub" ? (
             <div className="fg">
               <label className="f">{t("i_opening_kwh")} {t("i_opening_opt")}</label>
@@ -426,6 +445,7 @@ export function PropertyWizard({
             </div>
           ) : null}
           <p className="note">{t("i_elec_monthly_note")}</p>
+          {split === "owner" ? null : (
           <div className="example" data-testid="example-calc">
             <div className="row">
               <h3>{t("i_example_calc")}</h3>
@@ -443,6 +463,7 @@ export function PropertyWizard({
               </tbody>
             </table>
           </div>
+          )}
         </div>
       </div>
       {state.error && !namedField ? <p className="errmsg" data-testid="property-save-error">{errorText(t, state.error)}</p> : null}
@@ -458,8 +479,8 @@ export function PropertyWizard({
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button key="submit-property" className="btn pri" type="submit" data-testid="submit-property" disabled={blocked || !submitReady}>
-            {t("s_aed91da")}
+          <button key="submit-property" className="btn pri" type="submit" data-testid="submit-property" disabled={blocked || !submitReady} aria-busy={saving ? true : undefined}>
+            {saving ? t("i_portal_working") : t("s_aed91da")}
           </button>
         )}
       </div>

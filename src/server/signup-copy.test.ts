@@ -13,7 +13,7 @@ test("sign-up, pricing, and go-live copy stay on the handoff wording", () => {
   assert.equal(zh.i_field_required, "請填寫此欄位");
   assert.equal(zh.i_signup_submitting, "建立中…");
   assert.equal(zh.i_golive_pending, "正在切換到正式環境…");
-  assert.equal(zh.i_env_banner_title, "測試模式");
+  assert.equal(zh.i_env_banner_title, "範例公司");
   assert.equal(zh.i_signup_confirm_email, "確認我的電子郵件");
   assert.equal(zh.i_login_unconfirmed, "請先到信箱確認電子郵件");
   assert.equal(zh.i_signup_code_bad, "代碼無效，可先完成註冊，之後再聯絡我們");
@@ -26,14 +26,14 @@ test("sign-up, pricing, and go-live copy stay on the handoff wording", () => {
   assert.equal(zh.i_live_locked, "正式資料啟用前，請先與我們確認");
   assert.equal(zh.i_golive_start, "開始正式使用");
   assert.equal(zh.i_price_headline, "依實際出租戶數計費，前 4 戶永遠免費");
-  assert.equal(zh.i_price_sub, "只計算有生效租約的戶／房。空房、測試模式資料都不收費。");
+  assert.equal(zh.i_price_sub, "只計算有生效租約的戶／房。空房、範例公司資料都不收費。");
   assert.equal(zh.i_price_note, "年繳享 1 個月免費。");
   assert.equal(zh.i_price_year, "年繳 {money}（送 1 個月）");
   assert.equal(zh.i_price_cycle_y, "年繳送 1 個月");
   assert.equal(zh.i_price_receipt, "目前提供收據，暫無法開立統一發票");
   assert.equal(zh.i_price_a5, "目前提供收據，暫無法開立統一發票");
   assert.equal(zh.i_login_signup, "免費註冊");
-  assert.equal(zh.i_login_invite_tail, "（前 4 戶免費，先在測試模式試用全部功能）");
+  assert.equal(zh.i_login_invite_tail, "（前 4 戶免費，先在範例公司試用全部功能）");
   assert.equal(zh.i_admin_pause, "緊急暫停正式使用");
   assert.equal(zh.i_price_footer, "本服務為軟體工具，不代為管理物業、收取租金或保證法規遵循。");
   assert.equal(zh.i_price_fit_pro, "多據點、人數較多的團隊");

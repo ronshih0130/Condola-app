@@ -3,9 +3,8 @@ import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { actionPhoneVisibility, actionSetMeter } from "@/server/actions";
 import { AuditHistory } from "@/components/audit-log";
-import { SampleTag } from "@/components/sample-tag";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
-import { isSampleName } from "@/server/sandbox-data";
+import { displaySampleName } from "@/server/sandbox-data";
 import { formatMoney } from "@/server/format";
 import { can } from "@/server/perms";
 import { propertyDetail } from "@/server/queries";
@@ -31,7 +30,7 @@ export default async function PropertyPage({
       <PageHeader
         title={
           <>
-            {detail.property.name} <SampleTag show={isSampleName(detail.property.name)} label={t("i_sample_tag")} />
+            {displaySampleName(detail.property.name)}
           </>
         }
         crumb={<Link href="/m/properties">{t("s_e03a6ec")}</Link>}
@@ -64,12 +63,12 @@ export default async function PropertyPage({
             {detail.rooms.map((room) => (
               <div className="n" key={room.id}>
                 <b>
-                  {room.unit_label} {room.label}
+                  {displaySampleName(room.unit_label)} {displaySampleName(room.label)}
                 </b>
                 <span className="small muted">{formatMoney(Number(room.base_rent_minor), detail.property.currency, session.locale)}</span>
                 <span className="sp" />
                 {room.lease_id ? (
-                  <Link href={`/m/leases/${room.lease_id}`}>{room.tenant}</Link>
+                  <Link href={`/m/leases/${room.lease_id}`}>{displaySampleName(room.tenant || "")}</Link>
                 ) : (
                   <span className="chip bad">{t("i_vacant")}</span>
                 )}

@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./session";
 
-const STUB = "LINE 登入與推播是示範，不會連到 LINE 伺服器。";
-const NOTE = "LINE 推播是示範，不會送到 LINE。";
-const DEMO = "示範：登入已連結 LINE 的成員。不會連到 LINE 伺服器。";
+const STUB = "LINE 登入與推播是範例，不會連到 LINE 伺服器。";
+const NOTE = "LINE 推播是範例，不會送到 LINE。";
+const DEMO = "範例：登入已連結 LINE 的成員。不會連到 LINE 伺服器。";
 
 test("live mode hides demo LINE copy and sandbox shows it", async ({ page }) => {
   await page.goto("/login");

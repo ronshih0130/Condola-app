@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui";
 import { showDemoLineCopy } from "@/server/demo";
 import { formatDate, formatMoney } from "@/server/format";
 import { dashboard } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +82,7 @@ export default async function DashboardPage({
             <a className="btn" href="/api/env?set=sandbox&next=/m" data-testid="dash-sample">
               {t("i_dash_sample")}
             </a>
+            <p className="hint" data-testid="dash-free">{t("i_dash_free")}</p>
             <p className="hint">
               <Link href="/m/import" data-testid="dash-import">
                 {t("i_dash_import")}
@@ -129,7 +131,7 @@ export default async function DashboardPage({
               return (
                 <div key={property.id} style={{ marginBottom: 12 }}>
                   <div className="row small">
-                    <b>{property.name}</b>
+                    <b>{displaySampleName(property.name)}</b>
                     <span className="sp" />
                     {money(received)} / {money(billed)}
                   </div>
