@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { acceptInvite, describeInvite, signIn } from "./auth";
-import { query } from "./db";
+import { query, tx } from "./db";
 import { createProperty } from "./domain";
 import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
-import { hashInviteToken, inviteTokenBytes, issuePortalInvite } from "./portal-invite";
+import { hashInviteToken, inviteStoredEmail, inviteTokenBytes, issuePortalInvite } from "./portal-invite";
 import { resetAndSeed } from "./seed";
 import type { Session } from "./types";
 
@@ -147,12 +148,25 @@ test("an owner without a password gets a login on the link, including a minted a
     assert.equal(view.email, "");
     assert.equal(JSON.stringify(view).includes("demo.condola.local"), false);
   }
+  const existing = await query<{ id: string; encrypted_password: string | null }>(
+    `SELECT id::text, encrypted_password FROM auth.users WHERE lower(email) = lower($1)`,
+    ["jianhong.chen@owner.demo"],
+  );
+  const ours = await query<{ user_id: string }>(`SELECT user_id::text AS user_id FROM contacts WHERE id = $1`, [minted.rows[0].id]);
   const missing = await acceptInvite(link.token, "", "Owner1234", "Owner1234", meta, "");
+  const taken = await acceptInvite(link.token, "", "Owner1234", "Owner1234", meta, "jianhong.chen@owner.demo");
+  assert.deepEqual(missing, taken);
   assert.equal(missing.ok, false);
   if (!missing.ok) assert.equal(missing.error, "email");
-  const taken = await acceptInvite(link.token, "", "Owner1234", "Owner1234", meta, "jianhong.chen@owner.demo");
-  assert.equal(taken.ok, false);
-  if (!taken.ok) assert.equal(taken.error, "emailTaken");
+  const after = await query<{ id: string; encrypted_password: string | null }>(
+    `SELECT id::text, encrypted_password FROM auth.users WHERE lower(email) = lower($1)`,
+    ["jianhong.chen@owner.demo"],
+  );
+  assert.equal(after.rows[0].id, existing.rows[0].id);
+  assert.equal(after.rows[0].encrypted_password, existing.rows[0].encrypted_password);
+  const stillOurs = await query<{ user_id: string }>(`SELECT user_id::text AS user_id FROM contacts WHERE id = $1`, [minted.rows[0].id]);
+  assert.equal(stillOurs.rows[0].user_id, ours.rows[0].user_id);
+  assert.notEqual(stillOurs.rows[0].user_id, existing.rows[0].id);
   const chosen = `owner.${Date.now().toString(36)}@example.com`;
   const acceptedMint = await acceptInvite(link.token, "", "Owner1234", "Owner1234", meta, chosen);
   assert.equal(acceptedMint.ok, true);
@@ -166,6 +180,79 @@ test("an owner without a password gets a login on the link, including a minted a
     [minted.rows[0].id],
   );
   assert.equal(stored.rows[0].email, chosen);
+});
+
+test("five typed emails lock that link and that address, without saying which emails exist", async () => {
+  const ip = "198.51.100.77";
+  const otherIp = "198.51.100.78";
+  const first = await query<{ id: string }>(
+    `INSERT INTO contacts (org_id, is_owner, display_name, locale)
+     VALUES ($1, true, '次數屋主', 'zh-TW') RETURNING id::text`,
+    [ORG_ID],
+  );
+  const issued = await issuePortalInvite(staff(USERS.manager, "manager"), { kind: "owner", contactId: first.rows[0].id }, "https://app.condola.app");
+  assert.equal(issued.activated, false);
+  if (issued.activated) return;
+  const attempt = { ua: "test", ip };
+  const emails = ["bad-0", "jianhong.chen@owner.demo", "bad-2", "jianhong.chen@owner.demo", "still-bad"];
+  const results = [];
+  for (const email of emails) {
+    results.push(await acceptInvite(issued.token, "", "Owner1234", "Owner1234", attempt, email));
+  }
+  for (const result of results) assert.deepEqual(result, { ok: false, error: "email", kind: "owner" });
+  assert.equal((await describeInvite(issued.token, { ip: otherIp })).state, "invalid");
+  const blocked = await acceptInvite(issued.token, "", "Owner1234", "Owner1234", { ua: "test", ip: otherIp }, "fresh.lock@example.com");
+  assert.deepEqual(blocked, { ok: false, error: "invalid", kind: "unknown" });
+  const parked = await query(`SELECT 1 FROM auth.users WHERE lower(email) = lower($1)`, ["fresh.lock@example.com"]);
+  assert.equal(parked.rowCount, 0);
+
+  const second = await query<{ id: string }>(
+    `INSERT INTO contacts (org_id, is_owner, display_name, locale)
+     VALUES ($1, true, '另一連結屋主', 'zh-TW') RETURNING id::text`,
+    [ORG_ID],
+  );
+  const other = await issuePortalInvite(staff(USERS.manager, "manager"), { kind: "owner", contactId: second.rows[0].id }, "https://app.condola.app");
+  assert.equal(other.activated, false);
+  if (other.activated) return;
+  assert.equal((await describeInvite(other.token, { ip })).state, "invalid");
+  assert.equal((await describeInvite(other.token, { ip: otherIp })).state, "ready");
+  if ((await describeInvite(other.token, { ip: otherIp })).state === "ready") {
+    const view = await describeInvite(other.token, { ip: otherIp });
+    if (view.state === "ready" && view.kind !== "team_member") assert.equal(view.email, "");
+  }
+
+  await query(`DELETE FROM portal_invite_attempts WHERE ip LIKE 'token:%'`);
+  assert.equal((await describeInvite(issued.token, { ip })).state, "invalid");
+  assert.equal((await describeInvite(issued.token, { ip: otherIp })).state, "ready");
+});
+
+test("another firm cannot read the invited contact through the token", async () => {
+  const secretPhone = "+886900111222";
+  const contact = await query<{ id: string }>(
+    `INSERT INTO contacts (org_id, is_owner, display_name, phone_e164, locale)
+     VALUES ($1, true, '隔離電話屋主', $2, 'zh-TW') RETURNING id::text`,
+    [ORG_ID, secretPhone],
+  );
+  const issued = await issuePortalInvite(staff(USERS.admin, "admin"), { kind: "owner", contactId: contact.rows[0].id }, "https://app.condola.app");
+  assert.equal(issued.activated, false);
+  if (issued.activated) return;
+  const coast = await tx(USERS.coastAdmin, async (client) => {
+    const invites = await client.query(`SELECT email::text, contact_id::text FROM invitations WHERE code_hash = $1`, [hashInviteToken(issued.token)]);
+    const people = await client.query(`SELECT display_name, phone_e164, email::text FROM contacts WHERE id = $1`, [contact.rows[0].id]);
+    return { invites: invites.rowCount, people: people.rowCount };
+  });
+  assert.equal(coast.invites, 0);
+  assert.equal(coast.people, 0);
+  const view = await describeInvite(issued.token, { ip: "203.0.113.60" });
+  const body = JSON.stringify(view);
+  assert.equal(body.includes(secretPhone), false);
+  assert.equal(body.includes("demo.condola.local"), false);
+  assert.equal(body.includes(issued.token), false);
+  if (view.state === "ready" && view.kind !== "team_member") {
+    assert.deepEqual(Object.keys(view).sort(), ["collectEmail", "email", "firm", "kind", "state"]);
+    assert.equal(view.email, "");
+    assert.equal(view.firm, "松信住宅管理");
+  }
 });
 
 test("another firm and an accountant cannot issue a portal link", async () => {
@@ -227,4 +314,88 @@ test("a new property stores a 7-day owner invite hash and drops the raw token", 
   assert.match(invite.rows[0].code_hash, /^[0-9a-f]{64}$/);
   const days = (invite.rows[0].expires_at.getTime() - Date.now()) / 86_400_000;
   assert.ok(days > 6 && days < 8);
+});
+
+test("a sandbox owner keeps a stored email, including owner1.demo@example.com", async () => {
+  assert.equal(inviteStoredEmail("owner1.demo@example.com"), "owner1.demo@example.com");
+  const orgId = randomUUID();
+  const email = `owner1.demo.${Date.now().toString(36)}@example.com`;
+  await query(
+    `INSERT INTO organizations (
+       id, name, country_code, jurisdiction_id, default_currency, timezone, environment, live_org_id, created_by
+     )
+     SELECT $1, '北岸管理', country_code, jurisdiction_id, default_currency, timezone, 'sandbox', id, $2
+       FROM organizations WHERE id = $3`,
+    [orgId, USERS.admin, ORG_ID],
+  );
+  await query(`INSERT INTO org_members (org_id, user_id, role, status) VALUES ($1, $2, 'admin', 'active')`, [orgId, USERS.admin]);
+  const contact = await query<{ id: string }>(
+    `INSERT INTO contacts (org_id, is_owner, display_name, email, locale)
+     VALUES ($1, true, '範屋主甲', $2, 'zh-TW') RETURNING id::text`,
+    [orgId, email],
+  );
+  let userId: string | null = null;
+  try {
+    const issued = await issuePortalInvite(
+      { ...staff(USERS.admin, "admin", orgId), environment: "sandbox" },
+      { kind: "owner", contactId: contact.rows[0].id },
+      "https://app.condola.app",
+    );
+    assert.equal(issued.activated, false);
+    if (issued.activated) return;
+    assert.equal(issued.email, email);
+    const login = await query<{ id: string }>(`SELECT id::text FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+    userId = login.rows[0].id;
+    await query(
+      `UPDATE auth.users SET email = 'portal-' || id::text || '@demo.condola.local' WHERE id = $1`,
+      [userId],
+    );
+    await query(
+      `UPDATE invitations SET email = 'portal-' || $2 || '@demo.condola.local' WHERE code_hash = $1`,
+      [hashInviteToken(issued.token), userId],
+    );
+    const view = await describeInvite(issued.token, { ip: "203.0.113.90" });
+    assert.equal(view.state, "ready");
+    if (view.state === "ready" && view.kind !== "team_member") {
+      assert.equal(view.collectEmail, false);
+      assert.equal(view.email, email);
+    }
+    assert.equal(JSON.stringify(view).includes("demo.condola.local"), false);
+  } finally {
+    await query(`DELETE FROM invitations WHERE org_id = $1`, [orgId]);
+    await query(`UPDATE contacts SET user_id = NULL WHERE org_id = $1`, [orgId]);
+    await query(`DELETE FROM contacts WHERE org_id = $1`, [orgId]);
+    await query(`DELETE FROM org_members WHERE org_id = $1`, [orgId]);
+    if (userId) {
+      await query(`DELETE FROM auth.users WHERE id = $1`, [userId]);
+    }
+    await query(`DELETE FROM organizations WHERE id = $1`, [orgId]);
+  }
+});
+
+test("a second submit cannot accept the same link twice", async () => {
+  const email = `once.${Date.now().toString(36)}@example.com`;
+  const contact = await query<{ id: string }>(
+    `INSERT INTO contacts (org_id, is_owner, display_name, email, locale)
+     VALUES ($1, true, '重複送出屋主', $2, 'zh-TW') RETURNING id::text`,
+    [ORG_ID, email],
+  );
+  const issued = await issuePortalInvite(
+    staff(USERS.manager, "manager"),
+    { kind: "owner", contactId: contact.rows[0].id },
+    "https://app.condola.app",
+  );
+  assert.equal(issued.activated, false);
+  if (issued.activated) return;
+  const [first, second] = await Promise.all([
+    acceptInvite(issued.token, "", "Owner1234", "Owner1234", { ua: "test", ip: "198.51.100.90" }),
+    acceptInvite(issued.token, "", "Owner1234", "Owner1234", { ua: "test", ip: "198.51.100.91" }),
+  ]);
+  const results = [first, second];
+  assert.equal(results.filter((result) => result.ok).length, 1);
+  const failed = results.find((result) => !result.ok);
+  assert.equal(failed?.ok, false);
+  if (failed && !failed.ok) assert.ok(failed.error === "used" || failed.error === "invalid");
+  const users = await query<{ n: string }>(`SELECT count(*)::text AS n FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+  assert.equal(users.rows[0].n, "1");
 });

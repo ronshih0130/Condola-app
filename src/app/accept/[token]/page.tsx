@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { makeT } from "@/i18n";
+import { AcceptForm, AcceptSubmit } from "@/components/accept-form";
 import { AuthBrand } from "@/components/brand";
 import { PasswordFields } from "@/components/password-field";
 import { actionAccept } from "@/server/auth-actions";
@@ -47,17 +48,15 @@ export default async function AcceptPage({
       ? t("i_pw_weak")
       : query.error === "mismatch"
         ? t("i_pw_mismatch")
-        : query.error === "email"
-          ? t("i_email")
-          : query.error === "emailTaken"
-            ? t("i_email_taken")
-            : !portal && query.error === "used"
+        : query.error === "email" || query.error === "emailTaken"
+          ? t("i_portal_email_unusable")
+          : !portal && query.error === "used"
               ? t("i_invite_used")
               : "";
   return (
     <div className="auth-wrap">
       <AuthBrand name={t("i_brand")} />
-      <form className="card pad" action={actionAccept}>
+      <AcceptForm action={actionAccept}>
         {invite.state === "ready" && (invite.kind === "owner" || invite.kind === "tenant") ? (
           <h1 data-testid="portal-invite-title">{t("i_portal_invite_title", { firm: invite.firm })}</h1>
         ) : (
@@ -83,9 +82,7 @@ export default async function AcceptPage({
               )}
             </div>
             <PasswordFields />
-            <button className="btn pri block" type="submit" data-testid="portal-submit">
-              {t("i_portal_set_password")}
-            </button>
+            <AcceptSubmit idle={t("i_portal_set_password")} pending={t("i_portal_working")} testId="portal-submit" />
           </>
         ) : invite.kind === "team_member" ? (
           <>
@@ -99,15 +96,13 @@ export default async function AcceptPage({
               <input className="inp" name="name" data-testid="accept-name" defaultValue="" />
             </div>
             <PasswordFields />
-            <button className="btn pri block" type="submit" data-testid="accept-submit">
-              {t("i_accept")}
-            </button>
+            <AcceptSubmit idle={t("i_accept")} pending={t("i_portal_working")} testId="accept-submit" />
             <button className="btn line block" type="button" disabled={!lineLoginEnabled()} title={t("i_line_login_todo")}>
               LINE Login
             </button>
           </>
         ) : null}
-      </form>
+      </AcceptForm>
     </div>
   );
 }

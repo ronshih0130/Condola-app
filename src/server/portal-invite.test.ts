@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { inviteTokenBytes, mintedLoginEmail, newInviteToken, portalInviteDisplayEmail, portalInviteOrigin, portalInviteUrl } from "./portal-invite";
+import {
+  inviteStoredEmail,
+  inviteTokenBytes,
+  mintedLoginEmail,
+  newInviteToken,
+  portalInviteDisplayEmail,
+  portalInviteOrigin,
+  portalInviteUrl,
+  portalShownEmail,
+} from "./portal-invite";
 
 const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
 
@@ -32,9 +41,21 @@ test("portal tokens are at least 32 bytes and minted logins stay recognizable", 
   assert.ok(inviteTokenBytes(token) >= 32);
   assert.equal(token.includes("/"), false);
   assert.equal(mintedLoginEmail("portal-11111111-1111-4111-8111-111111111111@demo.condola.local"), true);
+  assert.equal(mintedLoginEmail("owner1.demo@example.com"), false);
+  assert.equal(mintedLoginEmail("someone@demo.condola.local"), false);
   assert.equal(mintedLoginEmail("tenant@example.com"), false);
   assert.equal(portalInviteDisplayEmail("portal-11111111-1111-4111-8111-111111111111@demo.condola.local"), "");
+  assert.equal(portalInviteDisplayEmail("owner1.demo@example.com"), "owner1.demo@example.com");
   assert.equal(portalInviteDisplayEmail("tenant@example.com"), "tenant@example.com");
+  assert.equal(inviteStoredEmail("owner1.demo@example.com"), "owner1.demo@example.com");
+  assert.equal(inviteStoredEmail("portal-11111111-1111-4111-8111-111111111111@demo.condola.local"), null);
+  assert.equal(inviteStoredEmail(null), null);
+  assert.equal(
+    portalShownEmail("portal-11111111-1111-4111-8111-111111111111@demo.condola.local", "owner1.demo@example.com"),
+    "owner1.demo@example.com",
+  );
+  assert.equal(portalShownEmail("morgan.lee@owner.demo", "other@example.com"), "morgan.lee@owner.demo");
+  assert.equal(portalShownEmail("portal-11111111-1111-4111-8111-111111111111@demo.condola.local", null), "");
 });
 
 test("portal invite copy hands the link over and stays on the locked wording", () => {
@@ -49,7 +70,9 @@ test("portal invite copy hands the link over and stays on the locked wording", (
     "i_portal_invite_invalid",
     "i_portal_login_email",
     "i_portal_choose_email",
+    "i_portal_email_unusable",
     "i_portal_set_password",
+    "i_portal_working",
   ];
   assert.equal(zh.i_portal_copy, "複製邀請連結");
   assert.equal(zh.i_portal_copied, "已複製，7 天內有效，只能使用一次");
@@ -60,8 +83,11 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(zh.i_portal_invite_title, "{firm} 邀請你使用租多啦");
   assert.equal(zh.i_portal_invite_invalid, "這個連結已失效，請向管理公司索取新的連結");
   assert.equal(zh.i_portal_choose_email, "請填寫你的 Email。設定密碼後，用它和密碼登入。");
+  assert.equal(zh.i_portal_email_unusable, "無法使用這個 email，請改用其他 email，或聯絡管理公司");
+  assert.equal(zh.i_portal_working, "處理中…");
   assert.equal(zh.i_portal_choose_email.includes("demo.condola.local"), false);
   assert.equal(zh.i_portal_choose_email.includes("portal-"), false);
+  assert.equal(zh.i_portal_email_unusable.includes("已經用過"), false);
   for (const key of keys) {
     assert.equal(zh[key].includes("房東"), false, key);
     assert.equal(zh[key].includes("房客"), false, key);

@@ -189,7 +189,7 @@ export async function actionAccept(formData: FormData) {
   );
   if (!result.ok) {
     const portal = result.kind === "owner" || result.kind === "tenant" || result.kind === "unknown";
-    const fieldError = result.error === "weak" || result.error === "mismatch" || result.error === "email" || result.error === "emailTaken";
+    const fieldError = result.error === "weak" || result.error === "mismatch" || result.error === "email";
     if (portal && !fieldError) {
       redirect(`/accept/${encodeURIComponent(token)}`);
     }

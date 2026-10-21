@@ -1,6 +1,5 @@
 import { makeT } from "@/i18n";
 import { ownerPrivacy } from "@/server/auth";
-import { FIRM_NAME } from "@/server/ids";
 import { formatMoney } from "@/server/format";
 import { ownerHome } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -14,7 +13,7 @@ export default async function OwnerHomePage() {
   return (
     <div>
       <h2>{t("i_hello", { name: session.name })}</h2>
-      <p className="small">{t("i_managed_by", { firm: FIRM_NAME, brand: t("i_brand") })}</p>
+      <p className="small" data-testid="managed-by">{t("i_managed_by", { firm: privacy.name, brand: t("i_brand") })}</p>
       <table className="t">
         <tbody>
           {rows.map((row) => (

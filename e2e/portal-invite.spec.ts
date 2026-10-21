@@ -124,11 +124,18 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
   await expect(ownerPage.locator("body")).not.toContainText("demo.condola.local");
   await expect(ownerPage.locator("body")).toContainText("請填寫你的 Email。設定密碼後，用它和密碼登入。");
   await ownerPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-choose-email.png", fullPage: true });
-  await ownerEmail.fill("jianhong.chen@owner.demo");
+  const generic = "無法使用這個 email，請改用其他 email，或聯絡管理公司";
+  await ownerEmail.fill("nobody.taken@example.com");
+  await ownerPage.getByTestId("new-password").fill("short");
+  await ownerPage.getByTestId("password-confirm").fill("short");
+  await ownerPage.getByTestId("portal-submit").click();
+  await expect(ownerPage.locator(".alert.bad")).toHaveText("密碼不符合規則。請改成至少 8 個字元，並同時包含英文字母與數字。");
+  await ownerPage.getByTestId("portal-email").fill("jianhong.chen@owner.demo");
   await ownerPage.getByTestId("new-password").fill("Owner1234");
   await ownerPage.getByTestId("password-confirm").fill("Owner1234");
   await ownerPage.getByTestId("portal-submit").click();
-  await expect(ownerPage.locator(".alert.bad")).toContainText("這個電子郵件已經用過");
+  await expect(ownerPage.locator(".alert.bad")).toHaveText(generic);
+  await expect(ownerPage.locator("body")).not.toContainText("已經用過");
   const freshEmail = `invite.${Date.now().toString(36)}@example.com`;
   await ownerPage.getByTestId("portal-email").fill(freshEmail);
   await ownerPage.getByTestId("new-password").fill("Owner1234");
@@ -139,6 +146,7 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
 
   await signIn(page, ACCOUNTS.owner);
   await page.goto("/o");
+  await expect(page.getByTestId("managed-by")).toHaveText("由 松信住宅管理 管理・使用 租多啦");
   await page.getByTestId("owner-sign-out").click();
   await page.waitForURL(/\/login/);
 });

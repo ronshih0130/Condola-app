@@ -1,10 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
-import { maybe, one, query, tx } from "./db";
+import { maybe, one, query, tx, withClient } from "./db";
 import { FlowError } from "./errors";
 import { lockActive, nextFailure } from "./lockout";
-import { authEmailTaken, portalLoginEmail } from "./portal-login";
+import { authEmailTaken } from "./portal-login";
 import { publicSiteOrigin } from "./signup-gotrue";
 import { assertStaff, type Session } from "./types";
 
@@ -35,13 +35,35 @@ export function hashInviteToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+const MINTED_LOGIN_EMAIL = /^portal-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@demo\.condola\.local$/;
+
+/** Only the address provision mints. Any other stored email is a real login. */
 export function mintedLoginEmail(email: string) {
-  return email.trim().toLowerCase().endsWith(`@${MINTED_LOGIN_HOST}`);
+  return MINTED_LOGIN_EMAIL.test(email.trim().toLowerCase());
 }
 
 /** Blank a minted address so a page cannot render it. */
 export function portalInviteDisplayEmail(email: string) {
   return mintedLoginEmail(email) ? "" : email;
+}
+
+/**
+ * Address the invitee will sign in with.
+ * A minted login falls back to the contact email when that one is real.
+ */
+export function portalShownEmail(loginEmail: string | null, contactEmail: string | null) {
+  const login = (loginEmail ?? "").trim();
+  if (login && !mintedLoginEmail(login)) return login;
+  const contact = (contactEmail ?? "").trim();
+  if (contact && !mintedLoginEmail(contact)) return contact;
+  return "";
+}
+
+/** Contact email to provision. Null means there is no real address, so mint one. */
+export function inviteStoredEmail(contactEmail: string | null) {
+  const stored = (contactEmail ?? "").trim().toLowerCase();
+  if (!stored || mintedLoginEmail(stored)) return null;
+  return stored;
 }
 
 /** Request host when it is this app. Anything else uses the site URL config. */
@@ -77,16 +99,20 @@ function attemptKey(ip: string | null) {
   return value || "unknown";
 }
 
-export async function inviteAttemptLocked(ip: string | null) {
+/** Per-token counter. The raw token is not stored; the key is its SHA-256 hex. */
+function tokenAttemptKey(token: string) {
+  return `token:${hashInviteToken(token)}`;
+}
+
+async function attemptLocked(key: string) {
   const row = await query<{ locked_until: Date | null }>(
     `SELECT locked_until FROM portal_invite_attempts WHERE ip = $1`,
-    [attemptKey(ip)],
+    [key],
   );
   return lockActive(row.rows[0]?.locked_until ?? null, new Date());
 }
 
-export async function noteBadInvite(ip: string | null) {
-  const key = attemptKey(ip);
+async function noteAttempt(key: string) {
   const now = new Date();
   const row = await query<{ failed_count: number; locked_until: Date | null }>(
     `SELECT failed_count, locked_until FROM portal_invite_attempts WHERE ip = $1`,
@@ -103,6 +129,39 @@ export async function noteBadInvite(ip: string | null) {
        SET failed_count = EXCLUDED.failed_count, locked_until = EXCLUDED.locked_until, updated_at = now()`,
     [key, next.failedCount, next.lockedUntil],
   );
+}
+
+export async function inviteAttemptLocked(ip: string | null) {
+  return attemptLocked(attemptKey(ip));
+}
+
+export async function noteBadInvite(ip: string | null) {
+  await noteAttempt(attemptKey(ip));
+}
+
+export async function tokenInviteLocked(token: string) {
+  return attemptLocked(tokenAttemptKey(token));
+}
+
+export async function noteTokenInviteAttempt(token: string) {
+  await noteAttempt(tokenAttemptKey(token));
+}
+
+/** One accept at a time for a token. The second submit waits, then sees the link already used. */
+export async function withInviteLock<T>(token: string, fn: () => Promise<T>): Promise<T> {
+  const key = hashInviteToken(token);
+  return withClient(async (client) => {
+    await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [key]);
+    try {
+      return await fn();
+    } finally {
+      try {
+        await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [key]);
+      } catch {
+        // Closing the connection releases the lock.
+      }
+    }
+  });
 }
 
 export async function portalLoginReady(userId: string | null) {
@@ -161,11 +220,7 @@ async function provisionLogin(client: Client, input: { name: string; email: stri
 
 async function attachLogin(client: Client, session: Session, contact: ContactLogin) {
   if (contact.user_id) return readLogin(client, contact.user_id).then((login) => ({ id: contact.user_id as string, ...login }));
-  const preferred = portalLoginEmail({
-    environment: session.environment,
-    contactEmail: contact.email,
-    emailTaken: false,
-  });
+  const preferred = inviteStoredEmail(contact.email);
   const minted = `portal-${randomUUID()}@${MINTED_LOGIN_HOST}`;
   const first = preferred ?? minted;
   const attempt = async (email: string) => {

@@ -10,7 +10,16 @@ import { FlowError } from "./errors";
 import { LOCKOUT_LIMIT, lockActive, nextFailure } from "./lockout";
 import { passwordAcceptable } from "./password";
 import { authEmailTaken } from "./portal-login";
-import { hashInviteToken, inviteAttemptLocked, mintedLoginEmail, noteBadInvite, portalInviteDisplayEmail } from "./portal-invite";
+import {
+  hashInviteToken,
+  inviteAttemptLocked,
+  mintedLoginEmail,
+  noteBadInvite,
+  noteTokenInviteAttempt,
+  portalShownEmail,
+  tokenInviteLocked,
+  withInviteLock,
+} from "./portal-invite";
 import { assertSeatAvailable } from "./seats";
 import { assertPerm } from "./perms";
 import { appCookieOptions } from "./public-origin";
@@ -601,19 +610,23 @@ export type InviteView =
   | { state: "expired" | "revoked" | "used" | "invalid"; kind: InviteKind };
 
 export async function describeInvite(token: string, meta?: { ip: string | null }): Promise<InviteView> {
+  if (await tokenInviteLocked(token)) return { state: "invalid", kind: "unknown" };
   if (meta && (await inviteAttemptLocked(meta.ip))) return { state: "invalid", kind: "unknown" };
   const row = await query<{
     status: string;
     expires_at: Date;
     kind: string;
     email: string | null;
+    contact_email: string | null;
     role: OrgRole | null;
     firm: string;
     inviter: string | null;
   }>(
-    `SELECT i.status::text, i.expires_at, i.kind::text, i.email::text, i.role::text, o.name AS firm, p.display_name AS inviter
+    `SELECT i.status::text, i.expires_at, i.kind::text, i.email::text, c.email::text AS contact_email,
+            i.role::text, o.name AS firm, p.display_name AS inviter
        FROM invitations i
        JOIN organizations o ON o.id = i.org_id
+       LEFT JOIN contacts c ON c.id = i.contact_id AND c.org_id = i.org_id
        LEFT JOIN profiles p ON p.id = i.invited_by
       WHERE i.code_hash = $1`,
     [hashInviteToken(token)],
@@ -632,9 +645,9 @@ export async function describeInvite(token: string, meta?: { ip: string | null }
   if (kind === "team_member" && invite.role && invite.email) {
     return { state: "ready", kind, email: invite.email, role: invite.role, firm: invite.firm, inviter: invite.inviter ?? "" };
   }
-  if ((kind === "owner" || kind === "tenant") && invite.email) {
-    const collectEmail = mintedLoginEmail(invite.email);
-    return { state: "ready", kind, email: portalInviteDisplayEmail(invite.email), firm: invite.firm, collectEmail };
+  if ((kind === "owner" || kind === "tenant") && (invite.email || invite.contact_email)) {
+    const email = portalShownEmail(invite.email, invite.contact_email);
+    return { state: "ready", kind, email, firm: invite.firm, collectEmail: email === "" };
   }
   return reject("invalid", kind);
 }
@@ -667,6 +680,29 @@ async function upsertInvitedUser(client: Client, email: string, name: string, pa
   return id;
 }
 
+/**
+ * Every rejected address takes the same queries and the same result.
+ * A format error and an address that already belongs to someone else are indistinguishable.
+ * The invite is never attached to that other login.
+ */
+async function rejectPortalEmail(
+  token: string,
+  userId: string,
+  emailRaw: string,
+  ip: string | null,
+  kind: "owner" | "tenant",
+): Promise<{ ok: false; error: "email"; kind: "owner" | "tenant" } | { ok: true; email: string }> {
+  const chosen = normalizeEmail(emailRaw);
+  const usable = Boolean(chosen && !mintedLoginEmail(chosen));
+  const probe = usable && chosen ? chosen : `unused.${hashInviteToken(emailRaw || "x").slice(0, 32)}@invalid.example`;
+  const found = await query(`SELECT 1 FROM auth.users WHERE lower(email) = lower($1) AND id <> $2 LIMIT 1`, [probe, userId]);
+  await query(`SELECT crypt($1, gen_salt('bf'))`, ["portal-email"]);
+  if (usable && chosen && !found.rows[0]) return { ok: true, email: chosen };
+  await noteTokenInviteAttempt(token);
+  await noteBadInvite(ip);
+  return { ok: false, error: "email", kind };
+}
+
 async function acceptPortalInvite(token: string, password: string, meta: RequestMeta, kind: "owner" | "tenant", emailRaw: string) {
   const pending = await query<{
     id: string;
@@ -688,15 +724,18 @@ async function acceptPortalInvite(token: string, password: string, meta: Request
 
   let replacement: string | null = null;
   if (mintedLoginEmail(row.login_email)) {
-    const chosen = normalizeEmail(emailRaw);
-    if (!chosen || mintedLoginEmail(chosen)) return { ok: false as const, error: "email" as const, kind };
-    const taken = await query(`SELECT 1 FROM auth.users WHERE lower(email) = lower($1) AND id <> $2`, [chosen, row.user_id]);
-    if (taken.rows[0]) return { ok: false as const, error: "emailTaken" as const, kind };
-    replacement = chosen;
+    const claimed = await rejectPortalEmail(token, row.user_id, emailRaw, meta.ip, kind);
+    if (!claimed.ok) return claimed;
+    replacement = claimed.email;
   }
 
   const applied = await setUserPassword(row.user_id, password, replacement ?? undefined);
-  if (applied === "emailTaken") return { ok: false as const, error: "emailTaken" as const, kind };
+  if (applied === "emailTaken") {
+    await noteTokenInviteAttempt(token);
+    await noteBadInvite(meta.ip);
+    await query(`SELECT crypt($1, gen_salt('bf'))`, ["portal-email"]);
+    return { ok: false as const, error: "email" as const, kind };
+  }
 
   const saved = await withClient(async (client) => {
     try {
@@ -762,6 +801,10 @@ async function acceptPortalInvite(token: string, password: string, meta: Request
 }
 
 export async function acceptInvite(token: string, name: string, password: string, confirm: string, meta: RequestMeta, emailRaw = "") {
+  return withInviteLock(token, () => acceptInviteOnce(token, name, password, confirm, meta, emailRaw));
+}
+
+async function acceptInviteOnce(token: string, name: string, password: string, confirm: string, meta: RequestMeta, emailRaw = "") {
   const view = await describeInvite(token, meta);
   if (view.state !== "ready") return { ok: false as const, error: view.state, kind: view.kind };
   if (password !== confirm) return { ok: false as const, error: "mismatch" as const, kind: view.kind };
@@ -934,9 +977,12 @@ export async function setRequireMfa(session: Session, required: boolean) {
   await writeAudit(session.orgId, session.userId, "require_2fa", { required });
 }
 
-export async function ownerPrivacy(orgId: string): Promise<OwnerPrivacy> {
-  const row = await query<{ settings: unknown }>(`SELECT settings FROM organizations WHERE id = $1`, [orgId]);
-  return privacyFromSettings(row.rows[0]?.settings ?? null);
+export async function ownerPrivacy(orgId: string): Promise<OwnerPrivacy & { name: string }> {
+  const row = await query<{ settings: unknown; name: string }>(
+    `SELECT settings, name FROM organizations WHERE id = $1`,
+    [orgId],
+  );
+  return { ...privacyFromSettings(row.rows[0]?.settings ?? null), name: row.rows[0]?.name ?? "" };
 }
 
 export async function setOwnerPrivacy(session: Session, input: OwnerPrivacy) {
