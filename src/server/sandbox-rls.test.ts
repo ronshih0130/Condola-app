@@ -177,18 +177,20 @@ test("sandbox rows stay hidden, copy resets owner portal logins, and five live u
     const occupancy = await query<{ spaces: number; occupied: number }>(
       `SELECT
          (
-           (SELECT count(*) FROM rooms r WHERE r.org_id = $1 AND r.archived_at IS NULL)
+           (SELECT count(*) FROM rooms r
+              JOIN units u ON u.id = r.unit_id
+             WHERE r.org_id = $1 AND r.archived_at IS NULL AND u.rental_mode = 'by_room')
            + (SELECT count(*) FROM units u
-               WHERE u.org_id = $1 AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit'
-                 AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+               WHERE u.org_id = $1 AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit')
          )::int AS spaces,
          (
-           (SELECT count(DISTINCT target_room_id) FROM leases
-             WHERE org_id = $1 AND status IN ('pending_signature','active') AND target_room_id IS NOT NULL)
+           (SELECT count(DISTINCT l.target_room_id) FROM leases l
+              JOIN rooms r ON r.id = l.target_room_id
+              JOIN units u ON u.id = r.unit_id
+             WHERE l.org_id = $1 AND l.status IN ('pending_signature','active') AND u.rental_mode = 'by_room')
            + (SELECT count(DISTINCT l.target_unit_id) FROM leases l
                JOIN units u ON u.id = l.target_unit_id
-              WHERE l.org_id = $1 AND l.status IN ('pending_signature','active')
-                AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+              WHERE l.org_id = $1 AND l.status IN ('pending_signature','active') AND u.rental_mode = 'whole_unit')
          )::int AS occupied`,
       [sandboxId],
     );

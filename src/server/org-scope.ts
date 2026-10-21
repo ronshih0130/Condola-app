@@ -2,6 +2,8 @@ import type { OrgRole } from "./types";
 
 export const ENV_COOKIE = "condola_env";
 export const ORG_COOKIE = "condola_org";
+/** Last environment choice. A session cookie was dropped on browser quit and a live firm then opened in test mode. */
+export const ENV_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 
 export type OrgEnvironment = "live" | "sandbox";
 
@@ -23,9 +25,10 @@ export type EnvChoice = {
 
 /**
  * A firm that has not started live, or while the emergency pause is on, always
- * opens in test mode. Otherwise the cookie is that user's last explicit choice.
- * The first request, with no cookie, also opens in test mode. live_started_at
- * counts as live data so go-live without copied rows stays on the live firm.
+ * opens in test mode. A live firm with data opens in live mode when the cookie
+ * is missing, so quitting the browser cannot hide that firm's rows. An explicit
+ * sandbox cookie still opens test mode. live_started_at counts as live data so
+ * go-live without copied rows stays on the live firm.
  */
 export function resolveStaffEnvironment(input: {
   cookie: OrgEnvironment | null;
@@ -33,8 +36,8 @@ export function resolveStaffEnvironment(input: {
   liveEnabled: boolean;
 }): OrgEnvironment {
   if (!input.liveEnabled || !input.hasLiveData) return "sandbox";
-  if (input.cookie === "live" || input.cookie === "sandbox") return input.cookie;
-  return "sandbox";
+  if (input.cookie === "sandbox") return "sandbox";
+  return "live";
 }
 
 type SqlClient = {

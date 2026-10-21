@@ -29,5 +29,6 @@ export function mapDbError(error: unknown): Error {
     return new FlowError("errors.billExists");
   }
   if (/invalid input syntax for type numeric/i.test(message)) return new FlowError("errors.amount");
+  if (/rented as whole_unit/i.test(message)) return new FlowError("errors.wholeUnit");
   return new FlowError("errors.generic");
 }

@@ -540,7 +540,7 @@ async function unitForFloor(client: Client, orgId: string, propertyId: string, f
     );
     return { id: created.id, areaUnit, created: true };
   }
-  if (kind === "room" && existing.rental_mode === "whole_unit") throw new FlowError("errors.generic");
+  if (kind === "room" && existing.rental_mode === "whole_unit") throw new FlowError("errors.wholeUnit");
   if (kind === "whole_unit" && existing.rental_mode !== "whole_unit") throw new FlowError("errors.generic");
   return { id: existing.id, areaUnit, created: false };
 }

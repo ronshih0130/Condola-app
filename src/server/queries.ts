@@ -113,18 +113,18 @@ export async function dashboard(session: Session) {
          (SELECT count(*)::text FROM maintenance_tickets WHERE org_id = $1 AND status NOT IN ('resolved','closed','cancelled')) AS tickets,
          (
            (SELECT count(*) FROM rooms r JOIN units u ON u.id = r.unit_id
-             WHERE r.org_id = $1 AND r.archived_at IS NULL)
+             WHERE r.org_id = $1 AND r.archived_at IS NULL AND u.archived_at IS NULL AND u.rental_mode = 'by_room')
            + (SELECT count(*) FROM units u
-               WHERE u.org_id = $1 AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit'
-                 AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+               WHERE u.org_id = $1 AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit')
          )::text AS rooms,
          (
-           (SELECT count(DISTINCT target_room_id) FROM leases
-             WHERE org_id = $1 AND status IN ('pending_signature','active') AND target_room_id IS NOT NULL)
+           (SELECT count(DISTINCT l.target_room_id) FROM leases l
+              JOIN rooms r ON r.id = l.target_room_id
+              JOIN units u ON u.id = r.unit_id
+             WHERE l.org_id = $1 AND l.status IN ('pending_signature','active') AND u.rental_mode = 'by_room')
            + (SELECT count(DISTINCT l.target_unit_id) FROM leases l
                JOIN units u ON u.id = l.target_unit_id
-              WHERE l.org_id = $1 AND l.status IN ('pending_signature','active')
-                AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+              WHERE l.org_id = $1 AND l.status IN ('pending_signature','active') AND u.rental_mode = 'whole_unit')
          )::text AS occupied`,
       [session.orgId],
     );
@@ -208,18 +208,18 @@ export async function listProperties(session: Session) {
               p.default_rental_mode::text AS rental_mode,
               (
                 (SELECT count(*) FROM rooms r JOIN units u ON u.id = r.unit_id
-                  WHERE u.property_id = p.id AND r.archived_at IS NULL)
+                  WHERE u.property_id = p.id AND r.archived_at IS NULL AND u.archived_at IS NULL AND u.rental_mode = 'by_room')
                 + (SELECT count(*) FROM units u
-                    WHERE u.property_id = p.id AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit'
-                      AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+                    WHERE u.property_id = p.id AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit')
               )::text AS rooms,
               (
                 (SELECT count(DISTINCT l.target_room_id) FROM leases l
-                  WHERE l.property_id = p.id AND l.status IN ('pending_signature','active') AND l.target_room_id IS NOT NULL)
+                   JOIN rooms r ON r.id = l.target_room_id
+                   JOIN units u ON u.id = r.unit_id
+                  WHERE l.property_id = p.id AND l.status IN ('pending_signature','active') AND u.rental_mode = 'by_room')
                 + (SELECT count(DISTINCT l.target_unit_id) FROM leases l
                     JOIN units u ON u.id = l.target_unit_id
-                   WHERE l.property_id = p.id AND l.status IN ('pending_signature','active')
-                     AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL))
+                   WHERE l.property_id = p.id AND l.status IN ('pending_signature','active') AND u.rental_mode = 'whole_unit')
               )::text AS occupied,
               (SELECT c.display_name FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
                 WHERE po.property_id = p.id AND po.is_primary LIMIT 1) AS owner_name
@@ -271,7 +271,7 @@ export async function propertyDetail(session: Session, id: string) {
          LEFT JOIN leases l ON l.target_room_id = r.id AND l.status IN ('pending_signature','active')
          LEFT JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
          LEFT JOIN contacts c ON c.id = lp.contact_id
-        WHERE u.property_id = $1 AND r.archived_at IS NULL
+        WHERE u.property_id = $1 AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
         ORDER BY u.label, r.label`,
       [id],
     );
@@ -330,6 +330,7 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
              JOIN units u ON u.id = r.unit_id
              JOIN properties p ON p.id = u.property_id
             WHERE r.org_id = $1 AND r.archived_at IS NULL AND p.archived_at IS NULL
+              AND u.rental_mode = 'by_room'
               AND NOT EXISTS (
                 SELECT 1 FROM leases l
                  WHERE l.status IN ('pending_signature','active')
@@ -342,7 +343,6 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
              JOIN properties p ON p.id = u.property_id
             WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
               AND u.rental_mode = 'whole_unit'
-              AND NOT EXISTS (SELECT 1 FROM rooms live WHERE live.unit_id = u.id AND live.archived_at IS NULL)
               AND NOT EXISTS (
                 SELECT 1 FROM leases l
                  WHERE l.status IN ('pending_signature','active')
@@ -356,8 +356,10 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
     const siblings = unitIds.length
       ? await many<{ id: string; unit_id: string; label: string }>(
           client,
-          `SELECT id::text, unit_id::text, label FROM rooms
-            WHERE unit_id = ANY($1::uuid[]) AND archived_at IS NULL ORDER BY label`,
+          `SELECT r.id::text, r.unit_id::text, r.label FROM rooms r
+             JOIN units u ON u.id = r.unit_id
+            WHERE r.unit_id = ANY($1::uuid[]) AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
+            ORDER BY r.label`,
           [unitIds],
         )
       : [];
@@ -370,7 +372,7 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
       baseRentMinor: Number(row.base_rent_minor),
       unitRooms: siblings.filter((room) => room.unit_id === row.unit_id).map((room) => ({ id: room.id, label: room.label })),
     }));
-  });
+  }, { orgId: session.orgId, environment: session.environment });
 }
 
 export async function listLeases(session: Session) {
@@ -736,7 +738,7 @@ export async function rentRoll(session: Session) {
               coalesce(rep.reported, false) AS reported
          FROM properties p
          JOIN units u ON u.property_id = p.id
-         LEFT JOIN rooms r ON r.unit_id = u.id AND r.archived_at IS NULL
+         LEFT JOIN rooms r ON r.unit_id = u.id AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
          LEFT JOIN LATERAL (
            SELECT c.display_name
              FROM property_owners po JOIN contacts c ON c.id = po.owner_contact_id
@@ -763,8 +765,8 @@ export async function rentRoll(session: Session) {
             LIMIT 1
          ) rep ON true
         WHERE p.org_id = $1 AND p.archived_at IS NULL
-          AND (r.id IS NOT NULL OR NOT EXISTS (
-            SELECT 1 FROM rooms rx WHERE rx.unit_id = u.id AND rx.archived_at IS NULL
+          AND (u.rental_mode = 'whole_unit' OR r.id IS NOT NULL OR NOT EXISTS (
+            SELECT 1 FROM rooms rx WHERE rx.unit_id = u.id AND rx.archived_at IS NULL AND u.rental_mode = 'by_room'
           ))
         ORDER BY p.name, space_label`,
       [session.orgId],
@@ -1114,7 +1116,7 @@ export async function listSpaces(session: Session) {
            FROM rooms r
            JOIN units u ON u.id = r.unit_id
            JOIN properties p ON p.id = u.property_id
-          WHERE r.org_id = $1 AND r.archived_at IS NULL AND p.archived_at IS NULL
+          WHERE r.org_id = $1 AND r.archived_at IS NULL AND p.archived_at IS NULL AND u.rental_mode = 'by_room'
          UNION ALL
          SELECT 'whole_unit'::text, u.id::text, p.id::text, p.name, p.currency,
                 u.label, NULL::text, NULL::text, u.area_value::text, u.area_unit,
@@ -1126,12 +1128,11 @@ export async function listSpaces(session: Session) {
            FROM units u
            JOIN properties p ON p.id = u.property_id
           WHERE u.org_id = $1 AND u.archived_at IS NULL AND u.rental_mode = 'whole_unit' AND p.archived_at IS NULL
-            AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.unit_id = u.id AND r.archived_at IS NULL)
        ) spaces
        ORDER BY created_at, sort_floor, sort_room`,
       [session.orgId],
     ),
-  );
+  { orgId: session.orgId, environment: session.environment });
 }
 
 export type SpaceEditor = {
@@ -1191,7 +1192,7 @@ export async function spaceEditor(session: Session, kind: "room" | "whole_unit",
          FROM rooms r
          JOIN units u ON u.id = r.unit_id
          JOIN properties p ON p.id = u.property_id
-        WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL`,
+        WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL AND u.rental_mode = 'by_room'`,
       [id, session.orgId],
     );
   });

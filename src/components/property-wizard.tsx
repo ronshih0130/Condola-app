@@ -47,15 +47,16 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
   const average = usageN > 0 && bill !== "" ? billN / usageN : null;
   const over = average !== null && rate !== "" && rateN > average + 1e-9;
   const blocked = step >= 4 && over && reason.trim() === "";
-  const roomCount = rentalMode === "whole_unit" ? 1 : 3;
+  const roomCount = rentalMode === "whole_unit" ? 0 : 3;
 
   const preview = useMemo(() => {
     if (!(usageN > 0) || rate === "") return null;
+    if (split === "sub" && bill.trim() === "") return null;
     const charged = usageN * rateN;
     const rooms = labels.map((label, index) => label.trim() || String(index + 1)).slice(0, roomCount);
     const share = rooms.length ? charged / rooms.length : charged;
     return { charged, rooms, share, bill: billN };
-  }, [usageN, rate, rateN, labels, roomCount, billN]);
+  }, [usageN, rate, rateN, labels, roomCount, billN, split, bill]);
 
   return (
     <form action={formAction}>

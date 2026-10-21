@@ -6,6 +6,8 @@ import { createProperty } from "./domain";
 import { FlowError } from "./errors";
 import { ORG_ID, USERS } from "./ids";
 import { createLeaseFromForm } from "./lease-form";
+import { listSpaces, vacantRooms } from "./queries";
+import { ensureSandbox } from "./sandbox";
 import type { Session } from "./types";
 
 const admin: Session = {
@@ -47,7 +49,7 @@ const base = {
   overrideReason: "",
 };
 
-test("a new tenant lease is saved with no Taipower number, for both electricity splits", async () => {
+test("a new tenant lease is saved in live and sandbox, including a whole unit that was given rooms", async () => {
   const action = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
   assert.match(action, /createLeaseFromForm\(session, formData\)/);
 
@@ -207,6 +209,202 @@ test("a new tenant lease is saved with no Taipower number, for both electricity 
       () => createLeaseFromForm(admin, form({ ...base, roomId: rooms.roomIds[0], rent: "" })),
       (error: unknown) => error instanceof FlowError && error.key === "errors.amount",
     );
+
+    const repair = readFileSync(new URL("../../supabase/migrations/20261022170000_archive_whole_unit_rooms.sql", import.meta.url), "utf8");
+    assert.match(repair, /SET archived_at/);
+    assert.match(repair, /u\.rental_mode = 'whole_unit'/);
+    assert.match(repair, /NOT EXISTS \(SELECT 1 FROM leases l WHERE l\.target_room_id = r\.id\)/);
+    assert.doesNotMatch(repair, /DELETE FROM rooms/i);
+
+    const sandboxId = await ensureSandbox(admin);
+    const sandbox: Session = {
+      ...admin,
+      sessionId: "lease-create-sandbox",
+      orgId: sandboxId,
+      environment: "sandbox",
+    };
+    const wholeSandbox = await createProperty(sandbox, {
+      name: `沙盒整層 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路5號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "沙盒屋主",
+      ownerPhone: "0912345678",
+      ownerEmail: `owner.sb.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "5F",
+      floor: "5",
+      rentalMode: "whole_unit",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 10000 },
+        { label: "B", roomType: "suite", baseRentMajor: 10000 },
+        { label: "C", roomType: "suite", baseRentMajor: 10000 },
+      ],
+    });
+    propertyIds.push(wholeSandbox.propertyId);
+    assert.equal(wholeSandbox.roomIds.length, 0);
+    const sandboxUnit = await query<{ id: string }>(`SELECT id::text FROM units WHERE property_id = $1`, [wholeSandbox.propertyId]);
+    const sandboxUnitId = sandboxUnit.rows[0].id;
+    const inserted = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM rooms WHERE unit_id = $1`,
+      [sandboxUnitId],
+    );
+    assert.equal(inserted.rows[0]?.n, "0");
+    const stray = await withClient(async (client) => {
+      const created = await client.query<{ id: string }>(
+        `INSERT INTO rooms (org_id, unit_id, label, room_type, base_rent_minor, area_unit)
+         SELECT $1, $2, label, 'suite', 0, 'ping'
+           FROM unnest(ARRAY['A','B','C']) AS label
+         RETURNING id::text`,
+        [sandboxId, sandboxUnitId],
+      );
+      return created.rows.map((row) => row.id);
+    });
+    assert.equal(stray.length, 3);
+
+    const before = await listSpaces(sandbox);
+    assert.ok(before.some((row) => row.id === sandboxUnitId && row.kind === "whole_unit"));
+    assert.equal(before.some((row) => stray.includes(row.id)), false);
+    const openSpaces = await vacantRooms(sandbox);
+    assert.ok(openSpaces.some((row) => row.id === sandboxUnitId));
+    assert.equal(openSpaces.some((row) => stray.includes(row.id)), false);
+
+    const sandboxLease = await createLeaseFromForm(
+      sandbox,
+      form({
+        ...base,
+        roomId: sandboxUnitId,
+        tenantName: "沙盒租客",
+        tenantEmail: `tenant.sb.${stamp}@example.com`,
+        splitMethod: "even",
+      }),
+    );
+    userIds.push(sandboxLease.tenantUserId);
+    assert.equal(sandboxLease.reused, false);
+
+    await query(
+      `UPDATE rooms r
+          SET archived_at = coalesce(r.archived_at, now()),
+              updated_at = now()
+         FROM units u
+        WHERE u.id = r.unit_id
+          AND u.id = $1
+          AND u.rental_mode = 'whole_unit'
+          AND r.archived_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM leases l WHERE l.target_room_id = r.id)`,
+      [sandboxUnitId],
+    );
+    const archived = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM rooms WHERE unit_id = $1 AND archived_at IS NOT NULL`,
+      [sandboxUnitId],
+    );
+    assert.equal(archived.rows[0]?.n, "3");
+
+    const byRoom = await createProperty(sandbox, {
+      name: `沙盒分租 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路6號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "沙盒分租屋主",
+      ownerPhone: "0912345678",
+      ownerEmail: `owner.rooms.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "6F",
+      floor: "6",
+      rentalMode: "by_room",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 8000 },
+        { label: "B", roomType: "suite", baseRentMajor: 9000 },
+      ],
+    });
+    propertyIds.push(byRoom.propertyId);
+    assert.equal(byRoom.roomIds.length, 2);
+    const roomLease = await createLeaseFromForm(
+      sandbox,
+      form({
+        ...base,
+        roomId: byRoom.roomIds[0],
+        tenantName: "分租租客",
+        tenantEmail: `tenant.room.${stamp}@example.com`,
+      }),
+    );
+    userIds.push(roomLease.tenantUserId);
+    const stillOpen = await vacantRooms(sandbox);
+    assert.ok(stillOpen.some((row) => row.id === byRoom.roomIds[1]));
+    assert.equal(stillOpen.some((row) => row.id === byRoom.roomIds[0]), false);
+    assert.equal(stillOpen.some((row) => stray.includes(row.id)), false);
+
+    const liveWhole = await createProperty(admin, {
+      name: `正式整層 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路7號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "正式屋主",
+      ownerPhone: "0912345678",
+      ownerEmail: `owner.live.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "7F",
+      floor: "7",
+      rentalMode: "whole_unit",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 10000 },
+        { label: "B", roomType: "suite", baseRentMajor: 10000 },
+        { label: "C", roomType: "suite", baseRentMajor: 10000 },
+      ],
+    });
+    propertyIds.push(liveWhole.propertyId);
+    assert.equal(liveWhole.roomIds.length, 0);
+    const liveUnit = await query<{ id: string }>(`SELECT id::text FROM units WHERE property_id = $1`, [liveWhole.propertyId]);
+    const liveUnitId = liveUnit.rows[0].id;
+    const liveStray = await withClient(async (client) => {
+      const created = await client.query<{ id: string }>(
+        `INSERT INTO rooms (org_id, unit_id, label, room_type, base_rent_minor, area_unit)
+         SELECT $1, $2, label, 'suite', 0, 'ping'
+           FROM unnest(ARRAY['A','B','C']) AS label
+         RETURNING id::text`,
+        [ORG_ID, liveUnitId],
+      );
+      return created.rows.map((row) => row.id);
+    });
+    const liveSpaces = await listSpaces(admin);
+    assert.ok(liveSpaces.some((row) => row.id === liveUnitId && row.kind === "whole_unit"));
+    assert.equal(liveSpaces.some((row) => liveStray.includes(row.id)), false);
+    const liveVacant = await vacantRooms(admin);
+    assert.ok(liveVacant.some((row) => row.id === liveUnitId));
+    assert.equal(liveVacant.some((row) => liveStray.includes(row.id)), false);
+
+    const missingEmail = `missing.${stamp}@example.com`;
+    await assert.rejects(
+      () => createLeaseFromForm(sandbox, form({ ...base, roomId: "00000000-0000-4000-8000-000000000099", tenantEmail: missingEmail })),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.notFound",
+    );
+    const missingUser = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM auth.users WHERE lower(email) = $1`,
+      [missingEmail],
+    );
+    assert.equal(missingUser.rows[0]?.n, "0");
+
+    await query(`UPDATE leases SET created_at = now() - interval '3 minutes' WHERE id = $1`, [roomLease.leaseId]);
+    const clashEmail = `clash.${stamp}@example.com`;
+    await assert.rejects(
+      () =>
+        createLeaseFromForm(
+          sandbox,
+          form({ ...base, roomId: byRoom.roomIds[0], tenantName: "衝突租客", tenantEmail: clashEmail }),
+        ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.occupied",
+    );
+    const clashUser = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM auth.users WHERE lower(email) = $1`,
+      [clashEmail],
+    );
+    assert.equal(clashUser.rows[0]?.n, "0");
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);

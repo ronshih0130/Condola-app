@@ -71,13 +71,12 @@ test("a firm without live data, or with live mode locked, always opens in test m
   assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: false, liveEnabled: false }), "sandbox");
   assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: false, liveEnabled: true }), "sandbox");
   assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: false }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: true, liveEnabled: true }), "sandbox");
   assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: true, liveEnabled: true }), "sandbox");
   assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
 });
 
-test("a first login with no env cookie opens in test mode, and an explicit choice sticks", () => {
-  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: true, liveEnabled: true }), "sandbox");
+test("a live firm with data opens in live mode when no cookie is set, and an explicit test-mode choice sticks", () => {
+  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: true, liveEnabled: true }), "live");
   assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: true, liveEnabled: true }), "sandbox");
   assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
 });

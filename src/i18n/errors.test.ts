@@ -17,11 +17,19 @@ test("every error key has a translation, and an empty amount uses the amount sen
     assert.notEqual(en[key], key);
   }
   assert.equal(zh.i_amount, "請輸入金額（數字，可填 0）");
+  assert.equal(zh.i_field_incomplete, "{field}未完成，請確認後再送出。");
+  assert.equal(zh.i_lease_failed, "租約沒有儲存成功，請稍後再試；若持續發生請聯絡 service@condola.app");
+  assert.equal(zh.i_lease_whole_unit, "此戶為整層出租，請選擇整層而不是房間。");
+  assert.match(zh.i_charged_total, /^向租客收取 /);
   assert.equal(errorText(makeT("zh-TW"), "errors.amount"), "請輸入金額（數字，可填 0）");
+  assert.equal(errorText(makeT("zh-TW"), "errors.leaseFailed"), zh.i_lease_failed);
   assert.equal(errorText(makeT("zh-TW"), "errors.notAKey"), "沒有完成。請檢查欄位後再試一次。");
   const mapped = mapDbError(new Error('invalid input syntax for type numeric: "NaN"'));
   assert.ok(mapped instanceof FlowError);
   assert.equal(mapped.key, "errors.amount");
+  const guard = mapDbError(new Error("unit 3F is rented as whole_unit; switch it to by_room before leasing a room"));
+  assert.ok(guard instanceof FlowError);
+  assert.equal(guard.key, "errors.wholeUnit");
 });
 
 test("confirmation mail uses the locked button and body", () => {
@@ -42,12 +50,20 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.ok(lines.some((line) => line.startsWith("condola_org=") && line.includes("Max-Age=0")));
   const wizard = readFileSync(new URL("../components/lease-wizard.tsx", import.meta.url), "utf8");
   assert.match(wizard, /data-testid="rent-error"/);
-  assert.match(wizard, /t\("i_amount"\)/);
+  assert.match(wizard, /i_field_incomplete/);
+  assert.match(wizard, /split === "sub_meter" && bill\.trim\(\) === ""/);
+  assert.doesNotMatch(wizard, /t\("i_amount"\)/);
   assert.match(wizard, /useActionState/);
   const property = readFileSync(new URL("../components/property-wizard.tsx", import.meta.url), "utf8");
   assert.match(property, /rentalMode === "whole_unit" \? null : \[0, 1, 2\]/);
+  assert.match(property, /split === "sub" && bill\.trim\(\) === ""/);
   const firm = readFileSync(new URL("../components/firm-steps.tsx", import.meta.url), "utf8");
   assert.match(firm, /noValidate/);
   assert.match(firm, /data-testid="firm-contact-error"/);
+  assert.match(firm, /i_field_incomplete/);
   assert.doesNotMatch(firm, /\srequired(?:\s|=|{|>)/);
+  const envRoute = readFileSync(new URL("../app/api/env/route.ts", import.meta.url), "utf8");
+  assert.match(envRoute, /set === "live"/);
+  assert.match(envRoute, /ENV_COOKIE_MAX_AGE/);
+  assert.match(envRoute, /jar\.set\(ENV_COOKIE, set,/);
 });

@@ -37,16 +37,20 @@ function cleanEmail(email: string) {
   return value;
 }
 
-async function provisionUser(input: { name: string; email: string | null; phone: string | null }) {
-  return svc(null, async (client) => {
-    const email = input.email ?? `portal-${randomUUID()}@demo.condola.local`;
+/** Insert the portal user on the caller's transaction so a later failure rolls it back. */
+async function insertPortalUser(client: Client, input: { name: string; email: string | null; phone: string | null }) {
+  const email = input.email ?? `portal-${randomUUID()}@demo.condola.local`;
+  await client.query(`SET LOCAL ROLE service_role`);
+  try {
     const user = await one<{ id: string }>(
       client,
       `SELECT app.provision_portal_user($1, $2, $3) AS id`,
       [email, input.name, input.phone],
     );
     return user.id;
-  });
+  } finally {
+    await client.query(`SET LOCAL ROLE authenticated`);
+  }
 }
 
 export async function markTryout(orgId: string, key: "property" | "lease" | "statement" | "repair") {
@@ -86,18 +90,12 @@ export async function createProperty(session: Session, input: PropertyInput) {
   if (!input.name.trim() || !input.city.trim() || !input.street.trim() || !input.unitLabel.trim()) {
     throw new FlowError("errors.required");
   }
-  const rooms = input.rooms.filter((room) => room.label.trim());
+  const rooms = input.rentalMode === "whole_unit" ? [] : input.rooms.filter((room) => room.label.trim());
   if (input.rentalMode === "by_room" && rooms.length < 2) throw new FlowError("errors.needRooms");
 
-  let ownerUserId: string | null = null;
-  let inviteCode: string | null = null;
   const ownerPhone = cleanPhone(input.ownerPhone);
   const ownerEmail = cleanEmail(input.ownerEmail);
-  if (input.ownerMode === "new") {
-    if (!input.ownerName.trim() || !ownerPhone) throw new FlowError("errors.required");
-    ownerUserId = await provisionUser({ name: input.ownerName.trim(), email: ownerEmail, phone: ownerPhone });
-    inviteCode = `CND-${randomUUID().slice(0, 8).toUpperCase()}`;
-  }
+  if (input.ownerMode === "new" && (!input.ownerName.trim() || !ownerPhone)) throw new FlowError("errors.required");
 
   const created = await tx(session.userId, async (client) => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property:${session.userId}:${input.name.trim()}`]);
@@ -108,7 +106,13 @@ export async function createProperty(session: Session, input: PropertyInput) {
         ORDER BY created_at DESC LIMIT 1`,
       [session.orgId, input.name.trim()],
     );
-    if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[] };
+    if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
+    let ownerUserId: string | null = null;
+    let inviteCode: string | null = null;
+    if (input.ownerMode === "new") {
+      ownerUserId = await insertPortalUser(client, { name: input.ownerName.trim(), email: ownerEmail, phone: ownerPhone });
+      inviteCode = `CND-${randomUUID().slice(0, 8).toUpperCase()}`;
+    }
     const country = input.currency === "USD" ? "US" : "TW";
     const jurisdiction = await one<{ id: string }>(
       client,
@@ -207,11 +211,11 @@ export async function createProperty(session: Session, input: PropertyInput) {
       );
       roomIds.push(inserted.id);
     }
-    return { propertyId: property.id, ownerContactId, roomIds };
-  });
+    return { propertyId: property.id, ownerContactId, roomIds, inviteCode };
+  }, { orgId: session.orgId, environment: session.environment });
 
   if (input.rentalMode === "by_room" && created.roomIds.length >= 3) await markTryout(session.orgId, "property");
-  return { ...created, inviteCode };
+  return created;
 }
 
 export async function setMeterSerial(session: Session, propertyId: string, serial: string) {
@@ -294,30 +298,33 @@ function readElectricity(input: LeaseInput) {
   if (!billOk && !usageOk && !rateOk) return null;
   if (billOk && usageOk && rateOk && bill === 0 && usage === 0 && rate === 0) return null;
   if ((bill != null && !Number.isFinite(bill)) || (usage != null && !Number.isFinite(usage)) || (rate != null && !Number.isFinite(rate))) {
-    throw new FlowError("errors.amount");
+    const field = bill != null && !Number.isFinite(bill) ? "i_bill_total" : usage != null && !Number.isFinite(usage) ? "i_usage" : "i_rate";
+    throw new FlowError("errors.amount", { field });
   }
-  if (!billOk || bill < 0 || !usageOk || usage <= 0 || (rateOk && rate < 0)) throw new FlowError("errors.amount");
+  if (!billOk || bill < 0) throw new FlowError("errors.amount", { field: "i_bill_total" });
+  if (!usageOk || usage <= 0) throw new FlowError("errors.amount", { field: "i_usage" });
+  if (rateOk && rate < 0) throw new FlowError("errors.amount", { field: "i_rate" });
   return { billMajor: bill, usageKwh: usage, rateMajor: rateOk ? rate : null };
 }
 
 export async function createLease(session: Session, input: LeaseInput) {
   assertStaff(session, ["admin", "manager"]);
-  if (!input.tenantName.trim() || !input.roomId || !input.startDate || !input.endDate) {
-    throw new FlowError("errors.required");
-  }
+  if (!input.roomId || !input.startDate || !input.endDate) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  if (!input.tenantName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
   const dueDay = input.dueDay;
-  if (!finiteNumber(dueDay) || dueDay < 1 || dueDay > 31 || Math.floor(dueDay) !== dueDay) throw new FlowError("errors.required");
+  if (!finiteNumber(dueDay) || dueDay < 1 || dueDay > 31 || Math.floor(dueDay) !== dueDay) {
+    throw new FlowError("errors.required", { field: "s_aa47e23" });
+  }
   const rentMajor = input.rentMajor;
   const depositMonths = input.depositMonths;
-  if (!finiteNumber(rentMajor) || rentMajor < 0 || !finiteNumber(depositMonths) || depositMonths < 0) {
-    throw new FlowError("errors.amount");
-  }
+  if (!finiteNumber(rentMajor) || rentMajor < 0) throw new FlowError("errors.amount", { field: "i_base_rent" });
+  if (!finiteNumber(depositMonths) || depositMonths < 0) throw new FlowError("errors.amount", { field: "s_8ed103e" });
   if (input.periodEnd <= input.periodStart || input.endDate < input.startDate) throw new FlowError("errors.required");
   if (!depositReasonOk(depositMonths, input.depositReason ?? "")) throw new FlowError("errors.depositCap");
   const lineId = normalizeLineId(input.lineUserId ?? "");
   if (!lineId.ok) throw new FlowError("errors.lineId");
   const phone = cleanPhone(input.tenantPhone);
-  if (!phone) throw new FlowError("errors.required");
+  if (!phone) throw new FlowError("errors.required", { field: "s_522cf12" });
   const email = cleanEmail(input.tenantEmail);
   const electricity = readElectricity(input);
   const billMinor = electricity ? toMinor(electricity.billMajor) : 0;
@@ -328,12 +335,14 @@ export async function createLease(session: Session, input: LeaseInput) {
     : rateSource === "bill_average"
       ? average
       : Math.round(electricity.rateMajor! * 100 * 1e6) / 1e6;
-  if (electricity && (!Number.isFinite(billMinor) || !Number.isFinite(rateMinor))) throw new FlowError("errors.amount");
+  if (electricity && (!Number.isFinite(billMinor) || !Number.isFinite(rateMinor))) {
+    throw new FlowError("errors.amount", { field: "i_bill_total" });
+  }
   const exceeds = Boolean(electricity) && rateSource === "fixed_rate" && rateMinor > average + 1e-9;
   if (exceeds && !input.overrideReason.trim()) throw new FlowError("errors.capReason");
-  const tenantUserId = await provisionUser({ name: input.tenantName.trim(), email, phone });
-
-  const result = await tx(session.userId, async (client) => {
+  let result;
+  try {
+    result = await tx(session.userId, async (client) => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`lease:${input.roomId}`]);
     const already = await maybe<{ id: string; tenantUserId: string }>(
       client,
@@ -375,20 +384,19 @@ export async function createLease(session: Session, input: LeaseInput) {
              JOIN units u ON u.id = r.unit_id
              JOIN properties p ON p.id = u.property_id
             WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL
+              AND u.rental_mode = 'by_room'
            UNION ALL
            SELECT u.id, u.id, u.property_id, p.currency, 'whole_unit'::text, u.label, 1
              FROM units u
              JOIN properties p ON p.id = u.property_id
             WHERE u.id = $1 AND u.org_id = $2 AND u.archived_at IS NULL
               AND u.rental_mode = 'whole_unit'
-              AND NOT EXISTS (
-                SELECT 1 FROM rooms live WHERE live.unit_id = u.id AND live.archived_at IS NULL
-              )
          ) spaces
         ORDER BY rank
         LIMIT 1`,
       [input.roomId, session.orgId],
     );
+    const tenantUserId = await insertPortalUser(client, { name: input.tenantName.trim(), email, phone });
     const contact = await one<{ id: string }>(
       client,
       `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, phone_e164, line_user_id, locale, preferred_channel)
@@ -504,7 +512,10 @@ export async function createLease(session: Session, input: LeaseInput) {
 
     const unitRooms = await many<{ id: string; label: string }>(
       client,
-      `SELECT id, label FROM rooms WHERE unit_id = $1 AND archived_at IS NULL ORDER BY label`,
+      `SELECT r.id, r.label FROM rooms r
+         JOIN units u ON u.id = r.unit_id
+        WHERE r.unit_id = $1 AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
+        ORDER BY r.label`,
       [space.unit_id],
     );
     const others = await many<{ id: string; target_room_id: string; start_date: string; end_date: string }>(
@@ -626,7 +637,11 @@ export async function createLease(session: Session, input: LeaseInput) {
       tenantAmount,
       reused: false,
     };
-  });
+  }, { orgId: session.orgId, environment: session.environment });
+  } catch (error) {
+    if (error instanceof FlowError && error.key === "errors.generic") throw new FlowError("errors.leaseFailed");
+    throw error;
+  }
 
   if (!result.reused) {
     await svc(session.userId, (client) => queueDemoNotice(client, result.leaseId, "lease_to_sign"));

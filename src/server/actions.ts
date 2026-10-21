@@ -29,7 +29,7 @@ import { createLeaseFromForm } from "./lease-form";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
 
-export type ActionState = { error: string };
+export type ActionState = { error: string; field?: string };
 
 const EMPTY_ACTION: ActionState = { error: "" };
 
@@ -113,9 +113,12 @@ function propertyInput(formData: FormData): PropertyInput {
   };
 }
 
-function actionError(error: unknown): ActionState {
+function actionError(error: unknown, fallback = "errors.generic"): ActionState {
   if (isRedirect(error)) throw error;
-  return { error: error instanceof FlowError ? error.key : "errors.generic" };
+  if (!(error instanceof FlowError)) return { error: fallback };
+  const key = error.key === "errors.generic" ? fallback : error.key;
+  const field = typeof error.vars?.field === "string" ? error.vars.field : undefined;
+  return field ? { error: key, field } : { error: key };
 }
 
 export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
@@ -138,7 +141,7 @@ export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formDa
     jar.set("condola_tenant_focus", created.tenantUserId, appCookieOptions({ httpOnly: false }));
     redirect(`/m/leases/${created.leaseId}?tab=sign`);
   } catch (error) {
-    return actionError(error);
+    return actionError(error, "errors.leaseFailed");
   }
 }
 

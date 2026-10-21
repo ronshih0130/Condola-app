@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { sessionCookie, type RequestMeta } from "./auth";
 import { FlowError } from "./errors";
-import { ENV_COOKIE, ORG_COOKIE } from "./org-scope";
+import { ENV_COOKIE, ENV_COOKIE_MAX_AGE, ORG_COOKIE } from "./org-scope";
 import {
   clearFirmOverride,
   createPartnerCode,
@@ -146,8 +146,9 @@ export async function actionCreateFirm(formData: FormData) {
     });
     if (!created.ok) redirect("/signup/firm?error=required");
     const jar = await cookies();
-    jar.set(ENV_COOKIE, "sandbox", appCookieOptions({ httpOnly: false }));
-    jar.set(ORG_COOKIE, created.orgId, appCookieOptions({ httpOnly: false }));
+    const persisted = appCookieOptions({ httpOnly: false, maxAge: ENV_COOKIE_MAX_AGE });
+    jar.set(ENV_COOKIE, "sandbox", persisted);
+    jar.set(ORG_COOKIE, created.orgId, persisted);
     const params = new URLSearchParams();
     if (created.dupName) params.set("dupFirm", "1");
     if (created.codeIgnored) params.set("code", "list");

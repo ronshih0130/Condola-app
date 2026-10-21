@@ -77,6 +77,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
 
   const preview = useMemo(() => {
     if (!room || !(usageN > 0) || rate === "") return null;
+    if (split === "sub_meter" && bill.trim() === "") return null;
     const charged = usageN * rateN;
     const shareRooms = room.unitRooms.length ? room.unitRooms : [{ id: room.id, label: room.unitLabel }];
     const count = shareRooms.length;
@@ -85,7 +86,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
       bill: Number.isFinite(billN) ? billN : 0,
       shares: shareRooms.map((item) => ({ label: item.label, amount: charged / count })),
     };
-  }, [room, usageN, rate, rateN, billN]);
+  }, [room, usageN, rate, rateN, billN, split, bill]);
 
   function goNext() {
     if (step === 2) {
@@ -141,7 +142,9 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
       <Stepper steps={steps} current={step} />
       {state.error ? (
         <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
-          {errorText(t, state.error)}
+          {state.field && (state.error === "errors.required" || state.error === "errors.amount")
+            ? t("i_field_incomplete", { field: t(state.field) })
+            : errorText(t, state.error)}
         </div>
       ) : null}
       <input type="hidden" name="roomId" value={roomId} />
@@ -180,12 +183,12 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
             <div className="fg">
               <label className="f">{t("s_0c5acea")}</label>
               <input className="inp" data-testid="tenant-name" placeholder={t("i_ph_tenant")} value={tenant} onChange={(event) => { setTenant(event.target.value); setTenantError(false); }} />
-              {tenantError ? <p className="hint" data-testid="tenant-name-error">{t("i_field_required")}</p> : null}
+              {tenantError ? <p className="hint" data-testid="tenant-name-error">{t("i_field_incomplete", { field: t("s_0c5acea") })}</p> : null}
             </div>
             <div className="fg">
               <label className="f">{t("s_522cf12")}</label>
               <input className="inp" data-testid="tenant-phone" placeholder={t("i_ph_phone")} value={phone} onChange={(event) => { setPhone(event.target.value); setPhoneError(false); }} />
-              {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_field_required")}</p> : null}
+              {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_field_incomplete", { field: t("s_522cf12") })}</p> : null}
             </div>
           </div>
           <div className="fg">
@@ -212,7 +215,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
             <div className="fg">
               <label className="f">{t("i_base_rent")}</label>
               <input className="inp" data-testid="rent" inputMode="decimal" placeholder={t("i_ph_rent")} value={rent} onChange={(event) => { setRent(event.target.value); setRentError(false); }} />
-              {rentError ? <p className="hint" data-testid="rent-error">{t("i_amount")}</p> : null}
+              {rentError ? <p className="hint" data-testid="rent-error">{t("i_field_incomplete", { field: t("i_base_rent") })}</p> : null}
               <div className="hint">{t("s_759b7ba")}</div>
               {room ? <div className="hint">{t("i_base_hint", { amount: money(room.baseRentMinor / 100, currency, locale) })}</div> : null}
             </div>
@@ -224,7 +227,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
           <div className="fg">
             <label className="f">{t("s_8ed103e")}</label>
             <input className="inp" data-testid="deposit-months" inputMode="decimal" placeholder={t("i_ph_dep")} value={depositMonths} onChange={(event) => { setDepositMonths(event.target.value); setDepositError(false); }} />
-            {depositError ? <p className="hint" data-testid="deposit-error">{t("i_amount")}</p> : null}
+            {depositError ? <p className="hint" data-testid="deposit-error">{t("i_field_incomplete", { field: t("s_8ed103e") })}</p> : null}
           </div>
           {depositOver ? (
             <div className="alert warn" data-testid="deposit-alert">
@@ -246,7 +249,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
           <div className="fg">
             <label className="f">{t("s_aa47e23")}</label>
             <input className="inp" data-testid="due-day" inputMode="numeric" placeholder={t("i_ph_due")} value={dueDay} onChange={(event) => { setDueDay(event.target.value); setDueError(false); }} />
-            {dueError ? <p className="hint" data-testid="due-error">{t("i_field_required")}</p> : null}
+            {dueError ? <p className="hint" data-testid="due-error">{t("i_field_incomplete", { field: t("s_aa47e23") })}</p> : null}
           </div>
           <p className="hint">{t("s_c6a6031")}</p>
         </div>
@@ -266,17 +269,17 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
             <div className="fg">
               <label className="f">{t("i_bill_total")}</label>
               <input className="inp" data-testid="bill-total" inputMode="decimal" placeholder={t("i_ph_bill")} value={bill} onChange={(event) => { setBill(event.target.value); setBillError(false); }} />
-              {billError ? <p className="hint" data-testid="bill-error">{t("i_amount")}</p> : null}
+              {billError ? <p className="hint" data-testid="bill-error">{t("i_field_incomplete", { field: t("i_bill_total") })}</p> : null}
             </div>
             <div className="fg">
               <label className="f">{t("i_usage")}</label>
               <input className="inp" data-testid="usage" inputMode="decimal" placeholder={t("i_ph_kwh")} value={usage} onChange={(event) => { setUsage(event.target.value); setUsageError(false); }} />
-              {usageError ? <p className="hint" data-testid="usage-error">{t("i_amount")}</p> : null}
+              {usageError ? <p className="hint" data-testid="usage-error">{t("i_field_incomplete", { field: t("i_usage") })}</p> : null}
             </div>
             <div className="fg">
               <label className="f">{t("i_rate")}</label>
               <input className="inp" data-testid="rate" inputMode="decimal" placeholder={t("i_ph_rate")} value={rate} onChange={(event) => { setRate(event.target.value); setRateError(false); }} />
-              {rateError ? <p className="hint" data-testid="rate-error">{t("i_amount")}</p> : null}
+              {rateError ? <p className="hint" data-testid="rate-error">{t("i_field_incomplete", { field: t("i_rate") })}</p> : null}
             </div>
           </div>
           {over ? (
