@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { appCookieOptions } from "./public-origin";
 import { redirect } from "next/navigation";
@@ -209,6 +210,7 @@ export async function actionUpdateLease(prev: ActionState = EMPTY_ACTION, formDa
       depositReason: text(formData.get("depositReason")),
       updatedAt: text(formData.get("updatedAt")),
     });
+    revalidatePath(`/m/leases/${leaseId}`);
     redirect(`/m/leases/${leaseId}`);
   } catch (error) {
     return actionError(error, "errors.leaseFailed");

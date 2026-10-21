@@ -11,7 +11,7 @@ import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
 import { PhoneField } from "./phone-field";
 import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
-import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
+import { callSubmitAction, claimFormSubmit, ensureIdempotencyKey, releaseFormSubmit } from "./submit-once";
 
 function amountOk(raw: string) {
   const trimmed = raw.trim();
@@ -39,8 +39,13 @@ export function LeaseWizard({
 }) {
   const t = useT();
   const locale = useLocale();
-  const [state, formAction, pending] = useActionState(actionCreateLease, { error: "" });
   const submitGuard = useRef(false);
+  const idempotencyKey = useRef("");
+  const [state, formAction, pending] = useActionState(
+    (prev: { error: string; field?: string }, formData: FormData) =>
+      callSubmitAction(submitGuard, () => actionCreateLease(prev, formData)),
+    { error: "" },
+  );
   const [submitReady, setSubmitReady] = useState(false);
   const [slowSubmit, setSlowSubmit] = useState(false);
   const armSubmit = useRef<number | null>(null);
@@ -276,6 +281,8 @@ export function LeaseWizard({
           else setStep(4);
           return;
         }
+        const field = event.currentTarget.elements.namedItem("idempotencyKey");
+        if (field instanceof HTMLInputElement) field.value = ensureIdempotencyKey(idempotencyKey);
         if (pending || !claimFormSubmit(submitGuard)) {
           event.preventDefault();
           return;
@@ -302,6 +309,7 @@ export function LeaseWizard({
           <Link href="/m/leases" data-testid="lease-slow-link">{t("s_fba85ae")}</Link>
         </div>
       ) : null}
+      <input type="hidden" name="idempotencyKey" defaultValue="" />
       <input type="hidden" name="roomId" value={roomId} />
       <input type="hidden" name="tenantName" value={tenant} />
       <input type="hidden" name="tenantPhone" value={phone} />

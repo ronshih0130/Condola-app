@@ -1,6 +1,19 @@
 /** Product rule: a deposit above this many months of rent needs a typed reason. */
 export const DEPOSIT_CAP_MONTHS = 2;
 
+/**
+ * The warning and reason box open only while the edited months are over the cap
+ * and differ from the saved months. A successful save leaves them equal, so the
+ * summary shows the stored deposit and the editor closes.
+ */
+export function depositReasonEditorOpen(editedMonths: string, savedMonths: string) {
+  const edited = Number(editedMonths);
+  if (!Number.isFinite(edited) || edited <= DEPOSIT_CAP_MONTHS) return false;
+  const saved = Number(savedMonths);
+  if (Number.isFinite(saved) && edited === saved) return false;
+  return true;
+}
+
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46]; // %PDF
 export const MAX_SIGNED_PDF_BYTES = 8 * 1024 * 1024;
 
@@ -61,6 +74,16 @@ export function normalizePhone(phone: string, callingCode = "+886"): string | nu
 export function phoneInputInvalid(value: string, callingCode = "+886") {
   if (value.replace(/[\s-]/g, "") === "") return false;
   return normalizePhone(value, callingCode) == null;
+}
+
+const IDEMPOTENCY_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Blank means this create has no retry key. Anything else must be a UUID. */
+export function normalizeIdempotencyKey(value: string | null | undefined): { ok: true; value: string | null } | { ok: false } {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return { ok: true, value: null };
+  if (!IDEMPOTENCY_KEY.test(trimmed)) return { ok: false };
+  return { ok: true, value: trimmed.toLowerCase() };
 }
 
 export function normalizeLineId(value: string): { ok: true; value: string | null } | { ok: false } {

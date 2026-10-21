@@ -58,6 +58,7 @@ export function leaseInputFromForm(formData: FormData): LeaseInput {
     rateSource: "fixed_rate",
     overrideReason: text(formData.get("overrideReason")),
     subUsages: [],
+    idempotencyKey: text(formData.get("idempotencyKey")),
   };
 }
 

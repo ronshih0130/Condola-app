@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { query, tx, withClient } from "./db";
@@ -1022,6 +1023,196 @@ test("every lease save path rejects a deposit over two months without a reason",
     assert.equal(formRow.rows[0]?.reason, reason);
     assert.equal(formRow.rows[0]?.audit_reason, reason);
     assert.equal(formRow.rows[0]?.outcome, "overridden");
+  } finally {
+    await withClient(async (client) => {
+      await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      try {
+        for (const propertyId of propertyIds) {
+          await client.query(
+            `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_allocation_runs
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_bills
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(`DELETE FROM meters WHERE unit_id IN (SELECT id FROM units WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM notifications WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM leases WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM management_agreements WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM properties WHERE id = $1`, [propertyId]);
+        }
+        if (userIds.length) {
+          await client.query(`DELETE FROM contacts WHERE user_id = ANY($1::uuid[])`, [userIds]);
+          await client.query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [userIds]);
+        }
+        await client.query(`DELETE FROM contacts WHERE lower(email::text) LIKE $1`, [`%${stamp}@example.com`]);
+        await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
+      } finally {
+        await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
+      }
+    });
+  }
+});
+
+test("two different leases both save, a triple create keeps one, and a failed submit can be retried", async () => {
+  const stamp = Date.now().toString(36);
+  const propertyIds: string[] = [];
+  const userIds: string[] = [];
+  const keyA = "00000000-0000-4000-8000-0000000000aa";
+  const keyB = randomUUID();
+  const retryKey = randomUUID();
+  try {
+    const rooms = await createProperty(admin, {
+      name: `冪等 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路9號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "冪等屋主",
+      ownerPhone: "0912000000",
+      ownerEmail: `idempotent.owner.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "9F",
+      floor: "9",
+      rentalMode: "by_room",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 9000 },
+        { label: "B", roomType: "suite", baseRentMajor: 9000 },
+        { label: "C", roomType: "suite", baseRentMajor: 9000 },
+        { label: "D", roomType: "suite", baseRentMajor: 9000 },
+      ],
+    });
+    propertyIds.push(rooms.propertyId);
+    const input = {
+      tenantName: "冪等租客",
+      tenantPhone: "0912000111",
+      tenantEmail: `idempotent.tenant.${stamp}@example.com`,
+      lineUserId: "",
+      startDate: "2027-03-01",
+      endDate: "2028-02-29",
+      rentMajor: 9000,
+      depositMonths: 2,
+      depositReason: "",
+      dueDay: 5,
+      splitMethod: "even" as const,
+      periodStart: "2027-03-01",
+      periodEnd: "2027-03-31",
+      billTotalMajor: null,
+      usageKwh: null,
+      rateMajor: null,
+      rateSource: "fixed_rate" as const,
+      overrideReason: "",
+      subUsages: [],
+      idempotencyKey: keyA,
+    };
+    await assert.rejects(
+      () => createLease(admin, { ...input, roomId: rooms.roomIds[0], idempotencyKey: "not-a-uuid" }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.leaseFailed",
+    );
+
+    const first = await createLease(admin, { ...input, roomId: rooms.roomIds[0] });
+    userIds.push(first.tenantUserId);
+    assert.equal(first.reused, false);
+    const second = await createLease(admin, {
+      ...input,
+      roomId: rooms.roomIds[1],
+      tenantName: "另一位租客",
+      tenantEmail: `idempotent.other.${stamp}@example.com`,
+      tenantPhone: "0912000222",
+      idempotencyKey: keyB,
+    });
+    userIds.push(second.tenantUserId);
+    assert.equal(second.reused, false);
+    assert.notEqual(second.leaseId, first.leaseId);
+
+    const again = await createLease(admin, { ...input, roomId: rooms.roomIds[0], tenantName: "重複名字" });
+    assert.equal(again.reused, true);
+    assert.equal(again.leaseId, first.leaseId);
+    const fromForm = await createLeaseFromForm(
+      admin,
+      form({
+        ...base,
+        roomId: rooms.roomIds[0],
+        tenantEmail: input.tenantEmail,
+        idempotencyKey: keyA,
+        startDate: input.startDate,
+        months: "12",
+      }),
+    );
+    assert.equal(fromForm.reused, true);
+    assert.equal(fromForm.leaseId, first.leaseId);
+    const rows = await query<{ n: string }>(`SELECT count(*)::text AS n FROM leases WHERE idempotency_key = $1`, [keyA]);
+    assert.equal(rows.rows[0]?.n, "1");
+    const both = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM leases WHERE id = ANY($1::uuid[])`,
+      [[first.leaseId, second.leaseId]],
+    );
+    assert.equal(both.rows[0]?.n, "2");
+
+    await assert.rejects(
+      () => createLease(admin, { ...input, roomId: "00000000-0000-4000-8000-000000000099", idempotencyKey: retryKey }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.notFound",
+    );
+    const retried = await createLease(admin, {
+      ...input,
+      roomId: rooms.roomIds[2],
+      tenantName: "重送租客",
+      tenantEmail: `idempotent.retry.${stamp}@example.com`,
+      tenantPhone: "0912000333",
+      idempotencyKey: retryKey,
+    });
+    userIds.push(retried.tenantUserId);
+    assert.equal(retried.reused, false);
+    const retryRows = await query<{ n: string }>(`SELECT count(*)::text AS n FROM leases WHERE idempotency_key = $1`, [retryKey]);
+    assert.equal(retryRows.rows[0]?.n, "1");
+
+    const blank = await createLease(admin, {
+      ...input,
+      roomId: rooms.roomIds[3],
+      tenantName: "無鍵租客",
+      tenantEmail: `idempotent.blank.${stamp}@example.com`,
+      tenantPhone: "0912000444",
+      idempotencyKey: "",
+    });
+    userIds.push(blank.tenantUserId);
+    assert.equal(blank.reused, false);
+    const blankAgain = await createLease(admin, {
+      ...input,
+      roomId: rooms.roomIds[3],
+      tenantName: "無鍵租客",
+      tenantEmail: `idempotent.blank.${stamp}@example.com`,
+      tenantPhone: "0912000444",
+      idempotencyKey: "  ",
+    });
+    assert.equal(blankAgain.reused, true);
+    assert.equal(blankAgain.leaseId, blank.leaseId);
+
+    await assert.rejects(
+      () =>
+        query(
+          `INSERT INTO leases (
+             org_id, unit_id, target_room_id, status, esign_status, start_date, end_date, currency,
+             rent_amount_minor, due_day, deposit_amount_minor, deposit_months, document_sha256, idempotency_key, created_by
+           )
+           SELECT org_id, unit_id, target_room_id, status, esign_status, '2035-03-01', '2036-02-28', currency,
+                  rent_amount_minor, due_day, deposit_amount_minor, deposit_months, document_sha256, idempotency_key, created_by
+             FROM leases
+            WHERE id = $1`,
+          [first.leaseId],
+        ),
+      (error: unknown) => {
+        const row = error as { code?: string; constraint?: string };
+        return row.code === "23505" && row.constraint === "leases_org_idempotency_key_uidx";
+      },
+    );
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
