@@ -442,10 +442,16 @@ export async function leaseDetail(session: Session, id: string) {
       line_user_id: string | null;
       signed_pdf: string | null;
       thread_id: string | null;
+      deposit_months: string | null;
+      deposit_override_reason: string | null;
+      updated_at: string;
+      signed_at: string | null;
     }>(
       client,
       `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, l.currency,
               l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.due_day,
+              l.deposit_months::text AS deposit_months, l.deposit_override_reason,
+              l.updated_at::text AS updated_at, l.signed_at::text AS signed_at,
               l.start_date::text, l.end_date::text,
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
               c.display_name AS tenant,

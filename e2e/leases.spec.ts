@@ -49,6 +49,25 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
     throw new Error(await error.innerText());
   }
   await expect(page.getByTestId("paper-sign")).toBeVisible();
+
+  await page.getByRole("link", { name: "摘要" }).click();
+  await page.getByTestId("deposit-months").fill("4");
+  const editAlert = page.getByTestId("deposit-alert");
+  await expect(editAlert).toBeVisible();
+  await expect(editAlert).toContainText("請填寫原因");
+  await expect(editAlert).not.toContainText("房東");
+  await page.getByTestId("deposit-reason").fill("   ");
+  await expect(page.getByTestId("save-lease-terms")).toBeDisabled();
+  await page.getByTestId("deposit-reason").fill("屋主同意調整為四個月押金");
+  await expect(page.getByTestId("save-lease-terms")).toBeEnabled();
+  await page.getByTestId("save-lease-terms").click();
+  const editError = page.getByTestId("lease-error");
+  if (await editError.isVisible().catch(() => false)) {
+    throw new Error(await editError.innerText());
+  }
+  await expect(page.getByTestId("deposit-reason")).toHaveValue("屋主同意調整為四個月押金");
+
+  await page.locator(".tabsx").getByRole("link", { name: "簽署與文件" }).click();
   await page.getByTestId("signed-pdf").setInputFiles({
     name: "signed-lease.pdf",
     mimeType: "application/pdf",
@@ -64,6 +83,9 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await page.getByRole("link", { name: "摘要" }).click();
   await expect(page.getByTestId("tenant-line-id")).toHaveText("U-pilot-line");
   await expect(page.getByText("生效中")).toBeVisible();
+  await expect(page.getByTestId("lease-terms-locked")).toContainText("已簽署或已生效");
+  await expect(page.getByTestId("lease-terms-locked")).not.toContainText("房東");
+  await expect(page.getByTestId("save-lease-terms")).toHaveCount(0);
 
   const leaseId = page.url().match(/leases\/([^/?]+)/)?.[1];
   expect(leaseId).toBeTruthy();

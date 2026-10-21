@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
+import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 
 test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositExceedsCap(2), false);
@@ -11,6 +11,56 @@ test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositReasonOk(3, ""), false);
   assert.equal(depositReasonOk(3, "   "), false);
   assert.equal(depositReasonOk(3, "屋主同意兩個月以上押金"), true);
+  assert.equal(depositCapSaveAllowed(3, "warn", true), true);
+  assert.equal(depositCapSaveAllowed(3, "warn", false), false);
+  assert.equal(depositCapSaveAllowed(3, "block", true), false);
+  assert.equal(depositCapSaveAllowed(3, "overridden", true), true);
+  assert.equal(depositCapSaveAllowed(3, "overridden", false), false);
+  assert.equal(depositCapSaveAllowed(3, "pass", true), false);
+  assert.equal(depositCapSaveAllowed(3, null, true), false);
+  assert.equal(depositCapSaveAllowed(1.5, "warn", false), true);
+  assert.equal(leaseTermsEditable({ status: "pending_signature", esign: "sent", signed: false }), true);
+  assert.equal(leaseTermsEditable({ status: "active", esign: "fully_signed", signed: true }), false);
+  assert.equal(leaseTermsEditable({ status: "pending_signature", esign: "partially_signed", signed: false }), false);
+  assert.equal(depositWarnFlag(3, "warn"), false);
+  assert.equal(depositWarnFlag(1.5, "warn"), true);
+  assert.equal(depositWarnFlag(2, "pass"), false);
+});
+
+test("create and edit lease screens ask for a reason with lease_deposit_over", () => {
+  const wizard = readFileSync(new URL("../components/lease-wizard.tsx", import.meta.url), "utf8");
+  const edit = readFileSync(new URL("../components/lease-terms-form.tsx", import.meta.url), "utf8");
+  const route = readFileSync(new URL("../app/api/flows/[action]/route.ts", import.meta.url), "utf8");
+  const actions = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
+  const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
+  for (const source of [wizard, edit]) {
+    assert.match(source, /lease_deposit_over/);
+    assert.match(source, /<textarea/);
+    assert.match(source, /data-testid="deposit-reason"/);
+    assert.equal(source.includes("房東"), false);
+  }
+  assert.match(route, /createLease: \(session, body\) => createLease\(session, body as never\)/);
+  assert.match(route, /updateLease: \(session, body\) => updateLease\(session, body as never\)/);
+  assert.match(actions, /createLeaseFromForm\(session, formData\)/);
+  assert.match(actions, /updateLease\(session,/);
+  assert.match(domain, /export async function createLease/);
+  assert.match(domain, /export async function updateLease/);
+  assert.match(domain, /savedDepositWarn/);
+  assert.match(domain, /rule_key = 'deposit.max_months'/);
+  assert.match(domain, /errors\.leaseLocked/);
+  assert.match(domain, /errors\.staleLease/);
+  assert.match(domain, /async function noteChange/);
+  assert.equal(domain.includes("set_config('app.change_reason', $1, true)`, [override.reason ?? \"\"]"), false);
+  assert.equal(domain.includes("set_config('app.change_reason', $1, true)`, [\"\"]"), false);
+  assert.match(edit, /lease_terms_locked|updatedAt/);
+  assert.match(readFileSync(new URL("../app/m/leases/[id]/page.tsx", import.meta.url), "utf8"), /lease_terms_locked/);
+  const guard = readFileSync(new URL("../../supabase/migrations/20261023090000_lease_deposit_override_check.sql", import.meta.url), "utf8");
+  const earlier = readFileSync(new URL("../../supabase/migrations/20261021140000_basic_leases.sql", import.meta.url), "utf8");
+  assert.match(earlier, /CREATE TRIGGER trg_lease_deposit_check/);
+  assert.match(earlier, /fn_lease_deposit_check/);
+  assert.match(guard, /leases_deposit_over_cap_requires_override/);
+  assert.match(guard, /trg_lease_deposit_check/);
+  assert.match(guard, /20261021140000_basic_leases/);
 });
 
 test("a Taiwan mobile becomes +886 and an international number stays", () => {

@@ -14,6 +14,32 @@ export function depositReasonOk(depositMonths: number, reason: string) {
   return reason.trim().length > 0;
 }
 
+/**
+ * Fail closed above the product cap. Missing deposit-rule result and block
+ * reject the save. A typed reason is not rejected just because the latest
+ * deposit result is warn. Under the cap, a jurisdiction warn stays a warning.
+ */
+export function depositCapSaveAllowed(depositMonths: number, outcome: string | null, reasonOk = false) {
+  if (!depositExceedsCap(depositMonths)) return true;
+  if (!reasonOk || outcome == null || outcome === "block") return false;
+  return outcome === "overridden" || outcome === "warn";
+}
+
+/**
+ * Rent and deposit are part of document_sha256, the bytes the parties sign.
+ * There is no amendment document, so a signed or active lease cannot be edited in place.
+ */
+export function leaseTermsEditable(input: { status: string; esign: string; signed: boolean }) {
+  if (input.signed) return false;
+  if (input.status !== "draft" && input.status !== "pending_signature") return false;
+  return input.esign === "not_sent" || input.esign === "sent";
+}
+
+/** Soft warning only when the deposit is still within two months of rent. */
+export function depositWarnFlag(depositMonths: number, outcome: string | null) {
+  return !depositExceedsCap(depositMonths) && outcome === "warn";
+}
+
 /** +E.164 as typed, or a Taiwan mobile 09xxxxxxxx (spaces and dashes allowed) as +886. */
 export function normalizePhone(phone: string): string | null {
   const value = phone.trim();
