@@ -264,12 +264,16 @@ export async function actionRecordPayment(formData: FormData) {
   const back = staff ? `/m/leases/${leaseId}?tab=ledger` : "/t/pay";
   try {
     const session = await getSession();
+    const { claimFromForm, confirmReceipt } = await import("./receipts");
+    const claim = claimFromForm(formData);
+    const proofFileId = claim ? await confirmReceipt(session, claim) : null;
     await recordPayment(session, {
       leaseId,
       amountMajor: num(formData.get("amount")),
       paidOn: text(formData.get("paidOn")) || taipeiToday(),
       last5: text(formData.get("last5")).trim(),
       reference: text(formData.get("reference")),
+      proofFileId,
     });
     redirect(staff ? `/m/leases/${leaseId}?tab=ledger` : "/t/pay?done=1");
   } catch (error) {

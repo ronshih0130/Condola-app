@@ -1700,5 +1700,18 @@
  "i_sec_rooms": "Units and rooms",
  "i_sec_meter": "Shared meter and split",
  "i_import_title": "Import Excel",
- "i_import_help": "Upload a CSV (Excel can save as CSV). Use the same columns as the property import."
+ "i_import_help": "Upload a CSV (Excel can save as CSV). Use the same columns as the property import.",
+ "i_receipt_label": "Receipt",
+ "i_receipt_drop": "Drag a file here, or click to upload (JPG, PNG, or PDF, up to 10MB)",
+ "i_receipt_uploading": "Uploading {pct}%",
+ "i_receipt_too_big": "File is over 10MB",
+ "i_receipt_type": "Use a JPG, PNG, or PDF.",
+ "i_receipt_view": "View",
+ "i_receipt_remove": "Remove",
+ "i_receipt_cancel": "Cancel",
+ "i_receipt_storage": "The receipt could not be saved. Storage is unavailable, so the file was not stored.",
+ "i_expense_view": "View",
+ "i_tenant_name_exists": "A tenant with this name is already in the firm. You can choose the existing one, or keep creating a new contact.",
+ "i_repair_photo_create": "Photos",
+ "i_repair_photo_partial": "The repair was sent, but a photo did not upload. You can add it on this repair."
 }

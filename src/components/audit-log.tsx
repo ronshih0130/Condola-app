@@ -25,6 +25,11 @@ export function AuditRows({ entries, t, testId }: { entries: AuditView[]; t: T; 
               <td>{entry.who || (entry.whoKey ? t(entry.whoKey) : "")}</td>
               <td>
                 <div>{t(entry.actionKey)}</div>
+                {entry.changes.map((change) => (
+                  <div key={change.fieldKey} className="small" data-testid="audit-change">
+                    {t(change.fieldKey)} {change.before} → {change.after}
+                  </div>
+                ))}
                 {entry.fields.length ? <div className="small muted">{entry.fields.map((key) => t(key)).join(t("i_list_sep"))}</div> : null}
                 {entry.other ? <div className="small muted">{t("i_audit_f_other")}</div> : null}
                 {entry.masked ? <div className="small muted">{t("i_audit_masked")}</div> : null}

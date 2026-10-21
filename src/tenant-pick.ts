@@ -15,6 +15,17 @@ export function tenantSearchText(tenant: TenantOption) {
   return `${tenant.name} ${phone} ${localPhone(phone)} ${tenant.email ?? ""}`.toLowerCase();
 }
 
+function foldedName(name: string) {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Exact display-name matches in this firm. Empty input matches nobody. */
+export function tenantsByName(tenants: readonly TenantOption[], name: string): TenantOption[] {
+  const needle = foldedName(name);
+  if (!needle) return [];
+  return tenants.filter((row) => foldedName(row.name) === needle);
+}
+
 /** Case-insensitive match against an active 租客 email. Empty and non-emails do not match. */
 export function tenantByEmail(tenants: readonly TenantOption[], email: string): TenantOption | null {
   const needle = email.trim().toLowerCase();

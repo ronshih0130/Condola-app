@@ -55,7 +55,16 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                     <div className="small muted">{displaySampleName(row.place)}</div>
                   </td>
                   <td data-label={t("i_paid_on")}>{row.paid_on}</td>
-                  <td data-label={t("i_last5")}>{row.last5}</td>
+                  <td data-label={t("i_last5")}>
+                    {row.last5}
+                    {row.proof_file_id ? (
+                      <div>
+                        <a href={`/api/receipts/${row.proof_file_id}`} data-testid="payment-receipt">
+                          {t("i_receipt_view")}
+                        </a>
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="num" data-label={t("i_amount_label")}>
                     {formatMoney(Number(row.amount), row.currency, session.locale)}
                   </td>

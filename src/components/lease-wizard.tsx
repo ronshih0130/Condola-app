@@ -6,7 +6,7 @@ import { errorText } from "@/i18n/errors";
 import { confirmDeposit, confirmSpace, confirmSpaceFromSnapshot, depositMonthsOnHalfStep, formatMajor, nextSpaceSnapshot, twdRentIsWhole } from "@/lease-confirm";
 import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
-import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
+import { activeTenantPick, filterTenants, tenantByEmail, tenantsByName, type TenantOption } from "@/tenant-pick";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
 import { PhoneField } from "./phone-field";
@@ -92,6 +92,10 @@ export function LeaseWizard({
   const room = rooms.find((item) => item.id === roomId) ?? (space?.id === roomId ? space : undefined);
   const summary = confirmSpaceFromSnapshot(roomId, space);
   const tenantMatches = useMemo(() => filterTenants(tenants, tenantQuery), [tenants, tenantQuery]);
+  const nameMatches = useMemo(
+    () => (tenantMode === "new" ? tenantsByName(tenants, tenant) : []),
+    [tenantMode, tenants, tenant],
+  );
   const pickedId = activeTenantPick(tenantContactId, tenantMatches);
   const pickedTenant = tenants.find((item) => item.id === pickedId) ?? null;
   const currency = room?.currency ?? "TWD";
@@ -410,6 +414,17 @@ export function LeaseWizard({
                   <label className="f">{t("s_0c5acea")}</label>
                   <input className="inp" data-testid="tenant-name" placeholder={t("i_ph_tenant")} value={tenant} onChange={(event) => { setTenant(event.target.value); setTenantError(false); }} />
                   {tenantError ? <p className="hint" data-testid="tenant-name-error">{t("i_step_incomplete", { field: t("s_0c5acea") })}</p> : null}
+                  {!duplicateTenant && nameMatches.length > 0 ? (
+                    <div className="alert warn" data-testid="tenant-name-exists" style={{ marginTop: 8 }}>
+                      <p>{t("i_tenant_name_exists")}</p>
+                      {nameMatches.map((match) => (
+                        <button className="btn" type="button" key={match.id} data-testid="tenant-name-use-existing" onClick={() => adoptTenant(match)}>
+                          {t("i_tenant_use_existing")}
+                          <span className="hint"> {match.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="fg">
                   <label className="f">{t("s_522cf12")}</label>

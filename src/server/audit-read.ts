@@ -4,10 +4,10 @@ import type { Session } from "./types";
 
 /**
  * Admin-only read model for audit_log.
- * One indexed page, no OFFSET, and no old_row/new_row so the Worker does not
- * parse full snapshots. The screen is two round trips: the page plus the member
- * list, then one UNION for every record name on that page. Identity numbers and
- * other sensitive values are masked before they leave this module.
+ * One indexed page, no OFFSET. Changed values are the few keys in changed_cols,
+ * not the whole old_row/new_row snapshot. The screen is two round trips: the page
+ * plus the member list, then one UNION for every record name on that page.
+ * Identity numbers and other sensitive values are masked before they leave this module.
  */
 
 export const AUDIT_PAGE_SIZE = 25;
@@ -182,6 +182,47 @@ export function sensitiveColumn(column: string) {
   if (column === "id" || column.endsWith("_id")) return true;
   if (FIELD_KEYS[column]) return false;
   return SENSITIVE_COLUMN.test(column);
+}
+
+export type AuditChange = { fieldKey: string; before: string; after: string };
+
+const MONEY_COLUMN = /_minor$/;
+
+/** A scalar the screen can show. Money columns are major units. Sensitive text is masked. */
+export function formatAuditValue(column: string, value: unknown) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return "";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  const raw = typeof value === "number" ? String(value) : String(value).trim();
+  if (!raw) return "";
+  if (MONEY_COLUMN.test(column) && /^-?\d+$/.test(raw)) {
+    const minor = Number(raw);
+    if (!Number.isSafeInteger(minor)) return "";
+    const sign = minor < 0 ? "-" : "";
+    const abs = Math.abs(minor);
+    const major = Math.trunc(abs / 100);
+    const frac = abs % 100;
+    return frac === 0 ? `${sign}${major}` : `${sign}${major}.${String(frac).padStart(2, "0")}`;
+  }
+  const masked = maskAuditText(raw);
+  return masked.text.length > 80 ? `${masked.text.slice(0, 80)}…` : masked.text;
+}
+
+export function auditChanges(rows: { column?: string; before?: unknown; after?: unknown }[] | null | undefined): AuditChange[] {
+  const changes: AuditChange[] = [];
+  for (const row of rows ?? []) {
+    const column = row.column ?? "";
+    if (!column || column === "updated_at" || column === "created_at") continue;
+    if (sensitiveColumn(column)) continue;
+    const fieldKey = FIELD_KEYS[column];
+    if (!fieldKey) continue;
+    const before = formatAuditValue(column, row.before);
+    const after = formatAuditValue(column, row.after);
+    if (!before && !after) continue;
+    if (before === after) continue;
+    changes.push({ fieldKey, before: before || "—", after: after || "—" });
+  }
+  return changes;
 }
 
 export function summarizeChanges(columns: string[] | null) {
@@ -409,6 +450,7 @@ type RawAudit = {
   action: string;
   event_type: string | null;
   changed_cols: string[] | null;
+  field_changes?: { column?: string; before?: unknown; after?: unknown }[] | null;
   reason: string | null;
 };
 
@@ -418,6 +460,7 @@ export type AuditView = {
   whoKey: "i_audit_member" | "i_audit_system" | null;
   actionKey: string;
   fields: string[];
+  changes: AuditChange[];
   other: boolean;
   masked: boolean;
   reason: string;
@@ -431,6 +474,7 @@ export type AuditView = {
 export function presentAudit(row: RawAudit, hit: RecordHit | null): AuditView {
   const name = maskAuditText(row.actor_name || "").text;
   const changes = summarizeChanges(row.changed_cols);
+  const diffs = auditChanges(row.field_changes);
   const rawReason = row.reason || "";
   const redundant = rawReason === row.event_type || rawReason === row.action || (row.table_name === "auth_events" && rawReason === row.row_id);
   const maskedReason = maskAuditText(redundant ? "" : rawReason);
@@ -441,7 +485,8 @@ export function presentAudit(row: RawAudit, hit: RecordHit | null): AuditView {
     who: name,
     whoKey: name ? null : row.has_actor ? "i_audit_member" : "i_audit_system",
     actionKey: actionKey(row.action, row.event_type),
-    fields: changes.fields,
+    fields: changes.fields.filter((key) => !diffs.some((diff) => diff.fieldKey === key)),
+    changes: diffs,
     other: changes.other,
     masked: changes.masked || maskedReason.masked,
     reason: leftover ? maskedReason.text : "",
@@ -463,6 +508,15 @@ const AUDIT_SELECT = `SELECT a.id::text AS id,
        a.action::text AS action,
        a.event_type,
        a.changed_cols,
+       COALESCE((
+         SELECT jsonb_agg(jsonb_build_object(
+                  'column', col,
+                  'before', CASE WHEN a.old_row IS NULL THEN NULL ELSE a.old_row -> col END,
+                  'after', CASE WHEN a.new_row IS NULL THEN NULL ELSE a.new_row -> col END
+                ))
+           FROM unnest(COALESCE(a.changed_cols, ARRAY[]::text[])) AS col
+          WHERE col <> 'updated_at' AND col <> 'created_at'
+       ), '[]'::jsonb) AS field_changes,
        a.reason`;
 
 export type AuditQueryInput = {
@@ -744,6 +798,7 @@ export async function loadAuditScreen(
         actor_name: row.actor_name ?? "",
         has_actor: Boolean(row.has_actor),
         changed_cols: Array.isArray(row.changed_cols) ? row.changed_cols : null,
+        field_changes: Array.isArray(row.field_changes) ? row.field_changes : null,
         reason: row.reason ?? null,
         event_type: row.event_type ?? null,
       }));

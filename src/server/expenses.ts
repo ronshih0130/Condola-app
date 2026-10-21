@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { maybe, many, one, tx } from "./db";
 import { FlowError } from "./errors";
@@ -76,6 +75,8 @@ export type ExpenseDraft = {
   vendorName?: string;
   description?: string;
   receiptName?: string;
+  /** Confirmed files.id. Null clears a saved receipt. Omit to leave it unchanged on edit. */
+  receiptFileId?: string | null;
 };
 
 type NormalizedExpense = {
@@ -128,6 +129,9 @@ export type ExpenseListRow = {
   bill_to: string;
   vendor_name: string | null;
   receipt_name: string | null;
+  receipt_file_id: string | null;
+  receipt_size: string | null;
+  month_closed: boolean;
   ticket_id: string | null;
   ticket_number: string | null;
   included: boolean;
@@ -135,7 +139,6 @@ export type ExpenseListRow = {
 
 export type ExpenseDetail = ExpenseListRow & {
   on_issued: boolean;
-  month_closed: boolean;
 };
 
 type ChoiceProperty = { id: string; name: string };
@@ -204,16 +207,6 @@ async function vendorIdFor(client: Client, orgId: string, name: string) {
   return created.id;
 }
 
-async function insertReceipt(client: Client, session: Session, name: string) {
-  const file = await one<{ id: string }>(
-    client,
-    `INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, uploaded_by)
-     VALUES ($1, 'receipts', $2, $3, 'text/plain', $4, $5) RETURNING id::text`,
-    [session.orgId, `demo/${randomUUID()}.txt`, name, Buffer.byteLength(name), session.userId],
-  );
-  return file.id;
-}
-
 async function firstOpenDay(client: Client, orgId: string) {
   const closed = await closedThrough(client, orgId);
   const today = taipeiToday();
@@ -271,6 +264,7 @@ const LIST_SQL = `SELECT e.id::text, e.property_id::text, p.name AS property_nam
             e.category, coalesce(e.description, '') AS description,
             e.currency, e.amount_minor::text, e.incurred_on::text, e.status::text, e.bill_to::text,
             c.display_name AS vendor_name, f.file_name AS receipt_name,
+            f.id::text AS receipt_file_id, f.size_bytes::text AS receipt_size,
             e.ticket_id::text, t.ticket_number::text AS ticket_number
        FROM expenses e
        JOIN properties p ON p.id = e.property_id
@@ -280,9 +274,19 @@ const LIST_SQL = `SELECT e.id::text, e.property_id::text, p.name AS property_nam
        LEFT JOIN maintenance_tickets t ON t.id = e.ticket_id AND t.org_id = e.org_id
        LEFT JOIN rooms rm ON rm.id = t.room_id`;
 
-function mapRow(row: Omit<ExpenseListRow, "included" | "incurred_on"> & { incurred_on: string }): ExpenseListRow {
+function mapRow(
+  row: Omit<ExpenseListRow, "included" | "incurred_on" | "month_closed"> & { incurred_on: string },
+  closed: string | null,
+): ExpenseListRow {
   const incurred_on = day(row.incurred_on);
-  return { ...row, incurred_on, included: asIncluded(row.status, row.bill_to) };
+  return {
+    ...row,
+    incurred_on,
+    included: asIncluded(row.status, row.bill_to),
+    month_closed: monthIsClosed(incurred_on, closed),
+    receipt_file_id: row.receipt_file_id,
+    receipt_size: row.receipt_size,
+  };
 }
 
 export async function expenseFormOptions(session: Session) {
@@ -322,7 +326,8 @@ export async function listExpenses(
   const unitId = filters.unitId && UUID.test(filters.unitId) ? filters.unitId : null;
   const status = (EXPENSE_STATUSES as readonly string[]).includes(filters.status ?? "") ? filters.status : null;
   return tx(session.userId, async (client) => {
-    const rows = await many<Omit<ExpenseListRow, "included">>(
+    const closed = await closedThrough(client, session.orgId);
+    const rows = await many<Omit<ExpenseListRow, "included" | "month_closed">>(
       client,
       `${LIST_SQL}
         WHERE e.org_id = $1
@@ -332,7 +337,7 @@ export async function listExpenses(
         ORDER BY e.incurred_on DESC, e.created_at DESC`,
       [session.orgId, propertyId, unitId, status],
     );
-    return rows.map((row) => mapRow(row));
+    return rows.map((row) => mapRow(row, closed));
   });
 }
 
@@ -340,18 +345,17 @@ export async function getExpense(session: Session, expenseId: string): Promise<E
   assertPerm(session, "exp.add");
   if (!UUID.test(expenseId)) return null;
   return tx(session.userId, async (client) => {
-    const row = await maybe<Omit<ExpenseListRow, "included">>(
+    const row = await maybe<Omit<ExpenseListRow, "included" | "month_closed">>(
       client,
       `${LIST_SQL} WHERE e.org_id = $1 AND e.id = $2`,
       [session.orgId, expenseId],
     );
     if (!row) return null;
-    const mapped = mapRow(row);
     const closed = await closedThrough(client, session.orgId);
+    const mapped = mapRow(row, closed);
     return {
       ...mapped,
       on_issued: await onIssuedStatement(client, session.orgId, expenseId),
-      month_closed: monthIsClosed(mapped.incurred_on, closed),
     };
   });
 }
@@ -367,7 +371,7 @@ export async function createExpense(session: Session, input: ExpenseDraft) {
     const closed = await closedThrough(client, session.orgId);
     if (monthIsClosed(incurred, closed)) throw new FlowError("errors.monthClosed");
     const vendorId = await vendorIdFor(client, session.orgId, fields.vendorName);
-    const receiptId = fields.receiptName ? await insertReceipt(client, session, fields.receiptName) : null;
+    const receiptId = input.receiptFileId || null;
     const memo = fields.description || fields.category;
     const expense = await one<{ id: string }>(
       client,
@@ -452,7 +456,8 @@ export async function updateExpense(session: Session, expenseId: string, input: 
       throw new FlowError("errors.expenseLocked");
     }
     const vendorId = await vendorIdFor(client, session.orgId, fields.vendorName);
-    const receiptId = fields.receiptName ? await insertReceipt(client, session, fields.receiptName) : null;
+    const receiptId = input.receiptFileId === undefined ? null : input.receiptFileId;
+    const clearReceipt = input.receiptFileId === null;
     const ownerLedger = current.bill_to === "owner" && (current.status === "posted" || Boolean(current.ledger_transaction_id));
     if (financial && ownerLedger && current.ledger_transaction_id) {
       const reversed = await maybe<{ id: string }>(
@@ -472,7 +477,11 @@ export async function updateExpense(session: Session, expenseId: string, input: 
          currency = $7,
          amount_minor = $8,
          incurred_on = $9,
-         receipt_file_id = COALESCE($10::uuid, receipt_file_id)
+         receipt_file_id = CASE
+           WHEN $12::boolean THEN NULL
+           WHEN $10::uuid IS NOT NULL THEN $10::uuid
+           ELSE receipt_file_id
+         END
        WHERE id = $1 AND org_id = $11 AND status <> 'void'`,
       [
         expenseId,
@@ -486,6 +495,7 @@ export async function updateExpense(session: Session, expenseId: string, input: 
         incurred,
         receiptId,
         session.orgId,
+        clearReceipt,
       ],
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.expenseVoid");
@@ -598,18 +608,17 @@ export async function approveExpense(session: Session, expenseId: string) {
 /** Statements shortcut: receipt required, category repair, date is the first open day. */
 export async function addExpense(
   session: Session,
-  input: { propertyId: string; description: string; amountText: string; receiptName: string },
+  input: { propertyId: string; description: string; amountText: string; receiptFileId: string },
 ) {
   assertPerm(session, "exp.add");
   const description = input.description.trim();
-  const receiptName = input.receiptName.trim();
   const amountText = input.amountText.trim();
-  if (!description || !receiptName || !amountText) throw new FlowError("errors.required");
+  if (!description || !input.receiptFileId || !amountText) throw new FlowError("errors.required");
   return createExpense(session, {
     propertyId: input.propertyId,
     category: "repair",
     description,
     amountText,
-    receiptName,
+    receiptFileId: input.receiptFileId,
   });
 }

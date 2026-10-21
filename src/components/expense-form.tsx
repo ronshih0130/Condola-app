@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ReceiptUpload } from "./receipt-upload";
 import { useT } from "./locale";
 
 type Option = { id: string; name: string };
@@ -31,6 +32,9 @@ export function ExpenseForm({
     incurredOn: string;
     vendorName: string;
     note: string;
+    receiptId?: string;
+    receiptName?: string;
+    receiptSize?: number | null;
   };
   lockFinancial: boolean;
   submitLabel: string;
@@ -138,6 +142,14 @@ export function ExpenseForm({
         <label className="f">{t("i_note")}</label>
         <input className="inp" name="note" data-testid="expense-note" defaultValue={defaults.note} />
       </div>
+      <ReceiptUpload
+        kind="expense"
+        existing={
+          defaults.receiptId && defaults.receiptName
+            ? { id: defaults.receiptId, name: defaults.receiptName, size: defaults.receiptSize ?? null }
+            : null
+        }
+      />
       <button className="btn pri" type="submit" data-testid="expense-save">
         {submitLabel}
       </button>

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
+import { RepairCreateForm } from "@/components/repair-create-form";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
 import { REPAIR_CATS, REPAIR_CAT_KEY } from "@/lib/repair-labels";
-import { actionTicket, actionUpdateTicket } from "@/server/actions";
+import { actionUpdateTicket } from "@/server/actions";
 import { formatMoney } from "@/server/format";
 import { can, rolesFor } from "@/server/perms";
 import { isUuid } from "@/server/repair-rules";
@@ -147,50 +148,17 @@ export default async function TicketsPage({
             </tbody>
           </table>
         </div>
-        <form className="card pad" action={canWrite ? actionTicket : undefined}>
-          <input type="hidden" name="returnTo" value="staff" />
-          <div className="fg">
-            <label className="f">{t("i_select_lease")}</label>
-            <select className="inp" name="leaseId" defaultValue="" disabled={!canWrite}>
-              <option value="">{t("i_choose")}</option>
-              {leases.map((lease) => (
-                <option key={lease.id} value={lease.id}>
-                  {displaySampleName(lease.tenant)} · {displaySampleName(lease.place)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="fg">
-            <label className="f">{t("i_category")}</label>
-            <select className="inp" name="category" defaultValue="" disabled={!canWrite}>
-              <option value="">{t("i_choose")}</option>
-              {REPAIR_CATS.map((cat) => (
-                <option key={cat} value={cat}>
-                  {t(REPAIR_CAT_KEY[cat])}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="fg">
-            <label className="f">{t("i_title")}</label>
-            <input className="inp" name="title" placeholder={t("i_ph_title")} defaultValue="" disabled={!canWrite} />
-          </div>
-          <div className="fg">
-            <label className="f">{t("i_description")}</label>
-            <textarea className="inp" name="description" defaultValue="" disabled={!canWrite} />
-          </div>
-          <button
-            className="btn pri"
-            type="submit"
-            disabled={!canWrite}
-            aria-disabled={!canWrite}
-            title={canWrite ? undefined : need}
-            data-testid={canWrite ? "ticket-create" : "ticket-create-disabled"}
-          >
-            {t("i_submit_repair")}
-          </button>
-          {canWrite ? null : <p className="tiny muted">{need}</p>}
-        </form>
+        <RepairCreateForm
+          returnTo="staff"
+          disabled={!canWrite}
+          denied={need}
+          submitTestId={canWrite ? "ticket-create" : "ticket-create-disabled"}
+          leases={leases.map((lease) => ({
+            id: lease.id,
+            label: `${displaySampleName(lease.tenant)} · ${displaySampleName(lease.place)}`,
+          }))}
+          categories={REPAIR_CATS.map((cat) => ({ value: cat, label: t(REPAIR_CAT_KEY[cat]) }))}
+        />
       </div>
     </>
   );

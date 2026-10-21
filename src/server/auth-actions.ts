@@ -433,14 +433,23 @@ function expenseFields(formData: FormData) {
   };
 }
 
+async function linkedReceipt(session: Awaited<ReturnType<typeof getSession>>, formData: FormData) {
+  const { claimFromForm, confirmReceipt } = await import("./receipts");
+  const claim = claimFromForm(formData);
+  if (claim) return confirmReceipt(session, claim);
+  if (formData.get("receiptClear") === "1") return null;
+  return undefined;
+}
+
 export async function actionAddExpense(formData: FormData) {
   try {
     const session = await getSession();
+    const receiptFileId = await linkedReceipt(session, formData);
     await addExpense(session, {
       propertyId: text(formData.get("propertyId")),
       description: text(formData.get("description")),
       amountText: text(formData.get("amount")),
-      receiptName: text(formData.get("receipt")),
+      receiptFileId: receiptFileId ?? "",
     });
     redirect("/m/statements?saved=1");
   } catch (error) {
@@ -451,7 +460,8 @@ export async function actionAddExpense(formData: FormData) {
 export async function actionCreateExpense(formData: FormData) {
   try {
     const session = await getSession();
-    const created = await createExpense(session, expenseFields(formData));
+    const receiptFileId = await linkedReceipt(session, formData);
+    const created = await createExpense(session, { ...expenseFields(formData), receiptFileId: receiptFileId ?? null });
     redirect(`/m/expenses/${created.expenseId}?saved=1`);
   } catch (error) {
     bounce("/m/expenses/new", error);
@@ -462,7 +472,8 @@ export async function actionUpdateExpense(formData: FormData) {
   const id = text(formData.get("expenseId"));
   try {
     const session = await getSession();
-    await updateExpense(session, id, expenseFields(formData));
+    const receiptFileId = await linkedReceipt(session, formData);
+    await updateExpense(session, id, { ...expenseFields(formData), ...(receiptFileId !== undefined ? { receiptFileId } : {}) });
     redirect(`/m/expenses/${id}?saved=1`);
   } catch (error) {
     bounce(id ? `/m/expenses/${id}` : "/m/expenses", error);

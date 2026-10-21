@@ -722,12 +722,16 @@ export async function listPayments(session: Session) {
       last5: string | null;
       tenant: string;
       place: string;
+      proof_file_id: string | null;
+      proof_name: string | null;
     }>(
       client,
       `SELECT p.id::text, p.status::text, p.amount_minor::text AS amount, p.currency, p.paid_on::text,
               p.payer_account_last5 AS last5, c.display_name AS tenant,
-              pr.name || coalesce(' ' || r.label, '') AS place
+              pr.name || coalesce(' ' || r.label, '') AS place,
+              p.proof_file_id::text, f.file_name AS proof_name
          FROM payments p
+         LEFT JOIN files f ON f.id = p.proof_file_id AND f.org_id = p.org_id
          JOIN leases l ON l.id = p.lease_id
          JOIN properties pr ON pr.id = l.property_id
          LEFT JOIN rooms r ON r.id = l.target_room_id

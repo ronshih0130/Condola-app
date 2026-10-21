@@ -363,3 +363,16 @@ body:has(.env-banner) .nav-check:checked ~ .app .nav-backdrop{inset:88px 0 0 0}
 .repair-timeline li{border-left:2px solid var(--line);padding:0 0 12px 12px;margin-left:6px}
 .repair-photos{display:flex;flex-wrap:wrap;gap:8px}
 .repair-photos img{width:120px;height:90px;object-fit:cover;border-radius:8px;background:var(--cd-surface2)}
+.receipt-drop{display:block;border:2px dashed var(--line);border-radius:14px;padding:28px;text-align:center;color:var(--ink3);background:#FFFCF8;cursor:pointer}
+.receipt-drop.on{border-color:var(--pri);background:var(--pri2)}
+.receipt-drop input{display:none}
+.receipt-file{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-top:10px}
+.receipt-file.bad{border-color:#C62828;background:#FFF6F5}
+.receipt-thumb{width:40px;height:40px;border-radius:8px;background:#F2E5D8;display:grid;place-items:center;flex:none}
+.receipt-main{flex:1;min-width:0}
+.receipt-meta{display:flex;gap:8px;align-items:center}
+.receipt-bar{height:6px;background:#EEE8E2;border-radius:9px;overflow:hidden;flex:1;min-width:80px}
+.receipt-bar i{display:block;height:100%;background:var(--cd-accent)}
+.receipt-err{color:#C62828;font-size:12px;margin-top:4px}
+.receipt-act{background:none;border:none;color:var(--pri);font:inherit;font-weight:700;cursor:pointer;padding:8px 0;text-decoration:none}
+.receipt-act.danger{color:#C62828}

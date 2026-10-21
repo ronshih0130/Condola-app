@@ -37,6 +37,8 @@ export function mapDbError(error: unknown): Error {
   if (/ticket photo limit/i.test(message)) return new FlowError("errors.photoLimit");
   if (/ticket photo path|files_ticket_photo_path/i.test(message)) return new FlowError("errors.forbidden");
   if (/files_ticket_photo_cap/i.test(message)) return new FlowError("errors.photoSize");
+  if (/files_receipt_cap/i.test(message)) return new FlowError("errors.receiptSize");
+  if (/files_receipt_path/i.test(message)) return new FlowError("errors.forbidden");
   if (/maintenance_tickets_schedule_order/i.test(message)) return new FlowError("errors.date");
   if (/rented as whole_unit/i.test(message)) return new FlowError("errors.wholeUnit");
   if (/month is closed|month_closed/i.test(message)) return new FlowError("errors.monthClosed");

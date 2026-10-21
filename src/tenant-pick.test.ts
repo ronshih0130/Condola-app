@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "./tenant-pick";
+import { activeTenantPick, filterTenants, tenantByEmail, tenantsByName, type TenantOption } from "./tenant-pick";
 
 const tenants: TenantOption[] = [
   { id: "1", name: "王小美", phone: "+886912111002", email: "xiaomei.wang@tenant.demo" },
@@ -23,6 +23,14 @@ test("a pick is kept only while that tenant is still in the filtered list", () =
   assert.equal(activeTenantPick("1", filterTenants(tenants, "沒有這個人")), "");
   assert.equal(activeTenantPick("", filterTenants(tenants, "")), "");
   assert.equal(activeTenantPick("1", filterTenants(tenants, "")), "1");
+});
+
+test("an exact tenant name matches without treating a partial name as the same person", () => {
+  assert.deepEqual(tenantsByName(tenants, "  王小美 ").map((row) => row.id), ["1"]);
+  assert.deepEqual(tenantsByName(tenants, "alex kim").map((row) => row.id), ["3"]);
+  assert.deepEqual(tenantsByName(tenants, "王小"), []);
+  assert.deepEqual(tenantsByName(tenants, "   "), []);
+  assert.deepEqual(tenantsByName([{ id: "4", name: "王  小美", phone: null, email: null }], "王 小美").map((row) => row.id), ["4"]);
 });
 
 test("a duplicate tenant email matches ignoring case", () => {

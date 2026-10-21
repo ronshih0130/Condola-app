@@ -1598,7 +1598,7 @@ async function allocateAndLedger(
 
 export async function recordPayment(
   session: Session,
-  input: { leaseId: string; amountMajor: number; paidOn: string; last5: string; reference: string },
+  input: { leaseId: string; amountMajor: number; paidOn: string; last5: string; reference: string; proofFileId?: string | null },
 ) {
   const amount = toMinor(input.amountMajor);
   if (!(amount > 0) || !input.paidOn) throw new FlowError("errors.amount");
@@ -1625,8 +1625,8 @@ export async function recordPayment(
         client,
         `INSERT INTO payments (
            org_id, property_id, lease_id, payer_contact_id, currency, amount_minor, paid_on, method,
-           payer_account_last5, reference, status, source, submitted_by
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::payment_method,$9,$10,'submitted','tenant_portal',$11)
+           payer_account_last5, reference, status, source, submitted_by, proof_file_id
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::payment_method,$9,$10,'submitted','tenant_portal',$11,$12)
          RETURNING id`,
         [
           lease.org_id,
@@ -1640,6 +1640,7 @@ export async function recordPayment(
           input.last5 || null,
           input.reference || null,
           session.userId,
+          input.proofFileId || null,
         ],
       );
       return payment.id;
@@ -1674,9 +1675,9 @@ export async function recordPayment(
       client,
       `INSERT INTO payments (
          org_id, property_id, lease_id, payer_contact_id, currency, amount_minor, paid_on, method,
-         payer_account_last5, reference, status, source, submitted_by, confirmed_by, confirmed_at
+         payer_account_last5, reference, status, source, submitted_by, confirmed_by, confirmed_at, proof_file_id
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8::payment_method,$9,$10,'confirmed','manager_entry',$11,$11,now()
+         $1,$2,$3,$4,$5,$6,$7,$8::payment_method,$9,$10,'confirmed','manager_entry',$11,$11,now(),$12
        ) RETURNING id, org_id::text, property_id::text, lease_id::text, currency, amount_minor::text, payer_contact_id::text`,
       [
         session.orgId,
@@ -1690,6 +1691,7 @@ export async function recordPayment(
         input.last5 || null,
         input.reference || null,
         session.userId,
+        input.proofFileId || null,
       ],
     );
     await allocateAndLedger(client, payment, session.userId);

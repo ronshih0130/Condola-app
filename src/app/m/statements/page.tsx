@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { StatementForm } from "@/components/dialogs";
+import { ReceiptUpload } from "@/components/receipt-upload";
 import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionAddExpense } from "@/server/auth-actions";
@@ -77,10 +78,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             <label className="f">{t("i_amount_label")}</label>
             <input className="inp" name="amount" data-testid="expense-amount" inputMode="decimal" required />
           </div>
-          <div className="fg">
-            <label className="f">{t("i_receipt")}</label>
-            <input className="inp" name="receipt" data-testid="expense-receipt" required />
-          </div>
+          <ReceiptUpload kind="expense" />
           <button className="btn pri" type="submit">
             {t("i_add_expense")}
           </button>

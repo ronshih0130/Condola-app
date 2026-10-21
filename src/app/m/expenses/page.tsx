@@ -129,8 +129,8 @@ export default async function ExpensesPage({
                     </div>
                   </Cell>
                   <Cell action>
-                    <Link className="btn sm" href={`/m/expenses/${row.id}`}>
-                      {row.status === "void" ? t("i_expense_open") : t("i_edit")}
+                    <Link className="btn sm" href={`/m/expenses/${row.id}`} data-testid="expense-action" data-mode={row.month_closed ? "view" : "edit"}>
+                      {row.month_closed ? t("i_expense_view") : row.status === "void" ? t("i_expense_open") : t("i_edit")}
                     </Link>
                   </Cell>
                 </tr>

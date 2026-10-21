@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
+import { RepairCreateForm } from "@/components/repair-create-form";
 import { RepairThread } from "@/components/repair-thread";
 import { ErrorBanner, statusClass, statusKey } from "@/components/ui";
 import { REPAIR_CAT_KEY } from "@/lib/repair-labels";
 import { selectedLease } from "@/lib/tenant-lease";
-import { actionTicket } from "@/server/actions";
 import { isUuid } from "@/server/repair-rules";
 import { tenantRepairs, ticketDetail } from "@/server/queries";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function RepairPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; done?: string; id?: string }>;
+  searchParams: Promise<{ error?: string; done?: string; id?: string; photoError?: string }>;
 }) {
   const { session, lease } = await selectedLease();
   const t = makeT(session.locale);
@@ -27,7 +27,16 @@ export default async function RepairPage({
     <div>
       <h2>{t("i_rich_repair")}</h2>
       <ErrorBanner t={t} error={params.error} />
-      {params.done ? <div className="alert ok">{t("i_repair_sent", { firm: lease.firm_name })}</div> : null}
+      {params.done ? (
+        <div className="alert ok" data-testid="repair-sent">
+          {t("i_repair_sent", { firm: lease.firm_name })}
+        </div>
+      ) : null}
+      {params.photoError ? (
+        <div className="alert warn" data-testid="repair-photo-partial">
+          {t("i_repair_photo_partial")}
+        </div>
+      ) : null}
       {own ? (
         <div className="card pad" style={{ marginBottom: 16 }} data-testid="repair-detail">
           <h3>
@@ -51,31 +60,18 @@ export default async function RepairPage({
           />
         </div>
       ) : null}
-      <form action={actionTicket}>
-        <input type="hidden" name="leaseId" value={lease.lease_id} />
-        <div className="fg">
-          <label className="f">{t("i_category")}</label>
-          <select className="inp" name="category" data-testid="repair-category" defaultValue="">
-            <option value="">{t("i_choose")}</option>
-            <option value="plumbing">{t("i_cat_plumbing")}</option>
-            <option value="electrical">{t("i_cat_electrical")}</option>
-            <option value="appliance">{t("i_cat_appliance")}</option>
-            <option value="hvac">{t("i_cat_hvac")}</option>
-            <option value="other">{t("i_cat_other")}</option>
-          </select>
-        </div>
-        <div className="fg">
-          <label className="f">{t("i_title")}</label>
-          <input className="inp" name="title" data-testid="repair-title" placeholder={t("i_ph_title")} defaultValue="" />
-        </div>
-        <div className="fg">
-          <label className="f">{t("i_description")}</label>
-          <textarea className="inp" name="description" defaultValue="" />
-        </div>
-        <button className="btn pri block" type="submit" data-testid="submit-repair">
-          {t("i_submit_repair")}
-        </button>
-      </form>
+      <RepairCreateForm
+        leaseId={lease.lease_id}
+        returnTo="tenant"
+        submitTestId="submit-repair"
+        categories={[
+          { value: "plumbing", label: t("i_cat_plumbing") },
+          { value: "electrical", label: t("i_cat_electrical") },
+          { value: "appliance", label: t("i_cat_appliance") },
+          { value: "hvac", label: t("i_cat_hvac") },
+          { value: "other", label: t("i_cat_other") },
+        ]}
+      />
       <h3 style={{ marginTop: 20 }}>{t("i_repair_history")}</h3>
       <p className="small muted">{t("i_repair_own_hint")}</p>
       {repairs.length === 0 ? <p className="small muted">{t("i_repair_none")}</p> : null}

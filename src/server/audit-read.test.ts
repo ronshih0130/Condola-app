@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   AUDIT_PAGE_SIZE,
   actionKey,
+  auditChanges,
   auditPageQuery,
   auditScreenQuery,
   decodeCursor,
@@ -185,8 +186,12 @@ test("the page query is a keyset seek and does not read snapshots", () => {
   assert.match(open.sql, /LIMIT \$2/);
   assert.equal(open.params.at(-1), AUDIT_PAGE_SIZE + 1);
   assert.doesNotMatch(open.sql, /OFFSET/i);
-  assert.doesNotMatch(open.sql, /old_row/);
-  assert.doesNotMatch(open.sql, /new_row/);
+  assert.match(open.sql, /a\.old_row -> col/);
+  assert.match(open.sql, /a\.new_row -> col/);
+  assert.match(open.sql, /unnest\(COALESCE\(a\.changed_cols/);
+  assert.match(open.sql, /AS field_changes/);
+  assert.equal(open.sql.includes("a.old_row,"), false);
+  assert.equal(open.sql.includes("a.new_row,"), false);
   assert.equal(open.sql.includes("actor_user_id ="), false);
 
   const narrowed = auditPageQuery({
@@ -209,6 +214,48 @@ test("the page query is a keyset seek and does not read snapshots", () => {
   assert.equal(narrowed.params.at(-1), 9);
   assert.equal(narrowed.sql.includes("drop table"), false);
   assert.equal(JSON.stringify(narrowed.params).includes("old_row"), false);
+});
+
+test("a changed rent shows major units, and phone or hash values stay off the page", () => {
+  assert.deepEqual(
+    auditChanges([
+      { column: "rent_amount_minor", before: 120000, after: 150000 },
+      { column: "phone_e164", before: null, after: "+886912345678" },
+      { column: "number_hash", before: null, after: "hash-secret" },
+      { column: "updated_at", before: "old", after: "new" },
+    ]),
+    [{ fieldKey: "i_audit_f_rent", before: "1200", after: "1500" }],
+  );
+  const rowId = "10000000-0000-4000-8000-0000000000bb";
+  const view = presentAudit(
+    {
+      id: "9",
+      occurred_key: "2026-10-20T16:30:00.000000Z",
+      occurred_at: "2026-10-20T16:30:00.000Z",
+      actor_name: "林雅婷",
+      has_actor: true,
+      table_name: "leases",
+      row_id: rowId,
+      action: "update",
+      event_type: null,
+      changed_cols: ["rent_amount_minor", "phone_e164", "number_hash"],
+      field_changes: [
+        { column: "rent_amount_minor", before: 120000, after: 150000 },
+        { column: "phone_e164", before: null, after: "+886912345678" },
+        { column: "number_hash", before: null, after: "hash-secret" },
+      ],
+      reason: "屋主同意調租",
+    },
+    { text: "王小美 信義松仁 3F" },
+  );
+  assert.deepEqual(view.changes, [{ fieldKey: "i_audit_f_rent", before: "1200", after: "1500" }]);
+  assert.equal(view.fields.includes("i_audit_f_rent"), false);
+  assert.equal(view.masked, true);
+  const packed = JSON.stringify(view);
+  assert.doesNotMatch(packed, /\+886912345678/);
+  assert.equal(packed.includes("hash-secret"), false);
+  assert.equal(packed.includes("phone_e164"), false);
+  assert.equal(packed.includes("number_hash"), false);
 });
 
 test("the screen and its record names are one statement each", () => {

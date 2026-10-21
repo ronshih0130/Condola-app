@@ -64,6 +64,13 @@ export default async function ExpenseDetailPage({
         </p>
         {row.vendor_name ? <p className="small">{row.vendor_name}</p> : null}
         {row.description ? <p>{row.description}</p> : null}
+        {row.receipt_file_id && row.receipt_name ? (
+          <p>
+            <a href={`/api/receipts/${row.receipt_file_id}`} data-testid="receipt-saved">
+              {t("i_receipt_view")} {row.receipt_name}
+            </a>
+          </p>
+        ) : null}
         {row.ticket_id && row.ticket_number ? (
           <p>
             <Link href={`/m/tickets/${row.ticket_id}`} data-testid="expense-ticket">
@@ -105,6 +112,9 @@ export default async function ExpenseDetailPage({
               incurredOn: row.incurred_on,
               vendorName: row.vendor_name ?? "",
               note: row.description,
+              receiptId: row.receipt_file_id ?? "",
+              receiptName: row.receipt_name ?? "",
+              receiptSize: row.receipt_size ? Number(row.receipt_size) : null,
             }}
           />
           {editable && !row.on_issued ? (

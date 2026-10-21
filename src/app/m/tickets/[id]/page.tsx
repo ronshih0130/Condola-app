@@ -18,7 +18,7 @@ export default async function TicketDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; photoError?: string }>;
 }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
@@ -49,6 +49,16 @@ export default async function TicketDetailPage({
         crumb={<Link href="/m/tickets">{t("i_repair_history")}</Link>}
       />
       <ErrorBanner t={t} error={query.error} />
+      {query.created === "1" ? (
+        <div className="alert ok" data-testid="repair-sent">
+          {t("i_repair_filed")}
+        </div>
+      ) : null}
+      {query.photoError ? (
+        <div className="alert warn" data-testid="repair-photo-partial">
+          {t("i_repair_photo_partial")}
+        </div>
+      ) : null}
       <p className="muted">
         <Link href={`/m/properties/${ticket.property_id}`} data-testid="repair-property">
           {displaySampleName(ticket.property_name)}

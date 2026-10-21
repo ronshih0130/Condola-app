@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { actionApproveMatch, actionImportCsv, actionRecordPayment, actionStatement } from "@/server/actions";
 import { taipeiToday } from "@/server/money";
+import { ReceiptUpload } from "./receipt-upload";
 import { useT } from "./locale";
 
 export function PayDialog({
@@ -62,6 +63,7 @@ export function PayDialog({
             <label className="f">{t("i_reference")}</label>
             <input className="inp" name="reference" defaultValue="" />
           </div>
+          <ReceiptUpload kind="payment" />
           <p className="small muted">{t("i_pay_direct", { brand: t("i_brand") })}</p>
         </div>
         <div className="ft">

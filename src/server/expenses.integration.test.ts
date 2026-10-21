@@ -114,7 +114,7 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     assert.equal(row.vendor_name, vendor);
     assert.equal(row.description, note);
     assert.equal(row.amount_minor, "150000");
-    assert.equal(row.receipt_name, `receipt-${stamp}.txt`);
+    assert.equal(row.receipt_name, null);
     assert.equal(row.incurred_on, "2099-06-15");
 
     const counted = await tx(USERS.admin, (client) =>
@@ -362,6 +362,7 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     });
     const replacement = await getExpense(manager, replacementId);
     assert.equal(replacement?.status, "draft");
+    assert.equal(replacement?.month_closed, false);
     assert.equal(replacement?.ticket_id, ticket.id);
     assert.equal(replacement?.included, false);
 
@@ -387,6 +388,11 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
       );
       return { posted: posted.rows[0].id, draft: draftRow.rows[0].id };
     });
+    const closedView = await getExpense(admin, closed.posted);
+    assert.equal(closedView?.month_closed, true);
+    const closedList = await listExpenses(admin);
+    assert.equal(closedList.find((row) => row.id === closed.posted)?.month_closed, true);
+    assert.equal(closedList.find((row) => row.id === replacementId)?.month_closed, false);
     await assert.rejects(
       () =>
         createExpense(admin, {

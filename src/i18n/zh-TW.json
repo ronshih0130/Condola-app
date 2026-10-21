@@ -1700,5 +1700,18 @@
  "i_sec_rooms": "戶別與房間",
  "i_sec_meter": "公用電表與分攤",
  "i_import_title": "匯入 Excel",
- "i_import_help": "上傳 CSV（可由 Excel 另存）。欄位與物件匯入範本相同。"
+ "i_import_help": "上傳 CSV（可由 Excel 另存）。欄位與物件匯入範本相同。",
+ "i_receipt_label": "收據",
+ "i_receipt_drop": "拖曳或點選上傳（JPG、PNG、PDF，10MB 內）",
+ "i_receipt_uploading": "上傳中 {pct}%",
+ "i_receipt_too_big": "檔案超過 10MB",
+ "i_receipt_type": "只接受 JPG、PNG 或 PDF。",
+ "i_receipt_view": "檢視",
+ "i_receipt_remove": "移除",
+ "i_receipt_cancel": "取消",
+ "i_receipt_storage": "目前無法儲存收據。儲存空間無法使用，檔案沒有寫入。",
+ "i_expense_view": "檢視",
+ "i_tenant_name_exists": "事務所已有同名租客。可以改選現有的，也可以繼續建立新的。",
+ "i_repair_photo_create": "照片",
+ "i_repair_photo_partial": "報修已送出，但有照片沒有上傳成功。可以在這筆報修補傳。"
 }
