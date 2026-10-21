@@ -17,6 +17,7 @@ import {
   resetPassword,
   verifyRecoveryTokenHash,
   revokeInvite,
+  revokeAllSessions,
   revokeOtherSessions,
   revokeSession,
   sessionCookie,
@@ -36,6 +37,7 @@ import { demoModeEnabled } from "./demo";
 import { addExpense, closeMonth, reversePayment } from "./domain";
 import { FlowError } from "./errors";
 import { appCookieOptions, sameAppPath } from "./public-origin";
+import { clearAuthCookies } from "./sign-out";
 import { getSession, readSession } from "./session";
 import type { OrgRole } from "./types";
 
@@ -312,7 +314,7 @@ export async function actionRevokeSession(formData: FormData) {
   await revokeSession(session.userId, id);
   if (id === session.sessionId) {
     const jar = await cookies();
-    jar.delete(SESSION_COOKIE);
+    clearAuthCookies(jar);
     redirect("/login");
   }
   redirect("/m/account");
@@ -331,11 +333,15 @@ export async function actionClearBackup() {
 
 export async function actionSignOut() {
   const session = await readSession();
-  if (session) await revokeSession(session.userId, session.sessionId);
   const jar = await cookies();
-  jar.delete(SESSION_COOKIE);
-  jar.delete(CHALLENGE_COOKIE);
-  jar.delete("condola_env");
+  clearAuthCookies(jar);
+  if (session) {
+    try {
+      await revokeAllSessions(session.userId);
+    } catch (error) {
+      console.error("sign out", error);
+    }
+  }
   redirect("/login");
 }
 

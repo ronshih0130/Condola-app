@@ -49,7 +49,13 @@ async function readSessionOnce(): Promise<Session | null> {
       );
       const identity = found.rows[0];
       if (!identity) return null;
-      await client.query(`UPDATE auth_sessions SET last_active_at = now() WHERE id = $1`, [identity.session_id]);
+      await client.query(
+        `UPDATE auth_sessions
+            SET last_active_at = now(),
+                expires_at = greatest(expires_at, now() + interval '12 hours')
+          WHERE id = $1`,
+        [identity.session_id],
+      );
       const preferredOrg = jar.get(ORG_COOKIE)?.value ?? null;
       const rawEnv = jar.get(ENV_COOKIE)?.value;
       const envChoice: OrgEnvironment | null = rawEnv === "sandbox" ? "sandbox" : rawEnv === "live" ? "live" : null;

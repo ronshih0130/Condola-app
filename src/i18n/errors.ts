@@ -1,6 +1,6 @@
 import type { T } from "./index";
 
-const ERRORS: Record<string, string> = {
+export const ERRORS: Record<string, string> = {
   "errors.forbidden": "i_forbidden",
   "errors.required": "i_required",
   "errors.generic": "i_generic",
@@ -40,5 +40,9 @@ const ERRORS: Record<string, string> = {
 
 export function errorText(t: T, key: string | undefined) {
   if (!key) return "";
-  return t(ERRORS[key] ?? "i_generic");
+  const mapped = ERRORS[key];
+  if (!mapped) return t("i_generic");
+  const text = t(mapped);
+  if (!text || text === mapped) return t("i_generic");
+  return text;
 }

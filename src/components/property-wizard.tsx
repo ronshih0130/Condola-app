@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
+import { errorText } from "@/i18n/errors";
 import { actionCreateProperty } from "@/server/actions";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
@@ -24,6 +25,7 @@ function money(major: number, currency: string, locale: string) {
 export function PropertyWizard({ owners }: { owners: { id: string; name: string }[] }) {
   const t = useT();
   const locale = useLocale();
+  const [state, formAction] = useActionState(actionCreateProperty, { error: "" });
   const steps = [t("s_634053c"), t("s_d2c40b1"), t("s_a757163"), t("s_a68e8dc")];
   const [step, setStep] = useState(1);
   const [ownerMode, setOwnerMode] = useState("");
@@ -56,8 +58,13 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
   }, [usageN, rate, rateN, labels, roomCount, billN]);
 
   return (
-    <form action={actionCreateProperty}>
+    <form action={formAction}>
       <Stepper steps={steps} current={step} />
+      {state.error ? (
+        <div className="alert bad" data-testid="property-error" style={{ marginBottom: 12 }}>
+          {errorText(t, state.error)}
+        </div>
+      ) : null}
       <div hidden={step !== 1}>
         <div className="card pad" style={{ maxWidth: 760 }}>
           <div className="fg">
@@ -143,7 +150,7 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
       </div>
       <div hidden={step !== 3}>
         <div className="card pad" style={{ maxWidth: 760 }}>
-          <p className="hint">{t("i_rooms_hint")}</p>
+          {rentalMode === "whole_unit" ? null : <p className="hint">{t("i_rooms_hint")}</p>}
           <div className="grid2">
             <div className="fg">
               <label className="f">{t("i_unit_label")}</label>
@@ -154,7 +161,7 @@ export function PropertyWizard({ owners }: { owners: { id: string; name: string 
               <input className="inp" name="floor" placeholder={t("i_ph_floor")} defaultValue="" />
             </div>
           </div>
-          {[0, 1, 2].map((index) => (
+          {rentalMode === "whole_unit" ? null : [0, 1, 2].map((index) => (
             <div className="grid3" key={index}>
               <div className="fg">
                 <label className="f">{t("s_8569bc8")}</label>

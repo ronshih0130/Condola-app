@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { actionSignOut } from "@/server/auth-actions";
 import { can, visibleNav, type PermKey } from "@/server/perms";
 import type { OrgRole } from "@/server/types";
 import { BrandImage } from "./brand";
@@ -79,7 +78,7 @@ export function PersonaSelect({
 export function SignOutButton({ testId = "sign-out" }: { testId?: string }) {
   const t = useT();
   return (
-    <form action={actionSignOut}>
+    <form action="/api/auth/sign-out" method="post">
       <button className="btn sm" type="submit" data-testid={testId}>
         {t("i_sign_out")}
       </button>

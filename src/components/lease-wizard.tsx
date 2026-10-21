@@ -1,10 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
+import { errorText } from "@/i18n/errors";
 import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
+
+function amountOk(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  const value = Number(trimmed);
+  return Number.isFinite(value) && value >= 0;
+}
 
 function money(major: number, currency: string, locale: string) {
   if (!Number.isFinite(major)) return "";
@@ -18,6 +26,7 @@ function money(major: number, currency: string, locale: string) {
 export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLocale: "zh-TW" | "en" }) {
   const t = useT();
   const locale = useLocale();
+  const [state, formAction] = useActionState(actionCreateLease, { error: "" });
   const steps = [
     t("s_4fabbda"),
     t("s_74f19b0"),
@@ -46,6 +55,14 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
   const [reason, setReason] = useState("");
   const [templateLang, setTemplateLang] = useState<"zh-TW" | "en">(firmLocale === "en" ? "en" : "zh-TW");
   const [bilingual, setBilingual] = useState(false);
+  const [tenantError, setTenantError] = useState(false);
+  const [phoneError, setPhoneError] = useState(false);
+  const [rentError, setRentError] = useState(false);
+  const [depositError, setDepositError] = useState(false);
+  const [dueError, setDueError] = useState(false);
+  const [billError, setBillError] = useState(false);
+  const [usageError, setUsageError] = useState(false);
+  const [rateError, setRateError] = useState(false);
 
   const room = rooms.find((item) => item.id === roomId);
   const currency = room?.currency ?? "TWD";
@@ -70,9 +87,63 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
     };
   }, [room, usageN, rate, rateN, billN]);
 
+  function goNext() {
+    if (step === 2) {
+      const nameBad = tenant.trim() === "";
+      const phoneBad = phone.trim() === "";
+      setTenantError(nameBad);
+      setPhoneError(phoneBad);
+      if (nameBad || phoneBad) return;
+    }
+    if (step === 3 && !amountOk(rent)) {
+      setRentError(true);
+      return;
+    }
+    if (step === 4 && !amountOk(depositMonths)) {
+      setDepositError(true);
+      return;
+    }
+    if (step === 5) {
+      const day = Number(dueDay);
+      if (!dueDay.trim() || !Number.isInteger(day) || day < 1 || day > 31) {
+        setDueError(true);
+        return;
+      }
+    }
+    if (step === 6) {
+      const anyElectricity = bill.trim() !== "" || usage.trim() !== "" || rate.trim() !== "";
+      if (anyElectricity) {
+        const billBad = !amountOk(bill);
+        const usageBad = !usage.trim() || !(Number(usage) > 0);
+        const rateBad = rate.trim() !== "" && !amountOk(rate);
+        setBillError(billBad);
+        setUsageError(usageBad);
+        setRateError(rateBad);
+        if (billBad || usageBad || rateBad) return;
+      }
+    }
+    setStep(step + 1);
+  }
+
   return (
-    <form action={actionCreateLease}>
+    <form
+      action={formAction}
+      onSubmit={(event) => {
+        if (!amountOk(rent) || !amountOk(depositMonths)) {
+          event.preventDefault();
+          setRentError(!amountOk(rent));
+          setDepositError(!amountOk(depositMonths));
+          if (!amountOk(rent)) setStep(3);
+          else setStep(4);
+        }
+      }}
+    >
       <Stepper steps={steps} current={step} />
+      {state.error ? (
+        <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
+          {errorText(t, state.error)}
+        </div>
+      ) : null}
       <input type="hidden" name="roomId" value={roomId} />
       <input type="hidden" name="tenantName" value={tenant} />
       <input type="hidden" name="tenantPhone" value={phone} />
@@ -108,11 +179,13 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
           <div className="grid2">
             <div className="fg">
               <label className="f">{t("s_0c5acea")}</label>
-              <input className="inp" data-testid="tenant-name" placeholder={t("i_ph_tenant")} value={tenant} onChange={(event) => setTenant(event.target.value)} />
+              <input className="inp" data-testid="tenant-name" placeholder={t("i_ph_tenant")} value={tenant} onChange={(event) => { setTenant(event.target.value); setTenantError(false); }} />
+              {tenantError ? <p className="hint" data-testid="tenant-name-error">{t("i_field_required")}</p> : null}
             </div>
             <div className="fg">
               <label className="f">{t("s_522cf12")}</label>
-              <input className="inp" data-testid="tenant-phone" placeholder={t("i_ph_phone")} value={phone} onChange={(event) => setPhone(event.target.value)} />
+              <input className="inp" data-testid="tenant-phone" placeholder={t("i_ph_phone")} value={phone} onChange={(event) => { setPhone(event.target.value); setPhoneError(false); }} />
+              {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_field_required")}</p> : null}
             </div>
           </div>
           <div className="fg">
@@ -138,7 +211,8 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
             </div>
             <div className="fg">
               <label className="f">{t("i_base_rent")}</label>
-              <input className="inp" data-testid="rent" inputMode="decimal" placeholder={t("i_ph_rent")} value={rent} onChange={(event) => setRent(event.target.value)} />
+              <input className="inp" data-testid="rent" inputMode="decimal" placeholder={t("i_ph_rent")} value={rent} onChange={(event) => { setRent(event.target.value); setRentError(false); }} />
+              {rentError ? <p className="hint" data-testid="rent-error">{t("i_amount")}</p> : null}
               <div className="hint">{t("s_759b7ba")}</div>
               {room ? <div className="hint">{t("i_base_hint", { amount: money(room.baseRentMinor / 100, currency, locale) })}</div> : null}
             </div>
@@ -149,7 +223,8 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
         <div className="card pad" style={{ maxWidth: 760 }}>
           <div className="fg">
             <label className="f">{t("s_8ed103e")}</label>
-            <input className="inp" data-testid="deposit-months" inputMode="decimal" placeholder={t("i_ph_dep")} value={depositMonths} onChange={(event) => setDepositMonths(event.target.value)} />
+            <input className="inp" data-testid="deposit-months" inputMode="decimal" placeholder={t("i_ph_dep")} value={depositMonths} onChange={(event) => { setDepositMonths(event.target.value); setDepositError(false); }} />
+            {depositError ? <p className="hint" data-testid="deposit-error">{t("i_amount")}</p> : null}
           </div>
           {depositOver ? (
             <div className="alert warn" data-testid="deposit-alert">
@@ -170,7 +245,8 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
         <div className="card pad" style={{ maxWidth: 760 }}>
           <div className="fg">
             <label className="f">{t("s_aa47e23")}</label>
-            <input className="inp" data-testid="due-day" inputMode="numeric" placeholder={t("i_ph_due")} value={dueDay} onChange={(event) => setDueDay(event.target.value)} />
+            <input className="inp" data-testid="due-day" inputMode="numeric" placeholder={t("i_ph_due")} value={dueDay} onChange={(event) => { setDueDay(event.target.value); setDueError(false); }} />
+            {dueError ? <p className="hint" data-testid="due-error">{t("i_field_required")}</p> : null}
           </div>
           <p className="hint">{t("s_c6a6031")}</p>
         </div>
@@ -189,15 +265,18 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
           <div className="grid3">
             <div className="fg">
               <label className="f">{t("i_bill_total")}</label>
-              <input className="inp" data-testid="bill-total" inputMode="decimal" placeholder={t("i_ph_bill")} value={bill} onChange={(event) => setBill(event.target.value)} />
+              <input className="inp" data-testid="bill-total" inputMode="decimal" placeholder={t("i_ph_bill")} value={bill} onChange={(event) => { setBill(event.target.value); setBillError(false); }} />
+              {billError ? <p className="hint" data-testid="bill-error">{t("i_amount")}</p> : null}
             </div>
             <div className="fg">
               <label className="f">{t("i_usage")}</label>
-              <input className="inp" data-testid="usage" inputMode="decimal" placeholder={t("i_ph_kwh")} value={usage} onChange={(event) => setUsage(event.target.value)} />
+              <input className="inp" data-testid="usage" inputMode="decimal" placeholder={t("i_ph_kwh")} value={usage} onChange={(event) => { setUsage(event.target.value); setUsageError(false); }} />
+              {usageError ? <p className="hint" data-testid="usage-error">{t("i_amount")}</p> : null}
             </div>
             <div className="fg">
               <label className="f">{t("i_rate")}</label>
-              <input className="inp" data-testid="rate" inputMode="decimal" placeholder={t("i_ph_rate")} value={rate} onChange={(event) => setRate(event.target.value)} />
+              <input className="inp" data-testid="rate" inputMode="decimal" placeholder={t("i_ph_rate")} value={rate} onChange={(event) => { setRate(event.target.value); setRateError(false); }} />
+              {rateError ? <p className="hint" data-testid="rate-error">{t("i_amount")}</p> : null}
             </div>
           </div>
           {over ? (
@@ -315,7 +394,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
         ) : null}
         <span className="sp" />
         {step < 8 ? (
-          <button className="btn pri" type="button" data-testid="wizard-next" disabled={blocked || (step === 1 && !roomId)} onClick={() => setStep(step + 1)}>
+          <button className="btn pri" type="button" data-testid="wizard-next" disabled={blocked || (step === 1 && !roomId)} onClick={goNext}>
             {t("s_9cff86c")} →
           </button>
         ) : (

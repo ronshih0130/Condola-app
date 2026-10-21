@@ -694,6 +694,23 @@ export async function revokeSession(userId: string, sessionId: string) {
   await writeAudit(await primaryOrg(userId), userId, "sign_out", { sessionId });
 }
 
+export async function revokeAllSessions(userId: string) {
+  await query(
+    `UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`,
+    [userId],
+  );
+  try {
+    await query(`SELECT app.end_auth_sessions($1::uuid)`, [userId]);
+  } catch (error) {
+    console.error("end_auth_sessions", error);
+  }
+  try {
+    await writeAudit(await primaryOrg(userId), userId, "sign_out", { scope: "all" });
+  } catch (error) {
+    console.error("sign_out audit", error);
+  }
+}
+
 export async function revokeOtherSessions(userId: string, currentSessionId: string) {
   await query(
     `UPDATE auth_sessions SET revoked_at = now()

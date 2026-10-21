@@ -9,8 +9,25 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
   const t = useT();
   const [step, setStep] = useState<3 | 4>(3);
   const [kind, setKind] = useState<"firm" | "self" | "">("");
+  const [nameError, setNameError] = useState(false);
+  const [contactError, setContactError] = useState(false);
   return (
-    <form action={actionCreateFirm} className="col" data-testid="firm-form">
+    <form
+      noValidate
+      action={actionCreateFirm}
+      className="col"
+      data-testid="firm-form"
+      onSubmit={(event) => {
+        const data = new FormData(event.currentTarget);
+        const name = String(data.get("name") ?? "").trim();
+        const contact = String(data.get("contactName") ?? "").trim();
+        const needName = kind === "firm" && name === "";
+        const needContact = contact === "";
+        setNameError(needName);
+        setContactError(needContact);
+        if (needName || needContact) event.preventDefault();
+      }}
+    >
       <ol className="steps" data-testid="signup-steps">
         <li className="on">1</li>
         <li className="on">2</li>
@@ -41,11 +58,13 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
         <div className="col" data-testid="signup-details">
           <div className="fg">
             <label className="f">{kind === "self" ? t("i_signup_name_self") : t("i_signup_name_firm")}</label>
-            <input className="inp" name="name" data-testid="firm-name" required={kind === "firm"} />
+            <input className="inp" name="name" data-testid="firm-name" onChange={() => setNameError(false)} />
+            {nameError ? <p className="hint" data-testid="firm-name-error">{t("i_field_required")}</p> : null}
           </div>
           <div className="fg">
             <label className="f">{t("i_signup_contact")}</label>
-            <input className="inp" name="contactName" required data-testid="firm-contact" />
+            <input className="inp" name="contactName" data-testid="firm-contact" onChange={() => setContactError(false)} />
+            {contactError ? <p className="hint" data-testid="firm-contact-error">{t("i_field_required")}</p> : null}
           </div>
           <div className="fg">
             <label className="f">{t("i_signup_phone")}</label>

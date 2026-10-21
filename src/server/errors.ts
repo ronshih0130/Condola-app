@@ -28,5 +28,6 @@ export function mapDbError(error: unknown): Error {
   if (/utility_bills_meter_id_period/i.test(message) || /meter_id, period_start/i.test(message)) {
     return new FlowError("errors.billExists");
   }
+  if (/invalid input syntax for type numeric/i.test(message)) return new FlowError("errors.amount");
   return new FlowError("errors.generic");
 }

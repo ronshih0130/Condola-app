@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import {
   approveMatch,
   confirmPayment,
-  createLease,
   createProperty,
   createTicket,
   generateStatement,
@@ -21,14 +20,18 @@ import {
   simulateTenantSignature,
   uploadSignedLeasePdf,
   updateTicket,
-  type LeaseInput,
   type PropertyInput,
 } from "./domain";
 import { createOwner, createSpace, updateOwner, updateProperty, updateSpace, type SpaceKind } from "./portfolio";
 import { FlowError } from "./errors";
-import { addCalendarMonths, monthBounds, taipeiToday } from "./money";
+import { taipeiToday } from "./money";
+import { createLeaseFromForm } from "./lease-form";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
+
+export type ActionState = { error: string };
+
+const EMPTY_ACTION: ActionState = { error: "" };
 
 function isRedirect(error: unknown) {
   return (
@@ -87,75 +90,55 @@ function spaceInput(formData: FormData) {
   };
 }
 
-export async function actionCreateProperty(formData: FormData) {
-  const back = "/m/properties/new";
+function propertyInput(formData: FormData): PropertyInput {
+  return {
+    name: text(formData.get("name")),
+    city: text(formData.get("city")),
+    district: text(formData.get("district")),
+    street: `${text(formData.get("street")).trim()}${text(formData.get("number")).trim()}`,
+    currency: text(formData.get("currency")) === "USD" ? "USD" : "TWD",
+    ownerMode: text(formData.get("ownerMode")) || "new",
+    ownerName: text(formData.get("ownerName")),
+    ownerPhone: text(formData.get("ownerPhone")),
+    ownerEmail: text(formData.get("ownerEmail")),
+    canViewTenantPhone: formData.get("canViewTenantPhone") === "on",
+    unitLabel: text(formData.get("unitLabel")),
+    floor: text(formData.get("floor")),
+    rentalMode: text(formData.get("rentalMode")) === "whole_unit" ? "whole_unit" : "by_room",
+    rooms: [0, 1, 2].map((index) => ({
+      label: text(formData.get(`room${index}label`)),
+      roomType: text(formData.get(`room${index}type`)) || "suite",
+      baseRentMajor: num(formData.get(`room${index}rent`)) || 0,
+    })),
+  };
+}
+
+function actionError(error: unknown): ActionState {
+  if (isRedirect(error)) throw error;
+  return { error: error instanceof FlowError ? error.key : "errors.generic" };
+}
+
+export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
+  void prev;
   try {
     const session = await getSession();
-    const input: PropertyInput = {
-      name: text(formData.get("name")),
-      city: text(formData.get("city")),
-      district: text(formData.get("district")),
-      street: `${text(formData.get("street")).trim()}${text(formData.get("number")).trim()}`,
-      currency: text(formData.get("currency")) === "USD" ? "USD" : "TWD",
-      ownerMode: text(formData.get("ownerMode")) || "new",
-      ownerName: text(formData.get("ownerName")),
-      ownerPhone: text(formData.get("ownerPhone")),
-      ownerEmail: text(formData.get("ownerEmail")),
-      canViewTenantPhone: formData.get("canViewTenantPhone") === "on",
-      unitLabel: text(formData.get("unitLabel")),
-      floor: text(formData.get("floor")),
-      rentalMode: text(formData.get("rentalMode")) === "whole_unit" ? "whole_unit" : "by_room",
-      rooms: [0, 1, 2].map((index) => ({
-        label: text(formData.get(`room${index}label`)),
-        roomType: text(formData.get(`room${index}type`)) || "suite",
-        baseRentMajor: num(formData.get(`room${index}rent`)) || 0,
-      })),
-    };
-    const created = await createProperty(session, input);
+    const created = await createProperty(session, propertyInput(formData));
     redirect(`/m/properties/${created.propertyId}`);
   } catch (error) {
-    bounce(back, error);
+    return actionError(error);
   }
 }
 
-export async function actionCreateLease(formData: FormData) {
-  const back = "/m/leases/new";
+export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
+  void prev;
   try {
     const session = await getSession();
-    const start = text(formData.get("startDate")).trim() || taipeiToday();
-    const months = num(formData.get("months"));
-    const end = addCalendarMonths(start, Number.isFinite(months) && months > 0 ? months : 12);
-    const bounds = monthBounds(/^\d{4}-\d{2}/.test(start) ? start.slice(0, 7) : taipeiToday().slice(0, 7));
-    const input: LeaseInput = {
-      roomId: text(formData.get("roomId")),
-      tenantName: text(formData.get("tenantName")),
-      tenantPhone: text(formData.get("tenantPhone")),
-      tenantEmail: text(formData.get("tenantEmail")),
-      lineUserId: text(formData.get("lineUserId")),
-      startDate: start,
-      endDate: end,
-      rentMajor: num(formData.get("rent")),
-      depositMonths: num(formData.get("depositMonths")),
-      depositReason: text(formData.get("depositReason")),
-      dueDay: num(formData.get("dueDay")),
-      splitMethod: (["even", "days_occupied", "sub_meter"].includes(text(formData.get("splitMethod")))
-        ? text(formData.get("splitMethod"))
-        : "even") as LeaseInput["splitMethod"],
-      periodStart: bounds.start,
-      periodEnd: bounds.end,
-      billTotalMajor: num(formData.get("billTotal")),
-      usageKwh: num(formData.get("usage")),
-      rateMajor: num(formData.get("rate")),
-      rateSource: "fixed_rate",
-      overrideReason: text(formData.get("overrideReason")),
-      subUsages: [],
-    };
-    const created = await createLease(session, input);
+    const created = await createLeaseFromForm(session, formData);
     const jar = await cookies();
     jar.set("condola_tenant_focus", created.tenantUserId, appCookieOptions({ httpOnly: false }));
     redirect(`/m/leases/${created.leaseId}?tab=sign`);
   } catch (error) {
-    bounce(back, error);
+    return actionError(error);
   }
 }
 
