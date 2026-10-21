@@ -31,6 +31,29 @@ test("identity numbers, phones, emails, and ids are masked", () => {
   assert.doesNotMatch(masked.text, /box@example.com/i);
   assert.doesNotMatch(masked.text, /aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/i);
   assert.equal(maskAuditText("押金原因").masked, false);
+  const phones = [
+    "+886 912 345 678",
+    "+886-912-345-678",
+    "+886 0912 345 678",
+    "0912-345-678",
+    "0912 345 678",
+    "(02) 2345-6789",
+    "02-2345-6789",
+    "04-123-4567",
+    "037-123-456",
+    "07 1234567",
+    "+886 2 2345 6789",
+  ];
+  for (const phone of phones) {
+    const hit = maskAuditText(`請聯絡 ${phone} 謝謝`);
+    assert.equal(hit.masked, true, phone);
+    assert.equal(hit.text.includes(phone), false, phone);
+    assert.doesNotMatch(hit.text, /\d{6}/, phone);
+  }
+  const together = maskAuditText("請打 +886912345678 02-2345-6789 0912-345-678");
+  assert.equal(together.masked, true);
+  assert.doesNotMatch(together.text, /\+886|2345|0912/);
+  assert.equal(maskAuditText("租金 2026-10-21 共 12000").masked, false);
 });
 
 test("changed columns never keep sensitive names", () => {
@@ -53,6 +76,17 @@ test("Taipei date bounds and keyset cursors stay exact", () => {
   assert.deepEqual(decodeCursor(cursor), { at: "2026-10-21T01:02:03.123456Z", id: "42" });
   assert.equal(decodeCursor("not-a-cursor"), null);
   assert.equal(decodeCursor(encodeCursor("2026-10-21T01:02:03.123Z", "42")), null);
+  assert.equal(decodeCursor(encodeCursor("2026-13-40T99:99:99.000000Z", "1")), null);
+  assert.equal(decodeCursor(encodeCursor("2026-02-31T00:00:00.000000Z", "1")), null);
+  assert.equal(decodeCursor(encodeCursor("2026-10-21T01:02:03.123456Z", "9999999999999999999")), null);
+  assert.equal(decodeCursor(encodeCursor("2026-10-21T01:02:03.123456Z", "9223372036854775808")), null);
+  assert.deepEqual(decodeCursor(encodeCursor("2026-10-21T01:02:03.123456Z", "9223372036854775807")), {
+    at: "2026-10-21T01:02:03.123456Z",
+    id: "9223372036854775807",
+  });
+  assert.equal(decodeCursor("a".repeat(240)), null);
+  assert.equal(parseAuditFilters({ cursor: encodeCursor("2026-13-40T00:00:00.000000Z", "12") }).cursor, null);
+  assert.equal(parseAuditFilters({ cursor: encodeCursor("2026-10-21T01:02:03.123456Z", "1".repeat(40)) }).cursor, null);
 });
 
 test("filters ignore unknown users, actions, and record types", () => {

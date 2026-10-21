@@ -12,6 +12,7 @@ import {
   loadAuditScreen,
   recordKey,
 } from "@/server/audit-read";
+import { noPermHref } from "@/server/perms";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export default async function AuditPage({
   searchParams: Promise<{ user?: string; action?: string; record?: string; from?: string; to?: string; cursor?: string }>;
 }) {
   const session = await getSession();
-  if (session.role !== "admin") redirect("/m/noperm?need=settings.edit");
+  const denied = noPermHref("/m/audit", session.role);
+  if (denied) redirect(denied);
   const query = await searchParams;
   const t = makeT(session.locale);
   const page = await loadAuditScreen(session, query);

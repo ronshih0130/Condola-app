@@ -109,6 +109,18 @@ export function requiresAdmin(pathname: string) {
   return path === "/m/audit" || path.startsWith("/m/audit/");
 }
 
+/**
+ * Where to send someone who cannot open this path.
+ * Prototype routes use their permission key (`props.edit`, `settings.edit`).
+ * 操作紀錄 is not the settings screen, so it names the admin role instead.
+ */
+export function noPermHref(pathname: string, role: OrgRole | null) {
+  if (requiresAdmin(pathname)) return role === "admin" ? null : "/m/noperm?need=admin";
+  const perm = permForPath(pathname);
+  if (perm && !can(role, perm)) return `/m/noperm?need=${perm}`;
+  return null;
+}
+
 export function navCount(role: OrgRole | null) {
   return visibleNav(role).reduce((sum, section) => sum + section.links.length, 0);
 }

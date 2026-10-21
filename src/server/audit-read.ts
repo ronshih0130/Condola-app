@@ -198,6 +198,52 @@ export function summarizeChanges(columns: string[] | null) {
 }
 
 const MASK = "••••••••••";
+const BIGINT_MAX = BigInt("9223372036854775807");
+/**
+ * One Taiwan number: +886 (optional trunk 0), a parenthesized area code, or a local 0-prefix.
+ * A separator is optional and only one character, so the next number in the same sentence stays intact.
+ */
+const PHONE =
+  /\+\s*886[ \t().-]*0?(?:[ \t().-]?\d){8,10}(?!\d)|\(\s*0\d{1,3}\s*\)[ \t.-]*(?:\d[ \t.-]?){5,8}\d(?!\d)|\b0\d(?:[ \t().-]?\d){7,9}(?!\d)/g;
+
+function taiwanPhone(raw: string) {
+  let digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("886")) {
+    digits = digits.slice(3);
+    if (!digits.startsWith("0")) digits = `0${digits}`;
+  }
+  if (/^09\d{8}$/.test(digits)) return true;
+  return /^0[2-8]\d{7,8}$/.test(digits);
+}
+
+/** A cursor timestamp Postgres can cast to timestamptz. Digit shape alone is not enough. */
+function cursorInstant(at: string) {
+  if (!CURSOR_AT.test(at)) return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.\d{6}Z$/.exec(at);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) return false;
+  const parsed = new Date(at);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() + 1 === month &&
+    parsed.getUTCDate() === day &&
+    parsed.getUTCHours() === hour &&
+    parsed.getUTCMinutes() === minute &&
+    parsed.getUTCSeconds() === second
+  );
+}
+
+function cursorId(id: string) {
+  if (!BIGINT.test(id)) return false;
+  return BigInt(id) <= BIGINT_MAX;
+}
 
 /** Hide identity numbers, phone numbers, emails, and UUIDs inside free text. */
 export function maskAuditText(value: string) {
@@ -212,8 +258,14 @@ export function maskAuditText(value: string) {
   apply(/[A-Z][1289]\d{8}/gi);
   apply(/[A-Z]{2}\d{8}/gi);
   apply(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi);
-  apply(/\+886\d{8,10}/g);
-  apply(/\b09\d{8}\b/g);
+  PHONE.lastIndex = 0;
+  text = text.replace(PHONE, (match, offset, whole) => {
+    const before = offset > 0 ? whole[offset - 1] : "";
+    const after = whole[offset + match.length] ?? "";
+    if (/\d/.test(before) || /\d/.test(after) || !taiwanPhone(match)) return match;
+    masked = true;
+    return MASK;
+  });
   apply(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g);
   return { text: text.replace(/[ \t]{2,}/g, " ").trim(), masked };
 }
@@ -234,7 +286,7 @@ export function decodeCursor(value: string | null | undefined) {
   if (split < 0) return null;
   const at = text.slice(0, split);
   const id = text.slice(split + 1);
-  if (!CURSOR_AT.test(at) || !BIGINT.test(id)) return null;
+  if (!cursorInstant(at) || !cursorId(id)) return null;
   return { at, id };
 }
 

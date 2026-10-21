@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditPageQuery, loadAuditHistory, loadAuditScreen } from "./audit-read";
+import { auditPageQuery, encodeCursor, loadAuditHistory, loadAuditScreen } from "./audit-read";
 import { query, tx } from "./db";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import type { Session } from "./types";
@@ -41,7 +41,7 @@ test("admins read only their firm's page, with sensitive fields masked", async (
       ORG_ID,
       USERS.admin,
       leaseId,
-      `${marker} 屋主同意 A123456789 ${secret} +886912345678`,
+      `${marker} 屋主同意 A123456789 ${secret} +886912345678 02-2345-6789 0912-345-678`,
       JSON.stringify({ phone_e164: "+886912345678", number_hash: "hash-secret", number_masked: "A123456789" }),
       ORG2_ID,
       otherLease,
@@ -60,6 +60,8 @@ test("admins read only their firm's page, with sensitive fields masked", async (
   assert.equal(packed.includes("org-two-marker"), false);
   assert.doesNotMatch(packed, /A123456789/);
   assert.doesNotMatch(packed, /\+886912345678/);
+  assert.doesNotMatch(packed, /02-2345-6789/);
+  assert.doesNotMatch(packed, /0912-345-678/);
   assert.equal(packed.includes(secret), false);
   assert.equal(packed.includes("hash-secret"), false);
   assert.equal(packed.includes("number_hash"), false);
@@ -87,6 +89,23 @@ test("admins read only their firm's page, with sensitive fields masked", async (
     client.query(`SELECT id FROM audit_log WHERE org_id = $1 AND reason LIKE $2`, [ORG_ID, `%${marker}%`]),
   );
   assert.equal(managerDenied.rows.length, 0);
+});
+
+test("an invalid cursor opens the first page", async () => {
+  const cursors = [
+    encodeCursor("2026-13-40T99:99:99.000000Z", "1"),
+    encodeCursor("2026-10-21T01:02:03.123456Z", "9999999999999999999"),
+    "a".repeat(240),
+    "not-a-cursor",
+  ];
+  const first = await loadAuditScreen(admin, {});
+  assert.ok(first.entries.length > 0);
+  for (const cursor of cursors) {
+    const page = await loadAuditScreen(admin, { cursor });
+    assert.equal(page.filters.cursor, null);
+    assert.equal(page.entries[0]?.cursor, first.entries[0]?.cursor);
+    assert.equal(page.entries.length, first.entries.length);
+  }
 });
 
 test("keyset plans seek an index and do not sort", async () => {

@@ -43,6 +43,9 @@ test("an org admin can filter 操作紀錄 and open a record history", async ({ 
 test("managers and accountants cannot open 操作紀錄", async ({ page }) => {
   await signIn(page, ACCOUNTS.accountant);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/audit");
+  await expect(page).toHaveURL(/\/m\/noperm\?need=admin/);
+  await expect(page.getByTestId("forbidden")).toContainText("管理員");
+  await expect(page).not.toHaveURL(/settings\.edit/);
   await expect(page.getByTestId("forbidden")).toBeVisible();
   await expect(page.getByTestId("audit-list")).toHaveCount(0);
   await page.goto("/m/properties");

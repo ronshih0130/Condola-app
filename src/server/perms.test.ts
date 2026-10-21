@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { totpCode, verifyTotp } from "./totp";
-import { PERMS, ROLE_KEYS, can, navCount, permForPath, requiresAdmin, visibleNav } from "./perms";
+import { PERMS, ROLE_KEYS, can, navCount, noPermHref, permForPath, requiresAdmin, visibleNav } from "./perms";
 
 test("permission matrix matches the prototype table", () => {
   assert.equal(PERMS.length, 18);
@@ -48,6 +48,13 @@ test("navigation follows the matrix", () => {
   assert.equal(requiresAdmin("/m/audit?user=1"), true);
   assert.equal(requiresAdmin("/m/leases"), false);
   assert.equal(permForPath("/m/audit"), null);
+  assert.equal(noPermHref("/m/audit", "manager"), "/m/noperm?need=admin");
+  assert.equal(noPermHref("/m/audit", "accountant"), "/m/noperm?need=admin");
+  assert.equal(noPermHref("/m/audit", "maintenance"), "/m/noperm?need=admin");
+  assert.equal(noPermHref("/m/audit", "admin"), null);
+  assert.equal(noPermHref("/m/settings", "manager"), "/m/noperm?need=settings.edit");
+  assert.equal(noPermHref("/m/owners/new", "accountant"), "/m/noperm?need=props.edit");
+  assert.equal(noPermHref("/m/leases", "manager"), null);
   assert.equal(permForPath("/m/tenants/abc"), "props.view");
   assert.equal(permForPath("/m/tickets"), null);
   assert.equal(permForPath("/m/tickets/1"), null);
