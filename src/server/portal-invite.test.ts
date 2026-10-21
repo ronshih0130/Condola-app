@@ -35,7 +35,7 @@ test("portal tokens are at least 32 bytes and minted logins stay recognizable", 
   assert.equal(mintedLoginEmail("tenant@example.com"), false);
 });
 
-test("portal invite copy does not send the link or use 房東 or 房客", () => {
+test("portal invite copy hands the link over and stays on the locked wording", () => {
   const keys = [
     "i_portal_copy",
     "i_portal_copied",
