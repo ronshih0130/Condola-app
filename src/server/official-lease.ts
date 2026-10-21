@@ -156,37 +156,65 @@ function districtStem(district: string) {
 const ROAD_DIGIT = "0-9０-９";
 const ROAD_SECTION = "0-9０-９一二三四五六七八九十";
 
+type RoadFill = {
+  name: string;
+  section: string;
+  lane: string;
+  alley: string;
+  number: string;
+  /** Text between the template 號 and 樓之. */
+  doorFloor: string;
+  /** Text after the template 樓之. */
+  doorSuffix: string;
+};
+
 /**
- * 號之N belongs in the 號 blank (88之1), never in 樓之. A suffix that is not a
- * plain number means the door number cannot be filled safely, so the street
- * stays blank. Only an explicit 樓之N may fill the floor-suffix blank, and only
- * when it does not disagree with the unit floor.
+ * 88號之1 and 88之1號 are different registered addresses. Keep every character
+ * the owner entered on its original side of 號 and of 樓之. The unit floor may
+ * fill 樓 only when the street itself stops at 號. A tail the blanks would
+ * rewrite is printed verbatim in the 街(路) blank instead.
  */
-function parseRoad(street: string) {
-  const match = street.trim().match(
+function parseRoad(street: string, unitFloor: string | null | undefined): RoadFill | null {
+  const trimmed = street.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(
     new RegExp(
-      `^(.+?)(?:路|街)(?:([${ROAD_SECTION}]+)段)?(?:([${ROAD_DIGIT}]+)巷)?(?:([${ROAD_DIGIT}]+)弄)?([${ROAD_DIGIT}]+)號(?:之([${ROAD_DIGIT}]+))?(?:([${ROAD_DIGIT}]+)樓(?:之([${ROAD_DIGIT}]+))?)?$`,
+      `^(.+?)(?:路|街)(?:([${ROAD_SECTION}]+)段)?(?:([${ROAD_DIGIT}]+)巷)?(?:([${ROAD_DIGIT}]+)弄)?(.*)$`,
     ),
   );
-  if (!match) return null;
-  const number = match[5] ?? "";
-  const doorSuffix = match[6] ?? "";
+  if (!match) return verbatimRoad(trimmed);
+  const placed = placeDoor(match[5] ?? "", unitFloor);
+  if (!placed) return verbatimRoad(trimmed);
   return {
     name: match[1] ?? "",
     section: match[2] ?? "",
     lane: match[3] ?? "",
     alley: match[4] ?? "",
-    number: doorSuffix ? `${number}之${doorSuffix}` : number,
-    floor: match[7] ?? "",
-    floorSuffix: match[8] ?? "",
+    number: placed.number,
+    doorFloor: placed.doorFloor,
+    doorSuffix: placed.doorSuffix,
   };
 }
 
-function agreedFloorSuffix(streetFloor: string, streetSuffix: string, unitFloor: string | null | undefined) {
-  if (!streetSuffix) return "";
-  const fromUnit = floorStem(unitFloor);
-  if (fromUnit && fromUnit !== streetFloor) return "";
-  return streetSuffix;
+function verbatimRoad(street: string): RoadFill | null {
+  if (!/[路街]/.test(street) || !street.includes("號")) return null;
+  return { name: street, section: "", lane: "", alley: "", number: "", doorFloor: "", doorSuffix: "" };
+}
+
+function placeDoor(rest: string, unitFloor: string | null | undefined) {
+  if (!rest) return { number: "", doorFloor: floorStem(unitFloor), doorSuffix: "" };
+  const mark = rest.indexOf("號");
+  if (mark <= 0 || rest.indexOf("號", mark + 1) !== -1) return null;
+  const number = rest.slice(0, mark);
+  const after = rest.slice(mark + 1);
+  const floorMark = after.indexOf("樓之");
+  if (floorMark >= 0) {
+    return { number, doorFloor: after.slice(0, floorMark), doorSuffix: after.slice(floorMark + 2) };
+  }
+  if (!after) return { number, doorFloor: floorStem(unitFloor), doorSuffix: "" };
+  if (after.endsWith("樓")) return { number, doorFloor: after.slice(0, -1), doorSuffix: "" };
+  if (!after.includes("樓")) return { number, doorFloor: after, doorSuffix: "" };
+  return null;
 }
 
 function floorStem(floor: string | null | undefined) {
@@ -253,7 +281,7 @@ export function renderOfficialLease(input: OfficialLeaseInput = {}) {
   markBox(state, "【為", "所有權人", Boolean(owner));
 
   const address = readAddress(input.address, input.addressDisplay);
-  const road = parseRoad(address.street);
+  const road = parseRoad(address.street, input.floor);
   fillSlot(state, "1、門牌", "縣(市)", cityStem(address.city));
   fillSlot(state, "縣(市)", "鄉（鎮、市、區）", districtStem(address.district));
   fillSlot(state, "鄉（鎮、市、區）", "街(路)", road?.name ?? "");
@@ -261,8 +289,8 @@ export function renderOfficialLease(input: OfficialLeaseInput = {}) {
   fillSlot(state, "段", "巷", road?.lane ?? "");
   fillSlot(state, "巷", "弄", road?.alley ?? "");
   fillSlot(state, "弄", "號", road?.number ?? "");
-  fillSlot(state, "號", "樓之", floorStem(input.floor));
-  fillSlot(state, "樓之", "(基地坐落", agreedFloorSuffix(road?.floor ?? "", road?.floorSuffix ?? "", input.floor));
+  fillSlot(state, "號", "樓之", road ? road.doorFloor : floorStem(input.floor));
+  fillSlot(state, "樓之", "(基地坐落", road?.doorSuffix ?? "");
 
   const partial = input.scope === "partial";
   const room = partial ? clean(input.roomLabel) : "";

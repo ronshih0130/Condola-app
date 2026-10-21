@@ -664,8 +664,8 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.equal(managerText.includes(`、${coTenant}，出租人`), true);
   assert.equal(managerText.includes(guarantor), false);
   assert.equal(managerText.includes(cosigner), false);
-  assert.equal(managerText.includes("88之1號"), true);
-  assert.equal(managerText.includes("弄88號"), false);
+  assert.equal(managerText.includes("88號之1"), true);
+  assert.equal(managerText.includes("88之1號"), false);
   assert.equal(managerText.includes("樓之1"), false);
 
   const tenant = pdfSession(USERS.tenant, "tenant", null, ORG_ID);
