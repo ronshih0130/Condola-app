@@ -67,18 +67,13 @@ test("sandbox sample is bundled and loads without reading the filesystem", () =>
   assert.equal(next.bills, counts.bills + 1);
 });
 
-test("a firm without live data, or with live mode locked, always opens in test mode", () => {
-  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: false, liveEnabled: false }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: false, liveEnabled: true }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: false }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: true, liveEnabled: true }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
-});
-
-test("a live firm with data opens in live mode when no cookie is set, and an explicit test-mode choice sticks", () => {
+test("login and sign-up open the live org unless the user chose the sample company", () => {
+  assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: false, liveEnabled: false }), "live");
+  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: false, liveEnabled: true }), "live");
+  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: false }), "live");
   assert.equal(resolveStaffEnvironment({ cookie: null, hasLiveData: true, liveEnabled: true }), "live");
+  assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: false, liveEnabled: false }), "sandbox");
   assert.equal(resolveStaffEnvironment({ cookie: "sandbox", hasLiveData: true, liveEnabled: true }), "sandbox");
-  assert.equal(resolveStaffEnvironment({ cookie: "live", hasLiveData: true, liveEnabled: true }), "live");
 });
 
 test("rentable spaces are rooms plus whole units that have no rooms", () => {

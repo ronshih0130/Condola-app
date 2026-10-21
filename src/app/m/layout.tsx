@@ -31,7 +31,7 @@ export default async function ManagerLayout({ children }: { children: React.Reac
           tickets={badge.tickets}
           role={session.role}
           showReset={demoModeEnabled() && session.role === "admin"}
-          showDemo={session.environment !== "live"}
+          sandbox={session.environment === "sandbox"}
         />
         <div className="main">{children}</div>
       </div>

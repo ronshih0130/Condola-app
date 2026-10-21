@@ -51,6 +51,46 @@ export default async function DashboardPage({
           {t("i_signup_code_list")}
         </p>
       ) : null}
+      {session.environment === "live" && data.properties.length === 0 ? (
+        <div data-testid="dashboard-empty">
+          <div className="card" style={{ textAlign: "center", padding: 36 }}>
+            <h2 style={{ marginTop: 0 }}>{t("i_dash_welcome")}</h2>
+            <p className="hint">{t("i_dash_steps")}</p>
+          </div>
+          <div className="grid3" style={{ marginTop: 16 }}>
+            <div className="card" style={{ textAlign: "center" }}>
+              <div className="guide-no">1</div>
+              <h3>{t("i_dash_step1")}</h3>
+              <p className="hint">{t("i_dash_step1_help")}</p>
+            </div>
+            <div className="card" style={{ textAlign: "center" }}>
+              <div className="guide-no">2</div>
+              <h3>{t("i_dash_step2")}</h3>
+              <p className="hint">{t("i_dash_step2_help")}</p>
+            </div>
+            <div className="card" style={{ textAlign: "center" }}>
+              <div className="guide-no">3</div>
+              <h3>{t("i_dash_step3")}</h3>
+              <p className="hint">{t("i_dash_step3_help")}</p>
+            </div>
+          </div>
+          <div style={{ textAlign: "center", marginTop: 16 }}>
+            <Link className="btn pri" href="/m/properties/new" data-testid="dash-first-property">
+              {t("i_dash_first")}
+            </Link>{" "}
+            <a className="btn" href="/api/env?set=sandbox&next=/m" data-testid="dash-sample">
+              {t("i_dash_sample")}
+            </a>
+            <p className="hint">
+              <Link href="/m/import" data-testid="dash-import">
+                {t("i_dash_import")}
+              </Link>
+            </p>
+          </div>
+        </div>
+      ) : null}
+      {session.environment === "live" && data.properties.length === 0 ? null : (
+      <>
       <div className="grid5" style={{ marginBottom: 16 }}>
         <Link className="card kpi" href="/m/rent">
           <div className="lbl">{t("i_paid")}</div>
@@ -164,6 +204,8 @@ export default async function DashboardPage({
           </RfTable>
         )}
       </div>
+      </>
+      )}
       <FooterNote demoLine={showDemoLineCopy(session.environment)} />
     </>
   );

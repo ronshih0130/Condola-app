@@ -12,6 +12,7 @@ import {
   round3,
   scoreMatch,
   splitWeighted,
+  taipeiToday,
   toMinor,
 } from "./money";
 import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/lease-confirm";
@@ -90,9 +91,107 @@ export type PropertyInput = {
   canViewTenantPhone: boolean;
   unitLabel: string;
   floor: string;
+  doorSupplement?: string;
   rentalMode: "whole_unit" | "by_room";
   rooms: { label: string; roomType: string; baseRentMajor: number }[];
+  extraUnits?: { label: string; floor: string; door: string; rooms: { label: string; roomType: string; baseRentMajor: number }[] }[];
+  electric?: {
+    split: "even" | "sub" | "owner";
+    rateMajor: number | null;
+    openings: (number | null)[];
+  } | null;
 };
+
+function uniqueUnitLabel(label: string, floor: string, door: string, used: Set<string>) {
+  const base = label.trim() || [floor.trim(), door.trim()].filter(Boolean).join(" ") || "1";
+  let next = base;
+  let suffix = 2;
+  while (used.has(next)) {
+    next = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  used.add(next);
+  return next;
+}
+
+async function insertPropertyUnit(
+  client: Client,
+  input: {
+    orgId: string;
+    propertyId: string;
+    label: string;
+    floor: string | null;
+    door: string;
+    rentalMode: "whole_unit" | "by_room";
+    areaUnit: string;
+    rooms: { label: string; roomType: string; baseRentMajor: number }[];
+  },
+) {
+  const door = input.door.trim();
+  const unit = door
+    ? await one<{ id: string }>(
+        client,
+        `INSERT INTO units (org_id, property_id, label, floor, door_supplement, rental_mode, area_unit)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [input.orgId, input.propertyId, input.label, input.floor, door, input.rentalMode, input.areaUnit],
+      )
+    : await one<{ id: string }>(
+        client,
+        `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+        [input.orgId, input.propertyId, input.label, input.floor, input.rentalMode, input.areaUnit],
+      );
+  const roomIds: string[] = [];
+  for (const room of input.rooms) {
+    const inserted = await one<{ id: string }>(
+      client,
+      `INSERT INTO rooms (org_id, unit_id, label, room_type, base_rent_minor, area_unit)
+       VALUES ($1,$2,$3,$4::room_type,$5,$6) RETURNING id`,
+      [input.orgId, unit.id, room.label.trim(), room.roomType || "suite", toMinor(room.baseRentMajor || 0), input.areaUnit],
+    );
+    roomIds.push(inserted.id);
+  }
+  return { unitId: unit.id, roomIds };
+}
+
+async function insertPropertyElectric(
+  client: Client,
+  session: Session,
+  propertyId: string,
+  unitId: string,
+  roomIds: string[],
+  electric: NonNullable<PropertyInput["electric"]>,
+) {
+  const rateMinor = electric.rateMajor == null ? null : toMinor(electric.rateMajor);
+  const ownerPays = electric.split === "owner";
+  const payer = ownerPays ? "owner" : "tenant";
+  const splitMethod = electric.split === "even" ? "even" : electric.split === "sub" ? "sub_meter" : "none";
+  const rateSource = ownerPays && rateMinor == null ? "fixed_rate" : rateMinor == null ? "bill_average" : "fixed_rate";
+  const meter = await one<{ id: string }>(
+    client,
+    `INSERT INTO meters (
+       org_id, property_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit
+     ) VALUES ($1,$2,$3,'electricity','kWh','main',$4,$5::split_method,$6::rate_source,$7) RETURNING id`,
+    [session.orgId, propertyId, unitId, payer, splitMethod, rateSource, rateMinor],
+  );
+  if (electric.split !== "sub") return;
+  for (let index = 0; index < roomIds.length; index += 1) {
+    const opening = electric.openings[index];
+    if (opening == null || !Number.isFinite(opening)) continue;
+    const sub = await one<{ id: string }>(
+      client,
+      `INSERT INTO meters (
+         org_id, property_id, unit_id, room_id, parent_meter_id, utility, usage_unit, label,
+         payer, split_method, rate_source, rate_minor_per_unit
+       ) VALUES ($1,$2,$3,$4,$5,'electricity','kWh',$6,'tenant','none'::split_method,$7::rate_source,$8) RETURNING id`,
+      [session.orgId, propertyId, unitId, roomIds[index], meter.id, `sub-${index + 1}`, rateSource, rateMinor],
+    );
+    await client.query(
+      `INSERT INTO meter_readings (org_id, meter_id, read_on, value, read_by) VALUES ($1,$2,$3,$4,$5)`,
+      [session.orgId, sub.id, taipeiToday(), opening, session.userId],
+    );
+  }
+}
 
 export async function createProperty(session: Session, input: PropertyInput) {
   assertStaff(session, ["admin", "manager"]);
@@ -104,6 +203,12 @@ export async function createProperty(session: Session, input: PropertyInput) {
   const rooms = posted.filter((room) => room.label.trim() || room.baseRentMajor > 0);
   if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8" });
   if (input.rentalMode === "by_room" && rooms.length < 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  if (rooms.some((room) => room.roomType === "whole_home") && rooms.length !== 1) {
+    throw new FlowError("errors.required", { field: "s_8569bc8" });
+  }
+  if (input.electric?.rateMajor != null && (!Number.isFinite(input.electric.rateMajor) || input.electric.rateMajor < 0)) {
+    throw new FlowError("errors.amount", { field: "i_rate" });
+  }
 
   const ownerPhone = cleanPhone(input.ownerPhone);
   const ownerEmail = cleanEmail(input.ownerEmail);
@@ -206,21 +311,50 @@ export async function createProperty(session: Session, input: PropertyInput) {
       }
     }
 
-    const unit = await one<{ id: string }>(
-      client,
-      `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [session.orgId, property.id, input.unitLabel.trim(), input.floor.trim() || null, input.rentalMode, country === "TW" ? "ping" : "sqft"],
-    );
+    const areaUnit = country === "TW" ? "ping" : "sqft";
+    const usedLabels = new Set<string>();
     const roomIds: string[] = [];
-    for (const room of rooms) {
-      const inserted = await one<{ id: string }>(
-        client,
-        `INSERT INTO rooms (org_id, unit_id, label, room_type, base_rent_minor, area_unit)
-         VALUES ($1,$2,$3,$4::room_type,$5,$6) RETURNING id`,
-        [session.orgId, unit.id, room.label.trim(), room.roomType || "suite", toMinor(room.baseRentMajor || 0), country === "TW" ? "ping" : "sqft"],
-      );
-      roomIds.push(inserted.id);
+    const first = await insertPropertyUnit(client, {
+      orgId: session.orgId,
+      propertyId: property.id,
+      label: uniqueUnitLabel(input.unitLabel, input.floor, input.doorSupplement ?? "", usedLabels),
+      floor: input.floor.trim() || null,
+      door: input.doorSupplement ?? "",
+      rentalMode: input.rentalMode,
+      areaUnit,
+      rooms,
+    });
+    roomIds.push(...first.roomIds);
+    for (const extra of input.extraUnits ?? []) {
+      const extraRooms = extra.rooms.filter((room) => room.label.trim() || room.baseRentMajor > 0);
+      if (!extra.floor.trim() && !extra.label.trim() && extraRooms.length === 0) continue;
+      if (!extra.floor.trim() && !extra.label.trim()) throw new FlowError("errors.required", { field: "i_floor" });
+      if (extraRooms.some((room) => room.roomType === "whole_home") && extraRooms.length !== 1) {
+        throw new FlowError("errors.required", { field: "s_8569bc8" });
+      }
+      const inserted = await insertPropertyUnit(client, {
+        orgId: session.orgId,
+        propertyId: property.id,
+        label: uniqueUnitLabel(extra.label, extra.floor, extra.door, usedLabels),
+        floor: extra.floor.trim() || null,
+        door: extra.door,
+        rentalMode: "by_room",
+        areaUnit,
+        rooms: extraRooms,
+      });
+      roomIds.push(...inserted.roomIds);
+    }
+    if (input.electric?.split) {
+      const openings =
+        input.rentalMode === "whole_unit"
+          ? []
+          : input.rooms.flatMap((room, index) =>
+              room.label.trim() || room.baseRentMajor > 0 ? [input.electric?.openings[index] ?? null] : [],
+            );
+      await insertPropertyElectric(client, session, property.id, first.unitId, first.roomIds, {
+        ...input.electric,
+        openings,
+      });
     }
     return { propertyId: property.id, ownerContactId, roomIds, inviteCode: null as string | null };
   }, { orgId: session.orgId, environment: session.environment });

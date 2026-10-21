@@ -1,4 +1,5 @@
 import type { T } from "@/i18n";
+import { PhoneField } from "./phone-field";
 
 export function OwnerForm({
   t,
@@ -34,7 +35,7 @@ export function OwnerForm({
           </div>
           <div className="fg">
             <label className="f">{t("i_phone_label")}</label>
-            <input className="inp" name="phone" data-testid="owner-phone" defaultValue={phone ?? ""} placeholder={t("i_ph_phone")} />
+            <PhoneField name="phone" testId="owner-phone" callingCode="+886" defaultValue={phone ?? ""} />
           </div>
         </div>
         <div className="fg">

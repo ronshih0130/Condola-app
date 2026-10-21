@@ -18,7 +18,7 @@ export default async function PropertyPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; audit?: string }>;
+  searchParams: Promise<{ error?: string; audit?: string; created?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -49,6 +49,11 @@ export default async function PropertyPage({
         }
       />
       <p className="muted">{detail.property.address_display}</p>
+      {query.created === "1" ? (
+        <p className="alert ok" data-testid="property-created">
+          {t("i_created_prop")}
+        </p>
+      ) : null}
       <ErrorBanner t={t} error={query.error} />
       <div className="grid2">
         <div className="card">

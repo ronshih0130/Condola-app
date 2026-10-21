@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { can, visibleNav, type PermKey } from "@/server/perms";
 import type { OrgRole } from "@/server/types";
 import { appFooterText, footerHasProductLine } from "@/line-copy";
@@ -162,31 +163,47 @@ export function Sidebar({
   tickets,
   role,
   showReset,
-  showDemo,
+  sandbox,
 }: {
   firm: string;
   pending: number;
   tickets: number;
   role: OrgRole | null;
   showReset: boolean;
-  showDemo: boolean;
+  sandbox: boolean;
 }) {
   const t = useT();
   const path = usePathname() || "/m";
+  const [orgOpen, setOrgOpen] = useState(false);
   const closeNav = () => {
     const box = document.getElementById("nav-open") as HTMLInputElement | null;
     if (box) box.checked = false;
   };
   const sections = visibleNav(role);
+  const next = encodeURIComponent(path);
+  const label = sandbox ? `${firm}${t("i_sandbox_suffix")}` : firm;
   return (
     <aside className="side">
       <div className="org">
         <div className="av">{firm.slice(0, 1)}</div>
-        <div>
-          <div className="b">{firm}</div>
-          {showDemo ? (
-            <div className="tiny muted" data-testid="demo-badge">
-              {t("i_demo_only")}
+        <div className="org-switch">
+          <button
+            type="button"
+            className="org-toggle"
+            data-testid="org-switch"
+            aria-expanded={orgOpen}
+            onClick={() => setOrgOpen((open) => !open)}
+          >
+            <span className="b">{label}</span>
+          </button>
+          {orgOpen ? (
+            <div className="org-menu" data-testid="org-menu">
+              <a href={`/api/env?set=live&next=${next}`} data-testid="org-pick-live">
+                {firm}
+              </a>
+              <a href={`/api/env?set=sandbox&next=${next}`} data-testid="org-pick-sandbox">
+                {t("i_sandbox_company")}
+              </a>
             </div>
           ) : null}
         </div>
@@ -202,8 +219,8 @@ export function Sidebar({
         </Link>
       ) : null}
       {sections.map((section) => (
-        <div key={section.section}>
-          <div className="sec">{t(section.section)}</div>
+        <div className="nav-sec" key={section.section}>
+          <h4 className="sec">{t(section.section)}</h4>
           {section.links.map((link) => {
             const on = link.href === "/m" ? path === "/m" : path === link.href || path.startsWith(`${link.href}/`);
             const badge = link.href === "/m/payments" ? pending : link.href === "/m/tickets" ? tickets : 0;

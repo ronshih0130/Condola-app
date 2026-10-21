@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { useT } from "./locale";
 
-const ROOM_TYPES = ["suite", "shared_bath", "studio", "other"] as const;
+const ROOM_TYPES = ["whole_home", "studio", "suite", "shared_bath", "other"] as const;
 const TYPE_KEY: Record<string, string> = {
-  suite: "i_suite",
+  whole_home: "i_whole_home",
+  suite: "i_room_split",
   shared_bath: "i_shared",
   studio: "i_studio",
   other: "i_other_room",

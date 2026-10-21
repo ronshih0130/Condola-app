@@ -82,7 +82,11 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(property, /useActionState/);
   assert.match(property, /i_step_incomplete/);
   assert.match(property, /data-testid="property-address-error"/);
-  assert.match(property, /split === "sub" && bill\.trim\(\) === ""/);
+  assert.match(property, /i_example_calc/);
+  assert.match(property, /data-testid="example-calc"/);
+  assert.doesNotMatch(property, /i_bill_total/);
+  assert.doesNotMatch(property, /i_ph_bill/);
+  assert.doesNotMatch(property, /i_ph_kwh/);
   assert.doesNotMatch(property, /ownerPhone\.trim\(\)/);
   assert.match(property, /setTimeout\(\(\) => setSubmitReady\(true\), 600\)/);
   assert.match(property, /disabled=\{blocked \|\| !submitReady\}/);
@@ -128,6 +132,9 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(firm, /disabled=\{!submitReady\}/);
   const envRoute = readFileSync(new URL("../app/api/env/route.ts", import.meta.url), "utf8");
   assert.match(envRoute, /set === "live"/);
-  assert.match(envRoute, /ENV_COOKIE_MAX_AGE/);
+  assert.doesNotMatch(envRoute, /ENV_COOKIE_MAX_AGE/);
+  assert.match(envRoute, /appCookieOptions\(\{ httpOnly: false \}\)/);
   assert.match(envRoute, /jar\.set\(ENV_COOKIE, set,/);
+  const actions = readFileSync(new URL("../server/actions.ts", import.meta.url), "utf8");
+  assert.match(actions, /redirect\(`\/m\/properties\/\$\{created\.propertyId\}\?created=1`\)/);
 });

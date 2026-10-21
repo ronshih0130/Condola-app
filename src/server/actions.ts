@@ -25,7 +25,9 @@ import {
 } from "./domain";
 import { createOwner, createSpace, updateOwner, updateProperty, updateSpace, type SpaceKind } from "./portfolio";
 import { FlowError } from "./errors";
+import { normalizePhone } from "./lease-rules";
 import { taipeiToday } from "./money";
+import { loadOrgCountry } from "./org-country";
 import { createLeaseFromForm } from "./lease-form";
 import { addTicketComment, saveRepairRecord } from "./repairs";
 import { getSession } from "./session";
@@ -92,26 +94,67 @@ function spaceInput(formData: FormData) {
   };
 }
 
+function submittedPhone(formData: FormData, name: string) {
+  const raw = text(formData.get(name));
+  if (!raw.trim()) return "";
+  const calling = text(formData.get(`${name}Country`)) || "+886";
+  return normalizePhone(raw, calling) ?? raw;
+}
+
+function postedRooms(formData: FormData, prefix: string, count: number) {
+  return Array.from({ length: Math.min(count, 30) }, (_, index) => ({
+    label: text(formData.get(`${prefix}${index}label`)),
+    roomType: text(formData.get(`${prefix}${index}type`)) || "suite",
+    baseRentMajor: num(formData.get(`${prefix}${index}rent`)) || 0,
+  }));
+}
+
 function propertyInput(formData: FormData): PropertyInput {
+  const rawCurrency = text(formData.get("currency"));
+  const splitRaw = text(formData.get("electricSplit"));
+  const split = splitRaw === "even" || splitRaw === "sub" || splitRaw === "owner" ? splitRaw : "";
+  const rateRaw = text(formData.get("electricRate")).trim();
+  const roomCount = Number(text(formData.get("roomCount"))) || 0;
+  const rooms = postedRooms(formData, "room", roomCount);
+  const unitCount = Math.min(Math.max(Number(text(formData.get("unitCount"))) || 1, 1), 20);
   return {
     name: text(formData.get("name")),
     city: text(formData.get("city")),
     district: text(formData.get("district")),
     street: `${text(formData.get("street")).trim()}${text(formData.get("number")).trim()}`,
-    currency: text(formData.get("currency")) === "USD" ? "USD" : "TWD",
+    currency: rawCurrency === "USD" ? "USD" : "TWD",
     ownerMode: text(formData.get("ownerMode")) || "new",
     ownerName: text(formData.get("ownerName")),
-    ownerPhone: text(formData.get("ownerPhone")),
+    ownerPhone: submittedPhone(formData, "ownerPhone"),
     ownerEmail: text(formData.get("ownerEmail")),
     canViewTenantPhone: formData.get("canViewTenantPhone") === "on",
     unitLabel: text(formData.get("unitLabel")),
     floor: text(formData.get("floor")),
+    doorSupplement: text(formData.get("doorSupplement")),
     rentalMode: text(formData.get("rentalMode")) === "whole_unit" ? "whole_unit" : "by_room",
-    rooms: Array.from({ length: Math.min(Number(text(formData.get("roomCount"))) || 0, 30) }, (_, index) => ({
-      label: text(formData.get(`room${index}label`)),
-      roomType: text(formData.get(`room${index}type`)) || "suite",
-      baseRentMajor: num(formData.get(`room${index}rent`)) || 0,
-    })),
+    rooms,
+    extraUnits: Array.from({ length: unitCount - 1 }, (_, index) => {
+      const unit = index + 1;
+      const count = Number(text(formData.get(`unit${unit}roomCount`))) || 0;
+      return {
+        label: text(formData.get(`unit${unit}label`)),
+        floor: text(formData.get(`unit${unit}floor`)),
+        door: text(formData.get(`unit${unit}door`)),
+        rooms: postedRooms(formData, `unit${unit}room`, count),
+      };
+    }),
+    electric: split
+      ? {
+          split,
+          rateMajor: rateRaw === "" ? null : num(formData.get("electricRate")),
+          openings: rooms.map((_, index) => {
+            const raw = text(formData.get(`room${index}opening`)).trim();
+            if (!raw) return null;
+            const parsed = Number(raw);
+            return Number.isFinite(parsed) ? parsed : null;
+          }),
+        }
+      : null,
   };
 }
 
@@ -127,8 +170,13 @@ export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, for
   void prev;
   try {
     const session = await getSession();
-    const created = await createProperty(session, propertyInput(formData));
-    redirect(`/m/properties/${created.propertyId}`);
+    const input = propertyInput(formData);
+    if (!text(formData.get("currency"))) {
+      const country = await loadOrgCountry(session.orgId);
+      input.currency = country.currency === "USD" ? "USD" : "TWD";
+    }
+    const created = await createProperty(session, input);
+    redirect(`/m/properties/${created.propertyId}?created=1`);
   } catch (error) {
     return actionError(error);
   }
@@ -401,7 +449,7 @@ export async function actionCreateOwner(formData: FormData) {
     await createOwner(session, {
       name: text(formData.get("name")),
       email: text(formData.get("email")),
-      phone: text(formData.get("phone")),
+      phone: submittedPhone(formData, "phone"),
       propertyIds: propertyIds(formData),
     });
     redirect("/m/owners");
@@ -418,7 +466,7 @@ export async function actionUpdateOwner(formData: FormData) {
     await updateOwner(session, ownerId, {
       name: text(formData.get("name")),
       email: text(formData.get("email")),
-      phone: text(formData.get("phone")),
+      phone: submittedPhone(formData, "phone"),
       propertyIds: propertyIds(formData),
     });
     redirect("/m/owners");

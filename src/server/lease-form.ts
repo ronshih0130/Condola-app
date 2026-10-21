@@ -1,4 +1,5 @@
 import { createLease, type LeaseInput } from "./domain";
+import { normalizePhone } from "./lease-rules";
 import { addCalendarMonths, monthBounds, taipeiToday } from "./money";
 import type { Session } from "./types";
 
@@ -33,7 +34,12 @@ export function leaseInputFromForm(formData: FormData): LeaseInput {
   return {
     roomId: text(formData.get("roomId")),
     tenantName: text(formData.get("tenantName")),
-    tenantPhone: text(formData.get("tenantPhone")),
+    tenantPhone: (() => {
+      const raw = text(formData.get("tenantPhone"));
+      if (!raw.trim()) return "";
+      const calling = text(formData.get("tenantPhoneCountry")) || text(formData.get("phoneCountry")) || "+886";
+      return normalizePhone(raw, calling) ?? raw;
+    })(),
     tenantEmail: text(formData.get("tenantEmail")),
     tenantContactId: tenantContactFromForm(formData),
     lineUserId: text(formData.get("lineUserId")),

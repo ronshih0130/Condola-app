@@ -18,7 +18,8 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
   const summary = listSummary(t, result);
   const editable = can(session.role, "props.edit");
   const roomTypeKey: Record<string, string> = {
-    suite: "i_suite",
+    whole_home: "i_whole_home",
+    suite: "i_room_split",
     shared_bath: "i_shared",
     studio: "i_studio",
     other: "i_other_room",
