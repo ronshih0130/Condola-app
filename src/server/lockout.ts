@@ -3,9 +3,9 @@
 export const LOCKOUT_LIMIT = 5;
 export const LOCKOUT_MS = 15 * 60 * 1000;
 
-export function nextFailure(failedCount: number, now: Date) {
+export function nextFailure(failedCount: number, now: Date, limit = LOCKOUT_LIMIT) {
   const count = failedCount + 1;
-  const locked = count >= LOCKOUT_LIMIT;
+  const locked = count >= limit;
   return {
     failedCount: count,
     locked,

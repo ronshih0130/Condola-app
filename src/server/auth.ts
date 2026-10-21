@@ -607,11 +607,11 @@ export type InviteKind = "team_member" | "owner" | "tenant" | "unknown";
 export type InviteView =
   | { state: "ready"; kind: "team_member"; email: string; role: OrgRole; firm: string; inviter: string }
   | { state: "ready"; kind: "owner" | "tenant"; email: string; firm: string; collectEmail: boolean }
-  | { state: "expired" | "revoked" | "used" | "invalid"; kind: InviteKind };
+  | { state: "expired" | "revoked" | "used" | "invalid" | "locked"; kind: InviteKind };
 
 export async function describeInvite(token: string, meta?: { ip: string | null }): Promise<InviteView> {
-  if (await tokenInviteLocked(token)) return { state: "invalid", kind: "unknown" };
-  if (meta && (await inviteAttemptLocked(meta.ip))) return { state: "invalid", kind: "unknown" };
+  if (await tokenInviteLocked(token)) return { state: "locked", kind: "unknown" };
+  if (meta && (await inviteAttemptLocked(meta.ip))) return { state: "locked", kind: "unknown" };
   const row = await query<{
     status: string;
     expires_at: Date;
@@ -634,8 +634,7 @@ export async function describeInvite(token: string, meta?: { ip: string | null }
   const invite = row.rows[0];
   const kind: InviteKind =
     invite?.kind === "team_member" || invite?.kind === "owner" || invite?.kind === "tenant" ? invite.kind : "unknown";
-  const reject = async (state: "expired" | "revoked" | "used" | "invalid", badKind: InviteKind): Promise<InviteView> => {
-    if (meta) await noteBadInvite(meta.ip);
+  const reject = (state: "expired" | "revoked" | "used" | "invalid", badKind: InviteKind): InviteView => {
     return { state, kind: badKind };
   };
   if (!invite) return reject("invalid", "unknown");
@@ -729,61 +728,79 @@ async function acceptPortalInvite(token: string, password: string, meta: Request
     replacement = claimed.email;
   }
 
-  const applied = await setUserPassword(row.user_id, password, replacement ?? undefined);
-  if (applied === "emailTaken") {
-    await noteTokenInviteAttempt(token);
-    await noteBadInvite(meta.ip);
-    await query(`SELECT crypt($1, gen_salt('bf'))`, ["portal-email"]);
-    return { ok: false as const, error: "email" as const, kind };
-  }
-
-  const saved = await withClient(async (client) => {
-    try {
-      await client.query("BEGIN");
-      const invite = await client.query(
-        `SELECT id FROM invitations WHERE id = $1 AND status = 'pending' AND expires_at > now() FOR UPDATE`,
-        [row.id],
-      );
-      if (!invite.rows[0]) {
+  let saved: typeof row | null = null;
+  try {
+    saved = await withClient(async (client) => {
+      try {
+        await client.query("BEGIN");
+        const invite = await client.query(
+          `SELECT id FROM invitations WHERE id = $1 AND status = 'pending' AND expires_at > now() FOR UPDATE`,
+          [row.id],
+        );
+        if (!invite.rows[0]) {
+          await client.query("ROLLBACK");
+          return null;
+        }
+        if (replacement) {
+          await client.query(
+            `UPDATE auth.users
+                SET email = $2,
+                    encrypted_password = crypt($3, gen_salt('bf')),
+                    email_confirmed_at = coalesce(email_confirmed_at, now()),
+                    updated_at = now()
+              WHERE id = $1`,
+            [row.user_id, replacement, password],
+          );
+          await client.query(`UPDATE profiles SET email = $2 WHERE id = $1`, [row.user_id, replacement]);
+          await client.query(
+            `UPDATE contacts AS c
+                SET email = $2, updated_at = now()
+              WHERE c.id = $1
+                AND c.org_id = $3
+                AND (c.email IS NULL OR lower(c.email::text) LIKE '%@demo.condola.local')
+                AND NOT EXISTS (
+                  SELECT 1 FROM contacts other
+                   WHERE other.org_id = c.org_id
+                     AND other.id <> c.id
+                     AND other.archived_at IS NULL
+                     AND other.is_tenant
+                     AND c.is_tenant
+                     AND lower(other.email::text) = lower($2)
+                )`,
+            [row.contact_id, replacement, row.org_id],
+          );
+          await client.query(
+            `UPDATE invitations SET email = $2, status = 'accepted', accepted_by = $3, accepted_at = now() WHERE id = $1`,
+            [row.id, replacement, row.user_id],
+          );
+        } else {
+          await client.query(
+            `UPDATE auth.users
+                SET encrypted_password = crypt($2, gen_salt('bf')), updated_at = now()
+              WHERE id = $1`,
+            [row.user_id, password],
+          );
+          await client.query(
+            `UPDATE invitations SET status = 'accepted', accepted_by = $2, accepted_at = now() WHERE id = $1`,
+            [row.id, row.user_id],
+          );
+        }
+        await client.query("COMMIT");
+        return row;
+      } catch (error) {
         await client.query("ROLLBACK");
-        return null;
+        throw error;
       }
-      if (replacement) {
-        await client.query(`UPDATE profiles SET email = $2 WHERE id = $1`, [row.user_id, replacement]);
-        await client.query(
-          `UPDATE contacts AS c
-              SET email = $2, updated_at = now()
-            WHERE c.id = $1
-              AND c.org_id = $3
-              AND (c.email IS NULL OR lower(c.email::text) LIKE '%@demo.condola.local')
-              AND NOT EXISTS (
-                SELECT 1 FROM contacts other
-                 WHERE other.org_id = c.org_id
-                   AND other.id <> c.id
-                   AND other.archived_at IS NULL
-                   AND other.is_tenant
-                   AND c.is_tenant
-                   AND lower(other.email::text) = lower($2)
-              )`,
-          [row.contact_id, replacement, row.org_id],
-        );
-        await client.query(
-          `UPDATE invitations SET email = $2, status = 'accepted', accepted_by = $3, accepted_at = now() WHERE id = $1`,
-          [row.id, replacement, row.user_id],
-        );
-      } else {
-        await client.query(
-          `UPDATE invitations SET status = 'accepted', accepted_by = $2, accepted_at = now() WHERE id = $1`,
-          [row.id, row.user_id],
-        );
-      }
-      await client.query("COMMIT");
-      return row;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
+    });
+  } catch (error) {
+    if (replacement && authEmailTaken(error)) {
+      await noteTokenInviteAttempt(token);
+      await noteBadInvite(meta.ip);
+      await query(`SELECT crypt($1, gen_salt('bf'))`, ["portal-email"]);
+      return { ok: false as const, error: "email" as const, kind };
     }
-  });
+    throw error;
+  }
   if (!saved?.user_id) return { ok: false as const, error: "invalid" as const, kind };
   await writeAudit(saved.org_id, saved.user_id, "portal_invite_accept", {
     kind,

@@ -20,14 +20,19 @@ test("invite links use the request host for this app and the site URL otherwise"
   try {
     process.env.CONDOLA_SITE_URL = "https://staging.condola.app";
     delete process.env.CONDOLA_ENV;
-    assert.equal(portalInviteOrigin("https://condola-staging.condola.workers.dev"), "https://condola-staging.condola.workers.dev");
+    assert.equal(portalInviteOrigin("https://condola-staging.condola.workers.dev"), "https://staging.condola.app");
     assert.equal(portalInviteOrigin("https://app.condola.app/m/leases"), "https://app.condola.app");
     assert.equal(portalInviteOrigin("https://staging.condola.app"), "https://staging.condola.app");
     assert.equal(portalInviteOrigin("http://127.0.0.1:43123"), "http://127.0.0.1:43123");
     assert.equal(portalInviteOrigin("https://evil.example"), "https://staging.condola.app");
     assert.equal(portalInviteOrigin(""), "https://staging.condola.app");
-    const url = portalInviteUrl("https://app.condola.app", "abc");
-    assert.equal(url, "https://app.condola.app/accept/abc");
+    const stagingUrl = portalInviteUrl("https://condola-staging.condola.workers.dev", "abc");
+    assert.equal(stagingUrl, "https://staging.condola.app/accept/abc");
+    assert.equal(stagingUrl.includes("workers.dev"), false);
+    process.env.CONDOLA_SITE_URL = "https://app.condola.app";
+    const productionUrl = portalInviteUrl("https://condola-staging.condola.workers.dev", "abc");
+    assert.equal(productionUrl, "https://app.condola.app/accept/abc");
+    assert.equal(productionUrl.includes("workers.dev"), false);
   } finally {
     if (previous === undefined) delete process.env.CONDOLA_SITE_URL;
     else process.env.CONDOLA_SITE_URL = previous;
@@ -68,6 +73,7 @@ test("portal invite copy hands the link over and stays on the locked wording", (
     "i_portal_hand_owner",
     "i_portal_invite_title",
     "i_portal_invite_invalid",
+    "i_portal_invite_locked",
     "i_portal_login_email",
     "i_portal_choose_email",
     "i_portal_email_unusable",
@@ -82,6 +88,7 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(zh.i_portal_hand_owner, "傳給屋主");
   assert.equal(zh.i_portal_invite_title, "{firm} 邀請你使用租多啦");
   assert.equal(zh.i_portal_invite_invalid, "這個連結已失效，請向管理公司索取新的連結");
+  assert.equal(zh.i_portal_invite_locked, "嘗試次數過多，請 15 分鐘後再試");
   assert.equal(zh.i_portal_choose_email, "請填寫你的 Email。設定密碼後，用它和密碼登入。");
   assert.equal(zh.i_portal_email_unusable, "無法使用這個 email，請改用其他 email，或聯絡管理公司");
   assert.equal(zh.i_portal_working, "處理中…");

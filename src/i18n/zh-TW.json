@@ -1633,6 +1633,7 @@
  "i_portal_hand_owner": "傳給屋主",
  "i_portal_invite_title": "{firm} 邀請你使用租多啦",
  "i_portal_invite_invalid": "這個連結已失效，請向管理公司索取新的連結",
+ "i_portal_invite_locked": "嘗試次數過多，請 15 分鐘後再試",
  "i_portal_login_email": "登入 Email",
  "i_portal_choose_email": "請填寫你的 Email。設定密碼後，用它和密碼登入。",
  "i_portal_email_unusable": "無法使用這個 email，請改用其他 email，或聯絡管理公司",

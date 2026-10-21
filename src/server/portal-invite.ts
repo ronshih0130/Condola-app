@@ -10,11 +10,11 @@ import { assertStaff, type Session } from "./types";
 
 export const PORTAL_INVITE_DAYS = 7;
 
-const DIRECT_HOSTS = new Set([
-  "app.condola.app",
-  "staging.condola.app",
-  "condola-staging.condola.workers.dev",
-]);
+const DIRECT_HOSTS = new Set(["app.condola.app", "staging.condola.app"]);
+
+/** Email guesses on one link. An office shares an IP, so that limit is higher. */
+export const PORTAL_TOKEN_ATTEMPT_LIMIT = 5;
+export const PORTAL_IP_ATTEMPT_LIMIT = 20;
 
 /**
  * A contact with no free inbox still gets a link. Provision mints an internal
@@ -66,7 +66,10 @@ export function inviteStoredEmail(contactEmail: string | null) {
   return stored;
 }
 
-/** Request host when it is this app. Anything else uses the site URL config. */
+/**
+ * app.condola.app, staging.condola.app, and loopback can use the request host.
+ * workers.dev and every other host use CONDOLA_SITE_URL.
+ */
 export function portalInviteOrigin(requestOrigin: string) {
   const direct = directAppOrigin(requestOrigin);
   if (direct) return direct;
@@ -112,7 +115,7 @@ async function attemptLocked(key: string) {
   return lockActive(row.rows[0]?.locked_until ?? null, new Date());
 }
 
-async function noteAttempt(key: string) {
+async function noteAttempt(key: string, limit: number) {
   const now = new Date();
   const row = await query<{ failed_count: number; locked_until: Date | null }>(
     `SELECT failed_count, locked_until FROM portal_invite_attempts WHERE ip = $1`,
@@ -121,7 +124,7 @@ async function noteAttempt(key: string) {
   const current = row.rows[0];
   if (current && lockActive(current.locked_until, now)) return;
   const base = current && current.locked_until && !lockActive(current.locked_until, now) ? 0 : (current?.failed_count ?? 0);
-  const next = nextFailure(base, now);
+  const next = nextFailure(base, now, limit);
   await query(
     `INSERT INTO portal_invite_attempts (ip, failed_count, locked_until, updated_at)
      VALUES ($1, $2, $3, now())
@@ -136,7 +139,7 @@ export async function inviteAttemptLocked(ip: string | null) {
 }
 
 export async function noteBadInvite(ip: string | null) {
-  await noteAttempt(attemptKey(ip));
+  await noteAttempt(attemptKey(ip), PORTAL_IP_ATTEMPT_LIMIT);
 }
 
 export async function tokenInviteLocked(token: string) {
@@ -144,7 +147,7 @@ export async function tokenInviteLocked(token: string) {
 }
 
 export async function noteTokenInviteAttempt(token: string) {
-  await noteAttempt(tokenAttemptKey(token));
+  await noteAttempt(tokenAttemptKey(token), PORTAL_TOKEN_ATTEMPT_LIMIT);
 }
 
 /** One accept at a time for a token. The second submit waits, then sees the link already used. */

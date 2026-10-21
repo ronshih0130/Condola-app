@@ -32,9 +32,12 @@ export default async function AcceptPage({
     accountant: "i_role_accountant",
     maintenance: "i_role_maintenance",
   };
-  const stateMessage = portal
-    ? t("i_portal_invite_invalid")
-    : invite.state === "used"
+  const stateMessage =
+    invite.state === "locked"
+      ? t("i_portal_invite_locked")
+      : portal
+      ? t("i_portal_invite_invalid")
+      : invite.state === "used"
       ? t("i_invite_used")
       : invite.state === "revoked"
         ? t("i_invite_revoked")

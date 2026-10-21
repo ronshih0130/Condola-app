@@ -6,7 +6,7 @@ import { query, tx } from "./db";
 import { createProperty } from "./domain";
 import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
-import { hashInviteToken, inviteStoredEmail, inviteTokenBytes, issuePortalInvite } from "./portal-invite";
+import { hashInviteToken, inviteStoredEmail, inviteTokenBytes, issuePortalInvite, noteBadInvite } from "./portal-invite";
 import { resetAndSeed } from "./seed";
 import type { Session } from "./types";
 
@@ -48,11 +48,16 @@ test("a manager copies a one-time tenant link and an expired or used link cannot
   );
   const row = lease.rows[0];
   const manager = staff(USERS.manager, "manager");
+  const previousSite = process.env.CONDOLA_SITE_URL;
+  process.env.CONDOLA_SITE_URL = "https://staging.condola.app";
   const issued = await issuePortalInvite(manager, { kind: "tenant", contactId: row.contact_id, leaseId: row.lease_id }, "https://condola-staging.condola.workers.dev");
+  if (previousSite === undefined) delete process.env.CONDOLA_SITE_URL;
+  else process.env.CONDOLA_SITE_URL = previousSite;
   assert.equal(issued.activated, false);
   if (issued.activated) return;
   assert.ok(inviteTokenBytes(issued.token) >= 32);
-  assert.match(issued.url, /^https:\/\/condola-staging\.condola\.workers\.dev\/accept\//);
+  assert.match(issued.url, /^https:\/\/staging\.condola\.app\/accept\//);
+  assert.equal(issued.url.includes("workers.dev"), false);
   assert.equal(issued.email, "ailing.li@tenant.demo");
   const stored = await query<{ code_hash: string; expires_at: Date; raw: string | null }>(
     `SELECT code_hash, expires_at, NULL::text AS raw FROM invitations WHERE contact_id = $1 AND status = 'pending'`,
@@ -182,7 +187,7 @@ test("an owner without a password gets a login on the link, including a minted a
   assert.equal(stored.rows[0].email, chosen);
 });
 
-test("five typed emails lock that link and that address, without saying which emails exist", async () => {
+test("five typed emails lock that link and leave the shared office address usable", async () => {
   const ip = "198.51.100.77";
   const otherIp = "198.51.100.78";
   const first = await query<{ id: string }>(
@@ -200,9 +205,9 @@ test("five typed emails lock that link and that address, without saying which em
     results.push(await acceptInvite(issued.token, "", "Owner1234", "Owner1234", attempt, email));
   }
   for (const result of results) assert.deepEqual(result, { ok: false, error: "email", kind: "owner" });
-  assert.equal((await describeInvite(issued.token, { ip: otherIp })).state, "invalid");
+  assert.equal((await describeInvite(issued.token, { ip: otherIp })).state, "locked");
   const blocked = await acceptInvite(issued.token, "", "Owner1234", "Owner1234", { ua: "test", ip: otherIp }, "fresh.lock@example.com");
-  assert.deepEqual(blocked, { ok: false, error: "invalid", kind: "unknown" });
+  assert.deepEqual(blocked, { ok: false, error: "locked", kind: "unknown" });
   const parked = await query(`SELECT 1 FROM auth.users WHERE lower(email) = lower($1)`, ["fresh.lock@example.com"]);
   assert.equal(parked.rowCount, 0);
 
@@ -214,7 +219,7 @@ test("five typed emails lock that link and that address, without saying which em
   const other = await issuePortalInvite(staff(USERS.manager, "manager"), { kind: "owner", contactId: second.rows[0].id }, "https://app.condola.app");
   assert.equal(other.activated, false);
   if (other.activated) return;
-  assert.equal((await describeInvite(other.token, { ip })).state, "invalid");
+  assert.equal((await describeInvite(other.token, { ip })).state, "ready");
   assert.equal((await describeInvite(other.token, { ip: otherIp })).state, "ready");
   if ((await describeInvite(other.token, { ip: otherIp })).state === "ready") {
     const view = await describeInvite(other.token, { ip: otherIp });
@@ -222,7 +227,7 @@ test("five typed emails lock that link and that address, without saying which em
   }
 
   await query(`DELETE FROM portal_invite_attempts WHERE ip LIKE 'token:%'`);
-  assert.equal((await describeInvite(issued.token, { ip })).state, "invalid");
+  assert.equal((await describeInvite(issued.token, { ip })).state, "ready");
   assert.equal((await describeInvite(issued.token, { ip: otherIp })).state, "ready");
 });
 
@@ -270,7 +275,7 @@ test("another firm and an accountant cannot issue a portal link", async () => {
   );
 });
 
-test("repeated bad tokens lock that address", async () => {
+test("opening dead links does not lock a valid invite", async () => {
   const ip = "198.51.100.40";
   const owner = await query<{ id: string }>(
     `INSERT INTO contacts (org_id, is_owner, display_name, email, locale)
@@ -283,9 +288,97 @@ test("repeated bad tokens lock that address", async () => {
   for (let i = 0; i < 5; i += 1) {
     assert.equal((await describeInvite(`missing-${i}`, { ip })).state, "invalid");
   }
-  assert.equal((await describeInvite(issued.token, { ip })).state, "invalid");
-  await query(`DELETE FROM portal_invite_attempts WHERE ip = $1`, [ip]);
+  await query(`UPDATE invitations SET expires_at = now() - interval '1 minute' WHERE code_hash = $1`, [hashInviteToken(issued.token)]);
+  for (let i = 0; i < 3; i += 1) {
+    assert.equal((await describeInvite(issued.token, { ip })).state, "expired");
+  }
+  const fresh = await query<{ id: string }>(
+    `INSERT INTO contacts (org_id, is_owner, display_name, locale)
+     VALUES ($1, true, '仍可用屋主', 'zh-TW') RETURNING id::text`,
+    [ORG_ID],
+  );
+  const live = await issuePortalInvite(staff(USERS.manager, "manager"), { kind: "owner", contactId: fresh.rows[0].id }, "https://app.condola.app");
+  assert.equal(live.activated, false);
+  if (live.activated) return;
+  assert.equal((await describeInvite(live.token, { ip })).state, "ready");
+});
+
+test("an office address locks on the 20th email rejection", async () => {
+  const ip = "198.51.100.79";
+  const contact = await query<{ id: string }>(
+    `INSERT INTO contacts (org_id, is_owner, display_name, locale)
+     VALUES ($1, true, '辦公室次數屋主', 'zh-TW') RETURNING id::text`,
+    [ORG_ID],
+  );
+  const issued = await issuePortalInvite(staff(USERS.manager, "manager"), { kind: "owner", contactId: contact.rows[0].id }, "https://app.condola.app");
+  assert.equal(issued.activated, false);
+  if (issued.activated) return;
+  for (let i = 0; i < 19; i += 1) await noteBadInvite(ip);
   assert.equal((await describeInvite(issued.token, { ip })).state, "ready");
+  await noteBadInvite(ip);
+  assert.equal((await describeInvite(issued.token, { ip })).state, "locked");
+  assert.equal((await describeInvite(issued.token, { ip: "198.51.100.80" })).state, "ready");
+});
+
+test("two registered emails leave the link usable, and a new email then consumes it", async () => {
+  const contact = await query<{ id: string }>(
+    `INSERT INTO contacts (org_id, is_owner, display_name, locale)
+     VALUES ($1, true, '連續拒絕屋主', 'zh-TW') RETURNING id::text`,
+    [ORG_ID],
+  );
+  const issued = await issuePortalInvite(staff(USERS.admin, "admin"), { kind: "owner", contactId: contact.rows[0].id }, "https://app.condola.app");
+  assert.equal(issued.activated, false);
+  if (issued.activated) return;
+  const before = await query<{ id: string; email: string; encrypted_password: string | null }>(
+    `SELECT id::text, email::text AS email, encrypted_password FROM auth.users WHERE lower(email) = lower($1)`,
+    [issued.email],
+  );
+  const takenUsers = await query<{ id: string; email: string; encrypted_password: string | null }>(
+    `SELECT id::text, email::text AS email, encrypted_password
+       FROM auth.users
+      WHERE lower(email) IN ('jianhong.chen@owner.demo', 'xiuying.lin@owner.demo')
+      ORDER BY email`,
+  );
+  const attempt = { ua: "test", ip: "198.51.100.41" };
+  const first = await acceptInvite(issued.token, "", "Owner1234", "Owner1234", attempt, "jianhong.chen@owner.demo");
+  const second = await acceptInvite(issued.token, "", "Owner1234", "Owner1234", attempt, "xiuying.lin@owner.demo");
+  assert.deepEqual(first, second);
+  assert.deepEqual(first, { ok: false, error: "email", kind: "owner" });
+  const after = await query<{ id: string; email: string; encrypted_password: string | null }>(
+    `SELECT id::text, email::text AS email, encrypted_password FROM auth.users WHERE id = $1`,
+    [before.rows[0].id],
+  );
+  assert.deepEqual(after.rows[0], before.rows[0]);
+  const stillTaken = await query<{ id: string; email: string; encrypted_password: string | null }>(
+    `SELECT id::text, email::text AS email, encrypted_password
+       FROM auth.users
+      WHERE lower(email) IN ('jianhong.chen@owner.demo', 'xiuying.lin@owner.demo')
+      ORDER BY email`,
+  );
+  assert.deepEqual(stillTaken.rows, takenUsers.rows);
+  const pending = await query<{ status: string }>(
+    `SELECT status::text FROM invitations WHERE code_hash = $1`,
+    [hashInviteToken(issued.token)],
+  );
+  assert.equal(pending.rows[0].status, "pending");
+  assert.equal((await describeInvite(issued.token, attempt)).state, "ready");
+  const chosen = `fresh.${Date.now().toString(36)}@example.com`;
+  const accepted = await acceptInvite(issued.token, "", "Owner1234", "Owner1234", attempt, chosen);
+  assert.equal(accepted.ok, true);
+  const consumed = await query<{ status: string; email: string }>(
+    `SELECT status::text, email::text AS email FROM invitations WHERE code_hash = $1`,
+    [hashInviteToken(issued.token)],
+  );
+  assert.equal(consumed.rows[0].status, "accepted");
+  assert.equal(consumed.rows[0].email, chosen);
+  const renamed = await query<{ email: string }>(
+    `SELECT email::text AS email FROM auth.users WHERE id = $1`,
+    [before.rows[0].id],
+  );
+  assert.equal(renamed.rows[0].email, chosen);
+  assert.equal((await describeInvite(issued.token, { ip: "198.51.100.42" })).state, "used");
+  const signedIn = await signIn(chosen, "Owner1234", false, attempt);
+  assert.equal(signedIn.ok, true);
 });
 
 test("a new property stores a 7-day owner invite hash and drops the raw token", async () => {
