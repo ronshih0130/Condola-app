@@ -1,5 +1,5 @@
+-- Version 20261023180000.
 -- One active 租客 contact per email inside a firm.
--- Version 20261023100000 sorts after 20261023090000_lease_deposit_override_check.
 --
 -- The lease wizard can attach an existing contact instead of inserting another
 -- row and another portal user. This index is the backstop: a second active
