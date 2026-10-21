@@ -208,7 +208,33 @@ test("the electricity migration fails closed on posted duplicates and unknown me
   assert.match(posting, /jsonb_to_recordset/);
   assert.equal(posting.includes("readingBySpace.get(space.space_id) ?? 0"), false);
   assert.equal(posting.includes("osl.ledger_transaction_id"), false);
+  assertAllocationRunWritesUnitId(posting);
+  assertAllocationRunWritesUnitId(moveIn);
 });
+
+test("a missing allocation unit is filled from the meter before the rate-cap trigger", () => {
+  const sql = readFileSync(
+    new URL("../../supabase/migrations/20261023130500_utility_runs_unit_id_default.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.utility_runs_fill_unit_id\(\)/);
+  assert.match(sql, /IF NEW\.unit_id IS NULL/);
+  assert.match(sql, /FROM meters m/);
+  assert.match(sql, /WHERE m\.id = NEW\.meter_id/);
+  assert.match(sql, /DROP TRIGGER IF EXISTS trg_utility_runs_fill_unit_id ON utility_allocation_runs/);
+  assert.match(sql, /DROP TRIGGER IF EXISTS trg_a_fill_unit_id ON utility_allocation_runs/);
+  assert.match(sql, /CREATE TRIGGER trg_a_fill_unit_id/);
+  assert.match(sql, /BEFORE INSERT ON utility_allocation_runs/);
+  assert.match(sql, /EXECUTE FUNCTION public\.utility_runs_fill_unit_id\(\)/);
+  assert.equal(sql.includes("CREATE TRIGGER trg_utility_runs_fill_unit_id"), false);
+  assert.ok("trg_a_fill_unit_id" < "trg_allocation_rate_cap");
+});
+
+function assertAllocationRunWritesUnitId(source: string) {
+  const writes = source.match(/INSERT INTO utility_allocation_runs \([\s\S]*?\)\s*VALUES|UPDATE utility_allocation_runs SET[\s\S]*?WHERE id = \$1/g);
+  assert.ok(writes && writes.length > 0);
+  for (const write of writes) assert.match(write, /\bunit_id\b/);
+}
 
 test("the synthetic bill average is at least the charged rate", () => {
   const milli = 151000;

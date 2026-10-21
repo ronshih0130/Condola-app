@@ -238,6 +238,17 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
       [[even.leaseId, sub.leaseId]],
     );
     assert.equal(runCount.rows[0]?.n, "1");
+    const runUnit = await query<{ unit_id: string; room_unit: string }>(
+      `SELECT r.unit_id::text, rm.unit_id::text AS room_unit
+         FROM utility_allocation_runs r
+         JOIN utility_allocation_lines line ON line.run_id = r.id
+         JOIN rooms rm ON rm.id = line.room_id
+        WHERE line.lease_id = $1
+        LIMIT 1`,
+      [even.leaseId],
+    );
+    assert.equal(runUnit.rows[0]?.unit_id, runUnit.rows[0]?.room_unit);
+    assert.ok(runUnit.rows[0]?.unit_id);
     const listed = await listLeases(admin);
     // The later sub_meter run for the same period replaces the original even split.
     assert.equal(listed.find((row) => row.id === even.leaseId)?.electricity, "sub_meter");

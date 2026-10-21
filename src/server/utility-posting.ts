@@ -562,7 +562,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
            cap_override_reason = $8, cap_overridden_by = $9,
            total_amount_minor = $10, inputs = $11::jsonb, algorithm_version = 'whole-ntd-v1',
            status = (CASE WHEN status IN ('posted', 'approved', 'pending_repost') THEN 'pending_repost' ELSE 'draft' END)::allocation_status,
-           computed_by = $12, computed_at = now()
+           computed_by = $12, computed_at = now(), unit_id = $13
          WHERE id = $1`,
         [
           runId,
@@ -577,6 +577,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
           totalMinor,
           JSON.stringify(inputs),
           session.userId,
+          unit.id,
         ],
       );
     }

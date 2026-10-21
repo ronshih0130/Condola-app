@@ -1144,7 +1144,7 @@ export async function createLease(session: Session, input: LeaseInput) {
              utility_bill_id = $2, split_method = $3::split_method, rate_source = $4::rate_source, currency = $5,
              total_usage = $6, common_area_usage = $7, rate_minor_per_unit = $8,
              cap_override_reason = $9, cap_overridden_by = $10, total_amount_minor = $11, inputs = $12::jsonb,
-             computed_by = $13, computed_at = now()
+             computed_by = $13, computed_at = now(), unit_id = $14
            WHERE id = $1 AND status = 'draft'`,
           [
             existingRun.id,
@@ -1160,6 +1160,7 @@ export async function createLease(session: Session, input: LeaseInput) {
             totalAmount,
             runInputs,
             session.userId,
+            space.unit_id,
           ],
         );
         await client.query(
