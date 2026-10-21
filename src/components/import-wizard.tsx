@@ -400,6 +400,11 @@ export function ImportWizard() {
               {t("im_unit")}
             </span>
           </div>
+          {previewDone && importableCount === 0 ? (
+            <p className="alert" data-testid="import-nothing" role="status">
+              {t("im_nothing")}
+            </p>
+          ) : null}
           <p className="small muted" data-testid="import-row-count">
             {t("im_preview_help")}{" "}
             <span data-testid="import-encoding-value">{detected}</span> {t("im_rows_n", { n: Math.max(0, table.length - 1) })}

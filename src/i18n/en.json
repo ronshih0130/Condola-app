@@ -86,6 +86,7 @@
  "im_next_upload": "Next",
  "im_none": "Nothing was imported",
  "im_none_err": "No rows need attention 🎉",
+ "im_nothing": "No rows can be imported.",
  "im_ok_n": "{n} rows OK",
  "im_only_err": "Only rows with problems",
  "im_page": "Page {p} of {n}",

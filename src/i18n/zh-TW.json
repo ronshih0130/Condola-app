@@ -86,6 +86,7 @@
  "im_next_upload": "下一步",
  "im_none": "沒有任何資料匯入",
  "im_none_err": "沒有需要處理的列 🎉",
+ "im_nothing": "沒有可匯入的資料",
  "im_ok_n": "{n} 列正確",
  "im_only_err": "只看有問題的列",
  "im_page": "第 {p} / {n} 頁",

@@ -498,6 +498,8 @@ test("a confirmed import is one transaction and the screen posts it once", () =>
   assert.match(wizard, /previewDone/);
   assert.match(wizard, /im_checking/);
   assert.match(wizard, /importableCount > 0/);
+  assert.match(wizard, /previewDone && importableCount === 0/);
+  assert.match(wizard, /t\("im_nothing"\)/);
   assert.match(wizard, /t\("im_run", \{ n: importableCount \}\)/);
   assert.match(wizard, /im_none/);
   assert.match(wizard, /import-retry/);
@@ -508,6 +510,7 @@ test("a confirmed import is one transaction and the screen posts it once", () =>
   assert.match(route, /application\/x-ndjson/);
   assert.equal(zh.im_progress_n, "已處理 {done}／{total} 筆");
   assert.equal(zh.im_none, "沒有任何資料匯入");
+  assert.equal(zh.im_nothing, "沒有可匯入的資料");
   assert.equal(zh.im_retry, "再試一次");
   assert.match(zh.im_e_phone_name, /\{n\}/);
   assert.match(zh.im_e_phone_name, /\{name\}/);
