@@ -44,12 +44,7 @@ export function GoLiveForm({
           <div className="alert ok">{t("i_golive_req_ok", { n: activeUnits, free: freeUnits })}</div>
         ) : (
           <div className="alert warn" data-testid="gl-blocked">
-            <div>
-              <p>{t("i_golive_blocked", { free: freeUnits })}</p>
-              <a href="/m/upgrade" data-testid="gl-upgrade">
-                {t("i_golive_upgrade")}
-              </a>
-            </div>
+            <p>{t("i_golive_blocked", { free: freeUnits })}</p>
           </div>
         )}
       </div>

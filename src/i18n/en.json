@@ -1443,7 +1443,7 @@
  "i_seat_limit": "No seats left. Upgrade before inviting someone.",
  "i_seat_meter": "Seats {used}/{limit}",
  "i_seat_unlimited": "Seats {used} (no limit)",
- "i_seat_upsell": "The free plan’s 1 seat is full. Upgrade before inviting someone.",
+ "i_seat_upsell": "Maximum users for this plan: {n}.",
  "i_seat_test": "The sample company has no seat limit.",
  "i_new_tenant": "New tenant",
  "i_existing_tenant": "Existing tenant",

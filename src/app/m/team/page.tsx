@@ -166,11 +166,8 @@ export default async function TeamPage({
           </p>
           <p className="small">{t("i_price_pending", { n: usage.pending })}</p>
         </div>
-        {seatBlocked ? (
-          <div className="card pad" data-testid="seat-upsell">
-            <p>{t("i_seat_upsell")}</p>
-            <a className="btn pri" href="/m/upgrade">{t("i_price_upgrade")}</a>
-          </div>
+        {seatBlocked && seatCap != null ? (
+          <p data-testid="seat-limit">{t("i_seat_upsell", { n: seatCap })}</p>
         ) : (
         <form className="card pad" action={actionInvite}>
           <h3>{t("s_f320582")}</h3>

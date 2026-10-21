@@ -1443,7 +1443,7 @@
  "i_seat_limit": "席次已滿。請升級方案後再邀請。",
  "i_seat_meter": "席次 {used}/{limit}",
  "i_seat_unlimited": "席次 {used}（不限）",
- "i_seat_upsell": "免費方案 1 個席次已滿。升級後才能再邀請。",
+ "i_seat_upsell": "目前方案最多 {n} 位使用者",
  "i_seat_test": "範例公司不限席次。",
  "i_new_tenant": "新租客",
  "i_existing_tenant": "現有租客",
