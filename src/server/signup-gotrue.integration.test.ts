@@ -71,6 +71,14 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     };
     assert.equal(await started(), 1);
 
+    await query(`ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS confirmation_token text`);
+    await query(`ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS confirmation_sent_at timestamptz`);
+    const confirmationToken = "gotrue-confirm-token-keep";
+    const confirmationSentAt = "2026-10-20T03:00:00.000Z";
+    await query(
+      `UPDATE auth.users SET confirmation_token = $2, confirmation_sent_at = $3::timestamptz WHERE id = $1`,
+      [userId, confirmationToken, confirmationSentAt],
+    );
     await query(`DELETE FROM profiles WHERE id = $1`, [userId]);
     await query(`DELETE FROM funnel_events WHERE user_id = $1 AND event_type = 'signup_started'`, [userId]);
     const retry = await startSignup({
@@ -84,6 +92,12 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     assert.equal(retry.ok, true);
     if (!retry.ok || retry.status !== "verify") throw new Error("expected retry verify");
     assert.equal(calls.length, 1, "a plain retry must not call GoTrue resend");
+    const kept = await query<{ confirmation_token: string; confirmation_sent_at: Date }>(
+      `SELECT confirmation_token, confirmation_sent_at FROM auth.users WHERE id = $1`,
+      [userId],
+    );
+    assert.equal(kept.rows[0].confirmation_token, confirmationToken);
+    assert.equal(kept.rows[0].confirmation_sent_at.toISOString(), confirmationSentAt);
     assert.equal((await query<{ email: string }>(`SELECT email::text FROM profiles WHERE id = $1`, [userId])).rows[0]?.email, email);
     assert.equal(await started(), 1);
 

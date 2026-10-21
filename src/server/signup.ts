@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { writeAudit } from "./audit";
-import { createSession, normalizeEmail, SESSION_COOKIE, setUserPassword, type RequestMeta } from "./auth";
+import { createSession, normalizeEmail, SESSION_COOKIE, type RequestMeta } from "./auth";
 import { firmDisplayName, normalizePartnerCode } from "./billing";
 import { query, withClient } from "./db";
 import { recordFunnel } from "./funnel";
@@ -194,10 +194,10 @@ export async function startSignup(input: {
       }
       return { ok: false, error: "duplicate" };
     }
-    await setUserPassword(existing.id, input.password);
+    // Leave auth.users alone. An admin password update clears confirmation_token and
+    // confirmation_sent_at, which expires the link already in the inbox, and this path does not send a new email.
     await rememberDraft(existing.id, draftCode);
     await ensureSignupStarted(existing.id, email);
-    // GoTrue already sent the confirmation on the first POST /signup. A form retry must not send another.
     const token = await issueVerification(existing.id, email);
     return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
   }
