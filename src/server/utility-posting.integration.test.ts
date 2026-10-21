@@ -187,13 +187,14 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
       await client.query("BEGIN");
       try {
         await client.query(`DROP INDEX utility_allocation_runs_open_period_uidx`);
+        await client.query(`ALTER TABLE utility_allocation_runs DROP CONSTRAINT utility_allocation_runs_unit_period_excl`);
         await client.query(
           `INSERT INTO utility_allocation_runs (
-             org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
+             org_id, unit_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
              total_usage, common_area_usage, common_area_policy, rate_minor_per_unit, total_amount_minor,
              inputs, algorithm_version, status, computed_by, approved_by, approved_at
            )
-           SELECT org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
+           SELECT org_id, unit_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
                   total_usage, common_area_usage, common_area_policy, rate_minor_per_unit, total_amount_minor,
                   inputs, algorithm_version, status, computed_by, approved_by, approved_at
              FROM utility_allocation_runs WHERE id = $1`,
@@ -318,6 +319,28 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
       [prepared.runId],
     );
     assert.equal(postedEvents.rows[0].n, "1");
+    await assert.rejects(
+      () =>
+        tx(
+          admin.userId,
+          (client) =>
+            client.query(`SELECT app.audit_event($1::uuid, 'utility_charge_posted', $2::jsonb)`, [
+              ORG_ID,
+              JSON.stringify({ runId: prepared.runId, lines: 2, reversed: 0 }),
+            ]),
+          { orgId: ORG_ID, environment: "live" },
+        ),
+      (error: unknown) => error instanceof FlowError,
+    );
+    assert.equal(
+      (
+        await query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM audit_log WHERE event_type = 'utility_charge_posted' AND new_row->>'runId' = $1`,
+          [prepared.runId],
+        )
+      ).rows[0]?.n,
+      "1",
+    );
     const reason = await query<{ n: string }>(
       `SELECT count(*)::text AS n FROM audit_log
         WHERE table_name = 'utility_allocation_runs' AND row_id = $1 AND reason = '確認電費入帳'`,
@@ -350,6 +373,43 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
         }),
       (error: unknown) => error instanceof FlowError && error.key === "errors.utilityOverlap",
     );
+    await assert.rejects(
+      () =>
+        prepareUtilityRun(admin, {
+          ...input,
+          periodStart: period.end,
+          periodEnd: addDays(period.end, 30),
+          totalKwh: 151,
+        }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.utilityOverlap",
+    );
+    await withClient(async (client) => {
+      await client.query("BEGIN");
+      try {
+        let rejected = false;
+        try {
+          await client.query(
+            `INSERT INTO utility_allocation_runs (
+               org_id, unit_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
+               total_usage, common_area_usage, common_area_policy, rate_minor_per_unit, total_amount_minor,
+               inputs, algorithm_version, status, computed_by
+             )
+             SELECT org_id, unit_id, meter_id, utility_bill_id, $2::date, $3::date, split_method, rate_source, currency,
+                    total_usage, common_area_usage, common_area_policy, rate_minor_per_unit, total_amount_minor,
+                    inputs, algorithm_version, 'draft', computed_by
+               FROM utility_allocation_runs WHERE id = $1`,
+            [prepared.runId, period.end, addDays(period.end, 30)],
+          );
+        } catch (error) {
+          rejected = true;
+          const message = error instanceof Error ? error.message : String(error);
+          assert.match(message, /utility_allocation_runs_unit_period_excl/);
+        }
+        assert.equal(rejected, true);
+      } finally {
+        await client.query("ROLLBACK");
+      }
+    });
     let boardPage = 1;
     let foundUnit = false;
     const seenUnits = new Set<string>();
@@ -426,6 +486,52 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
       [prepared.runId],
     );
     assert.equal(repostEvents.rows[0].n, "1");
+    await assert.rejects(
+      () =>
+        tx(
+          admin.userId,
+          (client) =>
+            client.query(`SELECT app.audit_event($1::uuid, 'utility_charge_reposted', $2::jsonb)`, [
+              ORG_ID,
+              JSON.stringify({ runId: prepared.runId, lines: 2, reversed: 2 }),
+            ]),
+          { orgId: ORG_ID, environment: "live" },
+        ),
+      (error: unknown) => error instanceof FlowError,
+    );
+    await tx(
+      admin.userId,
+      async (client) => {
+        await client.query(`UPDATE utility_allocation_runs SET computed_at = now() WHERE id = $1`, [prepared.runId]);
+        await client.query(`SELECT app.audit_event($1::uuid, 'utility_charge_reposted', $2::jsonb)`, [
+          ORG_ID,
+          JSON.stringify({ runId: prepared.runId, lines: 2, reversed: 2 }),
+        ]);
+      },
+      { orgId: ORG_ID, environment: "live" },
+    );
+    await assert.rejects(
+      () =>
+        tx(
+          admin.userId,
+          (client) =>
+            client.query(`SELECT app.audit_event($1::uuid, 'utility_charge_reposted', $2::jsonb)`, [
+              ORG_ID,
+              JSON.stringify({ runId: prepared.runId, lines: 2, reversed: 2 }),
+            ]),
+          { orgId: ORG_ID, environment: "live" },
+        ),
+      (error: unknown) => error instanceof FlowError,
+    );
+    assert.equal(
+      (
+        await query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM audit_log WHERE event_type = 'utility_charge_reposted' AND new_row->>'runId' = $1`,
+          [prepared.runId],
+        )
+      ).rows[0]?.n,
+      "2",
+    );
     const credits = await query<{ n: string; total: string }>(
       `SELECT count(*)::text AS n, coalesce(sum(amount_minor), 0)::text AS total
          FROM invoice_lines

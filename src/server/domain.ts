@@ -1113,9 +1113,9 @@ export async function createLease(session: Session, input: LeaseInput) {
             `INSERT INTO utility_allocation_runs (
                org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
                total_usage, common_area_usage, common_area_policy, rate_minor_per_unit,
-               cap_override_reason, cap_overridden_by, total_amount_minor, inputs, status, computed_by
+               cap_override_reason, cap_overridden_by, total_amount_minor, inputs, status, computed_by, unit_id
              ) VALUES (
-               $1,$2,$3,$4,$5,$6::split_method,$7::rate_source,$8,$9,$10,'split_evenly',$11,$12,$13,$14,$15::jsonb,'draft',$16
+               $1,$2,$3,$4,$5,$6::split_method,$7::rate_source,$8,$9,$10,'split_evenly',$11,$12,$13,$14,$15::jsonb,'draft',$16,$17
              ) RETURNING id`,
             [
               session.orgId,
@@ -1134,6 +1134,7 @@ export async function createLease(session: Session, input: LeaseInput) {
               totalAmount,
               runInputs,
               session.userId,
+              space.unit_id,
             ],
           );
       if (existingRun) {

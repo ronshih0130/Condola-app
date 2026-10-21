@@ -30,6 +30,7 @@ ALTER TABLE utility_allocation_lines
 
 -- One active main electricity meter per unit, and one non-void run per meter period.
 -- Duplicate drafts from the lease wizard are merged before the unique indexes.
+DROP TABLE IF EXISTS utility_meter_dupes;
 CREATE TEMP TABLE utility_meter_dupes AS
 SELECT d.id AS dupe_id, k.id AS keeper_id
   FROM (
@@ -192,14 +193,67 @@ CREATE UNIQUE INDEX IF NOT EXISTS utility_allocation_runs_open_period_uidx
   ON utility_allocation_runs (meter_id, period_start, period_end)
   WHERE status <> 'void';
 
--- invoice_lines had no (org_id, id) unique key, so a composite foreign key could not point at a line.
-ALTER TABLE invoice_lines DROP CONSTRAINT IF EXISTS invoice_lines_org_uniq;
-ALTER TABLE invoice_lines ADD CONSTRAINT invoice_lines_org_uniq UNIQUE (org_id, id);
+-- Inclusive periods. 10/01–10/31 and 10/31–11/30 overlap; 10/01–10/31 and 11/01–11/30 do not.
+-- A row does not conflict with itself, so re-editing that run is allowed. Void drops out of the predicate.
+ALTER TABLE utility_allocation_runs ADD COLUMN IF NOT EXISTS unit_id uuid;
 
+UPDATE utility_allocation_runs r
+   SET unit_id = m.unit_id
+  FROM meters m
+ WHERE r.meter_id = m.id
+   AND r.unit_id IS NULL;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM utility_allocation_runs WHERE unit_id IS NULL) THEN
+    RAISE EXCEPTION 'cannot backfill allocation run unit: a run has no meter unit'
+      USING ERRCODE = 'not_null_violation';
+  END IF;
+END $$;
+
+ALTER TABLE utility_allocation_runs ALTER COLUMN unit_id SET NOT NULL;
+
+ALTER TABLE utility_allocation_runs DROP CONSTRAINT IF EXISTS utility_allocation_runs_unit_fk;
+ALTER TABLE utility_allocation_runs
+  ADD CONSTRAINT utility_allocation_runs_unit_fk
+  FOREIGN KEY (org_id, unit_id) REFERENCES units (org_id, id) NOT VALID;
+ALTER TABLE utility_allocation_runs VALIDATE CONSTRAINT utility_allocation_runs_unit_fk;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM utility_allocation_runs a
+      JOIN utility_allocation_runs b
+        ON a.unit_id = b.unit_id
+       AND a.id < b.id
+       AND a.status <> 'void'
+       AND b.status <> 'void'
+       AND daterange(a.period_start, a.period_end, '[]') && daterange(b.period_start, b.period_end, '[]')
+  ) THEN
+    RAISE EXCEPTION 'cannot exclude overlapping allocation periods: non-void runs on a unit share a date'
+      USING ERRCODE = 'exclusion_violation';
+  END IF;
+END $$;
+
+ALTER TABLE utility_allocation_runs DROP CONSTRAINT IF EXISTS utility_allocation_runs_unit_period_excl;
+ALTER TABLE utility_allocation_runs
+  ADD CONSTRAINT utility_allocation_runs_unit_period_excl
+  EXCLUDE USING gist (
+    unit_id WITH =,
+    daterange(period_start, period_end, '[]') WITH &&
+  )
+  WHERE (status <> 'void');
+
+-- The posted-line foreign key depends on invoice_lines_org_uniq, so drop that key first.
 ALTER TABLE utility_allocation_lines DROP CONSTRAINT IF EXISTS utility_allocation_lines_posted_invoice_fk;
 ALTER TABLE utility_allocation_lines DROP CONSTRAINT IF EXISTS utility_allocation_lines_posted_line_fk;
 ALTER TABLE utility_allocation_lines DROP CONSTRAINT IF EXISTS utility_allocation_lines_posted_ledger_fk;
 ALTER TABLE utility_allocation_lines DROP CONSTRAINT IF EXISTS utility_allocation_lines_posted_pair_chk;
+
+-- invoice_lines had no (org_id, id) unique key, so a composite foreign key could not point at a line.
+ALTER TABLE invoice_lines DROP CONSTRAINT IF EXISTS invoice_lines_org_uniq;
+ALTER TABLE invoice_lines ADD CONSTRAINT invoice_lines_org_uniq UNIQUE (org_id, id);
 
 ALTER TABLE utility_allocation_lines
   ADD CONSTRAINT utility_allocation_lines_posted_invoice_fk
@@ -256,7 +310,7 @@ CREATE INDEX IF NOT EXISTS invoices_owner_statement_idx
 
 -- p_invoice retargets the reversed entries at a credit invoice. Two-argument callers keep the original invoice.
 DROP FUNCTION IF EXISTS post_reversal(uuid, text);
-CREATE FUNCTION post_reversal(p_txn uuid, p_reason text, p_invoice uuid DEFAULT NULL) RETURNS uuid
+CREATE OR REPLACE FUNCTION post_reversal(p_txn uuid, p_reason text, p_invoice uuid DEFAULT NULL) RETURNS uuid
 LANGUAGE plpgsql AS $$
 DECLARE t ledger_transactions; new_id uuid;
 BEGIN
@@ -293,6 +347,7 @@ DECLARE
   v_voided uuid;
   v_lines int;
   v_reversed int;
+  v_computed timestamptz;
   v_row jsonb;
 BEGIN
   IF auth.uid() IS NULL OR NOT app.has_role(p_org, '{admin,manager}') THEN
@@ -339,8 +394,8 @@ BEGIN
   IF p_detail ? 'lines' AND p_detail ? 'reversed' AND v_reversed > v_lines THEN
     RAISE EXCEPTION 'audit reversed exceeds lines' USING ERRCODE = 'check_violation';
   END IF;
-  SELECT status, approved_by, voided_by
-    INTO v_status, v_approved, v_voided
+  SELECT status, approved_by, voided_by, computed_at
+    INTO v_status, v_approved, v_voided, v_computed
     FROM utility_allocation_runs
    WHERE id = v_run AND org_id = p_org;
   IF NOT FOUND THEN
@@ -352,6 +407,24 @@ BEGIN
     END IF;
   ELSIF v_status <> 'posted' OR v_approved IS DISTINCT FROM auth.uid() THEN
     RAISE EXCEPTION 'post audit does not match the run' USING ERRCODE = 'check_violation';
+  END IF;
+  -- A posted run records that event once. A repost is recorded once per prepare (computed_at moves).
+  IF p_event = 'utility_charge_posted' AND EXISTS (
+    SELECT 1 FROM audit_log a
+     WHERE a.org_id = p_org
+       AND a.event_type = 'utility_charge_posted'
+       AND a.new_row->>'runId' = v_run::text
+  ) THEN
+    RAISE EXCEPTION 'posted audit already recorded for this run' USING ERRCODE = 'check_violation';
+  END IF;
+  IF p_event = 'utility_charge_reposted' AND EXISTS (
+    SELECT 1 FROM audit_log a
+     WHERE a.org_id = p_org
+       AND a.event_type = 'utility_charge_reposted'
+       AND a.new_row->>'runId' = v_run::text
+       AND a.occurred_at >= v_computed
+  ) THEN
+    RAISE EXCEPTION 'reposted audit already recorded for this run' USING ERRCODE = 'check_violation';
   END IF;
   v_row := jsonb_build_object('event', p_event, 'runId', v_run);
   IF p_detail ? 'lines' THEN

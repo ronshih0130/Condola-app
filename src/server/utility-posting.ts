@@ -1,7 +1,7 @@
 import type { Client } from "pg";
 import { maybe, many, one, tx } from "./db";
 import { FlowError } from "./errors";
-import { nextInvoiceNumber } from "./invoice-number";
+import { reserveInvoiceNumbers } from "./invoice-number";
 import { inclusiveDays, monthBounds, taipeiToday, toMinor } from "./money";
 import { assertStaff, type Session } from "./types";
 import {
@@ -477,10 +477,10 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
             `INSERT INTO utility_allocation_runs (
                org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
                total_usage, common_area_usage, common_area_policy, rate_minor_per_unit,
-               cap_override_reason, cap_overridden_by, total_amount_minor, inputs, algorithm_version, status, computed_by
+               cap_override_reason, cap_overridden_by, total_amount_minor, inputs, algorithm_version, status, computed_by, unit_id
              ) VALUES (
                $1,$2,$3,$4::date,$5::date,$6::split_method,'fixed_rate',$7,
-               $8,$9,'split_evenly',$10,$11,$12,$13,$14::jsonb,'whole-ntd-v1','draft',$15
+               $8,$9,'split_evenly',$10,$11,$12,$13,$14::jsonb,'whole-ntd-v1','draft',$15,$16
              ) RETURNING id::text`,
             [
               session.orgId,
@@ -498,6 +498,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
               totalMinor,
               JSON.stringify(inputs),
               session.userId,
+              unit.id,
             ],
           )
         ).id;
@@ -528,71 +529,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       );
     }
 
-    const prior = await many<{ id: string; lease_id: string | null; room_id: string | null; posted_ledger_transaction_id: string | null }>(
-      client,
-      `SELECT id::text, lease_id::text, room_id::text, posted_ledger_transaction_id::text
-         FROM utility_allocation_lines WHERE run_id = $1`,
-      [runId],
-    );
-    const kept = new Set<string>();
-    for (const share of shares) {
-      const found = prior.find((row) => row.lease_id === share.leaseId && (row.room_id ?? null) === share.roomId);
-      const ratio = totalMinor > 0 ? Math.min(1, Math.max(0, share.amountMinor / totalMinor)) : 0;
-      const explanation = {
-        kwh: share.kwhMilli / 1000,
-        rate_minor_per_unit: Number(ratePerUnit),
-        method: share.method,
-        room: share.label,
-        days: share.days,
-      };
-      if (found) {
-        kept.add(found.id);
-        await client.query(
-          `UPDATE utility_allocation_lines SET
-             days_occupied = $2, sub_meter_usage = $3, share_ratio = $4,
-             allocated_usage = $5, amount_minor = $6, bearer = 'tenant', explanation = $7::jsonb
-           WHERE id = $1`,
-          [
-            found.id,
-            share.days,
-            share.method === "submeter" ? milliText(share.rawMilli) : null,
-            ratio.toFixed(10),
-            milliText(share.kwhMilli),
-            share.amountMinor,
-            JSON.stringify(explanation),
-          ],
-        );
-      } else {
-        await client.query(
-          `INSERT INTO utility_allocation_lines (
-             org_id, run_id, lease_id, room_id, days_occupied, sub_meter_usage, share_ratio, allocated_usage, amount_minor, bearer, explanation
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'tenant',$10::jsonb)`,
-          [
-            session.orgId,
-            runId,
-            share.leaseId,
-            share.roomId,
-            share.days,
-            share.method === "submeter" ? milliText(share.rawMilli) : null,
-            ratio.toFixed(10),
-            milliText(share.kwhMilli),
-            share.amountMinor,
-            JSON.stringify(explanation),
-          ],
-        );
-      }
-    }
-    for (const row of prior) {
-      if (kept.has(row.id)) continue;
-      if (row.posted_ledger_transaction_id) {
-        await client.query(
-          `UPDATE utility_allocation_lines SET amount_minor = 0, allocated_usage = 0, share_ratio = 0 WHERE id = $1`,
-          [row.id],
-        );
-      } else {
-        await client.query(`DELETE FROM utility_allocation_lines WHERE id = $1`, [row.id]);
-      }
-    }
+    await writeShares(client, session.orgId, runId, shares, ratePerUnit, totalMinor);
     return { runId };
   }, scope(session));
 }
@@ -646,10 +583,17 @@ export async function confirmUtilityRun(session: Session, runId: string) {
     if (run.status === "void") throw new FlowError("errors.utilityState");
     if (!run.utility_bill_id) throw new FlowError("errors.amount", { field: "i_usage" });
     await assertRunCoversOccupied(client, session.orgId, runId);
+    const priorStatus = run.status;
     await client.query(`SELECT set_config('app.change_reason', '確認電費入帳', true)`);
     const lines = await many<PostedLine>(client, `${POSTED_LINE_SQL} WHERE l.run_id = $1 ORDER BY l.id`, [runId]);
+    const present = await existingInvoiceLineIds(
+      client,
+      lines.flatMap((line) => (line.posted_invoice_line_id ? [line.posted_invoice_line_id] : [])),
+    );
     let changed = 0;
     let reversed = 0;
+    const reverses: ReverseJob[] = [];
+    const posts: PostJob[] = [];
     for (const line of lines) {
       const rateMajor = rateMajorFromStored(line.rate);
       const description = utilityLineDescription(usageMilliFromText(line.allocated_usage), rateMajor);
@@ -663,32 +607,69 @@ export async function confirmUtilityRun(session: Session, runId: string) {
         Number(line.posted_amount_minor) === desired &&
         line.posted_description === description &&
         desired > 0 &&
-        (await invoiceLineExists(client, postedLineId));
+        present.has(postedLineId);
       if (same) continue;
       if (desired > 0 && (!line.contact_id || !line.property_id || !line.currency || !line.lease_id)) {
         throw new FlowError("errors.notFound");
       }
-      let target: { invoiceId: string | null; linkAllocation: boolean } = { invoiceId: null, linkAllocation: true };
       if (line.posted_ledger_transaction_id) {
-        target = await reversePostedLine(client, session, line, "更正電費入帳");
+        const creditAmount = -Number(line.posted_amount_minor ?? 0);
+        if (!Number.isSafeInteger(creditAmount)) throw new FlowError("errors.amount");
+        reverses.push({
+          lineId: line.id,
+          ledgerId: line.posted_ledger_transaction_id,
+          invoiceId: line.posted_invoice_id,
+          invoiceLineId: line.posted_invoice_line_id,
+          creditAmount,
+          creditDescription: `沖銷${line.posted_description ?? "電費"}`,
+          leaseId: line.lease_id,
+          propertyId: line.property_id,
+          currency: line.currency?.trim() ?? null,
+          contactId: line.contact_id,
+          periodStart: line.period_start,
+          periodEnd: line.period_end,
+        });
         reversed += 1;
         changed += 1;
       }
       if (desired > 0 && line.lease_id && line.property_id && line.currency && line.contact_id) {
-        await postLine(client, session, line, desired, description, target.invoiceId, target.linkAllocation);
+        posts.push({
+          lineId: line.id,
+          leaseId: line.lease_id,
+          propertyId: line.property_id,
+          currency: line.currency.trim(),
+          contactId: line.contact_id,
+          periodStart: line.period_start,
+          periodEnd: line.period_end,
+          amountMinor: desired,
+          description,
+          quantity: line.allocated_usage,
+          rate: line.rate,
+          targetInvoiceId: null,
+          linkAllocation: true,
+        });
         changed += 1;
       }
     }
+    const targets = await reversePostedLines(client, session, reverses, "更正電費入帳");
+    for (const post of posts) {
+      const target = targets.get(post.lineId);
+      if (!target) continue;
+      post.targetInvoiceId = target.invoiceId;
+      post.linkAllocation = target.linkAllocation;
+    }
+    await postChargeLines(client, session, posts);
     await client.query(
       `UPDATE utility_allocation_runs
           SET status = 'posted', approved_by = $2, approved_at = coalesce(approved_at, now())
         WHERE id = $1`,
       [runId, session.userId],
     );
-    if (changed > 0) {
+    if (changed > 0 && priorStatus !== "posted") {
+      const event = priorStatus === "pending_repost" || reversed > 0 ? "utility_charge_reposted" : "utility_charge_posted";
       await client.query(`SELECT app.audit_event($1::uuid, $2, $3::jsonb)`, [
         session.orgId,
-        reversed > 0 ? "utility_charge_reposted" : "utility_charge_posted",
+        event,
         JSON.stringify({ runId, lines: lines.length, reversed }),
       ]);
     }
@@ -715,7 +696,32 @@ export async function voidUtilityRun(session: Session, runId: string, reason: st
       `${POSTED_LINE_SQL} WHERE l.run_id = $1 AND l.posted_ledger_transaction_id IS NOT NULL`,
       [runId],
     );
-    for (const line of lines) await reversePostedLine(client, session, line, "作廢電費入帳");
+    await reversePostedLines(
+      client,
+      session,
+      lines.flatMap((line) => {
+        if (!line.posted_ledger_transaction_id) return [];
+        const creditAmount = -Number(line.posted_amount_minor ?? 0);
+        if (!Number.isSafeInteger(creditAmount)) throw new FlowError("errors.amount");
+        return [
+          {
+            lineId: line.id,
+            ledgerId: line.posted_ledger_transaction_id,
+            invoiceId: line.posted_invoice_id,
+            invoiceLineId: line.posted_invoice_line_id,
+            creditAmount,
+            creditDescription: `沖銷${line.posted_description ?? "電費"}`,
+            leaseId: line.lease_id,
+            propertyId: line.property_id,
+            currency: line.currency?.trim() ?? null,
+            contactId: line.contact_id,
+            periodStart: line.period_start,
+            periodEnd: line.period_end,
+          },
+        ];
+      }),
+      "作廢電費入帳",
+    );
     await client.query(
       `UPDATE utility_allocation_runs
           SET status = 'void', void_reason = $2, voided_by = $3, voided_at = now()
@@ -765,7 +771,7 @@ async function assertPeriodFree(
        FROM utility_allocation_runs r
        JOIN meters m ON m.id = r.meter_id
       WHERE m.unit_id = $1 AND r.org_id = $2 AND r.status <> 'void'
-        AND r.period_start < $4::date AND r.period_end > $3::date
+        AND r.period_start <= $4::date AND r.period_end >= $3::date
         AND NOT (r.meter_id = $5 AND r.period_start = $3::date AND r.period_end = $4::date)
       LIMIT 1`,
     [unitId, orgId, periodStart, periodEnd, meterId],
@@ -866,19 +872,134 @@ async function loadOccupants(client: Client, orgId: string, unitId: string, peri
   return occupants;
 }
 
-async function invoiceLineExists(client: Client, lineId: string) {
-  const row = await maybe<{ id: string }>(client, `SELECT id::text FROM invoice_lines WHERE id = $1`, [lineId]);
-  return Boolean(row);
+async function writeShares(
+  client: Client,
+  orgId: string,
+  runId: string,
+  shares: Share[],
+  ratePerUnit: string,
+  totalMinor: number,
+) {
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const share of shares) {
+    const ratio = totalMinor > 0 ? Math.min(1, Math.max(0, share.amountMinor / totalMinor)) : 0;
+    byKey.set(`${share.leaseId}:${share.roomId ?? ""}`, {
+      lease_id: share.leaseId,
+      room_id: share.roomId,
+      days: share.days,
+      sub_meter_usage: share.method === "submeter" ? milliText(share.rawMilli) : null,
+      share_ratio: ratio.toFixed(10),
+      allocated_usage: milliText(share.kwhMilli),
+      amount_minor: share.amountMinor,
+      explanation: {
+        kwh: share.kwhMilli / 1000,
+        rate_minor_per_unit: Number(ratePerUnit),
+        method: share.method,
+        room: share.label,
+        days: share.days,
+      },
+    });
+  }
+  const payload = JSON.stringify([...byKey.values()]);
+  const shareRows = `jsonb_to_recordset($2::jsonb) AS s(
+         lease_id uuid, room_id uuid, days integer, sub_meter_usage numeric,
+         share_ratio numeric, allocated_usage numeric, amount_minor bigint, explanation jsonb
+       )`;
+  await client.query(
+    `UPDATE utility_allocation_lines AS l
+        SET days_occupied = s.days, sub_meter_usage = s.sub_meter_usage, share_ratio = s.share_ratio,
+            allocated_usage = s.allocated_usage, amount_minor = s.amount_minor, bearer = 'tenant',
+            explanation = s.explanation
+       FROM ${shareRows}
+      WHERE l.run_id = $1::uuid
+        AND l.lease_id IS NOT DISTINCT FROM s.lease_id
+        AND l.room_id IS NOT DISTINCT FROM s.room_id`,
+    [runId, payload],
+  );
+  await client.query(
+    `INSERT INTO utility_allocation_lines (
+       org_id, run_id, lease_id, room_id, days_occupied, sub_meter_usage, share_ratio,
+       allocated_usage, amount_minor, bearer, explanation
+     )
+     SELECT $1::uuid, $2::uuid, s.lease_id, s.room_id, s.days, s.sub_meter_usage, s.share_ratio,
+            s.allocated_usage, s.amount_minor, 'tenant', s.explanation
+       FROM jsonb_to_recordset($3::jsonb) AS s(
+         lease_id uuid, room_id uuid, days integer, sub_meter_usage numeric,
+         share_ratio numeric, allocated_usage numeric, amount_minor bigint, explanation jsonb
+       )
+      WHERE NOT EXISTS (
+        SELECT 1 FROM utility_allocation_lines l
+         WHERE l.run_id = $2::uuid
+           AND l.lease_id IS NOT DISTINCT FROM s.lease_id
+           AND l.room_id IS NOT DISTINCT FROM s.room_id
+      )`,
+    [orgId, runId, payload],
+  );
+  const kept = `jsonb_to_recordset($2::jsonb) AS s(lease_id uuid, room_id uuid)`;
+  await client.query(
+    `UPDATE utility_allocation_lines AS l
+        SET amount_minor = 0, allocated_usage = 0, share_ratio = 0
+      WHERE l.run_id = $1::uuid
+        AND l.posted_ledger_transaction_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM ${kept}
+           WHERE l.lease_id IS NOT DISTINCT FROM s.lease_id
+             AND l.room_id IS NOT DISTINCT FROM s.room_id
+        )`,
+    [runId, payload],
+  );
+  await client.query(
+    `DELETE FROM utility_allocation_lines AS l
+      WHERE l.run_id = $1::uuid
+        AND l.posted_ledger_transaction_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM ${kept}
+           WHERE l.lease_id IS NOT DISTINCT FROM s.lease_id
+             AND l.room_id IS NOT DISTINCT FROM s.room_id
+        )`,
+    [runId, payload],
+  );
 }
 
-async function nextLineNo(client: Client, invoiceId: string) {
-  await one<{ id: string }>(client, `SELECT id::text FROM invoices WHERE id = $1 FOR UPDATE`, [invoiceId]);
-  const lineNo = await one<{ n: string }>(
-    client,
-    `SELECT (coalesce(max(line_no), 0) + 1)::text AS n FROM invoice_lines WHERE invoice_id = $1`,
-    [invoiceId],
-  );
-  return Number(lineNo.n);
+type ReverseJob = {
+  lineId: string;
+  ledgerId: string;
+  invoiceId: string | null;
+  invoiceLineId: string | null;
+  creditAmount: number;
+  creditDescription: string;
+  leaseId: string | null;
+  propertyId: string | null;
+  currency: string | null;
+  contactId: string | null;
+  periodStart: string;
+  periodEnd: string;
+};
+
+type PostJob = {
+  lineId: string;
+  leaseId: string;
+  propertyId: string;
+  currency: string;
+  contactId: string;
+  periodStart: string;
+  periodEnd: string;
+  amountMinor: number;
+  description: string;
+  quantity: string;
+  rate: string;
+  targetInvoiceId: string | null;
+  linkAllocation: boolean;
+};
+
+type InvoiceTarget = { invoiceId: string | null; linkAllocation: boolean };
+
+async function existingInvoiceLineIds(client: Client, ids: string[]) {
+  const found = new Set<string>();
+  if (ids.length === 0) return found;
+  const rows = await many<{ id: string }>(client, `SELECT id::text FROM invoice_lines WHERE id = ANY($1::uuid[])`, [ids]);
+  for (const row of rows) found.add(row.id);
+  return found;
 }
 
 const FROZEN_INVOICE_SQL = `
@@ -911,224 +1032,435 @@ function frozenRow(row: { status: string; paid_minor: string; einvoice_status: s
   return !openUnpaid || row.on_statement;
 }
 
-async function invoiceFrozen(client: Client, invoiceId: string) {
-  const row = await maybe<{
-    status: string;
-    paid_minor: string;
-    einvoice_status: string;
-    on_statement: boolean;
-  }>(
+async function reversePostedLines(client: Client, session: Session, jobs: ReverseJob[], reason: string) {
+  const targets = new Map<string, InvoiceTarget>();
+  if (jobs.length === 0) return targets;
+  const present = await existingInvoiceLineIds(
     client,
-    `SELECT ${FROZEN_INVOICE_SQL}
-       FROM invoices i
-      WHERE i.id = $1
-      FOR UPDATE`,
-    [invoiceId],
+    jobs.flatMap((job) => (job.invoiceLineId ? [job.invoiceLineId] : [])),
   );
-  return frozenRow(row);
-}
-
-async function clearReversedPointer(client: Client, invoiceId: string, ledgerId: string) {
-  await client.query(
-    `UPDATE invoices SET ledger_transaction_id = NULL WHERE id = $1 AND ledger_transaction_id = $2`,
-    [invoiceId, ledgerId],
-  );
-}
-
-async function attachLedger(client: Client, invoiceId: string, ledgerId: string) {
-  await client.query(
-    `UPDATE invoices SET ledger_transaction_id = $2
-      WHERE id = $1
-        AND (
-          ledger_transaction_id IS NULL
-          OR EXISTS (
-            SELECT 1 FROM ledger_transactions rev WHERE rev.reverses_transaction_id = invoices.ledger_transaction_id
-          )
-        )`,
-    [invoiceId, ledgerId],
-  );
-}
-
-async function insertCredit(client: Client, session: Session, invoiceId: string, amountMinor: number, description: string) {
-  const lineNo = await nextLineNo(client, invoiceId);
-  await client.query(
-    `INSERT INTO invoice_lines (
-       org_id, invoice_id, line_no, charge_type, description, quantity, unit_amount_minor, amount_minor
-     ) VALUES ($1,$2,$3,'credit',$4,1,$5::numeric,$5::bigint)`,
-    [session.orgId, invoiceId, lineNo, description, amountMinor],
-  );
-}
-
-async function reversePostedLine(client: Client, session: Session, line: PostedLine, reason: string) {
-  const ledgerId = line.posted_ledger_transaction_id;
-  const invoiceLineId = line.posted_invoice_line_id;
-  const invoiceId = line.posted_invoice_id;
-  if (!ledgerId) return { invoiceId: null as string | null, linkAllocation: true };
   await client.query(
     `UPDATE utility_allocation_lines
         SET posted_invoice_id = NULL, posted_invoice_line_id = NULL, posted_ledger_transaction_id = NULL,
             posted_amount_minor = NULL, posted_description = NULL
-      WHERE id = $1`,
-    [line.id],
+      WHERE id = ANY($1::uuid[])`,
+    [jobs.map((job) => job.lineId)],
   );
-  const creditAmount = -Number(line.posted_amount_minor ?? 0);
-  const creditDescription = `沖銷${line.posted_description ?? "電費"}`;
-  const frozen = invoiceId ? await invoiceFrozen(client, invoiceId) : true;
-  const lineStillThere = invoiceLineId ? await invoiceLineExists(client, invoiceLineId) : false;
-  if (!frozen && invoiceId && lineStillThere) {
-    await client.query(`UPDATE invoice_lines SET allocation_line_id = NULL WHERE id = $1`, [invoiceLineId]);
-  }
-  if (!frozen && invoiceId && creditAmount < 0) {
-    await insertCredit(client, session, invoiceId, creditAmount, creditDescription);
-    await client.query(`SELECT post_reversal($1::uuid, $2, NULL::uuid)`, [ledgerId, reason]);
-    await clearReversedPointer(client, invoiceId, ledgerId);
-    return { invoiceId, linkAllocation: true };
-  }
-  if (frozen && creditAmount < 0 && line.lease_id && line.property_id && line.currency && line.contact_id) {
-    const created = await createUtilityInvoice(client, session, line);
-    await insertCredit(client, session, created, creditAmount, creditDescription);
-    const reversal = await one<{ id: string }>(
+  const invoiceIds = [...new Set(jobs.flatMap((job) => (job.invoiceId ? [job.invoiceId] : [])))];
+  const frozenById = new Map<string, boolean>();
+  if (invoiceIds.length > 0) {
+    const rows = await many<{ id: string; status: string; paid_minor: string; einvoice_status: string; on_statement: boolean }>(
       client,
-      `SELECT post_reversal($1::uuid, $2, $3::uuid)::text AS id`,
-      [ledgerId, reason, created],
+      `SELECT i.id::text, ${FROZEN_INVOICE_SQL}
+         FROM invoices i
+        WHERE i.id = ANY($1::uuid[])
+        FOR UPDATE`,
+      [invoiceIds],
     );
-    await client.query(
-      `UPDATE invoices SET ledger_transaction_id = $2 WHERE id = $1 AND ledger_transaction_id IS NULL`,
-      [created, reversal.id],
-    );
-    return { invoiceId: created, linkAllocation: false };
+    for (const row of rows) frozenById.set(row.id, frozenRow(row));
   }
-  await client.query(`SELECT post_reversal($1::uuid, $2, NULL::uuid)`, [ledgerId, reason]);
-  if (!frozen && invoiceId) await clearReversedPointer(client, invoiceId, ledgerId);
-  return { invoiceId: null as string | null, linkAllocation: !lineStillThere || !frozen };
+  const frozenOf = (job: ReverseJob) => (job.invoiceId ? (frozenById.get(job.invoiceId) ?? true) : true);
+  const open: ReverseJob[] = [];
+  const frozen: ReverseJob[] = [];
+  const fallback: ReverseJob[] = [];
+  for (const job of jobs) {
+    const isFrozen = frozenOf(job);
+    const still = job.invoiceLineId != null && present.has(job.invoiceLineId);
+    const canCredit = job.creditAmount < 0;
+    if (!isFrozen && job.invoiceId && canCredit) {
+      open.push(job);
+      targets.set(job.lineId, { invoiceId: job.invoiceId, linkAllocation: true });
+    } else if (isFrozen && canCredit && job.leaseId && job.propertyId && job.currency && job.contactId) {
+      frozen.push(job);
+    } else {
+      fallback.push(job);
+      targets.set(job.lineId, { invoiceId: null, linkAllocation: !still || !isFrozen });
+    }
+  }
+  const unlink = jobs.flatMap((job) => (!frozenOf(job) && job.invoiceLineId && present.has(job.invoiceLineId) ? [job.invoiceLineId] : []));
+  if (unlink.length > 0) {
+    await client.query(`UPDATE invoice_lines SET allocation_line_id = NULL WHERE id = ANY($1::uuid[])`, [unlink]);
+  }
+  if (open.length > 0) await creditAndReverse(client, session.orgId, open, reason, null);
+  if (frozen.length > 0) {
+    const created = await createUtilityInvoices(
+      client,
+      session,
+      frozen.map((job) => ({
+        key: job.lineId,
+        leaseId: job.leaseId!,
+        propertyId: job.propertyId!,
+        contactId: job.contactId!,
+        currency: job.currency!,
+        periodStart: job.periodStart,
+        periodEnd: job.periodEnd,
+      })),
+    );
+    const credited = frozen.map((job) => {
+      const invoiceId = created.get(job.lineId);
+      if (!invoiceId) throw new FlowError("errors.generic");
+      targets.set(job.lineId, { invoiceId, linkAllocation: false });
+      return { ...job, invoiceId };
+    });
+    await creditAndReverse(client, session.orgId, credited, reason, "credit");
+  }
+  if (fallback.length > 0) await reverseWithoutCredit(client, fallback, reason, frozenOf);
+  return targets;
 }
 
-async function postLine(
+async function creditAndReverse(
+  client: Client,
+  orgId: string,
+  jobs: ReverseJob[],
+  reason: string,
+  retarget: "credit" | null,
+) {
+  const payload = JSON.stringify(
+    jobs.map((job) => ({
+      line_id: job.lineId,
+      ledger_id: job.ledgerId,
+      invoice_id: job.invoiceId,
+      credit_amount: job.creditAmount,
+      credit_description: job.creditDescription,
+    })),
+  );
+  const credits = await client.query<{ credits: string }>(
+    `WITH input AS (
+       SELECT * FROM jsonb_to_recordset($2::jsonb) AS s(
+         line_id uuid, ledger_id uuid, invoice_id uuid, credit_amount bigint, credit_description text
+       )
+     ),
+     locked AS (
+       SELECT i.id FROM invoices i WHERE i.id IN (SELECT invoice_id FROM input) FOR UPDATE
+     ),
+     numbered AS (
+       SELECT s.*,
+              coalesce(m.max_no, 0) + row_number() OVER (PARTITION BY s.invoice_id ORDER BY s.line_id) AS line_no
+         FROM input s
+         JOIN locked l ON l.id = s.invoice_id
+         LEFT JOIN LATERAL (
+           SELECT max(il.line_no) AS max_no FROM invoice_lines il WHERE il.invoice_id = s.invoice_id
+         ) m ON true
+     ),
+     inserted AS (
+       INSERT INTO invoice_lines (
+         org_id, invoice_id, line_no, charge_type, description, quantity, unit_amount_minor, amount_minor
+       )
+       SELECT $1::uuid, n.invoice_id, n.line_no::smallint, 'credit', n.credit_description, 1,
+              n.credit_amount::numeric, n.credit_amount
+         FROM numbered n
+       RETURNING id
+     )
+     SELECT count(*)::text AS credits FROM inserted`,
+    [orgId, payload],
+  );
+  if (Number(credits.rows[0]?.credits) !== jobs.length) throw new FlowError("errors.generic");
+  const reversalInvoice = retarget === "credit" ? "s.invoice_id" : "NULL::uuid";
+  const pointed = await client.query<{ reversals: string; pointed: string }>(
+    `WITH input AS (
+       SELECT * FROM jsonb_to_recordset($1::jsonb) AS s(ledger_id uuid, invoice_id uuid)
+     ),
+     reversals AS (
+       SELECT s.ledger_id, s.invoice_id, post_reversal(s.ledger_id, $2, ${reversalInvoice}) AS rev_id
+         FROM input s
+     ),
+     pointed AS (
+       UPDATE invoices i
+          SET ledger_transaction_id = ${retarget === "credit" ? "r.rev_id" : "NULL"}
+         FROM reversals r
+        WHERE i.id = r.invoice_id
+          AND ${retarget === "credit" ? "i.ledger_transaction_id IS NULL" : "i.ledger_transaction_id = r.ledger_id"}
+       RETURNING i.id
+     )
+     SELECT (SELECT count(*) FROM reversals)::text AS reversals,
+            (SELECT count(*) FROM pointed)::text AS pointed`,
+    [payload, reason],
+  );
+  if (Number(pointed.rows[0]?.reversals) !== jobs.length) throw new FlowError("errors.generic");
+  if (retarget === "credit" && Number(pointed.rows[0]?.pointed) !== jobs.length) throw new FlowError("errors.generic");
+}
+
+async function reverseWithoutCredit(
+  client: Client,
+  jobs: ReverseJob[],
+  reason: string,
+  frozenOf: (job: ReverseJob) => boolean,
+) {
+  const payload = JSON.stringify(
+    jobs.map((job) => ({
+      ledger_id: job.ledgerId,
+      invoice_id: job.invoiceId,
+      clear: Boolean(job.invoiceId) && !frozenOf(job),
+    })),
+  );
+  const result = await client.query<{ reversals: string }>(
+    `WITH input AS (
+       SELECT * FROM jsonb_to_recordset($1::jsonb) AS s(ledger_id uuid, invoice_id uuid, clear boolean)
+     ),
+     reversals AS (
+       SELECT s.ledger_id, s.invoice_id, s.clear, post_reversal(s.ledger_id, $2, NULL::uuid) AS rev_id
+         FROM input s
+     ),
+     cleared AS (
+       UPDATE invoices i
+          SET ledger_transaction_id = NULL
+         FROM reversals r
+        WHERE r.clear AND i.id = r.invoice_id AND i.ledger_transaction_id = r.ledger_id
+       RETURNING i.id
+     )
+     SELECT (SELECT count(*) FROM reversals)::text AS reversals,
+            (SELECT count(*) FROM cleared)::text AS cleared`,
+    [payload, reason],
+  );
+  if (Number(result.rows[0]?.reversals) !== jobs.length) throw new FlowError("errors.generic");
+}
+
+async function postChargeLines(client: Client, session: Session, posts: PostJob[]) {
+  if (posts.length === 0) return;
+  const needing = posts.filter((post) => !post.targetInvoiceId);
+  const found = await findOpenInvoices(client, session.orgId, needing);
+  for (const post of needing) {
+    const invoiceId = found.get(post.leaseId);
+    if (invoiceId) post.targetInvoiceId = invoiceId;
+  }
+  const missing = posts.filter((post) => !post.targetInvoiceId);
+  const created = await createUtilityInvoices(
+    client,
+    session,
+    missing.map((post) => ({
+      key: post.lineId,
+      leaseId: post.leaseId,
+      propertyId: post.propertyId,
+      contactId: post.contactId,
+      currency: post.currency,
+      periodStart: post.periodStart,
+      periodEnd: post.periodEnd,
+    })),
+  );
+  for (const post of missing) {
+    const invoiceId = created.get(post.lineId);
+    if (!invoiceId) throw new FlowError("errors.notFound");
+    post.targetInvoiceId = invoiceId;
+  }
+  const payload = JSON.stringify(
+    posts.map((post) => ({
+      line_id: post.lineId,
+      invoice_id: post.targetInvoiceId,
+      lease_id: post.leaseId,
+      property_id: post.propertyId,
+      contact_id: post.contactId,
+      currency: post.currency,
+      amount_minor: post.amountMinor,
+      description: post.description,
+      quantity: post.quantity,
+      rate: post.rate,
+      link_allocation: post.linkAllocation,
+    })),
+  );
+  const today = taipeiToday();
+  const result = await client.query<{ posted: string; entries: string }>(
+    `WITH input AS (
+       SELECT * FROM jsonb_to_recordset($4::jsonb) AS s(
+         line_id uuid, invoice_id uuid, lease_id uuid, property_id uuid, contact_id uuid, currency text,
+         amount_minor bigint, description text, quantity numeric, rate numeric, link_allocation boolean
+       )
+     ),
+     locked AS (
+       SELECT i.id FROM invoices i WHERE i.id IN (SELECT invoice_id FROM input) FOR UPDATE
+     ),
+     numbered AS (
+       SELECT s.*,
+              coalesce(m.max_no, 0) + row_number() OVER (PARTITION BY s.invoice_id ORDER BY s.line_id) AS line_no
+         FROM input s
+         JOIN locked l ON l.id = s.invoice_id
+         LEFT JOIN LATERAL (
+           SELECT max(il.line_no) AS max_no FROM invoice_lines il WHERE il.invoice_id = s.invoice_id
+         ) m ON true
+     ),
+     new_lines AS (
+       INSERT INTO invoice_lines (
+         org_id, invoice_id, line_no, charge_type, description, quantity, unit_amount_minor, amount_minor, allocation_line_id
+       )
+       SELECT $1::uuid, n.invoice_id, n.line_no::smallint, 'utility', n.description, n.quantity, n.rate, n.amount_minor,
+              CASE WHEN n.link_allocation THEN n.line_id ELSE NULL END
+         FROM numbered n
+       RETURNING id, invoice_id, line_no
+     ),
+     txns AS (
+       INSERT INTO ledger_transactions (
+         org_id, property_id, lease_id, kind, currency, effective_date, description, source_table, source_id, created_by
+       )
+       SELECT $1::uuid, n.property_id, n.lease_id, 'invoice', n.currency::char(3), $3::date, n.description,
+              'utility_allocation_lines', n.line_id, $2::uuid
+         FROM numbered n
+       RETURNING id, source_id
+     ),
+     entries AS (
+       INSERT INTO ledger_entries (
+         org_id, transaction_id, account, amount_minor, currency, contact_id, property_id, lease_id, invoice_id, memo
+       )
+       SELECT $1::uuid, t.id, x.account, x.amount_minor, n.currency::char(3), n.contact_id, n.property_id, n.lease_id,
+              n.invoice_id, '電費'
+         FROM txns t
+         JOIN numbered n ON n.line_id = t.source_id
+         CROSS JOIN LATERAL (
+           VALUES ('tenant_receivable'::ledger_account, n.amount_minor),
+                  ('other_income'::ledger_account, -n.amount_minor)
+         ) AS x(account, amount_minor)
+       RETURNING id
+     ),
+     posted AS (
+       UPDATE utility_allocation_lines l
+          SET posted_invoice_id = n.invoice_id,
+              posted_invoice_line_id = nl.id,
+              posted_ledger_transaction_id = t.id,
+              posted_amount_minor = n.amount_minor,
+              posted_description = n.description
+         FROM numbered n
+         JOIN new_lines nl ON nl.invoice_id = n.invoice_id AND nl.line_no = n.line_no::smallint
+         JOIN txns t ON t.source_id = n.line_id
+        WHERE l.id = n.line_id
+       RETURNING l.id
+     )
+     SELECT (SELECT count(*) FROM posted)::text AS posted,
+            (SELECT count(*) FROM entries)::text AS entries`,
+    [session.orgId, session.userId, today, payload],
+  );
+  if (Number(result.rows[0]?.posted) !== posts.length || Number(result.rows[0]?.entries) !== posts.length * 2) {
+    throw new FlowError("errors.generic");
+  }
+  await client.query(
+    `WITH input AS (
+       SELECT * FROM jsonb_to_recordset($1::jsonb) AS s(line_id uuid)
+     ),
+     picked AS (
+       SELECT DISTINCT ON (l.posted_invoice_id)
+              l.posted_invoice_id AS invoice_id,
+              l.posted_ledger_transaction_id AS txn_id
+         FROM input s
+         JOIN utility_allocation_lines l ON l.id = s.line_id
+        WHERE l.posted_invoice_id IS NOT NULL AND l.posted_ledger_transaction_id IS NOT NULL
+        ORDER BY l.posted_invoice_id, l.id
+     )
+     UPDATE invoices i
+        SET ledger_transaction_id = picked.txn_id
+       FROM picked
+      WHERE i.id = picked.invoice_id
+        AND (
+          i.ledger_transaction_id IS NULL
+          OR EXISTS (
+            SELECT 1 FROM ledger_transactions rev WHERE rev.reverses_transaction_id = i.ledger_transaction_id
+          )
+        )`,
+    [JSON.stringify(posts.map((post) => ({ line_id: post.lineId })))],
+  );
+}
+
+async function findOpenInvoices(client: Client, orgId: string, posts: PostJob[]) {
+  const found = new Map<string, string>();
+  if (posts.length === 0) return found;
+  const payload = JSON.stringify(
+    posts.map((post) => ({ lease_id: post.leaseId, period_start: post.periodStart, period_end: post.periodEnd })),
+  );
+  const rows = await many<{ lease_id: string; id: string }>(
+    client,
+    `WITH chosen AS (
+       SELECT DISTINCT ON (s.lease_id) s.lease_id, i.id
+         FROM jsonb_to_recordset($2::jsonb) AS s(lease_id uuid, period_start date, period_end date)
+         JOIN invoices i ON i.org_id = $1 AND i.lease_id = s.lease_id
+          AND i.status = 'open' AND i.paid_minor = 0
+          AND i.einvoice_status NOT IN ('issued', 'allowance_issued')
+          AND i.source IN ('recurring', 'utility')
+          AND i.period_start <= s.period_end AND i.period_end >= s.period_start
+          AND NOT (
+            EXISTS (
+              SELECT 1 FROM owner_statements os
+               WHERE os.id = i.owner_statement_id AND os.org_id = i.org_id AND os.status = 'issued'
+            )
+            OR EXISTS (
+              SELECT 1
+                FROM payment_allocations a
+                JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'
+                JOIN leases l ON l.id = i.lease_id
+                JOIN property_owners po ON po.property_id = l.property_id
+                JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id
+                 AND s.org_id = i.org_id AND s.status = 'issued'
+                 AND pay.paid_on >= s.period_start AND pay.paid_on <= s.period_end
+               WHERE a.invoice_id = i.id
+            )
+          )
+        ORDER BY s.lease_id, (i.period_start = s.period_start AND i.period_end = s.period_end) DESC, i.period_start DESC
+     )
+     SELECT c.lease_id::text, i.id::text
+       FROM chosen c
+       JOIN invoices i ON i.id = c.id
+      FOR UPDATE OF i`,
+    [orgId, payload],
+  );
+  for (const row of rows) found.set(row.lease_id, row.id);
+  return found;
+}
+
+async function createUtilityInvoices(
   client: Client,
   session: Session,
-  line: PostedLine,
-  amountMinor: number,
-  description: string,
-  targetInvoiceId: string | null,
-  linkAllocation: boolean,
+  rows: Array<{
+    key: string;
+    leaseId: string;
+    propertyId: string;
+    contactId: string;
+    currency: string;
+    periodStart: string;
+    periodEnd: string;
+  }>,
 ) {
-  const invoiceId = targetInvoiceId ?? (await ensureRentInvoice(client, session, line));
-  const lineNo = await nextLineNo(client, invoiceId);
-  const kwh = Number(line.allocated_usage);
-  const rateMinor = Number(line.rate);
-  const inserted = await one<{ id: string }>(
-    client,
-    `INSERT INTO invoice_lines (
-       org_id, invoice_id, line_no, charge_type, description, quantity, unit_amount_minor, amount_minor, allocation_line_id
-     ) VALUES ($1,$2,$3,'utility',$4,$5,$6,$7,$8)
-     RETURNING id::text`,
-    [session.orgId, invoiceId, lineNo, description, kwh, rateMinor, amountMinor, linkAllocation ? line.id : null],
-  );
-  const today = taipeiToday();
-  const txn = await one<{ id: string }>(
-    client,
-    `INSERT INTO ledger_transactions (
-       org_id, property_id, lease_id, kind, currency, effective_date, description, source_table, source_id, created_by
-     ) VALUES ($1,$2,$3,'invoice',$4,$5::date,$6,'utility_allocation_lines',$7,$8)
-     RETURNING id::text`,
-    [session.orgId, line.property_id, line.lease_id, line.currency, today, description, line.id, session.userId],
-  );
-  await client.query(
-    `INSERT INTO ledger_entries (
-       org_id, transaction_id, account, amount_minor, currency, contact_id, property_id, lease_id, invoice_id, memo
-     ) VALUES
-       ($1,$2,'tenant_receivable',$3,$4,$5,$6,$7,$8,'電費'),
-       ($1,$2,'other_income',$9,$4,$5,$6,$7,$8,'電費')`,
-    [
-      session.orgId,
-      txn.id,
-      amountMinor,
-      line.currency,
-      line.contact_id,
-      line.property_id,
-      line.lease_id,
-      invoiceId,
-      -amountMinor,
-    ],
-  );
-  await attachLedger(client, invoiceId, txn.id);
-  await client.query(
-    `UPDATE utility_allocation_lines
-        SET posted_invoice_id = $2, posted_invoice_line_id = $3, posted_ledger_transaction_id = $4,
-            posted_amount_minor = $5, posted_description = $6
-      WHERE id = $1`,
-    [line.id, invoiceId, inserted.id, txn.id, amountMinor, description],
-  );
-}
-
-async function ensureRentInvoice(client: Client, session: Session, line: PostedLine) {
-  const found = await maybe<{ id: string }>(
-    client,
-    `SELECT i.id::text FROM invoices i
-      WHERE i.org_id = $1 AND i.lease_id = $2
-        AND i.status = 'open' AND i.paid_minor = 0
-        AND i.einvoice_status NOT IN ('issued', 'allowance_issued')
-        AND i.source IN ('recurring', 'utility')
-        AND i.period_start <= $4::date AND i.period_end >= $3::date
-        AND NOT (
-          EXISTS (
-            SELECT 1 FROM owner_statements s
-             WHERE s.id = i.owner_statement_id AND s.org_id = i.org_id AND s.status = 'issued'
-          )
-          OR EXISTS (
-            SELECT 1
-              FROM payment_allocations a
-              JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'
-              JOIN leases l ON l.id = i.lease_id
-              JOIN property_owners po ON po.property_id = l.property_id
-              JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id
-               AND s.org_id = i.org_id AND s.status = 'issued'
-               AND pay.paid_on >= s.period_start AND pay.paid_on <= s.period_end
-             WHERE a.invoice_id = i.id
-          )
-        )
-      ORDER BY (i.period_start = $3::date AND i.period_end = $4::date) DESC, i.period_start DESC
-      LIMIT 1
-      FOR UPDATE`,
-    [session.orgId, line.lease_id, line.period_start, line.period_end],
-  );
-  if (found) return found.id;
-  return createUtilityInvoice(client, session, line);
-}
-
-async function createUtilityInvoice(client: Client, session: Session, line: PostedLine) {
-  if (!line.lease_id || !line.property_id || !line.currency || !line.contact_id) throw new FlowError("errors.notFound");
+  const map = new Map<string, string>();
+  if (rows.length === 0) return map;
   const today = taipeiToday();
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const number = await nextInvoiceNumber(client, session.orgId, attempt);
-    await client.query("SAVEPOINT utility_invoice");
+    const numbers = await reserveInvoiceNumbers(client, session.orgId, rows.length, attempt);
+    const payload = JSON.stringify(
+      rows.map((row, index) => ({
+        key: row.key,
+        property_id: row.propertyId,
+        lease_id: row.leaseId,
+        contact_id: row.contactId,
+        currency: row.currency,
+        period_start: row.periodStart,
+        period_end: row.periodEnd,
+        invoice_number: numbers[index],
+      })),
+    );
+    await client.query("SAVEPOINT utility_invoices");
     try {
-      const created = await one<{ id: string }>(
-        client,
+      const inserted = await client.query<{ id: string; invoice_number: string }>(
         `INSERT INTO invoices (
            org_id, property_id, lease_id, bill_to_contact_id, invoice_number, currency, issue_date, due_date,
            period_start, period_end, status, source, created_by, einvoice_status
-         ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7::date, GREATEST($8::date, $7::date), $9::date, $8::date, 'open', 'utility', $10, 'not_applicable'
-         ) RETURNING id::text`,
-        [
-          session.orgId,
-          line.property_id,
-          line.lease_id,
-          line.contact_id,
-          number,
-          line.currency,
-          today,
-          line.period_end,
-          line.period_start,
-          session.userId,
-        ],
+         )
+         SELECT $1::uuid, s.property_id, s.lease_id, s.contact_id, s.invoice_number, s.currency::char(3),
+                $2::date, GREATEST(s.period_end, $2::date), s.period_start, s.period_end, 'open', 'utility', $3::uuid,
+                'not_applicable'
+           FROM jsonb_to_recordset($4::jsonb) AS s(
+             key text, property_id uuid, lease_id uuid, contact_id uuid, invoice_number text, currency text,
+             period_start date, period_end date
+           )
+         RETURNING id::text, invoice_number`,
+        [session.orgId, today, session.userId, payload],
       );
-      await client.query("RELEASE SAVEPOINT utility_invoice");
-      return created.id;
+      await client.query("RELEASE SAVEPOINT utility_invoices");
+      const keyByNumber = new Map(rows.map((row, index) => [numbers[index], row.key]));
+      if (inserted.rows.length !== rows.length) throw new FlowError("errors.generic");
+      for (const row of inserted.rows) {
+        const key = keyByNumber.get(row.invoice_number);
+        if (!key) throw new FlowError("errors.generic");
+        map.set(key, row.id);
+      }
+      return map;
     } catch (error) {
-      await client.query("ROLLBACK TO SAVEPOINT utility_invoice");
-      if (!uniqueViolation(error)) throw error;
+      await client.query("ROLLBACK TO SAVEPOINT utility_invoices");
+      if (!uniqueViolation(error) && !(error instanceof FlowError)) throw error;
+      if (error instanceof FlowError) throw error;
     }
   }
   throw new FlowError("errors.generic");

@@ -27,6 +27,7 @@ export function mapDbError(error: unknown): Error {
   else if (/override reason|exceeds bill average/i.test(message)) key = "errors.capReason";
   else if (/deposit of|leases_deposit_over_cap_requires_override|leases_deposit_override_pair/i.test(message)) key = "errors.depositCap";
   else if (/unbalanced/i.test(message)) key = "errors.ledger";
+  else if (/utility_allocation_runs_unit_period_excl/i.test(message)) key = "errors.utilityOverlap";
   else if (/exclusion_violation|exclusion constraint|overlaps lease|double-booking/i.test(message)) key = "errors.occupied";
   else if (/contacts_org_tenant_email_uniq/i.test(message)) key = "errors.tenantExists";
   else if (/duplicate key/i.test(message) && /email/i.test(message)) key = "errors.emailTaken";
