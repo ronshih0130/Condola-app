@@ -21,7 +21,7 @@ export function isDbTimeout(error: unknown) {
 export function mapDbError(error: unknown): Error {
   if (error instanceof FlowError) return error;
   const message = error instanceof Error ? error.message : String(error);
-  console.error(error);
+  console.error("database error:", error);
   let key = "errors.generic";
   if (/row-level security|permission denied|insufficient_privilege/i.test(message)) key = "errors.forbidden";
   else if (/override reason|exceeds bill average/i.test(message)) key = "errors.capReason";

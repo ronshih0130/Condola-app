@@ -1693,11 +1693,19 @@ async function issueMoveInInvoice(client: Client, leaseId: string) {
     `SELECT contact_id FROM lease_parties WHERE lease_id = $1 AND role = 'primary' LIMIT 1`,
     [leaseId],
   );
+  // A confirmed electricity split already has its own invoice line. Attaching that
+  // allocation again violates invoice_lines_alloc_uniq and rolls the countersign back.
   const allocation = await maybe<{ id: string; amount_minor: string }>(
     client,
-    `SELECT id, amount_minor::text FROM utility_allocation_lines
-      WHERE lease_id = $1 AND amount_minor > 0
-      ORDER BY amount_minor DESC LIMIT 1`,
+    `SELECT l.id, l.amount_minor::text
+       FROM utility_allocation_lines l
+      WHERE l.lease_id = $1 AND l.amount_minor > 0
+        AND l.posted_invoice_line_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM invoice_lines il WHERE il.allocation_line_id = l.id
+        )
+      ORDER BY l.amount_minor DESC
+      LIMIT 1`,
     [leaseId],
   );
   const approver = await maybe<{ user_id: string }>(

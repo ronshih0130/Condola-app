@@ -50,6 +50,19 @@ test("every error key has a translation, and an empty amount uses the amount sen
   const overlap = mapDbError(new Error('conflicting key value violates exclusion constraint "utility_allocation_runs_unit_period_excl"'));
   assert.ok(overlap instanceof FlowError);
   assert.equal(overlap.key, "errors.utilityOverlap");
+  const logged: string[] = [];
+  const write = console.error;
+  console.error = (...args: unknown[]) => {
+    logged.push(args.map((arg) => String(arg)).join(" "));
+  };
+  try {
+    const hidden = mapDbError(new Error('duplicate key value violates unique constraint "invoice_lines_alloc_uniq"'));
+    assert.ok(hidden instanceof FlowError);
+    assert.equal(hidden.key, "errors.generic");
+  } finally {
+    console.error = write;
+  }
+  assert.match(logged.join("\n"), /invoice_lines_alloc_uniq/);
 });
 
 test("confirmation mail uses the locked button and body", () => {

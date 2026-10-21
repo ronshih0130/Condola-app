@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { query, tx, withClient } from "./db";
-import { createProperty, generateStatement, importBankCsv, recordPayment } from "./domain";
+import { createProperty, generateStatement, importBankCsv, recordPayment, signLease, simulateTenantSignature } from "./domain";
 import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { createLeaseFromForm } from "./lease-form";
@@ -1568,6 +1568,141 @@ test("平均分攤 accepts a blank total kWh and the owner expense is visible wh
     assert.ok(Number(bill.rows[0].usage) > 0);
   } finally {
     await cleanupFixture({ propertyIds, userIds: [], importId: null, stamp });
+  }
+});
+
+test("countersign activates a pending lease that already has a posted electricity invoice", async () => {
+  const stamp = Date.now().toString(36);
+  const period = currentUtilityPeriod();
+  const propertyIds: string[] = [];
+  const userIds: string[] = [];
+  try {
+    const created = await createProperty(admin, {
+      name: `簽署電費 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: `復興南路${stamp}`,
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "簽署屋主",
+      ownerPhone: "0912000666",
+      ownerEmail: `sign.util.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "3F",
+      floor: "3",
+      rentalMode: "by_room",
+      rooms: [{ label: "A", roomType: "suite", baseRentMajor: 10000 }],
+    });
+    propertyIds.push(created.propertyId);
+    const roomId = created.roomIds[0];
+    await query(`UPDATE rooms SET electricity_method = 'submeter', rate_per_kwh = 4 WHERE id = $1`, [roomId]);
+    const lease = await createLeaseFromForm(
+      admin,
+      form({
+        roomId,
+        tenantName: "待簽署租客",
+        tenantPhone: "0912345678",
+        tenantEmail: `sign.util.${stamp}@example.com`,
+        lineUserId: "",
+        startDate: period.start,
+        months: "12",
+        rent: "10000",
+        depositMonths: "2",
+        depositReason: "",
+        dueDay: "5",
+        splitMethod: "even",
+        billTotal: "",
+        usage: "",
+        rate: "",
+        overrideReason: "",
+      }),
+    );
+    userIds.push(lease.tenantUserId);
+    const before = await query<{ status: string; esign: string }>(
+      `SELECT status::text, esign_status::text AS esign FROM leases WHERE id = $1`,
+      [lease.leaseId],
+    );
+    assert.equal(before.rows[0]?.status, "pending_signature");
+
+    const unit = await query<{ id: string }>(`SELECT unit_id::text AS id FROM rooms WHERE id = $1`, [roomId]);
+    const prepared = await prepareUtilityRun(admin, {
+      unitId: unit.rows[0].id,
+      periodStart: period.start,
+      periodEnd: period.end,
+      rateMajor: 4,
+      totalKwh: 100,
+      billTotalMajor: 400,
+      overrideReason: "",
+      readings: [{ spaceId: roomId, kwh: 100 }],
+    });
+    await confirmUtilityRun(admin, prepared.runId);
+    const postedLine = await query<{ id: string; invoice_id: string }>(
+      `SELECT id::text, posted_invoice_id::text AS invoice_id
+         FROM utility_allocation_lines
+        WHERE lease_id = $1 AND posted_invoice_line_id IS NOT NULL`,
+      [lease.leaseId],
+    );
+    assert.equal(postedLine.rows.length, 1);
+    const utilityInvoice = postedLine.rows[0].invoice_id;
+    const linkedBefore = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM invoice_lines WHERE allocation_line_id = $1`,
+      [postedLine.rows[0].id],
+    );
+    assert.equal(linkedBefore.rows[0].n, "1");
+
+    const tenantSigned = await simulateTenantSignature(admin, lease.leaseId);
+    assert.equal(tenantSigned.esign, "partially_signed");
+    const waiting = await query<{ status: string; move_in: string }>(
+      `SELECT l.status::text,
+              (SELECT count(*)::text FROM invoices i WHERE i.lease_id = l.id AND i.source = 'move_in') AS move_in
+         FROM leases l WHERE l.id = $1`,
+      [lease.leaseId],
+    );
+    assert.equal(waiting.rows[0]?.status, "pending_signature");
+    assert.equal(waiting.rows[0]?.move_in, "0");
+
+    const activated = await signLease(admin, { leaseId: lease.leaseId, signedName: "管理方", consent: true });
+    assert.equal(activated.esign, "fully_signed");
+    assert.ok(activated.invoiceId);
+
+    const after = await query<{ status: string; esign: string }>(
+      `SELECT status::text, esign_status::text AS esign FROM leases WHERE id = $1`,
+      [lease.leaseId],
+    );
+    assert.equal(after.rows[0]?.status, "active");
+    assert.equal(after.rows[0]?.esign, "fully_signed");
+    const moveIn = await query<{ id: string; total: string }>(
+      `SELECT id::text, total_minor::text AS total
+         FROM invoices WHERE lease_id = $1 AND source = 'move_in' AND status <> 'void'`,
+      [lease.leaseId],
+    );
+    assert.equal(moveIn.rows.length, 1);
+    assert.equal(moveIn.rows[0].id, activated.invoiceId);
+    const moveInLines = await query<{ charge_type: string; amount: string; allocation_line_id: string | null }>(
+      `SELECT charge_type::text, amount_minor::text AS amount, allocation_line_id::text
+         FROM invoice_lines WHERE invoice_id = $1 ORDER BY line_no`,
+      [moveIn.rows[0].id],
+    );
+    assert.deepEqual(
+      moveInLines.rows.map((row) => row.charge_type),
+      ["rent", "deposit"],
+    );
+    assert.equal(moveInLines.rows.every((row) => row.allocation_line_id === null), true);
+    assert.equal(moveIn.rows[0].total, "3000000");
+    const linkedAfter = await query<{ n: string; invoice_id: string }>(
+      `SELECT count(*)::text AS n, min(invoice_id::text) AS invoice_id
+         FROM invoice_lines WHERE allocation_line_id = $1`,
+      [postedLine.rows[0].id],
+    );
+    assert.equal(linkedAfter.rows[0].n, "1");
+    assert.equal(linkedAfter.rows[0].invoice_id, utilityInvoice);
+    const utilityStill = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM invoices WHERE id = $1 AND source = 'utility' AND status <> 'void'`,
+      [utilityInvoice],
+    );
+    assert.equal(utilityStill.rows[0].n, "1");
+  } finally {
+    await cleanupFixture({ propertyIds, userIds, importId: null, stamp });
   }
 });
 

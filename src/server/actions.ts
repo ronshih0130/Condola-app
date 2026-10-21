@@ -53,6 +53,10 @@ function isRedirect(error: unknown) {
 function bounce(path: string, error: unknown): never {
   if (isRedirect(error)) throw error;
   const key = error instanceof FlowError ? error.key : "errors.generic";
+  if (key === "errors.generic") {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("action failed:", message);
+  }
   const [pathname, query = ""] = path.split("?");
   const params = new URLSearchParams(query);
   params.set("error", key);
