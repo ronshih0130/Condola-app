@@ -27,6 +27,16 @@ test("staff can lease a vacant room to an existing 租客", async ({ page }) => 
   await expect(option).not.toContainText("張雅文");
   await option.click();
   await expect(page.getByTestId("tenant-picked")).toHaveText("王小美");
+
+  await page.getByTestId("tenant-search").fill("沒有這個人");
+  await expect(page.getByTestId("tenant-picked")).toHaveCount(0);
+  await page.getByTestId("wizard-next").click();
+  await expect(page.getByTestId("tenant-pick-error")).toBeVisible();
+
+  await page.getByTestId("tenant-search").fill("0912-111-002");
+  await expect(page.getByTestId("tenant-option")).toHaveCount(1);
+  await page.getByTestId("tenant-option").click();
+  await expect(page.getByTestId("tenant-picked")).toHaveText("王小美");
   await page.getByTestId("wizard-next").click();
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());

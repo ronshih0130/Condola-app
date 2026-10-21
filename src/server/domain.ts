@@ -17,6 +17,7 @@ import {
 } from "./money";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
+import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
 function sha256(value: string) {
@@ -410,7 +411,7 @@ async function linkTenant(
       [input.tenantContactId, session.orgId],
     );
     if (!found) throw new FlowError("errors.notFound");
-    const tenantUserId = found.user_id ?? (await attachPortalUser(client, session.orgId, found));
+    const tenantUserId = found.user_id ?? (await attachPortalUser(client, session, found));
     return { contactId: found.id, tenantUserId };
   }
   if (input.email) {
@@ -433,27 +434,67 @@ async function linkTenant(
   return { contactId: contact.id, tenantUserId };
 }
 
-/** A 租客 row with no portal login yet keeps that row and gains a user. */
-async function attachPortalUser(client: Client, orgId: string, contact: TenantContactRow) {
-  const tenantUserId = await insertPortalUser(client, {
-    name: contact.display_name,
-    email: contact.email,
-    phone: contact.phone_e164,
+/**
+ * A 租客 row with no portal login yet keeps that row and gains a new user.
+ * Sandbox firms, and any email that already has a login, get a synthetic
+ * portal address. This never looks up auth.users by email and never attaches
+ * that existing login.
+ */
+async function attachPortalUser(client: Client, session: Session, contact: TenantContactRow) {
+  const loginEmail = portalLoginEmail({
+    environment: session.environment,
+    contactEmail: contact.email,
+    emailTaken: false,
   });
+  const tenantUserId = loginEmail
+    ? await insertPortalUserUnlessEmailTaken(client, contact, loginEmail)
+    : await insertPortalUser(client, {
+        name: contact.display_name,
+        email: null,
+        phone: contact.phone_e164,
+      });
   const updated = await maybe<{ id: string }>(
     client,
     `UPDATE contacts SET user_id = $2, updated_at = now()
       WHERE id = $1 AND org_id = $3 AND user_id IS NULL
       RETURNING id::text`,
-    [contact.id, tenantUserId, orgId],
+    [contact.id, tenantUserId, session.orgId],
   );
   if (updated) return tenantUserId;
   const again = await one<{ user_id: string }>(
     client,
     `SELECT user_id::text AS user_id FROM contacts WHERE id = $1 AND org_id = $2 AND user_id IS NOT NULL`,
-    [contact.id, orgId],
+    [contact.id, session.orgId],
   );
   return again.user_id;
+}
+
+/**
+ * Try the contact email. On a taken auth email, roll back only that insert and
+ * mint a new login. The first statement in the catch must be the savepoint
+ * rollback: the transaction is aborted, so a role change cannot run before it.
+ */
+async function insertPortalUserUnlessEmailTaken(client: Client, contact: TenantContactRow, email: string) {
+  await client.query(`SAVEPOINT attach_portal_login`);
+  try {
+    await client.query(`SET LOCAL ROLE service_role`);
+    const user = await one<{ id: string }>(
+      client,
+      `SELECT app.provision_portal_user($1, $2, $3) AS id`,
+      [email, contact.display_name, contact.phone_e164],
+    );
+    await client.query(`RELEASE SAVEPOINT attach_portal_login`);
+    await client.query(`SET LOCAL ROLE authenticated`);
+    return user.id;
+  } catch (error) {
+    await client.query(`ROLLBACK TO SAVEPOINT attach_portal_login`);
+    if (!authEmailTaken(error)) throw error;
+    return insertPortalUser(client, {
+      name: contact.display_name,
+      email: null,
+      phone: contact.phone_e164,
+    });
+  }
 }
 
 export async function createLease(session: Session, input: LeaseInput) {

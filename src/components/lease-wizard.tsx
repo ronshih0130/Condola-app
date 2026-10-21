@@ -4,7 +4,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "@/i18n/errors";
 import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
-import { filterTenants, type TenantOption } from "@/tenant-pick";
+import { activeTenantPick, filterTenants, type TenantOption } from "@/tenant-pick";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
 import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
@@ -83,7 +83,8 @@ export function LeaseWizard({
 
   const room = rooms.find((item) => item.id === roomId);
   const tenantMatches = useMemo(() => filterTenants(tenants, tenantQuery), [tenants, tenantQuery]);
-  const pickedTenant = tenants.find((item) => item.id === tenantContactId) ?? null;
+  const pickedId = activeTenantPick(tenantContactId, tenantMatches);
+  const pickedTenant = tenants.find((item) => item.id === pickedId) ?? null;
   const currency = room?.currency ?? "TWD";
   const billN = Number(bill);
   const usageN = Number(usage);
@@ -135,7 +136,7 @@ export function LeaseWizard({
   function goNext() {
     if (step === 2) {
       if (tenantMode === "existing") {
-        const missing = !tenantContactId;
+        const missing = pickedId === "";
         setTenantPickError(missing);
         if (missing) return;
       } else {
@@ -199,6 +200,12 @@ export function LeaseWizard({
         event.preventDefault();
       }}
       onSubmit={(event) => {
+        if (tenantMode === "existing" && pickedId === "") {
+          event.preventDefault();
+          setTenantPickError(true);
+          setStep(2);
+          return;
+        }
         const submitter = (event.nativeEvent as SubmitEvent).submitter;
         if (step !== 8 || !submitReady || !(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-lease") {
           event.preventDefault();
@@ -227,7 +234,7 @@ export function LeaseWizard({
       <input type="hidden" name="tenantName" value={tenant} />
       <input type="hidden" name="tenantPhone" value={phone} />
       <input type="hidden" name="lineUserId" value={lineId} />
-      <input type="hidden" name="tenantMode" value={tenantMode === "existing" ? tenantContactId : "new"} />
+      <input type="hidden" name="tenantMode" value={tenantMode === "existing" ? pickedId : "new"} />
       <input type="hidden" name="rent" value={rent} />
       <input type="hidden" name="months" value={months} />
       <input type="hidden" name="startDate" value={start} />
@@ -280,6 +287,9 @@ export function LeaseWizard({
                 autoComplete="off"
                 onChange={(event) => {
                   setTenantQuery(event.target.value);
+                  setTenantContactId("");
+                  setTenant("");
+                  setPhone("");
                   setTenantPickError(false);
                 }}
               />
@@ -289,8 +299,8 @@ export function LeaseWizard({
                     key={item.id}
                     type="button"
                     role="option"
-                    aria-selected={item.id === tenantContactId}
-                    className={`radio${item.id === tenantContactId ? " on" : ""}`}
+                    aria-selected={item.id === pickedId}
+                    className={`radio${item.id === pickedId ? " on" : ""}`}
                     style={{ width: "100%", textAlign: "left", font: "inherit" }}
                     data-testid="tenant-option"
                     onClick={() => {

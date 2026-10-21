@@ -44,6 +44,8 @@ test("the lease wizard can search for an existing tenant", () => {
   assert.match(wizard, /data-testid="tenant-option"/);
   assert.match(wizard, /i_existing_tenant/);
   assert.match(wizard, /filterTenants/);
+  assert.match(wizard, /activeTenantPick/);
+  assert.match(wizard, /setTenantQuery\(event\.target\.value\);\s*setTenantContactId\(""\)/);
   assert.equal(wizard.includes("房東"), false);
   assert.equal(wizard.includes("房客"), false);
 });

@@ -15,6 +15,12 @@ export function tenantSearchText(tenant: TenantOption) {
   return `${tenant.name} ${phone} ${localPhone(phone)} ${tenant.email ?? ""}`.toLowerCase();
 }
 
+/** Empty once the search no longer contains the picked contact, so that id cannot be submitted. */
+export function activeTenantPick(contactId: string, matches: readonly { id: string }[]) {
+  if (!contactId) return "";
+  return matches.some((row) => row.id === contactId) ? contactId : "";
+}
+
 export function filterTenants<T extends TenantOption>(tenants: T[], query: string): T[] {
   const q = query.trim().toLowerCase();
   if (!q) return tenants;
