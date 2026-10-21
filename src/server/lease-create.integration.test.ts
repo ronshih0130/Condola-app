@@ -228,7 +228,8 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     assert.ok(splits.rows.some((row) => row.lease_id === even.leaseId && row.split === "even"));
     assert.ok(splits.rows.some((row) => row.lease_id === sub.leaseId && row.split === "sub_meter"));
     const listed = await listLeases(admin);
-    assert.equal(listed.find((row) => row.id === even.leaseId)?.electricity, "even");
+    // The later sub_meter run for the same period replaces the original even split.
+    assert.equal(listed.find((row) => row.id === even.leaseId)?.electricity, "sub_meter");
     assert.equal(listed.find((row) => row.id === sub.leaseId)?.electricity, "sub_meter");
 
     const bills = await query<{ n: string }>(

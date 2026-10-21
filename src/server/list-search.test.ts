@@ -6,9 +6,11 @@ import {
   bindList,
   ilikePattern,
   leaseSearchSql,
+  listHref,
   parseListQuery,
   propertySearchSql,
   searchSqlTouchesNationalId,
+  slicePage,
   spaceSearchSql,
   tenantContactSearchSql,
   textSearch,
@@ -41,6 +43,24 @@ test("list SQL is parameterized, org-scoped, paged, and does not read national I
   assert.deepEqual(page.params, ["org-1", "%延平%", 2, 1]);
   assert.equal(page.pageSql, "LIMIT $3 OFFSET $4");
   assert.equal(page.limit, 1);
+  assert.equal(page.page, 2);
+
+  const full = bindList("org-1", { page: 2, limit: LIST_PAGE_SIZE });
+  assert.equal(full.params[2], LIST_PAGE_SIZE + 1);
+  assert.equal(full.params[3], LIST_PAGE_SIZE);
+  assert.equal(full.pageSql, "LIMIT $3 OFFSET $4");
+  const window = slicePage([1, 2, 3], LIST_PAGE_SIZE, 55, 2);
+  assert.equal(window.hasNext, false);
+  assert.equal(window.from, LIST_PAGE_SIZE + 1);
+  assert.equal(window.to, LIST_PAGE_SIZE + 3);
+  const first = slicePage(Array.from({ length: LIST_PAGE_SIZE + 1 }, (_, index) => index), LIST_PAGE_SIZE, 55, 1);
+  assert.equal(first.rows.length, LIST_PAGE_SIZE);
+  assert.equal(first.hasNext, true);
+  assert.equal(first.from, 1);
+  assert.equal(first.to, LIST_PAGE_SIZE);
+  assert.equal(listHref("/m/leases", "王", 2), "/m/leases?q=%E7%8E%8B&page=2");
+  assert.equal(listHref("/m/leases", "", 2), "/m/leases?page=2");
+  assert.equal(listHref("/m/leases", "王", 1), "/m/leases?q=%E7%8E%8B");
 
   const capped = bindList("org-1", { limit: 500, page: 1 });
   assert.equal(capped.limit, 100);
@@ -86,6 +106,8 @@ test("list SQL is parameterized, org-scoped, paged, and does not read national I
   for (const page of ["tenants/page.tsx", "properties/page.tsx", "leases/page.tsx", "units/page.tsx"]) {
     const source = readFileSync(new URL(`../app/m/${page}`, import.meta.url), "utf8");
     assert.match(source, /ListSearch/);
+    assert.match(source, /ListPager/);
+    assert.match(source, /i_search_range|listSummary/);
     assert.match(source, /search(Tenants|Leases|Properties|Spaces)\(session, raw\)/);
   }
   const header = readFileSync(new URL("../app/layout.tsx", import.meta.url), "utf8");

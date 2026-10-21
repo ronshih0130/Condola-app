@@ -1,12 +1,13 @@
 import type { TenantOption } from "@/tenant-pick";
+import type { QueryResultRow } from "pg";
 import { query, maybe, many, tx } from "./db";
 import {
   LIST_PAGE_SIZE,
   bindList,
   leaseSearchSql,
-  pageRows,
   parseListQuery,
   propertySearchSql,
+  slicePage,
   spaceSearchSql,
   tenantContactSearchSql,
   type ListOpts,
@@ -238,18 +239,36 @@ const PROPERTY_LIST_SQL = `SELECT p.id::text, p.name, coalesce(p.address_display
           ${propertySearchSql()}
         ORDER BY p.created_at, p.id`;
 
+const PROPERTY_LIST_ORDER = "ORDER BY p.created_at, p.id";
+
 function listScope(session: Session) {
   return { orgId: session.orgId, environment: session.environment };
+}
+
+async function loadList<T extends QueryResultRow>(
+  client: Parameters<typeof many>[0],
+  sql: string,
+  order: string,
+  bound: ReturnType<typeof bindList>,
+) {
+  const rows = await many<T>(client, `${sql} ${bound.pageSql}`, bound.params);
+  const counted =
+    bound.limit === null
+      ? null
+      : await maybe<{ n: number }>(
+          client,
+          `SELECT count(*)::int AS n FROM (${sql.slice(0, sql.lastIndexOf(order))}) counted`,
+          bound.params.slice(0, 2),
+        );
+  const total = bound.limit === null ? rows.length : Number(counted?.n ?? 0);
+  return slicePage(rows, bound.limit, total, bound.page);
 }
 
 async function queryProperties(session: Session, opts?: ListOpts) {
   const bound = bindList(session.orgId, opts);
   return tx(
     session.userId,
-    async (client) => {
-      const rows = await many<PropertyListRow>(client, `${PROPERTY_LIST_SQL} ${bound.pageSql}`, bound.params);
-      return pageRows(rows, bound.limit);
-    },
+    (client) => loadList<PropertyListRow>(client, PROPERTY_LIST_SQL, PROPERTY_LIST_ORDER, bound),
     listScope(session),
   );
 }
@@ -379,16 +398,19 @@ type TenantListRow = {
   contact_id: string;
   place: string;
   status: string;
+  lease_count: string;
 };
 
 /**
- * Lease rows for the 租客 page, filtered by the contact predicate.
- * That predicate is only `contacts c` columns, so a one-row-per-tenant
- * query can keep `${tenantContactSearchSql()}` and drop the lease joins.
+ * One row per 租客 contact. Other primary leases are a count, not extra rows.
+ * The search predicate stays on `contacts c` only.
  */
-const TENANT_LIST_SQL = `SELECT l.id::text, c.display_name AS tenant, c.id::text AS contact_id,
-              p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
-              l.status::text AS status
+const TENANT_LIST_SQL = `SELECT (array_agg(l.id::text ORDER BY l.created_at DESC, l.id))[1] AS id,
+              c.display_name AS tenant,
+              c.id::text AS contact_id,
+              (array_agg(p.name || ' ' || u.label || coalesce(' ' || r.label, '') ORDER BY l.created_at DESC, l.id))[1] AS place,
+              (array_agg(l.status::text ORDER BY l.created_at DESC, l.id))[1] AS status,
+              count(*)::text AS lease_count
          FROM contacts c
          JOIN lease_parties lp ON lp.contact_id = c.id AND lp.role = 'primary' AND lp.org_id = c.org_id
          JOIN leases l ON l.id = lp.lease_id
@@ -397,16 +419,16 @@ const TENANT_LIST_SQL = `SELECT l.id::text, c.display_name AS tenant, c.id::text
          LEFT JOIN rooms r ON r.id = l.target_room_id
         WHERE c.org_id = $1 AND c.is_tenant AND c.archived_at IS NULL
           ${tenantContactSearchSql()}
-        ORDER BY c.display_name, c.id, l.created_at DESC, l.id`;
+        GROUP BY c.id, c.display_name
+        ORDER BY c.display_name, c.id`;
+
+const TENANT_LIST_ORDER = "ORDER BY c.display_name, c.id";
 
 async function queryTenants(session: Session, opts?: ListOpts) {
   const bound = bindList(session.orgId, opts);
   return tx(
     session.userId,
-    async (client) => {
-      const rows = await many<TenantListRow>(client, `${TENANT_LIST_SQL} ${bound.pageSql}`, bound.params);
-      return pageRows(rows, bound.limit);
-    },
+    (client) => loadList<TenantListRow>(client, TENANT_LIST_SQL, TENANT_LIST_ORDER, bound),
     listScope(session),
   );
 }
@@ -518,8 +540,9 @@ const LEASE_LIST_SQL = `SELECT l.id::text, l.status::text, l.esign_status::text 
                    FROM utility_allocation_lines line
                    JOIN utility_allocation_runs r ON r.id = line.run_id
                   WHERE line.lease_id = l.id
-                  -- Same period: keep the split saved with this lease, not a later sibling share.
-                  ORDER BY r.period_start DESC, r.computed_at ASC, r.id
+                    AND r.status <> 'void'
+                  -- Latest non-void run for the period. A recalculation supersedes the original.
+                  ORDER BY r.period_start DESC, r.computed_at DESC, r.id DESC
                   LIMIT 1),
                 (SELECT m.split_method::text
                    FROM meters m
@@ -539,14 +562,13 @@ const LEASE_LIST_SQL = `SELECT l.id::text, l.status::text, l.esign_status::text 
           ${leaseSearchSql()}
         ORDER BY l.created_at DESC, l.id`;
 
+const LEASE_LIST_ORDER = "ORDER BY l.created_at DESC, l.id";
+
 async function queryLeases(session: Session, opts?: ListOpts) {
   const bound = bindList(session.orgId, opts);
   return tx(
     session.userId,
-    async (client) => {
-      const rows = await many<LeaseListRow>(client, `${LEASE_LIST_SQL} ${bound.pageSql}`, bound.params);
-      return pageRows(rows, bound.limit);
-    },
+    (client) => loadList<LeaseListRow>(client, LEASE_LIST_SQL, LEASE_LIST_ORDER, bound),
     listScope(session),
   );
 }
@@ -1481,14 +1503,13 @@ const SPACE_LIST_SQL = `SELECT kind, id, property_id, property_name, currency, f
          ${spaceSearchSql()}
        ORDER BY created_at, sort_floor, sort_room, id`;
 
+const SPACE_LIST_ORDER = "ORDER BY created_at, sort_floor, sort_room, id";
+
 async function querySpaces(session: Session, opts?: ListOpts) {
   const bound = bindList(session.orgId, opts);
   return tx(
     session.userId,
-    async (client) => {
-      const rows = await many<SpaceRow>(client, `${SPACE_LIST_SQL} ${bound.pageSql}`, bound.params);
-      return pageRows(rows, bound.limit);
-    },
+    (client) => loadList<SpaceRow>(client, SPACE_LIST_SQL, SPACE_LIST_ORDER, bound),
     listScope(session),
   );
 }

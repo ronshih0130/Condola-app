@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
-import { ListPager, ListSearch } from "@/components/list-search";
+import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { SampleTag } from "@/components/sample-tag";
 import { PageHeader } from "@/components/ui";
 import { searchProperties } from "@/server/queries";
@@ -13,7 +13,9 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
   const session = await getSession();
   const raw = await searchParams;
   const t = makeT(session.locale);
-  const { rows, q, page, hasNext } = await searchProperties(session, raw);
+  const result = await searchProperties(session, raw);
+  const { rows, q, page, hasNext, total, from, to } = result;
+  const summary = listSummary(t, result);
   return (
     <>
       <PageHeader
@@ -30,7 +32,13 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
         }
       />
       <div className="card">
-        <ListSearch action="/m/properties" q={q} label={t("i_search")} placeholder={t("i_search_ph_properties")} />
+        <ListSearch
+          action="/m/properties"
+          q={q}
+          label={t("i_search")}
+          placeholder={t("i_search_ph_properties")}
+          clearLabel={t("i_search_clear")}
+        />
         <table className="t rf" data-testid="property-list">
           <thead>
             <tr>
@@ -69,7 +77,18 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
           </tbody>
         </table>
       </div>
-      <ListPager path="/m/properties" q={q} page={page} hasNext={hasNext} prevLabel={t("i_search_prev")} nextLabel={t("i_search_next")} />
+      <ListPager
+        path="/m/properties"
+        q={q}
+        page={page}
+        hasNext={hasNext}
+        prevLabel={t("i_search_prev")}
+        nextLabel={t("i_search_next")}
+        summary={summary}
+        total={total}
+        from={from}
+        to={to}
+      />
     </>
   );
 }

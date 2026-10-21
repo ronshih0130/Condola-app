@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
-import { ListPager, ListSearch } from "@/components/list-search";
+import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { PageHeader } from "@/components/ui";
 import { searchTenants } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -11,12 +11,20 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
   const session = await getSession();
   const raw = await searchParams;
   const t = makeT(session.locale);
-  const { rows, q, page, hasNext } = await searchTenants(session, raw);
+  const result = await searchTenants(session, raw);
+  const { rows, q, page, hasNext, total, from, to } = result;
+  const summary = listSummary(t, result);
   return (
     <>
       <PageHeader title={t("i_tenants_title")} />
       <div className="card">
-        <ListSearch action="/m/tenants" q={q} label={t("i_search")} placeholder={t("i_search_ph_tenants")} />
+        <ListSearch
+          action="/m/tenants"
+          q={q}
+          label={t("i_search")}
+          placeholder={t("i_search_ph_tenants")}
+          clearLabel={t("i_search_clear")}
+        />
         <table className="t rf" data-testid="tenant-list">
           <thead>
             <tr>
@@ -40,6 +48,12 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
                 </td>
                 <td data-label={t("i_space")}>
                   <Link href={`/m/leases/${lease.id}`}>{lease.place}</Link>
+                  {Number(lease.lease_count) > 1 ? (
+                    <>
+                      {" "}
+                      <span data-testid="tenant-lease-more">+{Number(lease.lease_count) - 1}</span>
+                    </>
+                  ) : null}
                 </td>
                 <td data-label={t("i_status")}>{t(lease.status === "active" ? "i_st_active" : "i_st_pending")}</td>
               </tr>
@@ -47,7 +61,18 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
           </tbody>
         </table>
       </div>
-      <ListPager path="/m/tenants" q={q} page={page} hasNext={hasNext} prevLabel={t("i_search_prev")} nextLabel={t("i_search_next")} />
+      <ListPager
+        path="/m/tenants"
+        q={q}
+        page={page}
+        hasNext={hasNext}
+        prevLabel={t("i_search_prev")}
+        nextLabel={t("i_search_next")}
+        summary={summary}
+        total={total}
+        from={from}
+        to={to}
+      />
     </>
   );
 }

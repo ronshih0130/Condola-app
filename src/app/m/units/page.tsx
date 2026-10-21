@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
-import { ListPager, ListSearch } from "@/components/list-search";
+import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { PageHeader } from "@/components/ui";
 import { formatMoney } from "@/server/format";
 import { can } from "@/server/perms";
@@ -13,7 +13,9 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
   const session = await getSession();
   const raw = await searchParams;
   const t = makeT(session.locale);
-  const { rows, q, page, hasNext } = await searchSpaces(session, raw);
+  const result = await searchSpaces(session, raw);
+  const { rows, q, page, hasNext, total, from, to } = result;
+  const summary = listSummary(t, result);
   const editable = can(session.role, "props.edit");
   const roomTypeKey: Record<string, string> = {
     suite: "i_suite",
@@ -34,7 +36,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
         }
       />
       <div className="card">
-        <ListSearch action="/m/units" q={q} label={t("i_search")} placeholder={t("i_search_ph_units")} />
+        <ListSearch action="/m/units" q={q} label={t("i_search")} placeholder={t("i_search_ph_units")} clearLabel={t("i_search_clear")} />
         <table className="t rf" data-testid="space-list">
           <thead>
             <tr>
@@ -89,7 +91,18 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
           </tbody>
         </table>
       </div>
-      <ListPager path="/m/units" q={q} page={page} hasNext={hasNext} prevLabel={t("i_search_prev")} nextLabel={t("i_search_next")} />
+      <ListPager
+        path="/m/units"
+        q={q}
+        page={page}
+        hasNext={hasNext}
+        prevLabel={t("i_search_prev")}
+        nextLabel={t("i_search_next")}
+        summary={summary}
+        total={total}
+        from={from}
+        to={to}
+      />
     </>
   );
 }

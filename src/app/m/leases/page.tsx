@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { dictionary, makeT } from "@/i18n";
-import { ListPager, ListSearch } from "@/components/list-search";
+import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader, statusClass, statusKey } from "@/components/ui";
 import { formatDate, formatMoney } from "@/server/format";
@@ -14,7 +14,9 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
   const raw = await searchParams;
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
-  const { rows, q, page, hasNext } = await searchLeases(session, raw);
+  const result = await searchLeases(session, raw);
+  const { rows, q, page, hasNext, total, from, to } = result;
+  const summary = listSummary(t, result);
   const money = (minor: string, currency: string) => formatMoney(Number(minor), currency, session.locale);
   return (
     <>
@@ -27,7 +29,7 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
         }
       />
       <div className="card">
-        <ListSearch action="/m/leases" q={q} label={t("i_search")} placeholder={t("i_search_ph_leases")} />
+        <ListSearch action="/m/leases" q={q} label={t("i_search")} placeholder={t("i_search_ph_leases")} clearLabel={t("i_search_clear")} />
         <RfTable testId="lease-list">
           <thead>
             <tr>
@@ -78,7 +80,18 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
           </tbody>
         </RfTable>
       </div>
-      <ListPager path="/m/leases" q={q} page={page} hasNext={hasNext} prevLabel={t("i_search_prev")} nextLabel={t("i_search_next")} />
+      <ListPager
+        path="/m/leases"
+        q={q}
+        page={page}
+        hasNext={hasNext}
+        prevLabel={t("i_search_prev")}
+        nextLabel={t("i_search_next")}
+        summary={summary}
+        total={total}
+        from={from}
+        to={to}
+      />
     </>
   );
 }

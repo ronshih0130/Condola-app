@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { clearPagingRows, seedPagingRows } from "../../e2e/paging-seed";
 import { query } from "./db";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { searchLeases, searchProperties, searchSpaces, searchTenants } from "./queries";
@@ -161,12 +162,50 @@ test("list search stays inside the firm and ignores national ID numbers", async 
     const page2 = await searchProperties(admin, { limit: 1, page: 2 });
     assert.equal(page1.rows.length, 1);
     assert.equal(page1.hasNext, true);
+    assert.equal(page1.from, 1);
+    assert.equal(page1.to, 1);
+    assert.ok(page1.total > 1);
     assert.equal(page2.rows.length, 1);
+    assert.equal(page2.from, 2);
     assert.notEqual(page1.rows[0]?.id, page2.rows[0]?.id);
+    const kept = await searchProperties(admin, { q: "信義", limit: 1, page: 2 });
+    assert.equal(kept.q, "信義");
+    assert.equal(kept.page, 2);
     const pageFar = await searchProperties(admin, { limit: 1, page: 99 });
     assert.equal(pageFar.rows.length, 0);
     assert.equal(pageFar.hasNext, false);
   } finally {
     await query(`DELETE FROM identity_documents WHERE number_masked = 'Z9SEARCHID99'`);
+  }
+});
+
+test("paging returns the next rows and one contact is one tenant", async () => {
+  const prefix = `頁次${Date.now().toString(36)}`;
+  await clearPagingRows(prefix);
+  await seedPagingRows(prefix);
+  try {
+    const first = await searchLeases(admin, { q: prefix, limit: 50, page: 1 });
+    const second = await searchLeases(admin, { q: prefix, limit: 50, page: 2 });
+    assert.ok(first.total > 40);
+    assert.equal(first.rows.length, 50);
+    assert.equal(first.hasNext, true);
+    assert.equal(first.from, 1);
+    assert.equal(second.from, 51);
+    assert.ok(second.rows.length > 0);
+    assert.equal(second.rows.some((row) => first.rows.some((kept) => kept.id === row.id)), false);
+    const again = await searchLeases(admin, { q: prefix, page: "2" });
+    assert.equal(again.page, 2);
+    assert.equal(again.q, prefix);
+    const tenant = await searchTenants(admin, { q: `${prefix}-t-000` });
+    assert.equal(tenant.rows.length, 1);
+    assert.equal(Number(tenant.rows[0]?.lease_count), 2);
+    const properties = await searchProperties(admin, { q: prefix, limit: 50, page: 2 });
+    assert.ok(properties.total > 40);
+    assert.ok(properties.rows.length > 0);
+    const spaces = await searchSpaces(admin, { q: prefix, limit: 50, page: 2 });
+    assert.ok(spaces.total > 40);
+    assert.ok(spaces.rows.length > 0);
+  } finally {
+    await clearPagingRows(prefix);
   }
 });

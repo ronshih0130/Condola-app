@@ -31,13 +31,32 @@ export function bindList(orgId: string, opts?: ListOpts) {
   const pattern = ilikePattern(opts?.q ?? "");
   const params: unknown[] = [orgId, pattern];
   const limit = opts?.limit && opts.limit > 0 ? Math.min(Math.floor(opts.limit), MAX_LIMIT) : null;
+  let page = 1;
   let pageSql = "";
   if (limit !== null) {
-    const page = opts?.page && opts.page > 0 ? Math.min(Math.floor(opts.page), MAX_PAGE) : 1;
+    page = opts?.page && opts.page > 0 ? Math.min(Math.floor(opts.page), MAX_PAGE) : 1;
     params.push(limit + 1, (page - 1) * limit);
     pageSql = `LIMIT $${params.length - 1} OFFSET $${params.length}`;
   }
-  return { params, pageSql, limit, pattern };
+  return { params, pageSql, limit, pattern, page };
+}
+
+export function listHref(path: string, q: string, page: number) {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+/** `rows` may include the extra lookahead row. `total` is the unpaged count. */
+export function slicePage<T>(rows: T[], limit: number | null, total: number, page: number) {
+  const sliced = limit === null || rows.length <= limit ? rows : rows.slice(0, limit);
+  const safePage = page > 0 ? page : 1;
+  const from = sliced.length === 0 ? 0 : (safePage - 1) * (limit ?? sliced.length) + 1;
+  const to = sliced.length === 0 ? 0 : from + sliced.length - 1;
+  const hasNext = limit !== null && safePage * limit < total;
+  return { rows: sliced, hasNext, total, from, to };
 }
 
 /** Column expressions are fixed in code. `param` is a placeholder such as `$2`. */
@@ -117,6 +136,5 @@ export function searchSqlTouchesNationalId(sql: string) {
 }
 
 export function pageRows<T>(rows: T[], limit: number | null) {
-  if (limit === null || rows.length <= limit) return { rows, hasNext: false };
-  return { rows: rows.slice(0, limit), hasNext: true };
+  return slicePage(rows, limit, rows.length, 1);
 }
