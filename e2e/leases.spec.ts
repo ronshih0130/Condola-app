@@ -242,3 +242,69 @@ test("two leases save back to back, a triple click saves one, and a failed submi
   await expectOneLease(page, "丁租客");
   expect(crashes).toEqual([]);
 });
+
+test("an aborted create stays on the wizard and a resubmit saves one lease", async ({ page }) => {
+  const crashes: string[] = [];
+  page.on("pageerror", (error) => crashes.push(error.message));
+  await resetDemo(page);
+  const stamp = Date.now().toString(36);
+  const propertyName = `重送${stamp}`;
+  const tenant = "重送租客";
+  const created = await page.request.post("/api/flows/createProperty", {
+    data: {
+      name: propertyName,
+      city: "台北市",
+      district: "大安區",
+      street: "重送路1號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "重送屋主",
+      ownerPhone: "0912000099",
+      ownerEmail: `retry.owner.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "8F",
+      floor: "8",
+      rentalMode: "by_room",
+      rooms: [{ label: "A", roomType: "suite", baseRentMajor: 10000 }],
+    },
+  });
+  expect(created.ok(), await created.text()).toBeTruthy();
+
+  const submit = await reachLeaseSubmit(page, { propertyName, label: "A", tenant, phone: "+886912300199" });
+  const keys: string[] = [];
+  let aborted = false;
+  await page.route("**/m/leases/new**", async (route) => {
+    const request = route.request();
+    const action = request.headers()["next-action"];
+    if (request.method() !== "POST" || !action) {
+      await route.continue();
+      return;
+    }
+    const body = request.postData() ?? "";
+    const key = body.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0]?.toLowerCase() ?? "";
+    keys.push(key);
+    if (!aborted) {
+      aborted = true;
+      await route.abort("failed");
+      return;
+    }
+    await route.continue();
+  });
+
+  await submit.click();
+  const error = page.getByTestId("lease-error");
+  await expect(error).toBeVisible();
+  await expect(error).toContainText("網路不穩，租約還沒建立，請再送出一次");
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.getByTestId("lease-confirm-tenant")).toContainText(tenant);
+  await expect(submit).toBeEnabled();
+  expect(keys, "aborted request did not include an idempotency key").toEqual([expect.stringMatching(/^[0-9a-f-]{36}$/)]);
+
+  await submit.click();
+  await expect(page).toHaveURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1$/);
+  expect(keys).toHaveLength(2);
+  expect(keys[1]).toBe(keys[0]);
+  await expectOneLease(page, tenant);
+  expect(crashes).toEqual([]);
+});

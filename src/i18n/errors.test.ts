@@ -24,6 +24,7 @@ test("every error key has a translation, and an empty amount uses the amount sen
   assert.equal(en.i_lease_created, "Lease created. Please send the signing link to the tenant.");
   assert.equal(zh.i_lease_slow, "處理時間較長，請到租約列表確認");
   assert.equal(zh.i_lease_failed, "租約沒有儲存成功，請稍後再試；若持續發生請聯絡 service@condola.app");
+  assert.equal(zh.i_lease_network, "網路不穩，租約還沒建立，請再送出一次");
   assert.equal(zh.i_lease_whole_unit, "此戶為整層出租，請選擇整層而不是房間。");
   assert.match(zh.i_charged_total, /^向租客收取 /);
   assert.equal(zh.i_rooms_hint, "請填寫每間的房號與月租（可新增或刪除房間）");
@@ -35,6 +36,7 @@ test("every error key has a translation, and an empty amount uses the amount sen
   }
   assert.equal(errorText(makeT("zh-TW"), "errors.amount"), "請輸入金額（數字，可填 0）");
   assert.equal(errorText(makeT("zh-TW"), "errors.leaseFailed"), zh.i_lease_failed);
+  assert.equal(errorText(makeT("zh-TW"), "errors.leaseNetwork"), zh.i_lease_network);
   assert.equal(errorText(makeT("zh-TW"), "errors.notAKey"), "沒有完成。請檢查欄位後再試一次。");
   const mapped = mapDbError(new Error('invalid input syntax for type numeric: "NaN"'));
   assert.ok(mapped instanceof FlowError);

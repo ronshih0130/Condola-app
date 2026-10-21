@@ -5,6 +5,7 @@ export const ERRORS: Record<string, string> = {
   "errors.required": "i_required",
   "errors.generic": "i_generic",
   "errors.leaseFailed": "i_lease_failed",
+  "errors.leaseNetwork": "i_lease_network",
   "errors.wholeUnit": "i_lease_whole_unit",
   "errors.notFound": "i_not_found",
   "errors.capReason": "s_ab3ec53",

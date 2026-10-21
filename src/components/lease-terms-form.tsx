@@ -31,7 +31,12 @@ export function LeaseTermsForm({
   const router = useRouter();
   const guard = useRef(false);
   const [state, formAction, pending] = useActionState(
-    (prev: { error: string; field?: string }, formData: FormData) => callSubmitAction(guard, () => actionUpdateLease(prev, formData)),
+    (prev: { error: string; field?: string }, formData: FormData) =>
+      callSubmitAction(
+        guard,
+        () => actionUpdateLease(prev, formData),
+        () => ({ error: "errors.leaseFailed" }),
+      ),
     { error: "" },
   );
   const [rentValue, setRentValue] = useState(rent);

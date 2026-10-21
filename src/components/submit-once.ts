@@ -14,21 +14,30 @@ export function releaseFormSubmit(guard: { current: boolean }) {
   guard.current = false;
 }
 
+/** Next redirect() rejects the action so the router can navigate. Anything else stays on the form. */
+export function isNextRedirect(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
 /**
- * Release the guard when the server action throws. A redirect throws too, so a
- * retry is not stuck; the lease idempotency key keeps that retry from inserting
- * a second row. A resolved error state keeps the guard until the form effect
- * sees the error.
+ * Network errors and other non-redirect throws become onFailure, so the wizard
+ * stays mounted with the same idempotency key. The guard is released either way
+ * a throw happens, and a resolved result keeps it claimed until the form effect
+ * sees an error state. Redirect errors are rethrown for the Next router.
  */
-export async function callSubmitAction<T>(guard: { current: boolean }, run: () => Promise<T>): Promise<T> {
-  let thrown = false;
+export async function callSubmitAction<T>(guard: { current: boolean }, run: () => Promise<T>, onFailure: () => T): Promise<T> {
   try {
     return await run();
   } catch (error) {
-    thrown = true;
-    throw error;
-  } finally {
-    if (thrown) releaseFormSubmit(guard);
+    releaseFormSubmit(guard);
+    if (isNextRedirect(error)) throw error;
+    return onFailure();
   }
 }
 

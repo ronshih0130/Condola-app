@@ -1,4 +1,4 @@
--- Version 20261027120000, after 20261026120000_email_log.sql
+-- Version 20261027130000, after 20261026120000_email_log.sql
 -- and after 20261023180000.
 --
 -- One client UUID per lease create attempt. A retry of 「建立租約並送出簽署」

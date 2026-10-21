@@ -50,7 +50,8 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(actions, /updateLease\(session,/);
   assert.match(actions, /revalidatePath\(`\/m\/leases\/\$\{leaseId\}`\)/);
   assert.match(wizard, /claimFormSubmit\(submitGuard\)/);
-  assert.match(wizard, /callSubmitAction\(submitGuard/);
+  assert.match(wizard, /callSubmitAction\(\s*submitGuard/);
+  assert.match(wizard, /errors\.leaseNetwork/);
   assert.match(wizard, /ensureIdempotencyKey\(idempotencyKey\)/);
   assert.match(wizard, /name="idempotencyKey"/);
   assert.match(actions, /redirect\(`\/m\/leases\/\$\{created\.leaseId\}\?created=1`\)/);
@@ -67,7 +68,8 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(wizard, /blockImplicitEnter/);
   assert.match(wizard, /ImplicitSubmitSink/);
   assert.match(wizard, /submitter\.dataset\.testid !== "submit-lease"/);
-  assert.match(edit, /callSubmitAction\(guard/);
+  assert.match(edit, /callSubmitAction\(\s*guard/);
+  assert.match(edit, /errors\.leaseFailed/);
   assert.match(edit, /router\.refresh\(\)/);
   assert.match(edit, /depositReasonEditorOpen/);
   assert.match(domain, /idempotency_key/);
@@ -117,6 +119,8 @@ test("the lease idempotency migration is additive and later than shared staging 
   assert.ok(latestOther);
   assert.ok(stamp > latestOther);
   const sql = readFileSync(new URL(ours[0], dir), "utf8");
+  assert.match(sql, /Version 20261027130000/);
+  assert.doesNotMatch(sql, /Version 20261027120000/);
   assert.match(sql, /ADD COLUMN IF NOT EXISTS idempotency_key text/);
   assert.match(sql, /CREATE UNIQUE INDEX IF NOT EXISTS leases_org_idempotency_key_uidx/);
   assert.match(sql, /ON leases \(org_id, idempotency_key\)/);

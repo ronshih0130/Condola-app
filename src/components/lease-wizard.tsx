@@ -43,7 +43,11 @@ export function LeaseWizard({
   const idempotencyKey = useRef("");
   const [state, formAction, pending] = useActionState(
     (prev: { error: string; field?: string }, formData: FormData) =>
-      callSubmitAction(submitGuard, () => actionCreateLease(prev, formData)),
+      callSubmitAction(
+        submitGuard,
+        () => actionCreateLease(prev, formData),
+        () => ({ error: "errors.leaseNetwork" }),
+      ),
     { error: "" },
   );
   const [submitReady, setSubmitReady] = useState(false);
