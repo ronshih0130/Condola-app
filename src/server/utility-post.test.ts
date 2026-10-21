@@ -6,6 +6,7 @@ import {
   billMinorCeil,
   chargedRateExceedsBill,
   isPostableMethod,
+  meterUsageKwh,
   normalizeRateMajor,
   prorateMilli,
   rateMajorFromStored,
@@ -147,6 +148,14 @@ test("the rate is stored at four decimal places", () => {
   assert.equal(normalizeRateMajor(0), null);
   assert.equal(normalizeRateMajor(10000.01), null);
   assert.equal(normalizeRateMajor(Number.POSITIVE_INFINITY), null);
+});
+
+test("current minus previous is the room usage", () => {
+  assert.equal(meterUsageKwh(1200, 1250), 50);
+  assert.equal(meterUsageKwh(0, 0), 0);
+  assert.equal(meterUsageKwh(10.25, 10.5), 0.25);
+  assert.equal(Number.isNaN(meterUsageKwh(80, 79)), true);
+  assert.equal(Number.isNaN(meterUsageKwh(Number.NaN, 10)), true);
 });
 
 test("turnover splits one reading by occupancy days", () => {

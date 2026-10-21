@@ -34,6 +34,7 @@ import { createLeaseFromForm } from "./lease-form";
 import { addTicketComment, saveRepairRecord } from "./repairs";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
+import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
 
 export type ActionState = { error: string; field?: string; step?: number };
@@ -531,9 +532,13 @@ export async function actionUpdateSpace(formData: FormData) {
   }
 }
 
+function fieldAt(formData: FormData, name: string, index: number) {
+  const value = formData.getAll(name)[index];
+  return typeof value === "string" ? value : null;
+}
+
 function utilityInput(formData: FormData) {
   const spaceIds = formData.getAll("spaceId").map((value) => String(value));
-  const kwhs = formData.getAll("kwh").map((value) => optionalNum(value));
   const total = optionalNum(formData.get("totalKwh"));
   const bill = optionalNum(formData.get("billTotal"));
   return {
@@ -544,17 +549,31 @@ function utilityInput(formData: FormData) {
     totalKwh: total,
     billTotalMajor: bill,
     overrideReason: text(formData.get("overrideReason")),
-    readings: spaceIds.map((spaceId, index) => ({ spaceId, kwh: kwhs[index] ?? NaN })),
+    readings: spaceIds.map((spaceId, index) => {
+      const previousText = String(fieldAt(formData, "prevKwh", index) ?? "").trim();
+      const currentText = String(fieldAt(formData, "currKwh", index) ?? "").trim();
+      const hasEnds = previousText !== "" || currentText !== "";
+      const previousKwh = optionalNum(fieldAt(formData, "prevKwh", index));
+      const currentKwh = optionalNum(fieldAt(formData, "currKwh", index));
+      const direct = optionalNum(fieldAt(formData, "kwh", index));
+      return {
+        spaceId,
+        kwh: hasEnds ? meterUsageKwh(previousKwh ?? Number.NaN, currentKwh ?? Number.NaN) : (direct ?? Number.NaN),
+        previousKwh: hasEnds ? previousKwh : null,
+        currentKwh: hasEnds ? currentKwh : null,
+      };
+    }),
   };
 }
 
 export async function actionPrepareUtility(formData: FormData) {
   const unitId = text(formData.get("unitId"));
-  const back = `/m/rent/utilities?unit=${encodeURIComponent(unitId)}`;
+  const month = text(formData.get("periodStart")).slice(0, 7);
+  const back = `/m/rent/utilities?unit=${encodeURIComponent(unitId)}&month=${encodeURIComponent(month)}`;
   try {
     const session = await getSession();
     const result = await prepareUtilityRun(session, utilityInput(formData));
-    redirect(`/m/rent/utilities?run=${result.runId}`);
+    redirect(`/m/rent/utilities?run=${result.runId}&unit=${encodeURIComponent(unitId)}&month=${encodeURIComponent(month)}`);
   } catch (error) {
     bounce(back, error);
   }

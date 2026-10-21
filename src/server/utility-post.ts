@@ -29,6 +29,15 @@ export function kwhMilli(kwh: number): number {
   return milli;
 }
 
+/** Current minus previous, in kWh to 3 decimals. A lower current reading is not a usage. */
+export function meterUsageKwh(previous: number, current: number): number {
+  if (!Number.isFinite(previous) || !Number.isFinite(current)) return NaN;
+  if (previous < 0 || current < previous || current > MAX_KWH) return NaN;
+  const milli = Math.round((current - previous) * KWH_SCALE);
+  if (!Number.isSafeInteger(milli) || milli < 0) return NaN;
+  return milli / KWH_SCALE;
+}
+
 /** One rate for allocation, the invoice text, the cap check, and the stored numeric. Four decimal places. */
 export function normalizeRateMajor(rateMajor: number): number | null {
   if (!Number.isFinite(rateMajor) || rateMajor <= 0 || rateMajor > MAX_RATE_MAJOR) return null;

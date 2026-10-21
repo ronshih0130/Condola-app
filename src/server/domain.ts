@@ -19,6 +19,7 @@ import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/l
 import { claimIdempotentSubmit, idempotencyLockKey, stableStringify } from "@/idempotency";
 import { typedAddressDisplay } from "@/property-address";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
+import { syncVacantOwnerExpense } from "./utility-expense";
 import { nextInvoiceNumber } from "./invoice-number";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { addressKey } from "./owner-import";
@@ -1189,6 +1190,18 @@ export async function createLease(session: Session, input: LeaseInput) {
           ],
         );
       }
+      const ownerMinor = shares.reduce((sum, share, index) => {
+        if (parts[index]?.leaseId) return sum;
+        return sum + Math.max(0, share.amount);
+      }, 0);
+      await syncVacantOwnerExpense(client, session, {
+        runId: run.id,
+        propertyId: space.property_id,
+        unitId: space.unit_id,
+        currency: space.currency,
+        incurredOn: input.periodEnd,
+        amountMinor: ownerMinor,
+      });
       tenantAmount = shares.find((share) => parts[shares.indexOf(share)]?.leaseId === lease.id)?.amount ?? 0;
     } else {
       const prior = await maybe<{ amount: string }>(

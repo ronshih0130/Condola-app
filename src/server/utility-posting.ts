@@ -4,6 +4,7 @@ import { FlowError } from "./errors";
 import { reserveInvoiceNumbers } from "./invoice-number";
 import { inclusiveDays, monthBounds, taipeiToday, toMinor } from "./money";
 import { assertStaff, type Session } from "./types";
+import { syncVacantOwnerExpense } from "./utility-expense";
 import {
   allocateUtilityMinor,
   billMinorCeil,
@@ -45,14 +46,17 @@ type Occupant = {
 type Share = {
   spaceId: string;
   label: string;
-  leaseId: string;
-  contactId: string;
+  leaseId: string | null;
+  contactId: string | null;
   roomId: string | null;
   method: "submeter" | "by_reading";
   rawMilli: number;
   kwhMilli: number;
   amountMinor: number;
   days: number;
+  bearer: "tenant" | "owner";
+  previousKwh: number | null;
+  currentKwh: number | null;
 };
 
 export type UtilityRunInput = {
@@ -61,7 +65,7 @@ export type UtilityRunInput = {
   periodEnd: string;
   rateMajor: number;
   totalKwh: number | null;
-  readings: { spaceId: string; kwh: number }[];
+  readings: { spaceId: string; kwh: number; previousKwh?: number | null; currentKwh?: number | null }[];
   billTotalMajor: number | null;
   overrideReason: string;
 };
@@ -121,7 +125,7 @@ export async function listUtilityBoard(
            FROM units u
            JOIN properties p ON p.id = u.property_id
            LEFT JOIN rooms r ON r.unit_id = u.id AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
-           JOIN LATERAL (
+           LEFT JOIN LATERAL (
              SELECT l.id, c.display_name AS tenant
                FROM leases l
                JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
@@ -230,12 +234,18 @@ async function loadRun(client: Client, orgId: string, runId: string) {
     amount: string;
     posted_amount: string | null;
     method: string | null;
+    bearer: string;
+    previous_kwh: string | null;
+    current_kwh: string | null;
   }>(
     client,
     `SELECT l.id::text, l.lease_id::text, l.room_id::text, coalesce(room.label, u.label) AS space_label,
             c.display_name AS tenant, l.allocated_usage::text AS usage, l.amount_minor::text AS amount,
             l.posted_amount_minor::text AS posted_amount,
-            coalesce(room.electricity_method, u.electricity_method) AS method
+            coalesce(room.electricity_method, u.electricity_method) AS method,
+            l.bearer::text AS bearer,
+            l.explanation->>'previousKwh' AS previous_kwh,
+            l.explanation->>'currentKwh' AS current_kwh
        FROM utility_allocation_lines l
        JOIN utility_allocation_runs r ON r.id = l.run_id
        JOIN meters m ON m.id = r.meter_id
@@ -255,6 +265,8 @@ async function loadRun(client: Client, orgId: string, runId: string) {
     lines: lines.map((line) => ({
       ...line,
       description: utilityLineDescription(usageMilliFromText(line.usage), rateMajor),
+      previousKwh: readingNumber(line.previous_kwh),
+      currentKwh: readingNumber(line.current_kwh),
     })),
   };
 }
@@ -265,12 +277,16 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
   const rateMajor = normalizeRateMajor(input.rateMajor);
   if (!input.unitId || rateMajor == null) throw new FlowError("errors.amount", { field: "i_rate" });
   if (input.readings.length > MAX_READINGS) throw new FlowError("errors.amount", { field: "i_usage" });
-  const readingBySpace = new Map<string, number>();
+  const readingBySpace = new Map<string, { kwh: number; previousKwh: number | null; currentKwh: number | null }>();
   for (const reading of input.readings) {
     if (!Number.isFinite(reading.kwh) || reading.kwh < 0 || reading.kwh > 1_000_000) {
       throw new FlowError("errors.amount", { field: "i_usage" });
     }
-    readingBySpace.set(reading.spaceId, reading.kwh);
+    readingBySpace.set(reading.spaceId, {
+      kwh: reading.kwh,
+      previousKwh: reading.previousKwh ?? null,
+      currentKwh: reading.currentKwh ?? null,
+    });
   }
   if (input.totalKwh != null && (!Number.isFinite(input.totalKwh) || input.totalKwh < 0 || input.totalKwh > 1_000_000)) {
     throw new FlowError("errors.amount", { field: "i_usage" });
@@ -298,15 +314,17 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [session.orgId, unit.id]);
     const spaces = await loadSpaces(client, unit);
     const occupants = await loadOccupants(client, session.orgId, unit.id, input.periodStart, input.periodEnd);
-    const occupied = occupiedPostable(spaces, occupants);
-    if (occupied.length === 0) throw new FlowError("errors.utilityMethod");
-    if (occupied.some((row) => !readingBySpace.has(row.space.space_id))) {
+    const postable = spaces
+      .filter((space) => isPostableMethod(space.method))
+      .map((space) => ({ space, people: occupants.get(space.space_id) ?? [] }));
+    if (postable.length === 0) throw new FlowError("errors.utilityMethod");
+    if (postable.some((row) => !readingBySpace.has(row.space.space_id))) {
       throw new FlowError("errors.amount", { field: "i_usage" });
     }
 
-    const submeter = occupied.filter((row) => row.space.method === "submeter");
-    const byReading = occupied.filter((row) => row.space.method === "by_reading");
-    const rawOf = (space: SpaceRow) => kwhMilli(readingBySpace.get(space.space_id) as number);
+    const submeter = postable.filter((row) => row.space.method === "submeter");
+    const byReading = postable.filter((row) => row.space.method === "by_reading");
+    const rawOf = (space: SpaceRow) => kwhMilli(readingBySpace.get(space.space_id)?.kwh as number);
     if ([...submeter, ...byReading].some((row) => Number.isNaN(rawOf(row.space)))) {
       throw new FlowError("errors.amount", { field: "i_usage" });
     }
@@ -321,10 +339,15 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     const expanded: {
       key: string;
       space: SpaceRow;
-      person: Occupant;
+      leaseId: string | null;
+      contactId: string | null;
       method: "submeter" | "by_reading";
       rawMilli: number;
       kwhMilli: number;
+      days: number;
+      bearer: "tenant" | "owner";
+      previousKwh: number | null;
+      currentKwh: number | null;
     }[] = [];
     const pushShares = (
       rows: { space: SpaceRow; people: Occupant[] }[],
@@ -334,6 +357,26 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       for (const row of rows) {
         const rawMilli = rawOf(row.space);
         const milli = milliFor(row.space.space_id, rawMilli);
+        const reading = readingBySpace.get(row.space.space_id);
+        const ends = {
+          previousKwh: reading?.previousKwh ?? null,
+          currentKwh: reading?.currentKwh ?? null,
+        };
+        if (row.people.length === 0) {
+          expanded.push({
+            key: `${row.space.space_id}:owner`,
+            space: row.space,
+            leaseId: null,
+            contactId: null,
+            method,
+            rawMilli,
+            kwhMilli: milli,
+            days: 0,
+            bearer: "owner",
+            ...ends,
+          });
+          continue;
+        }
         const parts = row.people.map((person) => ({ key: person.leaseId, days: person.days }));
         const split = prorateMilli(parts, milli);
         if (!split) throw new FlowError("errors.meter");
@@ -343,10 +386,14 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
           expanded.push({
             key: `${row.space.space_id}:${person.leaseId}`,
             space: row.space,
-            person,
+            leaseId: person.leaseId,
+            contactId: person.contactId,
             method,
             rawMilli,
             kwhMilli: part.kwhMilli,
+            days: person.days,
+            bearer: "tenant",
+            ...ends,
           });
         }
       }
@@ -372,14 +419,17 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       return {
         spaceId: row.space.space_id,
         label: row.space.label,
-        leaseId: row.person.leaseId,
-        contactId: row.person.contactId,
+        leaseId: row.leaseId,
+        contactId: row.contactId,
         roomId: row.space.space_id === unit.id ? null : row.space.space_id,
         method: row.method,
         rawMilli: row.rawMilli,
         kwhMilli: share.kwhMilli,
         amountMinor: share.amountMinor,
-        days: row.person.days,
+        days: row.days,
+        bearer: row.bearer,
+        previousKwh: row.previousKwh,
+        currentKwh: row.currentKwh,
       };
     });
     const usageMilli = (submeter.length ? subTotal : 0) + byReading.reduce((total, row) => total + rawOf(row.space), 0);
@@ -466,6 +516,8 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
         method: share.method,
         leaseId: share.leaseId,
         days: share.days,
+        previousKwh: share.previousKwh,
+        currentKwh: share.currentKwh,
       })),
     };
     if (exceeds) await client.query(`SELECT set_config('app.change_reason', $1, true)`, [input.overrideReason.trim()]);
@@ -659,6 +711,8 @@ export async function confirmUtilityRun(session: Session, runId: string) {
       post.linkAllocation = target.linkAllocation;
     }
     await postChargeLines(client, session, posts);
+    const ownerExpense = await syncVacantOwnerExpense(client, session, await ownerExpenseInput(client, session.orgId, runId));
+    if (ownerExpense.changed) changed += 1;
     await client.query(
       `UPDATE utility_allocation_runs
           SET status = 'posted', approved_by = $2, approved_at = coalesce(approved_at, now())
@@ -722,6 +776,7 @@ export async function voidUtilityRun(session: Session, runId: string, reason: st
       }),
       "作廢電費入帳",
     );
+    await syncVacantOwnerExpense(client, session, await ownerExpenseInput(client, session.orgId, runId, 0));
     await client.query(
       `UPDATE utility_allocation_runs
           SET status = 'void', void_reason = $2, voided_by = $3, voided_at = now()
@@ -737,11 +792,39 @@ export async function voidUtilityRun(session: Session, runId: string, reason: st
   }, scope(session));
 }
 
-function occupiedPostable(spaces: SpaceRow[], occupants: Map<string, Occupant[]>) {
-  return spaces
-    .filter((space) => isPostableMethod(space.method))
-    .map((space) => ({ space, people: occupants.get(space.space_id) ?? [] }))
-    .filter((row) => row.people.length > 0);
+function readingNumber(value: string | null) {
+  if (value == null || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function ownerExpenseInput(client: Client, orgId: string, runId: string, amountOverride?: number) {
+  const row = await one<{
+    property_id: string;
+    unit_id: string;
+    currency: string;
+    period_end: string;
+    owner_minor: string;
+  }>(
+    client,
+    `SELECT u.property_id::text, u.id::text AS unit_id, r.currency, r.period_end::text,
+            coalesce(sum(l.amount_minor) FILTER (WHERE l.bearer = 'owner'), 0)::text AS owner_minor
+       FROM utility_allocation_runs r
+       JOIN units u ON u.id = r.unit_id
+       LEFT JOIN utility_allocation_lines l ON l.run_id = r.id
+      WHERE r.id = $1 AND r.org_id = $2
+      GROUP BY u.property_id, u.id, r.currency, r.period_end`,
+    [runId, orgId],
+  );
+  const amountMinor = amountOverride ?? Number(row.owner_minor);
+  return {
+    runId,
+    propertyId: row.property_id,
+    unitId: row.unit_id,
+    currency: row.currency,
+    incurredOn: row.period_end.slice(0, 10),
+    amountMinor,
+  };
 }
 
 function recordedSpaceIds(inputs: unknown) {
@@ -799,10 +882,9 @@ async function assertRunCoversOccupied(client: Client, orgId: string, runId: str
   );
   if (!run) throw new FlowError("errors.notFound");
   const spaces = await loadSpaces(client, { id: run.unit_id, rental_mode: run.rental_mode, method: run.method });
-  const occupants = await loadOccupants(client, orgId, run.unit_id, run.period_start, run.period_end);
   const recorded = recordedSpaceIds(run.inputs);
-  const occupied = occupiedPostable(spaces, occupants);
-  if (occupied.some((row) => !recorded.has(row.space.space_id))) {
+  const postable = spaces.filter((space) => isPostableMethod(space.method));
+  if (postable.some((space) => !recorded.has(space.space_id))) {
     throw new FlowError("errors.amount", { field: "i_usage" });
   }
 }
@@ -883,7 +965,7 @@ async function writeShares(
   const byKey = new Map<string, Record<string, unknown>>();
   for (const share of shares) {
     const ratio = totalMinor > 0 ? Math.min(1, Math.max(0, share.amountMinor / totalMinor)) : 0;
-    byKey.set(`${share.leaseId}:${share.roomId ?? ""}`, {
+    byKey.set(`${share.leaseId ?? ""}:${share.roomId ?? ""}`, {
       lease_id: share.leaseId,
       room_id: share.roomId,
       days: share.days,
@@ -891,24 +973,27 @@ async function writeShares(
       share_ratio: ratio.toFixed(10),
       allocated_usage: milliText(share.kwhMilli),
       amount_minor: share.amountMinor,
+      bearer: share.bearer,
       explanation: {
         kwh: share.kwhMilli / 1000,
         rate_minor_per_unit: Number(ratePerUnit),
         method: share.method,
         room: share.label,
         days: share.days,
+        previousKwh: share.previousKwh,
+        currentKwh: share.currentKwh,
       },
     });
   }
   const payload = JSON.stringify([...byKey.values()]);
   const shareRows = `jsonb_to_recordset($2::jsonb) AS s(
          lease_id uuid, room_id uuid, days integer, sub_meter_usage numeric,
-         share_ratio numeric, allocated_usage numeric, amount_minor bigint, explanation jsonb
+         share_ratio numeric, allocated_usage numeric, amount_minor bigint, bearer text, explanation jsonb
        )`;
   await client.query(
     `UPDATE utility_allocation_lines AS l
         SET days_occupied = s.days, sub_meter_usage = s.sub_meter_usage, share_ratio = s.share_ratio,
-            allocated_usage = s.allocated_usage, amount_minor = s.amount_minor, bearer = 'tenant',
+            allocated_usage = s.allocated_usage, amount_minor = s.amount_minor, bearer = s.bearer::utility_payer,
             explanation = s.explanation
        FROM ${shareRows}
       WHERE l.run_id = $1::uuid
@@ -922,10 +1007,10 @@ async function writeShares(
        allocated_usage, amount_minor, bearer, explanation
      )
      SELECT $1::uuid, $2::uuid, s.lease_id, s.room_id, s.days, s.sub_meter_usage, s.share_ratio,
-            s.allocated_usage, s.amount_minor, 'tenant', s.explanation
+            s.allocated_usage, s.amount_minor, s.bearer::utility_payer, s.explanation
        FROM jsonb_to_recordset($3::jsonb) AS s(
          lease_id uuid, room_id uuid, days integer, sub_meter_usage numeric,
-         share_ratio numeric, allocated_usage numeric, amount_minor bigint, explanation jsonb
+         share_ratio numeric, allocated_usage numeric, amount_minor bigint, bearer text, explanation jsonb
        )
       WHERE NOT EXISTS (
         SELECT 1 FROM utility_allocation_lines l

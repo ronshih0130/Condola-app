@@ -454,7 +454,7 @@ export type RoomOption = {
   propertyName: string;
   currency: string;
   baseRentMinor: number;
-  unitRooms: { id: string; label: string }[];
+  unitRooms: { id: string; label: string; occupied: boolean }[];
 };
 
 export async function vacantRooms(session: Session): Promise<RoomOption[]> {
@@ -502,9 +502,15 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
     );
     const unitIds = [...new Set(rows.map((row) => row.unit_id))];
     const siblings = unitIds.length
-      ? await many<{ id: string; unit_id: string; label: string }>(
+      ? await many<{ id: string; unit_id: string; label: string; occupied: boolean }>(
           client,
-          `SELECT r.id::text, r.unit_id::text, r.label FROM rooms r
+          `SELECT r.id::text, r.unit_id::text, r.label,
+                  EXISTS (
+                    SELECT 1 FROM leases l
+                     WHERE l.target_room_id = r.id
+                       AND l.status IN ('pending_signature','active')
+                  ) AS occupied
+             FROM rooms r
              JOIN units u ON u.id = r.unit_id
             WHERE r.unit_id = ANY($1::uuid[]) AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
             ORDER BY r.label`,
@@ -518,7 +524,9 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
       propertyName: row.property_name,
       currency: row.currency,
       baseRentMinor: Number(row.base_rent_minor),
-      unitRooms: siblings.filter((room) => room.unit_id === row.unit_id).map((room) => ({ id: room.id, label: room.label })),
+      unitRooms: siblings
+        .filter((room) => room.unit_id === row.unit_id)
+        .map((room) => ({ id: room.id, label: room.label, occupied: room.occupied })),
     }));
   }, { orgId: session.orgId, environment: session.environment });
 }

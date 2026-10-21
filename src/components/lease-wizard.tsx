@@ -117,14 +117,24 @@ export function LeaseWizard({
     if (!room || !(usageN > 0) || rate === "") return null;
     if (split === "sub_meter" && bill.trim() === "") return null;
     const charged = usageN * rateN;
-    const shareRooms = room.unitRooms.length ? room.unitRooms : [{ id: room.id, label: room.unitLabel }];
+    const shareRooms = room.unitRooms.length
+      ? room.unitRooms
+      : [{ id: room.id, label: room.unitLabel, occupied: true }];
     const count = shareRooms.length;
+    const each = charged / count;
+    if (split === "even") {
+      const occupied = shareRooms.filter((item) => item.id === room.id || item.occupied);
+      const vacantCount = count - occupied.length;
+      const shares = occupied.map((item) => ({ label: item.label, amount: each }));
+      if (vacantCount > 0) shares.push({ label: t("i_utility_owner_vacant"), amount: each * vacantCount });
+      return { charged, bill: Number.isFinite(billN) ? billN : 0, shares };
+    }
     return {
       charged,
       bill: Number.isFinite(billN) ? billN : 0,
-      shares: shareRooms.map((item) => ({ label: item.label, amount: charged / count })),
+      shares: shareRooms.map((item) => ({ label: item.label, amount: each })),
     };
-  }, [room, usageN, rate, rateN, billN, split, bill]);
+  }, [room, usageN, rate, rateN, billN, split, bill, t]);
 
   useEffect(() => {
     if (!pending && state.error) {
