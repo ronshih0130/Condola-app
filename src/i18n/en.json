@@ -1552,7 +1552,7 @@
  "i_expense_locked": "This expense is on an issued owner statement, so the amount, date, and property cannot change and it cannot be voided. Please correct that statement first.",
  "i_expense_closed_hint": "This month is closed, so it cannot be edited, approved, or voided.",
  "i_expense_issued_hint": "Already on an owner statement. The amount, date, and property stay as they are, and it cannot be voided. Please correct that statement first.",
- "i_expense_amount": "Please enter an amount greater than 0.",
+ "i_expense_amount": "Please enter an amount greater than 0 and at most 10,000,000.",
  "i_expense_state": "Please refresh. This expense cannot be approved from its current status.",
  "i_expense_approve": "Approve and post",
  "i_expense_approved": "Approved and posted. An expense billed to the owner is included on a later owner statement.",

@@ -1552,7 +1552,7 @@
  "i_expense_locked": "這筆支出已列入已發行的屋主報表，金額、日期與物件不能改，也不能作廢。請先更正那份報表。",
  "i_expense_closed_hint": "這個月份已月結，不能再修改、核准或作廢。",
  "i_expense_issued_hint": "已列入屋主報表。金額、日期與物件維持不變，也不能作廢。請先更正那份報表。",
- "i_expense_amount": "請輸入大於 0 的金額。",
+ "i_expense_amount": "請輸入大於 0、且不超過 10,000,000 的金額。",
  "i_expense_state": "這筆支出目前不能核准。請重新整理後再看狀態。",
  "i_expense_approve": "核准並入帳",
  "i_expense_approved": "已核准並入帳。由屋主負擔的支出會計入之後的屋主報表。",

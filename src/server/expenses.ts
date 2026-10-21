@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { maybe, many, one, tx } from "./db";
 import { FlowError } from "./errors";
-import { taipeiToday, toMinor } from "./money";
+import { taipeiToday } from "./money";
 import { assertPerm } from "./perms";
 import type { Session } from "./types";
 
@@ -35,11 +35,25 @@ export function monthIsClosed(isoDate: string, closedThrough: string | null) {
   return isoDate.slice(0, 7) <= closedThrough.slice(0, 7);
 }
 
-/** Major units from a form field. Scientific and hex notation are rejected. */
-export function parseAmountMajor(raw: string) {
+/** Largest amount a form may save, in cents (10,000,000.00). */
+export const MAX_EXPENSE_CENTS = 1_000_000_000;
+
+/**
+ * Form text to integer cents. At most two decimal digits.
+ * Digits are concatenated, so a float is never scaled and rounded into cents.
+ * Scientific notation, hex, extra decimals, zero, and amounts over the cap are NaN.
+ */
+export function parseAmountCents(raw: string) {
   const text = raw.replace(/,/g, "").trim();
-  if (!/^\d+(\.\d+)?$/.test(text)) return Number.NaN;
-  return Number(text);
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(text);
+  if (!match) return Number.NaN;
+  const whole = match[1].replace(/^0+(?=\d)/, "");
+  const frac = (match[2] ?? "").padEnd(2, "0");
+  const digits = `${whole}${frac}`.replace(/^0+(?=\d)/, "");
+  if (digits.length > String(MAX_EXPENSE_CENTS).length) return Number.NaN;
+  const cents = Number(digits);
+  if (!Number.isSafeInteger(cents) || cents <= 0 || cents > MAX_EXPENSE_CENTS) return Number.NaN;
+  return cents;
 }
 
 /** Major-unit string for an edit field. Whole amounts stay without a decimal. */
@@ -54,7 +68,10 @@ export type ExpenseDraft = {
   propertyId: string;
   unitId?: string;
   category: string;
-  amountMajor: number;
+  /** Already integer cents, for callers that did not start from form text. */
+  amountCents?: number;
+  /** Form text. Parsed to cents inside normalizeExpense. */
+  amountText?: string;
   incurredOn?: string;
   vendorName?: string;
   description?: string;
@@ -89,8 +106,10 @@ export function normalizeExpense(input: ExpenseDraft, allowCategory?: string): N
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new FlowError("errors.required");
     incurredOn = value;
   }
-  const amount = toMinor(input.amountMajor);
-  if (!Number.isFinite(amount) || amount <= 0) throw new FlowError("errors.expenseAmount");
+  const amount = input.amountText !== undefined ? parseAmountCents(input.amountText) : input.amountCents;
+  if (amount === undefined || !Number.isInteger(amount) || amount <= 0 || amount > MAX_EXPENSE_CENTS) {
+    throw new FlowError("errors.expenseAmount");
+  }
   return { propertyId, unitId, category, amount, incurredOn, vendorName, description, receiptName };
 }
 
@@ -573,17 +592,18 @@ export async function approveExpense(session: Session, expenseId: string) {
 /** Statements shortcut: receipt required, category repair, date is the first open day. */
 export async function addExpense(
   session: Session,
-  input: { propertyId: string; description: string; amountMajor: number; receiptName: string },
+  input: { propertyId: string; description: string; amountText: string; receiptName: string },
 ) {
   assertPerm(session, "exp.add");
   const description = input.description.trim();
   const receiptName = input.receiptName.trim();
-  if (!description || !receiptName || !(toMinor(input.amountMajor) > 0)) throw new FlowError("errors.required");
+  const amountText = input.amountText.trim();
+  if (!description || !receiptName || !amountText) throw new FlowError("errors.required");
   return createExpense(session, {
     propertyId: input.propertyId,
     category: "repair",
     description,
-    amountMajor: input.amountMajor,
+    amountText,
     receiptName,
   });
 }

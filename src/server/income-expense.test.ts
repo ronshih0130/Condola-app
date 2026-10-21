@@ -81,9 +81,9 @@ test("csv prefixes formula text and leaves numeric cells unchanged", () => {
     [
       {
         property_id: "10000000-0000-4000-8000-000000000001",
-        property_name: "=SUM(A1)",
-        owner_name: "+evil",
-        currency: "@TWD",
+        property_name: " =SUM(A1)",
+        owner_name: "  +evil",
+        currency: " @TWD",
         income_minor: "0",
         expense_minor: "280000",
         net_minor: "-280000",
@@ -91,7 +91,7 @@ test("csv prefixes formula text and leaves numeric cells unchanged", () => {
       {
         property_id: "10000000-0000-4000-8000-000000000002",
         property_name: "\tcmd",
-        owner_name: "\rbad",
+        owner_name: " 信義",
         currency: "-USD",
         income_minor: "0",
         expense_minor: "0",
@@ -100,16 +100,34 @@ test("csv prefixes formula text and leaves numeric cells unchanged", () => {
     ],
     labels,
   );
-  assert.match(csv, /"'=SUM\(A1\)"/);
-  assert.match(csv, /"'\+evil"/);
-  assert.match(csv, /"'@TWD"/);
+  assert.match(csv, /"' =SUM\(A1\)"/);
+  assert.match(csv, /"'  \+evil"/);
+  assert.match(csv, /"' @TWD"/);
   assert.match(csv, /"'\tcmd"/);
-  assert.match(csv, /"'\rbad"/);
+  assert.match(csv, /" 信義"/);
+  assert.doesNotMatch(csv, /"' 信義"/);
   assert.match(csv, /"'-USD"/);
   assert.match(csv, /"-2800.00"/);
   assert.doesNotMatch(csv, /"'-2800.00"/);
   assert.match(csv, /"2800.00"/);
   assert.match(csv, /"0.00"/);
+  const spaced = reportCsv(
+    [
+      {
+        property_id: "10000000-0000-4000-8000-000000000003",
+        property_name: " 信義松仁",
+        owner_name: "\rbad",
+        currency: "TWD",
+        income_minor: "0",
+        expense_minor: "0",
+        net_minor: "0",
+      },
+    ],
+    labels,
+  );
+  assert.match(spaced, /" 信義松仁"/);
+  assert.doesNotMatch(spaced, /"' 信義松仁"/);
+  assert.match(spaced, /"'\rbad"/);
 });
 
 test("the report migration is SQL, shares the statement predicate, and sorts after the expense migration", () => {

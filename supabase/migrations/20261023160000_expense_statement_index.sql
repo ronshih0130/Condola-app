@@ -20,15 +20,35 @@ AS $$
 DECLARE
   closed date;
   issued boolean;
+  org uuid;
+  incurred date;
 BEGIN
-  SELECT max(period_month) INTO closed FROM month_closes WHERE org_id = NEW.org_id;
-  IF closed IS NOT NULL AND to_char(NEW.incurred_on, 'YYYY-MM') <= to_char(closed, 'YYYY-MM') THEN
+  IF TG_OP = 'DELETE' THEN
+    org := OLD.org_id;
+    incurred := OLD.incurred_on;
+  ELSE
+    org := NEW.org_id;
+    incurred := NEW.incurred_on;
+  END IF;
+
+  -- Lock the close row this check uses so a concurrent close cannot move under us.
+  SELECT period_month INTO closed
+    FROM month_closes
+   WHERE org_id = org
+   ORDER BY period_month DESC
+   LIMIT 1
+   FOR SHARE;
+
+  IF closed IS NOT NULL AND to_char(incurred, 'YYYY-MM') <= to_char(closed, 'YYYY-MM') THEN
     RAISE EXCEPTION 'month is closed' USING ERRCODE = 'check_violation';
   END IF;
   IF TG_OP = 'UPDATE'
      AND closed IS NOT NULL
      AND to_char(OLD.incurred_on, 'YYYY-MM') <= to_char(closed, 'YYYY-MM') THEN
     RAISE EXCEPTION 'month is closed' USING ERRCODE = 'check_violation';
+  END IF;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
   END IF;
 
   IF TG_OP = 'UPDATE' THEN
@@ -56,7 +76,7 @@ END $$;
 
 DROP TRIGGER IF EXISTS trg_expense_locks ON expenses;
 CREATE TRIGGER trg_expense_locks
-  BEFORE INSERT OR UPDATE ON expenses
+  BEFORE INSERT OR UPDATE OR DELETE ON expenses
   FOR EACH ROW EXECUTE FUNCTION fn_expense_locks();
 
 -- Reversals use the Taipei calendar date rather than the database session date.

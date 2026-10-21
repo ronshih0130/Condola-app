@@ -39,12 +39,12 @@ const accountant = staff(USERS.accountant, "accountant");
 const maintenance = staff(USERS.maintenance, "maintenance");
 const coast = staff(USERS.coastAdmin, "admin", ORG2_ID);
 
-function draftFrom(row: ExpenseDetail, patch: Partial<{ description: string; amountMajor: number }> = {}) {
+function draftFrom(row: ExpenseDetail, patch: Partial<{ description: string; amountCents: number }> = {}) {
   return {
     propertyId: row.property_id,
     unitId: row.unit_id ?? "",
     category: row.category,
-    amountMajor: patch.amountMajor ?? Number(row.amount_minor) / 100,
+    amountCents: patch.amountCents ?? Number(row.amount_minor),
     incurredOn: row.incurred_on,
     vendorName: row.vendor_name ?? "",
     description: patch.description ?? row.description,
@@ -77,7 +77,7 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     await assert.rejects(() => createExpense(maintenance, {
       propertyId: place.id,
       category: "repair",
-      amountMajor: 10,
+      amountCents: 1000,
       incurredOn: "2099-06-15",
       description: "nope",
     }), (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden");
@@ -99,7 +99,7 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
       propertyId: place.id,
       unitId: place.unit_id,
       category: "cleaning",
-      amountMajor: 1500,
+      amountCents: 150000,
       incurredOn: "2099-06-15",
       vendorName: vendor,
       description: note,
@@ -186,7 +186,7 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     const bare = await createExpense(admin, {
       propertyId: place.id,
       category: "repair",
-      amountMajor: 20,
+      amountCents: 2000,
       incurredOn: "2099-07-01",
       description: `無收據${stamp}`,
     });
@@ -308,7 +308,7 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     await updateExpense(accountant, tenantId, {
       propertyId: place.id,
       category: "repair",
-      amountMajor: 90,
+      amountCents: 9000,
       incurredOn: "2099-10-02",
       description: tenantNote,
     });
@@ -392,7 +392,7 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
         createExpense(admin, {
           propertyId: place.id,
           category: "repair",
-          amountMajor: 30,
+          amountCents: 3000,
           incurredOn: "2020-01-20",
           description: `closed-new-${stamp}`,
         }),
@@ -425,10 +425,17 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
         ),
       (error: unknown) => error instanceof FlowError && error.key === "errors.monthClosed",
     );
+    await assert.rejects(
+      () =>
+        tx(USERS.admin, (client) =>
+          client.query(`DELETE FROM expenses WHERE id = $1 AND org_id = $2`, [closed.posted, ORG_ID]),
+        ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.monthClosed",
+    );
     const stillOpen = await createExpense(admin, {
       propertyId: place.id,
       category: "other",
-      amountMajor: 40,
+      amountCents: 4000,
       incurredOn: "2099-09-01",
       description: `open-${stamp}`,
     });
@@ -453,7 +460,7 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     assert.equal(renamed?.description, "冷氣維修備註");
     assert.equal(renamed?.amount_minor, linkedRow.amount_minor);
     await assert.rejects(
-      () => updateExpense(admin, linked, draftFrom(renamed!, { amountMajor: Number(linkedRow.amount_minor) / 100 + 1 })),
+      () => updateExpense(admin, linked, draftFrom(renamed!, { amountCents: Number(linkedRow.amount_minor) + 100 })),
       (error: unknown) => error instanceof FlowError && error.key === "errors.expenseLocked",
     );
     await assert.rejects(

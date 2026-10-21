@@ -35,7 +35,7 @@ import { BACKUP_COOKIE } from "./backup";
 import { forgotSentLocation, resetFlashCookie } from "./reset-flash";
 import { demoModeEnabled } from "./demo";
 import { closeMonth, reversePayment } from "./domain";
-import { addExpense, approveExpense, createExpense, parseAmountMajor, updateExpense, voidExpense } from "./expenses";
+import { addExpense, approveExpense, createExpense, updateExpense, voidExpense } from "./expenses";
 import { FlowError } from "./errors";
 import { clearStoredEnvChoice } from "./org-scope";
 import { appCookieOptions, sameAppPath } from "./public-origin";
@@ -356,7 +356,7 @@ function expenseFields(formData: FormData) {
     propertyId: text(formData.get("propertyId")),
     unitId: text(formData.get("unitId")),
     category: text(formData.get("category")),
-    amountMajor: parseAmountMajor(text(formData.get("amount"))),
+    amountText: text(formData.get("amount")),
     incurredOn: text(formData.get("incurredOn")),
     vendorName: text(formData.get("vendorName")),
     description: text(formData.get("note")),
@@ -370,7 +370,7 @@ export async function actionAddExpense(formData: FormData) {
     await addExpense(session, {
       propertyId: text(formData.get("propertyId")),
       description: text(formData.get("description")),
-      amountMajor: parseAmountMajor(text(formData.get("amount"))),
+      amountText: text(formData.get("amount")),
       receiptName: text(formData.get("receipt")),
     });
     redirect("/m/statements?saved=1");

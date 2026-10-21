@@ -11,7 +11,8 @@ import {
   majorInput,
   monthIsClosed,
   normalizeExpense,
-  parseAmountMajor,
+  MAX_EXPENSE_CENTS,
+  parseAmountCents,
 } from "./expenses";
 
 test("owner statements include only approved and posted expenses billed to the owner", () => {
@@ -37,6 +38,8 @@ test("the statement query uses the shared status predicate", () => {
   assert.match(migration, /expense is on an issued statement/);
   assert.match(migration, /timezone\('Asia\/Taipei', now\(\)\)/);
   assert.doesNotMatch(migration, /current_date/);
+  assert.match(migration, /FOR SHARE/);
+  assert.match(migration, /BEFORE INSERT OR UPDATE OR DELETE/);
   const names = readdirSync(new URL("../../supabase/migrations/", import.meta.url))
     .filter((name) => name.endsWith(".sql"))
     .sort();
@@ -54,18 +57,29 @@ test("a closed month blocks that month and every earlier one", () => {
 });
 
 test("expense amounts and dates are checked before they are saved", () => {
-  assert.equal(parseAmountMajor("1,500"), 1500);
-  assert.equal(parseAmountMajor(" 1500.5 "), 1500.5);
-  assert.equal(Number.isNaN(parseAmountMajor("1e5")), true);
-  assert.equal(Number.isNaN(parseAmountMajor("0x10")), true);
-  assert.equal(Number.isNaN(parseAmountMajor("-5")), true);
+  assert.equal(parseAmountCents("1,500"), 150000);
+  assert.equal(parseAmountCents(" 1500.5 "), 150050);
+  assert.equal(parseAmountCents("1.10"), 110);
+  assert.equal(parseAmountCents("1.1"), 110);
+  assert.equal(parseAmountCents("0.01"), 1);
+  assert.equal(parseAmountCents("10000000"), MAX_EXPENSE_CENTS);
+  assert.equal(parseAmountCents("10,000,000.00"), MAX_EXPENSE_CENTS);
+  assert.equal(Number.isNaN(parseAmountCents("1e5")), true);
+  assert.equal(Number.isNaN(parseAmountCents("0x10")), true);
+  assert.equal(Number.isNaN(parseAmountCents("-5")), true);
+  assert.equal(Number.isNaN(parseAmountCents("1.005")), true);
+  assert.equal(Number.isNaN(parseAmountCents("1.555")), true);
+  assert.equal(Number.isNaN(parseAmountCents("10000000.01")), true);
+  assert.equal(Number.isNaN(parseAmountCents("10000001")), true);
+  assert.equal(Number.isNaN(parseAmountCents("0")), true);
+  assert.equal(Number.isNaN(parseAmountCents("0.00")), true);
   assert.equal(majorInput(280000), "2800");
   assert.equal(majorInput(150050), "1500.50");
   const propertyId = "10000000-0000-4000-8000-000000000001";
   const saved = normalizeExpense({
     propertyId,
     category: "cleaning",
-    amountMajor: 1500,
+    amountText: "1,500",
     incurredOn: "2099-06-15",
     vendorName: "  老張水電  ",
     description: " 水管 ",
@@ -76,26 +90,38 @@ test("expense amounts and dates are checked before they are saved", () => {
   assert.equal(saved.description, "水管");
   assert.equal(saved.receiptName, "");
   assert.equal(saved.incurredOn, "2099-06-15");
-  assert.throws(() => normalizeExpense({ propertyId, category: "nope", amountMajor: 1, incurredOn: "2099-06-15" }), (error: unknown) => {
+  assert.throws(() => normalizeExpense({ propertyId, category: "nope", amountCents: 100, incurredOn: "2099-06-15" }), (error: unknown) => {
     assert.ok(error instanceof FlowError);
     assert.equal(error.key, "errors.required");
     return true;
   });
-  assert.throws(() => normalizeExpense({ propertyId, category: "repair", amountMajor: 0, incurredOn: "2099-06-15" }), (error: unknown) => {
+  assert.throws(() => normalizeExpense({ propertyId, category: "repair", amountText: "0", incurredOn: "2099-06-15" }), (error: unknown) => {
     assert.ok(error instanceof FlowError);
     assert.equal(error.key, "errors.expenseAmount");
     return true;
   });
   assert.throws(
-    () => normalizeExpense({ propertyId, category: "repair", amountMajor: parseAmountMajor("1e5"), incurredOn: "2099-06-15" }),
+    () => normalizeExpense({ propertyId, category: "repair", amountText: "1e5", incurredOn: "2099-06-15" }),
     (error: unknown) => {
       assert.ok(error instanceof FlowError);
       assert.equal(error.key, "errors.expenseAmount");
       return true;
     },
   );
+  assert.throws(
+    () => normalizeExpense({ propertyId, category: "repair", amountCents: MAX_EXPENSE_CENTS + 1, incurredOn: "2099-06-15" }),
+    (error: unknown) => {
+      assert.ok(error instanceof FlowError);
+      assert.equal(error.key, "errors.expenseAmount");
+      return true;
+    },
+  );
+  assert.equal(
+    normalizeExpense({ propertyId, category: "repair", amountCents: MAX_EXPENSE_CENTS, incurredOn: "2099-06-15" }).amount,
+    MAX_EXPENSE_CENTS,
+  );
   const kept = normalizeExpense(
-    { propertyId, category: "custom_trade", amountMajor: 10, incurredOn: "2099-06-15" },
+    { propertyId, category: "custom_trade", amountCents: 1000, incurredOn: "2099-06-15" },
     "custom_trade",
   );
   assert.equal(kept.category, "custom_trade");
@@ -133,4 +159,7 @@ test("approving a draft posts it and leaves the repair ticket link alone", () =>
   const zh = readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8");
   assert.match(zh, /也不能作廢/);
   assert.doesNotMatch(zh, /作廢後再建/);
+  const srcAgain = readFileSync(new URL("./expenses.ts", import.meta.url), "utf8");
+  assert.equal(srcAgain.includes("Math.round"), false);
+  assert.equal(srcAgain.includes("toMinor"), false);
 });

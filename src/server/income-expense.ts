@@ -58,7 +58,7 @@ function csvQuote(value: string) {
 
 /** Stop a spreadsheet from treating a text cell as a formula. Numbers stay as entered. */
 function csvText(value: string) {
-  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  const safe = /^\s*[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   return csvQuote(safe);
 }
 
