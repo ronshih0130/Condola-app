@@ -21,9 +21,10 @@ import { officialLeaseTemplateText } from "../assets/leases/moi-residential-1130
  * that file by scripts/embed-lease-template.mjs. Do not read the .txt at request time.
  * Paper signing only. This printout is not an electronic signature.
  * Blanks and checkboxes are filled. Missing data stays blank.
- * On the door plate, the template 號 is left out when the typed house number
- * already contains 號, and a trailing 之 is left out when there is no sub-floor.
- * Both omissions are recorded patches, so the official file can be restored.
+ * On the door plate, a house number that already contains 號 replaces the
+ * template 號 and leaves the blank after 弄 empty, so the number is not
+ * read as a 弄. A trailing 之 is left out when there is no sub-floor.
+ * Those edits are recorded patches, so the official file can be restored.
  */
 
 export type LeaseFieldPatch = { index: number; blank: string; value: string };
@@ -177,10 +178,11 @@ const FLOOR_TOKEN = `0-9０-９${FLOOR_CN}`;
 
 /**
  * The house-number segment is copied as typed, so 88號之1 is never rewritten
- * as 88之1號. If that segment already contains 號, the template 號 is not
- * printed again. A floor follows in its own cell. When the house number
- * contains 號 but does not end with it, one space separates it from the
- * floor so 之1 cannot be read as part of the floor. No punctuation is
+ * as 88之1號. A number without 號 fills the blank before the template 號.
+ * A number that already contains 號 replaces that 號 and leaves the blank
+ * after 弄 empty, so nothing follows 弄 unless a 弄 was entered. A floor
+ * follows in its own cell. When the house number contains 號 but does not
+ * end with it, one space separates it from the floor. No punctuation is
  * inserted. 樓之 keeps 之 only when there is a sub-floor. A tail the cells
  * cannot hold is printed whole in the 街(路) blank, and the floor still
  * uses its own cell.
@@ -316,6 +318,16 @@ function omitAtCursor(state: State, label: string) {
   state.patches.push({ index: state.cursor, blank: label, value: "" });
 }
 
+/** Replace the template label at the cursor with the typed value. */
+function replaceAtCursor(state: State, label: string, value: string) {
+  if (!state.text.startsWith(label, state.cursor)) throw new Error(`lease template is missing 「${label}」`);
+  const next = clean(value);
+  if (!next) throw new Error(`lease template 「${label}」 needs a value`);
+  state.text = state.text.slice(0, state.cursor) + next + state.text.slice(state.cursor + label.length);
+  state.patches.push({ index: state.cursor, blank: label, value: next });
+  state.cursor += next.length;
+}
+
 /** Insert one space. fillSlot trims values, so the space is its own patch. */
 function insertSpace(state: State) {
   state.text = `${state.text.slice(0, state.cursor)} ${state.text.slice(state.cursor)}`;
@@ -324,16 +336,17 @@ function insertSpace(state: State) {
 }
 
 /**
- * Print the house number exactly as typed. A second template 號 would turn
- * 88號之1 into 88號之1號, so that label is removed when 號 is already present.
- * 號之1 and the floor are separated with a space, not a comma. 樓之 loses 之
- * when the sub-floor cell is empty, so 3樓 is not printed as 3樓之.
+ * Print the house number exactly as typed. A number without 號 fills the
+ * blank in 「__號」. A number that already contains 號 would become 88號之1號
+ * in that blank, so it replaces the template 號 instead and the blank after
+ * 弄 stays empty. 號之1 and the floor are separated with a space, not a
+ * comma. 樓之 loses 之 when the sub-floor cell is empty.
  */
 function fillDoorPlate(state: State, number: string, floor: string, suffix: string) {
   const containsHao = number.includes("號");
   const separate = containsHao && !number.endsWith("號") && floor !== "";
-  fillSlot(state, "弄", "號", number);
-  if (containsHao) omitAtCursor(state, "號");
+  fillSlot(state, "弄", "號", containsHao ? "" : number);
+  if (containsHao) replaceAtCursor(state, "號", number);
   if (separate) insertSpace(state);
   fillSlot(state, containsHao ? "" : "號", "樓之", floor);
   if (floor && !suffix) {

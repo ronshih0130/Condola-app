@@ -104,7 +104,7 @@ test("filled blanks are the only difference from the stored official text", () =
   assertOfficial(rendered.text);
   assert.equal(rendered.text.includes("立契約書人承租人張雅文，出租人陳建宏【為■所有權人□轉租人"), true);
   assert.equal(
-    rendered.text.includes("1、門牌台北縣(市)信義鄉（鎮、市、區）松仁街(路)__段__巷__弄88號3樓    (基地坐落"),
+    rendered.text.includes("1、門牌台北縣(市)信義鄉（鎮、市、區）松仁街(路)__段__巷__弄__88號3樓    (基地坐落"),
     true,
   );
   assert.equal(rendered.text.includes("1、租賃住宅□全部■部分：第3層□房間     間■第A室"), true);
@@ -144,7 +144,8 @@ test("missing data and the other fee choices stay blank", () => {
     addressDisplay: "台北市大安區和平東路二段10號",
   });
   assert.equal(restore(direct.text, direct.patches), stored);
-  assert.equal(direct.text.includes("和平東街(路)二段__巷__弄10號2樓    (基地坐落"), true);
+  assert.equal(direct.text.includes("和平東街(路)二段__巷__弄__10號2樓    (基地坐落"), true);
+  assert.equal(direct.text.includes("弄10"), false);
   assert.equal(direct.text.includes("2樓之"), false);
   assert.equal(direct.text.includes("■全部□部分：第2層□房間     間□第     室"), true);
   assert.equal(direct.text.includes("至民國     年     月     日止。"), true);
@@ -176,7 +177,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "2F",
   });
   assert.equal(restore(at2.text, at2.patches), stored);
-  assert.equal(at2.text.includes("弄88號之1 2樓    (基地坐落"), true);
+  assert.equal(at2.text.includes("弄__88號之1 2樓    (基地坐落"), true);
+  assert.equal(at2.text.includes("弄88"), false);
   assert.equal(at2.text.includes("88號之1，"), false);
   assert.equal(at2.text.includes("88號之1號"), false);
   assert.equal(at2.text.includes("弄88之1號"), false);
@@ -188,7 +190,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "1F",
   });
   assert.equal(restore(at1.text, at1.patches), stored);
-  assert.equal(at1.text.includes("弄88號之1 1樓    (基地坐落"), true);
+  assert.equal(at1.text.includes("弄__88號之1 1樓    (基地坐落"), true);
+  assert.equal(at1.text.includes("弄88"), false);
   assert.equal(at1.text.includes("88號之1，"), false);
   assert.equal(at1.text.includes("88號之1號"), false);
   assert.equal(at1.text.includes("弄88之1號"), false);
@@ -199,7 +202,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "3F",
   });
   assert.equal(restore(zhiHao.text, zhiHao.patches), stored);
-  assert.equal(zhiHao.text.includes("弄88之1號3樓    (基地坐落"), true);
+  assert.equal(zhiHao.text.includes("弄__88之1號3樓    (基地坐落"), true);
+  assert.equal(zhiHao.text.includes("弄88"), false);
   assert.equal(zhiHao.text.includes("88號之1"), false);
   assert.equal(zhiHao.text.includes("3樓之"), false);
   assert.equal(zhiHao.text.includes("第3層"), true);
@@ -209,7 +213,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "5F之2",
   });
   assert.equal(restore(suffix.text, suffix.patches), stored);
-  assert.equal(suffix.text.includes("弄88號5樓之2(基地坐落"), true);
+  assert.equal(suffix.text.includes("弄__88號5樓之2(基地坐落"), true);
+  assert.equal(suffix.text.includes("弄88"), false);
   assert.equal(suffix.text.includes("88號之2"), false);
   assert.equal(suffix.text.includes("88號號"), false);
   assert.equal(suffix.text.includes("第5層"), true);
@@ -220,23 +225,35 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
   });
   assert.equal(restore(bare.text, bare.patches), stored);
   assert.equal(bare.text.includes("弄88號5樓    (基地坐落"), true);
+  assert.equal(bare.text.includes("弄__88"), false);
   assert.equal(bare.text.includes("88號號"), false);
   assert.equal(bare.text.includes("5樓之"), false);
   assert.equal(bare.text.includes("第5層"), true);
+
+  const alley = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路12弄88號之1" },
+    floor: "3F",
+  });
+  assert.equal(restore(alley.text, alley.patches), stored);
+  assert.equal(alley.text.includes("巷12弄__88號之1 3樓    (基地坐落"), true);
+  assert.equal(alley.text.includes("弄88"), false);
+  assert.equal(alley.text.includes("88號之1號"), false);
 
   const explicit = renderOfficialLease({
     address: { city: "台北市", district: "信義區", street: "松仁路88號3樓之2" },
     floor: "3樓",
   });
   assert.equal(restore(explicit.text, explicit.patches), stored);
-  assert.equal(explicit.text.includes("88號3樓之2(基地坐落"), true);
+  assert.equal(explicit.text.includes("弄__88號3樓之2(基地坐落"), true);
+  assert.equal(explicit.text.includes("弄88"), false);
 
   const conflict = renderOfficialLease({
     address: { city: "台北市", district: "信義區", street: "松仁路88號3樓之2" },
     floor: "4",
   });
   assert.equal(restore(conflict.text, conflict.patches), stored);
-  assert.equal(conflict.text.includes("88號4樓    (基地坐落"), true);
+  assert.equal(conflict.text.includes("弄__88號4樓    (基地坐落"), true);
+  assert.equal(conflict.text.includes("弄88"), false);
   assert.equal(conflict.text.includes("4樓之"), false);
   assert.equal(conflict.text.includes("樓之2"), false);
   assert.equal(conflict.text.includes("第4層"), true);
@@ -246,7 +263,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "3",
   });
   assert.equal(restore(withFloor.text, withFloor.patches), stored);
-  assert.equal(withFloor.text.includes("弄88號之1 3樓    (基地坐落"), true);
+  assert.equal(withFloor.text.includes("弄__88號之1 3樓    (基地坐落"), true);
+  assert.equal(withFloor.text.includes("弄88"), false);
   assert.equal(withFloor.text.includes("88號之1，"), false);
   assert.equal(withFloor.text.includes("88號之1號"), false);
   assert.equal(withFloor.text.includes("弄88之1號"), false);
@@ -256,7 +274,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "3",
   });
   assert.equal(restore(literal.text, literal.patches), stored);
-  assert.equal(literal.text.includes("弄88號之甲 3樓    (基地坐落"), true);
+  assert.equal(literal.text.includes("弄__88號之甲 3樓    (基地坐落"), true);
+  assert.equal(literal.text.includes("弄88"), false);
   assert.equal(literal.text.includes("88號之甲，"), false);
   assert.equal(literal.text.includes("88號之甲號"), false);
   assert.equal(literal.text.includes("弄88之甲號"), false);
