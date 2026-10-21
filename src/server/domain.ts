@@ -12,9 +12,9 @@ import {
   round3,
   scoreMatch,
   splitWeighted,
-  taipeiToday,
   toMinor,
 } from "./money";
+import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
@@ -1782,11 +1782,11 @@ export async function generateStatement(session: Session, input: { ownerContactI
     }
     const rent = [...rentByProperty.values()].reduce((sum, row) => sum + row.rent, 0);
     const other = [...rentByProperty.values()].reduce((sum, row) => sum + row.other, 0);
-    const expenses = await many<{ id: string; amount_minor: string; description: string | null; property_id: string }>(
+    const expenses = await many<{ id: string; amount_minor: string; description: string | null; category: string; property_id: string }>(
       client,
-      `SELECT id, amount_minor::text, description, property_id::text FROM expenses
-        WHERE org_id = $1 AND property_id = ANY($2::uuid[]) AND status IN ('approved','posted')
-          AND incurred_on BETWEEN $3 AND $4 AND currency = $5 AND bill_to = 'owner'`,
+      `SELECT id, amount_minor::text, description, category, property_id::text FROM expenses
+        WHERE org_id = $1 AND property_id = ANY($2::uuid[]) AND ${STATEMENT_EXPENSE_SQL}
+          AND incurred_on BETWEEN $3 AND $4 AND currency = $5`,
       [session.orgId, propertyIds, bounds.start, bounds.end, currency],
     );
     const expenseTotal = expenses.reduce((sum, expense) => sum + Number(expense.amount_minor), 0);
@@ -1872,7 +1872,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
       await client.query(
         `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor, expense_id)
          VALUES ($1,$2,$3,'expense',$4,$5,$6)`,
-        [session.orgId, statement.id, expense.property_id, expense.description || "expense", Number(expense.amount_minor), expense.id],
+        [session.orgId, statement.id, expense.property_id, expense.description?.trim() || expense.category, Number(expense.amount_minor), expense.id],
       );
     }
     return { id: statement.id, earned: rent + other > 0 };
@@ -2057,70 +2057,7 @@ export async function inviteTeammate(session: Session, input: { email: string; r
   return { code };
 }
 
-async function firstOpenDay(client: Client, orgId: string) {
-  const closed = await maybe<{ m: string | null }>(
-    client,
-    `SELECT max(period_month)::text AS m FROM month_closes WHERE org_id = $1`,
-    [orgId],
-  );
-  const today = taipeiToday();
-  if (!closed?.m) return today;
-  const closedMonth = closed.m.slice(0, 7);
-  if (today.slice(0, 7) > closedMonth) return today;
-  const [year, month] = closedMonth.split("-").map(Number);
-  const nextYear = month === 12 ? year + 1 : year;
-  const nextMonth = month === 12 ? 1 : month + 1;
-  return `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
-}
-
-export async function addExpense(
-  session: Session,
-  input: { propertyId: string; description: string; amountMajor: number; receiptName: string },
-) {
-  assertPerm(session, "exp.add");
-  const description = input.description.trim();
-  const receiptName = input.receiptName.trim();
-  const amount = toMinor(input.amountMajor);
-  if (!description || !receiptName || !(amount > 0)) throw new FlowError("errors.required");
-  return tx(session.userId, async (client) => {
-    const property = await maybe<{ currency: string }>(
-      client,
-      `SELECT currency FROM properties WHERE id = $1 AND org_id = $2 AND archived_at IS NULL`,
-      [input.propertyId, session.orgId],
-    );
-    if (!property) throw new FlowError("errors.notFound");
-    const incurred = await firstOpenDay(client, session.orgId);
-    const file = await one<{ id: string }>(
-      client,
-      `INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, uploaded_by)
-       VALUES ($1, 'receipts', $2, $3, 'text/plain', $4, $5) RETURNING id`,
-      [session.orgId, `demo/${randomUUID()}.txt`, receiptName, Buffer.byteLength(receiptName), session.userId],
-    );
-    const expense = await one<{ id: string }>(
-      client,
-      `INSERT INTO expenses (
-         org_id, property_id, category, description, currency, amount_minor, incurred_on,
-         paid_by, bill_to, receipt_file_id, status, created_by
-       ) VALUES ($1,$2,'repair',$3,$4,$5,$6,'manager_firm','owner',$7,'posted',$8)
-       RETURNING id`,
-      [session.orgId, input.propertyId, description, property.currency, amount, incurred, file.id, session.userId],
-    );
-    const txn = await one<{ id: string }>(
-      client,
-      `INSERT INTO ledger_transactions (
-         org_id, property_id, kind, currency, effective_date, description, source_table, source_id, created_by
-       ) VALUES ($1,$2,'expense',$3,$4,$5,'expenses',$6,$7) RETURNING id`,
-      [session.orgId, input.propertyId, property.currency, incurred, description, expense.id, session.userId],
-    );
-    await client.query(
-      `INSERT INTO ledger_entries (org_id, transaction_id, account, amount_minor, currency, property_id, memo)
-       VALUES ($1,$2,'expense',$3,$4,$5,$6), ($1,$2,'owner_payable',$7,$4,$5,$6)`,
-      [session.orgId, txn.id, amount, property.currency, input.propertyId, description, -amount],
-    );
-    await client.query(`UPDATE expenses SET ledger_transaction_id = $2 WHERE id = $1`, [expense.id, txn.id]);
-    return { expenseId: expense.id, incurred };
-  });
-}
+export { addExpense } from "./expenses";
 
 export async function reversePayment(session: Session, paymentId: string, reason: string) {
   assertPerm(session, "pay.reverse");

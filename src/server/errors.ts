@@ -35,5 +35,6 @@ export function mapDbError(error: unknown): Error {
   }
   if (/invalid input syntax for type numeric/i.test(message)) return new FlowError("errors.amount");
   if (/rented as whole_unit/i.test(message)) return new FlowError("errors.wholeUnit");
+  if (/month is closed|month_closed/i.test(message)) return new FlowError("errors.monthClosed");
   return new FlowError("errors.generic");
 }

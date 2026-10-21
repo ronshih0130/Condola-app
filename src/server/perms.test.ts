@@ -7,6 +7,8 @@ test("permission matrix matches the prototype table", () => {
   assert.equal(PERMS.length, 18);
   assert.deepEqual(ROLE_KEYS, ["admin", "manager", "accountant", "maintenance"]);
   assert.equal(can("manager", "exp.add"), true);
+  assert.equal(can("accountant", "exp.add"), true);
+  assert.equal(can("maintenance", "exp.add"), false);
   assert.equal(can("manager", "stmt.generate"), false);
   assert.equal(can("manager", "pay.reverse"), false);
   assert.equal(can("manager", "month.close"), false);
@@ -20,11 +22,12 @@ test("permission matrix matches the prototype table", () => {
 });
 
 test("navigation follows the matrix", () => {
-  assert.equal(navCount("admin"), 17);
+  assert.equal(navCount("admin"), 18);
   const accountant = visibleNav("accountant").flatMap((section) => section.links.map((link) => link.href));
   assert.ok(accountant.includes("/m/tickets"));
   assert.ok(accountant.includes("/m/bank"));
   assert.ok(accountant.includes("/m/close"));
+  assert.ok(accountant.includes("/m/expenses"));
   assert.ok(accountant.includes("/m/owners"));
   assert.ok(!accountant.includes("/m/team"));
   assert.ok(!accountant.includes("/m/settings"));
@@ -56,6 +59,9 @@ test("navigation follows the matrix", () => {
   assert.equal(noPermHref("/m/owners/new", "accountant"), "/m/noperm?need=props.edit");
   assert.equal(noPermHref("/m/leases", "manager"), null);
   assert.equal(permForPath("/m/tenants/abc"), "props.view");
+  assert.equal(permForPath("/m/expenses"), "exp.add");
+  assert.equal(permForPath("/m/expenses/new"), "exp.add");
+  assert.equal(permForPath("/m/expenses/abc"), "exp.add");
   assert.equal(permForPath("/m/tickets"), null);
   assert.equal(permForPath("/m/tickets/1"), null);
   assert.equal(can("accountant", "tickets.update"), false);

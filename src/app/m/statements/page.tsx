@@ -50,6 +50,12 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         deniedReason={denied}
       />
       {canExpense ? (
+        <>
+        <p style={{ marginTop: 16 }}>
+          <Link className="btn" href="/m/expenses" data-testid="open-expenses">
+            {t("i_nav_expenses")}
+          </Link>
+        </p>
         <form className="card pad" action={actionAddExpense} style={{ marginTop: 16, maxWidth: 640 }} data-testid="expense-form">
           <h3>{t("i_add_expense")}</h3>
           <div className="fg">
@@ -79,6 +85,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             {t("i_add_expense")}
           </button>
         </form>
+        </>
       ) : null}
       <div className="card" style={{ marginTop: 16 }}>
         <div className="hd">
