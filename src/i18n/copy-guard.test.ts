@@ -185,6 +185,39 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   }
 });
 
+test("tenant pages drop the LINE demo sentence and never say 示範, 測試模式, or 即將推出", () => {
+  const zh = JSON.parse(read(join(root, "src/i18n/zh-TW.json"))) as Record<string, string>;
+  const en = JSON.parse(read(join(root, "src/i18n/en.json"))) as Record<string, string>;
+  const banned = ["示範", "測試模式", "即將推出", "LINE 登入與推播"];
+  const tenantDir = join(root, "src/app/t");
+  const files = readdirSync(tenantDir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".tsx"))
+    .map((entry) => join(entry.parentPath ?? tenantDir, entry.name));
+  assert.ok(files.some((file) => file.endsWith(`${join("t", "layout.tsx")}`)));
+  const keys = new Set<string>();
+  for (const file of files) {
+    const text = read(file);
+    for (const word of banned) assert.equal(text.includes(word), false, `${file} ${word}`);
+    assert.doesNotMatch(text, /i_line_stub|line-stub|showDemoLineCopy/);
+    for (const match of text.matchAll(/\bt\(\s*"([^"]+)"/g)) keys.add(match[1]);
+  }
+  assert.ok(keys.has("i_rich_pay"));
+  assert.ok(keys.has("i_pay_direct"));
+  for (const key of keys) {
+    for (const catalog of [zh, en]) {
+      const value = catalog[key];
+      assert.equal(typeof value, "string", key);
+      for (const word of banned) assert.equal(value.includes(word), false, `${key} ${word}`);
+    }
+  }
+  for (const catalog of [zh, en]) {
+    assert.equal("i_line_stub" in catalog, false);
+    for (const value of Object.values(catalog)) {
+      assert.equal(String(value).includes("LINE 登入與推播"), false);
+    }
+  }
+});
+
 test("the build stamps a short git SHA into the staff footer and /api/version", () => {
   const config = read(join(root, "next.config.ts"));
   assert.match(config, /NEXT_PUBLIC_BUILD_SHA/);

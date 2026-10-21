@@ -866,7 +866,6 @@
  "i_split_even": "Even split",
  "i_split_days": "By days occupied",
  "i_split_sub": "By sub-meter",
- "i_line_stub": "LINE login and push alerts are a demo. Nothing is sent to LINE.",
  "i_bank_demo": "The sample deposit is not a real bank file.",
  "i_no_sample": "No unmatched payment yet. Record or confirm one first.",
  "i_switch": "Switch role",

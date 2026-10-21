@@ -156,7 +156,7 @@ test("demo LINE copy is live-hidden and shown for DEMO_MODE or a sandbox firm", 
   const account = readFileSync(new URL("../app/m/account/page.tsx", import.meta.url), "utf8");
   const settings = readFileSync(new URL("../app/m/settings/page.tsx", import.meta.url), "utf8");
   const login = readFileSync(new URL("../app/login/page.tsx", import.meta.url), "utf8");
-  assert.match(tenant, /showDemoLineCopy\(session\.environment\)/);
+  assert.doesNotMatch(tenant, /i_line_stub|showDemoLineCopy|line-stub|LINE 登入與推播/);
   assert.doesNotMatch(account, /showDemoLineCopy|LINE/);
   assert.doesNotMatch(settings, /LINE/);
   assert.match(login, /showDemoLineCopy\(null\)/);
