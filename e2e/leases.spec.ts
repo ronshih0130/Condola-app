@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 import { resetDemo, signIn } from "./session";
 
 test("deposit reason and a private signed PDF", async ({ page }) => {
+  const crashes: string[] = [];
+  page.on("pageerror", (error) => crashes.push(error.message));
   await resetDemo(page);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases/new");
   await expect(page.locator("body")).not.toContainText("房東");
@@ -42,13 +44,17 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await expect(page.getByTestId("cap-alert")).toHaveCount(0);
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("submit-lease").click();
+  await page.getByTestId("submit-lease").evaluate((button: HTMLButtonElement) => {
+    button.click();
+    button.click();
+  });
 
   const error = page.getByTestId("error-banner");
   if (await error.isVisible().catch(() => false)) {
     throw new Error(await error.innerText());
   }
   await expect(page.getByTestId("paper-sign")).toBeVisible();
+  expect(crashes).toEqual([]);
 
   await page.getByRole("link", { name: "摘要" }).click();
   await page.getByTestId("deposit-months").fill("4");
@@ -97,4 +103,5 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await signIn(page, "admin@coast.demo");
   const leaked = await page.request.get(`/m/leases/${leaseId}/signed`);
   expect(leaked.status()).toBe(404);
+  expect(crashes).toEqual([]);
 });

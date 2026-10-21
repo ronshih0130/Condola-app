@@ -43,6 +43,8 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(route, /updateLease: \(session, body\) => updateLease\(session, body as never\)/);
   assert.match(actions, /createLeaseFromForm\(session, formData\)/);
   assert.match(actions, /updateLease\(session,/);
+  assert.match(wizard, /claimFormSubmit\(submitGuard\)/);
+  assert.match(wizard, /disabled=\{blocked \|\| pending\}/);
   assert.match(domain, /export async function createLease/);
   assert.match(domain, /export async function updateLease/);
   assert.match(domain, /savedDepositWarn/);

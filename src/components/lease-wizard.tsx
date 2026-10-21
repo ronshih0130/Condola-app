@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "@/i18n/errors";
 import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
+import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
 
 function amountOk(raw: string) {
   const trimmed = raw.trim();
@@ -26,7 +27,8 @@ function money(major: number, currency: string, locale: string) {
 export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLocale: "zh-TW" | "en" }) {
   const t = useT();
   const locale = useLocale();
-  const [state, formAction] = useActionState(actionCreateLease, { error: "" });
+  const [state, formAction, pending] = useActionState(actionCreateLease, { error: "" });
+  const submitGuard = useRef(false);
   const steps = [
     t("s_4fabbda"),
     t("s_74f19b0"),
@@ -88,6 +90,10 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
     };
   }, [room, usageN, rate, rateN, billN, split, bill]);
 
+  useEffect(() => {
+    if (!pending && state.error) releaseFormSubmit(submitGuard);
+  }, [pending, state.error]);
+
   function goNext() {
     if (step === 2) {
       const nameBad = tenant.trim() === "";
@@ -136,7 +142,9 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
           setDepositError(!amountOk(depositMonths));
           if (!amountOk(rent)) setStep(3);
           else setStep(4);
+          return;
         }
+        if (pending || !claimFormSubmit(submitGuard)) event.preventDefault();
       }}
     >
       <Stepper steps={steps} current={step} />
@@ -401,7 +409,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked}>
+          <button className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending} aria-busy={pending || undefined}>
             {t("s_79b6c1d")}
           </button>
         )}
