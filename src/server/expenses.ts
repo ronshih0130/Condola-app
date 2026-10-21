@@ -263,7 +263,12 @@ async function onIssuedStatement(client: Client, orgId: string, expenseId: strin
 }
 
 const LIST_SQL = `SELECT e.id::text, e.property_id::text, p.name AS property_name,
-            e.unit_id::text, u.label AS unit_label, e.category, coalesce(e.description, '') AS description,
+            e.unit_id::text,
+            CASE
+              WHEN u.label IS NOT NULL AND rm.label IS NOT NULL THEN u.label || ' · ' || rm.label
+              ELSE coalesce(u.label, rm.label)
+            END AS unit_label,
+            e.category, coalesce(e.description, '') AS description,
             e.currency, e.amount_minor::text, e.incurred_on::text, e.status::text, e.bill_to::text,
             c.display_name AS vendor_name, f.file_name AS receipt_name,
             e.ticket_id::text, t.ticket_number::text AS ticket_number
@@ -272,7 +277,8 @@ const LIST_SQL = `SELECT e.id::text, e.property_id::text, p.name AS property_nam
        LEFT JOIN units u ON u.id = e.unit_id
        LEFT JOIN contacts c ON c.id = e.vendor_contact_id
        LEFT JOIN files f ON f.id = e.receipt_file_id
-       LEFT JOIN maintenance_tickets t ON t.id = e.ticket_id AND t.org_id = e.org_id`;
+       LEFT JOIN maintenance_tickets t ON t.id = e.ticket_id AND t.org_id = e.org_id
+       LEFT JOIN rooms rm ON rm.id = t.room_id`;
 
 function mapRow(row: Omit<ExpenseListRow, "included" | "incurred_on"> & { incurred_on: string }): ExpenseListRow {
   const incurred_on = day(row.incurred_on);

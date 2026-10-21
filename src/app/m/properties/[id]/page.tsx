@@ -4,7 +4,7 @@ import { makeT } from "@/i18n";
 import { actionPhoneVisibility, actionSetMeter } from "@/server/actions";
 import { AuditHistory } from "@/components/audit-log";
 import { SampleTag } from "@/components/sample-tag";
-import { ErrorBanner, PageHeader } from "@/components/ui";
+import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
 import { isSampleName } from "@/server/sandbox-data";
 import { formatMoney } from "@/server/format";
 import { can } from "@/server/perms";
@@ -95,6 +95,29 @@ export default async function PropertyPage({
               </div>
             </form>
           ) : null}
+        </div>
+        <div className="card pad" data-testid="repair-history">
+          <h3>{t("i_repair_history")}</h3>
+          {detail.repairs.length === 0 ? <p className="small muted">{t("i_repair_none")}</p> : null}
+          {detail.repairs.map((repair) => (
+            <div className="n" key={repair.id} data-testid={`property-repair-${repair.number}`}>
+              <Link href={`/m/tickets/${repair.id}`}>
+                <b>
+                  #{repair.number} {repair.title}
+                </b>
+              </Link>
+              <div className="small muted">
+                {repair.place}
+                {repair.vendor_name ? ` · ${repair.vendor_name}` : ""}
+                {repair.completed_on ? ` · ${repair.completed_on}` : repair.scheduled_on ? ` · ${repair.scheduled_on}` : ""}
+                {repair.final_cost ? ` · ${formatMoney(repair.final_cost, repair.currency || detail.property.currency, session.locale)}` : ""}
+              </div>
+              <span className={`chip ${statusClass(repair.status)}`}>{t(statusKey(repair.status))}</span>
+            </div>
+          ))}
+          <p style={{ marginTop: 8 }}>
+            <Link href={`/m/tickets?property=${id}`}>{t("i_repair_open")}</Link>
+          </p>
         </div>
         <div className="card pad" data-testid="shared-meter">
           <h3>{t("s_66a6e8b")}</h3>

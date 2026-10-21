@@ -213,7 +213,7 @@ test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {
   await expect(page.getByTestId("repair-title")).toHaveValue("");
   await page.getByTestId("repair-title").fill("試用報修");
   await page.getByTestId("submit-repair").click();
-  await expect(page.getByText("已送出")).toBeVisible();
+  await expect(page.locator(".alert.ok")).toContainText("已送出");
   await page.screenshot({ path: "/opt/cursor/artifacts/tenant-liff.png", fullPage: true });
 
   await signIn(page, ACCOUNTS.owner);

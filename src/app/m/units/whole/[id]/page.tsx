@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { SpaceForm } from "@/components/space-form";
+import { SpaceRepairs } from "@/components/space-repairs";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionUpdateSpace } from "@/server/actions";
 import { majorField } from "@/server/portfolio";
-import { listOwners, listProperties, spaceEditor } from "@/server/queries";
+import { listOwners, listProperties, spaceEditor, spaceRepairs } from "@/server/queries";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +21,11 @@ export default async function EditWholeUnitPage({
   const query = await searchParams;
   const session = await getSession();
   const t = makeT(session.locale);
-  const [space, properties, owners] = await Promise.all([
+  const [space, properties, owners, repairs] = await Promise.all([
     spaceEditor(session, "whole_unit", id),
     listProperties(session),
     listOwners(session),
+    spaceRepairs(session, { unitId: id }),
   ]);
   if (!space) notFound();
   const propertyName = properties.find((property) => property.id === space.propertyId)?.name ?? "";
@@ -53,6 +55,12 @@ export default async function EditWholeUnitPage({
           taipowerAmount: majorField(space.taipowerAmountMinor, space.currency),
           notes: space.notes,
         }}
+      />
+      <SpaceRepairs
+        t={t}
+        locale={session.locale}
+        repairs={repairs}
+        href={`/m/tickets?property=${space.propertyId}&unit=${space.id}`}
       />
     </>
   );
