@@ -24,6 +24,9 @@ export function mapDbError(error: unknown): Error {
   if (/exclusion_violation|exclusion constraint|overlaps lease|double-booking/i.test(message)) {
     return new FlowError("errors.occupied");
   }
+  if (/contacts_org_tenant_email_uniq/i.test(message)) {
+    return new FlowError("errors.tenantExists");
+  }
   if (/duplicate key/i.test(message) && /email/i.test(message)) {
     return new FlowError("errors.emailTaken");
   }

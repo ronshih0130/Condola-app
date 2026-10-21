@@ -268,6 +268,8 @@ export type LeaseInput = {
   tenantName: string;
   tenantPhone: string;
   tenantEmail: string;
+  /** Empty or "new" creates a contact. A contact id reuses that 租客 in this firm. */
+  tenantContactId?: string;
   lineUserId: string;
   startDate: string;
   endDate: string;
@@ -365,10 +367,100 @@ function readElectricity(input: LeaseInput) {
   return { billMajor: bill, usageKwh: usage, rateMajor: rateOk ? rate : null };
 }
 
+const CONTACT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function existingTenantId(value: string | undefined) {
+  const id = (value ?? "").trim();
+  if (!id || id === "new") return "";
+  if (!CONTACT_ID.test(id)) throw new FlowError("errors.notFound");
+  return id;
+}
+
+type TenantContactRow = {
+  id: string;
+  user_id: string | null;
+  display_name: string;
+  email: string | null;
+  phone_e164: string | null;
+};
+
+/**
+ * Reuse a 租客 already in this firm, or insert one.
+ * The lookup is org-scoped in SQL and runs as the signed-in member, so RLS
+ * (app.is_member) hides every other firm's contacts. A miss is notFound.
+ */
+async function linkTenant(
+  client: Client,
+  session: Session,
+  input: {
+    tenantContactId: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    lineId: string | null;
+  },
+) {
+  if (input.tenantContactId) {
+    const found = await maybe<TenantContactRow>(
+      client,
+      `SELECT id::text, user_id::text AS user_id, display_name, email::text AS email, phone_e164
+         FROM contacts
+        WHERE id = $1 AND org_id = $2 AND is_tenant AND archived_at IS NULL
+        FOR UPDATE`,
+      [input.tenantContactId, session.orgId],
+    );
+    if (!found) throw new FlowError("errors.notFound");
+    const tenantUserId = found.user_id ?? (await attachPortalUser(client, session.orgId, found));
+    return { contactId: found.id, tenantUserId };
+  }
+  if (input.email) {
+    const duplicate = await maybe<{ id: string }>(
+      client,
+      `SELECT id::text FROM contacts
+        WHERE org_id = $1 AND is_tenant AND archived_at IS NULL AND email = $2
+        LIMIT 1`,
+      [session.orgId, input.email],
+    );
+    if (duplicate) throw new FlowError("errors.tenantExists");
+  }
+  const tenantUserId = await insertPortalUser(client, { name: input.name, email: input.email, phone: input.phone });
+  const contact = await one<{ id: string }>(
+    client,
+    `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, phone_e164, line_user_id, locale, preferred_channel)
+     VALUES ($1,$2,true,$3,$4,$5,$6,$7,'line') RETURNING id`,
+    [session.orgId, tenantUserId, input.name, input.email, input.phone, input.lineId, session.locale],
+  );
+  return { contactId: contact.id, tenantUserId };
+}
+
+/** A 租客 row with no portal login yet keeps that row and gains a user. */
+async function attachPortalUser(client: Client, orgId: string, contact: TenantContactRow) {
+  const tenantUserId = await insertPortalUser(client, {
+    name: contact.display_name,
+    email: contact.email,
+    phone: contact.phone_e164,
+  });
+  const updated = await maybe<{ id: string }>(
+    client,
+    `UPDATE contacts SET user_id = $2, updated_at = now()
+      WHERE id = $1 AND org_id = $3 AND user_id IS NULL
+      RETURNING id::text`,
+    [contact.id, tenantUserId, orgId],
+  );
+  if (updated) return tenantUserId;
+  const again = await one<{ user_id: string }>(
+    client,
+    `SELECT user_id::text AS user_id FROM contacts WHERE id = $1 AND org_id = $2 AND user_id IS NOT NULL`,
+    [contact.id, orgId],
+  );
+  return again.user_id;
+}
+
 export async function createLease(session: Session, input: LeaseInput) {
   assertStaff(session, ["admin", "manager"]);
   if (!input.roomId || !input.startDate || !input.endDate) throw new FlowError("errors.required", { field: "s_8569bc8" });
-  if (!input.tenantName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
+  const tenantContactId = existingTenantId(input.tenantContactId);
+  if (!tenantContactId && !input.tenantName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
   const dueDay = input.dueDay;
   if (!finiteNumber(dueDay) || dueDay < 1 || dueDay > 31 || Math.floor(dueDay) !== dueDay) {
     throw new FlowError("errors.required", { field: "s_aa47e23" });
@@ -381,9 +473,9 @@ export async function createLease(session: Session, input: LeaseInput) {
   const override = leaseDepositOverride(depositMonths, input.depositReason ?? "", session.userId);
   const lineId = normalizeLineId(input.lineUserId ?? "");
   if (!lineId.ok) throw new FlowError("errors.lineId");
-  const phone = cleanPhone(input.tenantPhone);
-  if (!phone) throw new FlowError("errors.required", { field: "s_522cf12" });
-  const email = cleanEmail(input.tenantEmail);
+  const phone = tenantContactId ? null : cleanPhone(input.tenantPhone);
+  if (!tenantContactId && !phone) throw new FlowError("errors.required", { field: "s_522cf12" });
+  const email = tenantContactId ? null : cleanEmail(input.tenantEmail);
   const electricity = readElectricity(input);
   const billMinor = electricity ? toMinor(electricity.billMajor) : 0;
   const average = electricity ? Math.round((billMinor / electricity.usageKwh) * 1e6) / 1e6 : 0;
@@ -454,13 +546,15 @@ export async function createLease(session: Session, input: LeaseInput) {
         LIMIT 1`,
       [input.roomId, session.orgId],
     );
-    const tenantUserId = await insertPortalUser(client, { name: input.tenantName.trim(), email, phone });
-    const contact = await one<{ id: string }>(
-      client,
-      `INSERT INTO contacts (org_id, user_id, is_tenant, display_name, email, phone_e164, line_user_id, locale, preferred_channel)
-       VALUES ($1,$2,true,$3,$4,$5,$6,$7,'line') RETURNING id`,
-      [session.orgId, tenantUserId, input.tenantName.trim(), email, phone, lineId.value, session.locale],
-    );
+    const linked = await linkTenant(client, session, {
+      tenantContactId,
+      name: input.tenantName.trim(),
+      email,
+      phone,
+      lineId: lineId.value,
+    });
+    const tenantUserId = linked.tenantUserId;
+    const contact = { id: linked.contactId };
     const rentMinor = toMinor(rentMajor);
     const depositMinor = Math.round(rentMinor * depositMonths);
     const documentHash = sha256(

@@ -1,3 +1,4 @@
+import type { TenantOption } from "@/tenant-pick";
 import { query, maybe, many, tx } from "./db";
 import { rentUtilityDueMinor } from "./money";
 import type { Session } from "./types";
@@ -296,6 +297,23 @@ export async function listOwners(session: Session) {
         ORDER BY display_name`,
       [session.orgId],
     ),
+  );
+}
+
+/** Active 租客 contacts in the signed-in firm. RLS hides every other firm. */
+export async function listTenants(session: Session): Promise<TenantOption[]> {
+  return tx(
+    session.userId,
+    async (client) =>
+      many<TenantOption>(
+        client,
+        `SELECT id::text, display_name AS name, phone_e164 AS phone, email::text AS email
+           FROM contacts
+          WHERE org_id = $1 AND is_tenant AND archived_at IS NULL
+          ORDER BY display_name, id`,
+        [session.orgId],
+      ),
+    { orgId: session.orgId, environment: session.environment },
   );
 }
 

@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "@/i18n/errors";
 import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
+import { filterTenants, type TenantOption } from "@/tenant-pick";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
 import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
@@ -24,7 +25,15 @@ function money(major: number, currency: string, locale: string) {
   }).format(major);
 }
 
-export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLocale: "zh-TW" | "en" }) {
+export function LeaseWizard({
+  rooms,
+  tenants,
+  firmLocale,
+}: {
+  rooms: RoomOption[];
+  tenants: TenantOption[];
+  firmLocale: "zh-TW" | "en";
+}) {
   const t = useT();
   const locale = useLocale();
   const [state, formAction, pending] = useActionState(actionCreateLease, { error: "" });
@@ -43,6 +52,9 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
   ];
   const [step, setStep] = useState(1);
   const [roomId, setRoomId] = useState("");
+  const [tenantMode, setTenantMode] = useState<"new" | "existing">("new");
+  const [tenantContactId, setTenantContactId] = useState("");
+  const [tenantQuery, setTenantQuery] = useState("");
   const [tenant, setTenant] = useState("");
   const [phone, setPhone] = useState("");
   const [lineId, setLineId] = useState("");
@@ -61,6 +73,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
   const [bilingual, setBilingual] = useState(false);
   const [tenantError, setTenantError] = useState(false);
   const [phoneError, setPhoneError] = useState(false);
+  const [tenantPickError, setTenantPickError] = useState(false);
   const [rentError, setRentError] = useState(false);
   const [depositError, setDepositError] = useState(false);
   const [dueError, setDueError] = useState(false);
@@ -69,6 +82,8 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
   const [rateError, setRateError] = useState(false);
 
   const room = rooms.find((item) => item.id === roomId);
+  const tenantMatches = useMemo(() => filterTenants(tenants, tenantQuery), [tenants, tenantQuery]);
+  const pickedTenant = tenants.find((item) => item.id === tenantContactId) ?? null;
   const currency = room?.currency ?? "TWD";
   const billN = Number(bill);
   const usageN = Number(usage);
@@ -96,13 +111,40 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
     if (!pending && state.error) releaseFormSubmit(submitGuard);
   }, [pending, state.error]);
 
+  function chooseNewTenant() {
+    setTenantMode("new");
+    setTenantContactId("");
+    setTenant("");
+    setPhone("");
+    setLineId("");
+    setTenantQuery("");
+    setTenantError(false);
+    setPhoneError(false);
+    setTenantPickError(false);
+  }
+
+  function chooseExistingTenant() {
+    setTenantMode("existing");
+    setTenant("");
+    setPhone("");
+    setLineId("");
+    setTenantError(false);
+    setPhoneError(false);
+  }
+
   function goNext() {
     if (step === 2) {
-      const nameBad = tenant.trim() === "";
-      const phoneBad = phone.trim() === "";
-      setTenantError(nameBad);
-      setPhoneError(phoneBad);
-      if (nameBad || phoneBad) return;
+      if (tenantMode === "existing") {
+        const missing = !tenantContactId;
+        setTenantPickError(missing);
+        if (missing) return;
+      } else {
+        const nameBad = tenant.trim() === "";
+        const phoneBad = phone.trim() === "";
+        setTenantError(nameBad);
+        setPhoneError(phoneBad);
+        if (nameBad || phoneBad) return;
+      }
     }
     if (step === 3 && !amountOk(rent)) {
       setRentError(true);
@@ -185,6 +227,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
       <input type="hidden" name="tenantName" value={tenant} />
       <input type="hidden" name="tenantPhone" value={phone} />
       <input type="hidden" name="lineUserId" value={lineId} />
+      <input type="hidden" name="tenantMode" value={tenantMode === "existing" ? tenantContactId : "new"} />
       <input type="hidden" name="rent" value={rent} />
       <input type="hidden" name="months" value={months} />
       <input type="hidden" name="startDate" value={start} />
@@ -213,26 +256,87 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
       </div>
       <div hidden={step !== 2}>
         <div className="card pad" style={{ maxWidth: 760 }}>
-          <div className="grid2">
+          <label className="radio">
+            <input type="radio" data-testid="tenant-mode-new" checked={tenantMode === "new"} onChange={chooseNewTenant} />
+            <span>{t("i_new_tenant")}</span>
+          </label>
+          <label className="radio">
+            <input type="radio" data-testid="tenant-mode-existing" checked={tenantMode === "existing"} onChange={chooseExistingTenant} />
+            <span>{t("i_existing_tenant")}</span>
+          </label>
+          {tenantMode === "existing" ? (
             <div className="fg">
-              <label className="f">{t("s_0c5acea")}</label>
-              <input className="inp" data-testid="tenant-name" placeholder={t("i_ph_tenant")} value={tenant} onChange={(event) => { setTenant(event.target.value); setTenantError(false); }} />
-              {tenantError ? <p className="hint" data-testid="tenant-name-error">{t("i_field_incomplete", { field: t("s_0c5acea") })}</p> : null}
+              <label className="f" htmlFor="tenant-search">{t("i_tenant_pick")}</label>
+              <input
+                id="tenant-search"
+                className="inp"
+                data-testid="tenant-search"
+                placeholder={t("i_tenant_search")}
+                value={tenantQuery}
+                role="combobox"
+                aria-expanded={true}
+                aria-controls="tenant-options"
+                aria-autocomplete="list"
+                autoComplete="off"
+                onChange={(event) => {
+                  setTenantQuery(event.target.value);
+                  setTenantPickError(false);
+                }}
+              />
+              <div id="tenant-options" role="listbox" data-testid="tenant-options" style={{ maxHeight: 240, overflow: "auto", marginTop: 8 }}>
+                {tenantMatches.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    aria-selected={item.id === tenantContactId}
+                    className={`radio${item.id === tenantContactId ? " on" : ""}`}
+                    style={{ width: "100%", textAlign: "left", font: "inherit" }}
+                    data-testid="tenant-option"
+                    onClick={() => {
+                      setTenantContactId(item.id);
+                      setTenant(item.name);
+                      setPhone(item.phone ?? "");
+                      setTenantQuery(item.name);
+                      setTenantPickError(false);
+                    }}
+                  >
+                    <span>
+                      {item.name}
+                      {item.phone ? ` · ${item.phone}` : ""}
+                      {item.email ? ` · ${item.email}` : ""}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {tenantMatches.length === 0 ? <p className="hint" data-testid="tenant-none">{t("i_tenant_none")}</p> : null}
+              {pickedTenant ? <p className="hint" data-testid="tenant-picked">{pickedTenant.name}</p> : null}
+              {tenantPickError ? <p className="hint" data-testid="tenant-pick-error">{t("i_field_incomplete", { field: t("i_existing_tenant") })}</p> : null}
             </div>
-            <div className="fg">
-              <label className="f">{t("s_522cf12")}</label>
-              <input className="inp" data-testid="tenant-phone" placeholder={t("i_ph_phone")} value={phone} onChange={(event) => { setPhone(event.target.value); setPhoneError(false); }} />
-              {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_field_incomplete", { field: t("s_522cf12") })}</p> : null}
-            </div>
-          </div>
-          <div className="fg">
-            <label className="f">{t("lease_line_id")}</label>
-            <input className="inp" data-testid="tenant-line" placeholder={t("lease_ph_line")} value={lineId} onChange={(event) => setLineId(event.target.value)} />
-          </div>
-          <div className="fg">
-            <label className="f">{t("i_email_label")}</label>
-            <input className="inp" name="tenantEmail" placeholder={t("i_ph_email")} defaultValue="" />
-          </div>
+          ) : (
+            <>
+              <div className="grid2">
+                <div className="fg">
+                  <label className="f">{t("s_0c5acea")}</label>
+                  <input className="inp" data-testid="tenant-name" placeholder={t("i_ph_tenant")} value={tenant} onChange={(event) => { setTenant(event.target.value); setTenantError(false); }} />
+                  {tenantError ? <p className="hint" data-testid="tenant-name-error">{t("i_field_incomplete", { field: t("s_0c5acea") })}</p> : null}
+                </div>
+                <div className="fg">
+                  <label className="f">{t("s_522cf12")}</label>
+                  <input className="inp" data-testid="tenant-phone" placeholder={t("i_ph_phone")} value={phone} onChange={(event) => { setPhone(event.target.value); setPhoneError(false); }} />
+                  {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_field_incomplete", { field: t("s_522cf12") })}</p> : null}
+                </div>
+              </div>
+              <div className="fg">
+                <label className="f">{t("lease_line_id")}</label>
+                <input className="inp" data-testid="tenant-line" placeholder={t("lease_ph_line")} value={lineId} onChange={(event) => setLineId(event.target.value)} />
+              </div>
+              <div className="fg">
+                <label className="f">{t("i_email_label")}</label>
+                <input className="inp" name="tenantEmail" placeholder={t("i_ph_email")} defaultValue="" />
+              </div>
+            </>
+          )}
         </div>
       </div>
       <div hidden={step !== 3}>
@@ -405,7 +509,7 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
             <tbody>
               <tr>
                 <td>{t("s_74f19b0")}</td>
-                <td>{tenant}</td>
+                <td data-testid="lease-confirm-tenant">{tenant}</td>
               </tr>
               <tr>
                 <td>{t("i_rent_label")}</td>
