@@ -57,6 +57,7 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
   expect(template).toContain("租客");
   expect(template).not.toContain("房東");
   expect(template).not.toContain("房客");
+  expect(template).not.toContain("身分證");
 
   await expect(page.locator(".import-steps .st")).toHaveCount(3);
   await expect(page.locator(".import-steps")).toContainText("下載範本");
@@ -139,6 +140,7 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
   await expect(page.getByTestId("import-result")).toBeVisible();
   await expect(page.getByTestId("import-count-leases")).toHaveText("0");
   await expect(page.getByTestId("import-reused-leases")).toContainText("1");
+  await expect(page.getByTestId("import-duplicate-notice")).toContainText("已經存在");
 
   await signIn(page, ACCOUNTS.accountant);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/properties");

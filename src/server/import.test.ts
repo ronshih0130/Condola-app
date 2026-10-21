@@ -8,7 +8,6 @@ import { HMAC_KEY_REF, hashIdNumber, parseIdHmacKey } from "./id-hash";
 import { ORG2_ID, ORG_ID } from "./ids";
 import { IMPORT_BODY_MAX_BYTES, commitImportBatch, dryRunImport, readImportBody } from "./import-batch";
 import {
-  IMPORT_COMMIT_BATCH,
   IMPORT_DRY_BATCH,
   IMPORT_FIELDS,
   IMPORT_FIELD_MAX,
@@ -19,7 +18,9 @@ import {
   issuePreviewColumns,
   matchColumns,
   planOne,
+  planRows,
   previewBadColumns,
+  totalsFromPlans,
   rowHasError,
   templateHeaders,
   validateImportRows,
@@ -48,7 +49,6 @@ function blank(line = 2): ImportRequestRow {
     tenantName: "",
     tenantPhone: "",
     tenantEmail: "",
-    tenantId: "",
     startDate: "",
     endDate: "",
     deposit: "",
@@ -130,6 +130,9 @@ test("column match accepts legacy owner headers and ignores a client org id", ()
   assert.equal(templateHeaders("zh-TW").join(",").includes("房客"), false);
   assert.match(templateHeaders("zh-TW").join(","), /屋主姓名/);
   assert.match(templateHeaders("zh-TW").join(","), /租客姓名/);
+  assert.equal(templateHeaders("zh-TW").some((header) => header.includes("身分證")), false);
+  assert.equal(templateHeaders("en").some((header) => /national id|tenant id/i.test(header)), false);
+  assert.equal(IMPORT_FIELDS.includes("tenantId" as (typeof IMPORT_FIELDS)[number]), false);
 
   const coerced = coerceImportRows([{ orgId: ORG2_ID, propertyName: "只此欄", line: 9, extra: "nope" }]);
   assert.equal(coerced.length, 1);
@@ -138,8 +141,10 @@ test("column match accepts legacy owner headers and ignores a client org id", ()
   assert.equal(Object.prototype.hasOwnProperty.call(coerced[0], "orgId"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(coerced[0], "extra"), false);
   assert.equal(IMPORT_MAX_ROWS, 2000);
-  assert.equal(IMPORT_COMMIT_BATCH, 10);
   assert.equal(IMPORT_DRY_BATCH, 25);
+  const withId = coerceImportRows([{ line: 4, propertyName: "甲", tenantId: "A123456789", "租客身分證字號": "B123456789" }]);
+  assert.equal(JSON.stringify(withId).includes("A123456789"), false);
+  assert.equal(JSON.stringify(withId).includes("B123456789"), false);
 });
 
 test("row checks cover deposit cap, ended leases, duplicates, due day, and phone", () => {
@@ -180,21 +185,19 @@ test("row checks cover deposit cap, ended leases, duplicates, due day, and phone
   assert.ok(whole.issues.some((issue) => issue.key === "im_e_whole_room"));
 });
 
-test("an existing unit, tenant, and lease are reused", () => {
+test("an existing unit, tenant, and lease are reused and counted as already present", () => {
   const [parsed] = validateImportRows([lease()], "2026-10-21");
-  parsed.tenantIdHash = "abc";
   const index = emptyIndex();
   index.properties.set(parsed.propertyName, { id: "prop-1", addressKey: parsed.addressKey });
   index.units.set(`${parsed.addressKey}\n${parsed.unitLabel}`, { id: "unit-1", propertyId: "prop-1", mode: "whole_unit" });
   index.ownersByEmail.set(parsed.ownerEmail ?? "", "owner-1");
   index.tenantsByPhone.set(parsed.phoneE164 ?? "", [{ id: "tenant-1", name: parsed.tenantName ?? "" }]);
-  index.tenantsByHash.set("abc", [{ id: "tenant-1", name: parsed.tenantName ?? "" }]);
   index.leases.push({
     spaceKey: "unit:unit-1",
     start: "2026-11-01",
     end: "2027-10-31",
     phone: parsed.phoneE164,
-    idHash: "abc",
+    idHash: null,
     tenantId: "tenant-1",
     rentMinor: parsed.rentMinor,
     depositMinor: parsed.depositMinor,
@@ -206,29 +209,24 @@ test("an existing unit, tenant, and lease are reused", () => {
   assert.equal(plan.reuseTenant, true);
   assert.equal(plan.reuseLease, true);
   assert.equal(plan.createLease, false);
+  const totals = totalsFromPlans([plan], "again.xlsx", false);
+  assert.equal(totals.duplicateRows, 1);
+  assert.equal(totals.created.leases, 0);
 
   const changed = planOne({ ...parsed, rentMinor: parsed.rentMinor + 100 }, index);
   assert.equal(changed.blocked, true);
   assert.equal(changed.reuseLease, false);
   assert.ok(changed.issues.some((issue) => issue.key === "im_e_terms"));
 
-  const other = planOne({ ...parsed, phoneE164: "+886912000333", tenantIdHash: "other" }, index);
+  const other = planOne({ ...parsed, phoneE164: "+886912000333" }, index);
   assert.equal(other.blocked, true);
   assert.ok(other.issues.some((issue) => issue.key === "im_e_occupied"));
 });
 
-test("an ID that misses does not fall back to the phone, and a shared phone is not reused", () => {
-  const [parsed] = validateImportRows([lease({ tenantId: "A123456789" })], "2026-10-21");
-  parsed.tenantId = null;
-  parsed.tenantIdHash = "hash-new";
+test("a shared phone is not reused, and full-width numbers, ROC dates, and Excel phones are accepted", () => {
+  const [parsed] = validateImportRows([lease()], "2026-10-21");
   const index = emptyIndex();
-  index.tenantsByPhone.set(parsed.phoneE164 ?? "", [{ id: "tenant-phone", name: parsed.tenantName ?? "" }]);
-  const mismatch = planOne(parsed, index);
-  assert.equal(mismatch.blocked, true);
-  assert.equal(mismatch.reuseTenant, false);
-  assert.ok(mismatch.issues.some((issue) => issue.key === "im_e_tenant"));
-
-  const phoneOnly = { ...parsed, tenantId: null, tenantIdHash: null };
+  const phoneOnly = parsed;
   index.tenantsByPhone.set(parsed.phoneE164 ?? "", [
     { id: "tenant-a", name: "甲" },
     { id: "tenant-b", name: "乙" },
@@ -249,6 +247,38 @@ test("an ID that misses does not fall back to the phone, and a shared phone is n
   assert.equal(wrongName.reuseTenant, false);
   assert.equal(wrongName.createTenant, false);
   assert.ok(wrongName.issues.some((issue) => issue.key === "im_e_phone_name"));
+
+  const wide = validateImportRows(
+    [lease({ rent: "１２，０００", deposit: "２４，０００", dueDay: "５", startDate: "115/01/05", endDate: "民國116年1月5日", tenantPhone: "９１２０００２２２", unitLabel: "11F" })],
+    "2026-10-21",
+  )[0];
+  assert.equal(wide.issues.some((issue) => issue.severity === "error"), false);
+  assert.equal(wide.rentMajor, 12000);
+  assert.equal(wide.depositMajor, 24000);
+  assert.equal(wide.dueDay, 5);
+  assert.equal(wide.startDate, "2026-01-05");
+  assert.equal(wide.endDate, "2027-01-05");
+  assert.equal(wide.phoneE164, "+886912000222");
+
+  const scientific = validateImportRows([lease({ tenantPhone: "9.12000333E8", unitLabel: "12F" })], "2026-10-21")[0];
+  assert.equal(scientific.phoneE164, "+886912000333");
+});
+
+test("one blocked row zeroes the commit totals and a dry run still counts the valid rows", () => {
+  const rows = validateImportRows(
+    [lease({ unitLabel: "1F" }), lease({ line: 3, unitLabel: "2F", deposit: "90000" })],
+    "2026-10-21",
+  );
+  const plans = planRows(rows, emptyIndex());
+  const commit = totalsFromPlans(plans, "mix.csv", false);
+  assert.equal(plans.some((plan) => plan.blocked), true);
+  assert.equal(commit.created.properties, 0);
+  assert.equal(commit.created.leases, 0);
+  assert.equal(commit.duplicateRows, 0);
+  assert.ok(commit.errors.some((issue) => issue.key === "im_e_dep"));
+  const dry = totalsFromPlans(plans, "mix.csv", true);
+  assert.equal(dry.created.leases, 1);
+  assert.ok(dry.errors.some((issue) => issue.key === "im_e_dep"));
 });
 
 test("over-long fields and out-of-range amounts are rejected", () => {
@@ -393,10 +423,7 @@ test("the 2000-row cap counts parsed rows for csv and xlsx names", async () => {
     () => dryRunImport(session, { fileName: "batch.csv", rows: many(IMPORT_DRY_BATCH + 1) }),
     (error: unknown) => error instanceof FlowError && error.key === "im_too_many" && error.vars?.max === IMPORT_DRY_BATCH,
   );
-  await assert.rejects(
-    () => commitImportBatch(session, { fileName: "batch.xlsx", rows: many(IMPORT_COMMIT_BATCH + 1) }),
-    (error: unknown) => error instanceof FlowError && error.key === "im_too_many" && error.vars?.max === IMPORT_COMMIT_BATCH,
-  );
+  assert.equal(coerceImportRows(many(500), IMPORT_MAX_ROWS).length, 500);
 });
 
 test("active-unit billing counts include imported leases", () => {

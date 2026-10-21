@@ -30,7 +30,6 @@ export const IMPORT_FIELDS = [
   "tenantName",
   "tenantPhone",
   "tenantEmail",
-  "tenantId",
   "startDate",
   "endDate",
   "deposit",
@@ -47,9 +46,7 @@ export const IMPORT_FIELDS = [
 
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
-/** Commit rows per request. Kept small for the Workers free-plan 10ms CPU budget. */
-export const IMPORT_COMMIT_BATCH = 10;
-/** Dry-run rows per request. No writes, so a slightly larger batch still fits. */
+/** Dry-run rows per request. Commit sends the whole file in one transaction. */
 export const IMPORT_DRY_BATCH = 25;
 /** Whole file, counted on parsed data rows (csv and xlsx alike). */
 export const IMPORT_MAX_ROWS = 2000;
@@ -76,7 +73,6 @@ const ZH_HEADERS: Record<ImportField, string> = {
   tenantName: "租客姓名",
   tenantPhone: "租客電話",
   tenantEmail: "租客 Email",
-  tenantId: "租客身分證字號",
   startDate: "起租日",
   endDate: "到期日",
   deposit: "押金",
@@ -105,7 +101,6 @@ const EN_HEADERS: Record<ImportField, string> = {
   tenantName: "Tenant name",
   tenantPhone: "Tenant phone",
   tenantEmail: "Tenant email",
-  tenantId: "Tenant ID",
   startDate: "Start date",
   endDate: "End date",
   deposit: "Deposit",
@@ -142,7 +137,6 @@ const EXTRA_ALIASES: Partial<Record<ImportField, string[]>> = {
   tenantName: ["租客", "tenant"],
   tenantPhone: ["電話", "手機", "phone"],
   tenantEmail: ["tenant mail"],
-  tenantId: ["身分證", "身分證字號", "租客身分證", "id", "id number", "national id"],
   startDate: ["起租", "lease start"],
   endDate: ["到期", "lease end"],
   deposit: ["押金金額", "deposit amount"],
@@ -253,8 +247,6 @@ export type ParsedImportRow = {
   tenantPhone: string | null;
   phoneE164: string | null;
   tenantEmail: string | null;
-  tenantId: string | null;
-  tenantIdHash: string | null;
   startDate: string | null;
   endDate: string | null;
   depositMajor: number;
@@ -317,12 +309,11 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
     const ownerEmail = emailField(raw.line, raw.ownerEmail, issues);
     const tenantEmail = emailField(raw.line, raw.tenantEmail, issues);
     const tenantName = blank(boundedText(raw.line, ZH_HEADERS.tenantName, raw.tenantName, issues));
-    const tenantPhone = blank(boundedText(raw.line, ZH_HEADERS.tenantPhone, raw.tenantPhone, issues));
-    const tenantId = blank(boundedText(raw.line, ZH_HEADERS.tenantId, raw.tenantId, issues));
+    const tenantPhone = blank(boundedText(raw.line, ZH_HEADERS.tenantPhone, importPhone(raw.tenantPhone), issues));
     const startDate = dateField(raw.line, raw.startDate, issues);
     const endDate = dateField(raw.line, raw.endDate, issues);
     const electricity = electricityField(raw.line, raw.electricity, issues);
-    const lease = Boolean(tenantName || tenantPhone || tenantEmail || tenantId || raw.startDate.trim() || raw.endDate.trim() || raw.deposit.trim());
+    const lease = Boolean(tenantName || tenantPhone || tenantEmail || raw.startDate.trim() || raw.endDate.trim() || raw.deposit.trim());
     let dueDay: number | null = null;
     let phoneE164: string | null = null;
     let depositMonths = 0;
@@ -396,8 +387,6 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
       tenantPhone,
       phoneE164,
       tenantEmail,
-      tenantId,
-      tenantIdHash: null,
       startDate,
       endDate,
       depositMajor: deposit ?? 0,
@@ -436,7 +425,6 @@ const PREVIEW_FIELD: Partial<Record<ImportField, PreviewColumn>> = {
   tenantName: "tenant",
   tenantPhone: "tenant",
   tenantEmail: "tenant",
-  tenantId: "tenant",
 };
 
 export function issuePreviewColumns(issue: ImportIssue): PreviewColumn[] {
@@ -638,25 +626,6 @@ function nameKey(value: string | null | undefined) {
 
 function matchTenant(row: ParsedImportRow, index: ExistingIndex, issues: ImportIssue[]): string | null | "blocked" {
   const phones = row.phoneE164 ? (index.tenantsByPhone.get(row.phoneE164) ?? []) : [];
-  if (row.tenantIdHash) {
-    const hashes = index.tenantsByHash.get(row.tenantIdHash) ?? [];
-    if (hashes.length > 1) {
-      issues.push({ line: row.line, severity: "error", key: "im_e_id_dup" });
-      return "blocked";
-    }
-    if (hashes.length === 1) {
-      if (phones.some((tenant) => tenant.id !== hashes[0].id)) {
-        issues.push({ line: row.line, severity: "error", key: "im_e_tenant" });
-        return "blocked";
-      }
-      return hashes[0].id;
-    }
-    if (phones.length > 0) {
-      issues.push({ line: row.line, severity: "error", key: "im_e_tenant" });
-      return "blocked";
-    }
-    return null;
-  }
   if (phones.length > 1) {
     issues.push({ line: row.line, severity: "error", key: "im_e_phone_dup" });
     return "blocked";
@@ -715,11 +684,10 @@ function remember(index: ExistingIndex, plan: RowPlan) {
     index.ownersByName.set(row.ownerName, id);
   }
   if (plan.createTenant) {
-    const id = plan.tenantId ?? `new-tenant:${row.phoneE164 ?? row.tenantIdHash ?? row.line}`;
+    const id = plan.tenantId ?? `new-tenant:${row.phoneE164 ?? row.line}`;
     plan.tenantId = id;
     const tenant = { id, name: row.tenantName ?? "" };
     addTenantKey(index.tenantsByPhone, row.phoneE164, tenant);
-    addTenantKey(index.tenantsByHash, row.tenantIdHash, tenant);
   }
   if (plan.createLease && row.startDate && row.endDate && plan.tenantId) {
     index.leases.push({
@@ -727,7 +695,7 @@ function remember(index: ExistingIndex, plan: RowPlan) {
       start: row.startDate,
       end: row.endDate,
       phone: row.phoneE164,
-      idHash: row.tenantIdHash,
+      idHash: null,
       tenantId: plan.tenantId,
       rentMinor: row.rentMinor,
       depositMinor: row.depositMinor,
@@ -761,6 +729,8 @@ export type ImportResult = {
   fileName: string;
   created: ImportTotals;
   reused: { units: number; tenants: number; leases: number };
+  /** Confirmed rows that already existed and were not inserted again. */
+  duplicateRows: number;
   openingMinor: number;
   errors: ImportIssue[];
   warnings: ImportIssue[];
@@ -772,12 +742,15 @@ export function totalsFromPlans(plans: RowPlan[], fileName: string, dryRun: bool
   const errors: ImportIssue[] = [];
   const warnings: ImportIssue[] = [];
   let openingMinor = 0;
+  let duplicateRows = 0;
+  // A confirmed file is one write. One blocked row means none of the counts were saved.
+  const writeNothing = !dryRun && plans.some((plan) => plan.blocked);
   for (const plan of plans) {
     for (const issue of plan.issues) {
       if (issue.severity === "error") errors.push(issue);
       else warnings.push(issue);
     }
-    if (plan.blocked) continue;
+    if (plan.blocked || writeNothing) continue;
     if (plan.createProperty) created.properties += 1;
     if (plan.createUnit) created.units += 1;
     if (plan.createRoom) created.rooms += 1;
@@ -788,9 +761,17 @@ export function totalsFromPlans(plans: RowPlan[], fileName: string, dryRun: bool
     if (plan.reuseTenant) reused.tenants += 1;
     if (plan.reuseLease) reused.leases += 1;
     if (plan.vacant) created.vacant += 1;
+    if (planIsDuplicate(plan)) duplicateRows += 1;
     openingMinor += plan.row.openingMinor;
   }
-  return { dryRun, fileName, created, reused, openingMinor, errors, warnings };
+  return { dryRun, fileName, created, reused, duplicateRows, openingMinor, errors, warnings };
+}
+
+/** A confirmed row that matched data already stored, so this import does not insert it again. */
+export function planIsDuplicate(plan: RowPlan) {
+  if (plan.blocked) return false;
+  if (plan.createProperty || plan.createUnit || plan.createRoom || plan.createOwner || plan.createTenant || plan.createLease) return false;
+  return plan.reuseUnit || plan.reuseTenant || plan.reuseLease;
 }
 
 function req(line: number, field: string): ImportIssue {
@@ -803,7 +784,7 @@ function blank(value: string) {
 }
 
 function numberField(line: number, field: string, raw: string, issues: ImportIssue[], optional: boolean, max: number) {
-  const text = raw.trim().replace(/,/g, "");
+  const text = raw.normalize("NFKC").trim().replace(/[,\s\u00A0]/g, "");
   if (text.length > IMPORT_FIELD_MAX) {
     issues.push({ line, severity: "error", key: "im_e_len", vars: { f: field, max: IMPORT_FIELD_MAX } });
     return null;
@@ -850,38 +831,66 @@ function emailField(line: number, raw: string, issues: ImportIssue[]) {
 }
 
 function dateField(line: number, raw: string, issues: ImportIssue[]) {
-  const text = raw.trim();
+  const text = raw.normalize("NFKC").trim().replace(/\s+/g, "");
   if (text.length > IMPORT_FIELD_MAX) {
     issues.push({ line, severity: "error", key: "im_e_len", vars: { f: "date", max: IMPORT_FIELD_MAX } });
     return null;
   }
   if (!text) return null;
-  if (/^\d+(\.0+)?$/.test(text)) {
-    const serial = Number(text);
-    if (serial > 20000 && serial < 80000) {
-      const utc = Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000;
-      return new Date(utc).toISOString().slice(0, 10);
-    }
+  const serial = excelSerialDate(text);
+  if (serial) return serial;
+  const roc = rocDate(text);
+  if (roc) {
+    if (roc === "invalid") issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) } });
+    return roc === "invalid" ? null : roc;
   }
-  const match = /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/.exec(text);
-  if (!match) {
-    issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) } });
-    return null;
-  }
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const iso = `${match[1]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  const check = new Date(`${iso}T00:00:00Z`);
-  if (check.getUTCFullYear() !== year || check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) {
+  const western = /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/.exec(text);
+  const iso = western ? calendarDate(Number(western[1]), Number(western[2]), Number(western[3])) : null;
+  if (!iso || iso === "invalid") {
     issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) } });
     return null;
   }
   return iso;
 }
 
+function excelSerialDate(text: string) {
+  if (!/^\d+(\.0+)?$/.test(text)) return null;
+  const serial = Number(text);
+  if (serial <= 20000 || serial >= 80000) return null;
+  const utc = Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000;
+  return new Date(utc).toISOString().slice(0, 10);
+}
+
+/** 115/01/05 and 民國115年1月5日. A 1–3 digit year is Minguo (add 1911). */
+function rocDate(text: string): string | "invalid" | null {
+  const era = /^(?:民國)?(\d{1,3})年(\d{1,2})月(\d{1,2})日$/.exec(text);
+  const slash = /^(?:民國)?(\d{1,3})[./-](\d{1,2})[./-](\d{1,2})$/.exec(text);
+  const match = era || slash;
+  if (!match) return null;
+  return calendarDate(Number(match[1]) + 1911, Number(match[2]), Number(match[3]));
+}
+
+function calendarDate(year: number, month: number, day: number): string | "invalid" {
+  const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const check = new Date(`${iso}T00:00:00Z`);
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) return "invalid";
+  return iso;
+}
+
+/** Excel stores 09-numbers as integers and drops the leading zero. */
+function importPhone(raw: string) {
+  const text = raw.normalize("NFKC").trim();
+  if (/e/i.test(text)) {
+    const asNumber = Number(text);
+    if (Number.isSafeInteger(asNumber) && /^9\d{8}$/.test(String(asNumber))) return `0${asNumber}`;
+  }
+  const digits = text.replace(/\D/g, "");
+  if (/^9\d{8}$/.test(digits) && !text.startsWith("+")) return `0${digits}`;
+  return text;
+}
+
 function dueField(line: number, raw: string, issues: ImportIssue[]) {
-  const text = raw.trim();
+  const text = raw.normalize("NFKC").trim().replace(/[,\s]/g, "");
   if (!text) {
     issues.push({ line, severity: "error", key: "im_e_due" });
     return null;

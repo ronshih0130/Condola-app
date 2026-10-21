@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { useT } from "./locale";
 import { csvDocument, buildXlsx, readSpreadsheet, SpreadsheetError } from "@/lib/spreadsheet";
 import {
-  IMPORT_COMMIT_BATCH,
   IMPORT_FIELDS,
   IMPORT_MAX_ROWS,
   issuePreviewColumns,
@@ -30,6 +29,7 @@ const EMPTY: ImportResult = {
   fileName: "",
   created: { properties: 0, units: 0, rooms: 0, owners: 0, tenants: 0, leases: 0, vacant: 0 },
   reused: { units: 0, tenants: 0, leases: 0 },
+  duplicateRows: 0,
   openingMinor: 0,
   errors: [],
   warnings: [],
@@ -115,10 +115,11 @@ export function ImportWizard() {
     if (rows.length === 0 || missing.length > 0) return;
     setBusy(true);
     setNotice("");
+    setProgress(String(rows.length));
     try {
-      const combined = await runBatched("commit", rows);
-      setServerErrors(combined.errors.filter((issue) => issue.severity === "error"));
-      setDone(combined);
+      const result = await postImport("commit", fileName, rows);
+      setServerErrors(result.errors.filter((issue) => issue.severity === "error"));
+      setDone(result);
       setStep(3);
     } catch (error) {
       setNotice(messageFrom(t, error));
@@ -126,17 +127,6 @@ export function ImportWizard() {
       setBusy(false);
       setProgress("");
     }
-  }
-
-  async function runBatched(mode: "dry" | "commit", rows: ImportRequestRow[]) {
-    const combined = emptyResult(fileName);
-    const size = IMPORT_COMMIT_BATCH;
-    for (let offset = 0; offset < rows.length; offset += size) {
-      const batch = rows.slice(offset, offset + size);
-      setProgress(`${Math.min(offset + batch.length, rows.length)} / ${rows.length}`);
-      mergeResult(combined, await postImport(mode, fileName, batch));
-    }
-    return combined;
   }
 
   function downloadProblems() {
@@ -354,6 +344,13 @@ export function ImportWizard() {
       {step === 3 ? (
         <div className="card pad" data-testid="import-result">
           <h2>{t("im_res_h")}</h2>
+          {done.duplicateRows > 0 ? (
+            <p className="alert" data-testid="import-duplicate-notice">
+              {done.created.properties + done.created.units + done.created.rooms + done.created.leases + done.created.tenants + done.created.owners === 0
+                ? t("im_already")
+                : t("im_dup_some", { n: done.duplicateRows })}
+            </p>
+          ) : null}
           <Summary result={done} />
           <p>{t("im_next_fee")}</p>
           {serverErrors.length ? <p data-testid="import-server-errors">{t("im_err_n", { n: new Set(serverErrors.map((issue) => issue.line)).size })}</p> : null}
@@ -478,7 +475,6 @@ function requestRows(rows: ParsedImportRow[]): ImportRequestRow[] {
     tenantName: row.tenantName ?? "",
     tenantPhone: row.tenantPhone ?? "",
     tenantEmail: row.tenantEmail ?? "",
-    tenantId: row.tenantId ?? "",
     startDate: row.startDate ?? "",
     endDate: row.endDate ?? "",
     deposit: row.lease ? String(row.depositMajor) : "",
@@ -492,26 +488,6 @@ function requestRows(rows: ParsedImportRow[]): ImportRequestRow[] {
     rateReason: row.rateReason ?? "",
     notes: row.notes ?? "",
   }));
-}
-
-function emptyResult(fileName: string): ImportResult {
-  return { ...EMPTY, dryRun: false, fileName, created: { ...EMPTY.created }, reused: { ...EMPTY.reused }, errors: [], warnings: [] };
-}
-
-function mergeResult(target: ImportResult, part: ImportResult) {
-  target.created.properties += part.created.properties;
-  target.created.units += part.created.units;
-  target.created.rooms += part.created.rooms;
-  target.created.owners += part.created.owners;
-  target.created.tenants += part.created.tenants;
-  target.created.leases += part.created.leases;
-  target.created.vacant += part.created.vacant;
-  target.reused.units += part.reused.units;
-  target.reused.tenants += part.reused.tenants;
-  target.reused.leases += part.reused.leases;
-  target.openingMinor += part.openingMinor;
-  target.errors.push(...part.errors);
-  target.warnings.push(...part.warnings);
 }
 
 async function postImport(mode: "dry" | "commit", fileName: string, rows: ImportRequestRow[]) {
