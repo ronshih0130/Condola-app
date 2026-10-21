@@ -24,6 +24,21 @@ const SCREENS = [
   "app/m/reports/page.tsx",
 ];
 
+test("the lease wizard confirm step and the saved summary render TWD as NT$", () => {
+  assert.equal(moneyLabel(1_500_000, "TWD", "zh-TW"), "NT$15,000");
+  assert.equal(moneyLabel(3_000_000, "TWD", "zh-TW"), "NT$30,000");
+  const wizard = read("components/lease-wizard.tsx");
+  assert.match(wizard, /return formatMajor\(major, currency, locale\)/);
+  assert.match(wizard, /data-testid="lease-confirm-rent">\{money\(/);
+  assert.match(wizard, /data-testid="lease-confirm-deposit">\{confirmDeposit\(/);
+  assert.doesNotMatch(wizard, /style:\s*["']currency["']/);
+  const page = read("app/m/leases/[id]/page.tsx");
+  assert.match(page, /const money = \(minor: number\) => moneyLabel\(minor, lease\.currency, session\.locale\)/);
+  assert.match(page, /data-testid="summary-rent">\{money\(Number\(lease\.rent\)\)\}/);
+  assert.match(page, /data-testid="summary-deposit">\{money\(Number\(lease\.deposit\)\)\}/);
+  assert.doesNotMatch(page, /formatMoney/);
+});
+
 test("statement, property, rent, and reports render TWD as NT$", () => {
   assert.equal(moneyLabel(0, "TWD", "zh-TW"), "NT$0");
   assert.equal(moneyLabel(950_000, "TWD", "zh-TW"), "NT$9,500");
