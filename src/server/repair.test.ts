@@ -13,7 +13,9 @@ import {
   datesInOrder,
   expenseLinkPlan,
   isTicketPhotoPath,
+  liveExpenseId,
   minorToInput,
+  ticketPhotoPaths,
   parseOptionalDate,
   parseOptionalMoney,
   sniffPhotoMime,
@@ -64,6 +66,14 @@ test("photo rules cap size and type and never describe a re-encode", () => {
     true,
   );
   assert.equal(isTicketPhotoPath(path, "10000000-0000-4000-8000-000000000009", "30000000-0000-4000-8000-000000000002"), false);
+  assert.deepEqual(
+    ticketPhotoPaths("10000000-0000-4000-8000-000000000001", "30000000-0000-4000-8000-000000000002", [
+      path,
+      "org/10000000-0000-4000-8000-000000000001/tickets/30000000-0000-4000-8000-000000000009/40000000-0000-4000-8000-000000000003.png",
+      path,
+    ]),
+    [path],
+  );
 
   const server = readFileSync(new URL("./ticket-photos.ts", import.meta.url), "utf8");
   const client = readFileSync(new URL("../components/ticket-photos.tsx", import.meta.url), "utf8");
@@ -77,6 +87,7 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   assert.match(client, /body: file/);
   assert.match(client, /sniffPhotoMime/);
   assert.match(server, /bytes=0-/);
+  assert.match(server, /ticketPhotoPaths/);
   assert.doesNotMatch(client, /image\/gif/);
   assert.doesNotMatch(server, /image\/gif/);
   assert.match(view, /no-img-element/);
@@ -97,6 +108,10 @@ test("dates, money, vendor, and the expense link stay optional", () => {
   assert.equal(completionDate("open", null, "2026-11-12"), null);
   assert.equal(completionDate("closed", "2026-11-02", "2026-11-12"), "2026-11-02");
 
+  assert.equal(liveExpenseId(null), null);
+  assert.equal(liveExpenseId({ id: "exp", status: "void" }), null);
+  assert.equal(liveExpenseId({ id: "exp", status: "draft" }), "exp");
+  assert.equal(liveExpenseId({ id: "exp", status: "posted" }), "exp");
   assert.equal(expenseLinkPlan({ post: false, finalMinor: 100, expenseId: null, canPost: true }), "skip");
   assert.equal(expenseLinkPlan({ post: true, finalMinor: null, expenseId: "exp", canPost: true }), "keep");
   assert.equal(expenseLinkPlan({ post: true, finalMinor: 100, expenseId: null, canPost: true }), "create");
@@ -127,6 +142,14 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   assert.match(sql, /file_size_limit/);
   assert.match(sql, /5242880/);
   assert.match(sql, /expense_id uuid/);
+  assert.match(sql, /expenses_one_live_ticket_idx/);
+  assert.match(sql, /status <> 'void'/);
+  assert.match(sql, /files_ticket_photo_path/);
+  assert.match(sql, /fn_ticket_photo_attachment/);
+  assert.match(sql, /FOR UPDATE/);
+  assert.match(sql, /portal_ticket_photo_read/);
+  assert.match(sql, /count\(\*\)/);
+  assert.doesNotMatch(sql, /is_internal[\s\S]{0,80}ticket photo limit/);
   assert.doesNotMatch(sql, /expense_id uuid NOT NULL/);
   assert.match(sql, /"public" = false/);
   assert.doesNotMatch(sql, /image\/gif/);
@@ -138,6 +161,8 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   assert.match(schema, /CREATE TYPE expense_status\s+AS ENUM \('draft','submitted','approved','rejected','posted','void'\)/);
 
   const repairs = readFileSync(new URL("./repairs.ts", import.meta.url), "utf8");
+  assert.match(repairs, /liveExpenseId/);
+  assert.match(repairs, /FOR UPDATE/);
   assert.match(repairs, /REPAIR_EXPENSE_STATUS/);
   assert.match(repairs, /::expense_status/);
   assert.match(repairs, /ticket_id/);

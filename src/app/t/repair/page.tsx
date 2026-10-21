@@ -24,7 +24,7 @@ export default async function RepairPage({
   const selectedId = params.id && isUuid(params.id) ? params.id : "";
   const detail = selectedId ? await ticketDetail(session, selectedId) : null;
   const own = detail && repairs.some((repair) => repair.id === detail.ticket.id) ? detail : null;
-  const signed = own ? await signTicketPhotoUrls(own.photos.map((photo) => photo.path)) : {};
+  const signed = own ? await signTicketPhotoUrls(session.orgId, own.ticket.id, own.photos.map((photo) => photo.path)) : {};
   return (
     <div>
       <h2>{t("i_rich_repair")}</h2>

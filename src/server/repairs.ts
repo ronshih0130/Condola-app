@@ -15,6 +15,7 @@ import {
   completionDate,
   datesInOrder,
   expenseLinkPlan,
+  liveExpenseId,
   REPAIR_EXPENSE_STATUS,
   isTicketPhotoPath,
   isUuid,
@@ -53,6 +54,7 @@ type TicketRow = {
   scheduled_on: string | null;
   completed_on: string | null;
   expense_id: string | null;
+  assigned_vendor_contact_id: string | null;
 };
 
 function assertTicketActor(session: Session) {
@@ -70,10 +72,12 @@ async function loadTicket(client: Client, ticketId: string, orgId: string) {
     `SELECT t.id::text, t.org_id::text, t.property_id::text, t.unit_id::text, t.title, t.status::text,
             t.currency, p.currency AS property_currency, t.vendor_name,
             t.estimated_cost_minor::text, t.final_cost_minor::text, t.cost_bearer::text,
-            t.scheduled_on::text, t.completed_on::text, t.expense_id::text
+            t.scheduled_on::text, t.completed_on::text, t.expense_id::text,
+            t.assigned_vendor_contact_id::text
        FROM maintenance_tickets t
        JOIN properties p ON p.id = t.property_id
-      WHERE t.id = $1 AND t.org_id = $2`,
+      WHERE t.id = $1 AND t.org_id = $2
+      FOR UPDATE OF t`,
     [ticketId, orgId],
   );
 }
@@ -136,18 +140,26 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
   await tx(session.userId, async (client) => {
     const ticket = await loadTicket(client, ticketId, session.orgId);
     if (!ticket) throw new FlowError("errors.notFound");
-    const existingExpense = ticket.expense_id
-      ? ticket.expense_id
-      : (
-          await maybe<{ id: string }>(
-            client,
-            `SELECT id::text FROM expenses
-              WHERE org_id = $1 AND ticket_id = $2 AND status <> 'void'
-              ORDER BY created_at
-              LIMIT 1`,
-            [session.orgId, ticket.id],
-          )
-        )?.id ?? null;
+    const linked = ticket.expense_id
+      ? await maybe<{ id: string; status: string }>(
+          client,
+          `SELECT id::text, status::text FROM expenses WHERE id = $1 AND org_id = $2`,
+          [ticket.expense_id, session.orgId],
+        )
+      : null;
+    const existingExpense =
+      liveExpenseId(linked) ??
+      (
+        await maybe<{ id: string }>(
+          client,
+          `SELECT id::text FROM expenses
+            WHERE org_id = $1 AND ticket_id = $2 AND status <> 'void'
+            ORDER BY created_at
+            LIMIT 1`,
+          [session.orgId, ticket.id],
+        )
+      )?.id ??
+      null;
     const link = expenseLinkPlan({
       post: input.postExpense,
       finalMinor: finalCost,
@@ -155,7 +167,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
       canPost: can(session.role, "exp.add"),
     });
 
-    const vendor = vendorName
+    const matchedVendor = vendorName
       ? await maybe<{ id: string }>(
           client,
           `SELECT id::text FROM contacts
@@ -165,6 +177,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
           [session.orgId, vendorName],
         )
       : null;
+    const vendorId = vendorName ? matchedVendor?.id ?? ticket.assigned_vendor_contact_id : null;
     const currency = estimated !== null || finalCost !== null ? ticket.property_currency : ticket.currency;
 
     await client.query(
@@ -190,7 +203,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
         session.orgId,
         input.status,
         vendorName,
-        vendor?.id ?? null,
+        vendorId,
         estimated,
         finalCost,
         currency,
@@ -253,7 +266,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
         ticket.property_id,
         ticket.unit_id,
         ticket.id,
-        vendor?.id ?? null,
+        vendorId,
         ticket.title,
         currency || ticket.property_currency,
         finalCost,

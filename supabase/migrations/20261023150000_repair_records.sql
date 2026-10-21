@@ -7,14 +7,15 @@
 -- has estimated_cost_minor / final_cost_minor. Status changes keep using
 -- ticket_comments (status_from / status_to), which is the timeline.
 -- Photos are ticket_attachments -> files in the private bucket
--- ticket-photos-private. Allowed types are JPEG, PNG, and WEBP. The app checks
--- magic bytes before it keeps an object, uploads and reads with signed URLs,
--- and does not re-encode image bytes (Workers free plan is 10ms CPU).
+-- ticket-photos-private. Allowed types are JPEG, PNG, and WEBP. The storage
+-- path must be org/<org_id>/tickets/<ticket_id>/<uuid>.(jpg|png|webp) for that
+-- file's org and the attachment's ticket. The app checks magic bytes, uploads
+-- and reads with signed URLs, and does not re-encode image bytes.
 --
 -- expenses.ticket_id is already a nullable FK. expense_id on the ticket is the
 -- reverse nullable link and stays nullable. Opting in inserts one row with the
--- existing expense_status value draft and stores that id. It does not post the
--- ledger and does not add a status. The expense screen owns later statuses.
+-- existing expense_status value draft. A voided row does not occupy the one
+-- live expense per ticket. It does not post the ledger or add a status.
 
 ALTER TABLE maintenance_tickets
   ADD COLUMN IF NOT EXISTS scheduled_on date,
@@ -61,6 +62,10 @@ CREATE INDEX IF NOT EXISTS maintenance_tickets_expense_idx
   ON maintenance_tickets (expense_id) WHERE expense_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS expenses_ticket_idx
   ON expenses (ticket_id) WHERE ticket_id IS NOT NULL;
+-- One live expense per ticket. Voided rows stay, so a later opt-in can insert a new draft.
+CREATE UNIQUE INDEX IF NOT EXISTS expenses_one_live_ticket_idx
+  ON expenses (ticket_id)
+  WHERE ticket_id IS NOT NULL AND status <> 'void';
 
 -- A ticket photo row cannot exceed the same cap the private bucket enforces.
 ALTER TABLE files DROP CONSTRAINT IF EXISTS files_ticket_photo_cap;
@@ -76,9 +81,53 @@ ALTER TABLE files
     )
   );
 
-CREATE OR REPLACE FUNCTION fn_ticket_photo_limit() RETURNS trigger
-LANGUAGE plpgsql AS $$
+-- Path org segment is this file row. The ticket segment is checked when the
+-- attachment is inserted, because files has no ticket_id column.
+ALTER TABLE files DROP CONSTRAINT IF EXISTS files_ticket_photo_path;
+ALTER TABLE files
+  ADD CONSTRAINT files_ticket_photo_path
+  CHECK (
+    storage_bucket <> 'ticket-photos-private'
+    OR storage_path ~* (
+      '^org/' || org_id::text || '/tickets/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/'
+      || id::text || '\.(jpg|png|webp)$'
+    )
+  );
+
+CREATE OR REPLACE FUNCTION fn_ticket_photo_attachment() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_path text;
+  v_org uuid;
+  v_bucket text;
 BEGIN
+  SELECT f.storage_path, f.org_id, f.storage_bucket
+    INTO v_path, v_org, v_bucket
+    FROM files f
+   WHERE f.id = NEW.file_id;
+  IF v_bucket IS DISTINCT FROM 'ticket-photos-private'
+     OR v_org IS DISTINCT FROM NEW.org_id
+     OR v_path !~* (
+       '^org/' || NEW.org_id::text || '/tickets/' || NEW.ticket_id::text || '/'
+       || NEW.file_id::text || '\.(jpg|png|webp)$'
+     )
+  THEN
+    RAISE EXCEPTION 'ticket photo path' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_ticket_photo_attachment ON ticket_attachments;
+CREATE TRIGGER trg_ticket_photo_attachment
+  BEFORE INSERT OR UPDATE OF file_id, ticket_id, org_id ON ticket_attachments
+  FOR EACH ROW EXECUTE FUNCTION fn_ticket_photo_attachment();
+
+-- Counts every attachment, including internal notes. Locks the ticket so two
+-- inserts cannot both observe 7 and land on 9.
+CREATE OR REPLACE FUNCTION fn_ticket_photo_limit() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  PERFORM 1 FROM maintenance_tickets WHERE id = NEW.ticket_id FOR UPDATE;
   IF (SELECT count(*) FROM ticket_attachments WHERE ticket_id = NEW.ticket_id) >= 8 THEN
     RAISE EXCEPTION 'ticket photo limit' USING ERRCODE = 'check_violation';
   END IF;
@@ -89,6 +138,9 @@ DROP TRIGGER IF EXISTS trg_ticket_photo_limit ON ticket_attachments;
 CREATE TRIGGER trg_ticket_photo_limit
   BEFORE INSERT ON ticket_attachments
   FOR EACH ROW EXECUTE FUNCTION fn_ticket_photo_limit();
+
+REVOKE ALL ON FUNCTION fn_ticket_photo_attachment() FROM PUBLIC;
+REVOKE ALL ON FUNCTION fn_ticket_photo_limit() FROM PUBLIC;
 
 -- A tenant sees a ticket they reported, or a staff-filed ticket on their lease.
 -- They do not see another tenant's ticket, including on a different lease.
@@ -190,6 +242,21 @@ CREATE POLICY portal_comment_insert ON ticket_comments FOR INSERT TO authenticat
     AND author_user_id = auth.uid()
     AND status_to IS NULL
     AND app.tenant_owns_ticket(ticket_id)
+  );
+
+-- Staff uploads are files.uploaded_by = the member. Tenants still need to read
+-- those objects when the photo is on their ticket and is not internal.
+DROP POLICY IF EXISTS portal_ticket_photo_read ON files;
+CREATE POLICY portal_ticket_photo_read ON files FOR SELECT TO authenticated
+  USING (
+    storage_bucket = 'ticket-photos-private'
+    AND EXISTS (
+      SELECT 1 FROM ticket_attachments a
+       WHERE a.file_id = files.id
+         AND a.org_id = files.org_id
+         AND NOT a.is_internal
+         AND app.tenant_owns_ticket(a.ticket_id)
+    )
   );
 
 DROP POLICY IF EXISTS portal_ticket_att_insert ON ticket_attachments;

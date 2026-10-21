@@ -27,7 +27,7 @@ export default async function TicketDetailPage({
   const query = await searchParams;
   const detail = await ticketDetail(session, id);
   if (!detail) notFound();
-  const signed = await signTicketPhotoUrls(detail.photos.map((photo) => photo.path));
+  const signed = await signTicketPhotoUrls(session.orgId, detail.ticket.id, detail.photos.map((photo) => photo.path));
   const canWrite = can(session.role, "tickets.update");
   const canPost = can(session.role, "exp.add");
   const ticket = detail.ticket;

@@ -12,6 +12,7 @@ import type { Session } from "./types";
 const ORG = ORG_ID;
 const JPEG = Uint8Array.of(0xff, 0xd8, 0xff, 0xe0);
 const PNG = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+const WEBP = Uint8Array.of(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50);
 
 function staff(userId: string, role: Session["role"]): Session {
   return {
@@ -194,6 +195,29 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
     assert.equal(row.expense_ticket, ticketId);
     assert.equal(row.ledger, null);
     assert.equal(row.amount, "180000");
+    const vendorId = row.vendor_id;
+
+    await saveRepairRecord(admin, ticketId, {
+      status: "resolved",
+      note: "",
+      internal: false,
+      vendorName: "臨時水電",
+      estimated: "1500",
+      finalCost: "1800",
+      costBearer: "owner",
+      scheduledOn: "2026-11-01",
+      completedOn: "2026-11-03",
+      postExpense: false,
+    });
+    const unmatched = await tx(USERS.admin, (client) =>
+      client.query<{ vendor: string; vendor_id: string | null }>(
+        `SELECT vendor_name AS vendor, assigned_vendor_contact_id::text AS vendor_id
+           FROM maintenance_tickets WHERE id = $1`,
+        [ticketId],
+      ),
+    );
+    assert.equal(unmatched.rows[0].vendor, "臨時水電");
+    assert.equal(unmatched.rows[0].vendor_id, vendorId);
 
     await saveRepairRecord(admin, ticketId, {
       status: "resolved",
@@ -211,6 +235,48 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
       client.query<{ n: string }>(`SELECT count(*)::text AS n FROM expenses WHERE ticket_id = $1 AND status <> 'void'`, [ticketId]),
     );
     assert.equal(expenses.rows[0].n, "1");
+    await assert.rejects(
+      svc(null, (client) =>
+        client.query(
+          `INSERT INTO expenses (
+             org_id, property_id, ticket_id, category, description, currency, amount_minor, incurred_on,
+             paid_by, bill_to, status
+           ) VALUES ($1,$2,$3,'repair','重複','TWD',100, current_date, 'manager_firm','owner','draft')`,
+          [ORG, wang.property_id, ticketId],
+        ),
+      ),
+    );
+
+    await tx(USERS.admin, (client) =>
+      client.query(`UPDATE expenses SET status = 'void' WHERE ticket_id = $1 AND status = 'draft'`, [ticketId]),
+    );
+    await saveRepairRecord(admin, ticketId, {
+      status: "resolved",
+      note: "",
+      internal: false,
+      vendorName: "老張水電",
+      estimated: "1500",
+      finalCost: "1800",
+      costBearer: "owner",
+      scheduledOn: "2026-11-01",
+      completedOn: "2026-11-03",
+      postExpense: true,
+    });
+    const afterVoid = await tx(USERS.admin, (client) =>
+      client.query<{ status: string; linked: string; expense_id: string }>(
+        `SELECT e.status::text, (e.id = t.expense_id) AS linked, t.expense_id::text
+           FROM expenses e
+           JOIN maintenance_tickets t ON t.id = e.ticket_id
+          WHERE e.ticket_id = $1
+          ORDER BY e.created_at`,
+        [ticketId],
+      ),
+    );
+    assert.deepEqual(
+      afterVoid.rows.map((entry) => entry.status),
+      ["void", "draft"],
+    );
+    assert.equal(afterVoid.rows[1].linked, true);
 
     const timeline = await ticketDetail(admin, ticketId);
     assert.ok(timeline?.comments.some((comment) => comment.status_from === "open" && comment.status_to === "resolved"));
@@ -256,6 +322,17 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
       internal: true,
       header: PNG,
     });
+    const publicPath = ticketPhotoPath(ORG, ticketId, "40000000-0000-4000-8000-000000000096", "image/webp");
+    await attachRepairPhoto(admin, {
+      ticketId,
+      path: publicPath,
+      fileName: `${title}-public.webp`,
+      mime: "image/webp",
+      storedMime: "image/webp",
+      size: 120,
+      internal: false,
+      header: WEBP,
+    });
     await assert.rejects(
       attachRepairPhoto(admin, {
         ticketId,
@@ -270,9 +347,50 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
       (error: unknown) => error instanceof FlowError && error.key === "errors.photoType",
     );
     const tenantPhotos = await ticketDetail(wangSession, ticketId);
-    assert.equal(tenantPhotos?.photos.length, 1);
+    assert.equal(tenantPhotos?.photos.length, 2);
+    assert.ok(tenantPhotos?.photos.some((photo) => photo.name === `${title}-public.webp`));
+    assert.equal(tenantPhotos?.photos.some((photo) => photo.internal), false);
     const staffPhotos = await ticketDetail(admin, ticketId);
-    assert.equal(staffPhotos?.photos.length, 2);
+    assert.equal(staffPhotos?.photos.length, 3);
+    const tenantFile = await tx(USERS.tenant2, (client) =>
+      client.query(`SELECT id FROM files WHERE storage_path = $1`, [publicPath]),
+    );
+    assert.equal(tenantFile.rowCount, 1);
+    const hiddenFile = await tx(USERS.tenant2, (client) =>
+      client.query(`SELECT id FROM files WHERE storage_path = $1`, [internalPath]),
+    );
+    assert.equal(hiddenFile.rowCount, 0);
+    const otherTenantFile = await tx(USERS.tenant, (client) =>
+      client.query(`SELECT id FROM files WHERE storage_path = $1`, [publicPath]),
+    );
+    assert.equal(otherTenantFile.rowCount, 0);
+
+    for (let index = 0; index < 5; index += 1) {
+      const fileId = `40000000-0000-4000-8000-0000000000${10 + index}`;
+      await attachRepairPhoto(admin, {
+        ticketId,
+        path: ticketPhotoPath(ORG, ticketId, fileId, "image/jpeg"),
+        fileName: `${title}-extra-${index}.jpg`,
+        mime: "image/jpeg",
+        storedMime: "image/jpeg",
+        size: 80,
+        internal: false,
+        header: JPEG,
+      });
+    }
+    await assert.rejects(
+      attachRepairPhoto(admin, {
+        ticketId,
+        path: ticketPhotoPath(ORG, ticketId, "40000000-0000-4000-8000-00000000001f", "image/jpeg"),
+        fileName: `${title}-ninth.jpg`,
+        mime: "image/jpeg",
+        storedMime: "image/jpeg",
+        size: 80,
+        internal: false,
+        header: JPEG,
+      }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.photoLimit",
+    );
 
     await assert.rejects(
       svc(null, (client) =>
@@ -291,6 +409,21 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
           [ORG, PHOTO_BUCKET, `org/${ORG}/tickets/${ticketId}/anim.gif`, USERS.admin],
         ),
       ),
+    );
+    const strayId = "40000000-0000-4000-8000-000000000095";
+    const otherTicket = "50000000-0000-4000-8000-000000000001";
+    await assert.rejects(
+      svc(null, async (client) => {
+        await client.query(
+          `INSERT INTO files (id, org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, uploaded_by)
+           VALUES ($1,$2,$3,$4,$5,'image/jpeg',100,$6)`,
+          [strayId, ORG, PHOTO_BUCKET, `org/${ORG}/tickets/${otherTicket}/${strayId}.jpg`, `${title}-stray.jpg`, USERS.admin],
+        );
+        await client.query(
+          `INSERT INTO ticket_attachments (org_id, ticket_id, file_id, is_internal) VALUES ($1,$2,$3,false)`,
+          [ORG, ticketId, strayId],
+        );
+      }),
     );
 
     const accountantWrite = await tx(USERS.accountant, (client) =>

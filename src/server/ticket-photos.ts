@@ -7,6 +7,7 @@ import {
   assertPhotoMeta,
   isTicketPhotoPath,
   ticketPhotoPath,
+  ticketPhotoPaths,
 } from "./repair-rules";
 import type { Session } from "./types";
 
@@ -153,9 +154,9 @@ export async function confirmTicketPhoto(
   }
 }
 
-/** One batch of short-lived read URLs. Missing storage leaves photos unnamed. */
-export async function signTicketPhotoUrls(paths: string[]) {
-  const unique = [...new Set(paths.filter(Boolean))];
+/** One batch of short-lived read URLs. The service key only signs this ticket's paths. */
+export async function signTicketPhotoUrls(orgId: string, ticketId: string, paths: string[]) {
+  const unique = ticketPhotoPaths(orgId, ticketId, paths);
   if (!unique.length || !storageConfig()) return {} as Record<string, string>;
   try {
     const response = await storageRequest("POST", `/object/sign/${PHOTO_BUCKET}`, { expiresIn: 600, paths: unique });
@@ -166,7 +167,7 @@ export async function signTicketPhotoUrls(paths: string[]) {
     if (!Array.isArray(rows)) return signed;
     for (const row of rows) {
       const url = row.signedURL || row.signedUrl;
-      if (row.path && url) signed[row.path] = absoluteStorageUrl(base, url);
+      if (row.path && url && isTicketPhotoPath(row.path, orgId, ticketId)) signed[row.path] = absoluteStorageUrl(base, url);
     }
     return signed;
   } catch {

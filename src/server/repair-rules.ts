@@ -135,6 +135,17 @@ export function photoFileId(path: string) {
   return match ? match[3].toLowerCase() : null;
 }
 
+/** Paths the service key may sign. Anything outside this ticket is dropped. */
+export function ticketPhotoPaths(orgId: string, ticketId: string, paths: string[]) {
+  return [...new Set(paths.filter((path) => isTicketPhotoPath(path, orgId, ticketId)))];
+}
+
+/** A voided expense does not block a new draft. Every other existing status does. */
+export function liveExpenseId(row: { id: string; status: string } | null) {
+  if (!row || row.status === "void") return null;
+  return row.id;
+}
+
 export function parseOptionalDate(raw: string) {
   const value = raw.trim();
   if (!value) return null;
