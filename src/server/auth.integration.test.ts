@@ -194,10 +194,10 @@ test("a plus-addressed email signs in, including when the form turned + into a s
   const unconfirmed = `plus.tag+wait.${stamp}@example.com`;
   const noFirm = `plus.tag+firm.${stamp}@example.com`;
   const inserted = await query<{ id: string }>(
-    `INSERT INTO auth.users (email, encrypted_password, raw_user_meta_data, email_confirmed_at, role, aud)
-     VALUES ($1, crypt($2, gen_salt('bf')), '{}'::jsonb, now(), 'authenticated', 'authenticated'),
-            ($3, crypt($2, gen_salt('bf')), '{}'::jsonb, NULL, 'authenticated', 'authenticated'),
-            ($4, crypt($2, gen_salt('bf')), '{}'::jsonb, now(), 'authenticated', 'authenticated')
+    `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, email_confirmed_at, role, aud)
+     VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), '{}'::jsonb, now(), 'authenticated', 'authenticated'),
+            (gen_random_uuid(), $3, crypt($2, gen_salt('bf')), '{}'::jsonb, NULL, 'authenticated', 'authenticated'),
+            (gen_random_uuid(), $4, crypt($2, gen_salt('bf')), '{}'::jsonb, now(), 'authenticated', 'authenticated')
      RETURNING id::text`,
     [email, DEMO_PASSWORD, unconfirmed, noFirm],
   );

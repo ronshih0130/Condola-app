@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { writeAudit } from "./audit";
-import { query, svc, tx } from "./db";
-import { createProperty } from "./domain";
+import { query, svc, tx, withClient } from "./db";
+import { createLease, createProperty } from "./domain";
 import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { seedPortfolio } from "./portfolio";
@@ -274,7 +274,53 @@ test("a deposit over two months of rent is saved only with a reason", async () =
   }
 });
 
+async function assertPortalAccount(email: string) {
+  const row = await query<{
+    id: string;
+    instance_id: string;
+    aud: string;
+    role: string;
+    confirmation_token: string;
+    recovery_token: string;
+    email_change_token_new: string;
+    email_change: string;
+    email_change_token_current: string;
+    phone_change: string;
+    phone_change_token: string;
+    reauthentication_token: string;
+    created_at: Date | null;
+    updated_at: Date | null;
+  }>(
+    `SELECT id::text, instance_id::text, aud, role,
+            confirmation_token, recovery_token, email_change_token_new, email_change,
+            email_change_token_current, phone_change, phone_change_token, reauthentication_token,
+            created_at, updated_at
+       FROM auth.users WHERE lower(email) = lower($1)`,
+    [email],
+  );
+  const account = row.rows[0];
+  assert.ok(account?.id);
+  assert.equal(account.instance_id, "00000000-0000-0000-0000-000000000000");
+  assert.equal(account.aud, "authenticated");
+  assert.equal(account.role, "authenticated");
+  assert.equal(account.confirmation_token, "");
+  assert.equal(account.recovery_token, "");
+  assert.equal(account.email_change_token_new, "");
+  assert.equal(account.email_change, "");
+  assert.equal(account.email_change_token_current, "");
+  assert.equal(account.phone_change, "");
+  assert.equal(account.phone_change_token, "");
+  assert.equal(account.reauthentication_token, "");
+  assert.ok(account.created_at);
+  assert.ok(account.updated_at);
+}
+
 test("creating a property with a new owner works as service_role without write access to auth.users", async () => {
+  const idDefault = await query<{ column_default: string | null }>(
+    `SELECT column_default FROM information_schema.columns
+      WHERE table_schema = 'auth' AND table_name = 'users' AND column_name = 'id'`,
+  );
+  assert.equal(idDefault.rows[0]?.column_default ?? null, null);
   const grants = await query<{ privilege_type: string }>(
     `SELECT privilege_type FROM information_schema.role_table_grants
       WHERE table_schema = 'auth' AND table_name = 'users' AND grantee = 'service_role'`,
@@ -283,6 +329,7 @@ test("creating a property with a new owner works as service_role without write a
   assert.equal(privileges.includes("INSERT"), false);
   assert.equal(privileges.includes("UPDATE"), false);
   assert.equal(privileges.includes("DELETE"), false);
+  assert.equal(privileges.includes("SELECT"), false);
 
   const role = await svc(USERS.admin, async (client) => {
     const row = await client.query<{ role: string }>(`SELECT current_user AS role`);
@@ -341,12 +388,76 @@ test("creating a property with a new owner works as service_role without write a
     );
     assert.equal(linked.rows[0]?.email, email);
     assert.equal(linked.rows[0]?.name, "新屋主");
+    await assertPortalAccount(email);
+
+    const unit = await query<{ id: string }>(`SELECT id::text FROM units WHERE property_id = $1`, [propertyId]);
+    const tenantEmail = `new.tenant.${email}`;
+    const lease = await createLease(admin, {
+      roomId: unit.rows[0].id,
+      tenantName: "新租客",
+      tenantPhone: "+886912000333",
+      tenantEmail,
+      lineUserId: "",
+      startDate: "2027-03-01",
+      endDate: "2028-02-29",
+      rentMajor: 15000,
+      depositMonths: 2,
+      depositReason: "",
+      dueDay: 5,
+      splitMethod: "even",
+      periodStart: "2027-03-01",
+      periodEnd: "2027-03-31",
+      billTotalMajor: 1000,
+      usageKwh: 100,
+      rateMajor: 10,
+      rateSource: "bill_average",
+      overrideReason: "",
+      subUsages: [],
+    });
+    const tenant = await query<{ email: string }>(
+      `SELECT u.email FROM contacts c JOIN auth.users u ON u.id = c.user_id
+        WHERE c.user_id = $1 AND c.is_tenant`,
+      [lease.tenantUserId],
+    );
+    assert.equal(tenant.rows[0]?.email, tenantEmail);
+    await assertPortalAccount(tenantEmail);
   } finally {
-    if (contactId) {
-      await query(`DELETE FROM management_agreements WHERE owner_contact_id = $1`, [contactId]);
-      if (propertyId) await query(`DELETE FROM properties WHERE id = $1`, [propertyId]);
-      await query(`DELETE FROM contacts WHERE id = $1`, [contactId]);
-    }
-    await query(`DELETE FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+    const tenantEmail = `new.tenant.${email}`;
+    await withClient(async (client) => {
+      await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      try {
+        if (propertyId) {
+          await client.query(
+            `DELETE FROM utility_allocation_lines
+              WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_allocation_runs
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_bills
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(`DELETE FROM meters WHERE unit_id IN (SELECT id FROM units WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM notifications WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM leases WHERE property_id = $1`, [propertyId]);
+        }
+        if (contactId) {
+          await client.query(`DELETE FROM management_agreements WHERE owner_contact_id = $1`, [contactId]);
+        }
+        if (propertyId) await client.query(`DELETE FROM properties WHERE id = $1`, [propertyId]);
+        await client.query(
+          `DELETE FROM contacts WHERE id = $1 OR lower(email::text) = lower($2) OR lower(email::text) = lower($3)`,
+          [contactId || "00000000-0000-0000-0000-000000000000", email, tenantEmail],
+        );
+        await client.query(`DELETE FROM auth.users WHERE lower(email) = lower($1) OR lower(email) = lower($2)`, [email, tenantEmail]);
+      } finally {
+        await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
+      }
+    });
   }
 });

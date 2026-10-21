@@ -601,8 +601,8 @@ async function upsertInvitedUser(client: Client, email: string, name: string, pa
     return existing.rows[0].id;
   }
   const inserted = await client.query<{ id: string }>(
-    `INSERT INTO auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
-     VALUES ($1, crypt($2, gen_salt('bf')), now(), $3::jsonb, 'authenticated', 'authenticated')
+    `INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
+     VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), now(), $3::jsonb, 'authenticated', 'authenticated')
      RETURNING id::text`,
     [email, password, JSON.stringify({ name })],
   );

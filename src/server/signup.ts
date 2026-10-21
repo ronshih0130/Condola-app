@@ -209,8 +209,8 @@ export async function startSignup(input: {
   if (!remote) {
     try {
       const inserted = await query<{ id: string }>(
-        `INSERT INTO auth.users (email, encrypted_password, raw_user_meta_data, role, aud)
-         VALUES ($1, crypt($2, gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
+        `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
+         VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
          RETURNING id::text`,
         [email, input.password],
       );

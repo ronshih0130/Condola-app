@@ -30,8 +30,8 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     if (url.includes("/auth/v1/resend")) return new Response("{}", { status: 200 });
     const payload = JSON.parse(body) as { email: string; password: string };
     const inserted = await query<{ id: string }>(
-      `INSERT INTO auth.users (email, encrypted_password, raw_user_meta_data, role, aud)
-       VALUES ($1, crypt($2, gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
+      `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
+       VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
        RETURNING id::text`,
       [payload.email, payload.password],
     );
@@ -138,8 +138,8 @@ test("token_hash confirmation and recovery verify only run when POSTed", async (
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_ANON_KEY = "test-anon";
   const inserted = await query<{ id: string }>(
-    `INSERT INTO auth.users (email, encrypted_password, raw_user_meta_data, role, aud)
-     VALUES ($1, crypt('Fresh1234', gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
+    `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
+     VALUES (gen_random_uuid(), $1, crypt('Fresh1234', gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
      RETURNING id::text`,
     [email],
   );
