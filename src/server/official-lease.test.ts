@@ -18,7 +18,8 @@ function restore(text: string, patches: LeaseFieldPatch[]) {
   for (const { patch } of ordered) {
     assert.equal(out.slice(patch.index, patch.index + patch.value.length), patch.value, `patch ${patch.index}`);
     assert.notEqual(patch.value, patch.blank);
-    assert.match(patch.blank, /^(?:□|[_ \u3000]+|號|之)$/);
+    if (patch.blank === "") assert.equal(patch.value, " ");
+    else assert.match(patch.blank, /^(?:□|[_ \u3000]+|號|之)$/);
     out = out.slice(0, patch.index) + patch.blank + out.slice(patch.index + patch.value.length);
   }
   return out;
@@ -175,7 +176,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "2F",
   });
   assert.equal(restore(at2.text, at2.patches), stored);
-  assert.equal(at2.text.includes("弄88號之1，2樓    (基地坐落"), true);
+  assert.equal(at2.text.includes("弄88號之1 2樓    (基地坐落"), true);
+  assert.equal(at2.text.includes("88號之1，"), false);
   assert.equal(at2.text.includes("88號之1號"), false);
   assert.equal(at2.text.includes("弄88之1號"), false);
   assert.equal(at2.text.includes("2樓之"), false);
@@ -186,7 +188,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "1F",
   });
   assert.equal(restore(at1.text, at1.patches), stored);
-  assert.equal(at1.text.includes("弄88號之1，1樓    (基地坐落"), true);
+  assert.equal(at1.text.includes("弄88號之1 1樓    (基地坐落"), true);
+  assert.equal(at1.text.includes("88號之1，"), false);
   assert.equal(at1.text.includes("88號之1號"), false);
   assert.equal(at1.text.includes("弄88之1號"), false);
   assert.equal(at1.text.includes("1樓之"), false);
@@ -243,7 +246,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "3",
   });
   assert.equal(restore(withFloor.text, withFloor.patches), stored);
-  assert.equal(withFloor.text.includes("弄88號之1，3樓    (基地坐落"), true);
+  assert.equal(withFloor.text.includes("弄88號之1 3樓    (基地坐落"), true);
+  assert.equal(withFloor.text.includes("88號之1，"), false);
   assert.equal(withFloor.text.includes("88號之1號"), false);
   assert.equal(withFloor.text.includes("弄88之1號"), false);
 
@@ -252,7 +256,8 @@ test("door numbers print as typed and the floor stays in its own cell", () => {
     floor: "3",
   });
   assert.equal(restore(literal.text, literal.patches), stored);
-  assert.equal(literal.text.includes("弄88號之甲，3樓    (基地坐落"), true);
+  assert.equal(literal.text.includes("弄88號之甲 3樓    (基地坐落"), true);
+  assert.equal(literal.text.includes("88號之甲，"), false);
   assert.equal(literal.text.includes("88號之甲號"), false);
   assert.equal(literal.text.includes("弄88之甲號"), false);
 

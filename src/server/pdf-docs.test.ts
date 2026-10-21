@@ -165,6 +165,8 @@ test("a shortfall statement says 屋主應補繳 and a zero fee is NT$0", () => 
   assert.match(text, /NT\$0/);
   assert.match(text, /冷氣維修/);
   assert.match(text, /地址：台北市信義區松仁路88號/);
+  assert.match(text, /數字來自管理方確認的繳款紀錄。/);
+  assert.equal(text.includes("收款紀錄"), false);
   assert.equal(text.includes("期末"), false);
   assert.equal(text.includes("電子發票"), false);
   assert.equal(text.includes("房東"), false);

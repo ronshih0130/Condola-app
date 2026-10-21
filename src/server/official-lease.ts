@@ -178,10 +178,12 @@ const FLOOR_TOKEN = `0-9０-９${FLOOR_CN}`;
 /**
  * The house-number segment is copied as typed, so 88號之1 is never rewritten
  * as 88之1號. If that segment already contains 號, the template 號 is not
- * printed again. A floor follows in its own cell; 號之N gets a comma before
- * the floor so 之1 cannot be read as part of it. 樓之 keeps 之 only when
- * there is a sub-floor. A tail the cells cannot hold is printed whole in
- * the 街(路) blank, and the floor still uses its own cell.
+ * printed again. A floor follows in its own cell. When the house number
+ * contains 號 but does not end with it, one space separates it from the
+ * floor so 之1 cannot be read as part of the floor. No punctuation is
+ * inserted. 樓之 keeps 之 only when there is a sub-floor. A tail the cells
+ * cannot hold is printed whole in the 街(路) blank, and the floor still
+ * uses its own cell.
  */
 function parseRoad(street: string, unitFloor: string | null | undefined): RoadFill | null {
   const trimmed = street.trim();
@@ -314,18 +316,26 @@ function omitAtCursor(state: State, label: string) {
   state.patches.push({ index: state.cursor, blank: label, value: "" });
 }
 
+/** Insert one space. fillSlot trims values, so the space is its own patch. */
+function insertSpace(state: State) {
+  state.text = `${state.text.slice(0, state.cursor)} ${state.text.slice(state.cursor)}`;
+  state.patches.push({ index: state.cursor, blank: "", value: " " });
+  state.cursor += 1;
+}
+
 /**
  * Print the house number exactly as typed. A second template 號 would turn
  * 88號之1 into 88號之1號, so that label is removed when 號 is already present.
- * 號之1 and the floor are separated with a comma. 樓之 loses 之 when the
- * sub-floor cell is empty, so 3樓 is not printed as 3樓之.
+ * 號之1 and the floor are separated with a space, not a comma. 樓之 loses 之
+ * when the sub-floor cell is empty, so 3樓 is not printed as 3樓之.
  */
 function fillDoorPlate(state: State, number: string, floor: string, suffix: string) {
   const containsHao = number.includes("號");
   const separate = containsHao && !number.endsWith("號") && floor !== "";
   fillSlot(state, "弄", "號", number);
   if (containsHao) omitAtCursor(state, "號");
-  fillSlot(state, containsHao ? "" : "號", "樓之", separate ? `，${floor}` : floor);
+  if (separate) insertSpace(state);
+  fillSlot(state, containsHao ? "" : "號", "樓之", floor);
   if (floor && !suffix) {
     if (!state.text.startsWith("樓之", state.cursor)) throw new Error("lease template is missing 「樓之」");
     state.cursor += "樓".length;
