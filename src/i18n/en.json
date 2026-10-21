@@ -1096,6 +1096,7 @@
  "i_active": "Active",
  "i_rules_note": "The electricity cap, deposit cap, and management-fee rule are already set for this firm. Deposit and late-fee checks warn only.",
  "i_notify_note": "LINE push is a demo. Nothing is sent to LINE.",
+ "i_notify_empty": "No notifications right now.",
  "i_units_title": "Units and rooms",
  "i_tenants_title": "Tenants",
  "i_rentroll_title": "Rent roll",

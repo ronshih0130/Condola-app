@@ -10,7 +10,7 @@ import { BACKUP_COOKIE, backupDisplay } from "@/server/backup";
 import { actionLineLogin, actionSecondFactor, actionSignIn } from "@/server/auth-actions";
 import { actionResendSignup } from "@/server/signup-actions";
 import { CHALLENGE_COOKIE, peekChallenge } from "@/server/auth";
-import { demoModeEnabled, lineLoginEnabled } from "@/server/demo";
+import { demoModeEnabled, lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
 import { roleHome } from "@/server/perms";
 import { readSession, requestPrefs } from "@/server/session";
 
@@ -133,7 +133,13 @@ export default async function LoginPage({
                 LINE Login
               </button>
             )}
-            <p className="tiny muted">{lineLoginEnabled() ? t("i_line_demo") : t("i_line_login_todo")}</p>
+            {showDemoLineCopy(null) && lineLoginEnabled() ? (
+              <p className="tiny muted" data-testid="line-demo-note">
+                {t("i_line_demo")}
+              </p>
+            ) : (
+              <p className="tiny muted">{t("i_line_login_todo")}</p>
+            )}
             <p className="small" data-testid="login-invite">
               {t("i_login_invite_lead")}{" "}
               <a href="/signup" data-testid="login-signup">{t("i_login_signup")}</a>

@@ -14,7 +14,7 @@ import {
   actionRevokeSession,
 } from "@/server/auth-actions";
 import { CHALLENGE_COOKIE, listSessions, mfaStatus, peekChallenge } from "@/server/auth";
-import { lineLoginEnabled } from "@/server/demo";
+import { lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
 import { can } from "@/server/perms";
 import { getSession } from "@/server/session";
 
@@ -44,7 +44,13 @@ export default async function AccountPage({
             <b>{session.name}</b>
           </p>
           <p className="small">{session.email}</p>
-          <p className="small muted">{lineLoginEnabled() ? t("i_line_demo") : t("i_line_login_todo")}</p>
+          {showDemoLineCopy(session.environment) ? (
+            <p className="small muted" data-testid="line-demo-note">
+              {t("i_line_demo")}
+            </p>
+          ) : lineLoginEnabled() ? null : (
+            <p className="small muted">{t("i_line_login_todo")}</p>
+          )}
           <button className="btn" type="button" disabled={!lineLoginEnabled()} data-testid="line-link">
             LINE
           </button>

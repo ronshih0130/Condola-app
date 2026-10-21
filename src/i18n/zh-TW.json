@@ -1096,6 +1096,7 @@
  "i_active": "使用中",
  "i_rules_note": "電價上限、押金上限與管理費規則已套用在這家管理公司。押金與逾期金只提醒，不擋下儲存。",
  "i_notify_note": "LINE 推播是示範，不會送到 LINE。",
+ "i_notify_empty": "目前沒有通知",
  "i_units_title": "單位與房間",
  "i_tenants_title": "租客",
  "i_rentroll_title": "租金總覽",
