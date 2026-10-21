@@ -36,6 +36,7 @@ import { forgotSentLocation, resetFlashCookie } from "./reset-flash";
 import { demoModeEnabled } from "./demo";
 import { addExpense, closeMonth, reversePayment } from "./domain";
 import { FlowError } from "./errors";
+import { clearStoredEnvChoice } from "./org-scope";
 import { appCookieOptions, sameAppPath } from "./public-origin";
 import { clearAuthCookies } from "./sign-out";
 import { getSession, readSession } from "./session";
@@ -92,6 +93,7 @@ export async function actionSignIn(formData: FormData) {
     const cookie = sessionCookie(result.token, result.remember);
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
+    clearStoredEnvChoice(jar);
     redirect(result.destination === "firm" ? "/signup/firm" : next || "/auth/continue");
   }
   if ("step" in result) {
@@ -120,6 +122,7 @@ export async function actionLineLogin() {
     const cookie = sessionCookie(result.token, result.remember);
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
+    clearStoredEnvChoice(jar);
     redirect("/auth/continue");
   }
   if ("step" in result) {
@@ -142,6 +145,7 @@ export async function actionSecondFactor(formData: FormData) {
   const cookie = sessionCookie(result.token, result.remember);
   jar.set(cookie.name, cookie.value, cookie.options);
   jar.delete(CHALLENGE_COOKIE);
+  clearStoredEnvChoice(jar);
   if (result.backupCodes?.length) await rememberBackup(result.backupCodes);
   redirect(result.backupCodes?.length ? "/login?step=backup" : next || "/auth/continue");
 }
@@ -178,6 +182,7 @@ export async function actionAccept(formData: FormData) {
   const jar = await cookies();
   const cookie = sessionCookie(result.token, true);
   jar.set(cookie.name, cookie.value, cookie.options);
+  clearStoredEnvChoice(jar);
   redirect("/auth/continue");
 }
 

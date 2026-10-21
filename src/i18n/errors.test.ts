@@ -21,6 +21,13 @@ test("every error key has a translation, and an empty amount uses the amount sen
   assert.equal(zh.i_lease_failed, "租約沒有儲存成功，請稍後再試；若持續發生請聯絡 service@condola.app");
   assert.equal(zh.i_lease_whole_unit, "此戶為整層出租，請選擇整層而不是房間。");
   assert.match(zh.i_charged_total, /^向租客收取 /);
+  assert.equal(zh.i_rooms_hint, "請填寫每間的房號與月租（可新增或刪除房間）");
+  assert.equal(zh.i_task1, "任務一：新增一間物件，新增一個物件，依實際情況設定房間（整層或分租皆可），並加入一位屋主。");
+  assert.equal(makeT("zh-TW")("i_field_incomplete", { field: zh.i_address }), "地址未完成，請確認後再送出。");
+  for (const key of ["i_footer", "i_positioning", "i_pending_reports", "i_money_note"]) {
+    assert.equal(zh[key].includes("房客"), false, key);
+    assert.equal(zh[key].includes("租客"), true, key);
+  }
   assert.equal(errorText(makeT("zh-TW"), "errors.amount"), "請輸入金額（數字，可填 0）");
   assert.equal(errorText(makeT("zh-TW"), "errors.leaseFailed"), zh.i_lease_failed);
   assert.equal(errorText(makeT("zh-TW"), "errors.notAKey"), "沒有完成。請檢查欄位後再試一次。");
@@ -55,8 +62,22 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.doesNotMatch(wizard, /t\("i_amount"\)/);
   assert.match(wizard, /useActionState/);
   const property = readFileSync(new URL("../components/property-wizard.tsx", import.meta.url), "utf8");
-  assert.match(property, /rentalMode === "whole_unit" \? null : \[0, 1, 2\]/);
+  assert.match(property, /rentalMode === "whole_unit" \? null : rooms\.map/);
+  assert.match(property, /data-testid="add-room"/);
+  assert.match(property, /type="button"/);
+  assert.match(property, /submitter\.dataset\.testid !== "submit-property"/);
+  assert.match(property, /event\.key !== "Enter"/);
+  assert.match(property, /useActionState/);
+  assert.match(property, /i_field_incomplete/);
+  assert.match(property, /data-testid="property-address-error"/);
   assert.match(property, /split === "sub" && bill\.trim\(\) === ""/);
+  const leases = readFileSync(new URL("../app/m/leases/page.tsx", import.meta.url), "utf8");
+  assert.match(leases, /row\.electricity === "even"[\s\S]*i_split_even/);
+  assert.match(leases, /row\.electricity === "sub_meter"[\s\S]*i_split_sub/);
+  assert.doesNotMatch(leases, /i_elec_shared"\) : row\.electricity/);
+  const signIn = readFileSync(new URL("../server/auth-actions.ts", import.meta.url), "utf8");
+  assert.match(signIn, /clearStoredEnvChoice\(jar\)/);
+  assert.doesNotMatch(signIn, /ENV_COOKIE,\s*"sandbox"/);
   const firm = readFileSync(new URL("../components/firm-steps.tsx", import.meta.url), "utf8");
   assert.match(firm, /noValidate/);
   assert.match(firm, /data-testid="firm-contact-error"/);

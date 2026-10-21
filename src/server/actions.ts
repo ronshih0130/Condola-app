@@ -105,7 +105,7 @@ function propertyInput(formData: FormData): PropertyInput {
     unitLabel: text(formData.get("unitLabel")),
     floor: text(formData.get("floor")),
     rentalMode: text(formData.get("rentalMode")) === "whole_unit" ? "whole_unit" : "by_room",
-    rooms: [0, 1, 2].map((index) => ({
+    rooms: Array.from({ length: Math.min(Number(text(formData.get("roomCount"))) || 0, 30) }, (_, index) => ({
       label: text(formData.get(`room${index}label`)),
       roomType: text(formData.get(`room${index}type`)) || "suite",
       baseRentMajor: num(formData.get(`room${index}rent`)) || 0,

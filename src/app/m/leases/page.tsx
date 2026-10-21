@@ -51,7 +51,17 @@ export default async function LeasesPage() {
                 </Cell>
                 <Cell label={t("i_rent_label")}>{money(row.rent, row.currency)}</Cell>
                 <Cell label={t("i_deposit_label")}>{money(row.deposit, row.currency)}</Cell>
-                <Cell label={t("i_elec")}>{row.electricity === "shared" ? t("i_elec_shared") : row.electricity || t("i_elec_unset")}</Cell>
+                <Cell label={t("i_elec")}>
+                  {row.electricity === "even"
+                    ? t("i_split_even")
+                    : row.electricity === "sub_meter"
+                      ? t("i_split_sub")
+                      : row.electricity === "days_occupied"
+                        ? t("i_split_days")
+                        : row.electricity === "shared"
+                          ? t("i_elec_shared")
+                          : row.electricity || t("i_elec_unset")}
+                </Cell>
                 <Cell label={t("i_status")}>
                   <span className={`chip ${statusClass(row.status)}`}>{t(statusKey(row.status))}</span>
                 </Cell>

@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { sessionCookie, type RequestMeta } from "./auth";
 import { FlowError } from "./errors";
-import { ENV_COOKIE, ENV_COOKIE_MAX_AGE, ORG_COOKIE } from "./org-scope";
+import { clearStoredEnvChoice, ENV_COOKIE, ENV_COOKIE_MAX_AGE, ORG_COOKIE } from "./org-scope";
 import {
   clearFirmOverride,
   createPartnerCode,
@@ -51,6 +51,7 @@ async function setSession(token: string) {
   const jar = await cookies();
   const cookie = sessionCookie(token, true);
   jar.set(cookie.name, cookie.value, cookie.options);
+  clearStoredEnvChoice(jar);
 }
 
 function bounce(path: string, error: unknown): never {

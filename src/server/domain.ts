@@ -87,15 +87,19 @@ export type PropertyInput = {
 
 export async function createProperty(session: Session, input: PropertyInput) {
   assertStaff(session, ["admin", "manager"]);
-  if (!input.name.trim() || !input.city.trim() || !input.street.trim() || !input.unitLabel.trim()) {
-    throw new FlowError("errors.required");
-  }
-  const rooms = input.rentalMode === "whole_unit" ? [] : input.rooms.filter((room) => room.label.trim());
-  if (input.rentalMode === "by_room" && rooms.length < 2) throw new FlowError("errors.needRooms");
+  if (!input.name.trim()) throw new FlowError("errors.required", { field: "i_property_name" });
+  if (!input.city.trim()) throw new FlowError("errors.required", { field: "i_city" });
+  if (!input.street.trim()) throw new FlowError("errors.required", { field: "i_address" });
+  if (!input.unitLabel.trim()) throw new FlowError("errors.required", { field: "i_unit_label" });
+  const posted = input.rentalMode === "whole_unit" ? [] : input.rooms;
+  const rooms = posted.filter((room) => room.label.trim() || room.baseRentMajor > 0);
+  if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  if (input.rentalMode === "by_room" && rooms.length < 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
 
   const ownerPhone = cleanPhone(input.ownerPhone);
   const ownerEmail = cleanEmail(input.ownerEmail);
-  if (input.ownerMode === "new" && (!input.ownerName.trim() || !ownerPhone)) throw new FlowError("errors.required");
+  if (input.ownerMode === "new" && !input.ownerName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
+  if (input.ownerMode === "new" && !ownerPhone) throw new FlowError("errors.required", { field: "i_phone_label" });
 
   const created = await tx(session.userId, async (client) => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property:${session.userId}:${input.name.trim()}`]);

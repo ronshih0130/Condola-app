@@ -396,13 +396,19 @@ export async function listLeases(session: Session) {
               l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.currency,
               l.start_date::text, l.end_date::text,
               coalesce(
-                (SELECT lc.description FROM lease_charges lc
-                  WHERE lc.lease_id = l.id AND lc.charge_type = 'utility' AND lc.description IS NOT NULL
+                (SELECT r.split_method::text
+                   FROM utility_allocation_lines line
+                   JOIN utility_allocation_runs r ON r.id = line.run_id
+                  WHERE line.lease_id = l.id
+                  ORDER BY r.period_start DESC
                   LIMIT 1),
-                CASE WHEN EXISTS (
-                  SELECT 1 FROM meters m
-                   WHERE m.property_id = l.property_id AND m.utility = 'electricity' AND m.archived_at IS NULL
-                ) THEN 'shared' ELSE '' END
+                (SELECT m.split_method::text
+                   FROM meters m
+                  WHERE m.unit_id = l.unit_id AND m.utility = 'electricity'
+                    AND m.room_id IS NULL AND m.archived_at IS NULL
+                  ORDER BY m.created_at DESC
+                  LIMIT 1),
+                ''
               ) AS electricity
          FROM leases l
          JOIN properties p ON p.id = l.property_id

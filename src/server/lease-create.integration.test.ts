@@ -6,7 +6,7 @@ import { createProperty } from "./domain";
 import { FlowError } from "./errors";
 import { ORG_ID, USERS } from "./ids";
 import { createLeaseFromForm } from "./lease-form";
-import { listSpaces, vacantRooms } from "./queries";
+import { listLeases, listSpaces, vacantRooms } from "./queries";
 import { ensureSandbox } from "./sandbox";
 import type { Session } from "./types";
 
@@ -160,6 +160,9 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     );
     assert.ok(splits.rows.some((row) => row.lease_id === even.leaseId && row.split === "even"));
     assert.ok(splits.rows.some((row) => row.lease_id === sub.leaseId && row.split === "sub_meter"));
+    const listed = await listLeases(admin);
+    assert.equal(listed.find((row) => row.id === even.leaseId)?.electricity, "even");
+    assert.equal(listed.find((row) => row.id === sub.leaseId)?.electricity, "sub_meter");
 
     const bills = await query<{ n: string }>(
       `SELECT count(*)::text AS n FROM utility_bills
@@ -209,6 +212,48 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
       () => createLeaseFromForm(admin, form({ ...base, roomId: rooms.roomIds[0], rent: "" })),
       (error: unknown) => error instanceof FlowError && error.key === "errors.amount",
     );
+    await assert.rejects(
+      () =>
+        createProperty(admin, {
+          name: `缺地址 ${stamp}`,
+          city: "台北市",
+          district: "大安區",
+          street: "",
+          currency: "TWD",
+          ownerMode: "new",
+          ownerName: "測試屋主",
+          ownerPhone: "0912345678",
+          ownerEmail: "",
+          canViewTenantPhone: false,
+          unitLabel: "8F",
+          floor: "8",
+          rentalMode: "by_room",
+          rooms: [{ label: "A", roomType: "suite", baseRentMajor: 10000 }],
+        }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.required" && error.vars?.field === "i_address",
+    );
+    const oneRoom = await createProperty(admin, {
+      name: `單房 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路8號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "單房屋主",
+      ownerPhone: "0912345678",
+      ownerEmail: `owner.one.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "8F",
+      floor: "8",
+      rentalMode: "by_room",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 8000 },
+        { label: "", roomType: "suite", baseRentMajor: 0 },
+        { label: "", roomType: "suite", baseRentMajor: 0 },
+      ],
+    });
+    propertyIds.push(oneRoom.propertyId);
+    assert.equal(oneRoom.roomIds.length, 1);
 
     const repair = readFileSync(new URL("../../supabase/migrations/20261022170000_archive_whole_unit_rooms.sql", import.meta.url), "utf8");
     assert.match(repair, /SET archived_at/);
