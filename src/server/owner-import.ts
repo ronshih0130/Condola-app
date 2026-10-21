@@ -648,7 +648,7 @@ function nameKey(value: string | null | undefined) {
 }
 
 function matchTenant(row: ParsedImportRow, index: ExistingIndex, issues: ImportIssue[]): string | null | "blocked" {
-  const phones = row.phoneE164 ? (index.tenantsByPhone.get(row.phoneE164) ?? []) : [];
+  const phones = tenantsForPhone(index, row.phoneE164);
   if (phones.length > 1) {
     issues.push({ line: row.line, severity: "error", key: "im_e_phone_dup" });
     return "blocked";
@@ -710,7 +710,7 @@ function remember(index: ExistingIndex, plan: RowPlan) {
     const id = plan.tenantId ?? `new-tenant:${row.phoneE164 ?? row.line}`;
     plan.tenantId = id;
     const tenant = { id, name: row.tenantName ?? "" };
-    addTenantKey(index.tenantsByPhone, row.phoneE164, tenant);
+    indexTenantPhone(index.tenantsByPhone, row.phoneE164, tenant);
   }
   if (plan.createLease && row.startDate && row.endDate && plan.tenantId) {
     index.leases.push({
@@ -735,6 +735,42 @@ export function addTenantKey(map: Map<string, TenantRef[]>, key: string | null, 
     return;
   }
   if (!list.some((item) => item.id === tenant.id)) list.push(tenant);
+}
+
+/**
+ * One Taiwan mobile is stored as +8869xxxxxxxx or, when a leading 0 was kept, +88609xxxxxxxx.
+ * Both, plus the 9-digit national number, point at the same tenant inside this org.
+ */
+export function phoneMatchKeys(e164: string | null | undefined): string[] {
+  if (!e164) return [];
+  const keys = new Set<string>([e164]);
+  const digits = e164.replace(/\D/g, "");
+  let national = "";
+  if (digits.startsWith("8860") && digits.length === 13 && digits[4] === "9") national = digits.slice(4);
+  else if (digits.startsWith("886") && digits.length === 12 && digits[3] === "9") national = digits.slice(3);
+  if (national.length === 9) {
+    keys.add(national);
+    keys.add(`+886${national}`);
+    keys.add(`+8860${national}`);
+  }
+  return [...keys];
+}
+
+export function indexTenantPhone(map: Map<string, TenantRef[]>, e164: string | null | undefined, tenant: TenantRef) {
+  for (const key of phoneMatchKeys(e164)) addTenantKey(map, key, tenant);
+}
+
+function tenantsForPhone(index: ExistingIndex, e164: string | null): TenantRef[] {
+  const seen = new Set<string>();
+  const hits: TenantRef[] = [];
+  for (const key of phoneMatchKeys(e164)) {
+    for (const tenant of index.tenantsByPhone.get(key) ?? []) {
+      if (seen.has(tenant.id)) continue;
+      seen.add(tenant.id);
+      hits.push(tenant);
+    }
+  }
+  return hits;
 }
 
 export type ImportTotals = {

@@ -50,6 +50,7 @@ export function ImportWizard() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [previewDone, setPreviewDone] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [failed, setFailed] = useState(false);
   const [progress, setProgress] = useState("");
@@ -87,7 +88,7 @@ export function ImportWizard() {
   const importableCount = sendable.filter((row) => !row.issues.some((issue) => issue.key === "im_row_exists")).length;
   const preview = viewed.slice(0, PREVIEW_ROWS);
   const stepperAt = step >= 2 ? 3 : step + 1;
-  const canRun = !busy && !previewing && !previewFailed && sendable.length > 0;
+  const canRun = previewDone && !busy && !previewing && !previewFailed && sendable.length > 0;
 
   useEffect(() => {
     if (step !== 2) return;
@@ -98,10 +99,12 @@ export function ImportWizard() {
     const rows = validateImportRows(tableToRows(table, matched)).filter((row) => !rowHasError(row));
     let cancelled = false;
     setPreviewing(true);
+    setPreviewDone(false);
     setPreviewFailed(false);
     setServerIssues([]);
     if (rows.length === 0) {
       setPreviewing(false);
+      setPreviewDone(true);
       return;
     }
     void (async () => {
@@ -110,7 +113,10 @@ export function ImportWizard() {
         const issues = await postPreview(fileName, requestRows(rows.slice(offset, offset + IMPORT_PREVIEW_BATCH)));
         found.push(...issues);
       }
-      if (!cancelled) setServerIssues(found);
+      if (!cancelled) {
+        setServerIssues(found);
+        setPreviewDone(true);
+      }
     })()
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -129,6 +135,7 @@ export function ImportWizard() {
     setNotice("");
     setFailed(false);
     setPreviewFailed(false);
+    setPreviewDone(false);
     setProgress("");
     setServerIssues([]);
     setServerErrors([]);
@@ -186,7 +193,7 @@ export function ImportWizard() {
   async function runCommit() {
     if (!claimFormSubmit(submitGuard)) return;
     const rows = requestRows(sendable);
-    if (rows.length === 0 || missing.length > 0 || previewing || previewFailed) {
+    if (rows.length === 0 || missing.length > 0 || !previewDone || previewing || previewFailed) {
       releaseFormSubmit(submitGuard);
       return;
     }
@@ -373,11 +380,19 @@ export function ImportWizard() {
               {t("im_restart")}
             </button>
             <span>
-              {t("im_can")}{" "}
-              <b className="import-ok" data-testid="import-ok-count">
-                {importableCount}
-              </b>{" "}
-              {t("im_unit")}、{t("im_problem")}{" "}
+              {previewDone ? (
+                <>
+                  {t("im_can")}{" "}
+                  <b className="import-ok" data-testid="import-ok-count">
+                    {importableCount}
+                  </b>{" "}
+                  {t("im_unit")}、
+                </>
+              ) : (
+                <span data-testid="import-checking">{t("im_checking")}</span>
+              )}
+              {previewDone ? null : "、"}
+              {t("im_problem")}{" "}
               <b className="import-danger" data-testid="import-err-count">
                 {problemRows.length}
               </b>{" "}
@@ -407,7 +422,7 @@ export function ImportWizard() {
               <tbody>
                 {preview.map((row) => {
                   const bad = previewBadColumns(row);
-                  const status = rowStatus(row, t);
+                  const status = rowStatus(row, t, previewDone);
                   return (
                     <tr key={row.line} data-testid="import-issue-row" data-line={row.line}>
                       <td className={status.ok ? "import-ok" : "import-warn"}>{status.text}</td>
@@ -540,8 +555,9 @@ function Summary({ result }: { result: ImportResult }) {
   );
 }
 
-function rowStatus(row: ParsedImportRow, t: ReturnType<typeof useT>) {
+function rowStatus(row: ParsedImportRow, t: ReturnType<typeof useT>, checked: boolean) {
   const error = row.issues.find((issue) => issue.severity === "error");
+  if (!checked && !error) return { ok: false, text: t("im_checking") };
   if (!error && row.issues.some((issue) => issue.key === "im_row_exists")) return { ok: false, text: t("im_already") };
   if (!error) return { ok: true, text: t("im_row_ok") };
   const field = String(error.vars?.f ?? "");

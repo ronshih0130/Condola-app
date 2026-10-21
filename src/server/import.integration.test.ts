@@ -599,6 +599,46 @@ test("a phone-only match with a different name is a row error", async () => {
   }
 });
 
+test("preview names a trunk-zero phone in this org and ignores the other environment", async () => {
+  const stamp = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}z`;
+  const phone = `09${String(25000000 + (Date.now() % 70000000)).slice(-8)}`;
+  const stored = `+8860${phone.slice(1)}`;
+  const kept = `既有電話${stamp}`;
+  const email = `trunk.${stamp}@example.com`;
+  const fileName = `trunk-${stamp}.csv`;
+  const name = `匯入電話形式${stamp}`;
+  const address = `台北市中山區電話形式${stamp}號`;
+  await query(
+    `INSERT INTO contacts (org_id, is_tenant, display_name, email, phone_e164, locale)
+     VALUES ($1, true, $2, $3, $4, 'zh-TW')`,
+    [ORG_ID, kept, email, stored],
+  );
+  const sandboxId = await ensureSandbox(admin);
+  const sandbox = staff({ userId: USERS.admin, role: "admin", orgId: sandboxId, environment: "sandbox" });
+  const incoming = row({
+    propertyName: name,
+    address,
+    ownerName: "電話屋主",
+    ownerEmail: `town.${stamp}@example.com`,
+    tenantName: "不同姓名",
+    tenantPhone: phone,
+    tenantEmail: `tnew.${stamp}@example.com`,
+  });
+  try {
+    const preview = await previewImport(admin, { fileName, rows: [incoming] });
+    const issue = preview.find((item) => item.key === "im_e_phone_name");
+    assert.equal(issue?.vars?.n, 2);
+    assert.equal(issue?.vars?.name, kept);
+    const otherOrg = await previewImport(sandbox, { fileName, rows: [{ ...incoming, propertyName: `沙盒${name}` }] });
+    assert.equal(otherOrg.some((item) => item.key === "im_e_phone_name"), false);
+    const committed = await commitImportBatch(admin, { fileName, rows: [incoming] });
+    assert.equal(committed.created.tenants, 0);
+    assert.equal(committed.created.leases, 0);
+  } finally {
+    await cleanup([name, `沙盒${name}`], [email, `town.${stamp}@example.com`, `tnew.${stamp}@example.com`], [fileName]);
+  }
+});
+
 test("a UI unit is reused by the import address key, including when the key was not stored", async () => {
   const stamp = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}k`;
   const street = `鍵路${stamp}號`;
@@ -763,7 +803,8 @@ test("a failure after the first chunk saves nothing", async () => {
         seen.push({ done, total });
       }),
     );
-    assert.deepEqual(seen, [{ done: IMPORT_WRITE_CHUNK, total: count }]);
+    assert.ok(seen.some((event) => event.done === IMPORT_WRITE_CHUNK && event.total === count));
+    assert.ok(seen.every((event, index) => index === 0 || event.done >= seen[index - 1].done));
     const props = await query<{ n: string }>(`SELECT count(*)::text AS n FROM properties WHERE name = $1`, [name]);
     assert.equal(props.rows[0].n, "0");
   } finally {
@@ -889,9 +930,12 @@ test("five hundred rows commit in one transaction", async () => {
       seen.push(done);
     });
     const elapsed = performance.now() - started;
-    const expected: number[] = [];
-    for (let done = IMPORT_WRITE_CHUNK; done <= 500; done += IMPORT_WRITE_CHUNK) expected.push(done);
-    assert.deepEqual(seen, expected);
+    assert.equal(seen.at(-1), 500);
+    assert.ok(seen[0] > 0 && seen[0] < IMPORT_WRITE_CHUNK, `first progress was ${seen[0]}`);
+    assert.ok(seen.every((done, index) => index === 0 || done >= seen[index - 1]));
+    for (let done = IMPORT_WRITE_CHUNK; done <= 500; done += IMPORT_WRITE_CHUNK) {
+      assert.ok(seen.includes(done), `missing progress ${done}`);
+    }
     assert.equal(result.errors.length, 0);
     assert.equal(result.created.properties, 1);
     assert.equal(result.created.leases, 500);

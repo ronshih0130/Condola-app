@@ -17,8 +17,10 @@ import {
   coerceImportRows,
   emptyIndex,
   ignoredNationalIdHeaders,
+  indexTenantPhone,
   issuePreviewColumns,
   matchColumns,
+  phoneMatchKeys,
   planOne,
   planRows,
   previewBadColumns,
@@ -265,6 +267,18 @@ test("a shared phone is not reused, and full-width numbers, ROC dates, and Excel
   assert.equal(phoneIssue?.vars?.n, phoneOnly.line);
   assert.equal(phoneIssue?.vars?.name, "別的租客");
 
+  const trunk = emptyIndex();
+  indexTenantPhone(trunk.tenantsByPhone, "+8860912000111", { id: "tenant-trunk", name: "陳美玲" });
+  const [trunkRow] = validateImportRows([lease({ tenantName: "別人", tenantPhone: "0912000111", unitLabel: "21F" })], "2026-10-21");
+  const trunkPlan = planOne(trunkRow, trunk);
+  const trunkIssue = trunkPlan.issues.find((issue) => issue.key === "im_e_phone_name");
+  assert.equal(trunkPlan.blocked, true);
+  assert.equal(trunkIssue?.vars?.n, trunkRow.line);
+  assert.equal(trunkIssue?.vars?.name, "陳美玲");
+  assert.deepEqual(phoneMatchKeys("+886912000111").sort(), ["+8860912000111", "+886912000111", "912000111"].sort());
+  assert.deepEqual(phoneMatchKeys("+8860912000111").sort(), phoneMatchKeys("+886912000111").sort());
+  assert.deepEqual(phoneMatchKeys("+14155552671"), ["+14155552671"]);
+
   const wide = validateImportRows(
     [lease({ rent: "１２，０００", deposit: "２４，０００", dueDay: "５", startDate: "115/01/05", endDate: "民國116年1月5日", tenantPhone: "９１２０００２２２", unitLabel: "11F" })],
     "2026-10-21",
@@ -472,11 +486,17 @@ test("a confirmed import is one transaction and the screen posts it once", () =>
   assert.equal(commitFn.match(/await tx\(/g)?.length, 1);
   assert.match(source, /IMPORT_WRITE_CHUNK/);
   assert.match(source, /statement_timeout/);
+  assert.match(source, /relaxStatementTimeout/);
+  assert.match(source, /phoneMatchKeys/);
+  assert.doesNotMatch(source, /normalize\(coalesce/);
+  assert.doesNotMatch(source, /NFKC\)/);
   assert.doesNotMatch(source, /SAVEPOINT/i);
   assert.doesNotMatch(source, /IMPORT_COMMIT_BATCH/);
   assert.equal(wizard.match(/postImport\("commit"/g)?.length, 1);
   assert.match(wizard, /import-ignored-id/);
   assert.match(wizard, /im_progress_n/);
+  assert.match(wizard, /previewDone/);
+  assert.match(wizard, /im_checking/);
   assert.match(wizard, /im_none/);
   assert.match(wizard, /import-retry/);
   assert.match(wizard, /claimFormSubmit\(submitGuard\)/);

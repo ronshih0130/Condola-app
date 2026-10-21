@@ -8,10 +8,11 @@ import {
   IMPORT_DRY_BATCH,
   IMPORT_MAX_ROWS,
   IMPORT_PREVIEW_BATCH,
-  addTenantKey,
   addressKey,
   coerceImportRows,
   emptyIndex,
+  indexTenantPhone,
+  phoneMatchKeys,
   planRows,
   totalsFromPlans,
   validateImportRows,
@@ -42,8 +43,16 @@ export const IMPORT_WRITE_CHUNK = 100;
 
 export type ImportProgress = (done: number, total: number) => void;
 
-/** Same normalization as addressKey(), evaluated in Postgres for units that have no stored key. */
-const COMPUTED_ADDRESS_KEY = `NULLIF(lower(regexp_replace(normalize(coalesce(p.address_display, ''), NFKC), '\\s+', '', 'g')), '')`;
+/**
+ * Staging's authenticated role cancels statements at about 8s. Commit used to
+ * raise that to 60s and preview did not, so the preview check died while save
+ * still ran. Every mode raises it. The units lookup no longer normalizes
+ * every address in SQL: that expression could not use the address indexes and
+ * was the ~40s before the first progress event.
+ */
+async function relaxStatementTimeout(client: Client) {
+  await client.query(`SELECT set_config('statement_timeout', '60s', true)`);
+}
 
 export async function readImportBody(request: Request): Promise<{ mode: "dry" | "preview" | "commit"; fileName: string; rows: unknown }> {
   const text = await readCappedText(request, IMPORT_BODY_MAX_BYTES);
@@ -74,6 +83,7 @@ export async function dryRunImport(session: Session, input: { fileName: string; 
     const fileName = cleanName(input.fileName);
     if (parsed.length === 0) return totalsFromPlans([], fileName, true);
     return await tx(session.userId, async (client) => {
+      await relaxStatementTimeout(client);
       const index = await loadIndex(client, session.orgId, parsed);
       return totalsFromPlans(planRows(parsed, index), fileName, true);
     }, scope(session));
@@ -96,6 +106,7 @@ export async function previewImport(session: Session, input: { fileName: string;
     const parsed = validateImportRows(rows);
     if (parsed.length === 0) return [];
     return await tx(session.userId, async (client) => {
+      await relaxStatementTimeout(client);
       const index = await loadIndex(client, session.orgId, parsed);
       return previewIssues(planRows(parsed, index));
     }, scope(session));
@@ -133,12 +144,19 @@ export async function commitImportBatch(
     const parsed = validateImportRows(rows);
     const fileName = cleanName(input.fileName);
     if (parsed.length === 0) return totalsFromPlans([], fileName, false);
+    let reported = 0;
+    const progress: ImportProgress = (done, total) => {
+      if (done <= reported) return;
+      reported = done;
+      onProgress?.(done, total);
+    };
     const result = await tx(session.userId, async (client) => {
-      await client.query(`SELECT set_config('statement_timeout', '60s', true)`);
+      if (parsed.length > 0) progress(1, parsed.length);
+      await relaxStatementTimeout(client);
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`import:${session.orgId}`]);
-      const index = await loadIndex(client, session.orgId, parsed);
+      const index = await loadIndex(client, session.orgId, parsed, progress);
       const jurisdiction = await one<{ id: string }>(client, `SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
-      const plans = await persistPlans(client, session, parsed, index, jurisdiction.id, onProgress);
+      const plans = await persistPlans(client, session, parsed, index, jurisdiction.id, progress);
       const totals = totalsFromPlans(plans, fileName, false);
       const rejected = plans.some((plan) => plan.blocked);
       if (!rejected) {
@@ -184,13 +202,21 @@ function cleanName(value: string) {
   return value.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 200) || "import";
 }
 
-async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[]) {
+async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[], onProgress?: ImportProgress) {
   const index = emptyIndex();
   const names = unique(rows.map((row) => row.propertyName).filter(Boolean));
   const keys = unique(rows.map((row) => row.addressKey).filter(Boolean));
   const emails = unique(rows.map((row) => row.ownerEmail).filter((value): value is string => Boolean(value)));
   const ownerNames = unique(rows.map((row) => row.ownerName).filter(Boolean));
   const phones = unique(rows.map((row) => row.phoneE164).filter((value): value is string => Boolean(value)));
+  const total = rows.length;
+  // Leave the rest of the counter for the writes. These ticks are the phase that
+  // used to sit at 0 while the address scan ran.
+  const budget = Math.max(1, Math.round(total * 0.05));
+  const tick = (fraction: number) => {
+    if (!onProgress || total === 0) return;
+    onProgress(Math.max(1, Math.min(budget, Math.round(budget * fraction))), total);
+  };
 
   if (names.length) {
     const properties = await client.query<{ id: string; name: string; address_key: string; address_display: string | null }>(
@@ -204,38 +230,53 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[])
       index.properties.set(property.name, { id: property.id, addressKey: key });
     }
   }
+  tick(0.34);
 
-  const units = await client.query<{
-    id: string;
-    property_id: string;
-    label: string;
-    rental_mode: string;
-    address_key: string;
-    address_display: string | null;
-  }>(
-    `SELECT u.id::text, u.property_id::text, u.label, u.rental_mode::text AS rental_mode,
-            coalesce(u.import_address_key, p.address_key, ${COMPUTED_ADDRESS_KEY}, '') AS address_key,
-            p.address_display
-       FROM units u
-       JOIN properties p ON p.id = u.property_id
-      WHERE u.org_id = $1 AND u.archived_at IS NULL
-        AND (
-          u.import_address_key = ANY($2::text[])
-          OR p.address_key = ANY($2::text[])
-          OR ${COMPUTED_ADDRESS_KEY} = ANY($2::text[])
-          OR p.name = ANY($3::text[])
-        )`,
-    [orgId, keys, names],
-  );
-  for (const unit of units.rows) {
-    const key = unit.address_key || addressKey(unit.address_display ?? "");
-    if (!key) continue;
-    index.units.set(`${key}\n${unit.label.normalize("NFKC").trim()}`, {
-      id: unit.id,
-      propertyId: unit.property_id,
-      mode: unit.rental_mode === "by_room" ? "room" : "whole_unit",
-    });
+  if (keys.length || names.length) {
+    const units = await client.query<{
+      id: string;
+      property_id: string;
+      label: string;
+      rental_mode: string;
+      address_key: string;
+      address_display: string | null;
+    }>(
+      `SELECT u.id::text, u.property_id::text, u.label, u.rental_mode::text AS rental_mode,
+              coalesce(u.import_address_key, p.address_key, '') AS address_key,
+              p.address_display
+         FROM units u
+         JOIN properties p ON p.id = u.property_id
+        WHERE u.org_id = $1 AND u.archived_at IS NULL
+          AND u.import_address_key = ANY($2::text[])
+       UNION
+       SELECT u.id::text, u.property_id::text, u.label, u.rental_mode::text AS rental_mode,
+              coalesce(u.import_address_key, p.address_key, '') AS address_key,
+              p.address_display
+         FROM units u
+         JOIN properties p ON p.id = u.property_id
+        WHERE u.org_id = $1 AND u.archived_at IS NULL
+          AND p.address_key = ANY($2::text[])
+       UNION
+       SELECT u.id::text, u.property_id::text, u.label, u.rental_mode::text AS rental_mode,
+              coalesce(u.import_address_key, p.address_key, '') AS address_key,
+              p.address_display
+         FROM units u
+         JOIN properties p ON p.id = u.property_id
+        WHERE u.org_id = $1 AND u.archived_at IS NULL
+          AND p.name = ANY($3::text[])`,
+      [orgId, keys, names],
+    );
+    for (const unit of units.rows) {
+      const key = unit.address_key || addressKey(unit.address_display ?? "");
+      if (!key) continue;
+      index.units.set(`${key}\n${unit.label.normalize("NFKC").trim()}`, {
+        id: unit.id,
+        propertyId: unit.property_id,
+        mode: unit.rental_mode === "by_room" ? "room" : "whole_unit",
+      });
+    }
   }
+  tick(0.7);
 
   const unitIds = [...new Set([...index.units.values()].map((unit) => unit.id).filter((id) => !id.startsWith("new-")))];
   if (unitIds.length) {
@@ -272,8 +313,8 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[])
     for (const lease of leases.rows) {
       index.leases.push({
         spaceKey: lease.room_label ? `room:${lease.unit_id}:${lease.room_label}` : `unit:${lease.target_unit ?? lease.unit_id}`,
-        start: lease.start,
-        end: lease.end,
+        start: isoDate(lease.start),
+        end: isoDate(lease.end),
         phone: lease.phone,
         idHash: null,
         tenantId: lease.tenant_id,
@@ -298,18 +339,27 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[])
     }
   }
   if (phones.length) {
+    // Same org the session is pinned to (live or that firm's sandbox). RLS hides the other environment.
+    // Match +8869xxxxxxxx and the trunk-zero form +88609xxxxxxxx. Both pass the E.164 check.
+    const phoneKeys = unique(phones.flatMap((phone) => phoneMatchKeys(phone)));
     const tenants = await client.query<{ id: string; phone_e164: string | null; display_name: string }>(
       `SELECT id::text, phone_e164, display_name
          FROM contacts
         WHERE org_id = $1 AND is_tenant AND archived_at IS NULL
           AND phone_e164 = ANY($2::text[])`,
-      [orgId, phones],
+      [orgId, phoneKeys],
     );
     for (const tenant of tenants.rows) {
-      addTenantKey(index.tenantsByPhone, tenant.phone_e164, { id: tenant.id, name: tenant.display_name });
+      indexTenantPhone(index.tenantsByPhone, tenant.phone_e164, { id: tenant.id, name: tenant.display_name });
     }
   }
+  tick(1);
   return index;
+}
+
+function isoDate(value: string) {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+  return match ? match[1] : value;
 }
 
 async function readCappedText(request: Request, maxBytes: number) {
@@ -387,18 +437,24 @@ async function bulkWrite(client: Client, session: Session, plans: RowPlan[], jur
   const live = plans.filter((plan) => !plan.blocked);
   materializeIds(live);
   const total = live.length;
+  const steps = 8;
   for (let offset = 0; offset < total; offset += IMPORT_WRITE_CHUNK) {
     const chunk = live.slice(offset, offset + IMPORT_WRITE_CHUNK);
-    await insertProperties(client, session, chunk, jurisdictionId);
-    await insertPeople(client, session, chunk);
-    await insertPropertyOwners(client, session, chunk);
-    await insertUnits(client, session, chunk);
-    await insertRooms(client, session, chunk);
+    let step = 0;
+    const tick = async (work: Promise<unknown>) => {
+      await work;
+      step += 1;
+      onProgress?.(offset + Math.ceil((chunk.length * step) / steps), total);
+    };
+    await tick(insertProperties(client, session, chunk, jurisdictionId));
+    await tick(insertPeople(client, session, chunk));
+    await tick(insertPropertyOwners(client, session, chunk));
+    await tick(insertUnits(client, session, chunk));
+    await tick(insertRooms(client, session, chunk));
     const leaseIds = new Map<RowPlan, string>();
-    await insertLeases(client, session, chunk, leaseIds);
-    await insertParties(client, session, chunk, leaseIds);
-    await upsertListingsBulk(client, session.orgId, chunk);
-    onProgress?.(offset + chunk.length, total);
+    await tick(insertLeases(client, session, chunk, leaseIds));
+    await tick(insertParties(client, session, chunk, leaseIds));
+    await tick(upsertListingsBulk(client, session.orgId, chunk));
   }
 }
 

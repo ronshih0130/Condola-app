@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const body = await readImportBody(request);
     if (body.mode === "preview") {
       const issues = await previewImport(session, { fileName: body.fileName, rows: body.rows });
-      return NextResponse.json({ issues });
+      return NextResponse.json({ issues }, { headers: { "cache-control": "no-store" } });
     }
     if (body.mode === "dry") {
       const result = await dryRunImport(session, { fileName: body.fileName, rows: body.rows });
