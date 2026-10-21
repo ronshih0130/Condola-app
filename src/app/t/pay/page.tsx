@@ -23,6 +23,11 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
       <p>
         {displaySampleName(money.lease.place)}
       </p>
+      {money.utilityLines.map((line, index) => (
+        <p key={`${line.description}-${index}`} data-testid="tenant-utility-line">
+          {line.description} {formatMoney(Number(line.amount), money.currency, session.locale)}
+        </p>
+      ))}
       <p className="b" data-testid="tenant-bill">{formatMoney(money.dueMinor, money.currency, session.locale)}</p>
       <p className="small">{t("i_account_last5", { last5: "88921" })}</p>
       {money.dueMinor > 0 ? (

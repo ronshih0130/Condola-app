@@ -25,7 +25,14 @@ export default async function RentPage() {
   let lastProperty = "";
   return (
     <>
-      <PageHeader title={t("i_rentroll_title")} />
+      <PageHeader
+        title={t("i_rentroll_title")}
+        actions={
+          <Link className="btn" href="/m/rent/utilities" data-testid="utility-entry">
+            {t("i_utility_open")}
+          </Link>
+        }
+      />
       <div className="card">
         <RfTable testId="rent-roll">
           <thead>

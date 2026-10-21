@@ -34,6 +34,7 @@ import { createLeaseFromForm } from "./lease-form";
 import { addTicketComment, saveRepairRecord } from "./repairs";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
+import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
 
 export type ActionState = { error: string; field?: string; step?: number };
 
@@ -527,6 +528,57 @@ export async function actionUpdateSpace(formData: FormData) {
     redirect("/m/units");
   } catch (error) {
     bounce(back, error);
+  }
+}
+
+function utilityInput(formData: FormData) {
+  const spaceIds = formData.getAll("spaceId").map((value) => String(value));
+  const kwhs = formData.getAll("kwh").map((value) => optionalNum(value));
+  const total = optionalNum(formData.get("totalKwh"));
+  const bill = optionalNum(formData.get("billTotal"));
+  return {
+    unitId: text(formData.get("unitId")),
+    periodStart: text(formData.get("periodStart")),
+    periodEnd: text(formData.get("periodEnd")),
+    rateMajor: num(formData.get("rate")),
+    totalKwh: total,
+    billTotalMajor: bill,
+    overrideReason: text(formData.get("overrideReason")),
+    readings: spaceIds.map((spaceId, index) => ({ spaceId, kwh: kwhs[index] ?? NaN })),
+  };
+}
+
+export async function actionPrepareUtility(formData: FormData) {
+  const unitId = text(formData.get("unitId"));
+  const back = `/m/rent/utilities?unit=${encodeURIComponent(unitId)}`;
+  try {
+    const session = await getSession();
+    const result = await prepareUtilityRun(session, utilityInput(formData));
+    redirect(`/m/rent/utilities?run=${result.runId}`);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionConfirmUtility(formData: FormData) {
+  const runId = text(formData.get("runId"));
+  try {
+    const session = await getSession();
+    await confirmUtilityRun(session, runId);
+    redirect(`/m/rent/utilities?run=${runId}&saved=posted`);
+  } catch (error) {
+    bounce(`/m/rent/utilities?run=${runId}`, error);
+  }
+}
+
+export async function actionVoidUtility(formData: FormData) {
+  const runId = text(formData.get("runId"));
+  try {
+    const session = await getSession();
+    await voidUtilityRun(session, runId, text(formData.get("reason")));
+    redirect(`/m/rent/utilities?run=${runId}&saved=void`);
+  } catch (error) {
+    bounce(`/m/rent/utilities?run=${runId}`, error);
   }
 }
 

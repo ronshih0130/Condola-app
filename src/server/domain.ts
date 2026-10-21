@@ -2099,8 +2099,8 @@ export async function generateStatement(session: Session, input: { ownerContactI
           AND p.paid_on BETWEEN $3 AND $4 AND l.property_id = ANY($5::uuid[])`,
       [session.orgId, currency, bounds.start, bounds.end, propertyIds],
     );
-    const rentByProperty = new Map<string, { name: string; rent: number; other: number }>();
-    for (const property of properties) rentByProperty.set(property.property_id, { name: property.name, rent: 0, other: 0 });
+    const rentByProperty = new Map<string, { name: string; rent: number; utility: number; other: number }>();
+    for (const property of properties) rentByProperty.set(property.property_id, { name: property.name, rent: 0, utility: 0, other: 0 });
     for (const payment of payments) {
       const allocations = await many<{ amount_minor: string; invoice_id: string }>(
         client,
@@ -2119,11 +2119,12 @@ export async function generateStatement(session: Session, input: { ownerContactI
         );
         const bucket = rentByProperty.get(payment.property_id)!;
         bucket.rent += buckets.rent;
-        bucket.other += buckets.utility + buckets.other;
+        bucket.utility += buckets.utility;
+        bucket.other += buckets.other;
       }
     }
     const rent = [...rentByProperty.values()].reduce((sum, row) => sum + row.rent, 0);
-    const other = [...rentByProperty.values()].reduce((sum, row) => sum + row.other, 0);
+    const other = [...rentByProperty.values()].reduce((sum, row) => sum + row.utility + row.other, 0);
     const expenses = await many<{ id: string; amount_minor: string; description: string | null; category: string; property_id: string }>(
       client,
       `SELECT id, amount_minor::text, description, category, property_id::text FROM expenses
@@ -2193,6 +2194,13 @@ export async function generateStatement(session: Session, input: { ownerContactI
           `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor)
            VALUES ($1,$2,$3,'rent',$4,$5)`,
           [session.orgId, statement.id, propertyId, bucket.name, bucket.rent],
+        );
+      }
+      if (bucket.utility) {
+        await client.query(
+          `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor)
+           VALUES ($1,$2,$3,'other_income',$4,$5)`,
+          [session.orgId, statement.id, propertyId, "電費", bucket.utility],
         );
       }
       if (bucket.other) {

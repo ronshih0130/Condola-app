@@ -190,6 +190,8 @@ export function SpaceForm({
             >
               <option value="">{t("i_choose")}</option>
               <option value="submeter">{t("i_elec_submeter")}</option>
+              <option value="by_reading">{t("i_elec_reading")}</option>
+              <option value="shared">{t("i_elec_shared")}</option>
               <option value="tenant_direct">{t("i_elec_direct")}</option>
             </select>
           </div>

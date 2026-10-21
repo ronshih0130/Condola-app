@@ -191,7 +191,17 @@ export default async function LeasePage({
                   </td>
                 </tr>
                 <tr>
-                  <td>{t("i_charge_utility")}</td>
+                  <td>
+                    {detail.lines.some((line) => line.charge_type === "utility" && line.description.startsWith("電費"))
+                      ? detail.lines
+                          .filter((line) => line.charge_type === "utility" && line.description.startsWith("電費"))
+                          .map((line) => (
+                            <div key={line.id} data-testid="invoice-utility-line">
+                              {line.description}
+                            </div>
+                          ))
+                      : t("i_charge_utility")}
+                  </td>
                   <td className="num" data-testid="invoice-utility" data-minor={detail.utilityMinor}>
                     {money(detail.utilityMinor)}
                   </td>

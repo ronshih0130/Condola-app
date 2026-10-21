@@ -9,7 +9,7 @@ import type { Session } from "./types";
 import type { Client } from "pg";
 
 export type SpaceKind = "room" | "whole_unit";
-export type ElectricityMethod = "submeter" | "tenant_direct";
+export type ElectricityMethod = "submeter" | "by_reading" | "shared" | "tenant_direct";
 export type PortfolioRoomType = "whole_home" | "suite" | "shared_bath" | "studio" | "other";
 
 export type PortfolioRow = {
@@ -219,9 +219,14 @@ export function parsePortfolioCsv(text: string): PortfolioPlan {
     const rentMajor = optionalNumber(cell(source, index, "月租"), line, "月租");
     if (rentMajor === null) throw new PortfolioError(`第 ${line} 列缺少月租`);
     const electricityRaw = cell(source, index, "電費方式").trim();
-    const electricityMethod: ElectricityMethod | null =
-      electricityRaw === "分表" ? "submeter" : electricityRaw === "租客自繳" ? "tenant_direct" : null;
-    if (!electricityMethod) throw new PortfolioError(`第 ${line} 列的電費方式必須是分表或租客自繳`);
+    const electricityLabels: Record<string, ElectricityMethod> = {
+      分表: "submeter",
+      依電表度數: "by_reading",
+      共同電表: "shared",
+      租客自繳: "tenant_direct",
+    };
+    const electricityMethod = electricityLabels[electricityRaw] ?? null;
+    if (!electricityMethod) throw new PortfolioError(`第 ${line} 列的電費方式必須是分表、依電表度數、共同電表或租客自繳`);
     const due = optionalNumber(cell(source, index, "繳租日"), line, "繳租日");
     if (due !== null && (due < 1 || due > 31 || !Number.isInteger(due))) {
       throw new PortfolioError(`第 ${line} 列的繳租日必須是 1 到 31`);
@@ -317,7 +322,7 @@ function cleanKind(value: string): SpaceKind {
 }
 
 function cleanElectricity(value: string): ElectricityMethod {
-  if (value === "submeter" || value === "tenant_direct") return value;
+  if (value === "submeter" || value === "by_reading" || value === "shared" || value === "tenant_direct") return value;
   throw new FlowError("errors.required");
 }
 

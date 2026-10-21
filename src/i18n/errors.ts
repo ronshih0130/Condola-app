@@ -39,6 +39,8 @@ export const ERRORS: Record<string, string> = {
   "errors.tenantExists": "i_tenant_exists",
   "errors.phone": "i_phone",
   "errors.meter": "i_meter",
+  "errors.utilityMethod": "i_utility_method_skip",
+  "errors.utilityState": "i_utility_state",
   "errors.billExists": "i_bill_exists",
   "errors.lastAdmin": "i_last_admin",
   "errors.ownRole": "i_own_role",

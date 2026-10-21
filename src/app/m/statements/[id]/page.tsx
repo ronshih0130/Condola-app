@@ -38,6 +38,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
         t={t}
         locale={session.locale}
         row={row}
+        lines={detail.lines}
         note={
           <>
             <p className="small">{t("i_actor")}</p>

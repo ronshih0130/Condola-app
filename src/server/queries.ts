@@ -667,9 +667,9 @@ export async function leaseDetail(session: Session, id: string) {
       [id],
     );
     const lines = invoices.length
-      ? await many<{ invoice_id: string; charge_type: string; amount: string }>(
+      ? await many<{ id: string; invoice_id: string; charge_type: string; amount: string; description: string }>(
           client,
-          `SELECT invoice_id::text, charge_type::text, amount_minor::text AS amount
+          `SELECT id::text, invoice_id::text, charge_type::text, amount_minor::text AS amount, description
              FROM invoice_lines WHERE invoice_id = ANY($1::uuid[]) ORDER BY line_no`,
           [invoices.map((invoice) => invoice.id)],
         )
@@ -1317,9 +1317,9 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
       [leaseId],
     );
     const lines = invoices.length
-      ? await many<{ invoice_id: string; charge_type: string; amount: string }>(
+      ? await many<{ invoice_id: string; charge_type: string; amount: string; description: string }>(
           client,
-          `SELECT invoice_id::text, charge_type::text, amount_minor::text AS amount
+          `SELECT invoice_id::text, charge_type::text, amount_minor::text AS amount, description
              FROM invoice_lines WHERE invoice_id = ANY($1::uuid[])`,
           [invoices.map((invoice) => invoice.id)],
         )
@@ -1331,7 +1331,10 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
       return sum + rentUtilityDueMinor(invoiceLines, Number(invoice.paid));
     }, 0);
     const balance = invoices.reduce((sum, invoice) => sum + Number(invoice.balance), 0);
-    return { lease, dueMinor, balance, currency: lease.currency };
+    const utilityLines = lines
+      .filter((line) => line.charge_type === "utility" && line.description.startsWith("電費"))
+      .map((line) => ({ description: line.description, amount: line.amount }));
+    return { lease, dueMinor, balance, currency: lease.currency, utilityLines };
   });
 }
 
