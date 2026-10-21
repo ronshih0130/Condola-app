@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { query, tx, withClient } from "./db";
 import { FlowError } from "./errors";
+import { hashIdNumber } from "./id-hash";
 import { commitImportBatch, dryRunImport } from "./import-batch";
+import { IMPORT_REQUEST_ROWS } from "./owner-import";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import type { ImportRequestRow } from "./owner-import";
 import { ensureSandbox } from "./sandbox";
@@ -165,13 +167,30 @@ test("commit saves an active signed lease, rejects an unexplained deposit, and r
     );
     assert.equal(saved.rows.length, 1);
     assert.equal(saved.rows[0].status, "active");
-    assert.equal(saved.rows[0].esign, "fully_signed");
+    assert.equal(saved.rows[0].esign, "imported");
     assert.equal(saved.rows[0].reason, "屋主同意三個月");
     assert.equal(saved.rows[0].overridden_by, USERS.admin);
     assert.equal(saved.rows[0].user_id, null);
     assert.equal(saved.rows[0].invoices, "0");
-    assert.equal(saved.rows[0].hash?.length, 64);
+    assert.equal(saved.rows[0].hash, hashIdNumber(tenantId, ORG_ID));
     assert.notEqual(saved.rows[0].hash, tenantId);
+    const signed = await query<{ signed_at: string | null; sigs: string; consent: string }>(
+      `SELECT l.signed_at::text, l.document_sha256,
+              (SELECT count(*) FROM lease_signatures s WHERE s.lease_id = l.id)::text AS sigs,
+              (SELECT count(*) FROM lease_signatures s WHERE s.lease_id = l.id AND s.consent_text_key = 'lease.consent')::text AS consent
+         FROM leases l
+         JOIN properties p ON p.id = l.property_id
+        WHERE p.name = $1`,
+      [name],
+    );
+    assert.equal(signed.rows[0].signed_at, null);
+    assert.equal(signed.rows[0].sigs, "0");
+    assert.equal(signed.rows[0].consent, "0");
+    const auditBody = await query<{ body: string }>(
+      `SELECT new_row::text AS body FROM audit_log WHERE event_type = 'import_batch' AND new_row->>'fileName' = $1`,
+      [fileName],
+    );
+    assert.equal(auditBody.rows[0].body.includes(tenantId), false);
 
     const again = await commitImportBatch(admin, {
       fileName,
@@ -199,6 +218,32 @@ test("commit saves an active signed lease, rejects an unexplained deposit, and r
       [name],
     );
     assert.equal(leaseCount.rows[0].n, "1");
+
+    const changed = await commitImportBatch(admin, {
+      fileName,
+      rows: [
+        row({
+          propertyName: name,
+          address,
+          ownerName: "測試屋主",
+          ownerEmail,
+          tenantEmail,
+          tenantPhone: phone,
+          tenantId,
+          rent: "12000",
+          deposit: "24000",
+          depositReason: "屋主同意三個月",
+        }),
+      ],
+    });
+    assert.equal(changed.created.leases, 0);
+    assert.equal(changed.reused.leases, 0);
+    assert.ok(changed.errors.some((issue) => issue.key === "im_e_terms"));
+    const stillOne = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM leases l JOIN properties p ON p.id = l.property_id WHERE p.name = $1`,
+      [name],
+    );
+    assert.equal(stillOne.rows[0].n, "1");
     const unitCount = await query<{ n: string }>(
       `SELECT count(*)::text AS n FROM units u JOIN properties p ON p.id = u.property_id WHERE p.name = $1`,
       [name],
@@ -351,5 +396,103 @@ test("an accountant cannot import and a manager can", async () => {
     assert.equal(committed.created.leases, 1);
   } finally {
     await cleanup([name], [ownerEmail, `mt.${stamp}@example.com`], [fileName]);
+  }
+});
+
+test("a phone that matches more than one tenant is an error and does not overwrite", async () => {
+  const stamp = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}p`;
+  const phone = `09${String(22000000 + (Date.now() % 70000000)).slice(-8)}`;
+  const e164 = `+886${phone.slice(1)}`;
+  const name = `匯入電話${stamp}`;
+  const emailA = `dup.a.${stamp}@example.com`;
+  const emailB = `dup.b.${stamp}@example.com`;
+  const fileName = `dup-${stamp}.csv`;
+  await query(
+    `INSERT INTO contacts (org_id, is_tenant, display_name, email, phone_e164, locale)
+     VALUES ($1, true, $2, $3, $5, 'zh-TW'), ($1, true, $4, $6, $5, 'zh-TW')`,
+    [ORG_ID, `甲${stamp}`, emailA, `乙${stamp}`, e164, emailB],
+  );
+  try {
+    const result = await commitImportBatch(admin, {
+      fileName,
+      rows: [row({ propertyName: name, address: `台北市信義區電話路${stamp}號`, ownerName: "電話屋主", ownerEmail: `own.${stamp}@example.com`, tenantName: "新名字", tenantPhone: phone, tenantEmail: `new.${stamp}@example.com` })],
+    });
+    assert.ok(result.errors.some((issue) => issue.key === "im_e_phone_dup"));
+    assert.equal(result.created.tenants, 0);
+    assert.equal(result.created.leases, 0);
+    const names = await query<{ display_name: string }>(
+      `SELECT display_name FROM contacts WHERE org_id = $1 AND phone_e164 = $2 ORDER BY display_name`,
+      [ORG_ID, e164],
+    );
+    assert.deepEqual(names.rows.map((item) => item.display_name).sort(), [`乙${stamp}`, `甲${stamp}`].sort());
+    const props = await query<{ n: string }>(`SELECT count(*)::text AS n FROM properties WHERE name = $1`, [name]);
+    assert.equal(props.rows[0].n, "0");
+  } finally {
+    await cleanup([name], [emailA, emailB, `own.${stamp}@example.com`, `new.${stamp}@example.com`], [fileName]);
+  }
+});
+
+test("an ID that does not match is not attached to the phone's tenant", async () => {
+  const stamp = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}d`;
+  const phone = `09${String(23000000 + (Date.now() % 70000000)).slice(-8)}`;
+  const e164 = `+886${phone.slice(1)}`;
+  const name = `匯入身分${stamp}`;
+  const email = `id.${stamp}@example.com`;
+  const fileName = `id-${stamp}.csv`;
+  const kept = hashIdNumber(`Z${stamp.slice(0, 9)}`, ORG_ID);
+  const incoming = `Q${stamp.slice(0, 9).toUpperCase()}`;
+  await query(
+    `INSERT INTO contacts (org_id, is_tenant, display_name, email, phone_e164, id_number_hash, locale)
+     VALUES ($1, true, $2, $3, $4, $5, 'zh-TW')`,
+    [ORG_ID, `既有${stamp}`, email, e164, kept],
+  );
+  try {
+    const result = await commitImportBatch(admin, {
+      fileName,
+      rows: [row({ propertyName: name, address: `台北市中正區身分路${stamp}號`, ownerName: "身分屋主", ownerEmail: `idown.${stamp}@example.com`, tenantPhone: phone, tenantEmail: `idnew.${stamp}@example.com`, tenantId: incoming })],
+    });
+    assert.ok(result.errors.some((issue) => issue.key === "im_e_tenant"));
+    assert.equal(result.created.leases, 0);
+    const contact = await query<{ hash: string; display_name: string; n: string }>(
+      `SELECT id_number_hash AS hash, display_name, (SELECT count(*) FROM contacts c2 WHERE c2.org_id = $1 AND c2.phone_e164 = $2)::text AS n
+         FROM contacts WHERE org_id = $1 AND phone_e164 = $2`,
+      [ORG_ID, e164],
+    );
+    assert.equal(contact.rows.length, 1);
+    assert.equal(contact.rows[0].n, "1");
+    assert.equal(contact.rows[0].hash, kept);
+    assert.equal(contact.rows[0].display_name, `既有${stamp}`);
+    assert.equal(contact.rows[0].hash === hashIdNumber(incoming, ORG_ID), false);
+  } finally {
+    await cleanup([name], [email, `idown.${stamp}@example.com`, `idnew.${stamp}@example.com`], [fileName]);
+  }
+});
+
+test("a request over the batch cap and a file over the total cap are rejected", async () => {
+  const stamp = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}c`;
+  const fileName = `cap-${stamp}.csv`;
+  const tooMany = Array.from({ length: IMPORT_REQUEST_ROWS + 1 }, (_, index) => row({ line: index + 2, unitLabel: `U${index}` }));
+  await assert.rejects(
+    () => dryRunImport(admin, { fileName, rows: tooMany }),
+    (error: unknown) => error instanceof FlowError && error.key === "im_too_many",
+  );
+  await query(
+    `INSERT INTO import_jobs (org_id, entity, column_map, status, rows_total, rows_ok, rows_failed, requested_by, finished_at)
+     VALUES ($1, 'bulk', $2::jsonb, 'succeeded', 2000, 2000, 0, $3, now())`,
+    [ORG_ID, JSON.stringify({ fileName }), USERS.admin],
+  );
+  try {
+    await assert.rejects(
+      () =>
+        commitImportBatch(admin, {
+          fileName,
+          rows: [row({ propertyName: `匯入上限${stamp}`, address: `台北市南港區上限路${stamp}號`, ownerName: "上限屋主", ownerEmail: `cap.${stamp}@example.com` })],
+        }),
+      (error: unknown) => error instanceof FlowError && error.key === "im_too_many",
+    );
+    const props = await query<{ n: string }>(`SELECT count(*)::text AS n FROM properties WHERE name = $1`, [`匯入上限${stamp}`]);
+    assert.equal(props.rows[0].n, "0");
+  } finally {
+    await cleanup([`匯入上限${stamp}`], [`cap.${stamp}@example.com`], [fileName]);
   }
 });

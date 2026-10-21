@@ -43,6 +43,7 @@ export function depositCapSaveAllowed(depositMonths: number, outcome: string | n
  * There is no amendment document, so a signed or active lease cannot be edited in place.
  */
 export function leaseTermsEditable(input: { status: string; esign: string; signed: boolean }) {
+  if (input.esign === "imported" || input.status === "imported") return false;
   if (input.signed) return false;
   if (input.status !== "draft" && input.status !== "pending_signature") return false;
   return input.esign === "not_sent" || input.esign === "sent";

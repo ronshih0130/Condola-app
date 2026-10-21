@@ -89,8 +89,10 @@ export function csvDocument(rows: string[][]): string {
 }
 
 function csvCell(value: string) {
-  if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-  return value;
+  let text = value;
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  if (/[",\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
+  return text;
 }
 
 export async function readSpreadsheet(

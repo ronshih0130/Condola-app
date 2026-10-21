@@ -1319,12 +1319,13 @@ export async function signLease(session: Session, input: { leaseId: string; sign
   if (!input.signedName.trim()) throw new FlowError("errors.required");
 
   const result = await svc(session.userId, async (client) => {
-    const lease = await maybe<{ id: string; document_sha256: string; org_id: string }>(
+    const lease = await maybe<{ id: string; document_sha256: string; org_id: string; esign: string }>(
       client,
-      `SELECT id, document_sha256, org_id FROM leases WHERE id = $1`,
+      `SELECT id, document_sha256, org_id, esign_status::text AS esign FROM leases WHERE id = $1`,
       [input.leaseId],
     );
     if (!lease || lease.org_id !== session.orgId) throw new FlowError("errors.notFound");
+    if (lease.esign === "imported") throw new FlowError("errors.forbidden");
     const contact = await maybe<{ id: string }>(
       client,
       `SELECT c.id FROM lease_parties lp JOIN contacts c ON c.id = lp.contact_id

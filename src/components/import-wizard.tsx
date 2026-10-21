@@ -127,13 +127,14 @@ export function ImportWizard() {
     setBusy(true);
     setNotice("");
     try {
-      const result = await postImport("dry", fileName, requestRows(sending));
+      const result = await runBatched("dry", requestRows(sending));
       setDry(result);
       setStep(3);
     } catch (error) {
       setNotice(messageFrom(t, error));
     } finally {
       setBusy(false);
+      setProgress("");
     }
   }
 
@@ -143,14 +144,8 @@ export function ImportWizard() {
     if (rows.length === 0) return;
     setBusy(true);
     setNotice("");
-    const combined = emptyResult(fileName);
     try {
-      for (let offset = 0; offset < rows.length; offset += IMPORT_COMMIT_BATCH) {
-        const batch = rows.slice(offset, offset + IMPORT_COMMIT_BATCH);
-        setProgress(`${Math.min(offset + batch.length, rows.length)} / ${rows.length}`);
-        const part = await postImport("commit", fileName, batch);
-        mergeResult(combined, part);
-      }
+      const combined = await runBatched("commit", rows);
       setPreviewErrors(parsed.filter((row) => rowHasError(row)).flatMap((row) => row.issues.filter((issue) => issue.severity === "error")));
       setDone(combined);
       setStep(4);
@@ -160,6 +155,16 @@ export function ImportWizard() {
       setBusy(false);
       setProgress("");
     }
+  }
+
+  async function runBatched(mode: "dry" | "commit", rows: ImportRequestRow[]) {
+    const combined = emptyResult(fileName);
+    for (let offset = 0; offset < rows.length; offset += IMPORT_COMMIT_BATCH) {
+      const batch = rows.slice(offset, offset + IMPORT_COMMIT_BATCH);
+      setProgress(`${Math.min(offset + batch.length, rows.length)} / ${rows.length}`);
+      mergeResult(combined, await postImport(mode, fileName, batch));
+    }
+    return combined;
   }
 
   function downloadErrors(extra: ImportIssue[]) {

@@ -79,6 +79,7 @@ export function statusKey(status: string) {
     sent: "i_esign_sent",
     partially_signed: "i_esign_partial",
     fully_signed: "i_esign_full",
+    imported: "i_esign_imported",
     submitted: "i_pay_submitted",
     confirmed: "i_pay_confirmed",
     rejected: "i_pay_rejected",

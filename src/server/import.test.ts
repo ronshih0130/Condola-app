@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
+import { createHash, createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { buildXlsx, decodeBytes, readSpreadsheet, SpreadsheetError } from "../lib/spreadsheet";
-import { ORG2_ID } from "./ids";
+import { buildXlsx, csvDocument, decodeBytes, readSpreadsheet, SpreadsheetError } from "../lib/spreadsheet";
+import { FlowError } from "./errors";
+import { hashIdNumber, parseIdHmacKey } from "./id-hash";
+import { ORG2_ID, ORG_ID } from "./ids";
+import { IMPORT_BODY_MAX_BYTES, readImportBody } from "./import-batch";
 import {
   IMPORT_COMMIT_BATCH,
   IMPORT_FIELDS,
+  IMPORT_FIELD_MAX,
   IMPORT_MAX_ROWS,
+  IMPORT_MONEY_MAX,
   coerceImportRows,
   emptyIndex,
   matchColumns,
@@ -175,9 +181,19 @@ test("an existing unit, tenant, and lease are reused", () => {
   index.properties.set(parsed.propertyName, { id: "prop-1", addressKey: parsed.addressKey });
   index.units.set(`${parsed.addressKey}\n${parsed.unitLabel}`, { id: "unit-1", propertyId: "prop-1", mode: "whole_unit" });
   index.ownersByEmail.set(parsed.ownerEmail ?? "", "owner-1");
-  index.tenantsByPhone.set(parsed.phoneE164 ?? "", "tenant-1");
-  index.tenantsByHash.set("abc", "tenant-1");
-  index.leases.push({ spaceKey: "unit:unit-1", start: "2026-11-01", end: "2027-10-31", phone: parsed.phoneE164, idHash: "abc" });
+  index.tenantsByPhone.set(parsed.phoneE164 ?? "", ["tenant-1"]);
+  index.tenantsByHash.set("abc", ["tenant-1"]);
+  index.leases.push({
+    spaceKey: "unit:unit-1",
+    start: "2026-11-01",
+    end: "2027-10-31",
+    phone: parsed.phoneE164,
+    idHash: "abc",
+    tenantId: "tenant-1",
+    rentMinor: parsed.rentMinor,
+    depositMinor: parsed.depositMinor,
+    dueDay: parsed.dueDay ?? -1,
+  });
   const plan = planOne(parsed, index);
   assert.equal(plan.blocked, false);
   assert.equal(plan.reuseUnit, true);
@@ -185,9 +201,90 @@ test("an existing unit, tenant, and lease are reused", () => {
   assert.equal(plan.reuseLease, true);
   assert.equal(plan.createLease, false);
 
+  const changed = planOne({ ...parsed, rentMinor: parsed.rentMinor + 100 }, index);
+  assert.equal(changed.blocked, true);
+  assert.equal(changed.reuseLease, false);
+  assert.ok(changed.issues.some((issue) => issue.key === "im_e_terms"));
+
   const other = planOne({ ...parsed, phoneE164: "+886912000333", tenantIdHash: "other" }, index);
   assert.equal(other.blocked, true);
   assert.ok(other.issues.some((issue) => issue.key === "im_e_occupied"));
+});
+
+test("an ID that misses does not fall back to the phone, and a shared phone is not reused", () => {
+  const [parsed] = validateImportRows([lease({ tenantId: "A123456789" })], "2026-10-21");
+  parsed.tenantId = null;
+  parsed.tenantIdHash = "hash-new";
+  const index = emptyIndex();
+  index.tenantsByPhone.set(parsed.phoneE164 ?? "", ["tenant-phone"]);
+  const mismatch = planOne(parsed, index);
+  assert.equal(mismatch.blocked, true);
+  assert.equal(mismatch.reuseTenant, false);
+  assert.ok(mismatch.issues.some((issue) => issue.key === "im_e_tenant"));
+
+  const phoneOnly = { ...parsed, tenantId: null, tenantIdHash: null };
+  index.tenantsByPhone.set(parsed.phoneE164 ?? "", ["tenant-a", "tenant-b"]);
+  const dup = planOne(phoneOnly, index);
+  assert.equal(dup.blocked, true);
+  assert.ok(dup.issues.some((issue) => issue.key === "im_e_phone_dup"));
+
+  index.tenantsByPhone.set(parsed.phoneE164 ?? "", ["tenant-only"]);
+  const unique = planOne(phoneOnly, index);
+  assert.equal(unique.blocked, false);
+  assert.equal(unique.reuseTenant, true);
+  assert.equal(unique.tenantId, "tenant-only");
+});
+
+test("over-long fields and out-of-range amounts are rejected", () => {
+  assert.throws(
+    () => coerceImportRows([{ propertyName: "x".repeat(IMPORT_FIELD_MAX + 1) }]),
+    (error: unknown) => error instanceof FlowError && error.key === "im_e_len",
+  );
+  const huge = validateImportRows([lease({ rent: String(IMPORT_MONEY_MAX + 1) })], "2026-10-21")[0];
+  assert.ok(huge.issues.some((issue) => issue.key === "im_e_bound"));
+  assert.equal(huge.issues.some((issue) => issue.key === "im_e_len"), false);
+});
+
+test("ID hashes are org-bound HMAC values, not plain SHA-256", () => {
+  const number = "A123456789";
+  const raw = process.env.ID_DOC_HMAC_KEY?.trim();
+  const key = raw ? parseIdHmacKey(raw) : createHash("sha256").update("condola-demo-id-hmac").digest();
+  assert.ok(key);
+  const expected = createHmac("sha256", key).update(`${ORG_ID}\n${number}`).digest("hex");
+  assert.equal(hashIdNumber(`  ${number.toLowerCase()} `, ORG_ID), expected);
+  assert.notEqual(hashIdNumber(number, ORG_ID), hashIdNumber(number, ORG2_ID));
+  assert.notEqual(expected, createHash("sha256").update(number).digest("hex"));
+  assert.notEqual(expected, createHash("sha256").update(`${ORG_ID}\n${number}`).digest("hex"));
+});
+
+test("import requests reject a null body, an unknown mode, and a body over the byte cap", async () => {
+  const url = "http://local/api/import";
+  await assert.rejects(
+    () => readImportBody(new Request(url, { method: "POST", body: "null" })),
+    (error: unknown) => error instanceof FlowError && error.key === "im_body",
+  );
+  await assert.rejects(
+    () => readImportBody(new Request(url, { method: "POST", body: JSON.stringify({ mode: "wipe", rows: [] }) })),
+    (error: unknown) => error instanceof FlowError && error.key === "im_bad_mode",
+  );
+  const oversized = {
+    headers: new Headers({ "content-length": String(IMPORT_BODY_MAX_BYTES + 1) }),
+    text: async () => "{}",
+  } as Request;
+  await assert.rejects(
+    () => readImportBody(oversized),
+    (error: unknown) => error instanceof FlowError && error.key === "im_body",
+  );
+});
+
+test("error CSV cells neutralize formula injection", () => {
+  const csv = csvDocument([["=cmd", "+1", "-2", "@x", "\tok", "safe"]]);
+  assert.match(csv, /'=cmd/);
+  assert.match(csv, /'\+1/);
+  assert.match(csv, /'-2/);
+  assert.match(csv, /'@x/);
+  assert.match(csv, /'\tok/);
+  assert.equal(/^[=+\-@\t\r]/m.test(csv.replace(/^\uFEFF/, "")), false);
 });
 
 test("zh-TW import copy uses 屋主 and 租客", () => {

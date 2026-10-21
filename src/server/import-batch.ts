@@ -1,12 +1,13 @@
-import { createHash } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { maybe, one, tx } from "./db";
 import { FlowError } from "./errors";
+import { hashIdNumber } from "./id-hash";
 import { DEPOSIT_CAP_MONTHS, depositExceedsCap } from "./lease-rules";
 import {
-  IMPORT_COMMIT_BATCH,
   IMPORT_MAX_ROWS,
+  IMPORT_REQUEST_ROWS,
+  addTenantKey,
   addressKey,
   coerceImportRows,
   emptyIndex,
@@ -16,6 +17,7 @@ import {
   totalsFromPlans,
   validateImportRows,
   type ImportIssue,
+  type ImportRequestRow,
   type ImportResult,
   type ParsedImportRow,
   type RowPlan,
@@ -26,12 +28,36 @@ import type { Session } from "./types";
 
 export type { ImportResult };
 
+/** Reject uploads before JSON.parse. 50 rows of bounded fields fit under this. */
+export const IMPORT_BODY_MAX_BYTES = 512 * 1024;
+
+export async function readImportBody(request: Request): Promise<{ mode: "dry" | "commit"; fileName: string; rows: unknown }> {
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declared) && declared > IMPORT_BODY_MAX_BYTES) throw new FlowError("im_body");
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > IMPORT_BODY_MAX_BYTES) throw new FlowError("im_body");
+  if (!text.trim()) throw new FlowError("im_body");
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new FlowError("im_body");
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new FlowError("im_body");
+  const record = body as { mode?: unknown; fileName?: unknown; rows?: unknown };
+  if (record.mode !== "dry" && record.mode !== "commit") throw new FlowError("im_bad_mode");
+  const fileName = typeof record.fileName === "string" ? record.fileName : "";
+  if (fileName.length > 200) throw new FlowError("im_e_len", { f: "file", max: 200 });
+  return { mode: record.mode, fileName, rows: record.rows };
+}
+
 /** Validated JSON only. File bytes stay in the browser. */
 export async function dryRunImport(session: Session, input: { fileName: string; rows: unknown }): Promise<ImportResult> {
   assertImport(session);
   const rows = coerceImportRows(input.rows);
-  if (rows.length > IMPORT_MAX_ROWS) throw new FlowError("im_too_many", { n: rows.length, max: IMPORT_MAX_ROWS });
-  const parsed = stampHashes(validateImportRows(rows));
+  assertRequestRows(rows);
+  const parsed = stampHashes(validateImportRows(rows), session.orgId);
+  forgetRawIds(rows);
   const fileName = cleanName(input.fileName);
   if (parsed.length === 0) return totalsFromPlans([], fileName, true);
   return tx(session.userId, async (client) => {
@@ -44,19 +70,25 @@ export async function dryRunImport(session: Session, input: { fileName: string; 
 export async function commitImportBatch(session: Session, input: { fileName: string; rows: unknown }): Promise<ImportResult> {
   assertImport(session);
   const rows = coerceImportRows(input.rows);
-  if (rows.length > IMPORT_COMMIT_BATCH) throw new FlowError("im_too_many", { n: rows.length, max: IMPORT_COMMIT_BATCH });
-  const parsed = stampHashes(validateImportRows(rows));
+  assertRequestRows(rows);
+  const parsed = stampHashes(validateImportRows(rows), session.orgId);
+  forgetRawIds(rows);
   const fileName = cleanName(input.fileName);
   if (parsed.length === 0) return totalsFromPlans([], fileName, false);
   const result = await tx(session.userId, async (client) => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`import:${session.orgId}`]);
+    const prior = await client.query<{ n: number }>(
+      `SELECT coalesce(sum(rows_total), 0)::int AS n
+         FROM import_jobs
+        WHERE org_id = $1 AND entity = 'bulk' AND column_map->>'fileName' = $2`,
+      [session.orgId, fileName],
+    );
+    const already = Number(prior.rows[0]?.n ?? 0);
+    if (already + parsed.length > IMPORT_MAX_ROWS) {
+      throw new FlowError("im_too_many", { n: already + parsed.length, max: IMPORT_MAX_ROWS });
+    }
     const index = await loadIndex(client, session.orgId, parsed);
     const jurisdiction = await one<{ id: string }>(client, `SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
-    const member = await maybe<{ id: string }>(
-      client,
-      `SELECT id::text FROM org_members WHERE org_id = $1 AND user_id = $2 AND status = 'active'`,
-      [session.orgId, session.userId],
-    );
     const plans: RowPlan[] = [];
     for (const row of parsed) {
       const plan = planOne(row, index);
@@ -64,14 +96,9 @@ export async function commitImportBatch(session: Session, input: { fileName: str
         plans.push(plan);
         continue;
       }
-      if (plan.createLease && !member) {
-        fail(plan, { line: row.line, severity: "error", key: "errors.generic" });
-        plans.push(plan);
-        continue;
-      }
       await client.query("SAVEPOINT import_row");
       try {
-        await writeRow(client, session, plan, jurisdiction.id, member?.id ?? null);
+        await writeRow(client, session, plan, jurisdiction.id);
         await client.query("RELEASE SAVEPOINT import_row");
         rememberPlan(index, plan);
         plans.push(plan);
@@ -125,11 +152,26 @@ function cleanName(value: string) {
   return value.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 200) || "import";
 }
 
-function stampHashes(rows: ParsedImportRow[]) {
+function assertRequestRows(rows: ImportRequestRow[]) {
+  if (rows.length > IMPORT_REQUEST_ROWS) throw new FlowError("im_too_many", { n: rows.length, max: IMPORT_REQUEST_ROWS });
+  const farthest = rows.reduce((max, row) => Math.max(max, row.line), 0);
+  if (farthest > IMPORT_MAX_ROWS + 1) throw new FlowError("im_too_many", { n: Math.max(0, farthest - 1), max: IMPORT_MAX_ROWS });
+}
+
+function forgetRawIds(rows: ImportRequestRow[]) {
+  for (const row of rows) row.tenantId = "";
+}
+
+function stampHashes(rows: ParsedImportRow[], orgId: string) {
   for (const row of rows) {
-    if (!row.tenantId) continue;
-    const normal = row.tenantId.normalize("NFKC").replace(/\s+/g, "").toUpperCase();
-    row.tenantIdHash = createHash("sha256").update(normal).digest("hex");
+    const raw = row.tenantId;
+    row.tenantId = null;
+    if (!raw) continue;
+    try {
+      row.tenantIdHash = hashIdNumber(raw, orgId);
+    } catch {
+      throw new FlowError("im_e_idkey");
+    }
   }
   return rows;
 }
@@ -225,10 +267,15 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[])
       end: string;
       phone: string | null;
       id_hash: string | null;
+      tenant_id: string;
+      rent: string;
+      deposit: string;
+      due_day: number;
     }>(
       `SELECT l.unit_id::text, r.label AS room_label, l.target_unit_id::text AS target_unit,
               l.start_date::text AS start, coalesce(l.end_date::text, '9999-12-31') AS end,
-              c.phone_e164 AS phone, c.id_number_hash AS id_hash
+              c.phone_e164 AS phone, c.id_number_hash AS id_hash, lp.contact_id::text AS tenant_id,
+              l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.due_day
          FROM leases l
          JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
          JOIN contacts c ON c.id = lp.contact_id
@@ -244,6 +291,10 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[])
         end: lease.end,
         phone: lease.phone,
         idHash: lease.id_hash,
+        tenantId: lease.tenant_id,
+        rentMinor: Number(lease.rent),
+        depositMinor: Number(lease.deposit),
+        dueDay: Number(lease.due_day),
       });
     }
   }
@@ -270,14 +321,14 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[])
       [orgId, phones, hashes],
     );
     for (const tenant of tenants.rows) {
-      if (tenant.phone_e164) index.tenantsByPhone.set(tenant.phone_e164, tenant.id);
-      if (tenant.id_number_hash) index.tenantsByHash.set(tenant.id_number_hash, tenant.id);
+      addTenantKey(index.tenantsByPhone, tenant.phone_e164, tenant.id);
+      addTenantKey(index.tenantsByHash, tenant.id_number_hash, tenant.id);
     }
   }
   return index;
 }
 
-async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdictionId: string, memberId: string | null) {
+async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdictionId: string) {
   const row = plan.row;
   if (plan.createProperty) {
     const created = await one<{ id: string }>(
@@ -381,22 +432,19 @@ async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdi
     );
     plan.tenantId = created.id;
   }
-  if (plan.createLease && plan.tenantId && row.startDate && row.endDate && row.dueDay !== null && memberId) {
+  if (plan.createLease && plan.tenantId && row.startDate && row.endDate && row.dueDay !== null) {
     const over = depositExceedsCap(row.depositMonths);
     const reason = over ? row.depositReason : null;
     if (reason) await client.query(`SELECT set_config('app.change_reason', $1, true)`, [reason]);
-    const documentHash = createHash("sha256")
-      .update(JSON.stringify({ space: plan.roomId ?? plan.unitId, rent: row.rentMinor, deposit: row.depositMinor, start: row.startDate, end: row.endDate }))
-      .digest("hex");
     const lease = await one<{ id: string }>(
       client,
       `INSERT INTO leases (
          org_id, property_id, unit_id, target_unit_id, target_room_id, status, esign_status,
          start_date, end_date, currency, rent_amount_minor, due_day, prorate_first_period,
          deposit_amount_minor, deposit_months, deposit_override_reason, deposit_overridden_by, deposit_overridden_at,
-         document_sha256, signed_at, notes, created_by
+         notes, created_by
        ) VALUES (
-         $1,$2,$3,$4,$5,'active','fully_signed',$6,$7,'TWD',$8,$9,false,$10,$11,$12,$13,$14,$15,now(),$16,$17
+         $1,$2,$3,$4,$5,'active','imported',$6,$7,'TWD',$8,$9,false,$10,$11,$12,$13,$14,$15,$16
        ) RETURNING id::text`,
       [
         session.orgId,
@@ -413,7 +461,6 @@ async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdi
         reason,
         reason ? session.userId : null,
         reason ? new Date() : null,
-        documentHash,
         row.notes,
         session.userId,
       ],
@@ -422,18 +469,6 @@ async function writeRow(client: Client, session: Session, plan: RowPlan, jurisdi
     await client.query(
       `INSERT INTO lease_parties (org_id, lease_id, contact_id, role) VALUES ($1,$2,$3,'primary')`,
       [session.orgId, lease.id, plan.tenantId],
-    );
-    await client.query(
-      `INSERT INTO lease_signatures (
-         org_id, lease_id, signer_role, contact_id, status, signing_order, signed_name, document_sha256, consent_text_key, signed_at
-       ) VALUES ($1,$2,'tenant',$3,'signed',1,$4,$5,'lease.consent', now())`,
-      [session.orgId, lease.id, plan.tenantId, row.tenantName, documentHash],
-    );
-    await client.query(
-      `INSERT INTO lease_signatures (
-         org_id, lease_id, signer_role, member_id, status, signing_order, signed_name, document_sha256, consent_text_key, signed_at
-       ) VALUES ($1,$2,'manager',$3,'signed',2,$4,$5,'lease.consent', now())`,
-      [session.orgId, lease.id, memberId, session.name, documentHash],
     );
     await upsertListing(client, session.orgId, plan);
   } else if (plan.createUnit || plan.createRoom) {
@@ -449,9 +484,9 @@ async function upsertListing(client: Client, orgId: string, plan: RowPlan) {
   const existing = await maybe<{ id: string }>(
     client,
     roomId
-      ? `SELECT id::text FROM listing_terms WHERE room_id = $1`
-      : `SELECT id::text FROM listing_terms WHERE unit_id = $1`,
-    [roomId ?? unitId],
+      ? `SELECT id::text FROM listing_terms WHERE org_id = $1 AND room_id = $2`
+      : `SELECT id::text FROM listing_terms WHERE org_id = $1 AND unit_id = $2`,
+    [orgId, roomId ?? unitId],
   );
   const params = [
     row.tenantName,
@@ -467,10 +502,10 @@ async function upsertListing(client: Client, orgId: string, plan: RowPlan) {
   if (existing) {
     await client.query(
       `UPDATE listing_terms
-          SET tenant_name = $2, tenant_phone = $3, tenant_email = $4, lease_start = $5, lease_end = $6,
-              deposit_minor = $7, rent_due_day = $8, deposit_cap_reason = $9, opening_arrears_minor = $10, updated_at = now()
-        WHERE id = $1`,
-      [existing.id, ...params],
+          SET tenant_name = $3, tenant_phone = $4, tenant_email = $5, lease_start = $6, lease_end = $7,
+              deposit_minor = $8, rent_due_day = $9, deposit_cap_reason = $10, opening_arrears_minor = $11, updated_at = now()
+        WHERE id = $1 AND org_id = $2`,
+      [existing.id, orgId, ...params],
     );
     return;
   }

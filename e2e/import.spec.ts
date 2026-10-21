@@ -87,6 +87,14 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
 
   await page.getByTestId("import-go-props").click();
   await expect(page.getByRole("link", { name: "匯入公寓" })).toBeVisible();
+  await page.getByRole("link", { name: "匯入公寓" }).click();
+  await page.getByRole("link", { name: "有效租客" }).click();
+  await expect(page.getByTestId("lease-imported")).toContainText("沒有電子簽署");
+  await page.getByRole("link", { name: "簽署與文件" }).click();
+  await expect(page.getByTestId("lease-imported-sign")).toBeVisible();
+  await expect(page.getByTestId("simulate-tenant-sign")).toHaveCount(0);
+  await expect(page.getByTestId("submit-sign")).toHaveCount(0);
+  await expect(page.getByTestId("paper-sign")).toBeVisible();
 
   await page.goto("/m/import");
   await page.getByTestId("import-file").setInputFiles({

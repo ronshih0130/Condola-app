@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n";
+import { FlowError } from "./errors";
 import { DEPOSIT_CAP_MONTHS, depositExceedsCap, depositReasonOk, normalizePhone } from "./lease-rules";
 import { taipeiToday, toMinor } from "./money";
 
@@ -46,8 +47,17 @@ export const IMPORT_FIELDS = [
 
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
-export const IMPORT_COMMIT_BATCH = 50;
+/** Rows per dry-run or commit request. Sized for the Workers free-plan CPU budget. */
+export const IMPORT_REQUEST_ROWS = 50;
+export const IMPORT_COMMIT_BATCH = IMPORT_REQUEST_ROWS;
+/** Whole file, across every batched request. */
 export const IMPORT_MAX_ROWS = 2000;
+export const IMPORT_FIELD_MAX = 500;
+export const IMPORT_MONEY_MAX = 100_000_000;
+export const IMPORT_AREA_MAX = 100_000;
+export const IMPORT_RATE_MAX = 10_000;
+export const IMPORT_KWH_MAX = 1_000_000;
+const DEPOSIT_MONTHS_MAX = 99.99;
 
 export const REQUIRED_FIELDS: ImportField[] = ["propertyName", "address", "ownerName", "rentalMode", "unitLabel", "rent"];
 
@@ -202,7 +212,11 @@ export function coerceImportRows(input: unknown): ImportRequestRow[] {
     const row = { line: index + 2 } as ImportRequestRow;
     const line = Number(source.line);
     row.line = Number.isInteger(line) && line > 0 ? line : index + 2;
-    for (const field of IMPORT_FIELDS) row[field] = String(source[field] ?? "").slice(0, 500);
+    for (const field of IMPORT_FIELDS) {
+      const text = String(source[field] ?? "");
+      if (text.length > IMPORT_FIELD_MAX) throw new FlowError("im_e_len", { f: field, max: IMPORT_FIELD_MAX });
+      row[field] = text;
+    }
     return row;
   });
 }
@@ -270,17 +284,17 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
   const seenName = new Map<string, string>();
   for (const raw of rows) {
     const issues: ImportIssue[] = [];
-    const propertyName = raw.propertyName.trim();
-    const address = raw.address.trim();
-    const ownerName = raw.ownerName.trim();
-    const unitLabel = raw.unitLabel.normalize("NFKC").trim();
-    if (!propertyName) issues.push(req(raw.line, ZH_HEADERS.propertyName));
-    if (!address) issues.push(req(raw.line, ZH_HEADERS.address));
-    if (!ownerName) issues.push(req(raw.line, ZH_HEADERS.ownerName));
-    if (!unitLabel) issues.push(req(raw.line, ZH_HEADERS.unitLabel));
+    const propertyName = boundedText(raw.line, ZH_HEADERS.propertyName, raw.propertyName, issues);
+    const address = boundedText(raw.line, ZH_HEADERS.address, raw.address, issues);
+    const ownerName = boundedText(raw.line, ZH_HEADERS.ownerName, raw.ownerName, issues);
+    const unitLabel = boundedText(raw.line, ZH_HEADERS.unitLabel, raw.unitLabel, issues).normalize("NFKC").trim();
+    if (!raw.propertyName.trim()) issues.push(req(raw.line, ZH_HEADERS.propertyName));
+    if (!raw.address.trim()) issues.push(req(raw.line, ZH_HEADERS.address));
+    if (!raw.ownerName.trim()) issues.push(req(raw.line, ZH_HEADERS.ownerName));
+    if (!raw.unitLabel.trim()) issues.push(req(raw.line, ZH_HEADERS.unitLabel));
     const kind = rentalKind(raw.rentalMode);
-    if (!kind) issues.push({ line: raw.line, severity: "error", key: "im_e_type", vars: { v: raw.rentalMode.trim() || "—" } });
-    const roomLabel = raw.roomLabel.trim();
+      if (!kind) issues.push({ line: raw.line, severity: "error", key: "im_e_type", vars: { v: shown(raw.rentalMode) } });
+    const roomLabel = boundedText(raw.line, ZH_HEADERS.roomLabel, raw.roomLabel, issues);
     if (kind === "room" && !roomLabel) issues.push(req(raw.line, ZH_HEADERS.roomLabel));
     if (kind === "whole_unit" && roomLabel) issues.push({ line: raw.line, severity: "error", key: "im_e_whole_room" });
     let roomType: RoomType = "suite";
@@ -290,18 +304,18 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
       else if (!mapped) issues.push({ line: raw.line, severity: "warn", key: "im_w_rtype" });
       roomType = mapped ?? "suite";
     }
-    const rent = numberField(raw.line, ZH_HEADERS.rent, raw.rent, issues, false);
-    const area = numberField(raw.line, ZH_HEADERS.area, raw.area, issues, true);
-    const rate = numberField(raw.line, ZH_HEADERS.rate, raw.rate, issues, true);
-    const billKwh = numberField(raw.line, ZH_HEADERS.billKwh, raw.billKwh, issues, true);
-    const billAmount = numberField(raw.line, ZH_HEADERS.billAmount, raw.billAmount, issues, true);
-    const opening = numberField(raw.line, ZH_HEADERS.opening, raw.opening, issues, true);
-    const deposit = numberField(raw.line, ZH_HEADERS.deposit, raw.deposit, issues, true);
+    const rent = numberField(raw.line, ZH_HEADERS.rent, raw.rent, issues, false, IMPORT_MONEY_MAX);
+    const area = numberField(raw.line, ZH_HEADERS.area, raw.area, issues, true, IMPORT_AREA_MAX);
+    const rate = numberField(raw.line, ZH_HEADERS.rate, raw.rate, issues, true, IMPORT_RATE_MAX);
+    const billKwh = numberField(raw.line, ZH_HEADERS.billKwh, raw.billKwh, issues, true, IMPORT_KWH_MAX);
+    const billAmount = numberField(raw.line, ZH_HEADERS.billAmount, raw.billAmount, issues, true, IMPORT_MONEY_MAX);
+    const opening = numberField(raw.line, ZH_HEADERS.opening, raw.opening, issues, true, IMPORT_MONEY_MAX);
+    const deposit = numberField(raw.line, ZH_HEADERS.deposit, raw.deposit, issues, true, IMPORT_MONEY_MAX);
     const ownerEmail = emailField(raw.line, raw.ownerEmail, issues);
     const tenantEmail = emailField(raw.line, raw.tenantEmail, issues);
-    const tenantName = blank(raw.tenantName);
-    const tenantPhone = blank(raw.tenantPhone);
-    const tenantId = blank(raw.tenantId);
+    const tenantName = blank(boundedText(raw.line, ZH_HEADERS.tenantName, raw.tenantName, issues));
+    const tenantPhone = blank(boundedText(raw.line, ZH_HEADERS.tenantPhone, raw.tenantPhone, issues));
+    const tenantId = blank(boundedText(raw.line, ZH_HEADERS.tenantId, raw.tenantId, issues));
     const startDate = dateField(raw.line, raw.startDate, issues);
     const endDate = dateField(raw.line, raw.endDate, issues);
     const electricity = electricityField(raw.line, raw.electricity, issues);
@@ -324,6 +338,9 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
       if (endDate && endDate < today) issues.push({ line: raw.line, severity: "error", key: "im_e_ended" });
       dueDay = dueField(raw.line, raw.dueDay, issues);
       depositMonths = rentMinor > 0 ? Math.round((depositMinor / rentMinor) * 100) / 100 : depositMinor > 0 ? 99 : 0;
+      if (depositMonths > DEPOSIT_MONTHS_MAX) {
+        issues.push({ line: raw.line, severity: "error", key: "im_e_bound", vars: { f: ZH_HEADERS.deposit } });
+      }
       const reason = raw.depositReason.trim();
       if (!depositReasonOk(depositMonths, reason)) {
         issues.push({ line: raw.line, severity: "error", key: "im_e_dep", vars: { v: depositMonths, cap: DEPOSIT_CAP_MONTHS } });
@@ -389,9 +406,9 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
       billKwh,
       billAmountMinor: billAmount === null ? null : toMinor(billAmount),
       openingMinor,
-      depositReason: blank(raw.depositReason),
-      rateReason: blank(raw.rateReason),
-      notes: blank(raw.notes),
+      depositReason: blank(boundedText(raw.line, ZH_HEADERS.depositReason, raw.depositReason, issues)),
+      rateReason: blank(boundedText(raw.line, ZH_HEADERS.rateReason, raw.rateReason, issues)),
+      notes: blank(boundedText(raw.line, ZH_HEADERS.notes, raw.notes, issues)),
       lease,
       issues,
     });
@@ -409,9 +426,21 @@ export type ExistingIndex = {
   rooms: Map<string, { id: string; unitId: string }>;
   ownersByEmail: Map<string, string>;
   ownersByName: Map<string, string>;
-  tenantsByPhone: Map<string, string>;
-  tenantsByHash: Map<string, string>;
-  leases: { spaceKey: string; start: string; end: string; phone: string | null; idHash: string | null }[];
+  tenantsByPhone: Map<string, string[]>;
+  tenantsByHash: Map<string, string[]>;
+  leases: IndexedLease[];
+};
+
+export type IndexedLease = {
+  spaceKey: string;
+  start: string;
+  end: string;
+  phone: string | null;
+  idHash: string | null;
+  tenantId: string;
+  rentMinor: number;
+  depositMinor: number;
+  dueDay: number;
 };
 
 export function emptyIndex(): ExistingIndex {
@@ -522,29 +551,24 @@ function planRow(row: ParsedImportRow, index: ExistingIndex): RowPlan {
   else if (!row.ownerEmail && index.ownersByName.has(row.ownerName)) base.ownerId = index.ownersByName.get(row.ownerName) ?? null;
   else base.createOwner = true;
   if (row.lease) {
-    const byHash = row.tenantIdHash ? index.tenantsByHash.get(row.tenantIdHash) : undefined;
-    const byPhone = row.phoneE164 ? index.tenantsByPhone.get(row.phoneE164) : undefined;
-    if (byHash && byPhone && byHash !== byPhone) {
-      issues.push({ line: row.line, severity: "error", key: "im_e_tenant" });
+    const matched = matchTenant(row, index, issues);
+    if (matched === "blocked") {
       base.blocked = true;
       return base;
     }
-    const tenantId = byHash ?? byPhone ?? null;
-    if (tenantId) {
-      base.tenantId = tenantId;
+    if (matched) {
+      base.tenantId = matched;
       base.reuseTenant = true;
     } else base.createTenant = true;
     const spaceKey = roomSpaceKey(row, base.unitId);
-    const overlap = index.leases.find((lease) => lease.spaceKey === spaceKey && rangesOverlap(lease.start, lease.end, row.startDate, row.endDate));
-    if (overlap) {
-      const same = (row.phoneE164 && overlap.phone === row.phoneE164) || (row.tenantIdHash && overlap.idHash === row.tenantIdHash);
-      if (same) base.reuseLease = true;
-      else {
-        issues.push({ line: row.line, severity: "error", key: "im_e_occupied" });
-        base.blocked = true;
-        return base;
-      }
-    }     else base.createLease = true;
+    const overlaps = index.leases.filter((lease) => lease.spaceKey === spaceKey && rangesOverlap(lease.start, lease.end, row.startDate, row.endDate));
+    if (overlaps.length === 1 && sameLeaseTerms(overlaps[0], row, base.tenantId)) base.reuseLease = true;
+    else if (overlaps.length > 0) {
+      const samePerson = Boolean(base.tenantId) && overlaps.some((lease) => lease.tenantId === base.tenantId);
+      issues.push({ line: row.line, severity: "error", key: samePerson ? "im_e_terms" : "im_e_occupied" });
+      base.blocked = true;
+      return base;
+    } else base.createLease = true;
   } else base.vacant = true;
   return base;
 }
@@ -552,6 +576,45 @@ function planRow(row: ParsedImportRow, index: ExistingIndex): RowPlan {
 function roomSpaceKey(row: ParsedImportRow, unitId: string | null) {
   if (row.kind === "room") return `room:${unitId ?? `new:${row.addressKey}:${row.unitLabel}`}:${row.roomLabel}`;
   return `unit:${unitId ?? `new:${row.addressKey}:${row.unitLabel}`}`;
+}
+
+function matchTenant(row: ParsedImportRow, index: ExistingIndex, issues: ImportIssue[]): string | null | "blocked" {
+  const phones = row.phoneE164 ? (index.tenantsByPhone.get(row.phoneE164) ?? []) : [];
+  if (row.tenantIdHash) {
+    const hashes = index.tenantsByHash.get(row.tenantIdHash) ?? [];
+    if (hashes.length > 1) {
+      issues.push({ line: row.line, severity: "error", key: "im_e_id_dup" });
+      return "blocked";
+    }
+    if (hashes.length === 1) {
+      if (phones.some((id) => id !== hashes[0])) {
+        issues.push({ line: row.line, severity: "error", key: "im_e_tenant" });
+        return "blocked";
+      }
+      return hashes[0];
+    }
+    if (phones.length > 0) {
+      issues.push({ line: row.line, severity: "error", key: "im_e_tenant" });
+      return "blocked";
+    }
+    return null;
+  }
+  if (phones.length > 1) {
+    issues.push({ line: row.line, severity: "error", key: "im_e_phone_dup" });
+    return "blocked";
+  }
+  return phones[0] ?? null;
+}
+
+function sameLeaseTerms(lease: IndexedLease, row: ParsedImportRow, tenantId: string | null) {
+  if (!tenantId || lease.tenantId !== tenantId) return false;
+  return (
+    lease.start === row.startDate &&
+    lease.end === row.endDate &&
+    lease.rentMinor === row.rentMinor &&
+    lease.depositMinor === row.depositMinor &&
+    lease.dueDay === row.dueDay
+  );
 }
 
 function rangesOverlap(start: string, end: string, otherStart: string | null, otherEnd: string | null) {
@@ -590,18 +653,32 @@ function remember(index: ExistingIndex, plan: RowPlan) {
   if (plan.createTenant) {
     const id = plan.tenantId ?? `new-tenant:${row.phoneE164 ?? row.tenantIdHash ?? row.line}`;
     plan.tenantId = id;
-    if (row.phoneE164) index.tenantsByPhone.set(row.phoneE164, id);
-    if (row.tenantIdHash) index.tenantsByHash.set(row.tenantIdHash, id);
+    addTenantKey(index.tenantsByPhone, row.phoneE164, id);
+    addTenantKey(index.tenantsByHash, row.tenantIdHash, id);
   }
-  if (plan.createLease && row.startDate && row.endDate) {
+  if (plan.createLease && row.startDate && row.endDate && plan.tenantId) {
     index.leases.push({
       spaceKey: roomSpaceKey(row, plan.unitId),
       start: row.startDate,
       end: row.endDate,
       phone: row.phoneE164,
       idHash: row.tenantIdHash,
+      tenantId: plan.tenantId,
+      rentMinor: row.rentMinor,
+      depositMinor: row.depositMinor,
+      dueDay: row.dueDay ?? -1,
     });
   }
+}
+
+export function addTenantKey(map: Map<string, string[]>, key: string | null, id: string) {
+  if (!key) return;
+  const list = map.get(key);
+  if (!list) {
+    map.set(key, [id]);
+    return;
+  }
+  if (!list.includes(id)) list.push(id);
 }
 
 export type ImportTotals = {
@@ -660,8 +737,12 @@ function blank(value: string) {
   return text ? text : null;
 }
 
-function numberField(line: number, field: string, raw: string, issues: ImportIssue[], optional: boolean) {
+function numberField(line: number, field: string, raw: string, issues: ImportIssue[], optional: boolean, max: number) {
   const text = raw.trim().replace(/,/g, "");
+  if (text.length > IMPORT_FIELD_MAX) {
+    issues.push({ line, severity: "error", key: "im_e_len", vars: { f: field, max: IMPORT_FIELD_MAX } });
+    return null;
+  }
   if (!text) {
     if (!optional) issues.push(req(line, field));
     return null;
@@ -671,11 +752,30 @@ function numberField(line: number, field: string, raw: string, issues: ImportIss
     issues.push({ line, severity: "error", key: "im_e_num", vars: { f: field } });
     return null;
   }
+  if (value > max) {
+    issues.push({ line, severity: "error", key: "im_e_bound", vars: { f: field } });
+    return null;
+  }
   return value;
 }
 
+function boundedText(line: number, field: string, raw: string, issues: ImportIssue[]) {
+  const text = raw.trim();
+  if (text.length > IMPORT_FIELD_MAX) {
+    issues.push({ line, severity: "error", key: "im_e_len", vars: { f: field, max: IMPORT_FIELD_MAX } });
+    return "";
+  }
+  return text;
+}
+
+function shown(value: string) {
+  const text = value.trim();
+  if (!text) return "—";
+  return text.length > 40 ? `${text.slice(0, 40)}…` : text;
+}
+
 function emailField(line: number, raw: string, issues: ImportIssue[]) {
-  const text = raw.trim().toLowerCase();
+  const text = boundedText(line, "Email", raw, issues).toLowerCase();
   if (!text) return null;
   if (!text.includes("@") || /\s/.test(text)) {
     issues.push({ line, severity: "error", key: "i_email" });
@@ -686,6 +786,10 @@ function emailField(line: number, raw: string, issues: ImportIssue[]) {
 
 function dateField(line: number, raw: string, issues: ImportIssue[]) {
   const text = raw.trim();
+  if (text.length > IMPORT_FIELD_MAX) {
+    issues.push({ line, severity: "error", key: "im_e_len", vars: { f: "date", max: IMPORT_FIELD_MAX } });
+    return null;
+  }
   if (!text) return null;
   if (/^\d+(\.0+)?$/.test(text)) {
     const serial = Number(text);
@@ -696,7 +800,7 @@ function dateField(line: number, raw: string, issues: ImportIssue[]) {
   }
   const match = /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/.exec(text);
   if (!match) {
-    issues.push({ line, severity: "error", key: "im_e_date", vars: { v: text } });
+    issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) } });
     return null;
   }
   const year = Number(match[1]);
@@ -705,7 +809,7 @@ function dateField(line: number, raw: string, issues: ImportIssue[]) {
   const iso = `${match[1]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   const check = new Date(`${iso}T00:00:00Z`);
   if (check.getUTCFullYear() !== year || check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) {
-    issues.push({ line, severity: "error", key: "im_e_date", vars: { v: text } });
+    issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) } });
     return null;
   }
   return iso;
@@ -748,6 +852,6 @@ function electricityField(line: number, raw: string, issues: ImportIssue[]): Ele
   if (["分表", "submeter", "sub-meter"].includes(text)) return "submeter";
   if (["包含", "included", "include"].includes(text)) return "included";
   if (["租客自繳", "tenantdirect", "tenant_direct"].includes(text)) return "tenant_direct";
-  issues.push({ line, severity: "error", key: "im_e_elec", vars: { v: raw.trim() } });
+  issues.push({ line, severity: "error", key: "im_e_elec", vars: { v: shown(raw) } });
   return null;
 }
