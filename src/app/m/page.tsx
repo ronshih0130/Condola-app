@@ -3,6 +3,7 @@ import { dictionary, makeT } from "@/i18n";
 import { FooterNote } from "@/components/chrome";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader } from "@/components/ui";
+import { showDemoLineCopy } from "@/server/demo";
 import { formatDate, formatMoney } from "@/server/format";
 import { dashboard } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -163,7 +164,7 @@ export default async function DashboardPage({
           </RfTable>
         )}
       </div>
-      <FooterNote />
+      <FooterNote demoLine={showDemoLineCopy(session.environment)} />
     </>
   );
 }

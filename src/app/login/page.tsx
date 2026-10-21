@@ -10,6 +10,7 @@ import { BACKUP_COOKIE, backupDisplay } from "@/server/backup";
 import { actionLineLogin, actionSecondFactor, actionSignIn } from "@/server/auth-actions";
 import { actionResendSignup } from "@/server/signup-actions";
 import { CHALLENGE_COOKIE, peekChallenge } from "@/server/auth";
+import { appFooterText, footerHasProductLine } from "@/line-copy";
 import { demoModeEnabled, lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
 import { roleHome } from "@/server/perms";
 import { readSession, requestPrefs } from "@/server/session";
@@ -31,6 +32,7 @@ export default async function LoginPage({
   const t = makeT(prefs.locale);
   const session = await readSession();
   const demoLine = showDemoLineCopy(null);
+  const loginFooter = appFooterText(t("i_login_footer"), demoLine);
   if (session && params.step !== "backup") redirect(roleHome(session.kind, session.role));
   const jar = await cookies();
   const challenge = params.step === "2fa" || params.step === "enroll" ? await peekChallenge(jar.get(CHALLENGE_COOKIE)?.value ?? "") : null;
@@ -59,7 +61,7 @@ export default async function LoginPage({
       ) : null}
       <form className="card pad" action={params.step === "2fa" || params.step === "enroll" ? actionSecondFactor : actionSignIn}>
         <h1>{t("i_login_headline")}</h1>
-        <p>{demoLine ? t("i_login_sub") : t("i_login_sub_live")}</p>
+        <p {...(demoLine ? { "data-demo-line": "true" } : {})}>{demoLine ? t("i_login_sub") : t("i_login_sub_live")}</p>
         {params.demoReset === "1" ? (
           <div className="toast" data-testid="reset-toast">
             {t("s_fe71059")}
@@ -126,14 +128,14 @@ export default async function LoginPage({
               <a href="/forgot">{t("i_forgot")}</a>
             </p>
             {demoLine && lineLoginEnabled() ? (
-              <>
+              <div data-demo-line="true">
                 <button className="btn line block" type="submit" formAction={actionLineLogin} formNoValidate data-testid="line-login">
                   LINE Login
                 </button>
                 <p className="tiny muted" data-testid="line-demo-note">
                   {t("i_line_demo")}
                 </p>
-              </>
+              </div>
             ) : null}
             <p className="small" data-testid="login-invite">
               {t("i_login_invite_lead")}{" "}
@@ -146,7 +148,9 @@ export default async function LoginPage({
           </>
         )}
       </form>
-      <p className="foot" data-testid="login-footer">{t("i_login_footer")}</p>
+      <p className="foot" data-testid="login-footer" {...(footerHasProductLine(loginFooter) ? { "data-demo-line": "true" } : {})}>
+        {loginFooter}
+      </p>
     </div>
   );
 }

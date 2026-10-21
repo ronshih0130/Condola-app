@@ -45,7 +45,7 @@ export default async function AccountPage({
           </p>
           <p className="small">{session.email}</p>
           {showDemoLineCopy(session.environment) ? (
-            <>
+            <div data-demo-line="true">
               <p className="small muted" data-testid="line-demo-note">
                 {t("i_line_demo")}
               </p>
@@ -54,7 +54,7 @@ export default async function AccountPage({
                   LINE
                 </button>
               ) : null}
-            </>
+            </div>
           ) : null}
         </div>
         <form className="card pad" action={actionChangePassword}>

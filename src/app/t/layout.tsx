@@ -46,7 +46,7 @@ export default async function TenantLayout({ children }: { children: React.React
             </div>
           </div>
           {showDemoLineCopy(session.environment) ? (
-            <p className="fn" data-testid="line-stub">
+            <p className="fn" data-testid="line-stub" data-demo-line="true">
               {t("i_line_stub")}
             </p>
           ) : null}

@@ -415,7 +415,7 @@ export function LeaseWizard({
                 </div>
               </div>
               {showLine ? (
-                <div className="fg">
+                <div className="fg" data-demo-line="true">
                   <label className="f">{t("lease_line_id")}</label>
                   <input className="inp" data-testid="tenant-line" placeholder={t("lease_ph_line")} value={lineId} onChange={(event) => setLineId(event.target.value)} />
                 </div>

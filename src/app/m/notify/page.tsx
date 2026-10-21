@@ -13,12 +13,12 @@ export default async function NotifyPage() {
     <>
       <PageHeader title={t("i_nav_notify")} />
       {demoLine ? (
-        <>
+        <div data-demo-line="true">
           <div className="alert info" data-testid="line-stub">
             {t("i_line_stub")}
           </div>
           <p data-testid="notify-note">{t("i_notify_note")}</p>
-        </>
+        </div>
       ) : (
         <p className="muted" data-testid="notify-empty">
           {t("i_notify_empty")}

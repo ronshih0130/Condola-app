@@ -101,9 +101,11 @@ export default async function AcceptPage({
             <PasswordFields />
             <AcceptSubmit idle={t("i_accept")} pending={t("i_portal_working")} testId="accept-submit" />
             {showDemoLineCopy(null) && lineLoginEnabled() ? (
-              <button className="btn line block" type="button" data-testid="line-login">
-                LINE Login
-              </button>
+              <div data-demo-line="true">
+                <button className="btn line block" type="button" data-testid="line-login">
+                  LINE Login
+                </button>
+              </div>
             ) : null}
           </>
         ) : null}

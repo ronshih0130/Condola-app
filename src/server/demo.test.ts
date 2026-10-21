@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
+import { appFooterText, LINE_SUPPORT_CONTACT } from "../line-copy";
 import { demoModeEnabled, enforceDemoSafety, lineLoginEnabled, showDemoLineCopy } from "./demo";
 import { acceptSecondFactor } from "./totp";
 
@@ -183,15 +184,26 @@ test("demo LINE copy is live-hidden and shown for DEMO_MODE or a sandbox firm", 
   assert.deepEqual(hits, []);
 });
 
-test("live screens do not render LINE copy outside the site footer", () => {
+test("live screens do not render LINE product copy, including the app footer", () => {
   const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
   const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
   assert.equal(zh.i_login_sub_live, "給屋主與合法代管公司使用的租賃管理軟體。");
   assert.equal(en.i_login_sub_live, "Rental management software for owners and licensed firms.");
-  for (const key of ["i_footer", "i_login_footer", "i_price_footer", "i_login_sub_live", "i_notify_empty"]) {
-    assert.equal(zh[key].includes("LINE"), false, key);
-    assert.equal(en[key].includes("LINE"), false, key);
+  assert.equal(zh.i_notify_empty.includes("LINE"), false);
+  assert.equal(en.i_notify_empty.includes("LINE"), false);
+  const mixed = `軟體說明。租客用 LINE 就能查帳單。${LINE_SUPPORT_CONTACT}`;
+  assert.equal(appFooterText(mixed, false), `軟體說明。${LINE_SUPPORT_CONTACT}`);
+  assert.equal(appFooterText(mixed, true), mixed);
+  assert.equal(appFooterText(LINE_SUPPORT_CONTACT, false), LINE_SUPPORT_CONTACT);
+  for (const key of ["i_footer", "i_login_footer", "i_price_footer"]) {
+    for (const catalog of [zh, en]) {
+      const live = appFooterText(catalog[key], false);
+      assert.equal(live.split(LINE_SUPPORT_CONTACT).join("").includes("LINE"), false, key);
+    }
   }
+  assert.match(zh.i_w7, /租客在 LINE 收到邀請/);
+  assert.match(zh.i_invite_help, /LINE 官方帳號/);
+  assert.equal(zh.s_9f8fee8, "LINE 官方帳號");
 
   const lineKeys = Object.keys(zh).filter((key) => {
     const zhText = typeof zh[key] === "string" ? zh[key] : "";
@@ -201,7 +213,7 @@ test("live screens do not render LINE copy outside the site footer", () => {
   const ungated: string[] = [];
   const nearGate = (source: string, index: number) => {
     const window = source.slice(Math.max(0, index - 800), index + 160);
-    return /showDemoLineCopy|\bdemoLine\b|\bshowLine\b|environment === "sandbox"/.test(window);
+    return /showDemoLineCopy|\bdemoLine\b|\bshowLine\b|appFooterText|environment === "sandbox"/.test(window);
   };
   const scan = (dir: string) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -252,5 +264,8 @@ test("live screens do not render LINE copy outside the site footer", () => {
   assert.match(account, /showDemoLineCopy\(session\.environment\)/);
   const accept = readFileSync(new URL("../app/accept/[token]/page.tsx", import.meta.url), "utf8");
   assert.match(accept, /showDemoLineCopy\(null\) && lineLoginEnabled\(\)/);
+  const walk = readFileSync(new URL("../app/walk/page.tsx", import.meta.url), "utf8");
+  assert.match(walk, /demoLine \|\| !step\.includes\("LINE"\)/);
+  assert.equal(ungated.some((hit) => hit.includes("i_invite_help") || hit.includes("s_9f8fee8")), false);
   assert.deepEqual(ungated, []);
 });

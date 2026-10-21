@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { PricingCalculator } from "@/components/pricing-calculator";
+import { appFooterText, footerHasProductLine } from "@/line-copy";
+import { showDemoLineCopy } from "@/server/demo";
 import { resolveCommercialPrice } from "@/server/billing";
 import { loadPriceInputs } from "@/server/partners";
 import { countActiveUnits } from "@/server/sandbox";
@@ -26,6 +28,8 @@ export default async function PricingPage() {
   const tierName = staff ? await commercialTier(staff.liveOrgId) : "";
   const current = tierName === "free" || tierName === "standard" || tierName === "pro" ? tierName : null;
   const signedIn = Boolean(staff);
+  const demoLine = showDemoLineCopy(staff?.environment ?? null);
+  const priceFooter = appFooterText(t("i_price_footer"), demoLine);
   const now = new Date();
   const standardPrice = resolveCommercialPrice({
     tier: "standard",
@@ -130,7 +134,9 @@ export default async function PricingPage() {
         </details>
       </section>
       <p className="small">{t("i_price_open")}</p>
-      <p className="foot" data-testid="price-footer">{t("i_price_footer")}</p>
+      <p className="foot" data-testid="price-footer" {...(footerHasProductLine(priceFooter) ? { "data-demo-line": "true" } : {})}>
+        {priceFooter}
+      </p>
     </main>
   );
 }
