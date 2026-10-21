@@ -793,7 +793,7 @@
  "i_nav_tenants": "Tenants",
  "i_nav_leases": "Leases",
  "i_nav_rent": "Rent roll",
- "i_nav_inbox": "Payment records",
+ "i_nav_inbox": "Payments to confirm",
  "i_nav_bank": "Bank reconciliation",
  "i_nav_stmt": "Owner statements",
  "i_nav_tickets": "Maintenance",

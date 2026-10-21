@@ -9,9 +9,9 @@ function source(path: string) {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("manager lease and statement pages use the sidebar label 繳款紀錄", () => {
-  assert.equal(zh.i_nav_inbox, "繳款紀錄");
-  assert.equal(zh.i_nav_inbox.includes("待確認收款"), false);
+test("manager lease and statement pages use the sidebar label 待確認繳款", () => {
+  assert.equal(zh.i_nav_inbox, "待確認繳款");
+  assert.equal(zh.i_nav_inbox.includes("收款"), false);
   const inbox = MANAGER_NAV.flatMap((section) => [...section.links]).find((link) => link.href === "/m/payments");
   assert.equal(inbox?.key, "i_nav_inbox");
 

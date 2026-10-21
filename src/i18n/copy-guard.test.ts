@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -29,6 +29,8 @@ function decode(source: string) {
 
 function sourceFiles() {
   const out: string[] = [];
+  // Verbatim 內政部 contract text, including the required 「二房東」 note. Not product copy.
+  const officialLease = join(root, "src", "assets", "leases") + sep;
   const walk = (dir: string) => {
     if (!existsSync(dir)) return;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -38,6 +40,7 @@ function sourceFiles() {
         walk(path);
         continue;
       }
+      if (path.startsWith(officialLease)) continue;
       if (/\.test\.tsx?$|\.spec\.tsx?$/.test(entry.name)) continue;
       if (/\.(ts|tsx|json)$/.test(entry.name)) out.push(path);
     }
@@ -108,7 +111,7 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   assert.equal(zh.i_login_signup, "免費註冊");
   assert.equal(zh.i_login_invite_tail, "（前 4 戶永遠免費，可先看範例公司）");
   assert.equal(`${zh.i_login_invite_lead}${zh.i_login_signup}${zh.i_login_invite_tail}`, "還沒有帳號？免費註冊（前 4 戶永遠免費，可先看範例公司）");
-  assert.equal(zh.i_nav_inbox, "繳款紀錄");
+  assert.equal(zh.i_nav_inbox, "待確認繳款");
   assert.equal(zh.i_audit_ev_line_sign_in, "租客登入");
   assert.equal(zh.i_audit_rec_line, "邀請連結");
   assert.equal(zh.i_sandbox_suffix, "（範例）");
