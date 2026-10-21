@@ -1,6 +1,6 @@
 import { dictionary, type Locale, type T } from "@/i18n";
 import type { PdfBlock, PdfDocument, PdfRow } from "@/lib/pdf-document";
-import { formatDate, formatMoney, moneyLabel, ownerSettlement } from "@/server/format";
+import { formatDate, moneyLabel, ownerSettlement } from "@/server/format";
 import { renderOfficialLease } from "@/server/official-lease";
 import { can } from "@/server/perms";
 import type { CalendarMode, Session } from "@/server/types";
@@ -113,20 +113,19 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     payouts: source.payouts,
     closing: source.closing,
   });
-  const money = (minor: number) => formatMoney(minor, source.currency, locale);
-  const labeled = (minor: number) => moneyLabel(minor, source.currency, locale);
+  const money = (minor: number) => moneyLabel(minor, source.currency, locale);
   const rows: PdfRow[] = [
     { label: t("i_opening"), value: money(figures.opening) },
     { label: t("i_rent_received"), value: money(figures.rent) },
     { label: t("i_other_income"), value: money(figures.other) },
-    { label: t("i_fee"), value: labeled(figures.fee) },
-    { label: t("i_expenses"), value: labeled(figures.expenses) },
+    { label: t("i_fee"), value: money(figures.fee) },
+    { label: t("i_expenses"), value: money(figures.expenses) },
   ];
   if (figures.owes > 0) {
-    rows.push({ label: t("i_net_owner"), value: `${t("owner_owes")} ${labeled(figures.owes)}` });
+    rows.push({ label: t("i_net_owner"), value: `${t("owner_owes")} ${money(figures.owes)}` });
   } else {
-    rows.push({ label: t("i_net_owner"), value: labeled(figures.payable) });
-    rows.push({ label: t("i_closing"), value: labeled(Math.max(0, figures.closing)) });
+    rows.push({ label: t("i_net_owner"), value: money(figures.payable) });
+    rows.push({ label: t("i_closing"), value: money(Math.max(0, figures.closing)) });
   }
   const blocks: PdfBlock[] = [];
   const addresses = source.addresses.map((address) => address.trim()).filter(Boolean);
@@ -138,7 +137,7 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     blocks.push({
       kind: "text",
       heading: "",
-      lines: [t("owner_owes_reason", { cost: labeled(figures.costs), rent: labeled(figures.rent + figures.other) })],
+      lines: [t("owner_owes_reason", { cost: money(figures.costs), rent: money(figures.rent + figures.other) })],
     });
   }
   if (source.lines.length) {

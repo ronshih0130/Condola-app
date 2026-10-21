@@ -163,6 +163,7 @@ test("a shortfall statement says 屋主應補繳 and a zero fee is NT$0", () => 
   assert.match(text, /屋主應補繳/);
   assert.match(text, new RegExp(moneyLabel(280000, "TWD", "zh-TW").replace("$", "\\$")));
   assert.match(text, /NT\$0/);
+  assert.equal(text.replaceAll("NT$", "").includes("$"), false);
   assert.match(text, /冷氣維修/);
   assert.match(text, /地址：台北市信義區松仁路88號/);
   assert.match(text, /數字來自管理方確認的繳款紀錄。/);
@@ -178,5 +179,7 @@ test("a shortfall statement says 屋主應補繳 and a zero fee is NT$0", () => 
   const staffText = JSON.stringify(staff);
   assert.match(staffText, /電子發票/);
   assert.match(staffText, /期末/);
+  assert.match(staffText, /NT\$10,000/);
+  assert.equal(staffText.replaceAll("NT$", "").includes("$"), false);
   assert.equal(staffText.includes("屋主應補繳"), false);
 });
