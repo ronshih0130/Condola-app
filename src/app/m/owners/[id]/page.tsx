@@ -6,6 +6,7 @@ import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionUpdateOwner } from "@/server/actions";
 import { portalLoginReady } from "@/server/portal-invite";
 import { listProperties, ownerEditor } from "@/server/queries";
+import { isUuid } from "@/server/repair-rules";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function EditOwnerPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const query = await searchParams;
   const session = await getSession();
   const t = makeT(session.locale);

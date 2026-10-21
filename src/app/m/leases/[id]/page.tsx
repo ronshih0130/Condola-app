@@ -13,6 +13,7 @@ import { formatDate, formatMoney } from "@/server/format";
 import { majorField } from "@/server/portfolio";
 import { leaseTermsEditable } from "@/server/lease-rules";
 import { portalLoginReady } from "@/server/portal-invite";
+import { isUuid } from "@/server/repair-rules";
 import { leaseDetail, threadMessages } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -27,6 +28,7 @@ export default async function LeasePage({
   searchParams: Promise<{ tab?: string; error?: string; audit?: string; created?: string }>;
 }) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const query = await searchParams;
   const tab = query.tab || "summary";
   const session = await getSession();

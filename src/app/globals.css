@@ -200,6 +200,9 @@ table.t td.mine,table.t th.mine{background:var(--pri2)}
 .qr{background:#fff;padding:8px;border:1px solid var(--line);border-radius:8px;display:inline-block}
 .doc{background:var(--panel);border:1px solid var(--line);box-shadow:0 2px 8px rgba(46,38,34,.06);padding:18px 22px;font-size:12px;line-height:1.7;font-family:"Songti TC","Noto Serif TC",serif}
 .empty{padding:36px;text-align:center;color:var(--ink3)}
+.missing{max-width:480px;margin:48px auto;text-align:center}
+.missing h1{margin-top:0}
+.missing p{color:var(--ink2);margin:0 0 16px}
 .tl{list-style:none;padding:0;margin:0}.tl li{position:relative;padding:0 0 14px 22px}.tl li:before{content:"";position:absolute;left:5px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--cd-border-strong)}.tl li.on:before{background:var(--ok)}.tl li:after{content:"";position:absolute;left:9px;top:18px;bottom:0;width:2px;background:var(--line)}.tl li:last-child:after{display:none}
 /* start */
 .start{max-width:1080px;margin:0 auto;padding:40px 20px}.start .hero{display:flex;gap:24px;align-items:center;margin-bottom:26px}
