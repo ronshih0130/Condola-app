@@ -15,6 +15,7 @@ import {
 import { isPlatformAdmin, setGoLiveLock } from "./platform";
 import { appCookieOptions } from "./public-origin";
 import { getSession } from "./session";
+import { sessionEntryPath } from "./sign-out";
 import { signupVerifyType } from "./signup-gotrue";
 import {
   changeSignupEmail,
@@ -79,7 +80,7 @@ export async function actionStartSignup(formData: FormData) {
   if (!result.ok) redirect(`/signup?error=${result.error}`);
   if (result.status === "firm") {
     await setSession(result.token);
-    redirect("/signup/firm");
+    redirect(sessionEntryPath("/signup/firm"));
   }
   const params = new URLSearchParams({ email: result.email });
   if (result.devToken) params.set("dev", result.devToken);
@@ -111,7 +112,7 @@ export async function actionConfirmToken(formData: FormData) {
   const result = await confirmSignupToken(text(formData.get("token")), await meta());
   if (!result.ok) redirect("/signup/confirm?expired=1");
   await setSession(result.token);
-  redirect("/signup/firm");
+  redirect(sessionEntryPath("/signup/firm"));
 }
 
 export async function actionConfirmSupabaseHash(formData: FormData) {
@@ -120,14 +121,14 @@ export async function actionConfirmSupabaseHash(formData: FormData) {
   const result = await confirmSupabaseTokenHash(text(formData.get("token_hash")), type, await meta());
   if (!result.ok) redirect("/signup/confirm?expired=1");
   await setSession(result.token);
-  redirect("/signup/firm");
+  redirect(sessionEntryPath("/signup/firm"));
 }
 
 export async function actionConfirmSupabase(accessToken: string) {
   const result = await confirmSupabaseAccessToken(accessToken, await meta());
   if (!result.ok) redirect("/signup/confirm?expired=1");
   await setSession(result.token);
-  redirect("/signup/firm");
+  redirect(sessionEntryPath("/signup/firm"));
 }
 
 export async function actionCreateFirm(formData: FormData) {

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { query, withClient } from "./db";
 import { createProperty } from "./domain";
+import { updateProperty } from "./portfolio";
 import { FlowError } from "./errors";
 import { ORG_ID, USERS } from "./ids";
 import { createLeaseFromForm } from "./lease-form";
@@ -78,6 +79,72 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     });
     propertyIds.push(rooms.propertyId);
     assert.equal(rooms.roomIds.length, 2);
+
+    const blankPhone = await createProperty(admin, {
+      name: `無電話 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路4號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "無電話屋主",
+      ownerPhone: "",
+      ownerEmail: `nophone.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "1F",
+      floor: "1",
+      rentalMode: "whole_unit",
+      rooms: [],
+    });
+    propertyIds.push(blankPhone.propertyId);
+    const storedPhone = await query<{ phone: string | null }>(
+      `SELECT phone_e164 AS phone FROM contacts WHERE id = $1`,
+      [blankPhone.ownerContactId],
+    );
+    assert.equal(storedPhone.rows[0]?.phone ?? null, null);
+    const dashed = await createProperty(admin, {
+      name: `有電話 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路5號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "有電話屋主",
+      ownerPhone: "0912-345-678",
+      ownerEmail: `phone.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "2F",
+      floor: "2",
+      rentalMode: "whole_unit",
+      rooms: [],
+    });
+    propertyIds.push(dashed.propertyId);
+    const normalized = await query<{ phone: string | null }>(
+      `SELECT phone_e164 AS phone FROM contacts WHERE id = $1`,
+      [dashed.ownerContactId],
+    );
+    assert.equal(normalized.rows[0]?.phone, "+886912345678");
+    await updateProperty(admin, dashed.propertyId, {
+      name: `有電話 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路5號",
+      ownerContactId: dashed.ownerContactId,
+      electricity: { serial: "12-34-5678-90-1", split: "even", bill: "1000", usage: "200", rate: "4" },
+    });
+    const setupMeter = await query<{ serial: string | null; split: string; rate: string; bill: string; usage: string }>(
+      `SELECT m.serial_number AS serial, m.split_method::text AS split, m.rate_minor_per_unit::text AS rate,
+              b.total_amount_minor::text AS bill, b.total_usage::text AS usage
+         FROM meters m
+         JOIN utility_bills b ON b.meter_id = m.id
+        WHERE m.property_id = $1 AND m.utility = 'electricity' AND m.room_id IS NULL`,
+      [dashed.propertyId],
+    );
+    assert.equal(setupMeter.rows[0]?.serial, "12-34-5678-90-1");
+    assert.equal(setupMeter.rows[0]?.split, "even");
+    assert.equal(Number(setupMeter.rows[0]?.rate), 400);
+    assert.equal(setupMeter.rows[0]?.bill, "100000");
+    assert.equal(Number(setupMeter.rows[0]?.usage), 200);
 
     const even = await createLeaseFromForm(
       admin,

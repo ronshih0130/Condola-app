@@ -54,10 +54,16 @@ test("confirmation links use the allow-listed staging or production origin", () 
     assert.equal(signupConfirmUrl("https://condola-staging.workers.dev"), "https://staging.condola.app/signup/confirm");
 
     process.env.CONDOLA_ENV = "production";
+    process.env.CONDOLA_SITE_URL = "https://app.condola.app";
     assert.equal(signupConfirmUrl("https://app.condola.app"), "https://app.condola.app/signup/confirm");
     assert.equal(passwordResetUrl("https://app.condola.app"), "https://app.condola.app/reset");
     assert.equal(signupConfirmUrl("https://condola.app/login"), "https://app.condola.app/signup/confirm");
     assert.equal(passwordResetUrl("https://condola.app/login"), "https://app.condola.app/reset");
+    assert.equal(signupConfirmUrl("https://condola-prod.workers.dev"), "https://app.condola.app/signup/confirm");
+    assert.equal(signupConfirmUrl("https://evil.example"), "https://app.condola.app/signup/confirm");
+    process.env.CONDOLA_SITE_URL = "https://staging.condola.app";
+    assert.equal(signupConfirmUrl("https://condola.app/login"), "https://staging.condola.app/signup/confirm");
+    delete process.env.CONDOLA_SITE_URL;
     assert.equal(signupConfirmUrl("https://evil.example"), "https://app.condola.app/signup/confirm");
 
     process.env.CONDOLA_ENV = "development";

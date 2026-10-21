@@ -99,7 +99,6 @@ export async function createProperty(session: Session, input: PropertyInput) {
   const ownerPhone = cleanPhone(input.ownerPhone);
   const ownerEmail = cleanEmail(input.ownerEmail);
   if (input.ownerMode === "new" && !input.ownerName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
-  if (input.ownerMode === "new" && !ownerPhone) throw new FlowError("errors.required", { field: "i_phone_label" });
 
   const created = await tx(session.userId, async (client) => {
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property:${session.userId}:${input.name.trim()}`]);

@@ -1078,12 +1078,36 @@ export async function propertyEditor(session: Session, id: string) {
       address: { city?: string; district?: string; street?: string; line?: string };
       country_code: string;
       owner_contact_id: string | null;
+      meter_serial: string | null;
+      split_method: string | null;
+      rate_minor: string | null;
+      bill_minor: string | null;
+      usage: string | null;
     }>(
       client,
       `SELECT p.id::text, p.name, p.address, p.country_code,
               (SELECT po.owner_contact_id::text FROM property_owners po
-                WHERE po.property_id = p.id AND po.is_primary LIMIT 1) AS owner_contact_id
+                WHERE po.property_id = p.id AND po.is_primary LIMIT 1) AS owner_contact_id,
+              m.serial_number AS meter_serial,
+              m.split_method::text,
+              m.rate_minor_per_unit::text AS rate_minor,
+              b.total_amount_minor::text AS bill_minor,
+              b.total_usage::text AS usage
          FROM properties p
+         LEFT JOIN LATERAL (
+           SELECT id, serial_number, split_method, rate_minor_per_unit
+             FROM meters
+            WHERE property_id = p.id AND utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL
+            ORDER BY created_at
+            LIMIT 1
+         ) m ON true
+         LEFT JOIN LATERAL (
+           SELECT total_amount_minor, total_usage
+             FROM utility_bills
+            WHERE meter_id = m.id
+            ORDER BY period_end DESC
+            LIMIT 1
+         ) b ON true
         WHERE p.id = $1 AND p.org_id = $2 AND p.archived_at IS NULL`,
       [id, session.orgId],
     );

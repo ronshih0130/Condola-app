@@ -414,17 +414,127 @@ export async function updateOwner(
   });
 }
 
+export type PropertyElectricityInput = {
+  serial: string;
+  split: string;
+  bill: string;
+  usage: string;
+  rate: string;
+};
+
+function splitMethod(value: string): "none" | "even" | "days_occupied" | "sub_meter" {
+  const raw = value.trim();
+  if (!raw) return "none";
+  if (raw === "even") return "even";
+  if (raw === "days" || raw === "days_occupied") return "days_occupied";
+  if (raw === "sub" || raw === "sub_meter") return "sub_meter";
+  throw new FlowError("errors.required");
+}
+
+function optionalMajor(raw: string) {
+  const text = raw.trim();
+  if (!text) return null;
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < 0) throw new FlowError("errors.amount");
+  return value;
+}
+
+/** Taipower number, split, and bill fields. Blank bill fields leave existing bills alone. */
+async function savePropertyElectricity(
+  client: Client,
+  session: Session,
+  propertyId: string,
+  currency: string,
+  input: PropertyElectricityInput,
+) {
+  const serial = input.serial.trim().slice(0, 64);
+  const split = splitMethod(input.split);
+  const billRaw = input.bill.trim();
+  const usageRaw = input.usage.trim();
+  if ((billRaw === "") !== (usageRaw === "")) throw new FlowError("errors.amount");
+  const bill = optionalMajor(billRaw);
+  const usage = usageRaw === "" ? null : Number(usageRaw);
+  if (usage !== null && (!Number.isFinite(usage) || usage <= 0)) throw new FlowError("errors.amount");
+  const rate = optionalMajor(input.rate);
+  const any = Boolean(serial || split !== "none" || bill !== null || rate !== null);
+  const unit = await maybe<{ id: string }>(
+    client,
+    `SELECT id::text FROM units WHERE property_id = $1 AND org_id = $2 AND archived_at IS NULL ORDER BY created_at LIMIT 1`,
+    [propertyId, session.orgId],
+  );
+  if (!unit) {
+    if (any) throw new FlowError("errors.notFound");
+    return;
+  }
+  const meter = await maybe<{ id: string }>(
+    client,
+    `SELECT id::text FROM meters
+      WHERE property_id = $1 AND org_id = $2 AND utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL
+      ORDER BY created_at LIMIT 1`,
+    [propertyId, session.orgId],
+  );
+  const rateMinor = rate === null ? null : Math.round(rate * 100 * 1e6) / 1e6;
+  const rateSource = rate === null ? "bill_average" : "fixed_rate";
+  let meterId = meter?.id ?? "";
+  if (!meter) {
+    if (!any) return;
+    const inserted = await one<{ id: string }>(
+      client,
+      `INSERT INTO meters (
+         org_id, property_id, unit_id, utility, usage_unit, label, serial_number, payer, split_method, rate_source, rate_minor_per_unit
+       ) VALUES ($1,$2,$3,'electricity','kWh','main',NULLIF($4, ''),'tenant',$5::split_method,$6::rate_source,$7)
+       RETURNING id::text`,
+      [session.orgId, propertyId, unit.id, serial, split, rateSource, rateMinor],
+    );
+    meterId = inserted.id;
+  } else {
+    await client.query(
+      `UPDATE meters
+          SET serial_number = NULLIF($2, ''),
+              split_method = $3::split_method,
+              rate_source = $4::rate_source,
+              rate_minor_per_unit = $5,
+              updated_at = now()
+        WHERE id = $1 AND org_id = $6`,
+      [meter.id, serial, split, rateSource, rateMinor, session.orgId],
+    );
+  }
+  if (bill !== null && usage !== null) {
+    await client.query(
+      `INSERT INTO utility_bills (
+         org_id, meter_id, provider, period_start, period_end, currency, total_amount_minor, total_usage, entered_by
+       ) VALUES (
+         $1, $2, 'Taipower',
+         date_trunc('month', (now() AT TIME ZONE 'Asia/Taipei'))::date,
+         (date_trunc('month', (now() AT TIME ZONE 'Asia/Taipei')) + interval '1 month')::date,
+         $3, $4, $5, $6
+       )
+       ON CONFLICT (meter_id, period_start, period_end) DO UPDATE
+         SET total_amount_minor = EXCLUDED.total_amount_minor,
+             total_usage = EXCLUDED.total_usage`,
+      [session.orgId, meterId, currency, toMinor(bill), usage, session.userId],
+    );
+  }
+}
+
 export async function updateProperty(
   session: Session,
   propertyId: string,
-  input: { name: string; city: string; district: string; street: string; ownerContactId: string },
+  input: {
+    name: string;
+    city: string;
+    district: string;
+    street: string;
+    ownerContactId: string;
+    electricity: PropertyElectricityInput;
+  },
 ) {
   assertPerm(session, "props.edit");
   if (!input.name.trim() || !input.street.trim() || !input.ownerContactId) throw new FlowError("errors.required");
   await tx(session.userId, async (client) => {
-    const property = await maybe<{ country_code: string }>(
+    const property = await maybe<{ country_code: string; currency: string }>(
       client,
-      `SELECT country_code FROM properties WHERE id = $1 AND org_id = $2 AND archived_at IS NULL`,
+      `SELECT country_code, currency FROM properties WHERE id = $1 AND org_id = $2 AND archived_at IS NULL`,
       [propertyId, session.orgId],
     );
     if (!property) throw new FlowError("errors.notFound");
@@ -451,6 +561,7 @@ export async function updateProperty(
       `UPDATE property_owners SET is_primary = true WHERE property_id = $1 AND owner_contact_id = $2`,
       [propertyId, input.ownerContactId],
     );
+    await savePropertyElectricity(client, session, propertyId, property.currency.trim(), input.electricity);
   });
 }
 

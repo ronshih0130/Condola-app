@@ -48,7 +48,7 @@ test("the staging wrangler env names secrets and keeps demo mode off", () => {
   assert.doesNotMatch(raw, /supabase\.co/);
 });
 
-test("the production wrangler env serves both public hosts and keeps demo mode off", () => {
+test("the production wrangler env serves app.condola.app and keeps demo mode off", () => {
   const production = parseJsonc(read("wrangler.jsonc")).env?.production;
   assert.ok(production);
   assert.equal(production.name, "condola-prod");
@@ -71,7 +71,7 @@ test("the production wrangler env serves both public hosts and keeps demo mode o
   assert.equal(production.placement?.region, "aws:ap-northeast-1");
   assert.deepEqual(
     production.routes?.map((route) => route.pattern),
-    ["app.condola.app", "condola.app"],
+    ["app.condola.app"],
   );
   assert.equal(production.routes?.every((route) => route.custom_domain === true), true);
 });

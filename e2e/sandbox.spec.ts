@@ -12,29 +12,38 @@ test.afterAll(async ({ browser }) => {
   await page.close();
 });
 
-test("a first login with no env cookie opens in test mode and keeps a later choice", async ({ page }) => {
+test("a live firm opens live with no env cookie, and sign-in drops a leftover test-mode choice", async ({ page }) => {
   const sampleProperty = withSampleName(loadSampleRows()[0].property);
   await page.context().clearCookies();
   await page.goto("/login");
   await page.getByTestId("login-email").fill(ACCOUNTS.admin);
   await page.getByTestId("login-password").fill(DEMO_PASSWORD);
   await page.getByTestId("login-submit").click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/login"));
+  await page.waitForURL((url) => !url.pathname.startsWith("/login") && !url.pathname.startsWith("/api/auth/enter"));
 
+  await expect(page.getByTestId("env-banner")).toHaveCount(0);
+  await expect(page.getByTestId("env-switch")).toContainText("正式環境");
+  await expect(page.getByTestId("env-load")).toHaveCount(0);
+
+  await page.goto("/api/env?set=sandbox&next=/m/properties");
   const banner = page.getByTestId("env-banner");
   await expect(banner).toBeVisible();
   await expect(banner).toContainText("測試模式");
   await expect(banner).not.toContainText("Test mode");
   await expect(page.getByTestId("env-switch")).toContainText("測試模式");
-  await expect(page.getByTestId("env-load")).toHaveCount(0);
-  await page.goto("/m/properties");
   await expect(page.getByRole("link", { name: sampleProperty })).toBeVisible();
   await expect(page.getByTestId("sample-tag").first()).toHaveText("範例資料");
-
-  await page.goto("/api/env?set=live&next=/m");
-  await expect(page.getByTestId("env-banner")).toHaveCount(0);
-  await expect(page.getByTestId("env-switch")).toContainText("正式環境");
   await page.reload();
+  await expect(banner).toContainText("測試模式");
+
+  const kept = (await page.context().cookies()).filter((cookie) => cookie.name === "condola_env");
+  await page.context().clearCookies();
+  if (kept.length) await page.context().addCookies(kept);
+  await page.goto("/login");
+  await page.getByTestId("login-email").fill(ACCOUNTS.admin);
+  await page.getByTestId("login-password").fill(DEMO_PASSWORD);
+  await page.getByTestId("login-submit").click();
+  await page.waitForURL((url) => !url.pathname.startsWith("/login") && !url.pathname.startsWith("/api/auth/enter"));
   await expect(page.getByTestId("env-banner")).toHaveCount(0);
   await expect(page.getByTestId("env-switch")).toContainText("正式環境");
 });

@@ -9,16 +9,13 @@ export const CLEARED_COOKIES = [
   "condola_backup",
 ];
 
-const DOMAINS = [undefined, ".condola.app", "condola.app", "app.condola.app", "staging.condola.app"] as const;
+/** Host-only cookies from before Domain=.condola.app, plus every domain this app has set. */
+const COOKIE_DOMAINS = [undefined, ".condola.app", "condola.app", "app.condola.app", "staging.condola.app"] as const;
 
-export function expiredAuthCookies(extraNames: string[] = []) {
-  const names = [
-    ...CLEARED_COOKIES,
-    ...extraNames.filter((name) => name.startsWith("sb-") && !CLEARED_COOKIES.includes(name)),
-  ];
+export function expiredNamedCookies(names: string[]) {
   const lines: string[] = [];
   for (const name of names) {
-    for (const domain of DOMAINS) {
+    for (const domain of COOKIE_DOMAINS) {
       for (const secure of [false, true]) {
         for (const httpOnly of [false, true]) {
           const parts = [`${name}=`, "Path=/", "Max-Age=0", "Expires=Thu, 01 Jan 1970 00:00:00 GMT", "SameSite=Lax"];
@@ -31,6 +28,24 @@ export function expiredAuthCookies(extraNames: string[] = []) {
     }
   }
   return lines;
+}
+
+/** Sign-in must drop every condola_env, including a host-only sandbox cookie the jar cannot expire. */
+export function expiredEnvChoiceCookies() {
+  return expiredNamedCookies(["condola_env"]);
+}
+
+export function sessionEntryPath(next: string) {
+  const safe = next.startsWith("/") && !next.startsWith("//") ? next : "/auth/continue";
+  return `/api/auth/enter?next=${encodeURIComponent(safe)}`;
+}
+
+export function expiredAuthCookies(extraNames: string[] = []) {
+  const names = [
+    ...CLEARED_COOKIES,
+    ...extraNames.filter((name) => name.startsWith("sb-") && !CLEARED_COOKIES.includes(name)),
+  ];
+  return expiredNamedCookies(names);
 }
 
 type CookieSetter = {
