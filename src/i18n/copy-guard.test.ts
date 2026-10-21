@@ -86,6 +86,7 @@ test("sandbox chrome uses the sample company, the amber banner, and a native swi
   assert.equal(zh.i_sandbox_company, "範例公司");
   assert.equal(zh.i_report_hint.startsWith("收入是已確認的繳款"), true);
   const chrome = read(join(root, "src/components/chrome.tsx"));
+  assert.doesNotMatch(chrome, /demo-badge|i_demo_only|示範/);
   assert.match(chrome, /<details className="org-switch">/);
   assert.match(chrome, /<summary className="org-toggle" data-testid="org-switch">/);
   assert.match(chrome, /data-testid="org-pick-sandbox"/);
@@ -112,8 +113,15 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   assert.equal(zh.i_audit_rec_line, "邀請連結");
   assert.equal(zh.i_sandbox_suffix, "（範例）");
   assert.equal(zh.i_settings_plan, "方案：前 4 戶永遠免費");
+  assert.equal(zh.i_outstanding, "未繳清租客");
+  assert.equal(zh.i_receipt, "收據（範例檔名）");
   assert.equal(zh.i_pick_room_type, "請選擇房型");
   const dash = read(join(root, "src/app/m/page.tsx"));
+  assert.match(dash, /i_outstanding/);
+  assert.doesNotMatch(dash, /未收款/);
+  const statements = read(join(root, "src/app/m/statements/page.tsx"));
+  assert.match(statements, /i_receipt/);
+  assert.doesNotMatch(statements, /示範檔名/);
   assert.match(dash, /session\.environment === "live" && data\.properties\.length === 0/);
   assert.match(dash, /data-testid="dash-first-property"/);
   assert.match(dash, /i_dash_step1/);

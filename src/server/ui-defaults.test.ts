@@ -42,6 +42,7 @@ test("staff copy names the payments queue 繳款紀錄", () => {
   assert.equal(zh.i_dash_sample, "先看看範例公司");
   assert.equal(zh.i_dash_free, "前 4 戶永遠免費・第 5 戶起每戶每月 NT$30 起・付費方案前 3 個月免費");
   assert.equal(zh.i_outstanding, "未繳清租客");
+  assert.equal(zh.i_receipt, "收據（範例檔名）");
   assert.equal(zh.i_none_pending, "沒有待確認的繳款。");
   assert.equal(zh.i_sandbox_plan, "範例公司：資料僅供練習，不會出現在正式公司。範例公司不會實際寄出任何通知。");
   assert.equal(zh.i_whole_home_hint, "整層住家預設僅一間，代表整戶出租。");
