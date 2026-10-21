@@ -110,7 +110,7 @@ test("the lease idempotency migration is additive and later than shared staging 
   const dir = new URL("../../supabase/migrations/", import.meta.url);
   const names = readdirSync(dir).filter((name) => name.endsWith(".sql")).sort();
   const ours = names.filter((name) => name.includes("lease_idempotency_key"));
-  assert.deepEqual(ours, ["20261027120000_lease_idempotency_key.sql"]);
+  assert.deepEqual(ours, ["20261027130000_lease_idempotency_key.sql"]);
   const stamp = ours[0].slice(0, 14);
   assert.ok(stamp > "20261023180000");
   const latestOther = names.filter((name) => name !== ours[0]).map((name) => name.slice(0, 14)).sort().at(-1);
