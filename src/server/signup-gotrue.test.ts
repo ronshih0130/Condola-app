@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { normalizeEmail, requestPasswordReset } from "./auth";
+import { describeRecoveryHash, normalizeEmail, recoverySentAtStatus, requestPasswordReset } from "./auth";
 import { useEmailBinding } from "./mail";
 import {
   classifyPasswordGrant,
@@ -116,11 +116,48 @@ test("confirmation verify is a POST body and GET pages do not call it", () => {
   assert.match(verify, /n:\s*2/);
   assert.match(verify, /name="nextEmail"[\s\S]*name="password"/);
   const reset = readFileSync(new URL("../app/reset/page.tsx", import.meta.url), "utf8");
+  const localReset = readFileSync(new URL("../app/reset/[token]/page.tsx", import.meta.url), "utf8");
+  assert.match(reset, /describeRecoveryHash/);
   assert.match(reset, /actionReset/);
   assert.match(reset, /name="type" value="recovery"/);
   assert.match(reset, /name="token_hash"/);
+  assert.match(reset, /i_reset_expired/);
+  assert.match(reset, /i_reset_resend/);
+  assert.match(reset, /href="\/forgot"/);
   assert.doesNotMatch(reset, /verifyRecoveryTokenHash\(/);
   assert.doesNotMatch(reset, /actionVerifyRecovery/);
+  assert.match(localReset, /describeReset/);
+  assert.match(localReset, /i_reset_resend/);
+  assert.doesNotMatch(localReset, /verifyRecoveryTokenHash\(/);
+  const formAt = reset.indexOf("PasswordFields");
+  const expiredAt = reset.indexOf("i_reset_expired");
+  assert.ok(formAt > 0 && expiredAt > formAt);
+  assert.equal(reset.slice(expiredAt).includes("PasswordFields"), false);
+});
+
+test("a recovery link is ready only inside the 60-minute window and a page load does not verify it", async () => {
+  const now = Date.parse("2026-10-21T12:00:00Z");
+  assert.equal(recoverySentAtStatus(new Date("2026-10-21T11:00:01Z"), now), "ready");
+  assert.equal(recoverySentAtStatus(new Date("2026-10-21T11:00:00Z"), now), "expired");
+  assert.equal(recoverySentAtStatus(null, now), "expired");
+  const saved = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  try {
+    assert.equal(await describeRecoveryHash("hashed-token", "recovery", now), "expired");
+    assert.equal(await describeRecoveryHash("hashed-token", "signup", now), "expired");
+    assert.equal(await describeRecoveryHash("", "recovery", now), "expired");
+  } finally {
+    if (saved === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = saved;
+  }
+  const auth = readFileSync(new URL("./auth.ts", import.meta.url), "utf8");
+  const start = auth.indexOf("export async function describeRecoveryHash");
+  const end = auth.indexOf("const TEAM_ROLES", start);
+  const fn = auth.slice(start, end);
+  assert.match(fn, /SELECT recovery_sent_at/);
+  assert.match(fn, /recovery_token/);
+  assert.doesNotMatch(fn, /\/auth\/v1\/verify/);
+  assert.doesNotMatch(fn, /verifyRecoveryTokenHash/);
 });
 
 test("a hash access_token is forwarded to /signup/confirm and not looped", () => {

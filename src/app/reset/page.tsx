@@ -2,6 +2,7 @@ import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
 import { PasswordFields } from "@/components/password-field";
 import { actionReset } from "@/server/auth-actions";
+import { describeRecoveryHash } from "@/server/auth";
 import { requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export default async function ResetLinkPage({
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
   const tokenHash = params.token_hash || "";
-  const ready = Boolean(tokenHash) && params.type === "recovery" && params.expired !== "1";
+  const ready = (await describeRecoveryHash(tokenHash, params.type || "")) === "ready";
   const error =
     params.error === "weak" ? t("i_pw_weak") : params.error === "mismatch" ? t("i_pw_mismatch") : "";
   return (
@@ -39,8 +40,8 @@ export default async function ResetLinkPage({
             <div className="alert bad" data-testid="reset-expired">
               {t("i_reset_expired")}
             </div>
-            <a className="btn pri block" href="/forgot">
-              {t("i_forgot")}
+            <a className="btn pri block" href="/forgot" data-testid="reset-resend">
+              {t("i_reset_resend")}
             </a>
           </>
         )}

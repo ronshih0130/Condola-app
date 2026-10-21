@@ -610,6 +610,58 @@ export async function describeReset(token: string) {
   return "ready" as const;
 }
 
+/** A recovery hash is ready only while its sent time is inside the 60-minute window. */
+export function recoverySentAtStatus(sentAt: Date | null | undefined, now = Date.now()): "ready" | "expired" {
+  if (!sentAt || Number.isNaN(sentAt.getTime())) return "expired";
+  if (sentAt.getTime() + RESET_MINUTES * 60_000 <= now) return "expired";
+  return "ready";
+}
+
+function pgCode(error: unknown) {
+  return typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code) : "";
+}
+
+/**
+ * Read whether a GoTrue recovery link is still unused. This does not call
+ * /verify, so opening the page does not consume the token.
+ * `missing` means that store is not present or has no row.
+ */
+async function readRecoverySentAt(sql: string, hash: string, now: number): Promise<"ready" | "expired" | "missing"> {
+  try {
+    const row = await query<{ sent_at: Date | null }>(sql, [hash]);
+    if (!row.rows[0]) return "missing";
+    return recoverySentAtStatus(row.rows[0].sent_at, now);
+  } catch (error) {
+    const code = pgCode(error);
+    if (code === "42P01" || code === "42703") return "missing";
+    console.error("recovery link", error instanceof Error ? error.message : "failed");
+    return "expired";
+  }
+}
+
+/** Server-side check for /reset?token_hash. Invalid, used, and expired links are `expired`. */
+export async function describeRecoveryHash(tokenHash: string, type: string, now = Date.now()): Promise<"ready" | "expired"> {
+  const hash = tokenHash.trim();
+  if (!hash || type.trim().toLowerCase() !== "recovery") return "expired";
+  if (!process.env.DATABASE_URL) return "expired";
+  const fromUser = await readRecoverySentAt(
+    `SELECT recovery_sent_at AS sent_at FROM auth.users WHERE recovery_token = $1 AND recovery_token <> ''`,
+    hash,
+    now,
+  );
+  if (fromUser !== "missing") return fromUser;
+  const fromToken = await readRecoverySentAt(
+    `SELECT coalesce(u.recovery_sent_at, t.created_at AT TIME ZONE 'UTC') AS sent_at
+       FROM auth.one_time_tokens t
+       JOIN auth.users u ON u.id = t.user_id
+      WHERE t.token_hash = $1 AND t.token_type::text = 'recovery_token'`,
+    hash,
+    now,
+  );
+  if (fromToken !== "missing") return fromToken;
+  return "expired";
+}
+
 const TEAM_ROLES = new Set<OrgRole>(["admin", "manager", "accountant", "maintenance"]);
 
 async function assertLastAdmin(orgId: string, userId: string, nextRole: OrgRole | null) {

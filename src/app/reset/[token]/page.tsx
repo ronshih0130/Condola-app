@@ -31,8 +31,8 @@ export default async function ResetPage({
             <div className="alert bad" data-testid="reset-expired">
               {t("i_reset_expired")}
             </div>
-            <a className="btn pri block" href="/forgot">
-              {t("i_forgot")}
+            <a className="btn pri block" href="/forgot" data-testid="reset-resend">
+              {t("i_reset_resend")}
             </a>
           </>
         ) : (
