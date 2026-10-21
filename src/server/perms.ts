@@ -137,6 +137,7 @@ export function roleHome(kind: "staff" | "tenant" | "owner", role: OrgRole | nul
 
 const ROUTE_PERM: { prefix: string; perm: PermKey; exact?: boolean }[] = [
   { prefix: "/m/properties/new", perm: "props.edit" },
+  { prefix: "/m/import", perm: "props.edit" },
   { prefix: "/m/leases/new", perm: "leases.edit" },
   { prefix: "/m/owners", perm: "props.view", exact: true },
   { prefix: "/m/owners", perm: "props.edit" },
