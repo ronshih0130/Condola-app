@@ -33,7 +33,7 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
       {money.dueMinor > 0 ? (
         <PayDialog leaseId={lease.lease_id} dueMinor={money.dueMinor} currency={money.currency} label={t("i_report_pay")} returnTo="tenant" />
       ) : (
-        <div className="alert ok">{t("i_pay_confirmed")}</div>
+        <div className="alert ok">{t("i_paid_up")}</div>
       )}
       <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
     </div>

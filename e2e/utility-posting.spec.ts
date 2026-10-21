@@ -25,6 +25,8 @@ test("a manager confirms 電費 and the tenant sees it on the bill", async ({ pa
   await page.getByTestId("kwh-curr-B").fill("50");
   await page.getByTestId("utility-preview").click();
   await expect(page.getByTestId("utility-review")).toBeVisible();
+  await expect(page.getByTestId("utility-confirm")).toBeVisible();
+  await expect(page.getByTestId("utility-confirm")).toHaveText("確認登記電費");
   await expect(page.getByTestId("utility-repost")).toHaveCount(0);
   await expect(page.getByTestId("utility-share-desc").nth(0)).toContainText("電費 100 度 × 4 元");
   await expect(page.getByTestId("utility-share-desc").nth(1)).toContainText("電費 50 度 × 4 元");
@@ -152,4 +154,71 @@ test("公共用電 and 帳單差額 show as separate owner lines with a rate war
   await expect(page.getByTestId("utility-gap")).toContainText("電費（帳單差額）");
   await expect(page.getByTestId("utility-gap")).toContainText("-NT$300");
   await expect(page.getByTestId("utility-share").filter({ hasText: "屋主（空房）" })).toContainText("NT$100");
+});
+
+test("countersign activates a pending lease that already has a utility invoice", async ({ page }) => {
+  await resetDemo(page);
+  await page.goto("/api/demo/locale?set=zh-TW&next=/m/units");
+  for (const room of ["A", "B", "C"]) {
+    await page.getByTestId(`space-row-3F-${room}`).getByRole("link", { name: "編輯" }).click();
+    await page.getByTestId("space-electricity").selectOption("submeter");
+    await page.getByTestId("space-rate").fill("4");
+    await page.getByTestId("save-space").click();
+    await expect(page.getByTestId(`space-row-3F-${room}`)).toContainText("分表");
+  }
+
+  await page.goto("/m/leases/new");
+  const room = page.getByTestId("lease-room");
+  const vacant = room.locator("option", { hasText: "3F C" });
+  await expect(vacant).toHaveCount(1);
+  await room.selectOption((await vacant.getAttribute("value")) ?? "");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("tenant-name").fill("待副署租客");
+  await page.getByTestId("tenant-phone").fill("+886912300166");
+  await page.getByTestId("wizard-next").click();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+  await page.getByTestId("start-date").fill(today);
+  await page.getByTestId("term-months").fill("12");
+  await page.getByTestId("rent").fill("10000");
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("wizard-next").click();
+  await expect(page.getByTestId("utility-monthly-note")).toBeVisible();
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("wizard-next").click();
+  await page.getByTestId("submit-lease").click();
+  await expect(page).toHaveURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1/);
+  const leaseUrl = page.url().split("?")[0];
+
+  await page.goto("/m/rent/utilities");
+  await page.getByTestId("utility-unit").selectOption({ label: "信義松仁 · 3F" });
+  await page.getByTestId("utility-month-form").getByRole("button", { name: "查看這個月" }).click();
+  await page.getByTestId("utility-rate").fill("4");
+  await page.getByTestId("kwh-prev-A").fill("0");
+  await page.getByTestId("kwh-curr-A").fill("10");
+  await page.getByTestId("kwh-prev-B").fill("0");
+  await page.getByTestId("kwh-curr-B").fill("10");
+  await page.getByTestId("kwh-prev-C").fill("0");
+  await page.getByTestId("kwh-curr-C").fill("100");
+  await page.getByTestId("utility-preview").click();
+  await expect(page.getByTestId("utility-confirm")).toBeVisible();
+  await expect(page.getByTestId("utility-confirm")).toHaveText("確認登記電費");
+  await page.getByTestId("utility-confirm").click();
+  await expect(page.getByTestId("utility-status")).toContainText("電費已登記");
+
+  await page.goto(`${leaseUrl}?tab=sign`);
+  await page.getByTestId("simulate-tenant-sign").click();
+  await expect(page.getByText("租客已簽署")).toBeVisible();
+  await expect(page.getByTestId("error-banner")).toHaveCount(0);
+  await page.getByTestId("sign-name").fill("管理方");
+  await page.getByTestId("sign-consent").check();
+  await page.getByTestId("submit-sign").click();
+  await expect(page).toHaveURL(new RegExp(`${leaseUrl.split("/").pop()}\\?tab=ledger$`));
+  await expect(page).not.toHaveURL(/error=/);
+  await expect(page.getByTestId("error-banner")).toHaveCount(0);
+  await expect(page.getByTestId("invoice-utility-line")).toHaveCount(1);
+  await expect(page.getByTestId("invoice-rent")).toBeVisible();
+  await expect(page.getByTestId("invoice-deposit")).toBeVisible();
+  await page.getByRole("link", { name: "摘要" }).click();
+  await expect(page.getByText("生效中")).toBeVisible();
 });
