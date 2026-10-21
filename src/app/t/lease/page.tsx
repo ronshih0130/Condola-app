@@ -2,6 +2,7 @@ import { dictionary, makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { formatDate, formatMoney } from "@/server/format";
 import { tenantLeaseMoney } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { selectedLease } from "@/lib/tenant-lease";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export default async function TenantLeasePage() {
           testId="download-lease-pdf"
         />
       </p>
-      <p>{money.lease.place}</p>
+      <p>{displaySampleName(money.lease.place)}</p>
       <p>
         {formatDate(money.lease.start_date, session.locale, session.calendar, dict)} – {formatDate(money.lease.end_date, session.locale, session.calendar, dict)}
       </p>

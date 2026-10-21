@@ -2,7 +2,9 @@
 
 import { useRef, useState } from "react";
 import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
+import { offeredCountries } from "@/countries";
 import { PendingSubmit } from "./pending-submit";
+import { PhoneField } from "./phone-field";
 import { useT } from "./locale";
 import { actionCreateFirm } from "@/server/signup-actions";
 
@@ -80,20 +82,31 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
             {nameError ? <p className="hint" data-testid="firm-name-error">{t("i_step_incomplete", { field: t(kind === "self" ? "i_signup_name_self" : "i_signup_name_firm") })}</p> : null}
           </div>
           <div className="fg">
+            <label className="f">{t("i_country")}</label>
+            <select className="inp" name="country" data-testid="firm-country" defaultValue="TW">
+              {offeredCountries().map((country) => (
+                <option key={country.code} value={country.code}>
+                  {t(country.nameKey)}
+                </option>
+              ))}
+            </select>
+            <p className="hint">{t("i_country_hint")}</p>
+          </div>
+          <div className="fg">
             <label className="f">{t("i_signup_contact")}</label>
             <input className="inp" name="contactName" data-testid="firm-contact" onChange={() => setContactError(false)} />
             {contactError ? <p className="hint" data-testid="firm-contact-error">{t("i_step_incomplete", { field: t("i_signup_contact") })}</p> : null}
           </div>
           <div className="fg">
             <label className="f">{t("i_signup_phone")}</label>
-            <input className="inp" name="phone" data-testid="firm-phone" />
+            <PhoneField name="phone" testId="firm-phone" callingCode="+886" />
           </div>
           <div className="fg">
             <label className="f">{t("i_signup_code")}</label>
             <input className="inp" name="partnerCode" defaultValue={partnerCode} data-testid="firm-code" />
           </div>
           <p className="small" data-testid="signup-admin-note">{t("i_signup_admin_note")}</p>
-          <PendingSubmit className="btn pri" idle={t("i_signup_create")} pending={t("i_signup_submitting")} testId="firm-submit" disabled={!submitReady} />
+          <PendingSubmit className="btn pri" idle={t("i_signup_create")} pending={t("i_portal_working")} testId="firm-submit" disabled={!submitReady} />
         </div>
       )}
     </form>

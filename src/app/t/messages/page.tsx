@@ -2,6 +2,7 @@ import { makeT } from "@/i18n";
 import { ErrorBanner } from "@/components/ui";
 import { actionMessage } from "@/server/actions";
 import { threadMessages } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { selectedLease } from "@/lib/tenant-lease";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function TenantMessagesPage({ searchParams }: { searchParam
     <div>
       <h2>{t("i_rich_msg")}</h2>
       <ErrorBanner t={t} error={params.error} />
-      <p className="small">{t("i_context", { firm: lease.firm_name, place: `${lease.property_name} ${lease.room_label ?? ""}`.trim() })}</p>
+      <p className="small">{t("i_context", { firm: lease.firm_name, place: displaySampleName(`${lease.property_name} ${lease.room_label ?? ""}`.trim()) })}</p>
       {messages.map((message) => (
         <p key={message.id} className={message.mine ? "b" : ""}>
           {message.body}

@@ -4,6 +4,7 @@ import { makeT } from "@/i18n";
 import { AuditHistory } from "@/components/audit-log";
 import { PageHeader, statusClass, statusKey } from "@/components/ui";
 import { tenantDetail } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export default async function TenantPage({
   if (!detail) notFound();
   return (
     <>
-      <PageHeader title={detail.tenant.name} crumb={<Link href="/m/tenants">{t("i_tenants_title")}</Link>} />
+      <PageHeader title={displaySampleName(detail.tenant.name)} crumb={<Link href="/m/tenants">{t("i_tenants_title")}</Link>} />
       <div className="card" data-testid="tenant-leases">
         <div className="hd">
           <h3>{t("i_nav_leases")}</h3>
@@ -42,7 +43,7 @@ export default async function TenantPage({
               {detail.leases.map((lease) => (
                 <tr key={lease.id}>
                   <td>
-                    <Link href={`/m/leases/${lease.id}`}>{lease.place}</Link>
+                    <Link href={`/m/leases/${lease.id}`}>{displaySampleName(lease.place)}</Link>
                   </td>
                   <td data-label={t("i_status")}>
                     <span className={`chip ${statusClass(lease.status)}`}>{t(statusKey(lease.status))}</span>

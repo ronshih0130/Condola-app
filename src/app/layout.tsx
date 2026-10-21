@@ -3,7 +3,7 @@ import { makeT } from "@/i18n";
 import { AuthHashForward } from "@/components/auth-hash";
 import { BrandLink, LocaleLinks, ResetButton, SignOutButton } from "@/components/chrome";
 import { RequiredValidity } from "@/components/required-validity";
-import { EnvBanner, EnvSwitch } from "@/components/env-mode";
+import { EnvBanner } from "@/components/env-mode";
 import { LocaleProvider } from "@/components/locale";
 import { demoModeEnabled } from "@/server/demo";
 import { sandboxChrome } from "@/server/sandbox";
@@ -36,7 +36,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span aria-hidden="true">☰</span>
             </label>
             <BrandLink />
-            {session?.kind === "staff" ? <EnvSwitch environment={session.environment} liveEnabled={session.liveEnabled === true} /> : null}
             <span className="top-extra">
               {session ? <span className="small">{session.name}</span> : <a href="/login">{t("i_sign_in")}</a>}
             </span>
@@ -48,7 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {showReset ? <ResetButton /> : null}
             </span>
           </header>
-          {chrome.environment === "sandbox" ? <EnvBanner /> : null}
+          {chrome.environment === "sandbox" ? <EnvBanner showBack={session?.kind === "staff" && Boolean(session.liveOrgId)} /> : null}
           {children}
         </LocaleProvider>
       </body>

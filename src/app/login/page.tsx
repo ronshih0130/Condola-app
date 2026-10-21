@@ -138,7 +138,7 @@ export default async function LoginPage({
               </div>
             ) : null}
             <p className="small" data-testid="login-invite">
-              {t("i_login_invite_lead")}{" "}
+              {t("i_login_invite_lead")}
               <a href="/signup" data-testid="login-signup">{t("i_login_signup")}</a>
               {t("i_login_invite_tail")}
             </p>

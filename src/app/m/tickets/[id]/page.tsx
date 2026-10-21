@@ -8,6 +8,7 @@ import { actionSaveRepair } from "@/server/actions";
 import { can, rolesFor } from "@/server/perms";
 import { isUuid, minorToInput } from "@/server/repair-rules";
 import { ticketDetail } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -50,9 +51,9 @@ export default async function TicketDetailPage({
       <ErrorBanner t={t} error={query.error} />
       <p className="muted">
         <Link href={`/m/properties/${ticket.property_id}`} data-testid="repair-property">
-          {ticket.property_name}
+          {displaySampleName(ticket.property_name)}
         </Link>
-        {ticket.place.replace(ticket.property_name, "")} · {t(REPAIR_CAT_KEY[ticket.category] ?? "i_cat_other")}
+        {displaySampleName(ticket.place.replace(ticket.property_name, ""))} · {t(REPAIR_CAT_KEY[ticket.category] ?? "i_cat_other")}
       </p>
       {ticket.description ? <p>{ticket.description}</p> : null}
       <div className="grid2">
