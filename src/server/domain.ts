@@ -105,6 +105,14 @@ export type PropertyInput = {
   submitToken?: string;
 };
 
+const PROPERTY_ROOM_TYPES = new Set(["whole_home", "studio", "suite", "shared_bath"]);
+
+function assertPropertyRoomTypes(rooms: { roomType: string }[]) {
+  if (rooms.some((room) => !PROPERTY_ROOM_TYPES.has(room.roomType))) {
+    throw new FlowError("errors.required", { field: "i_room_type" });
+  }
+}
+
 function uniqueUnitLabel(label: string, floor: string, door: string, used: Set<string>) {
   const base = label.trim() || [floor.trim(), door.trim()].filter(Boolean).join(" ") || "1";
   let next = base;
@@ -151,7 +159,7 @@ async function insertPropertyUnit(
       client,
       `INSERT INTO rooms (org_id, unit_id, label, room_type, base_rent_minor, area_unit)
        VALUES ($1,$2,$3,$4::room_type,$5,$6) RETURNING id`,
-      [input.orgId, unit.id, room.label.trim(), room.roomType || "suite", toMinor(room.baseRentMajor || 0), input.areaUnit],
+      [input.orgId, unit.id, room.label.trim(), room.roomType, toMinor(room.baseRentMajor || 0), input.areaUnit],
     );
     roomIds.push(inserted.id);
   }
@@ -244,8 +252,14 @@ export async function createProperty(session: Session, input: PropertyInput) {
   if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8" });
   if (wholeUnit && rooms.length !== 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
   if (input.rentalMode === "by_room" && rooms.length < 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  if (input.rentalMode === "by_room") assertPropertyRoomTypes(rooms);
   if (rooms.some((room) => room.roomType === "whole_home") && rooms.length !== 1) {
     throw new FlowError("errors.required", { field: "s_8569bc8" });
+  }
+  for (const extra of input.rentalMode === "by_room" ? (input.extraUnits ?? []) : []) {
+    const extraRooms = extra.rooms.filter((room) => room.label.trim() || room.baseRentMajor > 0);
+    if (!extra.floor.trim() && !extra.label.trim() && extraRooms.length === 0) continue;
+    assertPropertyRoomTypes(extraRooms);
   }
   if (input.electric?.rateMajor != null && (!Number.isFinite(input.electric.rateMajor) || input.electric.rateMajor < 0)) {
     throw new FlowError("errors.amount", { field: "i_rate" });
@@ -259,20 +273,39 @@ export async function createProperty(session: Session, input: PropertyInput) {
     const submitToken = (input.submitToken || "").trim().slice(0, 80);
     const submitHash = submitToken ? sha256(stableStringify(propertySubmitPayload(input))) : "";
     if (submitToken) {
-      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
-        idempotencyLockKey("property", session.orgId, session.userId, submitToken),
-      ]);
-      const prior = await many<{ id: string; hash: string }>(
-        client,
-        `SELECT id::text, coalesce(address->>'submitHash', '') AS hash
-           FROM properties
-          WHERE org_id = $1
-            AND address->>'submitUser' = $2
-            AND address->>'submitToken' = $3`,
-        [session.orgId, session.userId, submitToken],
-      );
+      // One indexed lookup, not a scan under RLS. Permissive property policies
+      // call tenant/owner functions per row, and that scan is what stretched
+      // a create from about two seconds into the tens. service_role skips
+      // those policies; org_id keeps the read inside this firm.
+      await client.query(`SET LOCAL ROLE service_role`);
+      let prior: { id: string } | null = null;
+      try {
+        prior = await maybe<{ id: string }>(
+          client,
+          `WITH locked AS (
+             SELECT pg_advisory_xact_lock(hashtext($1))
+           )
+           SELECT id::text
+             FROM properties, locked
+            WHERE org_id = $2
+              AND address->>'submitUser' = $3
+              AND address->>'submitToken' = $4
+              AND address->>'submitHash' = $5
+            ORDER BY created_at DESC
+            LIMIT 1`,
+          [
+            idempotencyLockKey("property", session.orgId, session.userId, submitToken),
+            session.orgId,
+            session.userId,
+            submitToken,
+            submitHash,
+          ],
+        );
+      } finally {
+        await client.query(`SET LOCAL ROLE authenticated`);
+      }
       const claim = claimIdempotentSubmit(
-        prior.map((row) => ({ id: row.id, orgId: session.orgId, userId: session.userId, token: submitToken, hash: row.hash })),
+        prior ? [{ id: prior.id, orgId: session.orgId, userId: session.userId, token: submitToken, hash: submitHash }] : [],
         { orgId: session.orgId, userId: session.userId, token: submitToken, hash: submitHash },
       );
       if (claim.action === "replay") {

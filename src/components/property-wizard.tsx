@@ -39,8 +39,12 @@ function emptyRoom(): RoomDraft {
 }
 
 function stepOf(field: string) {
-  if (field === "i_unit_label" || field === "i_floor" || field === "s_8569bc8") return 3;
+  if (field === "i_unit_label" || field === "i_floor" || field === "s_8569bc8" || field === "i_room_type") return 3;
   return 1;
+}
+
+function roomNeedsType(room: RoomDraft) {
+  return (room.label.trim() !== "" || room.rent.trim() !== "") && room.type === "";
 }
 
 export function PropertyWizard({
@@ -87,7 +91,8 @@ export function PropertyWizard({
     if (!state.error) return;
     setSaving(false);
     setSubmitReady(true);
-  }, [state.error]);
+    if (state.field === "i_room_type") setStep(3);
+  }, [state.error, state.field]);
 
   const filledRooms = rooms.filter((room) => !blankRoom(room));
   const rateN = Number(rate);
@@ -122,6 +127,7 @@ export function PropertyWizard({
     if (throughStep >= 3 && rentalMode === "by_room") {
       if (wholeHome && filledRooms.length !== 1) return "s_8569bc8";
       if (!filledRooms.length || filledRooms.some((room) => !room.label.trim())) return "s_8569bc8";
+      if (filledRooms.some((room) => !room.type) || extras.some((unit) => unit.rooms.some(roomNeedsType))) return "i_room_type";
     }
     return "";
   }
@@ -187,7 +193,9 @@ export function PropertyWizard({
         const missing = gap(4);
         if (missing) {
           event.preventDefault();
+          setSaving(false);
           setFieldError(missing);
+          setStep(stepOf(missing));
           return;
         }
         setSaving(true);
@@ -195,6 +203,7 @@ export function PropertyWizard({
       }}
     >
       <input type="hidden" name="submitToken" value={submitToken} />
+      <input type="hidden" name="currency" value={currency} />
       <ImplicitSubmitSink />
       <Stepper steps={steps} current={step} errorStep={namedField ? stepOf(namedField) : undefined} />
       <div hidden={step !== 1}>
@@ -328,7 +337,7 @@ export function PropertyWizard({
                 {wholeUnit ? (
                   <input type="hidden" name={`room${index}type`} value="whole_home" />
                 ) : (
-                <div className="fg">
+                <div className={fieldClass("i_room_type")}>
                   <label className="f">{t("i_room_type")}</label>
                   <select
                     className="inp"
@@ -370,6 +379,9 @@ export function PropertyWizard({
             {namedField === "s_8569bc8" || namedField === "i_unit_label" || namedField === "i_floor" ? (
               <p className="errmsg">{t("i_step_incomplete", { field: t(namedField) })}</p>
             ) : null}
+            {namedField === "i_room_type" ? (
+              <p className="errmsg" data-testid="room-type-error">{t("i_pick_room_type")}</p>
+            ) : null}
             {rentalMode === "whole_unit" || wholeHome ? null : (
               <button className="btn" type="button" data-testid="add-room" onClick={() => setRooms([...rooms, emptyRoom()])}>
                 {t("s_5035250")}
@@ -397,7 +409,7 @@ export function PropertyWizard({
                       <label className="f">{t("i_room_name")}</label>
                       <input className="inp" name={`unit${unitIndex}room${roomIndex}label`} value={room.label} onChange={(event) => setExtras(extras.map((item, itemIndex) => itemIndex === index ? { ...item, rooms: item.rooms.map((entry, entryIndex) => entryIndex === roomIndex ? { ...entry, label: event.target.value } : entry) } : item))} />
                     </div>
-                    <div className="fg">
+                    <div className={fieldClass("i_room_type")}>
                       <label className="f">{t("i_room_type")}</label>
                       <select className="inp" name={`unit${unitIndex}room${roomIndex}type`} value={room.type} onChange={(event) => setExtras(extras.map((item, itemIndex) => itemIndex === index ? { ...item, rooms: item.rooms.map((entry, entryIndex) => entryIndex === roomIndex ? { ...entry, type: event.target.value } : entry) } : item))}>
                         <option value="">{t("i_choose")}</option>
@@ -502,7 +514,7 @@ export function PropertyWizard({
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button key="submit-property" className="btn pri" type="submit" data-testid="submit-property" disabled={blocked || !submitReady} aria-busy={saving ? true : undefined}>
+          <button key="submit-property" className="btn pri" type="submit" data-testid="submit-property" data-saving={saving ? "1" : undefined} disabled={blocked || !submitReady} aria-busy={saving ? true : undefined}>
             {saving ? t("i_portal_working") : t("s_aed91da")}
           </button>
         )}

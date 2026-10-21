@@ -111,6 +111,8 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   assert.equal(zh.i_audit_ev_line_sign_in, "租客登入");
   assert.equal(zh.i_audit_rec_line, "邀請連結");
   assert.equal(zh.i_sandbox_suffix, "（範例）");
+  assert.equal(zh.i_settings_plan, "方案：前 4 戶永遠免費");
+  assert.equal(zh.i_pick_room_type, "請選擇房型");
   const dash = read(join(root, "src/app/m/page.tsx"));
   assert.match(dash, /session\.environment === "live" && data\.properties\.length === 0/);
   assert.match(dash, /data-testid="dash-first-property"/);
@@ -119,6 +121,10 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   assert.match(dash, /i_dash_step3/);
   assert.match(dash, /<p className="small">\s*<a href="\/api\/env\?set=sandbox&next=\/m" data-testid="dash-sample">/);
   assert.doesNotMatch(dash, /className="btn"[^"]*" data-testid="dash-sample"/);
+  const settings = read(join(root, "src/app/m/settings/page.tsx"));
+  assert.match(settings, /data-testid="settings-plan"/);
+  assert.match(settings, /i_settings_plan/);
+  assert.doesNotMatch(settings, /i_price_upgrade/);
   const login = read(join(root, "src/app/login/page.tsx"));
   assert.match(login, /href="\/signup" data-testid="login-signup"/);
   assert.doesNotMatch(login, /先在測試模式試用全部功能/);

@@ -105,7 +105,7 @@ function submittedPhone(formData: FormData, name: string) {
 function postedRooms(formData: FormData, prefix: string, count: number) {
   return Array.from({ length: Math.min(count, 30) }, (_, index) => ({
     label: text(formData.get(`${prefix}${index}label`)),
-    roomType: text(formData.get(`${prefix}${index}type`)) || "suite",
+    roomType: text(formData.get(`${prefix}${index}type`)),
     baseRentMajor: num(formData.get(`${prefix}${index}rent`)) || 0,
   }));
 }

@@ -51,11 +51,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         ) : null}
         {query.upgrade === "1" ? <p data-testid="upgrade-hint">{t("i_golive_upgrade_hint")}</p> : null}
         {session.environment === "sandbox" ? null : (
-          <p>
-            <a href="/pricing">{t("i_nav_pricing")}</a>
-            {" · "}
-            <a href="/m/upgrade">{t("i_price_upgrade")}</a>
-          </p>
+          <p data-testid="settings-plan">{t("i_settings_plan")}</p>
         )}
         {isPlatformAdmin(session.email) ? (
           <p>

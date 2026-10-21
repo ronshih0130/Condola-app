@@ -107,6 +107,7 @@ h1{font-size:22px}h2{font-size:18px}h3{font-size:15px;font-weight:700}h4{font-si
 .btn.sm{padding:4px 10px;font-size:12px}.btn.lg{padding:11px 20px;font-size:15px}.btn.block{width:100%}.btn.ghost{border-color:transparent;background:transparent}
 .btn:disabled,.btn[disabled]{opacity:1;background:var(--cd-surface2);border-color:var(--cd-border-strong);color:var(--cd-ink3);cursor:not-allowed}
 .btn.pri:disabled,.btn.pri[disabled],.btn.line:disabled,.btn.line[disabled],.btn.danger:disabled,.btn.danger[disabled],.btn:disabled:hover,.btn[disabled]:hover,.btn.pri:disabled:hover,.btn.pri[disabled]:hover,.btn.line:disabled:hover,.btn.line[disabled]:hover{opacity:1;background:var(--cd-surface2);border-color:var(--cd-border-strong);color:var(--cd-ink3)}
+.btn.pri[data-saving="1"],.btn.pri[data-saving="1"]:disabled,.btn.pri[data-saving="1"][disabled]{opacity:1;background:var(--pri);border-color:var(--pri);color:#fff;font-weight:700;cursor:wait}
 .btn:focus-visible,a:focus-visible,.seg button:focus-visible,.seg a:focus-visible,.tabsx a:focus-visible{outline:none;box-shadow:var(--focus)}
 .seg button:focus-visible,.seg a:focus-visible{outline:2px solid var(--cd-primary);outline-offset:2px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
