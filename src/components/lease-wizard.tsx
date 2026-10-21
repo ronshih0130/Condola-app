@@ -9,7 +9,6 @@ import type { RoomOption } from "@/server/queries";
 import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
-import { PhoneField } from "./phone-field";
 import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
 import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
 
@@ -29,13 +28,11 @@ export function LeaseWizard({
   tenants,
   firmLocale,
   showLine = false,
-  callingCode = "+886",
 }: {
   rooms: RoomOption[];
   tenants: TenantOption[];
   firmLocale: "zh-TW" | "en";
   showLine?: boolean;
-  callingCode?: string;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -413,7 +410,7 @@ export function LeaseWizard({
                 </div>
                 <div className="fg">
                   <label className="f">{t("s_522cf12")}</label>
-                  <PhoneField testId="tenant-phone" callingCode={callingCode} value={phone} onChange={(value) => { setPhone(value); setPhoneError(false); }} />
+                  <input className="inp" data-testid="tenant-phone" placeholder={t("i_ph_phone")} value={phone} onChange={(event) => { setPhone(event.target.value); setPhoneError(false); }} />
                   {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_step_incomplete", { field: t("s_522cf12") })}</p> : null}
                 </div>
               </div>

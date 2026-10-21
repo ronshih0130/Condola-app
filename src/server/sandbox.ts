@@ -243,62 +243,6 @@ export async function ensureSampleLoaded(session: Session) {
   });
 }
 
-export const RETIRED_SAMPLE_ADDRESS = "台中市西區範例路 1 號";
-export const SECOND_SAMPLE_ADDRESS = "台中市西區範例路 2 號";
-
-const RETIRED_AVENUE = ["示", "範", "大道"].join("");
-const SAMPLE_FICTION = "（虛構）";
-const SAMPLE_ADDRESS_REV = "2";
-
-/** Existing sample firms keep the address they were seeded with. Replace a retired avenue line. */
-export async function correctRetiredSampleAddresses(client: { query: Client["query"] }, orgId: string) {
-  const current = await client.query<{ rev: string }>(
-    `SELECT coalesce(settings->>'sampleAddressRev', '') AS rev
-       FROM organizations
-      WHERE id = $1 AND environment = 'sandbox'`,
-    [orgId],
-  );
-  if (!current.rows[0] || current.rows[0].rev === SAMPLE_ADDRESS_REV) return;
-  const first = { country: "TW", city: "台中市", district: "西區", street: "範例路 1 號", line: RETIRED_SAMPLE_ADDRESS };
-  const second = { country: "TW", city: "台中市", district: "西區", street: "範例路 2 號", line: SECOND_SAMPLE_ADDRESS };
-  await client.query(
-    `UPDATE properties
-        SET address_display = $2,
-            address = coalesce(address, '{}'::jsonb) || $3::jsonb
-      WHERE org_id = $1
-        AND (address_display LIKE '%' || $4 || '%' OR address_display LIKE '%範例大道%'
-          OR coalesce(address->>'line', '') LIKE '%' || $4 || '%'
-          OR coalesce(address->>'line', '') LIKE '%範例大道%')`,
-    [orgId, RETIRED_SAMPLE_ADDRESS, JSON.stringify(first), RETIRED_AVENUE],
-  );
-  await client.query(
-    `UPDATE properties
-        SET address_display = $2,
-            address = coalesce(address, '{}'::jsonb) || $3::jsonb
-      WHERE org_id = $1
-        AND (address_display LIKE '%樣本街%' OR coalesce(address->>'line', '') LIKE '%樣本街%')`,
-    [orgId, SECOND_SAMPLE_ADDRESS, JSON.stringify(second)],
-  );
-  await client.query(
-    `UPDATE properties
-        SET address_display = replace(address_display, $2, ''),
-            address = jsonb_set(
-              coalesce(address, '{}'::jsonb),
-              '{line}',
-              to_jsonb(replace(coalesce(address->>'line', address_display), $2, ''))
-            )
-      WHERE org_id = $1
-        AND (address_display LIKE '%' || $2 || '%' OR coalesce(address->>'line', '') LIKE '%' || $2 || '%')`,
-    [orgId, SAMPLE_FICTION],
-  );
-  await client.query(
-    `UPDATE organizations
-        SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{sampleAddressRev}', to_jsonb($2::text), true)
-      WHERE id = $1 AND environment = 'sandbox'`,
-    [orgId, SAMPLE_ADDRESS_REV],
-  );
-}
-
 export async function loadSampleData(session: Session) {
   await ensureSampleLoaded(session);
 }

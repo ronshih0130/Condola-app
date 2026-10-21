@@ -28,13 +28,13 @@ test("pricing and upgrade list only implemented plan terms", async ({ page }) =>
   await resetDemo(page);
   await signIn(page, ACCOUNTS.admin);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/upgrade?tier=pro");
-  await expect(page).toHaveURL(/\/m\/settings$/);
-  const main = page.locator(".main");
-  await expect(main).not.toContainText("送出申請");
-  await expect(main).not.toContainText("目前以銀行轉帳付款");
-  await expect(page.getByTestId("upgrade-form")).toHaveCount(0);
-  await expect(page.getByTestId("upgrade-submit")).toHaveCount(0);
-  await expect(page.getByTestId("settings-plan")).toHaveText("方案：前 4 戶永遠免費");
+  const pro = page.getByTestId("upgrade-pro-copy");
+  await expect(pro).toHaveText("多據點、人數較多的團隊 · 前 3 個月免費 · 不限席次");
+  await expect(page.getByTestId("upgrade-standard-copy")).toHaveText("中小型管理公司 · 前 3 個月免費 · 5 個席次");
+  const upgrade = page.getByTestId("upgrade-form");
+  for (const banned of ["品牌報表", "LINE 官方", "優先支援", "進階報表", "即將推出", "Excel", "房東", "房客"]) {
+    await expect(upgrade).not.toContainText(banned);
+  }
 });
 
 test("property export offers a properties CSV", async ({ page }) => {

@@ -3,7 +3,6 @@ import { makeT } from "@/i18n";
 import { PageHeader } from "@/components/ui";
 import { can } from "@/server/perms";
 import { listOwnerDirectory } from "@/server/queries";
-import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -45,11 +44,11 @@ export default async function OwnersPage() {
             {rows.map((row) => (
               <tr key={row.id} data-testid={`owner-row-${row.email ?? row.id}`}>
                 <td>
-                  <b>{displaySampleName(row.name)}</b>
+                  <b>{row.name}</b>
                 </td>
                 <td data-label={t("i_owner_email")}>{row.email}</td>
                 <td data-label={t("i_phone_label")}>{row.phone || "—"}</td>
-                <td data-label={t("i_assign_properties")}>{row.properties ? displaySampleName(row.properties) : "—"}</td>
+                <td data-label={t("i_assign_properties")}>{row.properties || "—"}</td>
                 <td className="r">
                   {editable ? (
                     <Link className="btn sm" href={`/m/owners/${row.id}`}>

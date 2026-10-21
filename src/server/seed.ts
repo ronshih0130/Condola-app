@@ -441,7 +441,7 @@ export async function resetAndSeed() {
          messaging_channel_secret_ref, messaging_access_token_ref, liff_app_id, oa_basic_id,
          rich_menu_linked_id, rich_menu_unlinked_id
        ) VALUES (
-         'platform_default', '租多啦租客通知（範例）', 'provider-demo', 'channel-demo',
+         'platform_default', '租多啦租客通知（示範）', 'provider-demo', 'channel-demo',
          'vault://demo/line/secret', 'vault://demo/line/token', '1234567890-demoLiff', '@condola-demo',
          'rich-menu-linked-demo', 'rich-menu-unlinked-demo'
        ) RETURNING id`,

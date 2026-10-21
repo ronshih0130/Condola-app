@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { actionPhoneVisibility, actionSetMeter } from "@/server/actions";
 import { AuditHistory } from "@/components/audit-log";
+import { SampleTag } from "@/components/sample-tag";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
-import { displaySampleName } from "@/server/sandbox-data";
+import { isSampleName } from "@/server/sandbox-data";
 import { formatMoney } from "@/server/format";
 import { can } from "@/server/perms";
 import { propertyDetail } from "@/server/queries";
@@ -17,7 +18,7 @@ export default async function PropertyPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; audit?: string; created?: string }>;
+  searchParams: Promise<{ error?: string; audit?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -30,7 +31,7 @@ export default async function PropertyPage({
       <PageHeader
         title={
           <>
-            {displaySampleName(detail.property.name)}
+            {detail.property.name} <SampleTag show={isSampleName(detail.property.name)} label={t("i_sample_tag")} />
           </>
         }
         crumb={<Link href="/m/properties">{t("s_e03a6ec")}</Link>}
@@ -48,11 +49,6 @@ export default async function PropertyPage({
         }
       />
       <p className="muted">{detail.property.address_display}</p>
-      {query.created === "1" ? (
-        <p className="alert ok" data-testid="property-created">
-          {t("i_created_prop")}
-        </p>
-      ) : null}
       <ErrorBanner t={t} error={query.error} />
       <div className="grid2">
         <div className="card">
@@ -60,21 +56,15 @@ export default async function PropertyPage({
             <h3>{t("s_a757163")}</h3>
           </div>
           <div className="bd tree">
-            {detail.wholes.map((unit) => (
-              <div className="n" key={unit.id} data-testid="whole-unit-saved">
-                <b>{displaySampleName(unit.label)}</b>
-                <span className="small muted">{formatMoney(Number(unit.base_rent_minor), detail.property.currency, session.locale)}</span>
-              </div>
-            ))}
             {detail.rooms.map((room) => (
               <div className="n" key={room.id}>
                 <b>
-                  {displaySampleName(room.unit_label)} {displaySampleName(room.label)}
+                  {room.unit_label} {room.label}
                 </b>
                 <span className="small muted">{formatMoney(Number(room.base_rent_minor), detail.property.currency, session.locale)}</span>
                 <span className="sp" />
                 {room.lease_id ? (
-                  <Link href={`/m/leases/${room.lease_id}`}>{displaySampleName(room.tenant || "")}</Link>
+                  <Link href={`/m/leases/${room.lease_id}`}>{room.tenant}</Link>
                 ) : (
                   <span className="chip bad">{t("i_vacant")}</span>
                 )}
@@ -86,9 +76,9 @@ export default async function PropertyPage({
           <h3>{t("i_owner")}</h3>
           <p>
             {detail.owner && can(session.role, "props.edit") ? (
-              <Link href={`/m/owners/${detail.owner.contact_id}`}>{displaySampleName(detail.owner.name)}</Link>
+              <Link href={`/m/owners/${detail.owner.contact_id}`}>{detail.owner.name}</Link>
             ) : (
-              detail.owner ? displaySampleName(detail.owner.name) : null
+              detail.owner?.name
             )}
           </p>
           {detail.owner && (session.role === "admin" || session.role === "manager") ? (
@@ -117,7 +107,7 @@ export default async function PropertyPage({
                 </b>
               </Link>
               <div className="small muted">
-                {displaySampleName(repair.place)}
+                {repair.place}
                 {repair.vendor_name ? ` · ${repair.vendor_name}` : ""}
                 {repair.completed_on ? ` · ${repair.completed_on}` : repair.scheduled_on ? ` · ${repair.scheduled_on}` : ""}
                 {repair.final_cost ? ` · ${formatMoney(repair.final_cost, repair.currency || detail.property.currency, session.locale)}` : ""}

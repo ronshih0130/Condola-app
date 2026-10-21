@@ -7,9 +7,9 @@ const locales = [
     newOwner: "新屋主",
     byRoom: "分房出租",
     simulate: /模擬/,
-    pay: "登錄繳款",
+    pay: "登錄收款",
     regenerate: "重新產生",
-    reset: "已重置範例資料",
+    reset: "已重置示範資料",
   },
   {
     code: "en",
@@ -51,7 +51,8 @@ for (const locale of locales) {
     await page.getByTestId("wizard-next").click();
     await page.getByText(locale.byRoom, { exact: true }).click();
     await page.getByTestId("wizard-next").click();
-    await page.getByTestId("unit-floor").fill("3");
+    await page.getByTestId("unit-label").fill("3F");
+    await page.locator("input[name=floor]").fill("3");
     await page.getByTestId("add-room").click();
     await page.getByTestId("add-room").click();
     for (const [index, label] of ["A", "B", "C"].entries()) {
@@ -196,7 +197,7 @@ test("reset toast follows the locale", async ({ page }) => {
   await signIn(page, ACCOUNTS.admin);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m");
   await acceptReset(page);
-  await expect(page.getByTestId("reset-toast")).toHaveText("已重設範例資料");
+  await expect(page.getByTestId("reset-toast")).toHaveText("已重設示範資料");
 });
 
 test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {

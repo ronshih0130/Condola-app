@@ -6,7 +6,6 @@ import { PageHeader } from "@/components/ui";
 import { formatMoney } from "@/server/format";
 import { taipeiToday } from "@/server/money";
 import { rentRoll } from "@/server/queries";
-import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +45,7 @@ export default async function RentPage() {
                 row.property_id !== lastProperty ? (
                   <tr className="grp" key={`${row.property_id}-grp`}>
                     <td colSpan={8}>
-                      {displaySampleName(row.property_name)}
+                      {row.property_name}
                       {row.owner_name ? ` · ${row.owner_name}` : ""}
                     </td>
                   </tr>
@@ -91,7 +90,7 @@ export default async function RentPage() {
                   {group}
                   <tr>
                     <Cell>{row.space_label}</Cell>
-                    <Cell label={t("s_74f19b0")}>{displaySampleName(row.tenant || "")}</Cell>
+                    <Cell label={t("s_74f19b0")}>{row.tenant}</Cell>
                     <Cell label={t("i_rent_label")}>{money(row.rent)}</Cell>
                     <Cell label={t("i_due_this")}>{money(row.due)}</Cell>
                     <Cell label={t("i_paid")}>{money(row.received)}</Cell>

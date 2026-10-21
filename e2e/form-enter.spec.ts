@@ -73,9 +73,9 @@ test("Enter in electricity does not advance, and ordinary buttons still activate
   await expect(page.getByTestId("add-room")).toBeVisible();
   await expect(page.getByTestId("room-0-label")).toBeVisible();
   await expect(page.getByTestId("room-1-label")).toHaveCount(0);
-  await page.getByTestId("unit-floor").fill("8F");
-  await page.getByTestId("unit-floor").press("Enter");
-  await expect(page.getByTestId("unit-floor")).toBeVisible();
+  await page.getByTestId("unit-label").fill("8F");
+  await page.getByTestId("unit-label").press("Enter");
+  await expect(page.getByTestId("unit-label")).toBeVisible();
   await expect(page.getByTestId("submit-property")).toHaveCount(0);
   await page.getByTestId("add-room").focus();
   await page.getByTestId("add-room").press("Enter");

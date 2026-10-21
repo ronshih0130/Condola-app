@@ -1,7 +1,7 @@
 import type { OrgEnvironment } from "./org-scope";
 
 /** Appended to sandbox notice and invite audits. Nothing is delivered. */
-export const SANDBOX_NOT_SENT = "（範例環境：未實際傳送）";
+export const SANDBOX_NOT_SENT = "（測試模式：未實際傳送）";
 
 /** Real LINE pushes and emails are allowed only outside the sandbox. */
 export function canSendReal(environment: OrgEnvironment) {

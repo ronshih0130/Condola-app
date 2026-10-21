@@ -4,7 +4,6 @@ import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader, expenseCategoryKey, expenseStatusClass, expenseStatusKey } from "@/components/ui";
 import { expenseFormOptions, listExpenses } from "@/server/expenses";
 import { formatMoney } from "@/server/format";
-import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +57,7 @@ export default async function ExpensesPage({
               <option value="">{t("i_expense_all")}</option>
               {choices.units.map((unit) => (
                 <option key={unit.id} value={unit.id}>
-                  {displaySampleName(unit.property_name)} · {displaySampleName(unit.label)}
+                  {unit.property_name} · {unit.label}
                 </option>
               ))}
             </select>
@@ -103,8 +102,8 @@ export default async function ExpensesPage({
               {rows.map((row) => (
                 <tr key={row.id} data-testid="expense-row" data-status={row.status} data-included={row.included ? "true" : "false"}>
                   <Cell>{row.incurred_on}</Cell>
-                  <Cell label={t("i_col_property")}>{displaySampleName(row.property_name)}</Cell>
-                  <Cell label={t("i_expense_unit")}>{row.unit_label ? displaySampleName(row.unit_label) : dash}</Cell>
+                  <Cell label={t("i_col_property")}>{row.property_name}</Cell>
+                  <Cell label={t("i_expense_unit")}>{row.unit_label || dash}</Cell>
                   <Cell label={t("i_category")}>{categoryLabel(row.category)}</Cell>
                   <Cell label={t("i_expense_vendor")}>{row.vendor_name || dash}</Cell>
                   <Cell label={t("i_note")}>

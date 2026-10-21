@@ -94,8 +94,6 @@ export function isSampleName(name: string) {
   return name.includes(SAMPLE_LABEL) || name.includes("[Sample data]");
 }
 
-export { displaySampleName } from "@/sample-name";
-
 export function toE164(raw: string) {
   const digits = raw.replace(/\D/g, "");
   if (!digits) return null;

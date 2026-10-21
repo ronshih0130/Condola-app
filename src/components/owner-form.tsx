@@ -1,6 +1,4 @@
 import type { T } from "@/i18n";
-import { displaySampleName } from "@/sample-name";
-import { PhoneField } from "./phone-field";
 
 export function OwnerForm({
   t,
@@ -36,7 +34,7 @@ export function OwnerForm({
           </div>
           <div className="fg">
             <label className="f">{t("i_phone_label")}</label>
-            <PhoneField name="phone" testId="owner-phone" callingCode="+886" defaultValue={phone ?? ""} />
+            <input className="inp" name="phone" data-testid="owner-phone" defaultValue={phone ?? ""} placeholder={t("i_ph_phone")} />
           </div>
         </div>
         <div className="fg">
@@ -51,7 +49,7 @@ export function OwnerForm({
                 data-testid={`owner-property-${property.id}`}
                 defaultChecked={selected.includes(property.id)}
               />{" "}
-              {displaySampleName(property.name)}
+              {property.name}
             </label>
           ))}
         </div>

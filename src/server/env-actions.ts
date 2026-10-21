@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { FlowError } from "./errors";
-import { ENV_COOKIE, ORG_COOKIE } from "./org-scope";
+import { ENV_COOKIE, ENV_COOKIE_MAX_AGE, ORG_COOKIE } from "./org-scope";
 import { appCookieOptions } from "./public-origin";
 import { dismissSamplePrompt, goLive, loadSampleData } from "./sandbox";
 import { getSession } from "./session";
@@ -20,9 +20,9 @@ function fail(error: unknown, to: string): never {
 
 async function setEnvCookie(environment: "live" | "sandbox", liveOrgId: string) {
   const jar = await cookies();
-  const sessionCookie = appCookieOptions({ httpOnly: false });
-  jar.set(ENV_COOKIE, environment, sessionCookie);
-  jar.set(ORG_COOKIE, liveOrgId, sessionCookie);
+  const persisted = appCookieOptions({ httpOnly: false, maxAge: ENV_COOKIE_MAX_AGE });
+  jar.set(ENV_COOKIE, environment, persisted);
+  jar.set(ORG_COOKIE, liveOrgId, persisted);
 }
 
 export async function actionLoadSample() {

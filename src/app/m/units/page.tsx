@@ -5,7 +5,6 @@ import { PageHeader } from "@/components/ui";
 import { formatMoney } from "@/server/format";
 import { can } from "@/server/perms";
 import { searchSpaces } from "@/server/queries";
-import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +18,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
   const summary = listSummary(t, result);
   const editable = can(session.role, "props.edit");
   const roomTypeKey: Record<string, string> = {
-    whole_home: "i_whole_home",
-    suite: "i_room_split",
+    suite: "i_suite",
     shared_bath: "i_shared",
     studio: "i_studio",
     other: "i_other_room",
@@ -63,17 +61,17 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
             {rows.map((row) => (
               <tr key={`${row.kind}-${row.id}`} data-testid={`space-row-${row.floor}-${row.room_label ?? "unit"}`}>
                 <td>
-                  <Link href={`/m/properties/${row.property_id}`}>{displaySampleName(row.property_name)}</Link>
+                  <Link href={`/m/properties/${row.property_id}`}>{row.property_name}</Link>
                 </td>
                 <td data-label={t("i_space_kind")}>{row.kind === "room" ? t("i_space_room") : t("i_space_whole")}</td>
-                <td data-label={t("i_floor_unit")}>{displaySampleName(row.floor)}</td>
-                <td data-label={t("i_room_no")}>{row.room_label ? displaySampleName(row.room_label) : "—"}</td>
+                <td data-label={t("i_floor_unit")}>{row.floor}</td>
+                <td data-label={t("i_room_no")}>{row.room_label || "—"}</td>
                 <td data-label={t("i_room_type")}>{row.room_type ? t(roomTypeKey[row.room_type] ?? "i_other_room") : "—"}</td>
                 <td data-label={t("i_area_ping")}>{row.area_value || "—"}</td>
                 <td className="num" data-label={t("i_base_rent")}>
                   {row.base_rent_minor ? formatMoney(Number(row.base_rent_minor), row.currency, session.locale) : "—"}
                 </td>
-                <td data-label={t("i_owner")}>{row.owner_name ? displaySampleName(row.owner_name) : "—"}</td>
+                <td data-label={t("i_owner")}>{row.owner_name || "—"}</td>
                 <td data-label={t("i_elec_method")}>
                   {row.electricity_method === "submeter"
                     ? t("i_elec_submeter")

@@ -21,10 +21,10 @@ import { officialLeaseTemplateText } from "../assets/leases/moi-residential-1130
  * that file by scripts/embed-lease-template.mjs. Do not read the .txt at request time.
  * Paper signing only. This printout is not an electronic signature.
  * Blanks and checkboxes are filled. Missing data stays blank.
- * The door plate prints only the address segments the owner entered.
- * Empty segments are omitted, including their underscores and labels
- * (段, 巷, 弄, 縣(市), 街(路), 基地坐落). 號之N stays as typed.
- * That replacement is one recorded patch, so the official file can be restored.
+ * On the door plate, a house number that already contains 號 replaces the
+ * template 號 and leaves the blank after 弄 empty, so the number is not
+ * read as a 弄. A trailing 之 is left out when there is no sub-floor.
+ * Those edits are recorded patches, so the official file can be restored.
  */
 
 export type LeaseFieldPatch = { index: number; blank: string; value: string };
@@ -149,19 +149,27 @@ function readAddress(address: unknown, display: string | null | undefined) {
   return { city, district, street };
 }
 
+function cityStem(city: string) {
+  return /[縣市]$/.test(city) && city.length > 1 ? city.slice(0, -1) : "";
+}
+
+function districtStem(district: string) {
+  return /(?:區|鄉|鎮|市)$/.test(district) && district.length > 1 ? district.slice(0, -1) : "";
+}
+
 const ROAD_DIGIT = "0-9０-９";
 const ROAD_SECTION = "0-9０-９一二三四五六七八九十";
 
 type RoadFill = {
-  /** 路 or 街, empty when the street could not be split. */
-  kind: string;
   name: string;
   section: string;
   lane: string;
   alley: string;
-  /** House number exactly as typed, including 號之N or 之N號. */
+  /** Blank before the template 號. The typed house number, not the floor. */
   number: string;
+  /** Blank before 樓. */
   doorFloor: string;
+  /** Blank after 樓之. */
   doorSuffix: string;
 };
 
@@ -170,26 +178,31 @@ const FLOOR_TOKEN = `0-9０-９${FLOOR_CN}`;
 
 /**
  * The house-number segment is copied as typed, so 88號之1 is never rewritten
- * as 88之1號. Empty 段, 巷, and 弄 are not printed. A floor is its own
- * segment. A tail the cells cannot hold stays in the street text.
+ * as 88之1號. A number without 號 fills the blank before the template 號.
+ * A number that already contains 號 replaces that 號 and leaves the blank
+ * after 弄 empty, so nothing follows 弄 unless a 弄 was entered. A floor
+ * follows in its own cell. When the house number contains 號 but does not
+ * end with it, one space separates it from the floor. No punctuation is
+ * inserted. 樓之 keeps 之 only when there is a sub-floor. A tail the cells
+ * cannot hold is printed whole in the 街(路) blank, and the floor still
+ * uses its own cell.
  */
 function parseRoad(street: string, unitFloor: string | null | undefined): RoadFill | null {
   const trimmed = street.trim();
   if (!trimmed) return null;
   const match = trimmed.match(
     new RegExp(
-      `^(.+?)(路|街)(?:([${ROAD_SECTION}]+)段)?(?:([${ROAD_DIGIT}]+)巷)?(?:([${ROAD_DIGIT}]+)弄)?(.*)$`,
+      `^(.+?)(?:路|街)(?:([${ROAD_SECTION}]+)段)?(?:([${ROAD_DIGIT}]+)巷)?(?:([${ROAD_DIGIT}]+)弄)?(.*)$`,
     ),
   );
   if (!match) return verbatimRoad(trimmed, unitFloor);
-  const placed = placeDoor(match[6] ?? "", unitFloor);
+  const placed = placeDoor(match[5] ?? "", unitFloor);
   if (!placed) return verbatimRoad(trimmed, unitFloor);
   return {
-    kind: match[2] ?? "",
     name: match[1] ?? "",
-    section: match[3] ?? "",
-    lane: match[4] ?? "",
-    alley: match[5] ?? "",
+    section: match[2] ?? "",
+    lane: match[3] ?? "",
+    alley: match[4] ?? "",
     number: placed.number,
     doorFloor: placed.doorFloor,
     doorSuffix: placed.doorSuffix,
@@ -200,7 +213,6 @@ function verbatimRoad(street: string, unitFloor: string | null | undefined): Roa
   if (!/[路街]/.test(street) || !street.includes("號")) return null;
   const floor = parseUnitFloor(unitFloor);
   return {
-    kind: "",
     name: street,
     section: "",
     lane: "",
@@ -299,73 +311,52 @@ function periodMonths(frequency: string | null | undefined) {
   return "";
 }
 
-const DOOR_FROM = "1、門牌";
-const DOOR_TO = "位置略圖。";
-
-function officialDoorPlate() {
-  const text = officialLeaseTemplate();
-  const start = text.indexOf(DOOR_FROM);
-  const end = text.indexOf(DOOR_TO, start);
-  if (start < 0 || end < 0) throw new Error("lease template is missing the door plate");
-  return text.slice(start, end + DOOR_TO.length);
+/** Drop a template label at the cursor. The patch puts it back on restore. */
+function omitAtCursor(state: State, label: string) {
+  if (!state.text.startsWith(label, state.cursor)) throw new Error(`lease template is missing 「${label}」`);
+  state.text = state.text.slice(0, state.cursor) + state.text.slice(state.cursor + label.length);
+  state.patches.push({ index: state.cursor, blank: label, value: "" });
 }
 
-const DOOR_PLATE = officialDoorPlate();
-
-function floorText(floor: string, suffix: string) {
-  if (!floor && !suffix) return "";
-  if (!floor) return `樓之${suffix}`;
-  return suffix ? `${floor}樓之${suffix}` : `${floor}樓`;
+/** Replace the template label at the cursor with the typed value. */
+function replaceAtCursor(state: State, label: string, value: string) {
+  if (!state.text.startsWith(label, state.cursor)) throw new Error(`lease template is missing 「${label}」`);
+  const next = clean(value);
+  if (!next) throw new Error(`lease template 「${label}」 needs a value`);
+  state.text = state.text.slice(0, state.cursor) + next + state.text.slice(state.cursor + label.length);
+  state.patches.push({ index: state.cursor, blank: label, value: next });
+  state.cursor += next.length;
 }
 
-function addressParts(
-  address: { city: string; district: string; street: string },
-  road: RoadFill | null,
-  unitFloor: string | null | undefined,
-) {
-  const parts: string[] = [];
-  if (address.city) parts.push(address.city);
-  if (address.district) parts.push(address.district);
-  if (!road) {
-    if (address.street) parts.push(address.street);
-    const loose = parseUnitFloor(unitFloor);
-    const floor = floorText(loose?.floor ?? "", loose?.suffix ?? "");
-    if (floor) parts.push(floor);
-    return parts;
-  }
-  if (road.kind) {
-    if (road.name) parts.push(`${road.name}${road.kind}`);
-    if (road.section) parts.push(`${road.section}段`);
-    if (road.lane) parts.push(`${road.lane}巷`);
-    if (road.alley) parts.push(`${road.alley}弄`);
-    if (road.number) parts.push(road.number);
-  } else if (road.name) {
-    parts.push(road.name);
-  }
-  const floor = floorText(road.doorFloor, road.doorSuffix);
-  if (floor) parts.push(floor);
-  return parts;
+/** Insert one space. fillSlot trims values, so the space is its own patch. */
+function insertSpace(state: State) {
+  state.text = `${state.text.slice(0, state.cursor)} ${state.text.slice(state.cursor)}`;
+  state.patches.push({ index: state.cursor, blank: "", value: " " });
+  state.cursor += 1;
 }
 
-function doorPlateLine(input: OfficialLeaseInput) {
-  const address = readAddress(input.address, input.addressDisplay);
-  const road = parseRoad(address.street, input.floor);
-  const parts = addressParts(address, road, input.floor);
-  if (parts.length === 0) return DOOR_PLATE;
-  return `1、門牌 ${parts.join(" ")}。無門牌者，其房屋稅籍編號：或其位置略圖。`;
-}
-
-/** Replace the official door plate. Empty 基地坐落 and empty segments are omitted. */
-function writeDoorPlate(state: State, line: string) {
-  const at = state.text.indexOf(DOOR_PLATE, state.cursor);
-  if (at < 0) throw new Error("lease template is missing the door plate");
-  if (line === DOOR_PLATE) {
-    state.cursor = at + DOOR_PLATE.length;
+/**
+ * Print the house number exactly as typed. A number without 號 fills the
+ * blank in 「__號」. A number that already contains 號 would become 88號之1號
+ * in that blank, so it replaces the template 號 instead and the blank after
+ * 弄 stays empty. 號之1 and the floor are separated with a space, not a
+ * comma. 樓之 loses 之 when the sub-floor cell is empty.
+ */
+function fillDoorPlate(state: State, number: string, floor: string, suffix: string) {
+  const containsHao = number.includes("號");
+  const separate = containsHao && !number.endsWith("號") && floor !== "";
+  fillSlot(state, "弄", "號", containsHao ? "" : number);
+  if (containsHao) replaceAtCursor(state, "號", number);
+  if (separate) insertSpace(state);
+  fillSlot(state, containsHao ? "" : "號", "樓之", floor);
+  if (floor && !suffix) {
+    if (!state.text.startsWith("樓之", state.cursor)) throw new Error("lease template is missing 「樓之」");
+    state.cursor += "樓".length;
+    omitAtCursor(state, "之");
+    fillSlot(state, "", "(基地坐落", "");
     return;
   }
-  state.text = state.text.slice(0, at) + line + state.text.slice(at + DOOR_PLATE.length);
-  state.patches.push({ index: at, blank: DOOR_PLATE, value: line });
-  state.cursor = at + line.length;
+  fillSlot(state, "樓之", "(基地坐落", suffix);
 }
 
 function fillElectricity(region: State, method: string, rate: string) {
@@ -389,7 +380,21 @@ export function renderOfficialLease(input: OfficialLeaseInput = {}) {
   fillSlot(state, "，出租人", "【為", owner);
   markBox(state, "【為", "所有權人", Boolean(owner));
 
-  writeDoorPlate(state, doorPlateLine(input));
+  const address = readAddress(input.address, input.addressDisplay);
+  const road = parseRoad(address.street, input.floor);
+  fillSlot(state, "1、門牌", "縣(市)", cityStem(address.city));
+  fillSlot(state, "縣(市)", "鄉（鎮、市、區）", districtStem(address.district));
+  fillSlot(state, "鄉（鎮、市、區）", "街(路)", road?.name ?? "");
+  fillSlot(state, "街(路)", "段", road?.section ?? "");
+  fillSlot(state, "段", "巷", road?.lane ?? "");
+  fillSlot(state, "巷", "弄", road?.alley ?? "");
+  const looseFloor = parseUnitFloor(input.floor);
+  fillDoorPlate(
+    state,
+    road?.number ?? "",
+    road ? road.doorFloor : (looseFloor?.floor ?? ""),
+    road ? road.doorSuffix : (looseFloor?.suffix ?? ""),
+  );
 
   const partial = input.scope === "partial";
   const room = partial ? clean(input.roomLabel) : "";

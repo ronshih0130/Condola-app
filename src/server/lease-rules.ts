@@ -40,27 +40,14 @@ export function depositWarnFlag(depositMonths: number, outcome: string | null) {
   return !depositExceedsCap(depositMonths) && outcome === "warn";
 }
 
-/** +E.164 as typed, or a national number under callingCode. Taiwan (+886) stays mobile-only: 09xxxxxxxx. */
-export function normalizePhone(phone: string, callingCode = "+886"): string | null {
+/** +E.164 as typed, or a Taiwan mobile 09xxxxxxxx (spaces and dashes allowed) as +886. */
+export function normalizePhone(phone: string): string | null {
   const value = phone.trim();
   if (!value) return null;
   if (/^\+[1-9]\d{6,14}$/.test(value)) return value;
   const digits = value.replace(/\D/g, "");
-  const cc = callingCode.replace(/\D/g, "") || "886";
-  if (cc === "886") {
-    if (/^09\d{8}$/.test(digits)) return `+886${digits.slice(1)}`;
-    return null;
-  }
-  const national = digits.startsWith("0") ? digits.slice(1) : digits;
-  const combined = `+${cc}${national}`;
-  if (/^\+[1-9]\d{6,14}$/.test(combined)) return combined;
+  if (/^09\d{8}$/.test(digits)) return `+886${digits.slice(1)}`;
   return null;
-}
-
-/** Empty is allowed. A partial number is invalid. Does not require the field. */
-export function phoneInputInvalid(value: string, callingCode = "+886") {
-  if (value.replace(/[\s-]/g, "") === "") return false;
-  return normalizePhone(value, callingCode) == null;
 }
 
 export function normalizeLineId(value: string): { ok: true; value: string | null } | { ok: false } {

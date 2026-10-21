@@ -5,7 +5,6 @@ import { actionConfirmPayment, actionRejectPayment } from "@/server/actions";
 import { formatMoney } from "@/server/format";
 import { can, rolesFor } from "@/server/perms";
 import { listPayments } from "@/server/queries";
-import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -51,8 +50,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               {rows.map((row) => (
                 <tr key={row.id}>
                   <td>
-                    {displaySampleName(row.tenant)}
-                    <div className="small muted">{displaySampleName(row.place)}</div>
+                    {row.tenant}
+                    <div className="small muted">{row.place}</div>
                   </td>
                   <td data-label={t("i_paid_on")}>{row.paid_on}</td>
                   <td data-label={t("i_last5")}>{row.last5}</td>

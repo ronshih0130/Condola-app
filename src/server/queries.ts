@@ -359,15 +359,7 @@ export async function propertyDetail(session: Session, id: string) {
         LIMIT 50`,
       [id],
     );
-    const wholes = await many<{ id: string; label: string; base_rent_minor: string }>(
-      client,
-      `SELECT u.id::text, u.label, coalesce(u.base_rent_minor, 0)::text AS base_rent_minor
-         FROM units u
-        WHERE u.property_id = $1 AND u.org_id = $2 AND u.rental_mode = 'whole_unit' AND u.archived_at IS NULL
-        ORDER BY u.label`,
-      [id, session.orgId],
-    );
-    return { property, owner, rooms, wholes, meterSerial, repairs };
+    return { property, owner, rooms, meterSerial, repairs };
   });
 }
 

@@ -29,8 +29,8 @@ export default async function AuditPage({
   const query = await searchParams;
   const t = makeT(session.locale);
   const demoLine = showDemoLineCopy(session.environment);
-  const events = AUDIT_EVENTS.filter((event) => event !== "go_live");
-  const tables = AUDIT_TABLES;
+  const events = AUDIT_EVENTS.filter((event) => demoLine || event !== "line_sign_in");
+  const tables = AUDIT_TABLES.filter((table) => demoLine || table !== "line_account_links");
   const page = await loadAuditScreen(session, query);
   const { filters } = page;
   const selectedAction = filters.eventType || filters.action || "";

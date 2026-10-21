@@ -6,7 +6,6 @@ import { ErrorBanner, PageHeader, expenseCategoryKey, expenseStatusClass, expens
 import { actionApproveExpense, actionUpdateExpense, actionVoidExpense } from "@/server/auth-actions";
 import { EXPENSE_CATEGORIES, expenseCanBeApproved, expenseFormOptions, getExpense, majorInput } from "@/server/expenses";
 import { formatMoney } from "@/server/format";
-import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -59,8 +58,8 @@ export default async function ExpenseDetailPage({
           <span data-testid="expense-included">{row.included ? t("i_expense_included") : t("i_expense_excluded")}</span>
         </div>
         <p>
-          {displaySampleName(row.property_name)}
-          {row.unit_label ? ` · ${displaySampleName(row.unit_label)}` : ""} · {row.incurred_on} · {formatMoney(row.amount_minor, row.currency, session.locale)}
+          {row.property_name}
+          {row.unit_label ? ` · ${row.unit_label}` : ""} · {row.incurred_on} · {formatMoney(row.amount_minor, row.currency, session.locale)}
         </p>
         {row.vendor_name ? <p className="small">{row.vendor_name}</p> : null}
         {row.description ? <p>{row.description}</p> : null}

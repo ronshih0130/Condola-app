@@ -1,6 +1,5 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { BUILD_SHA } from "@/build-info";
 import { Sidebar, TaskPanel } from "@/components/chrome";
 import { demoModeEnabled } from "@/server/demo";
 import { noPermHref } from "@/server/perms";
@@ -32,14 +31,9 @@ export default async function ManagerLayout({ children }: { children: React.Reac
           tickets={badge.tickets}
           role={session.role}
           showReset={demoModeEnabled() && session.role === "admin"}
-          sandbox={session.environment === "sandbox"}
+          showDemo={session.environment !== "live"}
         />
-        <div className="main">
-          {children}
-          <p className="foot build-sha" data-testid="build-sha">
-            {BUILD_SHA}
-          </p>
-        </div>
+        <div className="main">{children}</div>
       </div>
     </>
   );

@@ -3,7 +3,6 @@ import { makeT } from "@/i18n";
 import { actionPickLease } from "@/server/actions";
 import { formatMoney } from "@/server/format";
 import { tenantLeaseMoney, tenantLeases } from "@/server/queries";
-import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +22,7 @@ export default async function TenantHome() {
             <button className="card pad" type="submit" style={{ width: "100%", textAlign: "left", marginBottom: 8 }}>
               <b>{lease.firm_name}</b>
               <div className="small">
-                {displaySampleName([lease.property_name, lease.unit_label, lease.room_label].filter(Boolean).join(" "))}
+                {lease.property_name} {lease.unit_label} {lease.room_label}
               </div>
             </button>
           </form>
@@ -41,7 +40,7 @@ export default async function TenantHome() {
     <div>
       <h2>{t("i_hello", { name: session.name })}</h2>
       <p>
-        {lease.firm_name} · {displaySampleName(`${lease.property_name} ${lease.room_label ?? ""}`)}
+        {lease.firm_name} · {lease.property_name} {lease.room_label}
       </p>
       <div className="flex" data-testid="rent-due-notice">
         <div className="fh">{t("s_23c9d54")}</div>
@@ -58,7 +57,7 @@ export default async function TenantHome() {
           {t("i_rich_pay")}
         </Link>
       </div>
-      <p className="small">{t("i_addr_managed", { address: displaySampleName(lease.address_display ?? lease.property_name), firm: lease.firm_name })}</p>
+      <p className="small">{t("i_addr_managed", { address: lease.address_display ?? lease.property_name, firm: lease.firm_name })}</p>
       <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
     </div>
   );

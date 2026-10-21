@@ -95,9 +95,7 @@ function rentalMode(value: string) {
 }
 
 function roomType(value: string) {
-  if (value === "套房" || value === "分租套房") return "suite";
-  if (value === "獨立套房") return "studio";
-  if (value === "整層住家") return "whole_home";
+  if (value === "套房") return "suite";
   if (value === "雅房") return "shared_bath";
   return "other";
 }

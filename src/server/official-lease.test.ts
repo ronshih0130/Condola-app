@@ -19,7 +19,7 @@ function restore(text: string, patches: LeaseFieldPatch[]) {
     assert.equal(out.slice(patch.index, patch.index + patch.value.length), patch.value, `patch ${patch.index}`);
     assert.notEqual(patch.value, patch.blank);
     if (patch.blank === "") assert.equal(patch.value, " ");
-    else assert.equal(stored.includes(patch.blank), true, patch.blank.slice(0, 40));
+    else assert.match(patch.blank, /^(?:□|[_ \u3000]+|號|之)$/);
     out = out.slice(0, patch.index) + patch.blank + out.slice(patch.index + patch.value.length);
   }
   return out;
@@ -104,7 +104,7 @@ test("filled blanks are the only difference from the stored official text", () =
   assertOfficial(rendered.text);
   assert.equal(rendered.text.includes("立契約書人承租人張雅文，出租人陳建宏【為■所有權人□轉租人"), true);
   assert.equal(
-    rendered.text.includes("1、門牌 台北市 信義區 松仁路 88號 3樓。"),
+    rendered.text.includes("1、門牌台北縣(市)信義鄉（鎮、市、區）松仁街(路)__段__巷__弄__88號3樓    (基地坐落"),
     true,
   );
   assert.equal(rendered.text.includes("1、租賃住宅□全部■部分：第3層□房間     間■第A室"), true);
@@ -144,9 +144,8 @@ test("missing data and the other fee choices stay blank", () => {
     addressDisplay: "台北市大安區和平東路二段10號",
   });
   assert.equal(restore(direct.text, direct.patches), stored);
-  assert.equal(direct.text.includes("1、門牌 台北市 大安區 和平東路 二段 10號 2樓。"), true);
-  assert.equal(doorLine(direct.text).includes("_"), false);
-  assert.equal(direct.text.includes("基地坐落"), false);
+  assert.equal(direct.text.includes("和平東街(路)二段__巷__弄__10號2樓    (基地坐落"), true);
+  assert.equal(direct.text.includes("弄10"), false);
   assert.equal(direct.text.includes("2樓之"), false);
   assert.equal(direct.text.includes("■全部□部分：第2層□房間     間□第     室"), true);
   assert.equal(direct.text.includes("至民國     年     月     日止。"), true);
@@ -169,85 +168,125 @@ test("missing data and the other fee choices stay blank", () => {
     addressDisplay: "1200 12th St, Oakland, CA 94607",
   });
   assert.equal(restore(unparsed.text, unparsed.patches), stored);
-  assert.equal(unparsed.text.includes("1、門牌 Oakland 1200 12th St。"), true);
-  assert.equal(doorLine(unparsed.text).includes("_"), false);
-  assert.equal(unparsed.text.includes("基地坐落"), false);
+  assert.equal(unparsed.text.includes("1、門牌__縣(市)__鄉（鎮、市、區）__街(路)__段__巷__弄__號__樓之"), true);
 });
 
-function doorLine(text: string) {
-  const start = text.indexOf("1、門牌");
-  assert.ok(start >= 0);
-  const end = text.indexOf("無門牌者", start);
-  assert.ok(end > start);
-  return text.slice(start, end);
-}
-
-function assertDoor(text: string, patches: LeaseFieldPatch[], line: string) {
-  assert.equal(restore(text, patches), stored);
-  assert.equal(doorLine(text), line);
-  const sentenceEnd = text.indexOf("位置略圖。", text.indexOf("1、門牌"));
-  const sentence = text.slice(text.indexOf("1、門牌"), sentenceEnd + "位置略圖。".length);
-  assert.equal(sentence.includes("_"), false);
-  assert.equal(sentence.includes("基地坐落"), false);
-  assert.equal(sentence.includes("縣(市)"), false);
-  assert.equal(sentence.includes("街(路)"), false);
-  assert.equal(sentence.endsWith("無門牌者，其房屋稅籍編號：或其位置略圖。"), true);
-  assert.equal(line.includes("，"), false);
-}
-
-test("the door plate prints entered segments and omits empty ones", () => {
-  const all = renderOfficialLease({
-    address: { city: "台北市", district: "信義區", street: "松仁路二段5巷12弄88號之1" },
-    floor: "3F",
-  });
-  assertDoor(all.text, all.patches, "1、門牌 台北市 信義區 松仁路 二段 5巷 12弄 88號之1 3樓。");
-  assert.equal(all.text.includes("第3層"), true);
-
-  const noAlley = renderOfficialLease({
-    address: { city: "台北市", district: "信義區", street: "松仁路二段5巷88號之1" },
+test("door numbers print as typed and the floor stays in its own cell", () => {
+  const at2 = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號之1" },
     floor: "2F",
   });
-  assertDoor(noAlley.text, noAlley.patches, "1、門牌 台北市 信義區 松仁路 二段 5巷 88號之1 2樓。");
-  assert.equal(doorLine(noAlley.text).includes("弄"), false);
+  assert.equal(restore(at2.text, at2.patches), stored);
+  assert.equal(at2.text.includes("弄__88號之1 2樓    (基地坐落"), true);
+  assert.equal(at2.text.includes("弄88"), false);
+  assert.equal(at2.text.includes("88號之1，"), false);
+  assert.equal(at2.text.includes("88號之1號"), false);
+  assert.equal(at2.text.includes("弄88之1號"), false);
+  assert.equal(at2.text.includes("2樓之"), false);
+  assert.equal(at2.text.includes("第2層"), true);
 
-  const streetOnly = renderOfficialLease({
-    address: { city: "台北市", district: "信義區", street: "松仁街88號之1" },
-    floor: "3",
+  const at1 = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號之1" },
+    floor: "1F",
   });
-  assertDoor(streetOnly.text, streetOnly.patches, "1、門牌 台北市 信義區 松仁街 88號之1 3樓。");
-  assert.equal(doorLine(streetOnly.text).includes("段"), false);
-  assert.equal(doorLine(streetOnly.text).includes("巷"), false);
-  assert.equal(doorLine(streetOnly.text).includes("弄"), false);
-  assert.equal(streetOnly.text.includes("88號之1號"), false);
-  assert.equal(streetOnly.text.includes("88之1號"), false);
+  assert.equal(restore(at1.text, at1.patches), stored);
+  assert.equal(at1.text.includes("弄__88號之1 1樓    (基地坐落"), true);
+  assert.equal(at1.text.includes("弄88"), false);
+  assert.equal(at1.text.includes("88號之1，"), false);
+  assert.equal(at1.text.includes("88號之1號"), false);
+  assert.equal(at1.text.includes("弄88之1號"), false);
+  assert.equal(at1.text.includes("1樓之"), false);
 
   const zhiHao = renderOfficialLease({
     address: { city: "台北市", district: "信義區", street: "松仁路88之1號" },
     floor: "3F",
   });
-  assertDoor(zhiHao.text, zhiHao.patches, "1、門牌 台北市 信義區 松仁路 88之1號 3樓。");
+  assert.equal(restore(zhiHao.text, zhiHao.patches), stored);
+  assert.equal(zhiHao.text.includes("弄__88之1號3樓    (基地坐落"), true);
+  assert.equal(zhiHao.text.includes("弄88"), false);
   assert.equal(zhiHao.text.includes("88號之1"), false);
+  assert.equal(zhiHao.text.includes("3樓之"), false);
+  assert.equal(zhiHao.text.includes("第3層"), true);
 
   const suffix = renderOfficialLease({
     address: { city: "台北市", district: "信義區", street: "松仁路88號" },
     floor: "5F之2",
   });
-  assertDoor(suffix.text, suffix.patches, "1、門牌 台北市 信義區 松仁路 88號 5樓之2。");
+  assert.equal(restore(suffix.text, suffix.patches), stored);
+  assert.equal(suffix.text.includes("弄__88號5樓之2(基地坐落"), true);
+  assert.equal(suffix.text.includes("弄88"), false);
   assert.equal(suffix.text.includes("88號之2"), false);
   assert.equal(suffix.text.includes("88號號"), false);
+  assert.equal(suffix.text.includes("第5層"), true);
 
   const bare = renderOfficialLease({
     address: { city: "台北市", district: "信義區", street: "松仁路88" },
     floor: "5F",
   });
-  assertDoor(bare.text, bare.patches, "1、門牌 台北市 信義區 松仁路 88 5樓。");
-  assert.equal(bare.text.includes("88號"), false);
+  assert.equal(restore(bare.text, bare.patches), stored);
+  assert.equal(bare.text.includes("弄88號5樓    (基地坐落"), true);
+  assert.equal(bare.text.includes("弄__88"), false);
+  assert.equal(bare.text.includes("88號號"), false);
+  assert.equal(bare.text.includes("5樓之"), false);
+  assert.equal(bare.text.includes("第5層"), true);
+
+  const alley = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路12弄88號之1" },
+    floor: "3F",
+  });
+  assert.equal(restore(alley.text, alley.patches), stored);
+  assert.equal(alley.text.includes("巷12弄__88號之1 3樓    (基地坐落"), true);
+  assert.equal(alley.text.includes("弄88"), false);
+  assert.equal(alley.text.includes("88號之1號"), false);
+
+  const explicit = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號3樓之2" },
+    floor: "3樓",
+  });
+  assert.equal(restore(explicit.text, explicit.patches), stored);
+  assert.equal(explicit.text.includes("弄__88號3樓之2(基地坐落"), true);
+  assert.equal(explicit.text.includes("弄88"), false);
+
+  const conflict = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號3樓之2" },
+    floor: "4",
+  });
+  assert.equal(restore(conflict.text, conflict.patches), stored);
+  assert.equal(conflict.text.includes("弄__88號4樓    (基地坐落"), true);
+  assert.equal(conflict.text.includes("弄88"), false);
+  assert.equal(conflict.text.includes("4樓之"), false);
+  assert.equal(conflict.text.includes("樓之2"), false);
+  assert.equal(conflict.text.includes("第4層"), true);
+
+  const withFloor = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號之1三樓" },
+    floor: "3",
+  });
+  assert.equal(restore(withFloor.text, withFloor.patches), stored);
+  assert.equal(withFloor.text.includes("弄__88號之1 3樓    (基地坐落"), true);
+  assert.equal(withFloor.text.includes("弄88"), false);
+  assert.equal(withFloor.text.includes("88號之1，"), false);
+  assert.equal(withFloor.text.includes("88號之1號"), false);
+  assert.equal(withFloor.text.includes("弄88之1號"), false);
+
+  const literal = renderOfficialLease({
+    address: { city: "台北市", district: "信義區", street: "松仁路88號之甲" },
+    floor: "3",
+  });
+  assert.equal(restore(literal.text, literal.patches), stored);
+  assert.equal(literal.text.includes("弄__88號之甲 3樓    (基地坐落"), true);
+  assert.equal(literal.text.includes("弄88"), false);
+  assert.equal(literal.text.includes("88號之甲，"), false);
+  assert.equal(literal.text.includes("88號之甲號"), false);
+  assert.equal(literal.text.includes("弄88之甲號"), false);
 
   const verbatim = renderOfficialLease({
     address: { city: "台北市", district: "信義區", street: "松仁路88號3樓B1" },
     floor: "3",
   });
-  assertDoor(verbatim.text, verbatim.patches, "1、門牌 台北市 信義區 松仁路88號3樓B1 3樓。");
+  assert.equal(restore(verbatim.text, verbatim.patches), stored);
+  assert.equal(verbatim.text.includes("松仁路88號3樓B1街(路)__段__巷__弄__號3樓    (基地坐落"), true);
+  assert.equal(verbatim.text.includes("號3樓之"), false);
 
   const holder = renderOfficialLease({ ...filled, accountHolder: "林秀英" });
   assert.equal(restore(holder.text, holder.patches), stored);

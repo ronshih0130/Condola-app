@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { sessionCookie, type RequestMeta } from "./auth";
 import { FlowError } from "./errors";
-import { clearStoredEnvChoice, ENV_COOKIE_MAX_AGE, ORG_COOKIE } from "./org-scope";
+import { clearStoredEnvChoice, ENV_COOKIE, ENV_COOKIE_MAX_AGE, ORG_COOKIE } from "./org-scope";
 import {
   clearFirmOverride,
   createPartnerCode,
@@ -144,14 +144,12 @@ export async function actionCreateFirm(formData: FormData) {
       name: text(formData.get("name")),
       contactName: text(formData.get("contactName")),
       phone: text(formData.get("phone")),
-      phoneCountry: text(formData.get("phoneCountry")),
-      country: text(formData.get("country")),
       partnerCode: text(formData.get("partnerCode")) || identity.partner_code || "",
     });
     if (!created.ok) redirect("/signup/firm?error=required");
     const jar = await cookies();
     const persisted = appCookieOptions({ httpOnly: false, maxAge: ENV_COOKIE_MAX_AGE });
-    clearStoredEnvChoice(jar);
+    jar.set(ENV_COOKIE, "sandbox", persisted);
     jar.set(ORG_COOKIE, created.orgId, persisted);
     const params = new URLSearchParams();
     if (created.dupName) params.set("dupFirm", "1");

@@ -4,7 +4,6 @@ import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionUpdateProperty } from "@/server/actions";
 import { listOwners, propertyEditor } from "@/server/queries";
-import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +32,7 @@ export default async function EditPropertyPage({
   };
   return (
     <>
-      <PageHeader title={t("i_property_edit")} crumb={<Link href={`/m/properties/${id}`}>{displaySampleName(property.name)}</Link>} />
+      <PageHeader title={t("i_property_edit")} crumb={<Link href={`/m/properties/${id}`}>{property.name}</Link>} />
       <ErrorBanner t={t} error={query.error} />
       <form action={actionUpdateProperty}>
         <input type="hidden" name="propertyId" value={property.id} />

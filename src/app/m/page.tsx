@@ -6,7 +6,6 @@ import { PageHeader } from "@/components/ui";
 import { showDemoLineCopy } from "@/server/demo";
 import { formatDate, formatMoney } from "@/server/format";
 import { dashboard } from "@/server/queries";
-import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -52,49 +51,6 @@ export default async function DashboardPage({
           {t("i_signup_code_list")}
         </p>
       ) : null}
-      {session.environment === "live" && data.properties.length === 0 ? (
-        <div data-testid="dashboard-empty">
-          <div className="card" style={{ textAlign: "center", padding: 36 }}>
-            <h2 style={{ marginTop: 0 }}>{t("i_dash_welcome")}</h2>
-            <p className="hint">{t("i_dash_steps")}</p>
-          </div>
-          <div className="grid3" style={{ marginTop: 16 }}>
-            <div className="card" style={{ textAlign: "center" }}>
-              <div className="guide-no">1</div>
-              <h3>{t("i_dash_step1")}</h3>
-              <p className="hint">{t("i_dash_step1_help")}</p>
-            </div>
-            <div className="card" style={{ textAlign: "center" }}>
-              <div className="guide-no">2</div>
-              <h3>{t("i_dash_step2")}</h3>
-              <p className="hint">{t("i_dash_step2_help")}</p>
-            </div>
-            <div className="card" style={{ textAlign: "center" }}>
-              <div className="guide-no">3</div>
-              <h3>{t("i_dash_step3")}</h3>
-              <p className="hint">{t("i_dash_step3_help")}</p>
-            </div>
-          </div>
-          <div style={{ textAlign: "center", marginTop: 16 }}>
-            <Link className="btn pri" href="/m/properties/new" data-testid="dash-first-property">
-              {t("i_dash_first")}
-            </Link>
-            <p className="small">
-              <a href="/api/env?set=sandbox&next=/m" data-testid="dash-sample">
-                {t("i_dash_sample")}
-              </a>
-            </p>
-            <p className="hint" data-testid="dash-free">{t("i_dash_free")}</p>
-            <p className="hint">
-              <Link href="/m/import" data-testid="dash-import">
-                {t("i_dash_import")}
-              </Link>
-            </p>
-          </div>
-        </div>
-      ) : null}
-      {session.environment === "live" && data.properties.length === 0 ? null : (
-      <>
       <div className="grid5" style={{ marginBottom: 16 }}>
         <Link className="card kpi" href="/m/rent">
           <div className="lbl">{t("i_paid")}</div>
@@ -133,7 +89,7 @@ export default async function DashboardPage({
               return (
                 <div key={property.id} style={{ marginBottom: 12 }}>
                   <div className="row small">
-                    <b>{displaySampleName(property.name)}</b>
+                    <b>{property.name}</b>
                     <span className="sp" />
                     {money(received)} / {money(billed)}
                   </div>
@@ -165,10 +121,10 @@ export default async function DashboardPage({
                   <tr key={row.lease_id} className="click">
                     <Cell>
                       <Link className="hit" href={`/m/leases/${row.lease_id}?tab=ledger`}>
-                        {displaySampleName(row.tenant)}
+                        {row.tenant}
                       </Link>
                     </Cell>
-                    <Cell label={t("i_space")}>{displaySampleName(row.place)}</Cell>
+                    <Cell label={t("i_space")}>{row.place}</Cell>
                     <Cell label={t("i_balance")}>{formatMoney(Number(row.balance), row.currency, session.locale)}</Cell>
                   </tr>
                 ))}
@@ -197,10 +153,10 @@ export default async function DashboardPage({
                 <tr key={row.lease_id} className="click">
                   <Cell>
                     <Link className="hit" href={`/m/leases/${row.lease_id}`}>
-                      {displaySampleName(row.tenant)}
+                      {row.tenant}
                     </Link>
                   </Cell>
-                  <Cell label={t("i_space")}>{displaySampleName(row.place)}</Cell>
+                  <Cell label={t("i_space")}>{row.place}</Cell>
                   <Cell label={t("i_end_date")}>{formatDate(row.end_date, session.locale, session.calendar, dict)}</Cell>
                 </tr>
               ))}
@@ -208,8 +164,6 @@ export default async function DashboardPage({
           </RfTable>
         )}
       </div>
-      </>
-      )}
       <FooterNote demoLine={showDemoLineCopy(session.environment)} />
     </>
   );

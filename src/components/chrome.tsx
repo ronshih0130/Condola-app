@@ -162,14 +162,14 @@ export function Sidebar({
   tickets,
   role,
   showReset,
-  sandbox,
+  showDemo,
 }: {
   firm: string;
   pending: number;
   tickets: number;
   role: OrgRole | null;
   showReset: boolean;
-  sandbox: boolean;
+  showDemo: boolean;
 }) {
   const t = useT();
   const path = usePathname() || "/m";
@@ -178,27 +178,18 @@ export function Sidebar({
     if (box) box.checked = false;
   };
   const sections = visibleNav(role);
-  const next = encodeURIComponent(path);
-  const label = sandbox ? `${firm}${t("i_sandbox_suffix")}` : firm;
   return (
     <aside className="side">
       <div className="org">
         <div className="av">{firm.slice(0, 1)}</div>
-        <details className="org-switch">
-          <summary className="org-toggle" data-testid="org-switch">
-            <span className="b">{label}</span>
-            <span className="org-caret" aria-hidden="true">▾</span>
-          </summary>
-          <div className="org-menu" data-testid="org-menu">
-            <a href={`/api/env?set=live&next=${next}`} data-testid="org-pick-live">
-              {firm}
-            </a>
-            <a href={`/api/env?set=sandbox&next=${next}`} data-testid="org-pick-sandbox">
-              <span>{t("i_sandbox_company")}</span>
-              <span className="org-tag">{t("i_sandbox_suffix")}</span>
-            </a>
-          </div>
-        </details>
+        <div>
+          <div className="b">{firm}</div>
+          {showDemo ? (
+            <div className="tiny muted" data-testid="demo-badge">
+              {t("i_demo_only")}
+            </div>
+          ) : null}
+        </div>
       </div>
       {can(role, "props.edit" as PermKey) ? (
         <Link className="btn block" href="/m/properties/new">
@@ -211,8 +202,8 @@ export function Sidebar({
         </Link>
       ) : null}
       {sections.map((section) => (
-        <div className="nav-sec" key={section.section}>
-          <h4 className="sec">{t(section.section)}</h4>
+        <div key={section.section}>
+          <div className="sec">{t(section.section)}</div>
           {section.links.map((link) => {
             const on = link.href === "/m" ? path === "/m" : path === link.href || path.startsWith(`${link.href}/`);
             const badge = link.href === "/m/payments" ? pending : link.href === "/m/tickets" ? tickets : 0;
@@ -226,7 +217,7 @@ export function Sidebar({
         </div>
       ))}
       <div className="side-tools">
-        {sandbox ? null : <Link href="/pricing">{t("i_nav_pricing")}</Link>}
+        <Link href="/pricing">{t("i_nav_pricing")}</Link>
         <Link href="/m/account">{t("i_account")}</Link>
         <Link href="/m/roles">{t("i_roles_title")}</Link>
         <SignOutButton testId="sign-out-drawer" />

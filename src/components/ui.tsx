@@ -1,17 +1,15 @@
 import { errorText } from "@/i18n/errors";
 import type { T } from "@/i18n";
 
-export function Stepper({ steps, current, errorStep }: { steps: string[]; current: number; errorStep?: number }) {
+export function Stepper({ steps, current }: { steps: string[]; current: number }) {
   return (
     <div className="steps">
       {steps.map((label, index) => {
         const number = index + 1;
         const done = number < current;
         const on = number === current;
-        const err = errorStep === number;
         return (
-          <span key={label} className={`s${on ? " on" : ""}${done ? " done" : ""}${err ? " err" : ""}`}>
-            {err ? <i className="dot" aria-hidden="true" /> : null}
+          <span key={label} className={`s${on ? " on" : ""}${done ? " done" : ""}`}>
             {done ? `✓ ${label}` : `${number}. ${label}`}
           </span>
         );
