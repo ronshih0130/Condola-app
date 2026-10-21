@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
@@ -6,6 +7,11 @@ import { readSignupIdentity } from "@/server/signup";
 import { requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const prefs = await requestPrefs();
+  return { title: { absolute: makeT(prefs.locale)("i_login_title") } };
+}
 
 export default async function FirmPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const params = await searchParams;

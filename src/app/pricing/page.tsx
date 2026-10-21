@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { PricingCalculator } from "@/components/pricing-calculator";
@@ -7,6 +8,11 @@ import { commercialTier, seatUsage } from "@/server/seats";
 import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const prefs = await requestPrefs();
+  return { title: { absolute: makeT(prefs.locale)("i_login_title") } };
+}
 
 export default async function PricingPage() {
   const prefs = await requestPrefs();
