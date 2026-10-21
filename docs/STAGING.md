@@ -50,6 +50,7 @@ Plain vars (not secrets):
 | Name | Value |
 | --- | --- |
 | `CONDOLA_ENV` | `staging` |
+| `CONDOLA_SITE_URL` | `https://staging.condola.app` |
 | `DEMO_MODE` | `false` |
 | `LINE_LOGIN_ENABLED` | `false` |
 

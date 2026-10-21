@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { makeT } from "@/i18n";
+import { AuthHashForward } from "@/components/auth-hash";
 import { BrandLink, LocaleLinks, ResetButton, SignOutButton } from "@/components/chrome";
 import { EnvBanner, EnvSwitch } from "@/components/env-mode";
 import { LocaleProvider } from "@/components/locale";
@@ -27,6 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={prefs.locale === "zh-TW" ? "zh-Hant-TW" : "en"}>
       <body>
         <LocaleProvider locale={prefs.locale}>
+          <AuthHashForward />
           <header className="top">
             <label htmlFor="nav-open" className="nav-toggle" data-testid="nav-toggle" aria-label={t("i_menu")}>
               <span aria-hidden="true">☰</span>

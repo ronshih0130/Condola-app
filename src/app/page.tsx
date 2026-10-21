@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { HashOrRedirect } from "@/components/auth-hash";
 import { readSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -7,5 +7,5 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
   const params = await searchParams;
   const session = await readSession();
   const demoReset = params.reset === "1" ? "?demoReset=1" : "";
-  redirect(session ? `/m${demoReset}` : `/login${demoReset}`);
+  return <HashOrRedirect next={session ? `/m${demoReset}` : `/login${demoReset}`} />;
 }

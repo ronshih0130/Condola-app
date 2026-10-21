@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
+import { AuthHashForward } from "@/components/auth-hash";
 import { AuthBrand } from "@/components/brand";
 import { BackupCodes } from "@/components/backup-codes";
 import { BACKUP_COOKIE, backupDisplay } from "@/server/backup";
@@ -32,6 +33,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     params.error === "locked" ? "i_auth_locked" : params.error === "disabled" ? "i_auth_disabled" : params.error ? "i_auth_invalid" : "";
   return (
     <div className="auth-wrap">
+      <AuthHashForward />
       <AuthBrand name={t("i_brand")} />
       <form className="card pad" action={params.step === "2fa" || params.step === "enroll" ? actionSecondFactor : actionSignIn}>
         <h1>{t("i_login_headline")}</h1>

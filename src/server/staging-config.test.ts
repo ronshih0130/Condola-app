@@ -30,6 +30,7 @@ test("the staging wrangler env names secrets and keeps demo mode off", () => {
   assert.ok(staging);
   assert.ok(staging.compatibility_flags?.includes("nodejs_compat"));
   assert.equal(staging.vars?.CONDOLA_ENV, "staging");
+  assert.equal(staging.vars?.CONDOLA_SITE_URL, "https://staging.condola.app");
   assert.equal(staging.vars?.DEMO_MODE, "false");
   assert.equal(staging.vars?.LINE_LOGIN_ENABLED, "false");
   assert.deepEqual(staging.secrets?.required, [
@@ -54,6 +55,7 @@ test("the production wrangler env serves both public hosts and keeps demo mode o
   assert.ok(production.compatibility_flags?.includes("nodejs_compat"));
   assert.equal(production.workers_dev, false);
   assert.equal(production.vars?.CONDOLA_ENV, "production");
+  assert.equal(production.vars?.CONDOLA_SITE_URL, "https://app.condola.app");
   assert.equal(production.vars?.DEMO_MODE, "false");
   assert.equal(production.vars?.LINE_LOGIN_ENABLED, "false");
   assert.equal(production.vars?.STAGING_AUTODEPLOY, "false");

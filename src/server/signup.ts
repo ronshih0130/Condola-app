@@ -8,6 +8,7 @@ import { recordFunnel } from "./funnel";
 import { previewPartnerCode, redeemPartnerCode } from "./partners";
 import { passwordAcceptable } from "./password";
 import { openSandboxFirm } from "./sandbox";
+import { gotrueEndpoint, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
 import type { Session } from "./types";
 
 const VERIFY_HOURS = 24;
@@ -88,42 +89,48 @@ async function issueVerification(userId: string, email: string) {
   return token;
 }
 
-async function supabaseSignUp(email: string, password: string, origin: string) {
+async function supabaseSignUp(email: string, password: string, requestOrigin: string) {
   const { url, anon } = supabaseAuth();
   if (!url || !anon) return null;
-  const response = await fetch(`${url}/auth/v1/signup`, {
+  const redirectTo = signupConfirmUrl(requestOrigin);
+  const response = await fetch(gotrueEndpoint(url, "/auth/v1/signup", redirectTo), {
     method: "POST",
     headers: { apikey: anon, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email,
-      password,
-      options: { emailRedirectTo: `${origin}/signup/confirm` },
-    }),
+    body: JSON.stringify({ email, password }),
   });
-  const body = (await response.json().catch(() => ({}))) as {
-    user?: { id?: string; email_confirmed_at?: string | null };
-    msg?: string;
-    error_description?: string;
-    message?: string;
-  };
-  if (!response.ok) {
-    const text = `${body.msg || ""} ${body.error_description || ""} ${body.message || ""}`.toLowerCase();
-    if (response.status === 422 || response.status === 400 || /already|registered|exists/.test(text)) return "duplicate" as const;
-    return "unavailable" as const;
-  }
-  const id = body.user?.id;
-  if (!id) return "unavailable" as const;
-  return { id, confirmed: Boolean(body.user?.email_confirmed_at) };
+  const body = await response.json().catch(() => ({}));
+  const parsed = parseSupabaseSignup(response.status, body);
+  if (parsed === "duplicate" || parsed === "unavailable") return parsed;
+  return parsed;
 }
 
-async function supabaseResend(email: string, origin: string) {
+async function supabaseResend(email: string, requestOrigin: string) {
   const { url, anon } = supabaseAuth();
   if (!url || !anon) return;
-  await fetch(`${url}/auth/v1/resend`, {
+  const redirectTo = signupConfirmUrl(requestOrigin);
+  await fetch(gotrueEndpoint(url, "/auth/v1/resend", redirectTo), {
     method: "POST",
     headers: { apikey: anon, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "signup", email, options: { emailRedirectTo: `${origin}/signup/confirm` } }),
+    body: JSON.stringify({ type: "signup", email }),
   });
+}
+
+/** Profile and the first funnel row. Safe to call again for an unconfirmed account. */
+async function ensureSignupStarted(userId: string, email: string) {
+  await query(
+    `INSERT INTO profiles (id, display_name, email, locale)
+     VALUES ($1, $2, $3, 'zh-TW')
+     ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
+    [userId, email.split("@")[0], email],
+  );
+  await query(
+    `INSERT INTO funnel_events (event_type, user_id, email, detail)
+     SELECT 'signup_started', $1::uuid, $2, '{}'::jsonb
+      WHERE NOT EXISTS (
+        SELECT 1 FROM funnel_events WHERE event_type = 'signup_started' AND user_id = $1::uuid
+      )`,
+    [userId, email],
+  );
 }
 
 async function markConfirmed(userId: string, email: string) {
@@ -189,8 +196,9 @@ export async function startSignup(input: {
     }
     await setUserPassword(existing.id, input.password);
     await rememberDraft(existing.id, draftCode);
+    await ensureSignupStarted(existing.id, email);
+    // GoTrue already sent the confirmation on the first POST /signup. A form retry must not send another.
     const token = await issueVerification(existing.id, email);
-    await supabaseResend(email, input.origin);
     return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
   }
 
@@ -214,14 +222,8 @@ export async function startSignup(input: {
       throw error;
     }
   }
-  await query(
-    `INSERT INTO profiles (id, display_name, email, locale)
-     VALUES ($1, $2, $3, 'zh-TW')
-     ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
-    [userId, email.split("@")[0], email],
-  );
+  await ensureSignupStarted(userId, email);
   await rememberDraft(userId, draftCode);
-  await recordFunnel("signup_started", { userId, email });
   if (confirmed) {
     await markConfirmed(userId, email);
     const token = await createSession(userId, true, input.meta);
