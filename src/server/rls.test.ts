@@ -590,7 +590,28 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   const coTenant = "共同承租李四";
   const guarantor = "保證人王大明";
   const cosigner = "連署人林小安";
-  const contactIds = await svc(USERS.admin, async (client) => {
+  const property = await svc(USERS.admin, async (client) => {
+    const row = await client.query<{ id: string; address: unknown; display: string | null }>(
+      `SELECT p.id::text, p.address, p.address_display AS display
+         FROM leases l
+         JOIN properties p ON p.id = l.property_id
+        WHERE l.id = $1`,
+      [leaseId],
+    );
+    const saved = row.rows[0];
+    assert.ok(saved);
+    await client.query(
+      `UPDATE properties
+          SET address = jsonb_set(coalesce(address, '{}'::jsonb), '{street}', to_jsonb($2::text), true),
+              address_display = $3
+        WHERE id = $1`,
+      [saved.id, "松仁路88號之1", "台北市信義區松仁路88號之1"],
+    );
+    return saved;
+  });
+  let contactIds: string[] = [];
+  try {
+  contactIds = await svc(USERS.admin, async (client) => {
     const ids: string[] = [];
     for (const [role, name, isTenant] of [
       ["co_tenant", coTenant, true],
@@ -614,7 +635,6 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
     return ids;
   });
 
-  try {
   const before = await pdfAuditCount("leases", leaseId);
   const maintenance = pdfSession(USERS.maintenance, "staff", "maintenance", ORG_ID);
   const visibleToMaintenance = await tx(USERS.maintenance, (client) =>
@@ -644,6 +664,9 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.equal(managerText.includes(`、${coTenant}，出租人`), true);
   assert.equal(managerText.includes(guarantor), false);
   assert.equal(managerText.includes(cosigner), false);
+  assert.equal(managerText.includes("88之1號"), true);
+  assert.equal(managerText.includes("弄88號"), false);
+  assert.equal(managerText.includes("樓之1"), false);
 
   const tenant = pdfSession(USERS.tenant, "tenant", null, ORG_ID);
   const tenantDoc = await leasePdfForSession(tenant, leaseId);
@@ -685,6 +708,11 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   assert.equal(coastRead.rows.length, 0);
   } finally {
     await svc(USERS.admin, async (client) => {
+      await client.query(`UPDATE properties SET address = $2::jsonb, address_display = $3 WHERE id = $1`, [
+        property.id,
+        property.address == null ? null : JSON.stringify(property.address),
+        property.display,
+      ]);
       await client.query(`DELETE FROM lease_parties WHERE contact_id = ANY($1::uuid[])`, [contactIds]);
       await client.query(`DELETE FROM contacts WHERE id = ANY($1::uuid[])`, [contactIds]);
     });
