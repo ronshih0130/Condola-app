@@ -56,6 +56,7 @@ const ERROR_KEYS = [
   "i_generic",
   "i_not_found",
   "i_email_taken",
+  "i_reset_expired",
   "i_auth_invalid",
   "i_auth_disabled",
   "i_pw_mismatch",
@@ -111,7 +112,7 @@ test("invite expiry, lockout, reset, and no-access copy match the prototype", ()
   assert.equal(zh.i_forgot_sent, "如果這個 Email 有租多啦帳號，重設連結已寄出，請於 60 分鐘內使用。沒收到請檢查垃圾郵件。");
   assert.equal(en.i_forgot_sent, "If this email has a 租多啦 account, a reset link has been sent. Use it within 60 minutes. If it doesn’t arrive, check your spam folder.");
   assert.equal(zh.i_forgot_sent.includes("{email}"), false);
-  assert.equal(zh.i_reset_expired, "這個連結已失效或已使用過");
+  assert.equal(zh.i_reset_expired, "這個連結已失效或已使用，請重新申請重設密碼。");
   assert.equal(zh.i_reset_resend, "重新寄送重設信");
   assert.equal(en.i_reset_resend, "Resend the reset email");
   assert.equal(zh.i_reset_save, "儲存新密碼");

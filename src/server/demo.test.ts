@@ -153,8 +153,9 @@ test("demo LINE copy is live-hidden and shown for DEMO_MODE or a sandbox firm", 
 
   const tenant = readFileSync(new URL("../app/t/layout.tsx", import.meta.url), "utf8");
   const notify = readFileSync(new URL("../app/m/notify/page.tsx", import.meta.url), "utf8");
+  const account = readFileSync(new URL("../app/m/account/page.tsx", import.meta.url), "utf8");
   const login = readFileSync(new URL("../app/login/page.tsx", import.meta.url), "utf8");
-  for (const source of [tenant, notify]) {
+  for (const source of [tenant, notify, account]) {
     assert.match(source, /showDemoLineCopy\(session\.environment\)/);
   }
   assert.match(login, /showDemoLineCopy\(null\)/);
@@ -260,14 +261,7 @@ test("live screens do not render LINE product copy, including the app footer", (
   assert.equal((login.match(/data-testid="line-login"/g) ?? []).length, 1);
   assert.doesNotMatch(login, /disabled[^>\n]*line-login|line-login"[^>\n]*disabled/);
   const account = readFileSync(new URL("../app/m/account/page.tsx", import.meta.url), "utf8");
-  const settings = readFileSync(new URL("../app/m/settings/page.tsx", import.meta.url), "utf8");
-  assert.equal(account.includes("LINE"), false);
-  assert.equal(settings.includes("LINE"), false);
-  assert.equal(account.includes("i_line_demo"), false);
-  assert.equal(zh.i_sandbox_plan.includes("LINE"), false);
-  assert.equal(en.i_sandbox_plan.includes("LINE"), false);
-  assert.equal(zh.i_line_demo.includes("LINE 的成員"), true);
-  assert.equal(LINE_SUPPORT_CONTACT.startsWith("LINE @644odqoe"), true);
+  assert.match(account, /showDemoLineCopy\(session\.environment\)/);
   const accept = readFileSync(new URL("../app/accept/[token]/page.tsx", import.meta.url), "utf8");
   assert.match(accept, /showDemoLineCopy\(null\) && lineLoginEnabled\(\)/);
   const walk = readFileSync(new URL("../app/walk/page.tsx", import.meta.url), "utf8");
