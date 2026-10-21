@@ -141,12 +141,8 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
   });
   await expect(page.getByTestId("import-preview")).toContainText("已經存在");
   await expect(page.getByTestId("import-ok-count")).toHaveText("0");
-  await expect(page.getByTestId("import-run")).toBeEnabled();
-  await page.getByTestId("import-run").click();
-  await expect(page.getByTestId("import-result")).toBeVisible();
-  await expect(page.getByTestId("import-count-leases")).toHaveText("0");
-  await expect(page.getByTestId("import-reused-leases")).toContainText("1");
-  await expect(page.getByTestId("import-duplicate-notice")).toContainText("已經存在");
+  await expect(page.getByTestId("import-run")).toHaveText("匯入 0 筆");
+  await expect(page.getByTestId("import-run")).toBeDisabled();
 
   await signIn(page, ACCOUNTS.accountant);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/properties");

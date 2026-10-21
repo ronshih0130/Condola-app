@@ -497,6 +497,8 @@ test("a confirmed import is one transaction and the screen posts it once", () =>
   assert.match(wizard, /im_progress_n/);
   assert.match(wizard, /previewDone/);
   assert.match(wizard, /im_checking/);
+  assert.match(wizard, /importableCount > 0/);
+  assert.match(wizard, /t\("im_run", \{ n: importableCount \}\)/);
   assert.match(wizard, /im_none/);
   assert.match(wizard, /import-retry/);
   assert.match(wizard, /claimFormSubmit\(submitGuard\)/);

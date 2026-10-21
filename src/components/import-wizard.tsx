@@ -85,10 +85,11 @@ export function ImportWizard() {
   );
   const problemRows = viewed.filter((row) => rowHasError(row));
   const sendable = viewed.filter((row) => !rowHasError(row));
-  const importableCount = sendable.filter((row) => !row.issues.some((issue) => issue.key === "im_row_exists")).length;
+  const importable = sendable.filter((row) => !row.issues.some((issue) => issue.key === "im_row_exists"));
+  const importableCount = importable.length;
   const preview = viewed.slice(0, PREVIEW_ROWS);
   const stepperAt = step >= 2 ? 3 : step + 1;
-  const canRun = previewDone && !busy && !previewing && !previewFailed && sendable.length > 0;
+  const canRun = previewDone && !busy && !previewing && !previewFailed && importableCount > 0;
 
   useEffect(() => {
     if (step !== 2) return;
@@ -192,7 +193,7 @@ export function ImportWizard() {
 
   async function runCommit() {
     if (!claimFormSubmit(submitGuard)) return;
-    const rows = requestRows(sendable);
+    const rows = requestRows(importable);
     if (rows.length === 0 || missing.length > 0 || !previewDone || previewing || previewFailed) {
       releaseFormSubmit(submitGuard);
       return;
@@ -462,7 +463,7 @@ export function ImportWizard() {
               {t("im_dl_problems")}
             </button>
             <button className="btn pri" type="button" data-testid="import-run" disabled={busy || !canRun} onClick={() => void runCommit()}>
-              {t("im_run", { n: sendable.length })}
+              {t("im_run", { n: importableCount })}
             </button>
           </div>
         </div>
