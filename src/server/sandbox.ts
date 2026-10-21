@@ -277,7 +277,14 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
 
       await client.query(
         `INSERT INTO map_fee (old_id, new_id)
-         SELECT id, gen_random_uuid() FROM fee_rules WHERE org_id = $1 AND archived_at IS NULL`,
+         SELECT f.id, gen_random_uuid()
+           FROM fee_rules f
+          WHERE f.org_id = $1 AND f.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = f.org_id AND sm.entity_table = 'fee_rules' AND sm.entity_id = f.id
+            )
+            AND f.name NOT LIKE '%範例資料%' AND f.name NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -296,7 +303,12 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
          SELECT DISTINCT c.id, gen_random_uuid()
            FROM contacts c
            JOIN property_owners po ON po.owner_contact_id = c.id AND po.org_id = c.org_id
-          WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL`,
+          WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = c.org_id AND sm.entity_table = 'contacts' AND sm.entity_id = c.id
+            )
+            AND c.display_name NOT LIKE '%範例資料%' AND c.display_name NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -310,7 +322,14 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
 
       await client.query(
         `INSERT INTO map_property (old_id, new_id)
-         SELECT id, gen_random_uuid() FROM properties WHERE org_id = $1 AND archived_at IS NULL`,
+         SELECT p.id, gen_random_uuid()
+           FROM properties p
+          WHERE p.org_id = $1 AND p.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = p.org_id AND sm.entity_table = 'properties' AND sm.entity_id = p.id
+            )
+            AND p.name NOT LIKE '%範例資料%' AND p.name NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -324,7 +343,15 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
 
       await client.query(
         `INSERT INTO map_unit (old_id, new_id)
-         SELECT id, gen_random_uuid() FROM units WHERE org_id = $1 AND archived_at IS NULL`,
+         SELECT u.id, gen_random_uuid()
+           FROM units u
+           JOIN map_property mp ON mp.old_id = u.property_id
+          WHERE u.org_id = $1 AND u.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = u.org_id AND sm.entity_table = 'units' AND sm.entity_id = u.id
+            )
+            AND u.label NOT LIKE '%範例資料%' AND u.label NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -340,7 +367,15 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
 
       await client.query(
         `INSERT INTO map_room (old_id, new_id)
-         SELECT id, gen_random_uuid() FROM rooms WHERE org_id = $1 AND archived_at IS NULL`,
+         SELECT r.id, gen_random_uuid()
+           FROM rooms r
+           JOIN map_unit mu ON mu.old_id = r.unit_id
+          WHERE r.org_id = $1 AND r.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = r.org_id AND sm.entity_table = 'rooms' AND sm.entity_id = r.id
+            )
+            AND r.label NOT LIKE '%範例資料%' AND r.label NOT LIKE '%[Sample data]%'`,
         [sandboxId],
       );
       await client.query(
@@ -362,7 +397,11 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
            FROM property_owners po
            JOIN map_property mp ON mp.old_id = po.property_id
            JOIN map_contact mc ON mc.old_id = po.owner_contact_id
-          WHERE po.org_id = $2`,
+          WHERE po.org_id = $2
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = po.org_id AND sm.entity_table = 'property_owners' AND sm.entity_id = po.id
+            )`,
         [liveOrgId, sandboxId],
       );
 
@@ -373,7 +412,11 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
            JOIN map_contact mc ON mc.old_id = a.owner_contact_id
            JOIN map_fee mf ON mf.old_id = a.fee_rule_id
            LEFT JOIN map_property mp ON mp.old_id = a.property_id
-          WHERE a.org_id = $2 AND (a.property_id IS NULL OR mp.new_id IS NOT NULL)`,
+          WHERE a.org_id = $2 AND (a.property_id IS NULL OR mp.new_id IS NOT NULL)
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = a.org_id AND sm.entity_table = 'management_agreements' AND sm.entity_id = a.id
+            )`,
         [liveOrgId, sandboxId],
       );
 
@@ -387,7 +430,13 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
            LEFT JOIN map_contact mc ON mc.old_id = b.owner_contact_id
           WHERE b.org_id = $2 AND b.archived_at IS NULL
             AND (b.property_id IS NULL OR mp.new_id IS NOT NULL)
-            AND (b.owner_contact_id IS NULL OR mc.new_id IS NOT NULL)`,
+            AND (b.owner_contact_id IS NULL OR mc.new_id IS NOT NULL)
+            AND NOT EXISTS (
+              SELECT 1 FROM sample_marks sm
+               WHERE sm.org_id = b.org_id AND sm.entity_table = 'bank_accounts' AND sm.entity_id = b.id
+            )
+            AND coalesce(b.nickname, '') NOT LIKE '%範例資料%'
+            AND coalesce(b.nickname, '') NOT LIKE '%[Sample data]%'`,
         [liveOrgId, sandboxId],
       );
     }
@@ -396,7 +445,11 @@ async function copySandboxSetup(sandboxId: string, liveOrgId: string, actorId: s
       `INSERT INTO invitations (org_id, kind, role, email, code_hash, status, expires_at, invited_by)
        SELECT $1, 'team_member', role, email, encode(gen_random_bytes(32), 'hex'), 'pending', expires_at, $3
          FROM invitations
-        WHERE org_id = $2 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()`,
+        WHERE org_id = $2 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()
+          AND NOT EXISTS (
+            SELECT 1 FROM sample_marks sm
+             WHERE sm.org_id = invitations.org_id AND sm.entity_table = 'invitations' AND sm.entity_id = invitations.id
+          )`,
       [liveOrgId, sandboxId, actorId],
     );
     await client.query("COMMIT");

@@ -5,7 +5,17 @@ import test from "node:test";
 const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
 
 test("sign-up, pricing, and go-live copy stay on the handoff wording", () => {
-  assert.equal(zh.i_signup_dup, "這個 Email 已經註冊過了");
+  assert.equal(zh.i_signup_dup, "這個電子郵件已經註冊過了");
+  assert.equal(zh.i_signup_verify_title, "請到信箱確認電子郵件");
+  assert.equal(zh.i_signup_change_email, "更換電子郵件");
+  assert.equal(zh.i_signup_kind_title, "您的身分");
+  assert.equal(zh.i_signup_firm_details, "事務所資料");
+  assert.equal(zh.i_field_required, "請填寫此欄位");
+  assert.equal(zh.i_signup_submitting, "建立中…");
+  assert.equal(zh.i_golive_pending, "正在切換到正式環境…");
+  assert.equal(zh.i_env_banner_title, "測試模式");
+  assert.equal(zh.i_signup_confirm_email, "確認我的電子郵件");
+  assert.equal(zh.i_login_unconfirmed, "請先到信箱確認電子郵件");
   assert.equal(zh.i_signup_code_bad, "代碼無效，可先完成註冊，之後再聯絡我們");
   assert.equal(zh.i_signup_kind_firm, "管理公司");
   assert.equal(zh.i_signup_kind_self, "自己管房的屋主");

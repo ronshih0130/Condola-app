@@ -80,6 +80,58 @@ export function signupConfirmUrl(requestOrigin: string) {
   return `${local || "http://127.0.0.1:43123"}${CONFIRM_PATH}`;
 }
 
+/** Signup confirmation accepts signup and email OTP types. Anything else is ignored. */
+export function signupVerifyType(value: string | null | undefined): "signup" | "email" | null {
+  const type = (value ?? "").trim().toLowerCase();
+  if (type === "email") return "email";
+  if (type === "signup" || type === "") return "signup";
+  return null;
+}
+
+export function gotrueVerifyBody(type: "signup" | "email" | "recovery", tokenHash: string) {
+  return { type, token_hash: tokenHash.trim() };
+}
+
+/** User id from a GoTrue verify response. Nested user.id and a top-level id both count. */
+export function parseGotrueUserId(body: unknown): { id: string; email: string } | null {
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const nested = record.user && typeof record.user === "object" ? (record.user as Record<string, unknown>) : null;
+  const id = (typeof nested?.id === "string" && nested.id) || (typeof record.id === "string" && record.id) || "";
+  if (!id) return null;
+  const email =
+    (typeof nested?.email === "string" && nested.email) || (typeof record.email === "string" && record.email) || "";
+  return { id, email };
+}
+
+/**
+ * Password grant failures. Only a real bad-credential response is "invalid".
+ * email_not_confirmed is separate. Other GoTrue errors must not look like a wrong password.
+ */
+export function classifyPasswordGrant(
+  status: number,
+  body: unknown,
+): { userId: string } | "unconfirmed" | "invalid" | "unavailable" {
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (status >= 200 && status < 300) {
+    const user = parseGotrueUserId(body);
+    return user ? { userId: user.id } : "unavailable";
+  }
+  const text = [record.error_code, record.error, record.msg, record.message, record.error_description]
+    .filter((part) => typeof part === "string")
+    .join(" ")
+    .toLowerCase();
+  if (text.includes("email_not_confirmed") || text.includes("email not confirmed")) return "unconfirmed";
+  if (
+    text.includes("invalid_grant") ||
+    text.includes("invalid_credentials") ||
+    text.includes("invalid login") ||
+    text.includes("invalid credentials")
+  ) {
+    return "invalid";
+  }
+  return "unavailable";
+}
+
 /** Where to send a hash access_token that landed on the wrong page. Null when this page should consume it. */
 export function confirmHashTarget(pathname: string, hash: string): string | null {
   const fragment = hash.startsWith("#") ? hash : hash ? `#${hash}` : "";

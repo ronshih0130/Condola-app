@@ -15,6 +15,7 @@ import {
   requestPasswordReset,
   resendInvite,
   resetPassword,
+  verifyRecoveryTokenHash,
   revokeInvite,
   revokeOtherSessions,
   revokeSession,
@@ -23,6 +24,7 @@ import {
   setMemberRole,
   setOwnerPrivacy,
   setRequireMfa,
+  normalizeEmail,
   signIn,
   signInWithLine,
   SESSION_COOKIE,
@@ -80,20 +82,33 @@ async function rememberBackup(codes: string[]) {
 
 export async function actionSignIn(formData: FormData) {
   const next = safeNext(text(formData.get("next")));
+  const email = normalizeEmail(text(formData.get("email"))) || text(formData.get("email")).trim();
   const result = await signIn(text(formData.get("email")), text(formData.get("password")), formData.get("remember") === "on", await meta());
   const jar = await cookies();
+  const nextQuery = next ? `&next=${encodeURIComponent(next)}` : "";
   if (result.ok) {
     const cookie = sessionCookie(result.token, result.remember);
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
-    redirect(next || "/auth/continue");
+    redirect(result.destination === "firm" ? "/signup/firm" : next || "/auth/continue");
   }
   if ("step" in result) {
     const cookie = challengeCookie(result.challengeId);
     jar.set(cookie.name, cookie.value, cookie.options);
-    redirect(`/login?step=${result.step}${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+    redirect(`/login?step=${result.step}${nextQuery}`);
   }
-  redirect(`/login?error=${result.error}${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+  if (result.error === "unconfirmed") {
+    redirect(`/login?error=unconfirmed&email=${encodeURIComponent(email)}${nextQuery}`);
+  }
+  redirect(`/login?error=${result.error}${nextQuery}`);
+}
+
+export async function actionVerifyRecovery(formData: FormData) {
+  const type = text(formData.get("type")).trim();
+  if (type !== "recovery") redirect("/reset?expired=1");
+  const result = await verifyRecoveryTokenHash(text(formData.get("token_hash")));
+  if (!result.ok) redirect("/reset?expired=1");
+  redirect(`/reset/${encodeURIComponent(result.token)}`);
 }
 
 export async function actionLineLogin() {

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
+import { PendingSubmit } from "@/components/pending-submit";
 import { actionChangeSignupEmail, actionResendSignup } from "@/server/signup-actions";
 import { requestPrefs } from "@/server/session";
 
@@ -30,7 +31,7 @@ export default async function VerifyPage({
           <li>3</li>
           <li>4</li>
         </ol>
-        <p className="small muted">{t("i_signup_step", { n: 2 })}</p>
+        <p className="small muted" data-testid="signup-step-label">{t("i_signup_step", { n: 2 })}</p>
         <h1>{t("i_signup_verify_title")}</h1>
         <p data-testid="verify-body">{t("i_signup_verify_body", { email })}</p>
         {params.resent === "1" ? <div className="alert ok">{t("i_signup_resent")}</div> : null}
@@ -53,20 +54,18 @@ export default async function VerifyPage({
         ) : null}
         <form action={actionResendSignup}>
           <input type="hidden" name="email" value={email} />
-          <button className="btn" type="submit" data-testid="signup-resend">
-            {t("i_signup_resend")}
-          </button>
+          <PendingSubmit className="btn" idle={t("i_signup_resend")} pending={t("i_signup_sending")} testId="signup-resend" />
         </form>
         <form action={actionChangeSignupEmail} className="col" style={{ marginTop: 16 }}>
           <h2 className="h3">{t("i_signup_change_email")}</h2>
           <input type="hidden" name="email" value={email} />
           <div className="fg">
-            <label className="f">{t("i_password")}</label>
-            <input className="inp" name="password" type="password" data-testid="change-password" />
+            <label className="f">{t("i_email_label")}</label>
+            <input className="inp" name="nextEmail" type="email" required data-testid="change-email" />
           </div>
           <div className="fg">
-            <label className="f">{t("i_email_label")}</label>
-            <input className="inp" name="nextEmail" type="email" data-testid="change-email" />
+            <label className="f">{t("i_password")}</label>
+            <input className="inp" name="password" type="password" required data-testid="change-password" />
           </div>
           <button className="btn" type="submit">
             {t("i_signup_change_email")}

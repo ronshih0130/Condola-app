@@ -5,8 +5,10 @@ import { makeT } from "@/i18n";
 import { AuthHashForward } from "@/components/auth-hash";
 import { AuthBrand } from "@/components/brand";
 import { BackupCodes } from "@/components/backup-codes";
+import { PendingSubmit } from "@/components/pending-submit";
 import { BACKUP_COOKIE, backupDisplay } from "@/server/backup";
 import { actionLineLogin, actionSecondFactor, actionSignIn } from "@/server/auth-actions";
+import { actionResendSignup } from "@/server/signup-actions";
 import { CHALLENGE_COOKIE, peekChallenge } from "@/server/auth";
 import { demoModeEnabled, lineLoginEnabled } from "@/server/demo";
 import { roleHome } from "@/server/perms";
@@ -19,7 +21,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: { absolute: makeT(prefs.locale)("i_login_title") } };
 }
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; step?: string; next?: string; reset?: string; demoReset?: string }> }) {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; step?: string; next?: string; reset?: string; demoReset?: string; email?: string }>;
+}) {
   const params = await searchParams;
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
@@ -30,11 +36,26 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const backup = params.step === "backup" ? backupDisplay(jar.get(BACKUP_COOKIE)?.value) : null;
   const next = params.next && params.next.startsWith("/") ? params.next : "";
   const errorKey =
-    params.error === "locked" ? "i_auth_locked" : params.error === "disabled" ? "i_auth_disabled" : params.error ? "i_auth_invalid" : "";
+    params.error === "locked"
+      ? "i_auth_locked"
+      : params.error === "disabled"
+        ? "i_auth_disabled"
+        : params.error === "unavailable"
+          ? "i_auth_unavailable"
+          : params.error && params.error !== "unconfirmed"
+            ? "i_auth_invalid"
+            : "";
   return (
     <div className="auth-wrap">
       <AuthHashForward />
       <AuthBrand name={t("i_brand")} />
+      {params.error === "unconfirmed" ? (
+        <form className="card pad" action={actionResendSignup} data-testid="login-unconfirmed">
+          <p>{t("i_login_unconfirmed")}</p>
+          <input type="hidden" name="email" value={params.email || ""} />
+          <PendingSubmit className="btn" idle={t("i_signup_resend")} pending={t("i_signup_sending")} testId="login-resend" />
+        </form>
+      ) : null}
       <form className="card pad" action={params.step === "2fa" || params.step === "enroll" ? actionSecondFactor : actionSignIn}>
         <h1>{t("i_login_headline")}</h1>
         <p>{t("i_login_sub")}</p>

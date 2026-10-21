@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { confirmHashTarget, gotrueEndpoint, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
+import { readFileSync } from "node:fs";
+import { normalizeEmail } from "./auth";
+import {
+  classifyPasswordGrant,
+  confirmHashTarget,
+  gotrueEndpoint,
+  gotrueVerifyBody,
+  parseSupabaseSignup,
+  signupConfirmUrl,
+  signupVerifyType,
+} from "./signup-gotrue";
 
 test("GoTrue signup accepts a top-level id and a nested user id", () => {
   const top = parseSupabaseSignup(200, { id: "user-top", aud: "authenticated", email_confirmed_at: null });
@@ -56,6 +66,46 @@ test("confirmation links use the allow-listed staging or production origin", () 
     if (previousSite === undefined) delete process.env.CONDOLA_SITE_URL;
     else process.env.CONDOLA_SITE_URL = previousSite;
   }
+});
+
+test("a plus address survives trim, case, and form-urlencoded spaces", () => {
+  assert.equal(normalizeEmail("  User+Tag@Example.com "), "user+tag@example.com");
+  assert.equal(normalizeEmail("user tag@example.com"), "user+tag@example.com");
+  assert.equal(normalizeEmail("user  tag+more@example.com"), "user+tag+more@example.com");
+  assert.equal(normalizeEmail("not an email"), null);
+});
+
+test("password grant maps email_not_confirmed and leaves other GoTrue errors alone", () => {
+  assert.deepEqual(classifyPasswordGrant(200, { user: { id: "user-1" } }), { userId: "user-1" });
+  assert.deepEqual(classifyPasswordGrant(200, { id: "user-top" }), { userId: "user-top" });
+  assert.equal(classifyPasswordGrant(400, { error_code: "email_not_confirmed", msg: "Email not confirmed" }), "unconfirmed");
+  assert.equal(classifyPasswordGrant(400, { error: "invalid_grant", error_description: "Invalid login credentials" }), "invalid");
+  assert.equal(classifyPasswordGrant(429, { error_code: "over_request_rate_limit", msg: "Too many requests" }), "unavailable");
+  assert.equal(classifyPasswordGrant(500, { message: "database unavailable" }), "unavailable");
+  assert.equal(classifyPasswordGrant(200, {}), "unavailable");
+});
+
+test("confirmation verify is a POST body and GET pages do not call it", () => {
+  assert.deepEqual(gotrueVerifyBody("signup", " hash "), { type: "signup", token_hash: "hash" });
+  assert.deepEqual(gotrueVerifyBody("email", "hash"), { type: "email", token_hash: "hash" });
+  assert.deepEqual(gotrueVerifyBody("recovery", "hash"), { type: "recovery", token_hash: "hash" });
+  assert.equal(signupVerifyType("signup"), "signup");
+  assert.equal(signupVerifyType("email"), "email");
+  assert.equal(signupVerifyType(""), "signup");
+  assert.equal(signupVerifyType("recovery"), null);
+
+  const confirm = readFileSync(new URL("../app/signup/confirm/page.tsx", import.meta.url), "utf8");
+  assert.match(confirm, /actionConfirmSupabaseHash/);
+  assert.match(confirm, /i_signup_confirm_email/);
+  assert.doesNotMatch(confirm, /<(ConfirmSupabaseHash|ConfirmToken)\b/);
+  assert.doesNotMatch(confirm, /useEffect/);
+  const verify = readFileSync(new URL("../app/signup/verify/page.tsx", import.meta.url), "utf8");
+  assert.match(verify, /n:\s*2/);
+  assert.match(verify, /name="nextEmail"[\s\S]*name="password"/);
+  const reset = readFileSync(new URL("../app/reset/page.tsx", import.meta.url), "utf8");
+  assert.match(reset, /actionVerifyRecovery/);
+  assert.match(reset, /type=recovery|name="type" value="recovery"/);
+  assert.doesNotMatch(reset, /verifyRecoveryTokenHash\(/);
 });
 
 test("a hash access_token is forwarded to /signup/confirm and not looped", () => {

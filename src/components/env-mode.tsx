@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type CSSProperties } from "react";
 import { actionGoLive } from "@/server/env-actions";
+import { PendingSubmit } from "./pending-submit";
 import type { OrgEnvironment } from "@/server/org-scope";
 import { useT } from "./locale";
 
@@ -65,10 +66,7 @@ export function EnvBanner() {
   const t = useT();
   return (
     <div className="env-banner" id="envBanner" data-testid="env-banner" role="status">
-      <span>
-        🧪 <b>{t("i_env_banner_title")}</b>
-      </span>
-      <span>{t("i_env_banner_body")}</span>
+      <b>{t("i_env_banner_title")}</b>
       <Link href="/m/env" data-testid="env-banner-live">
         {t("i_golive_start")} →
       </Link>
@@ -146,15 +144,14 @@ export function GoLiveForm({
       {liveEnabled ? null : (
         <p data-testid="gl-live-locked">{t("i_live_locked")}</p>
       )}
-      <button
+      <PendingSubmit
         className="btn pri"
-        type="submit"
-        data-testid="gl-confirm"
+        idle={t("i_golive_start")}
+        pending={t("i_golive_pending")}
+        testId="gl-confirm"
         disabled={!allowed || !liveEnabled}
         style={{ opacity: 1 }}
-      >
-        {t("i_golive_start")}
-      </button>
+      />
     </form>
   );
 }

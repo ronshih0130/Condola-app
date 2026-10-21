@@ -159,12 +159,14 @@ export function Sidebar({
   tickets,
   role,
   showReset,
+  showDemo,
 }: {
   firm: string;
   pending: number;
   tickets: number;
   role: OrgRole | null;
   showReset: boolean;
+  showDemo: boolean;
 }) {
   const t = useT();
   const path = usePathname() || "/m";
@@ -179,7 +181,11 @@ export function Sidebar({
         <div className="av">{firm.slice(0, 1)}</div>
         <div>
           <div className="b">{firm}</div>
-          <div className="tiny muted">{t("i_demo_only")}</div>
+          {showDemo ? (
+            <div className="tiny muted" data-testid="demo-badge">
+              {t("i_demo_only")}
+            </div>
+          ) : null}
         </div>
       </div>
       {can(role, "props.edit" as PermKey) ? (

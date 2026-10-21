@@ -15,6 +15,7 @@ import {
 import { isPlatformAdmin, setGoLiveLock } from "./platform";
 import { appCookieOptions } from "./public-origin";
 import { getSession } from "./session";
+import { signupVerifyType } from "./signup-gotrue";
 import {
   changeSignupEmail,
   confirmSignupToken,
@@ -105,15 +106,17 @@ export async function actionChangeSignupEmail(formData: FormData) {
   redirect(`/signup/verify?${params.toString()}`);
 }
 
-export async function actionConfirmToken(token: string) {
-  const result = await confirmSignupToken(token, await meta());
+export async function actionConfirmToken(formData: FormData) {
+  const result = await confirmSignupToken(text(formData.get("token")), await meta());
   if (!result.ok) redirect("/signup/confirm?expired=1");
   await setSession(result.token);
   redirect("/signup/firm");
 }
 
-export async function actionConfirmSupabaseHash(tokenHash: string) {
-  const result = await confirmSupabaseTokenHash(tokenHash, await meta());
+export async function actionConfirmSupabaseHash(formData: FormData) {
+  const type = signupVerifyType(text(formData.get("type")));
+  if (!type) redirect("/signup/confirm?expired=1");
+  const result = await confirmSupabaseTokenHash(text(formData.get("token_hash")), type, await meta());
   if (!result.ok) redirect("/signup/confirm?expired=1");
   await setSession(result.token);
   redirect("/signup/firm");

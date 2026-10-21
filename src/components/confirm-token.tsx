@@ -1,28 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { actionConfirmSupabase, actionConfirmSupabaseHash, actionConfirmToken } from "@/server/signup-actions";
+import { actionConfirmSupabase } from "@/server/signup-actions";
 
-export function ConfirmToken({ token }: { token: string }) {
-  const [started, setStarted] = useState(false);
-  useEffect(() => {
-    if (started || !token) return;
-    setStarted(true);
-    void actionConfirmToken(token);
-  }, [started, token]);
-  return null;
-}
-
-export function ConfirmSupabaseHash({ tokenHash }: { tokenHash: string }) {
-  const [started, setStarted] = useState(false);
-  useEffect(() => {
-    if (started || !tokenHash) return;
-    setStarted(true);
-    void actionConfirmSupabaseHash(tokenHash);
-  }, [started, tokenHash]);
-  return null;
-}
-
+/** Hash fragments are not sent on GET, so a scanner cannot consume an access_token by prefetching. */
 export function ConfirmHash() {
   const [started, setStarted] = useState(false);
   useEffect(() => {

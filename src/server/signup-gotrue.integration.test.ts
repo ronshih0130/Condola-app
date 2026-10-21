@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { verifyRecoveryTokenHash } from "./auth";
 import { query } from "./db";
-import { startSignup } from "./signup";
+import { confirmSupabaseTokenHash, startSignup } from "./signup";
 
 const meta = { ua: "signup-gotrue", ip: "127.0.0.1" };
 
@@ -127,5 +128,60 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
       await query(`DELETE FROM funnel_events WHERE user_id = ANY($1::uuid[])`, [users]).catch(() => undefined);
       await query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [users]).catch(() => undefined);
     }
+  }
+});
+
+test("token_hash confirmation and recovery verify only run when POSTed", async () => {
+  const saved = { url: process.env.SUPABASE_URL, anon: process.env.SUPABASE_ANON_KEY, fetch: global.fetch };
+  const email = `confirm.plus+tag.${Date.now().toString(36)}@example.com`;
+  const calls: { url: string; body: string }[] = [];
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_ANON_KEY = "test-anon";
+  const inserted = await query<{ id: string }>(
+    `INSERT INTO auth.users (email, encrypted_password, raw_user_meta_data, role, aud)
+     VALUES ($1, crypt('Fresh1234', gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
+     RETURNING id::text`,
+    [email],
+  );
+  const userId = inserted.rows[0].id;
+  global.fetch = async (input, init) => {
+    calls.push({ url: String(input), body: String(init?.body ?? "") });
+    return new Response(JSON.stringify({ user: { id: userId, email } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    assert.equal(calls.length, 0);
+    const confirmed = await confirmSupabaseTokenHash("signup-hash", "email", meta);
+    assert.equal(confirmed.ok, true);
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url, /\/auth\/v1\/verify$/);
+    assert.deepEqual(JSON.parse(calls[0].body), { type: "email", token_hash: "signup-hash" });
+    const marked = await query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM funnel_events WHERE event_type = 'email_confirmed' AND user_id = $1`,
+      [userId],
+    );
+    assert.equal(marked.rows[0].n, 1);
+    const recovery = await verifyRecoveryTokenHash("recovery-hash");
+    assert.equal(recovery.ok, true);
+    assert.deepEqual(JSON.parse(calls[1].body), { type: "recovery", token_hash: "recovery-hash" });
+    if (recovery.ok) {
+      const reset = await query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM auth_password_resets WHERE user_id = $1 AND used_at IS NULL`,
+        [userId],
+      );
+      assert.equal(reset.rows[0].n, 1);
+    }
+  } finally {
+    global.fetch = saved.fetch;
+    if (saved.url === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = saved.url;
+    if (saved.anon === undefined) delete process.env.SUPABASE_ANON_KEY;
+    else process.env.SUPABASE_ANON_KEY = saved.anon;
+    await query(`DELETE FROM auth_password_resets WHERE user_id = $1`, [userId]).catch(() => undefined);
+    await query(`DELETE FROM auth_sessions WHERE user_id = $1`, [userId]).catch(() => undefined);
+    await query(`DELETE FROM funnel_events WHERE user_id = $1`, [userId]).catch(() => undefined);
+    await query(`DELETE FROM auth.users WHERE id = $1`, [userId]).catch(() => undefined);
   }
 });

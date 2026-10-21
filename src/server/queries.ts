@@ -27,6 +27,54 @@ export async function loadTryout(session: Session): Promise<Tryout> {
   }
 }
 
+export async function loadManagerChrome(session: Session) {
+  const empty = {
+    flags: EMPTY_TRYOUT,
+    firm: { name: "", bankName: "", last5: "", defaultLocale: "zh-TW" as const },
+    badge: { pending: 0, tickets: 0 },
+  };
+  try {
+    return await tx(session.userId, async (client) => {
+      const row = await maybe<{ settings: { tryout?: Partial<Tryout> }; name: string; default_locale: string }>(
+        client,
+        `SELECT settings, name, default_locale FROM organizations WHERE id = $1`,
+        [session.orgId],
+      );
+      const flags = row?.settings?.tryout ?? {};
+      const bank = await maybe<{ bank_name: string; account_last5: string }>(
+        client,
+        `SELECT bank_name, account_last5 FROM bank_accounts
+          WHERE org_id = $1 AND archived_at IS NULL AND show_to_tenants ORDER BY created_at LIMIT 1`,
+        [session.orgId],
+      );
+      const countsRow = await maybe<{ pending: string; tickets: string }>(
+        client,
+        `SELECT
+           (SELECT count(*)::text FROM payments WHERE org_id = $1 AND status = 'submitted') AS pending,
+           (SELECT count(*)::text FROM maintenance_tickets WHERE org_id = $1 AND status NOT IN ('resolved','closed','cancelled')) AS tickets`,
+        [session.orgId],
+      );
+      return {
+        flags: {
+          property: Boolean(flags.property),
+          lease: Boolean(flags.lease),
+          statement: Boolean(flags.statement),
+          repair: Boolean(flags.repair),
+        },
+        firm: {
+          name: row?.name ?? "",
+          bankName: bank?.bank_name ?? "",
+          last5: bank?.account_last5 ?? "",
+          defaultLocale: (row?.default_locale === "en" ? "en" : "zh-TW") as "zh-TW" | "en",
+        },
+        badge: { pending: Number(countsRow?.pending ?? 0), tickets: Number(countsRow?.tickets ?? 0) },
+      };
+    });
+  } catch {
+    return empty;
+  }
+}
+
 export async function loadFirm(session: Session) {
   return tx(session.userId, async (client) => {
     const org = await maybe<{ name: string; default_locale: string }>(

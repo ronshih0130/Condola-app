@@ -8,7 +8,7 @@ import { recordFunnel } from "./funnel";
 import { previewPartnerCode, redeemPartnerCode } from "./partners";
 import { passwordAcceptable } from "./password";
 import { openSandboxFirm } from "./sandbox";
-import { gotrueEndpoint, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
+import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
 import type { Session } from "./types";
 
 const VERIFY_HOURS = 24;
@@ -302,20 +302,21 @@ export async function confirmSupabaseAccessToken(accessToken: string, meta: Requ
   return { ok: true as const, token: sessionToken };
 }
 
-export async function confirmSupabaseTokenHash(tokenHash: string, meta: RequestMeta) {
+export async function confirmSupabaseTokenHash(tokenHash: string, type: "signup" | "email", meta: RequestMeta) {
   const { url, anon } = supabaseAuth();
-  if (!url || !anon || !tokenHash.trim()) return { ok: false as const, error: "expired" as const };
+  const hash = tokenHash.trim();
+  if (!url || !anon || !hash) return { ok: false as const, error: "expired" as const };
   const response = await fetch(`${url}/auth/v1/verify`, {
     method: "POST",
     headers: { apikey: anon, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "signup", token_hash: tokenHash.trim() }),
+    body: JSON.stringify(gotrueVerifyBody(type, hash)),
   });
   if (!response.ok) return { ok: false as const, error: "expired" as const };
-  const body = (await response.json()) as { user?: { id?: string; email?: string } };
-  if (!body.user?.id) return { ok: false as const, error: "expired" as const };
-  const email = normalizeEmail(body.user.email || "") || body.user.email || "";
-  await markConfirmed(body.user.id, email);
-  const sessionToken = await createSession(body.user.id, true, meta);
+  const user = parseGotrueUserId(await response.json().catch(() => ({})));
+  if (!user) return { ok: false as const, error: "expired" as const };
+  const email = normalizeEmail(user.email) || user.email;
+  await markConfirmed(user.id, email);
+  const sessionToken = await createSession(user.id, true, meta);
   return { ok: true as const, token: sessionToken };
 }
 

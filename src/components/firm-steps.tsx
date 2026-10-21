@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PendingSubmit } from "./pending-submit";
 import { useT } from "./locale";
 import { actionCreateFirm } from "@/server/signup-actions";
 
@@ -16,12 +17,12 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
         <li className={step >= 3 ? "on" : ""}>3</li>
         <li className={step >= 4 ? "on" : ""}>4</li>
       </ol>
-      <p className="small muted">{t("i_signup_step", { n: step })}</p>
+      <p className="small muted" data-testid="signup-step-label">{t("i_signup_step", { n: step })}</p>
+      <h1>{step === 3 ? t("i_signup_kind_title") : t("i_signup_firm_details")}</h1>
       {error ? <div className="alert bad">{t("i_required")}</div> : null}
       <input type="hidden" name="kind" value={kind} />
       {step === 3 ? (
         <fieldset className="col" data-testid="signup-kind">
-          <legend className="f">{t("i_signup_kind_title")}</legend>
           <label className="radio">
             <input type="radio" name="kind-pick" checked={kind === "firm"} onChange={() => setKind("firm")} data-testid="kind-firm" />
             <span>{t("i_signup_kind_firm")}</span>
@@ -55,9 +56,7 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
             <input className="inp" name="partnerCode" defaultValue={partnerCode} data-testid="firm-code" />
           </div>
           <p className="small" data-testid="signup-admin-note">{t("i_signup_admin_note")}</p>
-          <button className="btn pri" type="submit" data-testid="firm-submit">
-            {t("i_signup_create")}
-          </button>
+          <PendingSubmit className="btn pri" idle={t("i_signup_create")} pending={t("i_signup_submitting")} testId="firm-submit" />
         </div>
       )}
     </form>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PendingSubmit } from "./pending-submit";
 import { useT } from "./locale";
 import { actionPreviewCode, actionStartSignup } from "@/server/signup-actions";
 
@@ -49,7 +50,11 @@ export function SignupForm({ error }: { error?: string }) {
           value={code}
           autoComplete="off"
           data-testid="signup-code"
-          onChange={(event) => setCode(event.target.value)}
+          onChange={(event) => {
+            setCode(event.target.value);
+            setNote("");
+            setBad(false);
+          }}
         />
         <div className="hint">{t("i_signup_code_hint")}</div>
         <button
@@ -85,9 +90,7 @@ export function SignupForm({ error }: { error?: string }) {
           </p>
         ) : null}
       </div>
-      <button className="btn pri block" type="submit" data-testid="signup-submit">
-        {t("i_signup_submit")}
-      </button>
+      <PendingSubmit className="btn pri block" idle={t("i_signup_submit")} pending={t("i_signup_submitting")} testId="signup-submit" />
       <p className="small">
         <a href="/forgot">{t("i_forgot")}</a>
         {" · "}
