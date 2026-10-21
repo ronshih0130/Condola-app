@@ -145,6 +145,20 @@ function setEnv(key: string, value: string | undefined) {
   else process.env[key] = value;
 }
 
+test("a sandbox session rewrites a retired sample avenue to the Taichung sample street", () => {
+  const sandbox = readFileSync(new URL("./sandbox.ts", import.meta.url), "utf8");
+  const session = readFileSync(new URL("./session.ts", import.meta.url), "utf8");
+  assert.match(sandbox, /export const RETIRED_SAMPLE_ADDRESS = "台中市西區範例路 1 號"/);
+  assert.match(sandbox, /address_display LIKE '%' \|\| \$4 \|\| '%'/);
+  assert.match(sandbox, /範例大道/);
+  assert.match(session, /correctRetiredSampleAddresses\(client, firm\.orgId\)/);
+  assert.match(session, /correctRetiredSampleAddresses\(client, sandboxId\)/);
+  const building = parseSampleCsv(SANDBOX_SAMPLE_CSV).filter((row) => row.property.includes("青埔"));
+  assert.ok(building.length > 0);
+  for (const row of building) assert.equal(row.address, "台中市西區範例路 1 號");
+  assert.equal(SANDBOX_SAMPLE_CSV.includes("示" + "範"), false);
+});
+
 test("the demo production guard still refuses to start", () => {
   const previous = {
     DEMO_MODE: process.env.DEMO_MODE,

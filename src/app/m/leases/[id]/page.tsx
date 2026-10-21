@@ -13,6 +13,7 @@ import { majorField } from "@/server/portfolio";
 import { leaseTermsEditable } from "@/server/lease-rules";
 import { portalLoginReady } from "@/server/portal-invite";
 import { leaseDetail, threadMessages } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export default async function LeasePage({
       <PageHeader
         title={
           <>
-            {lease.tenant} <span className="small muted">{lease.place}</span>
+            {displaySampleName(lease.tenant)} <span className="small muted">{displaySampleName(lease.place)}</span>
           </>
         }
         crumb={<Link href="/m/leases">{t("s_fba85ae")}</Link>}
@@ -101,7 +102,7 @@ export default async function LeasePage({
             </table>
           </div>
           <div className="card pad">
-            <h3>{lease.tenant}</h3>
+            <h3>{displaySampleName(lease.tenant)}</h3>
             <p data-testid="tenant-phone">{lease.phone || "•••"}</p>
             <p className="small muted">{lease.email}</p>
             {showDemoLineCopy(session.environment) && lease.line_user_id ? <p data-testid="tenant-line-id">{lease.line_user_id}</p> : null}

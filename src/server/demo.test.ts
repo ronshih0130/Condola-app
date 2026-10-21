@@ -155,12 +155,13 @@ test("demo LINE copy is live-hidden and shown for DEMO_MODE or a sandbox firm", 
   const notify = readFileSync(new URL("../app/m/notify/page.tsx", import.meta.url), "utf8");
   const account = readFileSync(new URL("../app/m/account/page.tsx", import.meta.url), "utf8");
   const login = readFileSync(new URL("../app/login/page.tsx", import.meta.url), "utf8");
-  for (const source of [tenant, notify, account]) {
+  for (const source of [tenant, account]) {
     assert.match(source, /showDemoLineCopy\(session\.environment\)/);
   }
   assert.match(login, /showDemoLineCopy\(null\)/);
   assert.match(notify, /i_notify_empty/);
-  assert.match(notify, /demoLine \? \(/);
+  assert.doesNotMatch(notify, /i_line_stub/);
+  assert.doesNotMatch(notify, /showDemoLineCopy/);
 
   const unused = ["s_26e8a90", "s_a24063a"];
   const hits: string[] = [];

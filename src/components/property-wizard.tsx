@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useMountSubmitToken } from "./submit-token";
 import { exampleRoomCharges, exampleSamplesForRooms } from "@/electric-example";
 import { errorText } from "@/i18n/errors";
 import { phoneInputInvalid } from "@/server/lease-rules";
@@ -79,7 +80,7 @@ export function PropertyWizard({
   const [submitReady, setSubmitReady] = useState(true);
   const [saving, setSaving] = useState(false);
   const armSubmit = useRef<number | null>(null);
-  const submitToken = useId();
+  const submitToken = useMountSubmitToken();
   const blocked = false;
 
   useEffect(() => {
@@ -92,9 +93,14 @@ export function PropertyWizard({
   const rateN = Number(rate);
   const wholeHome = rooms.some((room) => room.type === "whole_home");
 
+  const wholeUnit = rentalMode === "whole_unit";
   const preview = useMemo(() => {
     const pricedRate = rateN > 0 ? rateN : 6;
-    const labels = filledRooms.length ? filledRooms.map((room, index) => room.label.trim() || String.fromCharCode(65 + index)) : ["A", "B"];
+    const labels = wholeUnit
+      ? [rooms[0]?.label.trim() || "整層"]
+      : filledRooms.length
+        ? filledRooms.map((room, index) => room.label.trim() || String.fromCharCode(65 + index))
+        : ["A", "B"];
     const samples = exampleSamplesForRooms(labels.length);
     const priced = exampleRoomCharges(pricedRate, samples, currency === "TWD");
     if (!priced) return [];
@@ -103,7 +109,7 @@ export function PropertyWizard({
       kwh: priced.kwh[index],
       amount: priced.lines[index],
     }));
-  }, [rateN, filledRooms, currency]);
+  }, [rateN, filledRooms, currency, wholeUnit, rooms]);
 
   function gap(throughStep: number) {
     if (!name.trim()) return "i_property_name";
@@ -112,6 +118,7 @@ export function PropertyWizard({
     if (phoneInputInvalid(ownerPhone, phoneCode)) return "i_phone_mobile";
     if (ownerMode === "new" && !ownerName.trim()) return "s_0c5acea";
     if (throughStep >= 3 && !floor.trim()) return "i_floor";
+    if (throughStep >= 3 && rentalMode === "whole_unit" && !rooms[0]?.label.trim()) return "s_8569bc8";
     if (throughStep >= 3 && rentalMode === "by_room") {
       if (wholeHome && filledRooms.length !== 1) return "s_8569bc8";
       if (!filledRooms.length || filledRooms.some((room) => !room.label.trim())) return "s_8569bc8";
@@ -145,6 +152,13 @@ export function PropertyWizard({
   const serverField = state.field || (state.error === "errors.phone" ? "i_phone_mobile" : "");
   const namedField = fieldError || (serverField && (state.error === "errors.required" || state.error === "errors.amount" || state.error === "errors.phone") ? serverField : "");
 
+  function chooseWholeUnit() {
+    setRentalMode("whole_unit");
+    setRooms((current) => [{ ...emptyRoom(), rent: current[0]?.rent ?? "", label: "整層", type: "whole_home" }]);
+    setExtras([]);
+    setFieldError("");
+  }
+
   function updateRoom(index: number, patch: Partial<RoomDraft>) {
     if (patch.type === "whole_home") {
       setRooms([{ ...rooms[index], ...patch }]);
@@ -166,7 +180,7 @@ export function PropertyWizard({
       onKeyDownCapture={blockImplicitEnter}
       onSubmit={(event) => {
         const submitter = (event.nativeEvent as SubmitEvent).submitter;
-        if (!(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-property" || !submitReady || saving) {
+        if (!(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-property" || !submitReady || saving || !submitToken) {
           event.preventDefault();
           return;
         }
@@ -270,7 +284,7 @@ export function PropertyWizard({
             <span>{t("i_by_room")}</span>
           </label>
           <label className="radio">
-            <input type="radio" name="rentalMode" value="whole_unit" checked={rentalMode === "whole_unit"} onChange={() => setRentalMode("whole_unit")} />
+            <input type="radio" name="rentalMode" value="whole_unit" checked={rentalMode === "whole_unit"} onChange={chooseWholeUnit} />
             <span>{t("i_whole_unit")}</span>
           </label>
         </div>
@@ -279,7 +293,7 @@ export function PropertyWizard({
         <div className="card pad" style={{ maxWidth: 760 }}>
           <h3>{t("i_sec_rooms")}</h3>
           <p className="hint">{t("i_units_hint")}</p>
-          <input type="hidden" name="unitCount" value={1 + extras.length} />
+          <input type="hidden" name="unitCount" value={wholeUnit ? 1 : 1 + extras.length} />
           <input type="hidden" name="unitLabel" data-testid="unit-label" value={unitLabel || floor} onChange={(event) => setUnitLabel(event.target.value)} />
           <div className="unit-card">
             <div className="grid2">
@@ -297,20 +311,23 @@ export function PropertyWizard({
               <input className="inp" name="doorSupplement" placeholder={t("i_door_ph")} value={door} onChange={(event) => setDoor(event.target.value)} />
             </div>
             </div>
-            <input type="hidden" name="roomCount" value={rentalMode === "whole_unit" ? 0 : rooms.length} />
-            {rentalMode === "whole_unit" ? null : rooms.map((room, index) => (
+            <input type="hidden" name="roomCount" value={wholeUnit ? 1 : rooms.length} />
+            {(wholeUnit ? rooms.slice(0, 1) : rooms).map((room, index) => (
               <div className="room-row" key={index}>
                 <div className="fg">
                   <label className="f">{t("i_room_name")}</label>
                   <input
                     className="inp"
                     name={`room${index}label`}
-                    data-testid={`room-${index}-label`}
-                    placeholder={t(index === 0 ? "i_ph_room_a" : index === 1 ? "i_ph_room_b" : "i_ph_room_c")}
+                    data-testid={wholeUnit ? "whole-unit-name" : `room-${index}-label`}
+                    placeholder={wholeUnit ? "整層" : t(index === 0 ? "i_ph_room_a" : index === 1 ? "i_ph_room_b" : "i_ph_room_c")}
                     value={room.label}
                     onChange={(event) => updateRoom(index, { label: event.target.value })}
                   />
                 </div>
+                {wholeUnit ? (
+                  <input type="hidden" name={`room${index}type`} value="whole_home" />
+                ) : (
                 <div className="fg">
                   <label className="f">{t("i_room_type")}</label>
                   <select
@@ -328,24 +345,28 @@ export function PropertyWizard({
                     ))}
                   </select>
                 </div>
+                )}
                 <div className="fg">
                   <label className="f">{t("i_base_rent")}</label>
                   <input
                     className="inp"
                     name={`room${index}rent`}
-                    data-testid={`room-${index}-rent`}
+                    data-testid={wholeUnit ? "whole-unit-rent" : `room-${index}-rent`}
                     inputMode="decimal"
                     placeholder={t("i_ph_rent")}
                     value={room.rent}
                     onChange={(event) => updateRoom(index, { rent: event.target.value })}
                   />
                 </div>
+                {wholeUnit ? null : (
                 <button className="btn icon" type="button" aria-label={t("i_delete_room")} data-testid={`remove-room-${index}`} onClick={() => setRooms(rooms.filter((_, roomIndex) => roomIndex !== index))}>
                   ×
                 </button>
+                )}
               </div>
             ))}
-            {wholeHome ? <p className="hint" data-testid="whole-home-hint">{t("i_whole_home_hint")}</p> : null}
+            {wholeUnit ? <p className="hint" data-testid="whole-unit-hint">{t("i_whole_unit_hint")}</p> : null}
+            {!wholeUnit && wholeHome ? <p className="hint" data-testid="whole-home-hint">{t("i_whole_home_hint")}</p> : null}
             {namedField === "s_8569bc8" || namedField === "i_unit_label" || namedField === "i_floor" ? (
               <p className="errmsg">{t("i_step_incomplete", { field: t(namedField) })}</p>
             ) : null}
@@ -355,7 +376,7 @@ export function PropertyWizard({
               </button>
             )}
           </div>
-          {extras.map((unit, index) => {
+          {wholeUnit ? null : extras.map((unit, index) => {
             const unitIndex = index + 1;
             return (
               <div className="unit-card" key={unitIndex}>
@@ -395,9 +416,11 @@ export function PropertyWizard({
               </div>
             );
           })}
+          {wholeUnit ? null : (
           <button className="btn" type="button" data-testid="add-unit" onClick={() => setExtras([...extras, { floor: "", door: "", rooms: [emptyRoom()] }])}>
             + {t("i_add_unit")}
           </button>
+          )}
         </div>
       </div>
       <div hidden={step !== 4}>

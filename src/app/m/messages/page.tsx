@@ -2,6 +2,7 @@ import Link from "next/link";
 import { makeT } from "@/i18n";
 import { PageHeader } from "@/components/ui";
 import { listThreads } from "@/server/queries";
+import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +24,9 @@ export default async function MessagesPage() {
                 <tr key={thread.id}>
                   <td>
                     <Link href={`/m/messages/${thread.id}`}>
-                      <b>{thread.tenant}</b>
+                      <b>{displaySampleName(thread.tenant)}</b>
                     </Link>
-                    <div className="small muted">{thread.place}</div>
+                    <div className="small muted">{displaySampleName(thread.place)}</div>
                     <div className="small">{thread.preview}</div>
                   </td>
                 </tr>

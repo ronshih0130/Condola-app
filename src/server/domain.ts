@@ -16,6 +16,7 @@ import {
   toMinor,
 } from "./money";
 import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/lease-confirm";
+import { claimIdempotentSubmit, idempotencyLockKey, stableStringify } from "@/idempotency";
 import { typedAddressDisplay } from "@/property-address";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
@@ -126,6 +127,7 @@ async function insertPropertyUnit(
     door: string;
     rentalMode: "whole_unit" | "by_room";
     areaUnit: string;
+    baseRentMinor: number | null;
     rooms: { label: string; roomType: string; baseRentMajor: number }[];
   },
 ) {
@@ -133,15 +135,15 @@ async function insertPropertyUnit(
   const unit = door
     ? await one<{ id: string }>(
         client,
-        `INSERT INTO units (org_id, property_id, label, floor, door_supplement, rental_mode, area_unit)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-        [input.orgId, input.propertyId, input.label, input.floor, door, input.rentalMode, input.areaUnit],
+        `INSERT INTO units (org_id, property_id, label, floor, door_supplement, rental_mode, area_unit, base_rent_minor)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [input.orgId, input.propertyId, input.label, input.floor, door, input.rentalMode, input.areaUnit, input.baseRentMinor],
       )
     : await one<{ id: string }>(
         client,
-        `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-        [input.orgId, input.propertyId, input.label, input.floor, input.rentalMode, input.areaUnit],
+        `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit, base_rent_minor)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [input.orgId, input.propertyId, input.label, input.floor, input.rentalMode, input.areaUnit, input.baseRentMinor],
       );
   const roomIds: string[] = [];
   for (const room of input.rooms) {
@@ -195,15 +197,52 @@ async function insertPropertyElectric(
   }
 }
 
+function propertySubmitPayload(input: PropertyInput) {
+  return {
+    name: input.name.trim(),
+    city: input.city.trim(),
+    district: input.district.trim(),
+    street: input.street.trim(),
+    currency: input.currency,
+    ownerMode: input.ownerMode,
+    ownerName: input.ownerName.trim(),
+    ownerPhone: input.ownerPhone.trim(),
+    ownerEmail: input.ownerEmail.trim(),
+    canViewTenantPhone: input.canViewTenantPhone,
+    unitLabel: input.unitLabel.trim(),
+    floor: input.floor.trim(),
+    door: (input.doorSupplement ?? "").trim(),
+    rentalMode: input.rentalMode,
+    rooms: input.rooms.map((room) => ({
+      label: room.label.trim(),
+      roomType: room.roomType,
+      baseRentMajor: room.baseRentMajor,
+    })),
+    extraUnits: (input.extraUnits ?? []).map((unit) => ({
+      label: unit.label.trim(),
+      floor: unit.floor.trim(),
+      door: unit.door.trim(),
+      rooms: unit.rooms.map((room) => ({
+        label: room.label.trim(),
+        roomType: room.roomType,
+        baseRentMajor: room.baseRentMajor,
+      })),
+    })),
+    electric: input.electric ?? null,
+  };
+}
+
 export async function createProperty(session: Session, input: PropertyInput) {
   assertStaff(session, ["admin", "manager"]);
   if (!input.name.trim()) throw new FlowError("errors.required", { field: "i_property_name" });
   if (!input.city.trim()) throw new FlowError("errors.required", { field: "i_city" });
   if (!input.street.trim()) throw new FlowError("errors.required", { field: "i_address" });
   if (!input.unitLabel.trim() && !input.floor.trim()) throw new FlowError("errors.required", { field: "i_floor" });
-  const posted = input.rentalMode === "whole_unit" ? [] : input.rooms;
+  const wholeUnit = input.rentalMode === "whole_unit";
+  const posted = wholeUnit ? input.rooms.slice(0, 1) : input.rooms;
   const rooms = posted.filter((room) => room.label.trim() || room.baseRentMajor > 0);
   if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  if (wholeUnit && rooms.length !== 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
   if (input.rentalMode === "by_room" && rooms.length < 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
   if (rooms.some((room) => room.roomType === "whole_home") && rooms.length !== 1) {
     throw new FlowError("errors.required", { field: "s_8569bc8" });
@@ -218,27 +257,38 @@ export async function createProperty(session: Session, input: PropertyInput) {
 
   const created = await tx(session.userId, async (client) => {
     const submitToken = (input.submitToken || "").trim().slice(0, 80);
+    const submitHash = submitToken ? sha256(stableStringify(propertySubmitPayload(input))) : "";
     if (submitToken) {
-      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property-submit:${session.orgId}:${submitToken}`]);
-      const sameSubmit = await maybe<{ id: string }>(
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+        idempotencyLockKey("property", session.orgId, session.userId, submitToken),
+      ]);
+      const prior = await many<{ id: string; hash: string }>(
+        client,
+        `SELECT id::text, coalesce(address->>'submitHash', '') AS hash
+           FROM properties
+          WHERE org_id = $1
+            AND address->>'submitUser' = $2
+            AND address->>'submitToken' = $3`,
+        [session.orgId, session.userId, submitToken],
+      );
+      const claim = claimIdempotentSubmit(
+        prior.map((row) => ({ id: row.id, orgId: session.orgId, userId: session.userId, token: submitToken, hash: row.hash })),
+        { orgId: session.orgId, userId: session.userId, token: submitToken, hash: submitHash },
+      );
+      if (claim.action === "replay") {
+        return { propertyId: claim.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
+      }
+    } else {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property:${session.userId}:${input.name.trim()}`]);
+      const recent = await maybe<{ id: string }>(
         client,
         `SELECT id FROM properties
-          WHERE org_id = $1 AND address->>'submitToken' = $2
-          ORDER BY created_at DESC
-          LIMIT 1`,
-        [session.orgId, submitToken],
+          WHERE org_id = $1 AND name = $2 AND created_at > now() - interval '20 seconds'
+          ORDER BY created_at DESC LIMIT 1`,
+        [session.orgId, input.name.trim()],
       );
-      if (sameSubmit) return { propertyId: sameSubmit.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
+      if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
     }
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`property:${session.userId}:${input.name.trim()}`]);
-    const recent = await maybe<{ id: string }>(
-      client,
-      `SELECT id FROM properties
-        WHERE org_id = $1 AND name = $2 AND created_at > now() - interval '20 seconds'
-        ORDER BY created_at DESC LIMIT 1`,
-      [session.orgId, input.name.trim()],
-    );
-    if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
     let ownerUserId: string | null = null;
     if (input.ownerMode === "new") {
       ownerUserId = await insertPortalUser(client, { name: input.ownerName.trim(), email: ownerEmail, phone: ownerPhone });
@@ -254,7 +304,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
       city: input.city.trim(),
       district: input.district.trim(),
       street: input.street.trim(),
-      ...(submitToken ? { submitToken } : {}),
+      ...(submitToken ? { submitToken, submitUser: session.userId, submitHash } : {}),
     };
     const display =
       country === "TW"
@@ -333,15 +383,16 @@ export async function createProperty(session: Session, input: PropertyInput) {
     const first = await insertPropertyUnit(client, {
       orgId: session.orgId,
       propertyId: property.id,
-      label: uniqueUnitLabel(input.unitLabel, input.floor, input.doorSupplement ?? "", usedLabels),
+      label: uniqueUnitLabel(wholeUnit ? rooms[0].label : input.unitLabel, input.floor, input.doorSupplement ?? "", usedLabels),
       floor: input.floor.trim() || null,
       door: input.doorSupplement ?? "",
       rentalMode: input.rentalMode,
       areaUnit,
-      rooms,
+      baseRentMinor: wholeUnit ? toMinor(rooms[0]?.baseRentMajor || 0) : null,
+      rooms: wholeUnit ? [] : rooms,
     });
     roomIds.push(...first.roomIds);
-    for (const extra of input.extraUnits ?? []) {
+    for (const extra of wholeUnit ? [] : (input.extraUnits ?? [])) {
       const extraRooms = extra.rooms.filter((room) => room.label.trim() || room.baseRentMajor > 0);
       if (!extra.floor.trim() && !extra.label.trim() && extraRooms.length === 0) continue;
       if (!extra.floor.trim() && !extra.label.trim()) throw new FlowError("errors.required", { field: "i_floor" });
@@ -356,6 +407,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
         door: extra.door,
         rentalMode: "by_room",
         areaUnit,
+        baseRentMinor: null,
         rooms: extraRooms,
       });
       roomIds.push(...inserted.roomIds);

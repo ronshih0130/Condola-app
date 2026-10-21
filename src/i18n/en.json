@@ -1668,6 +1668,7 @@
  "i_add_unit": "Add unit",
  "i_whole_home": "Whole floor home",
  "i_whole_home_hint": "A whole-home room defaults to one room and is rented as the whole home.",
+ "i_whole_unit_hint": "A whole-unit rental is charged as one unit.",
  "i_room_split": "Split suite",
  "i_room_name": "Room name",
  "i_delete_room": "Delete room",

@@ -163,10 +163,10 @@ export default async function DashboardPage({
                   <tr key={row.lease_id} className="click">
                     <Cell>
                       <Link className="hit" href={`/m/leases/${row.lease_id}?tab=ledger`}>
-                        {row.tenant}
+                        {displaySampleName(row.tenant)}
                       </Link>
                     </Cell>
-                    <Cell label={t("i_space")}>{row.place}</Cell>
+                    <Cell label={t("i_space")}>{displaySampleName(row.place)}</Cell>
                     <Cell label={t("i_balance")}>{formatMoney(Number(row.balance), row.currency, session.locale)}</Cell>
                   </tr>
                 ))}
@@ -195,10 +195,10 @@ export default async function DashboardPage({
                 <tr key={row.lease_id} className="click">
                   <Cell>
                     <Link className="hit" href={`/m/leases/${row.lease_id}`}>
-                      {row.tenant}
+                      {displaySampleName(row.tenant)}
                     </Link>
                   </Cell>
-                  <Cell label={t("i_space")}>{row.place}</Cell>
+                  <Cell label={t("i_space")}>{displaySampleName(row.place)}</Cell>
                   <Cell label={t("i_end_date")}>{formatDate(row.end_date, session.locale, session.calendar, dict)}</Cell>
                 </tr>
               ))}

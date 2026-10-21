@@ -45,6 +45,7 @@ test("staff copy names the payments queue 待確認繳款", () => {
   assert.equal(zh.i_none_pending, "沒有待確認的繳款。");
   assert.equal(zh.i_sandbox_plan, "範例公司：資料僅供練習，不會出現在正式公司。範例公司不會實際寄出任何通知。");
   assert.equal(zh.i_whole_home_hint, "整層住家預設僅一間，代表整戶出租。");
+  assert.equal(zh.i_whole_unit_hint, "整層出租以一個單位計租");
   assert.equal(zh.i_sec_property, "物件資料");
   assert.equal(zh.i_sec_rooms, "戶別與房間");
   assert.equal(zh.i_sec_meter, "公用電表與分攤");

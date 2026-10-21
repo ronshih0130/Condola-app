@@ -60,6 +60,12 @@ export default async function PropertyPage({
             <h3>{t("s_a757163")}</h3>
           </div>
           <div className="bd tree">
+            {detail.wholes.map((unit) => (
+              <div className="n" key={unit.id} data-testid="whole-unit-saved">
+                <b>{displaySampleName(unit.label)}</b>
+                <span className="small muted">{formatMoney(Number(unit.base_rent_minor), detail.property.currency, session.locale)}</span>
+              </div>
+            ))}
             {detail.rooms.map((room) => (
               <div className="n" key={room.id}>
                 <b>
@@ -80,9 +86,9 @@ export default async function PropertyPage({
           <h3>{t("i_owner")}</h3>
           <p>
             {detail.owner && can(session.role, "props.edit") ? (
-              <Link href={`/m/owners/${detail.owner.contact_id}`}>{detail.owner.name}</Link>
+              <Link href={`/m/owners/${detail.owner.contact_id}`}>{displaySampleName(detail.owner.name)}</Link>
             ) : (
-              detail.owner?.name
+              detail.owner ? displaySampleName(detail.owner.name) : null
             )}
           </p>
           {detail.owner && (session.role === "admin" || session.role === "manager") ? (
@@ -111,7 +117,7 @@ export default async function PropertyPage({
                 </b>
               </Link>
               <div className="small muted">
-                {repair.place}
+                {displaySampleName(repair.place)}
                 {repair.vendor_name ? ` · ${repair.vendor_name}` : ""}
                 {repair.completed_on ? ` · ${repair.completed_on}` : repair.scheduled_on ? ` · ${repair.scheduled_on}` : ""}
                 {repair.final_cost ? ` · ${formatMoney(repair.final_cost, repair.currency || detail.property.currency, session.locale)}` : ""}

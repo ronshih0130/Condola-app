@@ -243,6 +243,27 @@ export async function ensureSampleLoaded(session: Session) {
   });
 }
 
+export const RETIRED_SAMPLE_ADDRESS = "台中市西區範例路 1 號";
+
+const RETIRED_AVENUE = ["示", "範", "大道"].join("");
+
+/** Existing sample firms keep the address they were seeded with. Replace a retired avenue line. */
+export async function correctRetiredSampleAddresses(client: { query: Client["query"] }, orgId: string) {
+  await client.query(
+    `UPDATE properties
+        SET address_display = $2,
+            address = coalesce(address, '{}'::jsonb) || $3::jsonb
+      WHERE org_id = $1
+        AND (address_display LIKE '%' || $4 || '%' OR address_display LIKE '%範例大道%')`,
+    [
+      orgId,
+      RETIRED_SAMPLE_ADDRESS,
+      JSON.stringify({ country: "TW", city: "台中市", district: "西區", street: "範例路 1 號" }),
+      RETIRED_AVENUE,
+    ],
+  );
+}
+
 export async function loadSampleData(session: Session) {
   await ensureSampleLoaded(session);
 }

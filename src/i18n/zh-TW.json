@@ -1668,6 +1668,7 @@
  "i_add_unit": "新增戶別",
  "i_whole_home": "整層住家",
  "i_whole_home_hint": "整層住家預設僅一間，代表整戶出租。",
+ "i_whole_unit_hint": "整層出租以一個單位計租",
  "i_room_split": "分租套房",
  "i_room_name": "房間名稱",
  "i_delete_room": "刪除房間",
