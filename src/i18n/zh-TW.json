@@ -752,6 +752,7 @@
  "i_required": "還有必填欄位沒有填。請補齊後再送出。",
  "i_generic": "沒有完成。請檢查欄位後再試一次。",
  "i_lease_failed": "租約沒有儲存成功，請稍後再試；若持續發生請聯絡 service@condola.app",
+ "i_lease_network": "租約沒有送出成功，填好的資料都還在，請再送出一次。",
  "i_lease_whole_unit": "此戶為整層出租，請選擇整層而不是房間。",
  "i_field_incomplete": "{field}未完成，請確認後再送出。",
  "i_step_incomplete": "{field}未完成，請確認後再繼續。",

@@ -28,6 +28,10 @@ test("the lease form keeps a new tenant and an existing contact id apart", () =>
   assert.equal(existing.tenantContactId, id);
 
   assert.equal(leaseInputFromForm(form({})).tenantContactId, "");
+  assert.equal(
+    leaseInputFromForm(form({ idempotencyKey: " 00000000-0000-4000-8000-000000000001 " })).idempotencyKey,
+    " 00000000-0000-4000-8000-000000000001 ",
+  );
 });
 
 test("a second tenant contact with the same email is the existing-tenant error", () => {

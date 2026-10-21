@@ -1,9 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { errorText } from "@/i18n/errors";
-import { actionUpdateLease } from "@/server/actions";
+import { actionUpdateLease, type ActionState } from "@/server/actions";
+import { depositReasonEditorOpen } from "@/server/lease-rules";
 import { useT } from "./locale";
+import { callSubmitAction, claimFormSubmit, releaseFormSubmit } from "./submit-once";
 
 function monthsInput(value: string) {
   if (!value.trim()) return "";
@@ -25,12 +28,29 @@ export function LeaseTermsForm({
   updatedAt: string;
 }) {
   const t = useT();
-  const [state, formAction] = useActionState(actionUpdateLease, { error: "" });
+  const router = useRouter();
+  const guard = useRef(false);
+  const [state, formAction, pending] = useActionState(
+    (prev: ActionState, formData: FormData) =>
+      callSubmitAction(
+        guard,
+        () => actionUpdateLease(prev, formData),
+        (): ActionState => ({ error: "errors.leaseFailed" }),
+      ),
+    { error: "" },
+  );
   const [rentValue, setRentValue] = useState(rent);
   const [months, setMonths] = useState(monthsInput(depositMonths));
-  const [reason, setReason] = useState(depositReason);
-  const depositOver = Number(months) > 2;
-  const blocked = depositOver && reason.trim() === "";
+  const [reason, setReason] = useState("");
+  const wasPending = useRef(false);
+  const showReason = depositReasonEditorOpen(months, depositMonths);
+  const blocked = showReason && reason.trim() === "";
+
+  useEffect(() => {
+    if (!pending && state.error) releaseFormSubmit(guard);
+    if (wasPending.current && !pending && !state.error) router.refresh();
+    wasPending.current = pending;
+  }, [pending, state.error, router]);
 
   return (
     <form
@@ -39,7 +59,7 @@ export function LeaseTermsForm({
       data-testid="lease-terms"
       action={formAction}
       onSubmit={(event) => {
-        if (blocked) event.preventDefault();
+        if (blocked || pending || !claimFormSubmit(guard)) event.preventDefault();
       }}
     >
       <h3>{t("i_edit")}</h3>
@@ -76,7 +96,7 @@ export function LeaseTermsForm({
           />
         </div>
       </div>
-      {depositOver ? (
+      {showReason ? (
         <div className="alert warn" data-testid="deposit-alert">
           <div>{t("lease_deposit_over", { months, cap: 2 })}</div>
           <label className="f" style={{ marginTop: 8 }}>{t("lease_deposit_reason")}</label>
@@ -89,6 +109,8 @@ export function LeaseTermsForm({
             onChange={(event) => setReason(event.target.value)}
           />
         </div>
+      ) : Number(months) > 2 ? (
+        <input type="hidden" name="depositReason" value={depositReason} />
       ) : (
         <>
           {depositReason.trim() ? (
@@ -99,7 +121,7 @@ export function LeaseTermsForm({
           <input type="hidden" name="depositReason" value="" />
         </>
       )}
-      <button className="btn pri" type="submit" data-testid="save-lease-terms" disabled={blocked} style={{ marginTop: 12 }}>
+      <button className="btn pri" type="submit" data-testid="save-lease-terms" disabled={blocked || pending} aria-busy={pending || undefined} style={{ marginTop: 12 }}>
         {t("i_save")}
       </button>
     </form>

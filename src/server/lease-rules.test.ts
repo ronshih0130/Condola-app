@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
+import { depositCapSaveAllowed, depositExceedsCap, depositReasonEditorOpen, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 
 test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositExceedsCap(2), false);
@@ -25,11 +25,16 @@ test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositWarnFlag(3, "warn"), false);
   assert.equal(depositWarnFlag(1.5, "warn"), true);
   assert.equal(depositWarnFlag(2, "pass"), false);
+  assert.equal(depositReasonEditorOpen("4", "4.00"), false);
+  assert.equal(depositReasonEditorOpen("4", "3"), true);
+  assert.equal(depositReasonEditorOpen("2", "4"), false);
+  assert.equal(depositReasonEditorOpen("", "3"), false);
 });
 
 test("create and edit lease screens ask for a reason with lease_deposit_over", () => {
   const wizard = readFileSync(new URL("../components/lease-wizard.tsx", import.meta.url), "utf8");
   const edit = readFileSync(new URL("../components/lease-terms-form.tsx", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../app/m/leases/[id]/page.tsx", import.meta.url), "utf8");
   const route = readFileSync(new URL("../app/api/flows/[action]/route.ts", import.meta.url), "utf8");
   const actions = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
   const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
@@ -43,7 +48,12 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(route, /updateLease: \(session, body\) => updateLease\(session, body as never\)/);
   assert.match(actions, /createLeaseFromForm\(session, formData\)/);
   assert.match(actions, /updateLease\(session,/);
+  assert.match(actions, /revalidatePath\(`\/m\/leases\/\$\{leaseId\}`\)/);
   assert.match(wizard, /claimFormSubmit\(submitGuard\)/);
+  assert.match(wizard, /callSubmitAction\(\s*submitGuard/);
+  assert.match(wizard, /errors\.leaseNetwork/);
+  assert.match(wizard, /ensureIdempotencyKey\(idempotencyKey\)/);
+  assert.match(wizard, /name="idempotencyKey"/);
   assert.match(actions, /redirect\(`\/m\/leases\/\$\{created\.leaseId\}\?created=1`\)/);
   assert.doesNotMatch(wizard, /router\.push/);
   assert.match(wizard, /i_lease_slow/);
@@ -58,6 +68,15 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(wizard, /blockImplicitEnter/);
   assert.match(wizard, /ImplicitSubmitSink/);
   assert.match(wizard, /submitter\.dataset\.testid !== "submit-lease"/);
+  assert.match(edit, /callSubmitAction\(\s*guard/);
+  assert.match(edit, /errors\.leaseFailed/);
+  assert.match(edit, /router\.refresh\(\)/);
+  assert.match(edit, /depositReasonEditorOpen/);
+  assert.match(domain, /idempotency_key/);
+  assert.match(domain, /leases_org_idempotency_key_uidx/);
+  assert.match(page, /data-testid="summary-deposit"/);
+  assert.match(page, /data-testid="deposit-override-reason"/);
+  assert.match(page, /key=\{lease\.updated_at\}/);
   assert.match(domain, /export async function createLease/);
   assert.match(domain, /export async function updateLease/);
   assert.match(domain, /savedDepositWarn/);
@@ -68,7 +87,7 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.equal(domain.includes("set_config('app.change_reason', $1, true)`, [override.reason ?? \"\"]"), false);
   assert.equal(domain.includes("set_config('app.change_reason', $1, true)`, [\"\"]"), false);
   assert.match(edit, /lease_terms_locked|updatedAt/);
-  assert.match(readFileSync(new URL("../app/m/leases/[id]/page.tsx", import.meta.url), "utf8"), /lease_terms_locked/);
+  assert.match(page, /lease_terms_locked/);
   const guard = readFileSync(new URL("../../supabase/migrations/20261023090000_lease_deposit_override_check.sql", import.meta.url), "utf8");
   const earlier = readFileSync(new URL("../../supabase/migrations/20261021140000_basic_leases.sql", import.meta.url), "utf8");
   assert.match(earlier, /CREATE TRIGGER trg_lease_deposit_check/);
@@ -76,6 +95,48 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(guard, /leases_deposit_over_cap_requires_override/);
   assert.match(guard, /trg_lease_deposit_check/);
   assert.match(guard, /20261021140000_basic_leases/);
+});
+
+test("a lease idempotency key is a UUID or absent", () => {
+  assert.deepEqual(normalizeIdempotencyKey("  "), { ok: true, value: null });
+  assert.deepEqual(normalizeIdempotencyKey(null), { ok: true, value: null });
+  assert.deepEqual(normalizeIdempotencyKey("00000000-0000-4000-8000-000000000001"), {
+    ok: true,
+    value: "00000000-0000-4000-8000-000000000001",
+  });
+  assert.deepEqual(normalizeIdempotencyKey("00000000-0000-4000-8000-00000000000G"), { ok: false });
+  assert.deepEqual(normalizeIdempotencyKey("retry-1"), { ok: false });
+});
+
+test("the lease idempotency migration is additive and later than shared staging history", () => {
+  const dir = new URL("../../supabase/migrations/", import.meta.url);
+  const names = readdirSync(dir).filter((name) => name.endsWith(".sql")).sort();
+  const ours = names.filter((name) => name.includes("lease_idempotency_key"));
+  assert.deepEqual(ours, ["20261027130000_lease_idempotency_key.sql"]);
+  const stamp = ours[0].slice(0, 14);
+  assert.ok(stamp > "20261023180000");
+  const latestOther = names.filter((name) => name !== ours[0]).map((name) => name.slice(0, 14)).sort().at(-1);
+  assert.ok(latestOther);
+  assert.ok(stamp > latestOther);
+  const sql = readFileSync(new URL(ours[0], dir), "utf8");
+  assert.match(sql, /Version 20261027130000/);
+  assert.doesNotMatch(sql, /Version 20261027120000/);
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS idempotency_key text/);
+  assert.match(sql, /CREATE UNIQUE INDEX IF NOT EXISTS leases_org_idempotency_key_uidx/);
+  assert.match(sql, /ON leases \(org_id, idempotency_key\)/);
+  assert.match(sql, /WHERE idempotency_key IS NOT NULL/);
+  assert.doesNotMatch(sql, /idempotency_key\s+text\s+NOT NULL/);
+  assert.doesNotMatch(sql, /SET NOT NULL/);
+  assert.doesNotMatch(sql, /ADD CONSTRAINT/);
+  assert.doesNotMatch(sql, /CHECK \(/);
+  assert.equal(sql.includes("房東"), false);
+  assert.equal(sql.includes("房客"), false);
+  assert.equal(sql.includes("收款"), false);
+  assert.equal(sql.includes("收租"), false);
+  assert.equal(sql.includes("即將推出"), false);
+  assert.equal(sql.includes("測試模式"), false);
+  assert.equal(sql.includes("範例沙盒"), false);
+  assert.equal(sql.includes("示範"), false);
 });
 
 test("a Taiwan mobile becomes +886 and an international number stays", () => {

@@ -4,14 +4,14 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { errorText } from "@/i18n/errors";
 import { confirmDeposit, confirmSpace, confirmSpaceFromSnapshot, depositMonthsOnHalfStep, formatMajor, nextSpaceSnapshot, twdRentIsWhole } from "@/lease-confirm";
-import { actionCreateLease } from "@/server/actions";
+import { actionCreateLease, type ActionState } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
 import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
 import { PhoneField } from "./phone-field";
 import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
-import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
+import { callSubmitAction, claimFormSubmit, ensureIdempotencyKey, releaseFormSubmit } from "./submit-once";
 
 function amountOk(raw: string) {
   const trimmed = raw.trim();
@@ -39,8 +39,17 @@ export function LeaseWizard({
 }) {
   const t = useT();
   const locale = useLocale();
-  const [state, formAction, pending] = useActionState(actionCreateLease, { error: "" });
   const submitGuard = useRef(false);
+  const idempotencyKey = useRef("");
+  const [state, formAction, pending] = useActionState(
+    (prev: ActionState, formData: FormData) =>
+      callSubmitAction(
+        submitGuard,
+        () => actionCreateLease(prev, formData),
+        (): ActionState => ({ error: "errors.leaseNetwork" }),
+      ),
+    { error: "" },
+  );
   const [submitReady, setSubmitReady] = useState(false);
   const [slowSubmit, setSlowSubmit] = useState(false);
   const armSubmit = useRef<number | null>(null);
@@ -120,6 +129,7 @@ export function LeaseWizard({
   useEffect(() => {
     if (!pending && state.error) {
       releaseFormSubmit(submitGuard);
+      if (state.error === "errors.leaseNetwork") setSubmitReady(true);
       if (slowTimer.current) window.clearTimeout(slowTimer.current);
       slowTimer.current = null;
       setSlowSubmit(false);
@@ -276,6 +286,8 @@ export function LeaseWizard({
           else setStep(4);
           return;
         }
+        const field = event.currentTarget.elements.namedItem("idempotencyKey");
+        if (field instanceof HTMLInputElement) field.value = ensureIdempotencyKey(idempotencyKey);
         if (pending || !claimFormSubmit(submitGuard)) {
           event.preventDefault();
           return;
@@ -287,7 +299,7 @@ export function LeaseWizard({
     >
       <ImplicitSubmitSink />
       <Stepper steps={steps} current={step} />
-      {state.error ? (
+      {state.error && state.error !== "errors.leaseNetwork" ? (
         <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
           {!showLine && state.error === "errors.lineId"
             ? t("i_generic")
@@ -302,6 +314,7 @@ export function LeaseWizard({
           <Link href="/m/leases" data-testid="lease-slow-link">{t("s_fba85ae")}</Link>
         </div>
       ) : null}
+      <input type="hidden" name="idempotencyKey" defaultValue="" />
       <input type="hidden" name="roomId" value={roomId} />
       <input type="hidden" name="tenantName" value={tenant} />
       <input type="hidden" name="tenantPhone" value={phone} />
@@ -658,9 +671,16 @@ export function LeaseWizard({
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady} aria-busy={pending ? true : undefined}>
-            {t("s_79b6c1d")}
-          </button>
+          <div>
+            {state.error === "errors.leaseNetwork" ? (
+              <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
+                {t("i_lease_network")}
+              </div>
+            ) : null}
+            <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady} aria-busy={pending ? true : undefined}>
+              {t("s_79b6c1d")}
+            </button>
+          </div>
         )}
       </div>
     </form>

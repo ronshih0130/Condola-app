@@ -14,6 +14,39 @@ export function releaseFormSubmit(guard: { current: boolean }) {
   guard.current = false;
 }
 
+/** Next redirect() rejects the action so the router can navigate. Anything else stays on the form. */
+export function isNextRedirect(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
+/**
+ * Network errors and other non-redirect throws become onFailure, so the wizard
+ * stays mounted with the same idempotency key. The guard is released either way
+ * a throw happens, and a resolved result keeps it claimed until the form effect
+ * sees an error state. Redirect errors are rethrown for the Next router.
+ */
+export async function callSubmitAction<T>(guard: { current: boolean }, run: () => Promise<T>, onFailure: () => T): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    releaseFormSubmit(guard);
+    if (isNextRedirect(error)) throw error;
+    return onFailure();
+  }
+}
+
+/** One key for this wizard instance. The hidden field is filled before FormData is read. */
+export function ensureIdempotencyKey(holder: { current: string }) {
+  if (!holder.current) holder.current = crypto.randomUUID();
+  return holder.current;
+}
+
 /**
  * Enter commits a select, a textarea newline, and the real submit button.
  * Cancelling it on a select drops the first unit choice, so 下一步 stays disabled.

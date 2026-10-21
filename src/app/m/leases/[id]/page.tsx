@@ -92,12 +92,18 @@ export default async function LeasePage({
                 </tr>
                 <tr>
                   <td>{t("i_rent_label")}</td>
-                  <td>{money(Number(lease.rent))}</td>
+                  <td data-testid="summary-rent">{money(Number(lease.rent))}</td>
                 </tr>
                 <tr>
                   <td>{t("i_deposit_label")}</td>
-                  <td>{money(Number(lease.deposit))}</td>
+                  <td data-testid="summary-deposit">{money(Number(lease.deposit))}</td>
                 </tr>
+                {lease.deposit_override_reason ? (
+                  <tr data-testid="deposit-override-reason">
+                    <td>{t("lease_deposit_reason")}</td>
+                    <td>{lease.deposit_override_reason}</td>
+                  </tr>
+                ) : null}
                 <tr>
                   <td>{t("i_due_day_label")}</td>
                   <td>{lease.due_day}</td>
@@ -139,6 +145,7 @@ export default async function LeasePage({
           signed: Boolean(lease.signed_at) || signatures.some((row) => row.status === "signed"),
         }) ? (
           <LeaseTermsForm
+            key={lease.updated_at}
             leaseId={id}
             rent={majorField(lease.rent, lease.currency)}
             depositMonths={lease.deposit_months ?? ""}
