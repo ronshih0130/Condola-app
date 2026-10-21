@@ -44,6 +44,10 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await expect(page.getByTestId("cap-alert")).toHaveCount(0);
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("wizard-next").click();
+  // Two clicks in one turn. The second must not dispatch another action: that
+  // races the redirect and has thrown a client exception. Playwright does not
+  // observe this Next server-action POST, so the guard itself is unit-tested
+  // and this checks the page does not crash and opens one signing screen.
   await page.getByTestId("submit-lease").evaluate((button: HTMLButtonElement) => {
     button.click();
     button.click();
@@ -57,6 +61,8 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   expect(crashes).toEqual([]);
 
   await page.getByRole("link", { name: "摘要" }).click();
+  await expect(page.getByTestId("deposit-override-reason")).toContainText("屋主同意兩個月以上押金");
+  await expect(page.getByTestId("deposit-alert")).toHaveCount(0);
   await page.getByTestId("deposit-months").fill("4");
   const editAlert = page.getByTestId("deposit-alert");
   await expect(editAlert).toBeVisible();
@@ -71,7 +77,10 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   if (await editError.isVisible().catch(() => false)) {
     throw new Error(await editError.innerText());
   }
-  await expect(page.getByTestId("deposit-reason")).toHaveValue("屋主同意調整為四個月押金");
+  await expect(page.getByTestId("deposit-alert")).toHaveCount(0);
+  await expect(page.getByTestId("deposit-reason")).toHaveCount(0);
+  await expect(page.getByTestId("deposit-override-reason")).toContainText("屋主同意調整為四個月押金");
+  await expect(page.getByTestId("summary-deposit")).toContainText("40,000");
 
   await page.locator(".tabsx").getByRole("link", { name: "簽署與文件" }).click();
   await page.getByTestId("signed-pdf").setInputFiles({
@@ -89,6 +98,8 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await page.getByRole("link", { name: "摘要" }).click();
   await expect(page.getByTestId("tenant-line-id")).toHaveText("U-pilot-line");
   await expect(page.getByText("生效中")).toBeVisible();
+  await expect(page.getByTestId("deposit-override-reason")).toContainText("屋主同意調整為四個月押金");
+  expect(crashes).toEqual([]);
   await expect(page.getByTestId("lease-terms-locked")).toContainText("已簽署或已生效");
   await expect(page.getByTestId("lease-terms-locked")).not.toContainText("房東");
   await expect(page.getByTestId("save-lease-terms")).toHaveCount(0);
@@ -103,5 +114,4 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await signIn(page, "admin@coast.demo");
   const leaked = await page.request.get(`/m/leases/${leaseId}/signed`);
   expect(leaked.status()).toBe(404);
-  expect(crashes).toEqual([]);
 });

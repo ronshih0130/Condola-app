@@ -852,6 +852,12 @@ export async function recordLeaseNotice(leaseId: string, eventType: string) {
   await svc(null, (client) => queueDemoNotice(client, leaseId, eventType));
 }
 
+/**
+ * Record one party's signature. A lease never sits in a `signed` status:
+ * a remaining signer leaves status at draft or pending_signature
+ * (esign_status partially_signed). The last signer sets status to active
+ * and esign_status to fully_signed, the same jump a paper PDF makes.
+ */
 export async function signLease(session: Session, input: { leaseId: string; signedName: string; consent: boolean }) {
   if (!input.consent) throw new FlowError("errors.consentRequired");
   if (!input.signedName.trim()) throw new FlowError("errors.required");

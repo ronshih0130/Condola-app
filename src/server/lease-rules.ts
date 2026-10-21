@@ -1,6 +1,30 @@
 /** Product rule: a deposit above this many months of rent needs a typed reason. */
 export const DEPOSIT_CAP_MONTHS = 2;
 
+/**
+ * `lease_status` in the schema. There is no `signed` lease status between
+ * `pending_signature` and `active`. `signed` is `lease_signatures.status`.
+ * `esign_status` is separate: not_sent, sent, partially_signed, fully_signed,
+ * declined, voided.
+ *
+ * One signature left keeps the lease at draft or pending_signature and sets
+ * esign_status to partially_signed. The last signature (`signLease`) and a
+ * stored paper PDF (`uploadSignedLeasePdf`) move draft or pending_signature
+ * straight to active, with esign_status fully_signed and signed_at set.
+ */
+export const LEASE_STATUSES = ["draft", "pending_signature", "active", "ended", "terminated", "cancelled"] as const;
+
+export type LeaseStatus = (typeof LEASE_STATUSES)[number];
+
+/** The warning and reason box open only while the edited months are over the cap and differ from the saved months. */
+export function depositReasonEditorOpen(editedMonths: string, savedMonths: string) {
+  const edited = Number(editedMonths);
+  if (!Number.isFinite(edited) || edited <= DEPOSIT_CAP_MONTHS) return false;
+  const saved = Number(savedMonths);
+  if (Number.isFinite(saved) && edited === saved) return false;
+  return true;
+}
+
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46]; // %PDF
 export const MAX_SIGNED_PDF_BYTES = 8 * 1024 * 1024;
 

@@ -60,6 +60,7 @@ export function chargeKey(type: string) {
 }
 
 export function statusKey(status: string) {
+  // lease_status has no `signed` value; that word is lease_signatures.status. See LEASE_STATUSES.
   const map: Record<string, string> = {
     draft: "i_st_draft",
     pending_signature: "i_st_pending",
