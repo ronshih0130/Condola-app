@@ -114,6 +114,7 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   assert.equal(`${zh.i_login_invite_lead}${zh.i_login_signup}${zh.i_login_invite_tail}`, "還沒有帳號？免費註冊（前 4 戶永遠免費，可先看範例公司）");
   assert.equal(zh.i_nav_inbox, "繳款紀錄");
   assert.equal(zh.i_audit_ev_line_sign_in, "租客登入");
+  assert.equal(zh.i_audit_ev_go_live, "切換為正式資料（舊版功能）");
   assert.equal(zh.i_audit_rec_line, "邀請連結");
   assert.equal(zh.i_sandbox_suffix, "（範例）");
   assert.equal(zh.i_settings_plan, "方案：前 4 戶永遠免費");

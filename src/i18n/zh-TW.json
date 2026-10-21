@@ -1477,7 +1477,7 @@
  "i_audit_ev_mfa_enabled": "啟用兩步驟驗證",
  "i_audit_ev_mfa_disabled": "關閉兩步驟驗證",
  "i_audit_ev_require_2fa": "調整兩步驟驗證要求",
- "i_audit_ev_go_live": "開始正式使用",
+ "i_audit_ev_go_live": "切換為正式資料（舊版功能）",
  "i_audit_ev_firm_created": "建立事務所",
  "i_audit_ev_owner_privacy": "調整屋主入口隱私",
  "i_audit_rec_lease": "租約",
