@@ -879,7 +879,7 @@
  "i_created_prop": "Property created. You can add a lease next.",
  "i_audit_hidden": "This role can't see the audit log. Admins and accountants can.",
  "i_opening": "Opening",
- "i_rent_received": "Rent confirmed",
+ "i_rent_received": "Rent paid",
  "i_other_income": "Other income (incl. electricity)",
  "i_fee": "Management fee",
  "i_expenses": "Expenses",

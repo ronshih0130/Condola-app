@@ -28,7 +28,10 @@ test("statement, property, rent, and reports render TWD as NT$", () => {
   assert.equal(moneyLabel(0, "TWD", "zh-TW"), "NT$0");
   assert.equal(moneyLabel(950_000, "TWD", "zh-TW"), "NT$9,500");
   const zh = JSON.parse(read("i18n/zh-TW.json")) as Record<string, string>;
-  assert.equal(zh.i_rent_received, "已確認租金");
+  assert.equal(zh.i_rent_received, "已繳租金");
+  assert.equal(zh.i_audit_ev_go_live, "開始正式使用");
+  const en = JSON.parse(read("i18n/en.json")) as Record<string, string>;
+  assert.equal(en.i_rent_received, "Rent paid");
 
   for (const file of SCREENS) {
     const source = read(file);
@@ -67,7 +70,28 @@ test("statement, property, rent, and reports render TWD as NT$", () => {
   assert.equal(bareDollars(pdfText), null, pdfText);
   assert.match(pdfText, /NT\$0/);
   assert.match(pdfText, /NT\$9,500/);
-  assert.match(pdfText, /已確認租金/);
+  assert.match(pdfText, /已繳租金/);
+  assert.equal(pdfText.includes("已確認租金"), false);
+});
+
+test("已確認租金 is not shown to users", () => {
+  const hits: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry);
+      if (entry === "node_modules" || entry.startsWith(".")) continue;
+      if (statSync(path).isDirectory()) {
+        walk(path);
+        continue;
+      }
+      if (/\.test\.tsx?$/.test(entry)) continue;
+      if (!/\.(ts|tsx|json)$/.test(entry)) continue;
+      const text = readFileSync(path, "utf8");
+      if (text.includes("已確認租金")) hits.push(path);
+    }
+  };
+  walk(root.pathname);
+  assert.deepEqual(hits, []);
 });
 
 test("rendered screens do not format amounts with a bare dollar", () => {

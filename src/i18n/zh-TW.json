@@ -879,7 +879,7 @@
  "i_created_prop": "物件已建立。接著可以建立租約。",
  "i_audit_hidden": "這個身份看不到稽核紀錄。管理員與會計可以查看。",
  "i_opening": "期初",
- "i_rent_received": "已確認租金",
+ "i_rent_received": "已繳租金",
  "i_other_income": "其他收入（含電費）",
  "i_fee": "管理費",
  "i_expenses": "支出",
