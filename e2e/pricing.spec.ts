@@ -15,7 +15,13 @@ test("pricing and upgrade list only implemented plan terms", async ({ page }) =>
   await expect(pricing.getByText("多據點、人數較多的團隊")).toBeVisible();
   await expect(pricing.getByText("不限席次", { exact: true })).toBeVisible();
   await expect(pricing.getByText("前 3 個月免費")).toHaveCount(2);
-  for (const banned of ["品牌報表", "LINE 官方", "優先支援", "進階報表", "即將推出", "Excel", "房東", "房客", "CSV/ZIP"]) {
+  await expect(page.getByTestId("price-note")).toHaveText("年繳享 1 個月免費。");
+  await expect(page.getByTestId("cycle-year")).toHaveText("年繳送 1 個月");
+  await page.getByTestId("calc-units").fill("600");
+  await expect(page.getByTestId("price-result")).toContainText("NT$17,880");
+  await page.getByTestId("cycle-year").click();
+  await expect(page.getByTestId("price-year")).toHaveText("年繳 NT$196,680（送 1 個月）");
+  for (const banned of ["品牌報表", "LINE 官方", "優先支援", "進階報表", "即將推出", "Excel", "房東", "房客", "CSV/ZIP", "超過 500", "NT$25", "2 個月"]) {
     await expect(pricing).not.toContainText(banned);
   }
 

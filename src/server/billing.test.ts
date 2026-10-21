@@ -15,18 +15,18 @@ const now = new Date("2026-10-20T00:00:00Z");
 test("list prices match the published examples", () => {
   assert.equal(monthlyAmount({ units: 30, rate: 30 }), 780);
   assert.equal(monthlyAmount({ units: 150, rate: 30 }), 4380);
-  assert.equal(monthlyAmount({ units: 600, rate: 30 }), 17380);
-  assert.equal(monthlyAmount({ units: 600, rate: 40 }), 22340);
-  assert.equal(yearlyAmount(17380), 173800);
+  assert.equal(monthlyAmount({ units: 600, rate: 30 }), 17880);
+  assert.equal(monthlyAmount({ units: 600, rate: 40 }), 23840);
+  assert.equal(yearlyAmount(17880), 196680);
   const standard = quoteMonthly({ units: 600, tier: "standard", cycle: "month", now });
   const pro = quoteMonthly({ units: 600, tier: "pro", cycle: "year", now });
-  assert.equal(standard.monthly, 17380);
+  assert.equal(standard.monthly, 17880);
   assert.equal(standard.source, "list");
-  assert.equal(pro.monthly, 22340);
-  assert.equal(pro.due, 223400);
+  assert.equal(pro.monthly, 23840);
+  assert.equal(pro.due, 262240);
 });
 
-test("a partner rate below NT$25 is kept past 500 units", () => {
+test("a partner rate applies to every billable unit", () => {
   assert.equal(monthlyAmount({ units: 200, rate: 20, freeUnits: 4 }), 3920);
   assert.equal(monthlyAmount({ units: 600, rate: 20, freeUnits: 4 }), 11920);
   const anju = quoteMonthly({
