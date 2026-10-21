@@ -83,6 +83,7 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
   await expect(page.getByTestId("import-preview")).toContainText("⚠ 租金空白");
   await expect(page.getByTestId("import-ok-count")).toHaveText("1");
   await expect(page.getByTestId("import-err-count")).toHaveText("1");
+  await expect(page.getByTestId("import-ignored-id")).toHaveCount(0);
   await expect(page.getByTestId("import-run")).toHaveText("匯入 1 筆");
   await expect(page.getByTestId("import-errors-csv")).toBeEnabled();
   const problemDownload = page.waitForEvent("download");
@@ -103,6 +104,8 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
   });
   await expect(page.getByTestId("import-preview")).toBeVisible();
   await expect(page.getByTestId("import-encoding-value")).toContainText("big5");
+  await expect(page.getByTestId("import-ignored-id")).toContainText("不會匯入");
+  await expect(page.getByTestId("import-ignored-id")).toContainText("身分證");
   await expect(page.getByTestId("import-preview")).toContainText("押金約 3 個月");
   await expect(page.getByTestId("import-preview")).toContainText("租約已到期");
   await expect(page.getByTestId("import-preview")).toContainText("✓ 可匯入");

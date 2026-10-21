@@ -8,6 +8,7 @@ import {
   IMPORT_FIELDS,
   IMPORT_MAX_ROWS,
   issuePreviewColumns,
+  ignoredNationalIdHeaders,
   matchColumns,
   missingRequired,
   previewBadColumns,
@@ -51,6 +52,7 @@ export function ImportWizard() {
   const [serverErrors, setServerErrors] = useState<ImportIssue[]>([]);
 
   const mapping = useMemo(() => (table[0] ? matchColumns(table[0]) : null), [table]);
+  const ignoredIds = useMemo(() => ignoredNationalIdHeaders(table[0] ?? []), [table]);
   const parsed = useMemo(() => (mapping ? validateImportRows(tableToRows(table, mapping)) : []), [mapping, table]);
   const missing = mapping ? missingRequired(mapping) : [];
   const problemRows = parsed.filter((row) => rowHasError(row));
@@ -118,7 +120,19 @@ export function ImportWizard() {
     setProgress(String(rows.length));
     try {
       const result = await postImport("commit", fileName, rows);
-      setServerErrors(result.errors.filter((issue) => issue.severity === "error"));
+      const errors = result.errors.filter((issue) => issue.severity === "error");
+      setServerErrors(errors);
+      const created =
+        result.created.properties +
+        result.created.units +
+        result.created.rooms +
+        result.created.leases +
+        result.created.tenants +
+        result.created.owners;
+      if (errors.length > 0 && created === 0 && result.duplicateRows === 0) {
+        setNotice(errors.map((issue) => t(issue.key, issue.vars)).slice(0, 3).join("；"));
+        return;
+      }
       setDone(result);
       setStep(3);
     } catch (error) {
@@ -285,6 +299,11 @@ export function ImportWizard() {
             {t("im_preview_help")}{" "}
             <span data-testid="import-encoding-value">{detected}</span> {t("im_rows_n", { n: Math.max(0, table.length - 1) })}
           </p>
+          {ignoredIds.length ? (
+            <p className="alert" data-testid="import-ignored-id">
+              {t("im_ignored", { cols: ignoredIds.join("、") })}
+            </p>
+          ) : null}
           <div style={{ overflowX: "auto" }}>
             <table className="t" data-testid="import-preview-table">
               <thead>
@@ -329,7 +348,11 @@ export function ImportWizard() {
               </tbody>
             </table>
           </div>
-          {progress ? <p data-testid="import-progress">{progress}</p> : null}
+          {progress ? (
+            <p data-testid="import-progress" role="status">
+              {t("im_saving", { n: progress })}
+            </p>
+          ) : null}
           <div className="import-foot">
             <button className="btn" type="button" data-testid="import-errors-csv" disabled={problemRows.length === 0} onClick={downloadProblems}>
               {t("im_dl_problems")}
@@ -344,6 +367,11 @@ export function ImportWizard() {
       {step === 3 ? (
         <div className="card pad" data-testid="import-result">
           <h2>{t("im_res_h")}</h2>
+          {ignoredIds.length ? (
+            <p className="alert" data-testid="import-ignored-id">
+              {t("im_ignored", { cols: ignoredIds.join("、") })}
+            </p>
+          ) : null}
           {done.duplicateRows > 0 ? (
             <p className="alert" data-testid="import-duplicate-notice">
               {done.created.properties + done.created.units + done.created.rooms + done.created.leases + done.created.tenants + done.created.owners === 0

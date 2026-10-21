@@ -109,6 +109,7 @@
  "im_s4": "Dry run",
  "im_s5": "Done",
  "im_sample_hint": "A simulated export from an old system: headers differ from the template and a few errors are planted.",
+ "im_saving": "Importing {n} rows. Nothing is saved unless the whole file succeeds.",
  "im_skip": "Skip",
  "im_skip_all_err": "Skip all rows with errors",
  "im_skip_n": "{n} skipped",

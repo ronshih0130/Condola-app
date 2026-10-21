@@ -70,7 +70,12 @@ export async function dryRunImport(session: Session, input: { fileName: string; 
   }
 }
 
-/** One transaction and one audit row for the whole file. A failure writes nothing. */
+/**
+ * One transaction for the whole confirmed file. Inserts are bulk statements on
+ * that connection, so 500 rows finish well under the 120s limit and a failure
+ * rolls every statement back. Background batches are not used: a batch that
+ * committed on its own would leave a partial file.
+ */
 export async function commitImportBatch(session: Session, input: { fileName: string; rows: unknown }): Promise<ImportResult> {
   const started = performance.now();
   let counted = 0;

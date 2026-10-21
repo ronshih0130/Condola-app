@@ -15,6 +15,7 @@ import {
   IMPORT_MONEY_MAX,
   coerceImportRows,
   emptyIndex,
+  ignoredNationalIdHeaders,
   issuePreviewColumns,
   matchColumns,
   planOne,
@@ -22,6 +23,7 @@ import {
   previewBadColumns,
   totalsFromPlans,
   rowHasError,
+  tableToRows,
   templateHeaders,
   validateImportRows,
   type ImportRequestRow,
@@ -145,6 +147,15 @@ test("column match accepts legacy owner headers and ignores a client org id", ()
   const withId = coerceImportRows([{ line: 4, propertyName: "甲", tenantId: "A123456789", "租客身分證字號": "B123456789" }]);
   assert.equal(JSON.stringify(withId).includes("A123456789"), false);
   assert.equal(JSON.stringify(withId).includes("B123456789"), false);
+
+  const idHeaders = ["物件名稱", "租客身分證字號", "月租", "National ID"];
+  assert.deepEqual(ignoredNationalIdHeaders(idHeaders), ["租客身分證字號", "National ID"]);
+  assert.deepEqual(ignoredNationalIdHeaders(["租客姓名", "屋主姓名"]), []);
+  const dropped = tableToRows([idHeaders, ["甲", "A123456789", "10000", "Z999"]], matchColumns(idHeaders));
+  assert.equal(JSON.stringify(dropped).includes("A123456789"), false);
+  assert.equal(JSON.stringify(dropped).includes("Z999"), false);
+  assert.equal(dropped[0].propertyName, "甲");
+  assert.equal(dropped[0].rent, "10000");
 });
 
 test("row checks cover deposit cap, ended leases, duplicates, due day, and phone", () => {
@@ -424,6 +435,17 @@ test("the 2000-row cap counts parsed rows for csv and xlsx names", async () => {
     (error: unknown) => error instanceof FlowError && error.key === "im_too_many" && error.vars?.max === IMPORT_DRY_BATCH,
   );
   assert.equal(coerceImportRows(many(500), IMPORT_MAX_ROWS).length, 500);
+});
+
+test("a confirmed import is one transaction and the screen posts it once", () => {
+  const source = readFileSync(new URL("./import-batch.ts", import.meta.url), "utf8");
+  const wizard = readFileSync(new URL("../components/import-wizard.tsx", import.meta.url), "utf8");
+  assert.equal(source.match(/await tx\(/g)?.length, 2);
+  assert.doesNotMatch(source, /SAVEPOINT/i);
+  assert.doesNotMatch(source, /IMPORT_COMMIT_BATCH/);
+  assert.equal(wizard.match(/postImport\("commit"/g)?.length, 1);
+  assert.match(wizard, /import-ignored-id/);
+  assert.match(wizard, /im_saving/);
 });
 
 test("active-unit billing counts include imported leases", () => {

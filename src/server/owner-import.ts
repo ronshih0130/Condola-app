@@ -183,6 +183,26 @@ export function matchColumns(headers: string[]): ColumnMapping {
   return mapping;
 }
 
+/** Headers that carry a national ID. They are never mapped and never stored. */
+export function ignoredNationalIdHeaders(headers: string[]): string[] {
+  const mapped = new Set(Object.values(matchColumns(headers)).filter((index): index is number => index !== null));
+  const seen = new Set<string>();
+  const found: string[] = [];
+  headers.forEach((header, index) => {
+    if (mapped.has(index)) return;
+    const label = header.trim();
+    const key = normHeader(label);
+    if (!key || seen.has(key) || !isNationalIdHeader(key)) return;
+    seen.add(key);
+    found.push(label);
+  });
+  return found;
+}
+
+function isNationalIdHeader(key: string) {
+  return key.includes("身分證") || key.includes("nationalid") || key.includes("idnumber") || key === "tenantid";
+}
+
 export function missingRequired(mapping: ColumnMapping) {
   return REQUIRED_FIELDS.filter((field) => mapping[field] === null);
 }
