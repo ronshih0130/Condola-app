@@ -23,6 +23,19 @@ import {
   utilityLineDescription,
 } from "./utility-post";
 
+test("electricity registration copy uses 登記 and does not say 入帳", () => {
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  assert.equal(zh.i_utility_open, "電費登記");
+  assert.equal(zh.i_utility_title, "電費登記");
+  assert.equal(zh.i_utility_confirm, "確認登記電費");
+  assert.equal(zh.i_utility_posted, "電費已登記");
+  assert.equal(zh.i_utility_repost, "這個月的電費已登記過");
+  assert.equal(zh.i_utility_pending, "待重新登記");
+  assert.equal(zh.i_utility_posted_locked, "這期電費已登記，新租約不會改動金額");
+  const keys = Object.keys(zh).filter((key) => key.startsWith("i_utility_") || key === "i_even_sample" || key === "i_meter_sample");
+  for (const key of keys) assert.equal(zh[key].includes("入帳"), false, key);
+});
+
 test("分表, 依電表度數, and 平均分攤 are posted", () => {
   assert.equal(isPostableMethod("submeter"), true);
   assert.equal(isPostableMethod("by_reading"), true);

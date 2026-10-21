@@ -30,20 +30,20 @@ test("a manager confirms 電費 and the tenant sees it on the bill", async ({ pa
   await expect(page.getByTestId("utility-share-desc").nth(1)).toContainText("電費 50 度 × 4 元");
   await page.getByTestId("utility-confirm").click();
   await expect(page.getByTestId("utility-saved")).toContainText("電費已記入租客本期帳單");
-  await expect(page.getByTestId("utility-posted-lock")).toContainText("這期已確認入帳，新租約不會改動金額");
+  await expect(page.getByTestId("utility-posted-lock")).toContainText("這期電費已登記，新租約不會改動金額");
   await expect(page.getByTestId("utility-confirm")).toHaveCount(0);
   await page.getByTestId("kwh-curr-A").fill("90");
   await page.getByTestId("utility-preview").click();
-  await expect(page.getByTestId("utility-status")).toContainText("待重新入帳");
-  await expect(page.getByTestId("utility-repost")).toContainText("確認後會先沖銷已入帳的電費");
+  await expect(page.getByTestId("utility-status")).toContainText("待重新登記");
+  await expect(page.getByTestId("utility-repost")).toContainText("這個月的電費已登記過");
   await page.getByTestId("kwh-prev-A").fill("0");
   await page.getByTestId("kwh-curr-A").fill("100");
   await page.getByTestId("kwh-prev-B").fill("0");
   await page.getByTestId("kwh-curr-B").fill("50");
   await page.getByTestId("utility-preview").click();
-  await expect(page.getByTestId("utility-status")).toContainText("待重新入帳");
+  await expect(page.getByTestId("utility-status")).toContainText("待重新登記");
   await page.getByTestId("utility-confirm").click();
-  await expect(page.getByTestId("utility-status")).toContainText("已入帳");
+  await expect(page.getByTestId("utility-status")).toContainText("電費已登記");
 
   await page.goto("/m/leases");
   await page.getByRole("link", { name: "王小美" }).click();

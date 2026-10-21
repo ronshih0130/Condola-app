@@ -742,7 +742,7 @@ test("a second lease in the same unit and period updates the draft run, and a po
       form({
         ...base,
         roomId: rooms.roomIds[2],
-        tenantName: "已入帳租客",
+        tenantName: "已登記租客",
         tenantEmail: `period.c.${stamp}@example.com`,
         billTotal: "1000",
         usage: "100",

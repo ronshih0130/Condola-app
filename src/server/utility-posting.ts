@@ -696,7 +696,7 @@ export async function confirmUtilityRun(session: Session, runId: string) {
     if (!run.utility_bill_id) throw new FlowError("errors.amount", { field: "i_usage" });
     await assertRunCoversOccupied(client, session.orgId, runId);
     const priorStatus = run.status;
-    await client.query(`SELECT set_config('app.change_reason', '確認電費入帳', true)`);
+    await client.query(`SELECT set_config('app.change_reason', '確認登記電費', true)`);
     const lines = await many<PostedLine>(client, `${POSTED_LINE_SQL} WHERE l.run_id = $1 ORDER BY l.id`, [runId]);
     const present = await existingInvoiceLineIds(
       client,
@@ -764,7 +764,7 @@ export async function confirmUtilityRun(session: Session, runId: string) {
         changed += 1;
       }
     }
-    const targets = await reversePostedLines(client, session, reverses, "更正電費入帳");
+    const targets = await reversePostedLines(client, session, reverses, "更正已登記電費");
     for (const post of posts) {
       const target = targets.get(post.lineId);
       if (!target) continue;
@@ -789,7 +789,7 @@ export async function confirmUtilityRun(session: Session, runId: string) {
       description: BILL_GAP_DESCRIPTION,
     });
     if (vacantExpense.changed || publicExpense.changed || gapExpense.changed) changed += 1;
-    await client.query(`SELECT set_config('app.change_reason', '確認電費入帳', true)`);
+    await client.query(`SELECT set_config('app.change_reason', '確認登記電費', true)`);
     await client.query(
       `UPDATE utility_allocation_runs
           SET status = 'posted', approved_by = $2, approved_at = coalesce(approved_at, now())
@@ -833,7 +833,7 @@ export async function voidUtilityRun(session: Session, runId: string, reason: st
     );
     if (!run) throw new FlowError("errors.notFound");
     if (run.status === "void") return { runId, reversed: 0 };
-    await client.query(`SELECT set_config('app.change_reason', '作廢電費入帳', true)`);
+    await client.query(`SELECT set_config('app.change_reason', '作廢電費登記', true)`);
     const lines = await many<PostedLine>(
       client,
       `${POSTED_LINE_SQL} WHERE l.run_id = $1 AND l.posted_ledger_transaction_id IS NOT NULL`,
@@ -863,7 +863,7 @@ export async function voidUtilityRun(session: Session, runId: string, reason: st
           },
         ];
       }),
-      "作廢電費入帳",
+      "作廢電費登記",
     );
     const cleared = await ownerExpenseInput(client, session.orgId, runId, 0);
     await syncVacantOwnerExpense(client, session, cleared);

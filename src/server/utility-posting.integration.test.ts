@@ -154,7 +154,7 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
       [mixed.runId],
     );
     assert.equal(mixedLines.rows[0].n, "1");
-    await voidUtilityRun(admin, mixed.runId, "共同電表不入帳");
+    await voidUtilityRun(admin, mixed.runId, "共同電表不登記");
 
     await query(`UPDATE rooms SET electricity_method = 'submeter' WHERE id = ANY($1::uuid[])`, [[roomA, roomB]]);
     await assert.rejects(
@@ -352,7 +352,7 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
     );
     const reason = await query<{ n: string }>(
       `SELECT count(*)::text AS n FROM audit_log
-        WHERE table_name = 'utility_allocation_runs' AND row_id = $1 AND reason = '確認電費入帳'`,
+        WHERE table_name = 'utility_allocation_runs' AND row_id = $1 AND reason = '確認登記電費'`,
       [prepared.runId],
     );
     assert.equal(Number(reason.rows[0].n) >= 1, true);
