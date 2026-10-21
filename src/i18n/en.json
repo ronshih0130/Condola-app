@@ -1034,7 +1034,7 @@
  "i_split_even": "Even split",
  "i_split_days": "By days occupied",
  "i_split_sub": "By sub-meter",
- "i_bank_demo": "The sample deposit is not a real bank file.",
+ "i_bank_demo": "This is a sample payment record, not a real bank file.",
  "i_no_sample": "No unmatched payment yet. Record or confirm one first.",
  "i_switch": "Switch role",
  "i_lang_zh": "繁中",
