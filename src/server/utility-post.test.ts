@@ -228,6 +228,23 @@ test("a missing allocation unit is filled from the meter before the rate-cap tri
   assert.match(sql, /EXECUTE FUNCTION public\.utility_runs_fill_unit_id\(\)/);
   assert.equal(sql.includes("CREATE TRIGGER trg_utility_runs_fill_unit_id"), false);
   assert.ok("trg_a_fill_unit_id" < "trg_allocation_rate_cap");
+  assert.ok("trg_allocation_rate_cap" < "trg_b_reuse_open_period");
+});
+
+test("an older draft insert reuses the open period without relaxing the unique index", () => {
+  const sql = readFileSync(
+    new URL("../../supabase/migrations/20261025160000_utility_run_draft_reuse.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.utility_runs_reuse_open_period\(\)/);
+  assert.match(sql, /CREATE TRIGGER trg_b_reuse_open_period/);
+  assert.match(sql, /BEFORE INSERT ON utility_allocation_runs/);
+  assert.match(sql, /status <> 'void'/);
+  assert.match(sql, /NEW\.status := 'void'/);
+  assert.match(sql, /post_reversal\(ledger_id, '作廢空房電費'\)/);
+  assert.equal(sql.includes("DROP INDEX"), false);
+  assert.equal(sql.includes("DROP CONSTRAINT"), false);
+  assert.equal(sql.includes("status IN ('approved'"), false);
 });
 
 function assertAllocationRunWritesUnitId(source: string) {

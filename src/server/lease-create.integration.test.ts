@@ -669,6 +669,7 @@ test("a second lease in the same unit and period updates the draft run, and a po
       usage: string;
       amount: string;
       n: string;
+      voids: string;
       bill_amount: string;
       bill_usage: string;
     }>(
@@ -676,6 +677,9 @@ test("a second lease in the same unit and period updates the draft run, and a po
               (SELECT count(*)::text FROM utility_allocation_runs x
                 WHERE x.meter_id = r.meter_id AND x.period_start = r.period_start AND x.period_end = r.period_end
                   AND x.status <> 'void') AS n,
+              (SELECT count(*)::text FROM utility_allocation_runs x
+                WHERE x.meter_id = r.meter_id AND x.period_start = r.period_start AND x.period_end = r.period_end
+                  AND x.status = 'void') AS voids,
               b.total_amount_minor::text AS bill_amount, b.total_usage::text AS bill_usage
          FROM utility_allocation_runs r
          JOIN utility_bills b ON b.id = r.utility_bill_id
@@ -685,6 +689,7 @@ test("a second lease in the same unit and period updates the draft run, and a po
     assert.equal(open.rows.length, 1);
     assert.equal(open.rows[0]?.status, "draft");
     assert.equal(open.rows[0]?.n, "1");
+    assert.equal(open.rows[0]?.voids, "0");
     assert.equal(Number(open.rows[0]?.usage), 300);
     assert.equal(open.rows[0]?.amount, "120000");
     assert.equal(open.rows[0]?.bill_amount, "100000");
