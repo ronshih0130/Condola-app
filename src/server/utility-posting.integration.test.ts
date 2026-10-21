@@ -1527,8 +1527,7 @@ test("平均分攤 accepts a blank total kWh and the owner expense is visible wh
         { label: "B", roomType: "suite", baseRentMajor: 10000 },
         { label: "C", roomType: "suite", baseRentMajor: 10000 },
       ],
-      split: "even",
-      rateMajor: 5,
+      electric: { split: "even", rateMajor: 5, openings: [] },
     });
     propertyIds.push(created.propertyId);
     const unit = await query<{ id: string }>(`SELECT id::text AS id FROM units WHERE property_id = $1`, [created.propertyId]);

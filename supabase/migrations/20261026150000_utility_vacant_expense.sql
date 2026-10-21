@@ -1,4 +1,4 @@
--- Version 20261025150000. 20261025140000 is the ID-upload migration on PR #9.
+-- Version 20261026150000. Ordered after main's 20261026120000_email_log.sql. 20261025140000 is the ID-upload migration on PR #9.
 -- Vacant-room electricity stays off the tenant bill. The owner bears that share
 -- as one posted expense per allocation run, so the monthly statement can list it.
 -- A voided expense releases the run and a later post can insert a new row.

@@ -88,9 +88,19 @@ export default async function EditPropertyPage({
               <option value="owner">{t("s_aecc842")}</option>
             </select>
           </div>
-          <div className="fg">
-            <label className="f">{t("i_rate")}</label>
-            <input className="inp" name="rate" data-testid="property-rate" inputMode="decimal" placeholder={t("i_ph_rate")} defaultValue={major(property.rate_minor)} />
+          <div className="grid3">
+            <div className="fg">
+              <label className="f">{t("i_bill_total")}</label>
+              <input className="inp" name="bill" data-testid="property-bill" inputMode="decimal" placeholder={t("i_ph_bill")} defaultValue={major(property.bill_minor)} />
+            </div>
+            <div className="fg">
+              <label className="f">{t("i_usage")}</label>
+              <input className="inp" name="usage" data-testid="property-usage" inputMode="decimal" placeholder={t("i_ph_kwh")} defaultValue={property.usage ?? ""} />
+            </div>
+            <div className="fg">
+              <label className="f">{t("i_rate")}</label>
+              <input className="inp" name="rate" data-testid="property-rate" inputMode="decimal" placeholder={t("i_ph_rate")} defaultValue={major(property.rate_minor)} />
+            </div>
           </div>
           <button className="btn pri" type="submit" data-testid="save-property">
             {t("i_save")}

@@ -180,6 +180,7 @@ test("owner statements say 已繳租金 and not 已收租金", () => {
   const proto = catalog("prototype", "zh-TW");
   assert.equal(zh.owner_owes_reason, OWNER_STATEMENT_REASON);
   assert.equal(proto.owner_owes_reason, OWNER_STATEMENT_REASON);
+  assert.equal(zh.i_rent_received, "已繳租金");
 
   const oldPhrase = "已收" + "租金";
   const files = statementSurfaceFiles();

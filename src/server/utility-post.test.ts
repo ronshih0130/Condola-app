@@ -198,7 +198,7 @@ test("turnover splits one reading by occupancy days", () => {
 });
 
 test("the electricity migration fails closed on posted duplicates and unknown methods", () => {
-  const sql = readFileSync(new URL("../../supabase/migrations/20261023130000_utility_charge_posting.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20261026130000_utility_charge_posting.sql", import.meta.url), "utf8");
   assert.equal(sql.includes("SET electricity_method = NULL"), false);
   assert.match(sql, /cannot merge allocation runs: a meter period has more than one approved or posted run/);
   assert.match(sql, /cannot merge meters: an approved or posted allocation run would have to be voided/);
@@ -237,7 +237,7 @@ test("the electricity migration fails closed on posted duplicates and unknown me
 
 test("a missing allocation unit is filled from the meter before the rate-cap trigger", () => {
   const sql = readFileSync(
-    new URL("../../supabase/migrations/20261023130500_utility_runs_unit_id_default.sql", import.meta.url),
+    new URL("../../supabase/migrations/20261026140000_utility_runs_unit_id_default.sql", import.meta.url),
     "utf8",
   );
   assert.match(sql, /CREATE OR REPLACE FUNCTION public\.utility_runs_fill_unit_id\(\)/);
@@ -256,7 +256,7 @@ test("a missing allocation unit is filled from the meter before the rate-cap tri
 
 test("an older draft insert reuses the open period without relaxing the unique index", () => {
   const sql = readFileSync(
-    new URL("../../supabase/migrations/20261025160000_utility_run_draft_reuse.sql", import.meta.url),
+    new URL("../../supabase/migrations/20261026160000_utility_run_draft_reuse.sql", import.meta.url),
     "utf8",
   );
   assert.match(sql, /CREATE OR REPLACE FUNCTION public\.utility_runs_reuse_open_period\(\)/);
