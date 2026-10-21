@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorText } from "@/i18n/errors";
-import { actionUpdateLease } from "@/server/actions";
+import { actionUpdateLease, type ActionState } from "@/server/actions";
 import { depositReasonEditorOpen } from "@/server/lease-rules";
 import { useT } from "./locale";
 import { callSubmitAction, claimFormSubmit, releaseFormSubmit } from "./submit-once";
@@ -31,11 +31,11 @@ export function LeaseTermsForm({
   const router = useRouter();
   const guard = useRef(false);
   const [state, formAction, pending] = useActionState(
-    (prev: { error: string; field?: string }, formData: FormData) =>
+    (prev: ActionState, formData: FormData) =>
       callSubmitAction(
         guard,
         () => actionUpdateLease(prev, formData),
-        () => ({ error: "errors.leaseFailed" }),
+        (): ActionState => ({ error: "errors.leaseFailed" }),
       ),
     { error: "" },
   );

@@ -4,7 +4,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { errorText } from "@/i18n/errors";
 import { confirmDeposit, confirmSpace, confirmSpaceFromSnapshot, depositMonthsOnHalfStep, formatMajor, nextSpaceSnapshot, twdRentIsWhole } from "@/lease-confirm";
-import { actionCreateLease } from "@/server/actions";
+import { actionCreateLease, type ActionState } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
 import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
 import { useLocale, useT } from "./locale";
@@ -42,11 +42,11 @@ export function LeaseWizard({
   const submitGuard = useRef(false);
   const idempotencyKey = useRef("");
   const [state, formAction, pending] = useActionState(
-    (prev: { error: string; field?: string }, formData: FormData) =>
+    (prev: ActionState, formData: FormData) =>
       callSubmitAction(
         submitGuard,
         () => actionCreateLease(prev, formData),
-        () => ({ error: "errors.leaseNetwork" }),
+        (): ActionState => ({ error: "errors.leaseNetwork" }),
       ),
     { error: "" },
   );
