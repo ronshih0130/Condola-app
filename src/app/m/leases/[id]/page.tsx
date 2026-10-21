@@ -4,11 +4,13 @@ import { dictionary, makeT } from "@/i18n";
 import { AuditHistory } from "@/components/audit-log";
 import { PayDialog } from "@/components/dialogs";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
+import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
 import { formatDate, formatMoney } from "@/server/format";
 import { majorField } from "@/server/portfolio";
 import { leaseTermsEditable } from "@/server/lease-rules";
+import { portalLoginReady } from "@/server/portal-invite";
 import { leaseDetail, threadMessages } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -30,6 +32,8 @@ export default async function LeasePage({
   const detail = await leaseDetail(session, id);
   if (!detail) notFound();
   const { lease, signatures } = detail;
+  const canInvite = session.role === "admin" || session.role === "manager";
+  const tenantActivated = canInvite ? await portalLoginReady(lease.tenant_user_id) : false;
   const money = (minor: number) => formatMoney(minor, lease.currency, session.locale);
   const tenantSig = signatures.find((row) => row.role === "tenant");
   const managerSig = signatures.find((row) => row.role === "manager");
@@ -100,6 +104,14 @@ export default async function LeasePage({
             <p data-testid="tenant-phone">{lease.phone || "•••"}</p>
             <p className="small muted">{lease.email}</p>
             {lease.line_user_id ? <p data-testid="tenant-line-id">{lease.line_user_id}</p> : null}
+            {canInvite ? (
+              <PortalInviteButton
+                kind="tenant"
+                contactId={lease.tenant_contact_id}
+                leaseId={id}
+                activated={tenantActivated}
+              />
+            ) : null}
             {lease.status !== "active" ? (
               <p>
                 <Link href={`/m/leases/${id}?tab=sign`}>{t("s_8ecfcf9")}</Link>

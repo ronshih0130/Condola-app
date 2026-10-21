@@ -1624,5 +1624,21 @@
  "i_photo_storage": "目前無法儲存照片。儲存空間無法使用，檔案沒有寫入。",
  "i_photo_limit": "每筆報修最多 8 張照片。",
  "i_date_invalid": "請輸入有效的日期。",
- "i_tenant_use_existing": "改選這位租客"
+ "i_tenant_use_existing": "改選這位租客",
+ "i_portal_copy": "複製邀請連結",
+ "i_portal_copied": "已複製，7 天內有效，只能使用一次",
+ "i_portal_regenerate": "重新產生",
+ "i_portal_activated": "已啟用",
+ "i_portal_hand_tenant": "傳給租客",
+ "i_portal_hand_owner": "傳給屋主",
+ "i_portal_invite_title": "{firm} 邀請你使用租多啦",
+ "i_portal_invite_invalid": "這個連結已失效，請向管理公司索取新的連結",
+ "i_portal_invite_locked": "嘗試次數過多，請 15 分鐘後再試",
+ "i_portal_login_email": "登入 Email",
+ "i_portal_choose_email": "請填寫你的 Email。設定密碼後，用它和密碼登入。",
+ "i_portal_email_unusable": "無法使用這個 email，請改用其他 email，或聯絡管理公司",
+ "i_portal_set_password": "設定密碼",
+ "i_portal_working": "處理中…",
+ "i_audit_ev_portal_invite": "產生邀請連結",
+ "i_audit_ev_portal_invite_accept": "使用邀請連結"
 }

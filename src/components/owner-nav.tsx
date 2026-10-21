@@ -32,7 +32,11 @@ export function OwnerNav({ children }: { children: React.ReactNode }) {
                 {t(key)}
               </Link>
             ))}
-            <a href="/api/demo/mode?mode=mgr">{t("i_logout")}</a>
+            <form action="/api/auth/sign-out" method="post">
+              <button type="submit" data-testid="owner-sign-out">
+                {t("i_logout")}
+              </button>
+            </form>
           </nav>
         </div>
       </div>
