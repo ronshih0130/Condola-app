@@ -129,6 +129,7 @@ export function LeaseWizard({
   useEffect(() => {
     if (!pending && state.error) {
       releaseFormSubmit(submitGuard);
+      if (state.error === "errors.leaseNetwork") setSubmitReady(true);
       if (slowTimer.current) window.clearTimeout(slowTimer.current);
       slowTimer.current = null;
       setSlowSubmit(false);
@@ -298,7 +299,7 @@ export function LeaseWizard({
     >
       <ImplicitSubmitSink />
       <Stepper steps={steps} current={step} />
-      {state.error ? (
+      {state.error && state.error !== "errors.leaseNetwork" ? (
         <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
           {!showLine && state.error === "errors.lineId"
             ? t("i_generic")
@@ -670,9 +671,16 @@ export function LeaseWizard({
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady} aria-busy={pending ? true : undefined}>
-            {t("s_79b6c1d")}
-          </button>
+          <div>
+            {state.error === "errors.leaseNetwork" ? (
+              <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
+                {t("i_lease_network")}
+              </div>
+            ) : null}
+            <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady} aria-busy={pending ? true : undefined}>
+              {t("s_79b6c1d")}
+            </button>
+          </div>
         )}
       </div>
     </form>

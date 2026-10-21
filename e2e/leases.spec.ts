@@ -293,12 +293,21 @@ test("an aborted create stays on the wizard and a resubmit saves one lease", asy
 
   await submit.click();
   const error = page.getByTestId("lease-error");
+  const failureCopy = "租約沒有送出成功，填好的資料都還在，請再送出一次。";
   await expect(error).toBeVisible();
-  await expect(error).toContainText("網路不穩，租約還沒建立，請再送出一次");
+  await expect(error).toHaveText(failureCopy);
+  await expect(submit).toBeEnabled();
+  const errorBox = await error.boundingBox();
+  const buttonBox = await submit.boundingBox();
+  expect(errorBox).toBeTruthy();
+  expect(buttonBox).toBeTruthy();
+  expect(errorBox!.y + errorBox!.height).toBeLessThanOrEqual(buttonBox!.y);
+  expect(buttonBox!.y - (errorBox!.y + errorBox!.height)).toBeLessThan(24);
+  expect(errorBox!.x).toBeLessThan(buttonBox!.x + buttonBox!.width);
+  expect(errorBox!.x + errorBox!.width).toBeGreaterThan(buttonBox!.x);
   await expect(page).toHaveURL(/\/m\/leases\/new/);
   await expect(page.locator("body")).not.toContainText("Application error");
   await expect(page.getByTestId("lease-confirm-tenant")).toContainText(tenant);
-  await expect(submit).toBeEnabled();
   expect(keys, "aborted request did not include an idempotency key").toEqual([expect.stringMatching(/^[0-9a-f-]{36}$/)]);
 
   await submit.click();

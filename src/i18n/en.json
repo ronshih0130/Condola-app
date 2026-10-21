@@ -752,7 +752,7 @@
  "i_required": "Some required fields are still empty. Please fill them in and try again.",
  "i_generic": "That didn't finish. Please check the fields and try again.",
  "i_lease_failed": "The lease was not saved. Please try again later, or contact service@condola.app if it keeps happening.",
- "i_lease_network": "The connection dropped before the lease was created. Please submit again.",
+ "i_lease_network": "The lease was not submitted. What you entered is still here. Please submit again.",
  "i_lease_whole_unit": "This home is rented as a whole unit. Please choose the whole unit, not a room.",
  "i_field_incomplete": "{field} is incomplete. Please check it and submit again.",
  "i_step_incomplete": "{field} is incomplete. Please check it before continuing.",
