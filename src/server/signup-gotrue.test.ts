@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { normalizeEmail } from "./auth";
+import { normalizeEmail, requestPasswordReset } from "./auth";
 import {
   classifyPasswordGrant,
   confirmHashTarget,
   gotrueEndpoint,
   gotrueVerifyBody,
   parseSupabaseSignup,
+  passwordResetUrl,
   signupConfirmUrl,
   signupVerifyType,
 } from "./signup-gotrue";
@@ -46,13 +47,17 @@ test("confirmation links use the allow-listed staging or production origin", () 
     process.env.CONDOLA_ENV = "staging";
     process.env.CONDOLA_SITE_URL = "https://staging.condola.app";
     assert.equal(signupConfirmUrl("https://staging.condola.app"), "https://staging.condola.app/signup/confirm");
+    assert.equal(passwordResetUrl("https://staging.condola.app"), "https://staging.condola.app/reset");
     assert.equal(signupConfirmUrl("https://condola-staging.workers.dev"), "https://staging.condola.app/signup/confirm");
+    assert.equal(passwordResetUrl("https://condola-staging.workers.dev"), "https://staging.condola.app/reset");
     delete process.env.CONDOLA_SITE_URL;
     assert.equal(signupConfirmUrl("https://condola-staging.workers.dev"), "https://staging.condola.app/signup/confirm");
 
     process.env.CONDOLA_ENV = "production";
     assert.equal(signupConfirmUrl("https://app.condola.app"), "https://app.condola.app/signup/confirm");
+    assert.equal(passwordResetUrl("https://app.condola.app"), "https://app.condola.app/reset");
     assert.equal(signupConfirmUrl("https://condola.app/login"), "https://app.condola.app/signup/confirm");
+    assert.equal(passwordResetUrl("https://condola.app/login"), "https://app.condola.app/reset");
     assert.equal(signupConfirmUrl("https://evil.example"), "https://app.condola.app/signup/confirm");
 
     process.env.CONDOLA_ENV = "development";
@@ -117,4 +122,50 @@ test("a hash access_token is forwarded to /signup/confirm and not looped", () =>
   assert.equal(confirmHashTarget("/signup/confirm", "#access_token=abc"), null);
   assert.equal(confirmHashTarget("/login", "#error=access_denied"), null);
   assert.equal(confirmHashTarget("/m", ""), null);
+});
+
+test("password reset asks GoTrue to send the recovery email and stays generic", async () => {
+  const saved = {
+    url: process.env.SUPABASE_URL,
+    anon: process.env.SUPABASE_ANON_KEY,
+    publicUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    publicAnon: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    fetch: global.fetch,
+  };
+  const calls: { url: string; method: string; body: string }[] = [];
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_ANON_KEY = "anon-test";
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  global.fetch = async (input, init) => {
+    calls.push({ url: String(input), method: String(init?.method), body: String(init?.body ?? "") });
+    return new Response("{}", { status: calls.length === 1 ? 200 : 500 });
+  };
+  try {
+    const known = await requestPasswordReset("  User+Tag@Example.com ", "https://staging.condola.app");
+    const missing = await requestPasswordReset("missing@example.com", "https://app.condola.app/login");
+    const blank = await requestPasswordReset("not an email", "https://staging.condola.app");
+    assert.equal(known.token, null);
+    assert.equal(missing.token, null);
+    assert.equal(blank.token, null);
+    assert.equal(calls.length, 2);
+    const first = new URL(calls[0].url);
+    assert.equal(first.origin, "https://example.supabase.co");
+    assert.equal(first.pathname, "/auth/v1/recover");
+    assert.equal(first.searchParams.get("redirect_to"), "https://staging.condola.app/reset");
+    assert.equal(calls[0].method, "POST");
+    assert.deepEqual(JSON.parse(calls[0].body), { email: "user+tag@example.com" });
+    assert.equal(new URL(calls[1].url).searchParams.get("redirect_to"), "https://app.condola.app/reset");
+    assert.deepEqual(JSON.parse(calls[1].body), { email: "missing@example.com" });
+  } finally {
+    global.fetch = saved.fetch;
+    if (saved.url === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = saved.url;
+    if (saved.anon === undefined) delete process.env.SUPABASE_ANON_KEY;
+    else process.env.SUPABASE_ANON_KEY = saved.anon;
+    if (saved.publicUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = saved.publicUrl;
+    if (saved.publicAnon === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    else process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = saved.publicAnon;
+  }
 });

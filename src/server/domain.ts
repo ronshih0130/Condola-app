@@ -42,13 +42,8 @@ async function provisionUser(input: { name: string; email: string | null; phone:
     const email = input.email ?? `portal-${randomUUID()}@demo.condola.local`;
     const user = await one<{ id: string }>(
       client,
-      `INSERT INTO auth.users (email, raw_user_meta_data, email_confirmed_at)
-       VALUES ($1, $2::jsonb, now()) RETURNING id`,
-      [email, JSON.stringify({ name: input.name })],
-    );
-    await client.query(
-      `INSERT INTO profiles (id, display_name, email, phone_e164, locale) VALUES ($1,$2,$3,$4,'zh-TW')`,
-      [user.id, input.name, email, input.phone],
+      `SELECT app.provision_portal_user($1, $2, $3) AS id`,
+      [email, input.name, input.phone],
     );
     return user.id;
   });

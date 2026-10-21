@@ -50,4 +50,6 @@ DO $$ BEGIN CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS; EXCEPTION WHEN
 
 GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 GRANT SELECT ON auth.users TO authenticated, service_role;
-GRANT ALL ON auth.users TO service_role;
+-- Do not grant service_role write on auth.users. Portal users go through
+-- app.provision_portal_user, which is SECURITY DEFINER. Hosted Supabase
+-- does not grant this write either.

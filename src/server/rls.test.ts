@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { writeAudit } from "./audit";
-import { svc, tx } from "./db";
+import { query, svc, tx } from "./db";
+import { createProperty } from "./domain";
+import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { seedPortfolio } from "./portfolio";
 import type { Session } from "./types";
@@ -269,5 +271,82 @@ test("a deposit over two months of rent is saved only with a reason", async () =
       await client.query(`DELETE FROM contacts WHERE org_id = $1 AND line_user_id = 'U-rls-line'`, [ORG_ID]);
       await client.query(`DELETE FROM files WHERE org_id = $1 AND storage_path LIKE $2`, [ORG_ID, `${ORG_ID}/${leaseId}/%`]);
     });
+  }
+});
+
+test("creating a property with a new owner works as service_role without write access to auth.users", async () => {
+  const grants = await query<{ privilege_type: string }>(
+    `SELECT privilege_type FROM information_schema.role_table_grants
+      WHERE table_schema = 'auth' AND table_name = 'users' AND grantee = 'service_role'`,
+  );
+  const privileges = grants.rows.map((row) => row.privilege_type);
+  assert.equal(privileges.includes("INSERT"), false);
+  assert.equal(privileges.includes("UPDATE"), false);
+  assert.equal(privileges.includes("DELETE"), false);
+
+  const role = await svc(USERS.admin, async (client) => {
+    const row = await client.query<{ role: string }>(`SELECT current_user AS role`);
+    return row.rows[0].role;
+  });
+  assert.equal(role, "service_role");
+
+  const email = `new.owner.${Date.now().toString(36)}@example.com`;
+  await assert.rejects(
+    () => svc(null, (client) => client.query(`INSERT INTO auth.users (email) VALUES ($1)`, [email])),
+    (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+  );
+
+  const admin: Session = {
+    userId: USERS.admin,
+    sessionId: "owner-provision",
+    email: "yating.lin@songxin.demo",
+    name: "Admin",
+    kind: "staff",
+    role: "admin",
+    orgId: ORG_ID,
+    liveOrgId: ORG_ID,
+    environment: "live",
+    locale: "zh-TW",
+    calendar: "gregorian",
+    leaseId: null,
+  };
+  let propertyId = "";
+  let contactId = "";
+  try {
+    const created = await createProperty(admin, {
+      name: `新屋主物件 ${email}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路1號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "新屋主",
+      ownerPhone: "+886912000222",
+      ownerEmail: email,
+      canViewTenantPhone: false,
+      unitLabel: "2F",
+      floor: "2",
+      rentalMode: "whole_unit",
+      rooms: [],
+    });
+    propertyId = created.propertyId;
+    contactId = created.ownerContactId;
+    const linked = await query<{ email: string; name: string }>(
+      `SELECT u.email, p.display_name AS name
+         FROM contacts c
+         JOIN auth.users u ON u.id = c.user_id
+         JOIN profiles p ON p.id = u.id
+        WHERE c.id = $1 AND c.is_owner`,
+      [contactId],
+    );
+    assert.equal(linked.rows[0]?.email, email);
+    assert.equal(linked.rows[0]?.name, "新屋主");
+  } finally {
+    if (contactId) {
+      await query(`DELETE FROM management_agreements WHERE owner_contact_id = $1`, [contactId]);
+      if (propertyId) await query(`DELETE FROM properties WHERE id = $1`, [propertyId]);
+      await query(`DELETE FROM contacts WHERE id = $1`, [contactId]);
+    }
+    await query(`DELETE FROM auth.users WHERE lower(email) = lower($1)`, [email]);
   }
 });

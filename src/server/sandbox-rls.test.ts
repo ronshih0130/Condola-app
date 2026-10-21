@@ -659,3 +659,72 @@ test("an existing empty sandbox is seeded once, and a sandbox that already has r
     await wipe();
   }
 });
+
+test("sample portfolio seed is a few statements, not one round trip per row", async () => {
+  const orgId = randomUUID();
+  const userId = randomUUID();
+  const tw = await query<{ id: string }>(`SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      await client.query(
+        `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, email_confirmed_at, role, aud)
+         VALUES ($1, $2, crypt('Demo1234', gen_salt('bf')), '{}'::jsonb, now(), 'authenticated', 'authenticated')`,
+        [userId, `seed-batch-${userId}@example.com`],
+      );
+      await client.query(`INSERT INTO profiles (id, display_name, email) VALUES ($1, 'Batch', $2)`, [
+        userId,
+        `seed-batch-${userId}@example.com`,
+      ]);
+      await client.query(
+        `INSERT INTO organizations (
+           id, name, country_code, jurisdiction_id, default_currency, timezone, plan_tier, created_by, environment
+         ) VALUES ($1, '批次沙盒', 'TW', $2, 'TWD', 'Asia/Taipei', 'free', $3, 'live')`,
+        [orgId, tw.rows[0].id, userId],
+      );
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status)
+         VALUES ($1, $2, 'admin', true, 'active')`,
+        [orgId, userId],
+      );
+      const sandboxId = randomUUID();
+      await client.query(
+        `INSERT INTO organizations (
+           id, name, country_code, jurisdiction_id, default_currency, timezone, plan_tier, created_by,
+           environment, live_org_id
+         ) VALUES ($1, '批次沙盒', 'TW', $2, 'TWD', 'Asia/Taipei', 'free', $3, 'sandbox', $4)`,
+        [sandboxId, tw.rows[0].id, userId, orgId],
+      );
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status)
+         VALUES ($1, $2, 'admin', true, 'active')`,
+        [sandboxId, userId],
+      );
+      let statements = 0;
+      const counting = new Proxy(client, {
+        get(target, prop, receiver) {
+          if (prop === "query") {
+            return (sql: string, params?: unknown[]) => {
+              statements += 1;
+              return target.query(sql, params);
+            };
+          }
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+      const started = Date.now();
+      const seeded = await runSandboxSeed(counting as typeof client, { orgId: sandboxId, actorUserId: userId });
+      const elapsed = Date.now() - started;
+      const expected = sampleCounts(loadSampleRows());
+      assert.equal(seeded.properties.length, expected.properties);
+      assert.equal(seeded.leases.length, expected.leases);
+      assert.equal(seeded.owners.length, expected.owners);
+      assert.ok(statements <= 24, `seed used ${statements} statements`);
+      assert.ok(elapsed < 3000, `seed took ${elapsed}ms`);
+      await client.query("ROLLBACK");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
+});

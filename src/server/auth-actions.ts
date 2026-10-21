@@ -144,9 +144,16 @@ export async function actionSecondFactor(formData: FormData) {
   redirect(result.backupCodes?.length ? "/login?step=backup" : next || "/auth/continue");
 }
 
+async function requestOrigin() {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host") || "";
+  const proto = h.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+  return host ? `${proto}://${host}` : "";
+}
+
 export async function actionForgot(formData: FormData) {
   const email = text(formData.get("email"));
-  await requestPasswordReset(email);
+  await requestPasswordReset(email, await requestOrigin());
   const jar = await cookies();
   const cookie = resetFlashCookie(email);
   jar.set(cookie.name, cookie.value, cookie.options);

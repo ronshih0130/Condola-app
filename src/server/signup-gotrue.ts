@@ -64,20 +64,29 @@ function loopbackOrigin(value: string): string | null {
 }
 
 /**
- * Confirmation links must land on an allow-listed URL:
- * https://staging.condola.app/signup/confirm or https://app.condola.app/signup/confirm.
- * A public request origin wins. Otherwise CONDOLA_SITE_URL, then CONDOLA_ENV.
+ * Allow-listed site origin. A public request origin wins. Otherwise
+ * CONDOLA_SITE_URL, then CONDOLA_ENV. Loopback is kept only for local dev.
  */
-export function signupConfirmUrl(requestOrigin: string) {
+export function publicSiteOrigin(requestOrigin: string) {
   const fromRequest = canonicalConfirmOrigin(requestOrigin);
-  if (fromRequest) return `${fromRequest}${CONFIRM_PATH}`;
+  if (fromRequest) return fromRequest;
   const fromEnv = canonicalConfirmOrigin(process.env.CONDOLA_SITE_URL || "");
-  if (fromEnv) return `${fromEnv}${CONFIRM_PATH}`;
+  if (fromEnv) return fromEnv;
   const name = process.env.CONDOLA_ENV?.trim().toLowerCase();
-  if (name === "production") return `https://app.condola.app${CONFIRM_PATH}`;
-  if (name === "staging" || name === "staging-real") return `https://staging.condola.app${CONFIRM_PATH}`;
+  if (name === "production") return "https://app.condola.app";
+  if (name === "staging" || name === "staging-real") return "https://staging.condola.app";
   const local = loopbackOrigin(requestOrigin);
-  return `${local || "http://127.0.0.1:43123"}${CONFIRM_PATH}`;
+  return local || "http://127.0.0.1:43123";
+}
+
+/** Confirmation links land on /signup/confirm of the allow-listed origin. */
+export function signupConfirmUrl(requestOrigin: string) {
+  return `${publicSiteOrigin(requestOrigin)}${CONFIRM_PATH}`;
+}
+
+/** Recovery links land on /reset of the same allow-listed origin. */
+export function passwordResetUrl(requestOrigin: string) {
+  return `${publicSiteOrigin(requestOrigin)}/reset`;
 }
 
 /** Signup confirmation accepts signup and email OTP types. Anything else is ignored. */

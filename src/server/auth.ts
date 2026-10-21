@@ -3,7 +3,7 @@ import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { query, withClient } from "./db";
 import { recordFunnel } from "./funnel";
-import { classifyPasswordGrant, gotrueVerifyBody, parseGotrueUserId } from "./signup-gotrue";
+import { classifyPasswordGrant, gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, passwordResetUrl } from "./signup-gotrue";
 import { lineLoginEnabled } from "./demo";
 import { outboundNote } from "./outbound";
 import { FlowError } from "./errors";
@@ -393,9 +393,25 @@ export async function verifyRecoveryTokenHash(tokenHash: string) {
   return { ok: true as const, token };
 }
 
-export async function requestPasswordReset(emailRaw: string) {
+export async function requestPasswordReset(emailRaw: string, requestOrigin = "") {
   const email = normalizeEmail(emailRaw);
   if (!email) return { token: null as string | null };
+  const url = supabaseUrl();
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  if (url && anon) {
+    // GoTrue sends the Supabase recovery template. The response stays generic
+    // whether or not the address exists, and a failed call does not change that.
+    try {
+      await fetch(gotrueEndpoint(url, "/auth/v1/recover", passwordResetUrl(requestOrigin)), {
+        method: "POST",
+        headers: { apikey: anon, "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch (error) {
+      console.error("password recover", error);
+    }
+    return { token: null };
+  }
   const user = await query<{ id: string }>(
     `SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`,
     [email],

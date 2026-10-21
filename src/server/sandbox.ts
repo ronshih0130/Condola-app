@@ -32,76 +32,81 @@ export async function sandboxForLive(liveOrgId: string) {
   return row.rows[0]?.id ?? null;
 }
 
-export async function ensureSandbox(session: Session) {
-  assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
-  const existing = await sandboxForLive(session.liveOrgId);
-  if (existing) return existing;
-  const live = await query<{
-    name: string;
-    legal_name: string | null;
-    country_code: string;
-    jurisdiction_id: string | null;
-    default_currency: string;
-    default_locale: string;
-    timezone: string;
-    date_calendar: string;
-    id_doc_retention_days: number;
-    is_rental_mgmt_business: boolean;
-    rental_mgmt_license_no: string | null;
-    feature_flags: unknown;
-  }>(
-    `SELECT name, legal_name, country_code, jurisdiction_id::text, default_currency, default_locale, timezone,
-            date_calendar::text, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no, feature_flags
-       FROM organizations WHERE id = $1 AND environment = 'live'`,
-    [session.liveOrgId],
+/** Create the linked sandbox and copy active members. The live firm must already be visible on this client. */
+export async function insertSandboxOrg(client: Client, liveOrgId: string, userId: string) {
+  const inserted = await client.query<{ id: string }>(
+    `INSERT INTO organizations (
+       name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
+       date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
+       plan_tier, feature_flags, settings, environment, live_org_id, created_by
+     )
+     SELECT name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
+            date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
+            'free', feature_flags, '{"sandboxPrompt":"open"}'::jsonb,
+            'sandbox', id, $2
+       FROM organizations
+      WHERE id = $1 AND environment = 'live'
+     RETURNING id::text`,
+    [liveOrgId, userId],
   );
-  const firm = live.rows[0];
-  if (!firm) throw new FlowError("errors.notFound");
-  let sandboxId: string;
-  try {
-    const inserted = await query<{ id: string }>(
-      `INSERT INTO organizations (
-         name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
-         date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
-         plan_tier, feature_flags, settings, environment, live_org_id, created_by
-       ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8::calendar_display,$9,$10,$11,'free',$12::jsonb,'{"sandboxPrompt":"open"}'::jsonb,
-         'sandbox',$13,$14
-       ) RETURNING id::text`,
-      [
-        firm.name,
-        firm.legal_name,
-        firm.country_code,
-        firm.jurisdiction_id,
-        firm.default_currency,
-        firm.default_locale,
-        firm.timezone,
-        firm.date_calendar,
-        firm.id_doc_retention_days,
-        firm.is_rental_mgmt_business,
-        firm.rental_mgmt_license_no,
-        JSON.stringify(firm.feature_flags ?? {}),
-        session.liveOrgId,
-        session.userId,
-      ],
-    );
-    sandboxId = inserted.rows[0].id;
-  } catch (error) {
-    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
-    if (code !== "23505") throw error;
-    const winner = await sandboxForLive(session.liveOrgId);
-    if (!winner) throw error;
-    sandboxId = winner;
-  }
-  await query(
+  const sandboxId = inserted.rows[0]?.id;
+  if (!sandboxId) throw new FlowError("errors.notFound");
+  await client.query(
     `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status, title)
      SELECT $1, user_id, role, is_billing_owner, status, title
        FROM org_members
       WHERE org_id = $2 AND status = 'active'
      ON CONFLICT (org_id, user_id) DO NOTHING`,
-    [sandboxId, session.liveOrgId],
+    [sandboxId, liveOrgId],
   );
   return sandboxId;
+}
+
+/** Sandbox plus its sample portfolio, in the caller's transaction. */
+export async function seedSandboxForNewFirm(client: Client, liveOrgId: string, userId: string) {
+  const sandboxId = await insertSandboxOrg(client, liveOrgId, userId);
+  await client.query(
+    `UPDATE organizations
+        SET sample_loaded_at = now(),
+            settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{sandboxPrompt}', '"loaded"'::jsonb, true)
+      WHERE id = $1 AND environment = 'sandbox'`,
+    [sandboxId],
+  );
+  await runSandboxSeed(client, { orgId: sandboxId, actorUserId: userId });
+  return sandboxId;
+}
+
+export async function ensureSandbox(session: Session) {
+  assertStaff(session, ["admin", "manager", "accountant", "maintenance"]);
+  const existing = await sandboxForLive(session.liveOrgId);
+  if (existing) return existing;
+  try {
+    return await withClient(async (client) => {
+      await client.query("BEGIN");
+      try {
+        const again = await client.query<{ id: string }>(
+          `SELECT id::text FROM organizations WHERE live_org_id = $1 AND environment = 'sandbox'`,
+          [session.liveOrgId],
+        );
+        if (again.rows[0]) {
+          await client.query("COMMIT");
+          return again.rows[0].id;
+        }
+        const sandboxId = await insertSandboxOrg(client, session.liveOrgId, session.userId);
+        await client.query("COMMIT");
+        return sandboxId;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    });
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    if (code !== "23505") throw error;
+    const winner = await sandboxForLive(session.liveOrgId);
+    if (!winner) throw error;
+    return winner;
+  }
 }
 
 /** First visit: create the linked sandbox, if it is missing, and load the sample portfolio once. */

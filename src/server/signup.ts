@@ -7,9 +7,8 @@ import { query, withClient } from "./db";
 import { recordFunnel } from "./funnel";
 import { previewPartnerCode, redeemPartnerCode } from "./partners";
 import { passwordAcceptable } from "./password";
-import { openSandboxFirm } from "./sandbox";
+import { seedSandboxForNewFirm } from "./sandbox";
 import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
-import type { Session } from "./types";
 
 const VERIFY_HOURS = 24;
 
@@ -406,8 +405,9 @@ export async function createFirm(input: {
       let redeemed = null as Awaited<ReturnType<typeof redeemPartnerCode>>;
       if (usableCode) redeemed = await redeemPartnerCode(client, { orgId, code: usableCode, where: "signup" });
       await client.query(`DELETE FROM signup_drafts WHERE user_id = $1`, [input.userId]);
+      const sandboxId = await seedSandboxForNewFirm(client, orgId, input.userId);
       await client.query("COMMIT");
-      return { orgId, firmName, dupName: Boolean(dup.rows[0]), redeemed, requestedCode: input.partnerCode.trim() || null };
+      return { orgId, sandboxId, firmName, dupName: Boolean(dup.rows[0]), redeemed, requestedCode: input.partnerCode.trim() || null };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -430,26 +430,11 @@ export async function createFirm(input: {
     detail: { kind, dupName: created.dupName },
   });
 
-  const session: Session = {
-    userId: input.userId,
-    sessionId: "signup",
-    email: input.email,
-    name: contactName,
-    kind: "staff",
-    role: "admin",
-    orgId: created.orgId,
-    liveOrgId: created.orgId,
-    environment: "live",
-    locale: "zh-TW",
-    calendar: "gregorian",
-    leaseId: null,
-  };
-  const sandboxId = await openSandboxFirm(session);
   const codeApplied = Boolean(created.redeemed && !created.redeemed.already);
   return {
     ok: true as const,
     orgId: created.orgId,
-    sandboxId,
+    sandboxId: created.sandboxId,
     name: created.firmName,
     dupName: created.dupName,
     codeApplied,
