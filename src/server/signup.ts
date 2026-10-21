@@ -6,6 +6,7 @@ import { firmDisplayName, normalizePartnerCode } from "./billing";
 import { query, withClient } from "./db";
 import { recordFunnel } from "./funnel";
 import { previewPartnerCode, redeemPartnerCode } from "./partners";
+import { normalizePhone } from "./lease-rules";
 import { passwordAcceptable } from "./password";
 import { seedSandboxForNewFirm } from "./sandbox";
 import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
@@ -390,7 +391,7 @@ export async function createFirm(input: {
           input.userId,
           kind,
           contactName,
-          input.phone.trim() || null,
+          normalizePhone(input.phone) ?? (input.phone.trim() || null),
           input.email,
           Boolean(dup.rows[0]),
         ],

@@ -1,5 +1,6 @@
 import { maybe, one, tx } from "./db";
 import { FlowError } from "./errors";
+import { normalizePhone } from "./lease-rules";
 import { toMinor } from "./money";
 import { assertPerm } from "./perms";
 import type { Session } from "./types";
@@ -293,9 +294,9 @@ function cleanEmail(email: string) {
 }
 
 function cleanPhone(phone: string) {
-  const value = phone.trim();
-  if (!value) return null;
-  if (!/^\+[1-9]\d{6,14}$/.test(value)) throw new FlowError("errors.phone");
+  if (!phone.trim()) return null;
+  const value = normalizePhone(phone);
+  if (!value) throw new FlowError("errors.phone");
   return value;
 }
 

@@ -15,7 +15,7 @@ import {
   taipeiToday,
   toMinor,
 } from "./money";
-import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, signedPdfName } from "./lease-rules";
+import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
@@ -24,9 +24,9 @@ function sha256(value: string) {
 }
 
 function cleanPhone(phone: string) {
-  const value = phone.trim();
-  if (!value) return null;
-  if (!/^\+[1-9]\d{6,14}$/.test(value)) throw new FlowError("errors.phone");
+  if (!phone.trim()) return null;
+  const value = normalizePhone(phone);
+  if (!value) throw new FlowError("errors.phone");
   return value;
 }
 

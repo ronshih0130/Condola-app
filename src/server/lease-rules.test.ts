@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, signedPdfName } from "./lease-rules";
+import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 
 test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositExceedsCap(2), false);
@@ -11,6 +11,14 @@ test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositReasonOk(3, ""), false);
   assert.equal(depositReasonOk(3, "   "), false);
   assert.equal(depositReasonOk(3, "屋主同意兩個月以上押金"), true);
+});
+
+test("a Taiwan mobile becomes +886 and an international number stays", () => {
+  assert.equal(normalizePhone("0911222333"), "+886911222333");
+  assert.equal(normalizePhone("0911-222-333"), "+886911222333");
+  assert.equal(normalizePhone("+886912345678"), "+886912345678");
+  assert.equal(normalizePhone("  "), null);
+  assert.equal(normalizePhone("0212345678"), null);
 });
 
 test("LINE id is optional and bounded", () => {
