@@ -18,8 +18,8 @@ export default async function PropertiesPage() {
         title={t("s_e03a6ec")}
         actions={
           <>
-            <a className="btn" href="/api/export">
-              {t("i_download")}
+            <a className="btn" href="/api/export" data-testid="export-properties">
+              {t("s_de922fa")}
             </a>
             <Link className="btn pri" href="/m/properties/new">
               + {t("s_aed91da")}

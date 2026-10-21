@@ -2,8 +2,6 @@
 
 export const LIST_STANDARD = 30;
 export const LIST_PRO = 40;
-export const VOLUME_CAP = 25;
-export const VOLUME_FROM = 500;
 export const FREE_UNITS = 4;
 
 export type PaidTier = "standard" | "pro";
@@ -23,24 +21,17 @@ function inForce(until: string | null | undefined, now: Date) {
   return Number.isFinite(time) && time > now.getTime();
 }
 
-/**
- * Monthly = (units in free+1…500) × rate + (units above 500) × min(rate, 25).
- * A partner rate below NT$25 is never raised for the units past 500.
- */
+/** Billable units are those past the free allowance, each at the same rate. */
 export function monthlyAmount(input: { units: number; rate: number; freeUnits?: number }) {
   const units = Math.max(0, Math.floor(input.units));
   const free = Math.max(0, input.freeUnits ?? FREE_UNITS);
   const rate = Math.max(0, input.rate);
-  let amount = 0;
-  for (let index = free + 1; index <= units; index += 1) {
-    amount += index <= VOLUME_FROM ? rate : Math.min(rate, VOLUME_CAP);
-  }
-  return amount;
+  return Math.max(0, units - free) * rate;
 }
 
-/** Yearly is 10 × monthly: two months free. */
+/** Yearly is 11 × monthly: one month free. */
 export function yearlyAmount(monthly: number) {
-  return monthly * 10;
+  return monthly * 11;
 }
 
 export function seatLimit(tier: string | null | undefined): number | null {
