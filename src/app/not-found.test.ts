@@ -73,3 +73,19 @@ test("dashboard money uses an NT$ prefix and the received tile says 已繳", () 
   assert.match(dash, /\{money\(received\)\} \/ \{money\(billed\)\}/);
   assert.match(dash, /money\(row\.balance, row\.currency\)/);
 });
+
+test("tenant pages prefix bill amounts with NT$ and leave PayDialog alone", () => {
+  const home = read("./t/page.tsx");
+  const lease = read("./t/lease/page.tsx");
+  const pay = read("./t/pay/page.tsx");
+  const dialog = read("../components/dialogs.tsx");
+  assert.match(home, /moneyLabel\(rentMinor, currency, session\.locale\)/);
+  assert.match(home, /moneyLabel\(depositMinor, currency, session\.locale\)/);
+  assert.doesNotMatch(home, /formatMoney/);
+  assert.match(lease, /moneyLabel\(Number\(money\.lease\.rent\)/);
+  assert.match(lease, /moneyLabel\(Number\(money\.lease\.deposit\)/);
+  assert.doesNotMatch(lease, /formatMoney/);
+  assert.match(pay, /import \{ moneyLabel as formatMoney \} from "@\/server\/format"/);
+  assert.match(pay, /\{formatMoney\(money\.dueMinor, money\.currency, session\.locale\)\}/);
+  assert.doesNotMatch(dialog, /moneyLabel/);
+});

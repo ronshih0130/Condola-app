@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { actionPickLease } from "@/server/actions";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { tenantLeaseMoney, tenantLeases } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -48,10 +48,10 @@ export default async function TenantHome() {
         <div className="fb">
           <div className="small">{t("s_b6c3113")}</div>
           <div className="big" data-testid="rent-due-amount" data-minor={rentMinor}>
-            {formatMoney(rentMinor, currency, session.locale)}
+            {moneyLabel(rentMinor, currency, session.locale)}
           </div>
           <div className="small" data-testid="rent-due-deposit" data-minor={depositMinor}>
-            {t("s_8b17769")} {formatMoney(depositMinor, currency, session.locale)}
+            {t("s_8b17769")} {moneyLabel(depositMinor, currency, session.locale)}
           </div>
         </div>
         <Link className="fbtn" href="/t/pay">
