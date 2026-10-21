@@ -52,7 +52,7 @@ test("a live firm opens live with no env cookie, and sign-in drops a leftover te
   await expect(page.getByTestId("org-switch")).not.toContainText("（範例）");
 });
 
-test("staff can open the seeded sandbox and go live without copying it", async ({ page }) => {
+test("staff can open the seeded sandbox", async ({ page }) => {
   const sampleProperty = displaySampleName(withSampleName(loadSampleRows()[0].property));
   await expect(page.getByTestId("env-banner")).toHaveCount(0);
   await expect(page.getByTestId("org-switch")).toContainText(FIRM_NAME);
@@ -70,35 +70,13 @@ test("staff can open the seeded sandbox and go live without copying it", async (
   await expect(page.getByTestId("property-list")).toBeVisible();
   await expect(page.getByRole("link", { name: sampleProperty })).toBeVisible();
   await expect(page.getByTestId("sample-tag")).toHaveCount(0);
-
-  await page.goto("/m/env");
-  await expect(page.getByTestId("gl-req")).toHaveAttribute("data-allowed", "true");
-  await expect(page.getByTestId("gl-copy")).toBeChecked();
-  await expect(page.getByTestId("gl-owners")).toContainText("屋主資料會一起複製");
-  await expect(page.getByTestId("gl-owners")).toContainText("登入與邀請會重設");
-  await expect(page.getByTestId("gl-never")).toContainText("測試中的人和金額都是練習用的");
-  await page.getByTestId("gl-copy").uncheck();
-  await expect(page.getByTestId("gl-no-copy")).toBeVisible();
-  await page.getByTestId("gl-confirm").click();
-
-  await expect(page.getByTestId("golive-note")).toBeVisible();
-  await expect(page.getByTestId("env-banner")).toHaveCount(0);
-  await page.goto("/m/properties");
-  await expect(page.getByRole("link", { name: sampleProperty })).toHaveCount(0);
-
-  await page.getByTestId("org-switch").click();
-  await page.getByTestId("org-pick-sandbox").click();
-  await expect(page.getByTestId("env-load")).toHaveCount(0);
-  await expect(page.getByTestId("env-banner")).toBeVisible();
-  await page.goto("/m/properties");
-  await expect(page.getByRole("link", { name: sampleProperty })).toBeVisible();
-  await expect(page.getByTestId("sample-tag")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("開始正式使用");
 });
 
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("the switcher stays tappable and go-live fits", async ({ page }) => {
+  test("the switcher stays tappable", async ({ page }) => {
     await signIn(page, ACCOUNTS.admin);
     await page.getByTestId("nav-toggle").click();
     await page.getByTestId("org-switch").click();
@@ -108,9 +86,21 @@ test.describe("phone", () => {
     await page.getByTestId("nav-toggle").click();
     const box = await page.getByTestId("org-switch").boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-    await page.goto("/m/env");
-    await expect(page.getByTestId("gl-never")).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("開始正式使用");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
     expect(overflow).toBe(true);
   });
+});
+
+test("a logged-in staff user gets 404 from /m/env and no page says 開始正式使用", async ({ page }) => {
+  const missing = await page.goto("/m/env");
+  expect(missing?.status()).toBe(404);
+  await expect(page.locator("body")).not.toContainText("開始正式使用");
+  for (const path of ["/m", "/m/properties", "/m/settings", "/m/audit", "/m/team", "/m/notify", "/m/account", "/pricing"]) {
+    await page.goto(path);
+    await expect(page.locator("body"), path).not.toContainText("開始正式使用");
+  }
+  await page.goto("/api/env?set=sandbox&next=/m");
+  await expect(page.getByTestId("env-banner")).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("開始正式使用");
 });

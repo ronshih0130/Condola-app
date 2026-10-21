@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { listFlaggedFirms, listPartnerCodes } from "@/server/partners";
-import { goLiveLocked, isPlatformAdmin } from "@/server/platform";
-import { actionClearPriceOverride, actionCreatePartnerCode, actionSetGoLiveLock, actionSetPriceOverride } from "@/server/signup-actions";
+import { isPlatformAdmin } from "@/server/platform";
+import { actionClearPriceOverride, actionCreatePartnerCode, actionSetPriceOverride } from "@/server/signup-actions";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -13,24 +13,13 @@ export default async function PlatformAdminPage({ searchParams }: { searchParams
   if (!isPlatformAdmin(session.email)) notFound();
   const query = await searchParams;
   const t = makeT(session.locale);
-  const [codes, flagged, locked] = await Promise.all([listPartnerCodes(), listFlaggedFirms(), goLiveLocked()]);
+  const [codes, flagged] = await Promise.all([listPartnerCodes(), listFlaggedFirms()]);
   return (
     <>
       <PageHeader title={t("i_admin_title")} />
       <ErrorBanner t={t} error={query.error} />
       {query.saved === "1" ? <p className="alert ok">{t("i_admin_saved")}</p> : null}
       <div className="col" style={{ maxWidth: 840 }}>
-        <form action={actionSetGoLiveLock} className="card pad" data-testid="admin-pause">
-          <h2>{t("i_admin_pause")}</h2>
-          <p className="small">{t("i_admin_pause_hint")}</p>
-          <label className="radio">
-            <input type="checkbox" name="locked" defaultChecked={locked} data-testid="admin-pause-toggle" />
-            <span>{t("i_admin_pause")}</span>
-          </label>
-          <button className="btn pri" type="submit">
-            {t("i_save")}
-          </button>
-        </form>
         <div className="card pad">
           <h2>{t("i_admin_codes")}</h2>
           <ul data-testid="admin-codes">

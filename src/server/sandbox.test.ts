@@ -6,11 +6,8 @@ import { demoModeEnabled, enforceDemoSafety } from "./demo";
 import { resolveStaffEnvironment } from "./org-scope";
 import { SANDBOX_NOT_SENT, canSendReal, deliveryPlan } from "./outbound";
 import {
-  COPY_KINDS,
-  NEVER_KINDS,
   SAMPLE_LABEL,
   displaySampleName,
-  goLiveAllowed,
   isSampleName,
   loadSampleRows,
   overFree,
@@ -113,8 +110,6 @@ test("sandbox ignores the free cap and live allows four units or a plan or trial
   assert.equal(overFree({ environment: "live", activeUnits: 9, plan: { tier: "standard", trialUntil: null }, now }), false);
   assert.equal(overFree({ environment: "live", activeUnits: 9, plan: { tier: "free", trialUntil: "2099-01-01" }, now }), false);
   assert.equal(overFree({ environment: "live", activeUnits: 5, plan: { tier: "free", trialUntil: "2020-01-01" }, now }), true);
-  assert.equal(goLiveAllowed({ activeUnits: 4, plan: free, now }), true);
-  assert.equal(goLiveAllowed({ activeUnits: 5, plan: free, now }), false);
 });
 
 test("sandbox delivery is logged and never uses the live demo sender", () => {
@@ -130,14 +125,6 @@ test("sandbox delivery is logged and never uses the live demo sender", () => {
   assert.equal(live.provider, "demo_line");
   assert.equal(live.error, "demo_not_sent");
   assert.equal(live.error.includes(SANDBOX_NOT_SENT), false);
-});
-
-test("go-live copies owner records and never copies people or money", () => {
-  assert.equal(COPY_KINDS.includes("owners"), true);
-  assert.equal((COPY_KINDS as readonly string[]).includes("tenants"), false);
-  for (const kind of ["tenants", "leases", "bills", "payments", "ledger", "statements"] as const) {
-    assert.equal(NEVER_KINDS.includes(kind), true);
-  }
 });
 
 function setEnv(key: string, value: string | undefined) {

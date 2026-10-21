@@ -12,7 +12,7 @@ import {
   requestUpgrade,
   setFirmOverride,
 } from "./partners";
-import { isPlatformAdmin, setGoLiveLock } from "./platform";
+import { isPlatformAdmin } from "./platform";
 import { appCookieOptions } from "./public-origin";
 import { getSession } from "./session";
 import { sessionEntryPath } from "./sign-out";
@@ -204,12 +204,6 @@ export async function actionCreatePartnerCode(formData: FormData) {
   } catch (error) {
     bounce("/m/admin", error);
   }
-  redirect("/m/admin?saved=1");
-}
-
-export async function actionSetGoLiveLock(formData: FormData) {
-  const session = await requirePlatformAdmin();
-  await setGoLiveLock(session.userId, formData.get("locked") === "on");
   redirect("/m/admin?saved=1");
 }
 

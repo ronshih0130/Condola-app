@@ -4,18 +4,6 @@ import type { OrgEnvironment } from "./org-scope";
 export const SAMPLE_LABEL = "範例資料";
 export const FREE_ACTIVE_UNITS = 4;
 
-export const COPY_KINDS = [
-  "settings",
-  "properties",
-  "rooms",
-  "owners",
-  "fee_templates",
-  "bank_accounts",
-  "invites",
-] as const;
-
-export const NEVER_KINDS = ["tenants", "leases", "bills", "payments", "ledger", "statements"] as const;
-
 export type SampleCounts = {
   properties: number;
   spaces: number;
@@ -205,8 +193,4 @@ export function overFree(input: { environment: OrgEnvironment; activeUnits: numb
   if (input.environment === "sandbox") return false;
   if (hasPlanOrTrial(input.plan, input.now)) return false;
   return input.activeUnits > FREE_ACTIVE_UNITS;
-}
-
-export function goLiveAllowed(input: { activeUnits: number; plan: PlanSnapshot; now: Date }) {
-  return !overFree({ environment: "live", ...input });
 }

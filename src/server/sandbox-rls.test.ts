@@ -2,12 +2,11 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
 import { query, tx, withClient } from "./db";
-import { FlowError } from "./errors";
 import { USERS } from "./ids";
 import { SANDBOX_NOT_SENT } from "./outbound";
 import { loadSampleRows, sampleCounts } from "./sandbox-data";
 import { runSandboxSeed } from "./sandbox-seed";
-import { ensureSampleLoaded, ensureSandbox, goLive, loadSampleData, openSandboxFirm } from "./sandbox";
+import { ensureSampleLoaded, ensureSandbox, loadSampleData, openSandboxFirm } from "./sandbox";
 import { recordLeaseNotice } from "./domain";
 import type { Session } from "./types";
 
@@ -79,7 +78,7 @@ async function count(orgId: string, table: string) {
   return row.rows[0].n;
 }
 
-test("sandbox rows stay hidden, copy resets owner portal logins, and five live units block go-live", async () => {
+test("sandbox rows stay hidden from other firms and sample data loads once", async () => {
   await cleanup();
   try {
     const tw = await query<{ id: string }>(`SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
@@ -302,188 +301,6 @@ test("sandbox rows stay hidden, copy resets owner portal logins, and five live u
       { pin: false },
     );
     assert.equal(stillHidden.rows[0].n, 0);
-
-    await query(
-      `UPDATE organizations
-          SET id_doc_retention_days = 45,
-              settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{firmColor}', '"amber"'::jsonb, true)
-        WHERE id = $1`,
-      [sandboxId],
-    );
-
-    await query(
-      `INSERT INTO platform_settings (key, value, description)
-       VALUES ('go_live_lock', 'true'::jsonb, 'test')
-       ON CONFLICT (key) DO UPDATE SET value = 'true'::jsonb`,
-    );
-    await assert.rejects(() => goLive(session(sandboxId, LIVE_ID, "sandbox"), false), (error: unknown) => {
-      assert.ok(error instanceof FlowError);
-      assert.equal(error.key, "errors.forbidden");
-      return true;
-    });
-    await query(`UPDATE platform_settings SET value = 'false'::jsonb WHERE key = 'go_live_lock'`);
-
-    await assert.rejects(() => goLive(session(sandboxId, LIVE_ID, "sandbox", "manager"), true), (error: unknown) => {
-      assert.ok(error instanceof FlowError);
-      assert.equal(error.key, "errors.forbidden");
-      return true;
-    });
-    assert.equal(await count(LIVE_ID, "fee_rules"), 0);
-
-    const mine = await query<{ id: string }>(
-      `INSERT INTO properties (org_id, name, address_display, country_code, jurisdiction_id, currency, timezone)
-       VALUES ($1, '我的物件', '新北市', 'TW', $2, 'TWD', 'Asia/Taipei') RETURNING id::text`,
-      [sandboxId, jurisdictionId],
-    );
-    const myOwner = await query<{ id: string }>(
-      `INSERT INTO contacts (org_id, is_owner, is_tenant, display_name, email)
-       VALUES ($1, true, false, '我的屋主', 'mine.owner@example.com') RETURNING id::text`,
-      [sandboxId],
-    );
-    await query(
-      `INSERT INTO property_owners (org_id, property_id, owner_contact_id, ownership_bp, is_primary)
-       VALUES ($1, $2, $3, 10000, true)`,
-      [sandboxId, mine.rows[0].id, myOwner.rows[0].id],
-    );
-    const myUnit = await query<{ id: string }>(
-      `INSERT INTO units (org_id, property_id, label, rental_mode) VALUES ($1, $2, '我的戶', 'whole_unit') RETURNING id::text`,
-      [sandboxId, mine.rows[0].id],
-    );
-    await query(`INSERT INTO rooms (org_id, unit_id, label) VALUES ($1, $2, '我的房')`, [sandboxId, myUnit.rows[0].id]);
-    await query(
-      `INSERT INTO fee_rules (org_id, name, purpose, kind, basis, currency, percent_bp)
-       VALUES ($1, '我的費用', 'management_fee', 'percent', 'collected_rent', 'TWD', 500)`,
-      [sandboxId],
-    );
-    await query(
-      `INSERT INTO bank_accounts (org_id, nickname, bank_name, bank_code, account_last5, currency, show_to_tenants)
-       VALUES ($1, '我的帳戶', '臺灣銀行', '004', '24680', 'TWD', false)`,
-      [sandboxId],
-    );
-    await query(
-      `INSERT INTO invitations (org_id, kind, role, email, code_hash, status, expires_at, invited_by)
-       VALUES ($1, 'team_member', 'manager', 'user.staff@example.com', $2, 'pending', now() + interval '7 days', $3)`,
-      [sandboxId, createHash("sha256").update("user-invite").digest("hex"), USER_ID],
-    );
-
-    await goLive(session(sandboxId, LIVE_ID, "sandbox"), true);
-
-    const liveProps = await query<{ id: string; name: string }>(
-      `SELECT id::text, name FROM properties WHERE org_id = $1 ORDER BY name`,
-      [LIVE_ID],
-    );
-    const sandboxProps = await query<{ id: string; name: string }>(
-      `SELECT id::text, name FROM properties WHERE org_id = $1`,
-      [sandboxId],
-    );
-    assert.equal(liveProps.rows.filter((row) => row.name.includes("範例資料")).length, 0);
-    assert.equal(liveProps.rows.some((row) => row.name === "正式標記"), true);
-    assert.equal(liveProps.rows.some((row) => row.name === "我的物件"), true);
-    const sandboxPropIds = new Set(sandboxProps.rows.map((row) => row.id));
-    assert.equal(liveProps.rows.some((row) => sandboxPropIds.has(row.id)), false);
-    assert.equal(await count(sandboxId, "properties"), expected.properties + 1);
-
-    const liveOwners = await query<{ user_id: string | null; tenant: boolean; name: string }>(
-      `SELECT user_id::text, is_tenant AS tenant, display_name AS name FROM contacts WHERE org_id = $1 AND is_owner`,
-      [LIVE_ID],
-    );
-    assert.equal(liveOwners.rows.length, 1);
-    assert.equal(liveOwners.rows[0].name, "我的屋主");
-    assert.equal(liveOwners.rows.some((row) => row.name.includes("範屋主")), false);
-    assert.equal(liveOwners.rows.every((row) => row.user_id === null && row.tenant === false), true);
-    assert.equal(await count(LIVE_ID, "leases"), 0);
-    assert.equal(await count(LIVE_ID, "invoices"), 0);
-    assert.equal(await count(LIVE_ID, "payments"), 0);
-    assert.equal(await count(LIVE_ID, "ledger_transactions"), 0);
-    assert.equal(await count(LIVE_ID, "owner_statements"), 0);
-    assert.equal(await count(LIVE_ID, "sample_marks"), 0);
-    assert.equal(await count(sandboxId, "leases"), expected.leases);
-    assert.ok((await count(sandboxId, "sample_marks")) > 0);
-
-    const portal = await query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM contacts WHERE org_id = $1 AND user_id = $2`,
-      [LIVE_ID, PORTAL_ID],
-    );
-    assert.equal(portal.rows[0].n, 0);
-    const invites = await query<{ kind: string; email: string; code_hash: string }>(
-      `SELECT kind::text, email::text, code_hash FROM invitations WHERE org_id = $1`,
-      [LIVE_ID],
-    );
-    assert.equal(invites.rows.some((row) => row.kind === "owner"), false);
-    assert.equal(invites.rows.filter((row) => row.email === "sandbox.staff@example.com").length, 0);
-    const team = invites.rows.filter((row) => row.email === "user.staff@example.com");
-    assert.equal(team.length, 1);
-    const sandboxTeam = await query<{ code_hash: string }>(
-      `SELECT code_hash FROM invitations WHERE org_id = $1 AND email = 'user.staff@example.com'`,
-      [sandboxId],
-    );
-    assert.notEqual(team[0].code_hash, sandboxTeam.rows[0].code_hash);
-    const liveBanks = await query<{ nickname: string }>(`SELECT nickname FROM bank_accounts WHERE org_id = $1`, [LIVE_ID]);
-    assert.equal(liveBanks.rows.some((row) => row.nickname.includes("範例")), false);
-    assert.equal(liveBanks.rows.some((row) => row.nickname === "我的帳戶"), true);
-    const liveRooms = await query<{ label: string }>(`SELECT label FROM rooms WHERE org_id = $1`, [LIVE_ID]);
-    assert.equal(liveRooms.rows.some((row) => row.label.includes("範例")), false);
-    assert.equal(liveRooms.rows.some((row) => row.label === "我的房"), true);
-    assert.ok((await count(LIVE_ID, "fee_rules")) > 0);
-
-    const liveOrg = await query<{ plan_tier: string; days: number; settings: { firmColor?: string; sandboxPrompt?: string } }>(
-      `SELECT plan_tier::text, id_doc_retention_days AS days, settings FROM organizations WHERE id = $1`,
-      [LIVE_ID],
-    );
-    assert.equal(liveOrg.rows[0].plan_tier, "beta");
-    assert.equal(liveOrg.rows[0].days, 45);
-    assert.equal(liveOrg.rows[0].settings.firmColor, "amber");
-    assert.equal(liveOrg.rows[0].settings.sandboxPrompt, undefined);
-    const sandboxStill = await query<{ user_id: string | null }>(
-      `SELECT user_id::text FROM contacts WHERE id = $1`,
-      [owner.rows[0].id],
-    );
-    assert.equal(sandboxStill.rows[0].user_id, PORTAL_ID);
-
-    const audit = await query<{ new_row: { copy?: boolean; owners?: string; notCopied?: string[] } }>(
-      `SELECT new_row FROM audit_log WHERE org_id = $1 AND event_type = 'go_live'`,
-      [LIVE_ID],
-    );
-    assert.equal(audit.rows[0].new_row.copy, true);
-    assert.equal(audit.rows[0].new_row.owners, "copied_without_portal_login");
-    assert.equal(audit.rows[0].new_row.notCopied?.includes("tenants"), true);
-    assert.equal(audit.rows[0].new_row.notCopied?.includes("statements"), true);
-
-    const blockSession = session(BLOCK_ID, BLOCK_ID, "live");
-    const blockSandbox = await ensureSandbox(blockSession);
-    const property = await query<{ id: string }>(
-      `INSERT INTO properties (org_id, name, country_code, jurisdiction_id, currency, timezone)
-       VALUES ($1, '超額物件', 'TW', $2, 'TWD', 'Asia/Taipei') RETURNING id::text`,
-      [BLOCK_ID, jurisdictionId],
-    );
-    for (let index = 0; index < 5; index += 1) {
-      const unit = await query<{ id: string }>(
-        `INSERT INTO units (org_id, property_id, label, rental_mode) VALUES ($1, $2, $3, 'whole_unit') RETURNING id::text`,
-        [BLOCK_ID, property.rows[0].id, `U${index}`],
-      );
-      await query(
-        `INSERT INTO leases (
-           org_id, property_id, unit_id, target_unit_id, status, start_date, currency, rent_amount_minor, signed_at
-         ) VALUES ($1, $2, $3, $3, 'active', current_date, 'TWD', 100000, now())`,
-        [BLOCK_ID, property.rows[0].id, unit.rows[0].id],
-      );
-    }
-    await assert.rejects(() => goLive(blockSession, false), (error: unknown) => {
-      assert.ok(error instanceof FlowError);
-      assert.equal(error.key, "errors.planLimit");
-      return true;
-    });
-    await query(
-      `UPDATE organizations SET settings = '{"plan":{"trialUntil":"2099-01-01"}}'::jsonb WHERE id = $1`,
-      [BLOCK_ID],
-    );
-    await goLive(session(blockSandbox, BLOCK_ID, "sandbox"), false);
-    const blockAudit = await query<{ new_row: { copy?: boolean; owners?: string } }>(
-      `SELECT new_row FROM audit_log WHERE org_id = $1 AND event_type = 'go_live'`,
-      [BLOCK_ID],
-    );
-    assert.equal(blockAudit.rows[0].new_row.copy, false);
-    assert.equal(blockAudit.rows[0].new_row.owners, "not_copied");
   } finally {
     await cleanup();
   }
