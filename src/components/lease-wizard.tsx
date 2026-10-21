@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { errorText } from "@/i18n/errors";
 import { confirmDeposit, confirmSpace, confirmSpaceFromSnapshot, depositMonthsOnHalfStep, formatMajor, nextSpaceSnapshot, twdRentIsWhole } from "@/lease-confirm";
 import { actionCreateLease } from "@/server/actions";
@@ -291,7 +292,7 @@ export function LeaseWizard({
       {slowSubmit ? (
         <div className="alert warn" data-testid="lease-submit-slow" style={{ marginBottom: 12 }}>
           {t("i_lease_slow")}{" "}
-          <a href="/m/leases" data-testid="lease-slow-link">{t("s_fba85ae")}</a>
+          <Link href="/m/leases" data-testid="lease-slow-link">{t("s_fba85ae")}</Link>
         </div>
       ) : null}
       <input type="hidden" name="roomId" value={roomId} />
