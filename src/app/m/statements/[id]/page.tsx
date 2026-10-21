@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
+import { PdfDownloadButton } from "@/components/pdf-download";
 import { StatementDocument } from "@/components/statement-document";
 import { PageHeader } from "@/components/ui";
 import { statementDetail } from "@/server/queries";
@@ -17,7 +18,18 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
   const row = detail.statement;
   return (
     <>
-      <PageHeader title={row.owner_name} crumb={<Link href="/m/statements">{t("i_nav_stmt")}</Link>} />
+      <PageHeader
+        title={row.owner_name}
+        crumb={<Link href="/m/statements">{t("i_nav_stmt")}</Link>}
+        actions={
+          <PdfDownloadButton
+            href={`/api/pdf/statements/${id}`}
+            label={t("s_874a842")}
+            failed={t("pdf_failed")}
+            testId="download-statement-pdf"
+          />
+        }
+      />
       <p className="muted">
         {row.period_start} – {row.period_end}
       </p>

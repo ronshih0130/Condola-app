@@ -16,3 +16,19 @@ export async function writeAudit(
   if (client) await client.query(sql, params);
   else await query(sql, params);
 }
+
+/** A successful lease or statement PDF download. Written after the RLS read succeeds. */
+export async function writePdfDownload(
+  orgId: string,
+  userId: string,
+  actorRole: string,
+  table: "leases" | "owner_statements",
+  rowId: string,
+  detail: Record<string, unknown> = {},
+) {
+  await query(
+    `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row, reason)
+     VALUES ($1, $2, $3, $4, $5, 'insert', 'pdf_download', $6::jsonb, 'pdf_download')`,
+    [orgId, userId, actorRole, table, rowId, JSON.stringify({ event: "pdf_download", ...detail })],
+  );
+}

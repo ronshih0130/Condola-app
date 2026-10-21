@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { writeAudit } from "./audit";
+import { leasePdfForSession, statementPdfForSession } from "./pdf-download";
 import { query, svc, tx, withClient } from "./db";
 import { createLease, createProperty } from "./domain";
 import { FlowError } from "./errors";
@@ -545,4 +546,95 @@ test("another firm cannot issue or redeem a portal invite, and anon cannot read 
     }
     await query(`DELETE FROM contacts WHERE id = $1`, [contactId]);
   }
+});
+
+function pdfSession(userId: string, kind: Session["kind"], role: Session["role"], orgId: string): Session {
+  return {
+    userId,
+    sessionId: "pdf",
+    email: "pdf@test",
+    name: "Pdf",
+    kind,
+    role,
+    orgId,
+    liveOrgId: orgId,
+    environment: "live",
+    locale: "zh-TW",
+    calendar: "gregorian",
+    leaseId: null,
+  };
+}
+
+async function pdfAuditCount(table: string, rowId: string) {
+  const rows = await tx(USERS.admin, (client) =>
+    client.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM audit_log WHERE table_name = $1 AND row_id = $2 AND event_type = 'pdf_download'`,
+      [table, rowId],
+    ),
+  );
+  return Number(rows.rows[0]?.n ?? 0);
+}
+
+test("PDF download follows RLS, records an audit row, and stays inside the firm", async () => {
+  const lease = await tx(USERS.tenant, (client) =>
+    client.query<{ id: string; document_sha256: string }>(
+      `SELECT id::text, document_sha256 FROM leases WHERE org_id = $1 LIMIT 1`,
+      [ORG_ID],
+    ),
+  );
+  const leaseId = lease.rows[0]?.id;
+  const hash = lease.rows[0]?.document_sha256;
+  assert.ok(leaseId);
+  assert.match(hash ?? "", /^[a-f0-9]{64}$/);
+
+  const before = await pdfAuditCount("leases", leaseId);
+  const maintenance = pdfSession(USERS.maintenance, "staff", "maintenance", ORG_ID);
+  const visibleToMaintenance = await tx(USERS.maintenance, (client) =>
+    client.query(`SELECT id FROM leases WHERE id = $1`, [leaseId]),
+  );
+  assert.equal(visibleToMaintenance.rows.length, 1);
+  assert.equal(await leasePdfForSession(maintenance, leaseId), null);
+
+  const coast = pdfSession(USERS.coastAdmin, "staff", "admin", ORG2_ID);
+  const leaked = await tx(USERS.coastAdmin, (client) => client.query(`SELECT id FROM leases WHERE id = $1`, [leaseId]));
+  assert.equal(leaked.rows.length, 0);
+  assert.equal(await leasePdfForSession(coast, leaseId), null);
+  assert.equal(await pdfAuditCount("leases", leaseId), before);
+
+  const manager = pdfSession(USERS.manager, "staff", "manager", ORG_ID);
+  const managerDoc = await leasePdfForSession(manager, leaseId);
+  assert.equal(managerDoc?.footerHash, hash);
+  assert.match(JSON.stringify(managerDoc), /屋主/);
+  assert.equal(JSON.stringify(managerDoc).includes("房東"), false);
+
+  const tenant = pdfSession(USERS.tenant, "tenant", null, ORG_ID);
+  const tenantDoc = await leasePdfForSession(tenant, leaseId);
+  assert.equal(tenantDoc?.footerHash, hash);
+  assert.match(JSON.stringify(tenantDoc), /租客/);
+  assert.match(JSON.stringify(tenantDoc), /屋主/);
+  assert.match(JSON.stringify(tenantDoc), /陳建宏/);
+  assert.equal(await pdfAuditCount("leases", leaseId), before + 2);
+
+  const statement = await tx(USERS.owner, (client) =>
+    client.query<{ id: string }>(`SELECT id::text FROM owner_statements LIMIT 1`),
+  );
+  const statementId = statement.rows[0]?.id;
+  assert.ok(statementId);
+  const statementBefore = await pdfAuditCount("owner_statements", statementId);
+  assert.equal(await statementPdfForSession(tenant, statementId), null);
+  assert.equal(await statementPdfForSession(coast, statementId), null);
+  assert.equal(await statementPdfForSession(maintenance, statementId), null);
+  assert.equal(await pdfAuditCount("owner_statements", statementId), statementBefore);
+
+  const owner = pdfSession(USERS.owner, "owner", null, ORG_ID);
+  const ownerDoc = await statementPdfForSession(owner, statementId);
+  assert.match(JSON.stringify(ownerDoc), /屋主應補繳/);
+  assert.equal(JSON.stringify(ownerDoc).includes("房東"), false);
+  const managerStatement = await statementPdfForSession(manager, statementId);
+  assert.ok(managerStatement);
+  assert.equal(await pdfAuditCount("owner_statements", statementId), statementBefore + 2);
+  const coastRead = await tx(USERS.coastAdmin, (client) =>
+    client.query(`SELECT id FROM owner_statements WHERE id = $1`, [statementId]),
+  );
+  assert.equal(coastRead.rows.length, 0);
 });

@@ -4,6 +4,7 @@ import { dictionary, makeT } from "@/i18n";
 import { AuditHistory } from "@/components/audit-log";
 import { PayDialog } from "@/components/dialogs";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
+import { PdfDownloadButton } from "@/components/pdf-download";
 import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
@@ -55,6 +56,14 @@ export default async function LeasePage({
           </>
         }
         crumb={<Link href="/m/leases">{t("s_fba85ae")}</Link>}
+        actions={
+          <PdfDownloadButton
+            href={`/api/pdf/leases/${id}`}
+            label={t("s_874a842")}
+            failed={t("pdf_failed")}
+            testId="download-lease-pdf"
+          />
+        }
       />
       <ErrorBanner t={t} error={query.error} />
       {query.created === "1" ? (
