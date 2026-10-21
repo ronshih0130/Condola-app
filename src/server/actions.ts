@@ -156,6 +156,7 @@ export async function actionUpdateLease(prev: ActionState = EMPTY_ACTION, formDa
       rentMajor: optionalNum(formData.get("rent")),
       depositMonths: optionalNum(formData.get("depositMonths")),
       depositReason: text(formData.get("depositReason")),
+      updatedAt: text(formData.get("updatedAt")),
     });
     redirect(`/m/leases/${leaseId}`);
   } catch (error) {

@@ -559,6 +559,31 @@ function isDepositCap(error: unknown) {
   return error instanceof FlowError && error.key === "errors.depositCap";
 }
 
+function isFlow(key: string) {
+  return (error: unknown) => error instanceof FlowError && error.key === key;
+}
+
+/** Postgres check_violation from the deposit CHECK or trigger, not the mapped FlowError. */
+function isPgDepositGuard(error: unknown, constraint?: string) {
+  if (error instanceof FlowError || !error || typeof error !== "object") return false;
+  const pg = error as { code?: string; constraint?: string; message?: string };
+  if (pg.code !== "23514") return false;
+  if (constraint) return pg.constraint === constraint;
+  return pg.constraint === "leases_deposit_over_cap_requires_override" || pg.constraint === "leases_deposit_override_pair" || /deposit of/i.test(pg.message ?? "");
+}
+
+async function leaseVersion(leaseId: string) {
+  const row = await query<{ updated_at: string; hash: string; months: string; reason: string | null; at: Date | null }>(
+    `SELECT updated_at::text AS updated_at, document_sha256 AS hash, deposit_months::text AS months,
+            deposit_override_reason AS reason, deposit_overridden_at AS at
+       FROM leases WHERE id = $1`,
+    [leaseId],
+  );
+  const version = row.rows[0];
+  if (!version) throw new Error("missing lease");
+  return version;
+}
+
 test("every lease save path rejects a deposit over two months without a reason", async () => {
   const stamp = Date.now().toString(36);
   const propertyIds: string[] = [];
@@ -663,12 +688,27 @@ test("every lease save path rejects a deposit over two months without a reason",
     assert.equal(saved.rows[0]?.outcome, "overridden");
     assert.equal(saved.rows[0]?.audit_reason, reason);
 
+    const opened = await leaseVersion(created.leaseId);
     await assert.rejects(
-      () => updateLease(admin, { leaseId: created.leaseId, rentMajor: 10000, depositMonths: 4, depositReason: "" }),
+      () =>
+        updateLease(admin, {
+          leaseId: created.leaseId,
+          rentMajor: 10000,
+          depositMonths: 4,
+          depositReason: "",
+          updatedAt: opened.updated_at,
+        }),
       isDepositCap,
     );
     await assert.rejects(
-      () => updateLease(admin, { leaseId: created.leaseId, rentMajor: 10000, depositMonths: "4", depositReason: "  " }),
+      () =>
+        updateLease(admin, {
+          leaseId: created.leaseId,
+          rentMajor: 10000,
+          depositMonths: "4",
+          depositReason: "  ",
+          updatedAt: opened.updated_at,
+        }),
       isDepositCap,
     );
     const still = await query<{ months: string }>(`SELECT deposit_months::text AS months FROM leases WHERE id = $1`, [created.leaseId]);
@@ -679,8 +719,11 @@ test("every lease save path rejects a deposit over two months without a reason",
       rentMajor: 10000,
       depositMonths: 4,
       depositReason: "屋主同意四個月押金",
+      updatedAt: opened.updated_at,
     });
     assert.equal(edited.depositWarn, false);
+    const editedVersion = await leaseVersion(created.leaseId);
+    assert.notEqual(editedVersion.hash, opened.hash);
     const editedRow = await query<{ months: string; reason: string | null; by: string | null; audit_reason: string | null }>(
       `SELECT l.deposit_months::text AS months, l.deposit_override_reason AS reason, l.deposit_overridden_by::text AS by,
               a.reason AS audit_reason
@@ -699,29 +742,141 @@ test("every lease save path rejects a deposit over two months without a reason",
     assert.equal(editedRow.rows[0]?.by, USERS.admin);
     assert.equal(editedRow.rows[0]?.audit_reason, "屋主同意四個月押金");
 
-    const cleared = await updateLease(admin, { leaseId: created.leaseId, rentMajor: 10000, depositMonths: 2, depositReason: "" });
+    await assert.rejects(
+      () =>
+        updateLease(admin, {
+          leaseId: created.leaseId,
+          rentMajor: 10000,
+          depositMonths: 4,
+          depositReason: "屋主同意四個月押金",
+          updatedAt: opened.updated_at,
+        }),
+      isFlow("errors.staleLease"),
+    );
+    assert.equal((await leaseVersion(created.leaseId)).updated_at, editedVersion.updated_at);
+
+    const keptAt = editedVersion.at;
+    const cleared = await updateLease(admin, {
+      leaseId: created.leaseId,
+      rentMajor: 10000,
+      depositMonths: 2,
+      depositReason: "",
+      updatedAt: editedVersion.updated_at,
+    });
     assert.equal(cleared.depositWarn, false);
-    const clearedRow = await query<{ months: string; reason: string | null; by: string | null }>(
-      `SELECT deposit_months::text AS months, deposit_override_reason AS reason, deposit_overridden_by::text AS by
-         FROM leases WHERE id = $1`,
+    const clearedRow = await query<{
+      months: string;
+      reason: string | null;
+      by: string | null;
+      at: Date | null;
+      audit_reason: string | null;
+      actor: string | null;
+      occurred_at: Date | null;
+      old_months: string | null;
+      new_months: string | null;
+      old_reason: string | null;
+      new_reason: string | null;
+    }>(
+      `SELECT l.deposit_months::text AS months, l.deposit_override_reason AS reason,
+              l.deposit_overridden_by::text AS by, l.deposit_overridden_at AS at,
+              a.reason AS audit_reason, a.actor_user_id::text AS actor, a.occurred_at,
+              a.old_row->>'deposit_months' AS old_months, a.new_row->>'deposit_months' AS new_months,
+              a.old_row->>'deposit_override_reason' AS old_reason, a.new_row->>'deposit_override_reason' AS new_reason
+         FROM leases l
+         JOIN LATERAL (
+           SELECT reason, actor_user_id, occurred_at, old_row, new_row
+             FROM audit_log
+            WHERE table_name = 'leases' AND row_id = l.id::text AND action = 'update'
+            ORDER BY occurred_at DESC
+            LIMIT 1
+         ) a ON true
+        WHERE l.id = $1`,
       [created.leaseId],
     );
     assert.equal(Number(clearedRow.rows[0]?.months), 2);
-    assert.equal(clearedRow.rows[0]?.reason, null);
-    assert.equal(clearedRow.rows[0]?.by, null);
+    assert.equal(clearedRow.rows[0]?.reason, "屋主同意四個月押金");
+    assert.equal(clearedRow.rows[0]?.by, USERS.admin);
+    assert.ok(clearedRow.rows[0]?.at);
+    assert.equal(clearedRow.rows[0]?.at?.toISOString(), keptAt?.toISOString());
+    assert.equal(clearedRow.rows[0]?.audit_reason, "屋主同意四個月押金");
+    assert.notEqual(clearedRow.rows[0]?.audit_reason, "");
+    assert.equal(clearedRow.rows[0]?.actor, USERS.admin);
+    assert.ok(clearedRow.rows[0]?.occurred_at);
+    assert.equal(Number(clearedRow.rows[0]?.old_months), 4);
+    assert.equal(Number(clearedRow.rows[0]?.new_months), 2);
+    assert.equal(clearedRow.rows[0]?.old_reason, "屋主同意四個月押金");
+    assert.equal(clearedRow.rows[0]?.new_reason, "屋主同意四個月押金");
+
+    const otherRule = await query<{ id: string }>(
+      `SELECT id::text FROM jurisdiction_rules WHERE rule_key <> 'deposit.max_months' LIMIT 1`,
+    );
+    assert.ok(otherRule.rows[0]?.id);
+    await query(
+      `INSERT INTO rule_check_results (
+         org_id, rule_id, entity_table, entity_id, outcome, observed, limit_value, message_key, checked_at
+       )
+       SELECT org_id, $2, 'leases', id, 'block', '{}'::jsonb, '{}'::jsonb, 'rules.other', now() + interval '1 day'
+         FROM leases WHERE id = $1`,
+      [created.leaseId, otherRule.rows[0].id],
+    );
+    const beforeNoise = await leaseVersion(created.leaseId);
+    const noised = await updateLease(admin, {
+      leaseId: created.leaseId,
+      rentMajor: 10000,
+      depositMonths: 3,
+      depositReason: reason,
+      updatedAt: beforeNoise.updated_at,
+    });
+    assert.equal(noised.depositWarn, false);
+
+    // CHECK leases_deposit_over_cap_requires_override (20261022180000) and the
+    // earlier trigger trg_lease_deposit_check / fn_lease_deposit_check
+    // (20261021140000_basic_leases.sql). query() does not map to FlowError.
+    const guard = await query<{ trigger_name: string; constraint_name: string }>(
+      `SELECT t.tgname AS trigger_name, c.conname AS constraint_name
+         FROM pg_trigger t
+         JOIN pg_constraint c ON c.conname = 'leases_deposit_over_cap_requires_override'
+        WHERE t.tgname = 'trg_lease_deposit_check' AND NOT t.tgisinternal`,
+    );
+    assert.equal(guard.rows[0]?.trigger_name, "trg_lease_deposit_check");
+    assert.equal(guard.rows[0]?.constraint_name, "leases_deposit_over_cap_requires_override");
 
     await assert.rejects(
       () =>
-        tx(USERS.admin, (client) =>
-          client.query(
-            `UPDATE leases
-                SET deposit_months = 5, deposit_amount_minor = rent_amount_minor * 5,
-                    deposit_override_reason = NULL, deposit_overridden_by = NULL, deposit_overridden_at = NULL
-              WHERE id = $1`,
-            [created.leaseId],
-          ),
+        query(
+          `UPDATE leases
+              SET deposit_months = 5, deposit_amount_minor = rent_amount_minor * 5,
+                  deposit_override_reason = NULL, deposit_overridden_by = NULL, deposit_overridden_at = NULL
+            WHERE id = $1`,
+          [created.leaseId],
         ),
-      isDepositCap,
+      (error: unknown) => isPgDepositGuard(error),
+    );
+    await assert.rejects(
+      () =>
+        query(
+          `UPDATE leases
+              SET deposit_months = 5, deposit_amount_minor = rent_amount_minor * 5,
+                  deposit_override_reason = '屋主同意五個月押金', deposit_overridden_by = $2, deposit_overridden_at = NULL
+            WHERE id = $1`,
+          [created.leaseId, USERS.admin],
+        ),
+      (error: unknown) => isPgDepositGuard(error, "leases_deposit_over_cap_requires_override"),
+    );
+    await assert.rejects(
+      () =>
+        query(
+          `UPDATE leases
+              SET deposit_months = NULL, deposit_amount_minor = rent_amount_minor * 5,
+                  deposit_override_reason = NULL, deposit_overridden_by = NULL, deposit_overridden_at = NULL
+            WHERE id = $1`,
+          [created.leaseId],
+        ),
+      (error: unknown) => {
+        if (error instanceof FlowError || !error || typeof error !== "object") return false;
+        const pg = error as { code?: string; message?: string };
+        return pg.code === "23514" && /deposit of 5\.00 months exceeds cap/.test(pg.message ?? "");
+      },
     );
     await tx(USERS.admin, async (client) => {
       await client.query(`SELECT set_config('app.change_reason', $1, true)`, ["屋主同意五個月押金"]);
@@ -748,10 +903,87 @@ test("every lease save path rejects a deposit over two months without a reason",
     assert.equal(Number(sqlRow.rows[0]?.months), 5);
     assert.equal(sqlRow.rows[0]?.audit_reason, "屋主同意五個月押金");
 
+    await withClient((client) => client.query(`ALTER TABLE leases DISABLE TRIGGER trg_lease_deposit_check`));
+    try {
+      await query(`DELETE FROM rule_check_results WHERE entity_table = 'leases' AND entity_id = $1`, [created.leaseId]);
+      const warned = await query<{ id: string }>(
+        `INSERT INTO rule_check_results (
+           org_id, rule_id, entity_table, entity_id, outcome, observed, limit_value, message_key
+         )
+         SELECT l.org_id, r.id, 'leases', l.id, 'warn', '{}'::jsonb, r.value, 'rules.deposit.max_months'
+           FROM leases l
+           JOIN properties p ON p.id = l.property_id
+           JOIN LATERAL (
+             SELECT id, value FROM jurisdiction_rules
+              WHERE rule_key = 'deposit.max_months' AND jurisdiction_id = p.jurisdiction_id
+              ORDER BY org_id NULLS LAST
+              LIMIT 1
+           ) r ON true
+          WHERE l.id = $1
+         RETURNING id::text`,
+        [created.leaseId],
+      );
+      assert.ok(warned.rows[0]?.id);
+      const warnVersion = await leaseVersion(created.leaseId);
+      const warnedSave = await updateLease(admin, {
+        leaseId: created.leaseId,
+        rentMajor: 10000,
+        depositMonths: 4,
+        depositReason: "屋主同意四個月押金",
+        updatedAt: warnVersion.updated_at,
+      });
+      assert.equal(warnedSave.depositWarn, false);
+
+      await query(`DELETE FROM rule_check_results WHERE entity_table = 'leases' AND entity_id = $1`, [created.leaseId]);
+      const closedVersion = await leaseVersion(created.leaseId);
+      await assert.rejects(
+        () =>
+          updateLease(admin, {
+            leaseId: created.leaseId,
+            rentMajor: 12000,
+            depositMonths: 4,
+            depositReason: "屋主同意四個月押金",
+            updatedAt: closedVersion.updated_at,
+          }),
+        isDepositCap,
+      );
+      assert.equal((await leaseVersion(created.leaseId)).hash, closedVersion.hash);
+    } finally {
+      await withClient((client) => client.query(`ALTER TABLE leases ENABLE TRIGGER trg_lease_deposit_check`));
+    }
+
+    const beforeLock = await leaseVersion(created.leaseId);
+    await query(
+      `UPDATE leases SET status = 'active', esign_status = 'fully_signed', signed_at = now() WHERE id = $1`,
+      [created.leaseId],
+    );
+    const locked = await leaseVersion(created.leaseId);
+    await assert.rejects(
+      () =>
+        updateLease(admin, {
+          leaseId: created.leaseId,
+          rentMajor: 11000,
+          depositMonths: 2,
+          depositReason: "",
+          updatedAt: locked.updated_at,
+        }),
+      isFlow("errors.leaseLocked"),
+    );
+    const afterLock = await leaseVersion(created.leaseId);
+    assert.equal(afterLock.hash, beforeLock.hash);
+    assert.equal(Number(afterLock.months), Number(beforeLock.months));
+
     const accountant: Session = { ...admin, userId: USERS.accountant, role: "accountant", email: "meiling.zhou@songxin.demo" };
     await assert.rejects(
-      () => updateLease(accountant, { leaseId: created.leaseId, rentMajor: 10000, depositMonths: 2, depositReason: "" }),
-      (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+      () =>
+        updateLease(accountant, {
+          leaseId: created.leaseId,
+          rentMajor: 10000,
+          depositMonths: 2,
+          depositReason: "",
+          updatedAt: locked.updated_at,
+        }),
+      isFlow("errors.forbidden"),
     );
 
     await assert.rejects(

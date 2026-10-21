@@ -49,22 +49,8 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
     throw new Error(await error.innerText());
   }
   await expect(page.getByTestId("paper-sign")).toBeVisible();
-  await page.getByTestId("signed-pdf").setInputFiles({
-    name: "signed-lease.pdf",
-    mimeType: "application/pdf",
-    buffer: Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"),
-  });
-  await page.getByTestId("upload-signed-pdf").click();
-  if (await error.isVisible().catch(() => false)) {
-    throw new Error(await error.innerText());
-  }
-  await expect(page.getByTestId("paper-signed")).toContainText("已上傳紙本租約");
-  await expect(page.getByTestId("paper-signed")).toContainText("signed-lease.pdf");
 
   await page.getByRole("link", { name: "摘要" }).click();
-  await expect(page.getByTestId("tenant-line-id")).toHaveText("U-pilot-line");
-  await expect(page.getByText("生效中")).toBeVisible();
-
   await page.getByTestId("deposit-months").fill("4");
   const editAlert = page.getByTestId("deposit-alert");
   await expect(editAlert).toBeVisible();
@@ -80,6 +66,26 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
     throw new Error(await editError.innerText());
   }
   await expect(page.getByTestId("deposit-reason")).toHaveValue("屋主同意調整為四個月押金");
+
+  await page.locator(".tabsx").getByRole("link", { name: "簽署與文件" }).click();
+  await page.getByTestId("signed-pdf").setInputFiles({
+    name: "signed-lease.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"),
+  });
+  await page.getByTestId("upload-signed-pdf").click();
+  if (await error.isVisible().catch(() => false)) {
+    throw new Error(await error.innerText());
+  }
+  await expect(page.getByTestId("paper-signed")).toContainText("已上傳紙本租約");
+  await expect(page.getByTestId("paper-signed")).toContainText("signed-lease.pdf");
+
+  await page.getByRole("link", { name: "摘要" }).click();
+  await expect(page.getByTestId("tenant-line-id")).toHaveText("U-pilot-line");
+  await expect(page.getByText("生效中")).toBeVisible();
+  await expect(page.getByTestId("lease-terms-locked")).toContainText("已簽署或已生效");
+  await expect(page.getByTestId("lease-terms-locked")).not.toContainText("房東");
+  await expect(page.getByTestId("save-lease-terms")).toHaveCount(0);
 
   const leaseId = page.url().match(/leases\/([^/?]+)/)?.[1];
   expect(leaseId).toBeTruthy();

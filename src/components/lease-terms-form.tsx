@@ -16,11 +16,13 @@ export function LeaseTermsForm({
   rent,
   depositMonths,
   depositReason,
+  updatedAt,
 }: {
   leaseId: string;
   rent: string;
   depositMonths: string;
   depositReason: string;
+  updatedAt: string;
 }) {
   const t = useT();
   const [state, formAction] = useActionState(actionUpdateLease, { error: "" });
@@ -49,6 +51,7 @@ export function LeaseTermsForm({
         </div>
       ) : null}
       <input type="hidden" name="leaseId" value={leaseId} />
+      <input type="hidden" name="updatedAt" value={updatedAt} />
       <div className="grid2">
         <div className="fg">
           <label className="f">{t("i_base_rent")}</label>
@@ -87,7 +90,14 @@ export function LeaseTermsForm({
           />
         </div>
       ) : (
-        <input type="hidden" name="depositReason" value="" />
+        <>
+          {depositReason.trim() ? (
+            <p className="small muted" data-testid="deposit-reason-kept">
+              {t("lease_deposit_reason_kept", { reason: depositReason.trim() })}
+            </p>
+          ) : null}
+          <input type="hidden" name="depositReason" value="" />
+        </>
       )}
       <button className="btn pri" type="submit" data-testid="save-lease-terms" disabled={blocked} style={{ marginTop: 12 }}>
         {t("i_save")}

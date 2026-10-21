@@ -7,6 +7,7 @@ import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/co
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
 import { formatDate, formatMoney } from "@/server/format";
 import { majorField } from "@/server/portfolio";
+import { leaseTermsEditable } from "@/server/lease-rules";
 import { leaseDetail, threadMessages } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -102,12 +103,23 @@ export default async function LeasePage({
         </div>
       ) : null}
       {tab === "summary" && (session.role === "admin" || session.role === "manager") ? (
-        <LeaseTermsForm
-          leaseId={id}
-          rent={majorField(lease.rent, lease.currency)}
-          depositMonths={lease.deposit_months ?? ""}
-          depositReason={lease.deposit_override_reason ?? ""}
-        />
+        leaseTermsEditable({
+          status: lease.status,
+          esign: lease.esign,
+          signed: Boolean(lease.signed_at) || signatures.some((row) => row.status === "signed"),
+        }) ? (
+          <LeaseTermsForm
+            leaseId={id}
+            rent={majorField(lease.rent, lease.currency)}
+            depositMonths={lease.deposit_months ?? ""}
+            depositReason={lease.deposit_override_reason ?? ""}
+            updatedAt={lease.updated_at}
+          />
+        ) : (
+          <p className="small muted" data-testid="lease-terms-locked" style={{ marginTop: 16 }}>
+            {t("lease_terms_locked")}
+          </p>
+        )
       ) : null}
       {tab === "ledger" ? (
         <div className="card">

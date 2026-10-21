@@ -10,6 +10,8 @@ export const ERRORS: Record<string, string> = {
   "errors.capReason": "s_ab3ec53",
   "errors.needRooms": "i_need_rooms",
   "errors.depositCap": "lease_deposit_cap",
+  "errors.leaseLocked": "lease_terms_locked",
+  "errors.staleLease": "lease_terms_stale",
   "errors.lineId": "lease_line_invalid",
   "errors.pdf": "lease_pdf_invalid",
   "errors.ledger": "i_ledger",

@@ -17,7 +17,9 @@ export function mapDbError(error: unknown): Error {
   if (/override reason|exceeds bill average/i.test(message)) {
     return new FlowError("errors.capReason");
   }
-  if (/deposit of/i.test(message)) return new FlowError("errors.depositCap");
+  if (/deposit of|leases_deposit_over_cap_requires_override|leases_deposit_override_pair/i.test(message)) {
+    return new FlowError("errors.depositCap");
+  }
   if (/unbalanced/i.test(message)) return new FlowError("errors.ledger");
   if (/exclusion_violation|exclusion constraint|overlaps lease|double-booking/i.test(message)) {
     return new FlowError("errors.occupied");
