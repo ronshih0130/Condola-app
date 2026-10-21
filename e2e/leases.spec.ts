@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 import { resetDemo, signIn } from "./session";
 
 test("deposit reason and a private signed PDF", async ({ page }) => {
+  const crashes: string[] = [];
+  page.on("pageerror", (error) => crashes.push(error.message));
   await resetDemo(page);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases/new");
   await expect(page.locator("body")).not.toContainText("房東");
@@ -41,14 +43,32 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await page.getByTestId("rate").fill("4");
   await expect(page.getByTestId("cap-alert")).toHaveCount(0);
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("wizard-next").click();
-  await page.getByTestId("submit-lease").click();
+  await expect(page.getByTestId("lease-template")).toBeVisible();
+  await page.getByTestId("template-lang-zh").press("Enter");
+  await expect(page.getByTestId("lease-template")).toBeVisible();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  const nextBox = await page.getByTestId("wizard-next").boundingBox();
+  expect(nextBox).toBeTruthy();
+  await page.mouse.click(nextBox!.x + nextBox!.width / 2, nextBox!.y + nextBox!.height / 2, { clickCount: 2 });
+  const submit = page.getByTestId("submit-lease");
+  await expect(submit).toBeVisible();
+  await expect(submit).toBeDisabled();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.getByText("確認後送出給租客簽名")).toBeVisible();
+  await expect(submit).toBeEnabled();
+  await expect(page).toHaveURL(/\/m\/leases\/new/);
+  await expect(page.getByTestId("paper-sign")).toHaveCount(0);
+  await submit.evaluate((button: HTMLButtonElement) => {
+    button.click();
+    button.click();
+  });
 
   const error = page.getByTestId("error-banner");
   if (await error.isVisible().catch(() => false)) {
     throw new Error(await error.innerText());
   }
   await expect(page.getByTestId("paper-sign")).toBeVisible();
+  expect(crashes).toEqual([]);
 
   await page.getByRole("link", { name: "摘要" }).click();
   await page.getByTestId("deposit-months").fill("4");
@@ -97,4 +117,5 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await signIn(page, "admin@coast.demo");
   const leaked = await page.request.get(`/m/leases/${leaseId}/signed`);
   expect(leaked.status()).toBe(404);
+  expect(crashes).toEqual([]);
 });

@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "@/i18n/errors";
 import { actionCreateLease } from "@/server/actions";
 import type { RoomOption } from "@/server/queries";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
+import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
 
 function amountOk(raw: string) {
   const trimmed = raw.trim();
@@ -26,7 +27,10 @@ function money(major: number, currency: string, locale: string) {
 export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLocale: "zh-TW" | "en" }) {
   const t = useT();
   const locale = useLocale();
-  const [state, formAction] = useActionState(actionCreateLease, { error: "" });
+  const [state, formAction, pending] = useActionState(actionCreateLease, { error: "" });
+  const submitGuard = useRef(false);
+  const [submitReady, setSubmitReady] = useState(false);
+  const armSubmit = useRef<number | null>(null);
   const steps = [
     t("s_4fabbda"),
     t("s_74f19b0"),
@@ -88,6 +92,10 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
     };
   }, [room, usageN, rate, rateN, billN, split, bill]);
 
+  useEffect(() => {
+    if (!pending && state.error) releaseFormSubmit(submitGuard);
+  }, [pending, state.error]);
+
   function goNext() {
     if (step === 2) {
       const nameBad = tenant.trim() === "";
@@ -123,20 +131,46 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
         if (billBad || usageBad || rateBad) return;
       }
     }
-    setStep(step + 1);
+    const next = step + 1;
+    if (next === 8) {
+      setSubmitReady(false);
+      if (armSubmit.current) window.clearTimeout(armSubmit.current);
+      armSubmit.current = window.setTimeout(() => setSubmitReady(true), 600);
+    }
+    setStep(next);
+  }
+
+  function goBack() {
+    if (armSubmit.current) window.clearTimeout(armSubmit.current);
+    armSubmit.current = null;
+    setSubmitReady(false);
+    setStep(step - 1);
   }
 
   return (
     <form
       action={formAction}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter") return;
+        if (event.target instanceof HTMLTextAreaElement) return;
+        if (event.target instanceof HTMLButtonElement && event.target.type === "submit") return;
+        event.preventDefault();
+      }}
       onSubmit={(event) => {
+        const submitter = (event.nativeEvent as SubmitEvent).submitter;
+        if (step !== 8 || !submitReady || !(submitter instanceof HTMLButtonElement) || submitter.dataset.testid !== "submit-lease") {
+          event.preventDefault();
+          return;
+        }
         if (!amountOk(rent) || !amountOk(depositMonths)) {
           event.preventDefault();
           setRentError(!amountOk(rent));
           setDepositError(!amountOk(depositMonths));
           if (!amountOk(rent)) setStep(3);
           else setStep(4);
+          return;
         }
+        if (pending || !claimFormSubmit(submitGuard)) event.preventDefault();
       }}
     >
       <Stepper steps={steps} current={step} />
@@ -391,17 +425,18 @@ export function LeaseWizard({ rooms, firmLocale }: { rooms: RoomOption[]; firmLo
       </div>
       <div className="row" style={{ marginTop: 16, maxWidth: 760 }}>
         {step > 1 ? (
-          <button className="btn" type="button" onClick={() => setStep(step - 1)}>
+          <button className="btn" type="button" onClick={goBack}>
             ← {t("s_5bf6faa")}
           </button>
         ) : null}
         <span className="sp" />
+        {/* A new node on the last step. Updating the next button in place turns this click into a submit. */}
         {step < 8 ? (
-          <button className="btn pri" type="button" data-testid="wizard-next" disabled={blocked || (step === 1 && !roomId)} onClick={goNext}>
+          <button key="wizard-next" className="btn pri" type="button" data-testid="wizard-next" disabled={blocked || (step === 1 && !roomId)} onClick={goNext}>
             {t("s_9cff86c")} →
           </button>
         ) : (
-          <button className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked}>
+          <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady} aria-busy={pending || undefined}>
             {t("s_79b6c1d")}
           </button>
         )}

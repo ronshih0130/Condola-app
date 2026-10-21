@@ -78,6 +78,8 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.doesNotMatch(property, /ownerPhone\.trim\(\)/);
   assert.match(property, /setTimeout\(\(\) => setSubmitReady\(true\), 600\)/);
   assert.match(property, /disabled=\{blocked \|\| !submitReady\}/);
+  assert.match(property, /key="wizard-next"/);
+  assert.match(property, /key="submit-property"/);
   const edit = readFileSync(new URL("../app/m/properties/[id]/edit/page.tsx", import.meta.url), "utf8");
   assert.match(edit, /data-testid="meter-serial"/);
   assert.match(edit, /data-testid="property-split"/);
@@ -109,6 +111,12 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(firm, /data-testid="firm-contact-error"/);
   assert.match(firm, /i_field_incomplete/);
   assert.doesNotMatch(firm, /\srequired(?:\s|=|{|>)/);
+  assert.match(firm, /key="kind-next"/);
+  assert.match(firm, /type="button"/);
+  assert.match(firm, /setTimeout\(\(\) => setSubmitReady\(true\), 600\)/);
+  assert.match(firm, /event\.key !== "Enter"/);
+  assert.match(firm, /submitter\.dataset\.testid !== "firm-submit"/);
+  assert.match(firm, /disabled=\{!submitReady\}/);
   const envRoute = readFileSync(new URL("../app/api/env/route.ts", import.meta.url), "utf8");
   assert.match(envRoute, /set === "live"/);
   assert.match(envRoute, /ENV_COOKIE_MAX_AGE/);
