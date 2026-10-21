@@ -37,7 +37,7 @@ Required secret names. There are no `ID_DOC_*` secrets in this config.
 
 Optional, not required to boot, and not one of the four secrets above:
 
-- `CONDOLA_PLATFORM_ADMIN_EMAILS` — comma-separated emails allowed to open `/m/admin` (create partner codes, per-firm price overrides, and the 「緊急暫停正式使用」 switch). Leave it unset to keep that screen closed. Set it as a Worker var or secret on staging and production when you want the screen. Sign-up confirmation uses the existing Supabase URL and anon key.
+- `CONDOLA_PLATFORM_ADMIN_EMAILS` — comma-separated emails allowed to open `/m/admin` (create partner codes and per-firm price overrides). Leave it unset to keep that screen closed. Set it as a Worker var or secret on staging and production when you want the screen. Sign-up confirmation uses the existing Supabase URL and anon key.
 - `CRON_SECRET` — protects `POST /api/cron/reminders`. The Worker cron (`0 1 * * *`, 09:00 Asia/Taipei) sends it. Leave it unset and the job logs and skips.
 - `BREVO_API_KEY` — fallback mail provider for this round. Leave it unset unless Cloudflare Email Sending blocks reminders. Then set `MAIL_PROVIDER` to `brevo`. The Worker calls Brevo's transactional API (`https://api.brevo.com/v3/smtp/email`), which delivers through the same `smtp-relay.brevo.com` relay Supabase already uses. The sender is `租多啦 Condola <no-reply@condola.app>`. A missing key logs and skips the send.
 - `RESEND_API_KEY` — additional backup. Leave it unset unless `MAIL_PROVIDER` is `resend`. Cloudflare Email Sending is the default (`MAIL_PROVIDER=cloudflare`). It uses the `EMAIL` binding (`send_email`) and does not need a token. The sender is `"租多啦 Condola" <noreply@send.condola.app>`.

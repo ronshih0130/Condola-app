@@ -141,7 +141,11 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   assert.doesNotMatch(login, /先在測試模式試用全部功能/);
   const banner = read(join(root, "src/components/env-mode.tsx"));
   assert.doesNotMatch(banner, /🧪|測試模式|示範/);
+  assert.doesNotMatch(banner, /GoLiveForm|actionGoLive|i_golive_|開始正式使用/);
   assert.match(banner, /i_sandbox_banner/);
+  assert.equal("i_golive_start" in zh, false);
+  assert.equal("i_admin_pause" in zh, false);
+  assert.equal(zh.i_audit_ev_go_live, "開始正式使用");
   const audit = read(join(root, "src/app/m/audit/page.tsx"));
   assert.match(audit, /event !== "go_live"/);
   assert.doesNotMatch(audit, /line_sign_in|line_account_links/);

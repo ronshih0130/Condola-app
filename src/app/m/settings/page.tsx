@@ -8,7 +8,7 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ upgrade?: string; error?: string; saved?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
   const session = await getSession();
   const query = await searchParams;
   const t = makeT(session.locale);
@@ -49,7 +49,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {t("i_sandbox_plan")}
           </div>
         ) : null}
-        {query.upgrade === "1" ? <p data-testid="upgrade-hint">{t("i_golive_upgrade_hint")}</p> : null}
         {session.environment === "sandbox" ? null : (
           <p data-testid="settings-plan">{t("i_settings_plan")}</p>
         )}

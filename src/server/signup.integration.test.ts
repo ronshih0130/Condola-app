@@ -5,8 +5,7 @@ import { quoteMonthly } from "./billing";
 import { query } from "./db";
 import { FlowError } from "./errors";
 import { loadPriceInputs, setFirmOverride, clearFirmOverride } from "./partners";
-import { goLiveLocked, setGoLiveLock } from "./platform";
-import { goLive } from "./sandbox";
+import { goLiveLocked } from "./platform";
 import { confirmSignupToken, createFirm, signupLinksExposed, startSignup } from "./signup";
 import type { Session } from "./types";
 
@@ -166,19 +165,6 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       role: "manager",
     });
     assert.ok(sandboxInvite.token);
-
-    await setGoLiveLock(users[0], true);
-    await assert.rejects(() => goLive(staff(users[0], created.orgId, "sandbox", email), false), (error: unknown) => {
-      assert.ok(error instanceof FlowError);
-      assert.equal(error.key, "errors.forbidden");
-      return true;
-    });
-    await setGoLiveLock(users[0], false);
-    await goLive(staff(users[0], created.orgId, "sandbox", email), false);
-    const started = await query<{ started: Date | null }>(`SELECT live_started_at AS started FROM organizations WHERE id = $1`, [created.orgId]);
-    assert.ok(started.rows[0].started);
-    const golive = await query(`SELECT 1 FROM funnel_events WHERE event_type = 'golive' AND org_id = $1`, [created.orgId]);
-    assert.ok(golive.rows[0]);
 
     const secondStart = await startSignup({
       email: other,

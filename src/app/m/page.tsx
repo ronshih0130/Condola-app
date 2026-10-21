@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ golive?: string; dupFirm?: string; code?: string }>;
+  searchParams: Promise<{ dupFirm?: string; code?: string }>;
 }) {
   const session = await getSession();
   const query = await searchParams;
@@ -37,11 +37,6 @@ export default async function DashboardPage({
           </>
         }
       />
-      {query.golive === "1" ? (
-        <p className="alert info" data-testid="golive-note">
-          {t("i_golive_note")}
-        </p>
-      ) : null}
       {query.dupFirm === "1" ? (
         <p className="alert warn" data-testid="dup-firm">
           {t("i_signup_dup_firm")}
