@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Sidebar, TaskPanel } from "@/components/chrome";
 import { demoModeEnabled } from "@/server/demo";
-import { can, permForPath } from "@/server/perms";
+import { noPermHref } from "@/server/perms";
 import { loadManagerChrome } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -13,8 +13,8 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   if (session.kind === "tenant") redirect("/t");
   if (session.kind === "owner") redirect("/o");
   const path = (await headers()).get("x-pathname") || "";
-  const perm = permForPath(path);
-  if (perm && !can(session.role, perm)) redirect(`/m/noperm?need=${perm}`);
+  const denied = noPermHref(path, session.role);
+  if (denied) redirect(denied);
   const jar = await cookies();
   const { flags, firm, badge } = await loadManagerChrome(session);
   return (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { dictionary, makeT } from "@/i18n";
+import { AuditHistory } from "@/components/audit-log";
 import { PayDialog } from "@/components/dialogs";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
@@ -18,7 +19,7 @@ export default async function LeasePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; error?: string }>;
+  searchParams: Promise<{ tab?: string; error?: string; audit?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -261,6 +262,13 @@ export default async function LeasePage({
           )}
         </div>
       ) : null}
+      <AuditHistory
+        table="leases"
+        rowId={id}
+        cursor={query.audit}
+        path={`/m/leases/${id}`}
+        preserve={{ tab: tab === "summary" ? undefined : tab, error: query.error }}
+      />
     </>
   );
 }

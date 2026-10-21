@@ -400,6 +400,7 @@ export async function listLeases(session: Session) {
       status: string;
       esign: string;
       tenant: string;
+      contact_id: string;
       place: string;
       rent: string;
       deposit: string;
@@ -410,6 +411,7 @@ export async function listLeases(session: Session) {
     }>(
       client,
       `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, c.display_name AS tenant,
+              c.id::text AS contact_id,
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
               l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.currency,
               l.start_date::text, l.end_date::text,
@@ -1264,4 +1266,35 @@ export async function counts(session: Session) {
     );
     return { pending: Number(row?.pending ?? 0), tickets: Number(row?.tickets ?? 0) };
   });
+}
+
+export async function tenantDetail(session: Session, id: string) {
+  return tx(
+    session.userId,
+    async (client) => {
+      const tenant = await maybe<{ id: string; name: string }>(
+        client,
+        `SELECT id::text, display_name AS name
+           FROM contacts
+          WHERE id = $1 AND org_id = $2 AND is_tenant AND archived_at IS NULL`,
+        [id, session.orgId],
+      );
+      if (!tenant) return null;
+      const leases = await many<{ id: string; place: string; status: string }>(
+        client,
+        `SELECT l.id::text, l.status::text,
+                p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place
+           FROM leases l
+           JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary' AND lp.contact_id = $1
+           JOIN properties p ON p.id = l.property_id
+           JOIN units u ON u.id = l.unit_id
+           LEFT JOIN rooms r ON r.id = l.target_room_id
+          WHERE l.org_id = $2
+          ORDER BY l.created_at DESC`,
+        [id, session.orgId],
+      );
+      return { tenant, leases };
+    },
+    { orgId: session.orgId, environment: session.environment },
+  );
 }

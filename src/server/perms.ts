@@ -49,7 +49,7 @@ export function rolesFor(key: PermKey): readonly OrgRole[] {
   return PERM_ROLES[key];
 }
 
-/** Sidebar entries. Admin sees 16. Empty sections are dropped by the caller. */
+/** Sidebar entries. Admin sees 17, including 操作紀錄. Empty sections are dropped by the caller. */
 export const MANAGER_NAV = [
   {
     section: "i_sec_rentals",
@@ -83,20 +83,42 @@ export const MANAGER_NAV = [
     section: "i_sec_set",
     links: [
       { href: "/m/team", key: "i_nav_team", perm: "team.manage" },
+      { href: "/m/audit", key: "i_nav_audit", admin: true },
       { href: "/m/notify", key: "i_nav_notify", perm: "settings.edit" },
       { href: "/m/settings", key: "i_nav_settings", perm: "settings.edit" },
     ],
   },
 ] as const;
 
-export type NavLink = { href: string; key: string; perm?: PermKey };
+export type NavLink = { href: string; key: string; perm?: PermKey; admin?: boolean };
 
 export function visibleNav(role: OrgRole | null): { section: string; links: NavLink[] }[] {
   if (!role) return [];
   return MANAGER_NAV.map((section) => ({
     section: section.section,
-    links: section.links.filter((link) => !("perm" in link) || can(role, link.perm)),
+    links: section.links.filter((link) => {
+      if ("admin" in link && link.admin) return role === "admin";
+      return !("perm" in link) || can(role, link.perm);
+    }),
   })).filter((section) => section.links.length > 0);
+}
+
+/** 操作紀錄 is org-admin only. It is not one of the 18 prototype permission rows. */
+export function requiresAdmin(pathname: string) {
+  const path = pathname.split("?")[0] || "/";
+  return path === "/m/audit" || path.startsWith("/m/audit/");
+}
+
+/**
+ * Where to send someone who cannot open this path.
+ * Prototype routes use their permission key (`props.edit`, `settings.edit`).
+ * 操作紀錄 is not the settings screen, so it names the admin role instead.
+ */
+export function noPermHref(pathname: string, role: OrgRole | null) {
+  if (requiresAdmin(pathname)) return role === "admin" ? null : "/m/noperm?need=admin";
+  const perm = permForPath(pathname);
+  if (perm && !can(role, perm)) return `/m/noperm?need=${perm}`;
+  return null;
 }
 
 export function navCount(role: OrgRole | null) {

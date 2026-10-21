@@ -18,12 +18,16 @@ export default async function NoPermPage({ searchParams }: { searchParams: Promi
     maintenance: "i_role_maintenance",
   };
   let roles = "";
-  try {
-    roles = rolesFor(need)
-      .map((role) => t(roleLabel[role]))
-      .join(t("i_list_sep"));
-  } catch {
-    roles = "";
+  if (params.need === "admin") {
+    roles = t("i_role_admin");
+  } else {
+    try {
+      roles = rolesFor(need)
+        .map((role) => t(roleLabel[role]))
+        .join(t("i_list_sep"));
+    } catch {
+      roles = "";
+    }
   }
   return (
     <>
