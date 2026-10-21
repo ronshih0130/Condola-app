@@ -101,7 +101,7 @@ export type PropertyInput = {
   rooms: { label: string; roomType: string; baseRentMajor: number }[];
   extraUnits?: { label: string; floor: string; door: string; rooms: { label: string; roomType: string; baseRentMajor: number }[] }[];
   electric?: {
-    split: "even" | "sub" | "owner";
+    split: "even" | "sub" | "owner" | "reading" | "days";
     rateMajor: number | null;
     openings: (number | null)[];
   } | null;
@@ -198,14 +198,32 @@ async function insertPropertyElectric(
   const rateMinor = electric.rateMajor == null ? null : toMinor(electric.rateMajor);
   const ownerPays = electric.split === "owner";
   const payer = ownerPays ? "owner" : "tenant";
-  const splitMethod = electric.split === "even" ? "even" : electric.split === "sub" ? "sub_meter" : "none";
+  const choice =
+    electric.split === "even"
+      ? { meterSplit: "even", method: "even" }
+      : electric.split === "sub"
+        ? { meterSplit: "sub_meter", method: "submeter" }
+        : electric.split === "reading"
+          ? { meterSplit: "none", method: "by_reading" }
+          : electric.split === "days"
+            ? { meterSplit: "days_occupied", method: "by_reading" }
+            : { meterSplit: "none", method: "shared" };
   const rateSource = ownerPays && rateMinor == null ? "fixed_rate" : rateMinor == null ? "bill_average" : "fixed_rate";
   const meter = await one<{ id: string }>(
     client,
     `INSERT INTO meters (
        org_id, property_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit
      ) VALUES ($1,$2,$3,'electricity','kWh','main',$4,$5::split_method,$6::rate_source,$7) RETURNING id`,
-    [session.orgId, propertyId, unitId, payer, splitMethod, rateSource, rateMinor],
+    [session.orgId, propertyId, unitId, payer, choice.meterSplit, rateSource, rateMinor],
+  );
+  const appliedRate = ownerPays ? null : electric.rateMajor;
+  await client.query(
+    `UPDATE units SET electricity_method = $2, rate_per_kwh = $3, updated_at = now() WHERE id = $1`,
+    [unitId, choice.method, appliedRate],
+  );
+  await client.query(
+    `UPDATE rooms SET electricity_method = $2, rate_per_kwh = $3, updated_at = now() WHERE unit_id = $1 AND archived_at IS NULL`,
+    [unitId, choice.method, appliedRate],
   );
   if (electric.split !== "sub") return;
   for (let index = 0; index < roomIds.length; index += 1) {

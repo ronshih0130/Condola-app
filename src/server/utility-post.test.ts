@@ -3,22 +3,28 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   allocateUtilityMinor,
+  billGapExceedsWarning,
+  billGapMinor,
   billMinorCeil,
   chargedRateExceedsBill,
+  evenSplitMinor,
   isPostableMethod,
   meterUsageKwh,
   normalizeRateMajor,
   prorateMilli,
+  publicKwhMilli,
   rateMajorFromStored,
   rateMinorText,
+  signedUsageAmountMinor,
   spreadCommonMilli,
   usageMilliFromText,
   utilityLineDescription,
 } from "./utility-post";
 
-test("only 分表 and 依電表度數 are posted", () => {
+test("分表, 依電表度數, and 平均分攤 are posted", () => {
   assert.equal(isPostableMethod("submeter"), true);
   assert.equal(isPostableMethod("by_reading"), true);
+  assert.equal(isPostableMethod("even"), true);
   assert.equal(isPostableMethod("shared"), false);
   assert.equal(isPostableMethod("tenant_direct"), false);
   assert.equal(isPostableMethod(null), false);
@@ -261,4 +267,30 @@ test("the synthetic bill average is at least the charged rate", () => {
   assert.equal(chargedRateExceedsBill(milli, rate, bill), false);
   assert.equal(chargedRateExceedsBill(milli, rate, bill - 1), true);
   assert.equal(billMinorCeil(0, rate), 0);
+});
+
+test("公共用電 is total kWh minus room meters and stays with the owner amount", () => {
+  assert.equal(publicKwhMilli(600000, 570000), 30000);
+  assert.equal(publicKwhMilli(600000, 640000), -40000);
+  assert.equal(signedUsageAmountMinor("TWD", 5, 30000), 15000);
+  assert.equal(signedUsageAmountMinor("TWD", 5, -40000), -20000);
+});
+
+test("電費（帳單差額） is bill minus rate × total kWh and warns above 5%", () => {
+  const bill = 300000;
+  const matched = billGapMinor("TWD", 5, 600000, bill);
+  assert.equal(matched, 0);
+  assert.equal(billGapExceedsWarning(bill, matched), false);
+  const higher = billGapMinor("TWD", 5, 500000, bill);
+  assert.equal(higher, 50000);
+  assert.equal(billGapExceedsWarning(bill, higher), true);
+  const lower = billGapMinor("TWD", 5, 700000, bill);
+  assert.equal(lower, -50000);
+  assert.equal(billGapExceedsWarning(bill, lower), true);
+});
+
+test("平均分攤 divides the bill across every room and leaves the remainder", () => {
+  assert.deepEqual(evenSplitMinor("TWD", 300000, 3), { shareMinor: 100000, remainderMinor: 0 });
+  assert.deepEqual(evenSplitMinor("TWD", 100000, 3), { shareMinor: 33300, remainderMinor: 100 });
+  assert.equal(evenSplitMinor("TWD", 100, 0), null);
 });

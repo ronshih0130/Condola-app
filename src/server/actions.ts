@@ -116,7 +116,7 @@ function postedRooms(formData: FormData, prefix: string, count: number) {
 function propertyInput(formData: FormData): PropertyInput {
   const rawCurrency = text(formData.get("currency"));
   const splitRaw = text(formData.get("electricSplit"));
-  const split = splitRaw === "even" || splitRaw === "sub" || splitRaw === "owner" ? splitRaw : "";
+  const split = splitRaw === "even" || splitRaw === "sub" || splitRaw === "owner" || splitRaw === "reading" || splitRaw === "days" ? splitRaw : "";
   const rateRaw = text(formData.get("electricRate")).trim();
   const roomCount = Number(text(formData.get("roomCount"))) || 0;
   const rooms = postedRooms(formData, "room", roomCount);

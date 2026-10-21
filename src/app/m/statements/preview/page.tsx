@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { PageHeader } from "@/components/ui";
 import { PreviewGenerateForm } from "@/components/dialogs";
@@ -18,10 +18,10 @@ export default async function StatementPreviewPage({
   const params = await searchParams;
   const month = params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : "";
   const owner = params.owner ?? "";
-  if (!month || !/^[0-9a-f-]{36}$/i.test(owner)) notFound();
+  if (!month || !/^[0-9a-f-]{36}$/i.test(owner)) redirect("/m/statements");
   const roster = await statementRoster(session, month);
   const row = roster.find((item) => item.owner_id === owner && item.period_start.slice(0, 7) === month);
-  if (!row) notFound();
+  if (!row) redirect("/m/statements");
   if (row.id) redirect(`/m/statements/${row.id}`);
   return (
     <>

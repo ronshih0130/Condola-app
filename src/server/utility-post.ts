@@ -18,8 +18,72 @@ const ONE = BigInt(1);
 const HUNDRED_THOUSAND = BigInt(100000);
 const TEN_MILLION = BigInt(10000000);
 
-export function isPostableMethod(method: string | null | undefined): method is "submeter" | "by_reading" {
-  return method === "submeter" || method === "by_reading";
+export function isPostableMethod(method: string | null | undefined): method is "submeter" | "by_reading" | "even" {
+  return method === "submeter" || method === "by_reading" || method === "even";
+}
+
+/** Owner keeps master-meter kWh that no room meter recorded. Not split onto tenants. */
+export const PUBLIC_POWER_RULE = "owner_public_kwh" as const;
+
+/** Bill minus rate × total kWh. A negative result is a credit on the owner report. */
+export const BILL_GAP_RULE = "owner_bill_minus_rate_times_kwh" as const;
+
+/** Amber warning when the absolute gap is greater than this share of the bill. */
+export const BILL_GAP_WARN_RATIO_NUM = 5;
+export const BILL_GAP_WARN_RATIO_DEN = 100;
+
+/** Master kWh minus the sum of room meters, in milli-kWh. Negative means the rooms exceed the bill. */
+export function publicKwhMilli(totalMilli: number, roomSumMilli: number): number {
+  if (!Number.isInteger(totalMilli) || !Number.isInteger(roomSumMilli)) return NaN;
+  return totalMilli - roomSumMilli;
+}
+
+/** Signed whole-currency amount for kWh × rate. Negative kWh is a negative amount. */
+export function signedUsageAmountMinor(currency: string, rateMajor: number, kwhMilliValue: number): number {
+  if (!Number.isInteger(kwhMilliValue) || Number.isNaN(kwhMilliValue)) return NaN;
+  const negative = kwhMilliValue < 0;
+  const [row] = allocateUtilityMinor({
+    currency,
+    rateMajor,
+    mode: "each",
+    parts: [{ key: "kwh", kwhMilli: Math.abs(kwhMilliValue) }],
+  });
+  if (!row || !Number.isSafeInteger(row.amountMinor)) return NaN;
+  return negative ? -row.amountMinor : row.amountMinor;
+}
+
+/**
+ * Bill minus (rate × total kWh), in minor units.
+ * Positive: the bill is higher than usage × rate. Negative: the bill is lower (a credit).
+ */
+export function billGapMinor(currency: string, rateMajor: number, totalKwhMilli: number, billMinor: number): number {
+  const rated = signedUsageAmountMinor(currency, rateMajor, totalKwhMilli);
+  if (!Number.isSafeInteger(rated) || !Number.isSafeInteger(billMinor)) return NaN;
+  return billMinor - rated;
+}
+
+/** True when |bill − rate × total kWh| is more than 5% of the bill. */
+export function billGapExceedsWarning(billMinor: number, gapMinor: number): boolean {
+  if (!Number.isSafeInteger(billMinor) || !Number.isSafeInteger(gapMinor) || billMinor === 0) return false;
+  return Math.abs(gapMinor) * BILL_GAP_WARN_RATIO_DEN > Math.abs(billMinor) * BILL_GAP_WARN_RATIO_NUM;
+}
+
+/**
+ * Equal whole-currency shares of a bill. Every room gets the same floor share.
+ * Leftover minor units are not given to a room; the caller posts them to the owner.
+ */
+export function evenSplitMinor(
+  currency: string,
+  billMinor: number,
+  roomCount: number,
+): { shareMinor: number; remainderMinor: number } | null {
+  if (!Number.isSafeInteger(billMinor) || billMinor < 0 || !Number.isInteger(roomCount) || roomCount <= 0) return null;
+  const spec = currency === "TWD" ? { minorPerUnit: 100 } : { minorPerUnit: 1 };
+  if (billMinor % spec.minorPerUnit !== 0) return null;
+  const units = billMinor / spec.minorPerUnit;
+  const share = Math.floor(units / roomCount);
+  const remainder = units - share * roomCount;
+  return { shareMinor: share * spec.minorPerUnit, remainderMinor: remainder * spec.minorPerUnit };
 }
 
 export function kwhMilli(kwh: number): number {

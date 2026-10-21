@@ -6,6 +6,17 @@ import type { Session } from "./types";
 /** Owner monthly statement line for electricity that no tenant is billed. */
 export const VACANT_ELECTRICITY_DESCRIPTION = "電費（空房）";
 
+/** Master-meter kWh minus room meters. Owner only; never split onto tenants. */
+export const PUBLIC_ELECTRICITY_DESCRIPTION = "公共用電";
+
+/**
+ * Bill amount minus rate × total kWh.
+ * Positive charges the owner. Negative is stored and shown as a credit on the owner report.
+ */
+export const BILL_GAP_DESCRIPTION = "電費（帳單差額）";
+
+const SIGNED_OWNER_DESCRIPTIONS = new Set<string>([PUBLIC_ELECTRICITY_DESCRIPTION, BILL_GAP_DESCRIPTION]);
+
 /**
  * One live owner expense per allocation run.
  * Vacant rooms keep their share of an even split (and their own submeter kWh).
@@ -21,10 +32,13 @@ export async function syncVacantOwnerExpense(
     currency: string;
     incurredOn: string;
     amountMinor: number;
+    description?: string;
   },
 ) {
+  const description = input.description ?? VACANT_ELECTRICITY_DESCRIPTION;
   const amount = input.amountMinor;
-  if (!Number.isSafeInteger(amount) || amount < 0) throw new FlowError("errors.amount");
+  if (!Number.isSafeInteger(amount)) throw new FlowError("errors.amount");
+  if (amount < 0 && !SIGNED_OWNER_DESCRIPTIONS.has(description)) throw new FlowError("errors.amount");
   const existing = await maybe<{
     id: string;
     amount_minor: string;
@@ -35,9 +49,9 @@ export async function syncVacantOwnerExpense(
     client,
     `SELECT id::text, amount_minor::text, incurred_on::text, ledger_transaction_id::text, status::text
        FROM expenses
-      WHERE org_id = $1 AND utility_run_id = $2 AND status <> 'void'
+      WHERE org_id = $1 AND utility_run_id = $2 AND description = $3 AND status <> 'void'
       FOR UPDATE`,
-    [session.orgId, input.runId],
+    [session.orgId, input.runId, description],
   );
   if (amount === 0) {
     if (!existing) return { changed: false };
@@ -70,7 +84,7 @@ export async function syncVacantOwnerExpense(
               bill_to = 'owner',
               paid_by = 'manager_firm'
         WHERE id = $1 AND org_id = $8 AND status <> 'void'`,
-      [existing.id, amount, input.incurredOn, VACANT_ELECTRICITY_DESCRIPTION, currency, input.propertyId, input.unitId, session.orgId],
+      [existing.id, amount, input.incurredOn, description, currency, input.propertyId, input.unitId, session.orgId],
     );
     await postExpenseLedger(client, session, {
       expenseId: existing.id,
@@ -78,6 +92,7 @@ export async function syncVacantOwnerExpense(
       currency,
       incurred: input.incurredOn,
       amount,
+      description,
     });
     return { changed: true };
   }
@@ -93,7 +108,7 @@ export async function syncVacantOwnerExpense(
       session.orgId,
       input.propertyId,
       input.unitId,
-      VACANT_ELECTRICITY_DESCRIPTION,
+      description,
       currency,
       amount,
       input.incurredOn,
@@ -107,6 +122,7 @@ export async function syncVacantOwnerExpense(
     currency,
     incurred: input.incurredOn,
     amount,
+    description,
   });
   return { changed: true };
 }
@@ -138,19 +154,19 @@ async function voidOwnerExpense(
 async function postExpenseLedger(
   client: Client,
   session: Session,
-  row: { expenseId: string; propertyId: string; currency: string; incurred: string; amount: number },
+  row: { expenseId: string; propertyId: string; currency: string; incurred: string; amount: number; description: string },
 ) {
   const txn = await one<{ id: string }>(
     client,
     `INSERT INTO ledger_transactions (
        org_id, property_id, kind, currency, effective_date, description, source_table, source_id, created_by
      ) VALUES ($1,$2,'expense',$3,$4,$5,'expenses',$6,$7) RETURNING id::text`,
-    [session.orgId, row.propertyId, row.currency, row.incurred, VACANT_ELECTRICITY_DESCRIPTION, row.expenseId, session.userId],
+    [session.orgId, row.propertyId, row.currency, row.incurred, row.description, row.expenseId, session.userId],
   );
   await client.query(
     `INSERT INTO ledger_entries (org_id, transaction_id, account, amount_minor, currency, property_id, memo)
      VALUES ($1,$2,'expense',$3,$4,$5,$6), ($1,$2,'owner_payable',$7,$4,$5,$6)`,
-    [session.orgId, txn.id, row.amount, row.currency, row.propertyId, VACANT_ELECTRICITY_DESCRIPTION, -row.amount],
+    [session.orgId, txn.id, row.amount, row.currency, row.propertyId, row.description, -row.amount],
   );
   await client.query(`UPDATE expenses SET ledger_transaction_id = $2 WHERE id = $1 AND org_id = $3`, [
     row.expenseId,

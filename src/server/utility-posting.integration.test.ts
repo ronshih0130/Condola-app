@@ -9,7 +9,7 @@ import { nextInvoiceNumber } from "./invoice-number";
 import { addDays, monthBounds, taipeiToday } from "./money";
 import type { Session } from "./types";
 import { allocateUtilityMinor, meterUsageKwh, spreadCommonMilli, utilityLineDescription } from "./utility-post";
-import { VACANT_ELECTRICITY_DESCRIPTION } from "./utility-expense";
+import { BILL_GAP_DESCRIPTION, PUBLIC_ELECTRICITY_DESCRIPTION, VACANT_ELECTRICITY_DESCRIPTION } from "./utility-expense";
 import { confirmUtilityRun, currentUtilityPeriod, listUtilityBoard, prepareUtilityRun, utilityRunDetail, voidUtilityRun } from "./utility-posting";
 
 const admin: Session = {
@@ -170,7 +170,15 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
       151000,
     );
     assert.ok(spread);
-    const expected = allocateUtilityMinor({ currency: "TWD", rateMajor: 4, mode: "split", parts: spread });
+    const expected = allocateUtilityMinor({
+      currency: "TWD",
+      rateMajor: 4,
+      mode: "each",
+      parts: [
+        { key: roomA, kwhMilli: 100000 },
+        { key: roomB, kwhMilli: 50000 },
+      ],
+    });
     const prepared = await prepareUtilityRun(admin, { ...input, totalKwh: 151 });
     await query(`UPDATE utility_allocation_runs SET inputs = jsonb_set(inputs, '{readings}', '[]'::jsonb) WHERE id = $1`, [
       prepared.runId,
@@ -182,7 +190,7 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
     const repaired = await prepareUtilityRun(admin, { ...input, totalKwh: 151 });
     assert.equal(repaired.runId, prepared.runId);
     const posted = await confirmUtilityRun(admin, prepared.runId);
-    assert.equal(posted.changed, 2);
+    assert.equal(posted.changed, 3);
     assert.equal(posted.reversed, 0);
     await withClient(async (client) => {
       await client.query("BEGIN");
@@ -441,7 +449,7 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
       totalKwh: 151,
       readings: [
         { spaceId: roomA, kwh: 90 },
-        { spaceId: roomB, kwh: 50 },
+        { spaceId: roomB, kwh: 40 },
       ],
     });
     assert.equal(edited.runId, prepared.runId);
@@ -462,14 +470,11 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
     const editedExpected = allocateUtilityMinor({
       currency: "TWD",
       rateMajor: 4,
-      mode: "split",
-      parts: spreadCommonMilli(
-        [
-          { key: roomA, kwhMilli: 90000 },
-          { key: roomB, kwhMilli: 50000 },
-        ],
-        151000,
-      )!,
+      mode: "each",
+      parts: [
+        { key: roomA, kwhMilli: 90000 },
+        { key: roomB, kwhMilli: 40000 },
+      ],
     });
     assert.equal(
       Number(openLines.rows[0].total),
@@ -1390,6 +1395,109 @@ test("vacant rooms are an owner expense, and the board lists them without a sign
       [meters.propertyId],
     );
     assert.equal(voided.rows[0]?.n, "0");
+  } finally {
+    await cleanupFixture({ propertyIds, userIds, importId: null, stamp });
+  }
+});
+
+test("公共用電 and 電費（帳單差額） are separate owner lines, including a negative gap", async () => {
+  const stamp = Date.now().toString(36);
+  const period = currentUtilityPeriod();
+  const propertyIds: string[] = [];
+  const userIds: string[] = [];
+  try {
+    const created = await createProperty(admin, {
+      name: `公共電費 ${stamp}`,
+      city: "台北市",
+      district: "信義區",
+      street: `公共路${stamp}`,
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "公共屋主",
+      ownerPhone: "0912000777",
+      ownerEmail: `owner.pub.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "2F",
+      floor: "2",
+      rentalMode: "by_room",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 8000 },
+        { label: "B", roomType: "suite", baseRentMajor: 8000 },
+      ],
+    });
+    propertyIds.push(created.propertyId);
+    const [roomA, roomB] = created.roomIds;
+    const lease = await createLeaseFromForm(
+      admin,
+      form({
+        tenantName: "公共租客",
+        tenantPhone: "0912345678",
+        tenantEmail: `pub.${stamp}@example.com`,
+        lineUserId: "",
+        startDate: period.start,
+        months: "12",
+        rent: "8000",
+        depositMonths: "2",
+        depositReason: "",
+        dueDay: "5",
+        splitMethod: "even",
+        billTotal: "",
+        usage: "",
+        rate: "",
+        overrideReason: "",
+        roomId: roomA,
+      }),
+    );
+    userIds.push(lease.tenantUserId);
+    await query(`UPDATE rooms SET electricity_method = 'submeter', rate_per_kwh = 5 WHERE id = ANY($1::uuid[])`, [[roomA, roomB]]);
+    const unitId = (await query<{ id: string }>(`SELECT unit_id::text AS id FROM rooms WHERE id = $1`, [roomA])).rows[0].id;
+    const input = {
+      unitId,
+      periodStart: period.start,
+      periodEnd: period.end,
+      rateMajor: 5,
+      totalKwh: 160,
+      billTotalMajor: 500,
+      overrideReason: "",
+      readings: [
+        { spaceId: roomA, kwh: 100, previousKwh: 0, currentKwh: 100 },
+        { spaceId: roomB, kwh: 50, previousKwh: 0, currentKwh: 50 },
+      ],
+    };
+    const prepared = await prepareUtilityRun(admin, input);
+    const detail = await utilityRunDetail(admin, prepared.runId);
+    assert.equal(detail?.adjustments.publicKwhMilli, 10000);
+    assert.equal(detail?.adjustments.publicAmountMinor, 5000);
+    assert.equal(detail?.adjustments.billGapMinor, -30000);
+    assert.equal(detail?.adjustments.billGapWarn, true);
+    assert.equal(detail?.lines.find((line) => line.room_id === roomB)?.bearer, "owner");
+    assert.equal(detail?.lines.find((line) => line.room_id === roomA)?.amount, "50000");
+    await confirmUtilityRun(admin, prepared.runId);
+    const expenses = await query<{ description: string; amount: string }>(
+      `SELECT description, amount_minor::text AS amount
+         FROM expenses WHERE property_id = $1 AND status <> 'void'`,
+      [created.propertyId],
+    );
+    const expenseByDescription = Object.fromEntries(expenses.rows.map((row) => [row.description, row.amount]));
+    assert.equal(expenses.rows.length, 3);
+    assert.equal(expenseByDescription[PUBLIC_ELECTRICITY_DESCRIPTION], "5000");
+    assert.equal(expenseByDescription[VACANT_ELECTRICITY_DESCRIPTION], "25000");
+    assert.equal(expenseByDescription[BILL_GAP_DESCRIPTION], "-30000");
+    const statement = await generateStatement(admin, {
+      ownerContactId: created.ownerContactId,
+      month: period.start.slice(0, 7),
+    });
+    const lines = await query<{ description: string; amount: string }>(
+      `SELECT description, amount_minor::text AS amount
+         FROM owner_statement_lines
+        WHERE statement_id = $1 AND line_type = 'expense'`,
+      [statement.statementId],
+    );
+    const lineByDescription = Object.fromEntries(lines.rows.map((row) => [row.description, row.amount]));
+    assert.equal(lines.rows.length, 3);
+    assert.equal(lineByDescription[PUBLIC_ELECTRICITY_DESCRIPTION], "5000");
+    assert.equal(lineByDescription[VACANT_ELECTRICITY_DESCRIPTION], "25000");
+    assert.equal(lineByDescription[BILL_GAP_DESCRIPTION], "-30000");
   } finally {
     await cleanupFixture({ propertyIds, userIds, importId: null, stamp });
   }

@@ -2,8 +2,8 @@ import Link from "next/link";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionPrepareUtility, actionVoidUtility } from "@/server/actions";
-import { UtilityConfirmForm } from "@/components/utility-confirm";
-import { formatMoney } from "@/server/format";
+import { PendingSubmit, UtilityConfirmForm } from "@/components/utility-confirm";
+import { signedMoneyLabel } from "@/server/format";
 import { monthBounds, taipeiToday } from "@/server/money";
 import { can } from "@/server/perms";
 import { listUtilityBoard, utilityRunDetail } from "@/server/utility-posting";
@@ -35,6 +35,13 @@ function utilityHref(query: Record<string, string | number | undefined>) {
   return text ? `/m/rent/utilities?${text}` : "/m/rent/utilities";
 }
 
+function methodLabel(t: (key: string) => string, method: string | null) {
+  if (method === "even") return t("s_ecf0e25");
+  if (method === "by_reading") return t("i_elec_reading");
+  if (method === "submeter") return t("s_9f8b19c");
+  return t("i_elec_unset");
+}
+
 function readingValue(value: number | null | undefined) {
   return value == null || Number.isNaN(value) ? "" : String(value);
 }
@@ -53,10 +60,11 @@ export default async function UtilityPostingPage({
   const board = await listUtilityBoard(session, period.start, period.end, Number.isInteger(page) ? page : 1);
   const detail = params.run ? await utilityRunDetail(session, params.run) : null;
   const canPost = can(session.role, "leases.edit");
-  const units = new Map<string, { id: string; label: string; currency: string; rate: string; spaces: typeof board.spaces }>();
+  const units = new Map<string, { id: string; propertyId: string; label: string; currency: string; rate: string; spaces: typeof board.spaces }>();
   for (const space of board.spaces) {
     const current = units.get(space.unit_id) ?? {
       id: space.unit_id,
+      propertyId: space.property_id,
       label: `${space.property_name} · ${space.unit_label}`,
       currency: space.currency,
       rate: space.rate ?? "",
@@ -67,7 +75,7 @@ export default async function UtilityPostingPage({
     units.set(space.unit_id, current);
   }
   const selected = params.unit ? units.get(params.unit) : [...units.values()][0];
-  const money = (minor: number, currency: string) => formatMoney(minor, currency, session.locale);
+  const money = (minor: number, currency: string) => signedMoneyLabel(minor, currency, session.locale);
   const statusLabel = utilityStatusLabel(t, detail?.run.status);
   const formPeriod = detail
     ? { start: detail.run.period_start, end: detail.run.period_end }
@@ -81,15 +89,21 @@ export default async function UtilityPostingPage({
       {params.saved === "void" ? <div className="alert ok">{t("i_utility_voided")}</div> : null}
       <p className="small">{t("i_utility_hint")}</p>
       <form method="get" action="/m/rent/utilities" className="card pad" data-testid="utility-month-form" style={{ maxWidth: 760 }}>
-        {selected ? <input type="hidden" name="unit" value={selected.id} /> : null}
-        <div className="fg">
-          <label className="f" htmlFor="utility-month">{t("i_utility_month")}</label>
-          <input id="utility-month" className="inp" type="month" name="month" data-testid="utility-month" defaultValue={monthValue} />
+        <div className="grid2">
+          <div className="fg">
+            <label className="f" htmlFor="utility-unit">{t("i_property_name")}</label>
+            <select id="utility-unit" className="inp" name="unit" data-testid="utility-unit" defaultValue={selected?.id ?? ""}>
+              {[...units.values()].map((unit) => (
+                <option key={unit.id} value={unit.id}>{unit.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="fg">
+            <label className="f" htmlFor="utility-month">{t("i_utility_month")}</label>
+            <input id="utility-month" className="inp" type="month" name="month" data-testid="utility-month" defaultValue={monthValue} />
+          </div>
         </div>
-        <p className="small" data-testid="utility-period">
-          {formPeriod.start} – {formPeriod.end}
-        </p>
-        <p className="small">{t("i_utility_period_note")}</p>
+        <p className="small" data-testid="utility-period">{formPeriod.start} – {formPeriod.end}</p>
         <button className="btn sm" type="submit">{t("i_utility_month_apply")}</button>
       </form>
       {units.size === 0 ? <div className="empty" data-testid="utility-empty">{t("i_utility_empty")}</div> : null}
@@ -112,104 +126,123 @@ export default async function UtilityPostingPage({
           <input type="hidden" name="unitId" value={selected.id} />
           <input type="hidden" name="periodStart" value={formPeriod.start} />
           <input type="hidden" name="periodEnd" value={formPeriod.end} />
-          <div className="fg">
-            <label className="f">{t("i_floor_unit")}</label>
-            <select className="inp" name="unitChoice" data-testid="utility-unit" defaultValue={selected.id} form="" disabled>
-              {[...units.values()].map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.label}
-                </option>
-              ))}
-            </select>
-            <div className="row" style={{ marginTop: 8 }}>
-              {[...units.values()].map((unit) => (
-                <Link key={unit.id} className={unit.id === selected.id ? "btn pri sm" : "btn sm"} href={utilityHref({ month, unit: unit.id, page: board.page })}>
-                  {unit.label}
-                </Link>
-              ))}
+          <div className="row" data-testid="utility-method" style={{ gap: 16, alignItems: "center", background: "#F6EEE6", borderRadius: 10, padding: "10px 14px" }}>
+            <span>{t("i_split")}：<b>{methodLabel(t, selected.spaces[0]?.method ?? null)}</b></span>
+            <span>{t("i_rate")}：<b>NT$</b></span>
+            <input className="inp" name="rate" data-testid="utility-rate" inputMode="decimal" defaultValue={detail ? String(detail.rateMajor) : selected.rate} style={{ maxWidth: 120 }} />
+            <Link href={`/m/properties/${selected.propertyId}/edit`} style={{ marginLeft: "auto" }}>{t("i_utility_settings")}</Link>
+          </div>
+          <h3 style={{ marginTop: 16 }}>{t("i_utility_section_bill")}</h3>
+          <div className="grid2">
+            <div className="fg">
+              <label className="f">{t("i_bill_total")}</label>
+              <input className="inp" name="billTotal" data-testid="utility-bill" inputMode="decimal" />
+            </div>
+            <div className="fg">
+              <label className="f">{t("i_utility_total_kwh")}</label>
+              <input className="inp" name="totalKwh" data-testid="utility-total-kwh" inputMode="decimal" />
             </div>
           </div>
-          <div className="fg">
-            <label className="f">{t("i_rate")}</label>
-            <input className="inp" name="rate" data-testid="utility-rate" inputMode="decimal" defaultValue={detail ? String(detail.rateMajor) : selected.rate} />
+          {selected.spaces.every((space) => space.method === "even") ? (
+            <p className="small">{t("i_utility_even_help")}</p>
+          ) : (
+            <>
+              <h3>{t("i_utility_section_rooms")}</h3>
+              {selected.spaces.map((space) => {
+                const prior = detail?.lines.find((line) => (line.room_id ?? detail.run.unit_id) === space.space_id);
+                return (
+                  <div className="fg" key={space.space_id}>
+                    <label className="f">
+                      {space.space_label} · {space.tenant || t("i_vacant")} · {methodLabel(t, space.method)}
+                    </label>
+                    <input type="hidden" name="spaceId" value={space.space_id} />
+                    <input type="hidden" name="kwh" value={prior?.usage ?? ""} />
+                    <div className="grid2">
+                      <input
+                        className="inp"
+                        name="prevKwh"
+                        data-testid={`kwh-prev-${space.space_label}`}
+                        inputMode="decimal"
+                        defaultValue={readingValue(prior?.previousKwh)}
+                        placeholder={t("i_utility_prev_kwh")}
+                        aria-label={`${space.space_label} ${t("i_utility_prev_kwh")}`}
+                      />
+                      <input
+                        className="inp"
+                        name="currKwh"
+                        data-testid={`kwh-curr-${space.space_label}`}
+                        inputMode="decimal"
+                        defaultValue={readingValue(prior?.currentKwh)}
+                        placeholder={t("i_utility_curr_kwh")}
+                        aria-label={`${space.space_label} ${t("i_utility_curr_kwh")}`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+          <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
+            <PendingSubmit label={t("i_utility_preview")} pendingLabel={t("i_utility_working")} testId="utility-preview" />
           </div>
-          <div className="fg">
-            <label className="f">{t("i_utility_total_kwh")}</label>
-            <input className="inp" name="totalKwh" data-testid="utility-total-kwh" inputMode="decimal" />
-          </div>
-          {selected.spaces.map((space) => {
-            const prior = detail?.lines.find((line) => (line.room_id ?? detail.run.unit_id) === space.space_id);
-            const methodLabel = space.method === "by_reading" ? t("i_elec_reading") : t("i_elec_submeter");
-            return (
-              <div className="fg" key={space.space_id}>
-                <label className="f">
-                  {space.space_label} · {space.tenant || t("i_vacant")} · {methodLabel}
-                </label>
-                <input type="hidden" name="spaceId" value={space.space_id} />
-                <input type="hidden" name="kwh" value={prior?.usage ?? ""} />
-                <div className="grid2">
-                  <input
-                    className="inp"
-                    name="prevKwh"
-                    data-testid={`kwh-prev-${space.space_label}`}
-                    inputMode="decimal"
-                    defaultValue={readingValue(prior?.previousKwh)}
-                    placeholder={t("i_utility_prev_kwh")}
-                    aria-label={`${space.space_label} ${t("i_utility_prev_kwh")}`}
-                  />
-                  <input
-                    className="inp"
-                    name="currKwh"
-                    data-testid={`kwh-curr-${space.space_label}`}
-                    inputMode="decimal"
-                    defaultValue={readingValue(prior?.currentKwh)}
-                    placeholder={t("i_utility_curr_kwh")}
-                    aria-label={`${space.space_label} ${t("i_utility_curr_kwh")}`}
-                  />
-                </div>
-              </div>
-            );
-          })}
-          <div className="fg">
-            <label className="f">{t("i_rate_reason")}</label>
-            <input className="inp" name="overrideReason" data-testid="utility-override" />
-          </div>
-          <button className="btn" type="submit" data-testid="utility-preview">
-            {t("i_utility_preview")}
-          </button>
         </form>
       ) : null}
       {detail ? (
         <div className="card" style={{ marginTop: 16 }} data-testid="utility-review" key={`${detail.run.id}-${detail.run.status}-${params.saved ?? ""}`}>
           <div className="hd">
-            <h3>
-              {detail.run.property_name} · {detail.run.unit_label}
-            </h3>
+            <h3>{t("i_utility_section_result")}</h3>
             <span className="chip" data-testid="utility-status">{statusLabel}</span>
           </div>
-          <p className="small">{t("i_utility_repost")}</p>
+          {detail.run.status === "posted" ? (
+            <div className="alert ok" data-testid="utility-posted-lock">{t("i_utility_posted_locked")}</div>
+          ) : (
+            <p className="small">{t("i_utility_repost")}</p>
+          )}
+          {detail.adjustments.publicKwhMilli < 0 ? (
+            <div className="alert warn" data-testid="utility-public-warn">{t("i_utility_public_warn")}</div>
+          ) : null}
+          {detail.adjustments.billGapWarn ? (
+            <div className="alert warn" data-testid="utility-gap-warn">{t("i_utility_gap_warn")}</div>
+          ) : null}
           <table className="t">
             <tbody>
               {detail.lines.map((line) => (
                 <tr key={line.id} data-testid="utility-share">
                   <td>
                     {line.bearer === "owner" ? t("i_utility_owner_vacant") : line.tenant || t("i_vacant")}
-                    <div className="small muted" data-testid="utility-share-desc">
-                      {line.description}
-                    </div>
+                    <div className="small muted" data-testid="utility-share-desc">{line.description}</div>
                   </td>
                   <td className="num">{money(Number(line.amount), detail.run.currency)}</td>
                 </tr>
               ))}
+              {detail.adjustments.publicAmountMinor !== 0 ? (
+                <tr data-testid="utility-public">
+                  <td>{t("i_utility_owner_public")}<div className="small muted">{t("i_utility_public_help", { kwh: String(detail.adjustments.publicKwhMilli / 1000) })}</div></td>
+                  <td className="num">{money(detail.adjustments.publicAmountMinor, detail.run.currency)}</td>
+                </tr>
+              ) : null}
+              {detail.adjustments.billGapMinor !== 0 ? (
+                <tr data-testid="utility-gap">
+                  <td>{t("i_utility_gap")}</td>
+                  <td className="num">{money(detail.adjustments.billGapMinor, detail.run.currency)}</td>
+                </tr>
+              ) : null}
+              {detail.adjustments.remainderMinor !== 0 ? (
+                <tr data-testid="utility-remainder">
+                  <td>{t("i_utility_remainder")}</td>
+                  <td className="num">{money(detail.adjustments.remainderMinor, detail.run.currency)}</td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
-          {canPost && detail.run.status !== "void" ? (
+          {canPost && detail.run.status !== "void" && detail.run.status !== "posted" ? (
             <div className="bd">
               <UtilityConfirmForm
                 runId={detail.run.id}
                 month={(detail.run.period_start || monthValue).slice(0, 7)}
                 unitId={detail.run.unit_id}
                 label={t("i_utility_confirm")}
+                pendingLabel={t("i_utility_working")}
               />
               <form action={actionVoidUtility} style={{ marginTop: 12 }}>
                 <input type="hidden" name="runId" value={detail.run.id} />

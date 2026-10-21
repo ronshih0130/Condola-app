@@ -438,12 +438,14 @@ export type PropertyElectricityInput = {
   rate: string;
 };
 
-function splitMethod(value: string): "none" | "even" | "days_occupied" | "sub_meter" {
+function electricityChoice(value: string): { meterSplit: "none" | "even" | "days_occupied" | "sub_meter"; method: string; rate: boolean } | null {
   const raw = value.trim();
-  if (!raw) return "none";
-  if (raw === "even") return "even";
-  if (raw === "days" || raw === "days_occupied") return "days_occupied";
-  if (raw === "sub" || raw === "sub_meter") return "sub_meter";
+  if (!raw) return null;
+  if (raw === "even") return { meterSplit: "even", method: "even", rate: true };
+  if (raw === "days" || raw === "days_occupied") return { meterSplit: "days_occupied", method: "by_reading", rate: true };
+  if (raw === "sub" || raw === "sub_meter") return { meterSplit: "sub_meter", method: "submeter", rate: true };
+  if (raw === "reading" || raw === "by_reading") return { meterSplit: "none", method: "by_reading", rate: true };
+  if (raw === "owner") return { meterSplit: "none", method: "shared", rate: false };
   throw new FlowError("errors.required");
 }
 
@@ -464,15 +466,16 @@ async function savePropertyElectricity(
   input: PropertyElectricityInput,
 ) {
   const serial = input.serial.trim().slice(0, 64);
-  const split = splitMethod(input.split);
+  const choice = electricityChoice(input.split);
+  const split = choice?.meterSplit ?? "none";
   const billRaw = input.bill.trim();
   const usageRaw = input.usage.trim();
   if ((billRaw === "") !== (usageRaw === "")) throw new FlowError("errors.amount");
   const bill = optionalMajor(billRaw);
   const usage = usageRaw === "" ? null : Number(usageRaw);
   if (usage !== null && (!Number.isFinite(usage) || usage <= 0)) throw new FlowError("errors.amount");
-  const rate = optionalMajor(input.rate);
-  const any = Boolean(serial || split !== "none" || bill !== null || rate !== null);
+  const rate = choice && !choice.rate ? null : optionalMajor(input.rate);
+  const any = Boolean(serial || choice || bill !== null || rate !== null);
   const unit = await maybe<{ id: string }>(
     client,
     `SELECT id::text FROM units WHERE property_id = $1 AND org_id = $2 AND archived_at IS NULL ORDER BY created_at LIMIT 1`,
@@ -534,6 +537,22 @@ async function savePropertyElectricity(
          SET total_amount_minor = EXCLUDED.total_amount_minor,
              total_usage = EXCLUDED.total_usage`,
       [session.orgId, meterId, currency, toMinor(bill), usage, session.userId],
+    );
+  }
+  if (choice) {
+    const appliedRate = choice.rate ? rate : null;
+    await client.query(
+      `UPDATE units
+          SET electricity_method = $3, rate_per_kwh = $4, updated_at = now()
+        WHERE property_id = $1 AND org_id = $2 AND archived_at IS NULL`,
+      [propertyId, session.orgId, choice.method, appliedRate],
+    );
+    await client.query(
+      `UPDATE rooms
+          SET electricity_method = $3, rate_per_kwh = $4, updated_at = now()
+        WHERE org_id = $2 AND archived_at IS NULL
+          AND unit_id IN (SELECT id FROM units WHERE property_id = $1 AND org_id = $2 AND archived_at IS NULL)`,
+      [propertyId, session.orgId, choice.method, appliedRate],
     );
   }
 }

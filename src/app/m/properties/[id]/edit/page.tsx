@@ -25,7 +25,13 @@ export default async function EditPropertyPage({
   const address = property.address ?? {};
   const street = address.street || address.line || "";
   const split =
-    property.split_method === "days_occupied" ? "days" : property.split_method === "sub_meter" ? "sub" : property.split_method === "even" ? "even" : "";
+    property.split_method === "days_occupied"
+      ? "days"
+      : property.split_method === "sub_meter"
+        ? "sub"
+        : property.split_method === "even"
+          ? "even"
+          : "";
   const major = (minor: string | null) => {
     if (!minor) return "";
     const value = Number(minor) / 100;
@@ -76,23 +82,15 @@ export default async function EditPropertyPage({
             <select className="inp" name="split" data-testid="property-split" defaultValue={split}>
               <option value="">{t("i_choose")}</option>
               <option value="even">{t("s_ecf0e25")}</option>
-              <option value="days">{t("s_c8e758d")}</option>
               <option value="sub">{t("s_9f8b19c")}</option>
+              <option value="reading">{t("i_elec_reading")}</option>
+              <option value="days">{t("s_c8e758d")}</option>
+              <option value="owner">{t("s_aecc842")}</option>
             </select>
           </div>
-          <div className="grid3">
-            <div className="fg">
-              <label className="f">{t("i_bill_total")}</label>
-              <input className="inp" name="bill" data-testid="property-bill" inputMode="decimal" placeholder={t("i_ph_bill")} defaultValue={major(property.bill_minor)} />
-            </div>
-            <div className="fg">
-              <label className="f">{t("i_usage")}</label>
-              <input className="inp" name="usage" data-testid="property-usage" inputMode="decimal" placeholder={t("i_ph_kwh")} defaultValue={property.usage ?? ""} />
-            </div>
-            <div className="fg">
-              <label className="f">{t("i_rate")}</label>
-              <input className="inp" name="rate" data-testid="property-rate" inputMode="decimal" placeholder={t("i_ph_rate")} defaultValue={major(property.rate_minor)} />
-            </div>
+          <div className="fg">
+            <label className="f">{t("i_rate")}</label>
+            <input className="inp" name="rate" data-testid="property-rate" inputMode="decimal" placeholder={t("i_ph_rate")} defaultValue={major(property.rate_minor)} />
           </div>
           <button className="btn pri" type="submit" data-testid="save-property">
             {t("i_save")}

@@ -5,17 +5,21 @@ import { reserveInvoiceNumbers } from "./invoice-number";
 import { inclusiveDays, monthBounds, taipeiToday, toMinor } from "./money";
 import { assertStaff, type Session } from "./types";
 import { syncVacantOwnerExpense } from "./utility-expense";
+import { BILL_GAP_DESCRIPTION, PUBLIC_ELECTRICITY_DESCRIPTION } from "./utility-expense";
 import {
   allocateUtilityMinor,
+  billGapExceedsWarning,
+  billGapMinor,
   billMinorCeil,
-  chargedRateExceedsBill,
+  evenSplitMinor,
   isPostableMethod,
   kwhMilli,
   normalizeRateMajor,
   prorateMilli,
+  publicKwhMilli,
   rateMajorFromStored,
   rateMinorText,
-  spreadCommonMilli,
+  signedUsageAmountMinor,
   usageMilliFromText,
   utilityLineDescription,
 } from "./utility-post";
@@ -49,7 +53,7 @@ type Share = {
   leaseId: string | null;
   contactId: string | null;
   roomId: string | null;
-  method: "submeter" | "by_reading";
+  method: "submeter" | "by_reading" | "even";
   rawMilli: number;
   kwhMilli: number;
   amountMinor: number;
@@ -104,6 +108,7 @@ export async function listUtilityBoard(
   return tx(session.userId, async (client) => {
     const spaces = await many<{
       unit_id: string;
+      property_id: string;
       property_name: string;
       unit_label: string;
       currency: string;
@@ -116,7 +121,7 @@ export async function listUtilityBoard(
     }>(
       client,
       `WITH occupied AS (
-         SELECT u.id AS unit_id, p.name AS property_name, u.label AS unit_label, p.currency,
+         SELECT u.id AS unit_id, p.id::text AS property_id, p.name AS property_name, u.label AS unit_label, p.currency,
                 coalesce(r.id, u.id)::text AS space_id,
                 CASE WHEN r.id IS NULL THEN u.label ELSE r.label END AS space_label,
                 coalesce(r.electricity_method, u.electricity_method) AS method,
@@ -140,13 +145,13 @@ export async function listUtilityBoard(
            ) lease ON true
           WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
             AND (u.rental_mode = 'whole_unit' OR r.id IS NOT NULL)
-            AND coalesce(r.electricity_method, u.electricity_method) IN ('submeter', 'by_reading')
+            AND coalesce(r.electricity_method, u.electricity_method) IN ('submeter', 'by_reading', 'even')
        ),
        ranked_units AS (
          SELECT unit_id, row_number() OVER (ORDER BY property_name, unit_label, unit_id) AS rn
            FROM (SELECT DISTINCT unit_id, property_name, unit_label FROM occupied) units
        )
-       SELECT o.unit_id::text, o.property_name, o.unit_label, o.currency,
+       SELECT o.unit_id::text, o.property_id, o.property_name, o.unit_label, o.currency,
               o.space_id, o.space_label, o.method, o.rate, o.lease_id, o.tenant
          FROM occupied o
          JOIN ranked_units ru ON ru.unit_id = o.unit_id
@@ -201,6 +206,7 @@ async function loadRun(client: Client, orgId: string, runId: string) {
     id: string;
     status: string;
     unit_id: string;
+    property_id: string;
     property_name: string;
     unit_label: string;
     currency: string;
@@ -210,12 +216,13 @@ async function loadRun(client: Client, orgId: string, runId: string) {
     usage: string;
     total: string;
     void_reason: string | null;
+    inputs: unknown;
   }>(
     client,
-    `SELECT r.id::text, r.status::text, u.id::text AS unit_id, p.name AS property_name, u.label AS unit_label,
+    `SELECT r.id::text, r.status::text, u.id::text AS unit_id, p.id::text AS property_id, p.name AS property_name, u.label AS unit_label,
             r.currency, r.period_start::text, r.period_end::text,
             r.rate_minor_per_unit::text AS rate, r.total_usage::text AS usage, r.total_amount_minor::text AS total,
-            r.void_reason
+            r.void_reason, r.inputs
        FROM utility_allocation_runs r
        JOIN meters m ON m.id = r.meter_id
        JOIN units u ON u.id = m.unit_id
@@ -262,9 +269,10 @@ async function loadRun(client: Client, orgId: string, runId: string) {
   return {
     run,
     rateMajor,
+    adjustments: ownerAdjustments(run.inputs),
     lines: lines.map((line) => ({
       ...line,
-      description: utilityLineDescription(usageMilliFromText(line.usage), rateMajor),
+      description: line.method === "even" ? "電費（平均分攤）" : utilityLineDescription(usageMilliFromText(line.usage), rateMajor),
       previousKwh: readingNumber(line.previous_kwh),
       currentKwh: readingNumber(line.current_kwh),
     })),
@@ -318,30 +326,31 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       .filter((space) => isPostableMethod(space.method))
       .map((space) => ({ space, people: occupants.get(space.space_id) ?? [] }));
     if (postable.length === 0) throw new FlowError("errors.utilityMethod");
-    if (postable.some((row) => !readingBySpace.has(row.space.space_id))) {
+    const evenMode = postable.every((row) => row.space.method === "even");
+    const meterRows = postable.filter((row) => row.space.method === "submeter" || row.space.method === "by_reading");
+    if (!evenMode && meterRows.some((row) => !readingBySpace.has(row.space.space_id))) {
       throw new FlowError("errors.amount", { field: "i_usage" });
     }
 
     const submeter = postable.filter((row) => row.space.method === "submeter");
     const byReading = postable.filter((row) => row.space.method === "by_reading");
     const rawOf = (space: SpaceRow) => kwhMilli(readingBySpace.get(space.space_id)?.kwh as number);
-    if ([...submeter, ...byReading].some((row) => Number.isNaN(rawOf(row.space)))) {
+    if (meterRows.some((row) => Number.isNaN(rawOf(row.space)))) {
       throw new FlowError("errors.amount", { field: "i_usage" });
     }
-    const subRaw = submeter.map((row) => ({ key: row.space.space_id, kwhMilli: rawOf(row.space) }));
-    const subSum = subRaw.reduce((total, part) => total + part.kwhMilli, 0);
-    const subTotal = input.totalKwh == null ? subSum : kwhMilli(input.totalKwh);
-    if (Number.isNaN(subTotal) || (submeter.length > 0 && subTotal < subSum)) throw new FlowError("errors.meter");
-    const spread = submeter.length ? spreadCommonMilli(subRaw, subTotal) : [];
-    if (submeter.length && !spread) throw new FlowError("errors.meter");
-    const spreadBySpace = new Map((spread ?? []).map((part) => [part.key, part.kwhMilli]));
+    const roomSum = meterRows.reduce((total, row) => total + rawOf(row.space), 0);
+    const totalMilli = input.totalKwh == null ? roomSum : kwhMilli(input.totalKwh);
+    if (Number.isNaN(totalMilli)) throw new FlowError("errors.amount", { field: "i_usage" });
+    // PUBLIC_POWER_RULE: owner keeps total kWh − room meters. A negative result is a credit, not a tenant charge.
+    const publicMilli = evenMode || input.totalKwh == null ? 0 : publicKwhMilli(totalMilli, roomSum);
+    if (Number.isNaN(publicMilli)) throw new FlowError("errors.amount", { field: "i_usage" });
 
     const expanded: {
       key: string;
       space: SpaceRow;
       leaseId: string | null;
       contactId: string | null;
-      method: "submeter" | "by_reading";
+      method: "submeter" | "by_reading" | "even";
       rawMilli: number;
       kwhMilli: number;
       days: number;
@@ -349,14 +358,9 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       previousKwh: number | null;
       currentKwh: number | null;
     }[] = [];
-    const pushShares = (
-      rows: { space: SpaceRow; people: Occupant[] }[],
-      method: "submeter" | "by_reading",
-      milliFor: (spaceId: string, rawMilli: number) => number,
-    ) => {
+    const pushMeter = (rows: { space: SpaceRow; people: Occupant[] }[], method: "submeter" | "by_reading") => {
       for (const row of rows) {
         const rawMilli = rawOf(row.space);
-        const milli = milliFor(row.space.space_id, rawMilli);
         const reading = readingBySpace.get(row.space.space_id);
         const ends = {
           previousKwh: reading?.previousKwh ?? null,
@@ -370,7 +374,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
             contactId: null,
             method,
             rawMilli,
-            kwhMilli: milli,
+            kwhMilli: rawMilli,
             days: 0,
             bearer: "owner",
             ...ends,
@@ -378,7 +382,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
           continue;
         }
         const parts = row.people.map((person) => ({ key: person.leaseId, days: person.days }));
-        const split = prorateMilli(parts, milli);
+        const split = prorateMilli(parts, rawMilli);
         if (!split) throw new FlowError("errors.meter");
         for (const part of split) {
           const person = row.people.find((item) => item.leaseId === part.key);
@@ -398,41 +402,60 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
         }
       }
     };
-    pushShares(submeter, "submeter", (spaceId) => spreadBySpace.get(spaceId) ?? 0);
-    pushShares(byReading, "by_reading", (_spaceId, rawMilli) => rawMilli);
+    pushMeter(submeter, "submeter");
+    pushMeter(byReading, "by_reading");
 
-    const splitShares = allocateUtilityMinor({
-      currency: unit.currency,
-      rateMajor,
-      mode: "split",
-      parts: expanded.filter((row) => row.method === "submeter").map((row) => ({ key: row.key, kwhMilli: row.kwhMilli })),
-    });
-    const eachShares = allocateUtilityMinor({
+    let remainderMinor = 0;
+    if (evenMode) {
+      if (input.billTotalMajor == null) throw new FlowError("errors.amount", { field: "i_bill_total" });
+      const billMinor = toMinor(input.billTotalMajor);
+      const split = evenSplitMinor(unit.currency, billMinor, postable.length);
+      if (!split) throw new FlowError("errors.amount", { field: "i_bill_total" });
+      remainderMinor = split.remainderMinor;
+      for (const row of postable) {
+        const bearer = row.people.length === 0 ? "owner" : "tenant";
+        const person = row.people[0];
+        expanded.push({
+          key: `${row.space.space_id}:${person?.leaseId ?? "owner"}`,
+          space: row.space,
+          leaseId: person?.leaseId ?? null,
+          contactId: person?.contactId ?? null,
+          method: "even",
+          rawMilli: 0,
+          kwhMilli: 0,
+          days: person?.days ?? 0,
+          bearer,
+          previousKwh: null,
+          currentKwh: null,
+        });
+      }
+    }
+
+    const priced = allocateUtilityMinor({
       currency: unit.currency,
       rateMajor,
       mode: "each",
-      parts: expanded.filter((row) => row.method === "by_reading").map((row) => ({ key: row.key, kwhMilli: row.kwhMilli })),
+      parts: expanded.filter((row) => row.method !== "even").map((row) => ({ key: row.key, kwhMilli: row.kwhMilli })),
     });
-    const byKey = new Map(expanded.map((row) => [row.key, row]));
-    const shares: Share[] = [...splitShares, ...eachShares].map((share) => {
-      const row = byKey.get(share.key)!;
-      return {
-        spaceId: row.space.space_id,
-        label: row.space.label,
-        leaseId: row.leaseId,
-        contactId: row.contactId,
-        roomId: row.space.space_id === unit.id ? null : row.space.space_id,
-        method: row.method,
-        rawMilli: row.rawMilli,
-        kwhMilli: share.kwhMilli,
-        amountMinor: share.amountMinor,
-        days: row.days,
-        bearer: row.bearer,
-        previousKwh: row.previousKwh,
-        currentKwh: row.currentKwh,
-      };
-    });
-    const usageMilli = (submeter.length ? subTotal : 0) + byReading.reduce((total, row) => total + rawOf(row.space), 0);
+    const priceByKey = new Map(priced.map((row) => [row.key, row.amountMinor]));
+    const evenShare = evenMode ? evenSplitMinor(unit.currency, toMinor(input.billTotalMajor ?? 0), postable.length) : null;
+    const shares: Share[] = expanded.map((row) => ({
+      spaceId: row.space.space_id,
+      label: row.space.label,
+      leaseId: row.leaseId,
+      contactId: row.contactId,
+      roomId: row.space.space_id === unit.id ? null : row.space.space_id,
+      method: row.method,
+      rawMilli: row.rawMilli,
+      kwhMilli: row.kwhMilli,
+      amountMinor: row.method === "even" ? (evenShare?.shareMinor ?? 0) : (priceByKey.get(row.key) ?? 0),
+      days: row.days,
+      bearer: row.bearer,
+      previousKwh: row.previousKwh,
+      currentKwh: row.currentKwh,
+    }));
+    const usageMilli = evenMode ? totalMilli : roomSum;
+    const publicAmountMinor = evenMode ? 0 : signedUsageAmountMinor(unit.currency, rateMajor, publicMilli);
     if (
       shares.some((share) => !Number.isSafeInteger(share.amountMinor) || !Number.isSafeInteger(share.kwhMilli)) ||
       (unit.currency === "TWD" && shares.some((share) => share.amountMinor % 100 !== 0))
@@ -440,7 +463,8 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       throw new FlowError("errors.amount");
     }
 
-    const meterSplit = submeter.length ? "sub_meter" : "none";
+    const meterSplit = evenMode ? "even" : submeter.length ? "sub_meter" : "none";
+    if (!Number.isSafeInteger(publicAmountMinor)) throw new FlowError("errors.amount");
     const ratePerUnit = rateMinorText(rateMajor);
     let meter = await maybe<{ id: string }>(
       client,
@@ -478,17 +502,38 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
         FOR UPDATE`,
       [meter.id, input.periodStart, input.periodEnd],
     );
-    if (usageMilli <= 0 && !existing) throw new FlowError("errors.amount", { field: "i_usage" });
+    if (usageMilli <= 0 && !evenMode && !existing) throw new FlowError("errors.amount", { field: "i_usage" });
+    if (evenMode && usageMilli < 0) throw new FlowError("errors.amount", { field: "i_usage" });
+
+    const enteredBill = input.billTotalMajor == null ? null : toMinor(input.billTotalMajor);
+    if (enteredBill != null && (!Number.isSafeInteger(enteredBill) || enteredBill < 0)) {
+      throw new FlowError("errors.amount", { field: "i_bill_total" });
+    }
+    const roomTotal = shares.reduce((total, share) => total + share.amountMinor, 0);
+    // BILL_GAP_RULE: meter mode posts bill − (room charges + 公共用電) to the owner.
+    // That equals bill − rate×total kWh, with whole-NT$ rounding dust kept on this owner line.
+    let gapMinor = 0;
+    let gapWarn = false;
+    let pureGap = 0;
+    if (!evenMode && enteredBill != null && input.totalKwh != null) {
+      pureGap = billGapMinor(unit.currency, rateMajor, totalMilli, enteredBill);
+      gapMinor = enteredBill - (roomTotal + publicAmountMinor);
+      gapWarn = billGapExceedsWarning(enteredBill, pureGap);
+    } else if (evenMode && enteredBill != null && input.totalKwh != null) {
+      pureGap = billGapMinor(unit.currency, rateMajor, totalMilli, enteredBill);
+      gapWarn = billGapExceedsWarning(enteredBill, pureGap);
+    }
+    if (!Number.isSafeInteger(gapMinor) || !Number.isSafeInteger(pureGap)) throw new FlowError("errors.amount");
+    // The rate-cap trigger still blocks a line when the rate is above the bill average.
+    // A lower bill is the owner credit 「電費（帳單差額）」, so record that reason and continue.
+    const capReason = pureGap < 0 ? input.overrideReason.trim() || "帳單低於每度電價，差額記入屋主" : "";
 
     let billId = existing?.utility_bill_id ?? null;
-    let exceeds = false;
-    if (usageMilli > 0) {
-      const synthetic = billMinorCeil(usageMilli, rateMajor);
-      const billMinor = input.billTotalMajor == null ? synthetic : toMinor(input.billTotalMajor);
-      if (!Number.isSafeInteger(billMinor) || billMinor < 0) throw new FlowError("errors.amount", { field: "i_bill_total" });
-      const usageKwh = milliText(usageMilli);
-      exceeds = chargedRateExceedsBill(usageMilli, rateMajor, billMinor);
-      if (exceeds && !input.overrideReason.trim()) throw new FlowError("errors.capReason");
+    const exceeds = capReason !== "";
+    if (exceeds) await client.query(`SELECT set_config('app.change_reason', $1, true)`, [capReason]);
+    if (usageMilli > 0 || enteredBill != null) {
+      const synthetic = usageMilli > 0 ? billMinorCeil(usageMilli, rateMajor) : 0;
+      const billMinor = enteredBill ?? synthetic;
       const saved = await one<{ id: string }>(
         client,
         `INSERT INTO utility_bills (
@@ -498,18 +543,23 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
            SET total_amount_minor = EXCLUDED.total_amount_minor,
                total_usage = EXCLUDED.total_usage
          RETURNING id::text`,
-        [session.orgId, meter.id, input.periodStart, input.periodEnd, unit.currency, billMinor, usageKwh, session.userId],
+        [session.orgId, meter.id, input.periodStart, input.periodEnd, unit.currency, billMinor, milliText(Math.max(0, usageMilli)), session.userId],
       );
       billId = saved.id;
     }
 
-    const totalMinor = shares.reduce((total, share) => total + share.amountMinor, 0);
-    if (!Number.isSafeInteger(totalMinor)) throw new FlowError("errors.amount");
-    const commonMilli = submeter.length ? Math.max(0, subTotal - subSum) : 0;
+    const totalMinor = enteredBill ?? roomTotal + Math.max(0, publicAmountMinor);
+    if (!Number.isSafeInteger(totalMinor) || totalMinor < 0) throw new FlowError("errors.amount");
+    const commonMilli = publicMilli;
     const inputs = {
-      version: "whole-ntd-v1",
+      version: "whole-ntd-v2",
       rate: rateMajor,
-      totalKwh: usageMilli / 1000,
+      totalKwh: totalMilli / 1000,
+      publicKwhMilli: publicMilli,
+      publicAmountMinor,
+      billGapMinor: gapMinor,
+      billGapWarn: gapWarn,
+      remainderMinor,
       readings: shares.map((share) => ({
         spaceId: share.spaceId,
         kwh: share.rawMilli / 1000,
@@ -520,7 +570,6 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
         currentKwh: share.currentKwh,
       })),
     };
-    if (exceeds) await client.query(`SELECT set_config('app.change_reason', $1, true)`, [input.overrideReason.trim()]);
     const runId = existing
       ? existing.id
       : (
@@ -545,7 +594,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
               milliText(usageMilli),
               milliText(commonMilli),
               ratePerUnit,
-              exceeds ? input.overrideReason.trim() : null,
+              exceeds ? capReason : null,
               exceeds ? session.userId : null,
               totalMinor,
               JSON.stringify(inputs),
@@ -572,7 +621,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
           milliText(usageMilli),
           milliText(commonMilli),
           ratePerUnit,
-          exceeds ? input.overrideReason.trim() : null,
+          exceeds ? capReason : null,
           exceeds ? session.userId : null,
           totalMinor,
           JSON.stringify(inputs),
@@ -649,7 +698,8 @@ export async function confirmUtilityRun(session: Session, runId: string) {
     const posts: PostJob[] = [];
     for (const line of lines) {
       const rateMajor = rateMajorFromStored(line.rate);
-      const description = utilityLineDescription(usageMilliFromText(line.allocated_usage), rateMajor);
+      const description =
+        line.method === "even" ? "電費（平均分攤）" : utilityLineDescription(usageMilliFromText(line.allocated_usage), rateMajor);
       const postable = Boolean(line.lease_id) && line.bearer === "tenant" && isPostableMethod(line.method);
       const desired = postable ? Number(line.amount_minor) : 0;
       if (!Number.isSafeInteger(desired) || desired < 0) throw new FlowError("errors.amount");
@@ -712,8 +762,24 @@ export async function confirmUtilityRun(session: Session, runId: string) {
       post.linkAllocation = target.linkAllocation;
     }
     await postChargeLines(client, session, posts);
-    const ownerExpense = await syncVacantOwnerExpense(client, session, await ownerExpenseInput(client, session.orgId, runId));
-    if (ownerExpense.changed) changed += 1;
+    const ownerBase = await ownerExpenseInput(client, session.orgId, runId);
+    const adjustments = ownerAdjustments(await runInputs(client, runId));
+    const vacantExpense = await syncVacantOwnerExpense(client, session, {
+      ...ownerBase,
+      amountMinor: ownerBase.amountMinor + adjustments.remainderMinor,
+    });
+    const publicExpense = await syncVacantOwnerExpense(client, session, {
+      ...ownerBase,
+      amountMinor: adjustments.publicAmountMinor,
+      description: PUBLIC_ELECTRICITY_DESCRIPTION,
+    });
+    const gapExpense = await syncVacantOwnerExpense(client, session, {
+      ...ownerBase,
+      amountMinor: adjustments.billGapMinor,
+      description: BILL_GAP_DESCRIPTION,
+    });
+    if (vacantExpense.changed || publicExpense.changed || gapExpense.changed) changed += 1;
+    await client.query(`SELECT set_config('app.change_reason', '確認電費入帳', true)`);
     await client.query(
       `UPDATE utility_allocation_runs
           SET status = 'posted', approved_by = $2, approved_at = coalesce(approved_at, now())
@@ -777,7 +843,10 @@ export async function voidUtilityRun(session: Session, runId: string, reason: st
       }),
       "作廢電費入帳",
     );
-    await syncVacantOwnerExpense(client, session, await ownerExpenseInput(client, session.orgId, runId, 0));
+    const cleared = await ownerExpenseInput(client, session.orgId, runId, 0);
+    await syncVacantOwnerExpense(client, session, cleared);
+    await syncVacantOwnerExpense(client, session, { ...cleared, description: PUBLIC_ELECTRICITY_DESCRIPTION });
+    await syncVacantOwnerExpense(client, session, { ...cleared, description: BILL_GAP_DESCRIPTION });
     await client.query(
       `UPDATE utility_allocation_runs
           SET status = 'void', void_reason = $2, voided_by = $3, voided_at = now()
@@ -791,6 +860,26 @@ export async function voidUtilityRun(session: Session, runId: string, reason: st
     ]);
     return { runId, reversed: lines.length };
   }, scope(session));
+}
+
+async function runInputs(client: Client, runId: string) {
+  const row = await maybe<{ inputs: unknown }>(client, `SELECT inputs FROM utility_allocation_runs WHERE id = $1`, [runId]);
+  return row?.inputs ?? null;
+}
+
+function ownerAdjustments(inputs: unknown) {
+  const record = inputs && typeof inputs === "object" ? (inputs as Record<string, unknown>) : {};
+  const num = (key: string) => {
+    const value = record[key];
+    return typeof value === "number" && Number.isInteger(value) ? value : 0;
+  };
+  return {
+    publicKwhMilli: num("publicKwhMilli"),
+    publicAmountMinor: num("publicAmountMinor"),
+    billGapMinor: num("billGapMinor"),
+    remainderMinor: num("remainderMinor"),
+    billGapWarn: record.billGapWarn === true,
+  };
 }
 
 function readingNumber(value: string | null) {
