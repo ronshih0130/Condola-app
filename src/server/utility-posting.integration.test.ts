@@ -5,10 +5,11 @@ import { createProperty, generateStatement, importBankCsv, recordPayment } from 
 import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { createLeaseFromForm } from "./lease-form";
-import { monthBounds, taipeiToday } from "./money";
+import { nextInvoiceNumber } from "./invoice-number";
+import { addDays, monthBounds, taipeiToday } from "./money";
 import type { Session } from "./types";
 import { allocateUtilityMinor, spreadCommonMilli, utilityLineDescription } from "./utility-post";
-import { confirmUtilityRun, currentUtilityPeriod, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
+import { confirmUtilityRun, currentUtilityPeriod, listUtilityBoard, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
 
 const admin: Session = {
   userId: USERS.admin,
@@ -170,9 +171,67 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
     assert.ok(spread);
     const expected = allocateUtilityMinor({ currency: "TWD", rateMajor: 4, mode: "split", parts: spread });
     const prepared = await prepareUtilityRun(admin, { ...input, totalKwh: 151 });
+    await query(`UPDATE utility_allocation_runs SET inputs = jsonb_set(inputs, '{readings}', '[]'::jsonb) WHERE id = $1`, [
+      prepared.runId,
+    ]);
+    await assert.rejects(
+      () => confirmUtilityRun(admin, prepared.runId),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.amount",
+    );
+    const repaired = await prepareUtilityRun(admin, { ...input, totalKwh: 151 });
+    assert.equal(repaired.runId, prepared.runId);
     const posted = await confirmUtilityRun(admin, prepared.runId);
     assert.equal(posted.changed, 2);
     assert.equal(posted.reversed, 0);
+    await withClient(async (client) => {
+      await client.query("BEGIN");
+      try {
+        await client.query(`DROP INDEX utility_allocation_runs_open_period_uidx`);
+        await client.query(
+          `INSERT INTO utility_allocation_runs (
+             org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
+             total_usage, common_area_usage, common_area_policy, rate_minor_per_unit, total_amount_minor,
+             inputs, algorithm_version, status, computed_by, approved_by, approved_at
+           )
+           SELECT org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
+                  total_usage, common_area_usage, common_area_policy, rate_minor_per_unit, total_amount_minor,
+                  inputs, algorithm_version, status, computed_by, approved_by, approved_at
+             FROM utility_allocation_runs WHERE id = $1`,
+          [prepared.runId],
+        );
+        let raised = false;
+        await client.query("SAVEPOINT posted_dupes");
+        try {
+          await client.query(`DO $$
+            BEGIN
+              IF EXISTS (
+                SELECT 1 FROM utility_allocation_runs
+                 WHERE status IN ('approved', 'posted')
+                 GROUP BY meter_id, period_start, period_end
+                HAVING count(*) > 1
+              ) THEN
+                RAISE EXCEPTION 'cannot merge allocation runs: a meter period has more than one approved or posted run'
+                  USING ERRCODE = 'unique_violation';
+              END IF;
+            END $$`);
+        } catch (error) {
+          raised = true;
+          await client.query("ROLLBACK TO SAVEPOINT posted_dupes");
+          const message = error instanceof Error ? error.message : String(error);
+          assert.match(message, /cannot merge allocation runs/);
+        }
+        assert.equal(raised, true);
+        const stillPosted = await client.query(
+          `SELECT count(*)::text AS n FROM utility_allocation_runs
+            WHERE meter_id = (SELECT meter_id FROM utility_allocation_runs WHERE id = $1)
+              AND status = 'posted'`,
+          [prepared.runId],
+        );
+        assert.equal(stillPosted.rows[0]?.n, "2");
+      } finally {
+        await client.query("ROLLBACK");
+      }
+    });
     const postedOn = await query<{ effective_date: string }>(
       `SELECT effective_date::text FROM ledger_transactions
         WHERE source_table = 'utility_allocation_lines' AND kind = 'invoice'
@@ -266,6 +325,56 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
     );
     assert.equal(Number(reason.rows[0].n) >= 1, true);
 
+    const postedLines = await query<{ id: string; line: string; amount: string }>(
+      `SELECT id::text, posted_invoice_line_id::text AS line, posted_amount_minor::text AS amount
+         FROM utility_allocation_lines WHERE run_id = $1 ORDER BY id`,
+      [prepared.runId],
+    );
+    await assert.rejects(
+      () => prepareUtilityRun(admin, { ...input, totalKwh: 151, readings: [{ spaceId: roomA, kwh: 90 }] }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.amount",
+    );
+    const postedLinesAfterGap = await query<{ id: string; line: string; amount: string }>(
+      `SELECT id::text, posted_invoice_line_id::text AS line, posted_amount_minor::text AS amount
+         FROM utility_allocation_lines WHERE run_id = $1 ORDER BY id`,
+      [prepared.runId],
+    );
+    assert.deepEqual(postedLinesAfterGap.rows, postedLines.rows);
+    await assert.rejects(
+      () =>
+        prepareUtilityRun(admin, {
+          ...input,
+          periodStart: addDays(period.start, 10),
+          periodEnd: addDays(period.end, 5),
+          totalKwh: 151,
+        }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.utilityOverlap",
+    );
+    let boardPage = 1;
+    let foundUnit = false;
+    const seenUnits = new Set<string>();
+    for (;;) {
+      const board = await listUtilityBoard(admin, period.start, period.end, boardPage, 1);
+      const ids = [...new Set(board.spaces.map((space) => space.unit_id))];
+      assert.ok(ids.length <= 1);
+      if (ids[0]) {
+        assert.equal(seenUnits.has(ids[0]), false);
+        seenUnits.add(ids[0]);
+      }
+      if (ids[0] === input.unitId) {
+        foundUnit = true;
+        assert.equal(board.spaces.length, 2);
+        assert.deepEqual(
+          board.spaces.map((space) => space.space_id).sort(),
+          [roomA, roomB].sort(),
+        );
+      }
+      if (!board.hasMore) break;
+      boardPage += 1;
+      assert.ok(boardPage < 40);
+    }
+    assert.equal(foundUnit, true);
+
     const edited = await prepareUtilityRun(admin, {
       ...input,
       totalKwh: 151,
@@ -279,7 +388,7 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
       `SELECT status::text FROM utility_allocation_runs WHERE id = $1`,
       [prepared.runId],
     );
-    assert.equal(stillPosted.rows[0]?.status, "posted");
+    assert.equal(stillPosted.rows[0]?.status, "pending_repost");
     const reposted = await confirmUtilityRun(admin, prepared.runId);
     assert.equal(reposted.reversed, 2);
     const openLines = await query<{ n: string; total: string }>(
@@ -411,6 +520,12 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
     );
     assert.equal(statementLine.rows.length, 1);
     assert.equal(statementLine.rows[0].amount, "200");
+    const linked = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM invoices
+        WHERE lease_id = $1 AND owner_statement_id = $2`,
+      [leaseA.leaseId, statement.statementId],
+    );
+    assert.equal(Number(linked.rows[0]?.n) >= 1, true);
 
     const csv = `date,amount,last5,memo\n${taipeiToday()},10002,24680,電費${stamp}`;
     const imported = await importBankCsv(admin, csv);
@@ -730,9 +845,23 @@ test("a paid invoice is left alone and the correction is a credit on a new utili
     assert.equal(paid.rows[0]?.status, "paid");
     assert.ok(Number(paid.rows[0]?.paid_minor) <= Number(paid.rows[0]?.total));
 
+    const pointerBefore = await query<{ ledger: string | null }>(
+      `SELECT ledger_transaction_id::text AS ledger FROM invoices WHERE id = $1`,
+      [invoice.rows[0].id],
+    );
+    assert.ok(pointerBefore.rows[0]?.ledger);
     const edited = await prepareUtilityRun(admin, { ...input, readings: [{ spaceId: roomA, kwh: 20 }] });
     assert.equal(edited.runId, prepared.runId);
+    const pending = await query<{ status: string }>(`SELECT status::text FROM utility_allocation_runs WHERE id = $1`, [
+      prepared.runId,
+    ]);
+    assert.equal(pending.rows[0]?.status, "pending_repost");
     await confirmUtilityRun(admin, prepared.runId);
+    const pointerAfter = await query<{ ledger: string | null }>(
+      `SELECT ledger_transaction_id::text AS ledger FROM invoices WHERE id = $1`,
+      [invoice.rows[0].id],
+    );
+    assert.equal(pointerAfter.rows[0]?.ledger, pointerBefore.rows[0]?.ledger);
     const afterEdit = await query<{ id: string; amount: string; description: string; charge_type: string }>(
       `SELECT id::text, amount_minor::text AS amount, description, charge_type::text
          FROM invoice_lines WHERE invoice_id = $1 ORDER BY line_no`,
@@ -752,6 +881,27 @@ test("a paid invoice is left alone and the correction is a credit on a new utili
     assert.equal(fresh.rows[0]?.source, "utility");
     assert.match(fresh.rows[0]?.invoice_number ?? "", /^INV-\d{6}-\d{4}$/);
     assert.equal(fresh.rows[0]?.invoice_number.startsWith("INV-E-"), false);
+    const creditLedger = await query<{ id: string; ledger: string }>(
+      `SELECT i.id::text, i.ledger_transaction_id::text AS ledger
+         FROM invoices i
+        WHERE i.lease_id = $1 AND i.id <> $2 AND i.source = 'utility'
+        ORDER BY i.created_at DESC
+        LIMIT 1`,
+      [lease.leaseId, invoice.rows[0].id],
+    );
+    assert.ok(creditLedger.rows[0]?.ledger);
+    const reversalEntries = await query<{ on_credit: string; elsewhere: string; reverses: string }>(
+      `SELECT
+         (SELECT count(*) FROM ledger_entries e WHERE e.transaction_id = t.id AND e.invoice_id = $2::uuid)::text AS on_credit,
+         (SELECT count(*) FROM ledger_entries e WHERE e.transaction_id = t.id AND e.invoice_id IS DISTINCT FROM $2::uuid)::text AS elsewhere,
+         t.reverses_transaction_id::text AS reverses
+         FROM ledger_transactions t
+        WHERE t.id = $1::uuid`,
+      [creditLedger.rows[0].ledger, creditLedger.rows[0].id],
+    );
+    assert.equal(Number(reversalEntries.rows[0]?.on_credit) >= 1, true);
+    assert.equal(reversalEntries.rows[0]?.elsewhere, "0");
+    assert.equal(reversalEntries.rows[0]?.reverses, pointerBefore.rows[0]?.ledger);
     assert.equal(Number(fresh.rows[0]?.credit) >= 1, true);
     assert.equal(Number(fresh.rows[0]?.utility) >= 1, true);
     const stillPaid = await query<{ paid_minor: string; total: string }>(
@@ -768,6 +918,11 @@ test("a paid invoice is left alone and the correction is a credit on a new utili
       [invoice.rows[0].id],
     );
     assert.deepEqual(afterVoid.rows, before.rows);
+    const pointerAfterVoid = await query<{ ledger: string | null }>(
+      `SELECT ledger_transaction_id::text AS ledger FROM invoices WHERE id = $1`,
+      [invoice.rows[0].id],
+    );
+    assert.equal(pointerAfterVoid.rows[0]?.ledger, pointerBefore.rows[0]?.ledger);
     const again = await voidUtilityRun(admin, prepared.runId, "帳單已付款");
     assert.equal(again.reversed, 0);
   } finally {
@@ -887,4 +1042,21 @@ test("a void run with a blank reason fails a validated check and passes after ba
   } finally {
     await cleanupFixture({ propertyIds, userIds, importId: null, stamp });
   }
+});
+
+test("monthly invoice numbers ignore seed invoices and share one sequence", async () => {
+  const seq = await tx(
+    admin.userId,
+    async (client) => {
+      const first = await nextInvoiceNumber(client, ORG_ID, 0);
+      const second = await nextInvoiceNumber(client, ORG_ID, 1);
+      const count = await client.query<{ n: string }>(`SELECT count(*)::text AS n FROM invoices WHERE org_id = $1`, [ORG_ID]);
+      return { first, second, count: Number(count.rows[0]?.n ?? 0) };
+    },
+    { orgId: ORG_ID, environment: "live" },
+  );
+  assert.match(seq.first, /^INV-\d{6}-\d{4}$/);
+  assert.equal(seq.second.slice(0, 11), seq.first.slice(0, 11));
+  assert.equal(Number(seq.second.slice(11)), Number(seq.first.slice(11)) + 1);
+  assert.ok(seq.count > Number(seq.first.slice(11)));
 });

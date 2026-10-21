@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   allocateUtilityMinor,
@@ -162,6 +163,26 @@ test("turnover splits one reading by occupancy days", () => {
     { key: "a", kwhMilli: 2 },
   ]);
   assert.equal(prorateMilli([{ key: "a", days: 0 }, { key: "b", days: 0 }], 10), null);
+});
+
+test("the electricity migration fails closed on posted duplicates and unknown methods", () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/20261023130000_utility_charge_posting.sql", import.meta.url), "utf8");
+  assert.equal(sql.includes("SET electricity_method = NULL"), false);
+  assert.match(sql, /cannot merge allocation runs: a meter period has more than one approved or posted run/);
+  assert.match(sql, /cannot merge meters: an approved or posted allocation run would have to be voided/);
+  assert.match(sql, /AND r\.status = 'draft'/);
+  assert.match(sql, /ADD VALUE IF NOT EXISTS 'pending_repost'/);
+  assert.match(sql, /owner_statement_id/);
+  assert.match(sql, /post_reversal\(p_txn uuid, p_reason text, p_invoice uuid DEFAULT NULL\)/);
+  assert.match(sql, /COALESCE\(p_invoice, invoice_id\)/);
+  assert.equal(sql.includes("osl.ledger_transaction_id = i.ledger_transaction_id"), false);
+  assert.match(sql, /k\.key NOT IN \('runId', 'lines', 'reversed'\)/);
+  const posting = readFileSync(new URL("./utility-posting.ts", import.meta.url), "utf8");
+  const moveIn = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
+  assert.match(posting, /nextInvoiceNumber/);
+  assert.match(moveIn, /nextInvoiceNumber/);
+  assert.equal(posting.includes("readingBySpace.get(space.space_id) ?? 0"), false);
+  assert.equal(posting.includes("osl.ledger_transaction_id"), false);
 });
 
 test("the synthetic bill average is at least the charged rate", () => {

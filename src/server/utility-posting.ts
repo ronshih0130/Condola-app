@@ -1,6 +1,7 @@
 import type { Client } from "pg";
 import { maybe, many, one, tx } from "./db";
 import { FlowError } from "./errors";
+import { nextInvoiceNumber } from "./invoice-number";
 import { inclusiveDays, monthBounds, taipeiToday, toMinor } from "./money";
 import { assertStaff, type Session } from "./types";
 import {
@@ -86,9 +87,16 @@ export function currentUtilityPeriod(today = taipeiToday()) {
   return monthBounds(today.slice(0, 7));
 }
 
-export async function listUtilityBoard(session: Session, periodStart: string, periodEnd: string, page = 1) {
+export async function listUtilityBoard(
+  session: Session,
+  periodStart: string,
+  periodEnd: string,
+  page = 1,
+  pageSize = BOARD_PAGE,
+) {
   assertPeriod(periodStart, periodEnd);
   const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const safeSize = Number.isInteger(pageSize) && pageSize > 0 && pageSize <= BOARD_PAGE ? pageSize : BOARD_PAGE;
   return tx(session.userId, async (client) => {
     const spaces = await many<{
       unit_id: string;
@@ -103,34 +111,44 @@ export async function listUtilityBoard(session: Session, periodStart: string, pe
       tenant: string | null;
     }>(
       client,
-      `SELECT u.id::text AS unit_id, p.name AS property_name, u.label AS unit_label, p.currency,
-              coalesce(r.id::text, u.id::text) AS space_id,
-              CASE WHEN r.id IS NULL THEN u.label ELSE r.label END AS space_label,
-              coalesce(r.electricity_method, u.electricity_method) AS method,
-              coalesce(r.rate_per_kwh, u.rate_per_kwh)::text AS rate,
-              lease.id::text AS lease_id, lease.tenant
-         FROM units u
-         JOIN properties p ON p.id = u.property_id
-         LEFT JOIN rooms r ON r.unit_id = u.id AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
-         JOIN LATERAL (
-           SELECT l.id, c.display_name AS tenant
-             FROM leases l
-             JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
-             JOIN contacts c ON c.id = lp.contact_id
-            WHERE l.org_id = u.org_id
-              AND l.status IN ('pending_signature','active')
-              AND l.start_date <= $3::date
-              AND coalesce(l.end_date, DATE '9999-12-31') >= $2::date
-              AND ((r.id IS NOT NULL AND l.target_room_id = r.id) OR (r.id IS NULL AND l.target_unit_id = u.id))
-            ORDER BY l.start_date DESC
-            LIMIT 1
-         ) lease ON true
-        WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
-          AND (u.rental_mode = 'whole_unit' OR r.id IS NOT NULL)
-          AND coalesce(r.electricity_method, u.electricity_method) IN ('submeter', 'by_reading')
-        ORDER BY p.name, u.label, space_label
-        LIMIT $4 OFFSET $5`,
-      [session.orgId, periodStart, periodEnd, BOARD_PAGE + 1, (safePage - 1) * BOARD_PAGE],
+      `WITH occupied AS (
+         SELECT u.id AS unit_id, p.name AS property_name, u.label AS unit_label, p.currency,
+                coalesce(r.id, u.id)::text AS space_id,
+                CASE WHEN r.id IS NULL THEN u.label ELSE r.label END AS space_label,
+                coalesce(r.electricity_method, u.electricity_method) AS method,
+                coalesce(r.rate_per_kwh, u.rate_per_kwh)::text AS rate,
+                lease.id::text AS lease_id, lease.tenant
+           FROM units u
+           JOIN properties p ON p.id = u.property_id
+           LEFT JOIN rooms r ON r.unit_id = u.id AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
+           JOIN LATERAL (
+             SELECT l.id, c.display_name AS tenant
+               FROM leases l
+               JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
+               JOIN contacts c ON c.id = lp.contact_id
+              WHERE l.org_id = u.org_id
+                AND l.status IN ('pending_signature','active')
+                AND l.start_date <= $3::date
+                AND coalesce(l.end_date, DATE '9999-12-31') >= $2::date
+                AND ((r.id IS NOT NULL AND l.target_room_id = r.id) OR (r.id IS NULL AND l.target_unit_id = u.id))
+              ORDER BY l.start_date DESC
+              LIMIT 1
+           ) lease ON true
+          WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
+            AND (u.rental_mode = 'whole_unit' OR r.id IS NOT NULL)
+            AND coalesce(r.electricity_method, u.electricity_method) IN ('submeter', 'by_reading')
+       ),
+       ranked_units AS (
+         SELECT unit_id, row_number() OVER (ORDER BY property_name, unit_label, unit_id) AS rn
+           FROM (SELECT DISTINCT unit_id, property_name, unit_label FROM occupied) units
+       )
+       SELECT o.unit_id::text, o.property_name, o.unit_label, o.currency,
+              o.space_id, o.space_label, o.method, o.rate, o.lease_id, o.tenant
+         FROM occupied o
+         JOIN ranked_units ru ON ru.unit_id = o.unit_id
+        WHERE ru.rn > $5 AND ru.rn <= $5 + $4
+        ORDER BY o.property_name, o.unit_label, o.space_label`,
+      [session.orgId, periodStart, periodEnd, safeSize + 1, (safePage - 1) * safeSize],
     );
     const runs = await many<{
       id: string;
@@ -155,11 +173,17 @@ export async function listUtilityBoard(session: Session, periodStart: string, pe
         LIMIT 20`,
       [session.orgId],
     );
+    const unitOrder: string[] = [];
+    for (const space of spaces) {
+      if (!unitOrder.includes(space.unit_id)) unitOrder.push(space.unit_id);
+    }
+    const hasMore = unitOrder.length > safeSize;
+    const keep = new Set(unitOrder.slice(0, safeSize));
     return {
-      spaces: spaces.slice(0, BOARD_PAGE),
+      spaces: spaces.filter((space) => keep.has(space.unit_id)),
       runs,
       page: safePage,
-      hasMore: spaces.length > BOARD_PAGE,
+      hasMore,
     };
   }, scope(session));
 }
@@ -271,21 +295,18 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       [input.unitId, session.orgId],
     );
     if (!unit) throw new FlowError("errors.notFound");
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [
-      session.orgId,
-      `${unit.id}|${input.periodStart}|${input.periodEnd}`,
-    ]);
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [session.orgId, unit.id]);
     const spaces = await loadSpaces(client, unit);
     const occupants = await loadOccupants(client, session.orgId, unit.id, input.periodStart, input.periodEnd);
-    const occupied = spaces
-      .filter((space) => isPostableMethod(space.method))
-      .map((space) => ({ space, people: occupants.get(space.space_id) ?? [] }))
-      .filter((row) => row.people.length > 0);
+    const occupied = occupiedPostable(spaces, occupants);
     if (occupied.length === 0) throw new FlowError("errors.utilityMethod");
+    if (occupied.some((row) => !readingBySpace.has(row.space.space_id))) {
+      throw new FlowError("errors.amount", { field: "i_usage" });
+    }
 
     const submeter = occupied.filter((row) => row.space.method === "submeter");
     const byReading = occupied.filter((row) => row.space.method === "by_reading");
-    const rawOf = (space: SpaceRow) => kwhMilli(readingBySpace.get(space.space_id) ?? 0);
+    const rawOf = (space: SpaceRow) => kwhMilli(readingBySpace.get(space.space_id) as number);
     if ([...submeter, ...byReading].some((row) => Number.isNaN(rawOf(row.space)))) {
       throw new FlowError("errors.amount", { field: "i_usage" });
     }
@@ -396,6 +417,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       );
     }
 
+    await assertPeriodFree(client, session.orgId, unit.id, meter.id, input.periodStart, input.periodEnd);
     const existing = await maybe<{ id: string; status: string; utility_bill_id: string | null }>(
       client,
       `SELECT id::text, status::text, utility_bill_id::text
@@ -486,7 +508,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
            total_usage = $5, common_area_usage = $6, rate_minor_per_unit = $7,
            cap_override_reason = $8, cap_overridden_by = $9,
            total_amount_minor = $10, inputs = $11::jsonb, algorithm_version = 'whole-ntd-v1',
-           status = CASE WHEN status IN ('posted', 'approved') THEN status ELSE 'draft' END,
+           status = (CASE WHEN status IN ('posted', 'approved', 'pending_repost') THEN 'pending_repost' ELSE 'draft' END)::allocation_status,
            computed_by = $12, computed_at = now()
          WHERE id = $1`,
         [
@@ -623,6 +645,7 @@ export async function confirmUtilityRun(session: Session, runId: string) {
     if (!run) throw new FlowError("errors.notFound");
     if (run.status === "void") throw new FlowError("errors.utilityState");
     if (!run.utility_bill_id) throw new FlowError("errors.amount", { field: "i_usage" });
+    await assertRunCoversOccupied(client, session.orgId, runId);
     await client.query(`SELECT set_config('app.change_reason', '確認電費入帳', true)`);
     const lines = await many<PostedLine>(client, `${POSTED_LINE_SQL} WHERE l.run_id = $1 ORDER BY l.id`, [runId]);
     let changed = 0;
@@ -708,6 +731,76 @@ export async function voidUtilityRun(session: Session, runId: string, reason: st
   }, scope(session));
 }
 
+function occupiedPostable(spaces: SpaceRow[], occupants: Map<string, Occupant[]>) {
+  return spaces
+    .filter((space) => isPostableMethod(space.method))
+    .map((space) => ({ space, people: occupants.get(space.space_id) ?? [] }))
+    .filter((row) => row.people.length > 0);
+}
+
+function recordedSpaceIds(inputs: unknown) {
+  const readings =
+    inputs && typeof inputs === "object" && "readings" in inputs ? (inputs as { readings?: unknown }).readings : null;
+  const ids = new Set<string>();
+  if (!Array.isArray(readings)) return ids;
+  for (const reading of readings) {
+    if (!reading || typeof reading !== "object" || !("spaceId" in reading)) continue;
+    const spaceId = (reading as { spaceId?: unknown }).spaceId;
+    if (typeof spaceId === "string" && spaceId) ids.add(spaceId);
+  }
+  return ids;
+}
+
+async function assertPeriodFree(
+  client: Client,
+  orgId: string,
+  unitId: string,
+  meterId: string,
+  periodStart: string,
+  periodEnd: string,
+) {
+  const overlap = await maybe<{ id: string }>(
+    client,
+    `SELECT r.id::text
+       FROM utility_allocation_runs r
+       JOIN meters m ON m.id = r.meter_id
+      WHERE m.unit_id = $1 AND r.org_id = $2 AND r.status <> 'void'
+        AND r.period_start < $4::date AND r.period_end > $3::date
+        AND NOT (r.meter_id = $5 AND r.period_start = $3::date AND r.period_end = $4::date)
+      LIMIT 1`,
+    [unitId, orgId, periodStart, periodEnd, meterId],
+  );
+  if (overlap) throw new FlowError("errors.utilityOverlap");
+}
+
+async function assertRunCoversOccupied(client: Client, orgId: string, runId: string) {
+  const run = await maybe<{
+    unit_id: string;
+    rental_mode: string;
+    method: string | null;
+    period_start: string;
+    period_end: string;
+    inputs: unknown;
+  }>(
+    client,
+    `SELECT u.id::text AS unit_id, u.rental_mode::text, u.electricity_method AS method,
+            r.period_start::text, r.period_end::text, r.inputs
+       FROM utility_allocation_runs r
+       JOIN meters m ON m.id = r.meter_id
+       JOIN units u ON u.id = m.unit_id
+      WHERE r.id = $1 AND r.org_id = $2`,
+    [runId, orgId],
+  );
+  if (!run) throw new FlowError("errors.notFound");
+  const spaces = await loadSpaces(client, { id: run.unit_id, rental_mode: run.rental_mode, method: run.method });
+  const occupants = await loadOccupants(client, orgId, run.unit_id, run.period_start, run.period_end);
+  const recorded = recordedSpaceIds(run.inputs);
+  const occupied = occupiedPostable(spaces, occupants);
+  if (occupied.some((row) => !recorded.has(row.space.space_id))) {
+    throw new FlowError("errors.amount", { field: "i_usage" });
+  }
+}
+
 async function loadSpaces(client: Client, unit: { id: string; rental_mode: string; method: string | null }) {
   if (unit.rental_mode === "whole_unit") {
     return many<SpaceRow>(
@@ -788,6 +881,36 @@ async function nextLineNo(client: Client, invoiceId: string) {
   return Number(lineNo.n);
 }
 
+const FROZEN_INVOICE_SQL = `
+  i.status::text, i.paid_minor::text, i.einvoice_status::text,
+  (
+    EXISTS (
+      SELECT 1 FROM owner_statements s
+       WHERE s.id = i.owner_statement_id AND s.org_id = i.org_id AND s.status = 'issued'
+    )
+    OR EXISTS (
+      SELECT 1
+        FROM payment_allocations a
+        JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'
+        JOIN leases l ON l.id = i.lease_id
+        JOIN property_owners po ON po.property_id = l.property_id
+        JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id
+         AND s.org_id = i.org_id AND s.status = 'issued'
+         AND pay.paid_on >= s.period_start AND pay.paid_on <= s.period_end
+       WHERE a.invoice_id = i.id
+    )
+  ) AS on_statement`;
+
+function frozenRow(row: { status: string; paid_minor: string; einvoice_status: string; on_statement: boolean } | null) {
+  if (!row) return true;
+  const openUnpaid =
+    row.status === "open" &&
+    Number(row.paid_minor) === 0 &&
+    row.einvoice_status !== "issued" &&
+    row.einvoice_status !== "allowance_issued";
+  return !openUnpaid || row.on_statement;
+}
+
 async function invoiceFrozen(client: Client, invoiceId: string) {
   const row = await maybe<{
     status: string;
@@ -796,35 +919,13 @@ async function invoiceFrozen(client: Client, invoiceId: string) {
     on_statement: boolean;
   }>(
     client,
-    `SELECT i.status::text, i.paid_minor::text, i.einvoice_status::text,
-            (
-              EXISTS (
-                SELECT 1
-                  FROM payment_allocations a
-                  JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'
-                  JOIN leases l ON l.id = i.lease_id
-                  JOIN property_owners po ON po.property_id = l.property_id
-                  JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id
-                   AND s.org_id = i.org_id AND s.status = 'issued'
-                   AND pay.paid_on >= s.period_start AND pay.paid_on <= s.period_end
-                 WHERE a.invoice_id = i.id
-              )
-              OR EXISTS (
-                SELECT 1
-                  FROM owner_statement_lines osl
-                  JOIN owner_statements s ON s.id = osl.statement_id AND s.status = 'issued'
-                 WHERE i.ledger_transaction_id IS NOT NULL
-                   AND osl.ledger_transaction_id = i.ledger_transaction_id
-              )
-            ) AS on_statement
+    `SELECT ${FROZEN_INVOICE_SQL}
        FROM invoices i
       WHERE i.id = $1
       FOR UPDATE`,
     [invoiceId],
   );
-  if (!row) return true;
-  const openUnpaid = row.status === "open" && Number(row.paid_minor) === 0 && row.einvoice_status !== "issued" && row.einvoice_status !== "allowance_issued";
-  return !openUnpaid || row.on_statement;
+  return frozenRow(row);
 }
 
 async function clearReversedPointer(client: Client, invoiceId: string, ledgerId: string) {
@@ -877,17 +978,28 @@ async function reversePostedLine(client: Client, session: Session, line: PostedL
   if (!frozen && invoiceId && lineStillThere) {
     await client.query(`UPDATE invoice_lines SET allocation_line_id = NULL WHERE id = $1`, [invoiceLineId]);
   }
-  await client.query(`SELECT post_reversal($1::uuid, $2)`, [ledgerId, reason]);
-  if (invoiceId) await clearReversedPointer(client, invoiceId, ledgerId);
   if (!frozen && invoiceId && creditAmount < 0) {
     await insertCredit(client, session, invoiceId, creditAmount, creditDescription);
+    await client.query(`SELECT post_reversal($1::uuid, $2, NULL::uuid)`, [ledgerId, reason]);
+    await clearReversedPointer(client, invoiceId, ledgerId);
     return { invoiceId, linkAllocation: true };
   }
   if (frozen && creditAmount < 0 && line.lease_id && line.property_id && line.currency && line.contact_id) {
     const created = await createUtilityInvoice(client, session, line);
     await insertCredit(client, session, created, creditAmount, creditDescription);
+    const reversal = await one<{ id: string }>(
+      client,
+      `SELECT post_reversal($1::uuid, $2, $3::uuid)::text AS id`,
+      [ledgerId, reason, created],
+    );
+    await client.query(
+      `UPDATE invoices SET ledger_transaction_id = $2 WHERE id = $1 AND ledger_transaction_id IS NULL`,
+      [created, reversal.id],
+    );
     return { invoiceId: created, linkAllocation: false };
   }
+  await client.query(`SELECT post_reversal($1::uuid, $2, NULL::uuid)`, [ledgerId, reason]);
+  if (!frozen && invoiceId) await clearReversedPointer(client, invoiceId, ledgerId);
   return { invoiceId: null as string | null, linkAllocation: !lineStillThere || !frozen };
 }
 
@@ -958,23 +1070,22 @@ async function ensureRentInvoice(client: Client, session: Session, line: PostedL
         AND i.einvoice_status NOT IN ('issued', 'allowance_issued')
         AND i.source IN ('recurring', 'utility')
         AND i.period_start <= $4::date AND i.period_end >= $3::date
-        AND NOT EXISTS (
-          SELECT 1
-            FROM payment_allocations a
-            JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'
-            JOIN leases l ON l.id = i.lease_id
-            JOIN property_owners po ON po.property_id = l.property_id
-            JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id
-             AND s.org_id = i.org_id AND s.status = 'issued'
-             AND pay.paid_on >= s.period_start AND pay.paid_on <= s.period_end
-           WHERE a.invoice_id = i.id
-        )
-        AND NOT EXISTS (
-          SELECT 1
-            FROM owner_statement_lines osl
-            JOIN owner_statements s ON s.id = osl.statement_id AND s.status = 'issued'
-           WHERE i.ledger_transaction_id IS NOT NULL
-             AND osl.ledger_transaction_id = i.ledger_transaction_id
+        AND NOT (
+          EXISTS (
+            SELECT 1 FROM owner_statements s
+             WHERE s.id = i.owner_statement_id AND s.org_id = i.org_id AND s.status = 'issued'
+          )
+          OR EXISTS (
+            SELECT 1
+              FROM payment_allocations a
+              JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'
+              JOIN leases l ON l.id = i.lease_id
+              JOIN property_owners po ON po.property_id = l.property_id
+              JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id
+               AND s.org_id = i.org_id AND s.status = 'issued'
+               AND pay.paid_on >= s.period_start AND pay.paid_on <= s.period_end
+             WHERE a.invoice_id = i.id
+          )
         )
       ORDER BY (i.period_start = $3::date AND i.period_end = $4::date) DESC, i.period_start DESC
       LIMIT 1
@@ -988,11 +1099,8 @@ async function ensureRentInvoice(client: Client, session: Session, line: PostedL
 async function createUtilityInvoice(client: Client, session: Session, line: PostedLine) {
   if (!line.lease_id || !line.property_id || !line.currency || !line.contact_id) throw new FlowError("errors.notFound");
   const today = taipeiToday();
-  const ym = `${today.slice(0, 4)}${today.slice(5, 7)}`;
-  await client.query(`SELECT pg_advisory_xact_lock(hashtext('invoice-seq'), hashtext($1))`, [session.orgId]);
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const count = await one<{ n: string }>(client, `SELECT count(*)::text AS n FROM invoices WHERE org_id = $1`, [session.orgId]);
-    const number = `INV-${ym}-${String(Number(count.n) + 1 + attempt).padStart(4, "0")}`;
+    const number = await nextInvoiceNumber(client, session.orgId, attempt);
     await client.query("SAVEPOINT utility_invoice");
     try {
       const created = await one<{ id: string }>(

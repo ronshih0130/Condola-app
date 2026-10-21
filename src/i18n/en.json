@@ -1894,5 +1894,7 @@
  "i_utility_runs": "Recent runs",
  "i_utility_prev": "Previous",
  "i_utility_next": "Next",
- "i_utility_saved": "Electricity is on the tenant bill for this period."
+ "i_utility_saved": "Electricity is on the tenant bill for this period.",
+ "i_utility_pending": "Pending repost",
+ "i_utility_overlap": "This period overlaps an electricity run for the same unit. Edit that period, or choose dates that do not overlap."
 }

@@ -1894,5 +1894,7 @@
  "i_utility_runs": "最近的分攤",
  "i_utility_prev": "上一頁",
  "i_utility_next": "下一頁",
- "i_utility_saved": "電費已記入租客本期帳單。"
+ "i_utility_saved": "電費已記入租客本期帳單。",
+ "i_utility_pending": "待重新入帳",
+ "i_utility_overlap": "這個期間和同一戶已有的電費分攤重疊。請沿用同一期來修改，或改選不重疊的日期。"
 }

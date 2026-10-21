@@ -41,6 +41,7 @@ export const ERRORS: Record<string, string> = {
   "errors.meter": "i_meter",
   "errors.utilityMethod": "i_utility_method_skip",
   "errors.utilityState": "i_utility_state",
+  "errors.utilityOverlap": "i_utility_overlap",
   "errors.billExists": "i_bill_exists",
   "errors.lastAdmin": "i_last_admin",
   "errors.ownRole": "i_own_role",

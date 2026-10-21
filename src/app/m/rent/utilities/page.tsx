@@ -9,6 +9,13 @@ import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
+function utilityStatusLabel(t: (key: string) => string, status: string | undefined) {
+  if (status === "posted") return t("i_utility_posted");
+  if (status === "pending_repost") return t("i_utility_pending");
+  if (status === "void") return t("i_utility_voided");
+  return t("i_utility_draft");
+}
+
 export default async function UtilityPostingPage({
   searchParams,
 }: {
@@ -37,8 +44,7 @@ export default async function UtilityPostingPage({
   }
   const selected = params.unit ? units.get(params.unit) : [...units.values()][0];
   const money = (minor: number, currency: string) => formatMoney(minor, currency, session.locale);
-  const statusLabel =
-    detail?.run.status === "posted" ? t("i_utility_posted") : detail?.run.status === "void" ? t("i_utility_voided") : t("i_utility_draft");
+  const statusLabel = utilityStatusLabel(t, detail?.run.status);
   return (
     <>
       <PageHeader title={t("i_utility_title")} crumb={<Link href="/m/rent">{t("i_rentroll_title")}</Link>} />
@@ -133,7 +139,7 @@ export default async function UtilityPostingPage({
             <h3>
               {detail.run.property_name} · {detail.run.unit_label}
             </h3>
-            <span className="chip">{statusLabel}</span>
+            <span className="chip" data-testid="utility-status">{statusLabel}</span>
           </div>
           <p className="small">{t("i_utility_repost")}</p>
           <table className="t">
@@ -190,7 +196,7 @@ export default async function UtilityPostingPage({
                       {run.period_start} – {run.period_end}
                     </div>
                   </td>
-                  <td>{run.status === "posted" ? t("i_utility_posted") : run.status === "void" ? t("i_utility_voided") : t("i_utility_draft")}</td>
+                  <td>{utilityStatusLabel(t, run.status)}</td>
                 </tr>
               ))}
             </tbody>

@@ -26,6 +26,15 @@ test("a manager confirms 電費 and the tenant sees it on the bill", async ({ pa
   await expect(page.getByTestId("utility-share-desc").nth(1)).toContainText("電費 50 度 × 4 元");
   await page.getByTestId("utility-confirm").click();
   await expect(page.getByTestId("utility-saved")).toContainText("電費已記入租客本期帳單");
+  await page.getByTestId("kwh-A").fill("90");
+  await page.getByTestId("utility-preview").click();
+  await expect(page.getByTestId("utility-status")).toContainText("待重新入帳");
+  await page.getByTestId("kwh-A").fill("100");
+  await page.getByTestId("kwh-B").fill("50");
+  await page.getByTestId("utility-preview").click();
+  await expect(page.getByTestId("utility-status")).toContainText("待重新入帳");
+  await page.getByTestId("utility-confirm").click();
+  await expect(page.getByTestId("utility-status")).toContainText("已入帳");
 
   await page.goto("/m/leases");
   await page.getByRole("link", { name: "王小美" }).click();

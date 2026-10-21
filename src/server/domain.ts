@@ -19,6 +19,7 @@ import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/l
 import { claimIdempotentSubmit, idempotencyLockKey, stableStringify } from "@/idempotency";
 import { typedAddressDisplay } from "@/property-address";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
+import { nextInvoiceNumber } from "./invoice-number";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
@@ -1626,9 +1627,7 @@ async function issueMoveInInvoice(client: Client, leaseId: string) {
   const actor =
     approver?.user_id ??
     (await one<{ id: string }>(client, `SELECT auth.uid() AS id`)).id;
-  const count = await one<{ n: string }>(client, `SELECT count(*)::text AS n FROM invoices WHERE org_id = $1`, [lease.org_id]);
-  const now = new Date();
-  const number = `INV-${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(Number(count.n) + 1).padStart(4, "0")}`;
+  const number = await nextInvoiceNumber(client, lease.org_id);
   const invoice = await one<{ id: string }>(
     client,
     `INSERT INTO invoices (
@@ -2114,6 +2113,34 @@ export async function approveMatch(session: Session, suggestionId: string) {
   return { leaseId };
 }
 
+/** Point each paid invoice at the latest issued statement that includes its payment. The ledger pointer is not involved. */
+async function linkStatementInvoices(client: Client, orgId: string, propertyIds: string[]) {
+  if (propertyIds.length === 0) return;
+  await client.query(
+    `UPDATE invoices i
+        SET owner_statement_id = picked.statement_id
+       FROM (
+         SELECT DISTINCT ON (inv.id) inv.id AS invoice_id, s.id AS statement_id
+           FROM invoices inv
+           JOIN payment_allocations a ON a.invoice_id = inv.id
+           JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'
+           JOIN leases l ON l.id = inv.lease_id
+           JOIN property_owners po ON po.property_id = l.property_id
+           JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id
+            AND s.org_id = inv.org_id
+            AND s.status = 'issued'
+            AND pay.paid_on >= s.period_start
+            AND pay.paid_on <= s.period_end
+          WHERE inv.org_id = $1
+            AND inv.property_id = ANY($2::uuid[])
+          ORDER BY inv.id, s.period_end DESC, s.id DESC
+       ) picked
+      WHERE i.id = picked.invoice_id
+        AND i.owner_statement_id IS DISTINCT FROM picked.statement_id`,
+    [orgId, propertyIds],
+  );
+}
+
 export async function generateStatement(session: Session, input: { ownerContactId: string; month: string }) {
   assertPerm(session, "stmt.generate");
   if (!/^\d{4}-\d{2}$/.test(input.month)) throw new FlowError("errors.required");
@@ -2131,6 +2158,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
     const currencies = [...new Set(properties.map((property) => property.currency))];
     if (currencies.length !== 1) throw new FlowError("errors.currency");
     const currency = currencies[0];
+    const propertyIds = properties.map((property) => property.property_id);
     const existing = await maybe<{ id: string }>(
       client,
       `SELECT id FROM owner_statements
@@ -2138,6 +2166,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
       [input.ownerContactId, currency, bounds.start],
     );
     if (existing) {
+      await linkStatementInvoices(client, session.orgId, propertyIds);
       const row = await one<{ rent: string; other: string }>(
         client,
         `SELECT rent_received_minor::text AS rent, other_income_minor::text AS other FROM owner_statements WHERE id = $1`,
@@ -2146,7 +2175,6 @@ export async function generateStatement(session: Session, input: { ownerContactI
       return { id: existing.id, earned: Number(row.rent) + Number(row.other) > 0 };
     }
 
-    const propertyIds = properties.map((property) => property.property_id);
     const payments = await many<{ id: string; property_id: string; property_name: string }>(
       client,
       `SELECT p.id, l.property_id::text, pr.name AS property_name
@@ -2287,6 +2315,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
         [session.orgId, statement.id, expense.property_id, expense.description?.trim() || expense.category, Number(expense.amount_minor), expense.id],
       );
     }
+    await linkStatementInvoices(client, session.orgId, propertyIds);
     return { id: statement.id, earned: rent + other > 0 };
   });
   if (statementId.earned) await markTryout(session.orgId, "statement");
