@@ -30,6 +30,7 @@ export default async function LoginPage({
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
   const session = await readSession();
+  const demoLine = showDemoLineCopy(null);
   if (session && params.step !== "backup") redirect(roleHome(session.kind, session.role));
   const jar = await cookies();
   const challenge = params.step === "2fa" || params.step === "enroll" ? await peekChallenge(jar.get(CHALLENGE_COOKIE)?.value ?? "") : null;
@@ -58,7 +59,7 @@ export default async function LoginPage({
       ) : null}
       <form className="card pad" action={params.step === "2fa" || params.step === "enroll" ? actionSecondFactor : actionSignIn}>
         <h1>{t("i_login_headline")}</h1>
-        <p>{t("i_login_sub")}</p>
+        <p>{demoLine ? t("i_login_sub") : t("i_login_sub_live")}</p>
         {params.demoReset === "1" ? (
           <div className="toast" data-testid="reset-toast">
             {t("s_fe71059")}
@@ -124,22 +125,16 @@ export default async function LoginPage({
             <p className="small">
               <a href="/forgot">{t("i_forgot")}</a>
             </p>
-            {lineLoginEnabled() ? (
-              <button className="btn line block" type="submit" formAction={actionLineLogin} formNoValidate data-testid="line-login">
-                LINE Login
-              </button>
-            ) : (
-              <button className="btn line block" type="button" data-testid="line-login" disabled title={t("i_line_login_todo")}>
-                LINE Login
-              </button>
-            )}
-            {showDemoLineCopy(null) && lineLoginEnabled() ? (
-              <p className="tiny muted" data-testid="line-demo-note">
-                {t("i_line_demo")}
-              </p>
-            ) : (
-              <p className="tiny muted">{t("i_line_login_todo")}</p>
-            )}
+            {demoLine && lineLoginEnabled() ? (
+              <>
+                <button className="btn line block" type="submit" formAction={actionLineLogin} formNoValidate data-testid="line-login">
+                  LINE Login
+                </button>
+                <p className="tiny muted" data-testid="line-demo-note">
+                  {t("i_line_demo")}
+                </p>
+              </>
+            ) : null}
             <p className="small" data-testid="login-invite">
               {t("i_login_invite_lead")}{" "}
               <a href="/signup" data-testid="login-signup">{t("i_login_signup")}</a>

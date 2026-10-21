@@ -182,3 +182,75 @@ test("demo LINE copy is live-hidden and shown for DEMO_MODE or a sandbox firm", 
   walk(new URL("../components", import.meta.url).pathname);
   assert.deepEqual(hits, []);
 });
+
+test("live screens do not render LINE copy outside the site footer", () => {
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
+  assert.equal(zh.i_login_sub_live, "給屋主與合法代管公司使用的租賃管理軟體。");
+  assert.equal(en.i_login_sub_live, "Rental management software for owners and licensed firms.");
+  for (const key of ["i_footer", "i_login_footer", "i_price_footer", "i_login_sub_live", "i_notify_empty"]) {
+    assert.equal(zh[key].includes("LINE"), false, key);
+    assert.equal(en[key].includes("LINE"), false, key);
+  }
+
+  const lineKeys = Object.keys(zh).filter((key) => {
+    const zhText = typeof zh[key] === "string" ? zh[key] : "";
+    const enText = typeof en[key] === "string" ? en[key] : "";
+    return zhText.includes("LINE") || enText.includes("LINE");
+  });
+  const ungated: string[] = [];
+  const nearGate = (source: string, index: number) => {
+    const window = source.slice(Math.max(0, index - 800), index + 160);
+    return /showDemoLineCopy|\bdemoLine\b|\bshowLine\b|environment === "sandbox"/.test(window);
+  };
+  const scan = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules") continue;
+        scan(path);
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+      const text = readFileSync(path, "utf8");
+      if (text.includes("i_line_login_todo")) ungated.push(`${path} still renders i_line_login_todo`);
+      if (text.includes("i_w${")) {
+        if (!text.includes("showDemoLineCopy") || !text.includes('includes("LINE")')) {
+          ungated.push(`${path} renders walk steps without a LINE filter`);
+        }
+      }
+      for (const key of lineKeys) {
+        const needle = `"${key}"`;
+        let from = 0;
+        while (from < text.length) {
+          const at = text.indexOf(needle, from);
+          if (at < 0) break;
+          if (!nearGate(text, at)) ungated.push(`${path} ${key}`);
+          from = at + needle.length;
+        }
+      }
+      const lineWord = /LINE/g;
+      let match: RegExpExecArray | null;
+      while ((match = lineWord.exec(text))) {
+        const lineStart = text.lastIndexOf("\n", match.index) + 1;
+        const lineEnd = text.indexOf("\n", match.index);
+        const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd).trim();
+        if (line.startsWith("//") || line.startsWith("*") || line.startsWith("/*")) continue;
+        if (!nearGate(text, match.index)) ungated.push(`${path} hardcoded LINE`);
+      }
+    }
+  };
+  scan(new URL("../app", import.meta.url).pathname);
+  scan(new URL("../components", import.meta.url).pathname);
+
+  const login = readFileSync(new URL("../app/login/page.tsx", import.meta.url), "utf8");
+  assert.match(login, /demoLine \? t\("i_login_sub"\) : t\("i_login_sub_live"\)/);
+  assert.match(login, /demoLine && lineLoginEnabled\(\)/);
+  assert.equal((login.match(/data-testid="line-login"/g) ?? []).length, 1);
+  assert.doesNotMatch(login, /disabled[^>\n]*line-login|line-login"[^>\n]*disabled/);
+  const account = readFileSync(new URL("../app/m/account/page.tsx", import.meta.url), "utf8");
+  assert.match(account, /showDemoLineCopy\(session\.environment\)/);
+  const accept = readFileSync(new URL("../app/accept/[token]/page.tsx", import.meta.url), "utf8");
+  assert.match(accept, /showDemoLineCopy\(null\) && lineLoginEnabled\(\)/);
+  assert.deepEqual(ungated, []);
+});

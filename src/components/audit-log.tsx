@@ -1,9 +1,17 @@
 import Link from "next/link";
 import { makeT, type T } from "@/i18n";
 import { loadAuditHistory, type AuditTable, type AuditView } from "@/server/audit-read";
+import { showDemoLineCopy } from "@/server/demo";
 import { getSession } from "@/server/session";
 
-export function AuditRows({ entries, t, testId }: { entries: AuditView[]; t: T; testId: string }) {
+function lineSafeKey(key: string, demoLine: boolean) {
+  if (demoLine) return key;
+  if (key === "i_audit_ev_line_sign_in") return "i_audit_ev_sign_in";
+  if (key === "i_audit_rec_line") return "i_audit_rec_other";
+  return key;
+}
+
+export function AuditRows({ entries, t, testId, demoLine = false }: { entries: AuditView[]; t: T; testId: string; demoLine?: boolean }) {
   return (
     <table className="t rf" data-testid={testId}>
       <thead>
@@ -16,12 +24,12 @@ export function AuditRows({ entries, t, testId }: { entries: AuditView[]; t: T; 
       </thead>
       <tbody>
         {entries.map((entry) => {
-          const record = `${t(entry.recordKey)}${entry.recordText ? ` ${entry.recordText}` : ""}${entry.found ? "" : ` ${t("i_audit_deleted")}`}`;
+          const record = `${t(lineSafeKey(entry.recordKey, demoLine))}${entry.recordText ? ` ${entry.recordText}` : ""}${entry.found ? "" : ` ${t("i_audit_deleted")}`}`;
           return (
             <tr key={entry.cursor} data-testid="audit-row">
               <td>{entry.who || (entry.whoKey ? t(entry.whoKey) : "")}</td>
               <td>
-                <div>{t(entry.actionKey)}</div>
+                <div>{t(lineSafeKey(entry.actionKey, demoLine))}</div>
                 {entry.fields.length ? <div className="small muted">{entry.fields.map((key) => t(key)).join(t("i_list_sep"))}</div> : null}
                 {entry.other ? <div className="small muted">{t("i_audit_f_other")}</div> : null}
                 {entry.masked ? <div className="small muted">{t("i_audit_masked")}</div> : null}
@@ -55,6 +63,7 @@ export async function AuditHistory({
   const session = await getSession();
   if (session.role !== "admin") return null;
   const t = makeT(session.locale);
+  const demoLine = showDemoLineCopy(session.environment);
   const page = await loadAuditHistory(session, table, rowId, cursor);
   const kept = new URLSearchParams();
   for (const [key, value] of Object.entries(preserve ?? {})) {
@@ -76,7 +85,7 @@ export async function AuditHistory({
       {page.entries.length === 0 ? (
         <div className="empty">{t("i_audit_empty")}</div>
       ) : (
-        <AuditRows entries={page.entries} t={t} testId="audit-history-list" />
+        <AuditRows entries={page.entries} t={t} testId="audit-history-list" demoLine={demoLine} />
       )}
       {cursor || nextHref ? (
         <div className="bd">

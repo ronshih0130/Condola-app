@@ -27,10 +27,12 @@ export function LeaseWizard({
   rooms,
   tenants,
   firmLocale,
+  showLine = false,
 }: {
   rooms: RoomOption[];
   tenants: TenantOption[];
   firmLocale: "zh-TW" | "en";
+  showLine?: boolean;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -284,9 +286,11 @@ export function LeaseWizard({
       <Stepper steps={steps} current={step} />
       {state.error ? (
         <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
-          {state.field && (state.error === "errors.required" || state.error === "errors.amount")
-            ? t("i_field_incomplete", { field: t(state.field) })
-            : errorText(t, state.error)}
+          {!showLine && state.error === "errors.lineId"
+            ? t("i_generic")
+            : state.field && (state.error === "errors.required" || state.error === "errors.amount")
+              ? t("i_field_incomplete", { field: t(state.field) })
+              : errorText(t, state.error)}
         </div>
       ) : null}
       {slowSubmit ? (
@@ -298,7 +302,7 @@ export function LeaseWizard({
       <input type="hidden" name="roomId" value={roomId} />
       <input type="hidden" name="tenantName" value={tenant} />
       <input type="hidden" name="tenantPhone" value={phone} />
-      <input type="hidden" name="lineUserId" value={lineId} />
+      <input type="hidden" name="lineUserId" value={showLine ? lineId : ""} />
       <input type="hidden" name="tenantMode" value={tenantMode === "existing" ? pickedId : "new"} />
       <input type="hidden" name="rent" value={rent} />
       <input type="hidden" name="months" value={months} />
@@ -410,10 +414,12 @@ export function LeaseWizard({
                   {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_step_incomplete", { field: t("s_522cf12") })}</p> : null}
                 </div>
               </div>
-              <div className="fg">
-                <label className="f">{t("lease_line_id")}</label>
-                <input className="inp" data-testid="tenant-line" placeholder={t("lease_ph_line")} value={lineId} onChange={(event) => setLineId(event.target.value)} />
-              </div>
+              {showLine ? (
+                <div className="fg">
+                  <label className="f">{t("lease_line_id")}</label>
+                  <input className="inp" data-testid="tenant-line" placeholder={t("lease_ph_line")} value={lineId} onChange={(event) => setLineId(event.target.value)} />
+                </div>
+              ) : null}
               <div className="fg">
                 <label className="f">{t("i_email_label")}</label>
                 <input

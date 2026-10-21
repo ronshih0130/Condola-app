@@ -45,15 +45,17 @@ export default async function AccountPage({
           </p>
           <p className="small">{session.email}</p>
           {showDemoLineCopy(session.environment) ? (
-            <p className="small muted" data-testid="line-demo-note">
-              {t("i_line_demo")}
-            </p>
-          ) : lineLoginEnabled() ? null : (
-            <p className="small muted">{t("i_line_login_todo")}</p>
-          )}
-          <button className="btn" type="button" disabled={!lineLoginEnabled()} data-testid="line-link">
-            LINE
-          </button>
+            <>
+              <p className="small muted" data-testid="line-demo-note">
+                {t("i_line_demo")}
+              </p>
+              {lineLoginEnabled() ? (
+                <button className="btn" type="button" data-testid="line-link">
+                  LINE
+                </button>
+              ) : null}
+            </>
+          ) : null}
         </div>
         <form className="card pad" action={actionChangePassword}>
           <h3>{t("i_change_password")}</h3>

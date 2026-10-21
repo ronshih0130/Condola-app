@@ -5,7 +5,7 @@ import { AuthBrand } from "@/components/brand";
 import { PasswordFields } from "@/components/password-field";
 import { actionAccept } from "@/server/auth-actions";
 import { describeInvite } from "@/server/auth";
-import { lineLoginEnabled } from "@/server/demo";
+import { lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
 import { requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -100,9 +100,11 @@ export default async function AcceptPage({
             </div>
             <PasswordFields />
             <AcceptSubmit idle={t("i_accept")} pending={t("i_portal_working")} testId="accept-submit" />
-            <button className="btn line block" type="button" disabled={!lineLoginEnabled()} title={t("i_line_login_todo")}>
-              LINE Login
-            </button>
+            {showDemoLineCopy(null) && lineLoginEnabled() ? (
+              <button className="btn line block" type="button" data-testid="line-login">
+                LINE Login
+              </button>
+            ) : null}
           </>
         ) : null}
       </AcceptForm>

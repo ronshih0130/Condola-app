@@ -1,6 +1,7 @@
 import { makeT } from "@/i18n";
 import { LeaseWizard } from "@/components/lease-wizard";
 import { ErrorBanner, PageHeader } from "@/components/ui";
+import { showDemoLineCopy } from "@/server/demo";
 import { listTenants, loadFirm, vacantRooms } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -18,7 +19,7 @@ export default async function NewLeasePage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title={t("s_c93e6db")} crumb={t("s_fba85ae")} />
       <ErrorBanner t={t} error={params.error} />
-      <LeaseWizard rooms={rooms} tenants={tenants} firmLocale={firm.defaultLocale} />
+      <LeaseWizard rooms={rooms} tenants={tenants} firmLocale={firm.defaultLocale} showLine={showDemoLineCopy(session.environment)} />
     </>
   );
 }
