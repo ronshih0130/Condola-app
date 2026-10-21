@@ -15,7 +15,7 @@ import {
   taipeiToday,
   toMinor,
 } from "./money";
-import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
+import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
@@ -271,8 +271,8 @@ export type LeaseInput = {
   lineUserId: string;
   startDate: string;
   endDate: string;
-  rentMajor: number | null;
-  depositMonths: number | null;
+  rentMajor: number | string | null;
+  depositMonths: number | string | null;
   depositReason: string;
   dueDay: number | null;
   splitMethod: "even" | "days_occupied" | "sub_meter";
@@ -288,6 +288,42 @@ export type LeaseInput = {
 
 function finiteNumber(value: number | null): value is number {
   return value != null && Number.isFinite(value);
+}
+
+/** JSON bodies may send "3" rather than 3. Blank stays empty; anything else must be numeric. */
+function coerceNumber(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return Number(trimmed);
+  }
+  return Number.NaN;
+}
+
+function leaseDepositOverride(depositMonths: number, reason: string, userId: string) {
+  const trimmed = reason.trim();
+  if (!depositReasonOk(depositMonths, trimmed)) throw new FlowError("errors.depositCap");
+  const over = depositExceedsCap(depositMonths);
+  return {
+    reason: over ? trimmed : null,
+    by: over ? userId : null,
+    at: over ? new Date() : null,
+  };
+}
+
+async function savedDepositWarn(client: Client, leaseId: string, depositMonths: number) {
+  const depositCheck = await maybe<{ outcome: string }>(
+    client,
+    `SELECT outcome::text FROM rule_check_results
+      WHERE entity_table = 'leases' AND entity_id = $1
+      ORDER BY checked_at DESC LIMIT 1`,
+    [leaseId],
+  );
+  const outcome = depositCheck?.outcome ?? null;
+  if (!depositCapSaveAllowed(depositMonths, outcome)) throw new FlowError("errors.depositCap");
+  return depositWarnFlag(depositMonths, outcome);
 }
 
 /** Blank electricity is optional. A partial bill still needs a positive usage; a missing rate uses the bill average. */
@@ -318,12 +354,12 @@ export async function createLease(session: Session, input: LeaseInput) {
   if (!finiteNumber(dueDay) || dueDay < 1 || dueDay > 31 || Math.floor(dueDay) !== dueDay) {
     throw new FlowError("errors.required", { field: "s_aa47e23" });
   }
-  const rentMajor = input.rentMajor;
-  const depositMonths = input.depositMonths;
+  const rentMajor = coerceNumber(input.rentMajor);
+  const depositMonths = coerceNumber(input.depositMonths);
   if (!finiteNumber(rentMajor) || rentMajor < 0) throw new FlowError("errors.amount", { field: "i_base_rent" });
   if (!finiteNumber(depositMonths) || depositMonths < 0) throw new FlowError("errors.amount", { field: "s_8ed103e" });
   if (input.periodEnd <= input.periodStart || input.endDate < input.startDate) throw new FlowError("errors.required");
-  if (!depositReasonOk(depositMonths, input.depositReason ?? "")) throw new FlowError("errors.depositCap");
+  const override = leaseDepositOverride(depositMonths, input.depositReason ?? "", session.userId);
   const lineId = normalizeLineId(input.lineUserId ?? "");
   if (!lineId.ok) throw new FlowError("errors.lineId");
   const phone = cleanPhone(input.tenantPhone);
@@ -408,8 +444,6 @@ export async function createLease(session: Session, input: LeaseInput) {
     );
     const rentMinor = toMinor(rentMajor);
     const depositMinor = Math.round(rentMinor * depositMonths);
-    const depositOver = depositExceedsCap(depositMonths);
-    const depositReason = depositOver ? (input.depositReason ?? "").trim() : null;
     const documentHash = sha256(
       JSON.stringify({
         room: space.id,
@@ -419,8 +453,8 @@ export async function createLease(session: Session, input: LeaseInput) {
         end: input.endDate,
       }),
     );
-    if (depositReason) {
-      await client.query(`SELECT set_config('app.change_reason', $1, true)`, [depositReason]);
+    if (override.reason) {
+      await client.query(`SELECT set_config('app.change_reason', $1, true)`, [override.reason]);
     }
     const lease = await one<{ id: string }>(
       client,
@@ -444,9 +478,9 @@ export async function createLease(session: Session, input: LeaseInput) {
         dueDay,
         depositMinor,
         depositMonths,
-        depositReason,
-        depositReason ? session.userId : null,
-        depositReason ? new Date() : null,
+        override.reason,
+        override.by,
+        override.at,
         documentHash,
         session.userId,
       ],
@@ -624,17 +658,10 @@ export async function createLease(session: Session, input: LeaseInput) {
     tenantAmount = shares.find((share) => parts[shares.indexOf(share)]?.leaseId === lease.id)?.amount ?? 0;
     }
 
-    const depositCheck = await maybe<{ outcome: string }>(
-      client,
-      `SELECT outcome::text FROM rule_check_results
-        WHERE entity_table = 'leases' AND entity_id = $1
-        ORDER BY checked_at DESC LIMIT 1`,
-      [lease.id],
-    );
     return {
       leaseId: lease.id,
       tenantUserId,
-      depositWarn: depositCheck?.outcome === "warn",
+      depositWarn: await savedDepositWarn(client, lease.id, depositMonths),
       exceeds,
       average,
       tenantAmount,
@@ -650,6 +677,49 @@ export async function createLease(session: Session, input: LeaseInput) {
     await svc(session.userId, (client) => queueDemoNotice(client, result.leaseId, "lease_to_sign"));
   }
   return result;
+}
+
+/** Edit rent and deposit. Over two months of rent still needs a typed reason. */
+export async function updateLease(
+  session: Session,
+  input: { leaseId: string; rentMajor: number | string | null; depositMonths: number | string | null; depositReason: string },
+) {
+  assertStaff(session, ["admin", "manager"]);
+  if (!input.leaseId) throw new FlowError("errors.required");
+  const rentMajor = coerceNumber(input.rentMajor);
+  const depositMonths = coerceNumber(input.depositMonths);
+  if (!finiteNumber(rentMajor) || rentMajor < 0) throw new FlowError("errors.amount", { field: "i_base_rent" });
+  if (!finiteNumber(depositMonths) || depositMonths < 0) throw new FlowError("errors.amount", { field: "s_8ed103e" });
+  const override = leaseDepositOverride(depositMonths, input.depositReason ?? "", session.userId);
+  return tx(
+    session.userId,
+    async (client) => {
+      const existing = await maybe<{ id: string }>(
+        client,
+        `SELECT id::text FROM leases WHERE id = $1 AND org_id = $2`,
+        [input.leaseId, session.orgId],
+      );
+      if (!existing) throw new FlowError("errors.notFound");
+      await client.query(`SELECT set_config('app.change_reason', $1, true)`, [override.reason ?? ""]);
+      const rentMinor = toMinor(rentMajor);
+      const depositMinor = Math.round(rentMinor * depositMonths);
+      const updated = await client.query(
+        `UPDATE leases
+            SET rent_amount_minor = $2,
+                deposit_amount_minor = $3,
+                deposit_months = $4,
+                deposit_override_reason = $5,
+                deposit_overridden_by = $6,
+                deposit_overridden_at = $7,
+                updated_at = now()
+          WHERE id = $1 AND org_id = $8`,
+        [input.leaseId, rentMinor, depositMinor, depositMonths, override.reason, override.by, override.at, session.orgId],
+      );
+      if (updated.rowCount !== 1) throw new FlowError("errors.notFound");
+      return { leaseId: input.leaseId, depositWarn: await savedDepositWarn(client, input.leaseId, depositMonths) };
+    },
+    { orgId: session.orgId, environment: session.environment },
+  );
 }
 
 async function queueDemoNotice(client: Client, leaseId: string, eventType: string) {

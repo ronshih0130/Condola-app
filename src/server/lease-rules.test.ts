@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { depositExceedsCap, depositReasonOk, isSignedPdf, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
+import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 
 test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositExceedsCap(2), false);
@@ -11,6 +11,35 @@ test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(depositReasonOk(3, ""), false);
   assert.equal(depositReasonOk(3, "   "), false);
   assert.equal(depositReasonOk(3, "屋主同意兩個月以上押金"), true);
+  assert.equal(depositCapSaveAllowed(3, "warn"), false);
+  assert.equal(depositCapSaveAllowed(3, "block"), false);
+  assert.equal(depositCapSaveAllowed(3, "overridden"), true);
+  assert.equal(depositCapSaveAllowed(3, null), true);
+  assert.equal(depositCapSaveAllowed(1.5, "warn"), true);
+  assert.equal(depositWarnFlag(3, "warn"), false);
+  assert.equal(depositWarnFlag(1.5, "warn"), true);
+  assert.equal(depositWarnFlag(2, "pass"), false);
+});
+
+test("create and edit lease screens ask for a reason with lease_deposit_over", () => {
+  const wizard = readFileSync(new URL("../components/lease-wizard.tsx", import.meta.url), "utf8");
+  const edit = readFileSync(new URL("../components/lease-terms-form.tsx", import.meta.url), "utf8");
+  const route = readFileSync(new URL("../app/api/flows/[action]/route.ts", import.meta.url), "utf8");
+  const actions = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
+  const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
+  for (const source of [wizard, edit]) {
+    assert.match(source, /lease_deposit_over/);
+    assert.match(source, /<textarea/);
+    assert.match(source, /data-testid="deposit-reason"/);
+    assert.equal(source.includes("房東"), false);
+  }
+  assert.match(route, /createLease: \(session, body\) => createLease\(session, body as never\)/);
+  assert.match(route, /updateLease: \(session, body\) => updateLease\(session, body as never\)/);
+  assert.match(actions, /createLeaseFromForm\(session, formData\)/);
+  assert.match(actions, /updateLease\(session,/);
+  assert.match(domain, /export async function createLease/);
+  assert.match(domain, /export async function updateLease/);
+  assert.match(domain, /savedDepositWarn/);
 });
 
 test("a Taiwan mobile becomes +886 and an international number stays", () => {

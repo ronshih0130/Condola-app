@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { query, withClient } from "./db";
-import { createProperty } from "./domain";
+import { query, tx, withClient } from "./db";
+import { createLease, createProperty, updateLease } from "./domain";
 import { updateProperty } from "./portfolio";
 import { FlowError } from "./errors";
 import { ORG_ID, USERS } from "./ids";
@@ -517,6 +517,278 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
       [clashEmail],
     );
     assert.equal(clashUser.rows[0]?.n, "0");
+  } finally {
+    await withClient(async (client) => {
+      await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      try {
+        for (const propertyId of propertyIds) {
+          await client.query(
+            `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_allocation_runs
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM utility_bills
+              WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(`DELETE FROM meters WHERE unit_id IN (SELECT id FROM units WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM notifications WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`, [propertyId]);
+          await client.query(`DELETE FROM leases WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM management_agreements WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM properties WHERE id = $1`, [propertyId]);
+        }
+        if (userIds.length) {
+          await client.query(`DELETE FROM contacts WHERE user_id = ANY($1::uuid[])`, [userIds]);
+          await client.query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [userIds]);
+        }
+        await client.query(`DELETE FROM contacts WHERE lower(email::text) LIKE $1`, [`%${stamp}@example.com`]);
+        await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
+      } finally {
+        await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
+      }
+    });
+  }
+});
+
+function isDepositCap(error: unknown) {
+  return error instanceof FlowError && error.key === "errors.depositCap";
+}
+
+test("every lease save path rejects a deposit over two months without a reason", async () => {
+  const stamp = Date.now().toString(36);
+  const propertyIds: string[] = [];
+  const userIds: string[] = [];
+  const reason = "屋主同意兩個月以上押金";
+  try {
+    const rooms = await createProperty(admin, {
+      name: `押金上限 ${stamp}`,
+      city: "台北市",
+      district: "大安區",
+      street: "測試路9號",
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "押金屋主",
+      ownerPhone: "0912000111",
+      ownerEmail: `dep.owner.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "9F",
+      floor: "9",
+      rentalMode: "by_room",
+      rooms: [
+        { label: "A", roomType: "suite", baseRentMajor: 10000 },
+        { label: "B", roomType: "suite", baseRentMajor: 10000 },
+      ],
+    });
+    propertyIds.push(rooms.propertyId);
+    const roomA = rooms.roomIds[0];
+    const roomB = rooms.roomIds[1];
+    const directEmail = `dep.direct.${stamp}@example.com`;
+    const formEmail = `dep.form.${stamp}@example.com`;
+
+    const over = (roomId: string, email: string, depositMonths: number, depositReason: string) => ({
+      roomId,
+      tenantName: "押金租客",
+      tenantPhone: "0912000111",
+      tenantEmail: email,
+      lineUserId: "",
+      startDate: "2026-12-01",
+      endDate: "2027-11-30",
+      rentMajor: 10000,
+      depositMonths,
+      depositReason,
+      dueDay: 5,
+      splitMethod: "even" as const,
+      periodStart: "2026-12-01",
+      periodEnd: "2026-12-31",
+      billTotalMajor: null,
+      usageKwh: null,
+      rateMajor: null,
+      rateSource: "bill_average" as const,
+      overrideReason: "",
+      subUsages: [],
+    });
+
+    await assert.rejects(() => createLease(admin, over(roomA, directEmail, 3, "")), isDepositCap);
+    await assert.rejects(() => createLease(admin, over(roomA, directEmail, 3, "   ")), isDepositCap);
+    await assert.rejects(
+      () => createLease(admin, { ...over(roomA, directEmail, 3, ""), depositMonths: "3" }),
+      isDepositCap,
+    );
+    const none = await query<{ n: string }>(`SELECT count(*)::text AS n FROM leases WHERE target_room_id = $1`, [roomA]);
+    assert.equal(none.rows[0]?.n, "0");
+
+    const created = await createLease(admin, over(roomA, directEmail, 3, reason));
+    userIds.push(created.tenantUserId);
+    assert.equal(created.depositWarn, false);
+    const saved = await query<{
+      months: string;
+      reason: string | null;
+      by: string | null;
+      at: Date | null;
+      outcome: string;
+      audit_reason: string | null;
+    }>(
+      `SELECT l.deposit_months::text AS months,
+              l.deposit_override_reason AS reason,
+              l.deposit_overridden_by::text AS by,
+              l.deposit_overridden_at AS at,
+              c.outcome,
+              a.reason AS audit_reason
+         FROM leases l
+         JOIN LATERAL (
+           SELECT outcome::text
+             FROM rule_check_results
+            WHERE entity_table = 'leases' AND entity_id = l.id
+            ORDER BY checked_at DESC
+            LIMIT 1
+         ) c ON true
+         JOIN LATERAL (
+           SELECT reason FROM audit_log
+            WHERE table_name = 'leases' AND row_id = l.id::text AND action = 'insert'
+            ORDER BY occurred_at DESC
+            LIMIT 1
+         ) a ON true
+        WHERE l.id = $1`,
+      [created.leaseId],
+    );
+    assert.equal(Number(saved.rows[0]?.months), 3);
+    assert.equal(saved.rows[0]?.reason, reason);
+    assert.equal(saved.rows[0]?.by, USERS.admin);
+    assert.ok(saved.rows[0]?.at);
+    assert.equal(saved.rows[0]?.outcome, "overridden");
+    assert.equal(saved.rows[0]?.audit_reason, reason);
+
+    await assert.rejects(
+      () => updateLease(admin, { leaseId: created.leaseId, rentMajor: 10000, depositMonths: 4, depositReason: "" }),
+      isDepositCap,
+    );
+    await assert.rejects(
+      () => updateLease(admin, { leaseId: created.leaseId, rentMajor: 10000, depositMonths: "4", depositReason: "  " }),
+      isDepositCap,
+    );
+    const still = await query<{ months: string }>(`SELECT deposit_months::text AS months FROM leases WHERE id = $1`, [created.leaseId]);
+    assert.equal(Number(still.rows[0]?.months), 3);
+
+    const edited = await updateLease(admin, {
+      leaseId: created.leaseId,
+      rentMajor: 10000,
+      depositMonths: 4,
+      depositReason: "屋主同意四個月押金",
+    });
+    assert.equal(edited.depositWarn, false);
+    const editedRow = await query<{ months: string; reason: string | null; by: string | null; audit_reason: string | null }>(
+      `SELECT l.deposit_months::text AS months, l.deposit_override_reason AS reason, l.deposit_overridden_by::text AS by,
+              a.reason AS audit_reason
+         FROM leases l
+         JOIN LATERAL (
+           SELECT reason FROM audit_log
+            WHERE table_name = 'leases' AND row_id = l.id::text AND action = 'update'
+            ORDER BY occurred_at DESC
+            LIMIT 1
+         ) a ON true
+        WHERE l.id = $1`,
+      [created.leaseId],
+    );
+    assert.equal(Number(editedRow.rows[0]?.months), 4);
+    assert.equal(editedRow.rows[0]?.reason, "屋主同意四個月押金");
+    assert.equal(editedRow.rows[0]?.by, USERS.admin);
+    assert.equal(editedRow.rows[0]?.audit_reason, "屋主同意四個月押金");
+
+    const cleared = await updateLease(admin, { leaseId: created.leaseId, rentMajor: 10000, depositMonths: 2, depositReason: "" });
+    assert.equal(cleared.depositWarn, false);
+    const clearedRow = await query<{ months: string; reason: string | null; by: string | null }>(
+      `SELECT deposit_months::text AS months, deposit_override_reason AS reason, deposit_overridden_by::text AS by
+         FROM leases WHERE id = $1`,
+      [created.leaseId],
+    );
+    assert.equal(Number(clearedRow.rows[0]?.months), 2);
+    assert.equal(clearedRow.rows[0]?.reason, null);
+    assert.equal(clearedRow.rows[0]?.by, null);
+
+    await assert.rejects(
+      () =>
+        tx(USERS.admin, (client) =>
+          client.query(
+            `UPDATE leases
+                SET deposit_months = 5, deposit_amount_minor = rent_amount_minor * 5,
+                    deposit_override_reason = NULL, deposit_overridden_by = NULL, deposit_overridden_at = NULL
+              WHERE id = $1`,
+            [created.leaseId],
+          ),
+        ),
+      isDepositCap,
+    );
+    await tx(USERS.admin, async (client) => {
+      await client.query(`SELECT set_config('app.change_reason', $1, true)`, ["屋主同意五個月押金"]);
+      await client.query(
+        `UPDATE leases
+            SET deposit_months = 5, deposit_amount_minor = rent_amount_minor * 5,
+                deposit_override_reason = $2, deposit_overridden_by = $3, deposit_overridden_at = now()
+          WHERE id = $1`,
+        [created.leaseId, "屋主同意五個月押金", USERS.admin],
+      );
+    });
+    const sqlRow = await query<{ months: string; audit_reason: string | null }>(
+      `SELECT l.deposit_months::text AS months, a.reason AS audit_reason
+         FROM leases l
+         JOIN LATERAL (
+           SELECT reason FROM audit_log
+            WHERE table_name = 'leases' AND row_id = l.id::text AND action = 'update'
+            ORDER BY occurred_at DESC
+            LIMIT 1
+         ) a ON true
+        WHERE l.id = $1`,
+      [created.leaseId],
+    );
+    assert.equal(Number(sqlRow.rows[0]?.months), 5);
+    assert.equal(sqlRow.rows[0]?.audit_reason, "屋主同意五個月押金");
+
+    const accountant: Session = { ...admin, userId: USERS.accountant, role: "accountant", email: "meiling.zhou@songxin.demo" };
+    await assert.rejects(
+      () => updateLease(accountant, { leaseId: created.leaseId, rentMajor: 10000, depositMonths: 2, depositReason: "" }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+    );
+
+    await assert.rejects(
+      () =>
+        createLeaseFromForm(
+          admin,
+          form({ ...base, roomId: roomB, tenantEmail: formEmail, depositMonths: "3", depositReason: "   " }),
+        ),
+      isDepositCap,
+    );
+    const formNone = await query<{ n: string }>(`SELECT count(*)::text AS n FROM leases WHERE target_room_id = $1`, [roomB]);
+    assert.equal(formNone.rows[0]?.n, "0");
+    const formed = await createLeaseFromForm(
+      admin,
+      form({ ...base, roomId: roomB, tenantEmail: formEmail, depositMonths: "3", depositReason: reason }),
+    );
+    userIds.push(formed.tenantUserId);
+    assert.equal(formed.depositWarn, false);
+    const formRow = await query<{ reason: string | null; audit_reason: string | null; outcome: string }>(
+      `SELECT l.deposit_override_reason AS reason, a.reason AS audit_reason, c.outcome
+         FROM leases l
+         JOIN LATERAL (
+           SELECT outcome::text FROM rule_check_results
+            WHERE entity_table = 'leases' AND entity_id = l.id
+            ORDER BY checked_at DESC LIMIT 1
+         ) c ON true
+         JOIN LATERAL (
+           SELECT reason FROM audit_log
+            WHERE table_name = 'leases' AND row_id = l.id::text AND action = 'insert'
+            ORDER BY occurred_at DESC LIMIT 1
+         ) a ON true
+        WHERE l.id = $1`,
+      [formed.leaseId],
+    );
+    assert.equal(formRow.rows[0]?.reason, reason);
+    assert.equal(formRow.rows[0]?.audit_reason, reason);
+    assert.equal(formRow.rows[0]?.outcome, "overridden");
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);

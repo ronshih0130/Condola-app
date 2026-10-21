@@ -14,6 +14,20 @@ export function depositReasonOk(depositMonths: number, reason: string) {
   return reason.trim().length > 0;
 }
 
+/**
+ * A jurisdiction rule may warn for a deposit of two months or less.
+ * Above the product cap, warn and block are not a successful save.
+ */
+export function depositCapSaveAllowed(depositMonths: number, outcome: string | null) {
+  if (!depositExceedsCap(depositMonths)) return true;
+  return outcome !== "warn" && outcome !== "block";
+}
+
+/** Soft warning only when the deposit is still within two months of rent. */
+export function depositWarnFlag(depositMonths: number, outcome: string | null) {
+  return !depositExceedsCap(depositMonths) && outcome === "warn";
+}
+
 /** +E.164 as typed, or a Taiwan mobile 09xxxxxxxx (spaces and dashes allowed) as +886. */
 export function normalizePhone(phone: string): string | null {
   const value = phone.trim();

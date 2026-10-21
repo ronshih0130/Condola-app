@@ -14,6 +14,7 @@ import {
   setOwnerPhoneVisibility,
   signLease,
   simulateTenantSignature,
+  updateLease,
   updateTicket,
 } from "@/server/domain";
 import { FlowError } from "@/server/errors";
@@ -25,6 +26,7 @@ type Handler = (session: Session, body: Record<string, never>) => Promise<unknow
 const handlers: Record<string, Handler> = {
   createProperty: (session, body) => createProperty(session, body as never),
   createLease: (session, body) => createLease(session, body as never),
+  updateLease: (session, body) => updateLease(session, body as never),
   simulateTenantSignature: (session, body) => simulateTenantSignature(session, String(body.leaseId ?? "")),
   signLease: (session, body) => signLease(session, body as never),
   recordPayment: (session, body) => recordPayment(session, body as never),

@@ -19,6 +19,7 @@ import {
   signLease,
   simulateTenantSignature,
   uploadSignedLeasePdf,
+  updateLease,
   updateTicket,
   type PropertyInput,
 } from "./domain";
@@ -140,6 +141,23 @@ export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formDa
     const jar = await cookies();
     jar.set("condola_tenant_focus", created.tenantUserId, appCookieOptions({ httpOnly: false }));
     redirect(`/m/leases/${created.leaseId}?tab=sign`);
+  } catch (error) {
+    return actionError(error, "errors.leaseFailed");
+  }
+}
+
+export async function actionUpdateLease(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
+  void prev;
+  const leaseId = text(formData.get("leaseId"));
+  try {
+    const session = await getSession();
+    await updateLease(session, {
+      leaseId,
+      rentMajor: optionalNum(formData.get("rent")),
+      depositMonths: optionalNum(formData.get("depositMonths")),
+      depositReason: text(formData.get("depositReason")),
+    });
+    redirect(`/m/leases/${leaseId}`);
   } catch (error) {
     return actionError(error, "errors.leaseFailed");
   }
