@@ -18,18 +18,28 @@ export const PHOTO_BUCKET = "ticket-photos-private";
 /** 5 MB. Same cap as the private bucket and files_ticket_photo_cap. */
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 export const PHOTO_LIMIT = 8;
-export const PHOTO_MIMES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+/** Bytes read to identify JPEG, PNG, or WEBP. GIF is not accepted. */
+export const PHOTO_HEADER_BYTES = 16;
+export const PHOTO_MIMES = ["image/jpeg", "image/png", "image/webp"] as const;
 
 const PHOTO_EXT: Record<(typeof PHOTO_MIMES)[number], string> = {
   "image/jpeg": ".jpg",
   "image/png": ".png",
   "image/webp": ".webp",
-  "image/gif": ".gif",
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PHOTO_PATH =
-  /^org\/([0-9a-f-]{36})\/tickets\/([0-9a-f-]{36})\/([0-9a-f-]{36})\.(jpg|png|webp|gif)$/i;
+  /^org\/([0-9a-f-]{36})\/tickets\/([0-9a-f-]{36})\/([0-9a-f-]{36})\.(jpg|png|webp)$/i;
+
+/** Existing public.expense_status values. Repair records must not add one. */
+export const EXPENSE_STATUSES = ["draft", "submitted", "approved", "rejected", "posted", "void"] as const;
+export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
+/**
+ * Nullable draft link only. The expense screen moves the row through the
+ * other existing statuses and posts the ledger.
+ */
+export const REPAIR_EXPENSE_STATUS: ExpenseStatus = "draft";
 
 export type PhotoMime = (typeof PHOTO_MIMES)[number];
 
@@ -50,6 +60,38 @@ export function normalizePhotoMime(mime: string): PhotoMime | null {
   return PHOTO_MIMES.includes(value as PhotoMime) ? (value as PhotoMime) : null;
 }
 
+/** File signature only. A matching extension or MIME is not enough. GIF returns null. */
+export function sniffPhotoMime(bytes: Uint8Array): PhotoMime | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
 export function assertPhotoMeta(input: { fileName: string; mime: string; size: number }) {
   const fileName = input.fileName.trim().replace(/[/\\]/g, "_");
   if (!fileName || fileName.length > 180) throw new FlowError("errors.required");
@@ -61,15 +103,21 @@ export function assertPhotoMeta(input: { fileName: string; mime: string; size: n
   return { fileName, mime, size: input.size };
 }
 
-/** Object metadata only. Callers must not download or re-encode the bytes. */
-export function acceptPhotoObject(info: { size: number; mime: string }, declaredMime: string) {
-  const stored = normalizePhotoMime(info.mime);
+/**
+ * Header signature decides the type. Declared MIME must agree with it.
+ * Storage may omit a type or echo application/octet-stream; a different image type does not pass.
+ */
+export function acceptPhotoObject(info: { size: number; mime: string; header: Uint8Array }, declaredMime: string) {
+  const sniffed = sniffPhotoMime(info.header);
   const declared = normalizePhotoMime(declaredMime);
-  if (!stored || !declared || stored !== declared) throw new FlowError("errors.photoType");
+  if (!sniffed || !declared || sniffed !== declared) throw new FlowError("errors.photoType");
+  const stored = info.mime ? normalizePhotoMime(info.mime) : null;
+  const untyped = !info.mime || info.mime === "application/octet-stream" || info.mime === "binary/octet-stream";
+  if (!untyped && stored !== sniffed) throw new FlowError("errors.photoType");
   if (!Number.isInteger(info.size) || info.size <= 0 || info.size > PHOTO_MAX_BYTES) {
     throw new FlowError("errors.photoSize");
   }
-  return { size: info.size, mime: stored };
+  return { size: info.size, mime: sniffed };
 }
 
 export function ticketPhotoPath(orgId: string, ticketId: string, fileId: string, mime: PhotoMime) {

@@ -3,7 +3,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { FlowError } from "./errors";
 import {
+  EXPENSE_STATUSES,
   PHOTO_MAX_BYTES,
+  REPAIR_EXPENSE_STATUS,
   acceptPhotoObject,
   assertPhotoMeta,
   cleanVendorName,
@@ -14,6 +16,7 @@ import {
   minorToInput,
   parseOptionalDate,
   parseOptionalMoney,
+  sniffPhotoMime,
   ticketPhotoPath,
 } from "./repair-rules";
 
@@ -29,8 +32,26 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   assert.throws(() => assertPhotoMeta({ fileName: "a.jpg", mime: "image/jpeg", size: PHOTO_MAX_BYTES + 1 }), (error: unknown) => {
     return error instanceof FlowError && error.key === "errors.photoSize";
   });
-  const accepted = acceptPhotoObject({ size: 40, mime: "image/jpg" }, "image/jpeg");
+  const jpeg = Uint8Array.of(0xff, 0xd8, 0xff, 0xe0);
+  const accepted = acceptPhotoObject({ size: 40, mime: "image/jpg", header: jpeg }, "image/jpeg");
   assert.deepEqual(accepted, { size: 40, mime: "image/jpeg" });
+  assert.equal(sniffPhotoMime(Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)), "image/png");
+  const webp = new Uint8Array(12);
+  webp.set([0x52, 0x49, 0x46, 0x46], 0);
+  webp.set([0x57, 0x45, 0x42, 0x50], 8);
+  assert.equal(sniffPhotoMime(webp), "image/webp");
+  assert.equal(sniffPhotoMime(Uint8Array.of(0x47, 0x49, 0x46, 0x38, 0x39, 0x61)), null);
+  assert.throws(
+    () => acceptPhotoObject({ size: 40, mime: "image/jpeg", header: Uint8Array.of(0x25, 0x50, 0x44, 0x46) }, "image/jpeg"),
+    (error: unknown) => error instanceof FlowError && error.key === "errors.photoType",
+  );
+  assert.throws(
+    () => acceptPhotoObject({ size: 40, mime: "image/png", header: jpeg }, "image/jpeg"),
+    (error: unknown) => error instanceof FlowError && error.key === "errors.photoType",
+  );
+  assert.throws(() => assertPhotoMeta({ fileName: "a.gif", mime: "image/gif", size: 100 }), (error: unknown) => {
+    return error instanceof FlowError && error.key === "errors.photoType";
+  });
 
   const path = ticketPhotoPath(
     "10000000-0000-4000-8000-000000000001",
@@ -54,6 +75,10 @@ test("photo rules cap size and type and never describe a re-encode", () => {
     assert.equal(source.includes("OffscreenCanvas"), false);
   }
   assert.match(client, /body: file/);
+  assert.match(client, /sniffPhotoMime/);
+  assert.match(server, /bytes=0-/);
+  assert.doesNotMatch(client, /image\/gif/);
+  assert.doesNotMatch(server, /image\/gif/);
   assert.match(view, /no-img-element/);
   assert.doesNotMatch(view, /from "next\/image"/);
 });
@@ -88,21 +113,35 @@ test("dates, money, vendor, and the expense link stay optional", () => {
 test("the repair migration follows 20261023090000 and posts only a draft link", () => {
   const names = readdirSync(new URL("supabase/migrations/", root)).filter((name) => name.endsWith(".sql")).sort();
   const repair = names.find((name) => name.includes("repair_records"));
-  assert.ok(repair);
+  assert.equal(repair, "20261023150000_repair_records.sql");
   assert.ok(repair > "20261023090000");
+  assert.equal(names.some((name) => name.startsWith("20261023120000")), false);
   assert.ok(names.includes("20261023090000_lease_deposit_override_check.sql"));
   const sql = readFileSync(new URL(`supabase/migrations/${repair}`, root), "utf8");
+  assert.match(sql, /^-- Version 20261023150000\./);
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS/);
+  assert.match(sql, /DROP CONSTRAINT IF EXISTS/);
+  assert.match(sql, /CREATE INDEX IF NOT EXISTS/);
   assert.match(sql, /tenant_owns_ticket/);
   assert.match(sql, /ticket-photos-private/);
   assert.match(sql, /file_size_limit/);
   assert.match(sql, /5242880/);
   assert.match(sql, /expense_id uuid/);
+  assert.doesNotMatch(sql, /expense_id uuid NOT NULL/);
   assert.match(sql, /"public" = false/);
+  assert.doesNotMatch(sql, /image\/gif/);
   assert.doesNotMatch(sql, /INSERT INTO ledger/);
 
+  assert.equal(REPAIR_EXPENSE_STATUS, "draft");
+  assert.deepEqual([...EXPENSE_STATUSES], ["draft", "submitted", "approved", "rejected", "posted", "void"]);
+  const schema = readFileSync(new URL("supabase/migrations/20261018120000_schema.sql", root), "utf8");
+  assert.match(schema, /CREATE TYPE expense_status\s+AS ENUM \('draft','submitted','approved','rejected','posted','void'\)/);
+
   const repairs = readFileSync(new URL("./repairs.ts", import.meta.url), "utf8");
-  assert.match(repairs, /'draft'/);
+  assert.match(repairs, /REPAIR_EXPENSE_STATUS/);
+  assert.match(repairs, /::expense_status/);
   assert.match(repairs, /ticket_id/);
+  assert.doesNotMatch(repairs, /'(submitted|approved|posted|rejected)'/);
   assert.doesNotMatch(repairs, /ledger_transactions/);
   const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
   assert.match(domain, /status IN \('approved','posted'\)/);

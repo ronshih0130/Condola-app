@@ -1590,7 +1590,7 @@
  "i_repair_timeline": "Status history",
  "i_repair_photos": "Photos",
  "i_repair_photo_add": "Add a photo",
- "i_repair_photo_hint": "JPG, PNG, WEBP, or GIF. 5 MB each.",
+ "i_repair_photo_hint": "JPG, PNG, or WEBP. 5 MB each.",
  "i_repair_bearer": "Who pays",
  "i_bearer_owner": "Owner",
  "i_bearer_tenant": "Tenant",
@@ -1607,7 +1607,7 @@
  "i_repair_filter": "Property",
  "i_repair_all": "All properties",
  "i_photo_size": "That photo is over 5 MB. Please choose a smaller one.",
- "i_photo_type": "Use a JPG, PNG, WEBP, or GIF.",
+ "i_photo_type": "Use a JPG, PNG, or WEBP.",
  "i_photo_storage": "The photo could not be uploaded. Please try again later.",
  "i_photo_limit": "Each repair can have up to 8 photos.",
  "i_date_invalid": "Enter a valid date."

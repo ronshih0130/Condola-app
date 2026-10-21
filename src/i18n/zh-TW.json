@@ -1590,7 +1590,7 @@
  "i_repair_timeline": "狀態歷程",
  "i_repair_photos": "照片",
  "i_repair_photo_add": "新增照片",
- "i_repair_photo_hint": "JPG、PNG、WEBP 或 GIF，單張 5 MB 以內。",
+ "i_repair_photo_hint": "JPG、PNG 或 WEBP，單張 5 MB 以內。",
  "i_repair_bearer": "費用負擔",
  "i_bearer_owner": "屋主",
  "i_bearer_tenant": "租客",
@@ -1607,7 +1607,7 @@
  "i_repair_filter": "物件",
  "i_repair_all": "全部物件",
  "i_photo_size": "照片超過 5 MB，請換一張較小的。",
- "i_photo_type": "只接受 JPG、PNG、WEBP 或 GIF。",
+ "i_photo_type": "只接受 JPG、PNG 或 WEBP。",
  "i_photo_storage": "目前無法上傳照片，請稍後再試。",
  "i_photo_limit": "每筆報修最多 8 張照片。",
  "i_date_invalid": "請輸入有效的日期。"

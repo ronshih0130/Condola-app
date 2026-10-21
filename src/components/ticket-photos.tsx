@@ -2,9 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-
-const MAX_BYTES = 5 * 1024 * 1024;
-const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+import { PHOTO_HEADER_BYTES, PHOTO_MAX_BYTES, PHOTO_MIMES, normalizePhotoMime, sniffPhotoMime } from "@/server/repair-rules";
 
 type Messages = { size: string; type: string; storage: string; limit: string; generic: string; internal: string };
 
@@ -42,11 +40,14 @@ export function TicketPhotoUpload({
     event.target.value = "";
     if (!file) return;
     setError("");
-    if (file.size > MAX_BYTES) {
+    if (file.size > PHOTO_MAX_BYTES) {
       setError(messages.size);
       return;
     }
-    if (!ALLOWED.includes(file.type)) {
+    const header = new Uint8Array(await file.slice(0, PHOTO_HEADER_BYTES).arrayBuffer());
+    const sniffed = sniffPhotoMime(header);
+    const declared = normalizePhotoMime(file.type);
+    if (!sniffed || (file.type !== "" && declared !== sniffed)) {
       setError(messages.type);
       return;
     }
@@ -55,14 +56,14 @@ export function TicketPhotoUpload({
       const signed = await fetch("/api/tickets/photos/sign", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ticketId, fileName: file.name, mime: file.type, size: file.size }),
+        body: JSON.stringify({ ticketId, fileName: file.name, mime: sniffed, size: file.size }),
       });
       const signBody = (await signed.json()) as { error?: string; uploadUrl?: string; token?: string; path?: string };
       if (!signed.ok || !signBody.uploadUrl || !signBody.path) {
         setError(messageFor(signBody.error, messages));
         return;
       }
-      const headers: Record<string, string> = { "content-type": file.type };
+      const headers: Record<string, string> = { "content-type": sniffed };
       if (signBody.token) headers.authorization = `Bearer ${signBody.token}`;
       const uploaded = await fetch(signBody.uploadUrl, { method: "PUT", headers, body: file });
       if (!uploaded.ok) {
@@ -76,7 +77,7 @@ export function TicketPhotoUpload({
           ticketId,
           path: signBody.path,
           fileName: file.name,
-          mime: file.type,
+          mime: sniffed,
           size: file.size,
           internal: Boolean(allowInternal && internalRef.current?.checked),
         }),
@@ -107,7 +108,7 @@ export function TicketPhotoUpload({
       <input
         className="inp"
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept={PHOTO_MIMES.join(",")}
         data-testid="repair-photo"
         onChange={onChange}
         disabled={pending}

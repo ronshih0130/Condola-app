@@ -15,6 +15,7 @@ import {
   completionDate,
   datesInOrder,
   expenseLinkPlan,
+  REPAIR_EXPENSE_STATUS,
   isTicketPhotoPath,
   isUuid,
   parseOptionalDate,
@@ -245,7 +246,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
        ) VALUES (
          $1,$2,$3,$4,$5,
          'repair',$6,$7,$8,$9::date,
-         'manager_firm',$10::cost_bearer,'draft',$11
+         'manager_firm',$10::cost_bearer,$11::expense_status,$12
        ) RETURNING id`,
       [
         session.orgId,
@@ -258,6 +259,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
         finalCost,
         day,
         input.costBearer || "owner",
+        REPAIR_EXPENSE_STATUS,
         session.userId,
       ],
     );
@@ -315,12 +317,21 @@ export async function repairPhotoTarget(session: Session, ticketId: string) {
  */
 export async function attachRepairPhoto(
   session: Session,
-  input: { ticketId: string; path: string; fileName: string; mime: string; size: number; internal: boolean },
+  input: {
+    ticketId: string;
+    path: string;
+    fileName: string;
+    mime: string;
+    storedMime: string;
+    size: number;
+    internal: boolean;
+    header: Uint8Array;
+  },
 ) {
   assertTicketActor(session);
   if (input.internal && session.kind !== "staff") throw new FlowError("errors.forbidden");
   const meta = assertPhotoMeta(input);
-  const accepted = acceptPhotoObject({ size: input.size, mime: input.mime }, meta.mime);
+  const accepted = acceptPhotoObject({ size: input.size, mime: input.storedMime, header: input.header }, meta.mime);
   if (!isUuid(input.ticketId)) throw new FlowError("errors.notFound");
   const fileId = photoFileId(input.path);
   if (!fileId) throw new FlowError("errors.forbidden");

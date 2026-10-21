@@ -10,6 +10,8 @@ import { addTicketComment, attachRepairPhoto, saveRepairRecord } from "./repairs
 import type { Session } from "./types";
 
 const ORG = ORG_ID;
+const JPEG = Uint8Array.of(0xff, 0xd8, 0xff, 0xe0);
+const PNG = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
 
 function staff(userId: string, role: Session["role"]): Session {
   return {
@@ -229,8 +231,10 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
       path,
       fileName: `${title}.jpg`,
       mime: "image/jpeg",
+      storedMime: "image/jpeg",
       size: 2048,
       internal: false,
+      header: JPEG,
     });
     const seen = await tx(USERS.tenant2, (client) =>
       client.query(`SELECT a.id FROM ticket_attachments a WHERE a.ticket_id = $1`, [ticketId]),
@@ -247,9 +251,24 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
       path: internalPath,
       fileName: `${title}-note.png`,
       mime: "image/png",
+      storedMime: "image/png",
       size: 100,
       internal: true,
+      header: PNG,
     });
+    await assert.rejects(
+      attachRepairPhoto(admin, {
+        ticketId,
+        path: ticketPhotoPath(ORG, ticketId, "40000000-0000-4000-8000-000000000097", "image/jpeg"),
+        fileName: "not-a-photo.jpg",
+        mime: "image/jpeg",
+        storedMime: "image/jpeg",
+        size: 32,
+        internal: false,
+        header: Uint8Array.of(0x25, 0x50, 0x44, 0x46),
+      }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.photoType",
+    );
     const tenantPhotos = await ticketDetail(wangSession, ticketId);
     assert.equal(tenantPhotos?.photos.length, 1);
     const staffPhotos = await ticketDetail(admin, ticketId);
@@ -261,6 +280,15 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
           `INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, uploaded_by)
            VALUES ($1,$2,$3,'too-big.jpg','image/jpeg',$4,$5)`,
           [ORG, PHOTO_BUCKET, `org/${ORG}/tickets/${ticketId}/too-big.jpg`, PHOTO_MAX_BYTES + 1, USERS.admin],
+        ),
+      ),
+    );
+    await assert.rejects(
+      svc(null, (client) =>
+        client.query(
+          `INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, uploaded_by)
+           VALUES ($1,$2,$3,'anim.gif','image/gif',12,$4)`,
+          [ORG, PHOTO_BUCKET, `org/${ORG}/tickets/${ticketId}/anim.gif`, USERS.admin],
         ),
       ),
     );

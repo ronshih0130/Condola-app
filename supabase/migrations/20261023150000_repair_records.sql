@@ -1,16 +1,20 @@
--- Repair records (修繕紀錄). Version 20261023120000, after 20261023090000.
+-- Version 20261023150000.
+-- Repair records (修繕紀錄), after 20261023090000.
 -- 20261022180000 is tenant_id_check and is already recorded on staging; do not reuse it.
+-- 20261023120000 is reserved by the bulk-import migration. Do not reuse it.
 --
 -- Schedule, completion, and a free-text vendor sit on the ticket. Cost already
 -- has estimated_cost_minor / final_cost_minor. Status changes keep using
 -- ticket_comments (status_from / status_to), which is the timeline.
 -- Photos are ticket_attachments -> files in the private bucket
--- ticket-photos-private. The app uploads and reads with signed URLs and does
--- not re-encode image bytes (Workers free plan is 10ms CPU).
+-- ticket-photos-private. Allowed types are JPEG, PNG, and WEBP. The app checks
+-- magic bytes before it keeps an object, uploads and reads with signed URLs,
+-- and does not re-encode image bytes (Workers free plan is 10ms CPU).
 --
 -- expenses.ticket_id is already a nullable FK. expense_id on the ticket is the
--- reverse nullable link. Opting in inserts one draft expense and stores that
--- id. It does not post the ledger; the expense screen owns approval and posting.
+-- reverse nullable link and stays nullable. Opting in inserts one row with the
+-- existing expense_status value draft and stores that id. It does not post the
+-- ledger and does not add a status. The expense screen owns later statuses.
 
 ALTER TABLE maintenance_tickets
   ADD COLUMN IF NOT EXISTS scheduled_on date,
@@ -68,7 +72,7 @@ ALTER TABLE files
       size_bytes IS NOT NULL
       AND size_bytes > 0
       AND size_bytes <= 5242880
-      AND mime_type IN ('image/jpeg', 'image/png', 'image/webp', 'image/gif')
+      AND mime_type IN ('image/jpeg', 'image/png', 'image/webp')
     )
   );
 
@@ -213,7 +217,7 @@ BEGIN
     'ticket-photos-private',
     false,
     5242880,
-    ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']::text[]
+    ARRAY['image/jpeg', 'image/png', 'image/webp']::text[]
   )
   ON CONFLICT (id) DO UPDATE
     SET "public" = false,
