@@ -881,13 +881,15 @@ function excelSerialDate(text: string) {
   return new Date(utc).toISOString().slice(0, 10);
 }
 
-/** 115/01/05 and 民國115年1月5日. A 1–3 digit year is Minguo (add 1911). */
+/** Minguo 1 is 1912, so the Gregorian year is the ROC year plus 1911. 民國115年1月5日 is 2026-01-05. */
+const ROC_YEAR_OFFSET = 1911;
+
 function rocDate(text: string): string | "invalid" | null {
-  const era = /^(?:民國)?(\d{1,3})年(\d{1,2})月(\d{1,2})日$/.exec(text);
+  const era = /^(?:民國)?(\d{1,3})年(\d{1,2})月(\d{1,2})日?$/.exec(text);
   const slash = /^(?:民國)?(\d{1,3})[./-](\d{1,2})[./-](\d{1,2})$/.exec(text);
   const match = era || slash;
   if (!match) return null;
-  return calendarDate(Number(match[1]) + 1911, Number(match[2]), Number(match[3]));
+  return calendarDate(Number(match[1]) + ROC_YEAR_OFFSET, Number(match[2]), Number(match[3]));
 }
 
 function calendarDate(year: number, month: number, day: number): string | "invalid" {

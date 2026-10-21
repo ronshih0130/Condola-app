@@ -275,6 +275,15 @@ test("a shared phone is not reused, and full-width numbers, ROC dates, and Excel
   assert.equal(scientific.phoneE164, "+886912000333");
 });
 
+test("ROC year 115 is 2026-01-05 for era text, separators, and full-width digits", () => {
+  const forms = ["民國115年1月5日", "115年1月5日", "115.01.05", "115-1-5", "民國１１５年１月５日"];
+  for (const [index, form] of forms.entries()) {
+    const row = validateImportRows([lease({ startDate: form, unitLabel: `R${index}` })], "2026-10-21")[0];
+    assert.equal(row.issues.some((issue) => issue.key === "im_e_date"), false, form);
+    assert.equal(row.startDate, "2026-01-05", form);
+  }
+});
+
 test("one blocked row zeroes the commit totals and a dry run still counts the valid rows", () => {
   const rows = validateImportRows(
     [lease({ unitLabel: "1F" }), lease({ line: 3, unitLabel: "2F", deposit: "90000" })],
