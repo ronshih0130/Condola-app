@@ -38,6 +38,10 @@ if ! grep -q "cron/reminders" "$SOURCE_ROOT/custom-worker.mjs"; then
   echo "custom-worker.mjs does not call the reminder route" >&2
   exit 1
 fi
+if ! grep -q "globalThis.__CONDOLA_FONTS" "$SOURCE_ROOT/custom-worker.mjs"; then
+  echo "custom-worker.mjs does not publish the watermark fonts" >&2
+  exit 1
+fi
 
 # Copy the thin entry. Bundling pg here makes wrangler reject the upload
 # (error 10021, dynamic require of "events").
@@ -48,6 +52,15 @@ if [[ "$bytes" -gt 4096 ]]; then
   exit 1
 fi
 cp -a "$SOURCE_ROOT/.open-next/." "$STAGE/.open-next/"
+# The entry imports these as Wrangler Data modules. They are not inside the OpenNext handler.
+for font in public/fonts/DroidSansFallback-subset.ttf src/server/fonts/DejaVuSans.ttf; do
+  if [[ ! -f "$SOURCE_ROOT/$font" ]]; then
+    echo "missing $font under $SOURCE_ROOT" >&2
+    exit 1
+  fi
+  mkdir -p "$STAGE/$(dirname "$font")"
+  cp "$SOURCE_ROOT/$font" "$STAGE/$font"
+done
 cp "$SOURCE_ROOT/wrangler.jsonc" "$STAGE/wrangler.jsonc"
 cp "$SOURCE_ROOT/package.json" "$STAGE/package.json"
 if [[ -f "$SOURCE_ROOT/COMMIT" ]]; then
@@ -63,6 +76,8 @@ members="$(mktemp)"
 tar -tzf "$OUT" > "$members"
 grep -qx './custom-worker.mjs' "$members"
 grep -qx './.open-next/worker.js' "$members"
+grep -qx './public/fonts/DroidSansFallback-subset.ttf' "$members"
+grep -qx './src/server/fonts/DejaVuSans.ttf' "$members"
 grep -qx './pr-migrations/MANIFEST.md' "$members"
 grep -qx './pr-migrations/PERMISSIONS.md' "$members"
 rm -f "$members"

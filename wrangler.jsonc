@@ -8,6 +8,11 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Watermark faces are Data modules so Workers can import the bytes. A base64
+  // string in the script is large enough that workerd will not start.
+  "rules": [
+    { "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }
+  ],
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",

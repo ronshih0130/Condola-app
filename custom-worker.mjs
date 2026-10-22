@@ -2,7 +2,13 @@
 // Reminders run at 09:00 Asia/Taipei. The ID-photo purge runs at 03:00.
 // Keep this file a thin entry that only imports the OpenNext worker. The purge
 // route runs inside that worker, which already loads the database driver.
+// The TTF imports are Wrangler Data modules. The watermark code reads
+// globalThis.__CONDOLA_FONTS because the OpenNext handler has no filesystem.
 import { default as handler } from "./.open-next/worker.js";
+import cjkFont from "./public/fonts/DroidSansFallback-subset.ttf";
+import latinFont from "./src/server/fonts/DejaVuSans.ttf";
+
+globalThis.__CONDOLA_FONTS = { cjk: cjkFont, latin: latinFont };
 
 const REMINDER_CRON = "0 1 * * *";
 const PURGE_CRON = "0 19 * * *";
@@ -48,5 +54,5 @@ const worker = {
 
 export default worker;
 
-export const DOQueueHandler = handler.DOQueueHandler;
-export const DOShardedTagCache = handler.DOShardedTagCache;
+// Named classes on worker.js are not properties of its default export. Re-exporting
+// handler.DOQueueHandler publishes undefined, and workerd then refuses to start.

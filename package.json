@@ -18,6 +18,7 @@
     "id:purge": "tsx scripts/purge-id-documents.ts",
     "id:watermark": "tsx scripts/backfill-id-watermarks.ts",
     "cf:build": "opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion",
+    "test:worker": "tsx --test --test-timeout=180000 src/server/id-worker.integration.test.ts",
     "cf:deploy:staging": "bash scripts/cf-deploy-staging.sh",
     "test:e2e": "playwright test"
   },

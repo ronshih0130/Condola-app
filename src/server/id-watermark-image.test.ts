@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { decode } from "jpeg-js";
 import { SAMPLE_JPEG_BASE64 } from "../lib/idv";
@@ -11,9 +12,27 @@ test("the burned sentence is only the firm name", () => {
   assert.throws(() => idFixedWatermark("  "), /empty/);
 });
 
+test("workers receive watermark fonts from the entry's Data modules", () => {
+  const source = readFileSync(new URL("./id-watermark-image.ts", import.meta.url), "utf8");
+  const entry = readFileSync(new URL("../../custom-worker.mjs", import.meta.url), "utf8");
+  const config = readFileSync(new URL("../../wrangler.jsonc", import.meta.url), "utf8");
+  assert.match(source, /__CONDOLA_FONTS/);
+  assert.match(entry, /DroidSansFallback-subset\.ttf/);
+  assert.match(entry, /DejaVuSans\.ttf/);
+  assert.match(entry, /globalThis\.__CONDOLA_FONTS/);
+  assert.doesNotMatch(entry, /export const DOQueueHandler/);
+  assert.match(config, /"type": "Data"/);
+  assert.match(config, /\*\*\/\*\.ttf/);
+});
+
 test("the second copy is a different jpeg with a red bar", () => {
   const plain = Buffer.from(SAMPLE_JPEG_BASE64, "base64");
+  const started = performance.now();
   const burned = burnFixedIdCopy(plain, "松信住宅管理");
+  assert.ok(performance.now() - started < 2000, "first burn");
+  const again = performance.now();
+  burnFixedIdCopy(plain, "松信住宅管理");
+  assert.ok(performance.now() - again < 2000, "cached burn");
   assert.equal(burned.equals(plain), false);
   assert.equal(burned[0], 0xff);
   assert.equal(burned[1], 0xd8);

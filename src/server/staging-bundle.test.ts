@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -9,7 +9,14 @@ test("the staging tarball contains the scheduled worker entry and the OpenNext w
   const root = mkdtempSync(path.join(tmpdir(), "condola-bundle-"));
   try {
     mkdirSync(path.join(root, ".open-next"));
+    mkdirSync(path.join(root, "public/fonts"), { recursive: true });
+    mkdirSync(path.join(root, "src/server/fonts"), { recursive: true });
     writeFileSync(path.join(root, "custom-worker.mjs"), readFileSync("custom-worker.mjs"));
+    copyFileSync(
+      "public/fonts/DroidSansFallback-subset.ttf",
+      path.join(root, "public/fonts/DroidSansFallback-subset.ttf"),
+    );
+    copyFileSync("src/server/fonts/DejaVuSans.ttf", path.join(root, "src/server/fonts/DejaVuSans.ttf"));
     writeFileSync(
       path.join(root, ".open-next/worker.js"),
       "export default { fetch() { return new Response('ok'); } };\n",
@@ -26,6 +33,8 @@ test("the staging tarball contains the scheduled worker entry and the OpenNext w
     assert.match(names, /^\.\/custom-worker\.mjs$/m);
     assert.doesNotMatch(names, /^\.\/id-purge-cron\.mjs$/m);
     assert.match(names, /^\.\/\.open-next\/worker\.js$/m);
+    assert.match(names, /^\.\/public\/fonts\/DroidSansFallback-subset\.ttf$/m);
+    assert.match(names, /^\.\/src\/server\/fonts\/DejaVuSans\.ttf$/m);
     assert.match(names, /^\.\/pr-migrations\/MANIFEST\.md$/m);
     assert.match(names, /^\.\/pr-migrations\/PERMISSIONS\.md$/m);
     const entry = execFileSync("tar", ["-xOf", out, "./custom-worker.mjs"], { encoding: "utf8" });
@@ -39,6 +48,8 @@ test("the staging tarball contains the scheduled worker entry and the OpenNext w
     assert.match(entry, /\/api\/cron\/reminders/);
     assert.match(entry, /id-purge failed/);
     assert.match(entry, /import \{ default as handler \} from "\.\/\.open-next\/worker\.js"/);
+    assert.match(entry, /globalThis\.__CONDOLA_FONTS/);
+    assert.doesNotMatch(entry, /export const DOQueueHandler/);
     const manifest = execFileSync("tar", ["-xOf", out, "./pr-migrations/MANIFEST.md"], { encoding: "utf8" });
     assert.match(manifest, /add-only/);
     const permissions = execFileSync("tar", ["-xOf", out, "./pr-migrations/PERMISSIONS.md"], { encoding: "utf8" });

@@ -17,6 +17,7 @@ type GlyphPath = { commands: { command: string; args: number[] }[] };
 type Mask = { width: number; height: number; ox: number; oy: number; advance: number; alpha: Uint8Array };
 
 const masks = new Map<string, Mask>();
+const fontBin = new Map<"cjk" | "latin", Uint8Array>();
 let cjkFont: GlyphFont | null = null;
 let latinFont: GlyphFont | null = null;
 
@@ -33,12 +34,22 @@ function loadFontkit(): FontkitApi {
   return mod;
 }
 
+type BundledFonts = { cjk?: ArrayBuffer; latin?: ArrayBuffer };
+
 const FONT_FILES = {
   cjk: "public/fonts/DroidSansFallback-subset.ttf",
   latin: "src/server/fonts/DejaVuSans.ttf",
 } as const;
 
-function fontBytes(relative: string) {
+/** Worker entry sets this from Wrangler Data modules. Node tests read the files. */
+function bundledFont(which: "cjk" | "latin") {
+  const fonts = (globalThis as { __CONDOLA_FONTS?: BundledFonts }).__CONDOLA_FONTS;
+  const bin = fonts?.[which];
+  if (!bin || bin.byteLength < 1024) return null;
+  return bin instanceof Uint8Array ? bin : new Uint8Array(bin);
+}
+
+function fontBytesFromDisk(relative: string) {
   let dir = process.cwd();
   for (let depth = 0; depth < 6; depth += 1) {
     const candidate = path.join(dir, relative);
@@ -50,11 +61,23 @@ function fontBytes(relative: string) {
   throw new IdWatermarkError("font");
 }
 
+/** Parsed faces and glyph masks stay on the module so the next photo skips fontkit. */
+function fontBytes(which: "cjk" | "latin") {
+  const cached = fontBin.get(which);
+  if (cached) return cached;
+  const bytes = bundledFont(which) ?? fontBytesFromDisk(FONT_FILES[which]);
+  if (bytes.length < 1024 || bytes[0] !== 0 || bytes[1] !== 1 || bytes[2] !== 0 || bytes[3] !== 0) {
+    throw new IdWatermarkError("font");
+  }
+  fontBin.set(which, bytes);
+  return bytes;
+}
+
 function fonts() {
   if (!cjkFont || !latinFont) {
     const fontkit = loadFontkit();
-    cjkFont = fontkit.create(fontBytes(FONT_FILES.cjk));
-    latinFont = fontkit.create(fontBytes(FONT_FILES.latin));
+    cjkFont = fontkit.create(fontBytes("cjk"));
+    latinFont = fontkit.create(fontBytes("latin"));
   }
   return { cjk: cjkFont, latin: latinFont };
 }

@@ -48,5 +48,7 @@ jobs:
           done
           npm run db:reset
       - run: npm run test:rls
+      - run: npm run cf:build
+      - run: npm run test:worker
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
