@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { RepairThread } from "@/components/repair-thread";
+import { VendorDispatch } from "@/components/vendor-dispatch";
 import { ErrorBanner, PageHeader, statusKey } from "@/components/ui";
 import { COST_BEARER_KEY, REPAIR_CAT_KEY, REPAIR_STATUSES } from "@/lib/repair-labels";
 import { actionSaveRepair } from "@/server/actions";
@@ -10,6 +12,7 @@ import { isUuid, minorToInput } from "@/server/repair-rules";
 import { ticketDetail } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
+import { loadVendorDispatch } from "@/server/vendor-repair";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +32,10 @@ export default async function TicketDetailPage({
   if (!detail) notFound();
   const canWrite = can(session.role, "tickets.update");
   const canPost = can(session.role, "exp.add");
+  const headerList = await headers();
+  const host = headerList.get("x-forwarded-host") || headerList.get("host") || "";
+  const proto = headerList.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+  const dispatch = await loadVendorDispatch(session, id, host ? `${proto}://${host}` : "");
   const ticket = detail.ticket;
   const currency = ticket.currency || ticket.property_currency;
   const roleLabel: Record<string, string> = {
@@ -163,6 +170,18 @@ export default async function TicketDetailPage({
           />
         </div>
       </div>
+      {dispatch ? (
+        <VendorDispatch
+          ticketId={ticket.id}
+          canDispatch={canWrite}
+          canConfirm={canWrite && canPost}
+          job={dispatch.job}
+          currency={currency}
+          t={t}
+          locale={session.locale}
+          calendar={session.calendar}
+        />
+      ) : null}
     </>
   );
 }

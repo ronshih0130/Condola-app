@@ -559,6 +559,69 @@ async function releaseRepairLink(client: Client, orgId: string, expenseId: strin
 }
 
 /**
+ * Posted owner repair from a confirmed vendor cost.
+ * Same shape as a staff expense: bill_to owner, status posted, ledger entry.
+ * A closed month moves the date to the first open day, matching other repairs.
+ */
+export async function insertPostedRepairExpense(
+  client: Client,
+  session: Session,
+  input: {
+    propertyId: string;
+    unitId: string | null;
+    ticketId: string;
+    vendorName: string;
+    description: string;
+    currency: string;
+    amountCents: number;
+    incurredOn: string;
+  },
+) {
+  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0 || input.amountCents > MAX_EXPENSE_CENTS) {
+    throw new FlowError("errors.expenseAmount");
+  }
+  const closed = await closedThrough(client, session.orgId);
+  const incurred = monthIsClosed(input.incurredOn, closed) ? await firstOpenDay(client, session.orgId) : input.incurredOn;
+  if (monthIsClosed(incurred, closed)) throw new FlowError("errors.monthClosed");
+  await setReason(client, "repair_vendor_confirm");
+  const vendorId = await vendorIdFor(client, session.orgId, input.vendorName);
+  const description = input.description.trim().slice(0, 2000);
+  const expense = await one<{ id: string }>(
+    client,
+    `INSERT INTO expenses (
+       org_id, property_id, unit_id, ticket_id, vendor_contact_id,
+       category, description, currency, amount_minor, incurred_on,
+       paid_by, bill_to, status, approved_by, approved_at, created_by
+     ) VALUES (
+       $1,$2,$3,$4,$5,
+       'repair', NULLIF($6, ''), $7, $8, $9::date,
+       'manager_firm', 'owner', 'posted', $10, now(), $10
+     ) RETURNING id::text`,
+    [
+      session.orgId,
+      input.propertyId,
+      input.unitId,
+      input.ticketId,
+      vendorId,
+      description,
+      input.currency.trim(),
+      input.amountCents,
+      incurred,
+      session.userId,
+    ],
+  );
+  await postLedger(client, session, {
+    expenseId: expense.id,
+    propertyId: input.propertyId,
+    currency: input.currency.trim(),
+    incurred,
+    memo: description || "repair",
+    amount: input.amountCents,
+  });
+  return { expenseId: expense.id, incurred };
+}
+
+/**
  * Move a repair draft (or a submitted/rejected row) to posted.
  * Owner-billed rows get a ledger entry so they match a new staff expense.
  * ticket_id is left as the repair recorded it.

@@ -23,12 +23,20 @@ export function TicketPhotoUpload({
   hint,
   allowInternal,
   messages,
+  signPath = "/api/tickets/photos/sign",
+  confirmPath = "/api/tickets/photos/confirm",
+  extra,
+  inputTestId = "repair-photo",
 }: {
   ticketId: string;
   label: string;
   hint: string;
   allowInternal: boolean;
   messages: Messages;
+  signPath?: string;
+  confirmPath?: string;
+  extra?: Record<string, string>;
+  inputTestId?: string;
 }) {
   const router = useRouter();
   const internalRef = useRef<HTMLInputElement>(null);
@@ -53,10 +61,10 @@ export function TicketPhotoUpload({
     }
     setPending(true);
     try {
-      const signed = await fetch("/api/tickets/photos/sign", {
+      const signed = await fetch(signPath, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ticketId, fileName: file.name, mime: sniffed, size: file.size }),
+        body: JSON.stringify({ ticketId, fileName: file.name, mime: sniffed, size: file.size, ...extra }),
       });
       const signBody = (await signed.json()) as {
         error?: string;
@@ -76,7 +84,7 @@ export function TicketPhotoUpload({
         setError(messages.storage);
         return;
       }
-      const confirmed = await fetch("/api/tickets/photos/confirm", {
+      const confirmed = await fetch(confirmPath, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -87,6 +95,7 @@ export function TicketPhotoUpload({
           size: file.size,
           internal: Boolean(allowInternal && internalRef.current?.checked),
           uploadToken: signBody.uploadToken,
+          ...extra,
         }),
       });
       const confirmedBody = (await confirmed.json()) as { error?: string };
@@ -116,7 +125,7 @@ export function TicketPhotoUpload({
         className="inp"
         type="file"
         accept={PHOTO_MIMES.join(",")}
-        data-testid="repair-photo"
+        data-testid={inputTestId}
         onChange={onChange}
         disabled={pending}
       />

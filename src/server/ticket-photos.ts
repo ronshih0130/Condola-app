@@ -52,6 +52,18 @@ async function storageRequest(method: string, path: string, body?: unknown) {
   return response;
 }
 
+export async function signRepairUpload(path: string) {
+  const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
+  const response = await storageRequest("POST", `/object/upload/sign/${PHOTO_BUCKET}/${encoded}`);
+  if (!response.ok) throw new FlowError("errors.photoStorage");
+  const payload = (await response.json()) as { url?: string; token?: string };
+  if (!payload.url) throw new FlowError("errors.photoStorage");
+  return {
+    token: payload.token ?? "",
+    uploadUrl: absoluteStorageUrl(storageConfig()?.url ?? "", payload.url),
+  };
+}
+
 export async function prepareTicketPhotoUpload(
   session: Session,
   input: { ticketId: string; fileName: string; mime: string; size: number },
@@ -61,15 +73,11 @@ export async function prepareTicketPhotoUpload(
   if (!ticket) throw new FlowError("errors.notFound");
   if (Number(ticket.count) >= PHOTO_LIMIT) throw new FlowError("errors.photoLimit");
   const path = ticketPhotoPath(ticket.org_id, input.ticketId, newPhotoFileId(), meta.mime);
-  const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
-  const response = await storageRequest("POST", `/object/upload/sign/${PHOTO_BUCKET}/${encoded}`);
-  if (!response.ok) throw new FlowError("errors.photoStorage");
-  const payload = (await response.json()) as { url?: string; token?: string };
-  if (!payload.url) throw new FlowError("errors.photoStorage");
+  const signed = await signRepairUpload(path);
   return {
     path,
-    token: payload.token ?? "",
-    uploadUrl: absoluteStorageUrl(storageConfig()?.url ?? "", payload.url),
+    token: signed.token,
+    uploadUrl: signed.uploadUrl,
     mime: meta.mime,
     uploadToken: issueUploadGrant(session.userId, input.ticketId, path),
   };
@@ -92,6 +100,19 @@ export function uploadGrantMatches(userId: string, ticketId: string, path: strin
   return timingSafeEqual(Buffer.from(expected), Buffer.from(token));
 }
 
+/** Bound to the vendor link hash, not a user id. A staff grant cannot be reused here. */
+export function issueVendorUploadGrant(tokenHash: string, ticketId: string, path: string) {
+  const key = grantKey();
+  if (!key) return "";
+  return createHmac("sha256", key).update(`vendor\n${tokenHash}\n${ticketId}\n${path}`).digest("base64url");
+}
+
+export function vendorUploadGrantMatches(tokenHash: string, ticketId: string, path: string, token: string) {
+  const expected = issueVendorUploadGrant(tokenHash, ticketId, path);
+  if (!expected || !token || expected.length !== token.length) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(token));
+}
+
 /** An attached object is never removed. A storage delete needs a grant from sign. */
 export function discardUploadAllowed(attachmentId: string | null, issued: boolean) {
   return attachmentId == null && issued;
@@ -100,6 +121,17 @@ export function discardUploadAllowed(attachmentId: string | null, issued: boolea
 async function deleteObject(path: string) {
   const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
   await storageRequest("DELETE", `/object/${PHOTO_BUCKET}/${encoded}`).catch(() => undefined);
+}
+
+export async function removeRepairObject(path: string) {
+  await deleteObject(path);
+}
+
+export async function inspectRepairObject(path: string) {
+  const info = await objectInfo(path);
+  if (!info.ok) throw new FlowError("errors.photoStorage");
+  const header = await readObjectHeader(path);
+  return { size: info.size ?? 0, mime: info.mime ?? "", header };
 }
 
 /** First bytes of the object. A range request plus cancel avoids reading the file. */
