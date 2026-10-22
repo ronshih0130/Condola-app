@@ -6,9 +6,9 @@ const widths = [400, 480, 640, 960] as const;
 const locales = [
   {
     code: "zh-TW" as const,
-    owes: "屋主應補繳",
-    reason: "代墊費用與代管費",
-    labels: ["物件", "代管費規則", "本月已繳租金", "應付屋主", "狀態"],
+    owes: "本期淨額為負",
+    reason: "已登記租金",
+    labels: ["物件", "代管費規則", "本月租金（已登記）", "屋主淨額", "狀態"],
     rentLabels: ["租客", "月租", "本月應收", "已繳", "餘額", "狀態"],
     leaseLabels: ["物件／房間", "租期", "月租", "押金", "電費", "狀態"],
     dashLabels: ["物件／房間", "餘額"],
@@ -114,16 +114,21 @@ for (const locale of locales) {
     await expect(page.getByTestId("statement-fee")).toHaveText("NT$0");
     const documentText = await page.getByTestId("statement-document").innerText();
     expect(documentText).toContain(locale.reason);
-    if (locale.code === "zh-TW") expect(documentText).not.toContain("已收租金");
+    if (locale.code === "zh-TW") {
+      expect(documentText).not.toContain("已收租金");
+      expect(documentText).toContain("屋主淨額為 −NT$2,800");
+      expect(documentText.split("屋主淨額為 −NT$2,800").join("")).not.toMatch(/[-−]NT\$/);
+    } else {
+      expect(documentText).not.toMatch(/[-−]\s*NT\$/);
+      expect(documentText).not.toContain("−NT$");
+    }
     expect(documentText).toContain("NT$0");
-    expect(documentText).not.toMatch(/[-−]\s*NT\$/);
-    expect(documentText).not.toContain("−NT$");
     const reason = page.getByTestId("owner-owes-reason");
     await expect(reason).toHaveClass(/alert/);
     await expect(reason).toHaveClass(/warn/);
     await expect(reason).toContainText("⚠");
     await expect(reason).toContainText("NT$2,800");
-    await expect(reason).toContainText("NT$0");
+    if (locale.code === "en") await expect(reason).toContainText("NT$0");
     await page.screenshot({ path: `/opt/cursor/artifacts/owner-owes-${locale.code}.png`, fullPage: true });
 
     await signIn(page, ACCOUNTS.owner);

@@ -83,7 +83,11 @@ export function StatementDocument({
       {figures.owes > 0 ? (
         <div className="bd">
           <div className="alert warn small" data-testid="owner-owes-reason">
-            ⚠ {t("owner_owes_reason", { cost: money(figures.costs), rent: money(figures.rent + figures.other) })}
+            ⚠ {t("owner_owes_reason", {
+              "金額": money(figures.owes).replace(/^NT\$/, ""),
+              cost: money(figures.costs),
+              rent: money(figures.rent + figures.other),
+            })}
           </div>
         </div>
       ) : null}

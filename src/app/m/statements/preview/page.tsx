@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { PageHeader } from "@/components/ui";
 import { PreviewGenerateForm } from "@/components/dialogs";
+import { formatMailMonth } from "@/server/mail-copy";
 import { statementRoster } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -26,7 +27,7 @@ export default async function StatementPreviewPage({
   return (
     <>
       <PageHeader title={row.owner_name} crumb={<Link href="/m/statements">{t("i_nav_stmt")}</Link>} />
-      <p className="muted">{month}</p>
+      <p className="muted">{formatMailMonth(month)}</p>
       <div className="card" style={{ maxWidth: 640 }}>
         <div className="bd">
           <p>

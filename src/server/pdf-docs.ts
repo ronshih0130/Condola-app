@@ -137,7 +137,13 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     blocks.push({
       kind: "text",
       heading: "",
-      lines: [t("owner_owes_reason", { cost: money(figures.costs), rent: money(figures.rent + figures.other) })],
+      lines: [
+        t("owner_owes_reason", {
+          "金額": money(figures.owes).replace(/^NT\$/, ""),
+          cost: money(figures.costs),
+          rent: money(figures.rent + figures.other),
+        }),
+      ],
     });
   }
   if (source.lines.length) {

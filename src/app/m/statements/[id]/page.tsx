@@ -4,6 +4,7 @@ import { makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { StatementDocument } from "@/components/statement-document";
 import { PageHeader } from "@/components/ui";
+import { formatMailMonth } from "@/server/mail-copy";
 import { statementDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -31,9 +32,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
           />
         }
       />
-      <p className="muted">
-        {row.period_start} – {row.period_end}
-      </p>
+      <p className="muted">{formatMailMonth(row.period_start)}</p>
       <StatementDocument
         t={t}
         locale={session.locale}

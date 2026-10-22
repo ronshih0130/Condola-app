@@ -7,7 +7,7 @@ const locales = [
     newOwner: "新屋主",
     byRoom: "分房出租",
     simulate: /模擬/,
-    pay: "登錄繳款",
+    pay: "登記繳租",
     regenerate: "重新產生",
     reset: "已重置範例資料",
   },

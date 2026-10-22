@@ -4,6 +4,7 @@ import { makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { StatementDocument } from "@/components/statement-document";
 import { ownerPrivacy, tenantDisplayNames } from "@/server/auth";
+import { formatMailMonth } from "@/server/mail-copy";
 import { maskTenantNames } from "@/server/privacy";
 import { statementDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -29,7 +30,7 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
       <p>
         <Link href="/o/statements">{t("i_back_list")}</Link>
       </p>
-      <h2>{row.period_start.slice(0, 7)}</h2>
+      <h2>{formatMailMonth(row.period_start)}</h2>
       <p>
         <PdfDownloadButton
           href={`/api/pdf/statements/${id}`}

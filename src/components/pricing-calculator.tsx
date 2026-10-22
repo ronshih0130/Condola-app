@@ -70,8 +70,23 @@ export function PricingCalculator({
           onChange={(event) => setUnits(Math.max(0, Number(event.target.value) || 0))}
         />
       </div>
-      <p data-testid="price-result">{t("i_price_you", { n: units, money: formatNt(quote.monthly) })}</p>
-      {cycle === "year" ? <p data-testid="price-year">{t("i_price_year", { money: formatNt(quote.yearly) })}</p> : null}
+      <p data-testid="price-result">
+        {t("i_price_you", {
+          n: units,
+          money: formatNt(quote.monthly),
+          N: units,
+          "金額": formatNt(quote.monthly).replace(/^NT\$/, ""),
+        })}
+      </p>
+      {cycle === "year" ? (
+        <p data-testid="price-year">
+          {t("i_price_year", {
+            money: formatNt(quote.yearly),
+            N: units,
+            "金額": formatNt(quote.yearly).replace(/^NT\$/, ""),
+          })}
+        </p>
+      ) : null}
       <p className="small muted" data-testid="price-note">{t("i_price_note")}</p>
       {override ? <p className="small" data-testid="price-override">{t("i_price_override", { price: override.rate })}</p> : null}
       {savedCode && !override ? (

@@ -129,7 +129,7 @@ test("房東 is absent outside import-header aliases", () => {
 });
 
 const OWNER_STATEMENT_REASON =
-  "本月代墊費用與代管費（{cost}）高於已繳租金（{rent}），差額請屋主補繳，或依委託約定從下期租金扣抵。";
+  "本月費用高於已登記租金，屋主淨額為 −NT${金額}。費用怎麼處理，請和屋主確認。";
 
 const STATEMENT_COPY_KEYS = [
   "owner_owes",
@@ -198,7 +198,13 @@ test("owner statements say 已繳租金 and not 已收租金", () => {
   assert.deepEqual(hits, []);
   assert.match(read(join(root, "src/components/statement-document.tsx")), /owner_owes_reason/);
   assert.match(read(join(root, "src/app/m/statements/page.tsx")), /owner_owes/);
+  assert.match(read(join(root, "src/app/m/statements/page.tsx")), /formatMailMonth\(row\.period_start\)/);
+  assert.match(read(join(root, "src/app/m/statements/[id]/page.tsx")), /formatMailMonth\(row\.period_start\)/);
+  assert.match(read(join(root, "src/app/m/statements/preview/page.tsx")), /formatMailMonth\(month\)/);
+  assert.match(read(join(root, "src/app/o/statements/page.tsx")), /formatMailMonth\(row\.period_start\)/);
+  assert.match(read(join(root, "src/app/o/statements/[id]/page.tsx")), /formatMailMonth\(row\.period_start\)/);
   assert.match(read(join(root, "src/app/o/statements/[id]/page.tsx")), /StatementDocument/);
+  assert.match(read(join(root, "src/app/m/close/page.tsx")), /formatMailMonth\(closed\.period_month\)/);
 });
 
 test("legacy 房東 import headers stay aliases when the owner importer exists", async () => {

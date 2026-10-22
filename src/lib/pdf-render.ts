@@ -83,6 +83,11 @@ export async function renderPdf(doc: PdfDocument, fontBytes: Uint8Array): Promis
         out += ch;
         continue;
       }
+      // The statement copy uses U+2212. This face has no minus glyph; Helvetica draws ASCII "-".
+      if (ch === "−") {
+        out += "-";
+        continue;
+      }
       if (hasCjk(ch) || canLatin(ch)) {
         out += ch;
         continue;

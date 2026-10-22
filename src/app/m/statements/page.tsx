@@ -6,6 +6,7 @@ import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionAddExpense } from "@/server/auth-actions";
 import { actionStatement } from "@/server/actions";
 import { moneyLabel, ownerSettlement } from "@/server/format";
+import { formatMailMonth } from "@/server/mail-copy";
 import { taipeiToday } from "@/server/money";
 import { can, rolesFor } from "@/server/perms";
 import { listOwners, listProperties, listStatements, statementRoster } from "@/server/queries";
@@ -125,7 +126,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                   <tr key={`${row.owner_id}-${period}`}>
                     <Cell>
                       <b>{row.owner_name}</b>
-                      <div className="small muted">{period}</div>
+                      <div className="small muted">{formatMailMonth(row.period_start)}</div>
                     </Cell>
                     <Cell label={t("i_col_property")}>{row.properties || dash}</Cell>
                     <Cell label={t("i_fee_rule")}>{row.fee_rule || dash}</Cell>

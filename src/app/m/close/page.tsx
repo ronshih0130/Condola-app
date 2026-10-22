@@ -1,6 +1,7 @@
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionCloseMonth } from "@/server/auth-actions";
+import { formatMailMonth } from "@/server/mail-copy";
 import { taipeiToday } from "@/server/money";
 import { getSession } from "@/server/session";
 import { maybe, tx } from "@/server/db";
@@ -26,7 +27,7 @@ export default async function ClosePage({ searchParams }: { searchParams: Promis
       {params.saved === "1" ? <div className="alert ok">{t("i_month_closed")}</div> : null}
       <form className="card pad" action={actionCloseMonth} style={{ maxWidth: 560 }}>
         <p className="small">{t("i_close_hint")}</p>
-        {closed?.period_month ? <p className="small muted">{t("i_last_close", { month: closed.period_month.slice(0, 7) })}</p> : null}
+        {closed?.period_month ? <p className="small muted">{t("i_last_close", { month: formatMailMonth(closed.period_month) })}</p> : null}
         <div className="fg">
           <label className="f">{t("i_month")}</label>
           <input className="inp" type="month" name="month" defaultValue={month} data-testid="close-month" />

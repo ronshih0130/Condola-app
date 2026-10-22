@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { moneyLabel, ownerSettlement } from "@/server/format";
+import { formatMailMonth } from "@/server/mail-copy";
 import { listStatements } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -30,7 +31,7 @@ export default async function OwnerStatementsPage() {
           return (
             <p key={row.id}>
               <Link href={`/o/statements/${row.id}`}>
-                {row.period_start.slice(0, 7)} ·{" "}
+                {formatMailMonth(row.period_start)} ·{" "}
                 {figures.owes > 0 ? (
                   <span className="chip warn" data-testid="owner-owes">
                     {t("owner_owes")} {amount}
