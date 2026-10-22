@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
+import { ReadOnlyNotice } from "@/components/plan-units";
 import { SpaceForm } from "@/components/space-form";
 import { SpaceRepairs } from "@/components/space-repairs";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -33,8 +34,21 @@ export default async function EditWholeUnitPage({
   const propertyName = properties.find((property) => property.id === space.propertyId)?.name ?? "";
   return (
     <>
-      <PageHeader title={t("i_space_edit")} crumb={t("i_units_title")} />
+      <PageHeader
+        title={
+          <span className="readonly-title">
+            {t("i_space_edit")}
+            {editable ? null : (
+              <span className="chip" data-testid="readonly-pill">
+                {t("i_plan_s16_readonly")}
+              </span>
+            )}
+          </span>
+        }
+        crumb={t("i_units_title")}
+      />
       <ErrorBanner t={t} error={query.error} />
+      {editable ? null : <ReadOnlyNotice t={t} kind="unit" />}
       <SpaceForm
         action={actionUpdateSpace}
         spaceId={space.id}

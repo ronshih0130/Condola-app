@@ -6,7 +6,7 @@ import { PayDialog } from "@/components/dialogs";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { PortalInviteButton } from "@/components/portal-invite-button";
-import { LockedEditButton, ReadOnlyAction } from "@/components/plan-units";
+import { LockedEditButton, ReadOnlyAction, ReadOnlyNotice } from "@/components/plan-units";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
 import { showDemoLineCopy } from "@/server/demo";
@@ -57,9 +57,14 @@ export default async function LeasePage({
     <>
       <PageHeader
         title={
-          <>
+          <span className="readonly-title">
             {displaySampleName(lease.tenant)} <span className="small muted">{displaySampleName(lease.place)}</span>
-          </>
+            {leaseEditable ? null : (
+              <span className="chip" data-testid="readonly-pill">
+                {t("i_plan_s16_readonly")}
+              </span>
+            )}
+          </span>
         }
         crumb={<Link href="/m/leases">{t("s_fba85ae")}</Link>}
         actions={
@@ -73,6 +78,7 @@ export default async function LeasePage({
         }
       />
       <ErrorBanner t={t} error={query.error} />
+      {leaseEditable ? null : <ReadOnlyNotice t={t} kind="lease" />}
       {query.created === "1" ? (
         <div className="alert ok" data-testid="lease-created">
           {t("i_lease_created")}

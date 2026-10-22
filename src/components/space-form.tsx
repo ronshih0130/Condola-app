@@ -221,22 +221,17 @@ export function SpaceForm({
           <textarea className="inp" name="notes" data-testid="space-notes" rows={3} defaultValue={initial.notes} />
         </div>
         {locked ? (
-          <span className="locked-edit">
-            <button
-              className="btn pri"
-              type="button"
-              disabled
-              aria-disabled="true"
-              data-testid="save-space"
-              data-i18n-key="i_readonly_edit_pending"
-              title={t("i_readonly_edit_pending")}
-            >
-              {t("i_save")}
-            </button>
-            <span className="small muted" data-testid="readonly-edit-note" data-i18n-key="i_readonly_edit_pending">
-              {t("i_readonly_edit_pending")}
-            </span>
-          </span>
+          <button
+            className="btn pri"
+            type="button"
+            disabled
+            aria-disabled="true"
+            data-testid="save-space"
+            data-i18n-key="i_readonly_edit_pending"
+            title={t("i_readonly_edit_pending")}
+          >
+            {t("i_save")}
+          </button>
         ) : (
           <button className="btn pri" type="submit" data-testid="save-space">
             {t("i_save")}

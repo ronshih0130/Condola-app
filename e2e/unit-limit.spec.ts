@@ -73,15 +73,18 @@ test("grace, the default four, a new pick, and payments on a read-only unit", as
 
   const lockedRow = readOnly.first();
   await expect(lockedRow.getByTestId("edit-locked")).toBeDisabled();
-  await expect(lockedRow.getByTestId("readonly-edit-note")).toHaveAttribute("data-i18n-key", "i_readonly_edit_pending");
-  await expect(lockedRow.getByTestId("readonly-edit-note")).toHaveText("");
+  await expect(lockedRow.getByTestId("edit-locked")).toHaveAttribute("data-i18n-key", "i_readonly_edit_pending");
+  await expect(lockedRow.getByTestId("edit-locked")).toHaveAttribute("title", "唯讀戶不能編輯");
   const lockedId = await lockedRow.getAttribute("data-space-id");
   const kind = await lockedRow.getAttribute("data-kind");
   expect(lockedId).toBeTruthy();
   await page.goto(kind === "room" ? `/m/units/room/${lockedId}` : `/m/units/whole/${lockedId}`);
+  await expect(page.getByTestId("readonly-pill")).toHaveText("唯讀");
+  await expect(page.getByTestId("readonly-u01")).toContainText("但不能編輯物件");
+  await expect(page.getByTestId("readonly-plans")).toHaveText("查看方案");
+  await expect(page.getByTestId("readonly-plans")).toHaveAttribute("href", "/pricing");
   await expect(page.getByTestId("save-space")).toBeDisabled();
-  await expect(page.getByTestId("save-space")).toHaveAttribute("data-i18n-key", "i_readonly_edit_pending");
-  await expect(page.getByTestId("readonly-edit-note")).toHaveText("");
+  await expect(page.getByTestId("save-space")).toHaveAttribute("title", "唯讀戶不能編輯");
 
   await page.goto("/m/units");
   await page.getByTestId("open-unit-keep").click();
@@ -162,9 +165,12 @@ async function openReadOnlyLease(page: Page) {
   const keep = spaces.map((space) => space.id).filter((id) => id !== lease.space_id).slice(0, 4);
   await sql(`UPDATE organizations SET kept_unit_ids = $2::uuid[] WHERE id = $1`, [ORG_ID, keep]);
   await page.goto(`/m/leases/${lease.id}`);
+  await expect(page.getByTestId("readonly-pill")).toHaveText("唯讀");
+  await expect(page.getByTestId("readonly-u02")).toContainText("但不能編輯租約");
+  await expect(page.getByTestId("readonly-plans")).toHaveText("查看方案");
+  await expect(page.getByTestId("readonly-plans")).toHaveAttribute("href", "/pricing");
   await expect(page.getByTestId("edit-locked")).toBeDisabled();
-  await expect(page.getByTestId("edit-locked")).toHaveAttribute("data-i18n-key", "i_readonly_edit_pending");
-  await expect(page.getByTestId("readonly-edit-note").first()).toHaveText("");
+  await expect(page.getByTestId("edit-locked")).toHaveAttribute("title", "唯讀戶不能編輯");
   await page.goto(`/m/leases/${lease.id}?tab=sign`);
   for (const testId of ["simulate-tenant-sign", "upload-signed-pdf", "submit-sign"]) {
     const button = page.getByTestId(testId);

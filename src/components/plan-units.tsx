@@ -66,6 +66,30 @@ export function PlanUnits({ t, view, admin }: { t: T; view: UnitLimitView; admin
   );
 }
 
+function LockIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 018 0v4" />
+    </svg>
+  );
+}
+
+export function ReadOnlyNotice({ t, kind }: { t: T; kind: "unit" | "lease" }) {
+  const key = kind === "unit" ? "i_readonly_unit" : "i_readonly_lease";
+  return (
+    <div className="readonly-banner" data-testid={kind === "unit" ? "readonly-u01" : "readonly-u02"} role="status">
+      <LockIcon />
+      <div>
+        <span data-i18n-key={key}>{t(key)}</span>
+        <Link className="readonly-plans" href="/pricing" data-testid="readonly-plans">
+          {t("i_readonly_plans")}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function ReadOnlyAction({
   testId,
   className,
@@ -80,23 +104,18 @@ export function ReadOnlyAction({
   style?: CSSProperties;
 }) {
   return (
-    <span className="locked-edit">
-      <button
-        className={className}
-        type="button"
-        disabled
-        aria-disabled="true"
-        data-testid={testId}
-        data-i18n-key="i_readonly_edit_pending"
-        title={note}
-        style={style}
-      >
-        {label}
-      </button>
-      <span className="small muted" data-testid="readonly-edit-note" data-i18n-key="i_readonly_edit_pending">
-        {note}
-      </span>
-    </span>
+    <button
+      className={className}
+      type="button"
+      disabled
+      aria-disabled="true"
+      data-testid={testId}
+      data-i18n-key="i_readonly_edit_pending"
+      title={note}
+      style={style}
+    >
+      {label}
+    </button>
   );
 }
 

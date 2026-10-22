@@ -154,8 +154,11 @@ test("plan screens reuse the approved S12, S15, S16, and S17 sentences", () => {
   assert.equal(zh.i_plan_s15_banner, "目前 {n} 戶，超過免費方案的 4 戶。寬限期剩 {left} 天，之後只有你選的 4 戶可以編輯。");
   assert.equal(zh.i_plan_s12_after, "30 天寬限期，之後只有你選的 4 戶可以編輯，其他 {n} 戶唯讀；資料不會刪除");
   assert.equal(zh.i_plan_s12_next, "下期生效");
-  assert.equal(zh.i_readonly_edit_pending, "");
-  assert.equal(en.i_readonly_edit_pending, "");
+  assert.equal(zh.i_readonly_edit_pending, "唯讀戶不能編輯");
+  assert.equal(zh.i_readonly_unit, "這一戶目前唯讀：仍可登記和撤銷付款，但不能編輯物件。想編輯這一戶，請升級方案或改選可編輯的 4 戶。");
+  assert.equal(zh.i_readonly_lease, "這一戶目前唯讀：仍可登記和撤銷付款，但不能編輯租約。想編輯這一戶，請升級方案或改選可編輯的 4 戶。");
+  assert.equal(zh.i_readonly_plans, "查看方案");
+  assert.equal(en.i_readonly_edit_pending, "Read-only units can't be edited.");
   assert.equal(en.i_plan_s16_banner, en.i_price_a2);
   assert.notEqual(en.i_plan_s16_banner, "");
 });

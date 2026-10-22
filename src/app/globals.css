@@ -385,3 +385,7 @@ body:has(.env-banner) .nav-check:checked ~ .app .nav-backdrop{inset:88px 0 0 0}
 .plan-banner .btn{margin:4px 8px 0 0}
 .plan-banner p{margin:0 0 6px}
 .locked-edit{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.readonly-title{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.readonly-banner{display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:var(--cd-warning-bg);border:1px solid var(--cd-accent);color:var(--ink);font-size:14px;line-height:1.7}
+.readonly-banner svg{flex:none;margin-top:2px}
+.readonly-plans{margin-left:6px;font-weight:700;color:var(--pri)}
