@@ -202,9 +202,12 @@ export function PortalInviteButton({
 
   if (phase === "activated") {
     return (
-      <p data-testid="portal-invite" style={{ marginTop: 12 }}>
+      <div data-testid="portal-invite" style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <span data-testid="portal-invite-activated">{t("i_portal_activated")}</span>
-      </p>
+        <button className="btn sm" type="button" data-testid="portal-invite-regenerate" disabled={busy} onClick={regenerate}>
+          {t("i_portal_regenerate")}
+        </button>
+      </div>
     );
   }
 

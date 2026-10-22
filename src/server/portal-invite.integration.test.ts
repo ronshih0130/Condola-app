@@ -588,6 +588,90 @@ test("each owner invite shows only that owner's email and binds only that owner"
   if (stillA.state === "ready" && stillA.kind !== "team_member") assert.equal(stillA.email, emailA);
 });
 
+test("reissuing after activation gives each owner only their own email", async () => {
+  const stamp = Date.now().toString(36);
+  const emailA = `reissue.a.${stamp}@example.com`;
+  const emailB = `reissue.b.${stamp}@example.com`;
+  const inserted = await query<{ id: string; email: string }>(
+    `INSERT INTO contacts (org_id, is_owner, display_name, email, locale)
+     VALUES ($1, true, '重發屋主甲', $2, 'zh-TW'), ($1, true, '重發屋主乙', $3, 'zh-TW')
+     RETURNING id::text, email::text AS email`,
+    [ORG_ID, emailA, emailB],
+  );
+  const ownerA = inserted.rows.find((row) => row.email === emailA);
+  const ownerB = inserted.rows.find((row) => row.email === emailB);
+  assert.ok(ownerA && ownerB);
+  const manager = staff(USERS.manager, "manager");
+  const issuedA = await issuePortalInvite(manager, { kind: "owner", contactId: ownerA.id, pageId: ownerA.id }, "https://staging.condola.app");
+  const issuedB = await issuePortalInvite(manager, { kind: "owner", contactId: ownerB.id, pageId: ownerB.id }, "https://staging.condola.app");
+  assert.equal(issuedA.activated, false);
+  assert.equal(issuedB.activated, false);
+  if (issuedA.activated || issuedB.activated) return;
+  assert.equal((await acceptInvite(issuedA.token, "", "Owner1234", "", meta)).ok, true);
+  assert.equal((await acceptInvite(issuedB.token, "", "Owner1234", "", meta)).ok, true);
+  const idle = await issuePortalInvite(manager, { kind: "owner", contactId: ownerA.id, pageId: ownerA.id }, "https://staging.condola.app");
+  assert.equal(idle.activated, true);
+  await assert.rejects(
+    () => issuePortalInvite(manager, { kind: "owner", contactId: ownerA.id, pageId: ownerB.id, rotate: true }, "https://staging.condola.app"),
+    (error: unknown) => error instanceof FlowError && error.key === "errors.portalMismatch",
+  );
+  const reA = await issuePortalInvite(manager, { kind: "owner", contactId: ownerA.id, pageId: ownerA.id, rotate: true }, "https://staging.condola.app");
+  const reB = await issuePortalInvite(manager, { kind: "owner", contactId: ownerB.id, pageId: ownerB.id, rotate: true }, "https://staging.condola.app");
+  assert.equal(reA.activated, false);
+  assert.equal(reB.activated, false);
+  if (reA.activated || reB.activated) return;
+  assert.notEqual(reA.token, issuedA.token);
+  assert.notEqual(reB.token, issuedB.token);
+  assert.notEqual(reA.url, reB.url);
+  assert.equal(reA.email, emailA);
+  assert.equal(reB.email, emailB);
+  assert.equal(reA.contactId, ownerA.id);
+  assert.equal(reB.contactId, ownerB.id);
+  const viewA = await describeInvite(reA.token, meta);
+  const viewB = await describeInvite(reB.token, meta);
+  assert.equal(viewA.state, "ready");
+  assert.equal(viewB.state, "ready");
+  if (viewA.state !== "ready" || viewA.kind === "team_member" || viewB.state !== "ready" || viewB.kind === "team_member") return;
+  assert.equal(viewA.email, emailA);
+  assert.equal(viewB.email, emailB);
+  assert.equal(JSON.stringify(viewA).includes(emailB), false);
+  assert.equal(JSON.stringify(viewB).includes(emailA), false);
+  assert.equal((await describeInvite(issuedA.token, meta)).state, "used");
+  assert.equal((await describeInvite(issuedB.token, meta)).state, "used");
+  const before = await query<{ encrypted_password: string }>(
+    `SELECT encrypted_password FROM auth.users WHERE lower(email) = lower($1)`,
+    [emailA],
+  );
+  const wrong = await acceptInvite(reA.token, "", "Wrong1234", "", meta);
+  assert.deepEqual(wrong, { ok: false, error: "auth", kind: "owner" });
+  const after = await query<{ encrypted_password: string }>(
+    `SELECT encrypted_password FROM auth.users WHERE lower(email) = lower($1)`,
+    [emailA],
+  );
+  assert.equal(after.rows[0].encrypted_password, before.rows[0].encrypted_password);
+  const stillB = await describeInvite(reB.token, meta);
+  assert.equal(stillB.state, "ready");
+  if (stillB.state === "ready" && stillB.kind !== "team_member") assert.equal(stillB.email, emailB);
+  const audits = await query<{ body: string }>(
+    `SELECT new_row::text AS body FROM audit_log
+      WHERE org_id = $1 AND event_type = 'portal_invite_reissue' AND new_row->>'contactId' = ANY($2::text[])`,
+    [ORG_ID, [ownerA.id, ownerB.id]],
+  );
+  assert.equal(audits.rows.length, 2);
+  for (const row of audits.rows) {
+    assert.equal(row.body.includes(reA.token), false);
+    assert.equal(row.body.includes(reB.token), false);
+    assert.equal(row.body.includes(reA.url), false);
+    assert.equal(row.body.includes(reB.url), false);
+  }
+  const stored = await query<{ contact_id: string; email: string }>(
+    `SELECT contact_id::text, email::text AS email FROM invitations WHERE code_hash = ANY($1::text[])`,
+    [[hashInviteToken(reA.token), hashInviteToken(reB.token)]],
+  );
+  assert.equal(stored.rows.find((row) => row.contact_id === ownerA.id)?.email, emailA);
+  assert.equal(stored.rows.find((row) => row.contact_id === ownerB.id)?.email, emailB);
+});
+
 test("a tenant password adds the owner role without taking the tenant contact", async () => {
   const email = "yawen.zhang@tenant.demo";
   const before = await query<{ id: string; user_id: string; encrypted_password: string }>(

@@ -62,6 +62,17 @@ export function portalShownEmail(loginEmail: string | null, contactEmail: string
   return "";
 }
 
+/**
+ * Address stored on this contact's invitation, and the address that link may show.
+ * A shared login never replaces this contact's own address.
+ */
+export function portalInviteEmails(contactEmail: string | null, loginEmail: string | null) {
+  const contact = inviteStoredEmail(contactEmail);
+  const login = loginEmail && !mintedLoginEmail(loginEmail) ? loginEmail.trim() : null;
+  const stored = contact ?? login;
+  return { stored, shown: portalShownEmail(stored, contact) };
+}
+
 /** Contact email to provision. Null means there is no real address, so mint one. */
 export function inviteStoredEmail(contactEmail: string | null) {
   const stored = (contactEmail ?? "").trim().toLowerCase();
@@ -346,9 +357,7 @@ export async function issuePortalInvite(
           if (!party) throw new FlowError("errors.portalMismatch");
         }
         const login = contact.user_id ? await readLogin(client, contact.user_id) : null;
-        const contactEmail = inviteStoredEmail(contact.email);
-        const loginEmail = login?.email && !mintedLoginEmail(login.email) ? login.email : null;
-        const shown = portalShownEmail(contactEmail, loginEmail);
+        const emails = portalInviteEmails(contact.email, login?.email ?? null);
         const pending = await maybe<{ id: string; email: string | null; kind: string; lease_id: string | null }>(
           client,
           `SELECT id::text, email::text AS email, kind::text, lease_id::text AS lease_id
@@ -358,9 +367,10 @@ export async function issuePortalInvite(
             FOR UPDATE`,
           [session.orgId, contact.id],
         );
-        // A ready login with no live invite has already accepted. A pending invite,
+        // A ready login with no live invite has already accepted. Copying stops there.
+        // Regenerating still issues a new link for this contact only. A pending invite,
         // including one stored before the secret table existed, can still be copied.
-        if (login?.ready && !pending) return { activated: true as const, contactId: contact.id };
+        if (login?.ready && !pending && !input.rotate) return { activated: true as const, contactId: contact.id };
         if (!input.rotate && pending) {
           const sameLease = input.kind === "owner" || sameId(pending.lease_id || "", input.leaseId || "");
           if (pending.kind !== input.kind || !sameLease) throw new FlowError("errors.portalRenew");
@@ -377,7 +387,7 @@ export async function issuePortalInvite(
             };
           }
         }
-        await withServiceRole(
+        const revoked = await withServiceRole(
           client,
           () =>
             client.query(
@@ -401,7 +411,7 @@ export async function issuePortalInvite(
             input.kind,
             contact.id,
             input.kind === "tenant" ? input.leaseId : null,
-            contactEmail ?? loginEmail,
+            emails.stored,
             contact.phone_e164,
             hashInviteToken(token),
             PORTAL_INVITE_DAYS,
@@ -412,8 +422,9 @@ export async function issuePortalInvite(
         return {
           activated: false as const,
           reused: false as const,
+          reissue: Boolean(login?.ready) || (revoked.rowCount ?? 0) > 0,
           token,
-          email: shown,
+          email: emails.shown,
           name: contact.display_name,
           invitationId: row.id,
           contactId: contact.id,
@@ -428,7 +439,8 @@ export async function issuePortalInvite(
   );
   if (issued.activated) return { activated: true as const, contactId: issued.contactId };
   if (!issued.reused) {
-    await writeAudit(session.orgId, session.userId, "portal_invite", {
+    // The raw token stays out of the audit row. Only the invitation id is recorded.
+    await writeAudit(session.orgId, session.userId, issued.reissue ? "portal_invite_reissue" : "portal_invite", {
       kind: input.kind,
       contactId: issued.contactId,
       invitationId: issued.invitationId,

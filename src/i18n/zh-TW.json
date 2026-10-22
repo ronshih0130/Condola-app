@@ -1833,6 +1833,7 @@
  "i_portal_forgot": "忘記密碼？",
  "i_portal_working": "處理中…",
  "i_audit_ev_portal_invite": "產生邀請連結",
+ "i_audit_ev_portal_invite_reissue": "重新產生邀請連結",
  "i_audit_ev_portal_invite_accept": "使用邀請連結",
  "i_country": "國家／地區",
  "i_country_tw": "台灣",

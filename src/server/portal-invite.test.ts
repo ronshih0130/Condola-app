@@ -17,6 +17,7 @@ import {
   mintedLoginEmail,
   newInviteToken,
   portalInviteDisplayEmail,
+  portalInviteEmails,
   portalInviteOrigin,
   portalInviteUrl,
   portalShownEmail,
@@ -158,6 +159,26 @@ test("portal tokens are at least 32 bytes and minted logins stay recognizable", 
   assert.equal(portalShownEmail("portal-11111111-1111-4111-8111-111111111111@demo.condola.local", null), "");
 });
 
+test("reissuing for two owners shows only that owner's email", () => {
+  const sharedLogin = "shared.login@example.com";
+  const ownerA = portalInviteEmails("owner.a@example.com", sharedLogin);
+  const ownerB = portalInviteEmails("owner.b@example.com", sharedLogin);
+  assert.equal(ownerA.stored, "owner.a@example.com");
+  assert.equal(ownerB.stored, "owner.b@example.com");
+  assert.equal(portalShownEmail(ownerA.stored, "owner.a@example.com"), "owner.a@example.com");
+  assert.equal(portalShownEmail(ownerB.stored, "owner.b@example.com"), "owner.b@example.com");
+  assert.equal(portalShownEmail(ownerA.stored, "owner.a@example.com").includes(ownerB.stored ?? ""), false);
+  assert.equal(portalShownEmail(ownerB.stored, "owner.b@example.com").includes(ownerA.stored ?? ""), false);
+  const minted = "portal-11111111-1111-4111-8111-111111111111@demo.condola.local";
+  const fromMinted = portalInviteEmails("owner.a@example.com", minted);
+  assert.equal(fromMinted.stored, "owner.a@example.com");
+  assert.equal(fromMinted.shown, "owner.a@example.com");
+  const loginOnly = portalInviteEmails(null, "owner.b@example.com");
+  assert.equal(loginOnly.stored, "owner.b@example.com");
+  assert.equal(loginOnly.shown, "owner.b@example.com");
+  assert.notEqual(fromMinted.shown, loginOnly.shown);
+});
+
 test("portal invite copy hands the link over and stays on the locked wording", () => {
   const keys = [
     "i_portal_copy",
@@ -190,6 +211,7 @@ test("portal invite copy hands the link over and stays on the locked wording", (
     "i_portal_password_help",
     "i_portal_forgot",
     "i_portal_working",
+    "i_audit_ev_portal_invite_reissue",
     "i_switch_role_tenant",
     "i_switch_role_owner",
   ];
@@ -224,6 +246,7 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(zh.i_portal_password_help, "第一次使用請設定新密碼；已經有 Condola 帳號，請輸入原本的密碼。");
   assert.equal(zh.i_portal_password_help.includes("忘記密碼請聯絡管理公司"), false);
   assert.equal(zh.i_portal_forgot, "忘記密碼？");
+  assert.equal(zh.i_audit_ev_portal_invite_reissue, "重新產生邀請連結");
   assert.equal(zh.i_portal_working, "處理中…");
   assert.equal(zh.i_portal_choose_email.includes("demo.condola.local"), false);
   assert.equal(zh.i_portal_choose_email.includes("portal-"), false);
@@ -234,6 +257,11 @@ test("portal invite copy hands the link over and stays on the locked wording", (
     assert.equal(zh[key].includes("LINE"), false, key);
     assert.equal(zh[key].includes("即將推出"), false, key);
     assert.equal(zh[key].includes("寄"), false, key);
+    assert.equal(zh[key].includes("收款"), false, key);
+    assert.equal(zh[key].includes("收租"), false, key);
+    assert.equal(zh[key].includes("入帳"), false, key);
+    assert.equal(zh[key].includes("已收"), false, key);
+    assert.equal(zh[key].includes("測試模式"), false, key);
   }
   const page = readFileSync(new URL("../app/accept/[token]/page.tsx", import.meta.url), "utf8");
   const portal = page.slice(page.indexOf('invite.kind === "owner"'), page.indexOf('invite.kind === "team_member"'));
@@ -271,6 +299,11 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.match(button, /PORTAL_COPY_HOLD_MS/);
   assert.match(button, /portal-invite-error-dismiss/);
   assert.match(button, /portal-invite-manual-copy/);
+  const activatedAt = button.indexOf('phase === "activated"');
+  const activatedBlock = button.slice(activatedAt, button.indexOf("return (", button.indexOf("return (", activatedAt) + 1));
+  assert.match(activatedBlock, /portal-invite-activated/);
+  assert.match(activatedBlock, /portal-invite-regenerate/);
+  assert.match(activatedBlock, /onClick=\{regenerate\}/);
   assert.equal(button.includes("也可以長按連結自己複製"), false);
   assert.ok(button.indexOf("const copyPromise = startPortalCopy") < button.indexOf("await actionIssuePortalInvite"));
   assert.equal(button.includes("catch {\n        // The link stays"), false);
@@ -319,6 +352,15 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(issueBody.includes("purgePortalInviteSecrets"), false);
   assert.match(issueBody, /lock_timeout = '1s'/);
   assert.match(issueBody, /statement_timeout = '2s'/);
+  assert.match(issueBody, /if \(login\?\.ready && !pending && !input\.rotate\)/);
+  assert.match(issueBody, /portalInviteEmails\(contact\.email, login\?\.email \?\? null\)/);
+  assert.match(issueBody, /emails\.stored/);
+  assert.match(issueBody, /portal_invite_reissue/);
+  assert.equal(issueBody.includes("console."), false);
+  const auditAt = issueBody.lastIndexOf("writeAudit");
+  const auditCall = issueBody.slice(auditAt, issueBody.indexOf("});", auditAt));
+  assert.equal(/\btoken\b/.test(auditCall), false);
+  assert.equal(auditCall.includes("url"), false);
   assert.equal(issuer.includes('if (!token) throw new FlowError("errors.portalRenew")'), false);
   assert.match(owners, /invitePending/);
   assert.match(owners, /ready && !owner\.invitePending/);
@@ -343,6 +385,8 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   const auth = readFileSync(new URL("./auth.ts", import.meta.url), "utf8");
   assert.match(auth, /purgePortalInviteSecrets/);
   assert.match(auth, /deletePortalInviteSecret/);
+  assert.match(auth, /LEFT JOIN contacts c ON c\.id = i\.contact_id AND c\.org_id = i\.org_id/);
+  assert.match(auth, /portalShownEmail\(invite\.email, invite\.contact_email\)/);
   const ownerId = "10000000-0000-4000-8000-0000000000aa";
   assert.deepEqual(portalPageTarget(`/m/owners/${ownerId}`), { kind: "owner", pageId: ownerId });
   assert.deepEqual(portalPageTarget(`/m/owners/${ownerId}?x=1`), { kind: "owner", pageId: ownerId });

@@ -1833,6 +1833,7 @@
  "i_portal_forgot": "Forgot password?",
  "i_portal_working": "Working…",
  "i_audit_ev_portal_invite": "Create invite link",
+ "i_audit_ev_portal_invite_reissue": "Create a new invite link",
  "i_audit_ev_portal_invite_accept": "Use invite link",
  "i_country": "Country / region",
  "i_country_tw": "Taiwan",
