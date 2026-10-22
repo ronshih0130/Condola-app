@@ -24,20 +24,21 @@ import {
   utilityLineDescription,
 } from "./utility-post";
 
-test("a pending lease notes that rent is billed after both signatures, and a signed lease hides it", () => {
-  assert.equal(unsignedRentNoteKey("pending_signature"), "i_pay_unsigned_bill");
+test("an empty pending bill list is replaced by the unsigned note, and a signed lease keeps the list", () => {
+  assert.equal(unsignedRentNoteKey("pending_signature", true), "i_pay_unsigned_bill");
+  assert.equal(unsignedRentNoteKey("pending_signature", false), null);
   for (const status of ["active", "ended", "draft", "terminated", "cancelled"]) {
-    assert.equal(unsignedRentNoteKey(status), null, status);
+    assert.equal(unsignedRentNoteKey(status, true), null, status);
+    assert.equal(unsignedRentNoteKey(status, false), null, status);
   }
   const page = readFileSync(new URL("../app/t/pay/page.tsx", import.meta.url), "utf8");
-  const noteAt = page.indexOf("unsignedRentNoteKey(money.lease.status)");
-  const billAt = page.indexOf('data-testid="tenant-bill"');
-  assert.ok(noteAt > 0 && noteAt < billAt);
-  assert.match(page, /noteKey \? \([\s\S]*data-testid="unsigned-rent-note"[\s\S]*t\(noteKey\)[\s\S]*\) : null/);
+  assert.match(page, /unsignedRentNoteKey\(money\.lease\.status, billEmpty\)/);
+  assert.match(page, /rentLines\.length === 0 && money\.utilityLines\.length === 0/);
+  assert.match(page, /noteKey \? \([\s\S]*data-testid="unsigned-rent-note"[\s\S]*\) : \([\s\S]*data-testid="tenant-bill"/);
   const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
   const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
-  assert.equal(zh.i_pay_unsigned_bill, "租約還沒完成簽署，帳單會在雙方簽署後產生。");
-  assert.equal(en.i_pay_unsigned_bill, "The lease is not fully signed yet. Bills are created after both parties sign.");
+  assert.equal(zh.i_pay_unsigned_bill, "租約還沒完成簽署，租金和電費帳單會在雙方簽署後產生。");
+  assert.equal(en.i_pay_unsigned_bill, "The lease is not fully signed yet. Rent and electricity bills are created after both parties sign.");
   const posting = readFileSync(new URL("./utility-posting.ts", import.meta.url), "utf8");
   assert.equal(posting.includes("pending_signature"), false);
   assert.match(posting, /AND l\.status = 'active'/);
