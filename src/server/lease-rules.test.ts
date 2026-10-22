@@ -59,7 +59,7 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(wizard, /overlappingLease\(room\?\.leases, start, termEnd\)/);
   assert.match(wizard, /data-testid="lease-error"/);
   assert.match(wizard, /role="alert"/);
-  assert.match(actions, /redirect\(`\/m\/leases\/\$\{created\.leaseId\}\?created=1/);
+  assert.match(actions, /leaseHref: `\/m\/leases\/\$\{created\.leaseId\}\?created=1/);
   assert.match(actions, /notice\.set\("utility", "kept"\)/);
   assert.match(actions, /notice\.set\("bill", "kept"\)/);
   const leasePage = readFileSync(new URL("../app/m/leases/[id]/page.tsx", import.meta.url), "utf8");
@@ -69,12 +69,16 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(domain, /ON CONFLICT \(meter_id, period_start, period_end\) WHERE status <> 'void' DO NOTHING/);
   assert.match(domain, /utilityKept = true/);
   assert.match(domain, /billKept = Number\(existingBill\.amount\) !== billMinor/);
-  assert.doesNotMatch(wizard, /router\.push/);
+  assert.match(wizard, /router\.push\(state\.leaseHref!\)/);
+  assert.match(wizard, /2_000/);
+  assert.match(wizard, /i_lease_creating/);
+  assert.match(wizard, /i_lease_created_sent/);
+  assert.match(wizard, /data-testid="lease-created-toast"/);
   assert.match(wizard, /i_lease_slow/);
   assert.match(wizard, /setTimeout\(\(\) => setSlowSubmit\(true\), 8000\)/);
   assert.match(wizard, /href="\/m\/leases"/);
   assert.match(wizard, /confirmSpaceFromSnapshot/);
-  assert.match(wizard, /disabled=\{blocked \|\| pending \|\| !submitReady\}/);
+  assert.match(wizard, /disabled=\{blocked \|\| creating \|\| !submitReady\}/);
   assert.match(wizard, /key="wizard-next"/);
   assert.match(wizard, /key="submit-lease"/);
   assert.match(wizard, /type="button"/);
@@ -88,6 +92,12 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(edit, /depositReasonEditorOpen/);
   assert.match(domain, /idempotency_key/);
   assert.match(domain, /leases_org_idempotency_key_uidx/);
+  assert.match(actions, /redirect\(`\/m\/leases\/\$\{leaseId\}\?saved=rent`\)/);
+  assert.match(page, /query\.saved === "rent"/);
+  assert.match(page, /data-testid="rent-updated"/);
+  assert.match(page, /i_rent_updated/);
+  assert.match(edit, /disabled=\{blocked \|\| pending\}/);
+  assert.match(edit, /pending \? t\("i_portal_working"\)/);
   assert.match(page, /data-testid="summary-deposit"/);
   assert.match(page, /data-testid="deposit-override-reason"/);
   assert.match(page, /key=\{lease\.updated_at\}/);
@@ -129,9 +139,15 @@ test("the lease idempotency migration is additive and later than shared staging 
   assert.deepEqual(ours, ["20261027130000_lease_idempotency_key.sql"]);
   const stamp = ours[0].slice(0, 14);
   assert.ok(stamp > "20261023180000");
-  const latestOther = names.filter((name) => name !== ours[0]).map((name) => name.slice(0, 14)).sort().at(-1);
-  assert.ok(latestOther);
-  assert.ok(stamp > latestOther);
+  assert.ok(stamp > "20261026120000");
+  const later = names.filter((name) => name.slice(0, 14) > stamp);
+  assert.deepEqual(later, [
+    "20261028130000_utility_charge_posting.sql",
+    "20261028140000_utility_runs_unit_id_default.sql",
+    "20261028150000_utility_vacant_expense.sql",
+    "20261028160000_utility_run_draft_reuse.sql",
+    "20261028180000_utility_owner_lines.sql",
+  ]);
   const sql = readFileSync(new URL(ours[0], dir), "utf8");
   assert.match(sql, /Version 20261027130000/);
   assert.doesNotMatch(sql, /Version 20261027120000/);

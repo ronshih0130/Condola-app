@@ -1,7 +1,8 @@
 -- Post a confirmed electricity allocation onto the tenant bill.
 -- Constraints are added NOT VALID, backfilled, then validated so a database that
 -- already has void runs or older electricity methods can migrate.
--- Ordered after 20261026120000_email_log.sql. Additive and safe to re-apply.
+-- Version 20261028130000. After 20261027130000_lease_idempotency_key.sql and
+-- after 20261026130000_bulk_import.sql. Additive and safe to re-apply.
 
 ALTER TABLE units DROP CONSTRAINT IF EXISTS units_electricity_method_chk;
 ALTER TABLE units ADD CONSTRAINT units_electricity_method_chk

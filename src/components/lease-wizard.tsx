@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { errorText } from "@/i18n/errors";
 import { confirmDeposit, confirmSpace, confirmSpaceFromSnapshot, depositMonthsOnHalfStep, formatMajor, nextSpaceSnapshot, twdRentIsWhole } from "@/lease-confirm";
 import { actionCreateLease, type ActionState } from "@/server/actions";
@@ -40,6 +41,7 @@ export function LeaseWizard({
 }) {
   const t = useT();
   const locale = useLocale();
+  const router = useRouter();
   const submitGuard = useRef(false);
   const idempotencyKey = useRef("");
   const [state, formAction, pending] = useActionState(
@@ -102,6 +104,7 @@ export function LeaseWizard({
   const termEnd = leaseTermEnd(start, months);
   const overlap = overlappingLease(room?.leases, start, termEnd);
   const blocked = depositBlocked || (Boolean(overlap) && step >= 3);
+  const creating = pending || Boolean(state.leaseHref);
 
   useEffect(() => {
     if (!pending && state.error) {
@@ -129,6 +132,15 @@ export function LeaseWizard({
       if (slowTimer.current) window.clearTimeout(slowTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!state.leaseHref || pending) return;
+    if (slowTimer.current) window.clearTimeout(slowTimer.current);
+    slowTimer.current = null;
+    setSlowSubmit(false);
+    const timer = window.setTimeout(() => router.push(state.leaseHref!), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [pending, router, state.leaseHref]);
 
   function chooseRoom(id: string) {
     setRoomId(id);
@@ -579,7 +591,7 @@ export function LeaseWizard({
       </div>
       <div className="row" style={{ marginTop: 16, maxWidth: 760 }}>
         {step > 1 ? (
-          <button className="btn" type="button" onClick={goBack}>
+          <button className="btn" type="button" onClick={goBack} disabled={pending || Boolean(state.leaseHref)}>
             ← {t("s_5bf6faa")}
           </button>
         ) : null}
@@ -591,13 +603,18 @@ export function LeaseWizard({
           </button>
         ) : (
           <div>
+            {state.leaseHref ? (
+              <div className="alert ok" data-testid="lease-created-toast" role="status" style={{ marginBottom: 12 }}>
+                {t("i_lease_created_sent")}
+              </div>
+            ) : null}
             {state.error === "errors.leaseNetwork" ? (
               <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
                 {t("i_lease_network")}
               </div>
             ) : null}
-            <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady} aria-busy={pending ? true : undefined}>
-              {t("s_79b6c1d")}
+            <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || creating || !submitReady} aria-busy={creating ? true : undefined}>
+              {creating ? t("i_lease_creating") : t("s_79b6c1d")}
             </button>
           </div>
         )}

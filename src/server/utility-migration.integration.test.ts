@@ -32,15 +32,18 @@ test("the electricity migration applies twice, including inside one transaction"
   try {
     await psql(database, ["-f", "supabase/stub/supabase_stub.sql"]);
     const files = (await readdir(path.join(root, "supabase/migrations"))).filter((name) => name.endsWith(".sql")).sort();
-    assert.equal(files.includes("20261026130000_utility_charge_posting.sql"), true);
-    assert.ok(files.indexOf("20261026130000_utility_charge_posting.sql") > files.indexOf("20261026120000_email_log.sql"));
+    assert.equal(files.includes("20261028130000_utility_charge_posting.sql"), true);
+    const utilityAt = files.indexOf("20261028130000_utility_charge_posting.sql");
+    assert.ok(utilityAt > files.indexOf("20261026120000_email_log.sql"));
+    assert.ok(utilityAt > files.indexOf("20261027130000_lease_idempotency_key.sql"));
+    assert.ok("20261028130000" > "20261026130000");
     for (const file of files) {
       await psql(database, ["-f", path.join("supabase/migrations", file)]);
     }
-    const utility = "supabase/migrations/20261026130000_utility_charge_posting.sql";
-    const fill = "supabase/migrations/20261026140000_utility_runs_unit_id_default.sql";
-    assert.equal(files[files.indexOf("20261026130000_utility_charge_posting.sql") + 1], "20261026140000_utility_runs_unit_id_default.sql");
-    assert.ok(files.indexOf("20261026160000_utility_run_draft_reuse.sql") > files.indexOf("20261026150000_utility_vacant_expense.sql"));
+    const utility = "supabase/migrations/20261028130000_utility_charge_posting.sql";
+    const fill = "supabase/migrations/20261028140000_utility_runs_unit_id_default.sql";
+    assert.equal(files[files.indexOf("20261028130000_utility_charge_posting.sql") + 1], "20261028140000_utility_runs_unit_id_default.sql");
+    assert.ok(files.indexOf("20261028160000_utility_run_draft_reuse.sql") > files.indexOf("20261028150000_utility_vacant_expense.sql"));
     await psql(database, ["-f", utility]);
     await psql(database, ["--single-transaction", "-f", utility]);
     // Staging already has the shim trigger. Re-applying this file must replace it
@@ -103,7 +106,7 @@ test("the electricity migration applies twice, including inside one transaction"
       { cwd: root },
     );
     assert.equal(triggers.stdout.trim(), "trg_a_fill_unit_id\ntrg_allocation_rate_cap\ntrg_b_reuse_open_period");
-    const reuse = "supabase/migrations/20261026160000_utility_run_draft_reuse.sql";
+    const reuse = "supabase/migrations/20261028160000_utility_run_draft_reuse.sql";
     await psql(database, ["-f", reuse]);
     await psql(database, ["--single-transaction", "-f", reuse]);
     const indexDef = await exec(

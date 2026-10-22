@@ -1,7 +1,7 @@
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner } from "@/components/ui";
-import { moneyLabel as formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { selectedLease } from "@/lib/tenant-lease";
@@ -23,12 +23,17 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
       <p>
         {displaySampleName(money.lease.place)}
       </p>
-      {money.utilityLines.map((line, index) => (
-        <p key={`${line.description}-${index}`} data-testid="tenant-utility-line">
-          {line.description} {formatMoney(Number(line.amount), money.currency, session.locale)}
+      {money.rentLines.map((line, index) => (
+        <p key={`rent-${line.amount}-${index}`} data-testid="tenant-rent-line">
+          {t("i_charge_rent")} {moneyLabel(Number(line.amount), money.currency, session.locale)}
         </p>
       ))}
-      <p className="b" data-testid="tenant-bill">{formatMoney(money.dueMinor, money.currency, session.locale)}</p>
+      {money.utilityLines.map((line, index) => (
+        <p key={`${line.description}-${index}`} data-testid="tenant-utility-line">
+          {line.description} {moneyLabel(Number(line.amount), money.currency, session.locale)}
+        </p>
+      ))}
+      <p className="b" data-testid="tenant-bill">{moneyLabel(money.dueMinor, money.currency, session.locale)}</p>
       <p className="small">{t("i_account_last5", { last5: "88921" })}</p>
       {money.dueMinor > 0 ? (
         <PayDialog leaseId={lease.lease_id} dueMinor={money.dueMinor} currency={money.currency} label={t("i_report_pay")} returnTo="tenant" />

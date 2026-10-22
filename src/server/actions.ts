@@ -37,7 +37,14 @@ import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
 
-export type ActionState = { error: string; field?: string; step?: number; vars?: Record<string, string>; propertyId?: string };
+export type ActionState = {
+  error: string;
+  field?: string;
+  step?: number;
+  vars?: Record<string, string>;
+  propertyId?: string;
+  leaseHref?: string;
+};
 
 const EMPTY_ACTION: ActionState = { error: "" };
 
@@ -218,7 +225,7 @@ export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formDa
     const extra = notice.toString();
     revalidatePath("/m/leases");
     revalidatePath(`/m/leases/${created.leaseId}`);
-    redirect(`/m/leases/${created.leaseId}?created=1${extra ? `&${extra}` : ""}`);
+    return { error: "", leaseHref: `/m/leases/${created.leaseId}?created=1${extra ? `&${extra}` : ""}` };
   } catch (error) {
     return actionError(error, "errors.leaseFailed");
   }
@@ -237,7 +244,7 @@ export async function actionUpdateLease(prev: ActionState = EMPTY_ACTION, formDa
       updatedAt: text(formData.get("updatedAt")),
     });
     revalidatePath(`/m/leases/${leaseId}`);
-    redirect(`/m/leases/${leaseId}`);
+    redirect(`/m/leases/${leaseId}?saved=rent`);
   } catch (error) {
     return actionError(error, "errors.leaseFailed");
   }

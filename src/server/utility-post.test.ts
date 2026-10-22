@@ -23,6 +23,17 @@ import {
   utilityLineDescription,
 } from "./utility-post";
 
+test("tenant pay lists invoiced rent and electricity in NT$", () => {
+  const page = readFileSync(new URL("../app/t/pay/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /data-testid="tenant-rent-line"/);
+  assert.match(page, /data-testid="tenant-utility-line"/);
+  assert.match(page, /moneyLabel\(/);
+  assert.doesNotMatch(page, /formatMoney\(/);
+  const queries = readFileSync(new URL("./queries.ts", import.meta.url), "utf8");
+  assert.match(queries, /charge_type === "rent"/);
+  assert.match(queries, /pending_signature/);
+});
+
 test("electricity registration copy uses 登記 and does not say 入帳", () => {
   const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
   assert.equal(zh.i_utility_open, "電費登記");
@@ -198,7 +209,7 @@ test("turnover splits one reading by occupancy days", () => {
 });
 
 test("the electricity migration fails closed on posted duplicates and unknown methods", () => {
-  const sql = readFileSync(new URL("../../supabase/migrations/20261026130000_utility_charge_posting.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20261028130000_utility_charge_posting.sql", import.meta.url), "utf8");
   assert.equal(sql.includes("SET electricity_method = NULL"), false);
   assert.match(sql, /cannot merge allocation runs: a meter period has more than one approved or posted run/);
   assert.match(sql, /cannot merge meters: an approved or posted allocation run would have to be voided/);
@@ -237,7 +248,7 @@ test("the electricity migration fails closed on posted duplicates and unknown me
 
 test("a missing allocation unit is filled from the meter before the rate-cap trigger", () => {
   const sql = readFileSync(
-    new URL("../../supabase/migrations/20261026140000_utility_runs_unit_id_default.sql", import.meta.url),
+    new URL("../../supabase/migrations/20261028140000_utility_runs_unit_id_default.sql", import.meta.url),
     "utf8",
   );
   assert.match(sql, /CREATE OR REPLACE FUNCTION public\.utility_runs_fill_unit_id\(\)/);
@@ -256,7 +267,7 @@ test("a missing allocation unit is filled from the meter before the rate-cap tri
 
 test("an older draft insert reuses the open period without relaxing the unique index", () => {
   const sql = readFileSync(
-    new URL("../../supabase/migrations/20261026160000_utility_run_draft_reuse.sql", import.meta.url),
+    new URL("../../supabase/migrations/20261028160000_utility_run_draft_reuse.sql", import.meta.url),
     "utf8",
   );
   assert.match(sql, /CREATE OR REPLACE FUNCTION public\.utility_runs_reuse_open_period\(\)/);

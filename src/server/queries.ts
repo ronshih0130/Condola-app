@@ -1368,10 +1368,17 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
       return sum + rentUtilityDueMinor(invoiceLines, Number(invoice.paid));
     }, 0);
     const balance = invoices.reduce((sum, invoice) => sum + Number(invoice.balance), 0);
-    const utilityLines = lines
-      .filter((line) => line.charge_type === "utility" && line.description.startsWith("電費"))
+    // Rent is invoiced on the move-in bill after both parties sign, then on recurring bills.
+    // Electricity can be posted earlier, while the lease is still pending_signature, onto its
+    // own utility invoice. A pending lease therefore has an electricity row and no rent row
+    // until that move-in bill exists. Deposit is omitted here; it is not part of dueMinor.
+    const rentLines = lines
+      .filter((line) => line.charge_type === "rent" && Number(line.amount) > 0)
       .map((line) => ({ description: line.description, amount: line.amount }));
-    return { lease, dueMinor, balance, currency: lease.currency, utilityLines };
+    const utilityLines = lines
+      .filter((line) => line.charge_type === "utility" && line.description.startsWith("電費") && Number(line.amount) > 0)
+      .map((line) => ({ description: line.description, amount: line.amount }));
+    return { lease, dueMinor, balance, currency: lease.currency, rentLines, utilityLines };
   });
 }
 
