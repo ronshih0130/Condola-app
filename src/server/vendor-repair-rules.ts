@@ -111,6 +111,19 @@ export function lastCooperationParts(iso: string | null | undefined) {
   return { year: match[1], month: String(month) };
 }
 
+/**
+ * Dropdown label. A vendor with no repair date omits 上次合作 entirely.
+ * `trade` is the already translated category.
+ */
+export function vendorMenuLabel(input: { name: string; trade: string; lastOn: string | null | undefined }) {
+  const last = lastCooperationParts(input.lastOn);
+  if (input.trade && last) {
+    return { key: "i_vendor_option_past" as const, name: input.name, trade: input.trade, year: last.year, month: last.month };
+  }
+  if (input.trade) return { key: "i_vendor_option" as const, name: input.name, trade: input.trade };
+  return { key: null, name: input.name };
+}
+
 /** Keep the schedule check happy when the visit date is still in the future. */
 export function vendorCompletedOn(scheduled: string | null, today: string) {
   if (scheduled && scheduled > today) return scheduled;

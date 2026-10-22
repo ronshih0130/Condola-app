@@ -3,16 +3,18 @@ import { actionAddVendor, actionConfirmVendor, actionDispatchVendor, actionRevok
 import { formatDate, formatMoney } from "@/server/format";
 import type { CalendarMode } from "@/server/types";
 import type { VendorChoice, VendorDispatchView } from "@/server/vendor-repair";
-import { VENDOR_CATEGORIES, VENDOR_CATEGORY_KEY, VENDOR_LINK_DAYS, lastCooperationParts } from "@/server/vendor-repair-rules";
+import { VENDOR_CATEGORIES, VENDOR_CATEGORY_KEY, VENDOR_LINK_DAYS, vendorMenuLabel } from "@/server/vendor-repair-rules";
 import { VendorLinkField } from "./vendor-link-field";
 
 function vendorOption(vendor: VendorChoice, t: T) {
   const tradeKey = VENDOR_CATEGORY_KEY[vendor.trade as (typeof VENDOR_CATEGORIES)[number]];
   const trade = tradeKey ? t(tradeKey) : vendor.trade;
-  const last = lastCooperationParts(vendor.lastOn);
-  if (trade && last) return t("i_vendor_option_past", { name: vendor.name, trade, year: last.year, month: last.month });
-  if (trade) return t("i_vendor_option", { name: vendor.name, trade });
-  return vendor.name;
+  const menu = vendorMenuLabel({ name: vendor.name, trade, lastOn: vendor.lastOn });
+  if (menu.key === "i_vendor_option_past") {
+    return t(menu.key, { name: menu.name, trade: menu.trade, year: menu.year, month: menu.month });
+  }
+  if (menu.key === "i_vendor_option") return t(menu.key, { name: menu.name, trade: menu.trade });
+  return menu.name;
 }
 
 export function VendorDispatch({

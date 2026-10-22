@@ -10,7 +10,6 @@ import { tenantRepairs, ticketDetail } from "@/server/queries";
 import type { T } from "@/i18n";
 
 function repairStatusLabel(status: string, t: T) {
-  // TODO(pmk): 文案待 PMk — the cancelled label is not in the final copy.
   if (status === "cancelled") return t("i_repair_cancelled_status");
   return t(statusKey(status));
 }
@@ -49,7 +48,6 @@ export default async function RepairPage({
         </div>
       ) : null}
       {params.cancelled === "1" && own && own.ticket.status === "cancelled" ? (
-        // TODO(pmk): 文案待 PMk — i_repair_cancelled_toast is not in the final copy.
         <div className="alert ok" data-testid="repair-cancelled-toast">
           {t("i_repair_cancelled_toast", { number: own.ticket.number })}
         </div>
@@ -63,7 +61,6 @@ export default async function RepairPage({
             <button className="btn pri" type="submit" data-testid="repair-cancel-submit">
               {t("i_repair_cancel")}
             </button>{" "}
-            {/* TODO(pmk): 文案待 PMk — i_repair_cancel_back is not in the final copy. */}
             <Link className="btn sm" href={`/t/repair?id=${own.ticket.id}`} data-testid="repair-cancel-back">
               {t("i_repair_cancel_back")}
             </Link>
@@ -146,7 +143,6 @@ export default async function RepairPage({
             <div className="small muted">
               {t(REPAIR_CAT_KEY[repair.category] ?? "i_cat_other")} ·{" "}
               <span className={`chip ${statusClass(repair.status)}`} data-testid={`tenant-repair-status-${repair.number}`}>
-                {/* TODO(pmk): 文案待 PMk — i_repair_cancelled_status is not in the final copy. */}
                 {repairStatusLabel(repair.status, t)}
               </span>
             </div>

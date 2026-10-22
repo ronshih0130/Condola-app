@@ -14,6 +14,7 @@ import {
   vendorLinkOpen,
   lastCooperationParts,
   vendorCategory,
+  vendorMenuLabel,
   vendorName,
   vendorPhone,
   vendorTokenAcceptable,
@@ -181,6 +182,15 @@ test("last cooperation is a month from past repair dates, not a stored column", 
   assert.deepEqual(lastCooperationParts("2026-10-01T00:00:00"), { year: "2026", month: "10" });
   assert.equal(lastCooperationParts(null), null);
   assert.equal(lastCooperationParts(""), null);
+  const none = vendorMenuLabel({ name: "好家修繕", trade: "水電", lastOn: null });
+  assert.equal(none.key, "i_vendor_option");
+  assert.equal("year" in none, false);
+  const past = vendorMenuLabel({ name: "大同冷氣行", trade: "冷氣", lastOn: "2026-08-20" });
+  assert.equal(past.key, "i_vendor_option_past");
+  if (past.key === "i_vendor_option_past") {
+    assert.equal(past.year, "2026");
+    assert.equal(past.month, "8");
+  }
   assert.equal(vendorCategory("water"), "water");
   assert.throws(() => vendorCategory("水電"), (error: unknown) => error instanceof FlowError);
   const source = readFileSync(new URL("./vendor-repair.ts", import.meta.url), "utf8");
@@ -188,7 +198,7 @@ test("last cooperation is a month from past repair dates, not a stored column", 
   assert.match(source, /coalesce\(t\.completed_on, t\.scheduled_on/);
   assert.doesNotMatch(source, /last_cooperation/);
   const page = readFileSync(new URL("../app/t/repair/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /TODO\(pmk\)/);
+  assert.doesNotMatch(page, /TODO\(pmk\)/);
   assert.match(page, /i_repair_cancelled_status/);
   assert.match(page, /i_repair_cancelled_toast/);
   assert.match(page, /i_repair_cancel_back/);
@@ -200,10 +210,9 @@ test("last cooperation is a month from past repair dates, not a stored column", 
   assert.doesNotMatch(dispatchForm, /vendorName/);
 });
 
-test("cancelled, the cancel toast, and back are drafts waiting on PMk", () => {
+test("cancelled status, the cancel toast, and back follow the copy supplement", () => {
   const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
   const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
-  // TODO(pmk): 文案待 PMk. These three are not in ui_copy_repair_portal_v1.
   assert.equal(zh.i_repair_cancelled_status, "已取消");
   assert.equal(zh.i_repair_cancelled_toast, "已取消報修 #{number}。");
   assert.equal(zh.i_repair_cancel_back, "返回");
