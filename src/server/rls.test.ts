@@ -427,8 +427,12 @@ test("creating a property with a new owner works as service_role without write a
     const tenantEmail = `new.tenant.${email}`;
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      await client.query(`ALTER TABLE ledger_entries DISABLE TRIGGER trg_ledger_entries_append_only`);
+      await client.query(`ALTER TABLE ledger_transactions DISABLE TRIGGER trg_ledger_transactions_append_only`);
       try {
         if (propertyId) {
+          await client.query(`UPDATE expenses SET ledger_transaction_id = NULL WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM expenses WHERE property_id = $1`, [propertyId]);
           await client.query(
             `DELETE FROM utility_allocation_lines
               WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
@@ -439,6 +443,13 @@ test("creating a property with a new owner works as service_role without write a
               WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
             [propertyId],
           );
+          await client.query(
+            `DELETE FROM ledger_entries
+              WHERE transaction_id IN (SELECT id FROM ledger_transactions WHERE property_id = $1)`,
+            [propertyId],
+          );
+          await client.query(`DELETE FROM ledger_transactions WHERE property_id = $1 AND kind = 'reversal'`, [propertyId]);
+          await client.query(`DELETE FROM ledger_transactions WHERE property_id = $1`, [propertyId]);
           await client.query(
             `DELETE FROM utility_bills
               WHERE meter_id IN (SELECT m.id FROM meters m JOIN units u ON u.id = m.unit_id WHERE u.property_id = $1)`,
@@ -458,6 +469,8 @@ test("creating a property with a new owner works as service_role without write a
         );
         await client.query(`DELETE FROM auth.users WHERE lower(email) = lower($1) OR lower(email) = lower($2)`, [email, tenantEmail]);
       } finally {
+        await client.query(`ALTER TABLE ledger_transactions ENABLE TRIGGER trg_ledger_transactions_append_only`);
+        await client.query(`ALTER TABLE ledger_entries ENABLE TRIGGER trg_ledger_entries_append_only`);
         await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
       }
     });

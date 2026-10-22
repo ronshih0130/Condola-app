@@ -289,7 +289,8 @@ export async function createProperty(session: Session, input: PropertyInput) {
   const posted = wholeUnit ? input.rooms.slice(0, 1) : input.rooms;
   const rooms = withStoredRoomTypes(posted.filter((room) => room.label.trim() || room.baseRentMajor > 0));
   if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8", step: 3 });
-  if (wholeUnit && rooms.length !== 1) throw new FlowError("errors.required", { field: "s_8569bc8", step: 3 });
+  // A whole unit is leased as the unit. Rooms are not required, and any that
+  // are sent are not stored. A by-room floor still needs at least one room.
   if (input.rentalMode === "by_room" && rooms.length < 1) throw new FlowError("errors.required", { field: "s_8569bc8", step: 3 });
   if (input.rentalMode === "by_room") assertPropertyRoomTypes(rooms);
   if (rooms.some((room) => room.roomType === "whole_home") && rooms.length !== 1) {
@@ -457,7 +458,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
     const first = await insertPropertyUnit(client, {
       orgId: session.orgId,
       propertyId: property.id,
-      label: uniqueUnitLabel(wholeUnit ? rooms[0].label : input.unitLabel, input.floor, input.doorSupplement ?? "", usedLabels),
+      label: uniqueUnitLabel(wholeUnit ? rooms[0]?.label || input.unitLabel : input.unitLabel, input.floor, input.doorSupplement ?? "", usedLabels),
       floor: input.floor.trim() || null,
       door: input.doorSupplement ?? "",
       rentalMode: input.rentalMode,

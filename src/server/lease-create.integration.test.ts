@@ -223,23 +223,29 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     assert.equal(meter.rows.length, 1);
     assert.equal(meter.rows[0]?.serial ?? null, null);
 
-    const splits = await query<{ lease_id: string; split: string }>(
-      `SELECT line.lease_id::text, r.split_method::text AS split
+    const splits = await query<{ lease_id: string | null; split: string; bearer: string; room_id: string }>(
+      `SELECT line.lease_id::text, r.split_method::text AS split, line.bearer::text, line.room_id::text
          FROM utility_allocation_lines line
          JOIN utility_allocation_runs r ON r.id = line.run_id
-        WHERE line.lease_id = ANY($1::uuid[])`,
-      [[even.leaseId, sub.leaseId]],
+         JOIN meters m ON m.id = r.meter_id
+         JOIN units u ON u.id = m.unit_id
+        WHERE u.property_id = $1 AND r.status <> 'void'`,
+      [rooms.propertyId],
     );
     assert.equal(new Set(splits.rows.map((row) => row.split)).size, 1);
     assert.equal(splits.rows[0]?.split, "sub_meter");
-    assert.ok(splits.rows.some((row) => row.lease_id === even.leaseId));
-    assert.ok(splits.rows.some((row) => row.lease_id === sub.leaseId));
+    // Both leases are still pending_signature, so the draft charges the owner.
+    // The second save still replaces the even split with sub_meter on that one run.
+    assert.ok(splits.rows.every((row) => row.lease_id == null && row.bearer === "owner"));
+    assert.ok(splits.rows.some((row) => row.room_id === rooms.roomIds[0]));
+    assert.ok(splits.rows.some((row) => row.room_id === rooms.roomIds[1]));
     const runCount = await query<{ n: string }>(
       `SELECT count(DISTINCT r.id)::text AS n
-         FROM utility_allocation_lines line
-         JOIN utility_allocation_runs r ON r.id = line.run_id
-        WHERE line.lease_id = ANY($1::uuid[]) AND r.status <> 'void'`,
-      [[even.leaseId, sub.leaseId]],
+         FROM utility_allocation_runs r
+         JOIN meters m ON m.id = r.meter_id
+         JOIN units u ON u.id = m.unit_id
+        WHERE u.property_id = $1 AND r.status <> 'void'`,
+      [rooms.propertyId],
     );
     assert.equal(runCount.rows[0]?.n, "1");
     const runUnit = await query<{ unit_id: string; room_unit: string }>(
@@ -247,9 +253,11 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
          FROM utility_allocation_runs r
          JOIN utility_allocation_lines line ON line.run_id = r.id
          JOIN rooms rm ON rm.id = line.room_id
-        WHERE line.lease_id = $1
+         JOIN meters m ON m.id = r.meter_id
+         JOIN units u ON u.id = m.unit_id
+        WHERE u.property_id = $1 AND r.status <> 'void'
         LIMIT 1`,
-      [even.leaseId],
+      [rooms.propertyId],
     );
     assert.equal(runUnit.rows[0]?.unit_id, runUnit.rows[0]?.room_unit);
     assert.ok(runUnit.rows[0]?.unit_id);

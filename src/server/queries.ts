@@ -586,6 +586,18 @@ const LEASE_LIST_SQL = `SELECT l.id::text, l.status::text, l.esign_status::text 
                   -- Latest non-void run for the period. A recalculation supersedes the original.
                   ORDER BY r.period_start DESC, r.computed_at DESC, r.id DESC
                   LIMIT 1),
+                -- A pending lease is not on a line yet. The unit's latest run is still the split
+                -- the next lease save wrote, including when that save replaced an earlier method.
+                (SELECT r.split_method::text
+                   FROM utility_allocation_runs r
+                   JOIN meters m ON m.id = r.meter_id
+                  WHERE m.unit_id = l.unit_id
+                    AND m.utility = 'electricity'
+                    AND m.room_id IS NULL
+                    AND m.archived_at IS NULL
+                    AND r.status <> 'void'
+                  ORDER BY r.period_start DESC, r.computed_at DESC, r.id DESC
+                  LIMIT 1),
                 (SELECT m.split_method::text
                    FROM meters m
                   WHERE m.unit_id = l.unit_id AND m.utility = 'electricity'

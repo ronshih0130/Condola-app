@@ -316,7 +316,12 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(migration.includes("is superuser"), false);
   const issueStart = issuer.indexOf("export async function issuePortalInvite");
   const issueBody = issuer.slice(issueStart);
-  assert.equal(issueBody.includes("purgePortalInviteSecrets"), false);
+  const lockAt = issueBody.indexOf("pg_advisory_xact_lock");
+  const txClose = issueBody.indexOf("{ orgId: session.orgId, environment: session.environment }");
+  const purgeAt = issueBody.indexOf("purgeExpiredInviteSecrets");
+  assert.ok(lockAt > 0 && txClose > lockAt && purgeAt > txClose);
+  assert.equal(issueBody.slice(lockAt, txClose).includes("purgePortalInviteSecrets"), false);
+  assert.equal(issueBody.slice(lockAt, txClose).includes("purgeExpiredInviteSecrets"), false);
   assert.match(issueBody, /lock_timeout = '1s'/);
   assert.match(issueBody, /statement_timeout = '2s'/);
   assert.equal(issuer.includes('if (!token) throw new FlowError("errors.portalRenew")'), false);

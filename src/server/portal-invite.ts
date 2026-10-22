@@ -283,6 +283,25 @@ export async function savePortalInviteSecret(client: Client, invitationId: strin
   );
 }
 
+/** Drop secrets whose invitation is no longer a live pending link. Runs in its own transaction. */
+async function purgeExpiredInviteSecrets() {
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      await client.query(`SET LOCAL statement_timeout = '2s'`);
+      await purgePortalInviteSecrets(client, "reset");
+      await client.query("COMMIT");
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // The connection is already closing.
+      }
+      throw error;
+    }
+  });
+}
+
 /** Drop secrets whose invitation is no longer a live pending link. */
 export async function purgePortalInviteSecrets(client: Client, restore: "authenticated" | "reset") {
   await withServiceRole(client, () => client.query(`SELECT app.purge_portal_invite_secrets()`), restore);
@@ -315,8 +334,8 @@ export async function issuePortalInvite(
         // One pending invite per contact. The lock is only for this contact.
         // A global secret purge here scanned invitations and held the lock for
         // several seconds, so the copy button waited with no feedback. Expired
-        // secrets for this contact are removed when its pending row is revoked.
-        // Opening a link still runs the purge.
+        // secrets are removed after this transaction commits. Opening a link
+        // still runs the purge as well.
         await client.query(`SET LOCAL lock_timeout = '1s'`);
         await client.query(`SET LOCAL statement_timeout = '2s'`);
         await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`portal-invite:${input.contactId}`]);
@@ -426,6 +445,9 @@ export async function issuePortalInvite(
     },
     { orgId: session.orgId, environment: session.environment },
   );
+  // After the contact lock is released. An invitation that expired without an
+  // UPDATE never fires the drop trigger, so this is what removes that secret.
+  await purgeExpiredInviteSecrets();
   if (issued.activated) return { activated: true as const, contactId: issued.contactId };
   if (!issued.reused) {
     await writeAudit(session.orgId, session.userId, "portal_invite", {
