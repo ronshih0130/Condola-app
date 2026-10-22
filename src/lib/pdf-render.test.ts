@@ -106,6 +106,40 @@ function darkPixels(ppm: Buffer, y0: number, y1: number, x0: number, x1: number)
   return dark;
 }
 
+test("a negative refund line in the owner-statement PDF renders as -NT$", async () => {
+  const font = readFileSync(new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url));
+  const refund = -123_400;
+  const source: StatementPdfSource = {
+    id: "10000000-0000-4000-8000-000000000077",
+    orgId: "10000000-0000-4000-8000-000000000001",
+    ownerName: "陳建宏",
+    periodStart: "2026-10-01",
+    periodEnd: "2026-10-31",
+    currency: "TWD",
+    opening: 0,
+    rent: 200_000,
+    other: 0,
+    fee: 0,
+    expenses: 0,
+    payouts: 0,
+    closing: 200_000,
+    lines: [{ lineType: "adjustment", description: "退租退款", amount: refund }],
+    addresses: [],
+    audience: "owner",
+  };
+  const doc = buildStatementPdf(source, "zh-TW", "gregorian", makeT("zh-TW"));
+  const linesBlock = doc.blocks.find((block) => block.kind === "rows" && block.heading !== "");
+  if (!linesBlock || linesBlock.kind !== "rows") throw new Error("missing refund line");
+  assert.equal(linesBlock.rows[0]?.value, "-NT$1,234");
+  const bytes = await renderPdf(doc, font);
+  const dir = mkdtempSync(join(tmpdir(), "stmt-refund-"));
+  const pdf = join(dir, "stmt.pdf");
+  writeFileSync(pdf, bytes);
+  const text = execFileSync("pdftotext", ["-layout", pdf, "-"], { encoding: "utf8" });
+  assert.match(text, /-NT\$1,234/);
+  assert.equal(text.split("-NT$1,234").join("").includes("NT$1,234"), false);
+});
+
 test("a glyph missing from the font rejects the PDF", async () => {
   const font = readFileSync(new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url));
   const doc = buildLeasePdf(

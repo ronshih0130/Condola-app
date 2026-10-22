@@ -1,3 +1,19 @@
+/**
+ * Walk steps that mention LINE, and the new-lease LINE ID field.
+ * `lineLoginEnabled()` is off in production, including the sample company.
+ */
+export function visibleWalkSteps(steps: readonly string[], lineOn: boolean) {
+  return steps.filter((step) => lineOn || !step.includes("LINE"));
+}
+
+/** The LINE ID label, and the invalid-id message, only when that field is shown. */
+export function leaseLineCopy(t: (key: string) => string, showLine: boolean, error = "") {
+  return {
+    field: showLine ? t("lease_line_id") : "",
+    invalid: error === "errors.lineId" ? (showLine ? t("lease_line_invalid") : t("i_generic")) : "",
+  };
+}
+
 /** Approved in-app support channel. It is not a LINE product feature. */
 export const LINE_SUPPORT_CONTACT = "LINE @644odqoe（租多啦官方客服帳號）";
 

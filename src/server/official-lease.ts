@@ -19,7 +19,7 @@ import { officialLeaseTemplateText } from "../assets/leases/moi-residential-1130
  * Stored text: src/assets/leases/moi-residential-1130708.txt
  * The Worker bundles src/assets/leases/moi-residential-1130708.ts, generated from
  * that file by scripts/embed-lease-template.mjs. Do not read the .txt at request time.
- * Paper signing only. This printout is not an electronic signature.
+ * Paper signing only.
  * Blanks and checkboxes are filled. Missing data stays blank.
  * On the door plate, a house number that already contains 號 replaces the
  * template 號 and leaves the blank after 弄 empty, so the number is not

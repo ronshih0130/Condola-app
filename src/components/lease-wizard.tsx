@@ -9,6 +9,7 @@ import { actionCreateLease, type ActionState } from "@/server/actions";
 import { leaseTermEnd, overlappingLease } from "@/server/lease-rules";
 import type { RoomOption } from "@/server/queries";
 import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
+import { leaseLineCopy } from "@/line-copy";
 import { useLocale, useT } from "./locale";
 import { Stepper } from "./ui";
 import { PhoneField } from "./phone-field";
@@ -243,6 +244,8 @@ export function LeaseWizard({
     setStep(step - 1);
   }
 
+  const lineCopy = leaseLineCopy(t, showLine, state.error);
+
   return (
     <form
       action={formAction}
@@ -290,8 +293,8 @@ export function LeaseWizard({
       <Stepper steps={steps} current={step} />
       {state.error && state.error !== "errors.leaseNetwork" ? (
         <div className="alert bad" data-testid="lease-error" role="alert" tabIndex={-1} style={{ marginBottom: 12 }}>
-          {!showLine && state.error === "errors.lineId"
-            ? t("i_generic")
+          {state.error === "errors.lineId"
+            ? lineCopy.invalid
             : state.error === "errors.roomLease"
               ? t("i_room_lease_exists", { start: state.vars?.start ?? "", end: state.vars?.end ?? "" })
               : state.field && (state.error === "errors.required" || state.error === "errors.amount")
@@ -421,9 +424,9 @@ export function LeaseWizard({
                   {phoneError ? <p className="hint" data-testid="tenant-phone-error">{t("i_step_incomplete", { field: t("s_522cf12") })}</p> : null}
                 </div>
               </div>
-              {showLine ? (
+              {lineCopy.field ? (
                 <div className="fg" data-demo-line="true">
-                  <label className="f">{t("lease_line_id")}</label>
+                  <label className="f">{lineCopy.field}</label>
                   <input className="inp" data-testid="tenant-line" placeholder={t("lease_ph_line")} value={lineId} onChange={(event) => setLineId(event.target.value)} />
                 </div>
               ) : null}

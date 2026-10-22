@@ -129,6 +129,8 @@ test("an English lease PDF localizes the paper note and keeps the official claus
   const text = JSON.stringify(doc);
   const sublessor = "二" + "房東";
   assert.match(text, /This copy is for signing on paper/);
+  assert.equal(JSON.stringify(doc.blocks[0]).includes("electronic signature"), false);
+  assert.equal(JSON.stringify(doc.blocks[0]).includes("e-sign"), false);
   assert.match(text, /Reason for the deposit/);
   assert.match(text, /第一條/);
   assert.match(text, /承租人/);

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
-import { showDemoLineCopy } from "@/server/demo";
-import { readSession, requestPrefs } from "@/server/session";
+import { visibleWalkSteps } from "@/line-copy";
+import { lineLoginEnabled } from "@/server/demo";
+import { requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -9,10 +10,11 @@ const LINKS = ["/m/properties/new", "/m/leases/new", "/m/payments", "/m/bank", "
 
 export default async function WalkPage() {
   const prefs = await requestPrefs();
-  const session = await readSession();
   const t = makeT(prefs.locale);
-  const demoLine = showDemoLineCopy(session?.environment ?? null);
-  const steps = Array.from({ length: 20 }, (_, index) => t(`i_w${index + 1}`)).filter((step) => demoLine || !step.includes("LINE"));
+  const steps = visibleWalkSteps(
+    Array.from({ length: 20 }, (_, index) => t(`i_w${index + 1}`)),
+    lineLoginEnabled(),
+  );
   return (
     <div className="main">
       <h1>{t("i_walk_title")}</h1>

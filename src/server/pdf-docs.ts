@@ -1,6 +1,6 @@
 import { dictionary, type Locale, type T } from "@/i18n";
 import type { PdfBlock, PdfDocument, PdfRow } from "@/lib/pdf-document";
-import { formatDate, moneyLabel, ownerSettlement } from "@/server/format";
+import { formatDate, moneyLabel, ownerSettlement, signedMoneyLabel } from "@/server/format";
 import { renderOfficialLease } from "@/server/official-lease";
 import { can } from "@/server/perms";
 import type { CalendarMode, Session } from "@/server/types";
@@ -152,7 +152,7 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
       heading: t("pdf_lines"),
       rows: source.lines.map((line) => ({
         label: line.description || t("i_expenses"),
-        value: money(line.amount),
+        value: signedMoneyLabel(line.amount, source.currency, locale),
       })),
     });
   }

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { appFooterText, LINE_SUPPORT_CONTACT } from "../line-copy";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { makeT, type Locale } from "@/i18n";
+import { appFooterText, leaseLineCopy, LINE_SUPPORT_CONTACT, visibleWalkSteps } from "../line-copy";
 import { demoModeEnabled, enforceDemoSafety, lineLoginEnabled, showDemoLineCopy } from "./demo";
 import { acceptSecondFactor } from "./totp";
 
@@ -229,7 +232,7 @@ test("live screens do not render LINE product copy, including the app footer", (
       const text = readFileSync(path, "utf8");
       if (text.includes("i_line_login_todo")) ungated.push(`${path} still renders i_line_login_todo`);
       if (text.includes("i_w${")) {
-        if (!text.includes("showDemoLineCopy") || !text.includes('includes("LINE")')) {
+        if (!text.includes("lineLoginEnabled()") || !text.includes("visibleWalkSteps")) {
           ungated.push(`${path} renders walk steps without a LINE filter`);
         }
       }
@@ -269,7 +272,77 @@ test("live screens do not render LINE product copy, including the app footer", (
   const accept = readFileSync(new URL("../app/accept/[token]/page.tsx", import.meta.url), "utf8");
   assert.match(accept, /showDemoLineCopy\(null\) && lineLoginEnabled\(\)/);
   const walk = readFileSync(new URL("../app/walk/page.tsx", import.meta.url), "utf8");
-  assert.match(walk, /demoLine \|\| !step\.includes\("LINE"\)/);
+  assert.match(walk, /visibleWalkSteps\([\s\S]*lineLoginEnabled\(\)/);
+  assert.doesNotMatch(walk, /showDemoLineCopy/);
+  const leaseNew = readFileSync(new URL("../app/m/leases/new/page.tsx", import.meta.url), "utf8");
+  assert.match(leaseNew, /showLine=\{lineLoginEnabled\(\)\}/);
+  assert.doesNotMatch(leaseNew, /showDemoLineCopy/);
+  const wizard = readFileSync(new URL("../components/lease-wizard.tsx", import.meta.url), "utf8");
+  assert.match(wizard, /leaseLineCopy\(t, showLine, state\.error\)/);
   assert.equal(ungated.some((hit) => hit.includes("i_invite_help") || hit.includes("s_9f8fee8")), false);
   assert.deepEqual(ungated, []);
+});
+
+const PRODUCT_LINE_KEYS = ["i_w6", "i_w7", "i_w8", "i_w12", "i_w13", "i_w17", "lease_line_id", "lease_line_invalid"] as const;
+
+function sandboxLineMarkup(locale: Locale, lineOn: boolean) {
+  const t = makeT(locale);
+  const steps = visibleWalkSteps(
+    Array.from({ length: 20 }, (_, index) => t(`i_w${index + 1}`)),
+    lineOn,
+  );
+  const line = leaseLineCopy(t, lineOn, "errors.lineId");
+  return renderToStaticMarkup(
+    createElement(
+      "div",
+      null,
+      createElement(
+        "ol",
+        null,
+        steps.map((step) => createElement("li", { key: step }, step)),
+      ),
+      line.field,
+      line.invalid,
+    ),
+  );
+}
+
+test("a sandbox company renders none of the LINE product strings without the flag", () => {
+  const previous = env();
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
+  const catalogs = { "zh-TW": zh, en };
+  try {
+    delete process.env.NEXT_PHASE;
+    delete process.env.LINE_LOGIN_ENABLED;
+    process.env.DEMO_MODE = "true";
+    setEnv("NODE_ENV", "production");
+    process.env.CONDOLA_ENV = "production";
+    assert.equal(showDemoLineCopy("sandbox"), true);
+    assert.equal(lineLoginEnabled(), false);
+    for (const locale of ["zh-TW", "en"] as const) {
+      const html = sandboxLineMarkup(locale, lineLoginEnabled());
+      const catalog = catalogs[locale];
+      assert.equal(html.includes(catalog.i_w1), true);
+      for (const key of PRODUCT_LINE_KEYS) assert.equal(html.includes(catalog[key]), false, `${locale} ${key}`);
+    }
+
+    setEnv("NODE_ENV", "development");
+    delete process.env.CONDOLA_ENV;
+    delete process.env.DEMO_MODE;
+    delete process.env.LINE_LOGIN_ENABLED;
+    assert.equal(showDemoLineCopy("sandbox"), true);
+    assert.equal(lineLoginEnabled(), false);
+    for (const locale of ["zh-TW", "en"] as const) {
+      const html = sandboxLineMarkup(locale, lineLoginEnabled());
+      for (const key of PRODUCT_LINE_KEYS) assert.equal(html.includes(catalogs[locale][key]), false, `${locale} ${key}`);
+    }
+
+    process.env.LINE_LOGIN_ENABLED = "true";
+    assert.equal(lineLoginEnabled(), true);
+    const enabled = sandboxLineMarkup("zh-TW", lineLoginEnabled());
+    for (const key of PRODUCT_LINE_KEYS) assert.equal(enabled.includes(zh[key]), true, key);
+  } finally {
+    restore(previous);
+  }
 });

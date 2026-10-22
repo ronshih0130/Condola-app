@@ -356,7 +356,16 @@ test("the lease PDF prints the official form and keeps the deposit reason outsid
   assert.ok(official && official.kind === "text");
   const rendered = renderOfficialLease(filled);
   assert.equal(official.lines.join("\n"), rendered.text);
-  assert.equal(doc.blocks[0]?.kind === "text" && doc.blocks[0].lines[0], "本文件依內政部住宅租賃契約書範本列印，供紙本簽署，不是電子簽章。");
+  assert.equal(doc.blocks[0]?.kind === "text" && doc.blocks[0].lines[0], "本文件依內政部住宅租賃契約書範本列印，供紙本簽署。");
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
+  assert.equal(zh.i_template_note, "使用內政部住宅租賃契約範本。此畫面只產生範例文件。");
+  assert.equal(zh.pdf_paper_note, "本文件依內政部住宅租賃契約書範本列印，供紙本簽署。");
+  assert.equal(en.i_template_note, "Uses the MOI residential lease template. This screen only builds a demo document.");
+  assert.equal(en.pdf_paper_note, "This copy is for signing on paper.");
+  for (const value of [zh.i_template_note, zh.pdf_paper_note, en.i_template_note, en.pdf_paper_note]) {
+    assert.equal(/簽章|e-sign|electronic signature/i.test(value), false, value);
+  }
   assert.equal(official.lines.join("\n").includes("屋主同意兩個月以上押金"), false);
   assert.equal(JSON.stringify(doc.blocks[0]).includes("屋主同意兩個月以上押金"), true);
 });

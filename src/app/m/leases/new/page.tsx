@@ -1,7 +1,7 @@
 import { makeT } from "@/i18n";
 import { LeaseWizard } from "@/components/lease-wizard";
 import { ErrorBanner, PageHeader } from "@/components/ui";
-import { showDemoLineCopy } from "@/server/demo";
+import { lineLoginEnabled } from "@/server/demo";
 import { loadOrgCountry } from "@/server/org-country";
 import { listTenants, loadFirm, vacantRooms } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -29,7 +29,7 @@ export default async function NewLeasePage({ searchParams }: { searchParams: Pro
         rooms={rooms}
         tenants={tenants}
         firmLocale={firm.defaultLocale}
-        showLine={showDemoLineCopy(session.environment)}
+        showLine={lineLoginEnabled()}
         callingCode={country.callingCode}
       />
     </>
