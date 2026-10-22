@@ -4,13 +4,14 @@
  * unless the signature is listed in supabase/rpc-allowlist.txt.
  *
  * REVOKE ALL counts as REVOKE EXECUTE. Hits print as file:line: signature.
+ * The same run prints a markdown permissions table (and writes it with --table).
  * Exit 0 when clean, 1 on a missing revoke, 2 on bad usage.
  *
  *   node scripts/ci/function-revokes.mjs
- *   node scripts/ci/function-revokes.mjs --diff change.diff --allowlist supabase/rpc-allowlist.txt
+ *   node scripts/ci/function-revokes.mjs --diff change.diff --allowlist supabase/rpc-allowlist.txt --table permissions-table.md
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseDiff } from "./parse-diff.mjs";
@@ -202,29 +203,71 @@ function covers(revoke, fn, role) {
   return revoke.roles.includes(role);
 }
 
-export function checkAddedFunctions(diffText, allowlistText) {
+function roleLabel(role) {
+  return role === "public" ? "PUBLIC" : role;
+}
+
+export function permissionRows(diffText, allowlistText) {
   const allowed = new Set(parseAllowlist(allowlistText || ""));
-  const problems = [];
+  const rows = [];
   for (const file of parseDiff(diffText)) {
     const paths = [file.path, file.oldPath].filter(Boolean);
     if (!paths.some((path) => path.endsWith(".sql"))) continue;
     const document = addedDocument(file);
     const revokes = findRevokes(document);
     for (const fn of findFunctions(document)) {
-      if (allowed.has(fn.signature)) continue;
-      const missing = REQUIRED_ROLES.filter((role) => !revokes.some((revoke) => covers(revoke, fn, role)));
-      if (missing.length === 0) continue;
-      const printed = missing.map((role) => (role === "public" ? "PUBLIC" : role));
-      problems.push({
+      const roles = {};
+      for (const role of REQUIRED_ROLES) {
+        roles[roleLabel(role)] = revokes.some((revoke) => covers(revoke, fn, role)) ? "revoked" : "missing";
+      }
+      const missing = REQUIRED_ROLES.filter((role) => roles[roleLabel(role)] === "missing").map(roleLabel);
+      const allowlisted = allowed.has(fn.signature);
+      rows.push({
         path: file.path,
         line: fn.line,
         signature: fn.signature,
-        missing: printed,
-        message: `${file.path}:${fn.line}: ${fn.signature} missing REVOKE EXECUTE FROM ${printed.join(", ")}`,
+        allowlisted,
+        roles,
+        missing,
+        ok: allowlisted || missing.length === 0,
       });
     }
   }
-  return problems;
+  return rows;
+}
+
+export function checkAddedFunctions(diffText, allowlistText) {
+  return permissionRows(diffText, allowlistText)
+    .filter((row) => !row.ok)
+    .map((row) => ({
+      path: row.path,
+      line: row.line,
+      signature: row.signature,
+      missing: row.missing,
+      message: `${row.path}:${row.line}: ${row.signature} missing REVOKE EXECUTE FROM ${row.missing.join(", ")}`,
+    }));
+}
+
+export function renderPermissionsTable(rows) {
+  const intro =
+    rows.length === 0
+      ? "No new SQL functions in this diff."
+      : "New SQL functions in this diff. A signature in supabase/rpc-allowlist.txt may omit REVOKE EXECUTE. Every other new function must revoke EXECUTE from PUBLIC, anon, and authenticated.";
+  const lines = [
+    "# Function EXECUTE permissions",
+    "",
+    intro,
+    "",
+    "| file | line | signature | allowlisted | PUBLIC | anon | authenticated | result |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+  ];
+  for (const row of rows) {
+    lines.push(
+      `| ${row.path} | ${row.line} | \`${row.signature}\` | ${row.allowlisted ? "yes" : "no"} | ${row.roles.PUBLIC} | ${row.roles.anon} | ${row.roles.authenticated} | ${row.ok ? "pass" : "fail"} |`,
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
 }
 
 function gitDiff() {
@@ -238,6 +281,7 @@ function main() {
   const args = process.argv.slice(2);
   let diffPath = "";
   let allowPath = ALLOWLIST_PATH;
+  let tablePath = "";
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--diff") {
@@ -250,17 +294,28 @@ function main() {
       index += 1;
       continue;
     }
-    console.error("Usage: node scripts/ci/function-revokes.mjs [--diff file] [--allowlist file]");
+    if (arg === "--table") {
+      tablePath = args[index + 1] || "";
+      index += 1;
+      continue;
+    }
+    console.error("Usage: node scripts/ci/function-revokes.mjs [--diff file] [--allowlist file] [--table file]");
     process.exit(2);
   }
   const diffText = diffPath ? readFileSync(diffPath, "utf8") : gitDiff();
   const allowText = allowPath && existsSync(allowPath) ? readFileSync(allowPath, "utf8") : "";
-  const problems = checkAddedFunctions(diffText, allowText);
+  const rows = permissionRows(diffText, allowText);
+  const table = renderPermissionsTable(rows);
+  console.log(table);
+  if (tablePath) writeFileSync(tablePath, table);
+  const problems = rows.filter((row) => !row.ok);
   if (problems.length === 0) {
     console.log("function revokes: clean");
     return 0;
   }
-  for (const problem of problems) console.error(problem.message);
+  for (const row of problems) {
+    console.error(`${row.path}:${row.line}: ${row.signature} missing REVOKE EXECUTE FROM ${row.missing.join(", ")}`);
+  }
   return 1;
 }
 

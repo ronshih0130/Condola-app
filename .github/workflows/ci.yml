@@ -17,18 +17,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Require rebase onto latest main
         run: |
           git fetch origin main --no-tags
-          base="$(git merge-base HEAD origin/main)"
-          main="$(git rev-parse origin/main)"
-          echo "HEAD $(git rev-parse HEAD)"
-          echo "merge-base $base"
-          echo "origin/main $main"
-          if [[ "$base" != "$main" ]]; then
-            echo "This branch does not contain the latest origin/main. Rebase onto main and push again."
-            exit 1
-          fi
+          node scripts/ci/rebase-check.mjs
 
   banned-terms:
     runs-on: ubuntu-latest
@@ -92,7 +87,8 @@ jobs:
       - name: New functions revoke EXECUTE from PUBLIC, anon, and authenticated
         run: |
           git fetch origin main --no-tags
-          node scripts/ci/function-revokes.mjs
+          node scripts/ci/function-revokes.mjs --table permissions-table.md
+          test -s permissions-table.md
 
   check:
     runs-on: ubuntu-latest

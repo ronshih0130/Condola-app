@@ -1,6 +1,5 @@
-# Migrated from .github/workflows/ci.yml.
-# Changes:
-# - runs-on: ubuntu-latest -> depot-ubuntu-latest
+# Depot CI. Runner label is depot-ubuntu-latest.
+# Gate jobs match .github/workflows/ci.yml: rebase, banned terms, privileges, function revokes.
 
 name: CI
 
@@ -11,6 +10,89 @@ on:
       - "**"
 
 jobs:
+  # Fails unless this commit already contains the latest origin/main.
+  # pull_request checkouts are merge commits, so this job checks the PR head.
+  rebase:
+    if: github.event_name == 'pull_request'
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Require rebase onto latest main
+        run: |
+          git fetch origin main --no-tags
+          node scripts/ci/rebase-check.mjs
+
+  banned-terms:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Banned words in user-facing copy
+        run: npm run copy:check
+
+  # scripts/check-function-privileges.sh lands with PR #45. Until that file is
+  # on the branch, this job records the skip and passes. After it merges, the
+  # same job runs the script against a scratch database.
+  privileges:
+    runs-on: depot-ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: condola
+          POSTGRES_PASSWORD: condola
+          POSTGRES_DB: condola
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U condola -d condola"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://condola:condola@127.0.0.1:5432/condola
+    steps:
+      - uses: actions/checkout@v4
+      - name: Function privilege gate
+        run: |
+          if [[ -f scripts/check-function-privileges.sh ]]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+            bash scripts/check-function-privileges.sh
+          else
+            echo "NOTE: scripts/check-function-privileges.sh is not on this branch."
+            echo "PR #45 adds it. This job skips until that file is present."
+          fi
+
+  # New functions in the pull request diff must revoke EXECUTE from PUBLIC, anon,
+  # and authenticated unless supabase/rpc-allowlist.txt lists the signature.
+  # The job prints and saves the permissions table.
+  function-revokes:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: New functions revoke EXECUTE from PUBLIC, anon, and authenticated
+        run: |
+          git fetch origin main --no-tags
+          node scripts/ci/function-revokes.mjs --table permissions-table.md
+          test -s permissions-table.md
+
   check:
     # Remapped from ubuntu-latest. Depot CI runs its own runner labels.
     runs-on: depot-ubuntu-latest

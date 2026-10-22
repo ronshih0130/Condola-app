@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Banned-word check. Product Marketing owns config/banned_terms.md.
+ * Banned-word check for UI strings, email templates, and rendered site HTML.
+ * The list is config/banned_terms.md.
  *
  * Strip every allowlisted phrase (longest first), then fail if a banned term remains.
  * CI, scripts/qa/smoke.sh, and Playwright must call this script rather than
