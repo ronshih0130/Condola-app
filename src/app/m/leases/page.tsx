@@ -4,6 +4,8 @@ import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader, statusClass, statusKey } from "@/components/ui";
 import { formatDate, moneyLabel } from "@/server/format";
+import { lifecycleEnabledFor } from "@/server/lease-lifecycle";
+import { COPY } from "@/server/lease-lifecycle-rules";
 import { searchLeases } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -16,6 +18,7 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
   const result = await searchLeases(session, raw);
+  const lifecycle = session.kind === "staff" ? await lifecycleEnabledFor(session) : false;
   const { rows, q, page, hasNext, total, from, to } = result;
   const summary = listSummary(t, result);
   const money = (minor: string, currency: string) => moneyLabel(Number(minor), currency, session.locale);
@@ -24,9 +27,16 @@ export default async function LeasesPage({ searchParams }: { searchParams: Promi
       <PageHeader
         title={t("s_fba85ae")}
         actions={
-          <Link className="btn pri" href="/m/leases/new">
-            + {t("s_e96eefc")}
-          </Link>
+          <>
+            {lifecycle ? (
+              <Link className="btn" href="/m/leases/expiring" data-testid="expiring-entry">
+                {COPY.listTitle}
+              </Link>
+            ) : null}
+            <Link className="btn pri" href="/m/leases/new">
+              + {t("s_e96eefc")}
+            </Link>
+          </>
         }
       />
       <div className="card">

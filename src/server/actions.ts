@@ -36,6 +36,8 @@ import { getSession } from "./session";
 import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
+import { addDeduction, confirmSettlement, removeDeduction, renewLease, scheduleMoveOut } from "./lease-lifecycle";
+import type { EndReason } from "./lease-lifecycle-rules";
 
 export type ActionState = {
   error: string;
@@ -653,6 +655,99 @@ export async function actionVoidUtility(formData: FormData) {
     redirect(`/m/rent/utilities?run=${runId}&saved=void`);
   } catch (error) {
     bounce(`/m/rent/utilities?run=${runId}`, error);
+  }
+}
+
+export async function actionRenewLease(formData: FormData) {
+  const leaseId = text(formData.get("leaseId"));
+  const back = `/m/leases/${leaseId}/renew`;
+  try {
+    const session = await getSession();
+    const created = await renewLease(session, {
+      leaseId,
+      rentMajor: num(formData.get("rent")),
+      depositMajor: num(formData.get("deposit")),
+      startDate: text(formData.get("startDate")),
+      endDate: text(formData.get("endDate")),
+      dueDay: num(formData.get("dueDay")),
+      depositReason: text(formData.get("depositReason")),
+    });
+    revalidatePath("/m/leases");
+    revalidatePath("/m/leases/expiring");
+    revalidatePath(`/m/leases/${leaseId}`);
+    revalidatePath(`/m/leases/${created.leaseId}`);
+    redirect(`/m/leases/${leaseId}/renew?created=1&start=${text(formData.get("startDate"))}`);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionScheduleMoveOut(formData: FormData) {
+  const leaseId = text(formData.get("leaseId"));
+  const back = `/m/leases/${leaseId}/moveout`;
+  try {
+    const session = await getSession();
+    const raw = text(formData.get("override")).trim();
+    await scheduleMoveOut(session, {
+      leaseId,
+      moveOutOn: text(formData.get("moveOutOn")),
+      reason: text(formData.get("reason")) as EndReason,
+      handover: text(formData.get("handover")),
+      overrideMajor: raw === "" ? null : num(formData.get("override")),
+    });
+    revalidatePath("/m/leases/expiring");
+    revalidatePath(`/m/leases/${leaseId}`);
+    redirect(`/m/leases/${leaseId}/settlement`);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionAddDeduction(formData: FormData) {
+  const leaseId = text(formData.get("leaseId"));
+  const back = `/m/leases/${leaseId}/settlement`;
+  try {
+    const session = await getSession();
+    const photos = formData.getAll("photos").filter((file) => file instanceof File && file.size > 0).length;
+    await addDeduction(session, {
+      leaseId,
+      kind: text(formData.get("kind")) === "electricity" ? "electricity" : "repair",
+      amountMajor: num(formData.get("amount")),
+      item: text(formData.get("item")),
+      photos,
+    });
+    revalidatePath(`/m/leases/${leaseId}/settlement`);
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionRemoveDeduction(formData: FormData) {
+  const leaseId = text(formData.get("leaseId"));
+  const back = `/m/leases/${leaseId}/settlement`;
+  try {
+    const session = await getSession();
+    await removeDeduction(session, { leaseId, lineId: text(formData.get("lineId")) });
+    revalidatePath(`/m/leases/${leaseId}/settlement`);
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionConfirmSettlement(formData: FormData) {
+  const leaseId = text(formData.get("leaseId"));
+  const back = `/m/leases/${leaseId}/settlement`;
+  try {
+    const session = await getSession();
+    await confirmSettlement(session, { leaseId, refundOn: text(formData.get("refundOn")) });
+    revalidatePath("/m/leases");
+    revalidatePath("/m/leases/expiring");
+    revalidatePath(`/m/leases/${leaseId}`);
+    redirect(`/m/leases/${leaseId}/settlement?done=1`);
+  } catch (error) {
+    bounce(back, error);
   }
 }
 

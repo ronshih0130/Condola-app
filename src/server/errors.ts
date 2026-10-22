@@ -39,6 +39,7 @@ export function mapDbError(error: unknown): Error {
   else if (/files_ticket_photo_cap/i.test(message)) key = "errors.photoSize";
   else if (/maintenance_tickets_schedule_order/i.test(message)) key = "errors.date";
   else if (/rented as whole_unit/i.test(message)) key = "errors.wholeUnit";
+  else if (/leases_closed_end_date_chk/i.test(message)) key = "errors.moveOutDate";
   else if (/month is closed|month_closed/i.test(message)) key = "errors.monthClosed";
   else if (/expense is on an issued statement/i.test(message)) key = "errors.expenseLocked";
   const wrapped = new FlowError(key);

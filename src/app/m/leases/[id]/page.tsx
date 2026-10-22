@@ -103,7 +103,7 @@ export default async function LeasePage({
               <tbody>
                 <tr>
                   <td>{t("i_period")}</td>
-                  <td>
+                  <td data-testid="summary-period" data-start={lease.start_date} data-end={lease.end_date ?? ""}>
                     {formatDate(lease.start_date, session.locale, session.calendar, dict)} – {formatDate(lease.end_date, session.locale, session.calendar, dict)}
                   </td>
                 </tr>
