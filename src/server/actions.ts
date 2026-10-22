@@ -36,6 +36,7 @@ import { getSession } from "./session";
 import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
+import { issueLineLinkCode, setLineOptOut } from "./line-store";
 
 export type ActionState = {
   error: string;
@@ -660,5 +661,17 @@ export async function actionPickLease(formData: FormData) {
   const leaseId = text(formData.get("leaseId"));
   const jar = await cookies();
   jar.set("condola_lease", leaseId, appCookieOptions({ httpOnly: false }));
+  redirect("/t");
+}
+
+export async function actionIssueLineCode() {
+  const session = await getSession();
+  if (session.kind === "tenant") await issueLineLinkCode(session);
+  redirect("/t");
+}
+
+export async function actionSetLineOptOut(formData: FormData) {
+  const session = await getSession();
+  if (session.kind === "tenant") await setLineOptOut(session, text(formData.get("optOut")) === "1");
   redirect("/t");
 }

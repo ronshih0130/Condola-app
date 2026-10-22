@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
+import { LineLinkPanel } from "@/components/line-link-panel";
 import { actionPickLease } from "@/server/actions";
 import { moneyLabel } from "@/server/format";
+import { loadTenantLinePanel } from "@/server/line-store";
 import { tenantLeaseMoney, tenantLeases } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -33,7 +35,7 @@ export default async function TenantHome() {
   }
   const lease = leases.find((item) => item.lease_id === session.leaseId) ?? leases[0];
   if (!lease) return <p>{t("i_empty")}</p>;
-  const money = await tenantLeaseMoney(session, lease.lease_id);
+  const [money, line] = await Promise.all([tenantLeaseMoney(session, lease.lease_id), loadTenantLinePanel(session)]);
   const rentMinor = money?.lease.rent ?? "0";
   const depositMinor = money?.lease.deposit ?? "0";
   const currency = money?.lease.currency ?? "TWD";
@@ -65,6 +67,15 @@ export default async function TenantHome() {
       )}
       <p className="small">{t("i_addr_managed", { address: displaySampleName(lease.address_display ?? lease.property_name), firm: lease.firm_name })}</p>
       <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
+      <LineLinkPanel
+        showLine={line.showLine}
+        locale={session.locale}
+        sandbox={line.sandbox}
+        linked={line.linked}
+        optOut={line.optOut}
+        code={line.code}
+        qrSvg={line.qrSvg}
+      />
     </div>
   );
 }

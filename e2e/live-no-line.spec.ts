@@ -65,11 +65,19 @@ test("live pages do not mention LINE except the support contact", async ({ page 
   await signIn(page, ACCOUNTS.tenant);
   await page.goto("/api/demo/locale?set=zh-TW&next=/t");
   await expect(page.getByTestId("liff-frame")).toBeVisible();
-  await expectLiveSurface(page);
   if (await page.getByTestId("lease-picker").count()) {
+    await expect(page.getByTestId("line-link-panel")).toHaveCount(0);
+    await expectLiveSurface(page);
     await page.getByRole("button", { name: /松信/ }).click();
     await expect(page.getByTestId("lease-picker")).toHaveCount(0);
   }
+  const panel = page.getByTestId("line-link-panel");
+  await expect(panel).toBeVisible();
+  const panelText = await panel.innerText();
+  const body = await page.locator("body").innerText();
+  expect(body.split(panelText).join("")).not.toContain("LINE");
+  await expect(page.locator("body")).not.toContainText("@644odqoe");
+  await expect(page.locator("body")).not.toContainText("官方客服");
 
   await page.goto("/t/messages");
   await expect(page.getByRole("heading", { name: "聯絡管理員" })).toBeVisible();

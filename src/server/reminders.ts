@@ -12,11 +12,15 @@ import {
   overdueTenantMail,
   spaceLabel,
 } from "./mail-copy";
+import { deliverTenantLine, retryFailedLinePushes } from "./line-store";
+import { payLink, rentReminderText, showLine, type LinePushRequest, type LineSendResult } from "./line";
 
 export const LEASE_THRESHOLDS = [60, 30, 7] as const;
 export const OVERDUE_ADMIN_THRESHOLDS = [1, 7] as const;
 
 export type ReminderKind = "lease_expiry_admin" | "lease_expiry_tenant" | "rent_overdue_admin" | "rent_overdue_tenant";
+
+export type LinePush = LinePushRequest & { email: MailMessage | null };
 
 export type ReminderPlan = {
   orgId: string;
@@ -24,9 +28,16 @@ export type ReminderPlan = {
   targetId: string;
   threshold: number;
   messages: MailMessage[];
+  linePushes?: LinePush[];
 };
 
-export type Person = { name: string; email: string };
+export type Person = {
+  name: string;
+  email: string;
+  contactId: string;
+  lineUserId: string;
+  lineOptOut: boolean;
+};
 
 export function taipeiToday(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -65,12 +76,21 @@ function people(value: unknown): Person[] {
   const out: Person[] = [];
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
-    const email = String((row as { email?: string }).email ?? "").trim();
-    const key = email.toLowerCase();
-    if (!email || seen.has(key)) continue;
+    const record = row as { email?: string; name?: string; contactId?: string; lineUserId?: string; lineOptOut?: boolean };
+    const email = String(record.email ?? "").trim();
+    const rawLine = String(record.lineUserId ?? "").trim();
+    const lineUserId = /^U[0-9a-f]{32}$/.test(rawLine) ? rawLine : "";
+    const key = (email || lineUserId).toLowerCase();
+    if ((!email && !lineUserId) || seen.has(key)) continue;
     seen.add(key);
-    const name = String((row as { name?: string }).name ?? "").trim() || "租客";
-    out.push({ name, email });
+    const name = String(record.name ?? "").trim() || "租客";
+    out.push({
+      name,
+      email,
+      contactId: String(record.contactId ?? "").trim(),
+      lineUserId,
+      lineOptOut: record.lineOptOut === true,
+    });
   }
   return out;
 }
@@ -131,7 +151,9 @@ export function planLeaseReminders(row: LeaseReminderInput, today: string): Remi
   }
   if (days === 30 && readTenantToggles(row.settings).leaseExpiry) {
     const contact = contactMethod(row.contactEmail, row.contactPhone);
-    const messages: MailMessage[] = tenants.map((tenant) => {
+    const messages: MailMessage[] = [];
+    for (const tenant of tenants) {
+      if (!tenant.email) continue;
       const rendered = leaseTenantMail({
         name: tenant.name,
         address: row.address || row.propertyName,
@@ -141,8 +163,8 @@ export function planLeaseReminders(row: LeaseReminderInput, today: string): Remi
         contact,
         url: `${row.origin}/t/lease`,
       });
-      return { to: tenant.email, subject: rendered.subject, text: rendered.text, html: rendered.html, replyTo };
-    });
+      messages.push({ to: tenant.email, subject: rendered.subject, text: rendered.text, html: rendered.html, replyTo });
+    }
     if (messages.length) {
       plans.push({ orgId: row.orgId, kind: "lease_expiry_tenant", targetId: row.leaseId, threshold: 30, messages });
     }
@@ -168,6 +190,8 @@ export type OverdueReminderInput = {
   tenants: unknown;
   staff: { name: string; email: string; prefs: unknown }[];
   origin: string;
+  /** Sample company and beta orgs only. Off for every other plan. */
+  lineEnabled?: boolean;
 };
 
 export function planOverdueReminders(row: OverdueReminderInput, today: string): ReminderPlan[] {
@@ -204,22 +228,43 @@ export function planOverdueReminders(row: OverdueReminderInput, today: string): 
   }
   if (days === 1 && readTenantToggles(row.settings).rentOverdue) {
     const contact = contactMethod(row.contactEmail, row.contactPhone);
-    const messages: MailMessage[] = tenants.map((tenant) => {
-      const rendered = overdueTenantMail({
-        name: tenant.name,
-        address: row.address || row.propertyName,
-        space,
-        month,
-        due,
-        amount,
-        company: row.orgName,
-        contact,
-        url: `${row.origin}/t/pay`,
-      });
-      return { to: tenant.email, subject: rendered.subject, text: rendered.text, html: rendered.html, replyTo };
-    });
-    if (messages.length) {
-      plans.push({ orgId: row.orgId, kind: "rent_overdue_tenant", targetId: row.invoiceId, threshold: 1, messages });
+    const messages: MailMessage[] = [];
+    const linePushes: LinePush[] = [];
+    const url = payLink(row.origin);
+    for (const tenant of tenants) {
+      const rendered = tenant.email
+        ? overdueTenantMail({
+            name: tenant.name,
+            address: row.address || row.propertyName,
+            space,
+            month,
+            due,
+            amount,
+            company: row.orgName,
+            contact,
+            url,
+          })
+        : null;
+      const email: MailMessage | null = rendered
+        ? { to: tenant.email, subject: rendered.subject, text: rendered.text, html: rendered.html, replyTo }
+        : null;
+      if (row.lineEnabled && tenant.lineUserId && !tenant.lineOptOut && tenant.contactId) {
+        linePushes.push({
+          orgId: row.orgId,
+          contactId: tenant.contactId,
+          lineUserId: tenant.lineUserId,
+          kind: "rent_reminder",
+          targetId: row.invoiceId,
+          text: rentReminderText(url),
+          email,
+          environment: "live",
+        });
+      } else if (email) {
+        messages.push(email);
+      }
+    }
+    if (messages.length || linePushes.length) {
+      plans.push({ orgId: row.orgId, kind: "rent_overdue_tenant", targetId: row.invoiceId, threshold: 1, messages, linePushes });
     }
   }
   return plans;
@@ -230,20 +275,49 @@ type ClaimStore = {
   complete(id: string, messageId: string): Promise<void>;
   release(id: string): Promise<void>;
   send(message: MailMessage): Promise<MailResult>;
+  sendLine?: (push: LinePush) => Promise<LineSendResult>;
 };
 
 export async function deliverReminders(plans: ReminderPlan[], io: ClaimStore) {
   let sent = 0;
   for (const plan of plans) {
-    if (plan.messages.length === 0) continue;
+    const pushes = plan.linePushes ?? [];
+    if (plan.messages.length === 0 && pushes.length === 0) continue;
     const id = await io.claim(plan);
     if (!id) continue;
     const ids: string[] = [];
+    let halted = false;
     for (const message of plan.messages) {
       const result = await io.send(message);
-      if (!result.ok) break;
+      if (!result.ok) {
+        halted = true;
+        break;
+      }
       ids.push(result.messageId);
       sent += 1;
+    }
+    if (!halted) {
+      for (const push of pushes) {
+        const result = io.sendLine ? await io.sendLine(push) : { ok: false as const, fallback: true, reason: "line sender missing" };
+        if (result.ok) {
+          ids.push(result.messageId);
+          sent += 1;
+          continue;
+        }
+        if (result.fallback && push.email) {
+          const mailed = await io.send(push.email);
+          if (!mailed.ok) {
+            halted = true;
+            break;
+          }
+          ids.push(mailed.messageId);
+          sent += 1;
+          continue;
+        }
+        if (result.fallback) continue;
+        halted = true;
+        break;
+      }
     }
     if (ids.length === 0) await io.release(id);
     else await io.complete(id, ids.join(","));
@@ -283,6 +357,8 @@ type InvoiceSqlRow = {
   contact_email: string | null;
   contact_phone: string | null;
   settings: unknown;
+  plan_tier: string;
+  feature_flags: unknown;
   property_name: string;
   address: string;
   unit_label: string | null;
@@ -293,13 +369,35 @@ type InvoiceSqlRow = {
 type StaffSqlRow = { org_id: string; name: string | null; email: string | null; email_prefs: unknown };
 
 const TENANTS_SQL = `
-  SELECT coalesce(json_agg(json_build_object('name', c.display_name, 'email', c.email::text)), '[]'::json)
+  SELECT coalesce(json_agg(json_build_object(
+           'name', c.display_name,
+           'email', c.email::text,
+           'contactId', c.id::text,
+           'lineUserId', (
+             SELECT ll.line_user_id
+               FROM line_account_links ll
+              WHERE ll.contact_id = c.id
+                AND ll.org_id = c.org_id
+                AND ll.status = 'linked'
+              ORDER BY ll.linked_at DESC NULLS LAST
+              LIMIT 1
+           ),
+           'lineOptOut', c.line_notify_opt_out
+         )), '[]'::json)
     FROM lease_parties lp
     JOIN contacts c ON c.id = lp.contact_id
    WHERE lp.lease_id = l.id
-     AND c.email IS NOT NULL
-     AND btrim(c.email::text) <> ''
-     AND (c.is_tenant OR lp.role IN ('primary', 'co_tenant'))`;
+     AND (c.is_tenant OR lp.role IN ('primary', 'co_tenant'))
+     AND (
+       (c.email IS NOT NULL AND btrim(c.email::text) <> '')
+       OR EXISTS (
+         SELECT 1
+           FROM line_account_links ll
+          WHERE ll.contact_id = c.id
+            AND ll.org_id = c.org_id
+            AND ll.status = 'linked'
+       )
+     )`;
 
 async function loadStaff(orgIds: string[]) {
   const grouped = new Map<string, { name: string; email: string; prefs: unknown }[]>();
@@ -364,6 +462,7 @@ async function loadInvoices() {
             i.due_date::text AS due_date, coalesce(i.period_start, i.due_date)::text AS period_start,
             i.balance_minor::text AS balance_minor, o.name AS org_name,
             o.contact_email::text AS contact_email, o.contact_phone, o.settings,
+            o.plan_tier::text AS plan_tier, o.feature_flags,
             p.name AS property_name, coalesce(nullif(p.address_display, ''), p.name) AS address,
             u.label AS unit_label, r.label AS room_label,
             (${TENANTS_SQL}) AS tenants
@@ -414,14 +513,16 @@ function dbStore(): ClaimStore {
       await query(`DELETE FROM email_log WHERE id = $1 AND message_id IS NULL`, [id]);
     },
     send: sendMail,
+    sendLine: (push) => deliverTenantLine(push),
   };
 }
 
 export async function runDueReminders(now = new Date()) {
+  const retried = await retryFailedLinePushes();
   const ready = await mailReady();
   if (!ready.ok) {
     console.warn(`reminders skipped: ${ready.reason}`);
-    return { sent: 0, skipped: ready.reason };
+    return { sent: retried, skipped: ready.reason };
   }
   const today = taipeiToday(now);
   const origin = publicSiteOrigin("");
@@ -479,11 +580,16 @@ export async function runDueReminders(now = new Date()) {
           tenants: row.tenants,
           staff: staff.get(row.org_id) ?? [],
           origin,
+          lineEnabled: showLine({
+            environment: row.environment,
+            planTier: row.plan_tier,
+            featureFlags: row.feature_flags,
+          }),
         },
         today,
       ),
     );
   }
   const sent = await deliverReminders(plans, dbStore());
-  return { sent, skipped: null as string | null };
+  return { sent: sent + retried, skipped: null as string | null };
 }

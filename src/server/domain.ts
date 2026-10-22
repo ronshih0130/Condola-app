@@ -27,6 +27,7 @@ import { assertPerm } from "./perms";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
 import { assertTicketStatus } from "./repair-rules";
+import { paymentLineHandled } from "./line-store";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
 function sha256(value: string) {
@@ -1933,7 +1934,9 @@ export async function recordPayment(
     await allocateAndLedger(client, payment, session.userId);
     return payment.id;
   });
-  await svc(session.userId, async (client) => queueDemoNotice(client, input.leaseId, "payment_confirmed"));
+  if (!(await paymentLineHandled(input.leaseId))) {
+    await svc(session.userId, async (client) => queueDemoNotice(client, input.leaseId, "payment_confirmed"));
+  }
   return { paymentId, status: "confirmed" as const };
 }
 
@@ -1967,7 +1970,9 @@ export async function confirmPayment(session: Session, paymentId: string) {
     await allocateAndLedger(client, payment, session.userId);
     return payment.lease_id;
   });
-  await svc(session.userId, async (client) => queueDemoNotice(client, leaseId, "payment_confirmed"));
+  if (!(await paymentLineHandled(leaseId))) {
+    await svc(session.userId, async (client) => queueDemoNotice(client, leaseId, "payment_confirmed"));
+  }
   return { paymentId, status: "confirmed" as const };
 }
 

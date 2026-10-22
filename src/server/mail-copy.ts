@@ -260,3 +260,22 @@ export function overdueTenantMail(vars: {
 export function passwordResetMail(url: string) {
   return renderTemplate(RESET_SUBJECT, RESET_BODY, { 重設連結: url });
 }
+
+const PAYMENT_RECORDED_SUBJECT = "款項到帳";
+const PAYMENT_RECORDED_BODY = `{租客姓名} 您好：
+
+款項到帳。請到下面的連結查看。
+
+[查看帳單]({租客帳單連結})
+
+此信由租多啦代 {管理公司名稱} 寄出。租多啦是管理公司使用的租賃管理軟體，不經手租金與押金。
+
+403 台中市西區府後街38號`;
+
+export function paymentRecordedMail(vars: { name: string; company: string; url: string }) {
+  return renderTemplate(PAYMENT_RECORDED_SUBJECT, PAYMENT_RECORDED_BODY, {
+    租客姓名: vars.name,
+    管理公司名稱: vars.company,
+    租客帳單連結: vars.url,
+  });
+}

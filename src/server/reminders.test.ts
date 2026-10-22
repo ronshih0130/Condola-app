@@ -104,6 +104,76 @@ test("overdue reminders reach admins on day 1 and 7, and tenants only on day 1",
   assert.deepEqual(planOverdueReminders({ ...row, dueDate: "2026-10-28" }, "2026-10-31"), []);
 });
 
+test("a linked beta tenant gets a LINE reminder with no personal data", () => {
+  const lineUserId = `U${"a".repeat(32)}`;
+  const row = {
+    orgId: "org-1",
+    invoiceId: "inv-1",
+    environment: "live",
+    dueDate: "2026-10-30",
+    periodStart: "2026-10-01",
+    balanceMinor: 1800000,
+    orgName: "松信管理",
+    contactEmail: null as string | null,
+    contactPhone: null as string | null,
+    settings: {},
+    propertyName: "府後街",
+    address: "台中市西區府後街38號",
+    unitLabel: "3F",
+    roomLabel: "A",
+    tenants: [{ name: "周美玲", email: "tenant@example.com", contactId: "contact-1", lineUserId, lineOptOut: false }],
+    staff: staff(),
+    origin,
+    lineEnabled: true,
+  };
+  const day1 = planOverdueReminders(row, "2026-10-31");
+  const tenant = day1.find((plan) => plan.kind === "rent_overdue_tenant");
+  assert.ok(tenant);
+  assert.equal(tenant.messages.length, 0);
+  assert.equal(tenant.linePushes?.length, 1);
+  assert.equal(tenant.linePushes?.[0].text, "【繳款提醒】您有未繳租金。請查看：https://app.condola.app/t/pay");
+  assert.equal(tenant.linePushes?.[0].lineUserId, lineUserId);
+  const text = tenant.linePushes?.[0].text ?? "";
+  assert.equal(text.includes("周美玲"), false);
+  assert.equal(text.includes("18,000"), false);
+  assert.equal(text.includes("NT$"), false);
+  assert.equal(text.includes("入帳"), false);
+  assert.equal(day1.some((plan) => plan.kind === "rent_overdue_admin"), true);
+});
+
+test("opt-out or a disabled flag keeps the overdue email and skips LINE", () => {
+  const base = {
+    orgId: "org-1",
+    invoiceId: "inv-1",
+    environment: "live",
+    dueDate: "2026-10-30",
+    periodStart: "2026-10-01",
+    balanceMinor: 1800000,
+    orgName: "松信管理",
+    contactEmail: null as string | null,
+    contactPhone: null as string | null,
+    settings: {},
+    propertyName: "府後街",
+    address: "台中市西區府後街38號",
+    unitLabel: "3F",
+    roomLabel: "A",
+    staff: staff(),
+    origin,
+  };
+  const linked = [{ name: "周美玲", email: "tenant@example.com", contactId: "contact-1", lineUserId: `U${"b".repeat(32)}`, lineOptOut: true }];
+  const optedOut = planOverdueReminders({ ...base, tenants: linked, lineEnabled: true }, "2026-10-31");
+  const tenant = optedOut.find((plan) => plan.kind === "rent_overdue_tenant");
+  assert.equal(tenant?.messages.length, 1);
+  assert.equal(tenant?.linePushes?.length ?? 0, 0);
+  assert.match(tenant?.messages[0].text ?? "", /周美玲/);
+  const off = planOverdueReminders(
+    { ...base, lineEnabled: false, tenants: [{ ...linked[0], lineOptOut: false }] },
+    "2026-10-31",
+  );
+  assert.equal(off.find((plan) => plan.kind === "rent_overdue_tenant")?.linePushes?.length ?? 0, 0);
+  assert.equal(off.find((plan) => plan.kind === "rent_overdue_tenant")?.messages.length, 1);
+});
+
 test("a claimed reminder is not sent twice, and a skipped send releases the claim", async () => {
   const plan: ReminderPlan = {
     orgId: "org-1",
@@ -157,6 +227,80 @@ test("a claimed reminder is not sent twice, and a skipped send releases the clai
     0,
   );
   assert.deepEqual(released, ["row-2"]);
+});
+
+test("LINE fallback sends the stored email, and a retry does not", async () => {
+  const email = { to: "tenant@example.com", subject: "未繳租金", text: "請查看帳單", html: "<p>請查看帳單</p>" };
+  const plan: ReminderPlan = {
+    orgId: "org-1",
+    kind: "rent_overdue_tenant",
+    targetId: "inv-1",
+    threshold: 1,
+    messages: [],
+    linePushes: [
+      {
+        orgId: "org-1",
+        contactId: "contact-1",
+        lineUserId: `U${"c".repeat(32)}`,
+        kind: "rent_reminder",
+        targetId: "inv-1",
+        text: "【繳款提醒】您有未繳租金。請查看：https://app.condola.app/t/pay",
+        email,
+        environment: "live",
+      },
+    ],
+  };
+  const mailed: string[] = [];
+  const completed: string[] = [];
+  assert.equal(
+    await deliverReminders([plan], {
+      async claim() {
+        return "row-line";
+      },
+      async complete(_id, messageId) {
+        completed.push(messageId);
+      },
+      async release() {
+        throw new Error("should not release a fallback send");
+      },
+      async send(message) {
+        mailed.push(message.to);
+        return { ok: true, messageId: "mail-1", provider: "cloudflare" };
+      },
+      async sendLine() {
+        return { ok: false, fallback: true, reason: "not_linked" };
+      },
+    }),
+    1,
+  );
+  assert.deepEqual(mailed, ["tenant@example.com"]);
+  assert.deepEqual(completed, ["mail-1"]);
+
+  const released: string[] = [];
+  const sent: string[] = [];
+  assert.equal(
+    await deliverReminders([plan], {
+      async claim() {
+        return "row-wait";
+      },
+      async complete() {
+        throw new Error("should not complete a waiting push");
+      },
+      async release(id) {
+        released.push(id);
+      },
+      async send() {
+        sent.push("email");
+        return { ok: true, messageId: "mail-2", provider: "cloudflare" };
+      },
+      async sendLine() {
+        return { ok: false, fallback: false, reason: "waiting" };
+      },
+    }),
+    0,
+  );
+  assert.deepEqual(released, ["row-wait"]);
+  assert.deepEqual(sent, []);
 });
 
 test("the cron secret check rejects a missing or wrong secret", () => {

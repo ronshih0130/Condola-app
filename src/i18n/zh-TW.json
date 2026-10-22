@@ -1934,5 +1934,15 @@
  "i_utility_public_warn": "分表加總超過台電總度數，請檢查度數。超出的度數記入屋主「公共用電」。",
  "i_utility_gap": "屋主負擔・電費（帳單差額）",
  "i_utility_gap_warn": "帳單金額和每度電價 × 總度數相差超過 5%，請檢查每度電價。",
- "i_utility_remainder": "屋主負擔・餘數"
+ "i_utility_remainder": "屋主負擔・餘數",
+ "i_line_link_title": "用 LINE 接收繳款提醒",
+ "i_line_link_help": "請用 LINE 掃描 QR，或把一次性連結碼傳給通知帳號。這個碼只能用一次。",
+ "i_line_link_code": "一次性連結碼",
+ "i_line_link_new": "產生連結碼",
+ "i_line_link_again": "產生新的連結碼",
+ "i_line_linked": "已連結 LINE。繳款提醒會送到 LINE。",
+ "i_line_opt_out": "不要再用 LINE 接收繳款提醒",
+ "i_line_opt_in": "改用 LINE 接收繳款提醒",
+ "i_line_opt_out_note": "已關閉 LINE 提醒。未繳租金改以電子郵件通知。",
+ "i_line_sandbox_note": "範例公司不會實際寄出通知。"
 }

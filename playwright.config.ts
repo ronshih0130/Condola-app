@@ -18,6 +18,12 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
+      command: "node e2e/line-api.mjs",
+      url: "http://127.0.0.1:4601/health",
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
       command: "npm run dev",
       url: "http://127.0.0.1:43123",
       reuseExistingServer: false,
@@ -26,6 +32,10 @@ export default defineConfig({
         ...process.env,
         SUPABASE_URL: "http://127.0.0.1:4599",
         SUPABASE_SERVICE_ROLE_KEY: "e2e-photo-key",
+        LINE_CHANNEL_SECRET: "e2e-line-secret",
+        LINE_CHANNEL_ACCESS_TOKEN: "e2e-line-token",
+        LINE_API_ORIGIN: "http://127.0.0.1:4601",
+        LINE_OA_BASIC_ID: "@condola-qa",
       },
     },
   ],

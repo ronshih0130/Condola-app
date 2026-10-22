@@ -1934,5 +1934,15 @@
  "i_utility_public_warn": "Room meters add up to more than the Taipower total. Check the readings. The extra kWh is an owner expense.",
  "i_utility_gap": "Owner · bill difference",
  "i_utility_gap_warn": "The bill and rate × total kWh differ by more than 5%. Check the price per kWh.",
- "i_utility_remainder": "Owner · rounding remainder"
+ "i_utility_remainder": "Owner · rounding remainder",
+ "i_line_link_title": "Get rent reminders on LINE",
+ "i_line_link_help": "Scan the QR with LINE, or send the one-time link code to the notification account. The code works once.",
+ "i_line_link_code": "One-time link code",
+ "i_line_link_new": "Create a link code",
+ "i_line_link_again": "Create a new link code",
+ "i_line_linked": "LINE is linked. Rent reminders go to LINE.",
+ "i_line_opt_out": "Stop rent reminders on LINE",
+ "i_line_opt_in": "Use LINE for rent reminders",
+ "i_line_opt_out_note": "LINE reminders are off. Unpaid rent is emailed instead.",
+ "i_line_sandbox_note": "The sample company does not actually send notifications."
 }
