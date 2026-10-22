@@ -89,9 +89,21 @@ async function endOnce(client: Client, ended: { current: boolean }) {
  * `DATABASE_URL` connection otherwise.
  */
 let hyperdriveCache: string | null | undefined;
+let clientFactory: ((route: DbRoute) => Promise<Client>) | null = null;
 
 export function resetHyperdriveCache() {
   hyperdriveCache = undefined;
+  clientFactory = null;
+}
+
+/** Unit tests only. A string forces the Hyperdrive branch; null forces DATABASE_URL. */
+export function useHyperdriveForTests(url: string | null) {
+  hyperdriveCache = url;
+}
+
+/** Unit tests only. Returns the same client twice to imitate a pooled connection. */
+export function setDbClientFactoryForTests(factory: ((route: DbRoute) => Promise<Client>) | null) {
+  clientFactory = factory;
 }
 
 async function hyperdriveConnectionString(): Promise<string | undefined> {
@@ -113,6 +125,7 @@ async function hyperdriveConnectionString(): Promise<string | undefined> {
 }
 
 async function connectRoute(route: DbRoute): Promise<Client> {
+  if (clientFactory) return clientFactory(route);
   const hyperdrive = route === "read" ? await hyperdriveConnectionString() : undefined;
   const client = new Client({
     connectionString: selectConnectionString(route, process.env.DATABASE_URL, hyperdrive),

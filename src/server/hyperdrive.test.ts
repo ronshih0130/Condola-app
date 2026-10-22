@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
+import type { Client } from "pg";
+import { resetHyperdriveCache, setDbClientFactoryForTests, tx, useHyperdriveForTests } from "./db";
 import { preambleSql, selectConnectionString, SET_ROLE_SQL } from "./hyperdrive";
 
 const queries = readFileSync(new URL("./queries.ts", import.meta.url), "utf8");
@@ -108,4 +110,122 @@ test("the Hyperdrive login migration is additive and is not granted service_role
   assert.match(probe, /SET LOCAL ROLE authenticated/);
   assert.match(probe, /ORG_ID/);
   assert.match(probe, /ORG2_ID/);
+  assert.match(probe, /leaseCount\(ORG2_ID\), 0/);
+  assert.match(probe, /leaseCount\(ORG_ID\), 0/);
+});
+
+test("a reused Hyperdrive connection drops the previous user's transaction settings", async () => {
+  const userA = "20000000-0000-4000-8000-000000000001";
+  const userB = "20000000-0000-4000-8000-000000000009";
+  const orgA = "10000000-0000-4000-8000-000000000001";
+  const orgB = "10000000-0000-4000-8000-000000000002";
+  const session = new Map<string, { value: string; local: boolean }>();
+  let role: string | null = null;
+  let inTx = false;
+  const queries: string[] = [];
+
+  function clearLocal() {
+    for (const [key, entry] of session) {
+      if (entry.local) session.delete(key);
+    }
+    role = null;
+    inTx = false;
+  }
+
+  function apply(sql: string) {
+    for (const part of sql.split(";").map((statement) => statement.trim()).filter(Boolean)) {
+      if (/^BEGIN\b/i.test(part)) {
+        if (inTx) throw new Error("BEGIN inside an open transaction");
+        inTx = true;
+        continue;
+      }
+      if (/^COMMIT\b/i.test(part) || /^ROLLBACK\b/i.test(part)) {
+        if (!inTx) throw new Error("COMMIT outside a transaction");
+        clearLocal();
+        continue;
+      }
+      const roleMatch = /^SET LOCAL ROLE\s+(\S+)/i.exec(part);
+      if (roleMatch) {
+        if (!inTx) throw new Error("SET LOCAL ROLE outside a transaction");
+        role = roleMatch[1];
+        continue;
+      }
+      const configs = [...part.matchAll(/set_config\('([^']+)', '([^']*)', (true|false)\)/gi)];
+      if (configs.length === 0) continue;
+      if (!inTx) throw new Error("set_config outside a transaction");
+      for (const config of configs) {
+        session.set(config[1], { value: config[2], local: config[3] === "true" });
+      }
+    }
+  }
+
+  const client = {
+    async query(sql: string) {
+      queries.push(sql);
+      apply(sql);
+      return { rows: [], rowCount: 0 };
+    },
+    async end() {},
+  } as unknown as Client;
+  useHyperdriveForTests("postgres://condola_hyperdrive@hyperdrive.local/postgres");
+  setDbClientFactoryForTests(async () => client);
+  try {
+    const first = await tx(
+      userA,
+      async () => ({
+        sub: session.get("request.jwt.claim.sub")?.value,
+        org: session.get("app.active_org_id")?.value,
+        roleClaim: session.get("request.jwt.claim.role")?.value,
+        env: session.get("app.env")?.value,
+        local: [...session.values()].every((entry) => entry.local),
+        role,
+      }),
+      { orgId: orgA, environment: "live" },
+    );
+    assert.equal(first.sub, userA);
+    assert.equal(first.org, orgA);
+    assert.equal(first.roleClaim, "authenticated");
+    assert.equal(first.env, "live");
+    assert.equal(first.local, true);
+    assert.equal(first.role, "authenticated");
+    assert.equal(session.size, 0);
+    assert.equal(role, null);
+
+    const second = await tx(
+      userB,
+      async () => ({
+        sub: session.get("request.jwt.claim.sub")?.value,
+        org: session.get("app.active_org_id")?.value,
+        role,
+        leakedUser: [...session.values()].some((entry) => entry.value === userA),
+        leakedOrg: [...session.values()].some((entry) => entry.value === orgA),
+      }),
+      { orgId: orgB, environment: "sandbox" },
+    );
+    assert.equal(second.sub, userB);
+    assert.equal(second.org, orgB);
+    assert.equal(second.role, "authenticated");
+    assert.equal(second.leakedUser, false);
+    assert.equal(second.leakedOrg, false);
+
+    const preambles = queries.filter((sql) => sql.startsWith("BEGIN"));
+    assert.equal(preambles.length, 2);
+    assert.match(preambles[0], new RegExp(`set_config\\('request\\.jwt\\.claim\\.sub', '${userA}', true\\)`));
+    assert.match(preambles[0], /set_config\('request\.jwt\.claim\.role', 'authenticated', true\)/);
+    assert.match(preambles[0], new RegExp(`set_config\\('app\\.active_org_id', '${orgA}', true\\)`));
+    assert.match(preambles[0], /set_config\('app\.env', 'live', true\)/);
+    assert.match(preambles[0], /SET LOCAL ROLE authenticated/);
+    assert.equal(preambles[0].includes(userB), false);
+    assert.match(preambles[1], new RegExp(`set_config\\('request\\.jwt\\.claim\\.sub', '${userB}', true\\)`));
+    assert.match(preambles[1], new RegExp(`set_config\\('app\\.active_org_id', '${orgB}', true\\)`));
+    assert.match(preambles[1], /set_config\('app\.env', 'sandbox', true\)/);
+    assert.match(preambles[1], /SET LOCAL ROLE authenticated/);
+    assert.equal(preambles[1].includes(userA), false);
+    assert.equal(preambles[1].includes(orgA), false);
+    const commitAt = queries.indexOf("COMMIT");
+    const secondAt = queries.indexOf(preambles[1]);
+    assert.ok(commitAt > queries.indexOf(preambles[0]) && commitAt < secondAt);
+  } finally {
+    resetHyperdriveCache();
+  }
 });

@@ -47,22 +47,36 @@ test("condola_hyperdrive is not superuser and RLS filters leases by org", async 
       () => client.query("SELECT org_id::text FROM leases LIMIT 1"),
       (error: { code?: string }) => error.code === "42501",
     );
-    const claim = preambleSql({
-      userId: USERS.admin,
-      role: "authenticated",
-      pin: { orgId: ORG_ID, environment: "live" },
-      begin: false,
-    });
-    assert.match(claim, /SET LOCAL ROLE authenticated/);
-    await client.query(claim);
-    const orgs = await client.query<{ org_id: string }>(`SELECT DISTINCT org_id::text AS org_id FROM leases`);
-    assert.ok(orgs.rows.length > 0);
-    assert.deepEqual(
-      [...new Set(orgs.rows.map((lease) => lease.org_id))],
-      [ORG_ID],
-    );
-    const other = await client.query(`SELECT id FROM leases WHERE org_id = $1`, [ORG2_ID]);
-    assert.equal(other.rows.length, 0);
+    await client.query("ROLLBACK");
+
+    async function leaseCount(orgId: string) {
+      const result = await client.query<{ n: string }>(`SELECT count(*)::text AS n FROM leases WHERE org_id = $1`, [orgId]);
+      return Number(result.rows[0]?.n ?? 0);
+    }
+
+    async function asOrg(userId: string, orgId: string) {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL ROLE condola_hyperdrive");
+      const claim = preambleSql({
+        userId,
+        role: "authenticated",
+        pin: { orgId, environment: "live" },
+        begin: false,
+      });
+      assert.match(claim, /set_config\('request\.jwt\.claim\.sub', '[^']+', true\)/);
+      assert.match(claim, /set_config\('app\.active_org_id', '[^']+', true\)/);
+      assert.match(claim, /SET LOCAL ROLE authenticated/);
+      await client.query(claim);
+    }
+
+    await asOrg(USERS.admin, ORG_ID);
+    assert.ok(await leaseCount(ORG_ID) > 0);
+    assert.equal(await leaseCount(ORG2_ID), 0);
+    await client.query("ROLLBACK");
+
+    await asOrg(USERS.coastAdmin, ORG2_ID);
+    assert.ok(await leaseCount(ORG2_ID) > 0);
+    assert.equal(await leaseCount(ORG_ID), 0);
     await client.query("ROLLBACK");
   } finally {
     await client.end().catch(() => {});
