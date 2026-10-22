@@ -5,6 +5,7 @@ import {
   LIST_PAGE_SIZE,
   bindList,
   leaseSearchSql,
+  pagedListSql,
   parseListQuery,
   propertySearchSql,
   slicePage,
@@ -18,6 +19,10 @@ import type { Session } from "./types";
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
 
 const EMPTY_TRYOUT: Tryout = { property: false, lease: false, statement: false, repair: false };
+
+function jsonRows<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
 
 export async function loadTryout(session: Session): Promise<Tryout> {
   try {
@@ -48,25 +53,32 @@ export async function loadManagerChrome(session: Session) {
   };
   try {
     return await tx(session.userId, async (client) => {
-      const row = await maybe<{ settings: { tryout?: Partial<Tryout> }; name: string; default_locale: string }>(
+      const row = await maybe<{
+        settings: { tryout?: Partial<Tryout> } | null;
+        name: string | null;
+        default_locale: string | null;
+        bank_name: string | null;
+        account_last5: string | null;
+        pending: string | null;
+        tickets: string | null;
+      }>(
         client,
-        `SELECT settings, name, default_locale FROM organizations WHERE id = $1`,
+        `SELECT o.settings, o.name, o.default_locale,
+                b.bank_name, b.account_last5,
+                (SELECT count(*)::text FROM payments WHERE org_id = anchor.org_id AND status = 'submitted') AS pending,
+                (SELECT count(*)::text FROM maintenance_tickets
+                  WHERE org_id = anchor.org_id AND status NOT IN ('resolved','closed','cancelled')) AS tickets
+           FROM (SELECT $1::uuid AS org_id) anchor
+           LEFT JOIN organizations o ON o.id = anchor.org_id
+           LEFT JOIN LATERAL (
+             SELECT bank_name, account_last5 FROM bank_accounts
+              WHERE org_id = anchor.org_id AND archived_at IS NULL AND show_to_tenants
+              ORDER BY created_at
+              LIMIT 1
+           ) b ON true`,
         [session.orgId],
       );
       const flags = row?.settings?.tryout ?? {};
-      const bank = await maybe<{ bank_name: string; account_last5: string }>(
-        client,
-        `SELECT bank_name, account_last5 FROM bank_accounts
-          WHERE org_id = $1 AND archived_at IS NULL AND show_to_tenants ORDER BY created_at LIMIT 1`,
-        [session.orgId],
-      );
-      const countsRow = await maybe<{ pending: string; tickets: string }>(
-        client,
-        `SELECT
-           (SELECT count(*)::text FROM payments WHERE org_id = $1 AND status = 'submitted') AS pending,
-           (SELECT count(*)::text FROM maintenance_tickets WHERE org_id = $1 AND status NOT IN ('resolved','closed','cancelled')) AS tickets`,
-        [session.orgId],
-      );
       return {
         flags: {
           property: Boolean(flags.property),
@@ -76,11 +88,11 @@ export async function loadManagerChrome(session: Session) {
         },
         firm: {
           name: row?.name ?? "",
-          bankName: bank?.bank_name ?? "",
-          last5: bank?.account_last5 ?? "",
+          bankName: row?.bank_name ?? "",
+          last5: row?.account_last5 ?? "",
           defaultLocale: (row?.default_locale === "en" ? "en" : "zh-TW") as "zh-TW" | "en",
         },
-        badge: { pending: Number(countsRow?.pending ?? 0), tickets: Number(countsRow?.tickets ?? 0) },
+        badge: { pending: Number(row?.pending ?? 0), tickets: Number(row?.tickets ?? 0) },
       };
     });
   } catch {
@@ -90,19 +102,31 @@ export async function loadManagerChrome(session: Session) {
 
 export async function loadFirm(session: Session) {
   return tx(session.userId, async (client) => {
-    const org = await maybe<{ name: string; default_locale: string }>(
+    const row = await maybe<{
+      name: string | null;
+      default_locale: string | null;
+      bank_name: string | null;
+      account_last5: string | null;
+    }>(
       client,
-      `SELECT name, default_locale FROM organizations WHERE id = $1`,
+      `SELECT o.name, o.default_locale, b.bank_name, b.account_last5
+         FROM (SELECT $1::uuid AS org_id) anchor
+         LEFT JOIN organizations o ON o.id = anchor.org_id
+         LEFT JOIN LATERAL (
+           SELECT bank_name, account_last5 FROM bank_accounts
+            WHERE org_id = anchor.org_id AND archived_at IS NULL AND show_to_tenants
+            ORDER BY created_at
+            LIMIT 1
+         ) b ON true`,
       [session.orgId],
     );
-    const bank = await maybe<{ bank_name: string; account_last5: string }>(
-      client,
-      `SELECT bank_name, account_last5 FROM bank_accounts
-        WHERE org_id = $1 AND archived_at IS NULL AND show_to_tenants ORDER BY created_at LIMIT 1`,
-      [session.orgId],
-    );
-    const locale = org?.default_locale === "en" ? "en" : "zh-TW";
-    return { name: org?.name ?? "", bankName: bank?.bank_name ?? "", last5: bank?.account_last5 ?? "", defaultLocale: locale as "zh-TW" | "en" };
+    const locale = row?.default_locale === "en" ? "en" : "zh-TW";
+    return {
+      name: row?.name ?? "",
+      bankName: row?.bank_name ?? "",
+      last5: row?.account_last5 ?? "",
+      defaultLocale: locale as "zh-TW" | "en",
+    };
   });
 }
 
@@ -572,13 +596,36 @@ const LEASE_LIST_SQL = `SELECT l.id::text, l.status::text, l.esign_status::text 
 
 const LEASE_LIST_ORDER = "ORDER BY l.created_at DESC, l.id";
 
+async function loadLeaseList(client: Parameters<typeof many>[0], bound: ReturnType<typeof bindList>) {
+  if (bound.limit === null) {
+    const rows = await many<LeaseListRow>(client, LEASE_LIST_SQL, bound.params);
+    return slicePage(rows, null, rows.length, bound.page);
+  }
+  const rows = await many<LeaseListRow & { __total?: number }>(
+    client,
+    pagedListSql(LEASE_LIST_SQL, LEASE_LIST_ORDER, bound.pageSql),
+    bound.params,
+  );
+  if (rows.length === 0) {
+    const counted = await maybe<{ n: number }>(
+      client,
+      `SELECT count(*)::int AS n FROM (${LEASE_LIST_SQL.slice(0, LEASE_LIST_SQL.lastIndexOf(LEASE_LIST_ORDER))}) counted`,
+      bound.params.slice(0, 2),
+    );
+    return slicePage([], bound.limit, Number(counted?.n ?? 0), bound.page);
+  }
+  const total = Number(rows[0]?.__total ?? 0);
+  const cleaned = rows.map((row) => {
+    const copy = { ...row };
+    delete copy.__total;
+    return copy as LeaseListRow;
+  });
+  return slicePage(cleaned, bound.limit, total, bound.page);
+}
+
 async function queryLeases(session: Session, opts?: ListOpts) {
   const bound = bindList(session.orgId, opts);
-  return tx(
-    session.userId,
-    (client) => loadList<LeaseListRow>(client, LEASE_LIST_SQL, LEASE_LIST_ORDER, bound),
-    listScope(session),
-  );
+  return tx(session.userId, (client) => loadLeaseList(client, bound), listScope(session));
 }
 
 export async function listLeases(session: Session) {
@@ -593,65 +640,121 @@ export async function searchLeases(session: Session, raw?: { q?: string; page?: 
 
 export async function leaseDetail(session: Session, id: string) {
   return tx(session.userId, async (client) => {
-    const lease = await maybe<{
-      id: string;
-      status: string;
-      esign: string;
-      currency: string;
-      rent: string;
-      deposit: string;
-      due_day: number;
-      start_date: string;
-      end_date: string;
-      place: string;
-      tenant_contact_id: string;
-      tenant_user_id: string | null;
-      tenant: string;
-      phone: string | null;
-      email: string | null;
-      line_user_id: string | null;
-      signed_pdf: string | null;
-      thread_id: string | null;
-      deposit_months: string | null;
-      deposit_override_reason: string | null;
-      updated_at: string;
-      signed_at: string | null;
+    const row = await maybe<{
+      lease: {
+        id: string;
+        status: string;
+        esign: string;
+        currency: string;
+        rent: string;
+        deposit: string;
+        due_day: number;
+        start_date: string;
+        end_date: string;
+        place: string;
+        tenant_contact_id: string;
+        tenant_user_id: string | null;
+        tenant: string;
+        phone: string | null;
+        email: string | null;
+        line_user_id: string | null;
+        signed_pdf: string | null;
+        thread_id: string | null;
+        deposit_months: string | null;
+        deposit_override_reason: string | null;
+        updated_at: string;
+        signed_at: string | null;
+      } | null;
+      signatures: { role: string; status: string; signed_name: string | null; signed_at: string | null }[];
+      invoices: {
+        id: string;
+        status: string;
+        total: string;
+        paid: string;
+        balance: string;
+        currency: string;
+        due_date: string;
+      }[];
+      lines: { invoice_id: string; charge_type: string; amount: string }[];
     }>(
       client,
-      `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, l.currency,
-              l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.due_day,
-              l.deposit_months::text AS deposit_months, l.deposit_override_reason,
-              l.updated_at::text AS updated_at, l.signed_at::text AS signed_at,
-              l.start_date::text, l.end_date::text,
-              p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
-              c.id::text AS tenant_contact_id,
-              c.user_id::text AS tenant_user_id,
-              c.display_name AS tenant,
-              CASE WHEN app.has_role(l.org_id, '{admin,manager,maintenance}') THEN c.phone_e164 END AS phone,
-              c.email,
-              c.line_user_id,
-              (SELECT f.file_name FROM lease_signed_pdfs pdf
-                 JOIN files f ON f.id = pdf.file_id
-                WHERE pdf.lease_id = l.id
-                ORDER BY pdf.created_at DESC LIMIT 1) AS signed_pdf,
-              (SELECT t.id::text FROM message_threads t WHERE t.lease_id = l.id AND t.kind = 'lease' LIMIT 1) AS thread_id
-         FROM leases l
-         JOIN properties p ON p.id = l.property_id
-         JOIN units u ON u.id = l.unit_id
-         LEFT JOIN rooms r ON r.id = l.target_room_id
-         JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
-         JOIN contacts c ON c.id = lp.contact_id
-        WHERE l.id = $1 AND l.org_id = $2`,
+      `SELECT
+         (SELECT json_build_object(
+                   'id', l.id::text,
+                   'status', l.status::text,
+                   'esign', l.esign_status::text,
+                   'currency', l.currency,
+                   'rent', l.rent_amount_minor::text,
+                   'deposit', l.deposit_amount_minor::text,
+                   'due_day', l.due_day,
+                   'deposit_months', l.deposit_months::text,
+                   'deposit_override_reason', l.deposit_override_reason,
+                   'updated_at', l.updated_at::text,
+                   'signed_at', l.signed_at::text,
+                   'start_date', l.start_date::text,
+                   'end_date', l.end_date::text,
+                   'place', p.name || ' ' || u.label || coalesce(' ' || r.label, ''),
+                   'tenant_contact_id', c.id::text,
+                   'tenant_user_id', c.user_id::text,
+                   'tenant', c.display_name,
+                   'phone', CASE WHEN app.has_role(l.org_id, '{admin,manager,maintenance}') THEN c.phone_e164 END,
+                   'email', c.email,
+                   'line_user_id', c.line_user_id,
+                   'signed_pdf', (SELECT f.file_name FROM lease_signed_pdfs pdf
+                                    JOIN files f ON f.id = pdf.file_id
+                                   WHERE pdf.lease_id = l.id
+                                   ORDER BY pdf.created_at DESC LIMIT 1),
+                   'thread_id', (SELECT t.id::text FROM message_threads t
+                                  WHERE t.lease_id = l.id AND t.kind = 'lease' LIMIT 1)
+                 )
+            FROM leases l
+            JOIN properties p ON p.id = l.property_id
+            JOIN units u ON u.id = l.unit_id
+            LEFT JOIN rooms r ON r.id = l.target_room_id
+            JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
+            JOIN contacts c ON c.id = lp.contact_id
+           WHERE l.id = $1 AND l.org_id = $2) AS lease,
+         coalesce((
+           SELECT json_agg(json_build_object(
+                    'role', s.signer_role::text,
+                    'status', s.status::text,
+                    'signed_name', s.signed_name,
+                    'signed_at', s.signed_at::text
+                  ) ORDER BY s.signing_order)
+             FROM lease_signatures s
+            WHERE s.lease_id = $1 AND s.org_id = $2
+         ), '[]'::json) AS signatures,
+         coalesce((
+           SELECT json_agg(json_build_object(
+                    'id', i.id::text,
+                    'status', i.status::text,
+                    'total', i.total_minor::text,
+                    'paid', i.paid_minor::text,
+                    'balance', i.balance_minor::text,
+                    'currency', i.currency,
+                    'due_date', i.due_date::text
+                  ) ORDER BY i.issue_date, i.created_at)
+             FROM invoices i
+            WHERE i.lease_id = $1 AND i.org_id = $2 AND i.status <> 'void'
+         ), '[]'::json) AS invoices,
+         coalesce((
+           SELECT json_agg(json_build_object(
+                    'invoice_id', line.invoice_id::text,
+                    'charge_type', line.charge_type::text,
+                    'amount', line.amount_minor::text
+                  ) ORDER BY line.line_no)
+             FROM invoice_lines line
+             JOIN invoices i ON i.id = line.invoice_id AND i.org_id = line.org_id
+            WHERE i.lease_id = $1 AND i.org_id = $2 AND i.status <> 'void' AND line.org_id = $2
+         ), '[]'::json) AS lines`,
       [id, session.orgId],
     );
+    const lease = row?.lease ?? null;
     if (!lease) return null;
-    const signatures = await many<{ role: string; status: string; signed_name: string | null; signed_at: string | null }>(
-      client,
-      `SELECT signer_role::text AS role, status::text, signed_name, signed_at::text
-         FROM lease_signatures WHERE lease_id = $1 ORDER BY signing_order`,
-      [id],
+    const signatures = jsonRows<{ role: string; status: string; signed_name: string | null; signed_at: string | null }>(
+      row?.signatures,
     );
-    const invoices = await many<{
+    const invoices = jsonRows<{
       id: string;
       status: string;
       total: string;
@@ -659,21 +762,8 @@ export async function leaseDetail(session: Session, id: string) {
       balance: string;
       currency: string;
       due_date: string;
-    }>(
-      client,
-      `SELECT id::text, status::text, total_minor::text AS total, paid_minor::text AS paid,
-              balance_minor::text AS balance, currency, due_date::text
-         FROM invoices WHERE lease_id = $1 AND status <> 'void' ORDER BY issue_date, created_at`,
-      [id],
-    );
-    const lines = invoices.length
-      ? await many<{ invoice_id: string; charge_type: string; amount: string }>(
-          client,
-          `SELECT invoice_id::text, charge_type::text, amount_minor::text AS amount
-             FROM invoice_lines WHERE invoice_id = ANY($1::uuid[]) ORDER BY line_no`,
-          [invoices.map((invoice) => invoice.id)],
-        )
-      : [];
+    }>(row?.invoices);
+    const lines = jsonRows<{ invoice_id: string; charge_type: string; amount: string }>(row?.lines);
     const open = invoices.filter((invoice) => invoice.status === "open" || invoice.status === "partially_paid");
     const dueMinor = open.reduce((sum, invoice) => {
       const invoiceLines = lines

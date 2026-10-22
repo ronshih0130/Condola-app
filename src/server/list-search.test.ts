@@ -7,6 +7,7 @@ import {
   ilikePattern,
   leaseSearchSql,
   listHref,
+  pagedListSql,
   parseListQuery,
   propertySearchSql,
   searchSqlTouchesNationalId,
@@ -113,4 +114,30 @@ test("list SQL is parameterized, org-scoped, paged, and does not read national I
   const header = readFileSync(new URL("../app/layout.tsx", import.meta.url), "utf8");
   assert.equal(header.includes("ListSearch"), false);
   assert.equal(LIST_PAGE_SIZE, 50);
+});
+
+test("the lease list and detail each use one statement and no Hyperdrive client", () => {
+  const paged = pagedListSql("SELECT l.id\n FROM leases l\n ORDER BY l.created_at DESC, l.id", "ORDER BY l.created_at DESC, l.id", "LIMIT $3 OFFSET $4");
+  assert.match(paged, /count\(\*\) OVER\(\)::int AS __total/);
+  assert.match(paged, /LIMIT \$3 OFFSET \$4$/);
+  assert.equal(paged.includes(";"), false);
+  assert.throws(() => pagedListSql("SELECT 1", "ORDER BY missing", ""), /order clause/);
+
+  const queries = readFileSync(new URL("./queries.ts", import.meta.url), "utf8");
+  assert.equal(queries.includes("hyperdrive"), false);
+  assert.equal(queries.includes("readTx"), false);
+  const list = queries.slice(queries.indexOf("async function loadLeaseList"), queries.indexOf("async function queryLeases"));
+  assert.match(list, /pagedListSql\(LEASE_LIST_SQL/);
+  const detail = queries.slice(queries.indexOf("export async function leaseDetail"), queries.indexOf("export async function signedLeasePdf"));
+  assert.equal(detail.match(/await maybe/g)?.length, 1);
+  assert.equal(detail.includes("await many"), false);
+  assert.match(detail, /WHERE l\.id = \$1 AND l\.org_id = \$2/);
+  assert.match(detail, /s\.org_id = \$2/);
+  assert.match(detail, /i\.org_id = \$2/);
+  const chrome = queries.slice(queries.indexOf("export async function loadManagerChrome"), queries.indexOf("export async function loadFirm"));
+  assert.equal(chrome.match(/await maybe/g)?.length, 1);
+  assert.match(chrome, /bank_accounts/);
+  assert.match(chrome, /FROM payments/);
+  const firm = queries.slice(queries.indexOf("export async function loadFirm"), queries.indexOf("export async function dashboard"));
+  assert.equal(firm.match(/await maybe/g)?.length, 1);
 });

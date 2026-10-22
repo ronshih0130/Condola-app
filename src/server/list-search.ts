@@ -138,3 +138,18 @@ export function searchSqlTouchesNationalId(sql: string) {
 export function pageRows<T>(rows: T[], limit: number | null) {
   return slicePage(rows, limit, rows.length, 1);
 }
+
+/**
+ * One statement for a page and its unpaged total.
+ * The window runs before LIMIT, and ORDER BY stays on this same SELECT so the
+ * page order does not depend on columns that were never selected.
+ */
+export function pagedListSql(sql: string, order: string, pageSql: string) {
+  if (sql.lastIndexOf(order) < 0) throw new Error("list query is missing its order clause");
+  const selectAt = sql.search(/select/i);
+  if (selectAt < 0) throw new Error("list query is missing SELECT");
+  const withCount =
+    sql.slice(0, selectAt) + "SELECT count(*) OVER()::int AS __total, " + sql.slice(selectAt + "SELECT".length);
+  const limit = pageSql.trim();
+  return limit ? `${withCount}\n${limit}` : withCount;
+}
