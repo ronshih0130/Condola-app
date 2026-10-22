@@ -1176,7 +1176,7 @@
  "i_mail_off_hint": "關閉後不再寄這類提醒給您。",
  "i_mail_org": "租客提醒",
  "i_mail_tenant_lease": "寄送租約到期提醒給租客（到期前 30 天）",
- "i_mail_tenant_overdue": "寄送繳費提醒給租客（逾期第 1 天）",
+ "i_mail_tenant_overdue": "寄送繳款提醒給租客（逾期第 1 天）",
  "i_mail_contact_email": "管理公司聯絡 Email",
  "i_mail_contact_phone": "管理公司聯絡電話",
  "i_mail_contact_hint": "租客來信會回覆到這個 Email。沒有就用 service@condola.app。",
