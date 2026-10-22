@@ -53,7 +53,6 @@ test("LINE reminders go out 3 days before rent, on the due day, 3 days overdue, 
   await expect(page.getByTestId("line-link-status")).toHaveText("LINE 已連結", { timeout: 15_000 });
 
   await withDb(async (client) => {
-    await client.query(`UPDATE organizations SET feature_flags = feature_flags || '{"line_live": true}'::jsonb WHERE id = $1`, [ORG]);
     await client.query(
       `UPDATE invoices
           SET due_date = (timezone('Asia/Taipei', now()))::date - 40
@@ -76,21 +75,39 @@ test("LINE reminders go out 3 days before rent, on the due day, 3 days overdue, 
           WHERE org_id = $1 AND status = 'active'
        )
        UPDATE leases l
-          SET end_date = (timezone('Asia/Taipei', now()))::date + CASE WHEN p.n = 1 THEN 60 ELSE 30 END
+          SET end_date = (timezone('Asia/Taipei', now()))::date + CASE
+                WHEN p.n = 1 THEN 60
+                WHEN p.n = 2 THEN 30
+                WHEN p.n = 3 THEN 7
+                ELSE 400
+              END
          FROM picked p
-        WHERE l.id = p.id AND p.n <= 2`,
+        WHERE l.id = p.id`,
       [ORG],
     );
     const linkedRow = await client.query(`SELECT status FROM line_user_links WHERE org_id = $1 AND user_id = $2`, [ORG, ADMIN]);
     expect(linkedRow.rows[0]?.status).toBe("linked");
+    const live = await client.query<{ line_live: string | null }>(
+      `SELECT feature_flags->>'line_live' AS line_live FROM organizations WHERE id = $1`,
+      [ORG],
+    );
+    expect(live.rows[0]?.line_live ?? null).not.toBe("true");
   });
 
+  const held = await page.request.post("/api/cron/reminders", { headers: { "x-cron-secret": "e2e-cron-secret" } });
+  expect(held.ok()).toBeTruthy();
+  expect((await pushes(page)).pushes).toEqual([]);
+
+  await withDb((client) =>
+    client.query(`UPDATE organizations SET feature_flags = feature_flags || '{"line_live": true}'::jsonb WHERE id = $1`, [ORG]),
+  );
   const cron = await page.request.post("/api/cron/reminders", { headers: { "x-cron-secret": "e2e-cron-secret" } });
   expect(cron.ok()).toBeTruthy();
   const sent = (await pushes(page)).pushes;
-  const rent = sent.filter((item) => item.text.startsWith(`${RENT} `) && item.text.endsWith("/m/rent"));
-  const overdue = sent.filter((item) => item.text.startsWith(`${OVERDUE} `) && item.text.endsWith("/m/rent"));
-  const lease = sent.filter((item) => item.text.startsWith(`${LEASE} `) && item.text.endsWith("/m/leases"));
+  const origin = "http://127.0.0.1:43123";
+  const rent = sent.filter((item) => item.text === `${RENT} ${origin}/m/rent`);
+  const overdue = sent.filter((item) => item.text === `${OVERDUE} ${origin}/m/rent`);
+  const lease = sent.filter((item) => item.text === `${LEASE} ${origin}/m/leases`);
   expect(rent).toHaveLength(2);
   expect(overdue).toHaveLength(1);
   expect(lease).toHaveLength(2);
@@ -99,7 +116,11 @@ test("LINE reminders go out 3 days before rent, on the due day, 3 days overdue, 
     expect(item.to).toBe(LINE_USER);
     expect(item.hasAuth).toBe(true);
     expect(item.text).not.toContain("?");
+    expect(item.text).not.toContain("#");
     expect(item.text).not.toContain("LINE");
+    const sentence = item.text.replace(/ https?:\/\/\S+$/, "");
+    expect(item.text).toBe(`${sentence} ${origin}${item.text.endsWith("/m/leases") ? "/m/leases" : "/m/rent"}`);
+    expect(sentence).not.toMatch(/\d/);
     for (const word of BANNED) expect(item.text, word).not.toContain(word);
   }
 });
