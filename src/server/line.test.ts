@@ -11,12 +11,14 @@ import {
   linePushTextOk,
   lineSignatureValid,
   linkCodeFromText,
+  LINE_SENTENCES,
+  lineLive,
   payLink,
   paymentRecordedText,
   pushLineText,
-  rentReminderText,
   replyLineText,
   showLine,
+  staffLineText,
   verifyLineWebhook,
 } from "./line";
 
@@ -38,6 +40,17 @@ function assertClean(text: string) {
   for (const word of banned) assert.equal(text.includes(word), false, word);
 }
 
+test("lineLive stays off until the flag is explicitly on", () => {
+  assert.equal(lineLive(null), false);
+  assert.equal(lineLive({}), false);
+  assert.equal(lineLive({ line_alerts: true }), false);
+  assert.equal(lineLive('{"line_alerts":true}'), false);
+  assert.equal(lineLive({ line_live: false }), false);
+  assert.equal(lineLive({ line_live: "false" }), false);
+  assert.equal(lineLive({ line_live: true }), true);
+  assert.equal(lineLive({ line_live: "true" }), true);
+});
+
 test("showLine is on for the sample company and beta orgs only", () => {
   assert.equal(showLine({ environment: "sandbox", planTier: "free" }), true);
   assert.equal(showLine({ environment: "sandbox", planTier: "free", featureFlags: { line_alerts: false } }), false);
@@ -56,7 +69,7 @@ test("a push is refused when either credential is missing and fetch is not calle
     called += 1;
     throw new Error("fetch should not run");
   };
-  const text = rentReminderText(payUrl);
+  const text = staffLineText("rent_due", "https://app.condola.app");
   const missingSecret = await pushLineText(user, text, fetchImpl, env({ LINE_CHANNEL_ACCESS_TOKEN: "token" }));
   const missingToken = await pushLineText(user, text, fetchImpl, env({ LINE_CHANNEL_SECRET: "secret" }));
   assert.equal(missingSecret.ok, false);
@@ -94,25 +107,33 @@ test("the access token stays on api.line.me unless the origin is loopback", asyn
   assert.equal(lineApiOrigin(env({ LINE_API_ORIGIN: "not a url" })), "https://api.line.me");
 });
 
-test("link codes, basic ids, and push text stay on the v1 template", () => {
-  assert.equal(linkCodeFromText(" 綁定 abcd2345 "), "ABCD2345");
-  assert.equal(linkCodeFromText("ABCD2345"), "ABCD2345");
-  assert.equal(linkCodeFromText("綁定 ABCD234"), null);
-  assert.equal(linkCodeFromText("綁定 ABCD234I"), null);
+test("link codes are 6 digits and pushes are a sentence plus a link", () => {
+  assert.equal(linkCodeFromText(" 綁定 012345 "), "012345");
+  assert.equal(linkCodeFromText("綁定碼 123456"), "123456");
+  assert.equal(linkCodeFromText("123456"), "123456");
+  assert.equal(linkCodeFromText("綁定 12345"), null);
+  assert.equal(linkCodeFromText("綁定 1234567"), null);
+  assert.equal(linkCodeFromText("ABCD2345"), null);
   assert.equal(lineBasicId(env({ LINE_OA_BASIC_ID: "@644odqoe" })), null);
   assert.equal(lineBasicId(env({ LINE_OA_BASIC_ID: "prefix-644odqoe" })), null);
   assert.equal(lineBasicId(env({ LINE_OA_BASIC_ID: "condola-qa" })), "@condola-qa");
   assert.equal(lineBasicId(env({ LINE_OA_BASIC_ID: "@condola-qa" })), "@condola-qa");
-  const reminder = rentReminderText(payLink("https://app.condola.app/"));
-  const notice = paymentRecordedText(payUrl);
-  assert.equal(reminder, "【繳款提醒】您有未繳租金。請查看：https://app.condola.app/t/pay");
+  const reminder = staffLineText("rent_due", "https://app.condola.app/");
+  const overdue = staffLineText("rent_overdue", "https://app.condola.app");
+  const lease = staffLineText("lease_expiry", "https://app.condola.app");
+  const notice = paymentRecordedText(payLink("https://app.condola.app"));
+  assert.equal(reminder, `${LINE_SENTENCES.rent_due} https://app.condola.app/m/rent`);
+  assert.equal(overdue, `${LINE_SENTENCES.rent_overdue} https://app.condola.app/m/rent`);
+  assert.equal(lease, `${LINE_SENTENCES.lease_expiry} https://app.condola.app/m/leases`);
   assert.equal(notice, "款項到帳。請查看：https://app.condola.app/t/pay");
   assert.equal(linePushTextOk(reminder), true);
   assert.equal(linePushTextOk(`${reminder}?invoice=1`), false);
-  assert.equal(linePushTextOk("【繳款提醒】周美玲 未繳 NT$1"), false);
+  assert.equal(linePushTextOk("有一筆租金快到期了，請登入查看。 https://app.condola.app/t/pay"), false);
   assert.equal(linePushTextOk("款項到帳。請查看：https://app.condola.app/t/lease"), false);
-  assertClean(reminder);
-  assertClean(notice);
+  assert.equal(linePushTextOk("【繳款提醒】周美玲 未繳 NT$1"), false);
+  for (const text of [reminder, overdue, lease, notice, staffLineText("repair", "https://app.condola.app"), staffLineText("statement", "https://app.condola.app")]) {
+    assertClean(text);
+  }
 });
 
 test("reply copy and the payment email avoid banned words", () => {
@@ -154,22 +175,38 @@ test("replies are refused without credentials and are not sent to a foreign orig
   assert.equal(called, 1);
 });
 
-test("tenant pages and the link panel never name the support account", () => {
+test("tenant pages and the notify screen never name the support account", () => {
   const files = [
     new URL("../app/t/page.tsx", import.meta.url),
     new URL("../app/t/pay/page.tsx", import.meta.url),
     new URL("../app/t/lease/page.tsx", import.meta.url),
     new URL("../app/t/messages/page.tsx", import.meta.url),
     new URL("../app/t/layout.tsx", import.meta.url),
-    new URL("../components/line-link-panel.tsx", import.meta.url),
+    new URL("../components/line-notify.tsx", import.meta.url),
+    new URL("../app/m/notify/page.tsx", import.meta.url),
   ];
   for (const file of files) {
     const source = readFileSync(file, "utf8");
     assert.equal(source.includes("644odqoe"), false, String(file));
     assert.equal(source.includes("LINE_SUPPORT_CONTACT"), false, String(file));
+    assert.equal(source.includes("驗證碼"), false, String(file));
   }
-  const panel = readFileSync(new URL("../components/line-link-panel.tsx", import.meta.url), "utf8");
+  const panel = readFileSync(new URL("../components/line-notify.tsx", import.meta.url), "utf8");
   assert.match(panel, /if \(!showLine\) return null/);
   assert.equal(panel.includes("王小美"), false);
   assert.equal(panel.includes("NT$"), false);
+});
+
+test("the line migration is additive, later than 20261029130000, and creates no function", () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/20261030120000_line_notify.sql", import.meta.url), "utf8");
+  assert.match(sql, /Version 20261030120000/);
+  assert.doesNotMatch(sql, /CREATE\s+(OR REPLACE\s+)?FUNCTION/i);
+  assert.match(sql, /REVOKE ALL ON TABLE line_link_codes FROM PUBLIC/);
+  assert.match(sql, /REVOKE ALL ON TABLE line_link_codes FROM anon/);
+  assert.match(sql, /REVOKE ALL ON TABLE line_link_codes FROM authenticated/);
+  assert.match(sql, /REVOKE ALL ON TABLE line_user_links FROM PUBLIC/);
+  assert.match(sql, /REVOKE ALL ON TABLE line_notify_prefs FROM authenticated/);
+  assert.match(sql, /REVOKE ALL ON TABLE line_delivery_log FROM anon/);
+  assert.doesNotMatch(sql, /DROP TABLE|DROP COLUMN|ALTER COLUMN|驗證碼/i);
+  assert.match(sql, /code ~ '\^\[0-9\]\{6\}\$'/);
 });

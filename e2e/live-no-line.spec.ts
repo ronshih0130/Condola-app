@@ -27,8 +27,14 @@ test("live pages do not mention LINE except the support contact", async ({ page 
   await expectLiveSurface(page);
 
   await page.goto("/m/notify");
-  await expect(page.getByTestId("notify-empty")).toHaveText("目前沒有通知");
-  await expectLiveSurface(page);
+  const notify = page.getByTestId("line-notify");
+  await expect(notify).toBeVisible();
+  await expect(page.getByTestId("line-notify-banner")).toBeVisible();
+  const notifyText = await notify.innerText();
+  const aroundNotify = (await page.locator("body").innerText()).split(notifyText).join("");
+  expect(aroundNotify).not.toContain("LINE");
+  await expect(page.locator("body")).not.toContainText("@644odqoe");
+  await expect(page.locator("body")).not.toContainText("官方客服");
 
   await page.goto("/m/account");
   await expectLiveSurface(page);
@@ -71,11 +77,9 @@ test("live pages do not mention LINE except the support contact", async ({ page 
     await page.getByRole("button", { name: /松信/ }).click();
     await expect(page.getByTestId("lease-picker")).toHaveCount(0);
   }
-  const panel = page.getByTestId("line-link-panel");
-  await expect(panel).toBeVisible();
-  const panelText = await panel.innerText();
-  const body = await page.locator("body").innerText();
-  expect(body.split(panelText).join("")).not.toContain("LINE");
+  await expect(page.getByTestId("line-link-panel")).toHaveCount(0);
+  await expect(page.getByTestId("line-notify")).toHaveCount(0);
+  await expectLiveSurface(page);
   await expect(page.locator("body")).not.toContainText("@644odqoe");
   await expect(page.locator("body")).not.toContainText("官方客服");
 

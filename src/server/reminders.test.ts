@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { cronAuthorized, REMINDER_CRON } from "./cron-auth";
-import { deliverReminders, planLeaseReminders, planOverdueReminders, taipeiToday, type ReminderPlan } from "./reminders";
+import { deliverReminders, planLeaseReminders, planOverdueReminders, planStaffLineReminders, taipeiToday, type ReminderPlan } from "./reminders";
 import type { MailResult } from "./mail";
 
 const origin = "https://app.condola.app";
@@ -104,8 +104,7 @@ test("overdue reminders reach admins on day 1 and 7, and tenants only on day 1",
   assert.deepEqual(planOverdueReminders({ ...row, dueDate: "2026-10-28" }, "2026-10-31"), []);
 });
 
-test("a linked beta tenant gets a LINE reminder with no personal data", () => {
-  const lineUserId = `U${"a".repeat(32)}`;
+test("day-1 overdue email stays even when the tenant has a linked account", () => {
   const row = {
     orgId: "org-1",
     invoiceId: "inv-1",
@@ -121,57 +120,76 @@ test("a linked beta tenant gets a LINE reminder with no personal data", () => {
     address: "台中市西區府後街38號",
     unitLabel: "3F",
     roomLabel: "A",
-    tenants: [{ name: "周美玲", email: "tenant@example.com", contactId: "contact-1", lineUserId, lineOptOut: false }],
+    tenants: [{ name: "周美玲", email: "tenant@example.com", contactId: "contact-1", lineUserId: `U${"a".repeat(32)}`, lineOptOut: false }],
     staff: staff(),
     origin,
-    lineEnabled: true,
   };
   const day1 = planOverdueReminders(row, "2026-10-31");
   const tenant = day1.find((plan) => plan.kind === "rent_overdue_tenant");
-  assert.ok(tenant);
-  assert.equal(tenant.messages.length, 0);
-  assert.equal(tenant.linePushes?.length, 1);
-  assert.equal(tenant.linePushes?.[0].text, "【繳款提醒】您有未繳租金。請查看：https://app.condola.app/t/pay");
-  assert.equal(tenant.linePushes?.[0].lineUserId, lineUserId);
-  const text = tenant.linePushes?.[0].text ?? "";
-  assert.equal(text.includes("周美玲"), false);
-  assert.equal(text.includes("18,000"), false);
-  assert.equal(text.includes("NT$"), false);
-  assert.equal(text.includes("入帳"), false);
-  assert.equal(day1.some((plan) => plan.kind === "rent_overdue_admin"), true);
-});
-
-test("opt-out or a disabled flag keeps the overdue email and skips LINE", () => {
-  const base = {
-    orgId: "org-1",
-    invoiceId: "inv-1",
-    environment: "live",
-    dueDate: "2026-10-30",
-    periodStart: "2026-10-01",
-    balanceMinor: 1800000,
-    orgName: "松信管理",
-    contactEmail: null as string | null,
-    contactPhone: null as string | null,
-    settings: {},
-    propertyName: "府後街",
-    address: "台中市西區府後街38號",
-    unitLabel: "3F",
-    roomLabel: "A",
-    staff: staff(),
-    origin,
-  };
-  const linked = [{ name: "周美玲", email: "tenant@example.com", contactId: "contact-1", lineUserId: `U${"b".repeat(32)}`, lineOptOut: true }];
-  const optedOut = planOverdueReminders({ ...base, tenants: linked, lineEnabled: true }, "2026-10-31");
-  const tenant = optedOut.find((plan) => plan.kind === "rent_overdue_tenant");
   assert.equal(tenant?.messages.length, 1);
   assert.equal(tenant?.linePushes?.length ?? 0, 0);
   assert.match(tenant?.messages[0].text ?? "", /周美玲/);
-  const off = planOverdueReminders(
-    { ...base, lineEnabled: false, tenants: [{ ...linked[0], lineOptOut: false }] },
-    "2026-10-31",
-  );
-  assert.equal(off.find((plan) => plan.kind === "rent_overdue_tenant")?.linePushes?.length ?? 0, 0);
-  assert.equal(off.find((plan) => plan.kind === "rent_overdue_tenant")?.messages.length, 1);
+});
+
+test("staff LINE reminders use the rent and lease schedule and omit personal data", () => {
+  const today = "2026-10-31";
+  const lineUserId = `U${"a".repeat(32)}`;
+  const org = {
+    orgId: "org-1",
+    environment: "live",
+    planTier: "beta",
+    featureFlags: { line_alerts: true, line_live: true },
+  };
+  const recipient = { orgId: "org-1", userId: "user-1", lineUserId, prefs: {} };
+  const plans = planStaffLineReminders({
+    today,
+    origin,
+    invoices: [
+      { ...org, invoiceId: "due-soon", dueDate: "2026-11-03" },
+      { ...org, invoiceId: "due-today", dueDate: "2026-10-31" },
+      { ...org, invoiceId: "overdue", dueDate: "2026-10-28" },
+      { ...org, invoiceId: "email-day", dueDate: "2026-10-30" },
+    ],
+    leases: [
+      { ...org, leaseId: "lease-60", endDate: "2026-12-30" },
+      { ...org, leaseId: "lease-30", endDate: "2026-11-30" },
+      { ...org, leaseId: "lease-7", endDate: "2026-11-07" },
+    ],
+    recipients: [recipient, { ...recipient, orgId: "org-2", userId: "user-2" }],
+  });
+  const keys = plans.map((plan) => `${plan.kind}:${plan.targetId}:${plan.threshold}`).sort();
+  assert.deepEqual(keys, [
+    "lease_expiry:lease-30:30",
+    "lease_expiry:lease-60:60",
+    "rent_due:due-soon:3",
+    "rent_due:due-today:0",
+    "rent_overdue:overdue:3",
+  ]);
+  for (const plan of plans) {
+    assert.equal(plan.lineUserId, lineUserId);
+    assert.equal(plan.text.includes("周美玲"), false);
+    assert.equal(plan.text.includes("18,000"), false);
+    assert.equal(plan.text.includes("NT$"), false);
+    assert.equal(plan.text.includes("入帳"), false);
+    assert.equal(plan.text.includes("府後街"), false);
+    assert.match(plan.text, /^[^ ]+。 https:\/\/app\.condola\.app\/m\//);
+  }
+  const quiet = planStaffLineReminders({
+    today,
+    origin,
+    invoices: [{ ...org, invoiceId: "due-soon", dueDate: "2026-11-03", featureFlags: { line_live: false } }],
+    leases: [],
+    recipients: [{ ...recipient, prefs: { rent_due: false } }],
+  });
+  assert.deepEqual(quiet, []);
+  const free = planStaffLineReminders({
+    today,
+    origin,
+    invoices: [{ ...org, planTier: "free", invoiceId: "due-today", dueDate: "2026-10-31" }],
+    leases: [{ ...org, environment: "sandbox", leaseId: "lease-60", endDate: "2026-12-30" }],
+    recipients: [recipient],
+  });
+  assert.deepEqual(free, []);
 });
 
 test("a claimed reminder is not sent twice, and a skipped send releases the claim", async () => {

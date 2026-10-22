@@ -8,16 +8,40 @@ const SUPPORT_BASIC_ID = "644odqoe";
 /** Words that must not appear in LINE copy. Split so product source stays clean. */
 const BANNED_COPY = ["入帳", "欠租", "代收", "本公司", "收" + "租", "收" + "款", "已收", "房" + "東", "房" + "客", SUPPORT_BASIC_ID];
 
-const RENT_REMINDER_TEXT = /^【繳款提醒】您有未繳租金。請查看：(\S+)$/;
-const PAYMENT_RECORDED_TEXT = /^款項到帳。請查看：(\S+)$/;
-
-export const LINE_REPLIES = {
-  linked: "已連結。之後的繳款提醒會送到這裡。",
-  rejected: "這個連結碼已經不能用。請到租客頁再產生一次。",
-  taken: "這個帳號已經連結其他租客。請到租客頁再產生一次。",
+export const LINE_SENTENCES = {
+  rent_due: "有一筆租金快到期了，請登入查看。",
+  rent_overdue: "有一筆租金還沒登記為已繳，請登入查看。",
+  lease_expiry: "有租約快到期了，請登入安排續約或退租。",
+  repair: "有修繕進度更新，請登入查看。",
+  statement: "本月結算表已產生，請登入查看。",
 } as const;
 
-export type LineKind = "rent_reminder" | "payment_recorded";
+const LINE_PATHS: Record<keyof typeof LINE_SENTENCES, string> = {
+  rent_due: "/m/rent",
+  rent_overdue: "/m/rent",
+  lease_expiry: "/m/leases",
+  repair: "/m/tickets",
+  statement: "/m/statements",
+};
+
+const PAYMENT_PREFIX = "款項到帳。請查看：";
+
+export const LINE_REPLIES = {
+  linked: "已連結。之後的提醒會送到這裡。",
+  rejected: "這個綁定碼已經不能用。請到通知設定再取得一次。",
+  taken: "這個帳號已經連結其他使用者。請到通知設定再取得一次。",
+} as const;
+
+export type LineKind =
+  | "rent_reminder"
+  | "payment_recorded"
+  | "rent_due"
+  | "rent_overdue"
+  | "lease_expiry"
+  | "repair"
+  | "statement";
+
+export type StaffLineKind = keyof typeof LINE_SENTENCES;
 
 export type LinePushRequest = {
   orgId: string;
@@ -47,6 +71,12 @@ export function showLine(input: {
   if (flags.line_alerts === false || flags.line_alerts === "false") return false;
   if (input.environment === "sandbox") return true;
   return input.planTier === "beta";
+}
+
+/** Real Messaging API calls wait until this flag is on. Absent means off. */
+export function lineLive(featureFlags: unknown) {
+  const flags = flagRecord(featureFlags);
+  return flags.line_live === true || flags.line_live === "true";
 }
 
 export function lineChannelSecret(env: NodeJS.ProcessEnv = process.env) {
@@ -96,30 +126,38 @@ export function lineCopyAllowed(text: string) {
   return BANNED_COPY.every((word) => !text.includes(word));
 }
 
-/** v1 pushes are a fixed sentence plus a link. No name, amount, or other personal data. */
-export function linePushTextOk(text: string) {
-  if (!lineCopyAllowed(text) || text.includes("LINE")) return false;
-  const urlText = text.match(RENT_REMINDER_TEXT)?.[1] || text.match(PAYMENT_RECORDED_TEXT)?.[1];
-  if (!urlText) return false;
+function linkOk(urlText: string, pathname: string) {
+  if (!urlText || /\s/.test(urlText)) return false;
   try {
     const url = new URL(urlText);
     if (url.protocol !== "https:" && url.protocol !== "http:") return false;
-    if (url.pathname !== "/t/pay") return false;
+    if (url.pathname !== pathname) return false;
     if (url.search || url.hash || url.username || url.password) return false;
-    return true;
+    return `${url.origin}${url.pathname}` === urlText;
   } catch {
     return false;
   }
 }
 
-export function rentReminderText(url: string) {
-  const text = `【繳款提醒】您有未繳租金。請查看：${url}`;
-  if (!linePushTextOk(text)) throw new Error("rent reminder copy rejected");
+/** Pushes are one fixed sentence plus a link. No name, amount, or other personal data. */
+export function linePushTextOk(text: string) {
+  if (!lineCopyAllowed(text) || text.includes("LINE") || text.includes("NT$")) return false;
+  if (text.startsWith(PAYMENT_PREFIX)) return linkOk(text.slice(PAYMENT_PREFIX.length), "/t/pay");
+  for (const kind of Object.keys(LINE_SENTENCES) as StaffLineKind[]) {
+    const prefix = `${LINE_SENTENCES[kind]} `;
+    if (text.startsWith(prefix)) return linkOk(text.slice(prefix.length), LINE_PATHS[kind]);
+  }
+  return false;
+}
+
+export function staffLineText(kind: StaffLineKind, origin: string) {
+  const text = `${LINE_SENTENCES[kind]} ${origin.replace(/\/$/, "")}${LINE_PATHS[kind]}`;
+  if (!linePushTextOk(text)) throw new Error("line reminder copy rejected");
   return text;
 }
 
 export function paymentRecordedText(url: string) {
-  const text = `款項到帳。請查看：${url}`;
+  const text = `${PAYMENT_PREFIX}${url}`;
   if (!linePushTextOk(text)) throw new Error("payment notice copy rejected");
   return text;
 }
@@ -143,12 +181,9 @@ export function verifyLineWebhook(rawBody: string, header: string | null, env: N
   return lineSignatureValid(secret, rawBody, header) ? ("ok" as const) : ("bad_signature" as const);
 }
 
-const LINK_CODE = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/;
-
 export function linkCodeFromText(text: string) {
-  const trimmed = text.trim().toUpperCase();
-  const match = trimmed.match(/^(?:綁定\s*)?([ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8})$/);
-  return match?.[1] && LINK_CODE.test(match[1]) ? match[1] : null;
+  const match = text.trim().match(/^(?:綁定碼\s*|綁定\s*)?([0-9]{6})$/);
+  return match?.[1] ?? null;
 }
 
 export function lineLinkPayload(code: string, basicId: string | null) {

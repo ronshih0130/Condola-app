@@ -12,8 +12,8 @@ import {
   overdueTenantMail,
   spaceLabel,
 } from "./mail-copy";
-import { deliverTenantLine, retryFailedLinePushes } from "./line-store";
-import { payLink, rentReminderText, showLine, type LinePushRequest, type LineSendResult } from "./line";
+import { deliverStaffLine, deliverTenantLine, retryFailedLinePushes } from "./line-store";
+import { lineLive, showLine, staffLineText, type LinePushRequest, type LineSendResult } from "./line";
 
 export const LEASE_THRESHOLDS = [60, 30, 7] as const;
 export const OVERDUE_ADMIN_THRESHOLDS = [1, 7] as const;
@@ -190,8 +190,6 @@ export type OverdueReminderInput = {
   tenants: unknown;
   staff: { name: string; email: string; prefs: unknown }[];
   origin: string;
-  /** Sample company and beta orgs only. Off for every other plan. */
-  lineEnabled?: boolean;
 };
 
 export function planOverdueReminders(row: OverdueReminderInput, today: string): ReminderPlan[] {
@@ -229,42 +227,24 @@ export function planOverdueReminders(row: OverdueReminderInput, today: string): 
   if (days === 1 && readTenantToggles(row.settings).rentOverdue) {
     const contact = contactMethod(row.contactEmail, row.contactPhone);
     const messages: MailMessage[] = [];
-    const linePushes: LinePush[] = [];
-    const url = payLink(row.origin);
+    const url = `${row.origin.replace(/\/$/, "")}/t/pay`;
     for (const tenant of tenants) {
-      const rendered = tenant.email
-        ? overdueTenantMail({
-            name: tenant.name,
-            address: row.address || row.propertyName,
-            space,
-            month,
-            due,
-            amount,
-            company: row.orgName,
-            contact,
-            url,
-          })
-        : null;
-      const email: MailMessage | null = rendered
-        ? { to: tenant.email, subject: rendered.subject, text: rendered.text, html: rendered.html, replyTo }
-        : null;
-      if (row.lineEnabled && tenant.lineUserId && !tenant.lineOptOut && tenant.contactId) {
-        linePushes.push({
-          orgId: row.orgId,
-          contactId: tenant.contactId,
-          lineUserId: tenant.lineUserId,
-          kind: "rent_reminder",
-          targetId: row.invoiceId,
-          text: rentReminderText(url),
-          email,
-          environment: "live",
-        });
-      } else if (email) {
-        messages.push(email);
-      }
+      if (!tenant.email) continue;
+      const rendered = overdueTenantMail({
+        name: tenant.name,
+        address: row.address || row.propertyName,
+        space,
+        month,
+        due,
+        amount,
+        company: row.orgName,
+        contact,
+        url,
+      });
+      messages.push({ to: tenant.email, subject: rendered.subject, text: rendered.text, html: rendered.html, replyTo });
     }
-    if (messages.length || linePushes.length) {
-      plans.push({ orgId: row.orgId, kind: "rent_overdue_tenant", targetId: row.invoiceId, threshold: 1, messages, linePushes });
+    if (messages.length) {
+      plans.push({ orgId: row.orgId, kind: "rent_overdue_tenant", targetId: row.invoiceId, threshold: 1, messages });
     }
   }
   return plans;
@@ -518,14 +498,15 @@ function dbStore(): ClaimStore {
 }
 
 export async function runDueReminders(now = new Date()) {
+  const today = taipeiToday(now);
+  const origin = publicSiteOrigin("");
   const retried = await retryFailedLinePushes();
+  const lined = await sendDueLineReminders(today, origin);
   const ready = await mailReady();
   if (!ready.ok) {
     console.warn(`reminders skipped: ${ready.reason}`);
-    return { sent: retried, skipped: ready.reason };
+    return { sent: retried + lined, skipped: ready.reason };
   }
-  const today = taipeiToday(now);
-  const origin = publicSiteOrigin("");
   const [leases, invoices] = await Promise.all([loadLeases(), loadInvoices()]);
   const orgIds = [...new Set([...leases.map((row) => row.org_id), ...invoices.map((row) => row.org_id)])];
   const staff = await loadStaff(orgIds);
@@ -580,16 +561,197 @@ export async function runDueReminders(now = new Date()) {
           tenants: row.tenants,
           staff: staff.get(row.org_id) ?? [],
           origin,
-          lineEnabled: showLine({
-            environment: row.environment,
-            planTier: row.plan_tier,
-            featureFlags: row.feature_flags,
-          }),
         },
         today,
       ),
     );
   }
   const sent = await deliverReminders(plans, dbStore());
-  return { sent: sent + retried, skipped: null as string | null };
+  return { sent: sent + retried + lined, skipped: null as string | null };
+}
+
+export type StaffLineRecipient = {
+  orgId: string;
+  userId: string;
+  lineUserId: string;
+  prefs: Partial<Record<string, boolean>>;
+};
+
+export type StaffLinePlan = {
+  orgId: string;
+  userId: string;
+  lineUserId: string;
+  kind: "rent_due" | "rent_overdue" | "lease_expiry";
+  targetId: string;
+  threshold: number;
+  text: string;
+};
+
+export function lineEventEnabled(prefs: Partial<Record<string, boolean>> | undefined, event: string) {
+  if (prefs && Object.prototype.hasOwnProperty.call(prefs, event)) return prefs[event] !== false;
+  return event !== "repair";
+}
+
+type LineOrg = {
+  orgId: string;
+  environment: string;
+  planTier: string;
+  featureFlags: unknown;
+};
+
+function lineAudience(row: LineOrg) {
+  return row.environment === "live" && showLine(row) && lineLive(row.featureFlags);
+}
+
+export function planStaffLineReminders(input: {
+  today: string;
+  origin: string;
+  invoices: (LineOrg & { invoiceId: string; dueDate: string })[];
+  leases: (LineOrg & { leaseId: string; endDate: string })[];
+  recipients: StaffLineRecipient[];
+}): StaffLinePlan[] {
+  const plans: StaffLinePlan[] = [];
+  const recipients = input.recipients.filter((person) => /^U[0-9a-f]{32}$/.test(person.lineUserId));
+  const push = (row: LineOrg, person: StaffLineRecipient, kind: StaffLinePlan["kind"], targetId: string, threshold: number) => {
+    if (person.orgId !== row.orgId || !lineEventEnabled(person.prefs, kind)) return;
+    plans.push({
+      orgId: row.orgId,
+      userId: person.userId,
+      lineUserId: person.lineUserId,
+      kind,
+      targetId,
+      threshold,
+      text: staffLineText(kind, input.origin),
+    });
+  };
+  for (const row of input.invoices) {
+    if (!lineAudience(row)) continue;
+    const days = daysUntil(row.dueDate, input.today);
+    if (days === 3) for (const person of recipients) push(row, person, "rent_due", row.invoiceId, 3);
+    else if (days === 0) for (const person of recipients) push(row, person, "rent_due", row.invoiceId, 0);
+    else if (days === -3) for (const person of recipients) push(row, person, "rent_overdue", row.invoiceId, 3);
+  }
+  for (const row of input.leases) {
+    if (!lineAudience(row)) continue;
+    const days = daysUntil(row.endDate, input.today);
+    if (days !== 60 && days !== 30) continue;
+    for (const person of recipients) push(row, person, "lease_expiry", row.leaseId, days);
+  }
+  return plans;
+}
+
+function pgMissing(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code) : "";
+  return code === "42P01" || code === "42703";
+}
+
+export async function sendDueLineReminders(today: string, origin: string) {
+  try {
+    const invoices = await query<{
+      invoice_id: string;
+      org_id: string;
+      due_date: string;
+      environment: string;
+      plan_tier: string;
+      feature_flags: unknown;
+    }>(
+      `SELECT i.id::text AS invoice_id, i.org_id::text AS org_id, i.due_date::text AS due_date,
+              o.environment::text AS environment, o.plan_tier::text AS plan_tier, o.feature_flags
+         FROM invoices i
+         JOIN organizations o ON o.id = i.org_id
+        WHERE o.environment = 'live'
+          AND i.status IN ('open', 'partially_paid')
+          AND i.balance_minor > 0
+          AND (i.due_date - $1::date) IN (3, 0, -3)
+          AND (
+            EXISTS (
+              SELECT 1 FROM invoice_lines il
+               WHERE il.invoice_id = i.id AND il.charge_type = 'rent' AND il.amount_minor > 0
+            )
+            OR (
+              i.source = 'recurring'
+              AND NOT EXISTS (
+                SELECT 1 FROM invoice_lines il
+                 WHERE il.invoice_id = i.id AND il.charge_type <> 'rent'
+              )
+            )
+          )`,
+      [today],
+    );
+    const leases = await query<{
+      lease_id: string;
+      org_id: string;
+      end_date: string;
+      environment: string;
+      plan_tier: string;
+      feature_flags: unknown;
+    }>(
+      `SELECT l.id::text AS lease_id, l.org_id::text AS org_id, l.end_date::text AS end_date,
+              o.environment::text AS environment, o.plan_tier::text AS plan_tier, o.feature_flags
+         FROM leases l
+         JOIN organizations o ON o.id = l.org_id
+        WHERE o.environment = 'live'
+          AND l.status = 'active'
+          AND l.renewal_status IS DISTINCT FROM 'renewed'
+          AND l.end_date IS NOT NULL
+          AND (l.end_date - $1::date) IN (60, 30)`,
+      [today],
+    );
+    const orgIds = [...new Set([...invoices.rows.map((row) => row.org_id), ...leases.rows.map((row) => row.org_id)])];
+    if (orgIds.length === 0) return 0;
+    const links = await query<{ org_id: string; user_id: string; line_user_id: string }>(
+      `SELECT org_id::text, user_id::text, line_user_id
+         FROM line_user_links
+        WHERE status = 'linked' AND org_id = ANY($1::uuid[])`,
+      [orgIds],
+    );
+    const prefRows = await query<{ org_id: string; user_id: string; event_type: string; enabled: boolean }>(
+      `SELECT org_id::text, user_id::text, event_type, enabled
+         FROM line_notify_prefs
+        WHERE channel = 'line' AND org_id = ANY($1::uuid[])`,
+      [orgIds],
+    );
+    const prefs = new Map<string, Partial<Record<string, boolean>>>();
+    for (const row of prefRows.rows) {
+      const key = `${row.org_id}:${row.user_id}`;
+      const current = prefs.get(key) ?? {};
+      current[row.event_type] = row.enabled === true;
+      prefs.set(key, current);
+    }
+    const plans = planStaffLineReminders({
+      today,
+      origin,
+      invoices: invoices.rows.map((row) => ({
+        orgId: row.org_id,
+        invoiceId: row.invoice_id,
+        dueDate: row.due_date.slice(0, 10),
+        environment: row.environment,
+        planTier: row.plan_tier,
+        featureFlags: row.feature_flags,
+      })),
+      leases: leases.rows.map((row) => ({
+        orgId: row.org_id,
+        leaseId: row.lease_id,
+        endDate: row.end_date.slice(0, 10),
+        environment: row.environment,
+        planTier: row.plan_tier,
+        featureFlags: row.feature_flags,
+      })),
+      recipients: links.rows.map((row) => ({
+        orgId: row.org_id,
+        userId: row.user_id,
+        lineUserId: row.line_user_id,
+        prefs: prefs.get(`${row.org_id}:${row.user_id}`) ?? {},
+      })),
+    });
+    let sent = 0;
+    for (const plan of plans) {
+      const result = await deliverStaffLine(plan);
+      if (result.ok) sent += 1;
+    }
+    return sent;
+  } catch (error) {
+    if (pgMissing(error)) return 0;
+    throw error;
+  }
 }

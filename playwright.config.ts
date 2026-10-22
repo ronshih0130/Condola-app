@@ -36,6 +36,7 @@ export default defineConfig({
         LINE_CHANNEL_ACCESS_TOKEN: "e2e-line-token",
         LINE_API_ORIGIN: "http://127.0.0.1:4601",
         LINE_OA_BASIC_ID: "@condola-qa",
+        CRON_SECRET: "e2e-cron-secret",
       },
     },
   ],

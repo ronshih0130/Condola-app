@@ -12,10 +12,12 @@ test("live mode hides demo LINE copy and sandbox shows it", async ({ page }) => 
 
   await signIn(page, ACCOUNTS.admin);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/notify");
-  await expect(page.getByTestId("notify-empty")).toHaveText("目前沒有通知");
+  await expect(page.getByTestId("line-notify")).toBeVisible();
   await expect(page.getByTestId("line-stub")).toHaveCount(0);
   await expect(page.getByTestId("notify-note")).toHaveCount(0);
-  await expect(page.locator(".main")).not.toContainText("LINE");
+  const liveMain = await page.locator(".main").innerText();
+  const liveCard = await page.getByTestId("line-notify").innerText();
+  expect(liveMain.split(liveCard).join("")).not.toContain("LINE");
 
   await page.goto("/m/account");
   await expect(page.getByTestId("line-demo-note")).toHaveCount(0);
@@ -32,10 +34,12 @@ test("live mode hides demo LINE copy and sandbox shows it", async ({ page }) => 
   await expect(page.locator(".main")).not.toContainText("LINE");
 
   await page.goto("/api/env?set=sandbox&next=/m/notify");
-  await expect(page.getByTestId("notify-empty")).toHaveText("目前沒有通知");
+  await expect(page.getByTestId("line-notify")).toBeVisible();
   await expect(page.getByTestId("line-stub")).toHaveCount(0);
   await expect(page.getByTestId("notify-note")).toHaveCount(0);
-  await expect(page.locator(".main")).not.toContainText("LINE");
+  const sandboxMain = await page.locator(".main").innerText();
+  const sandboxCard = await page.getByTestId("line-notify").innerText();
+  expect(sandboxMain.split(sandboxCard).join("")).not.toContain("LINE");
   await page.goto("/m/audit");
   await expect(page.locator(".main")).not.toContainText("LINE");
   await expect(page.locator(".main")).not.toContainText("開始正式使用");

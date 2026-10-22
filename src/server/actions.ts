@@ -36,7 +36,7 @@ import { getSession } from "./session";
 import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
-import { issueLineLinkCode, setLineOptOut } from "./line-store";
+import { issueStaffLineCode, saveStaffLinePrefs, unlinkStaffLine } from "./line-store";
 
 export type ActionState = {
   error: string;
@@ -664,14 +664,23 @@ export async function actionPickLease(formData: FormData) {
   redirect("/t");
 }
 
-export async function actionIssueLineCode() {
+export async function actionIssueStaffLineCode() {
   const session = await getSession();
-  if (session.kind === "tenant") await issueLineLinkCode(session);
-  redirect("/t");
+  const result = await issueStaffLineCode(session);
+  revalidatePath("/m/notify");
+  redirect(result === "limit" ? "/m/notify?limit=1" : "/m/notify?link=1");
 }
 
-export async function actionSetLineOptOut(formData: FormData) {
+export async function actionSaveLinePrefs(formData: FormData) {
   const session = await getSession();
-  if (session.kind === "tenant") await setLineOptOut(session, text(formData.get("optOut")) === "1");
-  redirect("/t");
+  await saveStaffLinePrefs(session, formData.getAll("event").map((value) => String(value)));
+  revalidatePath("/m/notify");
+  redirect("/m/notify?saved=1");
+}
+
+export async function actionUnlinkStaffLine() {
+  const session = await getSession();
+  await unlinkStaffLine(session);
+  revalidatePath("/m/notify");
+  redirect("/m/notify?unlinked=1");
 }
