@@ -59,6 +59,15 @@ test("CI runs the local function privilege check", () => {
   assert.match(script, /gotrue_confirm_uses/);
   assert.match(script, /utility function revoke probe/);
   assert.match(script, /app\.audit_event\(uuid, text, jsonb\)/);
+  assert.match(script, /app\.is_member\(uuid\)/);
+  assert.match(script, /permission table before\/after/);
+  assert.match(script, /is_member_check=/);
+  const member = read("supabase/migrations/20261029170000_revoke_app_is_member_execute.sql");
+  assert.match(member, /REVOKE EXECUTE ON FUNCTION app\.is_member\(uuid\) FROM PUBLIC/);
+  assert.match(member, /REVOKE EXECUTE ON FUNCTION app\.is_member\(uuid\) FROM anon/);
+  assert.match(member, /GRANT EXECUTE ON FUNCTION app\.is_member\(uuid\) TO authenticated, service_role/);
+  assert.doesNotMatch(member, /FROM authenticated/);
+  assert.doesNotMatch(member, /FROM service_role/);
 });
 
 test("the allowlist is authenticated-only and anon is not granted", () => {

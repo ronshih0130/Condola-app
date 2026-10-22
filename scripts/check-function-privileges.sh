@@ -66,7 +66,9 @@ SQL
 
 # One session: stub (creates anon, authenticated, service_role), Supabase-like
 # defaults, then every migration as postgres, the role that creates functions
-# on the hosted project.
+# on the hosted project. The is_member revoke is applied later so the gate can
+# print that function's grants before and after.
+is_member_file="supabase/migrations/20261029170000_revoke_app_is_member_execute.sql"
 {
   echo "SET client_min_messages TO warning;"
   echo "SET ROLE postgres;"
@@ -80,6 +82,10 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
 SQL
   echo "SET ROLE postgres;"
   for migration in supabase/migrations/*.sql; do
+    # Applied below so the is_member table can show the grants before it.
+    if [[ "$migration" == "$is_member_file" ]]; then
+      continue
+    fi
     printf '\\i %s\n' "$migration"
   done
 } | psql "$scratch_url" -v ON_ERROR_STOP=1 -q
@@ -317,6 +323,56 @@ echo "utility function revoke probe: enforced"
 fi
 else
   echo "utility function revoke probe: skipped (lock migration not in tree)"
+fi
+
+if [[ -f "$is_member_file" ]]; then
+  echo "is_member revoke probe"
+  echo "permission table before/after (anon / authenticated / service_role / public EXECUTE):"
+  member_report="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<SQL
+CREATE TEMP TABLE is_member_priv (
+  phase text PRIMARY KEY,
+  anon boolean NOT NULL,
+  authenticated boolean NOT NULL,
+  service_role boolean NOT NULL,
+  public boolean NOT NULL
+);
+INSERT INTO is_member_priv
+SELECT 'before',
+       has_function_privilege('anon', 'app.is_member(uuid)', 'EXECUTE'),
+       has_function_privilege('authenticated', 'app.is_member(uuid)', 'EXECUTE'),
+       has_function_privilege('service_role', 'app.is_member(uuid)', 'EXECUTE'),
+       has_function_privilege('public', 'app.is_member(uuid)', 'EXECUTE');
+\\i ${is_member_file}
+INSERT INTO is_member_priv
+SELECT 'after',
+       has_function_privilege('anon', 'app.is_member(uuid)', 'EXECUTE'),
+       has_function_privilege('authenticated', 'app.is_member(uuid)', 'EXECUTE'),
+       has_function_privilege('service_role', 'app.is_member(uuid)', 'EXECUTE'),
+       has_function_privilege('public', 'app.is_member(uuid)', 'EXECUTE');
+SELECT phase,
+       'app.is_member(uuid)' AS sig,
+       anon,
+       authenticated,
+       service_role,
+       public
+FROM is_member_priv
+ORDER BY phase DESC;
+\pset tuples_only on
+SELECT 'is_member_check=' || (
+  (SELECT anon AND authenticated AND service_role AND public FROM is_member_priv WHERE phase = 'before')
+  AND
+  (SELECT NOT anon AND authenticated AND service_role AND NOT public FROM is_member_priv WHERE phase = 'after')
+)::text;
+SQL
+)"
+  printf '%s\n' "$member_report"
+  if ! printf '%s\n' "$member_report" | grep -q 'is_member_check=true'; then
+    echo "app.is_member anon/PUBLIC revoke check failed" >&2
+    exit 1
+  fi
+  echo "is_member revoke probe: enforced"
+else
+  echo "is_member revoke probe: skipped (migration not in tree)"
 fi
 
 psql "$scratch_url" -v ON_ERROR_STOP=1 -tA -F $'\t' <<'SQL' > /tmp/condola-fn-priv.tsv
