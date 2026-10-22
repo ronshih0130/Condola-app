@@ -1,15 +1,17 @@
+import "./load-local-env";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { encode as encodeJpeg } from "jpeg-js";
 import { SAMPLE_JPEG_BASE64 } from "../lib/idv";
 import { fullNoticeSha256, ID_NOTICE_PATH, ID_NOTICE_SHA256, resolveFirmContact, uploadPageSha256 } from "../lib/id-notice";
 import { embedIdWatermarkMark, MAX_PHOTO_BYTES } from "../lib/jpeg-size";
 import { FlowError } from "./errors";
 import { copySlotCiphertext, readCiphertext, writeUploadSlot } from "./id-bytes";
-import { hashIdNumber } from "./id-crypto";
+import { ENCRYPTION_KEY_REF, decryptBytes, hashIdNumber } from "./id-crypto";
 import { attachSampleId, finalizeTenantId, issuePhotoUrls, openSignedPhoto, purgeDueIdDocuments, reviewIdCheck, saveIdCheck, staffViewAuditReason, storeIdPhoto, submitTenantId } from "./id-docs";
 import { query, svc, tx, withClient } from "./db";
 import { ORG_ID, USERS } from "./ids";
@@ -22,27 +24,6 @@ function markedPhoto() {
   const marked = embedIdWatermarkMark(Buffer.from(SAMPLE_JPEG_BASE64, "base64"));
   if (!marked) throw new Error("sample jpeg has no room for a watermark mark");
   return { mime: "image/jpeg", bytes: Buffer.from(marked) };
-}
-
-/** JPEG whose scan payload survives metadata stripping. Long edge stays at 1600. */
-function paddedJpeg(scanBytes: number) {
-  const width = 1600;
-  const height = 1200;
-  const sof = Buffer.from([
-    0xff, 0xc0, 0x00, 0x11, 0x08,
-    (height >> 8) & 0xff, height & 0xff,
-    (width >> 8) & 0xff, width & 0xff,
-    0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00,
-  ]);
-  const sos = Buffer.from([0xff, 0xda, 0x00, 0x0c, 0x03, 0x01, 0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3f, 0x00]);
-  return Buffer.concat([
-    Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]),
-    Buffer.from("JFIF\0\x01\x01\0\0\x01\0\x01\0\0"),
-    sof,
-    sos,
-    Buffer.alloc(scanBytes, 0x11),
-    Buffer.from([0xff, 0xd9]),
-  ]);
 }
 
 function session(userId: string, role: Session["role"], kind: Session["kind"] = "staff"): Session {
@@ -65,7 +46,12 @@ function session(userId: string, role: Session["role"], kind: Session["kind"] = 
 test.before(async () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const databaseUrl = process.env.DATABASE_URL ?? "postgres://condola:condola@127.0.0.1:5432/condola";
-  for (const file of ["20261029130000_id_no_direct_mutate.sql", "20261029140000_id_consent_shown_version.sql"]) {
+  for (const file of [
+    "20261029130000_id_no_direct_mutate.sql",
+    "20261029140000_id_consent_shown_version.sql",
+    "20261029150000_id_watermark_copy.sql",
+    "20261029160000_lease_close_end_date.sql",
+  ]) {
     execFileSync("psql", [databaseUrl, "-v", "ON_ERROR_STOP=1", "-f", path.join(root, "supabase/migrations", file)], {
       stdio: "pipe",
     });
@@ -880,11 +866,30 @@ test("clearing a formed lease end date waits, a later end date is kept, and dupl
   });
 });
 
+function noisyJpeg(width: number, height: number) {
+  const data = new Uint8Array(width * height * 4);
+  let state = 0x12345678;
+  const next = () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return state >>> 0;
+  };
+  for (let index = 0; index < data.length; index += 4) {
+    const sample = next();
+    data[index] = sample & 255;
+    data[index + 1] = (sample >>> 8) & 255;
+    data[index + 2] = (sample >>> 16) & 255;
+    data[index + 3] = 255;
+  }
+  return Buffer.from(encodeJpeg({ data, width, height }, 90).data);
+}
+
 test("photos larger than a 64KiB Bind round-trip through the chunked bytea path", async () => {
-  const medium = paddedJpeg(70 * 1024);
-  const large = paddedJpeg(790 * 1024);
+  const medium = noisyJpeg(480, 360);
+  const large = noisyJpeg(720, 540);
   assert.ok(medium.length > 64 * 1024);
-  assert.ok(large.length > 700 * 1024);
+  assert.ok(large.length > 64 * 1024);
   assert.ok(large.length <= MAX_PHOTO_BYTES);
   const contactId = randomUUID();
   await query(`INSERT INTO contacts (id, org_id, is_tenant, display_name) VALUES ($1,$2,true,'大圖')`, [contactId, ORG_ID]);
@@ -912,7 +917,7 @@ test("photos larger than a 64KiB Bind round-trip through the chunked bytea path"
   const front = stored.rows.find((row) => row.slot === "front");
   const selfie = stored.rows.find((row) => row.slot === "selfie");
   assert.ok(front && selfie);
-  assert.ok(front.cipher > 700 * 1024);
+  assert.ok(front.cipher > 64 * 1024);
   assert.ok(selfie.cipher > 64 * 1024);
   assert.equal(front.plain, large.length);
   const issued = await issuePhotoUrls(session(USERS.manager, "manager"), documentId);
@@ -925,7 +930,20 @@ test("photos larger than a 64KiB Bind round-trip through the chunked bytea path"
     const token = new URL(shot.url, "http://127.0.0.1").searchParams.get("token");
     assert.ok(token);
     const opened = await openSignedPhoto(session(USERS.manager, "manager"), token);
-    assert.equal(opened.bytes.equals(plain), true);
+    assert.equal(opened.bytes[0], 0xff);
+    assert.equal(opened.bytes[1], 0xd8);
+    assert.equal(opened.mime, "image/jpeg");
+    assert.equal(opened.bytes.equals(plain), false);
+    const path = `${ORG_ID}/${documentId}/${slot}`;
+    const original = await svc(USERS.admin, (client) => readCiphertext(client, "id-documents-private", path));
+    assert.ok(original);
+    const unmarked = await decryptBytes(original, { orgId: ORG_ID, documentId, slot }, ENCRYPTION_KEY_REF);
+    assert.equal(unmarked.equals(plain), true);
+    const watermark = await svc(USERS.admin, (client) => readCiphertext(client, "id-documents-private", `${path}.wm`, "watermark"));
+    assert.ok(watermark);
+    const burned = await decryptBytes(watermark, { orgId: ORG_ID, documentId, slot: `${slot}#wm` }, ENCRYPTION_KEY_REF);
+    assert.equal(burned.equals(opened.bytes), true);
+    assert.equal(burned.equals(plain), false);
     assert.ok(opened.timing.total >= opened.timing.db);
     assert.ok(opened.timing.decrypt >= 0);
     assert.ok(opened.timing.watermark >= 0);
@@ -1383,4 +1401,156 @@ test("a missing display name watermarks the email local part", async () => {
   } finally {
     await query(`UPDATE profiles SET display_name = $2 WHERE id = $1`, [USERS.manager, profile.rows[0]?.display_name]);
   }
+});
+
+test("terminating or cancelling a lease fills a null end date and leaves one that is already set", async () => {
+  const room = await query<{ property_id: string; unit_id: string; target_unit_id: string; target_room_id: string }>(
+    `SELECT property_id::text, unit_id::text, target_unit_id::text, target_room_id::text
+       FROM leases
+      WHERE org_id = $1
+        AND target_room_id IS NOT NULL
+        AND target_room_id NOT IN (
+          SELECT open_lease.target_room_id
+            FROM leases open_lease
+           WHERE open_lease.status IN ('pending_signature', 'active')
+             AND open_lease.end_date IS NULL
+             AND open_lease.target_room_id IS NOT NULL
+        )
+      LIMIT 1`,
+    [ORG_ID],
+  );
+  const base = room.rows[0];
+  assert.ok(base);
+  const taipei = async () => {
+    const row = await query<{ day: string }>(`SELECT (timezone('Asia/Taipei', now()))::date::text AS day`);
+    return row.rows[0].day;
+  };
+  const insertLease = async (status: string, esign: string, start: string, end: string | null) => {
+    const row = await query<{ id: string; end_date: string | null }>(
+      `INSERT INTO leases (
+         org_id, property_id, unit_id, target_unit_id, target_room_id, status, esign_status,
+         start_date, end_date, currency, rent_amount_minor, deposit_amount_minor, created_by
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6::lease_status, $7::esign_status, $8::date, $9::date, 'TWD', 1, 0, $10
+       )
+       RETURNING id::text, end_date::text`,
+      [ORG_ID, base.property_id, base.unit_id, base.target_unit_id, base.target_room_id, status, esign, start, end, USERS.admin],
+    );
+    return row.rows[0];
+  };
+  const save = async (leaseId: string, number: string) => {
+    const contactId = randomUUID();
+    await query(`INSERT INTO contacts (id, org_id, is_tenant, display_name) VALUES ($1,$2,true,'終止日')`, [contactId, ORG_ID]);
+    await query(`INSERT INTO lease_parties (org_id, lease_id, contact_id, role) VALUES ($1,$2,$3,'primary')`, [ORG_ID, leaseId, contactId]);
+    const documentId = await svc(USERS.admin, (client) =>
+      saveIdCheck(client, {
+        orgId: ORG_ID,
+        contactId,
+        leaseId,
+        createdBy: USERS.admin,
+        docType: "passport",
+        number,
+        photos: [
+          { slot: "front", ...photo() },
+          { slot: "selfie", ...photo() },
+        ],
+      }),
+    );
+    return documentId;
+  };
+  const due = async (documentId: string) => {
+    const row = await query<{ delete_after: string; upload: string }>(
+      `SELECT d.delete_after::text,
+              ((d.created_at AT TIME ZONE 'Asia/Taipei')::date + id_document_keep_days())::text AS upload
+         FROM identity_documents d WHERE d.id = $1`,
+      [documentId],
+    );
+    return row.rows[0];
+  };
+  const today = await taipei();
+  const openDraft = await insertLease("draft", "not_sent", "2020-01-01", null);
+  assert.equal(openDraft.end_date, null);
+  const openDoc = await save(openDraft.id, "EN12DD78");
+  const openDue = await due(openDoc);
+  assert.equal(openDue.delete_after, openDue.upload);
+  await query(`UPDATE leases SET status = 'terminated' WHERE id = $1`, [openDraft.id]);
+  const closed = await query<{ end_date: string; terminated_on: string | null; delete_after: string }>(
+    `SELECT l.end_date::text, l.terminated_on::text,
+            (l.end_date + id_document_keep_days())::text AS delete_after
+       FROM leases l
+       JOIN identity_documents d ON d.lease_id = l.id
+      WHERE l.id = $1`,
+    [openDraft.id],
+  );
+  assert.equal(closed.rows[0].end_date, today);
+  assert.equal(closed.rows[0].terminated_on, null);
+  const afterClose = await due(openDoc);
+  assert.equal(afterClose.delete_after, closed.rows[0].delete_after);
+  assert.notEqual(afterClose.delete_after, "9999-12-31");
+
+  const keptEnd = "2027-04-01";
+  const preset = await insertLease("draft", "not_sent", "2026-01-01", keptEnd);
+  assert.equal(preset.end_date, keptEnd);
+  const presetDoc = await save(preset.id, "PR12ES78");
+  await query(`UPDATE leases SET status = 'terminated' WHERE id = $1`, [preset.id]);
+  const presetRow = await query<{ end_date: string; terminated_on: string | null }>(
+    `SELECT end_date::text, terminated_on::text FROM leases WHERE id = $1`,
+    [preset.id],
+  );
+  assert.equal(presetRow.rows[0].end_date, keptEnd);
+  assert.equal(presetRow.rows[0].terminated_on, null);
+  const presetDue = await due(presetDoc);
+  const expectedPreset = await query<{ due: string }>(
+    `SELECT ($1::date + id_document_keep_days())::text AS due`,
+    [keptEnd],
+  );
+  assert.equal(presetDue.delete_after, expectedPreset.rows[0].due);
+
+  const cancelled = await insertLease("draft", "not_sent", "2020-06-01", null);
+  const cancelledDoc = await save(cancelled.id, "CA12EL78");
+  await query(`UPDATE leases SET status = 'cancelled', esign_status = 'voided' WHERE id = $1`, [cancelled.id]);
+  const cancelledRow = await query<{ end_date: string }>(`SELECT end_date::text FROM leases WHERE id = $1`, [cancelled.id]);
+  assert.equal(cancelledRow.rows[0].end_date, today);
+  const cancelledDue = await due(cancelledDoc);
+  assert.equal(cancelledDue.delete_after, cancelledDue.upload);
+
+  const dated = await insertLease("draft", "not_sent", "2020-03-01", null);
+  await query(`UPDATE leases SET status = 'terminated', terminated_on = current_date - 4 WHERE id = $1`, [dated.id]);
+  const datedRow = await query<{ end_date: string; terminated_on: string }>(
+    `SELECT end_date::text, terminated_on::text FROM leases WHERE id = $1`,
+    [dated.id],
+  );
+  assert.equal(datedRow.rows[0].terminated_on, datedRow.rows[0].end_date);
+  const expectedTerm = await query<{ day: string }>(`SELECT (current_date - 4)::text AS day`);
+  assert.equal(datedRow.rows[0].end_date, expectedTerm.rows[0].day);
+
+  const futureStart = await query<{ day: string }>(`SELECT (current_date + 40)::text AS day`);
+  const future = await insertLease("cancelled", "voided", futureStart.rows[0].day, null);
+  assert.equal(future.end_date, futureStart.rows[0].day);
+
+  const stillOpen = await insertLease("draft", "not_sent", "2021-01-01", null);
+  assert.equal(stillOpen.end_date, null);
+  const freshRoom = await query<{ id: string }>(
+    `INSERT INTO rooms (org_id, unit_id, label)
+     SELECT $1, unit_id, 'end-date-' || substr(gen_random_uuid()::text, 1, 8)
+       FROM leases
+      WHERE org_id = $1 AND target_room_id IS NOT NULL
+      LIMIT 1
+     RETURNING id::text`,
+    [ORG_ID],
+  );
+  const activeStart = await query<{ day: string }>(`SELECT (current_date + 2000)::text AS day`);
+  const active = await query<{ end_date: string | null }>(
+    `INSERT INTO leases (
+       org_id, property_id, unit_id, target_unit_id, target_room_id, status, esign_status,
+       start_date, end_date, currency, rent_amount_minor, deposit_amount_minor, created_by
+     )
+     SELECT org_id, property_id, unit_id, NULL, $2, 'active', 'fully_signed', $3::date, NULL, currency, rent_amount_minor, 0, $4
+       FROM leases
+      WHERE org_id = $1 AND target_room_id IS NOT NULL
+      LIMIT 1
+     RETURNING end_date::text`,
+    [ORG_ID, freshRoom.rows[0].id, activeStart.rows[0].day, USERS.admin],
+  );
+  assert.equal(active.rows[0].end_date, null);
 });

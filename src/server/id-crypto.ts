@@ -19,16 +19,19 @@ const aesKeys = new Map<string, Promise<CryptoKey>>();
 
 function key32(envName: IdKeyName) {
   const configured = configuredIdKey(envName);
-  const stamp = configured ? `cfg:${configured.toString("hex")}` : `demo:${DEMO_KEY_MATERIAL[envName]}`;
-  const cacheId = `${envName}:${stamp}`;
-  const cached = derivedKeys.get(cacheId);
-  if (cached) return cached;
   if (configured) {
+    const cacheId = `${envName}:cfg:${configured.toString("hex")}`;
+    const cached = derivedKeys.get(cacheId);
+    if (cached) return cached;
     derivedKeys.set(cacheId, configured);
     return configured;
   }
+  if (envName === "ID_DOC_ENCRYPTION_KEY") throw new Error("Refusing to start: ID_DOC_ENCRYPTION_KEY is required.");
   // Demo hashes are unreachable when CONDOLA_ENV or NODE_ENV is production-like.
   if (productionLikeEnv()) throw new Error(`Refusing to start: ${envName} is required outside demo mode.`);
+  const cacheId = `${envName}:demo:${DEMO_KEY_MATERIAL[envName]}`;
+  const cached = derivedKeys.get(cacheId);
+  if (cached) return cached;
   const hashed = createHash("sha256").update(DEMO_KEY_MATERIAL[envName]).digest();
   derivedKeys.set(cacheId, hashed);
   return hashed;

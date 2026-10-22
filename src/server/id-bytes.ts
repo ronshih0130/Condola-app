@@ -68,20 +68,27 @@ export async function writeUploadSlot(
   }
 }
 
+const CIPHER_TABLE = {
+  original: "id_document_objects",
+  watermark: "id_document_wm_objects",
+} as const;
+
 /** Insert ciphertext in slices small enough for one Bind message. */
 export async function writeCiphertext(
   client: Client,
   row: { bucket: string; path: string; mime: string; sha256: string; ciphertext: Buffer },
+  kind: keyof typeof CIPHER_TABLE = "original",
 ) {
+  const table = CIPHER_TABLE[kind];
   const chunks = byteaChunks(row.ciphertext);
   await client.query(
-    `INSERT INTO id_document_objects (bucket, path, mime_type, byte_size, sha256, ciphertext)
+    `INSERT INTO ${table} (bucket, path, mime_type, byte_size, sha256, ciphertext)
      VALUES ($1,$2,$3,$4,$5,$6)`,
     [row.bucket, row.path, row.mime, row.ciphertext.length, row.sha256, chunks[0]],
   );
   for (let index = 1; index < chunks.length; index += 1) {
     await client.query(
-      `UPDATE id_document_objects
+      `UPDATE ${table}
           SET ciphertext = ciphertext || $3::bytea
         WHERE bucket = $1 AND path = $2`,
       [row.bucket, row.path, chunks[index]],
@@ -144,11 +151,17 @@ export async function copySlotCiphertext(
  * Each slice is still 24KiB, so each hex DataRow stays under 64KiB. A ~68KB
  * photo is three rows of one result, not three extra queries.
  */
-export async function readCiphertext(client: Client, bucket: string, path: string) {
+export async function readCiphertext(
+  client: Client,
+  bucket: string,
+  path: string,
+  kind: keyof typeof CIPHER_TABLE = "original",
+) {
+  const table = CIPHER_TABLE[kind];
   const result = await client.query<{ n: number | null; chunk: unknown }>(
     `SELECT octet_length(ciphertext)::int AS n,
             substring(ciphertext from g.i for $3::int) AS chunk
-       FROM id_document_objects
+       FROM ${table}
        CROSS JOIN LATERAL generate_series(1, octet_length(ciphertext), $3::int) AS g(i)
       WHERE bucket = $1 AND path = $2
       ORDER BY g.i`,

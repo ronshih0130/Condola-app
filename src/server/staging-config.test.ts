@@ -130,6 +130,7 @@ test("the worker cron calls the protected reminder route", () => {
   assert.match(purge, /0 19 \* \* \*/);
   assert.match(purge, /purge_due_identity_documents/);
   assert.match(purge, /SET LOCAL ROLE service_role/);
+  assert.match(purge, /DELETE FROM id_document_wm_objects/);
   assert.match(purge, /DELETE FROM id_document_objects/);
   assert.doesNotMatch(purge, /SET LOCAL ROLE anon/);
   assert.doesNotMatch(purge, /console\.(log|error|warn)/);

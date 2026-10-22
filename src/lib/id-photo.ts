@@ -73,10 +73,10 @@ function burnWatermark(ctx: CanvasRenderingContext2D, width: number, height: num
 }
 
 /**
- * Downscale and encode a JPEG. A non-empty `lines` list burns those pixels;
- * the upload path passes none, because the approved sentence includes the
- * viewer and the view time and is drawn as an overlay. The COM marker is
- * still embedded so upload can reject a JPEG that skipped this step.
+ * Downscale and encode a JPEG. A non-empty `lines` list burns those pixels.
+ * The upload path passes none: the server burns the fixed firm sentence into
+ * a second copy. The COM marker is still embedded so upload can reject a JPEG
+ * that skipped this step. The marker is not proof that the pixels were burned.
  * Compression (about 2000px, quality 0.8) runs only when `compress` is set.
  * Otherwise the long edge stays at ID_PHOTO_LONG_EDGE. Quality drops until the
  * file is within the upload cap. Smaller sources are not enlarged.

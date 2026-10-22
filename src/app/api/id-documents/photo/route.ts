@@ -43,10 +43,9 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get("token") ?? "";
   // Missing cookie or a bad signature never opens a connection. A valid cookie
-  // is one id_photo_open call (session, org, role, and this slot's ciphertext).
-  // The download audit runs after the response. The JPEG is the clean original.
-  // The approved sentence is an overlay from the view action, not a re-encode:
-  // Workers Free allows 10ms of CPU, which cannot decode and re-encode a JPEG.
+  // is one id_photo_open call. The response is the upload-time watermarked copy.
+  // GET decrypts that object. A row with no copy is burned once and stored;
+  // the original is never the response. Viewer and Taiwan time stay on screen.
   if (!token) return new NextResponse(null, { status: 404 });
   const jar = await cookies();
   const sessionCookie = jar.get(SESSION_COOKIE)?.value;

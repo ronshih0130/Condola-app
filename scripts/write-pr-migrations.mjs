@@ -65,6 +65,14 @@ const added = {
     addOnly: true,
     reason: "Adds nullable consent_notice_sha and consented_at. No default, NOT NULL, or constraint. An old insert that omits them still works.",
   },
+  "supabase/migrations/20261029150000_id_watermark_copy.sql": {
+    addOnly: false,
+    reason: "New id_document_wm_objects table uses NOT NULL columns. Replaces id_photo_open so a signed read returns the watermarked copy, and replaces purge_due_identity_documents so both ciphertext objects are deleted. No new constraint on existing tables. An old photo insert that omits the watermarked object still succeeds.",
+  },
+  "supabase/migrations/20261029160000_lease_close_end_date.sql": {
+    addOnly: true,
+    reason: "BEFORE trigger fills a null end_date when a lease becomes terminated or cancelled. An end date that is already set stays. No NOT NULL and no new constraint.",
+  },
 };
 
 const functions = [

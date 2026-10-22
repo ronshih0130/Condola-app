@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { makeT, isLocale } from "@/i18n";
-import { idWatermarkText, taipeiViewStamp } from "@/lib/id-watermark";
+import { idWatermarkText, taipeiViewStamp, watermarkObjectPath, watermarkSlot } from "@/lib/id-watermark";
 import {
   DEFAULT_RETENTION_DAYS,
   PRIVATE_BUCKET,
@@ -22,7 +22,7 @@ import { ID_NOTICE_PATH, ID_NOTICE_SHA256, fullNoticeSha256Subtle, resolveFirmCo
 import { writeAudit } from "./audit";
 import { maybe, svc, tx, withDeferredClient } from "./db";
 import { FlowError, logServerError } from "./errors";
-import { copySlotCiphertext, writeCiphertext, writeUploadSlot } from "./id-bytes";
+import { copySlotCiphertext, readCiphertext, writeCiphertext, writeUploadSlot } from "./id-bytes";
 import {
   ENCRYPTION_KEY_REF,
   acceptUploadBytes,
@@ -35,10 +35,42 @@ import {
   sha256HexBytes,
   signPhotoToken,
 } from "./id-crypto";
+import { burnFixedIdCopy } from "./id-watermark-image";
 import { allowIdUpload } from "./id-upload-guard";
 import { assertStaff, type Session } from "./types";
 
 const SAMPLE_JPEG = Buffer.from(SAMPLE_JPEG_BASE64, "base64");
+
+async function storeWatermarkedCopy(
+  client: Client,
+  input: { orgId: string; documentId: string; slot: string; storagePath: string; plain: Buffer; firm: string },
+) {
+  let burned: Buffer;
+  try {
+    burned = burnFixedIdCopy(input.plain, input.firm);
+  } catch (error) {
+    logServerError("id-watermark", error);
+    throw new FlowError("errors.idPhoto");
+  }
+  if (burned.equals(input.plain)) throw new FlowError("errors.idPhoto");
+  const ciphertext = await encryptBytes(burned, {
+    orgId: input.orgId,
+    documentId: input.documentId,
+    slot: watermarkSlot(input.slot),
+  });
+  await writeCiphertext(
+    client,
+    {
+      bucket: PRIVATE_BUCKET,
+      path: watermarkObjectPath(input.storagePath),
+      mime: "image/jpeg",
+      sha256: sha256Hex(ciphertext),
+      ciphertext,
+    },
+    "watermark",
+  );
+  return burned;
+}
 
 export function canReviewId(session: Session) {
   return session.kind === "staff" && (session.role === "admin" || session.role === "manager");
@@ -290,6 +322,7 @@ async function insertIdCheck(
       ],
     );
   }
+  const firm = await maybe<{ name: string }>(client, `SELECT name FROM organizations WHERE id = $1`, [input.orgId]);
   let frontSha = "pending";
   for (const photo of input.photos) {
     let plain: Buffer;
@@ -324,6 +357,14 @@ async function insertIdCheck(
       mime,
       sha256: sha,
       ciphertext,
+    });
+    await storeWatermarkedCopy(client, {
+      orgId: input.orgId,
+      documentId,
+      slot: photo.slot,
+      storagePath: path,
+      plain,
+      firm: firm?.name ?? "",
     });
   }
   await client.query(`UPDATE identity_documents SET sha256_ciphertext = $2 WHERE id = $1`, [documentId, frontSha]);
@@ -646,6 +687,18 @@ async function commitTenantId(
         documentId,
         slot,
       });
+      const storagePath = `${party.org_id}/${documentId}/${slot}`;
+      const ciphertext = await readCiphertext(client, PRIVATE_BUCKET, storagePath);
+      if (!ciphertext) throw new FlowError("errors.idPhoto");
+      const plain = await decryptBytes(ciphertext, { orgId: party.org_id, documentId, slot }, ENCRYPTION_KEY_REF);
+      await storeWatermarkedCopy(client, {
+        orgId: party.org_id,
+        documentId,
+        slot,
+        storagePath,
+        plain,
+        firm: firm.name,
+      });
     }
     await client.query(`DELETE FROM id_upload_slots WHERE user_id = $1::uuid AND lease_id = $2::uuid`, [session.userId, input.leaseId]);
     await client.query(
@@ -893,10 +946,59 @@ export async function issuePhotoUrlsForToken(caller: PhotoCaller, documentId: st
   return issuePhotoUrlsForCaller(caller, documentId);
 }
 
+function isJpeg(bytes: Buffer) {
+  return bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9;
+}
+
 /**
- * One `id_photo_open` call returns the ciphertext. Decrypt and the watermark
- * string run after that. The download audit is deferred. `db` includes connect.
- * `total` runs until this function returns; on Workers the audit is outside it.
+ * Build the watermarked copy when a row has none. The original is decrypted
+ * only as input to the burn. A failure returns null and never the original.
+ */
+async function materializeWatermark(
+  client: Client,
+  input: { orgId: string; documentId: string; slot: string; storagePath: string; firm: string; keyRef: string },
+): Promise<Buffer | null> {
+  const lockKey = `${input.documentId}:${input.slot}:wm`;
+  await client.query(`SELECT pg_advisory_lock(hashtext($1)::bigint)`, [lockKey]);
+  try {
+    const existing = await readCiphertext(client, PRIVATE_BUCKET, watermarkObjectPath(input.storagePath), "watermark");
+    if (existing) {
+      try {
+        return await decryptBytes(
+          existing,
+          { orgId: input.orgId, documentId: input.documentId, slot: watermarkSlot(input.slot) },
+          input.keyRef,
+        );
+      } catch (error) {
+        logServerError("id-watermark", error);
+        return null;
+      }
+    }
+    const original = await readCiphertext(client, PRIVATE_BUCKET, input.storagePath);
+    if (!original) return null;
+    let plain: Buffer;
+    try {
+      plain = await decryptBytes(original, { orgId: input.orgId, documentId: input.documentId, slot: input.slot }, input.keyRef);
+    } catch (error) {
+      logServerError("id-watermark", error);
+      return null;
+    }
+    try {
+      return await storeWatermarkedCopy(client, { ...input, plain });
+    } catch (error) {
+      logServerError("id-watermark", error);
+      return null;
+    }
+  } finally {
+    await client.query(`SELECT pg_advisory_unlock(hashtext($1)::bigint)`, [lockKey]);
+  }
+}
+
+/**
+ * One `id_photo_open` call returns the watermarked ciphertext. Decrypt and the
+ * on-screen sentence run after that. A missing copy is burned here and stored;
+ * the original is never the response. The download audit is deferred.
+ * `db` includes connect. `total` runs until this function returns.
  */
 export async function serveSignedPhoto(input: PhotoCaller & { documentId: string; slot: string }): Promise<ServedPhoto | null> {
   const started = performance.now();
@@ -923,18 +1025,49 @@ export async function serveSignedPhoto(input: PhotoCaller & { documentId: string
     db = performance.now() - started;
     const first = result.rows[0];
     if (!first) return null;
-    const ciphertext = Buffer.concat(result.rows.map((row) => photoBytes(row.chunk)));
-    if (ciphertext.length !== Number(first.total_bytes)) return null;
-    const decryptStarted = performance.now();
-    const bytes = await decryptBytes(
-      ciphertext,
-      { orgId: first.org_id, documentId: input.documentId, slot: input.slot },
-      first.encryption_key_ref,
-    );
-    const decrypt = performance.now() - decryptStarted;
-    const watermarkStarted = performance.now();
-    idWatermarkText(first.firm_name, first.viewer_name, taipeiViewStamp());
-    const watermark = performance.now() - watermarkStarted;
+    const total = Number(first.total_bytes);
+    let bytes: Buffer;
+    let decrypt = 0;
+    let watermark = 0;
+    if (total > 0) {
+      const ciphertext = Buffer.concat(result.rows.map((row) => photoBytes(row.chunk)));
+      if (ciphertext.length !== total) return null;
+      const decryptStarted = performance.now();
+      try {
+        bytes = await decryptBytes(
+          ciphertext,
+          { orgId: first.org_id, documentId: input.documentId, slot: watermarkSlot(input.slot) },
+          first.encryption_key_ref,
+        );
+      } catch (error) {
+        logServerError("id-watermark", error);
+        return null;
+      }
+      decrypt = performance.now() - decryptStarted;
+      const watermarkStarted = performance.now();
+      idWatermarkText(first.firm_name, first.viewer_name, taipeiViewStamp());
+      watermark = performance.now() - watermarkStarted;
+    } else {
+      const photo = await maybe<{ storage_path: string }>(
+        client,
+        `SELECT storage_path FROM identity_document_photos WHERE document_id = $1 AND slot = $2`,
+        [input.documentId, input.slot],
+      );
+      if (!photo) return null;
+      const watermarkStarted = performance.now();
+      const made = await materializeWatermark(client, {
+        orgId: first.org_id,
+        documentId: input.documentId,
+        slot: input.slot,
+        storagePath: photo.storage_path,
+        firm: first.firm_name,
+        keyRef: first.encryption_key_ref,
+      });
+      watermark = performance.now() - watermarkStarted;
+      if (!made) return null;
+      bytes = made;
+    }
+    if (!isJpeg(bytes)) return null;
     defer(`SELECT id_photo_record($1::uuid, $2::uuid, $3::uuid, $4, $5::timestamptz, $6, $7::uuid)`, [
       first.org_id,
       input.documentId,
@@ -945,7 +1078,7 @@ export async function serveSignedPhoto(input: PhotoCaller & { documentId: string
       first.contact_id,
     ]);
     return {
-      mime: first.mime_type,
+      mime: "image/jpeg",
       bytes,
       firmName: first.firm_name,
       timing: { db, decrypt, watermark, total: 0 },
@@ -1043,14 +1176,66 @@ export async function purgeDueIdDocuments(limit = 500) {
     const rows = purged.rows;
     if (rows.length > 0) {
       const ids = [...new Set(rows.map((row) => row.document_id))];
+      const buckets = rows.map((row) => row.storage_bucket);
+      const paths = rows.map((row) => row.storage_path);
+      await client.query(
+        `DELETE FROM id_document_wm_objects AS w
+          WHERE (w.bucket, w.path) IN (SELECT * FROM unnest($1::text[], $2::text[]))`,
+        [buckets, paths.map((path) => `${path}.wm`)],
+      );
       await client.query(
         `DELETE FROM id_document_objects AS o
           WHERE (o.bucket, o.path) IN (SELECT * FROM unnest($1::text[], $2::text[]))`,
-        [rows.map((row) => row.storage_bucket), rows.map((row) => row.storage_path)],
+        [buckets, paths],
       );
       await client.query(`DELETE FROM identity_document_photos WHERE document_id = ANY($1::uuid[])`, [ids]);
     }
     return new Set(rows.map((row) => row.document_id)).size;
+  });
+}
+
+/**
+ * Burn a watermarked copy for live photos that do not have one yet.
+ * Logs the document id and slot. Image bytes stay in the database.
+ */
+export async function backfillIdWatermarks(limit = 50) {
+  return svc(null, async (client) => {
+    const missing = await client.query<{
+      org_id: string;
+      document_id: string;
+      slot: string;
+      storage_path: string;
+      firm_name: string;
+      encryption_key_ref: string;
+    }>(
+      `SELECT d.org_id::text, p.document_id::text, p.slot, p.storage_path,
+              o.name AS firm_name, d.encryption_key_ref
+         FROM identity_document_photos p
+         JOIN identity_documents d ON d.id = p.document_id
+         JOIN organizations o ON o.id = d.org_id
+         LEFT JOIN id_document_wm_objects w
+           ON w.bucket = p.storage_bucket AND w.path = p.storage_path || '.wm'
+        WHERE w.path IS NULL AND d.deleted_at IS NULL
+        ORDER BY p.document_id, p.slot
+        LIMIT $1`,
+      [limit],
+    );
+    let burned = 0;
+    let failed = 0;
+    for (const row of missing.rows) {
+      const made = await materializeWatermark(client, {
+        orgId: row.org_id,
+        documentId: row.document_id,
+        slot: row.slot,
+        storagePath: row.storage_path,
+        firm: row.firm_name,
+        keyRef: row.encryption_key_ref,
+      });
+      if (made) burned += 1;
+      else failed += 1;
+      console.log(`id-watermark ${made ? "ok" : "skip"} ${row.document_id} ${row.slot}`);
+    }
+    return { burned, failed, scanned: missing.rows.length };
   });
 }
 

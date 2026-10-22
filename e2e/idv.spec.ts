@@ -209,9 +209,24 @@ test("tenant ID check follows the consent, mask, review, and retention rules", a
   expect(bytes.length).toBeLessThanOrEqual(MAX_PHOTO_BYTES);
   expect(bytes.subarray(bytes.length - 2).equals(Buffer.from([0xff, 0xd9]))).toBe(true);
   expect(bytes.includes(Buffer.from("condola-id-wm"))).toBe(false);
+  expect(bytes.equals(phone)).toBe(false);
   await expect
     .poll(() => page.getByTestId("idv-photo-front").evaluate((img: HTMLImageElement) => img.naturalWidth))
     .toBeGreaterThan(0);
+  const bar = await page.getByTestId("idv-photo-front").evaluate((img: HTMLImageElement) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx || !img.naturalWidth || !img.naturalHeight) return null;
+    ctx.drawImage(img, 0, 0);
+    const pixel = ctx.getImageData(Math.floor(img.naturalWidth / 2), img.naturalHeight - 1, 1, 1).data;
+    return { r: pixel[0] ?? 0, g: pixel[1] ?? 0, b: pixel[2] ?? 0 };
+  });
+  expect(bar).toBeTruthy();
+  expect(bar!.r).toBeGreaterThan(150);
+  expect(bar!.r).toBeGreaterThan(bar!.g);
+  expect(bar!.r).toBeGreaterThan(bar!.b);
   await expect
     .poll(() => page.getByTestId("idv-watermark").first().innerText())
     .toContain(`僅供${FIRM_NAME}核對租約身分使用・黃志明・`);

@@ -15,7 +15,15 @@ function buildSha() {
 const NO_STORE = [{ key: "Cache-Control", value: "private, no-store" }];
 const sha = buildSha();
 
+const ID_WATERMARK_FONTS = ["./public/fonts/DroidSansFallback-subset.ttf", "./src/server/fonts/DejaVuSans.ttf"];
+
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/api/id-documents/photo": ID_WATERMARK_FONTS,
+    "/api/demo/reset": ID_WATERMARK_FONTS,
+    "/t/id": ID_WATERMARK_FONTS,
+    "/m/leases/[id]": ID_WATERMARK_FONTS,
+  },
   env: {
     NEXT_PUBLIC_BUILD_SHA: sha,
     NEXT_PUBLIC_COMMIT: sha,

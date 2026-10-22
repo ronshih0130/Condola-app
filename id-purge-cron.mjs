@@ -23,16 +23,23 @@ export async function runIdPurge(client) {
       const ids = [...new Set(rows.map((row) => row.document_id))];
       let removedFiles = 0;
       if (rows.length > 0) {
+        const buckets = rows.map((row) => row.storage_bucket);
+        const paths = rows.map((row) => row.storage_path);
+        const watermarks = await client.query(
+          `DELETE FROM id_document_wm_objects AS w
+            WHERE (w.bucket, w.path) IN (SELECT * FROM unnest($1::text[], $2::text[]))`,
+          [buckets, paths.map((path) => `${path}.wm`)],
+        );
         const objects = await client.query(
           `DELETE FROM id_document_objects AS o
             WHERE (o.bucket, o.path) IN (SELECT * FROM unnest($1::text[], $2::text[]))`,
-          [rows.map((row) => row.storage_bucket), rows.map((row) => row.storage_path)],
+          [buckets, paths],
         );
         const photos = await client.query(
           `DELETE FROM identity_document_photos WHERE document_id = ANY($1::uuid[])`,
           [ids],
         );
-        removedFiles = (objects.rowCount ?? 0) + (photos.rowCount ?? 0);
+        removedFiles = (watermarks.rowCount ?? 0) + (objects.rowCount ?? 0) + (photos.rowCount ?? 0);
       }
       await client.query("COMMIT");
       batches += 1;

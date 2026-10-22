@@ -1,13 +1,29 @@
 /**
- * One watermark sentence, approved for every view.
+ * On-screen sentence for a view. The middle dot is U+30FB.
  * 僅供{firm}核對租約身分使用・{viewer}・{YYYY-MM-DD HH:mm}
- * The middle dot is U+30FB. Viewer is the display name, or the email
- * local part when that name is missing. The clock is Asia/Taipei, the
- * moment of the view. It is not burned into the stored JPEG: the photo
- * GET and the view action draw it as an overlay so three photos stay a
- * database read plus a string, not a decode and re-encode.
+ * Viewer is the display name, or the email local part when that name is
+ * missing. The clock is Asia/Taipei at the moment of the view.
+ * Those two parts stay on the screen. The stored second copy is only
+ * idFixedWatermark: the firm sentence, burned once at upload.
  */
 export const ID_WATERMARK_TEMPLATE = "僅供{firm}核對租約身分使用・{viewer}・{when}";
+
+/** Object path of the watermarked copy. The original object keeps `storagePath`. */
+export function watermarkObjectPath(storagePath: string) {
+  return `${storagePath}.wm`;
+}
+
+/** AES-GCM binding for the watermarked copy. It is not the original slot. */
+export function watermarkSlot(slot: string) {
+  return `${slot}#wm`;
+}
+
+/** Fixed sentence burned into the second copy. No viewer and no clock. */
+export function idFixedWatermark(firm: string) {
+  const name = firm.replace(/\s+/g, " ").trim();
+  if (!name) throw new Error("watermark firm is empty");
+  return `僅供${name}核對租約身分使用`;
+}
 
 export function viewerLabel(displayName: string | null | undefined, email: string | null | undefined) {
   const name = (displayName ?? "").trim();

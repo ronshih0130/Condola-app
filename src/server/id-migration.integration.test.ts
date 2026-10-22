@@ -41,6 +41,14 @@ function psql(databaseUrl: string, file: string) {
   });
 }
 
+function applyWatermarkMigrations() {
+  psql(FRESH_URL, path.join(MIGRATIONS, "20261029150000_id_watermark_copy.sql"));
+  psql(FRESH_URL, path.join(MIGRATIONS, "20261029160000_lease_close_end_date.sql"));
+}
+
+test.before(applyWatermarkMigrations);
+test.after(applyWatermarkMigrations);
+
 async function withDb<T>(databaseUrl: string, fn: (client: Client) => Promise<T>) {
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
@@ -94,12 +102,12 @@ async function assertAnonIdGrants(client: Client) {
          FROM pg_class c
          JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public'
-          AND c.relname IN ('id_document_objects', 'identity_document_photos')
+          AND c.relname IN ('id_document_objects', 'id_document_wm_objects', 'identity_document_photos')
         ORDER BY c.relname`,
     );
     assert.deepEqual(
       tables.rows.map((row) => row.relname),
-      ["id_document_objects", "identity_document_photos"],
+      ["id_document_objects", "id_document_wm_objects", "identity_document_photos"],
     );
     for (const row of tables.rows) {
       assert.equal(row.sel, false, row.relname);
@@ -148,6 +156,7 @@ async function assertIdPhotoPrivileges(client: Client) {
     "identity_document_photos",
     "identity_document_access_log",
     "id_document_objects",
+    "id_document_wm_objects",
     "id_upload_slots",
   ];
   const priv = await client.query<{
@@ -205,6 +214,7 @@ async function assertIdPhotoPrivileges(client: Client) {
   assert.equal(byName.identity_document_access_log.auth_sel, true);
   assert.equal(byName.identity_document_access_log.auth_ins, false);
   assert.equal(byName.id_document_objects.auth_sel, false);
+  assert.equal(byName.id_document_wm_objects.auth_sel, false);
   assert.equal(byName.id_upload_slots.auth_sel, false);
   const policies = await client.query<{ polname: string; polcmd: string }>(
     `SELECT polname, polcmd FROM pg_policy WHERE polrelid = 'public.identity_documents'::regclass`,

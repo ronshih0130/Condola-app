@@ -174,6 +174,45 @@ test("webcrypto opens a payload written by node aes-256-gcm", async () => {
   assert.deepEqual(await decryptBytes(payload, BINDING, ENCRYPTION_KEY_REF), Buffer.from("legacy-row"));
 });
 
+test("demo mode refuses a missing or empty encryption key", async () => {
+  const env = process.env as Record<string, string | undefined>;
+  const saved = {
+    DEMO_MODE: env.DEMO_MODE,
+    CONDOLA_ENV: env.CONDOLA_ENV,
+    NODE_ENV: env.NODE_ENV,
+    NEXT_PHASE: env.NEXT_PHASE,
+    enc: env.ID_DOC_ENCRYPTION_KEY,
+    hmac: env.ID_DOC_HMAC_KEY,
+    sign: env.ID_DOC_SIGNING_SECRET,
+  };
+  env.DEMO_MODE = "true";
+  delete env.CONDOLA_ENV;
+  env.NODE_ENV = "test";
+  delete env.NEXT_PHASE;
+  env.ID_DOC_HMAC_KEY = HMAC;
+  env.ID_DOC_SIGNING_SECRET = SIGN;
+  try {
+    for (const value of [undefined, "", "   "]) {
+      if (value === undefined) delete env.ID_DOC_ENCRYPTION_KEY;
+      else env.ID_DOC_ENCRYPTION_KEY = value;
+      assert.throws(() => assertIdDocKeys(), /ID_DOC_ENCRYPTION_KEY is required/);
+      await assert.rejects(() => encryptBytes(Buffer.from("abc"), BINDING), /ID_DOC_ENCRYPTION_KEY is required/);
+    }
+  } finally {
+    const restore = (name: string, value: string | undefined) => {
+      if (value === undefined) delete env[name];
+      else env[name] = value;
+    };
+    restore("DEMO_MODE", saved.DEMO_MODE);
+    restore("CONDOLA_ENV", saved.CONDOLA_ENV);
+    restore("NODE_ENV", saved.NODE_ENV);
+    restore("NEXT_PHASE", saved.NEXT_PHASE);
+    restore("ID_DOC_ENCRYPTION_KEY", saved.enc);
+    restore("ID_DOC_HMAC_KEY", saved.hmac);
+    restore("ID_DOC_SIGNING_SECRET", saved.sign);
+  }
+});
+
 test("demo keys cannot encrypt when the environment is production", async () => {
   const env = process.env as Record<string, string | undefined>;
   const saved = {

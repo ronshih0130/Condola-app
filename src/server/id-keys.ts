@@ -3,9 +3,12 @@ import { demoModeEnabled, productionLikeEnv } from "./demo";
 const KEY_NAMES = ["ID_DOC_ENCRYPTION_KEY", "ID_DOC_HMAC_KEY", "ID_DOC_SIGNING_SECRET"] as const;
 export type IdKeyName = (typeof KEY_NAMES)[number];
 
-/** Local demo material. Hashed to 32 bytes in id-crypto, and only when demo mode is on and the env var is unset. */
-export const DEMO_KEY_MATERIAL: Record<IdKeyName, string> = {
-  ID_DOC_ENCRYPTION_KEY: "condola-demo-id-doc-key",
+/**
+ * Local demo material for the HMAC and the photo-link secret.
+ * Hashed to 32 bytes in id-crypto, and only when demo mode is on and that env var is unset.
+ * The encryption key has no demo material.
+ */
+export const DEMO_KEY_MATERIAL: Record<Exclude<IdKeyName, "ID_DOC_ENCRYPTION_KEY">, string> = {
   ID_DOC_HMAC_KEY: "condola-demo-id-hmac",
   ID_DOC_SIGNING_SECRET: "condola-demo-id-signing",
 };
@@ -34,6 +37,7 @@ function formatMessage(name: IdKeyName) {
 }
 
 function missingMessage(name: IdKeyName) {
+  if (name === "ID_DOC_ENCRYPTION_KEY") return "Refusing to start: ID_DOC_ENCRYPTION_KEY is required.";
   return `Refusing to start: ${name} is required outside demo mode.`;
 }
 
@@ -43,9 +47,10 @@ function refuse(message: string): never {
 }
 
 /**
- * Outside demo mode the process does not start, and does not encrypt, without
- * 32-byte ID_DOC_ENCRYPTION_KEY, ID_DOC_HMAC_KEY, and ID_DOC_SIGNING_SECRET values.
- * Demo mode may leave them unset. A value that is set must still be 32 bytes.
+ * ID_DOC_ENCRYPTION_KEY is required even in demo mode. A missing or empty value
+ * refuses startup and refuses the first encrypt or decrypt. ID_DOC_HMAC_KEY and
+ * ID_DOC_SIGNING_SECRET may be unset in demo mode. A value that is set must still
+ * be 32 bytes.
  */
 export function assertIdDocKeys() {
   if (building()) return;
@@ -53,18 +58,18 @@ export function assertIdDocKeys() {
   for (const name of KEY_NAMES) {
     const raw = process.env[name]?.trim();
     if (!raw) {
-      // Demo material is local only. A production-like process never skips a missing key.
-      if (!production && demoModeEnabled()) continue;
-      refuse(missingMessage(name));
+      if (name === "ID_DOC_ENCRYPTION_KEY" || production || !demoModeEnabled()) refuse(missingMessage(name));
+      continue;
     }
     if (!parseIdKey(raw)) refuse(formatMessage(name));
   }
 }
 
-/** Parsed 32-byte key, or null when demo mode is using its local material. */
+/** Parsed 32-byte key, or null when demo mode is using local HMAC or signing material. */
 export function configuredIdKey(envName: IdKeyName): Buffer | null {
   const raw = process.env[envName]?.trim();
   if (!raw) {
+    if (envName === "ID_DOC_ENCRYPTION_KEY") refuse(missingMessage(envName));
     if (productionLikeEnv()) refuse(missingMessage(envName));
     if (demoModeEnabled()) return null;
     refuse(missingMessage(envName));
