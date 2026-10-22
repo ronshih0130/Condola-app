@@ -5,14 +5,29 @@ import { purgeDueIdDocumentsUntilDone } from "@/server/id-docs";
 
 export const dynamic = "force-dynamic";
 
+async function cronSecret() {
+  if (process.env.CRON_SECRET) return process.env.CRON_SECRET;
+  try {
+    const mod = (await import("@opennextjs/cloudflare")) as {
+      getCloudflareContext: (options?: { async?: boolean }) => Promise<{ env: { CRON_SECRET?: string } }>;
+    };
+    const ctx = await mod.getCloudflareContext({ async: true });
+    return ctx.env.CRON_SECRET || "";
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Manual purge for preview and local e2e. Header x-cron-secret.
- * Demo accepts demo-cron. Production returns 404; the Worker cron calls the
- * function itself as service_role and does not use this route.
+ * Daily ID-photo purge. Header x-cron-secret. The Worker cron posts here.
+ * Demo accepts demo-cron. A missing or wrong secret is a 404.
+ * purgeDueIdDocumentsUntilDone runs as service_role and deletes the stored files.
  */
 export async function POST(request: Request) {
-  if ((process.env.CONDOLA_ENV ?? "").trim() === "production") return new NextResponse(null, { status: 404 });
-  if (!cronAuthorized(request.headers.get("x-cron-secret"))) return new NextResponse(null, { status: 404 });
+  const expected = await cronSecret();
+  if (!cronAuthorized(request.headers.get("x-cron-secret"), expected)) {
+    return new NextResponse(null, { status: 404 });
+  }
   try {
     const removed = await purgeDueIdDocumentsUntilDone();
     return NextResponse.json({ removed });

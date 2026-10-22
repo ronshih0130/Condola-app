@@ -37,7 +37,7 @@ Required secret names. Each `ID_DOC_*` value is exactly 32 bytes (64 hex charact
 - `ID_DOC_ENCRYPTION_KEY` — raw AES-256-GCM key
 - `ID_DOC_HMAC_KEY` — raw HMAC-SHA256 key for the ID number
 - `ID_DOC_SIGNING_SECRET` — raw HMAC-SHA256 key for photo tokens
-- `CRON_SECRET` — shared secret for the reminder cron. `0 1 * * *` (09:00 Asia/Taipei) sends it as `x-cron-secret` to `/api/cron/reminders`. `0 19 * * *` (03:00 Asia/Taipei) purges ID photos in the Worker as `service_role` and does not use this header. Cron Triggers are on the Workers Free plan.
+- `CRON_SECRET` — shared secret for the Worker crons. `0 1 * * *` (09:00 Asia/Taipei) sends it as `x-cron-secret` to `/api/cron/reminders`. `0 19 * * *` (03:00 Asia/Taipei) sends the same header to `/api/cron/purge-id-documents`. Cron Triggers are on the Workers Free plan.
 
 Optional, not required to boot, and not one of the required secrets above:
 

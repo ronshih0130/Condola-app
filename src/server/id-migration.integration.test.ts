@@ -17,6 +17,14 @@ const UPGRADE_FILE = "20261022200000_tenant_id_check_upgrade.sql";
 const OLD_FILE = "20261022180000_tenant_id_check.sql";
 const SHOWN_SHA_FILE = "20261027120000_id_consent_shown_sha.sql";
 const ANON_REVOKE_FILE = "20261027140000_id_anon_revoke.sql";
+const CLOSED_EXECUTE = [
+  "dedupe_live_identity_documents",
+  "fn_id_access_log_guard",
+  "fn_id_document_allow_log_delete",
+  "fn_id_number_masked",
+  "id_document_keep_days",
+  "id_number_stored_mask",
+] as const;
 const PURGE_REVOKE_FILE = "20261021150000_revoke_purge_execute.sql";
 const DEFINER = [
   "purge_due_identity_documents",
@@ -231,12 +239,71 @@ async function assertCurrentSchema(databaseUrl: string) {
     assert.match(body("fn_id_access_log_guard"), /OLD\.document_id::text = ANY \(allowed\)/);
     assert.match(body("fn_id_access_log_guard"), /NOT EXISTS \(SELECT 1 FROM public\.identity_documents d WHERE d\.id = OLD\.document_id\)/);
     assert.match(body("fn_id_access_log_guard"), /SECURITY DEFINER/);
+    assert.match(body("fn_id_access_log_guard"), /search_path (TO|=) '?pg_catalog'?, '?public'?/);
     assert.match(body("fn_id_document_allow_log_delete"), /array_append/);
     assert.match(body("id_document_delete_after"), /l\.status IN \('active', 'ended', 'terminated'\)/);
     assert.match(body("id_document_delete_after"), /voided/);
     assert.match(body("id_document_keep_days"), /SELECT 90/);
     const keep = await client.query<{ days: number }>(`SELECT id_document_keep_days() AS days`);
     assert.equal(keep.rows[0]?.days, 90);
+    const closed = await client.query<{ proname: string; anon: boolean; authn: boolean; pub: boolean; svc: boolean }>(
+      `SELECT p.proname,
+              has_function_privilege('anon', p.oid, 'execute') AS anon,
+              has_function_privilege('authenticated', p.oid, 'execute') AS authn,
+              has_function_privilege('public', p.oid, 'execute') AS pub,
+              has_function_privilege('service_role', p.oid, 'execute') AS svc
+         FROM pg_proc p
+         JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
+          AND p.proname = ANY($1::text[])
+        ORDER BY p.proname`,
+      [[...CLOSED_EXECUTE]],
+    );
+    assert.deepEqual(
+      closed.rows.map((row) => row.proname),
+      [...CLOSED_EXECUTE].slice().sort(),
+    );
+    for (const row of closed.rows) {
+      assert.equal(row.anon, false, row.proname);
+      assert.equal(row.authn, false, row.proname);
+      assert.equal(row.pub, false, row.proname);
+      assert.equal(row.svc, true, row.proname);
+    }
+    const guardConfig = await client.query<{ proconfig: string[] | null }>(
+      `SELECT proconfig FROM pg_proc p
+         JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public' AND p.proname = 'fn_id_access_log_guard'`,
+    );
+    assert.match((guardConfig.rows[0]?.proconfig ?? []).join(" "), /search_path=pg_catalog, public/);
+    await client.query("BEGIN");
+    try {
+      await client.query("SET LOCAL ROLE service_role");
+      const asService = await client.query<{ days: number; masked: string }>(
+        `SELECT id_document_keep_days() AS days, id_number_stored_mask('A123456789') AS masked`,
+      );
+      assert.equal(asService.rows[0]?.days, 90);
+      assert.equal(asService.rows[0]?.masked, "A******789");
+      await assert.rejects(
+        client.query(`SELECT fn_id_number_masked()`),
+        /trigger functions can only be called as triggers/,
+      );
+    } finally {
+      await client.query("ROLLBACK");
+    }
+    await client.query("BEGIN");
+    try {
+      await client.query("SET LOCAL ROLE anon");
+      await assert.rejects(client.query(`SELECT id_document_keep_days()`), /permission denied/);
+    } finally {
+      await client.query("ROLLBACK");
+    }
+    await client.query("BEGIN");
+    try {
+      await client.query("SET LOCAL ROLE anon");
+      await assert.rejects(client.query(`SELECT id_number_stored_mask('A123456789')`), /permission denied/);
+    } finally {
+      await client.query("ROLLBACK");
+    }
     const rejected = await client.query(
       `SELECT 1 FROM pg_proc p
          JOIN pg_namespace n ON n.oid = p.pronamespace

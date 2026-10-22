@@ -10,7 +10,6 @@ test("the staging tarball contains the scheduled worker entry and the OpenNext w
   try {
     mkdirSync(path.join(root, ".open-next"));
     writeFileSync(path.join(root, "custom-worker.mjs"), readFileSync("custom-worker.mjs"));
-    writeFileSync(path.join(root, "id-purge-cron.mjs"), readFileSync("id-purge-cron.mjs"));
     writeFileSync(
       path.join(root, ".open-next/worker.js"),
       "export default { fetch() { return new Response('ok'); } };\n",
@@ -25,16 +24,26 @@ test("the staging tarball contains the scheduled worker entry and the OpenNext w
     });
     const names = execFileSync("tar", ["-tzf", out], { encoding: "utf8" });
     assert.match(names, /^\.\/custom-worker\.mjs$/m);
-    assert.match(names, /^\.\/id-purge-cron\.mjs$/m);
+    assert.doesNotMatch(names, /^\.\/id-purge-cron\.mjs$/m);
     assert.match(names, /^\.\/\.open-next\/worker\.js$/m);
+    assert.match(names, /^\.\/pr-migrations\/MANIFEST\.md$/m);
+    assert.match(names, /^\.\/pr-migrations\/PERMISSIONS\.md$/m);
     const entry = execFileSync("tar", ["-xOf", out, "./custom-worker.mjs"], { encoding: "utf8" });
+    assert.ok(Buffer.byteLength(entry) < 4096);
     assert.match(entry, /scheduled\(/);
-    assert.match(entry, /purge_due_identity_documents/);
-    assert.match(entry, /SET LOCAL ROLE service_role/);
-    assert.doesNotMatch(entry, /SET LOCAL ROLE anon/);
+    assert.match(entry, /\/api\/cron\/purge-id-documents/);
+    assert.doesNotMatch(entry, /purge_due_identity_documents/);
+    assert.doesNotMatch(entry, /from "pg"/);
+    assert.doesNotMatch(entry, /require\("events"\)/);
+    assert.doesNotMatch(entry, /id-purge-cron/);
     assert.match(entry, /\/api\/cron\/reminders/);
     assert.match(entry, /id-purge failed/);
     assert.match(entry, /import \{ default as handler \} from "\.\/\.open-next\/worker\.js"/);
+    const manifest = execFileSync("tar", ["-xOf", out, "./pr-migrations/MANIFEST.md"], { encoding: "utf8" });
+    assert.match(manifest, /add-only/);
+    const permissions = execFileSync("tar", ["-xOf", out, "./pr-migrations/PERMISSIONS.md"], { encoding: "utf8" });
+    assert.match(permissions, /dedupe_live_identity_documents/);
+    assert.match(permissions, /id_number_stored_mask/);
     const built = execFileSync("tar", ["-xOf", out, "./.open-next/worker.js"], { encoding: "utf8" });
     assert.match(built, /export default/);
   } finally {

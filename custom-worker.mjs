@@ -1,26 +1,18 @@
 // OpenNext's generated worker only exports fetch. Cron calls scheduled().
 // Reminders run at 09:00 Asia/Taipei. The ID-photo purge runs at 03:00.
-import pg from "pg";
+// Keep this file a thin entry that only imports the OpenNext worker. The purge
+// route runs inside that worker, which already loads the database driver.
 import { default as handler } from "./.open-next/worker.js";
-import { PURGE_CRON, runIdPurge } from "./id-purge-cron.mjs";
 
 const REMINDER_CRON = "0 1 * * *";
+const PURGE_CRON = "0 19 * * *";
 
-async function purgeIdPhotos(env) {
-  const connectionString = env.DATABASE_URL;
-  if (!connectionString) {
-    console.error("id-purge skipped: DATABASE_URL missing");
-    throw new Error("id-purge skipped: DATABASE_URL missing");
-  }
-  const client = new pg.Client({ connectionString });
-  client.on("error", () => {});
-  await client.connect();
-  try {
-    const counts = await runIdPurge(client);
-    console.log(JSON.stringify({ event: "id-purge", batches: counts.batches, documents: counts.documents, files: counts.files }));
-  } finally {
-    await client.end();
-  }
+function siteRequest(env, pathname) {
+  const origin = String(env.CONDOLA_SITE_URL || "https://app.condola.app").replace(/\/$/, "");
+  return new Request(`${origin}${pathname}`, {
+    method: "POST",
+    headers: { "x-cron-secret": env.CRON_SECRET || "" },
+  });
 }
 
 const worker = {
@@ -32,18 +24,20 @@ const worker = {
         console.warn("cron reminders skipped: CRON_SECRET missing");
         return;
       }
-      const origin = String(env.CONDOLA_SITE_URL || "https://app.condola.app").replace(/\/$/, "");
-      const request = new Request(`${origin}/api/cron/reminders`, {
-        method: "POST",
-        headers: { "x-cron-secret": secret },
-      });
-      ctx.waitUntil(handler.fetch(request, env, ctx));
+      ctx.waitUntil(handler.fetch(siteRequest(env, "/api/cron/reminders"), env, ctx));
       return;
     }
     if (controller.cron !== PURGE_CRON) return;
+    if (!secret) {
+      console.warn("cron id-purge skipped: CRON_SECRET missing");
+      return;
+    }
     ctx.waitUntil((async () => {
       try {
-        await purgeIdPhotos(env);
+        const response = await handler.fetch(siteRequest(env, "/api/cron/purge-id-documents"), env, ctx);
+        if (!response.ok) throw new Error("status");
+        const body = await response.json().catch(() => ({}));
+        console.log(JSON.stringify({ event: "id-purge", removed: Number(body.removed) || 0 }));
       } catch (error) {
         console.error("id-purge failed", error instanceof Error ? error.name : "error");
         throw error;

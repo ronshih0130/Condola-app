@@ -116,8 +116,12 @@ test("the worker cron calls the protected reminder route", () => {
   const worker = read("custom-worker.mjs");
   assert.match(worker, /scheduled/);
   assert.match(worker, /0 1 \* \* \*/);
+  assert.match(worker, /0 19 \* \* \*/);
   assert.match(worker, /\/api\/cron\/reminders/);
-  assert.match(worker, /id-purge-cron\.mjs/);
+  assert.match(worker, /\/api\/cron\/purge-id-documents/);
+  assert.match(worker, /from "\.\/\.open-next\/worker\.js"/);
+  assert.doesNotMatch(worker, /id-purge-cron/);
+  assert.doesNotMatch(worker, /from "pg"/);
   assert.match(worker, /CRON_SECRET/);
   assert.match(worker, /x-cron-secret/);
   assert.match(worker, /id-purge failed/);
@@ -130,10 +134,12 @@ test("the worker cron calls the protected reminder route", () => {
   assert.doesNotMatch(purge, /SET LOCAL ROLE anon/);
   assert.doesNotMatch(purge, /console\.(log|error|warn)/);
   const route = read("src/app/api/cron/purge-id-documents/route.ts");
-  assert.match(route, /CONDOLA_ENV/);
-  assert.match(route, /production/);
+  assert.match(route, /purgeDueIdDocumentsUntilDone/);
+  assert.match(route, /getCloudflareContext/);
+  assert.match(route, /cronAuthorized/);
   assert.match(route, /status: 404/);
   assert.match(route, /x-cron-secret/);
+  assert.doesNotMatch(route, /CONDOLA_ENV/);
 });
 
 test("production redirects and cookies accept app.condola.app and condola.app", () => {
@@ -190,7 +196,9 @@ test("Depot deploys staging only after tests, behind a default-off variable", ()
 
   const worker = read("custom-worker.mjs");
   assert.match(worker, /scheduled/);
-  assert.match(worker, /id-purge-cron\.mjs/);
+  assert.match(worker, /\/api\/cron\/purge-id-documents/);
+  assert.doesNotMatch(worker, /id-purge-cron/);
+  assert.doesNotMatch(worker, /from "pg"/);
   assert.match(worker, /\/api\/cron\/reminders/);
   assert.match(worker, /CRON_SECRET/);
   assert.match(read("wrangler.jsonc"), /"main": "\.\/custom-worker\.mjs"/);
@@ -200,6 +208,17 @@ test("Depot deploys staging only after tests, behind a default-off variable", ()
   assert.match(sql, /ON DELETE CASCADE/);
   assert.match(sql, /row_number\(\)/);
   assert.match(sql, /REVOKE ALL ON FUNCTION purge_due_identity_documents\(integer\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /SET search_path = pg_catalog, public/);
+  for (const fn of [
+    "id_number_stored_mask\\(text\\)",
+    "dedupe_live_identity_documents\\(\\)",
+    "fn_id_access_log_guard\\(\\)",
+    "fn_id_document_allow_log_delete\\(\\)",
+    "fn_id_number_masked\\(\\)",
+    "id_document_keep_days\\(\\)",
+  ]) {
+    assert.match(sql, new RegExp(`REVOKE ALL ON FUNCTION ${fn} FROM PUBLIC, anon, authenticated`));
+  }
   assert.match(sql, /WHEN n < 8 THEN 2 ELSE 3 END/);
   assertPurgeExecuteStaysClosed(sql);
   const upgrade = read("supabase/migrations/20261022200000_tenant_id_check_upgrade.sql");
@@ -207,6 +226,17 @@ test("Depot deploys staging only after tests, behind a default-off variable", ()
   assert.match(upgrade, /DROP FUNCTION IF EXISTS id_document_delete_after\(uuid\)/);
   assert.match(upgrade, /DROP FUNCTION IF EXISTS fn_id_document_delete_after\(\)/);
   assert.match(upgrade, /REVOKE ALL ON FUNCTION purge_due_identity_documents\(integer\) FROM PUBLIC, anon, authenticated/);
+  assert.match(upgrade, /SET search_path = pg_catalog, public/);
+  for (const fn of [
+    "id_number_stored_mask\\(text\\)",
+    "dedupe_live_identity_documents\\(\\)",
+    "fn_id_access_log_guard\\(\\)",
+    "fn_id_document_allow_log_delete\\(\\)",
+    "fn_id_number_masked\\(\\)",
+    "id_document_keep_days\\(\\)",
+  ]) {
+    assert.match(upgrade, new RegExp(`REVOKE ALL ON FUNCTION ${fn} FROM PUBLIC, anon, authenticated`));
+  }
   assert.match(upgrade, /GRANT EXECUTE ON FUNCTION purge_due_identity_documents\(integer\)/);
   assert.match(upgrade, /TO service_role/);
   assertPurgeExecuteStaysClosed(upgrade);

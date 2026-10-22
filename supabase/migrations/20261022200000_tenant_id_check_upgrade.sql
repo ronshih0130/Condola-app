@@ -468,6 +468,7 @@ END $$;
 CREATE OR REPLACE FUNCTION fn_id_access_log_guard() RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+-- Fixed search_path. A definer function must not follow the caller's path.
 SET search_path = pg_catalog, public
 AS $$
 DECLARE
@@ -505,14 +506,28 @@ CREATE TRIGGER trg_id_document_allow_log_delete
   BEFORE DELETE ON identity_documents
   FOR EACH ROW EXECUTE FUNCTION fn_id_document_allow_log_delete();
 
-REVOKE ALL ON FUNCTION id_number_stored_mask(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION dedupe_live_identity_documents() FROM PUBLIC;
+-- These six are not called as anon or authenticated. ID writes use service_role.
+-- Masking in the request path is application code. dedupe runs from this
+-- migration. id_document_keep_days is called by the security-definer delete
+-- clock. The trigger functions were created by the table owner.
+REVOKE ALL ON FUNCTION id_number_stored_mask(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION dedupe_live_identity_documents() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION fn_id_access_log_guard() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION fn_id_document_allow_log_delete() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION fn_id_number_masked() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION id_document_keep_days() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION purge_due_identity_documents(integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION id_document_delete_after(uuid, uuid, timestamptz) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION fn_link_orphan_id_document() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION fn_id_document_delete_after() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION fn_lease_refresh_id_delete_after() FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION id_number_stored_mask(text), dedupe_live_identity_documents() TO service_role;
+GRANT EXECUTE ON FUNCTION id_number_stored_mask(text),
+  dedupe_live_identity_documents(),
+  fn_id_access_log_guard(),
+  fn_id_document_allow_log_delete(),
+  fn_id_number_masked(),
+  id_document_keep_days()
+  TO service_role;
 GRANT EXECUTE ON FUNCTION purge_due_identity_documents(integer),
   id_document_delete_after(uuid, uuid, timestamptz),
   fn_link_orphan_id_document(),

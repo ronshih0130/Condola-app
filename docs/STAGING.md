@@ -66,7 +66,7 @@ Required secret **names** on the staging Worker. Set them with Wrangler. Do not 
 - `ID_DOC_ENCRYPTION_KEY` — raw AES-256-GCM key, exactly 32 bytes
 - `ID_DOC_HMAC_KEY` — raw HMAC-SHA256 key for the ID number, exactly 32 bytes
 - `ID_DOC_SIGNING_SECRET` — raw HMAC-SHA256 key for photo tokens, exactly 32 bytes
-- `CRON_SECRET` — shared secret for the reminder cron. `0 1 * * *` (09:00 Asia/Taipei) sends it as `x-cron-secret` to `/api/cron/reminders`. `0 19 * * *` (03:00 Asia/Taipei) purges ID photos in the Worker as `service_role`. The manual route `POST /api/cron/purge-id-documents` accepts the same header on preview and staging and returns 404 in production. Cron Triggers are on the Workers Free plan. `openssl rand -hex 32` prints a valid value.
+- `CRON_SECRET` — shared secret for the Worker crons. `0 1 * * *` (09:00 Asia/Taipei) sends it as `x-cron-secret` to `/api/cron/reminders`. `0 19 * * *` (03:00 Asia/Taipei) sends the same header to `/api/cron/purge-id-documents`, which runs the purge as `service_role` inside the OpenNext worker. A missing or wrong secret is a 404. Cron Triggers are on the Workers Free plan. `openssl rand -hex 32` prints a valid value.
 
 Each ID key is 64 hex characters, or standard base64 that decodes to 32 bytes (44 characters including `=`). A passphrase is rejected. `openssl rand -hex 32` prints a valid value. Do not reuse one key for all three.
 
