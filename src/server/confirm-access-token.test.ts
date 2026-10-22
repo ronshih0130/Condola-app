@@ -59,4 +59,7 @@ test("a confirm JWT longer than the GoTrue expiry is rejected", () => {
   assert.match(config, /otp_expiry = 3600/);
   assert.match(read("src/server/signup.ts"), /gotrue_confirm_uses/);
   assert.match(read("src/server/signup.ts"), /claimGotrueConfirmToken/);
+  assert.match(read("src/server/signup.ts"), /DELETE FROM gotrue_confirm_uses/);
+  assert.match(read("src/server/signup.ts"), /make_interval\(secs => \$1\)/);
+  assert.match(read("src/server/signup.ts"), /GOTRUE_JWT_EXPIRY_SECONDS \* 2/);
 });

@@ -98,8 +98,15 @@ test("the lock migration checks caller org and revokes the country trigger", () 
   assert.match(sql, /invoice org mismatch/);
   assert.match(sql, /public\.fn_org_country_setting\(\)/);
   assert.match(sql, /REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated/);
-  assert.doesNotMatch(sql, /REVOKE EXECUTE ON FUNCTION public\.post_reversal/);
+  assert.doesNotMatch(sql, /REVOKE EXECUTE ON FUNCTION public\.post_reversal\(uuid, text\)/);
+  assert.match(sql, /REVOKE EXECUTE ON FUNCTION public\.post_reversal\(uuid, text, uuid\) FROM PUBLIC, anon/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.post_reversal\(uuid, text, uuid\) TO authenticated, service_role/);
+  assert.match(sql, /REVOKE EXECUTE ON FUNCTION public\.utility_runs_fill_unit_id\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /REVOKE EXECUTE ON FUNCTION public\.utility_runs_reuse_open_period\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /REVOKE EXECUTE ON FUNCTION app\.audit_event\(uuid, text, jsonb\) FROM PUBLIC, anon/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION app\.audit_event\(uuid, text, jsonb\) TO authenticated/);
   assert.doesNotMatch(sql, /REVOKE EXECUTE ON FUNCTION public\.fn_invoice_recalc/);
   assert.doesNotMatch(sql, /REVOKE EXECUTE ON FUNCTION public\.line_lease_picker/);
   assert.doesNotMatch(sql, /REVOKE EXECUTE ON FUNCTION public\.condola_property_address_key/);
+  assert.match(sql, /not on main at c4ea9de/);
 });

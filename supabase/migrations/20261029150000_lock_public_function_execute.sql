@@ -16,21 +16,31 @@
 -- from PUBLIC, anon, and authenticated.
 --
 -- (b) effective_rule and platform_max_id_retention_days are not called from
--- src and are not referenced by an RLS policy or a view. They are called from
--- trigger functions that run as the session user:
+-- src and are not referenced by an RLS policy or a view. Neither is
+-- SECURITY DEFINER (schema.sql: effective_rule LANGUAGE sql STABLE;
+-- platform_max_id_retention_days LANGUAGE sql STABLE). They are called from
+-- trigger functions that run as the session user, not as the owner:
 --   fn_lease_deposit_check and fn_allocation_rate_cap -> effective_rule
 --   fn_org_retention_guard -> platform_max_id_retention_days
 -- tx() uses authenticated and svc() uses service_role, so those roles keep
--- EXECUTE after PUBLIC and anon lose it. anon does not.
+-- EXECUTE after PUBLIC and anon lose it. anon does not. Revoking
+-- authenticated would make lease, allocation, and org-retention writes fail
+-- with permission denied for function. effective_rule reads jurisdiction_rules
+-- as the invoker, so rules_read (org_id IS NULL OR app.is_member) hides
+-- another org's override. platform_max reads platform_settings only.
 --
 -- fn_org_country_setting is the body of trg_org_country_setting (BEFORE
 -- INSERT OR UPDATE OF country_code, settings ON organizations). Nothing in
 -- src, and no RLS policy or view, calls it. Firing the trigger does not
 -- check EXECUTE, so PUBLIC, anon, and authenticated lose it.
 --
--- condola_property_address_key stays executable by authenticated. The
--- address-key triggers call it as the session user. 20261026130000 already
--- revokes PUBLIC and anon on it.
+-- condola_property_address_key stays executable by authenticated.
+-- condola_sync_unit_address_keys is SECURITY DEFINER and does not call it;
+-- it copies NEW.address_key. The callers are the invoker BEFORE triggers
+-- condola_set_property_address_key and condola_set_unit_import_address_key
+-- (20261026130000). Revoking authenticated makes those writes fail with
+-- permission denied for function. 20261026130000 already revokes PUBLIC and
+-- anon on the key function.
 
 DO $revoke$
 DECLARE
@@ -241,3 +251,50 @@ BEGIN
   $fn$;
 END
 $recalc$;
+
+-- Utility charge posting (PR #18) is not on main at c4ea9de. Its migrations
+-- are 20261028130000 (post_reversal(uuid, text, uuid), app.audit_event),
+-- 20261028140000 (utility_runs_fill_unit_id), and 20261028160000
+-- (utility_runs_reuse_open_period), on branch
+-- cursor/utility-charge-posting-3532. Each block skips with NOTICE until the
+-- function exists, then:
+--   post_reversal(uuid, text, uuid): PUBLIC and anon lose EXECUTE.
+--     authenticated keeps it. The utility branch calls this overload from
+--     src/server/utility-posting.ts inside tx(). This file does not replace
+--     the function body.
+--   utility_runs_fill_unit_id and utility_runs_reuse_open_period: trigger
+--     functions. Firing a trigger does not check EXECUTE, so PUBLIC, anon,
+--     and authenticated lose it. The reuse body calls post_reversal(uuid, text),
+--     which authenticated still has.
+--   app.audit_event(uuid, text, jsonb): schema app, SECURITY DEFINER.
+--     PUBLIC and anon lose EXECUTE. authenticated keeps it; the body checks
+--     auth.uid() and app.has_role.
+DO $utility$
+BEGIN
+  IF to_regprocedure('public.post_reversal(uuid, text, uuid)') IS NULL THEN
+    RAISE NOTICE 'skip missing function public.post_reversal(uuid, text, uuid)';
+  ELSE
+    REVOKE EXECUTE ON FUNCTION public.post_reversal(uuid, text, uuid) FROM PUBLIC, anon;
+    GRANT EXECUTE ON FUNCTION public.post_reversal(uuid, text, uuid) TO authenticated, service_role;
+  END IF;
+
+  IF to_regprocedure('public.utility_runs_fill_unit_id()') IS NULL THEN
+    RAISE NOTICE 'skip missing function public.utility_runs_fill_unit_id()';
+  ELSE
+    REVOKE EXECUTE ON FUNCTION public.utility_runs_fill_unit_id() FROM PUBLIC, anon, authenticated;
+  END IF;
+
+  IF to_regprocedure('public.utility_runs_reuse_open_period()') IS NULL THEN
+    RAISE NOTICE 'skip missing function public.utility_runs_reuse_open_period()';
+  ELSE
+    REVOKE EXECUTE ON FUNCTION public.utility_runs_reuse_open_period() FROM PUBLIC, anon, authenticated;
+  END IF;
+
+  IF to_regprocedure('app.audit_event(uuid, text, jsonb)') IS NULL THEN
+    RAISE NOTICE 'skip missing function app.audit_event(uuid, text, jsonb)';
+  ELSE
+    REVOKE EXECUTE ON FUNCTION app.audit_event(uuid, text, jsonb) FROM PUBLIC, anon;
+    GRANT EXECUTE ON FUNCTION app.audit_event(uuid, text, jsonb) TO authenticated;
+  END IF;
+END
+$utility$;

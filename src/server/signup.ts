@@ -358,6 +358,13 @@ export async function confirmSignupToken(token: string, meta: RequestMeta) {
 
 /** Record a confirm JWT so a second presentation is rejected. The raw token is not stored. */
 export async function claimGotrueConfirmToken(accessToken: string) {
+  // A JWT cannot still be valid after GOTRUE_JWT_EXPIRY_SECONDS. Drop replay
+  // rows older than twice that, so a late clock skew cannot revive one.
+  await query(
+    `DELETE FROM gotrue_confirm_uses
+      WHERE used_at < now() - make_interval(secs => $1)`,
+    [GOTRUE_JWT_EXPIRY_SECONDS * 2],
+  );
   const row = await query<{ token_hash: string }>(
     `INSERT INTO gotrue_confirm_uses (token_hash) VALUES ($1)
      ON CONFLICT (token_hash) DO NOTHING
