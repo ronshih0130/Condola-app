@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { moneyLabel } from "./format";
+import { electricityMonthLabel, moneyLabel } from "./format";
 import { tenantBillDueMinor, tenantBillLines, rentUtilityDueMinor } from "./money";
 import { unsignedRentNoteKey } from "./pay-note";
 import { expenseDescriptionToWrite, LEGACY_VACANT_ELECTRICITY_DESCRIPTION, VACANT_ELECTRICITY_DESCRIPTION } from "./utility-expense";
@@ -158,12 +158,31 @@ test("a pending tenant home shows the unsigned note instead of the rent-due card
   const home = readFileSync(new URL("../app/t/page.tsx", import.meta.url), "utf8");
   assert.match(home, /pending_signature/);
   assert.match(home, /pendingUnsigned \? \([\s\S]*data-testid="unsigned-rent-note"[\s\S]*i_pay_unsigned_bill[\s\S]*\) : \([\s\S]*data-testid="rent-due-notice"/);
+  assert.match(home, /moneyLabel\(dueMinor, currency, session\.locale\)/);
   assert.match(home, /moneyLabel\(rentMinor, currency, session\.locale\)/);
   assert.match(home, /moneyLabel\(depositMinor, currency, session\.locale\)/);
+  const totalAt = home.indexOf('t("i_pay_total")');
+  const rentAt = home.indexOf('data-testid="rent-due-rent"');
+  const depositAt = home.indexOf('data-testid="rent-due-deposit"');
+  assert.ok(totalAt >= 0 && totalAt < rentAt && rentAt < depositAt);
   assert.doesNotMatch(home, /formatMoney\(/);
   const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
   assert.equal(zh.i_pay_unsigned_bill, "租約還沒完成簽署，租金和電費帳單會在雙方簽署後產生。");
+  assert.equal(zh.i_pay_total, "應繳合計");
   assert.equal(zh.s_23c9d54, "租金即將到期");
+});
+
+test("electricity lines are prefixed with the billing month", () => {
+  assert.equal(electricityMonthLabel("2026-10-01", "電費 12 度 × 5 元"), "2026-10 電費 12 度 × 5 元");
+  assert.equal(electricityMonthLabel("2026-10-01", "2026-10 電費"), "2026-10 電費");
+  assert.equal(electricityMonthLabel(null, "電費"), "電費");
+  const pay = readFileSync(new URL("../app/t/pay/page.tsx", import.meta.url), "utf8");
+  const utilities = readFileSync(new URL("../app/m/rent/utilities/page.tsx", import.meta.url), "utf8");
+  assert.match(pay, /electricityMonthLabel\(line\.periodStart/);
+  assert.match(utilities, /electricityMonthLabel\(detail\.run\.period_start, line\.description\)/);
+  assert.match(utilities, /resultUnit\.unit_id/);
+  assert.match(utilities, /units\.get\(resultUnit\.unit_id\)/);
+  assert.match(utilities, /data-testid="utility-unit" key=\{selected\?\.id \?\? ""\}/);
 });
 
 test("new vacant electricity expenses use 電費（空房／未簽約） and existing rows keep 電費（空房）", () => {
@@ -367,6 +386,36 @@ test("turnover splits one reading by occupancy days", () => {
     { key: "a", kwhMilli: 2 },
   ]);
   assert.equal(prorateMilli([{ key: "a", days: 0 }, { key: "b", days: 0 }], 10), null);
+});
+
+test("reversal and audit stay inside the caller's active organization", () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/20261029170000_org_scoped_reversal_audit.sql", import.meta.url), "utf8");
+  assert.equal(sql.includes("DROP FUNCTION"), false);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION post_reversal\(p_txn uuid, p_reason text\)/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION post_reversal\(p_txn uuid, p_reason text, p_invoice uuid\)/);
+  assert.match(sql, /app\.active_org_id/);
+  assert.match(sql, /app\.is_member\(t\.org_id\)/);
+  assert.match(sql, /ERRCODE = '42501'/);
+  assert.match(sql, /current_user IN \('authenticated', 'anon'\)/);
+  assert.match(sql, /SECURITY DEFINER/);
+  assert.match(sql, /app\.reversal_target_exists\(p_txn\)/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION app\.reversal_target_exists\(uuid\) FROM PUBLIC, anon/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION app\.reversal_target_exists\(uuid\) TO authenticated, service_role/);
+  assert.match(sql, /v_org := v_active::uuid/);
+  assert.match(sql, /p_org IS DISTINCT FROM v_org/);
+  assert.match(sql, /auth\.uid\(\)/);
+  assert.match(sql, /SET search_path = pg_catalog, public, pg_temp/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION post_reversal\(uuid, text\) FROM PUBLIC, anon/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION post_reversal\(uuid, text, uuid\) FROM PUBLIC, anon/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION post_reversal\(uuid, text\) TO authenticated, service_role/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION post_reversal\(uuid, text, uuid\) TO authenticated, service_role/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION app\.audit_event\(uuid, text, jsonb\) FROM PUBLIC, anon, service_role/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION app\.audit_event\(uuid, text, jsonb\) TO authenticated/);
+  assert.equal(sql.includes("入帳"), false);
+  assert.equal(sql.includes("收租"), false);
+  assert.equal(sql.includes("收款"), false);
+  assert.equal(sql.includes("欠租"), false);
+  assert.equal(sql.includes("已收"), false);
 });
 
 test("the electricity migration fails closed on posted duplicates and unknown methods", () => {

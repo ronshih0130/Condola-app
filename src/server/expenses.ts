@@ -500,7 +500,7 @@ export async function updateExpense(session: Session, expenseId: string, input: 
       });
     }
     return { expenseId };
-  });
+  }, { orgId: session.orgId, environment: session.environment });
 }
 
 export async function voidExpense(session: Session, expenseId: string, reason: string) {
@@ -529,7 +529,7 @@ export async function voidExpense(session: Session, expenseId: string, reason: s
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.expenseVoid");
     await releaseRepairLink(client, session.orgId, expenseId, current.ticket_id);
-  });
+  }, { orgId: session.orgId, environment: session.environment });
 }
 
 /** Drop this row's repair link and point the ticket at another open expense, if that column exists. */

@@ -113,7 +113,7 @@ test("post_reversal allows the pinned org, rejects another org, and service_role
   });
 });
 
-test("the 3-arg post_reversal returns P0001 for another org, and app.audit_event returns 42501", async () => {
+test("the 3-arg post_reversal and app.audit_event return 42501 for another org", async () => {
   await withClient(async (client) => {
     await client.query("BEGIN");
     try {
@@ -130,19 +130,17 @@ test("the 3-arg post_reversal returns P0001 for another org, and app.audit_event
       await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
       await client.query("SET LOCAL ROLE authenticated");
 
-      // Same pin and membership as the 2-arg test. This overload has no
-      // 42501 branch. app.is_member hides the other org while the pin is set,
-      // so the body raises the default "not found" exception (P0001).
-      await client.query("SAVEPOINT expect_p0001");
+      // 20261029170000 adds the org check this overload did not have.
+      // A row hidden by RLS is still 42501, not the old "not found" P0001.
+      await client.query("SAVEPOINT expect_42501");
       try {
         await client.query(`SELECT post_reversal($1::uuid, 'cross org', NULL::uuid)`, [other]);
-        assert.fail("expected P0001 not found");
+        assert.fail("expected 42501 org mismatch");
       } catch (error) {
         const pg = asPg(error);
-        assert.equal(pg.code, "P0001");
-        assert.match(pg.message, /not found/);
-        assert.doesNotMatch(pg.message, /org mismatch/);
-        await client.query("ROLLBACK TO SAVEPOINT expect_p0001");
+        assert.equal(pg.code, "42501");
+        assert.match(pg.message, /org mismatch/);
+        await client.query("ROLLBACK TO SAVEPOINT expect_42501");
       }
 
       await client.query("SAVEPOINT expect_audit");
@@ -155,7 +153,7 @@ test("the 3-arg post_reversal returns P0001 for another org, and app.audit_event
       } catch (error) {
         const pg = asPg(error);
         assert.equal(pg.code, "42501");
-        assert.match(pg.message, /not allowed to audit this event/);
+        assert.match(pg.message, /insufficient_privilege/);
         await client.query("ROLLBACK TO SAVEPOINT expect_audit");
       }
     } finally {

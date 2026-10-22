@@ -36,6 +36,7 @@ export default async function TenantHome() {
   const money = await tenantLeaseMoney(session, lease.lease_id);
   const rentMinor = money?.lease.rent ?? "0";
   const depositMinor = money?.lease.deposit ?? "0";
+  const dueMinor = money?.dueMinor ?? 0;
   const currency = money?.lease.currency ?? "TWD";
   const pendingUnsigned = (money?.lease.status ?? lease.lease_status) === "pending_signature";
   return (
@@ -48,11 +49,13 @@ export default async function TenantHome() {
         <p className="small" data-testid="unsigned-rent-note">{t("i_pay_unsigned_bill")}</p>
       ) : (
         <div className="flex" data-testid="rent-due-notice">
-          <div className="fh">{t("s_23c9d54")}</div>
+          <div className="fh">{t("i_pay_total")}</div>
           <div className="fb">
-            <div className="small">{t("s_b6c3113")}</div>
-            <div className="big" data-testid="rent-due-amount" data-minor={rentMinor}>
-              {moneyLabel(rentMinor, currency, session.locale)}
+            <div className="big" data-testid="rent-due-amount" data-minor={dueMinor}>
+              {moneyLabel(dueMinor, currency, session.locale)}
+            </div>
+            <div className="small" data-testid="rent-due-rent" data-minor={rentMinor}>
+              {t("s_b6c3113")} {moneyLabel(rentMinor, currency, session.locale)}
             </div>
             <div className="small" data-testid="rent-due-deposit" data-minor={depositMinor}>
               {t("s_8b17769")} {moneyLabel(depositMinor, currency, session.locale)}
