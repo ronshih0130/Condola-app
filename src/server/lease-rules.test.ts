@@ -115,9 +115,15 @@ test("the lease idempotency migration is additive and later than shared staging 
   assert.deepEqual(ours, ["20261027130000_lease_idempotency_key.sql"]);
   const stamp = ours[0].slice(0, 14);
   assert.ok(stamp > "20261023180000");
-  const latestOther = names.filter((name) => name !== ours[0]).map((name) => name.slice(0, 14)).sort().at(-1);
-  assert.ok(latestOther);
-  assert.ok(stamp > latestOther);
+  const later = names.filter((name) => name.slice(0, 14) > stamp);
+  assert.deepEqual(later, ["20261029130000_condola_hyperdrive_role.sql"]);
+  const latestBefore = names
+    .filter((name) => name.slice(0, 14) < stamp)
+    .map((name) => name.slice(0, 14))
+    .sort()
+    .at(-1);
+  assert.ok(latestBefore);
+  assert.ok(stamp > latestBefore);
   const sql = readFileSync(new URL(ours[0], dir), "utf8");
   assert.match(sql, /Version 20261027130000/);
   assert.doesNotMatch(sql, /Version 20261027120000/);

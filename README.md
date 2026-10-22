@@ -97,7 +97,37 @@ Next.js notes for Workers:
 
 - Pages are `force-dynamic` because the session cookie is read on each request. OpenNext supports that. Do not switch these routes to static rendering.
 - `src/middleware.ts` only forwards `x-pathname`. It does not call the database.
-- The server uses `pg` over TCP. Workers need the `nodejs_compat` flag in `wrangler.jsonc`. If a direct Postgres connection fails at runtime, attach a Cloudflare Hyperdrive config to the same `DATABASE_URL` and point the Worker at the Hyperdrive connection string. Do not switch the app to the edge runtime.
+- The server uses `pg` over TCP. Workers need the `nodejs_compat` flag in `wrangler.jsonc`. List and detail reads use a Hyperdrive binding when it is present, and the same `pg` client on `DATABASE_URL` (Supabase Postgres) when it is not. Do not switch the app to the edge runtime.
+
+## Hyperdrive
+
+Hyperdrive is optional. `tx()` uses `env.HYPERDRIVE.connectionString` when the Worker binding is present. Local dev, unit tests, and any Worker without the binding keep the existing Supabase `DATABASE_URL` client. Session lookup and `service_role` writes stay on that client. Query caching stays off, because a cached row would ignore `SET LOCAL ROLE` and the org pin.
+
+The binding name is `HYPERDRIVE`. Staging uses id `2f14fd9785044250ba3b83fbe0025942` (direct host, port 5432, caching disabled). Production still has placeholder id `TODO_PRODUCTION_HYPERDRIVE_ID`. Do not commit a connection string.
+
+Creating a Hyperdrive config requires a Workers Paid plan. The Workers Free plan cannot create one. Do not run these commands from CI. An operator runs them once, then copies each printed id into `wrangler.jsonc`.
+
+`supabase/migrations/20261029130000_condola_hyperdrive_role.sql` creates `condola_hyperdrive` (`LOGIN`, `NOINHERIT`, `NOBYPASSRLS`, `NOSUPERUSER`, member of `authenticated` only). It is not a member of `service_role` and it has no table grants of its own, so a query that skips `SET LOCAL ROLE authenticated` fails closed. The migration is additive: role and grants only, no `NOT NULL` and no new constraints. Set the secret in the database, not in git:
+
+```sql
+ALTER ROLE condola_hyperdrive PASSWORD '<from a secret store>';
+```
+
+Origin is the direct Supabase host, port **5432**, database `postgres`, user `condola_hyperdrive`. Do not use the transaction pooler on port 6543. `--caching-disabled` is required.
+
+```bash
+npx wrangler hyperdrive create condola-staging \
+  --connection-string "postgres://condola_hyperdrive:<password>@db.<project-ref>.supabase.co:5432/postgres" \
+  --caching-disabled \
+  --sslmode require
+
+npx wrangler hyperdrive create condola-production \
+  --connection-string "postgres://condola_hyperdrive:<password>@db.<project-ref>.supabase.co:5432/postgres" \
+  --caching-disabled \
+  --sslmode require
+```
+
+If the direct host is refused, use the session pooler on port 5432 instead (`condola_hyperdrive.<project-ref>` at `aws-0-ap-northeast-1.pooler.supabase.com`), still not port 6543. The Worker secret `DATABASE_URL` stays the transaction-pooler string for sessions and writes.
 - `next/image` is not used. Adding it later needs `images.unoptimized` or a custom loader; the Cloudflare adapter does not run the default image optimizer.
 - There is no Node filesystem cache and no `fs` writes. Demo reset and seed stay operator commands, not Worker routes, when `DEMO_MODE` is false.
 

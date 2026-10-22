@@ -35,7 +35,9 @@ User is `postgres.<project-ref>`. Database name is `postgres`. Require SSL. Do n
 
 The session port is for migrations because Depot runners are IPv4 and the direct host `db.<project-ref>.supabase.co` is IPv6-only unless the project has the IPv4 add-on. `scripts/db-migrate.sh` refuses port `6543`. The transaction port is for the Worker because `SET LOCAL ROLE` does not survive a session-mode checkout. The database role must be allowed to `SET ROLE authenticated` and `SET ROLE service_role`.
 
-The Worker uses targeted placement in `aws:ap-northeast-1` so it runs near that database.
+The Worker uses targeted placement in `aws:ap-northeast-1` so it runs near that database. Preview workers ignore that placement.
+
+List and detail reads can use the staging Hyperdrive config `2f14fd9785044250ba3b83fbe0025942` (direct port **5432** as `condola_hyperdrive`, caching disabled). When that binding is absent, those reads use the Worker `DATABASE_URL` Supabase connection. Session lookup and writes stay on `DATABASE_URL` either way. The role migration is `supabase/migrations/20261029130000_condola_hyperdrive_role.sql`. The `npx wrangler hyperdrive create` commands are in the README. Creating a config requires a Workers Paid plan. Production's id in `wrangler.jsonc` is still a placeholder.
 
 Migrations are recorded in `condola_ops.schema_migrations`. The script does not read `.env.local`. A second run skips files already recorded. Migrations run after the OpenNext build and before the Worker upload, so a broken build does not change the database. Keep each new migration compatible with the Worker that is still serving.
 

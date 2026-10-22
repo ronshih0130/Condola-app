@@ -26,6 +26,14 @@
         "mode": "targeted",
         "region": "aws:ap-northeast-1"
       },
+      // Direct host port 5432 as condola_hyperdrive, caching disabled.
+      // The connection string stays out of git. See README.
+      "hyperdrive": [
+        {
+          "binding": "HYPERDRIVE",
+          "id": "2f14fd9785044250ba3b83fbe0025942"
+        }
+      ],
       "vars": {
         "CONDOLA_ENV": "staging",
         "CONDOLA_SITE_URL": "https://staging.condola.app",
@@ -61,6 +69,13 @@
         "mode": "targeted",
         "region": "aws:ap-northeast-1"
       },
+      // TODO: replace id with the config id from `npx wrangler hyperdrive create condola-production`.
+      "hyperdrive": [
+        {
+          "binding": "HYPERDRIVE",
+          "id": "TODO_PRODUCTION_HYPERDRIVE_ID"
+        }
+      ],
       "vars": {
         "CONDOLA_ENV": "production",
         "CONDOLA_SITE_URL": "https://app.condola.app",

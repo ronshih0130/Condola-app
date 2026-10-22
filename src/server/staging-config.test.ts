@@ -20,6 +20,7 @@ type WorkerEnv = {
   observability?: { enabled?: boolean };
   send_email?: { name?: string; remote?: boolean }[];
   triggers?: { crons?: string[] };
+  hyperdrive?: { binding?: string; id?: string; localConnectionString?: string }[];
 };
 
 function parseJsonc(raw: string) {
@@ -45,6 +46,10 @@ test("the staging wrangler env names secrets and keeps demo mode off", () => {
   assert.equal(staging.services?.[0]?.service, "condola-staging");
   assert.equal(staging.placement?.mode, "targeted");
   assert.equal(staging.placement?.region, "aws:ap-northeast-1");
+  assert.equal(staging.hyperdrive?.length, 1);
+  assert.equal(staging.hyperdrive?.[0]?.binding, "HYPERDRIVE");
+  assert.equal(staging.hyperdrive?.[0]?.id, "2f14fd9785044250ba3b83fbe0025942");
+  assert.equal(staging.hyperdrive?.[0]?.localConnectionString, undefined);
   assert.equal(staging.observability?.enabled, true);
   assert.equal(staging.vars?.MAIL_PROVIDER, "cloudflare");
   assert.deepEqual(staging.send_email, [{ name: "EMAIL", remote: true }]);
@@ -78,6 +83,10 @@ test("the production wrangler env serves app.condola.app and keeps demo mode off
   assert.equal(production.services?.[0]?.service, "condola-prod");
   assert.equal(production.placement?.mode, "targeted");
   assert.equal(production.placement?.region, "aws:ap-northeast-1");
+  assert.equal(production.hyperdrive?.length, 1);
+  assert.equal(production.hyperdrive?.[0]?.binding, "HYPERDRIVE");
+  assert.equal(production.hyperdrive?.[0]?.id, "TODO_PRODUCTION_HYPERDRIVE_ID");
+  assert.equal(production.hyperdrive?.[0]?.localConnectionString, undefined);
   assert.deepEqual(
     production.routes?.map((route) => route.pattern),
     ["app.condola.app"],
