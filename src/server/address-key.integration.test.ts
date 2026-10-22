@@ -14,6 +14,14 @@ const bulkSql = readFileSync(
   new URL("../../supabase/migrations/20261026130000_bulk_import.sql", import.meta.url),
   "utf8",
 );
+const moveSql = readFileSync(
+  new URL("../../supabase/migrations/20261029130000_unit_import_key_on_move.sql", import.meta.url),
+  "utf8",
+);
+const backfillSql = readFileSync(
+  new URL("../../scripts/backfill-unit-import-address-keys.sql", import.meta.url),
+  "utf8",
+);
 
 function stamp() {
   return `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -23,7 +31,19 @@ async function applySync(client: Client) {
   await client.query(syncSql);
 }
 
-async function qaProperty(client: Client, name: string, display: string) {
+async function applyMove(client: Client) {
+  await client.query(moveSql);
+}
+
+function noticeCount(notices: string[]) {
+  const matches = notices
+    .map((message) => message.match(/backfill-unit-import-address-keys updated (\d+)/))
+    .filter((match): match is RegExpMatchArray => match !== null);
+  assert.ok(matches.length > 0);
+  return Number(matches[matches.length - 1][1]);
+}
+
+async function qaProperty(client: Client, name: string, display: string, unitLabel: string | null = "5F") {
   const jurisdiction = await client.query<{ id: string }>(`SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
   const property = await client.query<{ id: string; address_key: string }>(
     `INSERT INTO properties (org_id, name, address, address_display, country_code, jurisdiction_id, currency, timezone)
@@ -31,11 +51,12 @@ async function qaProperty(client: Client, name: string, display: string) {
      RETURNING id::text, address_key`,
     [ORG_ID, name, display, jurisdiction.rows[0].id],
   );
+  if (!unitLabel) return { propertyId: property.rows[0].id, unitId: "", unitKey: property.rows[0].address_key };
   const unit = await client.query<{ id: string; import_address_key: string }>(
     `INSERT INTO units (org_id, property_id, label, floor, rental_mode)
-     VALUES ($1, $2, '5F', '5', 'whole_unit')
+     VALUES ($1, $2, $3, '5', 'whole_unit')
      RETURNING id::text, import_address_key`,
-    [ORG_ID, property.rows[0].id],
+    [ORG_ID, property.rows[0].id, unitLabel],
   );
   return { propertyId: property.rows[0].id, unitId: unit.rows[0].id, unitKey: unit.rows[0].import_address_key };
 }
@@ -236,6 +257,86 @@ test("replacing the bulk import function restores error logging", async () => {
       assert.equal(privileges.rows[0].auth_execute, false);
     } finally {
       await applySync(client);
+      await applyMove(client);
+      await cleanup(client, propertyIds);
+    }
+  });
+});
+
+test("moving a unit refreshes its key and the backfill script is idempotent", async () => {
+  const id = stamp();
+  const originName = `QA搬移物件${id}`;
+  const destinationName = `QA搬移目的${id}`;
+  const originAddress = `台北市大安區QA搬移路${id}號`;
+  const destinationAddress = `台北市大安區QA目的路${id}號`;
+  const staleKey = `qa-stale-${id}`;
+  const explicitKey = `qa-explicit-${id}`;
+  const propertyIds: string[] = [];
+  await withClient(async (client) => {
+    const notices: string[] = [];
+    client.on("notice", (notice: { message?: string }) => {
+      notices.push(notice.message ?? "");
+    });
+    try {
+      await applyMove(client);
+      await client.query(`SET client_min_messages TO notice`);
+      const origin = await qaProperty(client, originName, originAddress);
+      const destination = await qaProperty(client, destinationName, destinationAddress, null);
+      propertyIds.push(origin.propertyId, destination.propertyId);
+      assert.equal(origin.unitKey, addressKey(originAddress));
+
+      await client.query(`UPDATE units SET property_id = $2 WHERE id = $1`, [origin.unitId, destination.propertyId]);
+      const moved = await client.query<{ import_address_key: string }>(
+        `SELECT import_address_key FROM units WHERE id = $1`,
+        [origin.unitId],
+      );
+      assert.equal(moved.rows[0].import_address_key, addressKey(destinationAddress));
+
+      await client.query(`UPDATE units SET import_address_key = $2 WHERE id = $1`, [origin.unitId, staleKey]);
+      const kept = await client.query<{ import_address_key: string }>(
+        `SELECT import_address_key FROM units WHERE id = $1`,
+        [origin.unitId],
+      );
+      assert.equal(kept.rows[0].import_address_key, staleKey);
+
+      const explicit = await client.query<{ import_address_key: string }>(
+        `INSERT INTO units (org_id, property_id, label, floor, rental_mode, import_address_key)
+         VALUES ($1, $2, '6F', '6', 'whole_unit', $3)
+         RETURNING import_address_key`,
+        [ORG_ID, origin.propertyId, explicitKey],
+      );
+      assert.equal(explicit.rows[0].import_address_key, explicitKey);
+      const explicitId = (
+        await client.query<{ id: string }>(
+          `SELECT id::text FROM units WHERE property_id = $1 AND label = '6F'`,
+          [origin.propertyId],
+        )
+      ).rows[0].id;
+      await client.query(`UPDATE units SET property_id = $2 WHERE id = $1`, [explicitId, destination.propertyId]);
+      const explicitMoved = await client.query<{ import_address_key: string }>(
+        `SELECT import_address_key FROM units WHERE id = $1`,
+        [explicitId],
+      );
+      assert.equal(explicitMoved.rows[0].import_address_key, addressKey(destinationAddress));
+
+      await client.query(backfillSql);
+      const repaired = await client.query<{ import_address_key: string }>(
+        `SELECT import_address_key FROM units WHERE id = $1`,
+        [origin.unitId],
+      );
+      assert.equal(repaired.rows[0].import_address_key, addressKey(destinationAddress));
+      assert.ok(noticeCount(notices) >= 1);
+
+      notices.length = 0;
+      await client.query(backfillSql);
+      assert.equal(noticeCount(notices), 0);
+      const stable = await client.query<{ import_address_key: string }>(
+        `SELECT import_address_key FROM units WHERE id = $1`,
+        [origin.unitId],
+      );
+      assert.equal(stable.rows[0].import_address_key, addressKey(destinationAddress));
+    } finally {
+      await client.query(`ALTER TABLE public.units ENABLE TRIGGER trg_units_updated_at`);
       await cleanup(client, propertyIds);
     }
   });

@@ -46,3 +46,44 @@ test("address-key sync logs failures and stays add-only", () => {
   assert.doesNotMatch(code, /DISABLE TRIGGER/i);
   assert.doesNotMatch(code, /REFERENCES/i);
 });
+
+const moveMigration = "20261029130000_unit_import_key_on_move.sql";
+
+test("a unit key refreshes on move and the backfill stays out of the migration", () => {
+  const names = readdirSync(new URL("../../supabase/migrations/", import.meta.url))
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  assert.ok(names.includes(moveMigration));
+  assert.ok(moveMigration > syncMigration);
+  assert.equal(names.includes("backfill-unit-import-address-keys.sql"), false);
+
+  const { sql, code } = sqlWithoutComments(moveMigration);
+  assert.match(sql, /20261029130000/);
+  assert.match(sql, /scripts\/backfill-unit-import-address-keys\.sql/);
+  assert.match(
+    code,
+    /FUNCTION public\.condola_set_unit_import_address_key\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+SET search_path = pg_catalog, public/,
+  );
+  assert.match(code, /TG_OP = 'UPDATE' AND NEW\.property_id IS DISTINCT FROM OLD\.property_id/);
+  assert.match(code, /ELSIF NEW\.import_address_key IS NULL THEN/);
+  assert.match(code, /WHERE p\.id = NEW\.property_id\s+AND p\.org_id = NEW\.org_id/);
+  assert.match(code, /REVOKE EXECUTE ON FUNCTION public\.condola_set_unit_import_address_key\(\) FROM PUBLIC, anon, authenticated/);
+  assert.equal(code.match(/RETURN NEW/g)?.length, 1);
+  assert.doesNotMatch(code, /UPDATE\s+(public\.)?units/i);
+  assert.doesNotMatch(code, /\bDROP\b/i);
+  assert.doesNotMatch(code, /SET NOT NULL/i);
+  assert.doesNotMatch(code, /ADD CONSTRAINT/i);
+  assert.doesNotMatch(code, /DISABLE TRIGGER/i);
+  assert.doesNotMatch(code, /SECURITY DEFINER/i);
+
+  const script = readFileSync(new URL("../../scripts/backfill-unit-import-address-keys.sql", import.meta.url), "utf8");
+  const scriptCode = script.replace(/--.*$/gm, "");
+  assert.match(scriptCode, /UPDATE public\.units AS u/);
+  assert.match(scriptCode, /SET import_address_key = coalesce\(p\.address_key, public\.condola_property_address_key\(p\.address_display\)\)/);
+  assert.match(scriptCode, /u\.import_address_key IS DISTINCT FROM coalesce\(p\.address_key, public\.condola_property_address_key\(p\.address_display\)\)/);
+  assert.match(scriptCode, /DISABLE TRIGGER trg_units_updated_at/);
+  assert.equal(scriptCode.match(/ENABLE TRIGGER trg_units_updated_at/g)?.length, 2);
+  assert.match(scriptCode, /EXCEPTION WHEN OTHERS THEN[\s\S]*ENABLE TRIGGER trg_units_updated_at;\s*RAISE;/);
+  assert.match(scriptCode, /backfill-unit-import-address-keys updated/);
+  assert.doesNotMatch(scriptCode, /RETURN NULL/i);
+});
