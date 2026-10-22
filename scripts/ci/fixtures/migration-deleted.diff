@@ -1,0 +1,7 @@
+diff --git a/supabase/migrations/20261001000000_old.sql b/supabase/migrations/20261001000000_old.sql
+deleted file mode 100644
+--- a/supabase/migrations/20261001000000_old.sql
++++ /dev/null
+@@ -1,2 +0,0 @@
+-CREATE TABLE old_notes (id int);
+-

@@ -1,0 +1,6 @@
+diff --git a/src/i18n/zh-TW.json b/src/i18n/zh-TW.json
+--- a/src/i18n/zh-TW.json
++++ b/src/i18n/zh-TW.json
+@@ -30 +30 @@
+-  "s_bill": "計入"
++  "s_bill": "自動計入帳單"

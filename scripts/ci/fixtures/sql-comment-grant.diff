@@ -1,0 +1,6 @@
+diff --git a/supabase/manual/note.sql b/supabase/manual/note.sql
+--- a/supabase/manual/note.sql
++++ b/supabase/manual/note.sql
+@@ -1 +1 @@
+--- keep
++-- do not GRANT this and do not add SECURITY DEFINER

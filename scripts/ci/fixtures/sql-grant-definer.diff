@@ -1,0 +1,7 @@
+diff --git a/supabase/manual/fn.sql b/supabase/manual/fn.sql
+--- a/supabase/manual/fn.sql
++++ b/supabase/manual/fn.sql
+@@ -1,2 +1,3 @@
++CREATE OR REPLACE FUNCTION app.touch() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
++GRANT EXECUTE ON FUNCTION app.touch() TO authenticated;
+ SELECT 1;

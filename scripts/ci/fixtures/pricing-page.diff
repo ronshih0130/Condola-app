@@ -1,0 +1,6 @@
+diff --git a/src/app/pricing/page.tsx b/src/app/pricing/page.tsx
+--- a/src/app/pricing/page.tsx
++++ b/src/app/pricing/page.tsx
+@@ -6 +6 @@
+-      <h1>方案</h1>
++      <h1>方案說明</h1>

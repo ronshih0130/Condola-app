@@ -1,0 +1,6 @@
+diff --git a/src/server/org-scope.ts b/src/server/org-scope.ts
+--- a/src/server/org-scope.ts
++++ b/src/server/org-scope.ts
+@@ -4 +4 @@
+-const COOKIE = "org";
++const COOKIE = "org-id";

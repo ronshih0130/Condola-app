@@ -1,0 +1,6 @@
+diff --git a/messages/zh-TW.json b/messages/zh-TW.json
+new file mode 100644
+--- /dev/null
++++ b/messages/zh-TW.json
+@@ -0,0 +1 @@
++{ "hello": "您好" }

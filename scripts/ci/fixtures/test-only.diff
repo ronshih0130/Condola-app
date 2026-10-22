@@ -1,0 +1,6 @@
+diff --git a/src/server/list-search.test.ts b/src/server/list-search.test.ts
+--- a/src/server/list-search.test.ts
++++ b/src/server/list-search.test.ts
+@@ -3 +3 @@
+-  assert.equal(1, 1);
++  assert.equal(1, 2);

@@ -77,6 +77,23 @@ jobs:
             echo "This job is already wired. It will run the script on the first commit that contains the file, and it skips until then."
           fi
 
+  # New functions in the pull request diff must revoke EXECUTE from PUBLIC, anon,
+  # and authenticated unless supabase/rpc-allowlist.txt lists the signature.
+  function-revokes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: New functions revoke EXECUTE from PUBLIC, anon, and authenticated
+        run: |
+          git fetch origin main --no-tags
+          node scripts/ci/function-revokes.mjs
+
   check:
     runs-on: ubuntu-latest
     services:

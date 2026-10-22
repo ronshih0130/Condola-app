@@ -1,0 +1,6 @@
+diff --git a/src/server/privacy.ts b/src/server/privacy.ts
+--- a/src/server/privacy.ts
++++ b/src/server/privacy.ts
+@@ -3 +3 @@
+-const DAYS = 7;
++const DAYS = 14;

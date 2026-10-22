@@ -1,0 +1,6 @@
+diff --git a/src/i18n/en.json b/src/i18n/en.json
+--- a/src/i18n/en.json
++++ b/src/i18n/en.json
+@@ -4 +4 @@
+-  "i_refund": "Contact support"
++  "i_refund": "Full refund within 7 days"

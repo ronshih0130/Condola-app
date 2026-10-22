@@ -1,0 +1,9 @@
+diff --git a/supabase/migrations/20261029020000_provision.sql b/supabase/migrations/20261029020000_provision.sql
+new file mode 100644
+--- /dev/null
++++ b/supabase/migrations/20261029020000_provision.sql
+@@ -0,0 +1,4 @@
++CREATE OR REPLACE FUNCTION app.provision_portal_user(p_email text, p_name text, p_phone text)
++RETURNS uuid LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
++REVOKE ALL ON FUNCTION app.provision_portal_user(text, text, text) FROM PUBLIC;
++GRANT EXECUTE ON FUNCTION app.provision_portal_user(text, text, text) TO service_role;

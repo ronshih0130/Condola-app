@@ -1,0 +1,6 @@
+diff --git a/src/server/domain.ts b/src/server/domain.ts
+--- a/src/server/domain.ts
++++ b/src/server/domain.ts
+@@ -10 +10 @@
+-  const limit = 20;
++  const limit = 50;

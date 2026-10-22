@@ -1,0 +1,6 @@
+diff --git a/src/components/chrome.tsx b/src/components/chrome.tsx
+--- a/src/components/chrome.tsx
++++ b/src/components/chrome.tsx
+@@ -8 +8 @@
+-    <h1>Title</h1>
++    <h1>應繳合計</h1>

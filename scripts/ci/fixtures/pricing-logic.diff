@@ -1,0 +1,6 @@
+diff --git a/src/app/pricing/page.tsx b/src/app/pricing/page.tsx
+--- a/src/app/pricing/page.tsx
++++ b/src/app/pricing/page.tsx
+@@ -3 +3 @@
+-  const showTable = true;
++  const showTable = false;

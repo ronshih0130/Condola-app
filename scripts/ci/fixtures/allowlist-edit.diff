@@ -1,0 +1,6 @@
+diff --git a/supabase/rpc-allowlist.txt b/supabase/rpc-allowlist.txt
+--- a/supabase/rpc-allowlist.txt
++++ b/supabase/rpc-allowlist.txt
+@@ -1 +1 @@
+-# none
++# still none

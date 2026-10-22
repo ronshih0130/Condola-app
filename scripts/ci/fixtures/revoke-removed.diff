@@ -1,0 +1,6 @@
+diff --git a/supabase/migrations/20261029050000_old.sql b/supabase/migrations/20261029050000_old.sql
+--- a/supabase/migrations/20261029050000_old.sql
++++ b/supabase/migrations/20261029050000_old.sql
+@@ -1,2 +1 @@
+-CREATE OR REPLACE FUNCTION app.old() RETURNS void LANGUAGE sql AS $$ SELECT 1 $$;
+ SELECT 1;

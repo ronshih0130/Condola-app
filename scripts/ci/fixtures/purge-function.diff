@@ -1,0 +1,8 @@
+diff --git a/src/server/portal-invite.ts b/src/server/portal-invite.ts
+--- a/src/server/portal-invite.ts
++++ b/src/server/portal-invite.ts
+@@ -40 +40,3 @@
+ export async function loadInvite() {
++export async function purgePortalInviteSecrets(client) {
++  return client.query("select 1");
++}

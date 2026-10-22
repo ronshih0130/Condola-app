@@ -1,0 +1,11 @@
+diff --git a/supabase/migrations/20261029010000_touch.sql b/supabase/migrations/20261029010000_touch.sql
+new file mode 100644
+--- /dev/null
++++ b/supabase/migrations/20261029010000_touch.sql
+@@ -0,0 +1,6 @@
++CREATE OR REPLACE FUNCTION app.drop_portal_invite_secret()
++RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
++REVOKE ALL ON FUNCTION app.drop_portal_invite_secret() FROM PUBLIC;
++REVOKE ALL ON FUNCTION app.drop_portal_invite_secret() FROM anon;
++REVOKE ALL ON FUNCTION app.drop_portal_invite_secret() FROM authenticated;
++GRANT EXECUTE ON FUNCTION app.drop_portal_invite_secret() TO service_role;

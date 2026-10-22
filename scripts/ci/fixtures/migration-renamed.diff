@@ -1,0 +1,4 @@
+diff --git a/supabase/migrations/old.sql b/notes/old.sql
+similarity index 100%
+rename from supabase/migrations/old.sql
+rename to notes/old.sql

@@ -1,0 +1,5 @@
+diff --git a/src/i18n/zh-TW.json b/src/i18n/zh-TW.json
+--- a/src/i18n/zh-TW.json
++++ b/src/i18n/zh-TW.json
+@@ -12 +11,0 @@
+-  "i_price": "每月 NT$499"

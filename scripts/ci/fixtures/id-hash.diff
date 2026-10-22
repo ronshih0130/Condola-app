@@ -1,0 +1,6 @@
+diff --git a/src/server/id-hash.ts b/src/server/id-hash.ts
+--- a/src/server/id-hash.ts
++++ b/src/server/id-hash.ts
+@@ -2 +2 @@
+-const ROUNDS = 10;
++const ROUNDS = 12;

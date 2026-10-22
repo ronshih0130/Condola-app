@@ -1,0 +1,6 @@
+diff --git a/src/server/mail-copy.ts b/src/server/mail-copy.ts
+--- a/src/server/mail-copy.ts
++++ b/src/server/mail-copy.ts
+@@ -5 +5 @@
+-  subject: "old",
++  subject: "請查看帳單",

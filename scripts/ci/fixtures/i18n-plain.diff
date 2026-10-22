@@ -1,0 +1,6 @@
+diff --git a/src/i18n/zh-TW.json b/src/i18n/zh-TW.json
+--- a/src/i18n/zh-TW.json
++++ b/src/i18n/zh-TW.json
+@@ -10 +10 @@
+-  "s_x": "舊文案"
++  "s_x": "已繳清"

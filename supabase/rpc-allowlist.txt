@@ -1,0 +1,5 @@
+# Functions listed here may be created without
+# REVOKE EXECUTE FROM PUBLIC, anon, and authenticated.
+# One signature per line: schema.name(arg_types)
+# Argument names are omitted. Matching is case-insensitive.
+# Example: app.example(uuid, text)

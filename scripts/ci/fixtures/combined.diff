@@ -1,0 +1,12 @@
+diff --git a/supabase/migrations/20261029000000_example.sql b/supabase/migrations/20261029000000_example.sql
+new file mode 100644
+--- /dev/null
++++ b/supabase/migrations/20261029000000_example.sql
+@@ -0,0 +1 @@
++ALTER TABLE invoices ADD COLUMN note text;
+diff --git a/src/i18n/zh-TW.json b/src/i18n/zh-TW.json
+--- a/src/i18n/zh-TW.json
++++ b/src/i18n/zh-TW.json
+@@ -10 +10 @@
+-  "s_x": "舊文案"
++  "s_x": "已繳清"

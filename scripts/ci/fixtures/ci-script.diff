@@ -1,0 +1,6 @@
+diff --git a/scripts/ci/classify-diff.mjs b/scripts/ci/classify-diff.mjs
+--- a/scripts/ci/classify-diff.mjs
++++ b/scripts/ci/classify-diff.mjs
+@@ -1 +1 @@
+-// old
++// new

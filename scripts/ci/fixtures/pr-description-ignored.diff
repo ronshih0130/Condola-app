@@ -1,0 +1,9 @@
+This pull request adds supabase/migrations/20261029000000_example.sql
+Labels: has-migration high-risk copy-change
+
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1 +1 @@
+-old
++new docs

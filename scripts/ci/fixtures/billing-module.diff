@@ -1,0 +1,6 @@
+diff --git a/src/server/billing.ts b/src/server/billing.ts
+--- a/src/server/billing.ts
++++ b/src/server/billing.ts
+@@ -8 +8 @@
+-  return rows;
++  return rows.slice();

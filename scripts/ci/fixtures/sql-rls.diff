@@ -1,0 +1,7 @@
+diff --git a/supabase/manual/policy.sql b/supabase/manual/policy.sql
+--- a/supabase/manual/policy.sql
++++ b/supabase/manual/policy.sql
+@@ -1,2 +1,3 @@
++CREATE POLICY org_read ON invoices FOR SELECT USING (true);
++ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+ SELECT 1;

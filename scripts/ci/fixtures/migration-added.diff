@@ -1,0 +1,7 @@
+diff --git a/supabase/migrations/20261029000000_example.sql b/supabase/migrations/20261029000000_example.sql
+new file mode 100644
+--- /dev/null
++++ b/supabase/migrations/20261029000000_example.sql
+@@ -0,0 +1,2 @@
++-- record a column
++ALTER TABLE invoices ADD COLUMN note text;

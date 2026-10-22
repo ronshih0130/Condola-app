@@ -1,0 +1,6 @@
+diff --git a/src/server/perms.ts b/src/server/perms.ts
+--- a/src/server/perms.ts
++++ b/src/server/perms.ts
+@@ -12 +12 @@
+-  ["dash.view", "pm_dash", ["admin"]],
++  ["dash.view", "pm_dash", ["admin", "manager"]],
