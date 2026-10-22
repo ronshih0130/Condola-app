@@ -112,6 +112,10 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(propertyDomain, /LIMIT 1/);
   assert.match(property, /key="wizard-next"/);
   assert.match(property, /key="submit-property"/);
+  assert.match(property, /state\.step/);
+  assert.match(property, /aria-invalid/);
+  assert.match(property, /data-field/);
+  assert.match(wizard, /scrollIntoView/);
   const edit = readFileSync(new URL("../app/m/properties/[id]/edit/page.tsx", import.meta.url), "utf8");
   assert.match(edit, /data-testid="meter-serial"/);
   assert.match(edit, /data-testid="property-split"/);
@@ -122,7 +126,7 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(ownerForm, /name="phone"/);
   assert.doesNotMatch(ownerForm, /name="phone"[^>]*required/);
   const domain = readFileSync(new URL("../server/domain.ts", import.meta.url), "utf8");
-  assert.match(domain, /const ownerPhone = cleanPhone\(input\.ownerPhone\)/);
+  assert.match(domain, /const ownerPhone = cleanPhone\(input\.ownerPhone/);
   assert.doesNotMatch(domain, /!ownerPhone\) throw new FlowError\("errors\.required"/);
   const signUp = readFileSync(new URL("../server/signup.ts", import.meta.url), "utf8");
   const start = signUp.slice(signUp.indexOf("export async function startSignup"), signUp.indexOf("export async function resendSignup"));

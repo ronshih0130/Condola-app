@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 import { PRODUCTION_HOSTS } from "./src/server/public-origin";
 
 function buildSha() {
-  const fromEnv = (process.env.CONDOLA_BUILD_SHA || process.env.CF_PAGES_COMMIT_SHA || "").trim();
+  const fromEnv = (process.env.CONDOLA_BUILD_SHA || process.env.CONDOLA_COMMIT || process.env.CF_PAGES_COMMIT_SHA || "").trim();
   if (fromEnv) return fromEnv.slice(0, 7);
   try {
     return execSync("git rev-parse --short=7 HEAD", { encoding: "utf8" }).trim();
@@ -13,10 +13,12 @@ function buildSha() {
 }
 
 const NO_STORE = [{ key: "Cache-Control", value: "private, no-store" }];
+const sha = buildSha();
 
 const nextConfig: NextConfig = {
   env: {
-    NEXT_PUBLIC_BUILD_SHA: buildSha(),
+    NEXT_PUBLIC_BUILD_SHA: sha,
+    NEXT_PUBLIC_COMMIT: sha,
   },
   experimental: {
     serverActions: {

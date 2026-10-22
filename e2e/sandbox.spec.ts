@@ -63,7 +63,10 @@ test("staff can open the seeded sandbox", async ({ page }) => {
   const banner = page.getByTestId("env-banner");
   await expect(banner).toBeVisible();
   await expect(banner).toContainText("範例環境");
+  await expect(banner).not.toContainText("測試模式");
   await expect(banner).toContainText("回到正式公司");
+  await expect(banner).not.toContainText("開始正式使用");
+  await expect(banner).not.toContainText("要不要帶到正式公司");
   await expect(banner).toHaveCSS("background-color", "rgb(253, 243, 220)");
   await expect(banner).toHaveCSS("border-bottom-color", "rgb(242, 181, 68)");
   await page.goto("/m/properties");
@@ -83,6 +86,7 @@ test.describe("phone", () => {
     await page.getByTestId("org-pick-sandbox").click();
     await expect(page.getByTestId("env-load")).toHaveCount(0);
     await expect(page.getByTestId("env-banner")).toBeVisible();
+    await expect(page.getByTestId("env-banner-live")).toHaveText("回到正式公司");
     await page.getByTestId("nav-toggle").click();
     const box = await page.getByTestId("org-switch").boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);

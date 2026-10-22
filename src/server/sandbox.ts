@@ -114,13 +114,25 @@ export async function sandboxChrome(session: Session | null): Promise<{
   prompt: "open" | "closed";
   loaded: boolean;
   counts: SampleCounts | null;
+  /** Live firm already has data, so the sandbox banner says return rather than switch. */
+  returnToLive: boolean;
 }> {
   if (!session || session.environment !== "sandbox") {
-    return { environment: "live", prompt: "closed", loaded: false, counts: null };
+    return { environment: "live", prompt: "closed", loaded: false, counts: null, returnToLive: false };
   }
   const row = await query<{ settings: { sandboxPrompt?: string } | null; sample_loaded_at: Date | null }>(
     `SELECT settings, sample_loaded_at FROM organizations WHERE id = $1`,
     [session.orgId],
+  );
+  const returning = await query<{ returning: boolean }>(
+    `SELECT (
+        live_started_at IS NOT NULL
+        OR EXISTS (SELECT 1 FROM properties p WHERE p.org_id = organizations.id)
+        OR EXISTS (SELECT 1 FROM leases l WHERE l.org_id = organizations.id)
+      ) AS returning
+       FROM organizations
+      WHERE id = $1 AND environment = 'live'`,
+    [session.liveOrgId],
   );
   const settings = row.rows[0]?.settings;
   const loaded = Boolean(row.rows[0]?.sample_loaded_at) || settings?.sandboxPrompt === "loaded";
@@ -130,6 +142,7 @@ export async function sandboxChrome(session: Session | null): Promise<{
     prompt: closed ? "closed" : "open",
     loaded,
     counts: closed ? null : sampleCounts(loadSampleRows()),
+    returnToLive: Boolean(returning.rows[0]?.returning),
   };
 }
 

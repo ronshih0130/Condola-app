@@ -7,6 +7,17 @@ export class FlowError extends Error {
   }
 }
 
+/** Lock, statement, and connect timeouts. These must not fall through to the generic banner. */
+export function isDbTimeout(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    code === "55P03" ||
+    code === "57014" ||
+    /lock timeout|canceling statement due to statement timeout|statement timeout|timeout exceeded when trying to connect/i.test(message)
+  );
+}
+
 export function mapDbError(error: unknown): Error {
   if (error instanceof FlowError) return error;
   const message = error instanceof Error ? error.message : String(error);

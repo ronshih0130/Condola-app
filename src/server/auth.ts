@@ -14,12 +14,14 @@ import { LOCKOUT_LIMIT, lockActive, nextFailure } from "./lockout";
 import { passwordAcceptable } from "./password";
 import { authEmailTaken } from "./portal-login";
 import {
+  deletePortalInviteSecret,
   hashInviteToken,
   inviteAttemptLocked,
   mintedLoginEmail,
   noteBadInvite,
   noteTokenInviteAttempt,
   portalShownEmail,
+  purgePortalInviteSecrets,
   tokenInviteLocked,
   withInviteLock,
 } from "./portal-invite";
@@ -769,30 +771,65 @@ export type InviteKind = "team_member" | "owner" | "tenant" | "unknown";
 export type InviteView =
   | { state: "ready"; kind: "team_member"; email: string; role: OrgRole; firm: string; inviter: string }
   | { state: "ready"; kind: "owner" | "tenant"; email: string; firm: string; collectEmail: boolean }
-  | { state: "expired" | "revoked" | "used" | "invalid" | "locked"; kind: InviteKind };
+  | { state: "expired" | "revoked" | "used" | "invalid" | "locked" | "timeout"; kind: InviteKind };
+
+function dbTimeout(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    code === "55P03" ||
+    code === "57014" ||
+    /lock timeout|canceling statement due to statement timeout|statement timeout|timeout exceeded when trying to connect/i.test(message)
+  );
+}
 
 export async function describeInvite(token: string, meta?: { ip: string | null }): Promise<InviteView> {
+  try {
+    return await describeInviteOnce(token, meta);
+  } catch (error) {
+    if (dbTimeout(error)) return { state: "timeout", kind: "unknown" };
+    throw error;
+  }
+}
+
+async function describeInviteOnce(token: string, meta?: { ip: string | null }): Promise<InviteView> {
   if (await tokenInviteLocked(token)) return { state: "locked", kind: "unknown" };
   if (meta && (await inviteAttemptLocked(meta.ip))) return { state: "locked", kind: "unknown" };
-  const row = await query<{
-    status: string;
-    expires_at: Date;
-    kind: string;
-    email: string | null;
-    contact_email: string | null;
-    role: OrgRole | null;
-    firm: string;
-    inviter: string | null;
-  }>(
-    `SELECT i.status::text, i.expires_at, i.kind::text, i.email::text, c.email::text AS contact_email,
-            i.role::text, o.name AS firm, p.display_name AS inviter
-       FROM invitations i
-       JOIN organizations o ON o.id = i.org_id
-       LEFT JOIN contacts c ON c.id = i.contact_id AND c.org_id = i.org_id
-       LEFT JOIN profiles p ON p.id = i.invited_by
-      WHERE i.code_hash = $1`,
-    [hashInviteToken(token)],
-  );
+  const row = await withClient(async (client) => {
+    await client.query(`SET statement_timeout = '8s'`);
+    await client.query("BEGIN");
+    try {
+      await purgePortalInviteSecrets(client, "reset");
+      const result = await client.query<{
+        status: string;
+        expires_at: Date;
+        kind: string;
+        email: string | null;
+        contact_email: string | null;
+        role: OrgRole | null;
+        firm: string;
+        inviter: string | null;
+      }>(
+        `SELECT i.status::text, i.expires_at, i.kind::text, i.email::text, c.email::text AS contact_email,
+                i.role::text, o.name AS firm, p.display_name AS inviter
+           FROM invitations i
+           JOIN organizations o ON o.id = i.org_id
+           LEFT JOIN contacts c ON c.id = i.contact_id AND c.org_id = i.org_id
+           LEFT JOIN profiles p ON p.id = i.invited_by
+          WHERE i.code_hash = $1`,
+        [hashInviteToken(token)],
+      );
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // The connection is already closing.
+      }
+      throw error;
+    }
+  });
   const invite = row.rows[0];
   const kind: InviteKind =
     invite?.kind === "team_member" || invite?.kind === "owner" || invite?.kind === "tenant" ? invite.kind : "unknown";
@@ -806,7 +843,7 @@ export async function describeInvite(token: string, meta?: { ip: string | null }
   if (kind === "team_member" && invite.role && invite.email) {
     return { state: "ready", kind, email: invite.email, role: invite.role, firm: invite.firm, inviter: invite.inviter ?? "" };
   }
-  if ((kind === "owner" || kind === "tenant") && (invite.email || invite.contact_email)) {
+  if (kind === "owner" || kind === "tenant") {
     const email = portalShownEmail(invite.email, invite.contact_email);
     return { state: "ready", kind, email, firm: invite.firm, collectEmail: email === "" };
   }
@@ -841,60 +878,117 @@ async function upsertInvitedUser(client: Client, email: string, name: string, pa
   return id;
 }
 
-/**
- * Every rejected address takes the same queries and the same result.
- * A format error and an address that already belongs to someone else are indistinguishable.
- * The invite is never attached to that other login.
- */
-async function rejectPortalEmail(
-  token: string,
-  userId: string,
-  emailRaw: string,
-  ip: string | null,
-  kind: "owner" | "tenant",
-): Promise<{ ok: false; error: "email"; kind: "owner" | "tenant" } | { ok: true; email: string }> {
-  const chosen = normalizeEmail(emailRaw);
-  const usable = Boolean(chosen && !mintedLoginEmail(chosen));
-  const probe = usable && chosen ? chosen : `unused.${hashInviteToken(emailRaw || "x").slice(0, 32)}@invalid.example`;
-  const found = await query(`SELECT 1 FROM auth.users WHERE lower(email) = lower($1) AND id <> $2 LIMIT 1`, [probe, userId]);
+async function notePortalReject(token: string, ip: string | null) {
   await query(`SELECT crypt($1, gen_salt('bf'))`, ["portal-email"]);
-  if (usable && chosen && !found.rows[0]) return { ok: true, email: chosen };
   await noteTokenInviteAttempt(token);
   await noteBadInvite(ip);
-  return { ok: false, error: "email", kind };
 }
 
-async function acceptPortalInvite(token: string, password: string, meta: RequestMeta, kind: "owner" | "tenant", emailRaw: string) {
+function portalBindError(error: unknown) {
+  if (dbTimeout(error)) return "timeout" as const;
+  const message = error instanceof Error ? error.message : String(error);
+  if (/contacts_org_user_(owner|tenant)_uniq|contacts_org_user_uniq/i.test(message)) return "bound" as const;
+  if (authEmailTaken(error)) return "auth" as const;
+  return null;
+}
+
+/** Create the login and set its password inside one savepoint so a taken email rolls both back. */
+async function provisionAcceptedLogin(
+  client: Client,
+  input: { email: string; name: string; phone: string | null; password: string },
+) {
+  await client.query(`SAVEPOINT portal_accept_user`);
+  try {
+    await client.query(`SET LOCAL ROLE service_role`);
+    const user = await client.query<{ id: string }>(
+      `SELECT app.provision_portal_user($1, $2, $3) AS id`,
+      [input.email, input.name, input.phone],
+    );
+    await client.query(`RESET ROLE`);
+    await client.query(
+      `UPDATE auth.users
+          SET encrypted_password = crypt($2, gen_salt('bf')),
+              email_confirmed_at = coalesce(email_confirmed_at, now()),
+              updated_at = now()
+        WHERE id = $1`,
+      [user.rows[0].id, input.password],
+    );
+    await client.query(`RELEASE SAVEPOINT portal_accept_user`);
+    return user.rows[0].id;
+  } catch (error) {
+    await client.query(`ROLLBACK TO SAVEPOINT portal_accept_user`);
+    await client.query(`RESET ROLE`);
+    if (authEmailTaken(error)) return null;
+    throw error;
+  }
+}
+
+async function acceptPortalInvite(
+  token: string,
+  password: string,
+  meta: RequestMeta,
+  kind: "owner" | "tenant",
+  emailRaw: string,
+  sessionEmail: string,
+) {
   const pending = await query<{
     id: string;
     org_id: string;
     contact_id: string;
-    user_id: string;
-    login_email: string;
+    user_id: string | null;
+    login_email: string | null;
+    contact_email: string | null;
+    display_name: string;
+    phone_e164: string | null;
   }>(
-    `SELECT i.id::text, i.org_id::text, i.contact_id::text, c.user_id::text AS user_id, u.email::text AS login_email
+    `SELECT i.id::text, i.org_id::text, i.contact_id::text, c.user_id::text AS user_id,
+            u.email::text AS login_email, c.email::text AS contact_email, c.display_name, c.phone_e164
        FROM invitations i
        JOIN contacts c ON c.id = i.contact_id AND c.org_id = i.org_id
-       JOIN auth.users u ON u.id = c.user_id
+       LEFT JOIN auth.users u ON u.id = c.user_id
       WHERE i.code_hash = $1 AND i.kind = $2::invitation_kind
         AND i.status = 'pending' AND i.expires_at > now()`,
     [hashInviteToken(token), kind],
   );
   const row = pending.rows[0];
-  if (!row?.user_id) return { ok: false as const, error: "invalid" as const, kind };
+  if (!row) return { ok: false as const, error: "invalid" as const, kind };
 
-  let replacement: string | null = null;
-  if (mintedLoginEmail(row.login_email)) {
-    const claimed = await rejectPortalEmail(token, row.user_id, emailRaw, meta.ip, kind);
-    if (!claimed.ok) return claimed;
-    replacement = claimed.email;
+  let target = portalShownEmail(row.login_email, row.contact_email);
+  if (!target) {
+    const chosen = normalizeEmail(emailRaw);
+    if (!chosen || mintedLoginEmail(chosen)) {
+      await notePortalReject(token, meta.ip);
+      return { ok: false as const, error: "email" as const, kind };
+    }
+    target = chosen;
   }
 
-  let saved: typeof row | null = null;
+  const signedIn = sessionEmail.trim().toLowerCase();
+  if (signedIn && signedIn !== target.trim().toLowerCase()) {
+    return { ok: false as const, error: "account" as const, kind };
+  }
+
+  const account = await query<{ id: string; has_password: boolean; matches: boolean }>(
+    `SELECT id::text AS id,
+            (encrypted_password IS NOT NULL AND btrim(encrypted_password) <> '') AS has_password,
+            (encrypted_password IS NOT NULL AND encrypted_password = crypt($2, encrypted_password)) AS matches
+       FROM auth.users
+      WHERE lower(email) = lower($1)`,
+    [target, password],
+  );
+  const existing = account.rows[0];
+  if (existing?.has_password && !existing.matches) {
+    await notePortalReject(token, meta.ip);
+    return { ok: false as const, error: "auth" as const, kind };
+  }
+
+  let saved: { userId: string } | { conflict: true } | null = null;
   try {
     saved = await withClient(async (client) => {
       try {
         await client.query("BEGIN");
+        await client.query(`SET LOCAL statement_timeout = '8s'`);
+        await client.query(`SET LOCAL lock_timeout = '3s'`);
         const invite = await client.query(
           `SELECT id FROM invitations WHERE id = $1 AND status = 'pending' AND expires_at > now() FOR UPDATE`,
           [row.id],
@@ -903,7 +997,20 @@ async function acceptPortalInvite(token: string, password: string, meta: Request
           await client.query("ROLLBACK");
           return null;
         }
-        if (replacement) {
+        let userId = existing?.id ?? row.user_id ?? "";
+        if (!userId) {
+          const created = await provisionAcceptedLogin(client, {
+            email: target,
+            name: row.display_name,
+            phone: row.phone_e164,
+            password,
+          });
+          if (!created) {
+            await client.query("ROLLBACK");
+            return { conflict: true as const };
+          }
+          userId = created;
+        } else if (!existing?.has_password) {
           await client.query(
             `UPDATE auth.users
                 SET email = $2,
@@ -911,65 +1018,61 @@ async function acceptPortalInvite(token: string, password: string, meta: Request
                     email_confirmed_at = coalesce(email_confirmed_at, now()),
                     updated_at = now()
               WHERE id = $1`,
-            [row.user_id, replacement, password],
+            [userId, target, password],
           );
-          await client.query(`UPDATE profiles SET email = $2 WHERE id = $1`, [row.user_id, replacement]);
-          await client.query(
-            `UPDATE contacts AS c
-                SET email = $2, updated_at = now()
-              WHERE c.id = $1
-                AND c.org_id = $3
-                AND (c.email IS NULL OR lower(c.email::text) LIKE '%@demo.condola.local')
-                AND NOT EXISTS (
-                  SELECT 1 FROM contacts other
-                   WHERE other.org_id = c.org_id
-                     AND other.id <> c.id
-                     AND other.archived_at IS NULL
-                     AND other.is_tenant
-                     AND c.is_tenant
-                     AND lower(other.email::text) = lower($2)
-                )`,
-            [row.contact_id, replacement, row.org_id],
-          );
-          await client.query(
-            `UPDATE invitations SET email = $2, status = 'accepted', accepted_by = $3, accepted_at = now() WHERE id = $1`,
-            [row.id, replacement, row.user_id],
-          );
-        } else {
-          await client.query(
-            `UPDATE auth.users
-                SET encrypted_password = crypt($2, gen_salt('bf')), updated_at = now()
-              WHERE id = $1`,
-            [row.user_id, password],
-          );
-          await client.query(
-            `UPDATE invitations SET status = 'accepted', accepted_by = $2, accepted_at = now() WHERE id = $1`,
-            [row.id, row.user_id],
-          );
+          await client.query(`UPDATE profiles SET email = $2 WHERE id = $1`, [userId, target]);
         }
+        const bound = await client.query(
+          `UPDATE contacts
+              SET user_id = $2,
+                  email = CASE
+                    WHEN email IS NULL OR lower(email::text) LIKE '%@demo.condola.local' THEN $3
+                    ELSE email
+                  END,
+                  updated_at = now()
+            WHERE id = $1
+              AND org_id = $4
+              AND (user_id IS NULL OR user_id = $2 OR user_id = $5)`,
+          [row.contact_id, userId, target, row.org_id, row.user_id],
+        );
+        if (bound.rowCount !== 1) {
+          await client.query("ROLLBACK");
+          return null;
+        }
+        await client.query(
+          `UPDATE invitations SET email = $2, status = 'accepted', accepted_by = $3, accepted_at = now() WHERE id = $1`,
+          [row.id, target, userId],
+        );
+        await deletePortalInviteSecret(client, row.id);
         await client.query("COMMIT");
-        return row;
+        return { userId };
       } catch (error) {
         await client.query("ROLLBACK");
         throw error;
       }
     });
   } catch (error) {
-    if (replacement && authEmailTaken(error)) {
-      await noteTokenInviteAttempt(token);
-      await noteBadInvite(meta.ip);
-      await query(`SELECT crypt($1, gen_salt('bf'))`, ["portal-email"]);
-      return { ok: false as const, error: "email" as const, kind };
+    const bind = portalBindError(error);
+    if (bind === "timeout") return { ok: false as const, error: "timeout" as const, kind };
+    if (bind === "auth") {
+      await notePortalReject(token, meta.ip);
+      return { ok: false as const, error: bind, kind };
     }
-    throw error;
+    if (bind === "bound") return { ok: false as const, error: "bound" as const, kind };
+    console.error("portal accept failed", error);
+    return { ok: false as const, error: "failed" as const, kind };
   }
-  if (!saved?.user_id) return { ok: false as const, error: "invalid" as const, kind };
-  await writeAudit(saved.org_id, saved.user_id, "portal_invite_accept", {
+  if (saved && "conflict" in saved) {
+    await notePortalReject(token, meta.ip);
+    return { ok: false as const, error: "auth" as const, kind };
+  }
+  if (!saved || !("userId" in saved)) return { ok: false as const, error: "invalid" as const, kind };
+  await writeAudit(row.org_id, saved.userId, "portal_invite_accept", {
     kind,
-    contactId: saved.contact_id,
-    invitationId: saved.id,
+    contactId: row.contact_id,
+    invitationId: row.id,
   });
-  const sessionToken = await createSession(saved.user_id, true, meta);
+  const sessionToken = await createSession(saved.userId, true, meta);
   return {
     ok: true as const,
     token: sessionToken,
@@ -979,16 +1082,40 @@ async function acceptPortalInvite(token: string, password: string, meta: Request
   };
 }
 
-export async function acceptInvite(token: string, name: string, password: string, confirm: string, meta: RequestMeta, emailRaw = "") {
-  return withInviteLock(token, () => acceptInviteOnce(token, name, password, confirm, meta, emailRaw));
+export async function acceptInvite(
+  token: string,
+  name: string,
+  password: string,
+  confirm: string,
+  meta: RequestMeta,
+  emailRaw = "",
+  sessionEmail = "",
+) {
+  try {
+    return await withInviteLock(token, () => acceptInviteOnce(token, name, password, confirm, meta, emailRaw, sessionEmail));
+  } catch (error) {
+    if (dbTimeout(error)) return { ok: false as const, error: "timeout" as const, kind: "unknown" as const };
+    throw error;
+  }
 }
 
-async function acceptInviteOnce(token: string, name: string, password: string, confirm: string, meta: RequestMeta, emailRaw = "") {
+async function acceptInviteOnce(
+  token: string,
+  name: string,
+  password: string,
+  confirm: string,
+  meta: RequestMeta,
+  emailRaw = "",
+  sessionEmail = "",
+) {
   const view = await describeInvite(token, meta);
   if (view.state !== "ready") return { ok: false as const, error: view.state, kind: view.kind };
+  if (view.kind === "owner" || view.kind === "tenant") {
+    if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const, kind: view.kind };
+    return acceptPortalInvite(token, password, meta, view.kind, emailRaw, sessionEmail);
+  }
   if (password !== confirm) return { ok: false as const, error: "mismatch" as const, kind: view.kind };
   if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const, kind: view.kind };
-  if (view.kind === "owner" || view.kind === "tenant") return acceptPortalInvite(token, password, meta, view.kind, emailRaw);
   if (!name.trim()) return { ok: false as const, error: "required" as const, kind: "team_member" as const };
   return withClient(async (client) => {
   try {
@@ -1028,6 +1155,7 @@ async function acceptInviteOnce(token: string, name: string, password: string, c
       `UPDATE invitations SET status = 'accepted', accepted_by = $2, accepted_at = now() WHERE id = $1`,
       [row.id, userId],
     );
+    await deletePortalInviteSecret(client, row.id);
     await client.query("COMMIT");
     await writeAudit(row.org_id, userId, "invite_accept", { role: row.role });
     const sessionToken = await createSession(userId, true, meta);

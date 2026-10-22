@@ -13,6 +13,8 @@ test("sign-up and pricing copy stay on the handoff wording", () => {
   assert.equal(zh.i_field_required, "請填寫此欄位");
   assert.equal(zh.i_signup_submitting, "建立中…");
   assert.equal(zh.i_env_banner_title, "範例公司");
+  assert.equal(zh.i_env_switch_company, "切換到正式公司");
+  assert.equal(zh.i_env_return_company, "回到正式公司");
   assert.equal(zh.i_signup_confirm_email, "確認我的電子郵件");
   assert.equal(zh.i_login_unconfirmed, "請先到信箱確認電子郵件");
   assert.equal(zh.i_signup_code_bad, "代碼無效，可先完成註冊，之後再聯絡我們");

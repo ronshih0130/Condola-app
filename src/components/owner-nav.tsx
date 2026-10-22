@@ -5,7 +5,13 @@ import { usePathname } from "next/navigation";
 import { BrandImage } from "./brand";
 import { useT } from "./locale";
 
-export function OwnerNav({ children }: { children: React.ReactNode }) {
+export function OwnerNav({
+  children,
+  properties = [],
+}: {
+  children: React.ReactNode;
+  properties?: { id: string; name: string }[];
+}) {
   const t = useT();
   const path = usePathname() || "/o";
   const items = [
@@ -24,6 +30,16 @@ export function OwnerNav({ children }: { children: React.ReactNode }) {
             <div className="portal-brand">
               <BrandImage variant="horizontal" alt={t("i_brand")} />
             </div>
+            {properties.length > 0 ? (
+              <div data-testid="owner-properties">
+                <div className="small muted">{t("i_assign_properties")}</div>
+                {properties.map((property) => (
+                  <div key={property.id} data-testid="owner-property">
+                    {property.name}
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {children}
           </div>
           <nav className="tnav">

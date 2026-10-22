@@ -7,6 +7,7 @@ export const CLEARED_COOKIES = [
   "condola_org",
   "condola_tenant_focus",
   "condola_backup",
+  "condola_portal_role",
 ];
 
 /** Host-only cookies from before Domain=.condola.app, plus every domain this app has set. */

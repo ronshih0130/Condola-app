@@ -91,8 +91,9 @@ export function PropertyWizard({
     if (!state.error) return;
     setSaving(false);
     setSubmitReady(true);
-    if (state.field === "i_room_type") setStep(3);
-  }, [state.error, state.field]);
+    if (state.step != null) setStep(state.step);
+    else if (state.field === "i_room_type") setStep(3);
+  }, [state.error, state.field, state.step]);
 
   const filledRooms = rooms.filter((room) => !blankRoom(room));
   const rateN = Number(rate);
@@ -158,6 +159,12 @@ export function PropertyWizard({
   const serverField = state.field || (state.error === "errors.phone" ? "i_phone_mobile" : "");
   const namedField = fieldError || (serverField && (state.error === "errors.required" || state.error === "errors.amount" || state.error === "errors.phone") ? serverField : "");
 
+  function invalidProps(field: string) {
+    return namedField === field
+      ? ({ "aria-invalid": true as const, "data-field": field })
+      : ({ "data-field": field });
+  }
+
   function chooseWholeUnit() {
     setRentalMode("whole_unit");
     setRooms((current) => [{ ...emptyRoom(), rent: current[0]?.rent ?? "", label: "整層", type: "whole_home" }]);
@@ -211,13 +218,13 @@ export function PropertyWizard({
           <h3>{t("i_sec_property")}</h3>
           <div className={fieldClass("i_property_name")}>
             <label className="f">{t("i_property_name")}</label>
-            <input className="inp" name="name" data-testid="property-name" placeholder={t("i_ph_street")} value={name} onChange={(event) => { setName(event.target.value); setFieldError(""); }} />
+            <input className="inp" name="name" data-testid="property-name" placeholder={t("i_ph_street")} value={name} {...invalidProps("i_property_name")} onChange={(event) => { setName(event.target.value); setFieldError(""); }} />
             {namedField === "i_property_name" ? <p className="errmsg">{t("i_step_incomplete", { field: t("i_property_name") })}</p> : null}
           </div>
           <div className="grid2">
             <div className={fieldClass("i_city")}>
               <label className="f">{t("i_city")}</label>
-              <input className="inp" name="city" data-testid="property-city" placeholder={t("i_ph_city")} value={city} onChange={(event) => { setCity(event.target.value); setFieldError(""); }} />
+              <input className="inp" name="city" data-testid="property-city" placeholder={t("i_ph_city")} value={city} {...invalidProps("i_city")} onChange={(event) => { setCity(event.target.value); setFieldError(""); }} />
               {namedField === "i_city" ? <p className="errmsg">{t("i_step_incomplete", { field: t("i_city") })}</p> : null}
             </div>
             <div className="fg">
@@ -228,7 +235,7 @@ export function PropertyWizard({
           <div className="grid2">
             <div className={fieldClass("i_address")}>
               <label className="f">{t("i_street")}</label>
-              <input className="inp" name="street" data-testid="property-street" placeholder={t("i_ph_street")} value={street} onChange={(event) => { setStreet(event.target.value); setFieldError(""); }} />
+              <input className="inp" name="street" data-testid="property-street" placeholder={t("i_ph_street")} value={street} {...invalidProps("i_address")} onChange={(event) => { setStreet(event.target.value); setFieldError(""); }} />
               {namedField === "i_address" ? <p className="errmsg" data-testid="property-address-error">{t("i_step_incomplete", { field: t("i_address") })}</p> : null}
             </div>
             <div className="fg">

@@ -21,6 +21,8 @@ export type Session = {
   locale: Locale;
   calendar: CalendarMode;
   leaseId: string | null;
+  /** Set when this login is linked to a tenant contact, an owner contact, or both. */
+  portals?: { owner: boolean; tenant: boolean };
 };
 
 export function assertStaff(session: Session, roles: OrgRole[]) {

@@ -133,6 +133,12 @@ export function LeaseWizard({
       if (slowTimer.current) window.clearTimeout(slowTimer.current);
       slowTimer.current = null;
       setSlowSubmit(false);
+      const alert = document.querySelector<HTMLElement>("[data-testid=lease-error]");
+      if (alert) {
+        alert.tabIndex = -1;
+        alert.scrollIntoView({ block: "center" });
+        alert.focus();
+      }
     }
   }, [pending, state.error]);
 
@@ -300,7 +306,7 @@ export function LeaseWizard({
       <ImplicitSubmitSink />
       <Stepper steps={steps} current={step} />
       {state.error && state.error !== "errors.leaseNetwork" ? (
-        <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
+        <div className="alert bad" data-testid="lease-error" tabIndex={-1} style={{ marginBottom: 12 }}>
           {!showLine && state.error === "errors.lineId"
             ? t("i_generic")
             : state.field && (state.error === "errors.required" || state.error === "errors.amount")

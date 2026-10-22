@@ -1335,6 +1335,18 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
   });
 }
 
+export async function ownerPropertyNames(session: Session) {
+  return tx(session.userId, async (client) =>
+    many<{ id: string; name: string }>(
+      client,
+      `SELECT id::text, name
+         FROM properties
+        WHERE archived_at IS NULL
+        ORDER BY name`,
+    ),
+  );
+}
+
 export async function ownerHome(session: Session) {
   return tx(session.userId, async (client) =>
     many<{
@@ -1402,7 +1414,15 @@ export async function ownerEditor(session: Session, id: string) {
       `SELECT property_id::text FROM property_owners WHERE owner_contact_id = $1`,
       [id],
     );
-    return { ...owner, propertyIds: linked.map((row) => row.property_id) };
+    const pending = await maybe<{ id: string }>(
+      client,
+      `SELECT id::text FROM invitations
+        WHERE org_id = $2 AND contact_id = $1 AND status = 'pending'
+          AND kind IN ('owner', 'tenant') AND expires_at > now()
+        LIMIT 1`,
+      [id, session.orgId],
+    );
+    return { ...owner, propertyIds: linked.map((row) => row.property_id), invitePending: Boolean(pending) };
   });
 }
 

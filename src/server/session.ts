@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { isLocale, type Locale } from "@/i18n";
 import { withClient } from "./db";
 import { SESSION_COOKIE } from "./auth";
 import { ENV_COOKIE, ORG_COOKIE, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
+import { PORTAL_ROLE_COOKIE, pickPortalOrg, resolvePortalKind } from "./portal-role";
 import { correctRetiredSampleAddresses, ensureSampleLoaded, ensureSandbox } from "./sandbox";
 import type { CalendarMode, Session } from "./types";
 
@@ -35,6 +36,13 @@ async function readSessionOnce(): Promise<Session | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
+  let path = "";
+  try {
+    path = (await headers()).get("x-pathname") || "";
+  } catch {
+    path = "";
+  }
+  const portalCookie = jar.get(PORTAL_ROLE_COOKIE)?.value ?? null;
   try {
     let seedSample = false;
     const session = await withClient(async (client): Promise<(Session & { needsSandbox?: boolean }) | null> => {
@@ -104,21 +112,52 @@ async function readSessionOnce(): Promise<Session | null> {
         live_org_id: string;
         is_tenant: boolean;
         is_owner: boolean;
+        latest_kind: string | null;
+        latest_at: Date | null;
       }>(
         `SELECT c.org_id::text,
                 o.environment::text AS environment,
                 coalesce(o.live_org_id::text, c.org_id::text) AS live_org_id,
                 bool_or(c.is_tenant) AS is_tenant,
-                bool_or(c.is_owner) AS is_owner
+                bool_or(c.is_owner) AS is_owner,
+                (
+                  SELECT i.kind::text
+                    FROM invitations i
+                   WHERE i.accepted_by = $1
+                     AND i.org_id = c.org_id
+                     AND i.status = 'accepted'
+                     AND i.kind IN ('owner', 'tenant')
+                   ORDER BY i.accepted_at DESC NULLS LAST
+                   LIMIT 1
+                ) AS latest_kind,
+                (
+                  SELECT i.accepted_at
+                    FROM invitations i
+                   WHERE i.accepted_by = $1
+                     AND i.org_id = c.org_id
+                     AND i.status = 'accepted'
+                     AND i.kind IN ('owner', 'tenant')
+                   ORDER BY i.accepted_at DESC NULLS LAST
+                   LIMIT 1
+                ) AS latest_at
            FROM contacts c
            JOIN organizations o ON o.id = c.org_id
           WHERE c.user_id = $1 AND c.archived_at IS NULL
           GROUP BY c.org_id, o.environment, o.live_org_id
-          ORDER BY c.org_id
-          LIMIT 1`,
+          ORDER BY c.org_id`,
         [identity.user_id],
       );
-      const portal = contact.rows[0];
+      const picked = pickPortalOrg(
+        contact.rows.map((row) => ({
+          row,
+          isOwner: row.is_owner,
+          isTenant: row.is_tenant,
+          latestAt: row.latest_at ? new Date(row.latest_at).getTime() : null,
+        })),
+        path,
+        portalCookie,
+      );
+      const portal = picked?.row;
       if (!portal) return null;
       let orgId = portal.org_id;
       let environment: OrgEnvironment = portal.environment === "sandbox" ? "sandbox" : "live";
@@ -140,9 +179,27 @@ async function readSessionOnce(): Promise<Session | null> {
           liveOrgId = leaseOrg.rows[0].live_org_id;
         }
       }
-      if (portal.is_tenant) return { ...base, kind: "tenant", role: null, orgId, liveOrgId, environment };
-      if (portal.is_owner) return { ...base, kind: "owner", role: null, orgId, liveOrgId, environment };
-      return null;
+      const latest = portal.latest_kind === "owner" || portal.latest_kind === "tenant" ? portal.latest_kind : null;
+      const kind = resolvePortalKind({
+        path,
+        cookie: portalCookie,
+        isOwner: contact.rows.some((row) => row.is_owner),
+        isTenant: contact.rows.some((row) => row.is_tenant),
+        latest,
+      });
+      if (!kind) return null;
+      return {
+        ...base,
+        kind,
+        role: null,
+        orgId,
+        liveOrgId,
+        environment,
+        portals: {
+          owner: contact.rows.some((row) => row.is_owner),
+          tenant: contact.rows.some((row) => row.is_tenant),
+        },
+      };
     });
     if (session?.kind === "staff" && session.environment === "sandbox") {
       const sandboxId = session.needsSandbox ? await ensureSandbox(session) : session.orgId;

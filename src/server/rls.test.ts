@@ -380,17 +380,17 @@ test("creating a property with a new owner works as service_role without write a
     });
     propertyId = created.propertyId;
     contactId = created.ownerContactId;
-    const linked = await query<{ email: string; name: string }>(
-      `SELECT u.email, p.display_name AS name
+    const linked = await query<{ user_id: string | null; email: string | null; name: string }>(
+      `SELECT c.user_id::text AS user_id, c.email::text AS email, c.display_name AS name
          FROM contacts c
-         JOIN auth.users u ON u.id = c.user_id
-         JOIN profiles p ON p.id = u.id
         WHERE c.id = $1 AND c.is_owner`,
       [contactId],
     );
+    assert.equal(linked.rows[0]?.user_id, null);
     assert.equal(linked.rows[0]?.email, email);
     assert.equal(linked.rows[0]?.name, "新屋主");
-    await assertPortalAccount(email);
+    const ownerAccount = await query(`SELECT 1 FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+    assert.equal(ownerAccount.rowCount, 0);
 
     const unit = await query<{ id: string }>(`SELECT id::text FROM units WHERE property_id = $1`, [propertyId]);
     const tenantEmail = `new.tenant.${email}`;
@@ -489,11 +489,12 @@ test("another firm cannot issue or redeem a portal invite, and anon cannot read 
   const contactId = contact.rows[0].id;
   let userId: string | null = null;
   try {
-    const issued = await issuePortalInvite(admin, { kind: "owner", contactId }, "https://app.condola.app");
+    const issued = await issuePortalInvite(admin, { kind: "owner", contactId, pageId: contactId }, "https://app.condola.app");
     assert.equal(issued.activated, false);
     if (issued.activated) return;
-    const owner = await query<{ user_id: string }>(`SELECT user_id::text AS user_id FROM contacts WHERE id = $1`, [contactId]);
+    const owner = await query<{ user_id: string | null }>(`SELECT user_id::text AS user_id FROM contacts WHERE id = $1`, [contactId]);
     userId = owner.rows[0].user_id;
+    assert.equal(userId, null);
 
     const coast = await tx(USERS.coastAdmin, async (client) => {
       const selected = await client.query(`SELECT id FROM invitations WHERE contact_id = $1`, [contactId]);

@@ -85,7 +85,10 @@ async function endOnce(client: Client, ended: { current: boolean }) {
  * (or anything stored on globalThis) hands the next request a dead socket.
  */
 export async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    connectionTimeoutMillis: 8000,
+  });
   const ended = { current: false };
   client.on("error", () => {});
   await client.connect();

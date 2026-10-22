@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { sessionCookie, type RequestMeta } from "./auth";
 import { FlowError } from "./errors";
 import { clearStoredEnvChoice, ENV_COOKIE_MAX_AGE, ORG_COOKIE } from "./org-scope";
+import { PORTAL_ROLE_COOKIE } from "./portal-role";
 import {
   clearFirmOverride,
   createPartnerCode,
@@ -53,6 +54,7 @@ async function setSession(token: string) {
   const cookie = sessionCookie(token, true);
   jar.set(cookie.name, cookie.value, cookie.options);
   clearStoredEnvChoice(jar);
+  jar.delete(PORTAL_ROLE_COOKIE);
 }
 
 function bounce(path: string, error: unknown): never {

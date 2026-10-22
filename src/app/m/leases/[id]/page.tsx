@@ -123,12 +123,15 @@ export default async function LeasePage({
             <p className="small muted">{lease.email}</p>
             {showDemoLineCopy(session.environment) && lease.line_user_id ? <p data-testid="tenant-line-id">{lease.line_user_id}</p> : null}
             {canInvite ? (
-              <PortalInviteButton
-                kind="tenant"
-                contactId={lease.tenant_contact_id}
-                leaseId={id}
-                activated={tenantActivated}
-              />
+              <div key={id} data-lease-page={id}>
+                <PortalInviteButton
+                  key={`${lease.tenant_contact_id}:${id}`}
+                  kind="tenant"
+                  contactId={lease.tenant_contact_id}
+                  leaseId={id}
+                  activated={tenantActivated}
+                />
+              </div>
             ) : null}
             {lease.status !== "active" ? (
               <p>
