@@ -149,6 +149,7 @@ test("the lease idempotency migration is additive and later than shared staging 
     "20261028150000_utility_vacant_expense.sql",
     "20261028160000_utility_run_draft_reuse.sql",
     "20261028180000_utility_owner_lines.sql",
+    "20261029120000_default_function_privileges.sql",
     "20261029150000_lock_public_function_execute.sql",
     "20261029160000_gotrue_confirm_single_use.sql",
   ]);

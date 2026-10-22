@@ -45,11 +45,10 @@ public.condola_property_address_key(display text)
 public.post_reversal(p_txn uuid, p_reason text)
 public.fn_invoice_recalc(p_invoice uuid)
 
-# Utility charge posting (PR #18) is not on main at c4ea9de. When those
-# functions exist, the lock migration leaves authenticated EXECUTE and
-# removes PUBLIC and anon. app.audit_event is in schema app, so the public
-# function scan does not see it; the privilege script checks it directly.
-# A line for a function that is not in this database does not fail the gate.
+# Utility charge posting (PR #18) is on main at 2bedb89. The lock migration
+# leaves authenticated EXECUTE and removes PUBLIC and anon. app.audit_event
+# is in schema app, so the public function scan does not see it; the
+# privilege script checks it directly when the function exists.
 # @mode authenticated
 public.post_reversal(p_txn uuid, p_reason text, p_invoice uuid)
 app.audit_event(p_org uuid, p_event text, p_detail jsonb)

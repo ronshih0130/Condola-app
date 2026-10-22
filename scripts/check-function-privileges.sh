@@ -153,6 +153,64 @@ fi
 # broadly, re-apply the lock migration, require the intended EXECUTE, then
 # drop only the stand-ins so the public scan below stays the real schema.
 if [[ -f supabase/migrations/20261029150000_lock_public_function_execute.sql ]]; then
+real_utility="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+SELECT (
+  to_regprocedure('public.post_reversal(uuid, text, uuid)') IS NOT NULL
+  AND to_regprocedure('public.utility_runs_fill_unit_id()') IS NOT NULL
+  AND to_regprocedure('public.utility_runs_reuse_open_period()') IS NOT NULL
+  AND to_regprocedure('app.audit_event(uuid, text, jsonb)') IS NOT NULL
+);
+SQL
+)"
+if [[ "$real_utility" == "t" ]]; then
+  echo "utility function revoke probe: real functions"
+  lock_notices="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -f supabase/migrations/20261029150000_lock_public_function_execute.sql 2>&1)"
+  if printf '%s\n' "$lock_notices" | grep -E "skip missing function (public\.post_reversal\(uuid, text, uuid\)|public\.utility_runs_fill_unit_id|public\.utility_runs_reuse_open_period|app\.audit_event)"; then
+    echo "lock migration NOTICE-skipped a #18 function" >&2
+    exit 1
+  fi
+  echo "utility NOTICE skip: none"
+  echo "permission table (anon / authenticated / public EXECUTE):"
+  psql "$scratch_url" -v ON_ERROR_STOP=1 <<'SQL'
+SELECT sig,
+       has_function_privilege('anon', sig::regprocedure, 'EXECUTE') AS anon,
+       has_function_privilege('authenticated', sig::regprocedure, 'EXECUTE') AS authenticated,
+       has_function_privilege('public', sig::regprocedure, 'EXECUTE') AS public
+FROM (VALUES
+  ('public.post_reversal(uuid, text)'),
+  ('public.post_reversal(uuid, text, uuid)'),
+  ('public.utility_runs_fill_unit_id()'),
+  ('public.utility_runs_reuse_open_period()'),
+  ('app.audit_event(uuid, text, jsonb)')
+) AS f(sig)
+ORDER BY 1;
+SQL
+  utility_ok="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+SELECT
+  NOT has_function_privilege('anon', 'public.post_reversal(uuid, text)', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public.post_reversal(uuid, text)', 'EXECUTE')
+  AND has_function_privilege('authenticated', 'public.post_reversal(uuid, text)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
+  AND has_function_privilege('authenticated', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.utility_runs_fill_unit_id()', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.utility_runs_fill_unit_id()', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public.utility_runs_fill_unit_id()', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.utility_runs_reuse_open_period()', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.utility_runs_reuse_open_period()', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public.utility_runs_reuse_open_period()', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app.audit_event(uuid, text, jsonb)', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'app.audit_event(uuid, text, jsonb)', 'EXECUTE')
+  AND has_function_privilege('authenticated', 'app.audit_event(uuid, text, jsonb)', 'EXECUTE');
+SQL
+)"
+  if [[ "$utility_ok" != "t" ]]; then
+    echo "utility function revoke probe failed" >&2
+    exit 1
+  fi
+  echo "stand-ins=0"
+  echo "utility function revoke probe: enforced"
+else
 echo "utility function revoke probe"
 psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
 CREATE TABLE IF NOT EXISTS public.fn_priv_probe_created (sig text PRIMARY KEY);
@@ -256,6 +314,7 @@ $drop$;
 DROP TABLE public.fn_priv_probe_created;
 SQL
 echo "utility function revoke probe: enforced"
+fi
 else
   echo "utility function revoke probe: skipped (lock migration not in tree)"
 fi
