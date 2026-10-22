@@ -24,7 +24,7 @@ test("staff record, edit, and void an expense in zh-TW", async ({ page }) => {
   await page.getByTestId("expense-save").click();
   await expect(page.getByTestId("expense-saved")).toBeVisible();
   await expect(page.getByTestId("expense-included")).toHaveText("計入屋主報表");
-  await expect(page.getByTestId("expense-status")).toHaveText("已入帳");
+  await expect(page.getByTestId("expense-status")).toHaveText("已記帳");
   await expect(page.getByTestId("expense-summary")).toContainText("e2e 水管檢修");
   await expect(page.getByTestId("expense-summary")).toContainText("3F");
   await expect(page.getByTestId("expense-receipt")).toHaveCount(0);
