@@ -186,6 +186,17 @@ test("new vacant electricity expenses use 電費（空房／未簽約） and exi
 
 test("electricity registration copy uses 登記 and does not say 入帳", () => {
   const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
+  assert.equal(zh.i_utility_owner_vacant, "電費（空房／未簽約）");
+  assert.equal(en.i_utility_owner_vacant, "Electricity (vacant / unsigned)");
+  const oldVacantLabel = "屋主" + "（空房）";
+  assert.equal(zh.i_utility_owner_vacant.includes(oldVacantLabel), false);
+  const utilities = readFileSync(new URL("../app/m/rent/utilities/page.tsx", import.meta.url), "utf8");
+  const postingE2e = readFileSync(new URL("../../e2e/utility-posting.spec.ts", import.meta.url), "utf8");
+  assert.match(utilities, /t\("i_utility_owner_vacant"\)/);
+  assert.equal(utilities.includes(oldVacantLabel), false);
+  assert.equal(postingE2e.includes(oldVacantLabel), false);
+  assert.match(postingE2e, /電費（空房／未簽約）/);
   assert.equal(zh.i_utility_open, "電費登記");
   assert.equal(zh.i_utility_title, "電費登記");
   assert.equal(zh.i_utility_confirm, "確認登記電費");

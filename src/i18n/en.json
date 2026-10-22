@@ -1907,7 +1907,7 @@
  "i_utility_period_note": "After you pick a month, submeter and per-kWh rooms are listed, including vacant rooms. A lease that is waiting for signature or already effective, and overlaps this month, is enough to bill the tenant. Vacant rooms are not billed to a tenant; that share is an owner expense.",
  "i_utility_prev_kwh": "Previous kWh",
  "i_utility_curr_kwh": "Current kWh",
- "i_utility_owner_vacant": "Owner (vacant rooms)",
+ "i_utility_owner_vacant": "Electricity (vacant / unsigned)",
  "i_utility_void_reason": "Reason for voiding",
  "i_utility_method_skip": "This space uses a shared meter or the tenant pays the utility, so it is not added to the rent bill. Choose submeter or per kWh.",
  "i_utility_state": "This run is void and cannot be registered again. Start a new review for the period.",

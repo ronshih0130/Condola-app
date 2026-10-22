@@ -1907,7 +1907,7 @@
  "i_utility_period_note": "選月份後，分表和依電表度數的房間會列在下面，空房也會列出。待簽名或有效、且和這個月有重疊的租約就記入租客，不必完成簽署。空房不向租客收費，那一份記入屋主支出。",
  "i_utility_prev_kwh": "上期度數",
  "i_utility_curr_kwh": "本期度數",
- "i_utility_owner_vacant": "屋主（空房）",
+ "i_utility_owner_vacant": "電費（空房／未簽約）",
  "i_utility_void_reason": "作廢原因",
  "i_utility_method_skip": "這個空間是共同電表或租客自繳，電費不會計入租金帳單。請改成分表或依電表度數。",
  "i_utility_state": "這次分攤已經作廢，不能再登記。請重新試算一期。",

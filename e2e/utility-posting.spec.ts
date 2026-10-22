@@ -115,7 +115,7 @@ test("平均分攤 saves from the property wizard and splits the bill with no ro
   await expect(page.getByTestId("utility-gap-warn")).toContainText("請檢查每度電價");
   await expect(page.getByTestId("utility-gap")).toHaveCount(0);
   await expect(page.getByTestId("utility-share")).toHaveCount(3);
-  const ownerShares = page.getByTestId("utility-share").filter({ hasText: "屋主（空房）" });
+  const ownerShares = page.getByTestId("utility-share").filter({ hasText: "電費（空房／未簽約）" });
   await expect(ownerShares).toHaveCount(3);
   await expect(ownerShares.nth(0)).toContainText("NT$1,000");
   await expect(ownerShares.nth(1)).toContainText("NT$1,000");
@@ -153,7 +153,7 @@ test("公共用電 and 帳單差額 show as separate owner lines with a rate war
   await expect(page.getByTestId("utility-public")).toContainText("-NT$50");
   await expect(page.getByTestId("utility-gap")).toContainText("電費（帳單差額）");
   await expect(page.getByTestId("utility-gap")).toContainText("-NT$300");
-  await expect(page.getByTestId("utility-share").filter({ hasText: "屋主（空房）" })).toContainText("NT$100");
+  await expect(page.getByTestId("utility-share").filter({ hasText: "電費（空房／未簽約）" })).toContainText("NT$100");
 });
 
 test("countersign of a pending lease does not bill the electricity posted while it was unsigned", async ({ page }) => {
