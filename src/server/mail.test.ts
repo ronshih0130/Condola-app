@@ -185,7 +185,7 @@ test("overdue and reset copy matches the revised file and never says 收款", ()
   const reset = passwordResetMail("https://app.condola.app/reset?token_hash=abc&type=recovery");
   assert.equal(admin.subject, "【繳款提醒】府後街 3F A 本期租金尚未繳清");
   assert.equal(admin.subject.startsWith("【繳款提醒】"), true);
-  assert.equal(tenant.subject.includes("欠租提醒"), false);
+  assert.equal(tenant.subject, "2026年11月 租金繳費提醒");
   assert.match(admin.text, /系統尚未有繳款紀錄/);
   assert.match(admin.text, /請到「租金總覽」新增繳款紀錄，就不會再提醒。/);
   assert.equal(admin.text.includes("待確認收款"), false);

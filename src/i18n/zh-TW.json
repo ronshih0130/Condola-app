@@ -1172,7 +1172,7 @@
  "i_reset_resend": "重新寄送重設信",
  "i_mail_heading": "提醒信",
  "i_mail_lease": "租約到期提醒",
- "i_mail_overdue": "欠租提醒",
+ "i_mail_overdue": "繳款提醒",
  "i_mail_off_hint": "關閉後不再寄這類提醒給您。",
  "i_mail_org": "租客提醒",
  "i_mail_tenant_lease": "寄送租約到期提醒給租客（到期前 30 天）",

@@ -32,8 +32,11 @@ test("TWD amounts stay NT$ when the currency code is padded, and 已收 is not p
   assert.equal(zh.i_paid, "已繳");
   assert.equal(zh.i_rent_received, "已繳租金");
   assert.equal(zh.i_audit_ev_go_live, "開始正式使用");
+  assert.equal(zh.i_mail_overdue, "繳款提醒");
+  const overdueLabel = "欠租" + "提醒";
   for (const [key, value] of Object.entries(zh)) {
     assert.equal(value.replaceAll("已收到", "").includes("已收"), false, `${key}: ${value}`);
+    assert.equal(value.includes(overdueLabel), false, `${key}: ${value}`);
   }
   const leases = read("app/m/leases/page.tsx");
   assert.match(leases, /data-testid="lease-rent"/);
