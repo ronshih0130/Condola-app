@@ -95,7 +95,7 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
       unitLabel: "1F",
       floor: "1",
       rentalMode: "whole_unit",
-      rooms: [],
+      rooms: [{ label: "1F", roomType: "whole_home", baseRentMajor: 10000 }],
     });
     propertyIds.push(blankPhone.propertyId);
     const storedPhone = await query<{ phone: string | null }>(
@@ -117,7 +117,7 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
       unitLabel: "2F",
       floor: "2",
       rentalMode: "whole_unit",
-      rooms: [],
+      rooms: [{ label: "2F", roomType: "whole_home", baseRentMajor: 10000 }],
     });
     propertyIds.push(dashed.propertyId);
     const normalized = await query<{ phone: string | null }>(
@@ -223,23 +223,28 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     assert.equal(meter.rows.length, 1);
     assert.equal(meter.rows[0]?.serial ?? null, null);
 
-    const splits = await query<{ lease_id: string; split: string }>(
-      `SELECT line.lease_id::text, r.split_method::text AS split
+    const splits = await query<{ lease_id: string | null; bearer: string; split: string; room_id: string }>(
+      `SELECT line.lease_id::text, line.bearer::text, r.split_method::text AS split, line.room_id::text
          FROM utility_allocation_lines line
          JOIN utility_allocation_runs r ON r.id = line.run_id
-        WHERE line.lease_id = ANY($1::uuid[])`,
-      [[even.leaseId, sub.leaseId]],
+         JOIN meters m ON m.id = r.meter_id
+        WHERE m.unit_id IN (SELECT id FROM units WHERE property_id = $1)
+          AND r.status <> 'void'`,
+      [rooms.propertyId],
     );
     assert.equal(new Set(splits.rows.map((row) => row.split)).size, 1);
     assert.equal(splits.rows[0]?.split, "sub_meter");
-    assert.ok(splits.rows.some((row) => row.lease_id === even.leaseId));
-    assert.ok(splits.rows.some((row) => row.lease_id === sub.leaseId));
+    // Pending leases stay off the bill. The draft run still covers both rooms and charges the owner.
+    assert.ok(splits.rows.every((row) => row.lease_id == null && row.bearer === "owner"));
+    assert.ok(splits.rows.some((row) => row.room_id === rooms.roomIds[0]));
+    assert.ok(splits.rows.some((row) => row.room_id === rooms.roomIds[1]));
     const runCount = await query<{ n: string }>(
       `SELECT count(DISTINCT r.id)::text AS n
-         FROM utility_allocation_lines line
-         JOIN utility_allocation_runs r ON r.id = line.run_id
-        WHERE line.lease_id = ANY($1::uuid[]) AND r.status <> 'void'`,
-      [[even.leaseId, sub.leaseId]],
+         FROM utility_allocation_runs r
+         JOIN meters m ON m.id = r.meter_id
+        WHERE m.unit_id IN (SELECT id FROM units WHERE property_id = $1)
+          AND r.status <> 'void'`,
+      [rooms.propertyId],
     );
     assert.equal(runCount.rows[0]?.n, "1");
     const runUnit = await query<{ unit_id: string; room_unit: string }>(
@@ -247,9 +252,9 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
          FROM utility_allocation_runs r
          JOIN utility_allocation_lines line ON line.run_id = r.id
          JOIN rooms rm ON rm.id = line.room_id
-        WHERE line.lease_id = $1
+        WHERE line.room_id = $1 AND r.status <> 'void'
         LIMIT 1`,
-      [even.leaseId],
+      [rooms.roomIds[0]],
     );
     assert.equal(runUnit.rows[0]?.unit_id, runUnit.rows[0]?.room_unit);
     assert.ok(runUnit.rows[0]?.unit_id);
@@ -279,7 +284,7 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
       unitLabel: "4F",
       floor: "4",
       rentalMode: "whole_unit",
-      rooms: [],
+      rooms: [{ label: "4F", roomType: "whole_home", baseRentMajor: 10000 }],
     });
     propertyIds.push(whole.propertyId);
     const unit = await query<{ id: string }>(`SELECT id::text FROM units WHERE property_id = $1`, [whole.propertyId]);
@@ -1525,8 +1530,27 @@ test("two different leases both save, a triple create keeps one, and a failed su
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      await client.query(`ALTER TABLE ledger_entries DISABLE TRIGGER trg_ledger_entries_append_only`);
+      await client.query(`ALTER TABLE ledger_transactions DISABLE TRIGGER trg_ledger_transactions_append_only`);
       try {
         for (const propertyId of propertyIds) {
+          await client.query(`UPDATE expenses SET ledger_transaction_id = NULL WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM expenses WHERE property_id = $1`, [propertyId]);
+          await client.query(
+            `DELETE FROM ledger_entries
+              WHERE transaction_id IN (
+                SELECT id FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'
+              )`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses' AND kind = 'reversal'`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'`,
+            [propertyId],
+          );
           await client.query(
             `DELETE FROM utility_allocation_lines
               WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)
@@ -1561,6 +1585,8 @@ test("two different leases both save, a triple create keeps one, and a failed su
         await client.query(`DELETE FROM contacts WHERE lower(email::text) LIKE $1`, [`%${stamp}@example.com`]);
         await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
       } finally {
+        await client.query(`ALTER TABLE ledger_entries ENABLE TRIGGER trg_ledger_entries_append_only`);
+        await client.query(`ALTER TABLE ledger_transactions ENABLE TRIGGER trg_ledger_transactions_append_only`);
         await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
       }
     });

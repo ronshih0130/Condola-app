@@ -411,7 +411,16 @@ test("a fresh database that already ran the current ID migration accepts the upg
   psql(FRESH_URL, path.join(MIGRATIONS, "20261024100000_revoke_truncate.sql"));
   psql(FRESH_URL, path.join(MIGRATIONS, UPGRADE_FILE));
   psql(FRESH_URL, path.join(MIGRATIONS, UPGRADE_FILE));
+  // The upgrade file drops and recreates id_document_delete_after. The consent
+  // migration is the clock that has to remain on this database.
+  psql(FRESH_URL, path.join(MIGRATIONS, "20261028120000_id_delete_after_consent.sql"));
   await assertCurrentSchema(FRESH_URL);
+  await withDb(FRESH_URL, async (client) => {
+    const body = await client.query<{ def: string }>(
+      `SELECT pg_get_functiondef('id_document_delete_after(uuid,uuid,timestamptz)'::regprocedure) AS def`,
+    );
+    assert.match(body.rows[0]?.def ?? "", /9999-12-31/);
+  });
 });
 
 test("a database with the older 20261022180000 upgrades forward, then accepts the same file again", async () => {

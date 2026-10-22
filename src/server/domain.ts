@@ -1550,8 +1550,8 @@ export async function uploadSignedLeasePdf(
       [leaseId, session.orgId],
     );
     if (!lease) throw new FlowError("errors.notFound");
-    if (!(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
     const imported = lease.esign === "imported";
+    if (!imported && !(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
     const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
     const stored = await one<{ id: string }>(
       client,

@@ -293,8 +293,27 @@ test("picking an existing 租客 reuses that contact and portal user inside the 
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      await client.query(`ALTER TABLE ledger_entries DISABLE TRIGGER trg_ledger_entries_append_only`);
+      await client.query(`ALTER TABLE ledger_transactions DISABLE TRIGGER trg_ledger_transactions_append_only`);
       try {
         for (const propertyId of propertyIds) {
+          await client.query(`UPDATE expenses SET ledger_transaction_id = NULL WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM expenses WHERE property_id = $1`, [propertyId]);
+          await client.query(
+            `DELETE FROM ledger_entries
+              WHERE transaction_id IN (
+                SELECT id FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'
+              )`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses' AND kind = 'reversal'`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'`,
+            [propertyId],
+          );
           await client.query(
             `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
             [propertyId],
@@ -319,6 +338,8 @@ test("picking an existing 租客 reuses that contact and portal user inside the 
         if (userIds.length) await client.query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [userIds]);
         await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
       } finally {
+        await client.query(`ALTER TABLE ledger_entries ENABLE TRIGGER trg_ledger_entries_append_only`);
+        await client.query(`ALTER TABLE ledger_transactions ENABLE TRIGGER trg_ledger_transactions_append_only`);
         await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
       }
     });
@@ -555,8 +576,27 @@ test("a taken or sandbox email gets a new portal login, and an archived contact 
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      await client.query(`ALTER TABLE ledger_entries DISABLE TRIGGER trg_ledger_entries_append_only`);
+      await client.query(`ALTER TABLE ledger_transactions DISABLE TRIGGER trg_ledger_transactions_append_only`);
       try {
         for (const propertyId of propertyIds) {
+          await client.query(`UPDATE expenses SET ledger_transaction_id = NULL WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM expenses WHERE property_id = $1`, [propertyId]);
+          await client.query(
+            `DELETE FROM ledger_entries
+              WHERE transaction_id IN (
+                SELECT id FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'
+              )`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses' AND kind = 'reversal'`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'`,
+            [propertyId],
+          );
           await client.query(
             `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
             [propertyId],
@@ -581,6 +621,8 @@ test("a taken or sandbox email gets a new portal login, and an archived contact 
         if (userIds.length) await client.query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [userIds]);
         await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
       } finally {
+        await client.query(`ALTER TABLE ledger_entries ENABLE TRIGGER trg_ledger_entries_append_only`);
+        await client.query(`ALTER TABLE ledger_transactions ENABLE TRIGGER trg_ledger_transactions_append_only`);
         await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
       }
     });
@@ -677,8 +719,27 @@ test("a new 租客 whose email already logs in at another firm gets a fresh port
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      await client.query(`ALTER TABLE ledger_entries DISABLE TRIGGER trg_ledger_entries_append_only`);
+      await client.query(`ALTER TABLE ledger_transactions DISABLE TRIGGER trg_ledger_transactions_append_only`);
       try {
         for (const propertyId of propertyIds) {
+          await client.query(`UPDATE expenses SET ledger_transaction_id = NULL WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM expenses WHERE property_id = $1`, [propertyId]);
+          await client.query(
+            `DELETE FROM ledger_entries
+              WHERE transaction_id IN (
+                SELECT id FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'
+              )`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses' AND kind = 'reversal'`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'`,
+            [propertyId],
+          );
           await client.query(
             `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
             [propertyId],
@@ -703,6 +764,8 @@ test("a new 租客 whose email already logs in at another firm gets a fresh port
         if (userIds.length) await client.query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [userIds]);
         await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
       } finally {
+        await client.query(`ALTER TABLE ledger_entries ENABLE TRIGGER trg_ledger_entries_append_only`);
+        await client.query(`ALTER TABLE ledger_transactions ENABLE TRIGGER trg_ledger_transactions_append_only`);
         await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
       }
     });
@@ -824,8 +887,27 @@ test("deposit months step by half a month and TWD deposit dollars are rounded", 
   } finally {
     await withClient(async (client) => {
       await client.query(`ALTER TABLE lease_signature_events DISABLE TRIGGER trg_lease_signature_events_append_only`);
+      await client.query(`ALTER TABLE ledger_entries DISABLE TRIGGER trg_ledger_entries_append_only`);
+      await client.query(`ALTER TABLE ledger_transactions DISABLE TRIGGER trg_ledger_transactions_append_only`);
       try {
         for (const propertyId of propertyIds) {
+          await client.query(`UPDATE expenses SET ledger_transaction_id = NULL WHERE property_id = $1`, [propertyId]);
+          await client.query(`DELETE FROM expenses WHERE property_id = $1`, [propertyId]);
+          await client.query(
+            `DELETE FROM ledger_entries
+              WHERE transaction_id IN (
+                SELECT id FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'
+              )`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses' AND kind = 'reversal'`,
+            [propertyId],
+          );
+          await client.query(
+            `DELETE FROM ledger_transactions WHERE property_id = $1 AND source_table = 'expenses'`,
+            [propertyId],
+          );
           await client.query(
             `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
             [propertyId],
@@ -850,6 +932,8 @@ test("deposit months step by half a month and TWD deposit dollars are rounded", 
         if (userIds.length) await client.query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [userIds]);
         await client.query(`DELETE FROM auth.users WHERE lower(email) LIKE $1`, [`%${stamp}@example.com`]);
       } finally {
+        await client.query(`ALTER TABLE ledger_entries ENABLE TRIGGER trg_ledger_entries_append_only`);
+        await client.query(`ALTER TABLE ledger_transactions ENABLE TRIGGER trg_ledger_transactions_append_only`);
         await client.query(`ALTER TABLE lease_signature_events ENABLE TRIGGER trg_lease_signature_events_append_only`);
       }
     });
