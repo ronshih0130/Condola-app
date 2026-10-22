@@ -663,7 +663,7 @@ test("a UI unit is reused by the import address key, including when the key was 
       unitLabel: "5F",
       floor: "5",
       rentalMode: "whole_unit",
-      rooms: [],
+      rooms: [{ label: "5F", roomType: "whole_home", baseRentMajor: 10000 }],
     });
     const stored = await query<{ address_key: string; import_address_key: string }>(
       `SELECT p.address_key, u.import_address_key

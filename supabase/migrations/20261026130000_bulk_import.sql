@@ -58,6 +58,11 @@ BEGIN
 END;
 $$;
 
+-- SECURITY DEFINER: runs as the function owner so the property trigger can
+-- write units under row-level security. search_path is fixed. EXECUTE is
+-- revoked from PUBLIC, anon, and authenticated; the trigger does not need it.
+-- The body writes import_address_key only, and only on units of this property
+-- in the same org.
 CREATE OR REPLACE FUNCTION public.condola_sync_unit_address_keys()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -70,6 +75,7 @@ BEGIN
       UPDATE public.units
          SET import_address_key = NEW.address_key
        WHERE property_id = NEW.id
+         AND org_id = NEW.org_id
          AND import_address_key IS DISTINCT FROM NEW.address_key;
     EXCEPTION WHEN OTHERS THEN
       RETURN NEW;
@@ -78,6 +84,8 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+REVOKE EXECUTE ON FUNCTION public.condola_sync_unit_address_keys() FROM PUBLIC, anon, authenticated;
 
 DO $do$
 BEGIN
@@ -119,17 +127,31 @@ BEGIN
 END
 $do$;
 
-UPDATE properties
-   SET address_key = public.condola_property_address_key(address_display)
- WHERE address_key IS NULL
-   AND address_display IS NOT NULL;
-
-UPDATE units u
-   SET import_address_key = coalesce(p.address_key, public.condola_property_address_key(p.address_display))
-  FROM properties p
- WHERE p.id = u.property_id
-   AND u.import_address_key IS NULL
-   AND coalesce(p.address_key, public.condola_property_address_key(p.address_display)) IS NOT NULL;
+-- Backfill assigns only the new key columns. The updated_at triggers are
+-- paused so they cannot stamp another column, then turned back on.
+DO $backfill$
+BEGIN
+  ALTER TABLE public.properties DISABLE TRIGGER trg_properties_updated_at;
+  ALTER TABLE public.units DISABLE TRIGGER trg_units_updated_at;
+  UPDATE public.properties
+     SET address_key = public.condola_property_address_key(address_display)
+   WHERE address_key IS NULL
+     AND address_display IS NOT NULL;
+  UPDATE public.units AS u
+     SET import_address_key = coalesce(p.address_key, public.condola_property_address_key(p.address_display))
+    FROM public.properties AS p
+   WHERE p.id = u.property_id
+     AND p.org_id = u.org_id
+     AND u.import_address_key IS NULL
+     AND coalesce(p.address_key, public.condola_property_address_key(p.address_display)) IS NOT NULL;
+  ALTER TABLE public.properties ENABLE TRIGGER trg_properties_updated_at;
+  ALTER TABLE public.units ENABLE TRIGGER trg_units_updated_at;
+EXCEPTION WHEN OTHERS THEN
+  ALTER TABLE public.properties ENABLE TRIGGER trg_properties_updated_at;
+  ALTER TABLE public.units ENABLE TRIGGER trg_units_updated_at;
+  RAISE;
+END
+$backfill$;
 
 CREATE INDEX IF NOT EXISTS properties_org_address_key_idx
   ON properties (org_id, address_key)

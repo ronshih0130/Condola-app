@@ -573,6 +573,15 @@ test("bulk import migration is additive and idempotent", () => {
   assert.match(code, /ADD VALUE IF NOT EXISTS 'imported'/);
   assert.match(code, /CREATE OR REPLACE FUNCTION/);
   assert.match(code, /IF NOT EXISTS \(/);
+  assert.match(code, /SECURITY DEFINER[\s\S]*SET search_path = pg_catalog, public/);
+  assert.match(code, /REVOKE EXECUTE ON FUNCTION public\.condola_sync_unit_address_keys\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(code, /WHERE property_id = NEW\.id\s+AND org_id = NEW\.org_id/);
+  assert.match(code, /SET address_key = public\.condola_property_address_key\(address_display\)/);
+  assert.match(code, /SET import_address_key = coalesce\(p\.address_key, public\.condola_property_address_key\(p\.address_display\)\)/);
+  assert.match(code, /DISABLE TRIGGER trg_properties_updated_at/);
+  assert.match(code, /ENABLE TRIGGER trg_properties_updated_at/);
+  assert.match(code, /DISABLE TRIGGER trg_units_updated_at/);
+  assert.match(code, /ENABLE TRIGGER trg_units_updated_at/);
   assert.doesNotMatch(code, /\bDROP\b/i);
   assert.doesNotMatch(code, /\bUNIQUE\b/i);
   assert.doesNotMatch(code, /SET NOT NULL/i);
