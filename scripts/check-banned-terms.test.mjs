@@ -28,13 +28,12 @@ function words(text, options) {
 
 test("the Product Marketing file is the list the checker loads", () => {
   const loaded = terms();
-  for (const term of ["入帳", "收租", "收款", "欠租", "已收", "代收", "示範", "測試模式", "沙盒", "房東"]) {
-    assert.equal(loaded.banned.includes(term), true, term);
-  }
-  for (const phrase of ["一起成為完美房東", "自動計入帳單", "加入帳單", "匯入帳戶末五碼", "登入帳號", "款項到帳"]) {
-    assert.equal(loaded.allow.includes(phrase), true, phrase);
-  }
+  assert.deepEqual(loaded.banned, ["入帳", "收租", "收款", "欠租", "已收", "代收", "示範", "測試模式", "沙盒", "房東"]);
+  assert.deepEqual(loaded.allow, ["一起成為完美房東", "自動計入帳單", "加入帳單", "匯入帳戶末五碼", "登入帳號", "款項到帳"]);
+  assert.equal(loaded.allow.includes("款項入帳"), false);
   assert.equal(TERMS_PATH.endsWith("config/banned_terms.md"), true);
+  assert.deepEqual(words("款項入帳"), ["入帳"]);
+  assert.deepEqual(words("款項到帳"), []);
 });
 
 test("allowlisted phrases are removed before banned terms are searched", () => {

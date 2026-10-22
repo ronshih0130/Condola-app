@@ -1,34 +1,26 @@
-# Banned terms
+# Condola 禁用詞清單（Owner: Product Marketing，2026-10-21）
+CI：以下「禁用」任一出現即 build fail；先移除「白名單」整句再比對。
 
-Product Marketing owns this file. It is the only banned-word list.
+## 禁用（必須 0 筆）
+入帳
+收租
+收款
+欠租
+已收
+代收
+示範
+測試模式
+沙盒
+房東
 
-`scripts/check-banned-terms.mjs` reads this file and nothing else. CI, `scripts/qa/smoke.sh`, and Playwright all call that script.
+## 白名單（整句允許）
+一起成為完美房東
+自動計入帳單
+加入帳單
+匯入帳戶末五碼
+登入帳號
+款項到帳
 
-Check order:
-
-1. Remove every allowlisted phrase, longest phrase first.
-2. Fail if any banned term is still present.
-
-`房東` is banned. It is allowed only inside the exact slogan `一起成為完美房東`.
-
-## Banned
-
-- 入帳
-- 收租
-- 收款
-- 欠租
-- 已收
-- 代收
-- 示範
-- 測試模式
-- 沙盒
-- 房東
-
-## Allow
-
-- 一起成為完美房東
-- 自動計入帳單
-- 加入帳單
-- 匯入帳戶末五碼
-- 登入帳號
-- 款項到帳
+## 備註
+- 不可稱租客為「已驗證/verified」（人工審，不進 CI）。
+- 「入帳」白名單用「款項到帳」取代，不允許「款項入帳」。

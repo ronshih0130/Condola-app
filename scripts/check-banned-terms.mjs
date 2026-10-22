@@ -27,25 +27,24 @@ export function loadTerms(markdown) {
   let section = "";
   for (const raw of markdown.split(/\r?\n/)) {
     const line = raw.trim();
-    const heading = /^##\s+(.+?)\s*$/.exec(line);
+    const heading = /^#{1,6}\s+(.+?)\s*$/.exec(line);
     if (heading) {
       const name = heading[1].toLowerCase();
-      if (name === "banned") section = "banned";
-      else if (name === "allow") section = "allow";
+      if (name === "banned" || name.startsWith("禁用")) section = "banned";
+      else if (name === "allow" || name.startsWith("白名單")) section = "allow";
       else section = "";
       continue;
     }
-    if (!section) continue;
-    const item = /^\s*[-*]\s+(.+?)\s*$/.exec(raw);
-    if (!item) continue;
-    const term = item[1].trim().replace(/^`+|`+$/g, "").trim();
+    if (!section || !line) continue;
+    const item = /^[-*]\s+(.+)$/.exec(line);
+    const term = (item ? item[1] : line).trim().replace(/^`+|`+$/g, "").trim();
     if (!term) continue;
     (section === "banned" ? banned : allow).push(term);
   }
   const unique = (list) => [...new Set(list)];
   const terms = { banned: unique(banned), allow: unique(allow) };
   if (terms.banned.length === 0 || terms.allow.length === 0) {
-    throw new Error("config/banned_terms.md needs both a ## Banned list and a ## Allow list");
+    throw new Error("config/banned_terms.md needs a 禁用 list and a 白名單 list");
   }
   const overlap = terms.banned.filter((term) => terms.allow.includes(term));
   if (overlap.length > 0) {
