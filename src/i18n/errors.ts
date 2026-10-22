@@ -54,6 +54,9 @@ export const ERRORS: Record<string, string> = {
   "errors.photoStorage": "i_photo_storage",
   "errors.photoLimit": "i_photo_limit",
   "errors.date": "i_date_invalid",
+  "errors.portalMismatch": "i_portal_link_mismatch",
+  "errors.portalTimeout": "i_portal_timeout",
+  "errors.portalRenew": "i_portal_renew",
 };
 
 export function errorText(t: T, key: string | undefined) {

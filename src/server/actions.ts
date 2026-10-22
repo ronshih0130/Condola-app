@@ -35,7 +35,7 @@ import { addTicketComment, saveRepairRecord } from "./repairs";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
 
-export type ActionState = { error: string; field?: string };
+export type ActionState = { error: string; field?: string; step?: number };
 
 const EMPTY_ACTION: ActionState = { error: "" };
 
@@ -166,7 +166,8 @@ function actionError(error: unknown, fallback = "errors.generic"): ActionState {
   if (!(error instanceof FlowError)) return { error: fallback };
   const key = error.key === "errors.generic" ? fallback : error.key;
   const field = typeof error.vars?.field === "string" ? error.vars.field : undefined;
-  return field ? { error: key, field } : { error: key };
+  const step = typeof error.vars?.step === "number" ? error.vars.step : undefined;
+  return { error: key, ...(field ? { field } : {}), ...(step != null ? { step } : {}) };
 }
 
 export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
@@ -181,6 +182,7 @@ export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, for
     const created = await createProperty(session, input);
     redirect(`/m/properties/${created.propertyId}?created=1`);
   } catch (error) {
+    if (!(error instanceof FlowError) || error.key === "errors.generic") console.error("createProperty", error);
     return actionError(error);
   }
 }

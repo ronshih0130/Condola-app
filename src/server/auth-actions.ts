@@ -36,9 +36,11 @@ import { forgotSentLocation, resetFlashCookie } from "./reset-flash";
 import { demoModeEnabled } from "./demo";
 import { closeMonth, reversePayment } from "./domain";
 import { addExpense, approveExpense, createExpense, updateExpense, voidExpense } from "./expenses";
-import { FlowError } from "./errors";
+import { FlowError, isDbTimeout } from "./errors";
+import { portalPageTarget, sameId } from "@/lib/portal-page";
 import { issuePortalInvite } from "./portal-invite";
 import { clearStoredEnvChoice } from "./org-scope";
+import { PORTAL_ROLE_COOKIE } from "./portal-role";
 import { appCookieOptions, sameAppPath } from "./public-origin";
 import { clearAuthCookies, sessionEntryPath } from "./sign-out";
 import { getSession, readSession } from "./session";
@@ -96,6 +98,7 @@ export async function actionSignIn(formData: FormData) {
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
     clearStoredEnvChoice(jar);
+    jar.delete(PORTAL_ROLE_COOKIE);
     redirect(sessionEntryPath(result.destination === "firm" ? "/signup/firm" : next || "/auth/continue"));
   }
   if ("step" in result) {
@@ -117,6 +120,7 @@ export async function actionLineLogin() {
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
     clearStoredEnvChoice(jar);
+    jar.delete(PORTAL_ROLE_COOKIE);
     redirect(sessionEntryPath("/auth/continue"));
   }
   if ("step" in result) {
@@ -140,6 +144,7 @@ export async function actionSecondFactor(formData: FormData) {
   jar.set(cookie.name, cookie.value, cookie.options);
   jar.delete(CHALLENGE_COOKIE);
   clearStoredEnvChoice(jar);
+  jar.delete(PORTAL_ROLE_COOKIE);
   if (result.backupCodes?.length) await rememberBackup(result.backupCodes);
   redirect(sessionEntryPath(result.backupCodes?.length ? "/login?step=backup" : next || "/auth/continue"));
 }
@@ -214,6 +219,7 @@ export async function actionOrgMail(formData: FormData) {
 
 export async function actionAccept(formData: FormData) {
   const token = text(formData.get("token"));
+  const current = await readSession();
   const result = await acceptInvite(
     token,
     text(formData.get("name")),
@@ -221,10 +227,19 @@ export async function actionAccept(formData: FormData) {
     text(formData.get("confirm")),
     await meta(),
     text(formData.get("email")),
+    current?.email ?? "",
   );
   if (!result.ok) {
     const portal = result.kind === "owner" || result.kind === "tenant" || result.kind === "unknown";
-    const fieldError = result.error === "weak" || result.error === "mismatch" || result.error === "email";
+    const fieldError =
+      result.error === "weak" ||
+      result.error === "mismatch" ||
+      result.error === "email" ||
+      result.error === "auth" ||
+      result.error === "timeout" ||
+      result.error === "bound" ||
+      result.error === "failed" ||
+      result.error === "account";
     if (portal && !fieldError) {
       redirect(`/accept/${encodeURIComponent(token)}`);
     }
@@ -234,26 +249,58 @@ export async function actionAccept(formData: FormData) {
   const cookie = sessionCookie(result.token, true);
   jar.set(cookie.name, cookie.value, cookie.options);
   clearStoredEnvChoice(jar);
+  jar.delete(PORTAL_ROLE_COOKIE);
   if ("destination" in result && result.destination) redirect(result.destination);
   redirect(sessionEntryPath("/auth/continue"));
 }
 
-export async function actionIssuePortalInvite(input: { kind: string; contactId: string; leaseId?: string }) {
+export async function actionIssuePortalInvite(input: {
+  kind: string;
+  contactId: string;
+  pageId: string;
+  leaseId?: string;
+  rotate?: boolean;
+}) {
   try {
     const session = await getSession();
     const kind = input.kind === "owner" || input.kind === "tenant" ? input.kind : "";
-    if (!kind || !input.contactId) return { ok: false as const, error: "errors.required" };
+    if (!kind || !input.contactId || !input.pageId) return { ok: false as const, error: "errors.required" };
+    const path = (await headers()).get("x-pathname") || "";
+    const page = portalPageTarget(path);
+    if (!page || page.kind !== kind || !sameId(page.pageId, input.pageId)) {
+      return { ok: false as const, error: "errors.portalMismatch" };
+    }
+    if (kind === "owner" && !sameId(input.pageId, input.contactId)) {
+      return { ok: false as const, error: "errors.portalMismatch" };
+    }
+    if (kind === "tenant" && !sameId(input.pageId, input.leaseId || "")) {
+      return { ok: false as const, error: "errors.portalMismatch" };
+    }
     const issued = await issuePortalInvite(
       session,
-      { kind, contactId: input.contactId, leaseId: input.leaseId || undefined },
+      {
+        kind,
+        contactId: input.contactId,
+        pageId: input.pageId,
+        leaseId: input.leaseId || undefined,
+        rotate: input.rotate === true,
+      },
       await requestOrigin(),
     );
-    if (issued.activated) return { ok: true as const, activated: true as const };
-    return { ok: true as const, activated: false as const, url: issued.url };
+    if (issued.activated) return { ok: true as const, activated: true as const, contactId: issued.contactId };
+    return {
+      ok: true as const,
+      activated: false as const,
+      url: issued.url,
+      contactId: issued.contactId,
+      name: issued.name,
+      email: issued.email,
+    };
   } catch (error) {
     if (isRedirect(error)) throw error;
-    const key = error instanceof FlowError ? error.key : "errors.generic";
-    return { ok: false as const, error: key };
+    if (error instanceof FlowError) return { ok: false as const, error: error.key };
+    if (isDbTimeout(error)) return { ok: false as const, error: "errors.portalTimeout" };
+    return { ok: false as const, error: "errors.generic" };
   }
 }
 

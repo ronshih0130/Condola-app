@@ -43,12 +43,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <LocaleLinks />
             </span>
             <span className="top-extra-end">
+              {session?.portals?.owner && session.portals.tenant && session.kind !== "staff" ? (
+                <a
+                  className="small"
+                  data-testid="switch-role"
+                  href={session.kind === "owner" ? "/t" : "/o/statements"}
+                  style={{ marginRight: 10 }}
+                >
+                  {session.kind === "owner" ? t("i_switch_role_tenant") : t("i_switch_role_owner")}
+                </a>
+              ) : null}
               {session ? <SignOutButton /> : null}
               {showReset ? <ResetButton /> : null}
             </span>
           </header>
           {chrome.environment === "sandbox" ? <EnvBanner showBack={session?.kind === "staff" && Boolean(session.liveOrgId)} /> : null}
           {children}
+          <p className="foot" data-testid="app-version" style={{ margin: "16px" }}>
+            {process.env.NEXT_PUBLIC_COMMIT || "unknown"}
+          </p>
         </LocaleProvider>
       </body>
     </html>

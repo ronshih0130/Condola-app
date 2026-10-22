@@ -23,24 +23,28 @@ export default async function EditOwnerPage({
   const t = makeT(session.locale);
   const [owner, properties] = await Promise.all([ownerEditor(session, id), listProperties(session)]);
   if (!owner) notFound();
-  const activated = session.role === "admin" || session.role === "manager" ? await portalLoginReady(owner.user_id) : false;
+  const ready = session.role === "admin" || session.role === "manager" ? await portalLoginReady(owner.user_id) : false;
+  const activated = ready && !owner.invitePending;
   return (
     <>
       <PageHeader title={t("i_owner_edit")} crumb={t("i_owners_title")} />
       <ErrorBanner t={t} error={query.error} />
-      {session.role === "admin" || session.role === "manager" ? (
-        <PortalInviteButton kind="owner" contactId={owner.id} activated={activated} />
-      ) : null}
-      <OwnerForm
-        t={t}
-        action={actionUpdateOwner}
-        ownerId={owner.id}
-        name={owner.name}
-        email={owner.email ?? ""}
-        phone={owner.phone ?? ""}
-        properties={properties.map((property) => ({ id: property.id, name: property.name }))}
-        selected={owner.propertyIds}
-      />
+      <div key={owner.id} data-owner-page={owner.id}>
+        {session.role === "admin" || session.role === "manager" ? (
+          <PortalInviteButton key={owner.id} kind="owner" contactId={owner.id} activated={activated} />
+        ) : null}
+        <OwnerForm
+          key={owner.id}
+          t={t}
+          action={actionUpdateOwner}
+          ownerId={owner.id}
+          name={owner.name}
+          email={owner.email ?? ""}
+          phone={owner.phone ?? ""}
+          properties={properties.map((property) => ({ id: property.id, name: property.name }))}
+          selected={owner.propertyIds}
+        />
+      </div>
     </>
   );
 }

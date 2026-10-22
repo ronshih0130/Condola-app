@@ -22,7 +22,7 @@ import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { assertPerm } from "./perms";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
-import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS } from "./portal-invite";
+import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
 import { assertTicketStatus } from "./repair-rules";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
@@ -30,17 +30,17 @@ function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function cleanPhone(phone: string) {
+function cleanPhone(phone: string, where?: { field: string; step: number }) {
   if (!phone.trim()) return null;
   const value = normalizePhone(phone);
-  if (!value) throw new FlowError("errors.phone");
+  if (!value) throw new FlowError("errors.phone", where);
   return value;
 }
 
-function cleanEmail(email: string) {
+function cleanEmail(email: string, where?: { field: string; step: number }) {
   const value = email.trim().toLowerCase();
   if (!value) return null;
-  if (!value.includes("@")) throw new FlowError("errors.email");
+  if (!value.includes("@")) throw new FlowError("errors.email", where);
   return value;
 }
 
@@ -107,9 +107,25 @@ export type PropertyInput = {
 
 const PROPERTY_ROOM_TYPES = new Set(["whole_home", "studio", "suite", "shared_bath"]);
 
+const ROOM_TYPE_LABELS: Record<string, string> = {
+  套房: "suite",
+  雅房: "shared_bath",
+  獨立套房: "studio",
+};
+
+function storedRoomType(raw: string) {
+  const value = raw.trim();
+  if (PROPERTY_ROOM_TYPES.has(value)) return value;
+  return ROOM_TYPE_LABELS[value] ?? value;
+}
+
+function withStoredRoomTypes<T extends { roomType: string }>(rooms: T[]) {
+  return rooms.map((room) => ({ ...room, roomType: storedRoomType(room.roomType) }));
+}
+
 function assertPropertyRoomTypes(rooms: { roomType: string }[]) {
   if (rooms.some((room) => !PROPERTY_ROOM_TYPES.has(room.roomType))) {
-    throw new FlowError("errors.required", { field: "i_room_type" });
+    throw new FlowError("errors.required", { field: "i_room_type", step: 3 });
   }
 }
 
@@ -242,32 +258,32 @@ function propertySubmitPayload(input: PropertyInput) {
 
 export async function createProperty(session: Session, input: PropertyInput) {
   assertStaff(session, ["admin", "manager"]);
-  if (!input.name.trim()) throw new FlowError("errors.required", { field: "i_property_name" });
-  if (!input.city.trim()) throw new FlowError("errors.required", { field: "i_city" });
-  if (!input.street.trim()) throw new FlowError("errors.required", { field: "i_address" });
-  if (!input.unitLabel.trim() && !input.floor.trim()) throw new FlowError("errors.required", { field: "i_floor" });
+  if (!input.name.trim()) throw new FlowError("errors.required", { field: "i_property_name", step: 1 });
+  if (!input.city.trim()) throw new FlowError("errors.required", { field: "i_city", step: 1 });
+  if (!input.street.trim()) throw new FlowError("errors.required", { field: "i_address", step: 1 });
+  if (!input.unitLabel.trim() && !input.floor.trim()) throw new FlowError("errors.required", { field: "i_floor", step: 3 });
   const wholeUnit = input.rentalMode === "whole_unit";
   const posted = wholeUnit ? input.rooms.slice(0, 1) : input.rooms;
-  const rooms = posted.filter((room) => room.label.trim() || room.baseRentMajor > 0);
-  if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8" });
-  if (wholeUnit && rooms.length !== 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
-  if (input.rentalMode === "by_room" && rooms.length < 1) throw new FlowError("errors.required", { field: "s_8569bc8" });
+  const rooms = withStoredRoomTypes(posted.filter((room) => room.label.trim() || room.baseRentMajor > 0));
+  if (rooms.some((room) => !room.label.trim())) throw new FlowError("errors.required", { field: "s_8569bc8", step: 3 });
+  if (wholeUnit && rooms.length !== 1) throw new FlowError("errors.required", { field: "s_8569bc8", step: 3 });
+  if (input.rentalMode === "by_room" && rooms.length < 1) throw new FlowError("errors.required", { field: "s_8569bc8", step: 3 });
   if (input.rentalMode === "by_room") assertPropertyRoomTypes(rooms);
   if (rooms.some((room) => room.roomType === "whole_home") && rooms.length !== 1) {
-    throw new FlowError("errors.required", { field: "s_8569bc8" });
+    throw new FlowError("errors.required", { field: "s_8569bc8", step: 3 });
   }
   for (const extra of input.rentalMode === "by_room" ? (input.extraUnits ?? []) : []) {
-    const extraRooms = extra.rooms.filter((room) => room.label.trim() || room.baseRentMajor > 0);
+    const extraRooms = withStoredRoomTypes(extra.rooms.filter((room) => room.label.trim() || room.baseRentMajor > 0));
     if (!extra.floor.trim() && !extra.label.trim() && extraRooms.length === 0) continue;
     assertPropertyRoomTypes(extraRooms);
   }
   if (input.electric?.rateMajor != null && (!Number.isFinite(input.electric.rateMajor) || input.electric.rateMajor < 0)) {
-    throw new FlowError("errors.amount", { field: "i_rate" });
+    throw new FlowError("errors.amount", { field: "i_rate", step: 4 });
   }
 
-  const ownerPhone = cleanPhone(input.ownerPhone);
-  const ownerEmail = cleanEmail(input.ownerEmail);
-  if (input.ownerMode === "new" && !input.ownerName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
+  const ownerPhone = cleanPhone(input.ownerPhone, { field: "i_phone_label", step: 1 });
+  const ownerEmail = cleanEmail(input.ownerEmail, { field: "i_email_label", step: 1 });
+  if (input.ownerMode === "new" && !input.ownerName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea", step: 1 });
 
   const created = await tx(session.userId, async (client) => {
     const submitToken = (input.submitToken || "").trim().slice(0, 80);
@@ -322,10 +338,6 @@ export async function createProperty(session: Session, input: PropertyInput) {
       );
       if (recent) return { propertyId: recent.id, ownerContactId: "", roomIds: [] as string[], inviteCode: null as string | null };
     }
-    let ownerUserId: string | null = null;
-    if (input.ownerMode === "new") {
-      ownerUserId = await insertPortalUser(client, { name: input.ownerName.trim(), email: ownerEmail, phone: ownerPhone });
-    }
     const country = input.currency === "USD" ? "US" : "TW";
     const jurisdiction = await one<{ id: string }>(
       client,
@@ -364,17 +376,21 @@ export async function createProperty(session: Session, input: PropertyInput) {
     if (input.ownerMode === "new") {
       const contact = await one<{ id: string }>(
         client,
-        `INSERT INTO contacts (org_id, user_id, is_owner, display_name, email, phone_e164, locale, preferred_channel)
-         VALUES ($1,$2,true,$3,$4,$5,$6,'email') RETURNING id`,
-        [session.orgId, ownerUserId, input.ownerName.trim(), ownerEmail, ownerPhone, session.locale],
+        `INSERT INTO contacts (org_id, is_owner, display_name, email, phone_e164, locale, preferred_channel)
+         VALUES ($1,true,$2,$3,$4,$5,'email') RETURNING id`,
+        [session.orgId, input.ownerName.trim(), ownerEmail, ownerPhone, session.locale],
       );
       ownerContactId = contact.id;
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`portal-invite:${ownerContactId}`]);
-      await client.query(
+      const token = newInviteToken();
+      const invite = await one<{ id: string }>(
+        client,
         `INSERT INTO invitations (org_id, kind, contact_id, email, phone_e164, code_hash, expires_at, invited_by)
-         VALUES ($1,'owner',$2,$3,$4,$5, now() + make_interval(days => $6), $7)`,
-        [session.orgId, ownerContactId, ownerEmail, ownerPhone, hashInviteToken(newInviteToken()), PORTAL_INVITE_DAYS, session.userId],
+         VALUES ($1,'owner',$2,$3,$4,$5, now() + make_interval(days => $6), $7)
+         RETURNING id::text`,
+        [session.orgId, ownerContactId, ownerEmail, ownerPhone, hashInviteToken(token), PORTAL_INVITE_DAYS, session.userId],
       );
+      await savePortalInviteSecret(client, invite.id, token);
     }
     if (!ownerContactId) throw new FlowError("errors.required");
 
@@ -426,11 +442,11 @@ export async function createProperty(session: Session, input: PropertyInput) {
     });
     roomIds.push(...first.roomIds);
     for (const extra of wholeUnit ? [] : (input.extraUnits ?? [])) {
-      const extraRooms = extra.rooms.filter((room) => room.label.trim() || room.baseRentMajor > 0);
+      const extraRooms = withStoredRoomTypes(extra.rooms.filter((room) => room.label.trim() || room.baseRentMajor > 0));
       if (!extra.floor.trim() && !extra.label.trim() && extraRooms.length === 0) continue;
-      if (!extra.floor.trim() && !extra.label.trim()) throw new FlowError("errors.required", { field: "i_floor" });
+      if (!extra.floor.trim() && !extra.label.trim()) throw new FlowError("errors.required", { field: "i_floor", step: 3 });
       if (extraRooms.some((room) => room.roomType === "whole_home") && extraRooms.length !== 1) {
-        throw new FlowError("errors.required", { field: "s_8569bc8" });
+        throw new FlowError("errors.required", { field: "s_8569bc8", step: 3 });
       }
       const inserted = await insertPropertyUnit(client, {
         orgId: session.orgId,

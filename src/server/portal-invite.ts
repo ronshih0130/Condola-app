@@ -1,25 +1,28 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { maybe, one, query, tx, withClient } from "./db";
-import { FlowError } from "./errors";
+import { FlowError, isDbTimeout } from "./errors";
+import { sameId } from "@/lib/portal-page";
 import { lockActive, nextFailure } from "./lockout";
-import { authEmailTaken } from "./portal-login";
 import { publicSiteOrigin } from "./signup-gotrue";
 import { assertStaff, type Session } from "./types";
 
 export const PORTAL_INVITE_DAYS = 7;
 
-const DIRECT_HOSTS = new Set(["app.condola.app", "staging.condola.app"]);
+const APP_HOSTS = new Set(["app.condola.app", "staging.condola.app"]);
+
+/** Preview deploys of the staging worker. The star is the PR id. */
+const PREVIEW_HOST = /^pr-[a-z0-9-]*-condola-staging\.condola\.workers\.dev$/;
 
 /** Email guesses on one link. An office shares an IP, so that limit is higher. */
 export const PORTAL_TOKEN_ATTEMPT_LIMIT = 5;
 export const PORTAL_IP_ATTEMPT_LIMIT = 20;
 
 /**
- * A contact with no free inbox still gets a link. Provision mints an internal
- * address so the row can exist. That address is never shown. The accept page
- * asks for a real email and refuses one that already belongs to another login.
+ * A contact with no free inbox still gets a link. Issuing the link does not
+ * create or bind a login. The accept page asks for an email when none is stored.
+ * A minted address, if an older link still has one, is never shown.
  */
 export const MINTED_LOGIN_HOST = "demo.condola.local";
 
@@ -67,31 +70,66 @@ export function inviteStoredEmail(contactEmail: string | null) {
 }
 
 /**
- * app.condola.app, staging.condola.app, and loopback can use the request host.
- * workers.dev and every other host use CONDOLA_SITE_URL.
+ * An allowed request host wins, so a PR preview copies its own host instead
+ * of CONDOLA_SITE_URL. Production always copies https://app.condola.app.
+ * Anything else falls back to the configured app URL. Loopback is only for
+ * local tests with no site URL and no CONDOLA_ENV.
  */
 export function portalInviteOrigin(requestOrigin: string) {
-  const direct = directAppOrigin(requestOrigin);
-  if (direct) return direct;
+  const configured = httpsAppOrigin(process.env.CONDOLA_SITE_URL || "");
+  const name = process.env.CONDOLA_ENV?.trim().toLowerCase();
+  if (name === "production" || configured === "https://app.condola.app") return "https://app.condola.app";
+  const fromRequest = allowedInviteOrigin(requestOrigin);
+  if (fromRequest) return fromRequest;
+  if (configured) return configured;
+  if (name === "staging" || name === "staging-real") return "https://staging.condola.app";
+  const loopback = loopbackOrigin(requestOrigin);
+  if (loopback) return loopback;
   return publicSiteOrigin(requestOrigin);
+}
+
+function allowedInviteOrigin(value: string) {
+  const first = value.split(",")[0]?.trim() ?? "";
+  if (!first) return null;
+  try {
+    const url = new URL(first.includes("://") ? first : `https://${first}`);
+    if (url.username || url.password) return null;
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    const host = url.hostname.toLowerCase();
+    if (host !== "app.condola.app" && host !== "staging.condola.app" && !PREVIEW_HOST.test(host)) return null;
+    return `https://${host}`;
+  } catch {
+    return null;
+  }
 }
 
 export function portalInviteUrl(requestOrigin: string, token: string) {
   return `${portalInviteOrigin(requestOrigin)}/accept/${encodeURIComponent(token)}`;
 }
 
-function directAppOrigin(value: string) {
+function httpsAppOrigin(value: string) {
   const raw = value.trim();
   if (!raw) return null;
   try {
     const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    if (url.protocol !== "https:") return null;
     const host = url.hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1") {
-      if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-      return url.origin;
-    }
-    if (url.protocol !== "https:" || !DIRECT_HOSTS.has(host)) return null;
+    if (!APP_HOSTS.has(host)) return null;
     return `https://${host}`;
+  } catch {
+    return null;
+  }
+}
+
+function loopbackOrigin(value: string) {
+  const raw = value.trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw.includes("://") ? raw : `http://${raw}`);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    const host = url.hostname.toLowerCase();
+    if (host !== "localhost" && host !== "127.0.0.1") return null;
+    return url.origin;
   } catch {
     return null;
   }
@@ -150,19 +188,29 @@ export async function noteTokenInviteAttempt(token: string) {
   await noteAttempt(tokenAttemptKey(token), PORTAL_TOKEN_ATTEMPT_LIMIT);
 }
 
-/** One accept at a time for a token. The second submit waits, then sees the link already used. */
+/**
+ * One accept at a time for a token. The lock lives in this transaction, so a
+ * transaction pooler cannot keep it after the request. Waiters give up in 8s
+ * instead of sitting on a session lock until the socket times out.
+ */
 export async function withInviteLock<T>(token: string, fn: () => Promise<T>): Promise<T> {
   const key = hashInviteToken(token);
   return withClient(async (client) => {
-    await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [key]);
+    await client.query(`BEGIN`);
     try {
-      return await fn();
-    } finally {
+      await client.query(`SET LOCAL lock_timeout = '8s'`);
+      await client.query(`SET LOCAL statement_timeout = '8s'`);
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [key]);
+      const result = await fn();
+      await client.query(`COMMIT`);
+      return result;
+    } catch (error) {
       try {
-        await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [key]);
+        await client.query(`ROLLBACK`);
       } catch {
-        // Closing the connection releases the lock.
+        // The connection is already closing.
       }
+      throw error;
     }
   });
 }
@@ -202,136 +250,197 @@ async function readLogin(client: Client, userId: string) {
   }
 }
 
-async function provisionLogin(client: Client, input: { name: string; email: string; phone: string | null }) {
-  await client.query(`SAVEPOINT portal_invite_login`);
+async function withServiceRole<T>(client: Client, fn: () => Promise<T>, restore: "authenticated" | "reset") {
+  await client.query(`RESET ROLE`);
+  await client.query(`SET LOCAL ROLE service_role`);
   try {
-    await client.query(`SET LOCAL ROLE service_role`);
-    const user = await one<{ id: string }>(
-      client,
-      `SELECT app.provision_portal_user($1, $2, $3) AS id`,
-      [input.email, input.name, input.phone],
-    );
-    await client.query(`RELEASE SAVEPOINT portal_invite_login`);
-    await client.query(`SET LOCAL ROLE authenticated`);
-    return user.id;
-  } catch (error) {
-    await client.query(`ROLLBACK TO SAVEPOINT portal_invite_login`);
-    await client.query(`SET LOCAL ROLE authenticated`);
-    throw error;
+    return await fn();
+  } finally {
+    await client.query(restore === "authenticated" ? `SET LOCAL ROLE authenticated` : `RESET ROLE`);
   }
 }
 
-async function attachLogin(client: Client, session: Session, contact: ContactLogin) {
-  if (contact.user_id) return readLogin(client, contact.user_id).then((login) => ({ id: contact.user_id as string, ...login }));
-  const preferred = inviteStoredEmail(contact.email);
-  const minted = `portal-${randomUUID()}@${MINTED_LOGIN_HOST}`;
-  const first = preferred ?? minted;
-  const attempt = async (email: string) => {
-    const id = await provisionLogin(client, { name: contact.display_name, email, phone: contact.phone_e164 });
-    const updated = await client.query(
-      `UPDATE contacts SET user_id = $2, updated_at = now()
-        WHERE id = $1 AND org_id = $3 AND user_id IS NULL`,
-      [contact.id, id, session.orgId],
-    );
-    if (updated.rowCount === 1) return { id, email, ready: false };
-    const again = await one<{ user_id: string }>(
-      client,
-      `SELECT user_id::text AS user_id FROM contacts WHERE id = $1 AND org_id = $2 AND user_id IS NOT NULL`,
-      [contact.id, session.orgId],
-    );
-    const login = await readLogin(client, again.user_id);
-    return { id: again.user_id, email: login.email, ready: login.ready };
-  };
-  try {
-    return await attempt(first);
-  } catch (error) {
-    if (!preferred || !authEmailTaken(error)) throw error;
-    return attempt(minted);
-  }
+async function readPortalToken(client: Client, invitationId: string) {
+  return withServiceRole(
+    client,
+    async () => {
+      const row = await maybe<{ token: string }>(
+        client,
+        `SELECT token FROM portal_invite_secrets WHERE invitation_id = $1`,
+        [invitationId],
+      );
+      return row?.token ?? null;
+    },
+    "authenticated",
+  );
+}
+
+export async function savePortalInviteSecret(client: Client, invitationId: string, token: string) {
+  await withServiceRole(
+    client,
+    () => client.query(`INSERT INTO portal_invite_secrets (invitation_id, token) VALUES ($1, $2)`, [invitationId, token]),
+    "authenticated",
+  );
+}
+
+/** Drop secrets whose invitation is no longer a live pending link. */
+export async function purgePortalInviteSecrets(client: Client, restore: "authenticated" | "reset") {
+  await withServiceRole(client, () => client.query(`SELECT app.purge_portal_invite_secrets()`), restore);
+}
+
+/** Drop the raw token after accept. Revoke and expiry use the invitation trigger and the purge above. */
+export async function deletePortalInviteSecret(client: Client, invitationId: string) {
+  await withServiceRole(
+    client,
+    () => client.query(`DELETE FROM portal_invite_secrets WHERE invitation_id = $1`, [invitationId]),
+    "reset",
+  );
 }
 
 export async function issuePortalInvite(
   session: Session,
-  input: { kind: "owner" | "tenant"; contactId: string; leaseId?: string },
+  input: { kind: "owner" | "tenant"; contactId: string; pageId: string; leaseId?: string; rotate?: boolean },
   requestOrigin: string,
 ) {
   assertStaff(session, ["admin", "manager"]);
+  if (!input.contactId || !input.pageId) throw new FlowError("errors.required");
   if (input.kind === "tenant" && !input.leaseId) throw new FlowError("errors.required");
+  // Reject before any lock or revoke. A stale page must not touch another contact.
+  if (input.kind === "owner" && !sameId(input.pageId, input.contactId)) throw new FlowError("errors.portalMismatch");
+  if (input.kind === "tenant" && !sameId(input.pageId, input.leaseId || "")) throw new FlowError("errors.portalMismatch");
   const issued = await tx(
     session.userId,
     async (client) => {
-      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`portal-invite:${input.contactId}`]);
-      const contact = await maybe<ContactLogin>(
-        client,
-        `SELECT id::text, user_id::text AS user_id, display_name, email::text AS email, phone_e164,
-                is_owner, is_tenant
-           FROM contacts
-          WHERE id = $1 AND org_id = $2 AND archived_at IS NULL
-          FOR UPDATE`,
-        [input.contactId, session.orgId],
-      );
-      if (!contact) throw new FlowError("errors.notFound");
-      if (input.kind === "owner" && !contact.is_owner) throw new FlowError("errors.notFound");
-      if (input.kind === "tenant" && !contact.is_tenant) throw new FlowError("errors.notFound");
-      if (input.kind === "tenant") {
-        const party = await maybe<{ id: string }>(
+      try {
+        // One pending invite per contact. The lock is only for this contact.
+        // A global secret purge here scanned invitations and held the lock for
+        // several seconds, so the copy button waited with no feedback. Expired
+        // secrets for this contact are removed when its pending row is revoked.
+        // Opening a link still runs the purge.
+        await client.query(`SET LOCAL lock_timeout = '1s'`);
+        await client.query(`SET LOCAL statement_timeout = '2s'`);
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`portal-invite:${input.contactId}`]);
+        const contact = await maybe<ContactLogin>(
           client,
-          `SELECT lease_id::text AS id
-             FROM lease_parties
-            WHERE org_id = $1 AND lease_id = $2 AND contact_id = $3 AND role = 'primary'`,
-          [session.orgId, input.leaseId, contact.id],
+          `SELECT id::text, user_id::text AS user_id, display_name, email::text AS email, phone_e164,
+                  is_owner, is_tenant
+             FROM contacts
+            WHERE id = $1 AND org_id = $2 AND archived_at IS NULL
+            FOR UPDATE`,
+          [input.contactId, session.orgId],
         );
-        if (!party) throw new FlowError("errors.notFound");
+        if (!contact) throw new FlowError("errors.notFound");
+        if (!sameId(contact.id, input.contactId)) throw new FlowError("errors.portalMismatch");
+        if (input.kind === "owner" && (!contact.is_owner || !sameId(contact.id, input.pageId))) {
+          throw new FlowError("errors.portalMismatch");
+        }
+        if (input.kind === "tenant" && !contact.is_tenant) throw new FlowError("errors.notFound");
+        if (input.kind === "tenant") {
+          const party = await maybe<{ id: string }>(
+            client,
+            `SELECT lease_id::text AS id
+               FROM lease_parties
+              WHERE org_id = $1 AND lease_id = $2 AND contact_id = $3 AND role = 'primary'`,
+            [session.orgId, input.leaseId, contact.id],
+          );
+          if (!party) throw new FlowError("errors.portalMismatch");
+        }
+        const login = contact.user_id ? await readLogin(client, contact.user_id) : null;
+        const contactEmail = inviteStoredEmail(contact.email);
+        const loginEmail = login?.email && !mintedLoginEmail(login.email) ? login.email : null;
+        const shown = portalShownEmail(contactEmail, loginEmail);
+        const pending = await maybe<{ id: string; email: string | null; kind: string; lease_id: string | null }>(
+          client,
+          `SELECT id::text, email::text AS email, kind::text, lease_id::text AS lease_id
+             FROM invitations
+            WHERE org_id = $1 AND contact_id = $2 AND status = 'pending'
+              AND kind IN ('owner', 'tenant') AND expires_at > now()
+            FOR UPDATE`,
+          [session.orgId, contact.id],
+        );
+        // A ready login with no live invite has already accepted. A pending invite,
+        // including one stored before the secret table existed, can still be copied.
+        if (login?.ready && !pending) return { activated: true as const, contactId: contact.id };
+        if (!input.rotate && pending) {
+          const sameLease = input.kind === "owner" || sameId(pending.lease_id || "", input.leaseId || "");
+          if (pending.kind !== input.kind || !sameLease) throw new FlowError("errors.portalRenew");
+          const token = await readPortalToken(client, pending.id);
+          if (token) {
+            return {
+              activated: false as const,
+              reused: true as const,
+              token,
+              email: portalShownEmail(pending.email, contact.email),
+              name: contact.display_name,
+              invitationId: pending.id,
+              contactId: contact.id,
+            };
+          }
+        }
+        await withServiceRole(
+          client,
+          () =>
+            client.query(
+              `UPDATE invitations
+                  SET status = 'revoked'
+                WHERE org_id = $1 AND contact_id = $2 AND status = 'pending' AND kind IN ('owner', 'tenant')`,
+              [session.orgId, contact.id],
+            ),
+          "authenticated",
+        );
+        const token = newInviteToken();
+        const row = await one<{ id: string }>(
+          client,
+          `INSERT INTO invitations (
+             org_id, kind, contact_id, lease_id, email, phone_e164, code_hash, status, expires_at, invited_by
+           ) VALUES (
+             $1, $2::invitation_kind, $3, $4, $5, $6, $7, 'pending', now() + make_interval(days => $8), $9
+           ) RETURNING id::text`,
+          [
+            session.orgId,
+            input.kind,
+            contact.id,
+            input.kind === "tenant" ? input.leaseId : null,
+            contactEmail ?? loginEmail,
+            contact.phone_e164,
+            hashInviteToken(token),
+            PORTAL_INVITE_DAYS,
+            session.userId,
+          ],
+        );
+        await savePortalInviteSecret(client, row.id, token);
+        return {
+          activated: false as const,
+          reused: false as const,
+          token,
+          email: shown,
+          name: contact.display_name,
+          invitationId: row.id,
+          contactId: contact.id,
+        };
+      } catch (error) {
+        if (error instanceof FlowError) throw error;
+        if (isDbTimeout(error)) throw new FlowError("errors.portalTimeout");
+        throw error;
       }
-      const login = await attachLogin(client, session, contact);
-      if (login.ready) return { activated: true as const };
-      const token = newInviteToken();
-      await client.query(
-        `UPDATE invitations
-            SET status = 'revoked'
-          WHERE org_id = $1 AND contact_id = $2 AND status = 'pending' AND kind IN ('owner', 'tenant')`,
-        [session.orgId, contact.id],
-      );
-      const row = await one<{ id: string }>(
-        client,
-        `INSERT INTO invitations (
-           org_id, kind, contact_id, lease_id, email, phone_e164, code_hash, status, expires_at, invited_by
-         ) VALUES (
-           $1, $2::invitation_kind, $3, $4, $5, $6, $7, 'pending', now() + make_interval(days => $8), $9
-         ) RETURNING id::text`,
-        [
-          session.orgId,
-          input.kind,
-          contact.id,
-          input.kind === "tenant" ? input.leaseId : null,
-          login.email,
-          contact.phone_e164,
-          hashInviteToken(token),
-          PORTAL_INVITE_DAYS,
-          session.userId,
-        ],
-      );
-      return {
-        activated: false as const,
-        token,
-        email: login.email,
-        invitationId: row.id,
-        contactId: contact.id,
-      };
     },
     { orgId: session.orgId, environment: session.environment },
   );
-  if (issued.activated) return { activated: true as const };
-  await writeAudit(session.orgId, session.userId, "portal_invite", {
-    kind: input.kind,
-    contactId: issued.contactId,
-    invitationId: issued.invitationId,
-    ...(input.leaseId ? { leaseId: input.leaseId } : {}),
-  });
+  if (issued.activated) return { activated: true as const, contactId: issued.contactId };
+  if (!issued.reused) {
+    await writeAudit(session.orgId, session.userId, "portal_invite", {
+      kind: input.kind,
+      contactId: issued.contactId,
+      invitationId: issued.invitationId,
+      ...(input.leaseId ? { leaseId: input.leaseId } : {}),
+    });
+  }
   return {
     activated: false as const,
     email: issued.email,
+    name: issued.name,
     url: portalInviteUrl(requestOrigin, issued.token),
     token: issued.token,
+    contactId: issued.contactId,
   };
 }
