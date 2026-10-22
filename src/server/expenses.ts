@@ -29,6 +29,21 @@ export function expenseCountsOnStatement(status: string, billTo: string) {
   return billTo === "owner" && (STATEMENT_EXPENSE_STATUSES as readonly string[]).includes(status);
 }
 
+/**
+ * A repair cost reaches the owner settlement only after the ticket is closed.
+ * Expenses with no ticket are unchanged.
+ */
+export function repairCostOnStatement(input: {
+  status: string;
+  billTo: string;
+  ticketId: string | null;
+  ticketStatus: string | null;
+}) {
+  if (!expenseCountsOnStatement(input.status, input.billTo)) return false;
+  if (!input.ticketId) return true;
+  return input.ticketStatus === "closed";
+}
+
 /** A month is closed when its YYYY-MM is on or before the latest month_closes row. */
 export function monthIsClosed(isoDate: string, closedThrough: string | null) {
   if (!closedThrough) return false;
@@ -130,6 +145,7 @@ export type ExpenseListRow = {
   receipt_name: string | null;
   ticket_id: string | null;
   ticket_number: string | null;
+  ticket_status: string | null;
   included: boolean;
 };
 
@@ -146,8 +162,13 @@ function day(value: string) {
   return value.slice(0, 10);
 }
 
-function asIncluded(status: string, billTo: string) {
-  return expenseCountsOnStatement(status, billTo);
+function asIncluded(row: { status: string; bill_to: string; ticket_id: string | null; ticket_status: string | null }) {
+  return repairCostOnStatement({
+    status: row.status,
+    billTo: row.bill_to,
+    ticketId: row.ticket_id,
+    ticketStatus: row.ticket_status,
+  });
 }
 
 async function setReason(client: Client, reason: string) {
@@ -271,7 +292,7 @@ const LIST_SQL = `SELECT e.id::text, e.property_id::text, p.name AS property_nam
             e.category, coalesce(e.description, '') AS description,
             e.currency, e.amount_minor::text, e.incurred_on::text, e.status::text, e.bill_to::text,
             c.display_name AS vendor_name, f.file_name AS receipt_name,
-            e.ticket_id::text, t.ticket_number::text AS ticket_number
+            e.ticket_id::text, t.ticket_number::text AS ticket_number, t.status::text AS ticket_status
        FROM expenses e
        JOIN properties p ON p.id = e.property_id
        LEFT JOIN units u ON u.id = e.unit_id
@@ -282,7 +303,16 @@ const LIST_SQL = `SELECT e.id::text, e.property_id::text, p.name AS property_nam
 
 function mapRow(row: Omit<ExpenseListRow, "included" | "incurred_on"> & { incurred_on: string }): ExpenseListRow {
   const incurred_on = day(row.incurred_on);
-  return { ...row, incurred_on, included: asIncluded(row.status, row.bill_to) };
+  return {
+    ...row,
+    incurred_on,
+    included: asIncluded({
+      status: row.status,
+      bill_to: row.bill_to,
+      ticket_id: row.ticket_id,
+      ticket_status: row.ticket_status,
+    }),
+  };
 }
 
 export async function expenseFormOptions(session: Session) {

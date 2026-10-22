@@ -3,7 +3,7 @@ import { actionConfirmVendor, actionDispatchVendor, actionRevokeVendor } from "@
 import { formatDate, formatMoney } from "@/server/format";
 import type { CalendarMode } from "@/server/types";
 import { VENDOR_LINK_DAYS } from "@/server/vendor-repair-rules";
-import type { VendorDispatchView } from "@/server/vendor-repair";
+import type { VendorChoice, VendorDispatchView } from "@/server/vendor-repair";
 import { VendorLinkField } from "./vendor-link-field";
 
 export function VendorDispatch({
@@ -11,6 +11,7 @@ export function VendorDispatch({
   canDispatch,
   canConfirm,
   job,
+  vendors,
   currency,
   t,
   locale,
@@ -20,6 +21,7 @@ export function VendorDispatch({
   canDispatch: boolean;
   canConfirm: boolean;
   job: VendorDispatchView | null;
+  vendors: VendorChoice[];
   currency: string;
   t: T;
   locale: Locale;
@@ -91,13 +93,31 @@ export function VendorDispatch({
         <form action={actionDispatchVendor} data-testid="vendor-dispatch-form">
           <input type="hidden" name="ticketId" value={ticketId} />
           <div className="fg">
-            <label className="f">{t("i_vendor_name")}</label>
-            <input className="inp" name="vendorName" required defaultValue={job?.vendorName ?? ""} data-testid="vendor-name" />
+            <label className="f">{t("i_vendor_pick")}</label>
+            <select className="inp" name="vendorId" defaultValue="" data-testid="vendor-pick">
+              <option value="">{t("i_vendor_choose")}</option>
+              {vendors.map((vendor) => (
+                <option key={vendor.id} value={vendor.id}>
+                  {[vendor.name, vendor.trade, vendor.phone].filter(Boolean).join(" · ")}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="fg">
-            <label className="f">{t("i_vendor_phone")}</label>
-            <input className="inp" name="vendorPhone" required inputMode="tel" defaultValue={job?.phone ?? ""} data-testid="vendor-phone" />
-          </div>
+          <details data-testid="vendor-add-panel">
+            <summary data-testid="vendor-add">{t("i_vendor_add")}</summary>
+            <div className="fg">
+              <label className="f">{t("i_vendor_name")}</label>
+              <input className="inp" name="vendorName" defaultValue="" data-testid="vendor-name" />
+            </div>
+            <div className="fg">
+              <label className="f">{t("i_vendor_trade")}</label>
+              <input className="inp" name="vendorTrade" defaultValue="" data-testid="vendor-trade" />
+            </div>
+            <div className="fg">
+              <label className="f">{t("i_vendor_phone")}</label>
+              <input className="inp" name="vendorPhone" inputMode="tel" defaultValue="" data-testid="vendor-phone" />
+            </div>
+          </details>
           <div className="fg">
             <label className="f">{t("i_vendor_window")}</label>
             <p className="tiny muted">{t("i_vendor_window_hint")}</p>

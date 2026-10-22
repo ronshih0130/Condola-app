@@ -4,7 +4,7 @@ import { RepairThread } from "@/components/repair-thread";
 import { ErrorBanner, statusClass, statusKey } from "@/components/ui";
 import { REPAIR_CAT_KEY } from "@/lib/repair-labels";
 import { selectedLease } from "@/lib/tenant-lease";
-import { actionTicket } from "@/server/actions";
+import { actionCancelRepair, actionTicket } from "@/server/actions";
 import { isUuid } from "@/server/repair-rules";
 import { tenantRepairs, ticketDetail } from "@/server/queries";
 
@@ -37,6 +37,18 @@ export default async function RepairPage({
             {t(REPAIR_CAT_KEY[own.ticket.category] ?? "i_cat_other")} · {t(statusKey(own.ticket.status))}
           </p>
           {own.ticket.description ? <p>{own.ticket.description}</p> : null}
+          {own.ticket.status === "open" ? (
+            <form action={actionCancelRepair}>
+              <input type="hidden" name="ticketId" value={own.ticket.id} />
+              <button className="btn sm" type="submit" data-testid="repair-cancel">
+                {t("i_repair_cancel")}
+              </button>
+            </form>
+          ) : own.ticket.status === "cancelled" ? null : (
+            <p className="small" data-testid="repair-cancel-locked">
+              {t("i_repair_cancel_locked")}
+            </p>
+          )}
           <RepairThread
             ticketId={own.ticket.id}
             comments={own.comments}

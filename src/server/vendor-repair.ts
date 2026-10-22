@@ -13,6 +13,7 @@ import {
   acceptPhotoObject,
   assertPhotoMeta,
   isTicketPhotoPath,
+  cleanVendorTrade,
   isUuid,
   photoFileId,
   ticketPhotoPath,
@@ -65,6 +66,13 @@ type TicketRow = {
   currency: string | null;
   property_currency: string;
   expense_id: string | null;
+};
+
+export type VendorChoice = {
+  id: string;
+  name: string;
+  trade: string;
+  phone: string;
 };
 
 export type VendorDispatchView = {
@@ -164,7 +172,7 @@ async function loadTicket(client: Client, ticketId: string, orgId: string) {
   );
 }
 
-async function vendorContact(client: Client, orgId: string, name: string, phone: string) {
+async function vendorContact(client: Client, orgId: string, name: string, phone: string, trade: string) {
   const existing = await maybe<{ id: string }>(
     client,
     `SELECT id::text FROM contacts
@@ -173,14 +181,30 @@ async function vendorContact(client: Client, orgId: string, name: string, phone:
       LIMIT 1`,
     [orgId, name],
   );
-  if (existing) return existing.id;
+  if (existing) {
+    await client.query(
+      `UPDATE contacts SET phone_e164 = $2, vendor_trade = $3, updated_at = now() WHERE id = $1 AND org_id = $4`,
+      [existing.id, phone, trade, orgId],
+    );
+    return existing.id;
+  }
   const created = await maybe<{ id: string }>(
     client,
-    `INSERT INTO contacts (org_id, is_vendor, display_name, phone_e164)
-     VALUES ($1, true, $2, $3) RETURNING id::text`,
-    [orgId, name, phone],
+    `INSERT INTO contacts (org_id, is_vendor, display_name, phone_e164, vendor_trade)
+     VALUES ($1, true, $2, $3, $4) RETURNING id::text`,
+    [orgId, name, phone, trade],
   );
   return created?.id ?? null;
+}
+
+async function vendorById(client: Client, orgId: string, vendorId: string) {
+  return maybe<{ name: string; phone: string }>(
+    client,
+    `SELECT display_name AS name, phone_e164 AS phone
+       FROM contacts
+      WHERE id = $1 AND org_id = $2 AND is_vendor AND archived_at IS NULL`,
+    [vendorId, orgId],
+  );
 }
 
 async function noteStatus(client: Client, orgId: string, ticketId: string, userId: string | null, from: string, to: string) {
@@ -195,7 +219,7 @@ async function noteStatus(client: Client, orgId: string, ticketId: string, userI
 export async function dispatchVendor(
   session: Session,
   ticketId: string,
-  input: { vendorName: string; vendorPhone: string; contactWindow: string },
+  input: { vendorId?: string; vendorName: string; vendorPhone: string; vendorTrade?: string; contactWindow: string },
   origin: string,
 ) {
   assertStaff(session);
@@ -203,8 +227,11 @@ export async function dispatchVendor(
   if (!isUuid(ticketId)) throw new FlowError("errors.notFound");
   if (!(await orgVendorDispatchEnabled(session.orgId))) throw new FlowError("errors.forbidden");
   const country = await loadOrgCountry(session.orgId);
-  const name = vendorName(input.vendorName);
-  const phone = vendorPhone(input.vendorPhone, country.callingCode);
+  const rawName = input.vendorName.trim();
+  const vendorId = (input.vendorId ?? "").trim();
+  const name = rawName ? vendorName(rawName) : "";
+  const phone = rawName ? vendorPhone(input.vendorPhone, country.callingCode) : "";
+  if (!rawName && !isUuid(vendorId)) throw new FlowError("errors.required");
   const window = cleanContactWindow(input.contactWindow);
   const token = newVendorToken();
   const hash = hashVendorToken(token);
@@ -248,7 +275,19 @@ export async function dispatchVendor(
         session.orgId,
       ]);
     }
-    const contactId = await vendorContact(client, session.orgId, name, phone);
+    let vendorNameSaved = name;
+    let vendorPhoneSaved = phone;
+    let contactId: string | null;
+    if (rawName) {
+      const trade = cleanVendorTrade(input.vendorTrade ?? "");
+      contactId = await vendorContact(client, session.orgId, name, phone, trade);
+    } else {
+      const saved = await vendorById(client, session.orgId, vendorId);
+      if (!saved?.phone) throw new FlowError("errors.required");
+      vendorNameSaved = saved.name;
+      vendorPhoneSaved = saved.phone;
+      contactId = vendorId;
+    }
     const job = await maybe<{ id: string }>(
       client,
       `INSERT INTO repair_vendor_jobs (
@@ -256,7 +295,7 @@ export async function dispatchVendor(
        ) VALUES (
          $1,$2,$3,$4,$5,$6, now() + make_interval(days => $7), $8
        ) RETURNING id::text`,
-      [session.orgId, ticket.id, name, phone, window, hash, VENDOR_LINK_DAYS, session.userId],
+      [session.orgId, ticket.id, vendorNameSaved, vendorPhoneSaved, window, hash, VENDOR_LINK_DAYS, session.userId],
     );
     if (!job) throw new FlowError("errors.generic");
     await client.query(`INSERT INTO repair_vendor_secrets (job_id, token) VALUES ($1,$2)`, [job.id, token]);
@@ -267,10 +306,10 @@ export async function dispatchVendor(
               assigned_vendor_contact_id = $4::uuid,
               status = $5::ticket_status
         WHERE id = $1 AND org_id = $2`,
-      [ticket.id, session.orgId, name, contactId, nextStatus],
+      [ticket.id, session.orgId, vendorNameSaved, contactId, nextStatus],
     );
     await noteStatus(client, session.orgId, ticket.id, session.userId, ticket.status, nextStatus);
-    await writeAudit(session.orgId, session.userId, "repair_dispatch", { ticketId: ticket.id, jobId: job.id, vendorName: name }, client);
+    await writeAudit(session.orgId, session.userId, "repair_dispatch", { ticketId: ticket.id, jobId: job.id, vendorName: vendorNameSaved }, client);
     return job.id;
   });
 
@@ -329,7 +368,22 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
       [ticketId, session.orgId],
     ),
   );
-  if (!job) return { job: null as VendorDispatchView | null };
+  const vendors = await tx(session.userId, (client) =>
+    client.query<{ id: string; name: string; trade: string | null; phone: string | null }>(
+      `SELECT id::text, display_name AS name, vendor_trade AS trade, phone_e164 AS phone
+         FROM contacts
+        WHERE org_id = $1 AND is_vendor AND archived_at IS NULL
+        ORDER BY display_name`,
+      [session.orgId],
+    ),
+  );
+  const choices: VendorChoice[] = vendors.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    trade: row.trade ?? "",
+    phone: row.phone ? displayVendorPhone(row.phone) : "",
+  }));
+  if (!job) return { job: null as VendorDispatchView | null, vendors: choices };
   let link = "";
   if (job.link_open) {
     const secret = await svc(session.userId, (client) =>
@@ -360,6 +414,7 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
       revoked: job.revoked,
       expenseId: job.expense_id,
     },
+    vendors: choices,
   };
 }
 
@@ -515,7 +570,7 @@ export async function confirmVendorCost(session: Session, ticketId: string, jobI
       amountCents: amount,
       incurredOn,
     });
-    const nextStatus = ticket.status === "resolved" ? ticket.status : "resolved";
+    const nextStatus = "closed";
     await client.query(
       `UPDATE maintenance_tickets
           SET expense_id = $3::uuid,
@@ -524,7 +579,8 @@ export async function confirmVendorCost(session: Session, ticketId: string, jobI
               cost_bearer = 'owner',
               status = $6::ticket_status,
               completed_on = COALESCE(completed_on, $7::date),
-              resolved_at = coalesce(resolved_at, now())
+              resolved_at = coalesce(resolved_at, now()),
+              closed_at = coalesce(closed_at, now())
         WHERE id = $1 AND org_id = $2`,
       [ticket.id, session.orgId, posted.expenseId, amount, currency, nextStatus, posted.incurred],
     );

@@ -113,6 +113,13 @@ test("new vendor copy is in both catalogs and skips the banned words", () => {
   const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
   const keys = [
     "i_vendor_dispatch",
+    "i_vendor_pick",
+    "i_vendor_choose",
+    "i_vendor_add",
+    "i_vendor_trade",
+    "i_repair_cancel",
+    "i_repair_cancel_locked",
+    "i_photo_heic",
     "i_vendor_name",
     "i_vendor_phone",
     "i_vendor_window",

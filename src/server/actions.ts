@@ -31,7 +31,7 @@ import { taipeiToday } from "./money";
 import { typedStreet } from "@/property-address";
 import { loadOrgCountry } from "./org-country";
 import { createLeaseFromForm } from "./lease-form";
-import { addTicketComment, saveRepairRecord } from "./repairs";
+import { addTicketComment, cancelTenantRepair, saveRepairRecord } from "./repairs";
 import { confirmVendorCost, dispatchVendor, revokeVendorJob, submitVendorReport } from "./vendor-repair";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
@@ -412,6 +412,18 @@ export async function actionSaveRepair(formData: FormData) {
   }
 }
 
+export async function actionCancelRepair(formData: FormData) {
+  const ticketId = text(formData.get("ticketId"));
+  const back = `/t/repair?id=${ticketId}`;
+  try {
+    const session = await getSession();
+    await cancelTenantRepair(session, ticketId);
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
 export async function actionTicketComment(formData: FormData) {
   const ticketId = text(formData.get("ticketId"));
   const back = text(formData.get("returnTo")) === "tenant" ? `/t/repair?id=${ticketId}` : `/m/tickets/${ticketId}`;
@@ -440,8 +452,10 @@ export async function actionDispatchVendor(formData: FormData) {
       session,
       ticketId,
       {
+        vendorId: text(formData.get("vendorId")),
         vendorName: text(formData.get("vendorName")),
         vendorPhone: text(formData.get("vendorPhone")),
+        vendorTrade: text(formData.get("vendorTrade")),
         contactWindow: text(formData.get("contactWindow")),
       },
       await requestOrigin(),

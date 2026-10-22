@@ -117,6 +117,7 @@ export function RepairThread({
           messages={{
             size: t("i_photo_size"),
             type: t("i_photo_type"),
+            heic: t("i_photo_heic"),
             storage: t("i_photo_storage"),
             limit: t("i_photo_limit"),
             generic: t("i_generic"),

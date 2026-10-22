@@ -2307,6 +2307,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
       client,
       `SELECT id, amount_minor::text, description, category, property_id::text FROM expenses
         WHERE org_id = $1 AND property_id = ANY($2::uuid[]) AND ${STATEMENT_EXPENSE_SQL}
+          AND app.repair_cost_on_statement(ticket_id, org_id)
           AND incurred_on BETWEEN $3 AND $4 AND currency = $5`,
       [session.orgId, propertyIds, bounds.start, bounds.end, currency],
     );

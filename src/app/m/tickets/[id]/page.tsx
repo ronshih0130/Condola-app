@@ -176,6 +176,7 @@ export default async function TicketDetailPage({
           canDispatch={canWrite}
           canConfirm={canWrite && canPost}
           job={dispatch.job}
+          vendors={dispatch.vendors}
           currency={currency}
           t={t}
           locale={session.locale}

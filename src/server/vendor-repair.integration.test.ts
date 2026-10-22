@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { describe, test } from "node:test";
 import { svc, tx, withClient } from "./db";
 import { createTicket } from "./domain";
+import { cancelTenantRepair } from "./repairs";
 import { FlowError } from "./errors";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { loadIncomeExpense } from "./income-expense";
@@ -151,9 +152,15 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
         return error instanceof FlowError && error.key === "errors.notFound";
       });
 
+      const ownerView = await tx(USERS.owner, (client) =>
+        client.query(`SELECT id FROM maintenance_tickets WHERE id = $1`, [ticketId]),
+      );
+      assert.equal(ownerView.rowCount, 0);
+
       const issued = await dispatchVendor(maintenance, ticketId, {
         vendorName: "陳水電",
         vendorPhone: "0912000111",
+        vendorTrade: "水電",
         contactWindow: "週三 14:00-17:00",
       }, ORIGIN);
       const token = tokenOf(issued.url);
@@ -282,6 +289,7 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
       const again = await dispatchVendor(admin, ticketId, {
         vendorName: "陳水電",
         vendorPhone: "0912-000-111",
+        vendorTrade: "水電",
         contactWindow: "週三 14:00-17:00",
       }, ORIGIN);
       const liveToken = tokenOf(again.url);
@@ -329,6 +337,10 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
       const row = expense.rows[0];
       assert.equal(row.status, "posted");
       assert.equal(row.bill_to, "owner");
+      const closedTicket = await tx(USERS.admin, (client) =>
+        client.query<{ status: string }>(`SELECT status::text FROM maintenance_tickets WHERE id = $1`, [ticketId]),
+      );
+      assert.equal(closedTicket.rows[0]?.status, "closed");
       assert.equal(row.amount, "240000");
       assert.equal(row.ticket_id, ticketId);
       assert.equal(row.property_id, place.rows[0].property_id);
@@ -375,6 +387,7 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
       const revoked = await dispatchVendor(admin, third, {
         vendorName: "陳水電",
         vendorPhone: "0912000111",
+        vendorTrade: "水電",
         contactWindow: "週五 9:00-12:00",
       }, ORIGIN);
       const revokedToken = tokenOf(revoked.url);
@@ -395,6 +408,47 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
         client.query(`SELECT id FROM audit_log WHERE event_type = 'repair_dispatch_revoke' AND new_row->>'jobId' = $1`, [revoked.jobId]),
       );
       assert.equal(revokeAudit.rowCount, 1);
+    } finally {
+      await cleanup(title);
+    }
+  });
+
+  test("a tenant can cancel only while the repair is still new", async () => {
+    const title = `取消報修${Date.now()}`;
+    const wang = await leaseFor(USERS.tenant2);
+    assert.ok(wang);
+    const person = tenant(USERS.tenant2);
+    try {
+      const openId = await createTicket(person, {
+        leaseId: wang.id,
+        category: "other",
+        title,
+        description: "還沒派人",
+      });
+      await cancelTenantRepair(person, openId);
+      const cancelled = await tx(USERS.admin, (client) =>
+        client.query<{ status: string }>(`SELECT status::text FROM maintenance_tickets WHERE id = $1`, [openId]),
+      );
+      assert.equal(cancelled.rows[0]?.status, "cancelled");
+      await assert.rejects(() => cancelTenantRepair(person, openId), (error: unknown) => {
+        return error instanceof FlowError && error.key === "errors.repairCancelLocked";
+      });
+
+      const assigned = await createTicket(person, {
+        leaseId: wang.id,
+        category: "other",
+        title: `${title}-assigned`,
+        description: "已指派",
+      });
+      await tx(USERS.admin, (client) =>
+        client.query(`UPDATE maintenance_tickets SET status = 'assigned' WHERE id = $1`, [assigned]),
+      );
+      await assert.rejects(() => cancelTenantRepair(person, assigned), (error: unknown) => {
+        return error instanceof FlowError && error.key === "errors.repairCancelLocked";
+      });
+      await assert.rejects(() => cancelTenantRepair(staff(USERS.admin, "admin"), openId), (error: unknown) => {
+        return error instanceof FlowError && error.key === "errors.forbidden";
+      });
     } finally {
       await cleanup(title);
     }

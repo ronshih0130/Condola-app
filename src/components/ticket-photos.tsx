@@ -2,13 +2,14 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PHOTO_HEADER_BYTES, PHOTO_MAX_BYTES, PHOTO_MIMES, normalizePhotoMime, sniffPhotoMime } from "@/server/repair-rules";
+import { PHOTO_HEADER_BYTES, PHOTO_MAX_BYTES, PHOTO_MIMES, normalizePhotoMime, sniffHeic, sniffPhotoMime } from "@/server/repair-rules";
 
-type Messages = { size: string; type: string; storage: string; limit: string; generic: string; internal: string };
+type Messages = { size: string; type: string; heic: string; storage: string; limit: string; generic: string; internal: string };
 
 function messageFor(key: string | undefined, messages: Messages) {
   if (key === "errors.photoSize") return messages.size;
   if (key === "errors.photoType") return messages.type;
+  if (key === "errors.photoHeic") return messages.heic;
   if (key === "errors.photoStorage") return messages.storage;
   if (key === "errors.photoLimit") return messages.limit;
   return messages.generic;
@@ -54,17 +55,20 @@ export function TicketPhotoUpload({
     }
     const header = new Uint8Array(await file.slice(0, PHOTO_HEADER_BYTES).arrayBuffer());
     const sniffed = sniffPhotoMime(header);
+    const heic = sniffHeic(header);
     const declared = normalizePhotoMime(file.type);
-    if (!sniffed || (file.type !== "" && declared !== sniffed)) {
+    if (!heic && (!sniffed || (file.type !== "" && declared !== sniffed))) {
       setError(messages.type);
       return;
     }
+    const mime = sniffed ?? "image/jpeg";
+    const fileName = heic ? file.name.replace(/\.(heic|heif)$/i, "") + ".jpg" : file.name;
     setPending(true);
     try {
       const signed = await fetch(signPath, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ticketId, fileName: file.name, mime: sniffed, size: file.size, ...extra }),
+        body: JSON.stringify({ ticketId, fileName, mime, size: file.size, ...extra }),
       });
       const signBody = (await signed.json()) as {
         error?: string;
@@ -77,7 +81,7 @@ export function TicketPhotoUpload({
         setError(messageFor(signBody.error, messages));
         return;
       }
-      const headers: Record<string, string> = { "content-type": sniffed };
+      const headers: Record<string, string> = { "content-type": heic ? "image/heic" : mime };
       if (signBody.token) headers.authorization = `Bearer ${signBody.token}`;
       const uploaded = await fetch(signBody.uploadUrl, { method: "PUT", headers, body: file });
       if (!uploaded.ok) {
@@ -90,8 +94,8 @@ export function TicketPhotoUpload({
         body: JSON.stringify({
           ticketId,
           path: signBody.path,
-          fileName: file.name,
-          mime: sniffed,
+          fileName,
+          mime,
           size: file.size,
           internal: Boolean(allowInternal && internalRef.current?.checked),
           uploadToken: signBody.uploadToken,
@@ -124,7 +128,7 @@ export function TicketPhotoUpload({
       <input
         className="inp"
         type="file"
-        accept={PHOTO_MIMES.join(",")}
+        accept={`${PHOTO_MIMES.join(",")},.heic,.heif,image/heic,image/heif`}
         data-testid={inputTestId}
         onChange={onChange}
         disabled={pending}

@@ -1,13 +1,16 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { FlowError } from "./errors";
 import { attachRepairPhoto, findRepairPhoto, newPhotoFileId, readRepairPhoto, repairPhotoTarget } from "./repairs";
+import { heicToJpeg } from "./heic-jpeg";
 import {
   PHOTO_BUCKET,
   PHOTO_HEADER_BYTES,
   PHOTO_LIMIT,
+  PHOTO_MAX_BYTES,
   acceptPhotoObject,
   assertPhotoMeta,
   isTicketPhotoPath,
+  sniffHeic,
   ticketPhotoPath,
   ticketPhotoPaths,
 } from "./repair-rules";
@@ -15,9 +18,9 @@ import type { Session } from "./types";
 
 /**
  * Ticket photos are stored in a private Supabase bucket and transferred with
- * signed URLs. Confirm reads the first 16 bytes to check the file signature,
- * then cancels the rest. The Worker does not decode or re-encode the image.
- * That keeps this off the Cloudflare Workers free-plan 10ms CPU budget.
+ * signed URLs. JPEG, PNG, and WEBP are checked from the first 16 bytes and
+ * are not re-encoded. A HEIC upload is the original file; confirm converts
+ * that object to JPEG before it is attached.
  */
 
 type StorageConfig = { url: string; key: string };
@@ -128,10 +131,7 @@ export async function removeRepairObject(path: string) {
 }
 
 export async function inspectRepairObject(path: string) {
-  const info = await objectInfo(path);
-  if (!info.ok) throw new FlowError("errors.photoStorage");
-  const header = await readObjectHeader(path);
-  return { size: info.size ?? 0, mime: info.mime ?? "", header };
+  return ensureJpegObject(path);
 }
 
 /** First bytes of the object. A range request plus cancel avoids reading the file. */
@@ -177,6 +177,63 @@ async function readObjectHeader(path: string) {
   return header.subarray(0, offset);
 }
 
+async function readObjectBytes(path: string) {
+  const cfg = storageConfig();
+  if (!cfg) throw new FlowError("errors.photoStorage");
+  const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
+  let response: Response;
+  try {
+    response = await fetch(`${cfg.url}/storage/v1/object/${PHOTO_BUCKET}/${encoded}`, {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+      headers: { authorization: `Bearer ${cfg.key}`, apikey: cfg.key },
+    });
+  } catch {
+    throw new FlowError("errors.photoStorage");
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new FlowError("errors.photoStorage");
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength <= 0 || bytes.byteLength > PHOTO_MAX_BYTES) throw new FlowError("errors.photoSize");
+  return bytes;
+}
+
+async function writeJpegObject(path: string, bytes: Uint8Array) {
+  const cfg = storageConfig();
+  if (!cfg) throw new FlowError("errors.photoStorage");
+  const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
+  const response = await fetch(`${cfg.url}/storage/v1/object/${PHOTO_BUCKET}/${encoded}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      authorization: `Bearer ${cfg.key}`,
+      apikey: cfg.key,
+      "content-type": "image/jpeg",
+      "x-upsert": "true",
+    },
+    body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+  });
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new FlowError("errors.photoStorage");
+  }
+  await response.body?.cancel().catch(() => undefined);
+}
+
+/** JPEG, PNG, and WEBP stay as uploaded. HEIC is replaced with a JPEG at the same path. */
+export async function ensureJpegObject(path: string) {
+  const info = await objectInfo(path);
+  if (!info.ok) throw new FlowError("errors.photoStorage");
+  const header = await readObjectHeader(path);
+  if (!sniffHeic(header)) return { size: info.size ?? 0, mime: info.mime ?? "", header };
+  const jpeg = await heicToJpeg(await readObjectBytes(path));
+  await writeJpegObject(path, jpeg);
+  return { size: jpeg.byteLength, mime: "image/jpeg", header: jpeg.subarray(0, PHOTO_HEADER_BYTES) };
+}
+
 type ConfirmDeps = {
   target?: typeof repairPhotoTarget;
   existing?: typeof findRepairPhoto;
@@ -186,7 +243,7 @@ type ConfirmDeps = {
   attach?: typeof attachRepairPhoto;
 };
 
-const DISCARD_KEYS = new Set(["errors.photoLimit", "errors.photoType", "errors.photoSize", "errors.photoStorage"]);
+const DISCARD_KEYS = new Set(["errors.photoLimit", "errors.photoType", "errors.photoSize", "errors.photoStorage", "errors.photoHeic"]);
 
 async function objectInfo(path: string) {
   const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
@@ -229,19 +286,25 @@ export async function confirmTicketPhoto(
 
   try {
     const meta = assertPhotoMeta({ fileName: input.fileName, mime: input.mime, size: input.size });
-    const info = await (deps?.info ?? objectInfo)(input.path);
-    if (!info.ok) throw new FlowError("errors.photoStorage");
-    const header = await (deps?.header ?? readObjectHeader)(input.path);
-    const accepted = acceptPhotoObject({ size: info.size ?? 0, mime: info.mime ?? "", header }, meta.mime);
+    const stored =
+      deps?.info || deps?.header
+        ? await (async () => {
+            const info = await (deps?.info ?? objectInfo)(input.path);
+            if (!info.ok) throw new FlowError("errors.photoStorage");
+            const header = await (deps?.header ?? readObjectHeader)(input.path);
+            return { size: info.size ?? 0, mime: info.mime ?? "", header };
+          })()
+        : await ensureJpegObject(input.path);
+    const accepted = acceptPhotoObject({ size: stored.size, mime: stored.mime, header: stored.header }, meta.mime);
     return await (deps?.attach ?? attachRepairPhoto)(session, {
       ticketId: input.ticketId,
       path: input.path,
       fileName: meta.fileName,
       mime: meta.mime,
-      storedMime: info.mime ?? "",
+      storedMime: stored.mime,
       size: accepted.size,
       internal: input.internal,
-      header,
+      header: stored.header,
     });
   } catch (error) {
     if (error instanceof FlowError && DISCARD_KEYS.has(error.key)) await discard();

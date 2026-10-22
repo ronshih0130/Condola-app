@@ -55,6 +55,8 @@ export const ERRORS: Record<string, string> = {
   "errors.planLimit": "i_plan_limit",
   "errors.seatLimit": "i_seat_limit",
   "errors.photoType": "i_photo_type",
+  "errors.photoHeic": "i_photo_heic",
+  "errors.repairCancelLocked": "i_repair_cancel_locked",
   "errors.photoSize": "i_photo_size",
   "errors.photoStorage": "i_photo_storage",
   "errors.photoLimit": "i_photo_limit",
