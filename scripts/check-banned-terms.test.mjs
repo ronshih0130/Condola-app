@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
@@ -30,8 +31,11 @@ test("the checker loads both lists from banned_terms.md and does not hardcode th
   const source = readFileSync(checker, "utf8");
   const loaded = terms();
   assert.equal(TERMS_PATH.endsWith("config/banned_terms.md"), true);
+  const digest = createHash("sha256").update(readFileSync(TERMS_PATH)).digest("hex");
+  assert.equal(digest.startsWith("3ff8df7d252f"), true, digest);
   assert.ok(loaded.banned.length > 0);
-  assert.ok(loaded.allow.length > 0);
+  assert.ok(loaded.allow.includes("已收到"));
+  assert.ok(loaded.allow.includes("不開立統一發票"));
   for (const phrase of [...loaded.banned, ...loaded.allow]) {
     assert.equal(source.includes(phrase), false, phrase);
   }
