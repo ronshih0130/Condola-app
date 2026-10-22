@@ -25,8 +25,13 @@
 # When 20261029150000_lock_public_function_execute.sql is present, every
 # function authenticated can execute must be listed below.
 
-# Called from triggers while the session role is authenticated (and from
-# service_role). Not PostgREST RPCs.
+# Called from invoker triggers while the session role is authenticated (and
+# from service_role). Not PostgREST RPCs. None of these is SECURITY DEFINER.
+# effective_rule and platform_max_id_retention_days stay because
+# fn_lease_deposit_check, fn_allocation_rate_cap, and fn_org_retention_guard
+# call them as the session user. condola_property_address_key stays because
+# condola_set_property_address_key and condola_set_unit_import_address_key
+# call it as the session user. condola_sync_unit_address_keys does not.
 # @mode authenticated
 public.effective_rule(p_jurisdiction uuid, p_org uuid, p_key text, p_on date)
 public.platform_max_id_retention_days()
@@ -37,3 +42,12 @@ public.condola_property_address_key(display text)
 # @mode authenticated
 public.post_reversal(p_txn uuid, p_reason text)
 public.fn_invoice_recalc(p_invoice uuid)
+
+# Utility charge posting (PR #18) is not on main at c4ea9de. When those
+# functions exist, the lock migration leaves authenticated EXECUTE and
+# removes PUBLIC and anon. app.audit_event is in schema app, so the public
+# function scan does not see it; the privilege script checks it directly.
+# A line for a function that is not in this database does not fail the gate.
+# @mode authenticated
+public.post_reversal(p_txn uuid, p_reason text, p_invoice uuid)
+app.audit_event(p_org uuid, p_event text, p_detail jsonb)

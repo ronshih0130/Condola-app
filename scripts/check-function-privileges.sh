@@ -130,6 +130,136 @@ else
   echo "default-privilege probe: skipped (migration not in tree)"
 fi
 
+table_state="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+SELECT CASE
+  WHEN to_regclass('public.gotrue_confirm_uses') IS NULL THEN 'missing'
+  WHEN EXISTS (
+    SELECT 1
+    FROM (VALUES ('anon'), ('authenticated'), ('public')) AS r(role)
+    CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(perm)
+    WHERE has_table_privilege(r.role, 'public.gotrue_confirm_uses', p.perm)
+  ) THEN 'granted'
+  ELSE 'none'
+END;
+SQL
+)"
+echo "gotrue_confirm_uses anon/authenticated/public: ${table_state}"
+if [[ -f supabase/migrations/20261029160000_gotrue_confirm_single_use.sql && "$table_state" != "none" ]]; then
+  echo "anon, authenticated, or PUBLIC can use public.gotrue_confirm_uses (${table_state})" >&2
+  exit 1
+fi
+
+# Stand in for PR #18 when those functions are not in this database. Grant
+# broadly, re-apply the lock migration, require the intended EXECUTE, then
+# drop only the stand-ins so the public scan below stays the real schema.
+if [[ -f supabase/migrations/20261029150000_lock_public_function_execute.sql ]]; then
+echo "utility function revoke probe"
+psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+CREATE TABLE IF NOT EXISTS public.fn_priv_probe_created (sig text PRIMARY KEY);
+TRUNCATE public.fn_priv_probe_created;
+DO $body$
+BEGIN
+  IF to_regprocedure('public.post_reversal(uuid, text, uuid)') IS NULL THEN
+    EXECUTE $fn$
+      CREATE FUNCTION public.post_reversal(p_txn uuid, p_reason text, p_invoice uuid)
+      RETURNS uuid LANGUAGE sql AS $sql$ SELECT p_txn $sql$
+    $fn$;
+    INSERT INTO public.fn_priv_probe_created VALUES ('public.post_reversal(uuid, text, uuid)');
+  END IF;
+  IF to_regprocedure('public.utility_runs_fill_unit_id()') IS NULL THEN
+    EXECUTE $fn$
+      CREATE FUNCTION public.utility_runs_fill_unit_id()
+      RETURNS trigger LANGUAGE plpgsql AS $sql$ BEGIN RETURN NEW; END $sql$
+    $fn$;
+    INSERT INTO public.fn_priv_probe_created VALUES ('public.utility_runs_fill_unit_id()');
+  END IF;
+  IF to_regprocedure('public.utility_runs_reuse_open_period()') IS NULL THEN
+    EXECUTE $fn$
+      CREATE FUNCTION public.utility_runs_reuse_open_period()
+      RETURNS trigger LANGUAGE plpgsql AS $sql$ BEGIN RETURN NEW; END $sql$
+    $fn$;
+    INSERT INTO public.fn_priv_probe_created VALUES ('public.utility_runs_reuse_open_period()');
+  END IF;
+  IF to_regprocedure('app.audit_event(uuid, text, jsonb)') IS NULL THEN
+    EXECUTE $fn$
+      CREATE FUNCTION app.audit_event(p_org uuid, p_event text, p_detail jsonb)
+      RETURNS void LANGUAGE plpgsql AS $sql$ BEGIN RETURN; END $sql$
+    $fn$;
+    INSERT INTO public.fn_priv_probe_created VALUES ('app.audit_event(uuid, text, jsonb)');
+  END IF;
+END
+$body$;
+GRANT EXECUTE ON FUNCTION public.post_reversal(uuid, text, uuid) TO PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.utility_runs_fill_unit_id() TO PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.utility_runs_reuse_open_period() TO PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION app.audit_event(uuid, text, jsonb) TO PUBLIC, anon, authenticated;
+SQL
+{
+  echo "SET client_min_messages TO warning;"
+  echo "\\i supabase/migrations/20261029150000_lock_public_function_execute.sql"
+} | psql "$scratch_url" -v ON_ERROR_STOP=1 -q
+
+utility_priv="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+SELECT 'public.post_reversal(uuid, text, uuid)'
+    || ' anon=' || has_function_privilege('anon', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
+    || ' authenticated=' || has_function_privilege('authenticated', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
+    || ' public=' || has_function_privilege('public', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
+UNION ALL
+SELECT 'public.utility_runs_fill_unit_id()'
+    || ' anon=' || has_function_privilege('anon', 'public.utility_runs_fill_unit_id()', 'EXECUTE')
+    || ' authenticated=' || has_function_privilege('authenticated', 'public.utility_runs_fill_unit_id()', 'EXECUTE')
+    || ' public=' || has_function_privilege('public', 'public.utility_runs_fill_unit_id()', 'EXECUTE')
+UNION ALL
+SELECT 'public.utility_runs_reuse_open_period()'
+    || ' anon=' || has_function_privilege('anon', 'public.utility_runs_reuse_open_period()', 'EXECUTE')
+    || ' authenticated=' || has_function_privilege('authenticated', 'public.utility_runs_reuse_open_period()', 'EXECUTE')
+    || ' public=' || has_function_privilege('public', 'public.utility_runs_reuse_open_period()', 'EXECUTE')
+UNION ALL
+SELECT 'app.audit_event(uuid, text, jsonb)'
+    || ' anon=' || has_function_privilege('anon', 'app.audit_event(uuid, text, jsonb)', 'EXECUTE')
+    || ' authenticated=' || has_function_privilege('authenticated', 'app.audit_event(uuid, text, jsonb)', 'EXECUTE')
+    || ' public=' || has_function_privilege('public', 'app.audit_event(uuid, text, jsonb)', 'EXECUTE')
+UNION ALL
+SELECT 'stand-ins=' || count(*)::text FROM public.fn_priv_probe_created;
+SQL
+)"
+echo "$utility_priv"
+utility_ok="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+SELECT
+  NOT has_function_privilege('anon', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
+  AND has_function_privilege('authenticated', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.utility_runs_fill_unit_id()', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.utility_runs_fill_unit_id()', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public.utility_runs_fill_unit_id()', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.utility_runs_reuse_open_period()', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.utility_runs_reuse_open_period()', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public.utility_runs_reuse_open_period()', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app.audit_event(uuid, text, jsonb)', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'app.audit_event(uuid, text, jsonb)', 'EXECUTE')
+  AND has_function_privilege('authenticated', 'app.audit_event(uuid, text, jsonb)', 'EXECUTE');
+SQL
+)"
+if [[ "$utility_ok" != "t" ]]; then
+  echo "utility function revoke probe failed" >&2
+  exit 1
+fi
+psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+DO $drop$
+DECLARE sig text;
+BEGIN
+  FOR sig IN SELECT fn_priv_probe_created.sig FROM public.fn_priv_probe_created LOOP
+    EXECUTE 'DROP FUNCTION ' || sig;
+  END LOOP;
+END
+$drop$;
+DROP TABLE public.fn_priv_probe_created;
+SQL
+echo "utility function revoke probe: enforced"
+else
+  echo "utility function revoke probe: skipped (lock migration not in tree)"
+fi
+
 psql "$scratch_url" -v ON_ERROR_STOP=1 -tA -F $'\t' <<'SQL' > /tmp/condola-fn-priv.tsv
 SELECT n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',
        has_function_privilege('anon', p.oid, 'EXECUTE'),

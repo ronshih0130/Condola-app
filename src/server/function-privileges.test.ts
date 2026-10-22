@@ -56,6 +56,9 @@ test("CI runs the local function privilege check", () => {
   assert.match(script, /anon executable public functions/);
   assert.match(script, /@mode any is rejected/);
   assert.match(script, /default-privilege probe: skipped/);
+  assert.match(script, /gotrue_confirm_uses/);
+  assert.match(script, /utility function revoke probe/);
+  assert.match(script, /app\.audit_event\(uuid, text, jsonb\)/);
 });
 
 test("the allowlist is authenticated-only and anon is not granted", () => {
@@ -67,7 +70,11 @@ test("the allowlist is authenticated-only and anon is not granted", () => {
   assert.match(allow, /public\.condola_property_address_key\(display text\)/);
   assert.match(allow, /public\.effective_rule\(p_jurisdiction uuid, p_org uuid, p_key text, p_on date\)/);
   assert.match(allow, /public\.platform_max_id_retention_days\(\)/);
+  assert.match(allow, /public\.post_reversal\(p_txn uuid, p_reason text, p_invoice uuid\)/);
+  assert.match(allow, /app\.audit_event\(p_org uuid, p_event text, p_detail jsonb\)/);
   assert.doesNotMatch(allow, /line_lease_picker/);
+  assert.doesNotMatch(allow, /utility_runs_fill_unit_id/);
+  assert.doesNotMatch(allow, /utility_runs_reuse_open_period/);
   assert.doesNotMatch(allow, /purge_due_identity_documents/);
   assert.doesNotMatch(allow, /fn_org_country_setting/);
 });
