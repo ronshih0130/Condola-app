@@ -1,4 +1,4 @@
--- Version 20261029120000.
+-- Version 20261031120000.
 -- Vendor dispatch for one repair job.
 -- Additive only: new tables, one nullable column, triggers.
 -- No NOT NULL on existing columns, and no new constraint that older ticket
@@ -102,7 +102,8 @@ CREATE TRIGGER trg_vendor_job_photo
   FOR EACH ROW EXECUTE FUNCTION fn_vendor_job_photo();
 
 REVOKE ALL ON FUNCTION fn_vendor_job_photo() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION fn_vendor_job_photo() TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION fn_vendor_job_photo() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION fn_vendor_job_photo() TO service_role;
 
 CREATE OR REPLACE FUNCTION app.drop_vendor_job_secret() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -120,6 +121,7 @@ CREATE TRIGGER repair_vendor_secrets_drop
 
 REVOKE ALL ON FUNCTION app.drop_vendor_job_secret() FROM PUBLIC;
 REVOKE ALL ON FUNCTION app.drop_vendor_job_secret() FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION app.drop_vendor_job_secret() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION app.drop_vendor_job_secret() TO service_role;
 
 -- Sample company (sandbox) and beta firms. An explicit false turns it off.
@@ -161,5 +163,7 @@ REVOKE ALL ON FUNCTION app.vendor_dispatch_enabled(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION app.open_vendor_job(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION app.vendor_dispatch_enabled(uuid) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION app.open_vendor_job(text) FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION app.vendor_dispatch_enabled(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION app.open_vendor_job(text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION app.vendor_dispatch_enabled(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION app.open_vendor_job(text) TO service_role;

@@ -84,7 +84,7 @@ test("a vendor upload grant only matches that link", () => {
 test("the vendor page reuses the repair photo upload and the migration only adds", () => {
   const page = readFileSync(new URL("../app/v/[token]/page.tsx", import.meta.url), "utf8");
   const upload = readFileSync(new URL("../components/ticket-photos.tsx", import.meta.url), "utf8");
-  const sql = readFileSync(new URL("../../supabase/migrations/20261029120000_vendor_repair.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20261031120000_vendor_repair.sql", import.meta.url), "utf8");
   assert.match(page, /TicketPhotoUpload/);
   assert.match(page, /\/api\/vendor-jobs\/photos\/sign/);
   assert.match(page, /\/api\/vendor-jobs\/photos\/confirm/);
@@ -97,6 +97,15 @@ test("the vendor page reuses the repair photo upload and the migration only adds
   assert.doesNotMatch(sql, /ALTER TABLE maintenance_tickets/);
   assert.doesNotMatch(sql, /SET NOT NULL/);
   assert.match(sql, /REVOKE ALL ON FUNCTION app\.open_vendor_job\(text\) FROM anon, authenticated/);
+  for (const signature of [
+    "fn_vendor_job_photo()",
+    "app.drop_vendor_job_secret()",
+    "app.vendor_dispatch_enabled(uuid)",
+    "app.open_vendor_job(text)",
+  ]) {
+    assert.match(sql, new RegExp(`REVOKE EXECUTE ON FUNCTION ${signature.replace(/[().]/g, "\\$&")} FROM PUBLIC, anon, authenticated`));
+  }
+  assert.doesNotMatch(sql, /GRANT EXECUTE ON FUNCTION fn_vendor_job_photo\(\) TO authenticated/);
 });
 
 test("new vendor copy is in both catalogs and skips the banned words", () => {

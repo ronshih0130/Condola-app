@@ -180,6 +180,37 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
         () => tx(USERS.admin, (client) => client.query(`SELECT * FROM app.open_vendor_job($1)`, [hashVendorToken(token)])),
         (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
       );
+      const privileges = await withClient((client) =>
+        client.query<{ name: string; anon_exec: boolean; auth_exec: boolean; public_exec: boolean }>(
+          `SELECT n.nspname || '.' || p.proname AS name,
+                  has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_exec,
+                  has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_exec,
+                  EXISTS (
+                    SELECT 1 FROM aclexplode(p.proacl) acl
+                     WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+                  ) AS public_exec
+             FROM pg_proc p
+             JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE (n.nspname, p.proname) IN (
+              ('public', 'fn_vendor_job_photo'),
+              ('app', 'drop_vendor_job_secret'),
+              ('app', 'vendor_dispatch_enabled'),
+              ('app', 'open_vendor_job')
+            )`,
+        ),
+      );
+      const byName = new Map(privileges.rows.map((row) => [row.name, row]));
+      for (const name of [
+        "public.fn_vendor_job_photo",
+        "app.drop_vendor_job_secret",
+        "app.vendor_dispatch_enabled",
+        "app.open_vendor_job",
+      ]) {
+        const row = byName.get(name);
+        assert.equal(row?.anon_exec, false, name);
+        assert.equal(row?.auth_exec, false, name);
+        assert.equal(row?.public_exec, false, name);
+      }
       await assert.rejects(
         () =>
           tx(USERS.maintenance, (client) =>
