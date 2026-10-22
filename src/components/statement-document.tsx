@@ -44,7 +44,7 @@ export function StatementDocument({
   const period = row.period_start ? row.period_start.slice(0, 7) : "";
   const prev = period ? civilPeriodLabel(previousPeriod(period)) : "";
   const summary = [
-    ["i_opening", money(figures.opening), "statement-opening"],
+    ["i_opening", signed(figures.opening), "statement-opening"],
     ["i_stmt_firm_rent", money(firm), "statement-firm"],
     ["i_rent_received", money(figures.rent), "statement-rent"],
     ["i_other_income", money(figures.other), ""],
@@ -87,7 +87,7 @@ export function StatementDocument({
       </table>
       <p className="small" data-testid="statement-formula">
         {t("i_stmt_formula", {
-          opening: money(figures.opening),
+          opening: signed(figures.opening),
           firm: money(firm),
           costs: money(figures.costs),
           payouts: money(figures.payouts),
@@ -96,7 +96,7 @@ export function StatementDocument({
       </p>
       {prev ? (
         <p className="small muted" data-testid="statement-prev-close">
-          {t("i_stmt_prev_close", { period: prev })} {money(figures.opening)}
+          {t("i_stmt_prev_close", { period: prev })} {signed(figures.opening)}
         </p>
       ) : null}
       {figures.owes > 0 ? (

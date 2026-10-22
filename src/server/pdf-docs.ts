@@ -117,7 +117,7 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
   const money = (minor: number) => moneyLabel(minor, source.currency, locale);
   const signed = (minor: number) => signedMoneyLabel(minor, source.currency, locale);
   const rows: PdfRow[] = [
-    { label: t("i_opening"), value: money(figures.opening) },
+    { label: t("i_opening"), value: signed(figures.opening) },
     { label: t("i_rent_received"), value: money(figures.rent) },
     { label: t("i_other_income"), value: money(figures.other) },
     { label: t("i_fee"), value: money(figures.fee) },
@@ -149,7 +149,7 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     heading: "",
     lines: [
       t("i_stmt_formula", {
-        opening: money(figures.opening),
+        opening: signed(figures.opening),
         firm: money(source.firm ?? 0),
         costs: money(figures.costs),
         payouts: money(figures.payouts),

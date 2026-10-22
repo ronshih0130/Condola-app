@@ -12,19 +12,23 @@ function currencyCode(currency: string) {
   return currency.trim().toUpperCase();
 }
 
-/** TWD is an absolute NT$ amount, so zero is NT$0 and never −NT$0. Other currencies keep the ICU symbol. */
+/** TWD negatives are −NT$ (U+2212). Zero is NT$0. Other currencies keep the ICU symbol. */
 export function formatMoney(minor: number | string, currency: string, locale: Locale) {
   const code = currencyCode(currency);
-  if (code === "TWD") return `NT$${groupedAmount(minor, locale, 0)}`;
+  const value = Number(minor);
+  if (code === "TWD") {
+    const amount = `NT$${groupedAmount(value, locale, 0)}`;
+    return value < 0 ? `\u2212${amount}` : amount;
+  }
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
     style: "currency",
     currency: code,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(Number(minor) / 100);
+  }).format(value / 100);
 }
 
-/** Absolute amount with an NT$ prefix for TWD, so zero is NT$0 and never −NT$0. */
+/** TWD label. A negative amount is −NT$, and zero is NT$0. Non-TWD stays an absolute ICU amount. */
 export function moneyLabel(minor: number | string, currency: string, locale: Locale) {
   const code = currencyCode(currency);
   if (code === "TWD") return formatMoney(minor, code, locale);
@@ -50,7 +54,7 @@ export function signedMoneyLabel(minor: number | string, currency: string, local
   return `\u2212${label}`;
 }
 
-/** Month settlement. A negative net is what the owner owes — never a negative payout. */
+/** Month settlement. A negative net stays signed. It is not an amount the owner must pay. */
 export function ownerSettlement(row: StatementFigures) {
   const fee = Math.max(0, row.fee);
   const expenses = row.expenses;

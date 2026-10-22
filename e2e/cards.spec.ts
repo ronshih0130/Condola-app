@@ -118,6 +118,15 @@ for (const locale of locales) {
     expect(documentText).toContain("NT$0");
     expect(documentText).toContain("−NT$2,800");
     expect(documentText).not.toContain("-NT$");
+    await expect(page.getByTestId("statement-closing")).toBeVisible();
+    await expect(page.getByTestId("statement-closing")).toHaveText("−NT$2,800");
+    if (locale.code === "zh-TW") {
+      await expect(page.getByTestId("owner-owes-reason")).toHaveText(
+        "⚠ 本月費用高於已登記租金，屋主淨額為 −NT$2,800。費用怎麼處理，請和屋主確認。",
+      );
+      expect(documentText).not.toContain("差額請屋主補繳");
+      expect(documentText).not.toContain("屋主應補繳");
+    }
     const reason = page.getByTestId("owner-owes-reason");
     await expect(reason).toHaveClass(/alert/);
     await expect(reason).toHaveClass(/warn/);

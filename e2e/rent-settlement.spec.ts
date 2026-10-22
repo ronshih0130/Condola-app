@@ -58,7 +58,14 @@ test("manager records a payment, a duplicate warns, and an accountant reverses i
   await expect(page.getByTestId("statement-footer")).toContainText("押金不計入淨額。此表僅供紀錄與對帳。Condola 只提供管理軟體，不經手任何款項。");
   await expect(page.getByTestId("owner-owes")).toContainText("本期淨額為負");
   await expect(page.getByTestId("owner-owes")).toContainText("−NT$2,800");
+  await expect(page.getByTestId("statement-closing")).toBeVisible();
+  await expect(page.getByTestId("statement-closing")).toHaveText("−NT$2,800");
+  await expect(page.getByTestId("owner-owes-reason")).toHaveText(
+    "⚠ 本月費用高於已登記租金，屋主淨額為 −NT$2,800。費用怎麼處理，請和屋主確認。",
+  );
   const statementText = await page.getByTestId("statement-document").innerText();
+  expect(statementText).not.toContain("差額請屋主補繳");
+  expect(statementText).not.toContain("屋主應補繳");
   expect(statementText).not.toContain("-NT$");
   expect(statementText).not.toContain("電費（空房");
   expect(statementText).not.toContain("電子發票");
