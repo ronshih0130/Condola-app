@@ -306,9 +306,11 @@ export async function propertyDetail(session: Session, id: string) {
       address_display: string;
       currency: string;
       rental_mode: string;
+      records_only: boolean;
     }>(
       client,
-      `SELECT id::text, name, coalesce(address_display,'') AS address_display, currency, default_rental_mode::text AS rental_mode
+      `SELECT id::text, name, coalesce(address_display,'') AS address_display, currency, default_rental_mode::text AS rental_mode,
+              coalesce(records_only, false) AS records_only
          FROM properties WHERE id = $1 AND org_id = $2`,
       [id, session.orgId],
     );
@@ -665,9 +667,11 @@ export async function leaseDetail(session: Session, id: string) {
       deposit_override_reason: string | null;
       updated_at: string;
       signed_at: string | null;
+      records_only: boolean;
     }>(
       client,
       `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, l.currency,
+              coalesce(p.records_only, false) AS records_only,
               l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.due_day,
               l.deposit_months::text AS deposit_months, l.deposit_override_reason,
               l.updated_at::text AS updated_at, l.signed_at::text AS signed_at,
@@ -792,6 +796,85 @@ export async function listPayments(session: Session) {
   );
 }
 
+export async function paymentBoard(session: Session, month: string) {
+  const start = `${month}-01`;
+  return tx(session.userId, async (client) => {
+    const payments = await many<{
+      id: string;
+      status: string;
+      amount: string;
+      currency: string;
+      paid_on: string;
+      last5: string | null;
+      tenant: string | null;
+      place: string;
+      payee: string | null;
+      charge_kind: string | null;
+      period: string | null;
+      reverse_reason: string | null;
+      lease_id: string;
+    }>(
+      client,
+      `SELECT p.id::text, p.status::text, p.amount_minor::text AS amount, p.currency, p.paid_on::text,
+              p.payer_account_last5 AS last5, c.display_name AS tenant,
+              pr.name || coalesce(' ' || r.label, '') AS place,
+              p.payee, p.charge_kind, p.period, p.reverse_reason, p.lease_id::text
+         FROM payments p
+         JOIN leases l ON l.id = p.lease_id
+         JOIN properties pr ON pr.id = l.property_id
+         LEFT JOIN rooms r ON r.id = l.target_room_id
+         LEFT JOIN contacts c ON c.id = p.payer_contact_id
+        WHERE p.org_id = $1 AND p.paid_on >= $2::date
+          AND p.paid_on < ($2::date + interval '1 month')
+        ORDER BY p.paid_on DESC, p.created_at DESC`,
+      [session.orgId, start],
+    );
+    const open = await many<{
+      id: string;
+      balance: string;
+      paid: string;
+      currency: string;
+      due_date: string | null;
+      period_start: string | null;
+      tenant: string | null;
+      place: string;
+      lease_id: string;
+    }>(
+      client,
+      `SELECT i.id::text, i.balance_minor::text AS balance, i.paid_minor::text AS paid, i.currency,
+              i.due_date::text, i.period_start::text, c.display_name AS tenant,
+              pr.name || coalesce(' ' || r.label, '') AS place, l.id::text AS lease_id
+         FROM invoices i
+         JOIN leases l ON l.id = i.lease_id
+         JOIN properties pr ON pr.id = l.property_id
+         LEFT JOIN rooms r ON r.id = l.target_room_id
+         LEFT JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
+         LEFT JOIN contacts c ON c.id = lp.contact_id
+        WHERE i.org_id = $1 AND i.status IN ('open','partially_paid') AND i.balance_minor > 0
+          AND i.period_start >= $2::date AND i.period_start < ($2::date + interval '1 month')
+          AND EXISTS (
+            SELECT 1 FROM invoice_lines ln
+             WHERE ln.invoice_id = i.id AND ln.charge_type = 'rent'
+          )
+        ORDER BY i.due_date, c.display_name`,
+      [session.orgId, start],
+    );
+    const leases = await many<{ id: string; tenant: string; place: string }>(
+      client,
+      `SELECT l.id::text, c.display_name AS tenant, pr.name || coalesce(' ' || r.label, '') AS place
+         FROM leases l
+         JOIN properties pr ON pr.id = l.property_id
+         LEFT JOIN rooms r ON r.id = l.target_room_id
+         JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
+         JOIN contacts c ON c.id = lp.contact_id
+        WHERE l.org_id = $1 AND l.status IN ('pending_signature','active')
+        ORDER BY c.display_name, pr.name`,
+      [session.orgId],
+    );
+    return { payments, open, leases };
+  });
+}
+
 export async function listMatches(session: Session) {
   return tx(session.userId, async (client) =>
     many<{
@@ -879,6 +962,8 @@ export type RosterRow = {
   payouts: string | null;
   closing: string | null;
   generated: boolean;
+  units: string;
+  changed: boolean;
 };
 
 export async function statementRoster(session: Session, month: string): Promise<RosterRow[]> {
@@ -902,7 +987,12 @@ export async function statementRoster(session: Session, month: string): Promise<
               s.rent_received_minor::text AS rent, s.other_income_minor::text AS other,
               s.management_fee_minor::text AS fee, s.expenses_minor::text AS expenses,
               s.opening_balance_minor::text AS opening, s.payouts_minor::text AS payouts,
-              s.closing_balance_minor::text AS closing, true AS generated
+              s.closing_balance_minor::text AS closing, true AS generated,
+              (
+                SELECT count(DISTINCT po.property_id)::text FROM property_owners po
+                 WHERE po.owner_contact_id = s.owner_contact_id AND po.org_id = s.org_id
+              ) AS units,
+              coalesce(s.changed_after_generate, false) AS changed
          FROM owner_statements s
          JOIN contacts c ON c.id = s.owner_contact_id
         WHERE s.org_id = $1 AND s.status <> 'void'
@@ -930,7 +1020,12 @@ export async function statementRoster(session: Session, month: string): Promise<
                  LIMIT 1
               ) AS fee_rule,
               NULL::text AS rent, NULL::text AS other, NULL::text AS fee, NULL::text AS expenses,
-              NULL::text AS opening, NULL::text AS payouts, NULL::text AS closing, false AS generated
+              NULL::text AS opening, NULL::text AS payouts, NULL::text AS closing, false AS generated,
+              (
+                SELECT count(DISTINCT po.property_id)::text FROM property_owners po
+                 WHERE po.owner_contact_id = c.id AND po.org_id = c.org_id
+              ) AS units,
+              false AS changed
          FROM contacts c
         WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL
           AND EXISTS (SELECT 1 FROM property_owners po WHERE po.owner_contact_id = c.id)
@@ -1026,13 +1121,30 @@ export async function statementDetail(session: Session, id: string) {
       payouts: string;
       closing: string;
       status: string;
+      owner_id: string;
+      firm: string;
+      changed: boolean;
+      snapshot: {
+        opening?: number;
+        rent?: number;
+        other?: number;
+        fee?: number;
+        expenses?: number;
+        payouts?: number;
+        closing?: number;
+        firm?: number;
+      } | null;
     }>(
       client,
-      `SELECT s.id::text, c.display_name AS owner_name, s.period_start::text, s.period_end::text, s.currency,
+      `SELECT s.id::text, c.display_name AS owner_name, s.owner_contact_id::text AS owner_id,
+              s.period_start::text, s.period_end::text, s.currency,
               s.opening_balance_minor::text AS opening, s.rent_received_minor::text AS rent,
               s.other_income_minor::text AS other, s.management_fee_minor::text AS fee,
               s.expenses_minor::text AS expenses, s.payouts_minor::text AS payouts,
-              s.closing_balance_minor::text AS closing, s.status::text
+              s.closing_balance_minor::text AS closing, s.status::text,
+              coalesce(s.firm_handled_minor, 0)::text AS firm,
+              coalesce(s.changed_after_generate, false) AS changed,
+              s.content_snapshot AS snapshot
          FROM owner_statements s
          JOIN contacts c ON c.id = s.owner_contact_id
         WHERE s.id = $1`,
@@ -1045,7 +1157,13 @@ export async function statementDetail(session: Session, id: string) {
          FROM owner_statement_lines WHERE statement_id = $1 ORDER BY line_type, description`,
       [id],
     );
-    return { statement, lines };
+    const history = await many<{ action: string; reason: string | null; at: string; summary: string | null }>(
+      client,
+      `SELECT action, reason, created_at::text AS at, detail->>'summary' AS summary
+         FROM statement_change_log WHERE statement_id = $1 ORDER BY created_at`,
+      [id],
+    );
+    return { statement, lines, history };
   });
 }
 
@@ -1785,6 +1903,7 @@ export async function statementPdfSource(session: Session, id: string) {
       expenses: string;
       payouts: string;
       closing: string;
+      firm: string;
     }>(
       client,
       `SELECT s.id::text AS id, s.org_id::text AS "orgId", c.display_name AS "ownerName",
@@ -1792,7 +1911,8 @@ export async function statementPdfSource(session: Session, id: string) {
               s.opening_balance_minor::text AS opening, s.rent_received_minor::text AS rent,
               s.other_income_minor::text AS other, s.management_fee_minor::text AS fee,
               s.expenses_minor::text AS expenses, s.payouts_minor::text AS payouts,
-              s.closing_balance_minor::text AS closing
+              s.closing_balance_minor::text AS closing,
+              coalesce(s.firm_handled_minor, 0)::text AS firm
          FROM owner_statements s
          JOIN contacts c ON c.id = s.owner_contact_id
         WHERE s.id = $1`,

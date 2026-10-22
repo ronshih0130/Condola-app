@@ -33,8 +33,8 @@ test("a partial Taiwan mobile is invalid and an empty phone is allowed", () => {
   assert.equal(phoneInputInvalid("0912 345 678", "+886"), false);
 });
 
-test("staff copy names the payments queue 繳款紀錄", () => {
-  assert.equal(zh.i_nav_inbox, "繳款紀錄");
+test("staff copy names the payments queue 繳租紀錄", () => {
+  assert.equal(zh.i_nav_inbox, "繳租紀錄");
   assert.equal(zh.i_nav_inbox.includes("收款"), false);
   assert.equal(zh.i_example_calc, "範例試算");
   assert.equal(zh.i_sandbox_back, "回到正式公司");

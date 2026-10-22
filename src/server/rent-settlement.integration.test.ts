@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { tx, withClient } from "./db";
+import { query, tx, withClient } from "./db";
 import { FlowError } from "./errors";
 import { ORG_ID, USERS } from "./ids";
 import { correctBillPayment, loadRentSettlement, recordBillPayment, reverseBillPayment } from "./rent-settlement";
@@ -160,4 +160,89 @@ test("bill payments stay org-scoped, partial, correctable, and reversible", asyn
       }).catch(() => undefined);
     }
   }
+});
+
+test("anon and authenticated cannot execute invoice recalc, and a member insert still recalculates", async () => {
+  const priv = await query<{
+    anon_recalc: boolean;
+    auth_recalc: boolean;
+    anon_lines: boolean;
+    auth_lines: boolean;
+  }>(
+    `SELECT
+       has_function_privilege('anon', 'public.fn_invoice_recalc(uuid)', 'EXECUTE') AS anon_recalc,
+       has_function_privilege('authenticated', 'public.fn_invoice_recalc(uuid)', 'EXECUTE') AS auth_recalc,
+       has_function_privilege('anon', 'public.fn_invoice_lines_changed()', 'EXECUTE') AS anon_lines,
+       has_function_privilege('authenticated', 'public.fn_invoice_lines_changed()', 'EXECUTE') AS auth_lines`,
+  );
+  assert.equal(priv.rows[0]?.anon_recalc, false);
+  assert.equal(priv.rows[0]?.auth_recalc, false);
+  assert.equal(priv.rows[0]?.anon_lines, false);
+  assert.equal(priv.rows[0]?.auth_lines, false);
+
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL ROLE anon");
+    await client.query("SAVEPOINT recalc");
+    await assert.rejects(
+      () => client.query(`SELECT fn_invoice_recalc('00000000-0000-4000-8000-000000000099'::uuid)`),
+      /permission denied/i,
+    );
+    await client.query("ROLLBACK TO SAVEPOINT recalc");
+    await assert.rejects(() => client.query(`SELECT fn_invoice_lines_changed()`), /permission denied/i);
+    await client.query("ROLLBACK");
+  });
+
+  await tx(USERS.admin, async (client) => {
+    await assert.rejects(
+      () => client.query(`SELECT fn_invoice_recalc('00000000-0000-4000-8000-000000000099'::uuid)`),
+      /permission denied/i,
+    );
+  });
+
+  const invoice = await tx(USERS.admin, async (client) => {
+    const row = await client.query<{ id: string; total: string }>(
+      `SELECT id::text, total_minor::text AS total FROM invoices WHERE org_id = $1 AND invoice_number = 'INV-SEED-001'`,
+      [ORG_ID],
+    );
+    return row.rows[0];
+  });
+  assert.ok(invoice);
+  const lineId = await tx(USERS.admin, async (client) => {
+    const row = await client.query<{ id: string }>(
+      `INSERT INTO invoice_lines (org_id, invoice_id, line_no, charge_type, description, quantity, unit_amount_minor, amount_minor)
+       VALUES ($1,$2,90,'adjustment','qa line',1,100,100) RETURNING id::text`,
+      [ORG_ID, invoice.id],
+    );
+    return row.rows[0]?.id;
+  });
+  assert.ok(lineId);
+  const after = await tx(USERS.admin, async (client) => {
+    const row = await client.query<{ total: string }>(`SELECT total_minor::text AS total FROM invoices WHERE id = $1`, [invoice.id]);
+    return row.rows[0]?.total;
+  });
+  assert.equal(BigInt(after ?? "0") - BigInt(invoice.total), BigInt(100));
+  await tx(USERS.admin, async (client) => {
+    await client.query(`DELETE FROM invoice_lines WHERE id = $1`, [lineId]);
+  });
+
+  await withClient(async (client) => {
+    await assert.rejects(
+      () => client.query(`SELECT post_reversal('00000000-0000-4000-8000-000000009999'::uuid, 'missing')`),
+      /not found/i,
+    );
+  });
+  const txn = await query<{ id: string }>(`SELECT id::text FROM ledger_transactions WHERE org_id = $1 LIMIT 1`, [ORG_ID]);
+  assert.ok(txn.rows[0]);
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.coastAdmin]);
+    await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
+    await client.query("SET LOCAL ROLE authenticated");
+    await assert.rejects(
+      () => client.query(`SELECT post_reversal($1::uuid, 'cross')`, [txn.rows[0].id]),
+      (error: unknown) => error instanceof Error && /42501|insufficient_privilege|cross-organization/i.test(error.message),
+    );
+    await client.query("ROLLBACK");
+  });
 });

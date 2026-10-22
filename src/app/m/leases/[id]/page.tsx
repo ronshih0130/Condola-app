@@ -123,7 +123,7 @@ export default async function LeasePage({
                 ) : null}
                 <tr>
                   <td>{t("i_due_day_label")}</td>
-                  <td>{lease.due_day}</td>
+                  <td>{t("i_due_rent", { day: lease.due_day })}</td>
                 </tr>
                 <tr>
                   <td>{t("i_status")}</td>
@@ -163,7 +163,10 @@ export default async function LeasePage({
           </div>
         </div>
       ) : null}
-      {tab === "summary" && (session.role === "admin" || session.role === "manager") ? (
+      {lease.records_only ? (
+        <p className="alert warn" data-testid="records-only">{t("i_stmt_readonly")}</p>
+      ) : null}
+      {tab === "summary" && !lease.records_only && (session.role === "admin" || session.role === "manager") ? (
         leaseTermsEditable({
           status: lease.status,
           esign: lease.esign,

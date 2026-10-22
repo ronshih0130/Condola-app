@@ -163,7 +163,6 @@ export function Sidebar({
   role,
   showReset,
   sandbox,
-  rentSettlement = false,
 }: {
   firm: string;
   pending: number;
@@ -171,7 +170,6 @@ export function Sidebar({
   role: OrgRole | null;
   showReset: boolean;
   sandbox: boolean;
-  rentSettlement?: boolean;
 }) {
   const t = useT();
   const path = usePathname() || "/m";
@@ -179,13 +177,7 @@ export function Sidebar({
     const box = document.getElementById("nav-open") as HTMLInputElement | null;
     if (box) box.checked = false;
   };
-  const sections = visibleNav(role).map((section) => {
-    if (!rentSettlement || section.section !== "i_sec_acct" || !can(role, "stmt.view")) return section;
-    return {
-      ...section,
-      links: [...section.links, { href: "/m/rent/settlement", key: "i_settle_nav" }],
-    };
-  });
+  const sections = visibleNav(role);
   const next = encodeURIComponent(path);
   const label = sandbox ? t("i_sandbox_company") : firm;
   return (

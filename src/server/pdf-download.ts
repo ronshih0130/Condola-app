@@ -126,6 +126,7 @@ export async function statementPdfForSession(session: Session, id: string) {
       expenses: Number(statement.expenses),
       payouts: Number(statement.payouts),
       closing: Number(statement.closing),
+      firm: Number(statement.firm ?? 0),
       lines: lines.map((line) => ({
         lineType: line.lineType,
         description: line.description,

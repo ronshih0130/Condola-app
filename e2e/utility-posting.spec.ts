@@ -150,9 +150,9 @@ test("公共用電 and 帳單差額 show as separate owner lines with a rate war
   await expect(page.getByTestId("utility-public-warn")).toContainText("分表加總超過台電總度數");
   await expect(page.getByTestId("utility-gap-warn")).toContainText("請檢查每度電價");
   await expect(page.getByTestId("utility-public")).toContainText("公共用電");
-  await expect(page.getByTestId("utility-public")).toContainText("-NT$50");
+  await expect(page.getByTestId("utility-public")).toContainText("−NT$50");
   await expect(page.getByTestId("utility-gap")).toContainText("電費（帳單差額）");
-  await expect(page.getByTestId("utility-gap")).toContainText("-NT$300");
+  await expect(page.getByTestId("utility-gap")).toContainText("−NT$300");
   await expect(page.getByTestId("utility-share").filter({ hasText: "電費（空房／未簽約）" })).toContainText("NT$100");
 });
 

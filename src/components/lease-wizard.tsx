@@ -222,7 +222,7 @@ export function LeaseWizard({
     if (step === 3 && overlap) return;
     if (step === 5) {
       const day = Number(dueDay);
-      if (!dueDay.trim() || !Number.isInteger(day) || day < 1 || day > 31) {
+      if (!dueDay.trim() || !Number.isInteger(day) || day < 1 || day > 28) {
         setDueError(true);
         return;
       }

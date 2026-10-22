@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
-import { moneyLabel, ownerSettlement } from "@/server/format";
+import { moneyLabel, ownerSettlement, signedMoneyLabel } from "@/server/format";
+import { civilPeriodLabel } from "@/server/rent-settlement-math";
 import { listStatements } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -26,11 +27,13 @@ export default async function OwnerStatementsPage() {
             payouts: Number(row.payouts),
             closing: Number(row.closing),
           });
-          const amount = moneyLabel(figures.owes > 0 ? figures.owes : Math.max(0, figures.payable), row.currency, session.locale);
+          const amount = figures.owes > 0
+            ? signedMoneyLabel(-figures.owes, row.currency, session.locale)
+            : moneyLabel(Math.max(0, figures.payable), row.currency, session.locale);
           return (
             <p key={row.id}>
               <Link href={`/o/statements/${row.id}`}>
-                {row.period_start.slice(0, 7)} ·{" "}
+                {civilPeriodLabel(row.period_start.slice(0, 7))} ·{" "}
                 {figures.owes > 0 ? (
                   <span className="chip warn" data-testid="owner-owes">
                     {t("owner_owes")} {amount}

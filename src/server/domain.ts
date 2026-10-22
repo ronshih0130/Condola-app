@@ -817,7 +817,7 @@ export async function createLease(session: Session, input: LeaseInput) {
   const tenantContactId = existingTenantId(input.tenantContactId);
   if (!tenantContactId && !input.tenantName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
   const dueDay = input.dueDay;
-  if (!finiteNumber(dueDay) || dueDay < 1 || dueDay > 31 || Math.floor(dueDay) !== dueDay) {
+  if (!finiteNumber(dueDay) || dueDay < 1 || dueDay > 28 || Math.floor(dueDay) !== dueDay) {
     throw new FlowError("errors.required", { field: "s_aa47e23" });
   }
   const rentMajor = coerceNumber(input.rentMajor);
@@ -902,18 +902,19 @@ export async function createLease(session: Session, input: LeaseInput) {
       currency: string;
       kind: string;
       label: string;
+      records_only: boolean;
     }>(
       client,
-      `SELECT id, unit_id, property_id, currency, kind, label
+      `SELECT id, unit_id, property_id, currency, kind, label, records_only
          FROM (
-           SELECT r.id, r.unit_id, u.property_id, p.currency, 'room'::text AS kind, r.label, 0 AS rank
+           SELECT r.id, r.unit_id, u.property_id, p.currency, 'room'::text AS kind, r.label, coalesce(p.records_only, false) AS records_only, 0 AS rank
              FROM rooms r
              JOIN units u ON u.id = r.unit_id
              JOIN properties p ON p.id = u.property_id
             WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL
               AND u.rental_mode = 'by_room'
            UNION ALL
-           SELECT u.id, u.id, u.property_id, p.currency, 'whole_unit'::text, u.label, 1
+           SELECT u.id, u.id, u.property_id, p.currency, 'whole_unit'::text, u.label, coalesce(p.records_only, false), 1
              FROM units u
              JOIN properties p ON p.id = u.property_id
             WHERE u.id = $1 AND u.org_id = $2 AND u.archived_at IS NULL
@@ -923,6 +924,7 @@ export async function createLease(session: Session, input: LeaseInput) {
         LIMIT 1`,
       [input.roomId, session.orgId],
     );
+    if (space.records_only) throw new FlowError("errors.recordsOnly");
     assertLeaseMoney(space.currency, rentMajor, depositMonths);
     const clash = await maybe<{ start_date: string; end_date: string }>(
       client,
@@ -1325,6 +1327,16 @@ export async function updateLease(
   if (!finiteNumber(depositMonths) || depositMonths < 0) throw new FlowError("errors.amount", { field: "s_8ed103e" });
   if (!depositReasonOk(depositMonths, input.depositReason ?? "")) throw new FlowError("errors.depositCap");
   if (!input.updatedAt?.trim()) throw new FlowError("errors.required");
+  const locked = await tx(session.userId, async (client) =>
+    maybe<{ records_only: boolean }>(
+      client,
+      `SELECT coalesce(p.records_only, false) AS records_only
+         FROM leases l JOIN properties p ON p.id = l.property_id
+        WHERE l.id = $1 AND l.org_id = $2`,
+      [input.leaseId, session.orgId],
+    ),
+  );
+  if (locked?.records_only) throw new FlowError("errors.recordsOnly");
   return tx(
     session.userId,
     async (client) => {
@@ -1789,27 +1801,28 @@ async function allocateAndLedger(
   payment: { id: string; org_id: string; property_id: string; lease_id: string; currency: string; amount_minor: string; payer_contact_id: string | null },
   userId: string,
 ) {
-  let left = Number(payment.amount_minor);
+  let left = BigInt(payment.amount_minor);
   const invoices = await many<{ id: string; balance_minor: string }>(
     client,
     `SELECT id, balance_minor::text FROM invoices
       WHERE lease_id = $1 AND status IN ('open','partially_paid') AND balance_minor > 0
-      ORDER BY due_date, created_at`,
+      ORDER BY period_start NULLS LAST, due_date, created_at`,
     [payment.lease_id],
   );
   if (invoices.length === 0) throw new FlowError("errors.noInvoice");
   for (const invoice of invoices) {
-    if (left <= 0) break;
-    const take = Math.min(left, Number(invoice.balance_minor));
+    if (left <= BigInt(0)) break;
+    const balance = BigInt(invoice.balance_minor);
+    const take = left < balance ? left : balance;
     await client.query(
       `INSERT INTO payment_allocations (org_id, payment_id, invoice_id, amount_minor, created_by)
        VALUES ($1,$2,$3,$4,$5)`,
-      [payment.org_id, payment.id, invoice.id, take, userId],
+      [payment.org_id, payment.id, invoice.id, take.toString(), userId],
     );
     left -= take;
   }
-  const applied = Number(payment.amount_minor) - left;
-  if (applied <= 0) throw new FlowError("errors.noInvoice");
+  const applied = BigInt(payment.amount_minor) - left;
+  if (applied <= BigInt(0)) throw new FlowError("errors.noInvoice");
   const txn = await one<{ id: string }>(
     client,
     `INSERT INTO ledger_transactions (org_id, property_id, lease_id, kind, currency, effective_date, description, source_table, source_id, created_by)
@@ -1823,12 +1836,12 @@ async function allocateAndLedger(
     [
       payment.org_id,
       txn.id,
-      applied,
+      applied.toString(),
       payment.currency,
       payment.payer_contact_id,
       payment.property_id,
       payment.lease_id,
-      -applied,
+      (-applied).toString(),
     ],
   );
   await client.query(`UPDATE payments SET ledger_transaction_id = $2 WHERE id = $1`, [payment.id, txn.id]);
@@ -1928,6 +1941,96 @@ export async function recordPayment(
         input.last5 || null,
         input.reference || null,
         session.userId,
+      ],
+    );
+    await allocateAndLedger(client, payment, session.userId);
+    return payment.id;
+  });
+  await svc(session.userId, async (client) => queueDemoNotice(client, input.leaseId, "payment_confirmed"));
+  return { paymentId, status: "confirmed" as const };
+}
+
+export async function recordRentPayment(
+  session: Session,
+  input: {
+    leaseId: string;
+    amountMinor: bigint;
+    paidOn: string;
+    last5: string;
+    reference: string;
+    chargeKind: string;
+    period: string;
+    payee: string;
+    allowDuplicate: boolean;
+  },
+) {
+  assertStaff(session, ["admin", "manager", "accountant"]);
+  if (!input.leaseId) throw new FlowError("pay.lease");
+  if (input.chargeKind !== "rent" && input.chargeKind !== "deposit" && input.chargeKind !== "other") {
+    throw new FlowError("pay.kind");
+  }
+  if (!/^\d{4}-\d{2}$/.test(input.period)) throw new FlowError("pay.period");
+  if (input.payee !== "owner" && input.payee !== "firm") throw new FlowError("pay.payee");
+  if (input.amountMinor <= BigInt(0)) throw new FlowError("pay.amount");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paidOn) || input.paidOn > taipeiToday()) throw new FlowError("pay.date");
+  const last5 = input.last5.trim();
+  if (last5 && !/^\d{5}$/.test(last5)) throw new FlowError("errors.last5");
+  const paymentId = await tx(session.userId, async (client) => {
+    const lease = await one<{ property_id: string; currency: string }>(
+      client,
+      `SELECT property_id::text, currency FROM leases WHERE id = $1 AND org_id = $2`,
+      [input.leaseId, session.orgId],
+    );
+    const duplicate = await maybe<{ amount_minor: string }>(
+      client,
+      `SELECT amount_minor::text FROM payments
+        WHERE org_id = $1 AND lease_id = $2 AND amount_minor = $3 AND paid_on = $4
+          AND status <> 'reversed'
+        ORDER BY created_at DESC LIMIT 1`,
+      [session.orgId, input.leaseId, input.amountMinor.toString(), input.paidOn],
+    );
+    if (duplicate && !input.allowDuplicate) throw new FlowError("pay.duplicate");
+    const balance = await openBalance(client, input.leaseId);
+    if (input.amountMinor > BigInt(balance)) throw new FlowError("errors.amountTooHigh");
+    const party = await one<{ contact_id: string }>(
+      client,
+      `SELECT contact_id FROM lease_parties WHERE lease_id = $1 AND role = 'primary' LIMIT 1`,
+      [input.leaseId],
+    );
+    await client.query(`SELECT set_config('app.change_reason', $1, true)`, ["登記繳租"]);
+    const payment = await one<{
+      id: string;
+      org_id: string;
+      property_id: string;
+      lease_id: string;
+      currency: string;
+      amount_minor: string;
+      payer_contact_id: string | null;
+    }>(
+      client,
+      `INSERT INTO payments (
+         org_id, property_id, lease_id, payer_contact_id, currency, amount_minor, paid_on, method,
+         payer_account_last5, reference, status, source, submitted_by, confirmed_by, confirmed_at,
+         payee, charge_kind, period
+       ) VALUES (
+         $1,$2,$3,$4,$5,$6,$7,$8::payment_method,$9,$10,'confirmed','manager_entry',$11,$11,now(),
+         $12,$13,$14
+       ) RETURNING id, org_id::text, property_id::text, lease_id::text, currency, amount_minor::text, payer_contact_id::text`,
+      [
+        session.orgId,
+        lease.property_id,
+        input.leaseId,
+        party.contact_id,
+        lease.currency,
+        input.amountMinor.toString(),
+        input.paidOn,
+        lease.currency === "USD" ? "zelle" : "bank_transfer",
+        last5 || null,
+        input.reference || null,
+        session.userId,
+        input.payee,
+        input.chargeKind,
+        input.period,
       ],
     );
     await allocateAndLedger(client, payment, session.userId);
@@ -2229,7 +2332,7 @@ async function linkStatementInvoices(client: Client, orgId: string, propertyIds:
   );
 }
 
-export async function generateStatement(session: Session, input: { ownerContactId: string; month: string }) {
+export async function generateStatement(session: Session, input: { ownerContactId: string; month: string; regenerate?: boolean }) {
   assertPerm(session, "stmt.generate");
   if (!/^\d{4}-\d{2}$/.test(input.month)) throw new FlowError("errors.required");
   const bounds = monthBounds(input.month);
@@ -2253,7 +2356,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
         WHERE owner_contact_id = $1 AND currency = $2 AND period_start = $3 AND status <> 'void'`,
       [input.ownerContactId, currency, bounds.start],
     );
-    if (existing) {
+    if (existing && !input.regenerate) {
       await linkStatementInvoices(client, session.orgId, propertyIds);
       const row = await one<{ rent: string; other: string }>(
         client,
@@ -2262,10 +2365,32 @@ export async function generateStatement(session: Session, input: { ownerContactI
       );
       return { id: existing.id, earned: Number(row.rent) + Number(row.other) > 0 };
     }
+    if (existing && input.regenerate) {
+      await client.query(
+        `UPDATE owner_statements s
+            SET content_snapshot = coalesce(s.content_snapshot, jsonb_build_object(
+                  'opening', s.opening_balance_minor,
+                  'rent', s.rent_received_minor,
+                  'other', s.other_income_minor,
+                  'fee', s.management_fee_minor,
+                  'expenses', s.expenses_minor,
+                  'payouts', s.payouts_minor,
+                  'closing', s.closing_balance_minor,
+                  'firm', coalesce(s.firm_handled_minor, 0),
+                  'lines', coalesce((
+                    SELECT jsonb_agg(jsonb_build_object('line_type', line_type, 'description', description, 'amount', amount_minor) ORDER BY line_type, description)
+                      FROM owner_statement_lines WHERE statement_id = s.id
+                  ), '[]'::jsonb)
+                ))
+          WHERE s.id = $1 AND s.content_snapshot IS NULL`,
+        [existing.id],
+      );
+      await client.query(`DELETE FROM owner_statement_lines WHERE statement_id = $1`, [existing.id]);
+    }
 
-    const payments = await many<{ id: string; property_id: string; property_name: string }>(
+    const payments = await many<{ id: string; property_id: string; property_name: string; payee: string | null; charge_kind: string | null; amount_minor: string }>(
       client,
-      `SELECT p.id, l.property_id::text, pr.name AS property_name
+      `SELECT p.id, l.property_id::text, pr.name AS property_name, p.payee, p.charge_kind, p.amount_minor::text
          FROM payments p
          JOIN leases l ON l.id = p.lease_id
          JOIN properties pr ON pr.id = l.property_id
@@ -2275,7 +2400,13 @@ export async function generateStatement(session: Session, input: { ownerContactI
     );
     const rentByProperty = new Map<string, { name: string; rent: number; utility: number; other: number }>();
     for (const property of properties) rentByProperty.set(property.property_id, { name: property.name, rent: 0, utility: 0, other: 0 });
+    let firmRent = 0;
+    const depositByProperty = new Map<string, number>();
     for (const payment of payments) {
+      if (payment.charge_kind === "deposit") {
+        depositByProperty.set(payment.property_id, (depositByProperty.get(payment.property_id) ?? 0) + Number(payment.amount_minor));
+        continue;
+      }
       const allocations = await many<{ amount_minor: string; invoice_id: string }>(
         client,
         `SELECT amount_minor::text, invoice_id::text FROM payment_allocations WHERE payment_id = $1`,
@@ -2299,6 +2430,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
         bucket.rent += buckets.rent;
         bucket.utility += buckets.utility;
         bucket.other += buckets.other;
+        if (payment.payee === "firm") firmRent += buckets.rent;
       }
     }
     const rent = [...rentByProperty.values()].reduce((sum, row) => sum + row.rent, 0);
@@ -2307,6 +2439,8 @@ export async function generateStatement(session: Session, input: { ownerContactI
       client,
       `SELECT id, amount_minor::text, description, category, property_id::text FROM expenses
         WHERE org_id = $1 AND property_id = ANY($2::uuid[]) AND ${STATEMENT_EXPENSE_SQL}
+          AND utility_run_id IS NULL
+          AND coalesce(description, '') NOT LIKE '電費（空房%'
           AND incurred_on BETWEEN $3 AND $4 AND currency = $5`,
       [session.orgId, propertyIds, bounds.start, bounds.end, currency],
     );
@@ -2338,34 +2472,86 @@ export async function generateStatement(session: Session, input: { ownerContactI
       [input.ownerContactId, currency, bounds.start],
     );
     const opening = Number(previous?.closing_balance_minor ?? 0);
-    const closing = opening + rent + other - fee - expenseTotal;
-    const statement = await one<{ id: string }>(
+    const payoutRow = await maybe<{ amount: string }>(
       client,
-      `INSERT INTO owner_statements (
-         org_id, owner_contact_id, currency, period_start, period_end, status,
-         opening_balance_minor, rent_received_minor, other_income_minor, management_fee_minor,
-         expenses_minor, payouts_minor, closing_balance_minor, fee_rule_snapshot, locale,
-         einvoice_status, issued_at, issued_by
-       ) VALUES (
-         $1,$2,$3,$4,$5,'issued',$6,$7,$8,$9,$10,0,$11,$12::jsonb,$13,'not_applicable',now(),$14
-       ) RETURNING id`,
-      [
-        session.orgId,
-        input.ownerContactId,
-        currency,
-        bounds.start,
-        bounds.end,
-        opening,
-        rent,
-        other,
-        fee,
-        expenseTotal,
-        closing,
-        JSON.stringify(rule ?? { name: null }),
-        session.locale,
-        session.userId,
-      ],
+      `SELECT coalesce(sum(amount_minor), 0)::text AS amount
+         FROM owner_payouts
+        WHERE org_id = $1 AND owner_contact_id = $2 AND period_start = $3::date AND currency = $4`,
+      [session.orgId, input.ownerContactId, bounds.start, currency],
     );
+    const payoutTotal = Number(payoutRow?.amount ?? 0);
+    const closing = Number(BigInt(opening) + BigInt(firmRent) - BigInt(fee) - BigInt(expenseTotal) - BigInt(payoutTotal));
+    const snapshot = {
+      opening,
+      rent,
+      other,
+      fee,
+      expenses: expenseTotal,
+      payouts: payoutTotal,
+      closing,
+      firm: firmRent,
+    };
+    const statement = existing
+      ? await one<{ id: string }>(
+          client,
+          `UPDATE owner_statements
+              SET opening_balance_minor = $2, rent_received_minor = $3, other_income_minor = $4,
+                  management_fee_minor = $5, expenses_minor = $6, payouts_minor = $7,
+                  closing_balance_minor = $8, firm_handled_minor = $9, changed_after_generate = false,
+                  fee_rule_snapshot = $10::jsonb
+            WHERE id = $1
+            RETURNING id`,
+          [
+            existing.id,
+            opening,
+            rent,
+            other,
+            fee,
+            expenseTotal,
+            payoutTotal,
+            closing,
+            firmRent,
+            JSON.stringify(rule ?? { name: null }),
+          ],
+        )
+      : await one<{ id: string }>(
+          client,
+          `INSERT INTO owner_statements (
+             org_id, owner_contact_id, currency, period_start, period_end, status,
+             opening_balance_minor, rent_received_minor, other_income_minor, management_fee_minor,
+             expenses_minor, payouts_minor, closing_balance_minor, firm_handled_minor,
+             content_snapshot, changed_after_generate, fee_rule_snapshot, locale,
+             einvoice_status, issued_at, issued_by
+           ) VALUES (
+             $1,$2,$3,$4,$5,'issued',$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,false,$15::jsonb,$16,'not_applicable',now(),$17
+           ) RETURNING id`,
+          [
+            session.orgId,
+            input.ownerContactId,
+            currency,
+            bounds.start,
+            bounds.end,
+            opening,
+            rent,
+            other,
+            fee,
+            expenseTotal,
+            payoutTotal,
+            closing,
+            firmRent,
+            JSON.stringify(snapshot),
+            JSON.stringify(rule ?? { name: null }),
+            session.locale,
+            session.userId,
+          ],
+        );
+    if (existing) {
+      await client.query(
+        `INSERT INTO statement_change_log (org_id, statement_id, action, reason, actor_user_id, detail)
+         VALUES ($1,$2,'regenerate','重新產生月結單',$3,$4::jsonb)`,
+        [session.orgId, statement.id, session.userId, JSON.stringify({ summary: "重新產生月結單" })],
+      );
+    }
     for (const [propertyId, bucket] of rentByProperty) {
       if (bucket.rent) {
         await client.query(
@@ -2401,6 +2587,15 @@ export async function generateStatement(session: Session, input: { ownerContactI
         `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor, expense_id)
          VALUES ($1,$2,$3,'expense',$4,$5,$6)`,
         [session.orgId, statement.id, expense.property_id, expense.description?.trim() || expense.category, Number(expense.amount_minor), expense.id],
+      );
+    }
+    for (const [propertyId, amount] of depositByProperty) {
+      if (!amount) continue;
+      const name = rentByProperty.get(propertyId)?.name ?? "";
+      await client.query(
+        `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor)
+         VALUES ($1,$2,$3,'other_income',$4,$5)`,
+        [session.orgId, statement.id, propertyId, `${name}・押金（屋主保管）`, amount],
       );
     }
     await linkStatementInvoices(client, session.orgId, propertyIds);
@@ -2607,17 +2802,117 @@ export async function reversePayment(session: Session, paymentId: string, reason
   const note = reason.trim();
   if (!note) throw new FlowError("errors.required");
   await tx(session.userId, async (client) => {
-    const payment = await maybe<{ id: string; status: string; ledger_transaction_id: string | null }>(
+    const payment = await maybe<{
+      id: string;
+      status: string;
+      ledger_transaction_id: string | null;
+      paid_on: string;
+      amount_minor: string;
+      lease_id: string;
+      tenant: string | null;
+    }>(
       client,
-      `SELECT id::text, status::text, ledger_transaction_id::text
-         FROM payments WHERE id = $1 AND org_id = $2`,
+      `SELECT p.id::text, p.status::text, p.ledger_transaction_id::text, p.paid_on::text,
+              p.amount_minor::text, p.lease_id::text, c.display_name AS tenant
+         FROM payments p
+         LEFT JOIN contacts c ON c.id = p.payer_contact_id
+        WHERE p.id = $1 AND p.org_id = $2`,
       [paymentId, session.orgId],
     );
     if (!payment || payment.status !== "confirmed" || !payment.ledger_transaction_id) {
       throw new FlowError("errors.paymentState");
     }
+    await client.query(`SELECT set_config('app.change_reason', $1, true)`, [note]);
     await client.query(`SELECT post_reversal($1::uuid, $2)`, [payment.ledger_transaction_id, note]);
-    await client.query(`UPDATE payments SET status = 'reversed' WHERE id = $1 AND org_id = $2`, [payment.id, session.orgId]);
+    await client.query(
+      `UPDATE payments SET status = 'reversed', reverse_reason = $3 WHERE id = $1 AND org_id = $2`,
+      [payment.id, session.orgId, note],
+    );
+    const statements = await many<{ id: string }>(
+      client,
+      `SELECT s.id::text
+         FROM owner_statements s
+         JOIN leases l ON l.id = $2
+         JOIN property_owners po ON po.property_id = l.property_id AND po.owner_contact_id = s.owner_contact_id
+        WHERE s.org_id = $1 AND s.status = 'issued'
+          AND s.period_start <= $3::date AND s.period_end >= $3::date`,
+      [session.orgId, payment.lease_id, payment.paid_on],
+    );
+    const summary = `撤銷${payment.tenant ?? ""} ${note}`;
+    for (const statement of statements) {
+      await client.query(
+        `UPDATE owner_statements
+            SET changed_after_generate = true,
+                content_snapshot = coalesce(content_snapshot, jsonb_build_object(
+                  'opening', opening_balance_minor,
+                  'rent', rent_received_minor,
+                  'other', other_income_minor,
+                  'fee', management_fee_minor,
+                  'expenses', expenses_minor,
+                  'payouts', payouts_minor,
+                  'closing', closing_balance_minor,
+                  'firm', coalesce(firm_handled_minor, 0)
+                ))
+          WHERE id = $1 AND org_id = $2`,
+        [statement.id, session.orgId],
+      );
+      await client.query(
+        `INSERT INTO statement_change_log (org_id, statement_id, action, reason, actor_user_id, detail)
+         VALUES ($1,$2,'reverse',$3,$4,$5::jsonb)`,
+        [session.orgId, statement.id, note, session.userId, JSON.stringify({ summary, amount: payment.amount_minor, tenant: payment.tenant })],
+      );
+    }
+  });
+}
+
+export async function recordOwnerPayout(
+  session: Session,
+  input: { ownerContactId: string; month: string; amountMinor: bigint; note: string },
+) {
+  assertStaff(session, ["admin", "manager", "accountant"]);
+  if (!/^\d{4}-\d{2}$/.test(input.month) || input.amountMinor <= BigInt(0)) throw new FlowError("errors.amount");
+  const bounds = monthBounds(input.month);
+  await tx(session.userId, async (client) => {
+    const owner = await maybe<{ currency: string }>(
+      client,
+      `SELECT p.currency FROM property_owners po JOIN properties p ON p.id = po.property_id
+        WHERE po.org_id = $1 AND po.owner_contact_id = $2 LIMIT 1`,
+      [session.orgId, input.ownerContactId],
+    );
+    if (!owner) throw new FlowError("errors.notFound");
+    await client.query(
+      `INSERT INTO owner_payouts (org_id, owner_contact_id, currency, period_start, amount_minor, note, recorded_by)
+       VALUES ($1,$2,$3,$4::date,$5,$6,$7)`,
+      [session.orgId, input.ownerContactId, owner.currency, bounds.start, input.amountMinor.toString(), input.note.trim() || null, session.userId],
+    );
+    const statement = await maybe<{ id: string; opening: string; firm: string; fee: string; expenses: string; payouts: string }>(
+      client,
+      `SELECT id::text, opening_balance_minor::text AS opening, coalesce(firm_handled_minor, 0)::text AS firm,
+              management_fee_minor::text AS fee, expenses_minor::text AS expenses, payouts_minor::text AS payouts
+         FROM owner_statements
+        WHERE org_id = $1 AND owner_contact_id = $2 AND period_start = $3::date AND status = 'issued'`,
+      [session.orgId, input.ownerContactId, bounds.start],
+    );
+    if (!statement) return;
+    const payouts = BigInt(statement.payouts) + input.amountMinor;
+    const closing = BigInt(statement.opening) + BigInt(statement.firm) - BigInt(statement.fee) - BigInt(statement.expenses) - payouts;
+    await client.query(
+      `UPDATE owner_statements
+          SET payouts_minor = $2, closing_balance_minor = $3, changed_after_generate = true,
+              content_snapshot = coalesce(content_snapshot, jsonb_build_object(
+                'opening', opening_balance_minor, 'firm', coalesce(firm_handled_minor, 0),
+                'fee', management_fee_minor, 'expenses', expenses_minor,
+                'payouts', payouts_minor, 'closing', closing_balance_minor,
+                'rent', rent_received_minor, 'other', other_income_minor
+              ))
+        WHERE id = $1`,
+      [statement.id, payouts.toString(), closing.toString()],
+    );
+    await client.query(
+      `INSERT INTO statement_change_log (org_id, statement_id, action, reason, actor_user_id, detail)
+       VALUES ($1,$2,'payout',$3,$4,$5::jsonb)`,
+      [session.orgId, statement.id, input.note.trim() || "管理公司匯給屋主", session.userId, JSON.stringify({ amount: input.amountMinor.toString() })],
+    );
   });
 }
 

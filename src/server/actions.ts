@@ -14,7 +14,9 @@ import {
   importBankCsv,
   inviteTeammate,
   postMessage,
+  recordOwnerPayout,
   recordPayment,
+  recordRentPayment,
   rejectPayment,
   setMeterSerial,
   setOwnerPhoneVisibility,
@@ -27,6 +29,7 @@ import {
 } from "./domain";
 import { createOwner, createSpace, updateOwner, updateProperty, updateSpace, type SpaceKind } from "./portfolio";
 import { FlowError } from "./errors";
+import { parseAmountToMinor } from "./rent-settlement-math";
 import { normalizePhone } from "./lease-rules";
 import { taipeiToday } from "./money";
 import { typedStreet } from "@/property-address";
@@ -314,6 +317,77 @@ export async function actionRecordPayment(formData: FormData) {
   }
 }
 
+export async function actionRegisterRent(formData: FormData) {
+  const leaseId = text(formData.get("leaseId"));
+  const kind = text(formData.get("kind"));
+  const period = text(formData.get("period"));
+  const payee = text(formData.get("payee"));
+  const paidOn = text(formData.get("paidOn"));
+  const amount = text(formData.get("amount"));
+  const last5 = text(formData.get("last5")).trim();
+  const note = text(formData.get("note"));
+  const month = text(formData.get("month"));
+  const params = new URLSearchParams({
+    open: "1",
+    leaseId,
+    kind,
+    period,
+    payee,
+    paidOn,
+    amount,
+    last5,
+    note,
+  });
+  if (/^\d{4}-\d{2}$/.test(month)) params.set("month", month);
+  const back = `/m/payments?${params.toString()}`;
+  try {
+    const session = await getSession();
+    const minor = parseAmountToMinor(amount, "TWD");
+    if (!leaseId) throw new FlowError("pay.lease");
+    if (!kind) throw new FlowError("pay.kind");
+    if (!period) throw new FlowError("pay.period");
+    if (!payee) throw new FlowError("pay.payee");
+    if (!minor) throw new FlowError("pay.amount");
+    await recordRentPayment(session, {
+      leaseId,
+      amountMinor: minor,
+      paidOn,
+      last5,
+      reference: note,
+      chargeKind: kind,
+      period,
+      payee,
+      allowDuplicate: formData.get("acceptDuplicate") === "1",
+    });
+    redirect(`/m/payments?month=${encodeURIComponent(period)}`);
+  } catch (error) {
+    if (error instanceof FlowError && error.key === "pay.duplicate") {
+      params.set("notice", "duplicate");
+      redirect(`/m/payments?${params.toString()}`);
+    }
+    bounce(back, error);
+  }
+}
+
+export async function actionRecordPayout(formData: FormData) {
+  const statementId = text(formData.get("statementId"));
+  const back = statementId ? `/m/statements/${statementId}` : "/m/statements";
+  try {
+    const session = await getSession();
+    const minor = parseAmountToMinor(text(formData.get("amount")), "TWD");
+    if (!minor) throw new FlowError("errors.amount");
+    await recordOwnerPayout(session, {
+      ownerContactId: text(formData.get("ownerContactId")),
+      month: text(formData.get("month")),
+      amountMinor: minor,
+      note: text(formData.get("note")),
+    });
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
 export async function actionConfirmPayment(formData: FormData) {
   const id = text(formData.get("paymentId"));
   try {
@@ -362,6 +436,7 @@ export async function actionStatement(formData: FormData) {
     const result = await generateStatement(session, {
       ownerContactId: text(formData.get("ownerContactId")),
       month: text(formData.get("month")),
+      regenerate: formData.get("regenerate") === "1",
     });
     revalidatePath("/m/statements");
     revalidatePath("/m/statements/preview");

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { makeT } from "@/i18n";
+import { signedMoneyLabel } from "./format";
 import {
   attributeMinor,
   defaultPaidOn,
@@ -10,9 +11,14 @@ import {
   managementFeeExact,
   minorToAmountText,
   monthWindow,
+  civilPeriodLabel,
+  closingBalance,
+  dueDayAllowed,
   parseAmountToMinor,
   parseCivilDate,
+  previousPeriod,
   projectMonth,
+  rentPeriodLabel,
   rentSettlementEnabled,
   settlementCsv,
   taipeiCalendarDate,
@@ -162,6 +168,26 @@ test("partial payments, reversals, and one fee on the month total stay exact", (
     ),
     BigInt(50_000),
   );
+});
+
+test("closing balance is opening plus firm rent minus costs minus payouts", () => {
+  assert.equal(civilPeriodLabel("2026-10"), "2026年10月");
+  assert.equal(rentPeriodLabel("2026-10"), "2026年10月 租金");
+  assert.equal(previousPeriod("2026-01"), "2025-12");
+  assert.equal(dueDayAllowed(5), true);
+  assert.equal(dueDayAllowed(28), true);
+  assert.equal(dueDayAllowed(29), false);
+  assert.equal(
+    closingBalance(BigInt(200_000), BigInt(1_550_000), BigInt(755_000), BigInt(900_000)),
+    BigInt(95_000),
+  );
+  assert.equal(
+    closingBalance(BigInt(200_000), BigInt(1_550_000), BigInt(935_000), BigInt(900_000)),
+    BigInt(-85_000),
+  );
+  assert.equal(signedMoneyLabel(-330_000, "TWD", "zh-TW"), "\u2212NT$3,300");
+  assert.equal(signedMoneyLabel(0, "TWD", "zh-TW"), "NT$0");
+  assert.equal(signedMoneyLabel(-330_000, "TWD", "zh-TW").includes("-NT$"), false);
 });
 
 test("settlement copy uses 屋主, 未繳租金, 已繳, and 款項到帳", () => {

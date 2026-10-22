@@ -36,7 +36,7 @@ export default async function PropertyPage({
         crumb={<Link href="/m/properties">{t("s_e03a6ec")}</Link>}
         actions={
           <>
-            {can(session.role, "props.edit") ? (
+            {can(session.role, "props.edit") && !detail.property.records_only ? (
               <Link className="btn" href={`/m/properties/${id}/edit`} data-testid="edit-property">
                 {t("i_edit")}
               </Link>
@@ -48,6 +48,9 @@ export default async function PropertyPage({
         }
       />
       <p className="muted">{detail.property.address_display}</p>
+      {detail.property.records_only ? (
+        <p className="alert warn" data-testid="records-only">{t("i_stmt_readonly")}</p>
+      ) : null}
       {query.created === "1" ? (
         <p className="alert ok" data-testid="property-created">
           {t("i_created_prop")}
@@ -91,7 +94,7 @@ export default async function PropertyPage({
               detail.owner ? displaySampleName(detail.owner.name) : null
             )}
           </p>
-          {detail.owner && (session.role === "admin" || session.role === "manager") ? (
+          {detail.owner && !detail.property.records_only && (session.role === "admin" || session.role === "manager") ? (
             <form action={actionPhoneVisibility}>
               <input type="hidden" name="propertyId" value={id} />
               <input type="hidden" name="propertyOwnerId" value={detail.owner.id} />

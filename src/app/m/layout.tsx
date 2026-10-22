@@ -17,7 +17,7 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   const denied = noPermHref(path, session.role);
   if (denied) redirect(denied);
   const jar = await cookies();
-  const { flags, firm, badge, rentSettlement } = await loadManagerChrome(session);
+  const { flags, firm, badge } = await loadManagerChrome(session);
   return (
     <>
       {session.environment === "live" ? null : (
@@ -33,7 +33,6 @@ export default async function ManagerLayout({ children }: { children: React.Reac
           role={session.role}
           showReset={demoModeEnabled() && session.role === "admin"}
           sandbox={session.environment === "sandbox"}
-          rentSettlement={rentSettlement}
         />
         <div className="main">
           {children}

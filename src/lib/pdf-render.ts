@@ -83,6 +83,11 @@ export async function renderPdf(doc: PdfDocument, fontBytes: Uint8Array): Promis
         out += ch;
         continue;
       }
+      // The embedded face has U+FF0D and not U+2212. Screen copy keeps U+2212.
+      if (ch === "\u2212") {
+        out += "\uFF0D";
+        continue;
+      }
       if (hasCjk(ch) || canLatin(ch)) {
         out += ch;
         continue;

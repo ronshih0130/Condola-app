@@ -1,6 +1,6 @@
 import { dictionary, type Locale, type T } from "@/i18n";
 import type { PdfBlock, PdfDocument, PdfRow } from "@/lib/pdf-document";
-import { formatDate, moneyLabel, ownerSettlement } from "@/server/format";
+import { formatDate, moneyLabel, ownerSettlement, signedMoneyLabel } from "@/server/format";
 import { renderOfficialLease } from "@/server/official-lease";
 import { can } from "@/server/perms";
 import type { CalendarMode, Session } from "@/server/types";
@@ -59,6 +59,7 @@ export type StatementPdfSource = {
   expenses: number;
   payouts: number;
   closing: number;
+  firm?: number;
   lines: StatementPdfLine[];
   addresses: string[];
   audience: "owner" | "staff";
@@ -114,19 +115,21 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     closing: source.closing,
   });
   const money = (minor: number) => moneyLabel(minor, source.currency, locale);
+  const signed = (minor: number) => signedMoneyLabel(minor, source.currency, locale);
   const rows: PdfRow[] = [
     { label: t("i_opening"), value: money(figures.opening) },
     { label: t("i_rent_received"), value: money(figures.rent) },
     { label: t("i_other_income"), value: money(figures.other) },
     { label: t("i_fee"), value: money(figures.fee) },
     { label: t("i_expenses"), value: money(figures.expenses) },
+    { label: t("i_payouts"), value: money(figures.payouts) },
   ];
   if (figures.owes > 0) {
-    rows.push({ label: t("i_net_owner"), value: `${t("owner_owes")} ${money(figures.owes)}` });
+    rows.push({ label: t("i_stmt_owner_net"), value: `${t("owner_owes")} ${signed(-figures.owes)}` });
   } else {
-    rows.push({ label: t("i_net_owner"), value: money(figures.payable) });
-    rows.push({ label: t("i_closing"), value: money(Math.max(0, figures.closing)) });
+    rows.push({ label: t("i_stmt_owner_net"), value: money(figures.payable) });
   }
+  rows.push({ label: t("i_closing"), value: signed(figures.closing) });
   const blocks: PdfBlock[] = [];
   const addresses = source.addresses.map((address) => address.trim()).filter(Boolean);
   if (addresses.length) {
@@ -134,24 +137,37 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
   }
   blocks.push({ kind: "rows", heading: "", rows });
   if (figures.owes > 0) {
+    const bare = money(figures.owes).replace(/^NT\$/, "");
     blocks.push({
       kind: "text",
       heading: "",
-      lines: [t("owner_owes_reason", { cost: money(figures.costs), rent: money(figures.rent + figures.other) })],
+      lines: [t("i_stmt_negative", { amount: bare })],
     });
   }
+  blocks.push({
+    kind: "text",
+    heading: "",
+    lines: [
+      t("i_stmt_formula", {
+        opening: money(figures.opening),
+        firm: money(source.firm ?? 0),
+        costs: money(figures.costs),
+        payouts: money(figures.payouts),
+        closing: signed(figures.closing),
+      }),
+    ],
+  });
   if (source.lines.length) {
     blocks.push({
       kind: "rows",
       heading: t("pdf_lines"),
-      rows: source.lines.map((line) => ({
+      rows: source.lines.filter((line) => !String(line.description ?? "").includes("電費（空房")).map((line) => ({
         label: line.description || t("i_expenses"),
         value: money(line.amount),
       })),
     });
   }
-  const notes = [t("i_actor")];
-  if (source.audience === "staff") notes.push(t("i_einvoice"));
+  const notes = [t("i_actor"), t("i_stmt_footer"), t("i_stmt_disclaimer")];
   blocks.push({ kind: "text", heading: "", lines: notes });
   const period = `${formatDate(source.periodStart, locale, calendar, dict)} - ${formatDate(source.periodEnd, locale, calendar, dict)}`;
   return {

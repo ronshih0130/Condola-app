@@ -62,6 +62,7 @@ export const ERRORS: Record<string, string> = {
   "errors.portalMismatch": "i_portal_link_mismatch",
   "errors.portalTimeout": "i_portal_timeout",
   "errors.portalRenew": "i_portal_renew",
+  "errors.recordsOnly": "i_stmt_readonly",
 };
 
 export function errorText(t: T, key: string | undefined) {

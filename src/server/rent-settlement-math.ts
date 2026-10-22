@@ -263,6 +263,35 @@ export function minorToAmountText(minor: bigint, currency: string): string {
   return negative ? `-${body}` : body;
 }
 
+/** closing = opening + firm-handled rent − fees − payouts. All values are minor units. */
+export function closingBalance(opening: bigint, firmRent: bigint, costs: bigint, payouts: bigint): bigint {
+  return opening + firmRent - costs - payouts;
+}
+
+/** Screen period. Data and exports stay YYYY-MM. Month is not zero-padded. */
+export function civilPeriodLabel(period: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(period);
+  if (!match) return period;
+  return `${match[1]}年${Number(match[2])}月`;
+}
+
+export function rentPeriodLabel(period: string): string {
+  return `${civilPeriodLabel(period)} 租金`;
+}
+
+export function previousPeriod(period: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(period);
+  if (!match) return period;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const date = new Date(Date.UTC(year, month - 2, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function dueDayAllowed(day: number): boolean {
+  return Number.isInteger(day) && day >= 1 && day <= 28;
+}
+
 export function minorNumber(value: bigint): number {
   const max = BigInt(Number.MAX_SAFE_INTEGER);
   if (value > max || value < -max) throw new Error("amount exceeds exact integer range");

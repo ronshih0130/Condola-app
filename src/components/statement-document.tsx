@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Locale, T } from "@/i18n";
 import { BrandImage } from "@/components/brand";
 import { moneyLabel, ownerSettlement, signedMoneyLabel } from "@/server/format";
+import { civilPeriodLabel, previousPeriod } from "@/server/rent-settlement-math";
 
 export function StatementDocument({
   t,
@@ -22,6 +23,8 @@ export function StatementDocument({
     expenses: string;
     payouts: string;
     closing: string;
+    firm?: string;
+    period_start?: string;
   };
   note?: ReactNode;
 }) {
@@ -34,13 +37,20 @@ export function StatementDocument({
     payouts: Number(row.payouts),
     closing: Number(row.closing),
   });
+  const firm = Number(row.firm ?? 0);
   const money = (minor: number) => moneyLabel(minor, row.currency, locale);
+  const signed = (minor: number) => signedMoneyLabel(minor, row.currency, locale);
+  const bare = (minor: number) => money(Math.abs(minor)).replace(/^NT\$/, "");
+  const period = row.period_start ? row.period_start.slice(0, 7) : "";
+  const prev = period ? civilPeriodLabel(previousPeriod(period)) : "";
   const summary = [
-    ["i_opening", money(figures.opening), ""],
+    ["i_opening", money(figures.opening), "statement-opening"],
+    ["i_stmt_firm_rent", money(firm), "statement-firm"],
     ["i_rent_received", money(figures.rent), "statement-rent"],
     ["i_other_income", money(figures.other), ""],
     ["i_fee", money(figures.fee), "statement-fee"],
-    ["i_expenses", signedMoneyLabel(figures.expenses, row.currency, locale), ""],
+    ["i_expenses", money(figures.expenses), ""],
+    ["i_payouts", money(figures.payouts), "statement-payouts"],
   ] as const;
   return (
     <div className="card" style={{ maxWidth: 640 }} data-testid="statement-document">
@@ -55,50 +65,66 @@ export function StatementDocument({
               </td>
             </tr>
           ))}
-          {figures.owes > 0 ? (
-            <tr>
-              <td>{t("i_net_owner")}</td>
-              <td className="num">
+          <tr>
+            <td>{t("i_stmt_owner_net")}</td>
+            <td className="num">
+              {figures.owes > 0 ? (
                 <span className="chip warn" data-testid="owner-owes">
-                  {t("owner_owes")} {money(figures.owes)}
+                  {t("owner_owes")} {signed(-figures.owes)}
                 </span>
-              </td>
-            </tr>
-          ) : (
-            <>
-              <tr>
-                <td>{t("i_net_owner")}</td>
-                <td className="num">{money(figures.payable)}</td>
-              </tr>
-              <tr>
-                <td>{t("i_closing")}</td>
-                <td className="num" data-testid="statement-closing">
-                  {money(Math.max(0, figures.closing))}
-                </td>
-              </tr>
-            </>
-          )}
+              ) : (
+                money(figures.payable)
+              )}
+            </td>
+          </tr>
+          <tr>
+            <td>{t("i_closing")}</td>
+            <td className="num" data-testid="statement-closing">
+              {signed(figures.closing)}
+            </td>
+          </tr>
         </tbody>
       </table>
+      <p className="small" data-testid="statement-formula">
+        {t("i_stmt_formula", {
+          opening: money(figures.opening),
+          firm: money(firm),
+          costs: money(figures.costs),
+          payouts: money(figures.payouts),
+          closing: signed(figures.closing),
+        })}
+      </p>
+      {prev ? (
+        <p className="small muted" data-testid="statement-prev-close">
+          {t("i_stmt_prev_close", { period: prev })} {money(figures.opening)}
+        </p>
+      ) : null}
       {figures.owes > 0 ? (
         <div className="bd">
           <div className="alert warn small" data-testid="owner-owes-reason">
-            ⚠ {t("owner_owes_reason", { cost: money(figures.costs), rent: money(figures.rent + figures.other) })}
+            ⚠ {t("i_stmt_negative", { amount: bare(figures.owes) })}
           </div>
         </div>
       ) : null}
       {lines && lines.length > 0 ? (
         <table className="t">
           <tbody>
-            {lines.map((line, index) => (
-              <tr key={`${line.line_type}-${index}`}>
-                <td data-testid="statement-line">{line.description || t("i_expenses")}</td>
-                <td className="num" data-testid="statement-line-amount">{signedMoneyLabel(Number(line.amount), row.currency, locale)}</td>
-              </tr>
-            ))}
+            {lines
+              .filter((line) => !String(line.description ?? "").includes("電費（空房"))
+              .map((line, index) => (
+                <tr key={`${line.line_type}-${index}`}>
+                  <td data-testid="statement-line">{line.description || t("i_expenses")}</td>
+                  <td className="num" data-testid="statement-line-amount">
+                    {signedMoneyLabel(Number(line.amount), row.currency, locale)}
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       ) : null}
+      <p className="small muted" data-testid="statement-footer">
+        {t("i_stmt_footer")}
+      </p>
       {note ? <div className="bd">{note}</div> : null}
     </div>
   );

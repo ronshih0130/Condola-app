@@ -349,6 +349,8 @@ body:has(.env-banner) .nav-check:checked ~ .app .nav-backdrop{inset:88px 0 0 0}
 .portal-brand{display:flex;justify-content:center;padding:4px 0 8px}
 .portal-brand img{width:160px;height:auto}
 .statement-logo{width:160px;height:auto;display:block;margin:16px 16px 0}
+.stmt-title{white-space:nowrap}
+@media (max-width:640px){.stmt-title{font-size:18px}}
 .liff-welcome{display:flex;justify-content:center;padding:8px 0 4px}
 .liff-welcome img{width:148px;height:auto}
 .steps{display:flex;gap:8px;list-style:none;padding:0;margin:0 0 12px}

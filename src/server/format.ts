@@ -41,11 +41,13 @@ export type StatementFigures = {
   closing: number;
 };
 
-/** Signed TWD amounts keep the NT$ prefix, including a leading minus for a credit. */
+/** Signed TWD amounts use one U+2212 before NT$. Zero stays NT$0. */
 export function signedMoneyLabel(minor: number | string, currency: string, locale: Locale) {
   const value = Number(minor);
   const label = moneyLabel(value, currency, locale);
-  return value < 0 ? `-${label}` : label;
+  if (!(value < 0)) return label;
+  if (label.startsWith("\u2212") || label.startsWith("-")) return label;
+  return `\u2212${label}`;
 }
 
 /** Month settlement. A negative net is what the owner owes — never a negative payout. */

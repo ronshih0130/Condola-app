@@ -572,11 +572,13 @@ export async function updateProperty(
   assertPerm(session, "props.edit");
   if (!input.name.trim() || !input.street.trim() || !input.ownerContactId) throw new FlowError("errors.required");
   await tx(session.userId, async (client) => {
-    const property = await maybe<{ country_code: string; currency: string }>(
+    const property = await maybe<{ country_code: string; currency: string; records_only: boolean }>(
       client,
-      `SELECT country_code, currency FROM properties WHERE id = $1 AND org_id = $2 AND archived_at IS NULL`,
+      `SELECT country_code, currency, coalesce(records_only, false) AS records_only
+         FROM properties WHERE id = $1 AND org_id = $2 AND archived_at IS NULL`,
       [propertyId, session.orgId],
     );
+    if (property?.records_only) throw new FlowError("errors.recordsOnly");
     if (!property) throw new FlowError("errors.notFound");
     const country = property.country_code.trim();
     const city = input.city.trim();
