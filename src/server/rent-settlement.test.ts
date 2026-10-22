@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 import { makeT } from "@/i18n";
 import { signedMoneyLabel } from "./format";
@@ -51,12 +51,57 @@ test("sample company creation and the beta seed store the flag", () => {
   const seed = readFileSync(new URL("./seed.ts", import.meta.url), "utf8");
   assert.match(sandbox, /rent_settlement": true/);
   assert.match(seed, /rent_settlement": true/);
-  const migration = readFileSync(new URL("../../supabase/migrations/20261029120000_rent_settlement.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../../supabase/migrations/20261029180000_rent_settlement.sql", import.meta.url), "utf8");
+  assert.match(migration, /-- Version 20261029180000\./);
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /app\.is_member\(org_id\)/);
   assert.match(migration, /feature_flags ->> 'rent_settlement'/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS payment_corrections/);
+  assert.match(migration, /DROP POLICY IF EXISTS/);
+  assert.match(migration, /DROP TRIGGER IF EXISTS/);
   assert.doesNotMatch(migration, /ALTER TABLE (?!payment_corrections\b)/);
   assert.doesNotMatch(migration, /ALTER TABLE payment_corrections[\s\S]*NOT NULL/);
+  assert.equal(existsSync(new URL("../../supabase/migrations/20261029120000_rent_settlement.sql", import.meta.url)), false);
+});
+
+test("payment rules migration is additive, idempotent, and locks the trigger functions", () => {
+  const names = readdirSync(new URL("../../supabase/migrations/", import.meta.url))
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  assert.equal(names.includes("20261029180000_rent_settlement.sql"), true);
+  assert.equal(names.includes("20261029190000_payment_settlement_rules.sql"), true);
+  assert.equal(names.includes("20261029120000_rent_settlement.sql"), false);
+  assert.equal(names.includes("20261029130000_payment_settlement_rules.sql"), false);
+  const rules = readFileSync(new URL("../../supabase/migrations/20261029190000_payment_settlement_rules.sql", import.meta.url), "utf8");
+  assert.match(rules, /-- Version 20261029190000\./);
+  assert.match(rules, /ADD COLUMN IF NOT EXISTS/);
+  assert.match(rules, /CREATE TABLE IF NOT EXISTS statement_change_log/);
+  assert.match(rules, /CREATE TABLE IF NOT EXISTS owner_payouts/);
+  assert.match(rules, /DROP POLICY IF EXISTS/);
+  assert.match(rules, /DROP TRIGGER IF EXISTS/);
+  assert.doesNotMatch(rules, /ADD COLUMN (?!IF NOT EXISTS)/);
+  assert.doesNotMatch(rules, /ALTER TABLE (payments|owner_statements|properties|leases)[^;]*NOT NULL/);
+  assert.doesNotMatch(rules, /ADD CONSTRAINT/);
+  const locked = [
+    "public.fn_invoice_recalc(uuid)",
+    "public.fn_invoice_lines_changed()",
+    "public.fn_payment_status_changed()",
+  ];
+  for (const fn of locked) {
+    assert.match(rules, new RegExp(`to_regprocedure\\('${fn.replace(/[()]/g, "\\$&")}'\\)`));
+    assert.match(
+      rules,
+      new RegExp(`ALTER FUNCTION ${fn.replace(/[()]/g, "\\$&")} SECURITY DEFINER SET search_path = public, pg_temp`),
+    );
+    assert.match(
+      rules,
+      new RegExp(`REVOKE EXECUTE ON FUNCTION ${fn.replace(/[()]/g, "\\$&")} FROM PUBLIC, anon, authenticated`),
+    );
+  }
+  const triggerAt = rules.indexOf("public.fn_invoice_lines_changed()");
+  const definerAt = rules.indexOf("ALTER FUNCTION public.fn_invoice_lines_changed() SECURITY DEFINER SET search_path = public, pg_temp");
+  const revokeAt = rules.indexOf("REVOKE EXECUTE ON FUNCTION public.fn_invoice_lines_changed() FROM PUBLIC, anon, authenticated");
+  assert.ok(triggerAt >= 0 && definerAt > triggerAt && revokeAt > definerAt);
 });
 
 test("TWD amounts are whole NT$ minor units, with no float parsing", () => {

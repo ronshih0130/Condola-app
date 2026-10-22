@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { query, tx, withClient } from "./db";
 import { FlowError } from "./errors";
@@ -163,22 +164,60 @@ test("bill payments stay org-scoped, partial, correctable, and reversible", asyn
 });
 
 test("anon and authenticated cannot execute invoice recalc, and a member insert still recalculates", async () => {
+  const rules = readFileSync(new URL("../../supabase/migrations/20261029190000_payment_settlement_rules.sql", import.meta.url), "utf8");
+  await withClient(async (client) => {
+    await client.query(rules);
+    await client.query(rules);
+  });
+
+  const defs = await query<{ proname: string; prosecdef: boolean; proconfig: string | null }>(
+    `SELECT p.proname, p.prosecdef, p.proconfig::text AS proconfig
+       FROM pg_proc p
+       JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND p.proname IN ('fn_invoice_recalc', 'fn_invoice_lines_changed', 'fn_payment_status_changed')
+      ORDER BY p.proname`,
+  );
+  assert.deepEqual(
+    defs.rows.map((row) => row.proname),
+    ["fn_invoice_lines_changed", "fn_invoice_recalc", "fn_payment_status_changed"],
+  );
+  for (const row of defs.rows) {
+    assert.equal(row.prosecdef, true, row.proname);
+    assert.match(row.proconfig ?? "", /search_path=public, pg_temp/, row.proname);
+  }
+
   const priv = await query<{
     anon_recalc: boolean;
     auth_recalc: boolean;
     anon_lines: boolean;
     auth_lines: boolean;
+    anon_payment: boolean;
+    auth_payment: boolean;
+    service_recalc: boolean;
+    service_lines: boolean;
+    service_payment: boolean;
   }>(
     `SELECT
        has_function_privilege('anon', 'public.fn_invoice_recalc(uuid)', 'EXECUTE') AS anon_recalc,
        has_function_privilege('authenticated', 'public.fn_invoice_recalc(uuid)', 'EXECUTE') AS auth_recalc,
        has_function_privilege('anon', 'public.fn_invoice_lines_changed()', 'EXECUTE') AS anon_lines,
-       has_function_privilege('authenticated', 'public.fn_invoice_lines_changed()', 'EXECUTE') AS auth_lines`,
+       has_function_privilege('authenticated', 'public.fn_invoice_lines_changed()', 'EXECUTE') AS auth_lines,
+       has_function_privilege('anon', 'public.fn_payment_status_changed()', 'EXECUTE') AS anon_payment,
+       has_function_privilege('authenticated', 'public.fn_payment_status_changed()', 'EXECUTE') AS auth_payment,
+       has_function_privilege('service_role', 'public.fn_invoice_recalc(uuid)', 'EXECUTE') AS service_recalc,
+       has_function_privilege('service_role', 'public.fn_invoice_lines_changed()', 'EXECUTE') AS service_lines,
+       has_function_privilege('service_role', 'public.fn_payment_status_changed()', 'EXECUTE') AS service_payment`,
   );
   assert.equal(priv.rows[0]?.anon_recalc, false);
   assert.equal(priv.rows[0]?.auth_recalc, false);
   assert.equal(priv.rows[0]?.anon_lines, false);
   assert.equal(priv.rows[0]?.auth_lines, false);
+  assert.equal(priv.rows[0]?.anon_payment, false);
+  assert.equal(priv.rows[0]?.auth_payment, false);
+  assert.equal(priv.rows[0]?.service_recalc, true);
+  assert.equal(priv.rows[0]?.service_lines, true);
+  assert.equal(priv.rows[0]?.service_payment, true);
 
   await withClient(async (client) => {
     await client.query("BEGIN");
@@ -190,14 +229,21 @@ test("anon and authenticated cannot execute invoice recalc, and a member insert 
     );
     await client.query("ROLLBACK TO SAVEPOINT recalc");
     await assert.rejects(() => client.query(`SELECT fn_invoice_lines_changed()`), /permission denied/i);
+    await client.query("ROLLBACK TO SAVEPOINT recalc");
+    await assert.rejects(() => client.query(`SELECT fn_payment_status_changed()`), /permission denied/i);
     await client.query("ROLLBACK");
   });
 
   await tx(USERS.admin, async (client) => {
+    await client.query("SAVEPOINT recalc");
     await assert.rejects(
       () => client.query(`SELECT fn_invoice_recalc('00000000-0000-4000-8000-000000000099'::uuid)`),
       /permission denied/i,
     );
+    await client.query("ROLLBACK TO SAVEPOINT recalc");
+    await assert.rejects(() => client.query(`SELECT fn_invoice_lines_changed()`), /permission denied/i);
+    await client.query("ROLLBACK TO SAVEPOINT recalc");
+    await assert.rejects(() => client.query(`SELECT fn_payment_status_changed()`), /permission denied/i);
   });
 
   const invoice = await tx(USERS.admin, async (client) => {

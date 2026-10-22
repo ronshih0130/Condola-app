@@ -1,10 +1,10 @@
--- Version 20261029120000.
+-- Version 20261029180000.
 -- Rent payment records and owner settlement, behind feature flag rent_settlement.
 --
--- Additive only. No new NOT NULL, CHECK, or foreign key is added to an existing
--- table. organizations.feature_flags already exists; this only sets a jsonb key
--- on sample (sandbox) and beta firms. payment_corrections is a new append-only
--- audit table. Older Workers do not read it.
+-- Additive only and safe to apply again. No new NOT NULL, CHECK, or foreign key
+-- is added to an existing table. organizations.feature_flags already exists;
+-- this only sets a jsonb key on sample (sandbox) and beta firms.
+-- payment_corrections is a new append-only audit table. Older Workers do not read it.
 
 UPDATE organizations
    SET feature_flags = coalesce(feature_flags, '{}'::jsonb) || '{"rent_settlement": true}'::jsonb

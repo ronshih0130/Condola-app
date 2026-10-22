@@ -1,25 +1,38 @@
--- Version 20261029130000.
+-- Version 20261029190000.
 -- Payment and owner-settlement rules.
 --
--- Invoice recalc stays a trigger, but only the table owner (and service_role)
--- may call it. Trigger functions are SECURITY DEFINER so a member insert still
--- recalculates after EXECUTE is revoked from anon and authenticated.
+-- Invoice recalc stays a trigger. fn_invoice_lines_changed and
+-- fn_payment_status_changed are SECURITY DEFINER with a fixed search_path
+-- (public, then pg_temp, so a temp object cannot shadow public). EXECUTE on
+-- those trigger functions, and on fn_invoice_recalc, is revoked from PUBLIC,
+-- anon, and authenticated. Trigger fire does not check EXECUTE, so a member
+-- insert still recalculates. Direct calls are server-side only.
+--
+-- REVOKE is idempotent. The same revoke may also land in another migration;
+-- applying this block again is safe, and a missing function is skipped.
 --
 -- Additive only on existing tables: new nullable columns and a default change.
 -- No new NOT NULL, CHECK, or foreign key is added to an existing table.
--- statement_change_log and owner_payouts are new tables.
+-- statement_change_log and owner_payouts are new tables. Safe to apply again.
 
-ALTER FUNCTION fn_invoice_recalc(uuid) SECURITY DEFINER;
-ALTER FUNCTION fn_invoice_recalc(uuid) SET search_path = public, pg_temp;
-ALTER FUNCTION fn_invoice_lines_changed() SECURITY DEFINER;
-ALTER FUNCTION fn_invoice_lines_changed() SET search_path = public, pg_temp;
-ALTER FUNCTION fn_payment_status_changed() SECURITY DEFINER;
-ALTER FUNCTION fn_payment_status_changed() SET search_path = public, pg_temp;
-
-REVOKE EXECUTE ON FUNCTION fn_invoice_recalc(uuid) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION fn_invoice_lines_changed() FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION fn_invoice_recalc(uuid) TO service_role;
-GRANT EXECUTE ON FUNCTION fn_invoice_lines_changed() TO service_role;
+DO $$
+BEGIN
+  IF to_regprocedure('public.fn_invoice_recalc(uuid)') IS NOT NULL THEN
+    ALTER FUNCTION public.fn_invoice_recalc(uuid) SECURITY DEFINER SET search_path = public, pg_temp;
+    REVOKE EXECUTE ON FUNCTION public.fn_invoice_recalc(uuid) FROM PUBLIC, anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.fn_invoice_recalc(uuid) TO service_role;
+  END IF;
+  IF to_regprocedure('public.fn_invoice_lines_changed()') IS NOT NULL THEN
+    ALTER FUNCTION public.fn_invoice_lines_changed() SECURITY DEFINER SET search_path = public, pg_temp;
+    REVOKE EXECUTE ON FUNCTION public.fn_invoice_lines_changed() FROM PUBLIC, anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.fn_invoice_lines_changed() TO service_role;
+  END IF;
+  IF to_regprocedure('public.fn_payment_status_changed()') IS NOT NULL THEN
+    ALTER FUNCTION public.fn_payment_status_changed() SECURITY DEFINER SET search_path = public, pg_temp;
+    REVOKE EXECUTE ON FUNCTION public.fn_payment_status_changed() FROM PUBLIC, anon, authenticated;
+    GRANT EXECUTE ON FUNCTION public.fn_payment_status_changed() TO service_role;
+  END IF;
+END $$;
 
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS payee text;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS charge_kind text;
