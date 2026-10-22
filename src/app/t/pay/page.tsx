@@ -2,6 +2,7 @@ import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner } from "@/components/ui";
 import { moneyLabel } from "@/server/format";
+import { unsignedRentNoteKey } from "@/server/pay-note";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { selectedLease } from "@/lib/tenant-lease";
@@ -15,6 +16,7 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
   if (!lease) return <p>{t("i_empty")}</p>;
   const money = await tenantLeaseMoney(session, lease.lease_id);
   if (!money) return <p>{t("i_empty")}</p>;
+  const noteKey = unsignedRentNoteKey(money.lease.status);
   return (
     <div>
       <h2>{t("i_rich_pay")}</h2>
@@ -23,6 +25,9 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
       <p>
         {displaySampleName(money.lease.place)}
       </p>
+      {noteKey ? (
+        <p className="small" data-testid="unsigned-rent-note">{t(noteKey)}</p>
+      ) : null}
       {money.rentLines.map((line, index) => (
         <p key={`rent-${line.amount}-${index}`} data-testid="tenant-rent-line">
           {t("i_charge_rent")} {moneyLabel(Number(line.amount), money.currency, session.locale)}

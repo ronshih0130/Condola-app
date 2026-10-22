@@ -858,6 +858,7 @@
  "i_charged_total": "Charged to tenants {amount} (rate x kWh). The Taipower bill is {bill}. Those two totals are not meant to match.",
  "i_pay_hint": "Defaults to unpaid rent plus registered electricity, not the deposit. The deposit stays on the invoice and is held by the landlord.",
  "i_pay_hint_tenant": "Starts with unpaid rent and electricity, not the deposit. The deposit stays on the bill and is held by the owner.",
+ "i_pay_unsigned_rent": "The lease is not fully signed yet. The rent bill is created after both parties sign.",
  "i_meter_rate": "By meter {rate}/kWh",
  "i_due_day": "Day {day}",
  "i_from_property": "From property settings ({name})",
