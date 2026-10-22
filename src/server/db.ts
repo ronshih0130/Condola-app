@@ -163,11 +163,18 @@ export async function tx<T>(userId: string, fn: (client: Client) => Promise<T>, 
           "live";
         await pinOrg(client, scope.orgId, environment);
       } else {
+        // pinOrg sets app.active_org_id. post_reversal and fn_invoice_recalc
+        // compare that setting when current_user is authenticated.
+        // cookies() throws outside a request; still resolve the live firm so
+        // the setting exists for those functions.
         const choice = await readEnvChoice();
-        if (choice) {
-          const firm = await resolveStaffOrg(client, userId, choice.preferred, choice.environment);
-          if (firm) await pinOrg(client, firm.orgId, firm.environment);
-        }
+        const firm = await resolveStaffOrg(
+          client,
+          userId,
+          choice?.preferred ?? null,
+          choice?.environment ?? null,
+        );
+        if (firm) await pinOrg(client, firm.orgId, firm.environment);
       }
       await client.query("SET LOCAL ROLE authenticated");
       const result = await fn(client);
