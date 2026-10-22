@@ -1,5 +1,20 @@
+import { Client } from "pg";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { resetDemo } from "./session";
+
+const ORG = "10000000-0000-4000-8000-000000000001";
+
+async function withDb<T>(run: (client: Client) => Promise<T>) {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola",
+  });
+  await client.connect();
+  try {
+    return await run(client);
+  } finally {
+    await client.end();
+  }
+}
 
 const TENANT = "週期租客";
 const START = "2026-11-01";
@@ -20,7 +35,7 @@ async function roomValue(page: Page, label: string) {
   throw new Error(`no room ${label}`);
 }
 
-async function createExpiringLease(page: Page) {
+async function createExpiringLease(page: Page, rent = "21000") {
   await page.goto("/m/leases/new");
   const value = await roomValue(page, "C");
   await page.getByTestId("lease-room").selectOption(value ?? "");
@@ -31,7 +46,7 @@ async function createExpiringLease(page: Page) {
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("start-date").fill(START);
   await page.getByTestId("term-months").fill("2");
-  await page.getByTestId("rent").fill("21000");
+  await page.getByTestId("rent").fill(rent);
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("deposit-months").fill("2");
   await page.getByTestId("wizard-next").click();
@@ -96,7 +111,9 @@ test("a beta org renews inside 90 days and settles move-out with the overridden 
   await expect(page.getByTestId("renew-due-day")).toHaveValue("5");
   await expect(page.getByTestId("renew-due-day").locator("option")).toHaveCount(28);
   await expect(page.getByTestId("renew-due-day").locator("option").first()).toHaveText("每月 1 日繳租");
+  await expect(page.getByTestId("renew-due-day").locator("option").last()).toHaveText("每月 28 日繳租");
   await expect(page.getByTestId("renew-due-day").locator("option:checked")).toHaveText("每月 5 日繳租");
+  await page.getByTestId("renew-due-day").selectOption("28");
   await page.getByTestId("renew-rent").fill("22000");
   await page.getByTestId("renew-deposit").fill("44000");
   await expect(page.getByTestId("deposit-increase")).toHaveText("押金差額 NT$2,000，款項到帳後請在繳租紀錄登記為「押金」。");
@@ -104,8 +121,17 @@ test("a beta org renews inside 90 days and settles move-out with the overridden 
   await expect(page.getByTestId("renew-confirm")).toContainText("確認續約");
   await expect(page.getByTestId("confirm-old")).toHaveText(`${END} 結束後保留為歷史紀錄`);
   await expect(page.getByTestId("confirm-rent")).toHaveText("NT$22,000");
+  await expect(page.getByTestId("confirm-due-day")).toHaveText("每月 28 日繳租");
   await page.getByTestId("renew-create").click();
   await expect(page.getByTestId("renewal-created")).toHaveText("新租約已建立，2027年1月 起的帳單會依新租金產生。");
+  const dueDay = await withDb(async (client) => {
+    const row = await client.query<{ due_day: number }>(
+      `SELECT due_day FROM leases WHERE org_id = $1 AND renewed_from_id = $2`,
+      [ORG, leaseUrl.split("/").pop()],
+    );
+    return row.rows[0]?.due_day;
+  });
+  expect(dueDay).toBe(28);
 
   await page.goto(leaseUrl);
   await expect(page.getByText("生效中")).toBeVisible();
@@ -197,10 +223,55 @@ test("the sample company lists leases expiring within 90 days", async ({ page })
   const sandbox = "/api/env?set=sandbox&next=" + encodeURIComponent("/m/leases/expiring");
   await page.goto("/api/demo/locale?set=zh-TW&next=" + encodeURIComponent(sandbox));
   await expect(page.getByTestId("org-switch")).toContainText("範例公司");
+  const sandboxFlag = await withDb(async (client) => {
+    const row = await client.query<{ flag: string }>(
+      `SELECT feature_flags->>'lease_lifecycle' AS flag
+         FROM organizations
+        WHERE live_org_id = $1 AND environment = 'sandbox'`,
+      [ORG],
+    );
+    return row.rows[0]?.flag;
+  });
+  expect(sandboxFlag).toBe("true");
   await expect(page.getByTestId("expiring-window")).toHaveText("90 天內到期");
   await expect(page.getByTestId("expiring-empty")).toHaveCount(0);
   const sample = rowFor(page, "試測一二（範例）");
   await expect(sample.getByTestId("row-renew")).toHaveText("續約");
   await expect(sample.getByTestId("row-moveout")).toHaveText("退租");
   await expectClean(page.locator("body"));
+});
+
+test("move-out rent rounds 月租 ÷ 30 × days, including the last day, to a whole NT$", async ({ page }) => {
+  await resetDemo(page);
+  await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases");
+  const leaseUrl = await createExpiringLease(page, "10000");
+  await signLease(page, leaseUrl);
+  await page.goto("/m/leases/expiring");
+  await rowFor(page, TENANT).getByTestId("row-moveout").click();
+  await page.getByTestId("move-out-date").fill(MOVE_OUT);
+  await page.getByTestId("move-out-reason").selectOption("early");
+  await expect(page.getByTestId("rent-formula")).toHaveText("NT$10,000 ÷ 30 × 17 天 ＝ NT$5,667");
+  await page.getByTestId("move-out-rent").fill("5000");
+  await expect(page.getByTestId("override-note")).toHaveText("原金額 NT$5,667，已改為 NT$5,000");
+});
+
+test("feature_flags.lease_lifecycle is on for beta and off for pro", async ({ page }) => {
+  await resetDemo(page);
+  await page.goto("/api/demo/locale?set=zh-TW&next=/m/leases");
+  const beta = await withDb((client) =>
+    client.query<{ flag: string }>(`SELECT feature_flags->>'lease_lifecycle' AS flag FROM organizations WHERE id = $1 AND plan_tier = 'beta'`, [ORG]),
+  );
+  expect(beta.rows[0]?.flag).toBe("true");
+  await expect(page.getByTestId("expiring-entry")).toBeVisible();
+
+  await withDb((client) => client.query(`UPDATE organizations SET plan_tier = 'pro' WHERE id = $1`, [ORG]));
+  const pro = await withDb((client) =>
+    client.query<{ flag: string }>(`SELECT feature_flags->>'lease_lifecycle' AS flag FROM organizations WHERE id = $1 AND plan_tier = 'pro'`, [ORG]),
+  );
+  expect(pro.rows[0]?.flag).toBe("false");
+  await page.goto("/m/leases");
+  await expect(page.getByTestId("expiring-entry")).toHaveCount(0);
+  await page.goto("/m/leases/expiring");
+  await expect(page.getByTestId("not-found")).toBeVisible();
+  await expect(page.getByTestId("expiring-window")).toHaveCount(0);
 });

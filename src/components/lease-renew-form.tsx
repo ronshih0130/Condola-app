@@ -137,7 +137,7 @@ export function LeaseRenewForm({
               </tr>
               <tr>
                 <td>{dueDayLabel(dueDay)}</td>
-                <td>{dueDayLabel(dueDay)}</td>
+                <td data-testid="confirm-due-day">{dueDayLabel(dueDay)}</td>
               </tr>
             </tbody>
           </table>
