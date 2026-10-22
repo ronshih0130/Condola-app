@@ -1,0 +1,39 @@
+# Functions in schema public that authenticated may execute.
+#
+# One signature per line:
+#   public.name(identity arguments)
+# Identity arguments match pg_get_function_identity_arguments. Spaces are
+# ignored. A line whose first character is # is a comment.
+#
+# "# @mode authenticated" — authenticated may execute the following
+# signatures. anon must not. This is the only mode. "@mode any" is rejected
+# by CI because the anon key is public and anon must execute nothing.
+#
+# src has no supabase.rpc(...) calls. The browser does not call PostgREST.
+# anon can still call /rest/v1/rpc with the public anon key, so the gate
+# does not depend on the key staying out of the client bundle.
+#
+# A function created after 20261029120000_default_function_privileges.sql is
+# not executable by anon, authenticated, or PUBLIC. A client RPC needs both
+# an explicit grant and a line in this file:
+#
+#   GRANT EXECUTE ON FUNCTION public.example(uuid) TO authenticated;
+#
+# CI (bash scripts/check-function-privileges.sh) applies every migration to a
+# local database and queries has_function_privilege. anon executable count
+# must be zero whether or not the default-privilege migration is in the tree.
+# When 20261029150000_lock_public_function_execute.sql is present, every
+# function authenticated can execute must be listed below.
+
+# Called from triggers while the session role is authenticated (and from
+# service_role). Not PostgREST RPCs.
+# @mode authenticated
+public.effective_rule(p_jurisdiction uuid, p_org uuid, p_key text, p_on date)
+public.platform_max_id_retention_days()
+public.condola_property_address_key(display text)
+
+# Called from tx() as authenticated. 20261021145000 revokes PUBLIC and anon.
+# The lock migration keeps those grants and checks app.active_org_id.
+# @mode authenticated
+public.post_reversal(p_txn uuid, p_reason text)
+public.fn_invoice_recalc(p_invoice uuid)
