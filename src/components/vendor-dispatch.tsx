@@ -34,6 +34,9 @@ export function VendorDispatch({
   return (
     <section className="card pad" data-testid="vendor-dispatch" style={{ marginTop: 16 }}>
       <h3>{t("i_vendor_dispatch")}</h3>
+      <p className="small" data-testid="vendor-record-only">{t("i_vendor_record_only")}</p>
+      <p className="small" data-testid="vendor-notify-tenant">{t("i_vendor_notify_tenant")}</p>
+      <p className="tiny muted" data-testid="vendor-notify-via">{t("i_vendor_notify_tenant_hint")}</p>
       {job ? (
         <p className="small" data-testid="vendor-job-status">
           {job.confirmed
@@ -44,9 +47,7 @@ export function VendorDispatch({
                 ? t("i_vendor_status_open", { when })
                 : t("i_vendor_status_expired")}
         </p>
-      ) : (
-        <p className="small muted">{t("i_vendor_window_hint")}</p>
-      )}
+      ) : null}
       {job ? (
         <p className="small" data-testid="vendor-job-summary">
           {job.vendorName} · {job.phone}
@@ -120,7 +121,6 @@ export function VendorDispatch({
           </details>
           <div className="fg">
             <label className="f">{t("i_vendor_window")}</label>
-            <p className="tiny muted">{t("i_vendor_window_hint")}</p>
             <input className="inp" name="contactWindow" required defaultValue={job?.window ?? ""} data-testid="vendor-window" />
           </div>
           <button className="btn pri" type="submit" data-testid="vendor-dispatch-send">

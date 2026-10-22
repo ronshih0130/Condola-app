@@ -35,6 +35,8 @@ export default async function VendorJobPage({
     limit: t("i_photo_limit"),
     generic: t("i_generic"),
     internal: t("i_repair_internal"),
+    wait: t("i_repair_upload_wait"),
+    failed: t("i_repair_photo_failed"),
   };
   return (
     <div className="card pad" data-testid="vendor-job" style={{ maxWidth: 560, margin: "24px auto" }}>
@@ -50,10 +52,10 @@ export default async function VendorJobPage({
       <h2>{t("i_vendor_photos")}</h2>
       {job.issuePhotos.length ? (
         <div className="repair-photos">
-          {job.issuePhotos.map((photo) => (
+          {job.issuePhotos.map((photo, index) => (
             // Ticket photos are private objects. The link check happens on this route.
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={photo.id} src={`/api/vendor-jobs/${encodeURIComponent(token)}/photos/${photo.id}`} alt={photo.name} data-testid="vendor-issue-photo" />
+            <img key={photo.id} src={`/api/vendor-jobs/${encodeURIComponent(token)}/photos/${photo.id}`} alt={t("i_repair_photo_alt", { n: index + 1 })} data-testid="vendor-issue-photo" />
           ))}
         </div>
       ) : null}
@@ -61,9 +63,9 @@ export default async function VendorJobPage({
         <>
           <h2>{t("i_vendor_done_photos")}</h2>
           <div className="repair-photos">
-            {job.donePhotos.map((photo) => (
+            {job.donePhotos.map((photo, index) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={photo.id} src={`/api/vendor-jobs/${encodeURIComponent(token)}/photos/${photo.id}`} alt={photo.name} data-testid="vendor-done-photo" />
+              <img key={photo.id} src={`/api/vendor-jobs/${encodeURIComponent(token)}/photos/${photo.id}`} alt={t("i_repair_photo_alt", { n: index + 1 })} data-testid="vendor-done-photo" />
             ))}
           </div>
         </>

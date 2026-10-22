@@ -4,7 +4,23 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PHOTO_HEADER_BYTES, PHOTO_MAX_BYTES, PHOTO_MIMES, normalizePhotoMime, sniffHeic, sniffPhotoMime } from "@/server/repair-rules";
 
-type Messages = { size: string; type: string; heic: string; storage: string; limit: string; generic: string; internal: string };
+type Messages = {
+  size: string;
+  type: string;
+  heic: string;
+  storage: string;
+  limit: string;
+  generic: string;
+  internal: string;
+  internalHint?: string;
+  wait?: string;
+  failed?: string;
+};
+
+function photoFailed(messages: Messages, name: string, fallback: string) {
+  if (!messages.failed) return fallback;
+  return messages.failed.replaceAll("{name}", name);
+}
 
 function messageFor(key: string | undefined, messages: Messages) {
   if (key === "errors.photoSize") return messages.size;
@@ -50,7 +66,7 @@ export function TicketPhotoUpload({
     if (!file) return;
     setError("");
     if (file.size > PHOTO_MAX_BYTES) {
-      setError(messages.size);
+      setError(photoFailed(messages, file.name, messages.size));
       return;
     }
     const header = new Uint8Array(await file.slice(0, PHOTO_HEADER_BYTES).arrayBuffer());
@@ -58,7 +74,7 @@ export function TicketPhotoUpload({
     const heic = sniffHeic(header);
     const declared = normalizePhotoMime(file.type);
     if (!heic && (!sniffed || (file.type !== "" && declared !== sniffed))) {
-      setError(messages.type);
+      setError(photoFailed(messages, file.name, messages.type));
       return;
     }
     const mime = sniffed ?? "image/jpeg";
@@ -123,6 +139,7 @@ export function TicketPhotoUpload({
       {allowInternal ? (
         <label className="small">
           <input ref={internalRef} type="checkbox" /> {messages.internal}
+          {messages.internalHint ? <div className="tiny muted">{messages.internalHint}</div> : null}
         </label>
       ) : null}
       <input
@@ -133,6 +150,7 @@ export function TicketPhotoUpload({
         onChange={onChange}
         disabled={pending}
       />
+      {pending && messages.wait ? <p className="tiny">{messages.wait}</p> : null}
       {error ? (
         <div className="alert bad" data-testid="repair-photo-error">
           {error}

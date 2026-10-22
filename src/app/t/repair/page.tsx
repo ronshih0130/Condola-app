@@ -27,7 +27,19 @@ export default async function RepairPage({
     <div>
       <h2>{t("i_rich_repair")}</h2>
       <ErrorBanner t={t} error={params.error} />
-      {params.done ? <div className="alert ok">{t("i_repair_sent", { firm: lease.firm_name })}</div> : null}
+      {params.done ? (
+        <div className="alert ok" data-testid="repair-sent">
+          <p>{own ? t("i_repair_success_title", { number: own.ticket.number }) : t("i_repair_success_hint")}</p>
+          {own ? <p>{t("i_repair_success_hint")}</p> : null}
+          {own ? (
+            <p>
+              <Link href={`/t/repair?id=${own.ticket.id}`}>{t("i_repair_view_progress")}</Link>
+              {" · "}
+              <Link href="/t">{t("i_repair_home")}</Link>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {own ? (
         <div className="card pad" style={{ marginBottom: 16 }} data-testid="repair-detail">
           <h3>
@@ -40,6 +52,7 @@ export default async function RepairPage({
           {own.ticket.status === "open" ? (
             <form action={actionCancelRepair}>
               <input type="hidden" name="ticketId" value={own.ticket.id} />
+              <p className="small" data-testid="repair-cancel-confirm">{t("i_repair_cancel_confirm")}</p>
               <button className="btn sm" type="submit" data-testid="repair-cancel">
                 {t("i_repair_cancel")}
               </button>
@@ -65,8 +78,9 @@ export default async function RepairPage({
       ) : null}
       <form action={actionTicket}>
         <input type="hidden" name="leaseId" value={lease.lease_id} />
+        <h3>{t("i_repair_new")}</h3>
         <div className="fg">
-          <label className="f">{t("i_category")}</label>
+          <label className="f">{t("i_repair_type")}</label>
           <select className="inp" name="category" data-testid="repair-category" defaultValue="">
             <option value="">{t("i_choose")}</option>
             <option value="plumbing">{t("i_cat_plumbing")}</option>
@@ -77,20 +91,24 @@ export default async function RepairPage({
           </select>
         </div>
         <div className="fg">
-          <label className="f">{t("i_title")}</label>
+          <label className="f">{t("i_repair_short")}</label>
           <input className="inp" name="title" data-testid="repair-title" placeholder={t("i_ph_title")} defaultValue="" />
         </div>
         <div className="fg">
-          <label className="f">{t("i_description")}</label>
+          <label className="f">{t("i_repair_detail_optional")}</label>
           <textarea className="inp" name="description" defaultValue="" />
         </div>
         <button className="btn pri block" type="submit" data-testid="submit-repair">
           {t("i_submit_repair")}
         </button>
       </form>
-      <h3 style={{ marginTop: 20 }}>{t("i_repair_history")}</h3>
-      <p className="small muted">{t("i_repair_own_hint")}</p>
-      {repairs.length === 0 ? <p className="small muted">{t("i_repair_none")}</p> : null}
+      <h3 style={{ marginTop: 20 }}>{t("i_repair_mine")}</h3>
+      {repairs.length === 0 ? (
+        <div data-testid="repair-tenant-empty">
+          <p>{t("i_repair_tenant_empty")}</p>
+          <p className="small muted">{t("i_repair_tenant_empty_hint")}</p>
+        </div>
+      ) : null}
       <ul className="repair-timeline" data-testid="tenant-repairs">
         {repairs.map((repair) => (
           <li key={repair.id}>
