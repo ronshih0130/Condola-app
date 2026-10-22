@@ -42,6 +42,8 @@ Environment:
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `QA_ORG_A_JWT`.
 - `QA_RPC_SCHEMA`: defaults to `app`; schema must be exposed to the QA API.
 - `QA_RPC_CASES_JSON`: real SQL named arguments for both reversal overloads, invoice helpers and audit RPC; documented in `rpc-security.spec.ts`.
+- `TRIAL_MODE`: `calendar_months` (default) or `days_90`; pending Ron 10/22 18:30.
+- `BANNED_TERMS_PATH`: defaults to `../../rental-crm/prod/banned_terms.md` relative to tests.
 - `COPY_SCAN_GLOB`: defaults to `src/**/*.{ts,tsx,md}`; zero matching files fails.
 
 The security suite uses `describe.skipIf` when required environment is missing. Required CI jobs must validate those variables before running and reject skipped security coverage. Use a real authenticated org A QA JWT with normal application grants, existing org B fixtures, and verified missing IDs. Never use a service-role key. Revoke migrations must be applied before AC15 verification; signature/schema failures are not permission-test successes.
@@ -58,6 +60,6 @@ CI label mapping:
 
 Run pricing whenever pricing or lifecycle logic changes. Class B always requires PM QA manual checklist sign-off; automated coverage does not replace it. Feature-flag-off behavior, slot deployment, PDFs/exports, scheduler delivery, audit payloads and every RBAC table cell remain explicit manual gates.
 
-Unresolved source conflicts are visible: 已收到 versus banned 已收 has an expected-failure test; half-up at 432.5 is assumed. Move-out rent is capped at one month, so 31 days at 18,000 is 18,000. Trial length is the QA_TRIAL_UNIT and QA_TRIAL_COUNT parameter (calendar-months or days) with no chosen default. Handled rent counts company-directed rent only. The brief-required P04 summary is asserted alongside the supplemental required-field copy; PMk must decide their distinct triggers. The supplied combined statement footer is asserted; PMk should confirm its relationship to the supplemental unified disclaimer. Annual midyear unit-increase billing remains deferred and must not be invented.
+Source versions: payment_records_spec_v1.md sha256 81c4b4a3 (D24–D26); ui_copy_flows_v1.md 2229c085 (已手動修改 only in R04; vacant-unit electricity lines removed); banned_terms.md 3ff8df7d. The copy scanner reads its banned list and allowlist (incl. 已收到, 不開立統一發票) from banned_terms.md (override with `BANNED_TERMS_PATH`). Resolved: half-up rounding and one-month cap (D24); handled rent = company-directed rent only, no deposits (D25). Pending: trial length (`TRIAL_MODE` = `calendar_months` default | `days_90`, pending Ron 10/22 18:30); pricing dates derive from it. The brief-required P04 summary is asserted alongside the supplemental required-field copy; PMk must decide their distinct triggers. The supplied combined statement footer is asserted; PMk should confirm its relationship to the supplemental unified disclaimer. Annual midyear unit-increase billing remains deferred and must not be invented.
 
 No secrets belong in committed files, logs, screenshots, traces, or reports. These artifacts have not been executed against an application or database.

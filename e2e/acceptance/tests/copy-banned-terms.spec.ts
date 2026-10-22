@@ -1,24 +1,37 @@
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import fg from 'fast-glob';
-import { describe, expect, it, test } from 'vitest';
-import { readTrialLength } from '../../../src/server/trial-length';
+import { describe, expect, it } from 'vitest';
 
-// Production catalog via uiCopy. Do not duplicate expected literals in the adapter.
+// TODO: wire to the actual production copy registry/formatter. Do not duplicate
+// expected literals in an adapter merely to make these assertions pass.
 import { uiCopy } from '../src/copy';
 
-const WHITELIST = [
-  '一起成為完美房東',
-  '自動計入帳單',
-  '加入帳單',
-  '匯入帳戶末五碼',
-  '登入帳號',
-  '款項到帳',
-] as const;
+// Source of truth: rental-crm/prod/banned_terms.md (sha256 3ff8df7d…).
+// Override path with BANNED_TERMS_PATH.
+const BANNED_TERMS_PATH = process.env.BANNED_TERMS_PATH
+  ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../../rental-crm/prod/banned_terms.md');
 
-const BANNED = [
-  '入帳', '收租', '收款', '欠租', '已收', '代收',
-  '示範', '測試模式', '沙盒', '房東',
-] as const;
+function readSection(md: string, heading: string): string[] {
+  const lines = md.split(/\r?\n/);
+  const start = lines.findIndex(l => /^##\s/.test(l) && l.includes(heading));
+  if (start < 0) throw new Error(`banned_terms.md missing section: ${heading}`);
+  const out: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^##\s/.test(line)) break;
+    const t = line.trim();
+    if (t && !t.startsWith('-') && !t.startsWith('#')) out.push(t);
+  }
+  if (out.length === 0) throw new Error(`banned_terms.md section empty: ${heading}`);
+  return out;
+}
+
+const BANNED_MD = readFileSync(BANNED_TERMS_PATH, 'utf8');
+// Longest-first so overlapping allowlist sentences strip fully.
+const WHITELIST = readSection(BANNED_MD, '白名單').sort((x, y) => y.length - x.length);
+const BANNED = readSection(BANNED_MD, '禁用');
 
 const EXTRA = ['Condola 撥款', '平台轉付', '本公司', '含稅', '統一編號', '發票'] as const;
 
@@ -44,13 +57,16 @@ describe('scanner contract', () => {
     ['含稅', ['含稅']],
     ['統一編號', ['統一編號']],
     ['發票', ['發票']],
+    ['已收到', []],
+    ['已收', ['已收']],
+    ['不開立統一發票', []],
   ])('%s', (input, expected) => {
     expect(scanCopy(input)).toEqual(expected);
   });
 
-  // SPEC AMBIGUITY: R23 allows 已收到 but banned list blocks 已收
-  test.fails('approved 已收到 should pass once PM resolves the contradiction', () => {
-    expect(scanCopy('已收到')).toEqual([]);
+  it('loads allowlist and banned list from banned_terms.md', () => {
+    expect(WHITELIST).toEqual(expect.arrayContaining(['已收到', '不開立統一發票']));
+    expect(BANNED).toEqual(expect.arrayContaining(['已收', '入帳', '房東']));
   });
 });
 
@@ -117,23 +133,13 @@ describe('exact production copy', () => {
     ['line.leaseExpiry', {}, '有租約快到期了，請登入安排續約或退租。'],
     ['line.repair', {}, '有修繕進度更新，請登入查看。'],
     ['line.statement', {}, '本月結算表已產生，請登入查看。'],
+    ['pricing.trial', {}, '前 3 個月免費'],
     ['pricing.annual', {}, '年繳・享 1 個月免費'],
     ['pricing.footer', {}, '本頁只記錄你選的方案，不會進行付款。'],
   ] as const)('%s', (key, params, expected) => {
     const actual = uiCopy(key, params);
     expect(actual).toBe(expected);
     expect(scanCopy(actual)).toEqual([]);
-  });
-
-  const trialReady = Boolean(process.env.QA_TRIAL_UNIT && process.env.QA_TRIAL_COUNT);
-  it.skipIf(!trialReady)('trial copy follows QA_TRIAL_UNIT and QA_TRIAL_COUNT', () => {
-    const length = readTrialLength();
-    const key = length.unit === 'calendar-months' ? 'pricing.trialMonths' : 'pricing.trialDays';
-    const expected = length.unit === 'calendar-months'
-      ? `前 ${length.count} 個月免費`
-      : `前 ${length.count} 天免費`;
-    expect(uiCopy(key, { count: length.count })).toBe(expected);
-    expect(scanCopy(expected)).toEqual([]);
   });
 });
 

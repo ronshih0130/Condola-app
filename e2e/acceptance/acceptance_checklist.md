@@ -1,6 +1,6 @@
 Class A = pure logic, money, or copy; deterministic unit-testable. Class B = requires app, DB, RBAC, feature flags, migration, or deployment. Settlement integration is always Class B (payment R22). Every Class B row requires PM QA manual sign-off, including rows with automated coverage.
 
-Sources: PAY = payment_records_spec_v1.md; UI = ui_copy_flows_v1.md; PRC = pricing_rules_v1.md; BAN = banned_terms.md. Paths in the Test file column are under `tests/`. “Manual” means no automated acceptance claim is made.
+Sources: PAY = payment_records_spec_v1.md (sha256 81c4b4a3); UI = ui_copy_flows_v1.md (sha256 2229c085); PRC = pricing_rules_v1.md; BAN = banned_terms.md (sha256 3ff8df7d, allowlist read by copy-banned-terms.spec.ts). Paths in the Test file column are under `tests/`. “Manual” means no automated acceptance claim is made.
 
 | ID | Source | Class | Given / When / Then | Auto/Manual | Test file |
 |---|---|---|---|---|---|
@@ -25,15 +25,15 @@ Sources: PAY = payment_records_spec_v1.md; UI = ui_copy_flows_v1.md; PRC = prici
 | STL-02 | PAY R13–R14, D2, AC8 | B | Given statement; when rendered; then unit rent/unpaid/expenses and 管理公司匯給屋主/期初餘額/期末餘額 are shown. | Auto + Manual | settlement.e2e.spec.ts |
 | STL-03 | PAY R13, AC8 | B | Given 36,000 deposit; when statement calculated; then deposit separately shown and excluded from net. | Auto + Manual | settlement.e2e.spec.ts |
 | STL-04 | PAY D20 | A | Given opening 5,000, handled rent 36,000, expenses 4,200, payouts 30,000; when calculated; then closing 6,800 and next opening 6,800. | Auto | money.spec.ts |
-| STL-05 | PAY D20–D21 | A | Given owner/company rent and deposit; when handled rent calculated; then only company rent counts. ASSUMPTION: recipient determines handled rent. | Auto | money.spec.ts |
+| STL-05 | PAY D20–D21, D25 | A | Given owner/company rent and deposit; when handled rent calculated; then only rent with 付款對象 = 管理公司 counts; deposits excluded. | Auto | money.spec.ts |
 | STL-06 | PAY R15, D12; UI P08 | B | Given net −3,300; when viewed; then 本期淨額為負 and exact warning appear, without implying owner debt. | Auto + Manual | settlement.e2e.spec.ts |
 | STL-07 | PAY R16, D5, AC7; UI P11 | B | Given generated statement; when underlying payment reversed; then 已變更, 修改紀錄, 修改前內容 and regeneration preserve original/version history. | Auto + Manual | settlement.e2e.spec.ts |
 | STL-08 | PAY D19 | B | Given v1 statement; when viewed/exported; then vacant/unleased electricity excluded. | Auto + Manual | settlement.e2e.spec.ts |
 | STL-09 | PAY R17, AC12; UI P07 footer | B | Given statement/PDF/export; when inspected; then no prohibited tax/platform terms and footer disclaimer present. | Auto + Manual | settlement.e2e.spec.ts; copy-banned-terms.spec.ts |
 | STL-10 | PAY D20 | B | Given manager; when manually recording payout; then persisted payout changes closing and carries into next opening. | Manual | settlement.e2e.spec.ts |
 | MO-01 | PAY R18, D6, D23, AC9 | A | Given October 1–12 inclusive; when prorated; then 12 days and integer NT$7,200; all brief examples match half-up rounding. | Auto | money.spec.ts |
-| MO-02 | PAY D23 | A | Given 12,975/30 for one day; when rounded; then 433. AMBIGUITY: half-up assumed rather than bankers rounding. | Auto | money.spec.ts |
-| MO-03 | PAY R18, D23 | A | Given 31 days at 18,000; when prorated; then unresolved cap policy; uncapped formula gives 18,600. | Manual, TODO | money.spec.ts |
+| MO-02 | PAY D23, D24 | A | Given 12,975/30 for one day; when rounded once at the end; then half-up 433. | Auto | money.spec.ts |
+| MO-03 | PAY R18, D24 | A | Given 31 days at 18,000; when prorated; then capped at one month's rent: 18,000 (uncapped would be 18,600). | Auto | money.spec.ts |
 | MO-04 | UI R04/R07; PAY AC9 | B | Given moveout; when calculated; then NT$18,000 ÷ 30 × 12 天 ＝ NT$7,200 shown. | Auto + Manual | moveout.e2e.spec.ts |
 | MO-05 | PAY R19, AC9; UI R04 supplement | B | Given manual override; when saved; then actor/time badge and 原金額 NT$7,200，已改為 NT$7,000 shown; audit entry recorded. | Auto + Manual | moveout.e2e.spec.ts |
 | MO-06 | PAY R20, AC10; UI R06 | A | Given deposit 36,000 and deductions 38,500/equal 36,000; when calculated; then shortfall 2,500/equal no warning and refund 0. | Auto | money.spec.ts |
@@ -45,6 +45,7 @@ Sources: PAY = payment_records_spec_v1.md; UI = ui_copy_flows_v1.md; PRC = prici
 | PERM-05 | PAY §6 | B | Given manager/owner/tenant; when generating statement; then allow/deny/deny. | Manual | settlement.e2e.spec.ts |
 | PERM-06 | PAY §6, AC13 | B | Given manager/owner/tenant; when viewing statements; then organization/own only/deny. | Auto + Manual | settlement.e2e.spec.ts |
 | PERM-07 | PAY §6 | B | Given manager/owner/tenant; when viewing audit; then allow/deny/deny. | Manual | payments.e2e.spec.ts |
+| PERM-08 | PAY §6, D26; UI P01 | B | Given admin/accountant/other manager/owner/tenant; when confirming (確認登記) or declining (不登記) a tenant-reported pending payment; then allow/allow/deny/deny/deny. | Manual | payments.e2e.spec.ts |
 | SEC-01 | PAY R8, R21, AC5 | B | Given org A JWT and org B record; when either reversal overload or audit_event called; then 42501. | Auto + Manual | rpc-security.spec.ts |
 | SEC-02 | PAY R8, AC5 | B | Given nonexistent ID; when either reversal overload or audit_event called; then not found, never 42501. | Auto + Manual | rpc-security.spec.ts |
 | SEC-03 | PAY R21, AC5 | B | Given org A session; when org B page opened; then HTTP 404. | Auto + Manual | settlement.e2e.spec.ts |
@@ -53,7 +54,7 @@ Sources: PAY = payment_records_spec_v1.md; UI = ui_copy_flows_v1.md; PRC = prici
 | SEC-06 | PAY R22, D10, AC14 | B | Given flag off; when routes/navigation opened; then feature unavailable; deployment uses slot and complete PM QA. | Manual | settlement.e2e.spec.ts |
 | COPY-01 | PAY R1–R2, D1, D17; UI global | A | Given global disclaimer; when rendered; then exact approved text and no platform custody implication. | Auto | copy-banned-terms.spec.ts |
 | COPY-02 | PAY R23, AC12; BAN | A | Given source text; when whitelist sentences removed before scanning; then banned terms yield zero violations. | Auto | copy-banned-terms.spec.ts |
-| COPY-03 | PAY R23; BAN | A | Given 已收到; when scanned; then documented contradiction: approved copy contains banned 已收. | Expected failure + Manual resolution | copy-banned-terms.spec.ts |
+| COPY-03 | PAY R23; BAN (3ff8df7d) | A | Given 已收到 and 不開立統一發票 in the banned_terms.md allowlist; when scanned; then zero violations, while bare 已收 still flagged. Allowlist/banned list loaded from banned_terms.md. | Auto | copy-banned-terms.spec.ts |
 | COPY-04 | PAY R24; UI P04 | B | Given final UI copy; when PMk reviews; then resolve competing required-field summaries; brief-required summary remains asserted pending decision. | Manual | payments.e2e.spec.ts |
 | COPY-05 | UI supplement; PAY R23 | A | Given money/period/formula strings; when formatted; then commas, U+2212 minus, Chinese UI month, exact approved strings match. | Auto | money.spec.ts; copy-banned-terms.spec.ts |
 | COPY-06 | BAN notes | B | Given tenant-facing UI/PDF/export; when manually reviewed; then tenants never described as 已驗證/verified. | Manual | copy-banned-terms.spec.ts |
@@ -64,9 +65,9 @@ Sources: PAY = payment_records_spec_v1.md; UI = ui_copy_flows_v1.md; PRC = prici
 | PRC-05 | PRC R6, AC10 | A | Given free/std/pro; when seat limits checked; then 1/5/unlimited and invite disabled at finite limit. | Auto | pricing.spec.ts |
 | PRC-06 | PRC R7, AC5, D5 | A | Given midperiod increase/decrease; when scheduled; then current amount unchanged, next-period billing, increase usable immediately, decrease no refund. | Auto | pricing.spec.ts |
 | PRC-07 | PRC R8–R9, AC7, D1–D2 | B | Given >4 after trial; when grace expires day 31; then oldest four editable by default, admin can change selection, other unit/lease/bill/reminder edits disabled; records retained, scheduled bills sent, tenant unaffected. | Manual | pricing.spec.ts |
-| PRC-08 | PRC R10, AC6, D9 | A | Given trial reminders; when end−14/end−7 reached repeatedly; then once each; activation <14 days only seven-day reminder; Email/in-app, LINE gated. | Auto | pricing.spec.ts |
-| PRC-09 | PRC R11, AC8, D7 | A | Given trial ending March 31; when annual starts; then April 1 for 12 months; trial costs zero. | Auto | pricing.spec.ts |
-| PRC-10 | PRC R12, AC9, D7 | A | Given used/active trial; when plan/billing switched; then end unchanged and trial never restarts. | Auto | pricing.spec.ts |
+| PRC-08 | PRC R10, AC6, D9 | A | Given trial reminders with trial end derived from TRIAL_MODE (calendar_months default \| days_90; pending Ron 10/22 18:30); when end−14/end−7 reached repeatedly; then once each; activation <14 days only seven-day reminder; Email/in-app, LINE gated. | Auto | pricing.spec.ts |
+| PRC-09 | PRC R11, AC8, D7 | A | Given trial end derived from TRIAL_MODE; when annual starts; then day after trial end for 12 months; trial costs zero. Trial-length definition pending Ron 10/22 18:30. | Auto | pricing.spec.ts |
+| PRC-10 | PRC AC9, D7 | A | Given used/active trial (end derived from TRIAL_MODE); when plan/billing switched; then end unchanged, annual start = end + 1 day, trial never restarts. | Auto | pricing.spec.ts |
 | PRC-11 | PRC AC11 | A | Given pricing copy; when scanned/formatted; then 屋主, NT$x,xxx and no banned/tax terms. | Auto | copy-banned-terms.spec.ts |
 | PRC-12 | PRC AC12, D4 | B | Given downgrade over seats; when 30-day grace/day31/upgrade; then all active during grace, admin plus earliest/selected kept, others disabled not deleted, upgrade restores. | Manual | pricing.spec.ts |
 | PRC-13 | PRC D3 | B | Given pricing FAQ; when published; then matches 30-day grace and readonly rule. | Manual | copy-banned-terms.spec.ts |

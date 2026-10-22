@@ -51,13 +51,19 @@ describe('moveout money', () => {
     [17500, 11, 6417],
     [20000, 1, 667],
     [18000, 30, 18000],
-    // AMBIGUITY: assumes half-up; bankers rounding would produce 432.
+    // D24: half-up (bankers rounding would give 432).
     [12975, 1, 433],
+    // D24: capped at one month's rent (uncapped would be 18,600).
+    [18000, 31, 18000],
   ])('prorates %i for %i days to %i', (rent, days, expected) => {
     expect(prorateRent(rent, days)).toBe(expected);
   });
 
-  it('caps a 31-day month at one month of rent', () => {
+  it('D24: rounds half-up once at the end (12,975 × 1 ÷ 30 = 432.5 → 433)', () => {
+    expect(prorateRent(12975, 1)).toBe(433);
+  });
+
+  it('D24: caps 31 days at one month rent (18,000 × 31 → 18,000)', () => {
     expect(prorateRent(18000, 31)).toBe(18000);
   });
 
@@ -86,7 +92,7 @@ describe('settlement calculations (integration remains Class B)', () => {
   });
 
   it('counts company-directed rent only, excluding deposits', () => {
-    // ASSUMPTION: payment recipient determines 管理公司經手租金.
+    // D25: only rent whose 付款對象 is the management company; deposits excluded.
     expect(companyHandledRent([
       { recipient: 'company', type: 'rent', amount: 36000 },
       { recipient: 'owner', type: 'rent', amount: 18000 },

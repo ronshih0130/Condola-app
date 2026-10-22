@@ -102,8 +102,7 @@ jobs:
           QA_CROSS_ORG_STATEMENT_PATH: ${{ secrets.QA_CROSS_ORG_STATEMENT_PATH }}
           QA_MOVEOUT_PATH: ${{ secrets.QA_MOVEOUT_PATH }}
           QA_MOVEOUT_SHORTFALL_PATH: ${{ secrets.QA_MOVEOUT_SHORTFALL_PATH }}
-          QA_TRIAL_UNIT: ${{ secrets.QA_TRIAL_UNIT }}
-          QA_TRIAL_COUNT: ${{ secrets.QA_TRIAL_COUNT }}
+          TRIAL_MODE: ${{ secrets.TRIAL_MODE }}
         run: bash scripts/acceptance-label.sh
 
   # Staging Worker only. This job never deploys production.

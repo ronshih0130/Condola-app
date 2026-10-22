@@ -137,6 +137,8 @@ export function uiCopy(key: string, params: Record<string, string | number> = {}
       return t("i_line_repair");
     case "line.statement":
       return t("i_line_statement");
+    case "pricing.trial":
+      return t("i_price_trial");
     case "pricing.trialMonths":
       return t("i_price_trial_months", { count: Number(params.count) });
     case "pricing.trialDays":

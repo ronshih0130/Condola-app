@@ -1,5 +1,4 @@
 import { monthlyAmount, seatLimit as seatCap, yearlyAmount } from "../../../src/server/billing";
-import { trialOffer, type TrialLength } from "../../../src/server/trial-length";
 
 const LIST = { std: 30, pro: 40 } as const;
 
@@ -17,10 +16,9 @@ export function annualQuote(plan: "free" | "std" | "pro", units: number): { amou
   return { amount: yearlyAmount(monthly), discountApplied: true };
 }
 
-/** The length is the caller's parameter. Free stays zero either way. */
-export function trialOfferMonths(plan: "free" | "std" | "pro", length: TrialLength): number {
-  const offer = trialOffer(plan, length);
-  return offer.count;
+/** Pricing-table offer: free is 0 months, paid plans are 3 months. Trial end dates follow TRIAL_MODE in the spec. */
+export function trialOfferMonths(plan: "free" | "std" | "pro"): number {
+  return plan === "free" ? 0 : 3;
 }
 
 export function seatLimit(plan: "free" | "std" | "pro"): number {

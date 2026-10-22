@@ -1,13 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { readTrialLength } from '../../../src/server/trial-length';
 
+// TODO: wire to real module. Normalize production results to these contracts.
 // Dates are ISO civil dates; annual end is inclusive; reminder state is explicit.
-// Trial length comes from QA_TRIAL_UNIT and QA_TRIAL_COUNT. This file does not choose one.
 import {
   monthlyPrice, annualQuote, trialOfferMonths, seatLimit, canInvite,
   unitChange, trialReminders, annualWindow, switchSubscription,
   effectiveLeaseCount,
 } from '../src/pricing';
+
+// Trial length definition — PENDING Ron 10/22 18:30 decision.
+// 'calendar_months': 3 calendar months (end = activation + 3 months − 1 day).
+// 'days_90': 90 days inclusive (end = activation + 89 days).
+type TrialMode = 'calendar_months' | 'days_90';
+const TRIAL_MODE: TrialMode =
+  (process.env.TRIAL_MODE as TrialMode | undefined) ?? 'calendar_months';
+if (!['calendar_months', 'days_90'].includes(TRIAL_MODE)) {
+  throw new Error(`Unknown TRIAL_MODE: ${TRIAL_MODE}`);
+}
+
+// Pure UTC civil-date helpers (no host timezone parsing).
+const toUtc = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+};
+const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const addDays = (iso: string, n: number) => fmt(toUtc(iso) + n * 86_400_000);
+const addMonthsClamped = (iso: string, n: number) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
+  return fmt(Date.UTC(y, m - 1 + n, Math.min(d, last)));
+};
+function trialEndFor(activatedAt: string, mode: TrialMode = TRIAL_MODE): string {
+  return mode === 'days_90'
+    ? addDays(activatedAt, 89)
+    : addDays(addMonthsClamped(activatedAt, 3), -1);
+}
+const annualStartFor = (trialEnd: string) => addDays(trialEnd, 1);
+const annualEndFor = (start: string) => addDays(addMonthsClamped(start, 12), -1);
 
 describe('pricing', () => {
   it.each([
@@ -27,12 +56,11 @@ describe('pricing', () => {
     expect(annualQuote(plan, units)).toEqual({ amount, discountApplied });
   });
 
-  it('gives paid plans the configured trial length and free plans zero', () => {
-    const length = readTrialLength();
-    expect(trialOfferMonths('free', length)).toBe(0);
-    expect(trialOfferMonths('std', length)).toBe(length.count);
-    expect(trialOfferMonths('pro', length)).toBe(length.count);
-  });
+  it.each([['free', 0], ['std', 3], ['pro', 3]] as const)(
+    '%s trial offer', (plan, months) => {
+      expect(trialOfferMonths(plan)).toBe(months);
+    },
+  );
 
   it.each([
     ['free', 1, 1, false],
@@ -62,16 +90,23 @@ describe('pricing', () => {
 });
 
 describe('trial lifecycle', () => {
+  // Reminder dates derived from TRIAL_MODE; no hardcoded trial end.
+  const ACT = '2026-08-01';
+  const END = trialEndFor(ACT);
+  const d14 = addDays(END, -14);
+  const d7 = addDays(END, -7);
+  // Late activation (10 days before the same END): only the seven-day reminder applies.
+  const lateAct = addDays(END, -10);
   it.each([
-    ['2026-10-17', '2026-10-01', [], [14]],
-    ['2026-10-17', '2026-10-01', [14], []],
-    ['2026-10-24', '2026-10-01', [14], [7]],
-    ['2026-10-24', '2026-10-01', [14, 7], []],
-    ['2026-10-21', '2026-10-21', [], []],
-    ['2026-10-24', '2026-10-21', [], [7]],
-  ])('reminders on %s activated %s', (today, activatedAt, sent, expected) => {
+    [d14, ACT, [], [14]],
+    [d14, ACT, [14], []],
+    [d7, ACT, [14], [7]],
+    [d7, ACT, [14, 7], []],
+    [lateAct, lateAct, [], []],
+    [d7, lateAct, [], [7]],
+  ] as [string, string, number[], number[]][])('reminders on %s activated %s', (today, activatedAt, sent, expected) => {
     expect(trialReminders({
-      trialEnd: '2026-10-31', today, activatedAt, sent,
+      trialEnd: END, today, activatedAt, sent,
       lineLaunched: false, lineConnected: true,
     })).toEqual(expected.map(days => ({
       days, channels: ['email', 'in-app'],
@@ -80,26 +115,29 @@ describe('trial lifecycle', () => {
 
   it('adds LINE only after launch and connection', () => {
     expect(trialReminders({
-      trialEnd: '2026-10-31', today: '2026-10-24',
-      activatedAt: '2026-10-01', sent: [14],
+      trialEnd: END, today: d7,
+      activatedAt: ACT, sent: [14],
       lineLaunched: true, lineConnected: true,
     })).toEqual([{ days: 7, channels: ['email', 'in-app', 'line'] }]);
   });
 
-  it('starts a twelve-month annual period the day after trial', () => {
-    expect(annualWindow('2027-03-31')).toEqual({
-      start: '2027-04-01', end: '2028-03-31', trialCharge: 0,
+  it(`starts a twelve-month annual period the day after trial (${TRIAL_MODE})`, () => {
+    const trialEnd = trialEndFor('2027-01-01');
+    const start = annualStartFor(trialEnd);
+    expect(annualWindow(trialEnd)).toEqual({
+      start, end: annualEndFor(start), trialCharge: 0,
     });
   });
 
   it.each([
     ['std', 'monthly'], ['pro', 'annual'], ['free', 'monthly'],
   ] as const)('switch to %s/%s preserves trial', (plan, billing) => {
+    const trialEnd = trialEndFor('2027-01-01');
     expect(switchSubscription({
-      trialUsed: true, trialEnd: '2027-03-31', plan: 'std', billing: 'monthly',
+      trialUsed: true, trialEnd, plan: 'std', billing: 'monthly',
     }, { plan, billing })).toMatchObject({
-      trialUsed: true, trialEnd: '2027-03-31',
-      annualStart: '2027-04-01', trialRestarted: false,
+      trialUsed: true, trialEnd,
+      annualStart: annualStartFor(trialEnd), trialRestarted: false,
     });
   });
 

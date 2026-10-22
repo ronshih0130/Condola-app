@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Label-gated acceptance suites. Missing security or browser env fails the job.
-# Trial length is never defaulted: pricing runs only when QA_TRIAL_UNIT and QA_TRIAL_COUNT are set.
+# Pricing uses TRIAL_MODE (calendar_months by default, or days_90). An empty value uses the spec default.
 set -euo pipefail
 
 high="${HIGH_RISK:-false}"
@@ -55,8 +55,7 @@ if [[ "$copy" == "true" ]]; then
   npx vitest run --config e2e/acceptance/vitest.config.ts e2e/acceptance/tests/copy-banned-terms.spec.ts
 fi
 
-if [[ -n "${QA_TRIAL_UNIT:-}" && -n "${QA_TRIAL_COUNT:-}" ]]; then
-  npx vitest run --config e2e/acceptance/vitest.config.ts e2e/acceptance/tests/pricing.spec.ts
-else
-  echo "acceptance: pricing suite not run because QA_TRIAL_UNIT and QA_TRIAL_COUNT are unset"
+if [[ -z "${TRIAL_MODE:-}" ]]; then
+  unset TRIAL_MODE
 fi
+npx vitest run --config e2e/acceptance/vitest.config.ts e2e/acceptance/tests/pricing.spec.ts
