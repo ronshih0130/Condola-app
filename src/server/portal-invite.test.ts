@@ -322,7 +322,7 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(issuer.includes('if (!token) throw new FlowError("errors.portalRenew")'), false);
   assert.match(owners, /invitePending/);
   assert.match(owners, /ready && !owner\.invitePending/);
-  for (const file of ["../app/global-error.tsx", "../app/m/error.tsx"]) {
+  for (const file of ["../components/page-error.tsx", "../app/m/error.tsx"]) {
     const boundary = readFileSync(new URL(file, import.meta.url), "utf8");
     assert.match(boundary, /頁面暫時無法載入/);
     assert.match(boundary, /可能是網路不穩，資料都還在。請再試一次。/);
@@ -333,6 +333,13 @@ test("portal invite copy hands the link over and stays on the locked wording", (
     assert.equal(boundary.includes("系統錯誤"), false);
     assert.equal(boundary.includes("Application error"), false);
   }
+  const globalError = readFileSync(new URL("../app/global-error.tsx", import.meta.url), "utf8");
+  assert.match(globalError, /頁面暫時無法載入/);
+  assert.match(globalError, /<PageError/);
+  assert.equal(globalError.includes("error.message"), false);
+  assert.equal(globalError.includes("error.digest"), false);
+  assert.equal(globalError.includes("系統錯誤"), false);
+  assert.equal(globalError.includes("Application error"), false);
   const auth = readFileSync(new URL("./auth.ts", import.meta.url), "utf8");
   assert.match(auth, /purgePortalInviteSecrets/);
   assert.match(auth, /deletePortalInviteSecret/);

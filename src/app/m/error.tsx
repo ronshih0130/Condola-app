@@ -1,8 +1,19 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { BUILD_SHA } from "@/build-info";
+import { attemptChunkReload } from "@/lib/chunk-reload";
 
-export default function ManagerError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function ManagerError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => {
+    attemptChunkReload(error, {
+      buildId: BUILD_SHA,
+      storage: window.sessionStorage,
+      reload: () => window.location.reload(),
+    });
+  }, [error]);
+
   return (
     <div className="card pad" data-testid="page-error">
       <h1>頁面暫時無法載入</h1>

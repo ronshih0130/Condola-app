@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { makeT } from "@/i18n";
 import { AuthHashForward } from "@/components/auth-hash";
+import { ChunkReloadListener } from "@/components/chunk-reload";
 import { BrandLink, LocaleLinks, ResetButton, SignOutButton } from "@/components/chrome";
 import { RequiredValidity } from "@/components/required-validity";
 import { EnvBanner } from "@/components/env-mode";
@@ -31,6 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <LocaleProvider locale={prefs.locale}>
           <RequiredValidity message={t("i_field_required")} />
           <AuthHashForward />
+          <ChunkReloadListener />
           <header className="top">
             <label htmlFor="nav-open" className="nav-toggle" data-testid="nav-toggle" aria-label={t("i_menu")}>
               <span aria-hidden="true">☰</span>
