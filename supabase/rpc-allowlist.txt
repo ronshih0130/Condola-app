@@ -31,7 +31,9 @@
 # fn_lease_deposit_check, fn_allocation_rate_cap, and fn_org_retention_guard
 # call them as the session user. condola_property_address_key stays because
 # condola_set_property_address_key and condola_set_unit_import_address_key
-# call it as the session user. condola_sync_unit_address_keys does not.
+# call it as the session user. It is IMMUTABLE, not SECURITY DEFINER, reads
+# no tables, and has search_path = pg_catalog. condola_sync_unit_address_keys
+# does not call it.
 # @mode authenticated
 public.effective_rule(p_jurisdiction uuid, p_org uuid, p_key text, p_on date)
 public.platform_max_id_retention_days()
