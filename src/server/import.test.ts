@@ -575,6 +575,30 @@ test("bulk import migration is additive and idempotent", () => {
   assert.match(code, /IF NOT EXISTS \(/);
   assert.match(code, /SECURITY DEFINER[\s\S]*SET search_path = pg_catalog, public/);
   assert.match(code, /REVOKE EXECUTE ON FUNCTION public\.condola_sync_unit_address_keys\(\) FROM PUBLIC, anon, authenticated/);
+  const locked = [
+    "public.condola_property_address_key(text)",
+    "public.condola_set_property_address_key()",
+    "public.condola_set_unit_import_address_key()",
+    "public.condola_sync_unit_address_keys()",
+  ];
+  const revokes = [...code.matchAll(/REVOKE EXECUTE ON FUNCTION ([\s\S]*?) FROM (PUBLIC, anon, authenticated)/g)].map((match) => match[1]);
+  for (const fn of locked) {
+    assert.equal(revokes.some((list) => list.split(",").map((name) => name.trim()).includes(fn)), true, fn);
+  }
+  for (const role of ["public", "anon", "authenticated"]) {
+    for (const fn of locked) {
+      assert.equal(revokes.some((list) => list.split(",").map((name) => name.trim()).includes(fn)), true, `has_function_privilege('${role}', '${fn}', 'EXECUTE')`);
+    }
+  }
+  const tail = code.trim().split(";").map((part) => part.trim()).filter(Boolean).pop();
+  assert.equal(
+    tail,
+    "REVOKE EXECUTE ON FUNCTION public.condola_property_address_key(text), public.condola_set_property_address_key(), public.condola_set_unit_import_address_key() FROM PUBLIC, anon, authenticated",
+  );
+  assert.doesNotMatch(code, /GRANT\s+EXECUTE\b/i);
+  assert.match(code, /FUNCTION public\.condola_set_property_address_key\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+SECURITY DEFINER\s+SET search_path = pg_catalog, public/);
+  assert.match(code, /FUNCTION public\.condola_set_unit_import_address_key\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+SECURITY DEFINER\s+SET search_path = pg_catalog, public/);
+  assert.match(code, /WHERE p\.id = NEW\.property_id\s+AND p\.org_id = NEW\.org_id/);
   assert.match(code, /WHERE property_id = NEW\.id\s+AND org_id = NEW\.org_id/);
   assert.match(code, /SET address_key = public\.condola_property_address_key\(address_display\)/);
   assert.match(code, /SET import_address_key = coalesce\(p\.address_key, public\.condola_property_address_key\(p\.address_display\)\)/);

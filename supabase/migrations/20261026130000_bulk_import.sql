@@ -31,9 +31,14 @@ AS $$
   )
 $$;
 
+-- SECURITY DEFINER: tx() sets the session role to authenticated, and this
+-- body calls condola_property_address_key. Trigger entry does not check
+-- EXECUTE, but that inner call does. Running as the owner keeps the call
+-- working after EXECUTE is revoked from authenticated.
 CREATE OR REPLACE FUNCTION public.condola_set_property_address_key()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
@@ -42,9 +47,13 @@ BEGIN
 END;
 $$;
 
+-- Same reason as condola_set_property_address_key: the lookup of the
+-- property key runs as the owner, and only NEW.import_address_key is assigned.
+-- The property must belong to the same org as the unit.
 CREATE OR REPLACE FUNCTION public.condola_set_unit_import_address_key()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
@@ -52,7 +61,8 @@ BEGIN
     SELECT coalesce(p.address_key, public.condola_property_address_key(p.address_display))
       INTO NEW.import_address_key
       FROM public.properties p
-     WHERE p.id = NEW.property_id;
+     WHERE p.id = NEW.property_id
+       AND p.org_id = NEW.org_id;
   END IF;
   RETURN NEW;
 END;
@@ -168,3 +178,8 @@ CREATE INDEX IF NOT EXISTS contacts_org_tenant_id_hash_idx
 CREATE INDEX IF NOT EXISTS contacts_org_phone_idx
   ON contacts (org_id, phone_e164)
   WHERE phone_e164 IS NOT NULL AND archived_at IS NULL;
+
+-- Prod default privileges grant EXECUTE on new public functions to anon and
+-- authenticated. Revoke that after every CREATE so a later default grant
+-- cannot leave these callable. Trigger fire does not need the grant.
+REVOKE EXECUTE ON FUNCTION public.condola_property_address_key(text), public.condola_set_property_address_key(), public.condola_set_unit_import_address_key() FROM PUBLIC, anon, authenticated;
