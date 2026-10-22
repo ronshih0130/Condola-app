@@ -195,6 +195,19 @@ table.t td.mine,table.t th.mine{background:var(--pri2)}
 .opening-row{display:flex;gap:8px;align-items:center;margin-top:6px}.opening-row .inp{width:140px}
 .guide-no{width:28px;height:28px;border-radius:50%;background:var(--cd-accent,#F2B544);color:var(--ink);display:inline-flex;align-items:center;justify-content:center;font-weight:700;margin-bottom:8px}
 .foot{margin-top:28px;font-size:11px;color:var(--ink3);border-top:1px solid var(--line);padding-top:10px}
+.site-foot p{margin:0}
+.site-legal{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 6px}
+.site-legal a{color:var(--ink2);text-decoration:underline}
+.legal{max-width:800px;margin:0 auto;padding:8px 20px 48px;line-height:1.75;overflow-x:auto}
+.legal h1{font-size:1.6rem;line-height:1.35;margin:0 0 12px}
+.legal h2{font-size:1.15rem;margin:1.6rem 0 .6rem}
+.legal p{margin:.6rem 0}
+.legal ul,.legal ol{margin:.4rem 0;padding-left:1.4rem}
+.legal li{margin:.25rem 0}
+.legal a{text-decoration:underline}
+.legal table{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0}
+.legal th,.legal td{border:1px solid var(--line);padding:8px;vertical-align:top;text-align:left}
+.legal th{background:var(--bg)}
 .tree{font-size:14px}.tree .n{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer}.tree .n:hover{background:var(--bg)}.tree .n.on{background:var(--pri2)}.tree .l1{padding-left:28px}.tree .l2{padding-left:52px}
 .bigcard{border:2px solid var(--line);border-radius:var(--cd-radius-lg);padding:22px;cursor:pointer;background:var(--panel);text-align:center}.bigcard.on{border-color:var(--pri);background:var(--pri2)}.bigcard svg{width:150px;height:100px}
 .qr{background:#fff;padding:8px;border:1px solid var(--line);border-radius:8px;display:inline-block}
