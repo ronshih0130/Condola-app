@@ -1100,7 +1100,7 @@ export async function createLease(session: Session, input: LeaseInput) {
       client,
       `SELECT id::text, target_room_id::text, start_date::text, end_date::text
          FROM leases
-        WHERE unit_id = $1 AND id <> $2 AND status IN ('pending_signature','active')
+        WHERE unit_id = $1 AND id <> $2 AND status = 'active'
           AND daterange(start_date, coalesce(end_date, start_date), '[]') && daterange($3::date, $4::date, '[]')`,
       [space.unit_id, lease.id, input.periodStart, input.periodEnd],
     );
@@ -1110,10 +1110,8 @@ export async function createLease(session: Session, input: LeaseInput) {
     if (input.splitMethod === "sub_meter" && subTotal - electricity.usageKwh > 0.001) throw new FlowError("errors.meter");
     const common = input.splitMethod === "sub_meter" ? round3(Math.max(0, electricity.usageKwh - subTotal)) : 0;
     const parts = unitRooms.map((item) => {
-      const linked =
-        item.id === space.id
-          ? { id: lease.id, start_date: input.startDate, end_date: input.endDate }
-          : others.find((row) => row.target_room_id === item.id);
+      // This lease is still pending_signature, so its room is vacant until both parties sign.
+      const linked = others.find((row) => row.target_room_id === item.id);
       const days = linked
         ? inclusiveDays(linked.start_date, linked.end_date, input.periodStart, input.periodEnd)
         : 0;
@@ -1132,7 +1130,7 @@ export async function createLease(session: Session, input: LeaseInput) {
         key: space.id,
         roomId: null,
         label: space.label,
-        leaseId: lease.id,
+        leaseId: null,
         weight: input.splitMethod === "days_occupied" ? days : input.splitMethod === "sub_meter" ? electricity.usageKwh : 1,
         days,
         sub: input.splitMethod === "sub_meter" ? electricity.usageKwh : 0,

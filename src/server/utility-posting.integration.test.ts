@@ -99,6 +99,8 @@ test("a confirmed 電費 run posts, reposts, voids, and stays inside the firm", 
       form({ ...leaseFields, roomId: roomB, tenantName: "乙租客", tenantEmail: `b.util.${stamp}@example.com`, rent: "8000" }),
     );
     userIds.push(leaseA.tenantUserId, leaseB.tenantUserId);
+    await activateLease(leaseA.leaseId);
+    await activateLease(leaseB.leaseId);
 
     const parties = await query<{ lease_id: string; contact_id: string; property_id: string }>(
       `SELECT l.id::text AS lease_id, lp.contact_id::text, l.property_id::text
@@ -741,6 +743,15 @@ async function cleanupFixture(input: { propertyIds: string[]; userIds: string[];
   });
 }
 
+async function activateLease(leaseId: string) {
+  await query(
+    `UPDATE leases
+        SET status = 'active', esign_status = 'fully_signed', signed_at = coalesce(signed_at, now())
+      WHERE id = $1`,
+    [leaseId],
+  );
+}
+
 function leaseFields(email: string) {
   const period = currentUtilityPeriod();
   return {
@@ -790,6 +801,7 @@ test("concurrent prepares share one meter and one open run", async () => {
       form({ ...leaseFields(`conc.${stamp}@example.com`), roomId: roomA, tenantName: "並行租客" }),
     );
     userIds.push(lease.tenantUserId);
+    await activateLease(lease.leaseId);
     await query(`UPDATE rooms SET electricity_method = 'by_reading', rate_per_kwh = 4 WHERE id = $1`, [roomA]);
     const unitId = (await query<{ id: string }>(`SELECT unit_id::text AS id FROM rooms WHERE id = $1`, [roomA])).rows[0].id;
     const input = {
@@ -910,6 +922,7 @@ test("a paid invoice is left alone and the correction is a credit on a new utili
       }),
     );
     userIds.push(lease.tenantUserId);
+    await activateLease(lease.leaseId);
     await query(`UPDATE rooms SET electricity_method = 'by_reading', rate_per_kwh = 4 WHERE id = $1`, [roomA]);
     const unitId = (await query<{ id: string }>(`SELECT unit_id::text AS id FROM rooms WHERE id = $1`, [roomA])).rows[0].id;
     const party = await query<{ contact_id: string; property_id: string }>(
@@ -1235,13 +1248,8 @@ test("vacant rooms are an owner expense, and the board lists them without a sign
     for (const row of shares.rows) {
       assert.equal(Number(row.amount), 25000);
       assert.equal(Number(row.usage), 50);
-      if (row.label === "G" || row.label === "H") {
-        assert.equal(row.bearer, "owner");
-        assert.equal(row.lease_id, null);
-      } else {
-        assert.equal(row.bearer, "tenant");
-        assert.ok(row.lease_id);
-      }
+      assert.equal(row.bearer, "owner");
+      assert.equal(row.lease_id, null);
     }
     const expense = await query<{ description: string; amount: string; status: string; bill_to: string; category: string }>(
       `SELECT description, amount_minor::text AS amount, status::text, bill_to::text, category
@@ -1250,7 +1258,7 @@ test("vacant rooms are an owner expense, and the board lists them without a sign
     );
     assert.equal(expense.rows.length, 1);
     assert.equal(expense.rows[0]?.description, VACANT_ELECTRICITY_DESCRIPTION);
-    assert.equal(expense.rows[0]?.amount, "50000");
+    assert.equal(expense.rows[0]?.amount, "200000");
     assert.equal(expense.rows[0]?.status, "posted");
     assert.equal(expense.rows[0]?.bill_to, "owner");
     assert.equal(expense.rows[0]?.category, "utility");
@@ -1273,7 +1281,7 @@ test("vacant rooms are an owner expense, and the board lists them without a sign
     );
     assert.equal(statementLine.rows.length, 1);
     assert.equal(statementLine.rows[0]?.description, VACANT_ELECTRICITY_DESCRIPTION);
-    assert.equal(statementLine.rows[0]?.amount, "50000");
+    assert.equal(statementLine.rows[0]?.amount, "200000");
 
     const meters = await createProperty(admin, {
       name: `度數電費 ${stamp}`,
@@ -1327,7 +1335,7 @@ test("vacant rooms are an owner expense, and the board lists them without a sign
     assert.ok(beforeRooms.every((space) => space.lease_id == null));
     const during = await listUtilityBoard(admin, period.start, period.end);
     const duringRooms = during.spaces.filter((space) => space.unit_id === unitId);
-    assert.equal(duringRooms.find((space) => space.space_id === roomA)?.tenant, "度數租客");
+    assert.equal(duringRooms.find((space) => space.space_id === roomA)?.lease_id ?? null, null);
     assert.equal(duringRooms.find((space) => space.space_id === roomB)?.lease_id ?? null, null);
     const input = {
       unitId,
@@ -1358,7 +1366,7 @@ test("vacant rooms are an owner expense, and the board lists them without a sign
       [meters.propertyId],
     );
     assert.equal(postedExpense.rows.length, 1);
-    assert.equal(postedExpense.rows[0]?.amount, "4000");
+    assert.equal(postedExpense.rows[0]?.amount, "8000");
     assert.equal(postedExpense.rows[0]?.description, VACANT_ELECTRICITY_DESCRIPTION);
     const postedLines = await query<{ label: string; bearer: string; invoice: string | null }>(
       `SELECT r.label, l.bearer::text, l.posted_invoice_id::text AS invoice
@@ -1368,8 +1376,8 @@ test("vacant rooms are an owner expense, and the board lists them without a sign
         ORDER BY r.label`,
       [prepared.runId],
     );
-    assert.equal(postedLines.rows.find((row) => row.label === "A")?.bearer, "tenant");
-    assert.ok(postedLines.rows.find((row) => row.label === "A")?.invoice);
+    assert.equal(postedLines.rows.find((row) => row.label === "A")?.bearer, "owner");
+    assert.equal(postedLines.rows.find((row) => row.label === "A")?.invoice ?? null, null);
     assert.equal(postedLines.rows.find((row) => row.label === "B")?.bearer, "owner");
     assert.equal(postedLines.rows.find((row) => row.label === "B")?.invoice ?? null, null);
     const reposted = await prepareUtilityRun(admin, {
@@ -1388,7 +1396,7 @@ test("vacant rooms are an owner expense, and the board lists them without a sign
     );
     assert.equal(updated.rows.length, 1);
     assert.equal(updated.rows[0]?.n, "1");
-    assert.equal(updated.rows[0]?.amount, "8000");
+    assert.equal(updated.rows[0]?.amount, "12000");
     await voidUtilityRun(admin, prepared.runId, "空房電費作廢");
     const voided = await query<{ n: string }>(
       `SELECT count(*)::text AS n FROM expenses WHERE property_id = $1 AND status <> 'void'`,
@@ -1471,6 +1479,7 @@ test("公共用電 and 電費（帳單差額） are separate owner lines, includ
     assert.equal(detail?.adjustments.billGapMinor, -30000);
     assert.equal(detail?.adjustments.billGapWarn, true);
     assert.equal(detail?.lines.find((line) => line.room_id === roomB)?.bearer, "owner");
+    assert.equal(detail?.lines.find((line) => line.room_id === roomA)?.bearer, "owner");
     assert.equal(detail?.lines.find((line) => line.room_id === roomA)?.amount, "50000");
     await confirmUtilityRun(admin, prepared.runId);
     const expenses = await query<{ description: string; amount: string }>(
@@ -1481,7 +1490,7 @@ test("公共用電 and 電費（帳單差額） are separate owner lines, includ
     const expenseByDescription = Object.fromEntries(expenses.rows.map((row) => [row.description, row.amount]));
     assert.equal(expenses.rows.length, 3);
     assert.equal(expenseByDescription[PUBLIC_ELECTRICITY_DESCRIPTION], "5000");
-    assert.equal(expenseByDescription[VACANT_ELECTRICITY_DESCRIPTION], "25000");
+    assert.equal(expenseByDescription[VACANT_ELECTRICITY_DESCRIPTION], "75000");
     assert.equal(expenseByDescription[BILL_GAP_DESCRIPTION], "-30000");
     const statement = await generateStatement(admin, {
       ownerContactId: created.ownerContactId,
@@ -1496,7 +1505,7 @@ test("公共用電 and 電費（帳單差額） are separate owner lines, includ
     const lineByDescription = Object.fromEntries(lines.rows.map((row) => [row.description, row.amount]));
     assert.equal(lines.rows.length, 3);
     assert.equal(lineByDescription[PUBLIC_ELECTRICITY_DESCRIPTION], "5000");
-    assert.equal(lineByDescription[VACANT_ELECTRICITY_DESCRIPTION], "25000");
+    assert.equal(lineByDescription[VACANT_ELECTRICITY_DESCRIPTION], "75000");
     assert.equal(lineByDescription[BILL_GAP_DESCRIPTION], "-30000");
   } finally {
     await cleanupFixture({ propertyIds, userIds, importId: null, stamp });
@@ -1570,7 +1579,128 @@ test("平均分攤 accepts a blank total kWh and the owner expense is visible wh
   }
 });
 
-test("countersign activates a pending lease that already has a posted electricity invoice", async () => {
+test("electricity split bills signed tenants only and treats a pending lease as vacant", async () => {
+  const stamp = `mix${Date.now().toString(36)}`;
+  const period = currentUtilityPeriod();
+  const propertyIds: string[] = [];
+  const userIds: string[] = [];
+  try {
+    const created = await createProperty(admin, {
+      name: `簽署才分攤 ${stamp}`,
+      city: "台北市",
+      district: "中山區",
+      street: `分攤路${stamp}`,
+      currency: "TWD",
+      ownerMode: "new",
+      ownerName: "分攤屋主",
+      ownerPhone: "0912000888",
+      ownerEmail: `split.owner.${stamp}@example.com`,
+      canViewTenantPhone: false,
+      unitLabel: "7F",
+      floor: "7",
+      rentalMode: "by_room",
+      rooms: ["A", "B", "C"].map((label) => ({ label, roomType: "suite", baseRentMajor: 9000 })),
+      electric: { split: "even", rateMajor: 5, openings: [] },
+    });
+    propertyIds.push(created.propertyId);
+    const [roomA, roomB, roomC] = created.roomIds;
+    const fields = {
+      tenantPhone: "0912345678",
+      lineUserId: "",
+      startDate: period.start,
+      months: "12",
+      rent: "9000",
+      depositMonths: "2",
+      depositReason: "",
+      dueDay: "5",
+      splitMethod: "even",
+      billTotal: "",
+      usage: "",
+      rate: "",
+      overrideReason: "",
+    };
+    const signed = await createLeaseFromForm(
+      admin,
+      form({ ...fields, roomId: roomA, tenantName: "已簽署租客", tenantEmail: `signed.${stamp}@example.com` }),
+    );
+    const pending = await createLeaseFromForm(
+      admin,
+      form({ ...fields, roomId: roomB, tenantName: "待簽署租客", tenantEmail: `pending.${stamp}@example.com` }),
+    );
+    userIds.push(signed.tenantUserId, pending.tenantUserId);
+    const tenantSigned = await simulateTenantSignature(admin, signed.leaseId);
+    assert.equal(tenantSigned.esign, "partially_signed");
+    const activated = await signLease(admin, { leaseId: signed.leaseId, signedName: "管理方", consent: true });
+    assert.equal(activated.esign, "fully_signed");
+    const statuses = await query<{ id: string; status: string }>(
+      `SELECT id::text, status::text FROM leases WHERE id = ANY($1::uuid[])`,
+      [[signed.leaseId, pending.leaseId]],
+    );
+    assert.equal(statuses.rows.find((row) => row.id === signed.leaseId)?.status, "active");
+    assert.equal(statuses.rows.find((row) => row.id === pending.leaseId)?.status, "pending_signature");
+
+    const unitId = (await query<{ id: string }>(`SELECT unit_id::text AS id FROM rooms WHERE id = $1`, [roomA])).rows[0].id;
+    const prepared = await prepareUtilityRun(admin, {
+      unitId,
+      periodStart: period.start,
+      periodEnd: period.end,
+      rateMajor: 5,
+      totalKwh: null,
+      billTotalMajor: 3000,
+      overrideReason: "",
+      readings: [],
+    });
+    await confirmUtilityRun(admin, prepared.runId);
+    const shares = await query<{ label: string; bearer: string; lease_id: string | null; amount: string; invoice: string | null }>(
+      `SELECT r.label, l.bearer::text, l.lease_id::text, l.amount_minor::text AS amount, l.posted_invoice_id::text AS invoice
+         FROM utility_allocation_lines l
+         JOIN rooms r ON r.id = l.room_id
+        WHERE l.run_id = $1
+        ORDER BY r.label`,
+      [prepared.runId],
+    );
+    assert.deepEqual(
+      shares.rows.map((row) => row.label),
+      ["A", "B", "C"],
+    );
+    for (const row of shares.rows) assert.equal(row.amount, "100000");
+    const byLabel = Object.fromEntries(shares.rows.map((row) => [row.label, row]));
+    assert.equal(byLabel.A?.bearer, "tenant");
+    assert.equal(byLabel.A?.lease_id, signed.leaseId);
+    assert.ok(byLabel.A?.invoice);
+    assert.equal(byLabel.B?.bearer, "owner");
+    assert.equal(byLabel.B?.lease_id, null);
+    assert.equal(byLabel.B?.invoice, null);
+    assert.equal(byLabel.C?.bearer, "owner");
+    assert.equal(byLabel.C?.lease_id, null);
+    assert.equal(byLabel.C?.invoice, null);
+    const pendingCharges = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM invoice_lines il
+         JOIN invoices i ON i.id = il.invoice_id
+        WHERE i.lease_id = $1 AND il.charge_type = 'utility'`,
+      [pending.leaseId],
+    );
+    assert.equal(pendingCharges.rows[0]?.n, "0");
+    const expense = await query<{ description: string; amount: string; bill_to: string }>(
+      `SELECT description, amount_minor::text AS amount, bill_to::text
+         FROM expenses WHERE property_id = $1 AND status <> 'void'`,
+      [created.propertyId],
+    );
+    assert.equal(expense.rows.length, 1);
+    assert.equal(expense.rows[0]?.description, VACANT_ELECTRICITY_DESCRIPTION);
+    assert.equal(expense.rows[0]?.amount, "200000");
+    assert.equal(expense.rows[0]?.bill_to, "owner");
+    const board = await listUtilityBoard(admin, period.start, period.end);
+    const rooms = board.spaces.filter((space) => space.unit_id === unitId);
+    assert.equal(rooms.find((space) => space.space_id === roomA)?.lease_id, signed.leaseId);
+    assert.equal(rooms.find((space) => space.space_id === roomB)?.lease_id ?? null, null);
+    assert.equal(rooms.find((space) => space.space_id === roomC)?.lease_id ?? null, null);
+  } finally {
+    await cleanupFixture({ propertyIds, userIds, importId: null, stamp });
+  }
+});
+
+test("countersign leaves a pending room's electricity on the owner", async () => {
   const stamp = Date.now().toString(36);
   const period = currentUtilityPeriod();
   const propertyIds: string[] = [];
@@ -1635,19 +1765,23 @@ test("countersign activates a pending lease that already has a posted electricit
       readings: [{ spaceId: roomId, kwh: 100 }],
     });
     await confirmUtilityRun(admin, prepared.runId);
-    const postedLine = await query<{ id: string; invoice_id: string }>(
-      `SELECT id::text, posted_invoice_id::text AS invoice_id
+    const postedLine = await query<{ bearer: string; lease_id: string | null; invoice_id: string | null; amount: string }>(
+      `SELECT bearer::text, lease_id::text, posted_invoice_id::text AS invoice_id, amount_minor::text AS amount
          FROM utility_allocation_lines
-        WHERE lease_id = $1 AND posted_invoice_line_id IS NOT NULL`,
-      [lease.leaseId],
+        WHERE run_id = $1`,
+      [prepared.runId],
     );
     assert.equal(postedLine.rows.length, 1);
-    const utilityInvoice = postedLine.rows[0].invoice_id;
-    const linkedBefore = await query<{ n: string }>(
-      `SELECT count(*)::text AS n FROM invoice_lines WHERE allocation_line_id = $1`,
-      [postedLine.rows[0].id],
+    assert.equal(postedLine.rows[0]?.bearer, "owner");
+    assert.equal(postedLine.rows[0]?.lease_id, null);
+    assert.equal(postedLine.rows[0]?.invoice_id, null);
+    assert.equal(postedLine.rows[0]?.amount, "40000");
+    const vacant = await query<{ amount: string }>(
+      `SELECT amount_minor::text AS amount FROM expenses
+        WHERE property_id = $1 AND description = $2 AND status <> 'void'`,
+      [created.propertyId, VACANT_ELECTRICITY_DESCRIPTION],
     );
-    assert.equal(linkedBefore.rows[0].n, "1");
+    assert.equal(vacant.rows[0]?.amount, "40000");
 
     const tenantSigned = await simulateTenantSignature(admin, lease.leaseId);
     assert.equal(tenantSigned.esign, "partially_signed");
@@ -1688,18 +1822,11 @@ test("countersign activates a pending lease that already has a posted electricit
     );
     assert.equal(moveInLines.rows.every((row) => row.allocation_line_id === null), true);
     assert.equal(moveIn.rows[0].total, "3000000");
-    const linkedAfter = await query<{ n: string; invoice_id: string }>(
-      `SELECT count(*)::text AS n, min(invoice_id::text) AS invoice_id
-         FROM invoice_lines WHERE allocation_line_id = $1`,
-      [postedLine.rows[0].id],
+    const utilityInvoices = await query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM invoices WHERE lease_id = $1 AND source = 'utility' AND status <> 'void'`,
+      [lease.leaseId],
     );
-    assert.equal(linkedAfter.rows[0].n, "1");
-    assert.equal(linkedAfter.rows[0].invoice_id, utilityInvoice);
-    const utilityStill = await query<{ n: string }>(
-      `SELECT count(*)::text AS n FROM invoices WHERE id = $1 AND source = 'utility' AND status <> 'void'`,
-      [utilityInvoice],
-    );
-    assert.equal(utilityStill.rows[0].n, "1");
+    assert.equal(utilityInvoices.rows[0]?.n, "0");
   } finally {
     await cleanupFixture({ propertyIds, userIds, importId: null, stamp });
   }

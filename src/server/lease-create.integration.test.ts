@@ -596,7 +596,14 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
             [propertyId],
           );
           await client.query(
-            `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            `DELETE FROM utility_allocation_lines
+              WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)
+                 OR run_id IN (
+                   SELECT r.id FROM utility_allocation_runs r
+                     JOIN meters m ON m.id = r.meter_id
+                     JOIN units u ON u.id = m.unit_id
+                    WHERE u.property_id = $1
+                 )`,
             [propertyId],
           );
           await client.query(
@@ -710,8 +717,10 @@ test("a second lease in the same unit and period updates the draft run, and a po
               b.total_amount_minor::text AS bill_amount, b.total_usage::text AS bill_usage
          FROM utility_allocation_runs r
          JOIN utility_bills b ON b.id = r.utility_bill_id
-         JOIN utility_allocation_lines line ON line.run_id = r.id AND line.lease_id = $1`,
-      [first.leaseId],
+         JOIN meters m ON m.id = r.meter_id
+         JOIN units u ON u.id = m.unit_id
+        WHERE u.property_id = $1 AND r.status <> 'void'`,
+      [rooms.propertyId],
     );
     assert.equal(open.rows.length, 1);
     assert.equal(open.rows[0]?.status, "draft");
@@ -726,9 +735,8 @@ test("a second lease in the same unit and period updates the draft run, and a po
       `SELECT lease_id::text, bearer::text FROM utility_allocation_lines WHERE run_id = $1`,
       [open.rows[0].id],
     );
-    assert.ok(lines.rows.some((row) => row.lease_id === first.leaseId && row.bearer === "tenant"));
-    assert.ok(lines.rows.some((row) => row.lease_id === second.leaseId && row.bearer === "tenant"));
-    assert.equal(lines.rows.filter((row) => row.bearer === "owner").length, 1);
+    assert.equal(lines.rows.length, 3);
+    assert.ok(lines.rows.every((row) => row.lease_id == null && row.bearer === "owner"));
 
     await query(
       `UPDATE utility_allocation_runs
@@ -789,7 +797,14 @@ test("a second lease in the same unit and period updates the draft run, and a po
             [propertyId],
           );
           await client.query(
-            `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            `DELETE FROM utility_allocation_lines
+              WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)
+                 OR run_id IN (
+                   SELECT r.id FROM utility_allocation_runs r
+                     JOIN meters m ON m.id = r.meter_id
+                     JOIN units u ON u.id = m.unit_id
+                    WHERE u.property_id = $1
+                 )`,
             [propertyId],
           );
           await client.query(
@@ -1314,7 +1329,14 @@ test("every lease save path rejects a deposit over two months without a reason",
             [propertyId],
           );
           await client.query(
-            `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            `DELETE FROM utility_allocation_lines
+              WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)
+                 OR run_id IN (
+                   SELECT r.id FROM utility_allocation_runs r
+                     JOIN meters m ON m.id = r.meter_id
+                     JOIN units u ON u.id = m.unit_id
+                    WHERE u.property_id = $1
+                 )`,
             [propertyId],
           );
           await client.query(
@@ -1506,7 +1528,14 @@ test("two different leases both save, a triple create keeps one, and a failed su
       try {
         for (const propertyId of propertyIds) {
           await client.query(
-            `DELETE FROM utility_allocation_lines WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)`,
+            `DELETE FROM utility_allocation_lines
+              WHERE lease_id IN (SELECT id FROM leases WHERE property_id = $1)
+                 OR run_id IN (
+                   SELECT r.id FROM utility_allocation_runs r
+                     JOIN meters m ON m.id = r.meter_id
+                     JOIN units u ON u.id = m.unit_id
+                    WHERE u.property_id = $1
+                 )`,
             [propertyId],
           );
           await client.query(

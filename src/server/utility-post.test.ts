@@ -25,7 +25,7 @@ import {
 } from "./utility-post";
 
 test("a pending lease notes that rent is billed after both signatures, and a signed lease hides it", () => {
-  assert.equal(unsignedRentNoteKey("pending_signature"), "i_pay_unsigned_rent");
+  assert.equal(unsignedRentNoteKey("pending_signature"), "i_pay_unsigned_bill");
   for (const status of ["active", "ended", "draft", "terminated", "cancelled"]) {
     assert.equal(unsignedRentNoteKey(status), null, status);
   }
@@ -36,8 +36,11 @@ test("a pending lease notes that rent is billed after both signatures, and a sig
   assert.match(page, /noteKey \? \([\s\S]*data-testid="unsigned-rent-note"[\s\S]*t\(noteKey\)[\s\S]*\) : null/);
   const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
   const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
-  assert.equal(zh.i_pay_unsigned_rent, "租約還沒完成簽署，租金帳單會在雙方簽署後產生。");
-  assert.equal(en.i_pay_unsigned_rent, "The lease is not fully signed yet. The rent bill is created after both parties sign.");
+  assert.equal(zh.i_pay_unsigned_bill, "租約還沒完成簽署，帳單會在雙方簽署後產生。");
+  assert.equal(en.i_pay_unsigned_bill, "The lease is not fully signed yet. Bills are created after both parties sign.");
+  const posting = readFileSync(new URL("./utility-posting.ts", import.meta.url), "utf8");
+  assert.equal(posting.includes("pending_signature"), false);
+  assert.match(posting, /AND l\.status = 'active'/);
 });
 
 test("tenant pay lists invoiced rent and electricity in NT$", () => {

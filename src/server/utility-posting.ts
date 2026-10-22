@@ -138,7 +138,7 @@ export async function listUtilityBoard(
                JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
                JOIN contacts c ON c.id = lp.contact_id
               WHERE l.org_id = u.org_id
-                AND l.status IN ('pending_signature','active')
+                AND l.status = 'active'
                 AND l.start_date <= $3::date
                 AND coalesce(l.end_date, DATE '9999-12-31') >= $2::date
                 AND ((r.id IS NOT NULL AND l.target_room_id = r.id) OR (r.id IS NULL AND l.target_unit_id = u.id))
@@ -1020,48 +1020,41 @@ async function loadSpaces(client: Client, unit: { id: string; rental_mode: strin
   );
 }
 
+/** A room is billed only to a fully signed lease. Any other lease is vacant and stays on the owner. */
 async function loadOccupants(client: Client, orgId: string, unitId: string, periodStart: string, periodEnd: string) {
   const rows = await many<{
     space_id: string;
     lease_id: string;
     contact_id: string;
     tenant: string;
-    status: string;
     start_date: string;
     end_date: string;
   }>(
     client,
     `SELECT CASE WHEN l.target_room_id IS NULL THEN l.target_unit_id::text ELSE l.target_room_id::text END AS space_id,
-            l.id::text AS lease_id, c.id::text AS contact_id, c.display_name AS tenant, l.status::text,
+            l.id::text AS lease_id, c.id::text AS contact_id, c.display_name AS tenant,
             l.start_date::text, coalesce(l.end_date, DATE '9999-12-31')::text AS end_date
        FROM leases l
        JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
        JOIN contacts c ON c.id = lp.contact_id
       WHERE l.org_id = $1 AND l.unit_id = $2
-        AND l.status IN ('pending_signature','active')
+        AND l.status = 'active'
         AND l.start_date <= $4::date
         AND coalesce(l.end_date, DATE '9999-12-31') >= $3::date`,
     [orgId, unitId, periodStart, periodEnd],
   );
-  const grouped = new Map<string, typeof rows>();
-  for (const row of rows) {
-    const list = grouped.get(row.space_id) ?? [];
-    list.push(row);
-    grouped.set(row.space_id, list);
-  }
   const occupants = new Map<string, Occupant[]>();
-  for (const [spaceId, list] of grouped) {
-    const active = list.filter((row) => row.status === "active");
-    const chosen = active.length > 0 ? active : list.filter((row) => row.status === "pending_signature");
-    const people = chosen
-      .map((row) => ({
-        leaseId: row.lease_id,
-        contactId: row.contact_id,
-        tenant: row.tenant,
-        days: inclusiveDays(row.start_date, row.end_date, periodStart, periodEnd),
-      }))
-      .filter((row) => row.days > 0);
-    if (people.length) occupants.set(spaceId, people);
+  for (const row of rows) {
+    const days = inclusiveDays(row.start_date, row.end_date, periodStart, periodEnd);
+    if (days <= 0) continue;
+    const people = occupants.get(row.space_id) ?? [];
+    people.push({
+      leaseId: row.lease_id,
+      contactId: row.contact_id,
+      tenant: row.tenant,
+      days,
+    });
+    occupants.set(row.space_id, people);
   }
   return occupants;
 }

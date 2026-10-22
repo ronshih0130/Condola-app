@@ -156,7 +156,7 @@ test("公共用電 and 帳單差額 show as separate owner lines with a rate war
   await expect(page.getByTestId("utility-share").filter({ hasText: "屋主（空房）" })).toContainText("NT$100");
 });
 
-test("countersign activates a pending lease that already has a utility invoice", async ({ page }) => {
+test("countersign of a pending lease does not bill the electricity posted while it was unsigned", async ({ page }) => {
   await resetDemo(page);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/units");
   for (const room of ["A", "B", "C"]) {
@@ -216,7 +216,7 @@ test("countersign activates a pending lease that already has a utility invoice",
   await expect(page).toHaveURL(new RegExp(`${leaseUrl.split("/").pop()}\\?tab=ledger$`));
   await expect(page).not.toHaveURL(/error=/);
   await expect(page.getByTestId("error-banner")).toHaveCount(0);
-  await expect(page.getByTestId("invoice-utility-line")).toHaveCount(1);
+  await expect(page.getByTestId("invoice-utility-line")).toHaveCount(0);
   await expect(page.getByTestId("invoice-rent")).toBeVisible();
   await expect(page.getByTestId("invoice-deposit")).toBeVisible();
   await page.getByRole("link", { name: "摘要" }).click();
