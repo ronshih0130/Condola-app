@@ -107,13 +107,9 @@ The binding name is `HYPERDRIVE`. Staging uses id `2f14fd9785044250ba3b83fbe0025
 
 Creating a Hyperdrive config requires a Workers Paid plan. The Workers Free plan cannot create one. Do not run these commands from CI. An operator runs them once, then copies each printed id into `wrangler.jsonc`.
 
-`supabase/migrations/20261029130000_condola_hyperdrive_role.sql` creates `condola_hyperdrive` (`LOGIN`, `NOINHERIT`, `NOBYPASSRLS`, `NOSUPERUSER`, member of `authenticated` only). It is not a member of `service_role` and it has no table grants of its own, so a query that skips `SET LOCAL ROLE authenticated` fails closed. The migration is additive: role and grants only, no `NOT NULL` and no new constraints. Set the secret in the database, not in git:
+`supabase/migrations/20261029130000_condola_hyperdrive_role.sql` creates `condola_hyperdrive`. Both the `CREATE` and the `ALTER` branch set `NOSUPERUSER`, `NOBYPASSRLS`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, `LOGIN`, and `NOINHERIT`. `NOINHERIT` is required because `tx()` runs `SET LOCAL ROLE authenticated`. The only grants are `CONNECT` on the current database, `USAGE` on schema `public`, and membership in `authenticated`. There is no table grant and no `service_role` membership, so RLS applies as `authenticated`. A query that skips `SET LOCAL ROLE` fails closed. The migration does not assign a login secret.
 
-```sql
-ALTER ROLE condola_hyperdrive PASSWORD '<from a secret store>';
-```
-
-Origin is the direct Supabase host, port **5432**, database `postgres`, user `condola_hyperdrive`. Do not use the transaction pooler on port 6543. `--caching-disabled` is required.
+The login secret exists only inside the Cloudflare Hyperdrive config connection string. It is not in this repo, not in SQL, not in logs, and not in chat. Origin is the direct Supabase host, port **5432**, database `postgres`, user `condola_hyperdrive`. Do not use the transaction pooler on port 6543. `--caching-disabled` is required.
 
 ```bash
 npx wrangler hyperdrive create condola-staging \

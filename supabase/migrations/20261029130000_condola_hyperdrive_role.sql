@@ -6,31 +6,31 @@
 -- service_role. The operator sets the secret out of band (see README) and
 -- passes it only to `wrangler hyperdrive create`.
 --
--- The role is NOINHERIT and has no table grants of its own. Reads work only
--- after the app runs SET LOCAL ROLE authenticated, so a missed SET ROLE
--- fails closed instead of skipping RLS. Session lookup and service_role
--- writes stay on the existing DATABASE_URL login.
+-- The role is NOINHERIT because tx() runs SET LOCAL ROLE authenticated.
+-- It has no table grants of its own, so RLS applies as authenticated and a
+-- missed SET ROLE fails closed. This file never assigns a login secret.
+-- Session lookup and service_role writes stay on the existing DATABASE_URL login.
 
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'condola_hyperdrive') THEN
     CREATE ROLE condola_hyperdrive
-      LOGIN
       NOSUPERUSER
+      NOBYPASSRLS
       NOCREATEDB
       NOCREATEROLE
-      NOINHERIT
-      NOBYPASSRLS
-      NOREPLICATION;
+      NOREPLICATION
+      LOGIN
+      NOINHERIT;
   ELSE
     ALTER ROLE condola_hyperdrive
-      LOGIN
       NOSUPERUSER
+      NOBYPASSRLS
       NOCREATEDB
       NOCREATEROLE
-      NOINHERIT
-      NOBYPASSRLS
-      NOREPLICATION;
+      NOREPLICATION
+      LOGIN
+      NOINHERIT;
   END IF;
 END $$;
 

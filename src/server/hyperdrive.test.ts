@@ -76,15 +76,36 @@ test("the Hyperdrive login migration is additive and is not granted service_role
   assert.equal(roleName.startsWith("20261026130000"), false);
   assert.ok(names.includes("20261027130000_lease_idempotency_key.sql"));
   assert.ok(roleName > "20261027130000_lease_idempotency_key.sql");
-  assert.match(roleSql, /NOBYPASSRLS/);
-  assert.match(roleSql, /NOINHERIT/);
-  assert.match(roleSql, /NOSUPERUSER/);
+  const flags = ["NOSUPERUSER", "NOBYPASSRLS", "NOCREATEDB", "NOCREATEROLE", "NOREPLICATION", "LOGIN", "NOINHERIT"];
+  const create = between(roleSql, "CREATE ROLE condola_hyperdrive", "ELSE");
+  const alter = between(roleSql, "ALTER ROLE condola_hyperdrive", "END IF");
+  for (const branch of [create, alter]) {
+    for (const flag of flags) assert.match(branch, new RegExp(`\\b${flag}\\b`));
+    assert.equal(/\bSUPERUSER\b/.test(branch), false);
+    assert.equal(/\bBYPASSRLS\b/.test(branch), false);
+    assert.equal(/\bCREATEDB\b/.test(branch), false);
+    assert.equal(/\bCREATEROLE\b/.test(branch), false);
+    assert.equal(/\bREPLICATION\b/.test(branch), false);
+    assert.equal(/\bINHERIT\b/.test(branch), false);
+  }
+  assert.match(roleSql, /GRANT CONNECT ON DATABASE %I TO condola_hyperdrive/);
+  assert.match(roleSql, /GRANT USAGE ON SCHEMA public TO condola_hyperdrive/);
   assert.match(roleSql, /GRANT authenticated TO condola_hyperdrive/);
   assert.equal(/GRANT\s+service_role/i.test(roleSql), false);
+  assert.equal(/GRANT\s+(SELECT|INSERT|UPDATE|DELETE|ALL|TRUNCATE|REFERENCES|TRIGGER)\b/i.test(roleSql), false);
+  assert.equal(/ON TABLE/i.test(roleSql), false);
   assert.equal(/password/i.test(roleSql), false);
   assert.equal(roleSql.includes("postgres://"), false);
   assert.equal(/NOT NULL|ADD CONSTRAINT|ALTER TABLE|DROP |DELETE FROM|TRUNCATE/i.test(roleSql), false);
   const migrate = readFileSync(new URL("../../scripts/db-migrate.sh", import.meta.url), "utf8");
   assert.match(migrate, /supabase\/migrations\/\*\.sql/);
   assert.equal(migrate.includes("supabase/ops"), false);
+
+  const probe = readFileSync(new URL("./hyperdrive-role.integration.test.ts", import.meta.url), "utf8");
+  assert.match(probe, /rolsuper/);
+  assert.match(probe, /rolbypassrls/);
+  assert.match(probe, /SET LOCAL ROLE condola_hyperdrive/);
+  assert.match(probe, /SET LOCAL ROLE authenticated/);
+  assert.match(probe, /ORG_ID/);
+  assert.match(probe, /ORG2_ID/);
 });
