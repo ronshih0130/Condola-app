@@ -94,7 +94,7 @@ export function toE164(raw: string) {
 
 /** One masked sample id per tenant. Not a real national id. */
 export function sampleIdMask(index: number) {
-  return `A00****${String(index).padStart(3, "0")}`;
+  return `A******${String(index).padStart(3, "0")}`;
 }
 
 function parseLine(line: string) {

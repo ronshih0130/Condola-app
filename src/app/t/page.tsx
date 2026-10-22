@@ -2,6 +2,7 @@ import Link from "next/link";
 import { makeT } from "@/i18n";
 import { actionPickLease } from "@/server/actions";
 import { moneyLabel } from "@/server/format";
+import { loadLeaseIdCheck } from "@/server/id-docs";
 import { tenantLeaseMoney, tenantLeases } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -33,7 +34,10 @@ export default async function TenantHome() {
   }
   const lease = leases.find((item) => item.lease_id === session.leaseId) ?? leases[0];
   if (!lease) return <p>{t("i_empty")}</p>;
-  const money = await tenantLeaseMoney(session, lease.lease_id);
+  const [money, idCheck] = await Promise.all([
+    tenantLeaseMoney(session, lease.lease_id),
+    loadLeaseIdCheck(session, lease.lease_id),
+  ]);
   const rentMinor = money?.lease.rent ?? "0";
   const depositMinor = money?.lease.deposit ?? "0";
   const currency = money?.lease.currency ?? "TWD";
@@ -44,6 +48,14 @@ export default async function TenantHome() {
       <p>
         {lease.firm_name} · {displaySampleName(`${lease.property_name} ${lease.room_label ?? ""}`)}
       </p>
+      {idCheck && !idCheck.ready ? (
+        <p>
+          <Link className="btn block" href="/t/id" data-testid="idv-home-link">
+            {t("idv_start")}
+          </Link>
+          <span className="small">{t("idv_gate")}</span>
+        </p>
+      ) : null}
       {pendingUnsigned ? (
         <p className="small" data-testid="unsigned-rent-note">{t("i_pay_unsigned_bill")}</p>
       ) : (

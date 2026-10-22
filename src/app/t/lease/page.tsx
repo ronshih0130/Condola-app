@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { dictionary, makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
+import { selectedLease } from "@/lib/tenant-lease";
 import { formatDate, moneyLabel } from "@/server/format";
+import { loadLeaseIdCheck } from "@/server/id-docs";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
-import { selectedLease } from "@/lib/tenant-lease";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +14,23 @@ export default async function TenantLeasePage() {
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);
   if (!lease) return <p>{t("i_empty")}</p>;
-  const money = await tenantLeaseMoney(session, lease.lease_id);
+  const [money, idCheck] = await Promise.all([
+    tenantLeaseMoney(session, lease.lease_id),
+    loadLeaseIdCheck(session, lease.lease_id),
+  ]);
   if (!money) return <p>{t("i_empty")}</p>;
   return (
     <div>
       <h2>{t("i_rich_lease")}</h2>
+      {idCheck && !idCheck.ready ? (
+        <div className="card pad" id="idvGate" data-testid="idv-gate">
+          <h3>{t("idv_gate_h")}</h3>
+          <p>{t("idv_gate")}</p>
+          <Link className="btn pri" href="/t/id">
+            {t("idv_start")}
+          </Link>
+        </div>
+      ) : null}
       <p>
         <PdfDownloadButton
           href={`/api/pdf/leases/${lease.lease_id}`}

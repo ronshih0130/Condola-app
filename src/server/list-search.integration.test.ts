@@ -51,7 +51,7 @@ test("list search stays inside the firm and ignores national ID numbers", async 
   assert.ok(contact.rows[0]);
   await query(
     `INSERT INTO identity_documents (org_id, contact_id, doc_type, number_masked, number_hash, storage_path, encryption_key_ref)
-     VALUES ($1, $2, 'tw_national_id', 'Z9SEARCHID99', 'hash-z9searchid99', 'demo/search-id', 'test-key')`,
+     VALUES ($1, $2, 'tw_national_id', id_number_stored_mask('Z9SEARCHID99'), 'hash-z9searchid99', 'demo/search-id', 'test-key')`,
     [ORG_ID, contact.rows[0].id],
   );
   try {
@@ -175,7 +175,7 @@ test("list search stays inside the firm and ignores national ID numbers", async 
     assert.equal(pageFar.rows.length, 0);
     assert.equal(pageFar.hasNext, false);
   } finally {
-    await query(`DELETE FROM identity_documents WHERE number_masked = 'Z9SEARCHID99'`);
+    await query(`DELETE FROM identity_documents WHERE number_hash = 'hash-z9searchid99'`);
   }
 });
 

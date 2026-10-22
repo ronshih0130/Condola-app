@@ -117,6 +117,13 @@ for (const locale of locales) {
     if (await error.isVisible().catch(() => false)) {
       throw new Error(await error.innerText());
     }
+    await expect(page.getByTestId("idv-sign-wait")).toBeVisible();
+    await expect(page.getByTestId("simulate-tenant-sign")).toHaveCount(0);
+    const leaseId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
+    expect(leaseId).toBeTruthy();
+    const sample = await page.request.post("/api/demo/id-sample", { data: { leaseId } });
+    expect(sample.ok()).toBeTruthy();
+    await page.reload();
     const simulate = page.getByTestId("simulate-tenant-sign");
     await expect(simulate).toBeVisible();
     await expect(simulate).toContainText(locale.simulate);
@@ -195,7 +202,7 @@ test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {
   await expect(page.getByTestId("lease-picker")).toBeVisible();
   await expect(page.getByTestId("lease-picker")).toContainText("松信住宅管理");
   await expect(page.getByTestId("lease-picker")).toContainText("海岸公寓管理");
-  await expect(page.getByTestId("tenant-tile-pay")).toHaveText("繳租");
+  await expect(page.getByTestId("tenant-tile-pay")).toHaveText("我的帳單");
   await page.getByRole("button", { name: /松信住宅管理/ }).click();
   await expect(page.getByTestId("lease-picker")).toHaveCount(0);
   await page.getByTestId("tenant-tile-repair").click();

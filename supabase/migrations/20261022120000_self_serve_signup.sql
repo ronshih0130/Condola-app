@@ -1,3 +1,4 @@
+-- Version 20261022120000.
 -- Self-serve sign-up: firm profile, partner prices, funnel events, emergency go-live pause.
 -- Unconfirmed accounts are kept. Purging them after 7 days is deferred.
 

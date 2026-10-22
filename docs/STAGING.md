@@ -63,10 +63,15 @@ Required secret **names** on the staging Worker. Set them with Wrangler. Do not 
 - `SUPABASE_URL` — `https://<project-ref>.supabase.co`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` — password updates and password-reset links call the Auth admin API when this is set with `SUPABASE_URL`
+- `ID_DOC_ENCRYPTION_KEY` — raw AES-256-GCM key, exactly 32 bytes
+- `ID_DOC_HMAC_KEY` — raw HMAC-SHA256 key for the ID number, exactly 32 bytes
+- `ID_DOC_SIGNING_SECRET` — raw HMAC-SHA256 key for photo tokens, exactly 32 bytes
+- `CRON_SECRET` — shared secret for the reminder cron. `0 1 * * *` (09:00 Asia/Taipei) sends it as `x-cron-secret` to `/api/cron/reminders`. `0 19 * * *` (03:00 Asia/Taipei) purges ID photos in the Worker as `service_role`. The manual route `POST /api/cron/purge-id-documents` accepts the same header on preview and staging and returns 404 in production. Cron Triggers are on the Workers Free plan. `openssl rand -hex 32` prints a valid value.
+
+Each ID key is 64 hex characters, or standard base64 that decodes to 32 bytes (44 characters including `=`). A passphrase is rejected. `openssl rand -hex 32` prints a valid value. Do not reuse one key for all three.
 
 Optional Worker secrets. Deploy does not require them.
 
-- `CRON_SECRET` — the daily reminder cron sends this to `POST /api/cron/reminders`. If it is unset, the cron logs and does nothing.
 - `BREVO_API_KEY` — used only when `MAIL_PROVIDER` is `brevo`. That is the fallback if Cloudflare Email Sending blocks reminders. The Worker posts to Brevo's SMTP API (`https://api.brevo.com/v3/smtp/email`) as `租多啦 Condola <no-reply@condola.app>`, the same sender Supabase already uses on `smtp-relay.brevo.com`. A missing key logs and skips the send.
 - `RESEND_API_KEY` — used only when `MAIL_PROVIDER` is `resend`. The default provider is Cloudflare Email Sending (`MAIL_PROVIDER=cloudflare`), which needs no API token. The sender is `"租多啦 Condola" <noreply@send.condola.app>`. The staging and production envs bind `send_email` as `EMAIL`.
 
@@ -77,9 +82,13 @@ npx wrangler secret put DATABASE_URL --env staging
 npx wrangler secret put SUPABASE_URL --env staging
 npx wrangler secret put SUPABASE_ANON_KEY --env staging
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env staging
+npx wrangler secret put ID_DOC_ENCRYPTION_KEY --env staging
+npx wrangler secret put ID_DOC_HMAC_KEY --env staging
+npx wrangler secret put ID_DOC_SIGNING_SECRET --env staging
+npx wrangler secret put CRON_SECRET --env staging
 ```
 
-Each command prompts for the value. Wrangler refuses to deploy the staging env until all four names exist on that Worker. Deploy does not print the values, and it does not delete a secret you do not mention.
+Each command prompts for the value. Wrangler refuses to deploy the staging env until all eight names exist on that Worker. Deploy does not print the values, and it does not delete a secret you do not mention.
 
 Local preview of the staging env reads `.dev.vars.staging` (gitignored). Do not commit that file.
 
@@ -90,7 +99,7 @@ In Depot CI, for this repository:
 1. Add the variable `STAGING_AUTODEPLOY` with value `false`.
 2. Add the secret `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit). Do not reuse a token that can deploy unrelated production Workers if you can avoid it.
 3. Add the secret `DATABASE_URL` with the **session** connection string (port 5432) for the Tokyo project. This is not the Worker pooler string.
-4. When the four Worker secrets above are already stored on `condola-staging`, set `STAGING_AUTODEPLOY` to `true`.
+4. When the eight Worker secrets above are already stored on `condola-staging`, set `STAGING_AUTODEPLOY` to `true`.
 
 The next push to `main` deploys staging after tests pass. Set the variable back to `false` to stop. Deleting the variable also stops it.
 

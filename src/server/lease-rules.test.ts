@@ -142,6 +142,8 @@ test("the lease idempotency migration is additive and later than shared staging 
   assert.ok(stamp > "20261026120000");
   const later = names.filter((name) => name.slice(0, 14) > stamp);
   assert.deepEqual(later, [
+    "20261027140000_id_anon_revoke.sql",
+    "20261028120000_id_delete_after_consent.sql",
     "20261028130000_utility_charge_posting.sql",
     "20261028140000_utility_runs_unit_id_default.sql",
     "20261028150000_utility_vacant_expense.sql",

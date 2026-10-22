@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { dictionary, makeT } from "@/i18n";
 import { AuditHistory } from "@/components/audit-log";
 import { PayDialog } from "@/components/dialogs";
+import { IdvCard } from "@/components/idv-card";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { PortalInviteButton } from "@/components/portal-invite-button";
@@ -10,9 +11,11 @@ import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/co
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
 import { showDemoLineCopy } from "@/server/demo";
 import { formatDate, moneyLabel } from "@/server/format";
-import { majorField } from "@/server/portfolio";
+import { taipeiStamp } from "@/server/id-crypto";
+import { canReviewId, loadLeaseIdCheck } from "@/server/id-docs";
 import { leaseTermsEditable } from "@/server/lease-rules";
 import { portalLoginReady } from "@/server/portal-invite";
+import { majorField } from "@/server/portfolio";
 import { isUuid } from "@/server/repair-rules";
 import { leaseDetail, threadMessages } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -25,7 +28,7 @@ export default async function LeasePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; error?: string; audit?: string; created?: string; utility?: string; bill?: string; saved?: string }>;
+  searchParams: Promise<{ tab?: string; error?: string; audit?: string; created?: string; idv?: string; utility?: string; bill?: string; saved?: string }>;
 }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
@@ -39,9 +42,16 @@ export default async function LeasePage({
   const { lease, signatures } = detail;
   const canInvite = session.role === "admin" || session.role === "manager";
   const tenantActivated = canInvite ? await portalLoginReady(lease.tenant_user_id) : false;
+  const reviewer = canReviewId(session);
+  const idCheck = reviewer ? await loadLeaseIdCheck(session, id) : null;
+  if (idCheck?.uploadedAt) idCheck.uploadedAt = taipeiStamp(new Date(idCheck.uploadedAt));
+  const idvToast =
+    query.idv === "ok" ? t("idv_ok_toast") : query.idv === "returned" ? t("idv_return_toast") : undefined;
   const money = (minor: number) => moneyLabel(minor, lease.currency, session.locale);
   const tenantSig = signatures.find((row) => row.role === "tenant");
   const managerSig = signatures.find((row) => row.role === "manager");
+  const signingOpen = tenantSig?.status !== "signed" || managerSig?.status !== "signed";
+  const idBlocked = Boolean(reviewer && idCheck && !idCheck.ready && signingOpen);
   const tabs = [
     ["summary", "s_6b6fe14"],
     ["ledger", "s_6ef99a0"],
@@ -161,6 +171,13 @@ export default async function LeasePage({
               </p>
             ) : null}
           </div>
+          {reviewer && idCheck ? <IdvCard check={idCheck} toast={idvToast} /> : null}
+          {!reviewer ? (
+            <div className="card pad" id="idvNoAccess" data-testid="idv-no-access">
+              <h3>{t("idv_mgr_h")}</h3>
+              <p>{t("idv_no_access")}</p>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {tab === "summary" && (session.role === "admin" || session.role === "manager") ? (
@@ -250,6 +267,14 @@ export default async function LeasePage({
       ) : null}
       {tab === "sign" ? (
         <div className="grid2">
+          {idBlocked ? (
+            <div className="card pad" id="idvSignWait" data-testid="idv-sign-wait">
+              <h3>{t("idv_gate_h")}</h3>
+              <p>{t("idv_sign_wait")}</p>
+            </div>
+          ) : null}
+          {!idBlocked ? (
+          <>
           <div className="card pad">
             {lease.esign === "imported" ? (
               <p data-testid="lease-imported-sign">{t("i_esign_imported")}</p>
@@ -320,6 +345,8 @@ export default async function LeasePage({
             )}
           </div>
           )}
+          </>
+          ) : null}
         </div>
       ) : null}
       {tab === "msg" ? (

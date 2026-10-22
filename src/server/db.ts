@@ -1,5 +1,5 @@
 import { Client, type QueryResultRow } from "pg";
-import { mapDbError } from "./errors";
+import { logServerError, mapDbError } from "./errors";
 import { readEnvChoice, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
 
 function closedSocket(error: unknown) {
@@ -174,10 +174,18 @@ export async function tx<T>(userId: string, fn: (client: Client) => Promise<T>, 
       await client.query("COMMIT");
       return result;
     } catch (error) {
-      await client.query("ROLLBACK");
-      throw mapDbError(error);
+      return rollBack(client, error);
     }
   });
+}
+
+async function rollBack(client: Client, error: unknown): Promise<never> {
+  try {
+    await client.query("ROLLBACK");
+  } catch (rollbackError) {
+    logServerError("rollback", rollbackError);
+  }
+  throw mapDbError(error);
 }
 
 /**
@@ -196,8 +204,7 @@ export async function svc<T>(userId: string | null, fn: (client: Client) => Prom
       await client.query("COMMIT");
       return result;
     } catch (error) {
-      await client.query("ROLLBACK");
-      throw mapDbError(error);
+      return rollBack(client, error);
     }
   });
 }

@@ -1,3 +1,4 @@
+-- Version 20261020120000.
 -- P0 sign-in, sessions, lockout, password reset, TOTP, and month-close.
 -- Applied after 20261018120000_schema.sql. Do not edit the original migration.
 

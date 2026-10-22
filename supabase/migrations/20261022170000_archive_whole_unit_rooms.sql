@@ -1,3 +1,4 @@
+-- Version 20261022170000.
 -- Whole-unit saves used to insert rooms A/B/C. Those rooms were offered as
 -- leasable, then fn_lease_target_guard rejected the lease. Archive them when
 -- no lease points at the room.

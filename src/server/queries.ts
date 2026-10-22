@@ -1369,6 +1369,7 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
     });
     const dueMinor = billLines.reduce((sum, line) => sum + line.amountMinor, 0);
     const balance = invoices.reduce((sum, invoice) => sum + Number(invoice.balance), 0);
+    const paidMinor = invoices.reduce((sum, invoice) => sum + Number(invoice.paid), 0);
     // Rent and electricity are billed only after both parties sign. A pending_signature lease
     // is left out of the electricity split, so it has neither a rent row nor a new utility row.
     // Deposit and any other open charge stay on the bill so the rows match the invoice balance.
@@ -1383,7 +1384,7 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
     const otherLines = billLines
       .filter((line) => line.chargeType !== "rent" && line.chargeType !== "deposit" && line.chargeType !== "utility")
       .map(asRow);
-    return { lease, dueMinor, balance, currency: lease.currency, rentLines, depositLines, utilityLines, otherLines };
+    return { lease, dueMinor, balance, paidMinor, currency: lease.currency, rentLines, depositLines, utilityLines, otherLines };
   });
 }
 

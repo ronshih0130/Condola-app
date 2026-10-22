@@ -1,3 +1,4 @@
+-- Version 20261021140000.
 -- Basic leases: optional tenant LINE id, deposit-cap reason, paper-signed PDF.
 --
 -- A lease targets one portfolio space. A room uses rooms.id (leases.target_room_id).

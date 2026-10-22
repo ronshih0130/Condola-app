@@ -1,3 +1,4 @@
+-- Version 20261022140000.
 -- Portal owners and tenants are created by the app as service_role.
 -- Hosted Supabase does not grant that role write access to auth.users, and
 -- opening the table would let the role read and write every account.
