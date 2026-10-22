@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import { makeT } from "@/i18n";
 import { AuthHashForward } from "@/components/auth-hash";
 import { ChunkReloadListener } from "@/components/chunk-reload";
@@ -61,9 +62,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </header>
           {chrome.environment === "sandbox" ? <EnvBanner showBack={session?.kind === "staff" && Boolean(session.liveOrgId)} /> : null}
           {children}
-          <p className="foot" data-testid="app-version" style={{ margin: "16px" }}>
-            {process.env.NEXT_PUBLIC_COMMIT || "unknown"}
-          </p>
+          <footer className="foot site-foot" data-testid="site-footer" style={{ margin: "16px" }}>
+            <nav className="site-legal" aria-label={t("i_legal_nav")}>
+              <Link href="/terms">{t("i_legal_terms")}</Link>
+              <Link href="/privacy">{t("i_legal_privacy")}</Link>
+              <Link href="/refund">{t("i_legal_refund")}</Link>
+            </nav>
+            <p data-testid="app-version">{process.env.NEXT_PUBLIC_COMMIT || "unknown"}</p>
+          </footer>
         </LocaleProvider>
       </body>
     </html>
