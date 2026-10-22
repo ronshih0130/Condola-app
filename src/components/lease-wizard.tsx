@@ -2,9 +2,11 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { errorText } from "@/i18n/errors";
 import { confirmDeposit, confirmSpace, confirmSpaceFromSnapshot, depositMonthsOnHalfStep, formatMajor, nextSpaceSnapshot, twdRentIsWhole } from "@/lease-confirm";
 import { actionCreateLease, type ActionState } from "@/server/actions";
+import { leaseTermEnd, overlappingLease } from "@/server/lease-rules";
 import type { RoomOption } from "@/server/queries";
 import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
 import { useLocale, useT } from "./locale";
@@ -39,6 +41,7 @@ export function LeaseWizard({
 }) {
   const t = useT();
   const locale = useLocale();
+  const router = useRouter();
   const submitGuard = useRef(false);
   const idempotencyKey = useRef("");
   const [state, formAction, pending] = useActionState(
@@ -78,14 +81,9 @@ export function LeaseWizard({
   const [rent, setRent] = useState("");
   const [months, setMonths] = useState("");
   const [start, setStart] = useState("");
-  const [depositMonths, setDepositMonths] = useState("");
+  const [depositMonths, setDepositMonths] = useState("2");
   const [depositReason, setDepositReason] = useState("");
-  const [dueDay, setDueDay] = useState("");
-  const [split, setSplit] = useState("");
-  const [bill, setBill] = useState("");
-  const [usage, setUsage] = useState("");
-  const [rate, setRate] = useState("");
-  const [reason, setReason] = useState("");
+  const [dueDay, setDueDay] = useState("5");
   const [templateLang, setTemplateLang] = useState<"zh-TW" | "en">(firmLocale === "en" ? "en" : "zh-TW");
   const [bilingual, setBilingual] = useState(false);
   const [tenantError, setTenantError] = useState(false);
@@ -94,9 +92,6 @@ export function LeaseWizard({
   const [rentError, setRentError] = useState(false);
   const [depositError, setDepositError] = useState<false | "incomplete" | "step">(false);
   const [dueError, setDueError] = useState(false);
-  const [billError, setBillError] = useState(false);
-  const [usageError, setUsageError] = useState(false);
-  const [rateError, setRateError] = useState(false);
 
   const room = rooms.find((item) => item.id === roomId) ?? (space?.id === roomId ? space : undefined);
   const summary = confirmSpaceFromSnapshot(roomId, space);
@@ -104,27 +99,12 @@ export function LeaseWizard({
   const pickedId = activeTenantPick(tenantContactId, tenantMatches);
   const pickedTenant = tenants.find((item) => item.id === pickedId) ?? null;
   const currency = room?.currency ?? "TWD";
-  const billN = Number(bill);
-  const usageN = Number(usage);
-  const rateN = Number(rate);
-  const average = usageN > 0 && bill !== "" ? billN / usageN : null;
-  const over = average !== null && rate !== "" && rateN > average + 1e-9;
   const depositOver = Number(depositMonths) > 2;
   const depositBlocked = depositOver && depositReason.trim() === "";
-  const blocked = depositBlocked || (step >= 6 && (split === "" || (over && reason.trim() === "")));
-
-  const preview = useMemo(() => {
-    if (!room || !(usageN > 0) || rate === "") return null;
-    if (split === "sub_meter" && bill.trim() === "") return null;
-    const charged = usageN * rateN;
-    const shareRooms = room.unitRooms.length ? room.unitRooms : [{ id: room.id, label: room.unitLabel }];
-    const count = shareRooms.length;
-    return {
-      charged,
-      bill: Number.isFinite(billN) ? billN : 0,
-      shares: shareRooms.map((item) => ({ label: item.label, amount: charged / count })),
-    };
-  }, [room, usageN, rate, rateN, billN, split, bill]);
+  const termEnd = leaseTermEnd(start, months);
+  const overlap = overlappingLease(room?.leases, start, termEnd);
+  const blocked = depositBlocked || (Boolean(overlap) && step >= 3);
+  const creating = pending || Boolean(state.leaseHref);
 
   useEffect(() => {
     if (!pending && state.error) {
@@ -152,6 +132,15 @@ export function LeaseWizard({
       if (slowTimer.current) window.clearTimeout(slowTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!state.leaseHref || pending) return;
+    if (slowTimer.current) window.clearTimeout(slowTimer.current);
+    slowTimer.current = null;
+    setSlowSubmit(false);
+    const timer = window.setTimeout(() => router.push(state.leaseHref!), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [pending, router, state.leaseHref]);
 
   function chooseRoom(id: string) {
     setRoomId(id);
@@ -230,23 +219,12 @@ export function LeaseWizard({
         return;
       }
     }
+    if (step === 3 && overlap) return;
     if (step === 5) {
       const day = Number(dueDay);
       if (!dueDay.trim() || !Number.isInteger(day) || day < 1 || day > 31) {
         setDueError(true);
         return;
-      }
-    }
-    if (step === 6) {
-      const anyElectricity = bill.trim() !== "" || usage.trim() !== "" || rate.trim() !== "";
-      if (anyElectricity) {
-        const billBad = !amountOk(bill);
-        const usageBad = !usage.trim() || !(Number(usage) > 0);
-        const rateBad = rate.trim() !== "" && !amountOk(rate);
-        setBillError(billBad);
-        setUsageError(usageBad);
-        setRateError(rateBad);
-        if (billBad || usageBad || rateBad) return;
       }
     }
     const next = step + 1;
@@ -281,6 +259,11 @@ export function LeaseWizard({
           event.preventDefault();
           return;
         }
+        if (overlap) {
+          event.preventDefault();
+          setStep(3);
+          return;
+        }
         const rentBad = !amountOk(rent) || !twdRentIsWhole(currency, Number(rent));
         const depositIncomplete = !amountOk(depositMonths);
         const depositStep = !depositIncomplete && !depositMonthsOnHalfStep(Number(depositMonths));
@@ -306,12 +289,19 @@ export function LeaseWizard({
       <ImplicitSubmitSink />
       <Stepper steps={steps} current={step} />
       {state.error && state.error !== "errors.leaseNetwork" ? (
-        <div className="alert bad" data-testid="lease-error" tabIndex={-1} style={{ marginBottom: 12 }}>
+        <div className="alert bad" data-testid="lease-error" role="alert" tabIndex={-1} style={{ marginBottom: 12 }}>
           {!showLine && state.error === "errors.lineId"
             ? t("i_generic")
-            : state.field && (state.error === "errors.required" || state.error === "errors.amount")
-              ? t("i_field_incomplete", { field: t(state.field) })
-              : errorText(t, state.error)}
+            : state.error === "errors.roomLease"
+              ? t("i_room_lease_exists", { start: state.vars?.start ?? "", end: state.vars?.end ?? "" })
+              : state.field && (state.error === "errors.required" || state.error === "errors.amount")
+                ? t("i_field_incomplete", { field: t(state.field) })
+                : errorText(t, state.error)}
+        </div>
+      ) : null}
+      {overlap && step >= 3 ? (
+        <div className="alert bad" data-testid="room-lease-overlap" role="alert" style={{ marginBottom: 12 }}>
+          {t("i_room_lease_exists", { start: overlap.start, end: overlap.end })}
         </div>
       ) : null}
       {slowSubmit ? (
@@ -332,11 +322,6 @@ export function LeaseWizard({
       <input type="hidden" name="depositMonths" value={depositMonths} />
       <input type="hidden" name="depositReason" value={depositReason} />
       <input type="hidden" name="dueDay" value={dueDay} />
-      <input type="hidden" name="splitMethod" value={split} />
-      <input type="hidden" name="billTotal" value={bill} />
-      <input type="hidden" name="usage" value={usage} />
-      <input type="hidden" name="rate" value={rate} />
-      <input type="hidden" name="overrideReason" value={reason} />
 
       <div hidden={step !== 1}>
         <div className="card pad" style={{ maxWidth: 760 }}>
@@ -524,67 +509,11 @@ export function LeaseWizard({
         </div>
       </div>
       <div hidden={step !== 6}>
-        <div className="card pad" style={{ maxWidth: 760 }}>
-          <div className="fg">
-            <label className="f">{t("i_split")}</label>
-            <select className="inp" data-testid="split-method" value={split} onChange={(event) => setSplit(event.target.value)}>
-              <option value="">{t("i_choose")}</option>
-              <option value="even">{t("s_ecf0e25")}</option>
-              <option value="days_occupied">{t("s_c8e758d")}</option>
-              <option value="sub_meter">{t("s_9f8b19c")}</option>
-            </select>
-          </div>
-          <div className="grid3">
-            <div className="fg">
-              <label className="f">{t("i_bill_total")}</label>
-              <input className="inp" data-testid="bill-total" inputMode="decimal" placeholder={t("i_ph_bill")} value={bill} onChange={(event) => { setBill(event.target.value); setBillError(false); }} />
-              {billError ? <p className="hint" data-testid="bill-error">{t("i_step_incomplete", { field: t("i_bill_total") })}</p> : null}
-            </div>
-            <div className="fg">
-              <label className="f">{t("i_usage")}</label>
-              <input className="inp" data-testid="usage" inputMode="decimal" placeholder={t("i_ph_kwh")} value={usage} onChange={(event) => { setUsage(event.target.value); setUsageError(false); }} />
-              {usageError ? <p className="hint" data-testid="usage-error">{t("i_step_incomplete", { field: t("i_usage") })}</p> : null}
-            </div>
-            <div className="fg">
-              <label className="f">{t("i_rate")}</label>
-              <input className="inp" data-testid="rate" inputMode="decimal" placeholder={t("i_ph_rate")} value={rate} onChange={(event) => { setRate(event.target.value); setRateError(false); }} />
-              {rateError ? <p className="hint" data-testid="rate-error">{t("i_step_incomplete", { field: t("i_rate") })}</p> : null}
-            </div>
-          </div>
-          {over ? (
-            <div className="alert bad" data-testid="cap-alert">
-              <div>
-                <div>{t("s_ab3ec53")}</div>
-                <div>{t("i_cap_over", { avg: average?.toFixed(2) ?? "", rate: rateN.toFixed(2) })}</div>
-                <div className="small">{t("s_c6a6031")}</div>
-                <label className="f" style={{ marginTop: 8 }}>{t("s_7cb89e9")}</label>
-                <textarea className="inp" data-testid="override-reason" placeholder={t("i_ph_reason")} value={reason} onChange={(event) => setReason(event.target.value)} />
-              </div>
-            </div>
-          ) : average === null && bill === "" ? (
-            <p className="hint">{t("s_7afe0af")}</p>
-          ) : null}
-          {preview && split ? (
-            <div style={{ marginTop: 12 }}>
-              <h3>{t("i_preview_cap")}</h3>
-              <p data-testid="charged-total">
-                {t("i_charged_total", {
-                  amount: money(preview.charged, currency, locale),
-                  bill: money(preview.bill, currency, locale),
-                })}
-              </p>
-              <table className="t">
-                <tbody>
-                  {preview.shares.map((share) => (
-                    <tr key={share.label}>
-                      <td>{share.label}</td>
-                      <td className="num">{money(share.amount, currency, locale)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
+        <div className="card pad" style={{ maxWidth: 760 }} data-testid="utility-monthly-note">
+          <p>{t("i_utility_monthly")}</p>
+          <p className="hint">
+            <Link href="/m/rent/utilities">{t("i_utility_title")}</Link>
+          </p>
         </div>
       </div>
       <div hidden={step !== 7}>
@@ -656,17 +585,13 @@ export function LeaseWizard({
                 <td>{t("i_deposit_label")}</td>
                 <td data-testid="lease-confirm-deposit">{confirmDeposit(depositMonths, rent, summary?.currency ?? currency, locale, money)}</td>
               </tr>
-              <tr>
-                <td>{t("i_rate")}</td>
-                <td>{rate}</td>
-              </tr>
             </tbody>
           </table>
         </div>
       </div>
       <div className="row" style={{ marginTop: 16, maxWidth: 760 }}>
         {step > 1 ? (
-          <button className="btn" type="button" onClick={goBack}>
+          <button className="btn" type="button" onClick={goBack} disabled={pending || Boolean(state.leaseHref)}>
             ← {t("s_5bf6faa")}
           </button>
         ) : null}
@@ -678,13 +603,18 @@ export function LeaseWizard({
           </button>
         ) : (
           <div>
+            {state.leaseHref ? (
+              <div className="alert ok" data-testid="lease-created-toast" role="status" style={{ marginBottom: 12 }}>
+                {t("i_lease_created_sent")}
+              </div>
+            ) : null}
             {state.error === "errors.leaseNetwork" ? (
               <div className="alert bad" data-testid="lease-error" style={{ marginBottom: 12 }}>
                 {t("i_lease_network")}
               </div>
             ) : null}
-            <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || pending || !submitReady} aria-busy={pending ? true : undefined}>
-              {t("s_79b6c1d")}
+            <button key="submit-lease" className="btn pri" type="submit" data-testid="submit-lease" disabled={blocked || creating || !submitReady} aria-busy={creating ? true : undefined}>
+              {creating ? t("i_lease_creating") : t("s_79b6c1d")}
             </button>
           </div>
         )}

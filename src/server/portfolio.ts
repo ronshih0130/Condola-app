@@ -9,7 +9,7 @@ import type { Session } from "./types";
 import type { Client } from "pg";
 
 export type SpaceKind = "room" | "whole_unit";
-export type ElectricityMethod = "submeter" | "tenant_direct";
+export type ElectricityMethod = "submeter" | "by_reading" | "shared" | "tenant_direct";
 export type PortfolioRoomType = "whole_home" | "suite" | "shared_bath" | "studio" | "other";
 
 export type PortfolioRow = {
@@ -219,9 +219,14 @@ export function parsePortfolioCsv(text: string): PortfolioPlan {
     const rentMajor = optionalNumber(cell(source, index, "月租"), line, "月租");
     if (rentMajor === null) throw new PortfolioError(`第 ${line} 列缺少月租`);
     const electricityRaw = cell(source, index, "電費方式").trim();
-    const electricityMethod: ElectricityMethod | null =
-      electricityRaw === "分表" ? "submeter" : electricityRaw === "租客自繳" ? "tenant_direct" : null;
-    if (!electricityMethod) throw new PortfolioError(`第 ${line} 列的電費方式必須是分表或租客自繳`);
+    const electricityLabels: Record<string, ElectricityMethod> = {
+      分表: "submeter",
+      依電表度數: "by_reading",
+      共同電表: "shared",
+      租客自繳: "tenant_direct",
+    };
+    const electricityMethod = electricityLabels[electricityRaw] ?? null;
+    if (!electricityMethod) throw new PortfolioError(`第 ${line} 列的電費方式必須是分表、依電表度數、共同電表或租客自繳`);
     const due = optionalNumber(cell(source, index, "繳租日"), line, "繳租日");
     if (due !== null && (due < 1 || due > 31 || !Number.isInteger(due))) {
       throw new PortfolioError(`第 ${line} 列的繳租日必須是 1 到 31`);
@@ -317,7 +322,7 @@ function cleanKind(value: string): SpaceKind {
 }
 
 function cleanElectricity(value: string): ElectricityMethod {
-  if (value === "submeter" || value === "tenant_direct") return value;
+  if (value === "submeter" || value === "by_reading" || value === "shared" || value === "tenant_direct") return value;
   throw new FlowError("errors.required");
 }
 
@@ -433,12 +438,14 @@ export type PropertyElectricityInput = {
   rate: string;
 };
 
-function splitMethod(value: string): "none" | "even" | "days_occupied" | "sub_meter" {
+function electricityChoice(value: string): { meterSplit: "none" | "even" | "days_occupied" | "sub_meter"; method: string; rate: boolean } | null {
   const raw = value.trim();
-  if (!raw) return "none";
-  if (raw === "even") return "even";
-  if (raw === "days" || raw === "days_occupied") return "days_occupied";
-  if (raw === "sub" || raw === "sub_meter") return "sub_meter";
+  if (!raw) return null;
+  if (raw === "even") return { meterSplit: "even", method: "even", rate: true };
+  if (raw === "days" || raw === "days_occupied") return { meterSplit: "days_occupied", method: "by_reading", rate: true };
+  if (raw === "sub" || raw === "sub_meter") return { meterSplit: "sub_meter", method: "submeter", rate: true };
+  if (raw === "reading" || raw === "by_reading") return { meterSplit: "none", method: "by_reading", rate: true };
+  if (raw === "owner") return { meterSplit: "none", method: "shared", rate: false };
   throw new FlowError("errors.required");
 }
 
@@ -459,15 +466,16 @@ async function savePropertyElectricity(
   input: PropertyElectricityInput,
 ) {
   const serial = input.serial.trim().slice(0, 64);
-  const split = splitMethod(input.split);
+  const choice = electricityChoice(input.split);
+  const split = choice?.meterSplit ?? "none";
   const billRaw = input.bill.trim();
   const usageRaw = input.usage.trim();
   if ((billRaw === "") !== (usageRaw === "")) throw new FlowError("errors.amount");
   const bill = optionalMajor(billRaw);
   const usage = usageRaw === "" ? null : Number(usageRaw);
   if (usage !== null && (!Number.isFinite(usage) || usage <= 0)) throw new FlowError("errors.amount");
-  const rate = optionalMajor(input.rate);
-  const any = Boolean(serial || split !== "none" || bill !== null || rate !== null);
+  const rate = choice && !choice.rate ? null : optionalMajor(input.rate);
+  const any = Boolean(serial || choice || bill !== null || rate !== null);
   const unit = await maybe<{ id: string }>(
     client,
     `SELECT id::text FROM units WHERE property_id = $1 AND org_id = $2 AND archived_at IS NULL ORDER BY created_at LIMIT 1`,
@@ -494,6 +502,11 @@ async function savePropertyElectricity(
       `INSERT INTO meters (
          org_id, property_id, unit_id, utility, usage_unit, label, serial_number, payer, split_method, rate_source, rate_minor_per_unit
        ) VALUES ($1,$2,$3,'electricity','kWh','main',NULLIF($4, ''),'tenant',$5::split_method,$6::rate_source,$7)
+       ON CONFLICT (unit_id) WHERE utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL
+       DO UPDATE SET serial_number = EXCLUDED.serial_number,
+                     split_method = EXCLUDED.split_method,
+                     rate_source = EXCLUDED.rate_source,
+                     rate_minor_per_unit = EXCLUDED.rate_minor_per_unit
        RETURNING id::text`,
       [session.orgId, propertyId, unit.id, serial, split, rateSource, rateMinor],
     );
@@ -524,6 +537,22 @@ async function savePropertyElectricity(
          SET total_amount_minor = EXCLUDED.total_amount_minor,
              total_usage = EXCLUDED.total_usage`,
       [session.orgId, meterId, currency, toMinor(bill), usage, session.userId],
+    );
+  }
+  if (choice) {
+    const appliedRate = choice.rate ? rate : null;
+    await client.query(
+      `UPDATE units
+          SET electricity_method = $3, rate_per_kwh = $4, updated_at = now()
+        WHERE property_id = $1 AND org_id = $2 AND archived_at IS NULL`,
+      [propertyId, session.orgId, choice.method, appliedRate],
+    );
+    await client.query(
+      `UPDATE rooms
+          SET electricity_method = $3, rate_per_kwh = $4, updated_at = now()
+        WHERE org_id = $2 AND archived_at IS NULL
+          AND unit_id IN (SELECT id FROM units WHERE property_id = $1 AND org_id = $2 AND archived_at IS NULL)`,
+      [propertyId, session.orgId, choice.method, appliedRate],
     );
   }
 }

@@ -25,7 +25,13 @@ export default async function EditPropertyPage({
   const address = property.address ?? {};
   const street = address.street || address.line || "";
   const split =
-    property.split_method === "days_occupied" ? "days" : property.split_method === "sub_meter" ? "sub" : property.split_method === "even" ? "even" : "";
+    property.split_method === "days_occupied"
+      ? "days"
+      : property.split_method === "sub_meter"
+        ? "sub"
+        : property.split_method === "even"
+          ? "even"
+          : "";
   const major = (minor: string | null) => {
     if (!minor) return "";
     const value = Number(minor) / 100;
@@ -76,8 +82,10 @@ export default async function EditPropertyPage({
             <select className="inp" name="split" data-testid="property-split" defaultValue={split}>
               <option value="">{t("i_choose")}</option>
               <option value="even">{t("s_ecf0e25")}</option>
-              <option value="days">{t("s_c8e758d")}</option>
               <option value="sub">{t("s_9f8b19c")}</option>
+              <option value="reading">{t("i_elec_reading")}</option>
+              <option value="days">{t("s_c8e758d")}</option>
+              <option value="owner">{t("s_aecc842")}</option>
             </select>
           </div>
           <div className="grid3">

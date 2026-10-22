@@ -122,7 +122,7 @@ export function LeaseTermsForm({
         </>
       )}
       <button className="btn pri" type="submit" data-testid="save-lease-terms" disabled={blocked || pending} aria-busy={pending || undefined} style={{ marginTop: 12 }}>
-        {t("i_save")}
+        {pending ? t("i_portal_working") : t("i_save")}
       </button>
     </form>
   );

@@ -44,6 +44,25 @@ test("every error key has a translation, and an empty amount uses the amount sen
   const guard = mapDbError(new Error("unit 3F is rented as whole_unit; switch it to by_room before leasing a room"));
   assert.ok(guard instanceof FlowError);
   assert.equal(guard.key, "errors.wholeUnit");
+  const period = mapDbError(new Error('duplicate key value violates unique constraint "utility_allocation_runs_open_period_uidx"'));
+  assert.ok(period instanceof FlowError);
+  assert.equal(period.key, "errors.utilityPeriod");
+  const overlap = mapDbError(new Error('conflicting key value violates exclusion constraint "utility_allocation_runs_unit_period_excl"'));
+  assert.ok(overlap instanceof FlowError);
+  assert.equal(overlap.key, "errors.utilityOverlap");
+  const logged: string[] = [];
+  const write = console.error;
+  console.error = (...args: unknown[]) => {
+    logged.push(args.map((arg) => String(arg)).join(" "));
+  };
+  try {
+    const hidden = mapDbError(new Error('duplicate key value violates unique constraint "invoice_lines_alloc_uniq"'));
+    assert.ok(hidden instanceof FlowError);
+    assert.equal(hidden.key, "errors.generic");
+  } finally {
+    console.error = write;
+  }
+  assert.match(logged.join("\n"), /invoice_lines_alloc_uniq/);
 });
 
 test("confirmation mail uses the locked button and body", () => {
@@ -71,7 +90,13 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(wizard, /depositMonthsOnHalfStep/);
   assert.match(wizard, /i_deposit_half_step/);
   assert.match(wizard, /i_field_incomplete/);
-  assert.match(wizard, /split === "sub_meter" && bill\.trim\(\) === ""/);
+  assert.doesNotMatch(wizard, /data-testid="bill-total"/);
+  assert.doesNotMatch(wizard, /data-testid="usage"/);
+  assert.doesNotMatch(wizard, /name="billTotal"/);
+  assert.match(wizard, /i_utility_monthly/);
+  assert.match(wizard, /useState\("2"\)/);
+  assert.match(wizard, /useState\("5"\)/);
+  assert.match(wizard, /i_room_lease_exists/);
   assert.doesNotMatch(wizard, /t\("i_amount"\)/);
   assert.match(wizard, /useActionState/);
   const property = readFileSync(new URL("../components/property-wizard.tsx", import.meta.url), "utf8");

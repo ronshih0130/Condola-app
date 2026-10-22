@@ -217,6 +217,19 @@ export function StatementForm({
   );
 }
 
+/** Same action binding as the list form. A server-rendered form on the preview page did not submit. */
+export function PreviewGenerateForm({ ownerId, month, label }: { ownerId: string; month: string; label: string }) {
+  return (
+    <form action={actionStatement}>
+      <input type="hidden" name="ownerContactId" value={ownerId} />
+      <input type="hidden" name="month" value={month} />
+      <button className="btn pri" type="submit" data-testid="preview-generate" formAction={actionStatement}>
+        {label}
+      </button>
+    </form>
+  );
+}
+
 export function BankImport({ sample }: { sample: string }) {
   const t = useT();
   const [csv, setCsv] = useState("");

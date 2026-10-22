@@ -77,9 +77,13 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
                 <td data-label={t("i_elec_method")}>
                   {row.electricity_method === "submeter"
                     ? t("i_elec_submeter")
-                    : row.electricity_method === "tenant_direct"
-                      ? t("i_elec_direct")
-                      : "—"}
+                    : row.electricity_method === "by_reading"
+                      ? t("i_elec_reading")
+                      : row.electricity_method === "shared"
+                        ? t("i_elec_shared")
+                        : row.electricity_method === "tenant_direct"
+                          ? t("i_elec_direct")
+                          : "—"}
                 </td>
                 <td className="r">
                   {editable ? (

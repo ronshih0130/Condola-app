@@ -41,10 +41,17 @@ export type StatementFigures = {
   closing: number;
 };
 
+/** Signed TWD amounts keep the NT$ prefix, including a leading minus for a credit. */
+export function signedMoneyLabel(minor: number | string, currency: string, locale: Locale) {
+  const value = Number(minor);
+  const label = moneyLabel(value, currency, locale);
+  return value < 0 ? `-${label}` : label;
+}
+
 /** Month settlement. A negative net is what the owner owes — never a negative payout. */
 export function ownerSettlement(row: StatementFigures) {
   const fee = Math.max(0, row.fee);
-  const expenses = Math.max(0, row.expenses);
+  const expenses = row.expenses;
   const rent = Math.max(0, row.rent);
   const other = Math.max(0, row.other);
   const costs = fee + expenses;

@@ -19,6 +19,8 @@ import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/l
 import { claimIdempotentSubmit, idempotencyLockKey, stableStringify } from "@/idempotency";
 import { typedAddressDisplay } from "@/property-address";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
+import { syncVacantOwnerExpense } from "./utility-expense";
+import { nextInvoiceNumber } from "./invoice-number";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
@@ -99,7 +101,7 @@ export type PropertyInput = {
   rooms: { label: string; roomType: string; baseRentMajor: number }[];
   extraUnits?: { label: string; floor: string; door: string; rooms: { label: string; roomType: string; baseRentMajor: number }[] }[];
   electric?: {
-    split: "even" | "sub" | "owner";
+    split: "even" | "sub" | "owner" | "reading" | "days";
     rateMajor: number | null;
     openings: (number | null)[];
   } | null;
@@ -196,14 +198,32 @@ async function insertPropertyElectric(
   const rateMinor = electric.rateMajor == null ? null : toMinor(electric.rateMajor);
   const ownerPays = electric.split === "owner";
   const payer = ownerPays ? "owner" : "tenant";
-  const splitMethod = electric.split === "even" ? "even" : electric.split === "sub" ? "sub_meter" : "none";
+  const choice =
+    electric.split === "even"
+      ? { meterSplit: "even", method: "even" }
+      : electric.split === "sub"
+        ? { meterSplit: "sub_meter", method: "submeter" }
+        : electric.split === "reading"
+          ? { meterSplit: "none", method: "by_reading" }
+          : electric.split === "days"
+            ? { meterSplit: "days_occupied", method: "by_reading" }
+            : { meterSplit: "none", method: "shared" };
   const rateSource = ownerPays && rateMinor == null ? "fixed_rate" : rateMinor == null ? "bill_average" : "fixed_rate";
   const meter = await one<{ id: string }>(
     client,
     `INSERT INTO meters (
        org_id, property_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit
      ) VALUES ($1,$2,$3,'electricity','kWh','main',$4,$5::split_method,$6::rate_source,$7) RETURNING id`,
-    [session.orgId, propertyId, unitId, payer, splitMethod, rateSource, rateMinor],
+    [session.orgId, propertyId, unitId, payer, choice.meterSplit, rateSource, rateMinor],
+  );
+  const appliedRate = ownerPays ? null : electric.rateMajor;
+  await client.query(
+    `UPDATE units SET electricity_method = $2, rate_per_kwh = $3, updated_at = now() WHERE id = $1`,
+    [unitId, choice.method, appliedRate],
+  );
+  await client.query(
+    `UPDATE rooms SET electricity_method = $2, rate_per_kwh = $3, updated_at = now() WHERE unit_id = $1 AND archived_at IS NULL`,
+    [unitId, choice.method, appliedRate],
   );
   if (electric.split !== "sub") return;
   for (let index = 0; index < roomIds.length; index += 1) {
@@ -512,7 +532,9 @@ export async function setMeterSerial(session: Session, propertyId: string, seria
     await client.query(
       `INSERT INTO meters (
          org_id, property_id, unit_id, utility, usage_unit, label, serial_number, payer, split_method, rate_source
-       ) VALUES ($1,$2,$3,'electricity','kWh','main',$4,'tenant','even','bill_average')`,
+       ) VALUES ($1,$2,$3,'electricity','kWh','main',$4,'tenant','even','bill_average')
+       ON CONFLICT (unit_id) WHERE utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL
+       DO UPDATE SET serial_number = EXCLUDED.serial_number`,
       [session.orgId, propertyId, unit.id, value],
     );
   });
@@ -855,9 +877,10 @@ export async function createLease(session: Session, input: LeaseInput) {
         WHERE (l.target_room_id = $1 OR l.target_unit_id = $1) AND l.org_id = $2
           AND l.status = 'pending_signature'
           AND l.created_at > now() - interval '2 minutes'
+          AND daterange(l.start_date, coalesce(l.end_date, l.start_date), '[]') && daterange($3::date, $4::date, '[]')
         ORDER BY l.created_at DESC
         LIMIT 1`,
-      [input.roomId, session.orgId],
+      [input.roomId, session.orgId, input.startDate, input.endDate],
     );
     if (already?.tenantUserId) {
       return {
@@ -868,6 +891,8 @@ export async function createLease(session: Session, input: LeaseInput) {
         average,
         tenantAmount: 0,
         reused: true,
+        utilityKept: false,
+        billKept: false,
       };
     }
     const space = await one<{
@@ -899,6 +924,22 @@ export async function createLease(session: Session, input: LeaseInput) {
       [input.roomId, session.orgId],
     );
     assertLeaseMoney(space.currency, rentMajor, depositMonths);
+    const clash = await maybe<{ start_date: string; end_date: string }>(
+      client,
+      `SELECT l.start_date::text AS start_date, coalesce(l.end_date, l.start_date)::text AS end_date
+         FROM leases l
+        WHERE l.org_id = $1
+          AND l.status IN ('pending_signature','active')
+          AND daterange(l.start_date, coalesce(l.end_date, l.start_date), '[]') && daterange($2::date, $3::date, '[]')
+          AND (
+            ($4 = 'room' AND (l.target_room_id = $5::uuid OR l.target_unit_id = $6::uuid))
+            OR ($4 = 'whole_unit' AND (l.target_unit_id = $5::uuid OR (l.unit_id = $6::uuid AND l.target_room_id IS NOT NULL)))
+          )
+        ORDER BY l.start_date, l.id
+        LIMIT 1`,
+      [session.orgId, input.startDate, input.endDate, space.kind, space.id, space.unit_id],
+    );
+    if (clash) throw new FlowError("errors.roomLease", { start: clash.start_date, end: clash.end_date });
     const linked = await linkTenant(client, session, {
       tenantContactId,
       name: input.tenantName.trim(),
@@ -997,7 +1038,13 @@ export async function createLease(session: Session, input: LeaseInput) {
     );
 
     let tenantAmount = 0;
+    let utilityKept = false;
+    let billKept = false;
     if (electricity) {
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [
+      session.orgId,
+      `${space.unit_id}|${input.periodStart}|${input.periodEnd}`,
+    ]);
     let meter = await maybe<{ id: string }>(
       client,
       `SELECT id FROM meters WHERE unit_id = $1 AND utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL LIMIT 1`,
@@ -1009,6 +1056,8 @@ export async function createLease(session: Session, input: LeaseInput) {
         `INSERT INTO meters (
            org_id, property_id, unit_id, utility, usage_unit, label, payer, split_method, rate_source, rate_minor_per_unit, billing_cycle_months
          ) VALUES ($1,$2,$3,'electricity','kWh','main','tenant',$4::split_method,$5::rate_source,$6,2)
+         ON CONFLICT (unit_id) WHERE utility = 'electricity' AND room_id IS NULL AND archived_at IS NULL
+         DO UPDATE SET label = COALESCE(meters.label, EXCLUDED.label)
          RETURNING id`,
         [session.orgId, space.property_id, space.unit_id, input.splitMethod, rateSource, rateMinor],
       );
@@ -1023,13 +1072,21 @@ export async function createLease(session: Session, input: LeaseInput) {
        RETURNING id, avg_price_minor_per_unit::text AS avg`,
       [session.orgId, meter.id, input.periodStart, input.periodEnd, space.currency, billMinor, electricity.usageKwh, session.userId],
     );
-    const bill = insertedBill ?? await one<{ id: string; avg: string }>(
-      client,
-      `SELECT id, avg_price_minor_per_unit::text AS avg
-         FROM utility_bills
-        WHERE meter_id = $1 AND period_start = $2 AND period_end = $3`,
-      [meter.id, input.periodStart, input.periodEnd],
-    );
+    let bill: { id: string; avg: string };
+    if (insertedBill) {
+      bill = insertedBill;
+    } else {
+      const existingBill = await one<{ id: string; avg: string; amount: string; usage: string }>(
+        client,
+        `SELECT id, avg_price_minor_per_unit::text AS avg,
+                total_amount_minor::text AS amount, total_usage::text AS usage
+           FROM utility_bills
+          WHERE meter_id = $1 AND period_start = $2 AND period_end = $3`,
+        [meter.id, input.periodStart, input.periodEnd],
+      );
+      bill = existingBill;
+      billKept = Number(existingBill.amount) !== billMinor || Math.abs(Number(existingBill.usage) - electricity.usageKwh) > 0.001;
+    }
 
     const unitRooms = await many<{ id: string; label: string }>(
       client,
@@ -1043,7 +1100,7 @@ export async function createLease(session: Session, input: LeaseInput) {
       client,
       `SELECT id::text, target_room_id::text, start_date::text, end_date::text
          FROM leases
-        WHERE unit_id = $1 AND id <> $2 AND status IN ('pending_signature','active')
+        WHERE unit_id = $1 AND id <> $2 AND status = 'active'
           AND daterange(start_date, coalesce(end_date, start_date), '[]') && daterange($3::date, $4::date, '[]')`,
       [space.unit_id, lease.id, input.periodStart, input.periodEnd],
     );
@@ -1053,10 +1110,8 @@ export async function createLease(session: Session, input: LeaseInput) {
     if (input.splitMethod === "sub_meter" && subTotal - electricity.usageKwh > 0.001) throw new FlowError("errors.meter");
     const common = input.splitMethod === "sub_meter" ? round3(Math.max(0, electricity.usageKwh - subTotal)) : 0;
     const parts = unitRooms.map((item) => {
-      const linked =
-        item.id === space.id
-          ? { id: lease.id, start_date: input.startDate, end_date: input.endDate }
-          : others.find((row) => row.target_room_id === item.id);
+      // This lease is still pending_signature, so its room is vacant until both parties sign.
+      const linked = others.find((row) => row.target_room_id === item.id);
       const days = linked
         ? inclusiveDays(linked.start_date, linked.end_date, input.periodStart, input.periodEnd)
         : 0;
@@ -1075,7 +1130,7 @@ export async function createLease(session: Session, input: LeaseInput) {
         key: space.id,
         roomId: null,
         label: space.label,
-        leaseId: lease.id,
+        leaseId: null,
         weight: input.splitMethod === "days_occupied" ? days : input.splitMethod === "sub_meter" ? electricity.usageKwh : 1,
         days,
         sub: input.splitMethod === "sub_meter" ? electricity.usageKwh : 0,
@@ -1085,59 +1140,141 @@ export async function createLease(session: Session, input: LeaseInput) {
     const shares = splitWeighted(electricity.usageKwh, totalAmount, parts);
 
     if (exceeds) await noteChange(client, input.overrideReason);
-    const run = await one<{ id: string }>(
-      client,
-      `INSERT INTO utility_allocation_runs (
-         org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
-         total_usage, common_area_usage, common_area_policy, rate_minor_per_unit,
-         cap_override_reason, cap_overridden_by, total_amount_minor, inputs, status, computed_by
-       ) VALUES (
-         $1,$2,$3,$4,$5,$6::split_method,$7::rate_source,$8,$9,$10,'split_evenly',$11,$12,$13,$14,$15::jsonb,'draft',$16
-       ) RETURNING id`,
-      [
-        session.orgId,
-        meter.id,
-        bill.id,
-        input.periodStart,
-        input.periodEnd,
-        input.splitMethod,
-        rateSource,
-        space.currency,
-        electricity.usageKwh,
-        common,
-        rateMinor,
-        exceeds ? input.overrideReason.trim() : null,
-        exceeds ? session.userId : null,
-        totalAmount,
-        JSON.stringify({ rooms: parts.map((part) => ({ room: part.label, days: part.days, sub: part.sub })) }),
-        session.userId,
-      ],
-    );
-
-    for (let index = 0; index < shares.length; index += 1) {
-      const share = shares[index];
-      const part = parts[index];
+    const openRunSql = `SELECT id, status::text
+         FROM utility_allocation_runs
+        WHERE meter_id = $1 AND period_start = $2::date AND period_end = $3::date AND status <> 'void'
+        ORDER BY computed_at DESC
+        LIMIT 1`;
+    const existingRun = await maybe<{ id: string; status: string }>(client, `${openRunSql} FOR UPDATE`, [
+      meter.id,
+      input.periodStart,
+      input.periodEnd,
+    ]);
+    const runInputs = JSON.stringify({ rooms: parts.map((part) => ({ room: part.label, days: part.days, sub: part.sub })) });
+    const replaceDraft = async (runId: string) => {
+      await client.query(`SELECT id FROM utility_allocation_runs WHERE id = $1 AND status = 'draft' FOR UPDATE`, [runId]);
       await client.query(
-        `INSERT INTO utility_allocation_lines (
-           org_id, run_id, lease_id, room_id, days_occupied, sub_meter_usage, share_ratio,
-           allocated_usage, amount_minor, bearer, explanation
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::utility_payer,$11::jsonb)`,
+        `UPDATE utility_allocation_runs SET
+           utility_bill_id = $2, split_method = $3::split_method, rate_source = $4::rate_source, currency = $5,
+           total_usage = $6, common_area_usage = $7, rate_minor_per_unit = $8,
+           cap_override_reason = $9, cap_overridden_by = $10, total_amount_minor = $11, inputs = $12::jsonb,
+           computed_by = $13, computed_at = now(), unit_id = $14
+         WHERE id = $1 AND status = 'draft'`,
         [
-          session.orgId,
-          run.id,
-          part.leaseId,
-          part.roomId,
-          part.days,
-          input.splitMethod === "sub_meter" ? part.sub : null,
-          share.ratio,
-          Math.max(0, share.usage),
-          Math.max(0, share.amount),
-          part.leaseId ? "tenant" : "owner",
-          JSON.stringify({ kwh: share.usage, rate_minor_per_unit: rateMinor, method: input.splitMethod, room: part.label }),
+          runId,
+          bill.id,
+          input.splitMethod,
+          rateSource,
+          space.currency,
+          electricity.usageKwh,
+          common,
+          rateMinor,
+          exceeds ? input.overrideReason.trim() : null,
+          exceeds ? session.userId : null,
+          totalAmount,
+          runInputs,
+          session.userId,
+          space.unit_id,
         ],
       );
+      await client.query(
+        `DELETE FROM utility_allocation_lines WHERE run_id = $1 AND posted_ledger_transaction_id IS NULL`,
+        [runId],
+      );
+    };
+    let runId: string | null = null;
+    if (existingRun && existingRun.status !== "draft") {
+      utilityKept = true;
+    } else if (existingRun) {
+      runId = existingRun.id;
+      await replaceDraft(runId);
+    } else {
+      const inserted = await maybe<{ id: string }>(
+        client,
+        `INSERT INTO utility_allocation_runs (
+           org_id, meter_id, utility_bill_id, period_start, period_end, split_method, rate_source, currency,
+           total_usage, common_area_usage, common_area_policy, rate_minor_per_unit,
+           cap_override_reason, cap_overridden_by, total_amount_minor, inputs, status, computed_by, unit_id
+         ) VALUES (
+           $1,$2,$3,$4,$5,$6::split_method,$7::rate_source,$8,$9,$10,'split_evenly',$11,$12,$13,$14,$15::jsonb,'draft',$16,$17
+         )
+         ON CONFLICT (meter_id, period_start, period_end) WHERE status <> 'void' DO NOTHING
+         RETURNING id`,
+        [
+          session.orgId,
+          meter.id,
+          bill.id,
+          input.periodStart,
+          input.periodEnd,
+          input.splitMethod,
+          rateSource,
+          space.currency,
+          electricity.usageKwh,
+          common,
+          rateMinor,
+          exceeds ? input.overrideReason.trim() : null,
+          exceeds ? session.userId : null,
+          totalAmount,
+          runInputs,
+          session.userId,
+          space.unit_id,
+        ],
+      );
+      if (inserted) {
+        runId = inserted.id;
+      } else {
+        const raced = await maybe<{ id: string; status: string }>(client, `${openRunSql} FOR UPDATE`, [
+          meter.id,
+          input.periodStart,
+          input.periodEnd,
+        ]);
+        if (!raced || raced.status !== "draft") {
+          utilityKept = true;
+        } else {
+          runId = raced.id;
+          await replaceDraft(runId);
+        }
+      }
     }
-    tenantAmount = shares.find((share) => parts[shares.indexOf(share)]?.leaseId === lease.id)?.amount ?? 0;
+    if (runId) {
+      const run = { id: runId };
+      for (let index = 0; index < shares.length; index += 1) {
+        const share = shares[index];
+        const part = parts[index];
+        await client.query(
+          `INSERT INTO utility_allocation_lines (
+             org_id, run_id, lease_id, room_id, days_occupied, sub_meter_usage, share_ratio,
+             allocated_usage, amount_minor, bearer, explanation
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::utility_payer,$11::jsonb)`,
+          [
+            session.orgId,
+            run.id,
+            part.leaseId,
+            part.roomId,
+            part.days,
+            input.splitMethod === "sub_meter" ? part.sub : null,
+            share.ratio,
+            Math.max(0, share.usage),
+            Math.max(0, share.amount),
+            part.leaseId ? "tenant" : "owner",
+            JSON.stringify({ kwh: share.usage, rate_minor_per_unit: rateMinor, method: input.splitMethod, room: part.label }),
+          ],
+        );
+      }
+      const ownerMinor = shares.reduce((sum, share, index) => {
+        if (parts[index]?.leaseId) return sum;
+        return sum + Math.max(0, share.amount);
+      }, 0);
+      await syncVacantOwnerExpense(client, session, {
+        runId: run.id,
+        propertyId: space.property_id,
+        unitId: space.unit_id,
+        currency: space.currency,
+        incurredOn: input.periodEnd,
+        amountMinor: ownerMinor,
+      });
+      tenantAmount = shares.find((share) => parts[shares.indexOf(share)]?.leaseId === lease.id)?.amount ?? 0;
+    }
     }
 
     return {
@@ -1148,6 +1285,8 @@ export async function createLease(session: Session, input: LeaseInput) {
       average,
       tenantAmount,
       reused: false,
+      utilityKept,
+      billKept,
     };
   }, { orgId: session.orgId, environment: session.environment });
   } catch (error) {
@@ -1552,11 +1691,19 @@ async function issueMoveInInvoice(client: Client, leaseId: string) {
     `SELECT contact_id FROM lease_parties WHERE lease_id = $1 AND role = 'primary' LIMIT 1`,
     [leaseId],
   );
+  // A confirmed electricity split already has its own invoice line. Attaching that
+  // allocation again violates invoice_lines_alloc_uniq and rolls the countersign back.
   const allocation = await maybe<{ id: string; amount_minor: string }>(
     client,
-    `SELECT id, amount_minor::text FROM utility_allocation_lines
-      WHERE lease_id = $1 AND amount_minor > 0
-      ORDER BY amount_minor DESC LIMIT 1`,
+    `SELECT l.id, l.amount_minor::text
+       FROM utility_allocation_lines l
+      WHERE l.lease_id = $1 AND l.amount_minor > 0
+        AND l.posted_invoice_line_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM invoice_lines il WHERE il.allocation_line_id = l.id
+        )
+      ORDER BY l.amount_minor DESC
+      LIMIT 1`,
     [leaseId],
   );
   const approver = await maybe<{ user_id: string }>(
@@ -1568,9 +1715,7 @@ async function issueMoveInInvoice(client: Client, leaseId: string) {
   const actor =
     approver?.user_id ??
     (await one<{ id: string }>(client, `SELECT auth.uid() AS id`)).id;
-  const count = await one<{ n: string }>(client, `SELECT count(*)::text AS n FROM invoices WHERE org_id = $1`, [lease.org_id]);
-  const now = new Date();
-  const number = `INV-${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(Number(count.n) + 1).padStart(4, "0")}`;
+  const number = await nextInvoiceNumber(client, lease.org_id);
   const invoice = await one<{ id: string }>(
     client,
     `INSERT INTO invoices (
@@ -2056,6 +2201,34 @@ export async function approveMatch(session: Session, suggestionId: string) {
   return { leaseId };
 }
 
+/** Point each paid invoice at the latest issued statement that includes its payment. The ledger pointer is not involved. */
+async function linkStatementInvoices(client: Client, orgId: string, propertyIds: string[]) {
+  if (propertyIds.length === 0) return;
+  await client.query(
+    `UPDATE invoices i
+        SET owner_statement_id = picked.statement_id
+       FROM (
+         SELECT DISTINCT ON (inv.id) inv.id AS invoice_id, s.id AS statement_id
+           FROM invoices inv
+           JOIN payment_allocations a ON a.invoice_id = inv.id
+           JOIN payments pay ON pay.id = a.payment_id AND pay.status = 'confirmed'
+           JOIN leases l ON l.id = inv.lease_id
+           JOIN property_owners po ON po.property_id = l.property_id
+           JOIN owner_statements s ON s.owner_contact_id = po.owner_contact_id
+            AND s.org_id = inv.org_id
+            AND s.status = 'issued'
+            AND pay.paid_on >= s.period_start
+            AND pay.paid_on <= s.period_end
+          WHERE inv.org_id = $1
+            AND inv.property_id = ANY($2::uuid[])
+          ORDER BY inv.id, s.period_end DESC, s.id DESC
+       ) picked
+      WHERE i.id = picked.invoice_id
+        AND i.owner_statement_id IS DISTINCT FROM picked.statement_id`,
+    [orgId, propertyIds],
+  );
+}
+
 export async function generateStatement(session: Session, input: { ownerContactId: string; month: string }) {
   assertPerm(session, "stmt.generate");
   if (!/^\d{4}-\d{2}$/.test(input.month)) throw new FlowError("errors.required");
@@ -2073,6 +2246,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
     const currencies = [...new Set(properties.map((property) => property.currency))];
     if (currencies.length !== 1) throw new FlowError("errors.currency");
     const currency = currencies[0];
+    const propertyIds = properties.map((property) => property.property_id);
     const existing = await maybe<{ id: string }>(
       client,
       `SELECT id FROM owner_statements
@@ -2080,6 +2254,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
       [input.ownerContactId, currency, bounds.start],
     );
     if (existing) {
+      await linkStatementInvoices(client, session.orgId, propertyIds);
       const row = await one<{ rent: string; other: string }>(
         client,
         `SELECT rent_received_minor::text AS rent, other_income_minor::text AS other FROM owner_statements WHERE id = $1`,
@@ -2088,7 +2263,6 @@ export async function generateStatement(session: Session, input: { ownerContactI
       return { id: existing.id, earned: Number(row.rent) + Number(row.other) > 0 };
     }
 
-    const propertyIds = properties.map((property) => property.property_id);
     const payments = await many<{ id: string; property_id: string; property_name: string }>(
       client,
       `SELECT p.id, l.property_id::text, pr.name AS property_name
@@ -2099,8 +2273,8 @@ export async function generateStatement(session: Session, input: { ownerContactI
           AND p.paid_on BETWEEN $3 AND $4 AND l.property_id = ANY($5::uuid[])`,
       [session.orgId, currency, bounds.start, bounds.end, propertyIds],
     );
-    const rentByProperty = new Map<string, { name: string; rent: number; other: number }>();
-    for (const property of properties) rentByProperty.set(property.property_id, { name: property.name, rent: 0, other: 0 });
+    const rentByProperty = new Map<string, { name: string; rent: number; utility: number; other: number }>();
+    for (const property of properties) rentByProperty.set(property.property_id, { name: property.name, rent: 0, utility: 0, other: 0 });
     for (const payment of payments) {
       const allocations = await many<{ amount_minor: string; invoice_id: string }>(
         client,
@@ -2108,22 +2282,27 @@ export async function generateStatement(session: Session, input: { ownerContactI
         [payment.id],
       );
       for (const allocation of allocations) {
-        const lines = await many<{ charge_type: string; amount_minor: string }>(
+        const lines = await many<{ charge_type: string; amount_minor: string; description: string }>(
           client,
-          `SELECT charge_type::text, amount_minor::text FROM invoice_lines WHERE invoice_id = $1`,
+          `SELECT charge_type::text, amount_minor::text, description FROM invoice_lines WHERE invoice_id = $1`,
           [allocation.invoice_id],
         );
         const buckets = attributePayment(
-          lines.map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount_minor) })),
+          lines.map((line) => ({
+            charge_type: line.charge_type,
+            amount_minor: Number(line.amount_minor),
+            description: line.description,
+          })),
           Number(allocation.amount_minor),
         );
         const bucket = rentByProperty.get(payment.property_id)!;
         bucket.rent += buckets.rent;
-        bucket.other += buckets.utility + buckets.other;
+        bucket.utility += buckets.utility;
+        bucket.other += buckets.other;
       }
     }
     const rent = [...rentByProperty.values()].reduce((sum, row) => sum + row.rent, 0);
-    const other = [...rentByProperty.values()].reduce((sum, row) => sum + row.other, 0);
+    const other = [...rentByProperty.values()].reduce((sum, row) => sum + row.utility + row.other, 0);
     const expenses = await many<{ id: string; amount_minor: string; description: string | null; category: string; property_id: string }>(
       client,
       `SELECT id, amount_minor::text, description, category, property_id::text FROM expenses
@@ -2195,6 +2374,13 @@ export async function generateStatement(session: Session, input: { ownerContactI
           [session.orgId, statement.id, propertyId, bucket.name, bucket.rent],
         );
       }
+      if (bucket.utility) {
+        await client.query(
+          `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor)
+           VALUES ($1,$2,$3,'other_income',$4,$5)`,
+          [session.orgId, statement.id, propertyId, "電費", bucket.utility],
+        );
+      }
       if (bucket.other) {
         await client.query(
           `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor)
@@ -2217,6 +2403,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
         [session.orgId, statement.id, expense.property_id, expense.description?.trim() || expense.category, Number(expense.amount_minor), expense.id],
       );
     }
+    await linkStatementInvoices(client, session.orgId, propertyIds);
     return { id: statement.id, earned: rent + other > 0 };
   });
   if (statementId.earned) await markTryout(session.orgId, "statement");

@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { PageHeader } from "@/components/ui";
-import { actionStatement } from "@/server/actions";
+import { PreviewGenerateForm } from "@/components/dialogs";
 import { statementRoster } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -18,10 +18,10 @@ export default async function StatementPreviewPage({
   const params = await searchParams;
   const month = params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : "";
   const owner = params.owner ?? "";
-  if (!month || !/^[0-9a-f-]{36}$/i.test(owner)) notFound();
+  if (!month || !/^[0-9a-f-]{36}$/i.test(owner)) redirect("/m/statements");
   const roster = await statementRoster(session, month);
   const row = roster.find((item) => item.owner_id === owner && item.period_start.slice(0, 7) === month);
-  if (!row) notFound();
+  if (!row) redirect("/m/statements");
   if (row.id) redirect(`/m/statements/${row.id}`);
   return (
     <>
@@ -36,13 +36,7 @@ export default async function StatementPreviewPage({
             {t("i_fee_rule")}：{row.fee_rule || "—"}
           </p>
           <p className="small">{t("i_preview_pending")}</p>
-          <form action={actionStatement}>
-            <input type="hidden" name="ownerContactId" value={row.owner_id} />
-            <input type="hidden" name="month" value={month} />
-            <button className="btn pri" type="submit">
-              {t("s_705a524")}
-            </button>
-          </form>
+          <PreviewGenerateForm ownerId={row.owner_id} month={month} label={t("s_705a524")} />
         </div>
       </div>
     </>

@@ -468,6 +468,8 @@ export function PropertyWizard({
               <option value="">{t("i_choose")}</option>
               <option value="even">{t("i_split_even")}</option>
               <option value="sub">{t("i_split_sub")}</option>
+              <option value="reading">{t("i_elec_reading")}</option>
+              <option value="days">{t("i_split_days")}</option>
               <option value="owner">{t("i_split_owner")}</option>
             </select>
           </div>

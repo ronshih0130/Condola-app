@@ -1,3 +1,5 @@
+import { addCalendarMonths } from "./money";
+
 /** Product rule: a deposit above this many months of rent needs a typed reason. */
 export const DEPOSIT_CAP_MONTHS = 2;
 
@@ -104,4 +106,23 @@ export function signedPdfName(name: string) {
   const cleaned = base.replace(/[\u0000-\u001f]/g, "").slice(0, 120);
   if (!cleaned) return "signed.pdf";
   return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : `${cleaned}.pdf`;
+}
+
+export type LeaseSpan = { start: string; end: string };
+
+/** Inclusive. The day after a lease ends does not overlap. */
+export function periodsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string) {
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
+export function leaseTermEnd(start: string, monthsRaw: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return "";
+  const months = Number(monthsRaw);
+  const count = Number.isFinite(months) && months > 0 ? months : 12;
+  return addCalendarMonths(start, count);
+}
+
+export function overlappingLease(leases: readonly LeaseSpan[] | undefined, start: string, end: string): LeaseSpan | null {
+  if (!leases || !end || end < start) return null;
+  return leases.find((lease) => periodsOverlap(lease.start, lease.end, start, end)) ?? null;
 }

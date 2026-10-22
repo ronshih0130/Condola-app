@@ -34,8 +34,17 @@ import { createLeaseFromForm } from "./lease-form";
 import { addTicketComment, saveRepairRecord } from "./repairs";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
+import { meterUsageKwh } from "./utility-post";
+import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
 
-export type ActionState = { error: string; field?: string; step?: number };
+export type ActionState = {
+  error: string;
+  field?: string;
+  step?: number;
+  vars?: Record<string, string>;
+  propertyId?: string;
+  leaseHref?: string;
+};
 
 const EMPTY_ACTION: ActionState = { error: "" };
 
@@ -51,6 +60,10 @@ function isRedirect(error: unknown) {
 function bounce(path: string, error: unknown): never {
   if (isRedirect(error)) throw error;
   const key = error instanceof FlowError ? error.key : "errors.generic";
+  if (key === "errors.generic") {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("action failed:", message);
+  }
   const [pathname, query = ""] = path.split("?");
   const params = new URLSearchParams(query);
   params.set("error", key);
@@ -114,7 +127,7 @@ function postedRooms(formData: FormData, prefix: string, count: number) {
 function propertyInput(formData: FormData): PropertyInput {
   const rawCurrency = text(formData.get("currency"));
   const splitRaw = text(formData.get("electricSplit"));
-  const split = splitRaw === "even" || splitRaw === "sub" || splitRaw === "owner" ? splitRaw : "";
+  const split = splitRaw === "even" || splitRaw === "sub" || splitRaw === "owner" || splitRaw === "reading" || splitRaw === "days" ? splitRaw : "";
   const rateRaw = text(formData.get("electricRate")).trim();
   const roomCount = Number(text(formData.get("roomCount"))) || 0;
   const rooms = postedRooms(formData, "room", roomCount);
@@ -167,7 +180,19 @@ function actionError(error: unknown, fallback = "errors.generic"): ActionState {
   const key = error.key === "errors.generic" ? fallback : error.key;
   const field = typeof error.vars?.field === "string" ? error.vars.field : undefined;
   const step = typeof error.vars?.step === "number" ? error.vars.step : undefined;
-  return { error: key, ...(field ? { field } : {}), ...(step != null ? { step } : {}) };
+  const vars: Record<string, string> = {};
+  if (error.vars) {
+    for (const [name, value] of Object.entries(error.vars)) {
+      if (name === "field" || name === "step") continue;
+      vars[name] = String(value);
+    }
+  }
+  return {
+    error: key,
+    ...(field ? { field } : {}),
+    ...(step != null ? { step } : {}),
+    ...(Object.keys(vars).length ? { vars } : {}),
+  };
 }
 
 export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
@@ -194,7 +219,13 @@ export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formDa
     const created = await createLeaseFromForm(session, formData);
     const jar = await cookies();
     jar.set("condola_tenant_focus", created.tenantUserId, appCookieOptions({ httpOnly: false }));
-    redirect(`/m/leases/${created.leaseId}?created=1`);
+    const notice = new URLSearchParams();
+    if (created.utilityKept) notice.set("utility", "kept");
+    if (created.billKept) notice.set("bill", "kept");
+    const extra = notice.toString();
+    revalidatePath("/m/leases");
+    revalidatePath(`/m/leases/${created.leaseId}`);
+    return { error: "", leaseHref: `/m/leases/${created.leaseId}?created=1${extra ? `&${extra}` : ""}` };
   } catch (error) {
     return actionError(error, "errors.leaseFailed");
   }
@@ -213,7 +244,7 @@ export async function actionUpdateLease(prev: ActionState = EMPTY_ACTION, formDa
       updatedAt: text(formData.get("updatedAt")),
     });
     revalidatePath(`/m/leases/${leaseId}`);
-    redirect(`/m/leases/${leaseId}`);
+    redirect(`/m/leases/${leaseId}?saved=rent`);
   } catch (error) {
     return actionError(error, "errors.leaseFailed");
   }
@@ -330,6 +361,9 @@ export async function actionStatement(formData: FormData) {
       ownerContactId: text(formData.get("ownerContactId")),
       month: text(formData.get("month")),
     });
+    revalidatePath("/m/statements");
+    revalidatePath("/m/statements/preview");
+    revalidatePath(`/m/statements/${result.statementId}`);
     redirect(`/m/statements/${result.statementId}`);
   } catch (error) {
     bounce("/m/statements", error);
@@ -527,6 +561,98 @@ export async function actionUpdateSpace(formData: FormData) {
     redirect("/m/units");
   } catch (error) {
     bounce(back, error);
+  }
+}
+
+function fieldAt(formData: FormData, name: string, index: number) {
+  const value = formData.getAll(name)[index];
+  return typeof value === "string" ? value : null;
+}
+
+function utilityInput(formData: FormData) {
+  const spaceIds = formData.getAll("spaceId").map((value) => String(value));
+  const total = optionalNum(formData.get("totalKwh"));
+  const bill = optionalNum(formData.get("billTotal"));
+  return {
+    unitId: text(formData.get("unitId")),
+    periodStart: text(formData.get("periodStart")),
+    periodEnd: text(formData.get("periodEnd")),
+    rateMajor: num(formData.get("rate")),
+    totalKwh: total,
+    billTotalMajor: bill,
+    overrideReason: text(formData.get("overrideReason")),
+    readings: spaceIds.map((spaceId, index) => {
+      const previousText = String(fieldAt(formData, "prevKwh", index) ?? "").trim();
+      const currentText = String(fieldAt(formData, "currKwh", index) ?? "").trim();
+      const hasEnds = previousText !== "" || currentText !== "";
+      const previousKwh = optionalNum(fieldAt(formData, "prevKwh", index));
+      const currentKwh = optionalNum(fieldAt(formData, "currKwh", index));
+      const direct = optionalNum(fieldAt(formData, "kwh", index));
+      return {
+        spaceId,
+        kwh: hasEnds ? meterUsageKwh(previousKwh ?? Number.NaN, currentKwh ?? Number.NaN) : (direct ?? Number.NaN),
+        previousKwh: hasEnds ? previousKwh : null,
+        currentKwh: hasEnds ? currentKwh : null,
+      };
+    }),
+  };
+}
+
+function utilityBack(formData: FormData) {
+  const params = new URLSearchParams();
+  const unitId = text(formData.get("unitId"));
+  const month = text(formData.get("periodStart")).slice(0, 7);
+  if (unitId) params.set("unit", unitId);
+  if (/^\d{4}-\d{2}$/.test(month)) params.set("month", month);
+  const bill = text(formData.get("billTotal")).trim().slice(0, 16);
+  const kwh = text(formData.get("totalKwh")).trim().slice(0, 16);
+  if (bill) params.set("bill", bill);
+  if (kwh) params.set("kwh", kwh);
+  const query = params.toString();
+  return query ? `/m/rent/utilities?${query}` : "/m/rent/utilities";
+}
+
+export async function actionPrepareUtility(formData: FormData) {
+  const unitId = text(formData.get("unitId"));
+  const month = text(formData.get("periodStart")).slice(0, 7);
+  const back = utilityBack(formData);
+  try {
+    const session = await getSession();
+    const result = await prepareUtilityRun(session, utilityInput(formData));
+    redirect(`/m/rent/utilities?run=${result.runId}&unit=${encodeURIComponent(unitId)}&month=${encodeURIComponent(month)}`);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionConfirmUtility(formData: FormData) {
+  const runId = text(formData.get("runId"));
+  const month = text(formData.get("month"));
+  const unitId = text(formData.get("unitId"));
+  const next = new URLSearchParams({ run: runId });
+  if (/^\d{4}-\d{2}$/.test(month)) next.set("month", month);
+  if (unitId) next.set("unit", unitId);
+  try {
+    const session = await getSession();
+    await confirmUtilityRun(session, runId);
+    revalidatePath("/m/rent/utilities");
+    revalidatePath("/m/expenses");
+    revalidatePath("/m/statements");
+    next.set("saved", "posted");
+    redirect(`/m/rent/utilities?${next.toString()}`);
+  } catch (error) {
+    bounce(`/m/rent/utilities?${next.toString()}`, error);
+  }
+}
+
+export async function actionVoidUtility(formData: FormData) {
+  const runId = text(formData.get("runId"));
+  try {
+    const session = await getSession();
+    await voidUtilityRun(session, runId, text(formData.get("reason")));
+    redirect(`/m/rent/utilities?run=${runId}&saved=void`);
+  } catch (error) {
+    bounce(`/m/rent/utilities?run=${runId}`, error);
   }
 }
 

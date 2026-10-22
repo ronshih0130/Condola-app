@@ -77,8 +77,10 @@ for (const locale of locales) {
     await page.goto("/m/leases/new");
     await expect(page.getByTestId("tenant-name")).toHaveValue("");
     await expect(page.getByTestId("rent")).toHaveValue("");
-    await expect(page.getByTestId("rate")).toHaveValue("");
-    await expect(page.getByTestId("bill-total")).toHaveValue("");
+    await expect(page.getByTestId("bill-total")).toHaveCount(0);
+    await expect(page.getByTestId("usage")).toHaveCount(0);
+    await expect(page.getByTestId("deposit-months")).toHaveValue("2");
+    await expect(page.getByTestId("due-day")).toHaveValue("5");
     await expect(page.getByTestId("tenant-name")).toHaveAttribute("placeholder", /.+/);
     const room = page.getByTestId("lease-room");
     const roomValue = await room.locator("option", { hasText: "松德試用" }).first().getAttribute("value");
@@ -98,22 +100,8 @@ for (const locale of locales) {
     await page.getByTestId("due-day").fill("5");
     await page.getByTestId("wizard-next").click();
 
-    await page.getByTestId("split-method").selectOption("even");
-    await page.getByTestId("bill-total").fill("2000");
-    await page.getByTestId("usage").fill("400");
-    await page.getByTestId("rate").fill("6");
-    await expect(page.getByTestId("cap-alert")).toBeVisible();
-    await expect(page.getByTestId("wizard-next")).toBeDisabled();
-    await page.getByTestId("override-reason").fill("   ");
-    await expect(page.getByTestId("wizard-next")).toBeDisabled();
-    await page.getByTestId("override-reason").fill("Landlord agreed to this trial rate");
-    await expect(page.getByTestId("wizard-next")).toBeEnabled();
-    const charged = page.getByTestId("charged-total");
-    await expect(charged).toContainText("2,400");
-    await expect(charged).toContainText("2,000");
-    if (locale.code === "zh-TW") {
-      await page.screenshot({ path: "/opt/cursor/artifacts/lease-electricity-cap.png", fullPage: true });
-    }
+    await expect(page.getByTestId("utility-monthly-note")).toBeVisible();
+    await expect(page.getByTestId("bill-total")).toHaveCount(0);
     await page.getByTestId("wizard-next").click();
     const template = page.getByTestId("lease-template");
     await expect(template).toHaveAttribute("data-lang", "zh-TW");

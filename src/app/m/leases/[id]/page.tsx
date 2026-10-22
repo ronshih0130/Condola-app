@@ -25,7 +25,7 @@ export default async function LeasePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; error?: string; audit?: string; created?: string }>;
+  searchParams: Promise<{ tab?: string; error?: string; audit?: string; created?: string; utility?: string; bill?: string; saved?: string }>;
 }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
@@ -72,6 +72,21 @@ export default async function LeasePage({
       {query.created === "1" ? (
         <div className="alert ok" data-testid="lease-created">
           {t("i_lease_created")}
+        </div>
+      ) : null}
+      {query.saved === "rent" ? (
+        <div className="alert ok" data-testid="rent-updated" role="status">
+          {t("i_rent_updated")}
+        </div>
+      ) : null}
+      {query.utility === "kept" ? (
+        <div className="alert warn" data-testid="utility-run-kept">
+          {t("i_utility_run_kept")}
+        </div>
+      ) : null}
+      {query.bill === "kept" ? (
+        <div className="alert warn" data-testid="utility-bill-kept">
+          {t("i_utility_bill_kept")}
         </div>
       ) : null}
       <div className="tabsx">
@@ -191,7 +206,17 @@ export default async function LeasePage({
                   </td>
                 </tr>
                 <tr>
-                  <td>{t("i_charge_utility")}</td>
+                  <td>
+                    {detail.lines.some((line) => line.charge_type === "utility" && line.description.startsWith("電費"))
+                      ? detail.lines
+                          .filter((line) => line.charge_type === "utility" && line.description.startsWith("電費"))
+                          .map((line) => (
+                            <div key={line.id} data-testid="invoice-utility-line">
+                              {line.description}
+                            </div>
+                          ))
+                      : t("i_charge_utility")}
+                  </td>
                   <td className="num" data-testid="invoice-utility" data-minor={detail.utilityMinor}>
                     {money(detail.utilityMinor)}
                   </td>
@@ -204,6 +229,7 @@ export default async function LeasePage({
                 </tr>
                 {detail.lines
                   .filter((line) => !["rent", "utility", "deposit"].includes(line.charge_type))
+                  .filter((line) => !(line.charge_type === "credit" && line.description.startsWith("沖銷電費")))
                   .map((line, index) => (
                     <tr key={`${line.invoice_id}-${index}`}>
                       <td>{t(chargeKey(line.charge_type))}</td>

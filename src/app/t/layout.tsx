@@ -27,7 +27,7 @@ export default async function TenantLayout({ children }: { children: React.React
             <BrandImage variant="symbolSmall" alt="" className="brand-symbol" />
             {t("i_brand")}
           </div>
-          <div className="liffb">
+          <div className="liffb" data-testid="bill-list">
             {path === "/t" ? (
               <div className="liff-welcome">
                 <BrandImage variant="stacked" alt={t("i_brand")} />

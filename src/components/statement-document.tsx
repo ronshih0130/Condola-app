@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Locale, T } from "@/i18n";
 import { BrandImage } from "@/components/brand";
-import { moneyLabel, ownerSettlement } from "@/server/format";
+import { moneyLabel, ownerSettlement, signedMoneyLabel } from "@/server/format";
 
 export function StatementDocument({
   t,
@@ -40,7 +40,7 @@ export function StatementDocument({
     ["i_rent_received", money(figures.rent), "statement-rent"],
     ["i_other_income", money(figures.other), ""],
     ["i_fee", money(figures.fee), "statement-fee"],
-    ["i_expenses", money(figures.expenses), ""],
+    ["i_expenses", signedMoneyLabel(figures.expenses, row.currency, locale), ""],
   ] as const;
   return (
     <div className="card" style={{ maxWidth: 640 }} data-testid="statement-document">
@@ -93,7 +93,7 @@ export function StatementDocument({
             {lines.map((line, index) => (
               <tr key={`${line.line_type}-${index}`}>
                 <td data-testid="statement-line">{line.description || t("i_expenses")}</td>
-                <td className="num">{money(Number(line.amount))}</td>
+                <td className="num" data-testid="statement-line-amount">{signedMoneyLabel(Number(line.amount), row.currency, locale)}</td>
               </tr>
             ))}
           </tbody>

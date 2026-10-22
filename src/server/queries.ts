@@ -12,7 +12,7 @@ import {
   tenantContactSearchSql,
   type ListOpts,
 } from "./list-search";
-import { rentUtilityDueMinor } from "./money";
+import { rentUtilityDueMinor, tenantBillLines } from "./money";
 import type { Session } from "./types";
 
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
@@ -447,6 +447,8 @@ export async function searchTenants(session: Session, raw?: { q?: string; page?:
   return { ...result, q: parsed.q, page: parsed.page };
 }
 
+export type RoomLeaseSpan = { start: string; end: string };
+
 export type RoomOption = {
   id: string;
   label: string;
@@ -454,7 +456,8 @@ export type RoomOption = {
   propertyName: string;
   currency: string;
   baseRentMinor: number;
-  unitRooms: { id: string; label: string }[];
+  unitRooms: { id: string; label: string; occupied: boolean }[];
+  leases: RoomLeaseSpan[];
 };
 
 export async function vacantRooms(session: Session): Promise<RoomOption[]> {
@@ -467,44 +470,66 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
       property_name: string;
       currency: string;
       base_rent_minor: string;
+      kind: string;
     }>(
       client,
-      `SELECT id, label, unit_id, unit_label, property_name, currency, base_rent_minor
+      `SELECT id, label, unit_id, unit_label, property_name, currency, base_rent_minor, kind
          FROM (
            SELECT r.id::text AS id, r.label, u.id::text AS unit_id, u.label AS unit_label,
                   p.name AS property_name, p.currency, r.base_rent_minor::text AS base_rent_minor,
-                  p.created_at, 0 AS rank
+                  'room'::text AS kind, p.created_at, 0 AS rank
              FROM rooms r
              JOIN units u ON u.id = r.unit_id
              JOIN properties p ON p.id = u.property_id
             WHERE r.org_id = $1 AND r.archived_at IS NULL AND p.archived_at IS NULL
               AND u.rental_mode = 'by_room'
-              AND NOT EXISTS (
-                SELECT 1 FROM leases l
-                 WHERE l.status IN ('pending_signature','active')
-                   AND (l.target_room_id = r.id OR l.target_unit_id = u.id)
-              )
            UNION ALL
            SELECT u.id::text, ''::text, u.id::text, u.label, p.name, p.currency,
-                  u.base_rent_minor::text, p.created_at, 1
+                  u.base_rent_minor::text, 'whole_unit'::text, p.created_at, 1
              FROM units u
              JOIN properties p ON p.id = u.property_id
             WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
               AND u.rental_mode = 'whole_unit'
-              AND NOT EXISTS (
-                SELECT 1 FROM leases l
-                 WHERE l.status IN ('pending_signature','active')
-                   AND (l.target_unit_id = u.id OR (l.unit_id = u.id AND l.target_room_id IS NOT NULL))
-              )
          ) spaces
         ORDER BY created_at DESC, rank, label`,
       [session.orgId],
     );
     const unitIds = [...new Set(rows.map((row) => row.unit_id))];
-    const siblings = unitIds.length
-      ? await many<{ id: string; unit_id: string; label: string }>(
+    const spaceIds = rows.map((row) => row.id);
+    const leaseRows = spaceIds.length
+      ? await many<{
+          id: string;
+          unit_id: string;
+          target_room_id: string | null;
+          target_unit_id: string | null;
+          start_date: string;
+          end_date: string;
+        }>(
           client,
-          `SELECT r.id::text, r.unit_id::text, r.label FROM rooms r
+          `SELECT l.id::text, l.unit_id::text, l.target_room_id::text, l.target_unit_id::text,
+                  l.start_date::text AS start_date, coalesce(l.end_date, l.start_date)::text AS end_date
+             FROM leases l
+            WHERE l.org_id = $1
+              AND l.status IN ('pending_signature','active')
+              AND (
+                l.target_room_id = ANY($2::uuid[])
+                OR l.target_unit_id = ANY($2::uuid[])
+                OR l.unit_id = ANY($2::uuid[])
+              )
+            ORDER BY l.start_date, l.id`,
+          [session.orgId, [...new Set([...spaceIds, ...unitIds])]],
+        )
+      : [];
+    const siblings = unitIds.length
+      ? await many<{ id: string; unit_id: string; label: string; occupied: boolean }>(
+          client,
+          `SELECT r.id::text, r.unit_id::text, r.label,
+                  EXISTS (
+                    SELECT 1 FROM leases l
+                     WHERE l.target_room_id = r.id
+                       AND l.status IN ('pending_signature','active')
+                  ) AS occupied
+             FROM rooms r
              JOIN units u ON u.id = r.unit_id
             WHERE r.unit_id = ANY($1::uuid[]) AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
             ORDER BY r.label`,
@@ -518,7 +543,16 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
       propertyName: row.property_name,
       currency: row.currency,
       baseRentMinor: Number(row.base_rent_minor),
-      unitRooms: siblings.filter((room) => room.unit_id === row.unit_id).map((room) => ({ id: room.id, label: room.label })),
+      unitRooms: siblings
+        .filter((room) => room.unit_id === row.unit_id)
+        .map((room) => ({ id: room.id, label: room.label, occupied: room.occupied })),
+      leases: leaseRows
+        .filter((lease) =>
+          row.kind === "room"
+            ? lease.target_room_id === row.id || lease.target_unit_id === row.unit_id
+            : lease.target_unit_id === row.id || (lease.unit_id === row.unit_id && lease.target_room_id !== null),
+        )
+        .map((lease) => ({ start: lease.start_date, end: lease.end_date })),
     }));
   }, { orgId: session.orgId, environment: session.environment });
 }
@@ -667,9 +701,9 @@ export async function leaseDetail(session: Session, id: string) {
       [id],
     );
     const lines = invoices.length
-      ? await many<{ invoice_id: string; charge_type: string; amount: string }>(
+      ? await many<{ id: string; invoice_id: string; charge_type: string; amount: string; description: string }>(
           client,
-          `SELECT invoice_id::text, charge_type::text, amount_minor::text AS amount
+          `SELECT id::text, invoice_id::text, charge_type::text, amount_minor::text AS amount, description
              FROM invoice_lines WHERE invoice_id = ANY($1::uuid[]) ORDER BY line_no`,
           [invoices.map((invoice) => invoice.id)],
         )
@@ -678,11 +712,14 @@ export async function leaseDetail(session: Session, id: string) {
     const dueMinor = open.reduce((sum, invoice) => {
       const invoiceLines = lines
         .filter((line) => line.invoice_id === invoice.id)
-        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount) }));
+        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount), description: line.description }));
       return sum + rentUtilityDueMinor(invoiceLines, Number(invoice.paid));
     }, 0);
     const sumType = (type: string) =>
       lines.filter((line) => line.charge_type === type).reduce((sum, line) => sum + Number(line.amount), 0);
+    const electricityCredit = lines
+      .filter((line) => line.charge_type === "credit" && line.description.startsWith("沖銷電費"))
+      .reduce((sum, line) => sum + Number(line.amount), 0);
     return {
       lease,
       signatures,
@@ -690,7 +727,7 @@ export async function leaseDetail(session: Session, id: string) {
       lines,
       dueMinor,
       rentMinor: sumType("rent"),
-      utilityMinor: sumType("utility"),
+      utilityMinor: sumType("utility") + electricityCredit,
       depositMinor: sumType("deposit"),
     };
   });
@@ -1317,21 +1354,36 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
       [leaseId],
     );
     const lines = invoices.length
-      ? await many<{ invoice_id: string; charge_type: string; amount: string }>(
+      ? await many<{ invoice_id: string; charge_type: string; amount: string; description: string }>(
           client,
-          `SELECT invoice_id::text, charge_type::text, amount_minor::text AS amount
+          `SELECT invoice_id::text, charge_type::text, amount_minor::text AS amount, description
              FROM invoice_lines WHERE invoice_id = ANY($1::uuid[])`,
           [invoices.map((invoice) => invoice.id)],
         )
       : [];
-    const dueMinor = invoices.reduce((sum, invoice) => {
+    const billLines = invoices.flatMap((invoice) => {
       const invoiceLines = lines
         .filter((line) => line.invoice_id === invoice.id)
-        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount) }));
-      return sum + rentUtilityDueMinor(invoiceLines, Number(invoice.paid));
-    }, 0);
+        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount), description: line.description }));
+      return tenantBillLines(invoiceLines, Number(invoice.paid));
+    });
+    const dueMinor = billLines.reduce((sum, line) => sum + line.amountMinor, 0);
     const balance = invoices.reduce((sum, invoice) => sum + Number(invoice.balance), 0);
-    return { lease, dueMinor, balance, currency: lease.currency };
+    // Rent and electricity are billed only after both parties sign. A pending_signature lease
+    // is left out of the electricity split, so it has neither a rent row nor a new utility row.
+    // Deposit and any other open charge stay on the bill so the rows match the invoice balance.
+    const asRow = (line: { chargeType: string; description: string; amountMinor: number }) => ({
+      chargeType: line.chargeType,
+      description: line.description,
+      amount: String(line.amountMinor),
+    });
+    const rentLines = billLines.filter((line) => line.chargeType === "rent").map(asRow);
+    const depositLines = billLines.filter((line) => line.chargeType === "deposit").map(asRow);
+    const utilityLines = billLines.filter((line) => line.chargeType === "utility").map(asRow);
+    const otherLines = billLines
+      .filter((line) => line.chargeType !== "rent" && line.chargeType !== "deposit" && line.chargeType !== "utility")
+      .map(asRow);
+    return { lease, dueMinor, balance, currency: lease.currency, rentLines, depositLines, utilityLines, otherLines };
   });
 }
 
