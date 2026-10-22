@@ -859,9 +859,10 @@ export async function paymentBoard(session: Session, month: string) {
         ORDER BY i.due_date, c.display_name`,
       [session.orgId, start],
     );
-    const leases = await many<{ id: string; tenant: string; place: string }>(
+    const leases = await many<{ id: string; tenant: string; place: string; records_only: boolean }>(
       client,
-      `SELECT l.id::text, c.display_name AS tenant, pr.name || coalesce(' ' || r.label, '') AS place
+      `SELECT l.id::text, c.display_name AS tenant, pr.name || coalesce(' ' || r.label, '') AS place,
+              coalesce(pr.records_only, false) AS records_only
          FROM leases l
          JOIN properties pr ON pr.id = l.property_id
          LEFT JOIN rooms r ON r.id = l.target_room_id
@@ -1163,7 +1164,23 @@ export async function statementDetail(session: Session, id: string) {
          FROM statement_change_log WHERE statement_id = $1 ORDER BY created_at`,
       [id],
     );
-    return { statement, lines, history };
+    const recipients = await many<{ payee: string }>(
+      client,
+      `SELECT DISTINCT p.payee
+         FROM payments p
+         JOIN leases l ON l.id = p.lease_id
+         JOIN property_owners po ON po.property_id = l.property_id
+        WHERE p.org_id = $1
+          AND po.owner_contact_id = $2
+          AND p.status = 'confirmed'
+          AND p.charge_kind = 'rent'
+          AND p.payee IN ('owner', 'firm')
+          AND p.paid_on >= $3::date
+          AND p.paid_on <= $4::date
+        ORDER BY p.payee`,
+      [session.orgId, statement.owner_id, statement.period_start, statement.period_end],
+    );
+    return { statement, lines, history, recipients };
   });
 }
 

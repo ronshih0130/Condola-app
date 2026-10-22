@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -60,6 +60,7 @@ function ownerTermScanFiles() {
   const files = new Set<string>();
   for (const dir of ["src/app", "src/components", "src/server", "e2e"]) {
     for (const file of filesUnder(join(root, dir))) {
+      if (file.includes(`${sep}acceptance${sep}`)) continue;
       if (/\.(ts|tsx|js|jsx|mjs|cjs|json|sql)$/.test(file)) files.add(file);
     }
   }

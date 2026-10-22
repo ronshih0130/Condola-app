@@ -67,7 +67,7 @@ export function StatementDocument({
           ))}
           <tr>
             <td>{t("i_stmt_owner_net")}</td>
-            <td className="num">
+            <td className="num" data-testid="statement-net">
               {figures.owes > 0 ? (
                 <span className="chip warn" data-testid="owner-owes">
                   {t("owner_owes")} {signed(-figures.owes)}
@@ -114,7 +114,10 @@ export function StatementDocument({
               .map((line, index) => (
                 <tr key={`${line.line_type}-${index}`}>
                   <td data-testid="statement-line">{line.description || t("i_expenses")}</td>
-                  <td className="num" data-testid="statement-line-amount">
+                  <td
+                    className="num"
+                    data-testid={String(line.description ?? "").includes("押金") ? "statement-deposit" : "statement-line-amount"}
+                  >
                     {signedMoneyLabel(Number(line.amount), row.currency, locale)}
                   </td>
                 </tr>

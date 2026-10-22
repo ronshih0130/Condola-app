@@ -1,3 +1,5 @@
+import { demoModeEnabled } from "./demo";
+
 export function toMinor(major: number): number {
   if (!Number.isFinite(major)) return NaN;
   return Math.round(major * 100);
@@ -88,7 +90,11 @@ export function addCalendarMonths(iso: string, months: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+const qaClock = globalThis as { __qaBusinessToday?: string };
+
 export function taipeiToday(): string {
+  const frozen = qaClock.__qaBusinessToday;
+  if (demoModeEnabled() && typeof frozen === "string" && /^\d{4}-\d{2}-\d{2}$/.test(frozen)) return frozen;
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
 }
 

@@ -4,7 +4,7 @@ import { makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { StatementDocument } from "@/components/statement-document";
 import { PageHeader } from "@/components/ui";
-import { actionRecordPayout } from "@/server/actions";
+import { actionRecordPayout, actionStatement } from "@/server/actions";
 import { moneyLabel, signedMoneyLabel } from "@/server/format";
 import { can } from "@/server/perms";
 import { statementDetail } from "@/server/queries";
@@ -30,13 +30,23 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
         title={<span className="stmt-title">{t("i_stmt_doc_title", { owner: row.owner_name, period })}</span>}
         crumb={<Link href="/m/statements">{t("i_nav_stmt")}</Link>}
         actions={
-          <PdfDownloadButton
-            href={`/api/pdf/statements/${id}`}
-            label={t("s_874a842")}
-            failed={t("pdf_failed")}
-            fontFailed={t("pdf_font_missing")}
-            testId="download-statement-pdf"
-          />
+          <>
+            {canGenerate ? (
+              <form action={actionStatement}>
+                <input type="hidden" name="ownerContactId" value={row.owner_id} />
+                <input type="hidden" name="month" value={row.period_start.slice(0, 7)} />
+                <input type="hidden" name="regenerate" value="1" />
+                <button className="btn" type="submit">{t("i_stmt_regen")}</button>
+              </form>
+            ) : null}
+            <PdfDownloadButton
+              href={`/api/pdf/statements/${id}`}
+              label={t("s_874a842")}
+              failed={t("pdf_failed")}
+              fontFailed={t("pdf_font_missing")}
+              testId="download-statement-pdf"
+            />
+          </>
         }
       />
       {row.changed ? (
@@ -44,6 +54,12 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
           <span className="chip warn">{t("i_stmt_changed")}</span> {t("i_pay_stmt_changed_note")}
         </p>
       ) : null}
+      <p className="small muted" data-testid="statement-version">{detail.history.length}</p>
+      {detail.recipients.map((item) => (
+        <p key={item.payee} data-testid="statement-recipient">
+          {item.payee === "firm" ? t("i_stmt_payee_firm") : t("i_stmt_payee_owner")}
+        </p>
+      ))}
       <StatementDocument
         t={t}
         locale={session.locale}

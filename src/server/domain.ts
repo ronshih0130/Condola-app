@@ -2041,7 +2041,7 @@ export async function recordRentPayment(
 }
 
 export async function confirmPayment(session: Session, paymentId: string) {
-  assertStaff(session, ["admin", "manager", "accountant"]);
+  assertPerm(session, "pay.reverse");
   const leaseId = await tx(session.userId, async (client) => {
     const payment = await maybe<{
       id: string;
@@ -2075,7 +2075,7 @@ export async function confirmPayment(session: Session, paymentId: string) {
 }
 
 export async function rejectPayment(session: Session, paymentId: string, reason: string) {
-  assertStaff(session, ["admin", "manager", "accountant"]);
+  assertPerm(session, "pay.reverse");
   if (!reason.trim()) throw new FlowError("errors.required");
   await tx(session.userId, async (client) => {
     const updated = await client.query(

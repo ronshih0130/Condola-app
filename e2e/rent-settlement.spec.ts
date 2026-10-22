@@ -29,7 +29,7 @@ test("manager records a payment, a duplicate warns, and an accountant reverses i
   await expect(list.getByText("已登記").first()).toBeVisible();
   await expect(list.getByText("尚未繳").first()).toBeVisible();
   await expect(list.getByText("NT$8,000").first()).toBeVisible();
-  await expect(page.getByTestId("reverse-disabled").first()).toBeVisible();
+  await expect(page.getByTestId("reverse-payment").first()).toBeDisabled();
 
   await page.getByTestId("register-rent").click();
   await chooseWang();

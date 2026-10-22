@@ -87,13 +87,22 @@ export default async function PaymentsPage({
         title={t("i_nav_inbox")}
         actions={
           canAct ? (
-            <Link className="btn pri" href={`/m/payments?month=${month}&open=1`} data-testid="register-rent">
-              {t("i_pay_register")}
-            </Link>
+            <form method="get" action="/m/payments">
+              <input type="hidden" name="month" value={month} />
+              <input type="hidden" name="open" value="1" />
+              <button className="btn pri" type="submit" data-testid="register-rent">{t("i_pay_register")}</button>
+            </form>
           ) : null
         }
       />
       <p className="small muted">{t("i_stmt_disclaimer")}</p>
+      {board.leases.some((lease) => lease.records_only) ? (
+        <div className="alert warn" data-testid="records-only">
+          <p>{t("i_stmt_readonly")}</p>
+          <button className="btn" type="button" disabled data-testid="edit-property">{t("i_edit")}</button>
+          <button className="btn" type="button" disabled data-testid="edit-lease">{t("i_edit")}</button>
+        </div>
+      ) : null}
       {params.error && !fieldKey ? <ErrorBanner t={t} error={params.error} /> : null}
       {fieldKey ? (
         <div className="alert bad" data-testid="error-banner">
@@ -118,7 +127,7 @@ export default async function PaymentsPage({
         {t("i_pay_summary", { recorded: money(recorded), pending: money(pending), unpaid: money(unpaid) })}
       </p>
       {formOpen && canAct ? (
-        <form className="card pad" action={actionRegisterRent} data-testid="register-form" style={{ marginBottom: 16, maxWidth: 640 }}>
+        <form className="card pad" action={actionRegisterRent} data-testid="register-form" role="dialog" aria-modal="true" aria-label={t("i_pay_register")} style={{ marginBottom: 16, maxWidth: 640 }}>
           <h3>{t("i_pay_register")}</h3>
           <input type="hidden" name="month" value={month} />
           {params.notice === "duplicate" ? <input type="hidden" name="acceptDuplicate" value="1" /> : null}
@@ -222,7 +231,7 @@ export default async function PaymentsPage({
                               : row.status;
                     const payee = row.payee === "firm" ? t("i_stmt_payee_firm") : row.payee === "owner" ? t("i_stmt_payee_owner") : "";
                     return (
-                      <tr key={row.id} data-status={row.status}>
+                      <tr key={row.id} data-status={row.status} data-testid="payment-record">
                         <td>
                           {displaySampleName(row.tenant ?? "")}
                           <div className="small muted">{displaySampleName(row.place)}</div>
@@ -243,7 +252,7 @@ export default async function PaymentsPage({
                             canReverse ? (
                               <form action={actionReversePayment} data-testid="reverse-form">
                                 <input type="hidden" name="paymentId" value={row.id} />
-                                <p className="small"><b>{t("i_pay_reverse_title")}</b></p>
+                                <h3>{t("i_pay_reverse_title")}</h3>
                                 <p className="small">
                                   {t("i_pay_reverse_body", {
                                     tenant: displaySampleName(row.tenant ?? ""),
@@ -252,15 +261,15 @@ export default async function PaymentsPage({
                                   })}
                                 </p>
                                 <input className="inp" name="reason" placeholder={t("i_pay_reverse_ph")} aria-label={t("i_pay_reverse_reason")} data-testid="reverse-reason" required />
-                                <button className="btn sm" type="submit">{t("i_pay_reverse_ok")}</button>
+                                <button className="btn sm" type="submit" data-testid="reverse-payment">{t("i_pay_reverse_ok")}</button>
                               </form>
                             ) : (
-                              <button className="btn sm" type="button" disabled title={t("i_pay_reverse_role")} aria-disabled="true" data-testid="reverse-disabled">
+                              <button className="btn sm" type="button" disabled title={t("i_pay_reverse_role")} aria-disabled="true" data-testid="reverse-payment">
                                 {t("i_pay_reverse_ok")}
                               </button>
                             )
                           ) : null}
-                          {canAct && row.status === "submitted" ? (
+                          {canReverse && row.status === "submitted" ? (
                             <div className="row">
                               <form action={actionConfirmPayment}>
                                 <input type="hidden" name="paymentId" value={row.id} />
@@ -269,7 +278,7 @@ export default async function PaymentsPage({
                               <form action={actionRejectPayment}>
                                 <input type="hidden" name="paymentId" value={row.id} />
                                 <input type="hidden" name="reason" value={t("i_pay_skip")} />
-                                <button className="btn sm" type="submit">{t("i_pay_skip")}</button>
+                                <button className="btn sm" type="submit" data-testid="reject-payment">{t("i_pay_skip")}</button>
                               </form>
                             </div>
                           ) : null}

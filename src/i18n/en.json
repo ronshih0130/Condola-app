@@ -2057,5 +2057,22 @@
  "i_stmt_disclaimer": "Condola only provides management software and does not handle any funds.",
  "i_due_rent": "Rent is due on day {day} of each month",
  "i_partial_note": "Recorded {paid}, applied first to the {period} bill (oldest first)",
- "i_partial_left": "Still unpaid {left}"
+ "i_partial_left": "Still unpaid {left}",
+ "i_tenant_total": "Total due NT${amount}",
+ "i_move_out_formula": "NT${rent} ÷ 30 × {days} days = NT${amount}",
+ "i_move_out_override": "Edited manually ({actor} · {timestamp})",
+ "i_move_out_amount_change": "Original NT${original}, changed to NT${updated}",
+ "i_deposit_shortfall": "Deposit does not cover the deductions",
+ "i_deposit_shortfall_due": "Deductions exceed the deposit. The tenant still needs to pay NT${amount}.",
+ "i_period_rent": "{period} rent",
+ "i_line_preview_privacy": "LINE messages contain only a reminder and a link. Names, amounts, and addresses stay behind login.",
+ "i_line_rent_due": "A rent payment is coming due. Sign in to see it.",
+ "i_line_rent_unpaid": "A rent payment is not recorded as paid. Sign in to see it.",
+ "i_line_lease_expiry": "A lease is coming to an end. Sign in to arrange the next step.",
+ "i_line_repair": "A repair has an update. Sign in to see it.",
+ "i_line_statement": "This month's statement is ready. Sign in to see it.",
+ "i_price_trial_months": "First {count} months free",
+ "i_price_trial_days": "First {count} days free",
+ "i_price_annual_badge": "Annual · 1 month free",
+ "i_price_record_only": "This page only records the plan you select. It does not take payment."
 }

@@ -2057,5 +2057,22 @@
  "i_stmt_disclaimer": "Condola 只提供管理軟體，不經手任何款項。",
  "i_due_rent": "每月 {day} 日繳租",
  "i_partial_note": "已登記 {paid}，先抵 {period} 的帳單（最舊的先抵）",
- "i_partial_left": "尚未繳 {left}"
+ "i_partial_left": "尚未繳 {left}",
+ "i_tenant_total": "應繳合計 NT${amount}",
+ "i_move_out_formula": "NT${rent} ÷ 30 × {days} 天 ＝ NT${amount}",
+ "i_move_out_override": "已手動修改（{actor}・{timestamp}）",
+ "i_move_out_amount_change": "原金額 NT${original}，已改為 NT${updated}",
+ "i_deposit_shortfall": "押金不足扣抵",
+ "i_deposit_shortfall_due": "扣款超過押金，租客還需補付 NT${amount}",
+ "i_period_rent": "{period} 租金",
+ "i_line_preview_privacy": "LINE 訊息只有提醒文字和連結，不會出現租客姓名、金額或地址。詳細內容要登入後才看得到。",
+ "i_line_rent_due": "有一筆租金快到期了，請登入查看。",
+ "i_line_rent_unpaid": "有一筆租金還沒登記為已繳，請登入查看。",
+ "i_line_lease_expiry": "有租約快到期了，請登入安排續約或退租。",
+ "i_line_repair": "有修繕進度更新，請登入查看。",
+ "i_line_statement": "本月結算表已產生，請登入查看。",
+ "i_price_trial_months": "前 {count} 個月免費",
+ "i_price_trial_days": "前 {count} 天免費",
+ "i_price_annual_badge": "年繳・享 1 個月免費",
+ "i_price_record_only": "本頁只記錄你選的方案，不會進行付款。"
 }
