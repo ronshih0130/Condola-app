@@ -24,6 +24,11 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
             <a className="btn" href="/api/export" data-testid="export-properties">
               {t("s_de922fa")}
             </a>
+            {session.role === "admin" || session.role === "manager" ? (
+              <Link className="btn" href="/m/import" data-testid="import-link">
+                {t("im_title")}
+              </Link>
+            ) : null}
             <Link className="btn pri" href="/m/properties/new">
               + {t("s_aed91da")}
             </Link>

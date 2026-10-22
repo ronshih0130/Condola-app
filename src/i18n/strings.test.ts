@@ -85,16 +85,6 @@ function legacyImportAliases() {
     .filter((line) => line && !line.startsWith("#"));
 }
 
-function hasAlias(source: string, alias: string, aliases: string[]) {
-  const decoded = decodeUnicodeEscapes(source);
-  if (alias !== "房東") return decoded.includes(alias);
-  let stripped = decoded;
-  for (const other of aliases) {
-    if (other !== "房東" && other.includes("房東")) stripped = stripped.split(other).join("");
-  }
-  return stripped.includes("房東");
-}
-
 test("shared catalog keys match the vendored prototype", () => {
   for (const locale of locales) {
     const app = catalog("app", locale);
@@ -138,7 +128,7 @@ test("房東 is absent outside import-header aliases", () => {
   assert.deepEqual(hits, []);
 });
 
-test("legacy 房東 import headers stay aliases when the owner importer exists", () => {
+test("legacy 房東 import headers stay aliases when the owner importer exists", async () => {
   const aliases = legacyImportAliases();
   for (const required of ["房東姓名", "房東", "房東email", "房東信箱"]) {
     assert.ok(aliases.includes(required), `fixture note is missing ${required}`);
@@ -154,12 +144,11 @@ test("legacy 房東 import headers stay aliases when the owner importer exists",
     return;
   }
 
-  const source = read(ownerImport);
-  for (const alias of aliases) {
-    assert.equal(hasAlias(source, alias, aliases), true, `owner-import.ts must accept ${alias}`);
-  }
-  const decoded = decodeUnicodeEscapes(source);
-  let leftover = decoded;
-  for (const alias of [...aliases].sort((a, b) => b.length - a.length)) leftover = leftover.split(alias).join("");
-  assert.equal(leftover.includes("房東"), false, "owner-import.ts has 房東 outside the legacy aliases");
+  const source = decodeUnicodeEscapes(read(ownerImport));
+  assert.equal(source.includes("房東"), false, "owner-import.ts must not spell the legacy word");
+  const { LEGACY_OWNER_ALIASES, matchColumns } = await import("../server/owner-import");
+  assert.deepEqual([...LEGACY_OWNER_ALIASES], aliases);
+  const mapped = matchColumns(["房東姓名", "房東email", "房東信箱", "房東 email", "房東"]);
+  assert.equal(mapped.ownerName, 0);
+  assert.equal(mapped.ownerEmail, 1);
 });

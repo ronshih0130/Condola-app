@@ -1,4 +1,5 @@
 import type { Client } from "pg";
+import { BILLABLE_ACTIVE_LEASE } from "./billing";
 import { query, withClient } from "./db";
 import { FlowError } from "./errors";
 import { goLiveLocked } from "./platform";
@@ -102,7 +103,7 @@ export async function countActiveUnits(orgId: string) {
   const row = await query<{ n: number }>(
     `SELECT count(DISTINCT coalesce(target_room_id::text, target_unit_id::text))::int AS n
        FROM leases
-      WHERE org_id = $1 AND status = 'active' AND signed_at IS NOT NULL
+      WHERE org_id = $1 AND ${BILLABLE_ACTIVE_LEASE}
         AND coalesce(target_room_id, target_unit_id) IS NOT NULL`,
     [orgId],
   );

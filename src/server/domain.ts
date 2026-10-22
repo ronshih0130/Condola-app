@@ -20,6 +20,7 @@ import { claimIdempotentSubmit, idempotencyLockKey, stableStringify } from "@/id
 import { typedAddressDisplay } from "@/property-address";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
+import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
@@ -152,22 +153,24 @@ async function insertPropertyUnit(
     rentalMode: "whole_unit" | "by_room";
     areaUnit: string;
     baseRentMinor: number | null;
+    importAddressKey: string;
     rooms: { label: string; roomType: string; baseRentMajor: number }[];
   },
 ) {
   const door = input.door.trim();
+  const addressKeyValue = input.importAddressKey || null;
   const unit = door
     ? await one<{ id: string }>(
         client,
-        `INSERT INTO units (org_id, property_id, label, floor, door_supplement, rental_mode, area_unit, base_rent_minor)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-        [input.orgId, input.propertyId, input.label, input.floor, door, input.rentalMode, input.areaUnit, input.baseRentMinor],
+        `INSERT INTO units (org_id, property_id, label, floor, door_supplement, rental_mode, area_unit, base_rent_minor, import_address_key)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [input.orgId, input.propertyId, input.label, input.floor, door, input.rentalMode, input.areaUnit, input.baseRentMinor, addressKeyValue],
       )
     : await one<{ id: string }>(
         client,
-        `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit, base_rent_minor)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-        [input.orgId, input.propertyId, input.label, input.floor, input.rentalMode, input.areaUnit, input.baseRentMinor],
+        `INSERT INTO units (org_id, property_id, label, floor, rental_mode, area_unit, base_rent_minor, import_address_key)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [input.orgId, input.propertyId, input.label, input.floor, input.rentalMode, input.areaUnit, input.baseRentMinor, addressKeyValue],
       );
   const roomIds: string[] = [];
   for (const room of input.rooms) {
@@ -357,13 +360,14 @@ export async function createProperty(session: Session, input: PropertyInput) {
         : [address.street, address.city, address.district].filter(Boolean).join(", ");
     const property = await one<{ id: string }>(
       client,
-      `INSERT INTO properties (org_id, name, address, address_display, country_code, jurisdiction_id, currency, timezone, default_rental_mode)
-       VALUES ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      `INSERT INTO properties (org_id, name, address, address_display, address_key, country_code, jurisdiction_id, currency, timezone, default_rental_mode)
+       VALUES ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
       [
         session.orgId,
         input.name.trim(),
         JSON.stringify(address),
         display,
+        addressKey(display),
         country,
         jurisdiction.id,
         input.currency,
@@ -428,6 +432,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
 
     const areaUnit = country === "TW" ? "ping" : "sqft";
     const usedLabels = new Set<string>();
+    const importAddressKey = addressKey(display);
     const roomIds: string[] = [];
     const first = await insertPropertyUnit(client, {
       orgId: session.orgId,
@@ -438,6 +443,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
       rentalMode: input.rentalMode,
       areaUnit,
       baseRentMinor: wholeUnit ? toMinor(rooms[0]?.baseRentMajor || 0) : null,
+      importAddressKey,
       rooms: wholeUnit ? [] : rooms,
     });
     roomIds.push(...first.roomIds);
@@ -457,6 +463,7 @@ export async function createProperty(session: Session, input: PropertyInput) {
         rentalMode: "by_room",
         areaUnit,
         baseRentMinor: null,
+        importAddressKey,
         rooms: extraRooms,
       });
       roomIds.push(...inserted.roomIds);
@@ -1319,12 +1326,13 @@ export async function signLease(session: Session, input: { leaseId: string; sign
   if (!input.signedName.trim()) throw new FlowError("errors.required");
 
   const result = await svc(session.userId, async (client) => {
-    const lease = await maybe<{ id: string; document_sha256: string; org_id: string }>(
+    const lease = await maybe<{ id: string; document_sha256: string; org_id: string; esign: string }>(
       client,
-      `SELECT id, document_sha256, org_id FROM leases WHERE id = $1`,
+      `SELECT id, document_sha256, org_id, esign_status::text AS esign FROM leases WHERE id = $1`,
       [input.leaseId],
     );
     if (!lease || lease.org_id !== session.orgId) throw new FlowError("errors.notFound");
+    if (lease.esign === "imported") throw new FlowError("errors.forbidden");
     const contact = await maybe<{ id: string }>(
       client,
       `SELECT c.id FROM lease_parties lp JOIN contacts c ON c.id = lp.contact_id
@@ -1395,12 +1403,13 @@ export async function uploadSignedLeasePdf(
   const fileName = signedPdfName(file.fileName);
   const hash = createHash("sha256").update(file.bytes).digest("hex");
   const result = await tx(session.userId, async (client) => {
-    const lease = await maybe<{ id: string; status: string }>(
+    const lease = await maybe<{ id: string; status: string; esign: string }>(
       client,
-      `SELECT id::text, status::text FROM leases WHERE id = $1 AND org_id = $2`,
+      `SELECT id::text, status::text, esign_status::text AS esign FROM leases WHERE id = $1 AND org_id = $2`,
       [leaseId, session.orgId],
     );
     if (!lease) throw new FlowError("errors.notFound");
+    const imported = lease.esign === "imported";
     const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
     const stored = await one<{ id: string }>(
       client,
@@ -1413,26 +1422,33 @@ export async function uploadSignedLeasePdf(
        VALUES ($1,$2,$3,'lease-documents-private',$4,$5)`,
       [session.orgId, leaseId, stored.id, path, Buffer.from(file.bytes)],
     );
-    await client.query(
-      `UPDATE lease_signatures
-          SET status = 'signed', signed_name = coalesce(signed_name, 'paper'), document_sha256 = $2,
-              consent_text_key = 'lease.paper', signed_at = coalesce(signed_at, now())
-        WHERE lease_id = $1 AND status <> 'signed'`,
-      [leaseId, hash],
-    );
-    await client.query(
-      `INSERT INTO lease_signature_events (org_id, signature_id, event, actor_user_id, document_sha256, details)
-       SELECT org_id, id, 'signed', $2, $3, '{"medium":"paper"}'::jsonb
-         FROM lease_signatures
-        WHERE lease_id = $1 AND document_sha256 = $3 AND signed_at IS NOT NULL`,
-      [leaseId, session.userId, hash],
-    );
-    const activated = lease.status === "draft" || lease.status === "pending_signature";
+    if (!imported) {
+      await client.query(
+        `UPDATE lease_signatures
+            SET status = 'signed', signed_name = coalesce(signed_name, 'paper'), document_sha256 = $2,
+                consent_text_key = 'lease.paper', signed_at = coalesce(signed_at, now())
+          WHERE lease_id = $1 AND status <> 'signed'`,
+        [leaseId, hash],
+      );
+      await client.query(
+        `INSERT INTO lease_signature_events (org_id, signature_id, event, actor_user_id, document_sha256, details)
+         SELECT org_id, id, 'signed', $2, $3, '{"medium":"paper"}'::jsonb
+           FROM lease_signatures
+          WHERE lease_id = $1 AND document_sha256 = $3 AND signed_at IS NOT NULL`,
+        [leaseId, session.userId, hash],
+      );
+    }
+    const activated = !imported && (lease.status === "draft" || lease.status === "pending_signature");
     await client.query(
       `UPDATE leases
-          SET document_file_id = $2, document_sha256 = $3, esign_status = 'fully_signed',
-              status = CASE WHEN status IN ('draft','pending_signature') THEN 'active'::lease_status ELSE status END,
-              signed_at = coalesce(signed_at, now())
+          SET document_file_id = $2, document_sha256 = $3,
+              esign_status = CASE WHEN esign_status = 'imported' THEN esign_status ELSE 'fully_signed'::esign_status END,
+              status = CASE
+                WHEN esign_status = 'imported' THEN status
+                WHEN status IN ('draft','pending_signature') THEN 'active'::lease_status
+                ELSE status
+              END,
+              signed_at = CASE WHEN esign_status = 'imported' THEN signed_at ELSE coalesce(signed_at, now()) END
         WHERE id = $1 AND org_id = $4`,
       [leaseId, stored.id, hash, session.orgId],
     );
@@ -1822,10 +1838,9 @@ export async function rejectPayment(session: Session, paymentId: string, reason:
   });
 }
 
-// TODO(owner-import): Property and owner spreadsheet import is not built yet.
-// Bank CSV below is the only importer. When the owner column-header map is added,
-// put it in src/server/owner-import.ts and keep every legacy alias listed in
-// design/strings/import-column-headers.txt. Those aliases are not UI copy.
+// Property and owner spreadsheets are parsed in the browser and committed by
+// src/server/import-batch.ts. Column aliases, including the legacy headers, live in
+// src/server/owner-import.ts. Bank CSV below is a separate importer.
 export function parseCsv(text: string) {
   const lines = text.trim().split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) return [];

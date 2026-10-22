@@ -114,6 +114,11 @@ export default async function LeasePage({
                   <td>{t("i_status")}</td>
                   <td>
                     <span className={`chip ${statusClass(lease.status)}`}>{t(statusKey(lease.status))}</span>
+                    {lease.esign === "imported" ? (
+                      <span className="chip" data-testid="lease-imported" style={{ marginLeft: 8 }}>
+                        {t("i_esign_imported")}
+                      </span>
+                    ) : null}
                   </td>
                 </tr>
               </tbody>
@@ -220,25 +225,31 @@ export default async function LeasePage({
       {tab === "sign" ? (
         <div className="grid2">
           <div className="card pad">
-            <h3>{t("i_tenant_pending")}</h3>
-            <ul className="tl">
-              <li className={tenantSig?.status === "signed" ? "on" : ""}>
-                <b>{tenantSig?.status === "signed" ? t("i_tenant_signed") : t("i_tenant_pending")}</b>
-                <div className="small muted">{tenantSig?.signed_at ? t("i_signed_at", { time: tenantSig.signed_at }) : t("i_sign_pending")}</div>
-              </li>
-              <li className={managerSig?.status === "signed" ? "on" : ""}>
-                <b>{managerSig?.status === "signed" ? t("i_fully_signed") : t("i_await_manager")}</b>
-                <div className="small muted">{managerSig?.signed_at ? t("i_signed_at", { time: managerSig.signed_at }) : t("i_sign_pending")}</div>
-              </li>
-            </ul>
-            {tenantSig?.status !== "signed" ? (
-              <form action={actionSimulateSign}>
-                <input type="hidden" name="leaseId" value={id} />
-                <button className="btn pri lg block" type="submit" data-testid="simulate-tenant-sign">
-                  {t("s_bbba58a")}
-                </button>
-              </form>
-            ) : null}
+            {lease.esign === "imported" ? (
+              <p data-testid="lease-imported-sign">{t("i_esign_imported")}</p>
+            ) : (
+              <>
+                <h3>{t("i_tenant_pending")}</h3>
+                <ul className="tl">
+                  <li className={tenantSig?.status === "signed" ? "on" : ""}>
+                    <b>{tenantSig?.status === "signed" ? t("i_tenant_signed") : t("i_tenant_pending")}</b>
+                    <div className="small muted">{tenantSig?.signed_at ? t("i_signed_at", { time: tenantSig.signed_at }) : t("i_sign_pending")}</div>
+                  </li>
+                  <li className={managerSig?.status === "signed" ? "on" : ""}>
+                    <b>{managerSig?.status === "signed" ? t("i_fully_signed") : t("i_await_manager")}</b>
+                    <div className="small muted">{managerSig?.signed_at ? t("i_signed_at", { time: managerSig.signed_at }) : t("i_sign_pending")}</div>
+                  </li>
+                </ul>
+                {tenantSig?.status !== "signed" ? (
+                  <form action={actionSimulateSign}>
+                    <input type="hidden" name="leaseId" value={id} />
+                    <button className="btn pri lg block" type="submit" data-testid="simulate-tenant-sign">
+                      {t("s_bbba58a")}
+                    </button>
+                  </form>
+                ) : null}
+              </>
+            )}
             <div style={{ marginTop: 16 }} data-testid="paper-sign">
               <h3>{t("lease_paper_upload")}</h3>
               <p className="small muted">{t("lease_paper_hint")}</p>
@@ -259,6 +270,7 @@ export default async function LeasePage({
               ) : null}
             </div>
           </div>
+          {lease.esign === "imported" ? null : (
           <div className="card pad">
             <h3>{t("i_manager_sign")}</h3>
             {managerSig?.status === "signed" ? (
@@ -281,6 +293,7 @@ export default async function LeasePage({
               </form>
             )}
           </div>
+          )}
         </div>
       ) : null}
       {tab === "msg" ? (

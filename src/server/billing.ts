@@ -4,6 +4,12 @@ export const LIST_STANDARD = 30;
 export const LIST_PRO = 40;
 export const FREE_UNITS = 4;
 
+/**
+ * A unit counts for billing when its lease is active and either executed
+ * (signed_at) or imported. Imported paper leases stay active with signed_at NULL.
+ */
+export const BILLABLE_ACTIVE_LEASE = "status = 'active' AND (signed_at IS NOT NULL OR esign_status = 'imported')";
+
 export type PaidTier = "standard" | "pro";
 export type PriceSource = "override" | "code" | "list";
 

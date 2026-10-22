@@ -22,6 +22,8 @@ test("a deposit over two months of rent needs a typed reason", () => {
   assert.equal(leaseTermsEditable({ status: "pending_signature", esign: "sent", signed: false }), true);
   assert.equal(leaseTermsEditable({ status: "active", esign: "fully_signed", signed: true }), false);
   assert.equal(leaseTermsEditable({ status: "pending_signature", esign: "partially_signed", signed: false }), false);
+  assert.equal(leaseTermsEditable({ status: "draft", esign: "imported", signed: false }), false);
+  assert.equal(leaseTermsEditable({ status: "active", esign: "imported", signed: false }), false);
   assert.equal(depositWarnFlag(3, "warn"), false);
   assert.equal(depositWarnFlag(1.5, "warn"), true);
   assert.equal(depositWarnFlag(2, "pass"), false);
