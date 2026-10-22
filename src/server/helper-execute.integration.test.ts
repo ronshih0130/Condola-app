@@ -1,27 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Client } from "pg";
 import { withClient } from "./db";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 
-function asPg(error: unknown): { code?: string; message: string } {
-  assert.ok(error instanceof Error);
-  return error as Error & { code?: string };
-}
-
-async function expectKeyDenied(client: Client, sql: string, params: unknown[]) {
-  await client.query("SAVEPOINT expect_key");
-  await client.query("REVOKE EXECUTE ON FUNCTION public.condola_property_address_key(text) FROM authenticated");
-  await client.query("SET LOCAL ROLE authenticated");
-  try {
-    await client.query(sql, params);
-    assert.fail("expected permission denied for condola_property_address_key");
-  } catch (error) {
-    const pg = asPg(error);
-    assert.equal(pg.code, "42501");
-    assert.match(pg.message, /permission denied for function condola_property_address_key/);
-    await client.query("ROLLBACK TO SAVEPOINT expect_key");
-  }
+/** Same normalization as condola_property_address_key: NFKC, lower case, no whitespace. */
+function addressKey(display: string) {
+  return display.normalize("NFKC").toLowerCase().replace(/\s+/g, "");
 }
 
 test("org A cannot read org B through effective_rule or platform_max_id_retention_days", async () => {
@@ -95,59 +79,91 @@ test("org A cannot read org B through effective_rule or platform_max_id_retentio
   });
 });
 
-test("authenticated address writes need EXECUTE on condola_property_address_key", async () => {
+test("condola_property_address_key is an invoker pure function and authenticated address writes update keys", async () => {
   await withClient(async (client) => {
     await client.query("BEGIN");
     try {
-      const place = await client.query<{ property_id: string; unit_id: string }>(
-        `SELECT p.id::text AS property_id, u.id::text AS unit_id
-           FROM properties p
-           JOIN units u ON u.property_id = p.id AND u.org_id = p.org_id
-          WHERE p.org_id = $1 AND p.address_display IS NOT NULL
-          LIMIT 1`,
-        [ORG_ID],
+      const def = await client.query<{
+        prosecdef: boolean;
+        provolatile: string;
+        prosrc: string;
+        proconfig: string[] | null;
+        table_refs: string;
+        granted: boolean;
+      }>(
+        `SELECT p.prosecdef,
+                p.provolatile,
+                p.prosrc,
+                p.proconfig,
+                (SELECT count(*)::text
+                   FROM pg_depend d
+                  WHERE d.objid = p.oid
+                    AND d.classid = 'pg_proc'::regclass
+                    AND d.refclassid = 'pg_class'::regclass) AS table_refs,
+                has_function_privilege('authenticated', p.oid, 'EXECUTE') AS granted
+           FROM pg_proc p
+           JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname = 'public'
+            AND p.proname = 'condola_property_address_key'`,
       );
-      const row = place.rows[0];
-      assert.ok(row, "seeded property and unit");
+      const fn = def.rows[0];
+      assert.ok(fn);
+      assert.equal(fn.prosecdef, false);
+      assert.equal(fn.provolatile, "i");
+      assert.equal(fn.table_refs, "0");
+      assert.doesNotMatch(fn.prosrc, /\b(from|join|insert|update|delete)\b/i);
+      assert.ok(fn.proconfig?.some((item) => item.replace(/\s+/g, "") === "search_path=pg_catalog"));
+      assert.equal(fn.granted, true);
+
+      const jurisdiction = await client.query<{ id: string }>(
+        `SELECT id::text FROM jurisdictions WHERE code = 'TW'`,
+      );
+      const jurisdictionId = jurisdiction.rows[0]?.id;
+      assert.ok(jurisdictionId);
 
       await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.admin]);
       await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
       await client.query("SET LOCAL ROLE authenticated");
 
-      const property = await client.query<{ address_key: string }>(
-        `UPDATE properties
-            SET address_display = 'OrgA Key Probe'
-          WHERE id = $1
-          RETURNING address_key`,
-        [row.property_id],
+      const stamp = `Key Probe ${Date.now().toString(36)}`;
+      const first = `${stamp} Lane 1`;
+      const second = `${stamp} Lane 2`;
+      const third = `${stamp} Lane 3`;
+      const created = await client.query<{ id: string; address_key: string }>(
+        `INSERT INTO properties (
+           org_id, name, address, address_display, country_code, jurisdiction_id, currency, timezone
+         ) VALUES ($1, $2, '{}'::jsonb, $3, 'TW', $4, 'TWD', 'Asia/Taipei')
+         RETURNING id::text, address_key`,
+        [ORG_ID, `addr ${stamp}`, first, jurisdictionId],
       );
-      assert.equal(property.rows[0].address_key, "orgakeyprobe");
+      const propertyId = created.rows[0].id;
+      assert.equal(created.rows[0].address_key, addressKey(first));
 
-      const unit = await client.query<{ import_address_key: string }>(
-        `UPDATE units
-            SET import_address_key = NULL
-          WHERE id = $1
-          RETURNING import_address_key`,
-        [row.unit_id],
+      const updated = await client.query<{ address_key: string }>(
+        `UPDATE properties SET address_display = $2 WHERE id = $1 RETURNING address_key`,
+        [propertyId, second],
       );
-      assert.equal(unit.rows[0].import_address_key, "orgakeyprobe");
+      assert.equal(updated.rows[0].address_key, addressKey(second));
 
-      await client.query("RESET ROLE");
-      await expectKeyDenied(
-        client,
-        `UPDATE properties SET address_display = 'OrgA Key Probe 2' WHERE id = $1`,
-        [row.property_id],
+      const unit = await client.query<{ id: string; import_address_key: string }>(
+        `INSERT INTO units (org_id, property_id, label, rental_mode)
+         VALUES ($1, $2, $3, 'whole_unit')
+         RETURNING id::text, import_address_key`,
+        [ORG_ID, propertyId, `U ${stamp}`],
       );
-      await expectKeyDenied(
-        client,
-        `UPDATE units SET import_address_key = NULL WHERE id = $1`,
-        [row.unit_id],
-      );
+      assert.equal(unit.rows[0].import_address_key, addressKey(second));
 
-      const still = await client.query<{ granted: boolean }>(
-        `SELECT has_function_privilege('authenticated', 'public.condola_property_address_key(text)', 'EXECUTE') AS granted`,
+      await client.query(`UPDATE properties SET address_display = $2 WHERE id = $1`, [propertyId, third]);
+      const unitUpdated = await client.query<{ import_address_key: string }>(
+        `UPDATE units SET import_address_key = NULL WHERE id = $1 RETURNING import_address_key`,
+        [unit.rows[0].id],
       );
-      assert.equal(still.rows[0].granted, true);
+      assert.equal(unitUpdated.rows[0].import_address_key, addressKey(third));
+      const propertyKey = await client.query<{ address_key: string }>(
+        `SELECT address_key FROM properties WHERE id = $1`,
+        [propertyId],
+      );
+      assert.equal(propertyKey.rows[0].address_key, addressKey(third));
     } finally {
       await client.query("ROLLBACK");
     }

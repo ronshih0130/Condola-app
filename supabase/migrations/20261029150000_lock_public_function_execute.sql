@@ -34,13 +34,14 @@
 -- src, and no RLS policy or view, calls it. Firing the trigger does not
 -- check EXECUTE, so PUBLIC, anon, and authenticated lose it.
 --
--- condola_property_address_key stays executable by authenticated.
--- condola_sync_unit_address_keys is SECURITY DEFINER and does not call it;
--- it copies NEW.address_key. The callers are the invoker BEFORE triggers
--- condola_set_property_address_key and condola_set_unit_import_address_key
--- (20261026130000). Revoking authenticated makes those writes fail with
--- permission denied for function. 20261026130000 already revokes PUBLIC and
--- anon on the key function.
+-- condola_property_address_key stays executable by authenticated. It is not
+-- SECURITY DEFINER. It is IMMUTABLE: the body is an expression on its
+-- argument and reads no tables. 20261026130000 sets search_path = pg_catalog;
+-- the block below sets that path again when the function exists. The invoker
+-- BEFORE triggers condola_set_property_address_key and
+-- condola_set_unit_import_address_key call it as the session user.
+-- condola_sync_unit_address_keys is SECURITY DEFINER and only copies
+-- NEW.address_key. 20261026130000 already revokes PUBLIC and anon.
 
 DO $revoke$
 DECLARE
@@ -100,6 +101,18 @@ BEGIN
   END LOOP;
 END
 $helpers$;
+
+-- Fixed search_path. The bulk-import migration already sets pg_catalog.
+-- Repeat it so a copy created without a path cannot see another schema.
+DO $address_key$
+BEGIN
+  IF to_regprocedure('public.condola_property_address_key(text)') IS NULL THEN
+    RAISE NOTICE 'skip missing function public.condola_property_address_key(text)';
+    RETURN;
+  END IF;
+  EXECUTE 'ALTER FUNCTION public.condola_property_address_key(text) SET search_path = pg_catalog';
+END
+$address_key$;
 
 -- search_path on the functions that did not have one. The five SECURITY
 -- DEFINER trigger functions already set search_path and are left alone.
