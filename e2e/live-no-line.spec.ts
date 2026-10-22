@@ -66,6 +66,7 @@ test("live pages do not mention LINE except the support contact", async ({ page 
   await page.goto("/api/demo/locale?set=zh-TW&next=/t");
   await expect(page.getByTestId("liff-frame")).toBeVisible();
   await expectLiveSurface(page);
+  await expect(page.locator("body")).not.toContainText("@644odqoe");
   if (await page.getByTestId("lease-picker").count()) {
     await page.getByRole("button", { name: /松信/ }).click();
     await expect(page.getByTestId("lease-picker")).toHaveCount(0);
@@ -74,8 +75,18 @@ test("live pages do not mention LINE except the support contact", async ({ page 
   await page.goto("/t/messages");
   await expect(page.getByRole("heading", { name: "聯絡管理員" })).toBeVisible();
   await expectLiveSurface(page);
+  await expect(page.locator("body")).not.toContainText("@644odqoe");
 
   await page.goto("/t/lease");
   await expect(page.getByRole("heading", { name: "我的租約" })).toBeVisible();
   await expectLiveSurface(page);
+  await expect(page.locator("body")).not.toContainText("@644odqoe");
+
+  await page.goto("/t/pay");
+  await expect(page.getByRole("heading", { name: "繳租" })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("@644odqoe");
+
+  await page.goto("/t/repair");
+  await expect(page.getByRole("heading", { name: "報修" })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("@644odqoe");
 });

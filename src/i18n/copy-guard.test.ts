@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -207,6 +207,17 @@ test("tenant pages drop the LINE demo sentence and never say 示範, 測試模�
     const text = read(file);
     for (const word of banned) assert.equal(text.includes(word), false, `${file} ${word}`);
     assert.doesNotMatch(text, /i_line_stub|line-stub|showDemoLineCopy/);
+    assert.equal(text.includes("@644odqoe"), false, file);
+    assert.equal(text.includes("LINE_SUPPORT_CONTACT"), false, file);
+    for (const match of text.matchAll(/from\s+"(@\/[^"]+|\.\.?\/[^"]+)"/g)) {
+      const spec = match[1];
+      const base = spec.startsWith("@/") ? join(root, "src", spec.slice(2)) : join(dirname(file), spec);
+      const imported = [".tsx", ".ts", "/index.tsx", "/index.ts"].map((suffix) => base + suffix).find((path) => existsSync(path));
+      if (!imported) continue;
+      const source = read(imported);
+      assert.equal(source.includes("@644odqoe"), false, imported);
+      assert.equal(source.includes("LINE_SUPPORT_CONTACT"), false, imported);
+    }
     for (const match of text.matchAll(/\bt\(\s*"([^"]+)"/g)) keys.add(match[1]);
   }
   assert.ok(keys.has("i_rich_pay"));
@@ -216,6 +227,7 @@ test("tenant pages drop the LINE demo sentence and never say 示範, 測試模�
       const value = catalog[key];
       assert.equal(typeof value, "string", key);
       for (const word of banned) assert.equal(value.includes(word), false, `${key} ${word}`);
+      assert.equal(value.includes("@644odqoe"), false, key);
     }
   }
   for (const catalog of [zh, en]) {
