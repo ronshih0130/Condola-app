@@ -734,7 +734,7 @@ test("included electricity stays off the existing method check", async () => {
 });
 
 test("the bulk import migration applies a second time", async () => {
-  const sql = readFileSync(new URL("../../supabase/migrations/20261023120000_bulk_import.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20261026130000_bulk_import.sql", import.meta.url), "utf8");
   await withClient(async (client) => {
     await client.query(sql);
   });

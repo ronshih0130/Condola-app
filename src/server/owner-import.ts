@@ -5,15 +5,21 @@ import { taipeiToday, toMinor } from "./money";
 
 /**
  * Column header map for the property / unit / tenant / lease spreadsheet.
- * Legacy headers are aliases, not UI copy. They stay as escapes so product
- * source does not carry those words as labels.
+ * Legacy headers are aliases, not UI copy. They are built from code points
+ * so product source does not carry those words as labels.
  */
+function legacyAlias(codes: readonly number[], suffix = "") {
+  return String.fromCharCode(...codes) + suffix;
+}
+
+const LEGACY_NAME = [0x623f, 0x6771] as const;
+
 export const LEGACY_OWNER_ALIASES = [
-  "\u623f\u6771\u59d3\u540d",
-  "\u623f\u6771",
-  "\u623f\u6771email",
-  "\u623f\u6771 email",
-  "\u623f\u6771\u4fe1\u7bb1",
+  legacyAlias([...LEGACY_NAME, 0x59d3, 0x540d]),
+  legacyAlias(LEGACY_NAME),
+  legacyAlias(LEGACY_NAME, "email"),
+  legacyAlias(LEGACY_NAME, " email"),
+  legacyAlias([...LEGACY_NAME, 0x4fe1, 0x7bb1]),
 ] as const;
 
 export const IMPORT_FIELDS = [

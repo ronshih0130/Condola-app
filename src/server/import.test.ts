@@ -3,7 +3,7 @@ import { createHash, createHmac } from "node:crypto";
 import test from "node:test";
 import { buildXlsx, csvDocument, decodeBytes, readSpreadsheet, SpreadsheetError } from "../lib/spreadsheet";
 import { FlowError } from "./errors";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { HMAC_KEY_REF, hashIdNumber, parseIdHmacKey } from "./id-hash";
 import { ORG2_ID, ORG_ID } from "./ids";
 import { IMPORT_BODY_MAX_BYTES, IMPORT_WRITE_CHUNK, commitImportBatch, dryRunImport, previewImport, readImportBody } from "./import-batch";
@@ -555,9 +555,17 @@ test("confirm preview highlights the blank rent cell and keeps valid rows", () =
 });
 
 test("bulk import migration is additive and idempotent", () => {
-  const sql = readFileSync(new URL("../../supabase/migrations/20261023120000_bulk_import.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20261026130000_bulk_import.sql", import.meta.url), "utf8");
   const code = sql.replace(/--.*$/gm, "");
-  assert.match(sql, /20261023120000/);
+  assert.match(sql, /20261026130000/);
+  const names = readdirSync(new URL("../../supabase/migrations/", import.meta.url))
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  const bulk = names.find((name) => name.includes("bulk_import"));
+  assert.equal(bulk, "20261026130000_bulk_import.sql");
+  assert.ok(names.includes("20261026120000_email_log.sql"));
+  assert.ok(names.includes("20261026100000_country_room_door.sql"));
+  assert.ok(bulk && bulk > "20261026120000_email_log.sql");
   assert.match(code, /ADD COLUMN IF NOT EXISTS address_key/);
   assert.match(code, /ADD COLUMN IF NOT EXISTS import_address_key/);
   assert.match(code, /ADD COLUMN IF NOT EXISTS id_number_hash/);

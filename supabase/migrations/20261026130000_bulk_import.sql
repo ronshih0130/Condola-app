@@ -1,4 +1,5 @@
--- Bulk import match keys. Version 20261023120000 stays assigned.
+-- Bulk import match keys. Version 20261026130000 runs after main's migrations
+-- (through 20261026120000_email_log). The previous 20261023120000 slot is unused.
 -- Shared staging runs this while older app builds are still serving.
 -- Additive and idempotent: nullable columns, non-unique indexes, and triggers.
 -- Existing rows keep their current values. Older writes are not rejected.
