@@ -24,6 +24,25 @@ const SCREENS = [
   "app/m/reports/page.tsx",
 ];
 
+test("TWD amounts stay NT$ when the currency code is padded, and 已收 is not payment copy", () => {
+  assert.equal(moneyLabel(0, "TWD ", "zh-TW"), "NT$0");
+  assert.equal(moneyLabel(0, "twd", "zh-TW"), "NT$0");
+  assert.equal(moneyLabel(0, " USD ", "en"), "$0.00");
+  const zh = JSON.parse(read("i18n/zh-TW.json")) as Record<string, string>;
+  assert.equal(zh.i_paid, "已繳");
+  assert.equal(zh.i_rent_received, "已繳租金");
+  assert.equal(zh.i_audit_ev_go_live, "開始正式使用");
+  for (const [key, value] of Object.entries(zh)) {
+    assert.equal(value.replaceAll("已收到", "").includes("已收"), false, `${key}: ${value}`);
+  }
+  const leases = read("app/m/leases/page.tsx");
+  assert.match(leases, /data-testid="lease-rent"/);
+  assert.match(leases, /data-testid="lease-deposit"/);
+  assert.match(leases, /money\(row\.rent, row\.currency\)/);
+  assert.match(leases, /money\(row\.deposit, row\.currency\)/);
+  assert.doesNotMatch(leases, /formatMoney/);
+});
+
 test("the lease wizard confirm step and the saved summary render TWD as NT$", () => {
   assert.equal(moneyLabel(1_500_000, "TWD", "zh-TW"), "NT$15,000");
   assert.equal(moneyLabel(3_000_000, "TWD", "zh-TW"), "NT$30,000");

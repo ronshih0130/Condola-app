@@ -7,12 +7,18 @@ function groupedAmount(minor: number | string, locale: Locale, digits: number) {
   }).format(Math.abs(Number(minor)) / 100);
 }
 
+/** char(3) currency codes can arrive padded. TWD is matched after trim. */
+function currencyCode(currency: string) {
+  return currency.trim().toUpperCase();
+}
+
 /** TWD is an absolute NT$ amount, so zero is NT$0 and never −NT$0. Other currencies keep the ICU symbol. */
 export function formatMoney(minor: number | string, currency: string, locale: Locale) {
-  if (currency === "TWD") return `NT$${groupedAmount(minor, locale, 0)}`;
+  const code = currencyCode(currency);
+  if (code === "TWD") return `NT$${groupedAmount(minor, locale, 0)}`;
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
     style: "currency",
-    currency,
+    currency: code,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(minor) / 100);
@@ -20,8 +26,9 @@ export function formatMoney(minor: number | string, currency: string, locale: Lo
 
 /** Absolute amount with an NT$ prefix for TWD, so zero is NT$0 and never −NT$0. */
 export function moneyLabel(minor: number | string, currency: string, locale: Locale) {
-  if (currency === "TWD") return formatMoney(minor, currency, locale);
-  return formatMoney(Math.abs(Number(minor)), currency, locale);
+  const code = currencyCode(currency);
+  if (code === "TWD") return formatMoney(minor, code, locale);
+  return formatMoney(Math.abs(Number(minor)), code, locale);
 }
 
 export type StatementFigures = {
@@ -58,10 +65,11 @@ export function ownerSettlement(row: StatementFigures) {
 }
 
 export function formatRate(minorPerUnit: number | string, currency: string, locale: Locale) {
-  if (currency === "TWD") return `NT$${groupedAmount(minorPerUnit, locale, 2)}`;
+  const code = currencyCode(currency);
+  if (code === "TWD") return `NT$${groupedAmount(minorPerUnit, locale, 2)}`;
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
     style: "currency",
-    currency,
+    currency: code,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(minorPerUnit) / 100);

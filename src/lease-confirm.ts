@@ -23,7 +23,8 @@ export function depositAmountMinor(currency: string, rentMajor: number, depositM
 /** TWD on the lease wizard is NT$12,000: an NT$ prefix, thousands separators, and whole dollars. */
 export function formatMajor(major: number, currency: string, locale: string) {
   if (!Number.isFinite(major)) return "";
-  if (currency === "TWD") {
+  const code = currency.trim().toUpperCase();
+  if (code === "TWD") {
     const formatted = new Intl.NumberFormat("zh-Hant-TW", {
       maximumFractionDigits: 0,
       minimumFractionDigits: 0,
@@ -32,7 +33,7 @@ export function formatMajor(major: number, currency: string, locale: string) {
   }
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
     style: "currency",
-    currency,
+    currency: code,
     maximumFractionDigits: 2,
   }).format(major);
 }

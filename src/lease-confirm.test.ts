@@ -5,6 +5,7 @@ import { confirmDeposit, confirmSpace, confirmSpaceFromSnapshot, depositAmountMi
 test("the lease confirmation names the room and writes rent and deposit with units", () => {
   assert.equal(formatMajor(12000, "TWD", "zh-TW"), "NT$12,000");
   assert.equal(formatMajor(15000, "TWD", "zh-TW"), "NT$15,000");
+  assert.equal(formatMajor(0, "TWD ", "zh-TW"), "NT$0");
   assert.equal(formatMajor(20000, "TWD", "en"), "NT$20,000");
   assert.equal(confirmSpace({ propertyName: "信義松仁", unitLabel: "3F", label: "C" }), "信義松仁 · 3F C");
   assert.equal(confirmDeposit("1.5", "12000", "TWD", "zh-TW"), "1.5 個月（NT$18,000）");
