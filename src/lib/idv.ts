@@ -25,11 +25,18 @@ export const GLARE_SHARE = 0.18;
 export const PRIVATE_BUCKET = "id-documents-private";
 export const SIGNED_URL_TTL_SECONDS = 60;
 /**
- * Pilot retention. Photos are deleted this many days after the lease move-out
- * date (terminated_on, otherwise end_date). Not an admin setting.
- * Must match id_document_keep_days() in the tenant ID migration.
+ * Days until a live ID photo is deleted. A lease that took effect is deleted
+ * this many days after it ends. A lease that never took effect is deleted this
+ * many days after the upload date. Must match id_document_keep_days().
  */
 export const DEFAULT_RETENTION_DAYS = 90;
+
+/**
+ * Backup copies of a deleted ID photo must be gone within this many days.
+ * Supabase daily backups and point-in-time recovery are outside the app.
+ * Ops sets those windows to at most this many days. See docs/STAGING.md.
+ */
+export const ID_BACKUP_PURGE_DAYS = 14;
 
 /** Small baseline JPEG used for the demo sample and for tests. Not a real identity document. */
 export const SAMPLE_JPEG_BASE64 =

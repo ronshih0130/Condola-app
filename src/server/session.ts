@@ -17,6 +17,11 @@ function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+/** Same hash `readSessionOn` stores on `auth_sessions.token_hash`. */
+export function sessionTokenHash(token: string) {
+  return sha256(token);
+}
+
 export async function requestPrefs(): Promise<Prefs> {
   const jar = await cookies();
   const locale: Locale = isLocale(jar.get("condola_locale")?.value) ? (jar.get("condola_locale")!.value as Locale) : "zh-TW";

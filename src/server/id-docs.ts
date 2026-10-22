@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { makeT, isLocale } from "@/i18n";
+import { idWatermarkText, taipeiViewStamp } from "@/lib/id-watermark";
 import {
   DEFAULT_RETENTION_DAYS,
   PRIVATE_BUCKET,
@@ -19,9 +20,9 @@ import {
 import { acceptIdJpeg, acceptIdPng, sniffIdImage, stripJpegMetadata } from "@/lib/jpeg-size";
 import { ID_NOTICE_PATH, ID_NOTICE_SHA256, fullNoticeSha256Subtle, resolveFirmContact, uploadPageSha256Subtle } from "@/lib/id-notice";
 import { writeAudit } from "./audit";
-import { maybe, svc, svcOn, tx, withClient } from "./db";
+import { maybe, svc, tx, withDeferredClient } from "./db";
 import { FlowError, logServerError } from "./errors";
-import { copySlotCiphertext, readCiphertext, writeCiphertext, writeUploadSlot } from "./id-bytes";
+import { copySlotCiphertext, writeCiphertext, writeUploadSlot } from "./id-bytes";
 import {
   ENCRYPTION_KEY_REF,
   acceptUploadBytes,
@@ -33,7 +34,6 @@ import {
   sha256Hex,
   sha256HexBytes,
   signPhotoToken,
-  taipeiStamp,
 } from "./id-crypto";
 import { allowIdUpload } from "./id-upload-guard";
 import { assertStaff, type Session } from "./types";
@@ -240,9 +240,11 @@ async function insertIdCheck(
          id, org_id, contact_id, lease_id, doc_type, number_masked, number_hash,
          storage_bucket, storage_path, encryption_key_ref, sha256_ciphertext,
          review_status, is_sample, consent_accepted_at, consent_notice_sha256,
-         consent_full_text_sha256, consent_upload_text_sha256, created_by
+         consent_full_text_sha256, consent_upload_text_sha256,
+         consent_notice_sha, consented_at, created_by
        ) VALUES (
-         $1,$2,$3,$4,$5::id_doc_type,$6,$7,$8,$9,$10,'pending','pending_review',$11,now(),$12,$13,$14,$15
+         $1,$2,$3,$4,$5::id_doc_type,$6,$7,$8,$9,$10,'pending','pending_review',$11,now(),$12,$13,$14,$12,
+         CASE WHEN $12::text IS NULL THEN NULL ELSE now() END,$15
        )`,
       [
         documentId,
@@ -269,7 +271,10 @@ async function insertIdCheck(
           SET doc_type = $2::id_doc_type, number_masked = $3, number_hash = $4, storage_path = $5,
               review_status = 'pending_review', return_reason = NULL, reviewed_by = NULL, reviewed_at = NULL,
               is_sample = $6, consent_accepted_at = now(), consent_notice_sha256 = $7,
-              consent_full_text_sha256 = $8, consent_upload_text_sha256 = $9, created_by = $10
+              consent_full_text_sha256 = $8, consent_upload_text_sha256 = $9,
+              consent_notice_sha = $7,
+              consented_at = CASE WHEN $7::text IS NULL THEN NULL ELSE now() END,
+              created_by = $10
         WHERE id = $1`,
       [
         documentId,
@@ -574,9 +579,10 @@ async function commitTenantId(
            id, org_id, contact_id, lease_id, doc_type, number_masked, number_hash,
            storage_bucket, storage_path, encryption_key_ref, sha256_ciphertext,
            review_status, is_sample, consent_accepted_at, consent_notice_sha256,
-           consent_full_text_sha256, consent_upload_text_sha256, created_by
+           consent_full_text_sha256, consent_upload_text_sha256,
+           consent_notice_sha, consented_at, created_by
          ) VALUES (
-           $1,$2,$3,$4,$5::id_doc_type,$6,$7,$8,$9,$10,$11,'pending_review',false,now(),$12,$13,$14,$15
+           $1,$2,$3,$4,$5::id_doc_type,$6,$7,$8,$9,$10,$11,'pending_review',false,now(),$12,$13,$14,$12,now(),$15
          )`,
         [
           documentId,
@@ -604,7 +610,8 @@ async function commitTenantId(
                 encryption_key_ref = $6, sha256_ciphertext = $7,
                 review_status = 'pending_review', return_reason = NULL, reviewed_by = NULL, reviewed_at = NULL,
                 is_sample = false, consent_accepted_at = now(), consent_notice_sha256 = $8,
-                consent_full_text_sha256 = $9, consent_upload_text_sha256 = $10, created_by = $11
+                consent_full_text_sha256 = $9, consent_upload_text_sha256 = $10,
+                consent_notice_sha = $8, consented_at = now(), created_by = $11
           WHERE id = $1`,
         [
           documentId,
@@ -793,129 +800,176 @@ function assertPhotoViewer(session: Session) {
   if (session.kind !== "staff" && session.kind !== "tenant") throw new FlowError("errors.forbidden");
 }
 
-export async function issuePhotoUrls(session: Session, documentId: string) {
-  assertPhotoViewer(session);
-  // service_role bypasses RLS. Ownership is checked here, not by the policy.
-  // The lookup and both audit inserts share one connection.
-  const issued = await svc(session.userId, async (client) => {
-    const doc = await maybe<{
-      id: string;
-      org_id: string;
-      contact_id: string;
-      user_id: string | null;
-      tenant_name: string;
-      firm_name: string;
-      slots: string[];
-    }>(
+type PhotoCaller = {
+  tokenHash: string | null;
+  userId: string | null;
+  preferredOrg: string | null;
+  env: string | null;
+};
+
+type GateRow = {
+  user_id: string;
+  viewer_name: string;
+  email: string;
+  firm_name: string;
+  tenant_name: string;
+  contact_id: string;
+  org_id: string;
+  document_id: string;
+  kind: string;
+  encryption_key_ref: string;
+  slots: string[] | null;
+};
+
+export type PhotoTiming = { db: number; decrypt: number; watermark: number; total: number };
+
+export type ServedPhoto = { mime: string; bytes: Buffer; firmName: string; timing: PhotoTiming };
+
+function photoBytes(value: Buffer | string) {
+  if (Buffer.isBuffer(value)) return value;
+  if (value.startsWith("\\x")) return Buffer.from(value.slice(2), "hex");
+  return Buffer.from(value);
+}
+
+/**
+ * One `id_photo_gate` call. The access log and audit row are one statement
+ * after the response. The connecting role is the database owner; the function
+ * is SECURITY DEFINER and is not granted to anon or authenticated.
+ */
+async function issuePhotoUrlsForCaller(caller: PhotoCaller, documentId: string) {
+  const exp = Date.now() + SIGNED_URL_TTL_SECONDS * 1000;
+  const row = await withDeferredClient(async (client, defer) => {
+    const found = await maybe<GateRow>(
       client,
-      `SELECT d.id::text, d.org_id::text, d.contact_id::text, c.user_id::text,
-              c.display_name AS tenant_name, o.name AS firm_name,
-              (SELECT coalesce(array_agg(p.slot ORDER BY p.slot), '{}')
-                 FROM identity_document_photos p WHERE p.document_id = d.id) AS slots
-         FROM identity_documents d
-         JOIN contacts c ON c.id = d.contact_id
-         JOIN organizations o ON o.id = d.org_id
-        WHERE d.id = $1 AND d.deleted_at IS NULL`,
-      [documentId],
+      `SELECT user_id::text, viewer_name, email, firm_name, tenant_name,
+              contact_id::text, org_id::text, document_id::text, kind,
+              encryption_key_ref, slots
+         FROM id_photo_gate($1::text, $2::uuid, $3::uuid, $4::text, $5::text)`,
+      [caller.tokenHash, caller.userId, documentId, caller.preferredOrg, caller.env],
     );
-    if (!doc) throw new FlowError("errors.forbidden");
-    if (session.kind === "staff" && doc.org_id !== session.orgId) throw new FlowError("errors.forbidden");
-    if (session.kind === "tenant" && doc.user_id !== session.userId) throw new FlowError("errors.forbidden");
-    const exp = Date.now() + SIGNED_URL_TTL_SECONDS * 1000;
-    const expiresAt = new Date(exp).toISOString();
-    const purpose = session.kind === "staff" ? "staff_view" : "self_view";
-    const reason = session.kind === "staff" ? staffViewAuditReason(doc.tenant_name) : "租客查看自己的身分證件照片";
-    await client.query(
-      `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row, reason)
-       VALUES ($1,$2,'app','identity_documents',$3,'insert','id_document_view',$4::jsonb,$5)`,
-      [doc.org_id, session.userId, documentId, JSON.stringify({ documentId, contactId: doc.contact_id, purpose }), purpose],
-    );
-    await client.query(
-      `INSERT INTO identity_document_access_log (org_id, document_id, accessed_by, purpose, signed_url_expires_at)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [doc.org_id, documentId, session.userId, purpose, expiresAt],
-    );
-    return { doc, exp, reason };
+    if (!found || (found.kind !== "staff" && found.kind !== "tenant")) return null;
+    const purpose = found.kind === "staff" ? "staff_view" : "self_view";
+    defer(`SELECT id_photo_record($1::uuid, $2::uuid, $3::uuid, $4, $5::timestamptz, $6, $7::uuid)`, [
+      found.org_id,
+      found.document_id,
+      found.user_id,
+      purpose,
+      new Date(exp).toISOString(),
+      null,
+      found.contact_id,
+    ]);
+    return found;
   });
-  const t = makeT(session.locale);
-  const watermark =
-    session.kind === "staff"
-      ? t("idv_wm", { firm: issued.doc.firm_name, who: session.name, t: taipeiStamp() })
-      : t("idv_wm_ten");
-  const shots = issued.doc.slots
+  if (!row) throw new FlowError("errors.forbidden");
+  const watermark = idWatermarkText(row.firm_name, row.viewer_name, taipeiViewStamp());
+  const logged = row.kind === "staff" ? staffViewAuditReason(row.tenant_name) : "租客查看自己的身分證件照片";
+  const shots = (row.slots ?? [])
     .filter((slot): slot is IdSlot => slot === "front" || slot === "back" || slot === "selfie")
     .map((slot) => ({
       slot,
       url: `/api/id-documents/photo?token=${encodeURIComponent(
-        signPhotoToken({ documentId, slot, userId: session.userId, exp: issued.exp }),
+        signPhotoToken({ documentId: row.document_id, slot, userId: row.user_id, exp }),
       )}`,
       watermark,
     }));
-  return { shots, watermark, logged: issued.reason };
+  return { shots, watermark, logged };
 }
 
-type OpenedPhoto = { mime: string; bytes: Buffer; firmName: string };
-
-async function loadSignedPhoto(
-  client: Client,
-  session: Session,
-  parsed: { d: string; s: string },
-): Promise<OpenedPhoto | null> {
-  const photo = await maybe<{
-    org_id: string;
-    user_id: string | null;
-    firm_name: string;
-    mime_type: string;
-    encryption_key_ref: string;
-    bucket: string;
-    path: string;
-  }>(
-    client,
-    `SELECT d.org_id::text, c.user_id::text, o.name AS firm_name,
-            obj.mime_type, d.encryption_key_ref, obj.bucket, obj.path
-       FROM identity_documents d
-       JOIN contacts c ON c.id = d.contact_id
-       JOIN organizations o ON o.id = d.org_id
-       JOIN identity_document_photos p ON p.document_id = d.id AND p.slot = $2
-       JOIN id_document_objects obj ON obj.bucket = p.storage_bucket AND obj.path = p.storage_path
-      WHERE d.id = $1 AND d.deleted_at IS NULL`,
-    [parsed.d, parsed.s],
-  );
-  if (!photo) return null;
-  if (session.kind === "tenant" && photo.user_id !== session.userId) return null;
-  if (session.kind === "staff" && photo.org_id !== session.orgId) return null;
-  const ciphertext = await readCiphertext(client, photo.bucket, photo.path);
-  if (!ciphertext) return null;
-  const bytes = await decryptBytes(
-    ciphertext,
-    { orgId: photo.org_id, documentId: parsed.d, slot: parsed.s },
-    photo.encryption_key_ref,
-  );
-  await client.query(
-    `INSERT INTO identity_document_access_log (org_id, document_id, accessed_by, purpose)
-     VALUES ($1,$2,$3,'download')`,
-    [photo.org_id, parsed.d, session.userId],
-  );
-  await client.query(
-    `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row)
-     VALUES ($1,$2,'app','identity_documents',$3,'insert','id_document_download',$4::jsonb)`,
-    [photo.org_id, session.userId, parsed.d, JSON.stringify({ documentId: parsed.d, slot: parsed.s })],
-  );
-  return { mime: photo.mime_type, bytes, firmName: photo.firm_name };
-}
-
-/** Photo bytes on a connection the caller already holds. The route uses this after the session lookup. */
-export async function openSignedPhotoOn(client: Client, session: Session, token: string) {
-  const parsed = readPhotoToken(token);
-  if (!parsed || parsed.u !== session.userId) throw new FlowError("errors.forbidden");
+export async function issuePhotoUrls(session: Session, documentId: string) {
   assertPhotoViewer(session);
-  const opened = await svcOn(client, session.userId, (tx) => loadSignedPhoto(tx, session, parsed));
-  if (!opened) throw new FlowError("errors.forbidden");
+  return issuePhotoUrlsForCaller(
+    {
+      tokenHash: null,
+      userId: session.userId,
+      preferredOrg: session.liveOrgId,
+      env: session.environment,
+    },
+    documentId,
+  );
+}
+
+/** Cookie session, one gate query. Used by the view-photos action. */
+export async function issuePhotoUrlsForToken(caller: PhotoCaller, documentId: string) {
+  return issuePhotoUrlsForCaller(caller, documentId);
+}
+
+/**
+ * One `id_photo_open` call returns the ciphertext. Decrypt and the watermark
+ * string run after that. The download audit is deferred. `db` includes connect.
+ * `total` runs until this function returns; on Workers the audit is outside it.
+ */
+export async function serveSignedPhoto(input: PhotoCaller & { documentId: string; slot: string }): Promise<ServedPhoto | null> {
+  const started = performance.now();
+  let db = 0;
+  const opened = await withDeferredClient(async (client, defer) => {
+    const result = await client.query<{
+      user_id: string;
+      viewer_name: string;
+      firm_name: string;
+      contact_id: string;
+      org_id: string;
+      mime_type: string;
+      encryption_key_ref: string;
+      total_bytes: number;
+      seq: number;
+      chunk: Buffer | string;
+    }>(
+      `SELECT user_id::text, viewer_name, firm_name, contact_id::text, org_id::text,
+              mime_type, encryption_key_ref, total_bytes, seq, chunk
+         FROM id_photo_open($1::text, $2::uuid, $3::uuid, $4::text, $5::text, $6::text)
+        ORDER BY seq`,
+      [input.tokenHash, input.userId, input.documentId, input.slot, input.preferredOrg, input.env],
+    );
+    db = performance.now() - started;
+    const first = result.rows[0];
+    if (!first) return null;
+    const ciphertext = Buffer.concat(result.rows.map((row) => photoBytes(row.chunk)));
+    if (ciphertext.length !== Number(first.total_bytes)) return null;
+    const decryptStarted = performance.now();
+    const bytes = await decryptBytes(
+      ciphertext,
+      { orgId: first.org_id, documentId: input.documentId, slot: input.slot },
+      first.encryption_key_ref,
+    );
+    const decrypt = performance.now() - decryptStarted;
+    const watermarkStarted = performance.now();
+    idWatermarkText(first.firm_name, first.viewer_name, taipeiViewStamp());
+    const watermark = performance.now() - watermarkStarted;
+    defer(`SELECT id_photo_record($1::uuid, $2::uuid, $3::uuid, $4, $5::timestamptz, $6, $7::uuid)`, [
+      first.org_id,
+      input.documentId,
+      first.user_id,
+      "download",
+      null,
+      input.slot,
+      first.contact_id,
+    ]);
+    return {
+      mime: first.mime_type,
+      bytes,
+      firmName: first.firm_name,
+      timing: { db, decrypt, watermark, total: 0 },
+    };
+  });
+  if (!opened) return null;
+  opened.timing.total = performance.now() - started;
   return opened;
 }
 
 export async function openSignedPhoto(session: Session, token: string) {
-  return withClient((client) => openSignedPhotoOn(client, session, token));
+  const parsed = readPhotoToken(token);
+  if (!parsed || parsed.u !== session.userId) throw new FlowError("errors.forbidden");
+  assertPhotoViewer(session);
+  const opened = await serveSignedPhoto({
+    tokenHash: null,
+    userId: session.userId,
+    documentId: parsed.d,
+    slot: parsed.s,
+    preferredOrg: session.liveOrgId,
+    env: session.environment,
+  });
+  if (!opened) throw new FlowError("errors.forbidden");
+  return opened;
 }
 
 export async function attachSampleId(actorId: string, leaseId: string) {
@@ -973,6 +1027,12 @@ export async function seedSampleCheck(
   });
 }
 
+/**
+ * Deletes live ID ciphertext once delete_after has passed (lease end + 90 days,
+ * or upload date + 90 days when the lease never took effect) and upload slots
+ * older than 24 hours. Supabase backups are outside this job; they must age
+ * out within 14 days. See docs/STAGING.md.
+ */
 export async function purgeDueIdDocuments(limit = 500) {
   return svc(null, async (client) => {
     await client.query(`DELETE FROM id_upload_slots WHERE created_at < now() - interval '24 hours'`);

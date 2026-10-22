@@ -142,6 +142,101 @@ async function assertAnonIdGrants(client: Client) {
     }
 }
 
+async function assertIdPhotoPrivileges(client: Client) {
+  const tables = [
+    "identity_documents",
+    "identity_document_photos",
+    "identity_document_access_log",
+    "id_document_objects",
+    "id_upload_slots",
+  ];
+  const priv = await client.query<{
+    relname: string;
+    auth_sel: boolean;
+    auth_ins: boolean;
+    auth_upd: boolean;
+    auth_del: boolean;
+    anon_upd: boolean;
+    anon_del: boolean;
+    pub_upd: boolean;
+    pub_del: boolean;
+    svc_sel: boolean;
+    svc_ins: boolean;
+    svc_upd: boolean;
+    svc_del: boolean;
+  }>(
+    `SELECT c.relname,
+            has_table_privilege('authenticated', c.oid, 'SELECT') AS auth_sel,
+            has_table_privilege('authenticated', c.oid, 'INSERT') AS auth_ins,
+            has_table_privilege('authenticated', c.oid, 'UPDATE') AS auth_upd,
+            has_table_privilege('authenticated', c.oid, 'DELETE') AS auth_del,
+            has_table_privilege('anon', c.oid, 'UPDATE') AS anon_upd,
+            has_table_privilege('anon', c.oid, 'DELETE') AS anon_del,
+            has_table_privilege('public', c.oid, 'UPDATE') AS pub_upd,
+            has_table_privilege('public', c.oid, 'DELETE') AS pub_del,
+            has_table_privilege('service_role', c.oid, 'SELECT') AS svc_sel,
+            has_table_privilege('service_role', c.oid, 'INSERT') AS svc_ins,
+            has_table_privilege('service_role', c.oid, 'UPDATE') AS svc_upd,
+            has_table_privilege('service_role', c.oid, 'DELETE') AS svc_del
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relname = ANY($1::text[])`,
+    [tables],
+  );
+  const byName = Object.fromEntries(priv.rows.map((row) => [row.relname, row]));
+  for (const name of tables) {
+    const row = byName[name];
+    assert.ok(row, name);
+    assert.equal(row.auth_upd, false, `${name} update`);
+    assert.equal(row.auth_del, false, `${name} delete`);
+    assert.equal(row.anon_upd, false, name);
+    assert.equal(row.anon_del, false, name);
+    assert.equal(row.pub_upd, false, name);
+    assert.equal(row.pub_del, false, name);
+    assert.equal(row.svc_sel, true, name);
+    assert.equal(row.svc_ins, true, name);
+    assert.equal(row.svc_upd, true, name);
+    assert.equal(row.svc_del, true, name);
+  }
+  assert.equal(byName.identity_documents.auth_sel, true);
+  assert.equal(byName.identity_documents.auth_ins, true);
+  assert.equal(byName.identity_document_photos.auth_sel, true);
+  assert.equal(byName.identity_document_photos.auth_ins, false);
+  assert.equal(byName.identity_document_access_log.auth_sel, true);
+  assert.equal(byName.identity_document_access_log.auth_ins, false);
+  assert.equal(byName.id_document_objects.auth_sel, false);
+  assert.equal(byName.id_upload_slots.auth_sel, false);
+  const policies = await client.query<{ polname: string; polcmd: string }>(
+    `SELECT polname, polcmd FROM pg_policy WHERE polrelid = 'public.identity_documents'::regclass`,
+  );
+  assert.equal(policies.rows.some((row) => row.polname === "iddoc_team"), false);
+  assert.equal(policies.rows.find((row) => row.polname === "iddoc_team_select")?.polcmd, "r");
+  const fns = await client.query<{ proname: string; pub: boolean; anon: boolean; authn: boolean; svc: boolean; proconfig: string[] | null }>(
+    `SELECT p.proname,
+            has_function_privilege('public', p.oid, 'execute') AS pub,
+            has_function_privilege('anon', p.oid, 'execute') AS anon,
+            has_function_privilege('authenticated', p.oid, 'execute') AS authn,
+            has_function_privilege('service_role', p.oid, 'execute') AS svc,
+            p.proconfig
+       FROM pg_proc p
+       JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = ANY($1::text[])
+      ORDER BY p.proname`,
+    [["id_photo_gate", "id_photo_open", "id_photo_record"]],
+  );
+  assert.deepEqual(
+    fns.rows.map((row) => row.proname),
+    ["id_photo_gate", "id_photo_open", "id_photo_record"],
+  );
+  for (const row of fns.rows) {
+    assert.equal(row.pub, false, row.proname);
+    assert.equal(row.anon, false, row.proname);
+    assert.equal(row.authn, false, row.proname);
+    assert.equal(row.svc, true, row.proname);
+    assert.match((row.proconfig ?? []).join(" "), /search_path=pg_catalog, public/);
+  }
+}
+
 async function assertCurrentSchema(databaseUrl: string) {
   await assertShownNoticeColumns(databaseUrl);
   await withDb(databaseUrl, async (client) => {
@@ -366,6 +461,7 @@ async function assertCurrentSchema(databaseUrl: string) {
     } finally {
       await client.query(`DELETE FROM organizations WHERE id = $1`, [orgId]);
     }
+    await assertIdPhotoPrivileges(client);
   });
 }
 
@@ -481,6 +577,7 @@ test("a fresh database that already ran the current ID migration accepts the upg
   // The upgrade file drops and recreates id_document_delete_after. The consent
   // migration is the clock that has to remain on this database.
   psql(FRESH_URL, path.join(MIGRATIONS, "20261028120000_id_delete_after_consent.sql"));
+  psql(FRESH_URL, path.join(MIGRATIONS, "20261029130000_id_no_direct_mutate.sql"));
   await assertCurrentSchema(FRESH_URL);
   await withDb(FRESH_URL, async (client) => {
     const body = await client.query<{ def: string }>(
@@ -669,4 +766,11 @@ test("anon and authenticated cannot truncate public tables, including tables cre
       await client.query("ROLLBACK");
     }
   });
+});
+
+test("the direct-mutate migration applies twice and keeps photo helpers on service_role", async () => {
+  const file = path.join(MIGRATIONS, "20261029130000_id_no_direct_mutate.sql");
+  psql(FRESH_URL, file);
+  psql(FRESH_URL, file);
+  await withDb(FRESH_URL, assertIdPhotoPrivileges);
 });

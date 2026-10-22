@@ -1,4 +1,5 @@
 import { Client, type QueryResultRow } from "pg";
+import { finishAfterResponse } from "./after-response";
 import { logServerError, mapDbError } from "./errors";
 import { readEnvChoice, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
 
@@ -97,6 +98,47 @@ export async function withClient<T>(fn: (client: Client) => Promise<T>): Promise
     return await fn(client);
   } finally {
     await endOnce(client, ended);
+  }
+}
+
+/**
+ * One connection. The deferred statement runs after the response on Workers
+ * (ctx.waitUntil) and before return in node tests. The photo path uses this
+ * so the access log does not add a round trip before the bytes are sent.
+ */
+export async function withDeferredClient<T>(
+  fn: (client: Client, defer: (sql: string, params?: unknown[]) => void) => Promise<T>,
+): Promise<T> {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    connectionTimeoutMillis: 8000,
+  });
+  const ended = { current: false };
+  client.on("error", () => {});
+  await client.connect();
+  guardSocketClose(client);
+  const deferred: { sql: string; params: unknown[] }[] = [];
+  try {
+    const result = await fn(client, (sql, params = []) => {
+      deferred[0] = { sql, params };
+    });
+    const statement = deferred[0];
+    if (!statement) {
+      await endOnce(client, ended);
+      return result;
+    }
+    const work = (async () => {
+      try {
+        await client.query(statement.sql, statement.params);
+      } finally {
+        await endOnce(client, ended);
+      }
+    })();
+    await finishAfterResponse(work);
+    return result;
+  } catch (error) {
+    await endOnce(client, ended);
+    throw error;
   }
 }
 

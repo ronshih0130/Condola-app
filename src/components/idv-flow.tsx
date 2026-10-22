@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
 import { IdKeepNotice } from "./id-keep";
-import { IdPhotoError, prepareIdPhoto, taipeiDay } from "@/lib/id-photo";
+import { IdPhotoError, prepareIdPhoto } from "@/lib/id-photo";
 import { idFileAllowed } from "@/lib/jpeg-size";
 import {
   isValidIdNumber,
@@ -27,7 +27,6 @@ export function IdvFlow({
   numberMasked,
   returnReason,
   photoUrls,
-  firmName,
   demo,
   sent,
   notice,
@@ -41,7 +40,6 @@ export function IdvFlow({
   numberMasked: string | null;
   returnReason: string | null;
   photoUrls: { slot: IdSlot; url: string; watermark: string }[];
-  firmName: string;
   demo: boolean;
   sent: boolean;
   notice: string;
@@ -68,6 +66,9 @@ export function IdvFlow({
           {photoUrls.map((photo) => (
             <div key={photo.slot} className="idv-shot">
               <img src={photo.url} alt="" />
+              <div className="idv-watermark" data-testid="idv-watermark">
+                {photo.watermark}
+              </div>
             </div>
           ))}
         </div>
@@ -84,7 +85,6 @@ export function IdvFlow({
     <Wizard
       leaseId={leaseId}
       notice={notice}
-      firmName={firmName}
       agreeLabel={agreeLabel}
       noticeUrl={noticeUrl}
       demo={demo}
@@ -98,7 +98,6 @@ export function IdvFlow({
 function Wizard({
   leaseId,
   notice,
-  firmName,
   agreeLabel,
   noticeUrl,
   demo,
@@ -108,7 +107,6 @@ function Wizard({
 }: {
   leaseId: string;
   notice: string;
-  firmName: string;
   agreeLabel: string;
   noticeUrl: string;
   demo: boolean;
@@ -129,7 +127,6 @@ function Wizard({
   const busyRef = useRef(false);
   const queueRef = useRef<{ slot: IdSlot; file: File }[]>([]);
   const [number, setNumber] = useState("");
-  const watermarkLines = [t("idv_burn"), t("idv_burn_meta", { firm: firmName, date: taipeiDay() })];
   const steps = [t("idv_s_consent"), t("idv_s_doc"), t("idv_s_selfie"), t("idv_s_review")];
   const slots = requiredSlots(docType);
   const docSlots = slots.filter((slot) => slot !== "selfie");
@@ -140,7 +137,7 @@ function Wizard({
   const busy = processing || submitting;
 
   async function prepare(slot: IdSlot, file: File) {
-    const prepared = await prepareIdPhoto(file, watermarkLines, { compress: compressPhotos });
+    const prepared = await prepareIdPhoto(file, [], { compress: compressPhotos });
     setShots((current) => ({ ...current, [slot]: { url: prepared.dataUrl, glare: prepared.glare } }));
   }
 

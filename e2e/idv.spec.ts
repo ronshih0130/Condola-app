@@ -103,7 +103,7 @@ test("tenant ID check follows the consent, mask, review, and retention rules", a
   await signIn(page, ACCOUNTS.admin);
   await zh(page, "/m/settings");
   await expect(page.locator("#idvRetainDays")).toHaveText(
-    "身分證件照片：已生效之租約，於租約結束（期滿或提前終止）後滿90日自動刪除（系統每日執行，最遲次日完成）；租約為草稿、未簽署、取消或作廢者，自上傳日起滿90日自動刪除（系統每日執行，最遲次日完成），不另行通知。",
+    "身分證件照片：已生效之租約，於租約結束（期滿或提前終止）後滿90日自動刪除（系統每日執行，最遲次日完成）；租約為草稿、未簽署、取消或作廢者，自上傳日起滿90日自動刪除（系統每日執行，最遲次日完成），不另行通知。刪除後，備份中之副本於14日內一併清除。",
   );
   await expect(page.locator("#idvRetainDays input")).toHaveCount(0);
 
@@ -164,7 +164,12 @@ test("tenant ID check follows the consent, mask, review, and retention rules", a
   const pending = await page.locator("body").innerText();
   expect(pending).not.toContain("已驗證");
   expect(pending).not.toMatch(/verified/i);
-  await expect(page.getByTestId("idv-watermark")).toHaveCount(0);
+  await expect(page.getByTestId("idv-watermark")).toHaveCount(3);
+  const tenantMark = await page.getByTestId("idv-watermark").first().innerText();
+  expect(tenantMark).toContain(`僅供${FIRM_NAME}核對租約身分使用・王小美・`);
+  expect(tenantMark).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+  expect(tenantMark.includes("驗證")).toBe(false);
+  expect(tenantMark.includes("已認證")).toBe(false);
 
   await signIn(page, ACCOUNTS.manager);
   await zh(page, "/m/leases");
@@ -186,12 +191,16 @@ test("tenant ID check follows the consent, mask, review, and retention rules", a
   await expect(page.getByTestId("idv-logged")).toContainText("這次查看已記錄在稽核紀錄");
   await expect(page.getByTestId("idv-audit-reason")).toHaveText("查看租客 王小美 的身分證件照片");
   await expect(page.getByTestId("idv-watermark")).toHaveCount(3);
-  await expect(page.getByTestId("idv-watermark").first()).toContainText("僅供");
   const src = await page.getByTestId("idv-photo-front").getAttribute("src");
   expect(src).toBeTruthy();
   const image = await page.request.get(src!);
   expect(image.ok()).toBeTruthy();
   expect(image.headers()["content-type"]).toContain("image/jpeg");
+  const timing = image.headers()["server-timing"] ?? "";
+  expect(timing).toContain("db;dur=");
+  expect(timing).toContain("decrypt;dur=");
+  expect(timing).toContain("watermark;dur=");
+  expect(timing).toContain("total;dur=");
   const bytes = Buffer.from(await image.body());
   expect(bytes[0]).toBe(0xff);
   expect(bytes[1]).toBe(0xd8);
@@ -203,19 +212,13 @@ test("tenant ID check follows the consent, mask, review, and retention rules", a
   await expect
     .poll(() => page.getByTestId("idv-photo-front").evaluate((img: HTMLImageElement) => img.naturalWidth))
     .toBeGreaterThan(0);
-  const burned = await page.getByTestId("idv-photo-front").evaluate((img: HTMLImageElement) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("canvas");
-    ctx.drawImage(img, 0, 0);
-    const pixel = ctx.getImageData(Math.floor(canvas.width / 2), canvas.height - 1, 1, 1).data;
-    return { r: pixel[0] ?? 0, g: pixel[1] ?? 0, b: pixel[2] ?? 0 };
-  });
-  expect(burned.r).toBeGreaterThan(100);
-  expect(burned.r).toBeGreaterThan(burned.g + 30);
-  expect(burned.r).toBeGreaterThan(burned.b + 30);
+  await expect
+    .poll(() => page.getByTestId("idv-watermark").first().innerText())
+    .toContain(`僅供${FIRM_NAME}核對租約身分使用・黃志明・`);
+  const managerMark = await page.getByTestId("idv-watermark").first().innerText();
+  expect(managerMark).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+  expect(managerMark.includes("驗證")).toBe(false);
+  expect(managerMark.includes("已認證")).toBe(false);
   const stored = readJpegSize(bytes);
   expect(stored?.width).toBe(1600);
   expect(stored?.height).toBe(1200);

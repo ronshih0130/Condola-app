@@ -57,6 +57,14 @@ const added = {
     addOnly: false,
     reason: "Replaces id_document_delete_after and rewrites delete_after on live rows. No new NOT NULL or table constraint.",
   },
+  "supabase/migrations/20261029130000_id_no_direct_mutate.sql": {
+    addOnly: false,
+    reason: "REVOKE UPDATE and DELETE on the id tables from PUBLIC, anon, and authenticated. Replaces iddoc_team with a SELECT-only policy. Adds SECURITY DEFINER photo functions and REVOKEs them from anon and authenticated. No new NOT NULL or constraint.",
+  },
+  "supabase/migrations/20261029140000_id_consent_shown_version.sql": {
+    addOnly: true,
+    reason: "Adds nullable consent_notice_sha and consented_at. No default, NOT NULL, or constraint. An old insert that omits them still works.",
+  },
 };
 
 const functions = [

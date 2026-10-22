@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { SAMPLE_JPEG_BASE64 } from "../lib/idv";
 import { fullNoticeSha256, ID_NOTICE_PATH, ID_NOTICE_SHA256, resolveFirmContact, uploadPageSha256 } from "../lib/id-notice";
 import { embedIdWatermarkMark, MAX_PHOTO_BYTES } from "../lib/jpeg-size";
@@ -60,6 +63,13 @@ function session(userId: string, role: Session["role"], kind: Session["kind"] = 
 }
 
 test.before(async () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  const databaseUrl = process.env.DATABASE_URL ?? "postgres://condola:condola@127.0.0.1:5432/condola";
+  for (const file of ["20261029130000_id_no_direct_mutate.sql", "20261029140000_id_consent_shown_version.sql"]) {
+    execFileSync("psql", [databaseUrl, "-v", "ON_ERROR_STOP=1", "-f", path.join(root, "supabase/migrations", file)], {
+      stdio: "pipe",
+    });
+  }
   await resetAndSeed();
 });
 
@@ -327,14 +337,19 @@ test("identity photos stay private, masked, audited, and are purged only after t
     consent_notice_sha256: string | null;
     consent_full_text_sha256: string | null;
     consent_upload_text_sha256: string | null;
+    consent_notice_sha: string | null;
+    consented_at: string | null;
   }>(
-    `SELECT number_masked, review_status::text, consent_notice_sha256, consent_full_text_sha256, consent_upload_text_sha256
+    `SELECT number_masked, review_status::text, consent_notice_sha256, consent_full_text_sha256,
+            consent_upload_text_sha256, consent_notice_sha, consented_at::text
        FROM identity_documents WHERE id = $1`,
     [documentId],
   );
   assert.equal(stored.rows[0].number_masked, "A******789");
   assert.equal(stored.rows[0].review_status, "checked");
   assert.equal(stored.rows[0].consent_notice_sha256, ID_NOTICE_SHA256);
+  assert.equal(stored.rows[0].consent_notice_sha, ID_NOTICE_SHA256);
+  assert.match(stored.rows[0].consented_at ?? "", /^\d{4}-\d{2}-\d{2}/);
   assert.equal(stored.rows[0].consent_full_text_sha256, fullNoticeSha256(noticeVars));
   assert.equal(stored.rows[0].consent_upload_text_sha256, uploadPageSha256(noticeVars));
   const leaked = await query(
@@ -911,6 +926,10 @@ test("photos larger than a 64KiB Bind round-trip through the chunked bytea path"
     assert.ok(token);
     const opened = await openSignedPhoto(session(USERS.manager, "manager"), token);
     assert.equal(opened.bytes.equals(plain), true);
+    assert.ok(opened.timing.total >= opened.timing.db);
+    assert.ok(opened.timing.decrypt >= 0);
+    assert.ok(opened.timing.watermark >= 0);
+    console.log("photo-timing", slot, opened.timing);
   }
 });
 
@@ -1305,4 +1324,63 @@ test("ciphertext over 64KiB is copied in slices and a later submit stores one do
   assert.equal(objects.rows[0]?.n, "3");
   const slots = await query<{ n: string }>(`SELECT count(*)::text AS n FROM id_upload_slots WHERE lease_id = $1`, [leaseId]);
   assert.equal(slots.rows[0]?.n, "0");
+});
+
+test("a manager cannot update or delete identity rows as authenticated", async () => {
+  const doc = await query<{ id: string }>(
+    `SELECT id::text FROM identity_documents WHERE org_id = $1 AND deleted_at IS NULL LIMIT 1`,
+    [ORG_ID],
+  );
+  assert.ok(doc.rows[0]);
+  const denied = (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden";
+  await assert.rejects(
+    () =>
+      tx(
+        USERS.manager,
+        (client) => client.query(`UPDATE identity_documents SET return_reason = 'no' WHERE id = $1`, [doc.rows[0].id]),
+        { orgId: ORG_ID, environment: "live" },
+      ),
+    denied,
+  );
+  await assert.rejects(
+    () =>
+      tx(
+        USERS.manager,
+        (client) => client.query(`DELETE FROM identity_documents WHERE id = $1`, [doc.rows[0].id]),
+        { orgId: ORG_ID, environment: "live" },
+      ),
+    denied,
+  );
+});
+
+test("a missing display name watermarks the email local part", async () => {
+  const doc = await query<{ id: string; firm: string }>(
+    `SELECT d.id::text, o.name AS firm
+       FROM identity_documents d
+       JOIN organizations o ON o.id = d.org_id
+      WHERE d.org_id = $1 AND d.deleted_at IS NULL
+      LIMIT 1`,
+    [ORG_ID],
+  );
+  const profile = await query<{ display_name: string | null; email: string }>(
+    `SELECT p.display_name, coalesce(p.email::text, u.email::text) AS email
+       FROM auth.users u
+       LEFT JOIN profiles p ON p.id = u.id
+      WHERE u.id = $1`,
+    [USERS.manager],
+  );
+  const email = profile.rows[0]?.email ?? "";
+  const local = email.split("@")[0] ?? "";
+  assert.ok(local);
+  const cleared = await query(`UPDATE profiles SET display_name = NULL WHERE id = $1`, [USERS.manager]);
+  assert.equal(cleared.rowCount, 1);
+  try {
+    const issued = await issuePhotoUrls(session(USERS.manager, "manager"), doc.rows[0].id);
+    assert.match(issued.watermark, new RegExp(`^僅供${doc.rows[0].firm}核對租約身分使用・${local}・\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$`));
+    assert.equal(issued.watermark.includes("黃志明"), false);
+    assert.equal(issued.watermark.includes("驗證"), false);
+    assert.equal(issued.watermark.includes("已認證"), false);
+  } finally {
+    await query(`UPDATE profiles SET display_name = $2 WHERE id = $1`, [USERS.manager, profile.rows[0]?.display_name]);
+  }
 });

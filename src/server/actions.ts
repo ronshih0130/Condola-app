@@ -25,15 +25,17 @@ import {
   type PropertyInput,
 } from "./domain";
 import { createOwner, createSpace, updateOwner, updateProperty, updateSpace, type SpaceKind } from "./portfolio";
+import { SESSION_COOKIE } from "./auth";
 import { FlowError, logServerError } from "./errors";
-import { finalizeTenantId, issuePhotoUrls, reviewIdCheck } from "./id-docs";
+import { finalizeTenantId, issuePhotoUrlsForToken, reviewIdCheck } from "./id-docs";
+import { ENV_COOKIE, ORG_COOKIE } from "./org-scope";
 import { normalizePhone } from "./lease-rules";
 import { typedStreet } from "@/property-address";
 import { loadOrgCountry } from "./org-country";
 import { createLeaseFromForm } from "./lease-form";
 import { addTicketComment, saveRepairRecord } from "./repairs";
 import { taipeiToday } from "./money";
-import { getSession } from "./session";
+import { getSession, sessionTokenHash } from "./session";
 import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
@@ -584,8 +586,19 @@ export async function actionFinalizeId(formData: FormData): Promise<{ error: str
 
 export async function actionViewIdPhotos(documentId: string) {
   try {
-    const session = await getSession();
-    return await issuePhotoUrls(session, documentId);
+    const jar = await cookies();
+    const token = jar.get(SESSION_COOKIE)?.value;
+    if (!token) redirect("/login");
+    const rawEnv = jar.get(ENV_COOKIE)?.value;
+    return await issuePhotoUrlsForToken(
+      {
+        tokenHash: sessionTokenHash(token),
+        userId: null,
+        preferredOrg: jar.get(ORG_COOKIE)?.value ?? null,
+        env: rawEnv === "sandbox" || rawEnv === "live" ? rawEnv : null,
+      },
+      documentId,
+    );
   } catch (error) {
     if (isRedirect(error)) throw error;
     return { error: error instanceof FlowError ? error.key : "errors.generic" };

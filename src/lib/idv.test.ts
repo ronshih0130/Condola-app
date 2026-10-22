@@ -6,9 +6,11 @@ import { ID_COMPRESS_AFTER_SECONDS, ID_COMPRESS_JPEG_QUALITY, ID_COMPRESS_LONG_E
 import { idUploadShowsWaitNote } from "./id-upload-estimate";
 import { ID_PHOTO_LONG_EDGE, MAX_LONG_EDGE } from "./jpeg-size";
 import test from "node:test";
+import { ID_WATERMARK_TEMPLATE, idWatermarkText, taipeiViewStamp, viewerLabel } from "./id-watermark";
 import {
   DEFAULT_RETENTION_DAYS,
   GLARE_SHARE,
+  ID_BACKUP_PURGE_DAYS,
   SIGNED_URL_TTL_SECONDS,
   isValidIdNumber,
   keepPhrase,
@@ -59,7 +61,12 @@ test("a passport needs the photo page and a selfie; a card needs the back too", 
 
 test("retention is stated in days, including the 90-day default", () => {
   assert.equal(DEFAULT_RETENTION_DAYS, 90);
+  assert.equal(ID_BACKUP_PURGE_DAYS, 14);
   assert.equal(keepPhrase(DEFAULT_RETENTION_DAYS, "1 年", "90 天"), "90 天");
+  const notice = readFileSync(new URL("./id-upload-privacy-notice.md", import.meta.url), "utf8");
+  assert.match(notice, /滿90日/);
+  assert.match(notice, /14日內一併清除/);
+  assert.equal(notice.includes("365"), false);
   assert.equal(keepPhrase(30, "1 年", "30 天"), "30 天");
 });
 
@@ -89,7 +96,7 @@ test("id check copy never says verified and the consent notice is verbatim", () 
   for (const locale of ["zh-TW", "en"] as const) {
     const catalog = JSON.parse(readFileSync(new URL(`../i18n/${locale}.json`, import.meta.url), "utf8")) as Record<string, string>;
     const keys = Object.keys(catalog).filter((key) => key.startsWith("idv_"));
-    assert.equal(keys.length, 80, locale);
+    assert.equal(keys.length, 76, locale);
     const copyKeys = Object.keys(catalog).filter((key) => key.startsWith("idv_") || key.startsWith("i_id_"));
     for (const key of copyKeys) {
       assert.equal(catalog[key].includes("已驗證"), false, key);
@@ -102,7 +109,7 @@ test("id check copy never says verified and the consent notice is verbatim", () 
       assert.equal(/verified/i.test(catalog[key]), false, key);
       assert.equal(catalog[key].includes("LINE"), false, key);
     }
-    for (const removed of ["idv_notice", "idv_keep_1y", "idv_ret_hint", "idv_use_sample", "idv_agree", "idv_keep_mgr", "idv_ret_a", "idv_ret_b"]) {
+    for (const removed of ["idv_notice", "idv_keep_1y", "idv_ret_hint", "idv_use_sample", "idv_agree", "idv_keep_mgr", "idv_ret_a", "idv_ret_b", "idv_wm", "idv_wm_ten", "idv_burn", "idv_burn_meta"]) {
       assert.equal(Object.prototype.hasOwnProperty.call(catalog, removed), false, removed);
     }
     if (locale === "zh-TW") {
@@ -117,7 +124,7 @@ test("id check copy never says verified and the consent notice is verbatim", () 
       assert.equal(catalog.i_pay_hint_tenant.includes("收款"), false);
       assert.equal(
         catalog.i_id_retain,
-        "身分證件照片：已生效之租約，於租約結束（期滿或提前終止）後滿90日自動刪除（系統每日執行，最遲次日完成）；租約為草稿、未簽署、取消或作廢者，自上傳日起滿90日自動刪除（系統每日執行，最遲次日完成），不另行通知。",
+        "身分證件照片：已生效之租約，於租約結束（期滿或提前終止）後滿90日自動刪除（系統每日執行，最遲次日完成）；租約為草稿、未簽署、取消或作廢者，自上傳日起滿90日自動刪除（系統每日執行，最遲次日完成），不另行通知。刪除後，備份中之副本於14日內一併清除。",
       );
       assert.equal(catalog.idv_ten_pending.includes("LINE"), false);
       assert.equal(catalog.idv_doc_hint_2, "需要正面與背面各一張。");
@@ -163,6 +170,9 @@ test("a failed photo view is translated, and a bounced send keeps the selected p
   assert.doesNotMatch(flow, /idv_keep_1y/);
   assert.doesNotMatch(flow, /retentionDays/);
   assert.match(flow, /idv-missing/);
+  assert.match(flow, /prepareIdPhoto\(file, \[\]/);
+  assert.match(flow, /data-testid="idv-watermark"/);
+  assert.doesNotMatch(flow, /idv_burn/);
   assert.doesNotMatch(flow, /setShots\(\(current\) => \(\{ front:/);
   assert.doesNotMatch(flow, /accept="image\/\*"/);
   const actions = readFileSync(new URL("../server/actions.ts", import.meta.url), "utf8");
@@ -172,6 +182,11 @@ test("a failed photo view is translated, and a bounced send keeps the selected p
   assert.match(fn, /finalizeTenantId/);
   assert.doesNotMatch(fn, /bounce\(/);
   assert.match(actions, /revalidatePath\(`\/m\/leases\/\$\{leaseId\}`\)/);
+  const view = actions.slice(actions.indexOf("export async function actionViewIdPhotos"));
+  const viewFn = view.slice(0, view.indexOf("export async function actionMarkIdChecked"));
+  assert.match(viewFn, /issuePhotoUrlsForToken/);
+  assert.match(viewFn, /sessionTokenHash/);
+  assert.doesNotMatch(viewFn, /getSession\(/);
 });
 
 test("the upload wait note appears only when the estimate is over 10 seconds", () => {
@@ -253,10 +268,55 @@ test("the photo modal keeps a fixed frame per slot and reloads with a new link",
   assert.match(css, /\.idv-photo-frame\{[^}]*min-height:240px/);
   const route = readFileSync(new URL("../app/api/id-documents/photo/route.ts", import.meta.url), "utf8");
   const get = route.slice(route.indexOf("export async function GET"));
-  assert.match(get, /readSessionOn\(client, \{ touch: false \}\)/);
-  assert.match(get, /openSignedPhotoOn\(client, session, token\)/);
+  assert.match(get, /serveSignedPhoto/);
+  assert.match(get, /id_photo_open|serveSignedPhoto/);
+  assert.match(get, /server-timing/);
+  assert.match(get, /db;dur=/);
+  assert.match(get, /decrypt;dur=/);
+  assert.match(get, /watermark;dur=/);
+  assert.match(get, /total;dur=/);
   assert.match(get, /private, no-store/);
+  assert.doesNotMatch(get, /readSessionOn/);
   assert.doesNotMatch(get, /readSession\(\)/);
+  assert.doesNotMatch(get, /SET LOCAL ROLE/);
+  assert.doesNotMatch(get, /openSignedPhotoOn/);
   const bytes = readFileSync(new URL("../server/id-bytes.ts", import.meta.url), "utf8");
   assert.match(bytes, /generate_series\(1, octet_length\(ciphertext\), \$3::int\)/);
+  const photoSql = readFileSync(new URL("../../supabase/migrations/20261029130000_id_no_direct_mutate.sql", import.meta.url), "utf8");
+  assert.match(photoSql, /id_photo_open/);
+  assert.match(photoSql, /REVOKE UPDATE, DELETE/);
+  const staging = readFileSync(new URL("../../docs/STAGING.md", import.meta.url), "utf8");
+  assert.match(staging, /14 days/);
+  assert.match(staging, /id_document_keep_days\(\) = 90/);
+});
+
+test("an upload stores the consent notice version and the consent time", () => {
+  const migration = readFileSync(new URL("../../supabase/migrations/20261029140000_id_consent_shown_version.sql", import.meta.url), "utf8");
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS consent_notice_sha text/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS consented_at timestamptz/);
+  assert.doesNotMatch(migration, /NOT NULL/);
+  assert.doesNotMatch(migration, /DEFAULT/);
+  const docs = readFileSync(new URL("../server/id-docs.ts", import.meta.url), "utf8");
+  const save = docs.slice(docs.indexOf("export async function saveIdCheck"), docs.indexOf("async function shownNotice"));
+  const finalize = docs.slice(docs.indexOf("export async function finalizeTenantId"), docs.indexOf("export async function issuePhotoUrls"));
+  for (const body of [save, finalize]) {
+    assert.match(body, /consent_notice_sha/);
+    assert.match(body, /consented_at/);
+    assert.equal(body.split("consent_notice_sha").length >= 3, true);
+  }
+  assert.match(save, /consent_notice_sha = \$7/);
+  assert.match(finalize, /consent_notice_sha = \$8, consented_at = now\(\)/);
+});
+
+test("the watermark is one approved sentence and never an empty viewer", () => {
+  assert.equal(ID_WATERMARK_TEMPLATE, "僅供{firm}核對租約身分使用・{viewer}・{when}");
+  assert.equal(viewerLabel("黃志明", "zhiming.huang@songxin.demo"), "黃志明");
+  assert.equal(viewerLabel("  ", "qa.manager@firm.test"), "qa.manager");
+  assert.equal(viewerLabel("", "qa.manager@firm.test"), "qa.manager");
+  assert.equal(taipeiViewStamp(new Date("2026-10-22T06:05:00Z")), "2026-10-22 14:05");
+  const text = idWatermarkText("松信住宅管理", "黃志明", "2026-10-22 14:05");
+  assert.equal(text, "僅供松信住宅管理核對租約身分使用・黃志明・2026-10-22 14:05");
+  assert.equal(text.includes("驗證"), false);
+  assert.equal(text.includes("已認證"), false);
+  assert.equal(text.includes("・・"), false);
 });

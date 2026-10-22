@@ -37,6 +37,12 @@ The session port is for migrations because Depot runners are IPv4 and the direct
 
 The Worker uses targeted placement in `aws:ap-northeast-1` so it runs near that database.
 
+## ID photo backups
+
+Live ID ciphertext is deleted by the daily purge (`0 19 * * *`, 03:00 Asia/Taipei) through `purgeDueIdDocuments` → `purge_due_identity_documents`. The clock is id_document_keep_days() = 90. A lease that took effect is deleted 90 days after it ends. A lease that never took effect is deleted 90 days after the Taipei upload date. The same job deletes upload slots older than 24 hours.
+
+Supabase daily backups and point-in-time recovery are outside the app. The purge cannot delete those copies. In the Supabase project, set Database → Backups so daily backup retention and the PITR window are both at most 14 days. Pro daily backups default to 7 days. Do not raise the PITR window to 14 days or to 28 days. Cloudflare does not store the ciphertext: the photo response sends `Cache-Control: private, no-store`.
+
 Migrations are recorded in `condola_ops.schema_migrations`. The script does not read `.env.local`. A second run skips files already recorded. Migrations run after the OpenNext build and before the Worker upload, so a broken build does not change the database. Keep each new migration compatible with the Worker that is still serving.
 
 ## Worker config

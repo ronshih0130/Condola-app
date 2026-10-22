@@ -28,7 +28,6 @@ export default async function TenantIdPage({ searchParams }: { searchParams: Pro
         numberMasked={check.numberMasked}
         returnReason={check.returnReason}
         photoUrls={photos}
-        firmName={check.firmName}
         demo={demoModeEnabled()}
         compress={demoModeEnabled() && query.compress === "1"}
         sent={query.sent === "1"}

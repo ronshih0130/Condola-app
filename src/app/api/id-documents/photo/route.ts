@@ -1,9 +1,12 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { MAX_PHOTO_BYTES } from "@/lib/jpeg-size";
-import { withClient } from "@/server/db";
+import { SESSION_COOKIE } from "@/server/auth";
 import { FlowError } from "@/server/errors";
-import { openSignedPhotoOn, storeIdPhoto } from "@/server/id-docs";
-import { completeSession, readSession, readSessionOn } from "@/server/session";
+import { serveSignedPhoto, storeIdPhoto } from "@/server/id-docs";
+import { readPhotoToken } from "@/server/id-crypto";
+import { ENV_COOKIE, ORG_COOKIE } from "@/server/org-scope";
+import { readSession, sessionTokenHash } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -39,32 +42,38 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get("token") ?? "";
-  // One connection for the session check and the photo. touch:false avoids
-  // three parallel GETs queueing on the same last_active row. The ciphertext
-  // for this slot comes back in one result (24KiB rows). No server re-encode:
-  // Workers Free allows 10ms of CPU, which cannot decode and re-encode a
-  // capped JPEG, and this route adds no paid image dependency. The browser
-  // burns the CJK lines and a red bar into the pixels, then writes a
-  // condola-id-wm COM marker. Upload refuses a JPEG without that marker.
-  // These bytes are that burned scan after APP/COM segments are stripped.
-  // A client can forge the marker without burning pixels. A real server
-  // re-encode needs a Worker with a higher cpu_ms limit.
-  const photo = await withClient(async (client) => {
-    const loaded = await readSessionOn(client, { touch: false });
-    const session = await completeSession(loaded);
-    if (!session) return null;
-    try {
-      return await openSignedPhotoOn(client, session, token);
-    } catch {
-      return null;
-    }
-  });
+  // Missing cookie or a bad signature never opens a connection. A valid cookie
+  // is one id_photo_open call (session, org, role, and this slot's ciphertext).
+  // The download audit runs after the response. The JPEG is the clean original.
+  // The approved sentence is an overlay from the view action, not a re-encode:
+  // Workers Free allows 10ms of CPU, which cannot decode and re-encode a JPEG.
+  if (!token) return new NextResponse(null, { status: 404 });
+  const jar = await cookies();
+  const sessionCookie = jar.get(SESSION_COOKIE)?.value;
+  if (!sessionCookie) return new NextResponse(null, { status: 404 });
+  const parsed = readPhotoToken(token);
+  if (!parsed) return new NextResponse(null, { status: 404 });
+  const rawEnv = jar.get(ENV_COOKIE)?.value;
+  let photo;
+  try {
+    photo = await serveSignedPhoto({
+      tokenHash: sessionTokenHash(sessionCookie),
+      userId: parsed.u,
+      documentId: parsed.d,
+      slot: parsed.s,
+      preferredOrg: jar.get(ORG_COOKIE)?.value ?? null,
+      env: rawEnv === "sandbox" || rawEnv === "live" ? rawEnv : null,
+    });
+  } catch {
+    return new NextResponse(null, { status: 404 });
+  }
   if (!photo) return new NextResponse(null, { status: 404 });
   return new NextResponse(new Uint8Array(photo.bytes), {
     headers: {
       "content-type": photo.mime,
       "cache-control": "private, no-store",
       "x-content-type-options": "nosniff",
+      "server-timing": `db;dur=${photo.timing.db.toFixed(1)}, decrypt;dur=${photo.timing.decrypt.toFixed(1)}, watermark;dur=${photo.timing.watermark.toFixed(1)}, total;dur=${photo.timing.total.toFixed(1)}`,
     },
   });
 }
