@@ -48,21 +48,49 @@ export function isChunkLoadFailure(input: unknown) {
 }
 
 /**
- * One reload per build id. The id is NEXT_PUBLIC_BUILD_SHA (the same sha /api/version returns).
- * A thrown storage read or write refuses the reload so a broken sessionStorage cannot loop.
+ * Builds already given their one reload on this storage object.
+ * sessionStorage is the session boundary, but a store that accepts setItem and
+ * then forgets the value would reload forever. This set stops that in the same session.
+ */
+const reloadedBuilds = new WeakMap<ChunkReloadStorage, Set<string>>();
+
+function reloadedBuildIds(storage: ChunkReloadStorage) {
+  let seen = reloadedBuilds.get(storage);
+  if (!seen) {
+    seen = new Set();
+    reloadedBuilds.set(storage, seen);
+  }
+  return seen;
+}
+
+/**
+ * One reload per session per build id. The id is NEXT_PUBLIC_BUILD_SHA (the same sha /api/version returns).
+ * The flag lives in sessionStorage under condola:chunk-reload:<build id>.
+ * A thrown storage read or write, or a store that does not keep the flag, refuses another reload.
  */
 export function shouldAutoReload(buildId: string, storage: ChunkReloadStorage) {
+  const id = buildId.trim() || "unknown";
+  const seen = reloadedBuildIds(storage);
+  if (seen.has(id)) return false;
   const key = chunkReloadStorageKey(buildId);
+  let stored: string | null;
   try {
-    if (storage.getItem(key) === "1") return false;
+    stored = storage.getItem(key);
   } catch {
+    seen.add(id);
+    return false;
+  }
+  if (stored === "1") {
+    seen.add(id);
     return false;
   }
   try {
     storage.setItem(key, "1");
   } catch {
+    seen.add(id);
     return false;
   }
+  seen.add(id);
   return true;
 }
 

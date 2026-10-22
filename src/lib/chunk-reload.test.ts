@@ -118,6 +118,28 @@ test("reloads once per build id and then blocks", () => {
   assert.equal(reloads, 1);
 });
 
+test("a session that forgets the flag still reloads once per build id", () => {
+  const forgotten: ChunkReloadStorage = {
+    getItem: () => null,
+    setItem: () => {},
+  };
+  const otherSession: ChunkReloadStorage = {
+    getItem: () => null,
+    setItem: () => {},
+  };
+  let reloads = 0;
+  const reload = () => {
+    reloads += 1;
+  };
+  const failure = { name: "ChunkLoadError", message: "Loading chunk 9 failed." };
+  assert.equal(attemptChunkReload(failure, { buildId: "abc1234", storage: forgotten, reload }), "reloaded");
+  assert.equal(attemptChunkReload(failure, { buildId: "abc1234", storage: forgotten, reload }), "blocked");
+  assert.equal(attemptChunkReload(failure, { buildId: "def5678", storage: forgotten, reload }), "reloaded");
+  assert.equal(attemptChunkReload(failure, { buildId: "abc1234", storage: otherSession, reload }), "reloaded");
+  assert.equal(attemptChunkReload(failure, { buildId: "abc1234", storage: otherSession, reload }), "blocked");
+  assert.equal(reloads, 3);
+});
+
 test("window error and unhandledrejection reload once, then stop", () => {
   type Entry = { type: string; capture: boolean; listener: ChunkListener };
   const entries: Entry[] = [];
