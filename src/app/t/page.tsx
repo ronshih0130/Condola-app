@@ -37,27 +37,32 @@ export default async function TenantHome() {
   const rentMinor = money?.lease.rent ?? "0";
   const depositMinor = money?.lease.deposit ?? "0";
   const currency = money?.lease.currency ?? "TWD";
+  const pendingUnsigned = (money?.lease.status ?? lease.lease_status) === "pending_signature";
   return (
     <div>
       <h2>{t("i_hello", { name: session.name })}</h2>
       <p>
         {lease.firm_name} · {displaySampleName(`${lease.property_name} ${lease.room_label ?? ""}`)}
       </p>
-      <div className="flex" data-testid="rent-due-notice">
-        <div className="fh">{t("s_23c9d54")}</div>
-        <div className="fb">
-          <div className="small">{t("s_b6c3113")}</div>
-          <div className="big" data-testid="rent-due-amount" data-minor={rentMinor}>
-            {moneyLabel(rentMinor, currency, session.locale)}
+      {pendingUnsigned ? (
+        <p className="small" data-testid="unsigned-rent-note">{t("i_pay_unsigned_bill")}</p>
+      ) : (
+        <div className="flex" data-testid="rent-due-notice">
+          <div className="fh">{t("s_23c9d54")}</div>
+          <div className="fb">
+            <div className="small">{t("s_b6c3113")}</div>
+            <div className="big" data-testid="rent-due-amount" data-minor={rentMinor}>
+              {moneyLabel(rentMinor, currency, session.locale)}
+            </div>
+            <div className="small" data-testid="rent-due-deposit" data-minor={depositMinor}>
+              {t("s_8b17769")} {moneyLabel(depositMinor, currency, session.locale)}
+            </div>
           </div>
-          <div className="small" data-testid="rent-due-deposit" data-minor={depositMinor}>
-            {t("s_8b17769")} {moneyLabel(depositMinor, currency, session.locale)}
-          </div>
+          <Link className="fbtn" href="/t/pay">
+            {t("i_rich_pay")}
+          </Link>
         </div>
-        <Link className="fbtn" href="/t/pay">
-          {t("i_rich_pay")}
-        </Link>
-      </div>
+      )}
       <p className="small">{t("i_addr_managed", { address: displaySampleName(lease.address_display ?? lease.property_name), firm: lease.firm_name })}</p>
       <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
     </div>

@@ -55,10 +55,19 @@ export function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export function chargeKey(type: string) {
-  if (type === "rent") return "i_charge_rent";
-  if (type === "deposit") return "i_charge_deposit";
-  if (type === "utility") return "i_charge_utility";
-  return "i_charge_other";
+  const keys: Record<string, string> = {
+    rent: "i_charge_rent",
+    deposit: "i_charge_deposit",
+    utility: "i_charge_utility",
+    add_on: "i_charge_add_on",
+    late_fee: "i_charge_late_fee",
+    one_off: "i_charge_one_off",
+    maintenance: "i_charge_maintenance",
+    adjustment: "i_charge_adjustment",
+    credit: "i_charge_credit",
+    deposit_refund: "i_charge_deposit_refund",
+  };
+  return keys[type] ?? "i_charge_other";
 }
 
 export function statusKey(status: string) {

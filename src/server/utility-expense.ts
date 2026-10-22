@@ -3,8 +3,20 @@ import { maybe, one } from "./db";
 import { FlowError } from "./errors";
 import type { Session } from "./types";
 
-/** Owner monthly statement line for electricity that no tenant is billed. */
-export const VACANT_ELECTRICITY_DESCRIPTION = "電費（空房）";
+/** Owner monthly statement line for electricity that no signed tenant is billed. New rows only. */
+export const VACANT_ELECTRICITY_DESCRIPTION = "電費（空房／未簽約）";
+
+/** Label used before unsigned rooms were called out. Existing rows keep this text. */
+export const LEGACY_VACANT_ELECTRICITY_DESCRIPTION = "電費（空房）";
+
+/** A new vacant expense uses the current label. An existing row keeps the label it was posted with. */
+export function expenseDescriptionToWrite(requested: string, existing: string | null): string {
+  const vacant =
+    requested === VACANT_ELECTRICITY_DESCRIPTION || requested === LEGACY_VACANT_ELECTRICITY_DESCRIPTION;
+  if (!vacant) return existing ?? requested;
+  if (existing === LEGACY_VACANT_ELECTRICITY_DESCRIPTION) return existing;
+  return VACANT_ELECTRICITY_DESCRIPTION;
+}
 
 /** Master-meter kWh minus room meters. Owner only; never split onto tenants. */
 export const PUBLIC_ELECTRICITY_DESCRIPTION = "公共用電";
@@ -39,20 +51,28 @@ export async function syncVacantOwnerExpense(
   const amount = input.amountMinor;
   if (!Number.isSafeInteger(amount)) throw new FlowError("errors.amount");
   if (amount < 0 && !SIGNED_OWNER_DESCRIPTIONS.has(description)) throw new FlowError("errors.amount");
+  const matchDescriptions =
+    description === VACANT_ELECTRICITY_DESCRIPTION || description === LEGACY_VACANT_ELECTRICITY_DESCRIPTION
+      ? [LEGACY_VACANT_ELECTRICITY_DESCRIPTION, VACANT_ELECTRICITY_DESCRIPTION]
+      : [description];
   const existing = await maybe<{
     id: string;
     amount_minor: string;
     incurred_on: string;
     ledger_transaction_id: string | null;
     status: string;
+    description: string;
   }>(
     client,
-    `SELECT id::text, amount_minor::text, incurred_on::text, ledger_transaction_id::text, status::text
+    `SELECT id::text, amount_minor::text, incurred_on::text, ledger_transaction_id::text, status::text, description
        FROM expenses
-      WHERE org_id = $1 AND utility_run_id = $2 AND description = $3 AND status <> 'void'
+      WHERE org_id = $1 AND utility_run_id = $2 AND description = ANY($3::text[]) AND status <> 'void'
+      ORDER BY CASE WHEN description = $4 THEN 0 ELSE 1 END
+      LIMIT 1
       FOR UPDATE`,
-    [session.orgId, input.runId, description],
+    [session.orgId, input.runId, matchDescriptions, LEGACY_VACANT_ELECTRICITY_DESCRIPTION],
   );
+  const writtenDescription = expenseDescriptionToWrite(description, existing?.description ?? null);
   if (amount === 0) {
     if (!existing) return { changed: false };
     await voidOwnerExpense(client, session.orgId, existing, "作廢空房電費");
@@ -84,7 +104,7 @@ export async function syncVacantOwnerExpense(
               bill_to = 'owner',
               paid_by = 'manager_firm'
         WHERE id = $1 AND org_id = $8 AND status <> 'void'`,
-      [existing.id, amount, input.incurredOn, description, currency, input.propertyId, input.unitId, session.orgId],
+      [existing.id, amount, input.incurredOn, writtenDescription, currency, input.propertyId, input.unitId, session.orgId],
     );
     await postExpenseLedger(client, session, {
       expenseId: existing.id,
@@ -92,7 +112,7 @@ export async function syncVacantOwnerExpense(
       currency,
       incurred: input.incurredOn,
       amount,
-      description,
+      description: writtenDescription,
     });
     return { changed: true };
   }
@@ -108,7 +128,7 @@ export async function syncVacantOwnerExpense(
       session.orgId,
       input.propertyId,
       input.unitId,
-      description,
+      writtenDescription,
       currency,
       amount,
       input.incurredOn,
@@ -122,7 +142,7 @@ export async function syncVacantOwnerExpense(
     currency,
     incurred: input.incurredOn,
     amount,
-    description,
+    description: writtenDescription,
   });
   return { changed: true };
 }

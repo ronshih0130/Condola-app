@@ -12,7 +12,7 @@ import {
   tenantContactSearchSql,
   type ListOpts,
 } from "./list-search";
-import { rentUtilityDueMinor } from "./money";
+import { rentUtilityDueMinor, tenantBillLines } from "./money";
 import type { Session } from "./types";
 
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
@@ -1361,23 +1361,29 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
           [invoices.map((invoice) => invoice.id)],
         )
       : [];
-    const dueMinor = invoices.reduce((sum, invoice) => {
+    const billLines = invoices.flatMap((invoice) => {
       const invoiceLines = lines
         .filter((line) => line.invoice_id === invoice.id)
         .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount), description: line.description }));
-      return sum + rentUtilityDueMinor(invoiceLines, Number(invoice.paid));
-    }, 0);
+      return tenantBillLines(invoiceLines, Number(invoice.paid));
+    });
+    const dueMinor = billLines.reduce((sum, line) => sum + line.amountMinor, 0);
     const balance = invoices.reduce((sum, invoice) => sum + Number(invoice.balance), 0);
     // Rent and electricity are billed only after both parties sign. A pending_signature lease
     // is left out of the electricity split, so it has neither a rent row nor a new utility row.
-    // Deposit is omitted here; it is not part of dueMinor.
-    const rentLines = lines
-      .filter((line) => line.charge_type === "rent" && Number(line.amount) > 0)
-      .map((line) => ({ description: line.description, amount: line.amount }));
-    const utilityLines = lines
-      .filter((line) => line.charge_type === "utility" && line.description.startsWith("電費") && Number(line.amount) > 0)
-      .map((line) => ({ description: line.description, amount: line.amount }));
-    return { lease, dueMinor, balance, currency: lease.currency, rentLines, utilityLines };
+    // Deposit and any other open charge stay on the bill so the rows match the invoice balance.
+    const asRow = (line: { chargeType: string; description: string; amountMinor: number }) => ({
+      chargeType: line.chargeType,
+      description: line.description,
+      amount: String(line.amountMinor),
+    });
+    const rentLines = billLines.filter((line) => line.chargeType === "rent").map(asRow);
+    const depositLines = billLines.filter((line) => line.chargeType === "deposit").map(asRow);
+    const utilityLines = billLines.filter((line) => line.chargeType === "utility").map(asRow);
+    const otherLines = billLines
+      .filter((line) => line.chargeType !== "rent" && line.chargeType !== "deposit" && line.chargeType !== "utility")
+      .map(asRow);
+    return { lease, dueMinor, balance, currency: lease.currency, rentLines, depositLines, utilityLines, otherLines };
   });
 }
 

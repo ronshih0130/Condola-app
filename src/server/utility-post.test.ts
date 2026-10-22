@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { moneyLabel } from "./format";
+import { tenantBillDueMinor, tenantBillLines, rentUtilityDueMinor } from "./money";
 import { unsignedRentNoteKey } from "./pay-note";
+import { expenseDescriptionToWrite, LEGACY_VACANT_ELECTRICITY_DESCRIPTION, VACANT_ELECTRICITY_DESCRIPTION } from "./utility-expense";
 import {
   allocateUtilityMinor,
   billAverageBelowRate,
@@ -33,7 +36,10 @@ test("an empty pending bill list is replaced by the unsigned note, and a signed 
   }
   const page = readFileSync(new URL("../app/t/pay/page.tsx", import.meta.url), "utf8");
   assert.match(page, /unsignedRentNoteKey\(money\.lease\.status, billEmpty\)/);
-  assert.match(page, /rentLines\.length === 0 && money\.utilityLines\.length === 0/);
+  assert.match(page, /rentLines\.length === 0 &&/);
+  assert.match(page, /depositLines\.length === 0 &&/);
+  assert.match(page, /utilityLines\.length === 0 &&/);
+  assert.match(page, /otherLines\.length === 0/);
   assert.match(page, /noteKey \? \([\s\S]*data-testid="unsigned-rent-note"[\s\S]*\) : \([\s\S]*data-testid="tenant-bill"/);
   const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
   const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
@@ -47,12 +53,135 @@ test("an empty pending bill list is replaced by the unsigned note, and a signed 
 test("tenant pay lists invoiced rent and electricity in NT$", () => {
   const page = readFileSync(new URL("../app/t/pay/page.tsx", import.meta.url), "utf8");
   assert.match(page, /data-testid="tenant-rent-line"/);
+  assert.match(page, /data-testid="tenant-deposit-line"/);
   assert.match(page, /data-testid="tenant-utility-line"/);
+  assert.match(page, /data-testid="tenant-other-line"/);
+  const rentAt = page.indexOf('data-testid="tenant-rent-line"');
+  const depositAt = page.indexOf('data-testid="tenant-deposit-line"');
+  const utilityAt = page.indexOf('data-testid="tenant-utility-line"');
+  assert.ok(rentAt < depositAt && depositAt < utilityAt);
+  assert.match(page, /t\("i_charge_deposit"\)/);
+  assert.match(page, /t\("i_pay_total"\)/);
   assert.match(page, /moneyLabel\(/);
   assert.doesNotMatch(page, /formatMoney\(/);
   const queries = readFileSync(new URL("./queries.ts", import.meta.url), "utf8");
-  assert.match(queries, /charge_type === "rent"/);
+  assert.match(queries, /chargeType === "rent"/);
+  assert.match(queries, /chargeType === "deposit"/);
   assert.match(queries, /pending_signature/);
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
+  assert.equal(zh.i_charge_deposit, "押金");
+  assert.equal(zh.i_pay_total, "應繳合計");
+  assert.equal(en.i_pay_total, "Amount due");
+  assert.equal(zh.i_pay_hint_tenant.includes("不含押金"), false);
+});
+
+const MOVE_IN_LINES = [
+  { charge_type: "rent", amount_minor: 1_200_000, description: "租金" },
+  { charge_type: "deposit", amount_minor: 2_400_000, description: "押金" },
+  { charge_type: "utility", amount_minor: 100_000, description: "電費 2026-10" },
+];
+
+test("a move-in bill keeps the deposit and the rows add up to the open balance", () => {
+  const rows = tenantBillLines(MOVE_IN_LINES, 0);
+  assert.deepEqual(
+    rows.map((row) => [row.chargeType, row.amountMinor]),
+    [
+      ["rent", 1_200_000],
+      ["deposit", 2_400_000],
+      ["utility", 100_000],
+    ],
+  );
+  assert.equal(tenantBillDueMinor(MOVE_IN_LINES, 0), 3_700_000);
+  assert.equal(rows.reduce((sum, row) => sum + row.amountMinor, 0), 3_700_000);
+  assert.equal(moneyLabel(3_700_000, "TWD", "zh-TW"), "NT$37,000");
+  assert.equal(moneyLabel(1_200_000, "TWD", "zh-TW"), "NT$12,000");
+  assert.equal(moneyLabel(2_400_000, "TWD", "zh-TW"), "NT$24,000");
+  assert.equal(moneyLabel(100_000, "TWD", "zh-TW"), "NT$1,000");
+  assert.equal(rentUtilityDueMinor(MOVE_IN_LINES, 0), 1_300_000);
+
+  const rentPaid = tenantBillLines(MOVE_IN_LINES, 1_200_000);
+  assert.deepEqual(
+    rentPaid.map((row) => [row.chargeType, row.amountMinor]),
+    [
+      ["deposit", 2_400_000],
+      ["utility", 100_000],
+    ],
+  );
+  assert.equal(tenantBillDueMinor(MOVE_IN_LINES, 1_200_000), 2_500_000);
+
+  const rentAndPowerPaid = tenantBillLines(MOVE_IN_LINES, 1_300_000);
+  assert.deepEqual(rentAndPowerPaid.map((row) => [row.chargeType, row.amountMinor]), [["deposit", 2_400_000]]);
+  const depositPartlyPaid = tenantBillLines(MOVE_IN_LINES, 1_400_000);
+  assert.equal(depositPartlyPaid.find((row) => row.chargeType === "deposit")?.amountMinor, 2_300_000);
+  assert.equal(tenantBillDueMinor(MOVE_IN_LINES, 1_400_000), 2_300_000);
+});
+
+test("a charge type that is not rent, deposit, or electricity is still a row", () => {
+  const lines = [
+    ...MOVE_IN_LINES,
+    { charge_type: "late_fee", amount_minor: 50_000, description: "逾期費用" },
+  ];
+  const rows = tenantBillLines(lines, 0);
+  assert.deepEqual(
+    rows.map((row) => row.chargeType),
+    ["rent", "deposit", "utility", "late_fee"],
+  );
+  assert.equal(tenantBillDueMinor(lines, 0), 3_750_000);
+  assert.equal(rows.reduce((sum, row) => sum + row.amountMinor, 0), tenantBillDueMinor(lines, 0));
+  const afterRent = tenantBillLines(lines, 1_200_000);
+  assert.equal(afterRent.find((row) => row.chargeType === "late_fee")?.amountMinor, 50_000);
+  const intoLateFee = tenantBillLines(lines, 1_220_000);
+  assert.equal(intoLateFee.find((row) => row.chargeType === "late_fee")?.amountMinor, 30_000);
+  assert.equal(intoLateFee.find((row) => row.chargeType === "utility")?.amountMinor, 100_000);
+  assert.equal(intoLateFee.find((row) => row.chargeType === "deposit")?.amountMinor, 2_400_000);
+
+  const withCredit = [
+    ...MOVE_IN_LINES,
+    { charge_type: "credit", amount_minor: -20_000, description: "折抵" },
+  ];
+  assert.equal(tenantBillDueMinor(withCredit, 0), 3_680_000);
+  assert.equal(tenantBillLines(withCredit, 0).some((row) => row.chargeType === "credit" && row.amountMinor === -20_000), true);
+
+  const withOffset = [
+    { charge_type: "rent", amount_minor: 1_200_000, description: "租金" },
+    { charge_type: "utility", amount_minor: 100_000, description: "電費 2026-10" },
+    { charge_type: "credit", amount_minor: -20_000, description: "沖銷電費 2026-10" },
+  ];
+  const offsetRows = tenantBillLines(withOffset, 0);
+  assert.equal(offsetRows.find((row) => row.chargeType === "utility")?.amountMinor, 80_000);
+  assert.equal(offsetRows.some((row) => row.chargeType === "credit"), false);
+  assert.equal(tenantBillDueMinor(withOffset, 0), 1_280_000);
+});
+
+test("a pending tenant home shows the unsigned note instead of the rent-due card", () => {
+  const home = readFileSync(new URL("../app/t/page.tsx", import.meta.url), "utf8");
+  assert.match(home, /pending_signature/);
+  assert.match(home, /pendingUnsigned \? \([\s\S]*data-testid="unsigned-rent-note"[\s\S]*i_pay_unsigned_bill[\s\S]*\) : \([\s\S]*data-testid="rent-due-notice"/);
+  assert.match(home, /moneyLabel\(rentMinor, currency, session\.locale\)/);
+  assert.match(home, /moneyLabel\(depositMinor, currency, session\.locale\)/);
+  assert.doesNotMatch(home, /formatMoney\(/);
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  assert.equal(zh.i_pay_unsigned_bill, "租約還沒完成簽署，租金和電費帳單會在雙方簽署後產生。");
+  assert.equal(zh.s_23c9d54, "租金即將到期");
+});
+
+test("new vacant electricity expenses use 電費（空房／未簽約） and existing rows keep 電費（空房）", () => {
+  assert.equal(VACANT_ELECTRICITY_DESCRIPTION, "電費（空房／未簽約）");
+  assert.equal(LEGACY_VACANT_ELECTRICITY_DESCRIPTION, "電費（空房）");
+  assert.equal(expenseDescriptionToWrite(VACANT_ELECTRICITY_DESCRIPTION, null), "電費（空房／未簽約）");
+  assert.equal(expenseDescriptionToWrite(VACANT_ELECTRICITY_DESCRIPTION, "電費（空房）"), "電費（空房）");
+  assert.equal(expenseDescriptionToWrite(VACANT_ELECTRICITY_DESCRIPTION, "電費（空房／未簽約）"), "電費（空房／未簽約）");
+  assert.equal(expenseDescriptionToWrite("公共用電", null), "公共用電");
+  assert.equal(expenseDescriptionToWrite("公共用電", "公共用電"), "公共用電");
+  const source = readFileSync(new URL("./utility-expense.ts", import.meta.url), "utf8");
+  assert.match(source, /LEGACY_VACANT_ELECTRICITY_DESCRIPTION/);
+  assert.match(source, /expenseDescriptionToWrite\(description, existing\?\.description \?\? null\)/);
+  assert.match(source, /description = ANY\(\$3::text\[\]\)/);
+  const migration = readFileSync(new URL("../../supabase/migrations/20261028180000_utility_owner_lines.sql", import.meta.url), "utf8");
+  assert.match(migration, /電費（空房）/);
+  assert.equal(migration.includes("電費（空房／未簽約）"), false);
+  assert.doesNotMatch(migration, /UPDATE\s+expenses/i);
 });
 
 test("electricity registration copy uses 登記 and does not say 入帳", () => {

@@ -118,7 +118,12 @@ export function managementFeeMinor(rule: FeeRule, rentReceivedMinor: number): nu
   return 0;
 }
 
-type ChargeLine = { charge_type: string; amount_minor: number; description?: string };
+export type ChargeLine = { charge_type: string; amount_minor: number; description?: string };
+
+/** Existing allocation order. Late fees and similar charges sit between rent and utility. */
+const PAYMENT_ORDER = ["rent", "add_on", "late_fee", "one_off", "maintenance", "utility", "deposit", "adjustment", "credit"];
+
+const BILL_DISPLAY_ORDER = ["rent", "deposit", "utility"];
 
 /** A reversed 電費 line stays on the invoice. Its credit reduces what the tenant still owes. */
 function netElectricityCredits(lines: ChargeLine[]): ChargeLine[] {
@@ -142,7 +147,7 @@ function netElectricityCredits(lines: ChargeLine[]): ChargeLine[] {
   return netted;
 }
 
-/** Outstanding rent plus billed utilities. Deposit is excluded on purpose. */
+/** Staff payment default: outstanding rent plus billed utilities. Deposit stays off this default. */
 export function rentUtilityDueMinor(lines: ChargeLine[], paidMinor: number) {
   const netted = netElectricityCredits(lines);
   const rent = netted.filter((line) => line.charge_type === "rent").reduce((sum, line) => sum + line.amount_minor, 0);
@@ -151,8 +156,56 @@ export function rentUtilityDueMinor(lines: ChargeLine[], paidMinor: number) {
   return Math.max(0, rent - applied.rent) + Math.max(0, utility - applied.utility);
 }
 
+export type TenantBillLine = { chargeType: string; description: string; amountMinor: number };
+
+function paymentRank(chargeType: string) {
+  return PAYMENT_ORDER.indexOf(chargeType);
+}
+
+/**
+ * One row per remaining charge. Deposit outstanding is max(0, deposit − allocated deposit).
+ * Any other charge type is included so the rows sum to the open invoice balance.
+ */
+export function tenantBillLines(lines: ChargeLine[], paidMinor: number): TenantBillLine[] {
+  const netted = netElectricityCredits(lines);
+  const applied = attributePayment(netted, paidMinor);
+  const remaining = { rent: applied.rent, utility: applied.utility, deposit: applied.deposit, other: applied.other };
+  const sorted = [...netted].sort((a, b) => paymentRank(a.charge_type) - paymentRank(b.charge_type));
+  const outstanding: TenantBillLine[] = [];
+  for (const line of sorted) {
+    if (line.amount_minor < 0) {
+      outstanding.push({ chargeType: line.charge_type, description: line.description ?? "", amountMinor: line.amount_minor });
+      continue;
+    }
+    if (line.amount_minor === 0) continue;
+    const bucket = line.charge_type === "rent" || line.charge_type === "utility" || line.charge_type === "deposit" ? line.charge_type : "other";
+    const take = Math.min(remaining[bucket], line.amount_minor);
+    remaining[bucket] -= take;
+    const left = line.amount_minor - take;
+    if (left > 0) {
+      outstanding.push({ chargeType: line.charge_type, description: line.description ?? "", amountMinor: left });
+    }
+  }
+  outstanding.sort((a, b) => {
+    const ar = BILL_DISPLAY_ORDER.indexOf(a.chargeType);
+    const br = BILL_DISPLAY_ORDER.indexOf(b.chargeType);
+    const aRank = ar === -1 ? BILL_DISPLAY_ORDER.length : ar;
+    const bRank = br === -1 ? BILL_DISPLAY_ORDER.length : br;
+    if (aRank !== bRank) return aRank - bRank;
+    const aPay = paymentRank(a.chargeType);
+    const bPay = paymentRank(b.chargeType);
+    return (aPay === -1 ? PAYMENT_ORDER.length : aPay) - (bPay === -1 ? PAYMENT_ORDER.length : bPay);
+  });
+  return outstanding;
+}
+
+/** Amount due on the tenant bill, including deposit and every other open charge. */
+export function tenantBillDueMinor(lines: ChargeLine[], paidMinor: number) {
+  return tenantBillLines(lines, paidMinor).reduce((sum, line) => sum + line.amountMinor, 0);
+}
+
 export function attributePayment(lines: ChargeLine[], paidMinor: number) {
-  const order = ["rent", "add_on", "late_fee", "one_off", "maintenance", "utility", "deposit", "adjustment", "credit"];
+  const order = PAYMENT_ORDER;
   const buckets = { rent: 0, utility: 0, deposit: 0, other: 0 };
   let left = paidMinor;
   const sorted = netElectricityCredits(lines).sort(

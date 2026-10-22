@@ -87,7 +87,13 @@ test("tenant pages prefix bill amounts with NT$ and leave PayDialog alone", () =
   assert.match(lease, /moneyLabel\(Number\(money\.lease\.rent\)/);
   assert.match(lease, /moneyLabel\(Number\(money\.lease\.deposit\)/);
   assert.doesNotMatch(lease, /formatMoney/);
-  assert.match(pay, /import \{ moneyLabel as formatMoney \} from "@\/server\/format"/);
-  assert.match(pay, /\{formatMoney\(money\.dueMinor, money\.currency, session\.locale\)\}/);
+  assert.match(pay, /moneyLabel\(money\.dueMinor, money\.currency, session\.locale\)/);
+  assert.doesNotMatch(pay, /formatMoney/);
   assert.doesNotMatch(dialog, /moneyLabel/);
+  assert.equal(moneyLabel(2_400_000, "TWD", "zh-TW"), "NT$24,000");
+  for (const file of ["t/page.tsx", "t/pay/page.tsx", "t/lease/page.tsx", "t/repair/page.tsx", "t/messages/page.tsx", "t/layout.tsx"]) {
+    const source = read(file).replaceAll("NT$", "");
+    assert.equal(source.includes("formatMoney"), false, file);
+    assert.equal(/\$\d/.test(source), false, file);
+  }
 });
