@@ -1,6 +1,6 @@
 import { makeT } from "@/i18n";
 import { ownerPrivacy } from "@/server/auth";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { ownerHome } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -25,7 +25,7 @@ export default async function OwnerHomePage() {
                   {displaySampleName([row.property_name, row.unit_label, row.room_label].filter(Boolean).join(" "))}
                 </div>
               </td>
-              <td className="num">{formatMoney(Number(row.rent), row.currency, session.locale)}</td>
+              <td className="num">{moneyLabel(Number(row.rent), row.currency, session.locale)}</td>
               <td
                 data-testid="tenant-phone"
                 data-visible={privacy.showPhone && row.phone_visible ? "true" : "false"}

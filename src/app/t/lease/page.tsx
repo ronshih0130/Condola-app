@@ -1,6 +1,6 @@
 import { dictionary, makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
-import { formatDate, formatMoney } from "@/server/format";
+import { formatDate, moneyLabel } from "@/server/format";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { selectedLease } from "@/lib/tenant-lease";
@@ -31,10 +31,10 @@ export default async function TenantLeasePage() {
         {formatDate(money.lease.start_date, session.locale, session.calendar, dict)} – {formatDate(money.lease.end_date, session.locale, session.calendar, dict)}
       </p>
       <p>
-        {t("i_rent_label")} {formatMoney(Number(money.lease.rent), money.currency, session.locale)}
+        {t("i_rent_label")} {moneyLabel(Number(money.lease.rent), money.currency, session.locale)}
       </p>
       <p>
-        {t("i_deposit_label")} {formatMoney(Number(money.lease.deposit), money.currency, session.locale)}
+        {t("i_deposit_label")} {moneyLabel(Number(money.lease.deposit), money.currency, session.locale)}
       </p>
       <p className="fn">{t("i_firm_uses", { firm: money.lease.firm, brand: t("i_brand") })}</p>
     </div>

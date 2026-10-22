@@ -9,10 +9,11 @@ import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
 import { showDemoLineCopy } from "@/server/demo";
-import { formatDate, formatMoney } from "@/server/format";
+import { formatDate, moneyLabel } from "@/server/format";
 import { majorField } from "@/server/portfolio";
 import { leaseTermsEditable } from "@/server/lease-rules";
 import { portalLoginReady } from "@/server/portal-invite";
+import { isUuid } from "@/server/repair-rules";
 import { leaseDetail, threadMessages } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -27,6 +28,7 @@ export default async function LeasePage({
   searchParams: Promise<{ tab?: string; error?: string; audit?: string; created?: string }>;
 }) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const query = await searchParams;
   const tab = query.tab || "summary";
   const session = await getSession();
@@ -37,7 +39,7 @@ export default async function LeasePage({
   const { lease, signatures } = detail;
   const canInvite = session.role === "admin" || session.role === "manager";
   const tenantActivated = canInvite ? await portalLoginReady(lease.tenant_user_id) : false;
-  const money = (minor: number) => formatMoney(minor, lease.currency, session.locale);
+  const money = (minor: number) => moneyLabel(minor, lease.currency, session.locale);
   const tenantSig = signatures.find((row) => row.role === "tenant");
   const managerSig = signatures.find((row) => row.role === "manager");
   const tabs = [

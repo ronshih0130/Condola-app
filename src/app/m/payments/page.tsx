@@ -2,7 +2,7 @@ import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
 import { actionReversePayment } from "@/server/auth-actions";
 import { actionConfirmPayment, actionRejectPayment } from "@/server/actions";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { can, rolesFor } from "@/server/perms";
 import { listPayments } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -57,7 +57,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                   <td data-label={t("i_paid_on")}>{row.paid_on}</td>
                   <td data-label={t("i_last5")}>{row.last5}</td>
                   <td className="num" data-label={t("i_amount_label")}>
-                    {formatMoney(Number(row.amount), row.currency, session.locale)}
+                    {moneyLabel(Number(row.amount), row.currency, session.locale)}
                   </td>
                   <td data-label={t("i_status")}>
                     <span className={`chip ${statusClass(row.status)}`}>{t(statusKey(row.status))}</span>

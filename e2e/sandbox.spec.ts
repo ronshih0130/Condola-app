@@ -32,7 +32,8 @@ test("a live firm opens live with no env cookie, and sign-in drops a leftover te
   await expect(banner).toBeVisible();
   await expect(banner).toContainText("範例環境");
   await expect(banner).toContainText("回到正式公司");
-  await expect(page.getByTestId("org-switch")).toContainText("（範例）");
+  await expect(page.getByTestId("org-switch")).toContainText("範例公司");
+  await expect(page.getByTestId("org-switch")).not.toContainText("（範例）");
   await expect(page.getByRole("link", { name: sampleProperty })).toBeVisible();
   await expect(page.getByTestId("sample-tag")).toHaveCount(0);
   await expect(page.getByTestId("property-list")).not.toContainText("範例資料");
@@ -58,6 +59,7 @@ test("staff can open the seeded sandbox", async ({ page }) => {
   await expect(page.getByTestId("org-switch")).toContainText(FIRM_NAME);
 
   await page.getByTestId("org-switch").click();
+  await expect(page.getByTestId("org-pick-sandbox")).toHaveText("範例公司");
   await page.getByTestId("org-pick-sandbox").click();
   await expect(page.getByTestId("env-load")).toHaveCount(0);
   const banner = page.getByTestId("env-banner");
@@ -67,6 +69,8 @@ test("staff can open the seeded sandbox", async ({ page }) => {
   await expect(banner).toContainText("回到正式公司");
   await expect(banner).not.toContainText("開始正式使用");
   await expect(banner).not.toContainText("要不要帶到正式公司");
+  await expect(page.getByTestId("org-switch")).toContainText("範例公司");
+  await expect(page.getByTestId("org-switch")).not.toContainText("（範例）");
   await expect(banner).toHaveCSS("background-color", "rgb(253, 243, 220)");
   await expect(banner).toHaveCSS("border-bottom-color", "rgb(242, 181, 68)");
   await page.goto("/m/properties");

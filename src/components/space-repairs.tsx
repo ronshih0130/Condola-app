@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Locale } from "@/i18n";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 
 export function SpaceRepairs({
   t,
@@ -25,7 +25,7 @@ export function SpaceRepairs({
       <h3>{t("i_repair_history")}</h3>
       {repairs.length === 0 ? <p className="small muted">{t("i_repair_none")}</p> : null}
       {repairs.map((repair) => {
-        const cost = repair.final_cost ? formatMoney(repair.final_cost, repair.currency, locale) : "";
+        const cost = repair.final_cost ? moneyLabel(repair.final_cost, repair.currency, locale) : "";
         const detail = [repair.vendor_name, cost].filter(Boolean).join(" · ");
         return (
           <div className="n" key={repair.id}>

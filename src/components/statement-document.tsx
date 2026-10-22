@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Locale, T } from "@/i18n";
 import { BrandImage } from "@/components/brand";
-import { formatMoney, moneyLabel, ownerSettlement } from "@/server/format";
+import { moneyLabel, ownerSettlement } from "@/server/format";
 
 export function StatementDocument({
   t,
@@ -34,14 +34,13 @@ export function StatementDocument({
     payouts: Number(row.payouts),
     closing: Number(row.closing),
   });
-  const money = (minor: number) => formatMoney(minor, row.currency, locale);
-  const labeled = (minor: number) => moneyLabel(minor, row.currency, locale);
+  const money = (minor: number) => moneyLabel(minor, row.currency, locale);
   const summary = [
     ["i_opening", money(figures.opening), ""],
     ["i_rent_received", money(figures.rent), "statement-rent"],
     ["i_other_income", money(figures.other), ""],
-    ["i_fee", labeled(figures.fee), "statement-fee"],
-    ["i_expenses", labeled(figures.expenses), ""],
+    ["i_fee", money(figures.fee), "statement-fee"],
+    ["i_expenses", money(figures.expenses), ""],
   ] as const;
   return (
     <div className="card" style={{ maxWidth: 640 }} data-testid="statement-document">
@@ -61,7 +60,7 @@ export function StatementDocument({
               <td>{t("i_net_owner")}</td>
               <td className="num">
                 <span className="chip warn" data-testid="owner-owes">
-                  {t("owner_owes")} {labeled(figures.owes)}
+                  {t("owner_owes")} {money(figures.owes)}
                 </span>
               </td>
             </tr>
@@ -69,12 +68,12 @@ export function StatementDocument({
             <>
               <tr>
                 <td>{t("i_net_owner")}</td>
-                <td className="num">{labeled(figures.payable)}</td>
+                <td className="num">{money(figures.payable)}</td>
               </tr>
               <tr>
                 <td>{t("i_closing")}</td>
                 <td className="num" data-testid="statement-closing">
-                  {labeled(Math.max(0, figures.closing))}
+                  {money(Math.max(0, figures.closing))}
                 </td>
               </tr>
             </>
@@ -84,7 +83,7 @@ export function StatementDocument({
       {figures.owes > 0 ? (
         <div className="bd">
           <div className="alert warn small" data-testid="owner-owes-reason">
-            ⚠ {t("owner_owes_reason", { cost: labeled(figures.costs), rent: labeled(figures.rent + figures.other) })}
+            ⚠ {t("owner_owes_reason", { cost: money(figures.costs), rent: money(figures.rent + figures.other) })}
           </div>
         </div>
       ) : null}

@@ -84,5 +84,5 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
   await page.getByTestId("space-row-3F-A").getByRole("link", { name: "編輯" }).click();
   await expect(page.getByTestId("space-repairs")).toContainText("廚房漏水測試");
   await expect(page.getByTestId("space-repairs")).toContainText("老張水電");
-  await expect(page.getByTestId("space-repairs")).toContainText("$1,800");
+  await expect(page.getByTestId("space-repairs")).toContainText("NT$1,800");
 });

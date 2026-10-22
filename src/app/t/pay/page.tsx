@@ -1,7 +1,7 @@
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner } from "@/components/ui";
-import { formatMoney } from "@/server/format";
+import { moneyLabel as formatMoney } from "@/server/format";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { selectedLease } from "@/lib/tenant-lease";

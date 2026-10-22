@@ -37,7 +37,7 @@ const LEASE_TENANT_BODY = `{租客姓名} 您好：
 
 403 台中市西區府後街38號`;
 
-const OVERDUE_ADMIN_SUBJECT = "【欠租提醒】{物件名稱} {戶別房間} 本期租金尚未繳清";
+const OVERDUE_ADMIN_SUBJECT = "【繳款提醒】{物件名稱} {戶別房間} 本期租金尚未繳清";
 const OVERDUE_ADMIN_BODY = `{管理員姓名} 您好：
 
 以下帳單已過繳費日，系統尚未有繳款紀錄：

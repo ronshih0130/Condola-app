@@ -37,6 +37,8 @@ async function reachLeaseSubmit(page: Page, opts: { propertyName: string; label:
   await page.getByTestId("wizard-next").click();
   const submit = page.getByTestId("submit-lease");
   await expect(submit).toBeEnabled();
+  await expect(page.getByTestId("lease-confirm-rent")).toHaveText("NT$10,000");
+  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("2 個月（NT$20,000）");
   return submit;
 }
 
@@ -102,6 +104,8 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await expect(submit).toBeEnabled();
   await expect(page).toHaveURL(/\/m\/leases\/new/);
   await expect(page.getByTestId("paper-sign")).toHaveCount(0);
+  await expect(page.getByTestId("lease-confirm-rent")).toHaveText("NT$10,000");
+  await expect(page.getByTestId("lease-confirm-deposit")).toHaveText("3 個月（NT$30,000）");
   await submit.evaluate((button: HTMLButtonElement) => {
     button.click();
     button.click();
@@ -124,7 +128,7 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await page.getByRole("link", { name: "摘要" }).click();
   await expect(page.getByTestId("deposit-override-reason")).toContainText("屋主同意兩個月以上押金");
   await expect(page.getByTestId("deposit-alert")).toHaveCount(0);
-  await expect(page.getByTestId("summary-deposit")).toContainText("30,000");
+  await expect(page.getByTestId("summary-deposit")).toHaveText("NT$30,000");
   await page.getByTestId("deposit-months").fill("4");
   const editAlert = page.getByTestId("deposit-alert");
   await expect(editAlert).toBeVisible();
@@ -142,8 +146,8 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await expect(page.getByTestId("deposit-alert")).toHaveCount(0);
   await expect(page.getByTestId("deposit-reason")).toHaveCount(0);
   await expect(page.getByTestId("deposit-override-reason")).toContainText("屋主同意調整為四個月押金");
-  await expect(page.getByTestId("summary-deposit")).toContainText("40,000");
-  await expect(page.getByTestId("summary-rent")).toContainText("10,000");
+  await expect(page.getByTestId("summary-deposit")).toHaveText("NT$40,000");
+  await expect(page.getByTestId("summary-rent")).toHaveText("NT$10,000");
 
   await page.locator(".tabsx").getByRole("link", { name: "簽署與文件" }).click();
   await page.getByTestId("signed-pdf").setInputFiles({

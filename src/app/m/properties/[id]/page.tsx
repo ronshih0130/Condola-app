@@ -5,7 +5,7 @@ import { actionPhoneVisibility, actionSetMeter } from "@/server/actions";
 import { AuditHistory } from "@/components/audit-log";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
 import { displaySampleName } from "@/server/sandbox-data";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { can } from "@/server/perms";
 import { propertyDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -63,7 +63,7 @@ export default async function PropertyPage({
             {detail.wholes.map((unit) => (
               <div className="n" key={unit.id} data-testid="whole-unit-saved">
                 <b>{displaySampleName(unit.label)}</b>
-                <span className="small muted">{formatMoney(Number(unit.base_rent_minor), detail.property.currency, session.locale)}</span>
+                <span className="small muted">{moneyLabel(Number(unit.base_rent_minor), detail.property.currency, session.locale)}</span>
               </div>
             ))}
             {detail.rooms.map((room) => (
@@ -71,7 +71,7 @@ export default async function PropertyPage({
                 <b>
                   {displaySampleName(room.unit_label)} {displaySampleName(room.label)}
                 </b>
-                <span className="small muted">{formatMoney(Number(room.base_rent_minor), detail.property.currency, session.locale)}</span>
+                <span className="small muted">{moneyLabel(Number(room.base_rent_minor), detail.property.currency, session.locale)}</span>
                 <span className="sp" />
                 {room.lease_id ? (
                   <Link href={`/m/leases/${room.lease_id}`}>{displaySampleName(room.tenant || "")}</Link>
@@ -120,7 +120,7 @@ export default async function PropertyPage({
                 {displaySampleName(repair.place)}
                 {repair.vendor_name ? ` · ${repair.vendor_name}` : ""}
                 {repair.completed_on ? ` · ${repair.completed_on}` : repair.scheduled_on ? ` · ${repair.scheduled_on}` : ""}
-                {repair.final_cost ? ` · ${formatMoney(repair.final_cost, repair.currency || detail.property.currency, session.locale)}` : ""}
+                {repair.final_cost ? ` · ${moneyLabel(repair.final_cost, repair.currency || detail.property.currency, session.locale)}` : ""}
               </div>
               <span className={`chip ${statusClass(repair.status)}`}>{t(statusKey(repair.status))}</span>
             </div>

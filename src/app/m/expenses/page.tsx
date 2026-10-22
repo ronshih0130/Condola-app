@@ -3,7 +3,7 @@ import { makeT } from "@/i18n";
 import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader, expenseCategoryKey, expenseStatusClass, expenseStatusKey } from "@/components/ui";
 import { expenseFormOptions, listExpenses } from "@/server/expenses";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
@@ -118,7 +118,7 @@ export default async function ExpensesPage({
                     ) : null}
                   </Cell>
                   <Cell label={t("i_amount_label")} className="num">
-                    {formatMoney(row.amount_minor, row.currency, session.locale)}
+                    {moneyLabel(row.amount_minor, row.currency, session.locale)}
                   </Cell>
                   <Cell label={t("i_status")}>
                     <span className={`chip ${expenseStatusClass(row.status)}`} data-testid="expense-status">

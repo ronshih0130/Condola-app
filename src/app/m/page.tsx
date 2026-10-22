@@ -4,7 +4,7 @@ import { FooterNote } from "@/components/chrome";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader } from "@/components/ui";
 import { showDemoLineCopy } from "@/server/demo";
-import { formatDate, formatMoney } from "@/server/format";
+import { formatDate, moneyLabel } from "@/server/format";
 import { dashboard } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -21,7 +21,7 @@ export default async function DashboardPage({
   const t = makeT(session.locale);
   const data = await dashboard(session);
   const dict = dictionary(session.locale);
-  const money = (minor: number) => formatMoney(minor, "TWD", session.locale);
+  const money = (minor: number | string, currency = "TWD") => moneyLabel(minor, currency, session.locale);
   return (
     <>
       <PageHeader
@@ -93,11 +93,11 @@ export default async function DashboardPage({
       <div className="grid5" style={{ marginBottom: 16 }}>
         <Link className="card kpi" href="/m/rent">
           <div className="lbl">{t("i_paid")}</div>
-          <div className="val">{money(data.received)}</div>
+          <div className="val" data-testid="dash-received">{money(data.received)}</div>
         </Link>
         <Link className="card kpi" href="/m/rent">
           <div className="lbl">{t("i_open_balance")}</div>
-          <div className="val">{money(data.outstanding)}</div>
+          <div className="val" data-testid="dash-outstanding">{money(data.outstanding)}</div>
           <div className="sub">{t("i_tenant_count", { count: data.owingCount })}</div>
         </Link>
         <Link className="card kpi" href="/m/payments">
@@ -130,7 +130,7 @@ export default async function DashboardPage({
                   <div className="row small">
                     <b>{displaySampleName(property.name)}</b>
                     <span className="sp" />
-                    {money(received)} / {money(billed)}
+                    <span data-testid="dash-property-amounts">{money(received)} / {money(billed)}</span>
                   </div>
                   <div className="bar">
                     <i style={{ width: `${width}%` }} />
@@ -164,7 +164,7 @@ export default async function DashboardPage({
                       </Link>
                     </Cell>
                     <Cell label={t("i_space")}>{displaySampleName(row.place)}</Cell>
-                    <Cell label={t("i_balance")}>{formatMoney(Number(row.balance), row.currency, session.locale)}</Cell>
+                    <Cell label={t("i_balance")}>{money(row.balance, row.currency)}</Cell>
                   </tr>
                 ))}
               </tbody>

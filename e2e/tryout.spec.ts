@@ -244,10 +244,15 @@ test("rent due notice shows rent only", async ({ page }) => {
   const deposit = page.getByTestId("rent-due-deposit");
   await expect(amount).toHaveAttribute("data-minor", "1200000");
   await expect(deposit).toHaveAttribute("data-minor", "2400000");
-  await expect(amount).toContainText("12,000");
+  await expect(amount).toHaveText("NT$12,000");
   await expect(amount).not.toContainText("36,000");
-  await expect(deposit).toContainText("24,000");
+  await expect(deposit).toContainText("NT$24,000");
   await expect(deposit).toContainText("押金");
+  await page.goto("/t/pay");
+  await expect(page.locator("p.b")).toHaveText("NT$12,000");
+  await page.goto("/t/lease");
+  await expect(page.getByText("月租 NT$12,000")).toBeVisible();
+  await expect(page.getByText("押金 NT$24,000")).toBeVisible();
 });
 
 test("manager phone width keeps a menu, contained tables, and the locale toggle", async ({ page }) => {

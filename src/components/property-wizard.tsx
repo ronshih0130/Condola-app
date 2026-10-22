@@ -23,10 +23,18 @@ type RoomDraft = { label: string; type: string; rent: string; opening: string };
 type UnitDraft = { floor: string; door: string; rooms: RoomDraft[] };
 
 function money(major: number, currency: string, locale: string) {
+  const code = currency.trim().toUpperCase();
+  if (code === "TWD") {
+    const formatted = new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(Math.round(Math.abs(major)));
+    return `NT$${formatted}`;
+  }
   return new Intl.NumberFormat(locale === "zh-TW" ? "zh-Hant-TW" : "en-US", {
     style: "currency",
-    currency,
-    maximumFractionDigits: currency === "TWD" ? 0 : 2,
+    currency: code,
+    maximumFractionDigits: 2,
   }).format(major);
 }
 

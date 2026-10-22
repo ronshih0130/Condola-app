@@ -3,7 +3,7 @@ import { makeT } from "@/i18n";
 import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { FlowError } from "@/server/errors";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { loadIncomeExpense, reportFilterOptions, reportPeriod, type ReportPeriod, type ReportRow } from "@/server/income-expense";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -152,13 +152,13 @@ export default async function IncomeExpenseReportPage({
                     <Cell label={t("i_owner")}>{row.owner_name || "—"}</Cell>
                     <Cell label={t("i_report_currency")}>{row.currency}</Cell>
                     <Cell label={t("i_report_income")} className="num">
-                      {formatMoney(row.income_minor, row.currency, session.locale)}
+                      {moneyLabel(row.income_minor, row.currency, session.locale)}
                     </Cell>
                     <Cell label={t("i_report_expense")} className="num">
-                      {formatMoney(row.expense_minor, row.currency, session.locale)}
+                      {moneyLabel(row.expense_minor, row.currency, session.locale)}
                     </Cell>
                     <Cell label={t("i_report_net")} className="num">
-                      {formatMoney(row.net_minor, row.currency, session.locale)}
+                      {moneyLabel(row.net_minor, row.currency, session.locale)}
                     </Cell>
                   </tr>
                 );

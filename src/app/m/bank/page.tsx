@@ -2,7 +2,7 @@ import { makeT } from "@/i18n";
 import { ApproveForm, BankImport } from "@/components/dialogs";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { sampleCsv } from "@/server/domain";
-import { formatMoney } from "@/server/format";
+import { moneyLabel } from "@/server/format";
 import { latestUnmatchedPayment, listMatches } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
@@ -46,7 +46,7 @@ export default async function BankPage({ searchParams }: { searchParams: Promise
                       </div>
                     </td>
                     <td className="num" data-label={t("i_amount_label")}>
-                      {formatMoney(Number(match.amount), match.currency, session.locale)}
+                      {moneyLabel(Number(match.amount), match.currency, session.locale)}
                     </td>
                     <td className="r">
                       <ApproveForm id={match.id} />
