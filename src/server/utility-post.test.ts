@@ -173,9 +173,13 @@ test("a pending tenant home shows the unsigned note instead of the rent-due card
 });
 
 test("electricity lines are prefixed with the billing month", () => {
-  assert.equal(electricityMonthLabel("2026-10-01", "電費 12 度 × 5 元"), "2026-10 電費 12 度 × 5 元");
-  assert.equal(electricityMonthLabel("2026-10-01", "2026-10 電費"), "2026-10 電費");
+  assert.equal(electricityMonthLabel("2026-11-01", "電費"), "2026年11月 電費");
+  assert.equal(electricityMonthLabel("2026-10-01", "電費 12 度 × 5 元"), "2026年10月 電費 12 度 × 5 元");
+  assert.equal(electricityMonthLabel("2026-03-01", "電費"), "2026年3月 電費");
+  assert.equal(electricityMonthLabel("2026-11-01", "2026年11月 電費"), "2026年11月 電費");
+  assert.equal(electricityMonthLabel("2026-03-15", "2026年3月 電費"), "2026年3月 電費");
   assert.equal(electricityMonthLabel(null, "電費"), "電費");
+  assert.equal(electricityMonthLabel("2026-00-01", "電費"), "電費");
   const pay = readFileSync(new URL("../app/t/pay/page.tsx", import.meta.url), "utf8");
   const utilities = readFileSync(new URL("../app/m/rent/utilities/page.tsx", import.meta.url), "utf8");
   assert.match(pay, /electricityMonthLabel\(line\.periodStart/);
