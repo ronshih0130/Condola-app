@@ -31,14 +31,12 @@ AS $$
   )
 $$;
 
--- SECURITY DEFINER: tx() sets the session role to authenticated, and this
--- body calls condola_property_address_key. Trigger entry does not check
--- EXECUTE, but that inner call does. Running as the owner keeps the call
--- working after EXECUTE is revoked from authenticated.
+-- Invoker. tx() sets the session role to authenticated. Trigger fire does
+-- not check EXECUTE. The body calls condola_property_address_key, which
+-- authenticated may execute.
 CREATE OR REPLACE FUNCTION public.condola_set_property_address_key()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
@@ -47,13 +45,11 @@ BEGIN
 END;
 $$;
 
--- Same reason as condola_set_property_address_key: the lookup of the
--- property key runs as the owner, and only NEW.import_address_key is assigned.
--- The property must belong to the same org as the unit.
+-- Invoker, same as condola_set_property_address_key. Only
+-- NEW.import_address_key is assigned, and only from a property in the same org.
 CREATE OR REPLACE FUNCTION public.condola_set_unit_import_address_key()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
@@ -180,6 +176,9 @@ CREATE INDEX IF NOT EXISTS contacts_org_phone_idx
   WHERE phone_e164 IS NOT NULL AND archived_at IS NULL;
 
 -- Prod default privileges grant EXECUTE on new public functions to anon and
--- authenticated. Revoke that after every CREATE so a later default grant
--- cannot leave these callable. Trigger fire does not need the grant.
-REVOKE EXECUTE ON FUNCTION public.condola_property_address_key(text), public.condola_set_property_address_key(), public.condola_set_unit_import_address_key() FROM PUBLIC, anon, authenticated;
+-- authenticated. Trigger fire does not check EXECUTE on these two. Their
+-- inner call to condola_property_address_key runs as authenticated.
+REVOKE EXECUTE ON FUNCTION public.condola_set_property_address_key(), public.condola_set_unit_import_address_key() FROM PUBLIC, anon, authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.condola_property_address_key(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.condola_property_address_key(text) TO authenticated, service_role;

@@ -573,31 +573,50 @@ test("bulk import migration is additive and idempotent", () => {
   assert.match(code, /ADD VALUE IF NOT EXISTS 'imported'/);
   assert.match(code, /CREATE OR REPLACE FUNCTION/);
   assert.match(code, /IF NOT EXISTS \(/);
-  assert.match(code, /SECURITY DEFINER[\s\S]*SET search_path = pg_catalog, public/);
+  assert.equal(code.match(/SECURITY DEFINER/g)?.length, 1);
+  assert.match(code, /FUNCTION public\.condola_sync_unit_address_keys\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+SECURITY DEFINER\s+SET search_path = pg_catalog, public/);
+  assert.match(code, /FUNCTION public\.condola_property_address_key\(display text\)\s+RETURNS text\s+LANGUAGE sql\s+IMMUTABLE\s+SET search_path = pg_catalog/);
+  assert.match(code, /FUNCTION public\.condola_set_property_address_key\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+SET search_path = pg_catalog, public/);
+  assert.match(code, /FUNCTION public\.condola_set_unit_import_address_key\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+SET search_path = pg_catalog, public/);
   assert.match(code, /REVOKE EXECUTE ON FUNCTION public\.condola_sync_unit_address_keys\(\) FROM PUBLIC, anon, authenticated/);
-  const locked = [
+  assert.match(code, /REVOKE EXECUTE ON FUNCTION public\.condola_set_property_address_key\(\), public\.condola_set_unit_import_address_key\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(code, /REVOKE EXECUTE ON FUNCTION public\.condola_property_address_key\(text\) FROM PUBLIC, anon/);
+  assert.match(code, /GRANT EXECUTE ON FUNCTION public\.condola_property_address_key\(text\) TO authenticated, service_role/);
+  const keyRevokeAt = code.indexOf("REVOKE EXECUTE ON FUNCTION public.condola_property_address_key(text) FROM PUBLIC, anon");
+  const keyGrantAt = code.indexOf("GRANT EXECUTE ON FUNCTION public.condola_property_address_key(text) TO authenticated, service_role");
+  assert.ok(keyGrantAt > keyRevokeAt);
+  const functions = [
     "public.condola_property_address_key(text)",
     "public.condola_set_property_address_key()",
     "public.condola_set_unit_import_address_key()",
     "public.condola_sync_unit_address_keys()",
   ];
-  const revokes = [...code.matchAll(/REVOKE EXECUTE ON FUNCTION ([\s\S]*?) FROM (PUBLIC, anon, authenticated)/g)].map((match) => match[1]);
-  for (const fn of locked) {
-    assert.equal(revokes.some((list) => list.split(",").map((name) => name.trim()).includes(fn)), true, fn);
-  }
-  for (const role of ["public", "anon", "authenticated"]) {
-    for (const fn of locked) {
-      assert.equal(revokes.some((list) => list.split(",").map((name) => name.trim()).includes(fn)), true, `has_function_privilege('${role}', '${fn}', 'EXECUTE')`);
+  const execute = new Map(functions.map((fn) => [fn, new Set(["public", "anon", "authenticated", "service_role"])]));
+  for (const match of code.matchAll(/\b(REVOKE|GRANT) EXECUTE ON FUNCTION\s+([\s\S]*?)\s+(FROM|TO)\s+([^;]+)/g)) {
+    const names = match[2].split(",").map((name) => name.trim());
+    const roles = match[4].split(",").map((role) => role.trim().toLowerCase());
+    for (const name of names) {
+      const held = execute.get(name);
+      assert.ok(held, name);
+      for (const role of roles) {
+        if (match[1] === "REVOKE") held.delete(role);
+        else held.add(role);
+      }
     }
   }
-  const tail = code.trim().split(";").map((part) => part.trim()).filter(Boolean).pop();
-  assert.equal(
-    tail,
-    "REVOKE EXECUTE ON FUNCTION public.condola_property_address_key(text), public.condola_set_property_address_key(), public.condola_set_unit_import_address_key() FROM PUBLIC, anon, authenticated",
-  );
-  assert.doesNotMatch(code, /GRANT\s+EXECUTE\b/i);
-  assert.match(code, /FUNCTION public\.condola_set_property_address_key\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+SECURITY DEFINER\s+SET search_path = pg_catalog, public/);
-  assert.match(code, /FUNCTION public\.condola_set_unit_import_address_key\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+SECURITY DEFINER\s+SET search_path = pg_catalog, public/);
+  for (const fn of functions) {
+    const held = execute.get(fn);
+    assert.ok(held);
+    for (const role of ["public", "anon"]) {
+      assert.equal(held.has(role), false, `has_function_privilege('${role}', '${fn}', 'EXECUTE')`);
+    }
+    assert.equal(
+      held.has("authenticated"),
+      fn === "public.condola_property_address_key(text)",
+      `has_function_privilege('authenticated', '${fn}', 'EXECUTE')`,
+    );
+  }
+  assert.equal(execute.get("public.condola_property_address_key(text)")?.has("service_role"), true);
   assert.match(code, /WHERE p\.id = NEW\.property_id\s+AND p\.org_id = NEW\.org_id/);
   assert.match(code, /WHERE property_id = NEW\.id\s+AND org_id = NEW\.org_id/);
   assert.match(code, /SET address_key = public\.condola_property_address_key\(address_display\)/);
