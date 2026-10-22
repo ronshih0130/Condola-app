@@ -4,6 +4,7 @@ import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionPrepareUtility, actionVoidUtility } from "@/server/actions";
 import { PendingSubmit, UtilityConfirmForm } from "@/components/utility-confirm";
+import { UtilityUnitSelect } from "@/components/utility-unit-select";
 import { electricityMonthLabel, signedMoneyLabel } from "@/server/format";
 import { monthBounds, taipeiToday } from "@/server/money";
 import { can } from "@/server/perms";
@@ -106,15 +107,14 @@ export default async function UtilityPostingPage({
         <div className="grid2">
           <div className="fg">
             <label className="f" htmlFor="utility-unit">{t("i_property_name")}</label>
-            <select id="utility-unit" className="inp" name="unit" data-testid="utility-unit" key={selected?.id ?? ""} defaultValue={selected?.id ?? ""}>
-              {[...units.values()].map((unit) => (
-                <option key={unit.id} value={unit.id}>{unit.label}</option>
-              ))}
-            </select>
+            <UtilityUnitSelect
+              units={[...units.values()].map((unit) => ({ id: unit.id, label: unit.label }))}
+              selectedId={selected?.id ?? ""}
+            />
           </div>
           <div className="fg">
             <label className="f" htmlFor="utility-month">{t("i_utility_month")}</label>
-            <input id="utility-month" className="inp" type="month" name="month" data-testid="utility-month" defaultValue={monthValue} />
+            <input id="utility-month" className="inp" type="month" name="month" data-testid="utility-month" key={monthValue} defaultValue={monthValue} />
           </div>
         </div>
         <p className="small" data-testid="utility-period">{formPeriod.start} – {formPeriod.end}</p>

@@ -182,7 +182,11 @@ test("electricity lines are prefixed with the billing month", () => {
   assert.match(utilities, /electricityMonthLabel\(detail\.run\.period_start, line\.description\)/);
   assert.match(utilities, /resultUnit\.unit_id/);
   assert.match(utilities, /units\.get\(resultUnit\.unit_id\)/);
-  assert.match(utilities, /data-testid="utility-unit" key=\{selected\?\.id \?\? ""\}/);
+  assert.match(utilities, /UtilityUnitSelect/);
+  assert.match(utilities, /selectedId=\{selected\?\.id \?\? ""\}/);
+  const unitSelect = readFileSync(new URL("../components/utility-unit-select.tsx", import.meta.url), "utf8");
+  assert.match(unitSelect, /setValue\(selectedId\)/);
+  assert.match(unitSelect, /\[selectedId\]/);
 });
 
 test("new vacant electricity expenses use 電費（空房／未簽約） and existing rows keep 電費（空房）", () => {
