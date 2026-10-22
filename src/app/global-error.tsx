@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { BUILD_SHA } from "@/build-info";
 import { PageError } from "@/components/page-error";
-import { attemptChunkReload } from "@/lib/chunk-reload";
+import { attemptChunkReload, recoverChunkFailure } from "@/lib/chunk-reload";
 import "./globals.css";
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
@@ -11,7 +11,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
     attemptChunkReload(error, {
       buildId: BUILD_SHA,
       storage: window.sessionStorage,
-      reload: () => window.location.reload(),
+      reload: () => recoverChunkFailure(window.location, Date.now()),
     });
   }, [error]);
 
