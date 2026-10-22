@@ -24,6 +24,7 @@ import { nextInvoiceNumber } from "./invoice-number";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
+import { leaseIdentityReady } from "./id-docs";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
 import { assertTicketStatus } from "./repair-rules";
@@ -1486,6 +1487,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
     const asTenant = Boolean(contact) && session.kind === "tenant";
     const asManager = Boolean(member) && (member?.role === "admin" || member?.role === "manager") && !asTenant;
     if (!asTenant && !asManager) throw new FlowError("errors.forbidden");
+    if (!(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
     const role = asTenant ? "tenant" : "manager";
     const signature = await maybe<{ id: string }>(
       client,
@@ -1549,6 +1551,7 @@ export async function uploadSignedLeasePdf(
     );
     if (!lease) throw new FlowError("errors.notFound");
     const imported = lease.esign === "imported";
+    if (!imported && !(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
     const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
     const stored = await one<{ id: string }>(
       client,

@@ -9,8 +9,8 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
-  const session = await getSession();
   const query = await searchParams;
+  const session = await getSession();
   const t = makeT(session.locale);
   const mail = can(session.role, "settings.edit") ? await orgMailSettings(session.orgId) : null;
   return (
@@ -61,6 +61,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p className="small">{t("s_c6a6031")}</p>
         <p className="small muted">{t("s_ff6ff46")}</p>
       </div>
+      {session.role === "admin" ? (
+        <div className="card pad" style={{ maxWidth: 720, marginTop: 16 }}>
+          <h3>{t("idv_ret_h")}</h3>
+          <p id="idvRetainDays" data-testid="idv-retain-days">
+            {t("i_id_retain")}
+          </p>
+        </div>
+      ) : null}
     </>
   );
 }

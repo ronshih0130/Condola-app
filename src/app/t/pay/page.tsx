@@ -56,10 +56,17 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
           ))}
           <p className="b" data-testid="tenant-bill">{t("i_pay_total")} {moneyLabel(money.dueMinor, money.currency, session.locale)}</p>
           <p className="small">{t("i_account_last5", { last5: "88921" })}</p>
-          {money.dueMinor > 0 ? (
-            <PayDialog leaseId={lease.lease_id} dueMinor={money.dueMinor} currency={money.currency} label={t("i_report_pay")} returnTo="tenant" />
+          {money.dueMinor <= 0 ? (
+            <div className="alert ok" data-testid="pay-status">{t("i_pay_settled")}</div>
           ) : (
-            <div className="alert ok">{t("i_paid_up")}</div>
+            <PayDialog
+              leaseId={lease.lease_id}
+              dueMinor={money.dueMinor}
+              currency={money.currency}
+              label={t("i_report_pay")}
+              returnTo="tenant"
+              status={money.paidMinor > 0 ? t("i_pay_partial") : undefined}
+            />
           )}
         </>
       )}

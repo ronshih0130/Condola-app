@@ -96,7 +96,7 @@ test("sample names stay tagged once and phones become E.164", () => {
   assert.equal(displaySampleName("Oakland [Sample data]"), "Oakland");
   assert.equal(toE164("0900-000-101"), "+886900000101");
   assert.equal(toE164(""), null);
-  assert.equal(sampleIdMask(1), "A00****001");
+  assert.equal(sampleIdMask(1), "A******001");
 });
 
 test("sandbox ignores the free cap and live allows four units or a plan or trial", () => {

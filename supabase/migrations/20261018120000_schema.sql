@@ -1,3 +1,4 @@
+-- Version 20261018120000.
 -- =============================================================================
 -- PropertyOS (working name) - MVP schema, Postgres 15+ / Supabase
 -- Source of truth: MVP_Scope_v0.2.md, Personas_Journeys_Needs_v0.3.md

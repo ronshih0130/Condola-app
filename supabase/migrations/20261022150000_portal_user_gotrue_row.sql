@@ -1,3 +1,4 @@
+-- Version 20261022150000.
 -- Hosted auth.users.id has no default, so the previous provision function
 -- failed with a not-null violation. Replace it. Do not edit the applied
 -- migration. The row also fills the token columns GoTrue scans as text.

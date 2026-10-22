@@ -1,5 +1,6 @@
 import { Client, type QueryResultRow } from "pg";
-import { mapDbError } from "./errors";
+import { finishAfterResponse } from "./after-response";
+import { logServerError, mapDbError } from "./errors";
 import { readEnvChoice, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
 
 function closedSocket(error: unknown) {
@@ -100,6 +101,47 @@ export async function withClient<T>(fn: (client: Client) => Promise<T>): Promise
   }
 }
 
+/**
+ * One connection. The deferred statement runs after the response on Workers
+ * (ctx.waitUntil) and before return in node tests. The photo path uses this
+ * so the access log does not add a round trip before the bytes are sent.
+ */
+export async function withDeferredClient<T>(
+  fn: (client: Client, defer: (sql: string, params?: unknown[]) => void) => Promise<T>,
+): Promise<T> {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    connectionTimeoutMillis: 8000,
+  });
+  const ended = { current: false };
+  client.on("error", () => {});
+  await client.connect();
+  guardSocketClose(client);
+  const deferred: { sql: string; params: unknown[] }[] = [];
+  try {
+    const result = await fn(client, (sql, params = []) => {
+      deferred[0] = { sql, params };
+    });
+    const statement = deferred[0];
+    if (!statement) {
+      await endOnce(client, ended);
+      return result;
+    }
+    const work = (async () => {
+      try {
+        await client.query(statement.sql, statement.params);
+      } finally {
+        await endOnce(client, ended);
+      }
+    })();
+    await finishAfterResponse(work);
+    return result;
+  } catch (error) {
+    await endOnce(client, ended);
+    throw error;
+  }
+}
+
 export async function query<T extends QueryResultRow = QueryResultRow>(sql: string, params: unknown[] = []) {
   return withClient((client) => client.query<T>(sql, params));
 }
@@ -174,10 +216,18 @@ export async function tx<T>(userId: string, fn: (client: Client) => Promise<T>, 
       await client.query("COMMIT");
       return result;
     } catch (error) {
-      await client.query("ROLLBACK");
-      throw mapDbError(error);
+      return rollBack(client, error);
     }
   });
+}
+
+async function rollBack(client: Client, error: unknown): Promise<never> {
+  try {
+    await client.query("ROLLBACK");
+  } catch (rollbackError) {
+    logServerError("rollback", rollbackError);
+  }
+  throw mapDbError(error);
 }
 
 /**
@@ -185,19 +235,27 @@ export async function tx<T>(userId: string, fn: (client: Client) => Promise<T>, 
  * try-out flag run as service_role (BYPASSRLS), matching the schema comment
  * that those flows are server-side. Callers must authorize first.
  */
-export async function svc<T>(userId: string | null, fn: (client: Client) => Promise<T>): Promise<T> {
-  return withClient(async (client) => {
-    try {
-      await client.query("BEGIN");
-      if (userId) await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [userId]);
+/** service_role transaction on a connection the caller already holds. */
+export async function svcOn<T>(client: Client, userId: string | null, fn: (client: Client) => Promise<T>): Promise<T> {
+  try {
+    await client.query("BEGIN");
+    if (userId) {
+      await client.query(
+        `SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'service_role', true)`,
+        [userId],
+      );
+    } else {
       await client.query(`SELECT set_config('request.jwt.claim.role', 'service_role', true)`);
-      await client.query("SET LOCAL ROLE service_role");
-      const result = await fn(client);
-      await client.query("COMMIT");
-      return result;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw mapDbError(error);
     }
-  });
+    await client.query("SET LOCAL ROLE service_role");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    return rollBack(client, error);
+  }
+}
+
+export async function svc<T>(userId: string | null, fn: (client: Client) => Promise<T>): Promise<T> {
+  return withClient((client) => svcOn(client, userId, fn));
 }

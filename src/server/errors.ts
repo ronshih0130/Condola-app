@@ -7,6 +7,55 @@ export class FlowError extends Error {
   }
 }
 
+const HEX_BLOB = /\\x[0-9a-fA-F]{8,}/g;
+const B64_BLOB = /[A-Za-z0-9+/]{40,}={0,2}/g;
+const TWID = /[A-Z][1289]\d{8}/g;
+const ARC = /[A-Z]{2}\d{8}/g;
+const PASSPORT = /\b[A-Z]{1,2}\d{5,10}\b/g;
+const QUOTED = /'[^']*'/g;
+
+/** Drop ID numbers, passport/ARC shapes, quoted DB values, and ciphertext from a log line. */
+export function redactServerMessage(raw: string) {
+  return raw
+    .replace(HEX_BLOB, "\\x…")
+    .replace(B64_BLOB, "[redacted]")
+    .replace(TWID, "[id]")
+    .replace(ARC, "[arc]")
+    .replace(PASSPORT, "[doc]")
+    .replace(QUOTED, "'[redacted]'")
+    .slice(0, 200);
+}
+
+function pgText(value: unknown) {
+  return typeof value === "string" ? value : undefined;
+}
+
+/** Server log line with the driver code and a short redacted message. No names or ID numbers. */
+export function logServerError(tag: string, error: unknown) {
+  const err = error as {
+    name?: string;
+    message?: string;
+    code?: string;
+    routine?: string;
+    severity?: string;
+    constraint?: string;
+    table?: string;
+    column?: string;
+  };
+  const raw = err?.message ?? (error instanceof Error ? error.message : String(error));
+  const message = redactServerMessage(raw);
+  console.error(`${tag} failed`, {
+    name: err?.name ?? (error instanceof Error ? error.name : "Error"),
+    code: pgText(err?.code),
+    routine: pgText(err?.routine),
+    severity: pgText(err?.severity),
+    constraint: pgText(err?.constraint),
+    table: pgText(err?.table),
+    column: pgText(err?.column),
+    message,
+  });
+}
+
 /** Lock, statement, and connect timeouts. These must not fall through to the generic banner. */
 export function isDbTimeout(error: unknown) {
   const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
@@ -21,6 +70,7 @@ export function isDbTimeout(error: unknown) {
 export function mapDbError(error: unknown): Error {
   if (error instanceof FlowError) return error;
   const message = error instanceof Error ? error.message : String(error);
+  logServerError("database", error);
   console.error("database error:", error);
   let key = "errors.generic";
   if (/row-level security|permission denied|insufficient_privilege/i.test(message)) key = "errors.forbidden";
@@ -41,6 +91,8 @@ export function mapDbError(error: unknown): Error {
   else if (/rented as whole_unit/i.test(message)) key = "errors.wholeUnit";
   else if (/month is closed|month_closed/i.test(message)) key = "errors.monthClosed";
   else if (/expense is on an issued statement/i.test(message)) key = "errors.expenseLocked";
+  else if (/id_doc_retention_days/i.test(message)) key = "errors.idRetention";
+  else if (/identity number must be stored masked/i.test(message)) key = "errors.idNumber";
   const wrapped = new FlowError(key);
   if (error instanceof Error) wrapped.cause = error;
   return wrapped;

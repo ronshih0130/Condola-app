@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { FlowError, mapDbError } from "../server/errors";
+import { FlowError, logServerError, mapDbError, redactServerMessage } from "../server/errors";
 import { expiredAuthCookies, expiredEnvChoiceCookies } from "../server/sign-out";
 import { ERRORS, errorText } from "./errors";
 import { makeT } from "./index";
@@ -44,6 +44,42 @@ test("every error key has a translation, and an empty amount uses the amount sen
   const guard = mapDbError(new Error("unit 3F is rented as whole_unit; switch it to by_room before leasing a room"));
   assert.ok(guard instanceof FlowError);
   assert.equal(guard.key, "errors.wholeUnit");
+  const redacted = redactServerMessage("passport AB1234567 name '張雅文' id A123456789 arc AC12345678 detail 'duplicate key value violates'");
+  assert.equal(redacted.includes("AB1234567"), false);
+  assert.equal(redacted.includes("A123456789"), false);
+  assert.equal(redacted.includes("AC12345678"), false);
+  assert.equal(redacted.includes("張雅文"), false);
+  assert.equal(redacted.includes("duplicate"), false);
+  assert.match(redacted, /\[doc\]/);
+  assert.match(redacted, /\[id\]/);
+  assert.match(redacted, /\[arc\]/);
+  assert.match(redacted, /'\[redacted\]'/);
+  const lines: unknown[][] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    lines.push(args);
+  };
+  try {
+    logServerError("finalizeTenantId", {
+      name: "error",
+      code: "23514",
+      routine: "ExecConstraints",
+      severity: "ERROR",
+      constraint: "id_upload_slots_ciphertext_cap",
+      table: "id_upload_slots",
+      column: "ciphertext",
+      message: "new row for relation id_upload_slots violates check constraint",
+      detail: "Failing row contains (A123456789)",
+    });
+  } finally {
+    console.error = original;
+  }
+  const payload = lines[0]?.[1] as Record<string, unknown>;
+  assert.equal(payload.constraint, "id_upload_slots_ciphertext_cap");
+  assert.equal(payload.table, "id_upload_slots");
+  assert.equal(payload.column, "ciphertext");
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "detail"), false);
+  assert.equal(JSON.stringify(lines).includes("A123456789"), false);
   const period = mapDbError(new Error('duplicate key value violates unique constraint "utility_allocation_runs_open_period_uidx"'));
   assert.ok(period instanceof FlowError);
   assert.equal(period.key, "errors.utilityPeriod");

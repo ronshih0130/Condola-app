@@ -1,3 +1,4 @@
+-- Version 20261021170000.
 -- Live mode stays locked until we flip the flag. Idempotent.
 -- Firms that already have live properties or leases (the staging QA org) are unlocked.
 

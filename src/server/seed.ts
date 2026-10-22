@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "./db";
 import { DEMO_PASSWORD } from "./demo-password";
+import { seedSampleCheck } from "./id-docs";
 import { FIRM2_NAME, FIRM_NAME, ORG2_ID, ORG_ID, USERS } from "./ids";
 
 const KEEP = new Set([
@@ -514,6 +515,13 @@ export async function resetAndSeed() {
        VALUES ($1, $2, $3, 'expense', '冷氣維修', 280000, $4)`,
       [ORG_ID, november.rows[0].id, ids.xinyi, acRepair.rows[0].id],
     );
+
+    await seedSampleCheck(client, {
+      orgId: ORG_ID,
+      contactId: ids.zhang,
+      leaseId: leaseZhang.id,
+      createdBy: USERS.tenant,
+    });
 
     await client.query("COMMIT");
   } catch (error) {

@@ -1,3 +1,4 @@
+-- Version 20261021120000.
 -- Portfolio fields from the sample import (物件 / 空間 / 屋主).
 -- Lease and tenant columns live on listing_terms so a file can be seeded.
 -- They are not tenant accounts; the lease product is a later change.

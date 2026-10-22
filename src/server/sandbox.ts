@@ -20,11 +20,11 @@ export async function insertSandboxOrg(client: Client, liveOrgId: string, userId
   const inserted = await client.query<{ id: string }>(
     `INSERT INTO organizations (
        name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
-       date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
+       date_calendar, is_rental_mgmt_business, rental_mgmt_license_no,
        plan_tier, feature_flags, settings, environment, live_org_id, created_by
      )
      SELECT name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
-            date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
+            date_calendar, is_rental_mgmt_business, rental_mgmt_license_no,
             'free', feature_flags, '{"sandboxPrompt":"open"}'::jsonb,
             'sandbox', id, $2
        FROM organizations

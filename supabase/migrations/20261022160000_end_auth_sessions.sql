@@ -1,3 +1,4 @@
+-- Version 20261022160000.
 -- Logout must also drop hosted GoTrue sessions. Local Postgres has no
 -- auth.sessions table, so the deletes no-op when the relation is absent.
 
