@@ -7,6 +7,76 @@ on:
       - "**"
 
 jobs:
+  # Fails unless this commit already contains the latest origin/main.
+  # pull_request checkouts are merge commits, so this job checks the PR head.
+  rebase:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Require rebase onto latest main
+        run: |
+          git fetch origin main --no-tags
+          base="$(git merge-base HEAD origin/main)"
+          main="$(git rev-parse origin/main)"
+          echo "HEAD $(git rev-parse HEAD)"
+          echo "merge-base $base"
+          echo "origin/main $main"
+          if [[ "$base" != "$main" ]]; then
+            echo "This branch does not contain the latest origin/main. Rebase onto main and push again."
+            exit 1
+          fi
+
+  banned-terms:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Banned words in user-facing copy
+        run: npm run copy:check
+
+  # scripts/check-function-privileges.sh lands with PR #45. Until that file is
+  # on the branch, this job records the skip and passes. After it merges, the
+  # same job runs the script against a scratch database.
+  privileges:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: condola
+          POSTGRES_PASSWORD: condola
+          POSTGRES_DB: condola
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U condola -d condola"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://condola:condola@127.0.0.1:5432/condola
+    steps:
+      - uses: actions/checkout@v4
+      - name: Function privilege gate
+        run: |
+          if [[ -f scripts/check-function-privileges.sh ]]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+            bash scripts/check-function-privileges.sh
+          else
+            echo "NOTE: scripts/check-function-privileges.sh is not on this branch."
+            echo "PR #45 (https://cursor.com/codebase/ron-shih/condola-app/pull/45) adds it."
+            echo "This job is already wired. It will run the script on the first commit that contains the file, and it skips until then."
+          fi
+
   check:
     runs-on: ubuntu-latest
     services:
@@ -38,7 +108,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test:unit
-      - name: Apply schema and seed
+      - name: Fresh database with every migration
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
