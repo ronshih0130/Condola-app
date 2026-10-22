@@ -6,6 +6,7 @@ import { PayDialog } from "@/components/dialogs";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { PortalInviteButton } from "@/components/portal-invite-button";
+import { LockedEditButton, ReadOnlyAction } from "@/components/plan-units";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
 import { showDemoLineCopy } from "@/server/demo";
@@ -17,6 +18,7 @@ import { isUuid } from "@/server/repair-rules";
 import { leaseDetail, threadMessages } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
+import { leaseIsEditable } from "@/server/unit-limit-store";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +38,9 @@ export default async function LeasePage({
   const dict = dictionary(session.locale);
   const detail = await leaseDetail(session, id);
   if (!detail) notFound();
+  const leaseEditable = await leaseIsEditable(session, id);
   const { lease, signatures } = detail;
+  const readOnlyNote = t("i_readonly_edit_pending");
   const canInvite = session.role === "admin" || session.role === "manager";
   const tenantActivated = canInvite ? await portalLoginReady(lease.tenant_user_id) : false;
   const money = (minor: number) => moneyLabel(minor, lease.currency, session.locale);
@@ -164,23 +168,38 @@ export default async function LeasePage({
         </div>
       ) : null}
       {tab === "summary" && (session.role === "admin" || session.role === "manager") ? (
-        leaseTermsEditable({
-          status: lease.status,
-          esign: lease.esign,
-          signed: Boolean(lease.signed_at) || signatures.some((row) => row.status === "signed"),
-        }) ? (
-          <LeaseTermsForm
-            key={lease.updated_at}
-            leaseId={id}
-            rent={majorField(lease.rent, lease.currency)}
-            depositMonths={lease.deposit_months ?? ""}
-            depositReason={lease.deposit_override_reason ?? ""}
-            updatedAt={lease.updated_at}
-          />
+        leaseEditable ? (
+          leaseTermsEditable({
+            status: lease.status,
+            esign: lease.esign,
+            signed: Boolean(lease.signed_at) || signatures.some((row) => row.status === "signed"),
+          }) ? (
+            <LeaseTermsForm
+              key={lease.updated_at}
+              leaseId={id}
+              rent={majorField(lease.rent, lease.currency)}
+              depositMonths={lease.deposit_months ?? ""}
+              depositReason={lease.deposit_override_reason ?? ""}
+              updatedAt={lease.updated_at}
+            />
+          ) : (
+            <p className="small muted" data-testid="lease-terms-locked" style={{ marginTop: 16 }}>
+              {t("lease_terms_locked")}
+            </p>
+          )
         ) : (
-          <p className="small muted" data-testid="lease-terms-locked" style={{ marginTop: 16 }}>
-            {t("lease_terms_locked")}
-          </p>
+          <div style={{ marginTop: 16 }}>
+            <LockedEditButton label={t("i_save")} note={readOnlyNote} />
+            {leaseTermsEditable({
+              status: lease.status,
+              esign: lease.esign,
+              signed: Boolean(lease.signed_at) || signatures.some((row) => row.status === "signed"),
+            }) ? null : (
+              <p className="small muted" data-testid="lease-terms-locked" style={{ marginTop: 8 }}>
+                {t("lease_terms_locked")}
+              </p>
+            )}
+          </div>
         )
       ) : null}
       {tab === "ledger" ? (
@@ -267,12 +286,16 @@ export default async function LeasePage({
                   </li>
                 </ul>
                 {tenantSig?.status !== "signed" ? (
-                  <form action={actionSimulateSign}>
-                    <input type="hidden" name="leaseId" value={id} />
-                    <button className="btn pri lg block" type="submit" data-testid="simulate-tenant-sign">
-                      {t("s_bbba58a")}
-                    </button>
-                  </form>
+                  leaseEditable ? (
+                    <form action={actionSimulateSign}>
+                      <input type="hidden" name="leaseId" value={id} />
+                      <button className="btn pri lg block" type="submit" data-testid="simulate-tenant-sign">
+                        {t("s_bbba58a")}
+                      </button>
+                    </form>
+                  ) : (
+                    <ReadOnlyAction testId="simulate-tenant-sign" className="btn pri lg block" label={t("s_bbba58a")} note={readOnlyNote} />
+                  )
                 ) : null}
               </>
             )}
@@ -286,13 +309,23 @@ export default async function LeasePage({
                 </p>
               ) : null}
               {session.role === "admin" || session.role === "manager" ? (
-                <form action={actionUploadSignedPdf}>
-                  <input type="hidden" name="leaseId" value={id} />
-                  <input className="inp" type="file" name="signedPdf" accept="application/pdf,.pdf" data-testid="signed-pdf" />
-                  <button className="btn" type="submit" data-testid="upload-signed-pdf" style={{ marginTop: 8 }}>
-                    {t("lease_paper_upload")}
-                  </button>
-                </form>
+                leaseEditable ? (
+                  <form action={actionUploadSignedPdf}>
+                    <input type="hidden" name="leaseId" value={id} />
+                    <input className="inp" type="file" name="signedPdf" accept="application/pdf,.pdf" data-testid="signed-pdf" />
+                    <button className="btn" type="submit" data-testid="upload-signed-pdf" style={{ marginTop: 8 }}>
+                      {t("lease_paper_upload")}
+                    </button>
+                  </form>
+                ) : (
+                  <ReadOnlyAction
+                    testId="upload-signed-pdf"
+                    className="btn"
+                    label={t("lease_paper_upload")}
+                    note={readOnlyNote}
+                    style={{ marginTop: 8 }}
+                  />
+                )
               ) : null}
             </div>
           </div>
@@ -301,7 +334,7 @@ export default async function LeasePage({
             <h3>{t("i_manager_sign")}</h3>
             {managerSig?.status === "signed" ? (
               <div className="alert ok">{t("i_fully_signed")}</div>
-            ) : (
+            ) : leaseEditable ? (
               <form action={actionSign}>
                 <input type="hidden" name="leaseId" value={id} />
                 <div className="fg">
@@ -317,6 +350,8 @@ export default async function LeasePage({
                   </button>
                 </div>
               </form>
+            ) : (
+              <ReadOnlyAction testId="submit-sign" className="btn pri" label={t("s_fc0cfbd")} note={readOnlyNote} />
             )}
           </div>
           )}

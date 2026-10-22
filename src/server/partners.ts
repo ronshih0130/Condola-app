@@ -1,5 +1,6 @@
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
+import { trialMode } from "./unit-limit";
 import {
   BILLABLE_ACTIVE_LEASE,
   normalizePartnerCode,
@@ -305,7 +306,8 @@ export async function requestUpgrade(session: Session, tier: PaidTier, rawCode: 
         `SELECT trial_months, code FROM firm_partner_prices WHERE org_id = $1`,
         [orgId],
       );
-      const trialMonths = held.rows[0]?.trial_months ?? 3;
+      const trialMonths = held.rows[0]?.trial_months ?? null;
+      await client.query(`SELECT set_config('app.trial_mode', $1, true)`, [trialMode()]);
       const units = await client.query<{ n: number }>(
         `SELECT count(DISTINCT coalesce(target_room_id::text, target_unit_id::text))::int AS n
            FROM leases
@@ -318,7 +320,7 @@ export async function requestUpgrade(session: Session, tier: PaidTier, rawCode: 
             SET settings = coalesce(settings, '{}'::jsonb) || jsonb_build_object(
                   'plan', jsonb_build_object(
                     'tier', $2::text,
-                    'trialUntil', to_jsonb(now() + make_interval(months => $3::int))
+                    'trialUntil', to_jsonb(app.trial_end(now(), $3::int))
                   )
                 )
           WHERE id = $1`,

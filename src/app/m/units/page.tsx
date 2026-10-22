@@ -1,23 +1,30 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { ListPager, ListSearch, listSummary } from "@/components/list-search";
-import { PageHeader } from "@/components/ui";
+import { LockedEditButton, PlanUnits } from "@/components/plan-units";
+import { ErrorBanner, PageHeader } from "@/components/ui";
 import { moneyLabel } from "@/server/format";
 import { can } from "@/server/perms";
 import { searchSpaces } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
+import { loadUnitLimit } from "@/server/unit-limit-store";
 
 export const dynamic = "force-dynamic";
 
-export default async function UnitsPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
+export default async function UnitsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string; error?: string; saved?: string }>;
+}) {
   const session = await getSession();
   const raw = await searchParams;
   const t = makeT(session.locale);
-  const result = await searchSpaces(session, raw);
+  const [result, limit] = await Promise.all([searchSpaces(session, raw), loadUnitLimit(session)]);
   const { rows, q, page, hasNext, total, from, to } = result;
   const summary = listSummary(t, result);
   const editable = can(session.role, "props.edit");
+  const access = new Map(limit.spaces.map((space) => [space.id, space]));
   const roomTypeKey: Record<string, string> = {
     whole_home: "i_whole_home",
     suite: "i_room_split",
@@ -37,6 +44,13 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
           ) : null
         }
       />
+      <ErrorBanner t={t} error={raw.error} />
+      {raw.saved === "kept" ? (
+        <div className="alert ok" data-testid="kept-saved">
+          {t("i_saved")}
+        </div>
+      ) : null}
+      <PlanUnits t={t} view={limit} admin={session.role === "admin"} />
       <div className="card">
         <ListSearch action="/m/units" q={q} label={t("i_search")} placeholder={t("i_search_ph_units")} clearLabel={t("i_search_clear")} />
         <table className="t rf" data-testid="space-list">
@@ -60,8 +74,17 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
                 <td colSpan={10}>{q ? t("i_search_none") : t("i_empty")}</td>
               </tr>
             ) : null}
-            {rows.map((row) => (
-              <tr key={`${row.kind}-${row.id}`} data-testid={`space-row-${row.floor}-${row.room_label ?? "unit"}`}>
+            {rows.map((row) => {
+              const space = access.get(row.id);
+              const readOnly = limit.phase === "locked" && space?.editable === false;
+              return (
+              <tr
+                key={`${row.kind}-${row.id}`}
+                data-testid={`space-row-${row.floor}-${row.room_label ?? "unit"}`}
+                data-space-id={row.id}
+                data-kind={row.kind}
+                data-editable={space ? String(space.editable) : "true"}
+              >
                 <td>
                   <Link href={`/m/properties/${row.property_id}`}>{displaySampleName(row.property_name)}</Link>
                 </td>
@@ -86,14 +109,24 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
                           : "—"}
                 </td>
                 <td className="r">
+                  {limit.phase === "locked" && space ? (
+                    <span className="chip" data-testid="space-access" style={{ marginRight: 8 }}>
+                      {space.editable ? t("i_plan_s16_editable") : t("i_plan_s16_readonly")}
+                    </span>
+                  ) : null}
                   {editable ? (
-                    <Link className="btn sm" href={row.kind === "room" ? `/m/units/room/${row.id}` : `/m/units/whole/${row.id}`}>
-                      {t("i_edit")}
-                    </Link>
+                    readOnly ? (
+                      <LockedEditButton label={t("i_edit")} note={t("i_readonly_edit_pending")} />
+                    ) : (
+                      <Link className="btn sm" href={row.kind === "room" ? `/m/units/room/${row.id}` : `/m/units/whole/${row.id}`}>
+                        {t("i_edit")}
+                      </Link>
+                    )
                   ) : null}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -379,3 +379,9 @@ body:has(.env-banner) .nav-check:checked ~ .app .nav-backdrop{inset:88px 0 0 0}
 .import-danger{color:var(--bad)}
 .import-warn{color:var(--warn)}
 .import-bad{outline:2px solid var(--bad);background:var(--badbg);border-radius:4px}
+.keep-list label{display:flex;justify-content:space-between;gap:12px;padding:8px 12px;border-top:1px solid var(--line);align-items:center}
+.keep-list label:first-child{border-top:0}
+.plan-banner{display:block;line-height:1.7}
+.plan-banner .btn{margin:4px 8px 0 0}
+.plan-banner p{margin:0 0 6px}
+.locked-edit{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}

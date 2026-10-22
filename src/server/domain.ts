@@ -28,6 +28,7 @@ import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
 import { assertTicketStatus } from "./repair-rules";
 import { assertStaff, type OrgRole, type Session } from "./types";
+import { assertLeaseEditable, assertSpaceEditable } from "./unit-limit-store";
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -923,6 +924,7 @@ export async function createLease(session: Session, input: LeaseInput) {
         LIMIT 1`,
       [input.roomId, session.orgId],
     );
+    await assertSpaceEditable(client, session.orgId, space.id);
     assertLeaseMoney(space.currency, rentMajor, depositMonths);
     const clash = await maybe<{ start_date: string; end_date: string }>(
       client,
@@ -1358,6 +1360,7 @@ export async function updateLease(
         [input.leaseId, session.orgId, input.updatedAt],
       );
       if (!existing) throw new FlowError("errors.notFound");
+      await assertLeaseEditable(client, session.orgId, input.leaseId);
       if (!leaseTermsEditable({ status: existing.status, esign: existing.esign, signed: Boolean(existing.signed_at) || existing.party_signed })) {
         throw new FlowError("errors.leaseLocked");
       }
@@ -1471,6 +1474,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
       [input.leaseId],
     );
     if (!lease || lease.org_id !== session.orgId) throw new FlowError("errors.notFound");
+    await assertLeaseEditable(client, session.orgId, input.leaseId);
     if (lease.esign === "imported") throw new FlowError("errors.forbidden");
     const contact = await maybe<{ id: string }>(
       client,
@@ -1548,6 +1552,7 @@ export async function uploadSignedLeasePdf(
       [leaseId, session.orgId],
     );
     if (!lease) throw new FlowError("errors.notFound");
+    await assertLeaseEditable(client, session.orgId, leaseId);
     const imported = lease.esign === "imported";
     const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
     const stored = await one<{ id: string }>(

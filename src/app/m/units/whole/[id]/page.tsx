@@ -7,6 +7,7 @@ import { actionUpdateSpace } from "@/server/actions";
 import { majorField } from "@/server/portfolio";
 import { listOwners, listProperties, spaceEditor, spaceRepairs } from "@/server/queries";
 import { getSession } from "@/server/session";
+import { spaceIsEditable } from "@/server/unit-limit-store";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +22,12 @@ export default async function EditWholeUnitPage({
   const query = await searchParams;
   const session = await getSession();
   const t = makeT(session.locale);
-  const [space, properties, owners, repairs] = await Promise.all([
+  const [space, properties, owners, repairs, editable] = await Promise.all([
     spaceEditor(session, "whole_unit", id),
     listProperties(session),
     listOwners(session),
     spaceRepairs(session, { unitId: id }),
+    spaceIsEditable(session, id),
   ]);
   if (!space) notFound();
   const propertyName = properties.find((property) => property.id === space.propertyId)?.name ?? "";
@@ -55,6 +57,7 @@ export default async function EditWholeUnitPage({
           taipowerAmount: majorField(space.taipowerAmountMinor, space.currency),
           notes: space.notes,
         }}
+        locked={!editable}
       />
       <SpaceRepairs
         t={t}

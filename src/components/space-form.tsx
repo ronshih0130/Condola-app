@@ -56,6 +56,7 @@ export function SpaceForm({
   lockKind,
   propertyName,
   spaceId,
+  locked,
 }: {
   action: (formData: FormData) => void;
   properties: { id: string; name: string }[];
@@ -65,6 +66,7 @@ export function SpaceForm({
   lockKind?: boolean;
   propertyName?: string;
   spaceId?: string;
+  locked?: boolean;
 }) {
   const t = useT();
   const initial = { ...EMPTY, ...defaults };
@@ -218,9 +220,28 @@ export function SpaceForm({
           <label className="f">{t("i_note")}</label>
           <textarea className="inp" name="notes" data-testid="space-notes" rows={3} defaultValue={initial.notes} />
         </div>
-        <button className="btn pri" type="submit" data-testid="save-space">
-          {t("i_save")}
-        </button>
+        {locked ? (
+          <span className="locked-edit">
+            <button
+              className="btn pri"
+              type="button"
+              disabled
+              aria-disabled="true"
+              data-testid="save-space"
+              data-i18n-key="i_readonly_edit_pending"
+              title={t("i_readonly_edit_pending")}
+            >
+              {t("i_save")}
+            </button>
+            <span className="small muted" data-testid="readonly-edit-note" data-i18n-key="i_readonly_edit_pending">
+              {t("i_readonly_edit_pending")}
+            </span>
+          </span>
+        ) : (
+          <button className="btn pri" type="submit" data-testid="save-space">
+            {t("i_save")}
+          </button>
+        )}
       </div>
     </form>
   );

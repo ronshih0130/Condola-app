@@ -1,10 +1,12 @@
 import { makeT } from "@/i18n";
+import { PlanUnits } from "@/components/plan-units";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionOrgMail } from "@/server/auth-actions";
 import { orgMailSettings } from "@/server/mail-settings";
 import { can } from "@/server/perms";
 import { isPlatformAdmin } from "@/server/platform";
 import { getSession } from "@/server/session";
+import { loadUnitLimit } from "@/server/unit-limit-store";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +15,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const query = await searchParams;
   const t = makeT(session.locale);
   const mail = can(session.role, "settings.edit") ? await orgMailSettings(session.orgId) : null;
+  const limit = await loadUnitLimit(session);
   return (
     <>
       <PageHeader title={t("i_nav_settings")} />
       <ErrorBanner t={t} error={query.error} />
+      <PlanUnits t={t} view={limit} admin={session.role === "admin"} />
       {query.saved === "1" ? <div className="alert ok">{t("i_saved")}</div> : null}
       {mail ? (
         <form className="card pad" action={actionOrgMail} style={{ maxWidth: 720, marginBottom: 16 }}>

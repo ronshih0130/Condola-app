@@ -5,6 +5,7 @@ import { normalizePhone } from "./lease-rules";
 import { toMinor } from "./money";
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
+import { assertSpaceEditable } from "./unit-limit-store";
 import type { Session } from "./types";
 import type { Client } from "pg";
 
@@ -791,6 +792,7 @@ export async function updateSpace(session: Session, kind: SpaceKind, spaceId: st
         [spaceId, session.orgId],
       );
       if (!unit) throw new FlowError("errors.notFound");
+      await assertSpaceEditable(client, session.orgId, spaceId);
       await ensureOwner(client, session.orgId, unit.property_id, input.ownerContactId);
       const country = await propertyCountry(client, session.orgId, unit.property_id);
       await client.query(
@@ -824,6 +826,7 @@ export async function updateSpace(session: Session, kind: SpaceKind, spaceId: st
       [spaceId, session.orgId],
     );
     if (!room) throw new FlowError("errors.notFound");
+    await assertSpaceEditable(client, session.orgId, spaceId);
     await ensureOwner(client, session.orgId, room.property_id, input.ownerContactId);
     const unit = await unitForFloor(client, session.orgId, room.property_id, write.floor, "room");
     const clash = await maybe<{ id: string }>(
