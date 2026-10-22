@@ -66,6 +66,7 @@ test("statement, property, rent, and reports render TWD as NT$", () => {
   assert.equal(moneyLabel(950_000, "TWD", "zh-TW"), "NT$9,500");
   const zh = JSON.parse(read("i18n/zh-TW.json")) as Record<string, string>;
   assert.equal(zh.i_rent_received, "已繳租金");
+  assert.equal(zh.i_rent_this_month, "本月已繳租金");
   assert.equal(zh.i_audit_ev_go_live, "開始正式使用");
   const en = JSON.parse(read("i18n/en.json")) as Record<string, string>;
   assert.equal(en.i_rent_received, "Rent paid");
