@@ -109,5 +109,5 @@ test("the lock migration checks caller org and revokes the country trigger", () 
   assert.doesNotMatch(sql, /REVOKE EXECUTE ON FUNCTION public\.line_lease_picker/);
   assert.doesNotMatch(sql, /REVOKE EXECUTE ON FUNCTION public\.condola_property_address_key/);
   assert.match(sql, /ALTER FUNCTION public\.condola_property_address_key\(text\) SET search_path = pg_catalog/);
-  assert.match(sql, /not on main at c4ea9de/);
+  assert.match(sql, /sort before this one, so the\n-- REVOKEs apply and do not NOTICE-skip/);
 });

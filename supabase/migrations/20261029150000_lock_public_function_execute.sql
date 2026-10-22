@@ -265,12 +265,12 @@ BEGIN
 END
 $recalc$;
 
--- Utility charge posting (PR #18) is not on main at c4ea9de. Its migrations
--- are 20261028130000 (post_reversal(uuid, text, uuid), app.audit_event),
+-- Utility charge posting (PR #18, main 2bedb89) creates these in
+-- 20261028130000 (post_reversal(uuid, text, uuid), app.audit_event),
 -- 20261028140000 (utility_runs_fill_unit_id), and 20261028160000
--- (utility_runs_reuse_open_period), on branch
--- cursor/utility-charge-posting-3532. Each block skips with NOTICE until the
--- function exists, then:
+-- (utility_runs_reuse_open_period). Those files sort before this one, so the
+-- REVOKEs apply and do not NOTICE-skip. A database that has not applied them
+-- yet still skips with NOTICE.
 --   post_reversal(uuid, text, uuid): PUBLIC and anon lose EXECUTE.
 --     authenticated keeps it. The utility branch calls this overload from
 --     src/server/utility-posting.ts inside tx(). This file does not replace

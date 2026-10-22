@@ -113,6 +113,66 @@ test("post_reversal allows the pinned org, rejects another org, and service_role
   });
 });
 
+test("the 3-arg post_reversal has no pinned-org check, and app.audit_event rejects another org", async () => {
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const stamp = `org-rev3-${Date.now().toString(36)}`;
+      const other = await ledger(client, ORG2_ID, `${stamp}-b`);
+      await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.admin]);
+      await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+
+      // Not a member of org B. RLS hides the ledger row. The 3-arg body raises
+      // the default exception, not 42501. The PM org-check follow-up is what
+      // adds 42501.
+      await client.query("SAVEPOINT expect_p0001");
+      try {
+        await client.query(`SELECT post_reversal($1::uuid, 'cross org', NULL::uuid)`, [other]);
+        assert.fail("expected P0001 not found");
+      } catch (error) {
+        const pg = asPg(error);
+        assert.equal(pg.code, "P0001");
+        assert.match(pg.message, /not found/);
+        assert.doesNotMatch(pg.message, /org mismatch/);
+        await client.query("ROLLBACK TO SAVEPOINT expect_p0001");
+      }
+
+      await client.query("SAVEPOINT expect_audit");
+      try {
+        await client.query(
+          `SELECT app.audit_event($1::uuid, 'utility_charge_posted', $2::jsonb)`,
+          [ORG2_ID, JSON.stringify({ runId: "00000000-0000-4000-8000-000000000099" })],
+        );
+        assert.fail("expected 42501 from app.audit_event");
+      } catch (error) {
+        const pg = asPg(error);
+        assert.equal(pg.code, "42501");
+        assert.match(pg.message, /not allowed to audit this event/);
+        await client.query("ROLLBACK TO SAVEPOINT expect_audit");
+      }
+      await client.query("RESET ROLE");
+
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, status)
+         VALUES ($1, $2, 'admin', 'active')
+         ON CONFLICT (org_id, user_id) DO NOTHING`,
+        [ORG2_ID, USERS.admin],
+      );
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+      const reversed = await client.query<{ id: string }>(
+        `SELECT post_reversal($1::uuid, 'member of the other org', NULL::uuid) AS id`,
+        [other],
+      );
+      assert.match(reversed.rows[0].id, /^[0-9a-f-]{36}$/);
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  });
+});
+
 test("fn_invoice_recalc allows the pinned org, rejects another org, and service_role bypasses", async () => {
   await withClient(async (client) => {
     await client.query("BEGIN");
