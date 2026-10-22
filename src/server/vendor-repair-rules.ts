@@ -85,6 +85,32 @@ export function vendorName(raw: string) {
   return name;
 }
 
+/** M04b categories. Stored as codes; the labels are i18n. */
+export const VENDOR_CATEGORIES = ["water", "climate", "lock", "leak", "other"] as const;
+
+export const VENDOR_CATEGORY_KEY: Record<(typeof VENDOR_CATEGORIES)[number], string> = {
+  water: "i_vendor_cat_water",
+  climate: "i_vendor_cat_climate",
+  lock: "i_vendor_cat_lock",
+  leak: "i_vendor_cat_leak",
+  other: "i_vendor_cat_other",
+};
+
+export function vendorCategory(raw: string) {
+  const value = raw.trim();
+  if (!VENDOR_CATEGORIES.includes(value as (typeof VENDOR_CATEGORIES)[number])) throw new FlowError("errors.required");
+  return value;
+}
+
+/** Latest cooperation month from a YYYY-MM-DD repair date. No stored column. */
+export function lastCooperationParts(iso: string | null | undefined) {
+  const match = /^(\d{4})-(\d{2})-\d{2}/.exec(iso ?? "");
+  if (!match) return null;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return { year: match[1], month: String(month) };
+}
+
 /** Keep the schedule check happy when the visit date is still in the future. */
 export function vendorCompletedOn(scheduled: string | null, today: string) {
   if (scheduled && scheduled > today) return scheduled;

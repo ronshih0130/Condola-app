@@ -1,10 +1,19 @@
 import { dictionary, type T, type Locale } from "@/i18n";
-import { actionConfirmVendor, actionDispatchVendor, actionRevokeVendor } from "@/server/actions";
+import { actionAddVendor, actionConfirmVendor, actionDispatchVendor, actionRevokeVendor } from "@/server/actions";
 import { formatDate, formatMoney } from "@/server/format";
 import type { CalendarMode } from "@/server/types";
-import { VENDOR_LINK_DAYS } from "@/server/vendor-repair-rules";
 import type { VendorChoice, VendorDispatchView } from "@/server/vendor-repair";
+import { VENDOR_CATEGORIES, VENDOR_CATEGORY_KEY, VENDOR_LINK_DAYS, lastCooperationParts } from "@/server/vendor-repair-rules";
 import { VendorLinkField } from "./vendor-link-field";
+
+function vendorOption(vendor: VendorChoice, t: T) {
+  const tradeKey = VENDOR_CATEGORY_KEY[vendor.trade as (typeof VENDOR_CATEGORIES)[number]];
+  const trade = tradeKey ? t(tradeKey) : vendor.trade;
+  const last = lastCooperationParts(vendor.lastOn);
+  if (trade && last) return t("i_vendor_option_past", { name: vendor.name, trade, year: last.year, month: last.month });
+  if (trade) return t("i_vendor_option", { name: vendor.name, trade });
+  return vendor.name;
+}
 
 export function VendorDispatch({
   ticketId,
@@ -13,6 +22,7 @@ export function VendorDispatch({
   job,
   vendors,
   currency,
+  selectedVendorId,
   t,
   locale,
   calendar,
@@ -23,6 +33,7 @@ export function VendorDispatch({
   job: VendorDispatchView | null;
   vendors: VendorChoice[];
   currency: string;
+  selectedVendorId: string;
   t: T;
   locale: Locale;
   calendar: CalendarMode;
@@ -91,34 +102,32 @@ export function VendorDispatch({
         </form>
       ) : null}
       {showForm ? (
+        <>
         <form action={actionDispatchVendor} data-testid="vendor-dispatch-form">
           <input type="hidden" name="ticketId" value={ticketId} />
+          {vendors.length === 0 ? (
+            <div data-testid="vendor-empty">
+              <p>{t("i_vendor_none")}</p>
+              <p className="small muted">{t("i_vendor_none_hint")}</p>
+            </div>
+          ) : null}
           <div className="fg">
-            <label className="f">{t("i_vendor_pick")}</label>
-            <select className="inp" name="vendorId" defaultValue="" data-testid="vendor-pick">
+            <label className="f">{t("i_vendor_pick")} *</label>
+            <select
+              className="inp"
+              name="vendorId"
+              required
+              defaultValue={vendors.some((vendor) => vendor.id === selectedVendorId) ? selectedVendorId : ""}
+              data-testid="vendor-pick"
+            >
               <option value="">{t("i_vendor_choose")}</option>
               {vendors.map((vendor) => (
                 <option key={vendor.id} value={vendor.id}>
-                  {[vendor.name, vendor.trade, vendor.phone].filter(Boolean).join(" · ")}
+                  {vendorOption(vendor, t)}
                 </option>
               ))}
             </select>
           </div>
-          <details data-testid="vendor-add-panel">
-            <summary data-testid="vendor-add">{t("i_vendor_add")}</summary>
-            <div className="fg">
-              <label className="f">{t("i_vendor_name")}</label>
-              <input className="inp" name="vendorName" defaultValue="" data-testid="vendor-name" />
-            </div>
-            <div className="fg">
-              <label className="f">{t("i_vendor_trade")}</label>
-              <input className="inp" name="vendorTrade" defaultValue="" data-testid="vendor-trade" />
-            </div>
-            <div className="fg">
-              <label className="f">{t("i_vendor_phone")}</label>
-              <input className="inp" name="vendorPhone" inputMode="tel" defaultValue="" data-testid="vendor-phone" />
-            </div>
-          </details>
           <div className="fg">
             <label className="f">{t("i_vendor_window")}</label>
             <input className="inp" name="contactWindow" required defaultValue={job?.window ?? ""} data-testid="vendor-window" />
@@ -127,6 +136,39 @@ export function VendorDispatch({
             {t("i_vendor_dispatch_send")}
           </button>
         </form>
+        <details data-testid="vendor-add-panel" style={{ marginTop: 12 }}>
+          <summary data-testid="vendor-add">{vendors.length === 0 ? t("i_vendor_add_title") : t("i_vendor_add")}</summary>
+          <form action={actionAddVendor} data-testid="vendor-add-form">
+            <input type="hidden" name="ticketId" value={ticketId} />
+            <h3>{t("i_vendor_add_title")}</h3>
+            <div className="fg">
+              <label className="f">{t("i_vendor_name")} *</label>
+              <input className="inp" name="vendorName" required defaultValue="" data-testid="vendor-name" />
+            </div>
+            <div className="fg">
+              <label className="f">{t("i_vendor_trade")} *</label>
+              <select className="inp" name="vendorTrade" required defaultValue="" data-testid="vendor-trade">
+                <option value="">{t("i_choose")}</option>
+                {VENDOR_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {t(VENDOR_CATEGORY_KEY[category])}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="fg">
+              <label className="f">{t("i_vendor_phone")} *</label>
+              <input className="inp" name="vendorPhone" inputMode="tel" required defaultValue="" data-testid="vendor-phone" />
+            </div>
+            <button className="btn pri" type="submit" data-testid="vendor-add-save">
+              {t("i_vendor_add_title")}
+            </button>{" "}
+            <a className="btn sm" href={`/m/tickets/${ticketId}`}>
+              {t("i_cancel")}
+            </a>
+          </form>
+        </details>
+        </>
       ) : null}
     </section>
   );

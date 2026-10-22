@@ -21,7 +21,7 @@ export default async function TicketDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; vendor?: string }>;
 }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
@@ -172,6 +172,7 @@ export default async function TicketDetailPage({
           canConfirm={canWrite && canPost}
           job={dispatch.job}
           vendors={dispatch.vendors}
+          selectedVendorId={query.vendor && isUuid(query.vendor) ? query.vendor : ""}
           currency={currency}
           t={t}
           locale={session.locale}

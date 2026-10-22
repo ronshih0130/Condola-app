@@ -7,13 +7,20 @@ import { selectedLease } from "@/lib/tenant-lease";
 import { actionCancelRepair, actionTicket } from "@/server/actions";
 import { isUuid } from "@/server/repair-rules";
 import { tenantRepairs, ticketDetail } from "@/server/queries";
+import type { T } from "@/i18n";
+
+function repairStatusLabel(status: string, t: T) {
+  // TODO(pmk): 文案待 PMk — the cancelled label is not in the final copy.
+  if (status === "cancelled") return t("i_repair_cancelled_status");
+  return t(statusKey(status));
+}
 
 export const dynamic = "force-dynamic";
 
 export default async function RepairPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; done?: string; id?: string }>;
+  searchParams: Promise<{ error?: string; done?: string; id?: string; cancel?: string; cancelled?: string }>;
 }) {
   const { session, lease } = await selectedLease();
   const t = makeT(session.locale);
@@ -23,6 +30,7 @@ export default async function RepairPage({
   const selectedId = params.id && isUuid(params.id) ? params.id : "";
   const detail = selectedId ? await ticketDetail(session, selectedId) : null;
   const own = detail && repairs.some((repair) => repair.id === detail.ticket.id) ? detail : null;
+  const confirming = params.cancel === "1" && own?.ticket.status === "open";
   return (
     <div>
       <h2>{t("i_rich_repair")}</h2>
@@ -40,24 +48,44 @@ export default async function RepairPage({
           ) : null}
         </div>
       ) : null}
+      {params.cancelled === "1" && own && own.ticket.status === "cancelled" ? (
+        // TODO(pmk): 文案待 PMk — i_repair_cancelled_toast is not in the final copy.
+        <div className="alert ok" data-testid="repair-cancelled-toast">
+          {t("i_repair_cancelled_toast", { number: own.ticket.number })}
+        </div>
+      ) : null}
+      {confirming && own ? (
+        <div className="card pad" data-testid="repair-cancel-dialog" style={{ marginBottom: 16 }}>
+          <h3>{t("i_repair_cancel")}</h3>
+          <p data-testid="repair-cancel-confirm">{t("i_repair_cancel_confirm")}</p>
+          <form action={actionCancelRepair}>
+            <input type="hidden" name="ticketId" value={own.ticket.id} />
+            <button className="btn pri" type="submit" data-testid="repair-cancel-submit">
+              {t("i_repair_cancel")}
+            </button>{" "}
+            {/* TODO(pmk): 文案待 PMk — i_repair_cancel_back is not in the final copy. */}
+            <Link className="btn sm" href={`/t/repair?id=${own.ticket.id}`} data-testid="repair-cancel-back">
+              {t("i_repair_cancel_back")}
+            </Link>
+          </form>
+        </div>
+      ) : null}
       {own ? (
         <div className="card pad" style={{ marginBottom: 16 }} data-testid="repair-detail">
           <h3>
             #{own.ticket.number} {own.ticket.title}
           </h3>
           <p className="small muted">
-            {t(REPAIR_CAT_KEY[own.ticket.category] ?? "i_cat_other")} · {t(statusKey(own.ticket.status))}
+            {t(REPAIR_CAT_KEY[own.ticket.category] ?? "i_cat_other")} · {repairStatusLabel(own.ticket.status, t)}
           </p>
           {own.ticket.description ? <p>{own.ticket.description}</p> : null}
-          {own.ticket.status === "open" ? (
-            <form action={actionCancelRepair}>
-              <input type="hidden" name="ticketId" value={own.ticket.id} />
-              <p className="small" data-testid="repair-cancel-confirm">{t("i_repair_cancel_confirm")}</p>
-              <button className="btn sm" type="submit" data-testid="repair-cancel">
+          {own.ticket.status === "open" && !confirming ? (
+            <p>
+              <Link className="btn sm" href={`/t/repair?id=${own.ticket.id}&cancel=1`} data-testid="repair-cancel">
                 {t("i_repair_cancel")}
-              </button>
-            </form>
-          ) : own.ticket.status === "cancelled" ? null : (
+              </Link>
+            </p>
+          ) : own.ticket.status === "cancelled" || confirming ? null : (
             <p className="small" data-testid="repair-cancel-locked">
               {t("i_repair_cancel_locked")}
             </p>
@@ -117,7 +145,10 @@ export default async function RepairPage({
             </Link>
             <div className="small muted">
               {t(REPAIR_CAT_KEY[repair.category] ?? "i_cat_other")} ·{" "}
-              <span className={`chip ${statusClass(repair.status)}`}>{t(statusKey(repair.status))}</span>
+              <span className={`chip ${statusClass(repair.status)}`} data-testid={`tenant-repair-status-${repair.number}`}>
+                {/* TODO(pmk): 文案待 PMk — i_repair_cancelled_status is not in the final copy. */}
+                {repairStatusLabel(repair.status, t)}
+              </span>
             </div>
           </li>
         ))}

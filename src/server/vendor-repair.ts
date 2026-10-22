@@ -42,6 +42,7 @@ import {
   vendorJobPath,
   vendorName,
   vendorPhone,
+  vendorCategory,
   vendorTokenAcceptable,
 } from "./vendor-repair-rules";
 
@@ -73,6 +74,8 @@ export type VendorChoice = {
   name: string;
   trade: string;
   phone: string;
+  /** YYYY-MM-DD of the latest repair for this vendor, computed from tickets. */
+  lastOn: string | null;
 };
 
 export type VendorDispatchView = {
@@ -214,6 +217,35 @@ async function noteStatus(client: Client, orgId: string, ticketId: string, userI
      VALUES ($1,$2,$3,$4::ticket_status,$5::ticket_status)`,
     [orgId, ticketId, userId, from, to],
   );
+}
+
+/** M04b. Saves name, category, and phone only. It does not dispatch a job. */
+export async function addVendor(
+  session: Session,
+  ticketId: string,
+  input: { name: string; phone: string; trade: string },
+) {
+  assertStaff(session);
+  assertPerm(session, "tickets.update");
+  if (!isUuid(ticketId)) throw new FlowError("errors.notFound");
+  if (!(await orgVendorDispatchEnabled(session.orgId))) throw new FlowError("errors.forbidden");
+  const country = await loadOrgCountry(session.orgId);
+  const name = vendorName(input.name);
+  const phone = vendorPhone(input.phone, country.callingCode);
+  const trade = vendorCategory(input.trade);
+  const visible = await tx(session.userId, (client) =>
+    maybe<{ id: string }>(client, `SELECT id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`, [
+      ticketId,
+      session.orgId,
+    ]),
+  );
+  if (!visible) throw new FlowError("errors.notFound");
+  const contactId = await svc(session.userId, async (client) => {
+    await assertDispatchFlag(client, session.orgId);
+    return vendorContact(client, session.orgId, name, phone, trade);
+  });
+  if (!contactId) throw new FlowError("errors.generic");
+  return contactId;
 }
 
 export async function dispatchVendor(
@@ -369,11 +401,20 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
     ),
   );
   const vendors = await tx(session.userId, (client) =>
-    client.query<{ id: string; name: string; trade: string | null; phone: string | null }>(
-      `SELECT id::text, display_name AS name, vendor_trade AS trade, phone_e164 AS phone
-         FROM contacts
-        WHERE org_id = $1 AND is_vendor AND archived_at IS NULL
-        ORDER BY display_name`,
+    client.query<{ id: string; name: string; trade: string | null; phone: string | null; last_on: string | null }>(
+      `SELECT c.id::text, c.display_name AS name, c.vendor_trade AS trade, c.phone_e164 AS phone,
+              (
+                SELECT to_char(
+                         max(coalesce(t.completed_on, t.scheduled_on, (t.updated_at AT TIME ZONE 'Asia/Taipei')::date)),
+                         'YYYY-MM-DD'
+                       )
+                  FROM maintenance_tickets t
+                 WHERE t.org_id = c.org_id
+                   AND t.assigned_vendor_contact_id = c.id
+              ) AS last_on
+         FROM contacts c
+        WHERE c.org_id = $1 AND c.is_vendor AND c.archived_at IS NULL
+        ORDER BY c.display_name`,
       [session.orgId],
     ),
   );
@@ -382,6 +423,7 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
     name: row.name,
     trade: row.trade ?? "",
     phone: row.phone ? displayVendorPhone(row.phone) : "",
+    lastOn: row.last_on,
   }));
   if (!job) return { job: null as VendorDispatchView | null, vendors: choices };
   let link = "";

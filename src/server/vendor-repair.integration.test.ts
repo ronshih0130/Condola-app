@@ -10,13 +10,16 @@ import { loadIncomeExpense } from "./income-expense";
 import { PHOTO_BUCKET, ticketPhotoPath } from "./repair-rules";
 import type { Session } from "./types";
 import {
+  addVendor,
   confirmVendorCost,
   dispatchVendor,
   findVendorPhoto,
+  loadVendorDispatch,
   loadVendorJob,
   revokeVendorJob,
   submitVendorReport,
 } from "./vendor-repair";
+import { lastCooperationParts } from "./vendor-repair-rules";
 import { hashVendorToken } from "./vendor-repair-rules";
 
 const ORG = ORG_ID;
@@ -505,6 +508,43 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
         client.query(`UPDATE organizations SET feature_flags = feature_flags - 'vendor_dispatch' WHERE id = $1`, [ORG]),
       );
       await dropFirms();
+    }
+  });
+
+  test("last cooperation is the latest repair month for that vendor", async () => {
+    const title = `上次合作${Date.now()}`;
+    const wang = await leaseFor(USERS.tenant2);
+    assert.ok(wang);
+    const admin = staff(USERS.admin, "admin");
+    const person = tenant(USERS.tenant2);
+    let first = "";
+    let second = "";
+    let vendorId = "";
+    try {
+      first = await createTicket(person, { leaseId: wang.id, category: "other", title, description: "第一次" });
+      second = await createTicket(person, { leaseId: wang.id, category: "other", title: `${title}-2`, description: "第二次" });
+      vendorId = await addVendor(admin, first, { name: title, phone: "0912000111", trade: "water" });
+      await dispatchVendor(admin, first, { vendorId, vendorName: "", vendorPhone: "", contactWindow: "週三" }, ORIGIN);
+      await tx(USERS.admin, (client) =>
+        client.query(`UPDATE maintenance_tickets SET completed_on = '2026-08-20', scheduled_on = '2026-08-01' WHERE id = $1`, [first]),
+      );
+      const loaded = await loadVendorDispatch(admin, second, ORIGIN);
+      const choice = loaded?.vendors.find((vendor) => vendor.id === vendorId);
+      assert.equal(choice?.lastOn, "2026-08-20");
+      assert.deepEqual(lastCooperationParts(choice?.lastOn), { year: "2026", month: "8" });
+      const column = await svc(null, (client) =>
+        client.query(
+          `SELECT 1 FROM information_schema.columns
+            WHERE table_name IN ('contacts', 'maintenance_tickets', 'repair_vendor_jobs')
+              AND column_name = 'last_cooperation'`,
+        ),
+      );
+      assert.equal(column.rowCount, 0);
+    } finally {
+      await cleanup(title);
+      if (vendorId) {
+        await svc(null, (client) => client.query(`DELETE FROM contacts WHERE id = $1 AND org_id = $2`, [vendorId, ORG]));
+      }
     }
   });
 });

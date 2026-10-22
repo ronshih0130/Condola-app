@@ -32,7 +32,7 @@ import { typedStreet } from "@/property-address";
 import { loadOrgCountry } from "./org-country";
 import { createLeaseFromForm } from "./lease-form";
 import { addTicketComment, cancelTenantRepair, saveRepairRecord } from "./repairs";
-import { confirmVendorCost, dispatchVendor, revokeVendorJob, submitVendorReport } from "./vendor-repair";
+import { addVendor, confirmVendorCost, dispatchVendor, revokeVendorJob, submitVendorReport } from "./vendor-repair";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
@@ -418,7 +418,7 @@ export async function actionCancelRepair(formData: FormData) {
   try {
     const session = await getSession();
     await cancelTenantRepair(session, ticketId);
-    redirect(back);
+    redirect(`${back}&cancelled=1`);
   } catch (error) {
     bounce(back, error);
   }
@@ -441,6 +441,22 @@ async function requestOrigin() {
   const host = h.get("x-forwarded-host") || h.get("host") || "";
   const proto = h.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
   return host ? `${proto}://${host}` : "";
+}
+
+export async function actionAddVendor(formData: FormData) {
+  const ticketId = text(formData.get("ticketId"));
+  const back = `/m/tickets/${ticketId}`;
+  try {
+    const session = await getSession();
+    const vendorId = await addVendor(session, ticketId, {
+      name: text(formData.get("vendorName")),
+      phone: text(formData.get("vendorPhone")),
+      trade: text(formData.get("vendorTrade")),
+    });
+    redirect(`${back}?vendor=${vendorId}`);
+  } catch (error) {
+    bounce(back, error);
+  }
 }
 
 export async function actionDispatchVendor(formData: FormData) {

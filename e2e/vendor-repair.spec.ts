@@ -16,8 +16,10 @@ test("a manager dispatches a repair, the vendor reports, and the cost is charged
   await expect(page.getByTestId("vendor-dispatch")).toBeVisible();
   await page.getByTestId("vendor-add").click();
   await page.getByTestId("vendor-name").fill("陳水電");
-  await page.getByTestId("vendor-trade").fill("水電");
+  await page.getByTestId("vendor-trade").selectOption("water");
   await page.getByTestId("vendor-phone").fill("0912000111");
+  await page.getByTestId("vendor-add-save").click();
+  await expect(page.getByTestId("vendor-pick")).not.toHaveValue("");
   await page.getByTestId("vendor-window").fill("週三 14:00-17:00");
   await page.getByTestId("vendor-dispatch-send").click();
   const link = await page.getByTestId("vendor-link").inputValue();
