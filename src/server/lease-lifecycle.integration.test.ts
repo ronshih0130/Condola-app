@@ -73,6 +73,33 @@ test("renewal keeps the old lease, move-out uses the overridden rent, and a clos
     );
     assert.equal(sandbox.rows[0]?.environment, "sandbox");
     assert.equal(sandbox.rows[0]?.flag, "true");
+    const privileges = await query<{ name: string; anon_exec: boolean; auth_exec: boolean; public_exec: boolean }>(
+      `SELECT n.nspname || '.' || p.proname AS name,
+              has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_exec,
+              has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_exec,
+              EXISTS (
+                SELECT 1 FROM aclexplode(p.proacl) acl
+                 WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+              ) AS public_exec
+         FROM pg_proc p
+         JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE (n.nspname, p.proname) IN (
+          ('public', 'fn_sync_lease_lifecycle_flag'),
+          ('public', 'fn_lease_close_end_date'),
+          ('app', 'lease_lifecycle_on')
+        )`,
+    );
+    const byName = new Map(privileges.rows.map((row) => [row.name, row]));
+    for (const name of ["public.fn_sync_lease_lifecycle_flag", "public.fn_lease_close_end_date"]) {
+      const row = byName.get(name);
+      assert.equal(row?.anon_exec, false, name);
+      assert.equal(row?.auth_exec, false, name);
+      assert.equal(row?.public_exec, false, name);
+    }
+    const helper = byName.get("app.lease_lifecycle_on");
+    assert.equal(helper?.anon_exec, false);
+    assert.equal(helper?.auth_exec, true);
+    assert.equal(helper?.public_exec, false);
 
     const pro = await query<{ id: string; flag: string }>(
       `INSERT INTO organizations (name, country_code, jurisdiction_id, default_currency, timezone, plan_tier, environment, created_by)
@@ -231,16 +258,15 @@ test("renewal keeps the old lease, move-out uses the overridden rent, and a clos
     assert.equal(cancelled.endDate, today < start ? start : today);
     await query(`ALTER TABLE leases DISABLE TRIGGER trg_lease_close_end_date`);
     try {
-      await assert.rejects(
-        () => query(`UPDATE leases SET end_date = NULL WHERE id = $1 AND status = 'cancelled'`, [pending.leaseId]),
-        (error: unknown) => {
-          const row = error as { code?: string; constraint?: string };
-          return row.code === "23514" && row.constraint === "leases_closed_end_date_chk";
-        },
-      );
+      await query(`UPDATE leases SET end_date = NULL WHERE id = $1 AND status = 'cancelled'`, [pending.leaseId]);
+      const cleared = await query<{ end_date: string | null }>(`SELECT end_date::text FROM leases WHERE id = $1`, [pending.leaseId]);
+      assert.equal(cleared.rows[0]?.end_date, null);
     } finally {
       await query(`ALTER TABLE leases ENABLE TRIGGER trg_lease_close_end_date`);
     }
+    await query(`UPDATE leases SET end_date = NULL WHERE id = $1 AND status = 'cancelled'`, [pending.leaseId]);
+    const restored = await query<{ end_date: string | null }>(`SELECT end_date::text FROM leases WHERE id = $1`, [pending.leaseId]);
+    assert.equal(restored.rows[0]?.end_date, cancelled.endDate);
   } finally {
     await query(`ALTER TABLE leases ENABLE TRIGGER trg_lease_close_end_date`).catch(() => undefined);
     await withClient(async (client) => {

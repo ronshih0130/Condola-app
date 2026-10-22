@@ -81,8 +81,15 @@ test("renewal and deposit copy matches the locked sentences", () => {
   assert.equal(COPY.emptyBody, "租約到期前 90 天會出現在這裡。");
   const source = readFileSync(new URL("./lease-lifecycle-rules.ts", import.meta.url), "utf8");
   for (const word of BANNED) assert.equal(source.includes(word), false, word);
-  const sql = readFileSync(new URL("../../supabase/migrations/20261029120000_lease_lifecycle.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20261029170000_lease_lifecycle.sql", import.meta.url), "utf8");
   assert.equal(/DROP\s+(TABLE|COLUMN)|TRUNCATE/i.test(sql), false);
+  assert.equal(/leases_closed_end_date_chk/.test(sql), false);
   assert.match(sql, /lease_moveouts/);
-  assert.match(sql, /leases_closed_end_date_chk/);
+  assert.match(sql, /REVOKE EXECUTE ON FUNCTION public\.fn_sync_lease_lifecycle_flag\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /REVOKE EXECUTE ON FUNCTION public\.fn_lease_close_end_date\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /REVOKE EXECUTE ON FUNCTION app\.lease_lifecycle_on\(uuid\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION app\.lease_lifecycle_on\(uuid\) TO authenticated, service_role/);
+  const allow = readFileSync(new URL("../../supabase/rpc-allowlist.txt", import.meta.url), "utf8");
+  assert.match(allow, /^app\.lease_lifecycle_on\(p_org uuid\)$/m);
+  assert.equal(/fn_sync_lease_lifecycle_flag|fn_lease_close_end_date/.test(allow), false);
 });

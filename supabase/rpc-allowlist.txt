@@ -1,0 +1,12 @@
+# Functions authenticated may execute. anon must not.
+# One signature per line, matching pg_get_function_identity_arguments.
+# "# @mode authenticated" is the only mode.
+#
+# Trigger functions in 20261029170000_lease_lifecycle.sql revoke EXECUTE
+# from PUBLIC, anon, and authenticated and are not listed here. Firing a
+# trigger does not check EXECUTE.
+# app.lease_lifecycle_on is called from row-level security as the session
+# role, so authenticated keeps EXECUTE.
+
+# @mode authenticated
+app.lease_lifecycle_on(p_org uuid)

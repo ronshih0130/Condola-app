@@ -1,7 +1,13 @@
--- Lease renewal and move-out. Add-only.
--- lease_lifecycle is on for the sample company (sandbox) and for beta-plan orgs.
--- Ending or cancelling a lease always stores end_date. The 90-day ID-document
--- purge clock reads that date.
+-- Lease renewal and move-out. Additive only.
+-- Older app builds keep working: new columns on leases are nullable, and this
+-- file adds no NOT NULL and no check on existing columns that an old writer
+-- could violate. A before trigger still fills end_date when a lease is closed,
+-- which the 90-day ID-document purge reads.
+--
+-- Trigger functions revoke EXECUTE from PUBLIC, anon, and authenticated.
+-- Firing a trigger does not check EXECUTE. app.lease_lifecycle_on is called
+-- from row-level security as authenticated, so that role keeps EXECUTE and
+-- the signature is listed in supabase/rpc-allowlist.txt.
 
 CREATE OR REPLACE FUNCTION app.lease_lifecycle_on(p_org uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -11,11 +17,13 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
        AND (o.environment = 'sandbox' OR o.plan_tier = 'beta')
   );
 $$;
-REVOKE ALL ON FUNCTION app.lease_lifecycle_on(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app.lease_lifecycle_on(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION app.lease_lifecycle_on(uuid) TO authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION fn_sync_lease_lifecycle_flag() RETURNS trigger
-LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION public.fn_sync_lease_lifecycle_flag() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
 BEGIN
   NEW.feature_flags := jsonb_set(
     coalesce(NEW.feature_flags, '{}'::jsonb),
@@ -25,11 +33,12 @@ BEGIN
   );
   RETURN NEW;
 END $$;
+REVOKE EXECUTE ON FUNCTION public.fn_sync_lease_lifecycle_flag() FROM PUBLIC, anon, authenticated;
 
 CREATE TRIGGER trg_org_lease_lifecycle
   BEFORE INSERT OR UPDATE OF plan_tier, environment, feature_flags
   ON organizations
-  FOR EACH ROW EXECUTE FUNCTION fn_sync_lease_lifecycle_flag();
+  FOR EACH ROW EXECUTE FUNCTION public.fn_sync_lease_lifecycle_flag();
 
 UPDATE organizations
    SET feature_flags = jsonb_set(
@@ -44,23 +53,22 @@ UPDATE leases
  WHERE status IN ('ended', 'terminated', 'cancelled')
    AND end_date IS NULL;
 
-CREATE OR REPLACE FUNCTION fn_lease_close_end_date() RETURNS trigger
-LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION public.fn_lease_close_end_date() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
 BEGIN
   IF NEW.status IN ('ended', 'terminated', 'cancelled') AND NEW.end_date IS NULL THEN
     NEW.end_date := coalesce(NEW.terminated_on, NEW.start_date);
   END IF;
   RETURN NEW;
 END $$;
+REVOKE EXECUTE ON FUNCTION public.fn_lease_close_end_date() FROM PUBLIC, anon, authenticated;
 
 CREATE TRIGGER trg_lease_close_end_date
   BEFORE INSERT OR UPDATE OF status, end_date, terminated_on
   ON leases
-  FOR EACH ROW EXECUTE FUNCTION fn_lease_close_end_date();
-
-ALTER TABLE leases
-  ADD CONSTRAINT leases_closed_end_date_chk
-  CHECK (status NOT IN ('ended', 'terminated', 'cancelled') OR end_date IS NOT NULL);
+  FOR EACH ROW EXECUTE FUNCTION public.fn_lease_close_end_date();
 
 CREATE OR REPLACE VIEW id_documents_due_for_purge WITH (security_invoker = true) AS
 WITH lease_close AS (
