@@ -8,7 +8,7 @@ function read(path: string) {
 }
 
 test("default privileges revoke future execute and do not touch existing functions", () => {
-  const sql = read("supabase/migrations/20261029120000_default_function_privileges.sql");
+  const sql = read("supabase/migrations/20261029171000_default_function_privileges.sql");
   assert.match(sql, /FOR ROLE postgres IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated/);
   assert.match(sql, /FOR ROLE postgres REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC/);
   assert.match(sql, /FOR ROLE supabase_admin IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated/);
@@ -62,7 +62,7 @@ test("CI runs the local function privilege check", () => {
   assert.match(script, /app\.is_member\(uuid\)/);
   assert.match(script, /permission table before\/after/);
   assert.match(script, /is_member_check=/);
-  const member = read("supabase/migrations/20261029170000_revoke_app_is_member_execute.sql");
+  const member = read("supabase/migrations/20261029180000_revoke_app_is_member_execute.sql");
   assert.match(member, /REVOKE EXECUTE ON FUNCTION app\.is_member\(uuid\) FROM PUBLIC/);
   assert.match(member, /REVOKE EXECUTE ON FUNCTION app\.is_member\(uuid\) FROM anon/);
   assert.match(member, /GRANT EXECUTE ON FUNCTION app\.is_member\(uuid\) TO authenticated, service_role/);

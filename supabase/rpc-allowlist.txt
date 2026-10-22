@@ -13,7 +13,7 @@
 # anon can still call /rest/v1/rpc with the public anon key, so the gate
 # does not depend on the key staying out of the client bundle.
 #
-# A function created after 20261029120000_default_function_privileges.sql is
+# A function created after 20261029171000_default_function_privileges.sql is
 # not executable by anon, authenticated, or PUBLIC. A client RPC needs both
 # an explicit grant and a line in this file:
 #

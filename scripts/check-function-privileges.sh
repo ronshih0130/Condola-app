@@ -14,7 +14,7 @@
 # Hosted Supabase grants EXECUTE on new public functions to anon,
 # authenticated, and service_role. The scratch database records that default
 # before migrations so has_function_privilege sees the same grants a hosted
-# CREATE FUNCTION receives. 20261029120000 then revokes those defaults.
+# CREATE FUNCTION receives. 20261029171000 then revokes those defaults.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -68,7 +68,7 @@ SQL
 # defaults, then every migration as postgres, the role that creates functions
 # on the hosted project. The is_member revoke is applied later so the gate can
 # print that function's grants before and after.
-is_member_file="supabase/migrations/20261029170000_revoke_app_is_member_execute.sql"
+is_member_file="supabase/migrations/20261029180000_revoke_app_is_member_execute.sql"
 {
   echo "SET client_min_messages TO warning;"
   echo "SET ROLE postgres;"
@@ -90,7 +90,7 @@ SQL
   done
 } | psql "$scratch_url" -v ON_ERROR_STOP=1 -q
 
-default_file="supabase/migrations/20261029120000_default_function_privileges.sql"
+default_file="supabase/migrations/20261029171000_default_function_privileges.sql"
 if [[ -f "$default_file" ]]; then
   psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
 SET ROLE postgres;
@@ -465,7 +465,7 @@ if mode == "forward":
     root = pathlib.Path("supabase/migrations")
     for path in sorted(root.glob("*.sql")):
         version = path.name.split("_", 1)[0]
-        if version < "20261029120000":
+        if version < "20261029171000":
             continue
         text = path.read_text()
         for match in re.finditer(
