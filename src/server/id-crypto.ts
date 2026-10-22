@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { acceptIdJpeg, acceptIdPng, jpegHasWatermarkMark, maxJpegBase64Chars, sniffIdImage, stripJpegMetadata } from "@/lib/jpeg-size";
 import { productionLikeEnv } from "./demo";
 import { configuredIdKey, DEMO_KEY_MATERIAL, type IdKeyName } from "./id-keys";
@@ -14,12 +14,24 @@ const ENCRYPTION_KEYS: Record<string, IdKeyName> = {
   [ENCRYPTION_KEY_REF]: "ID_DOC_ENCRYPTION_KEY",
 };
 
+const derivedKeys = new Map<string, Buffer>();
+const aesKeys = new Map<string, Promise<CryptoKey>>();
+
 function key32(envName: IdKeyName) {
   const configured = configuredIdKey(envName);
-  if (configured) return configured;
+  const stamp = configured ? `cfg:${configured.toString("hex")}` : `demo:${DEMO_KEY_MATERIAL[envName]}`;
+  const cacheId = `${envName}:${stamp}`;
+  const cached = derivedKeys.get(cacheId);
+  if (cached) return cached;
+  if (configured) {
+    derivedKeys.set(cacheId, configured);
+    return configured;
+  }
   // Demo hashes are unreachable when CONDOLA_ENV or NODE_ENV is production-like.
   if (productionLikeEnv()) throw new Error(`Refusing to start: ${envName} is required outside demo mode.`);
-  return createHash("sha256").update(DEMO_KEY_MATERIAL[envName]).digest();
+  const hashed = createHash("sha256").update(DEMO_KEY_MATERIAL[envName]).digest();
+  derivedKeys.set(cacheId, hashed);
+  return hashed;
 }
 
 export type IdCipherBinding = { orgId: string; documentId: string; slot: string };
@@ -42,8 +54,19 @@ export function keyForRef(ref: string | null | undefined) {
   return key32(name);
 }
 
+/** One CryptoKey per raw key and usage. importKey used to run on every photo. */
 async function aesKey(raw: Uint8Array, usage: "encrypt" | "decrypt") {
-  return crypto.subtle.importKey("raw", exactBytes(raw), { name: "AES-GCM" }, false, [usage]);
+  const cacheId = `${Buffer.from(raw).toString("hex")}:${usage}`;
+  const cached = aesKeys.get(cacheId);
+  if (cached) return cached;
+  const created = crypto.subtle.importKey("raw", exactBytes(raw), { name: "AES-GCM" }, false, [usage]);
+  aesKeys.set(cacheId, created);
+  try {
+    return await created;
+  } catch (error) {
+    aesKeys.delete(cacheId);
+    throw error;
+  }
 }
 
 /**
@@ -125,9 +148,10 @@ function signSecret() {
 }
 
 export function signPhotoToken(input: { documentId: string; slot: string; userId: string; exp: number }) {
-  const body = Buffer.from(JSON.stringify({ d: input.documentId, s: input.slot, u: input.userId, e: input.exp })).toString(
-    "base64url",
-  );
+  // `n` is inside the signature so a retry is a different URL even in the same millisecond.
+  const body = Buffer.from(
+    JSON.stringify({ d: input.documentId, s: input.slot, u: input.userId, e: input.exp, n: randomBytes(8).toString("base64url") }),
+  ).toString("base64url");
   const sig = createHmac("sha256", signSecret()).update(body).digest("base64url");
   return `${body}.${sig}`;
 }

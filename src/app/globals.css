@@ -398,7 +398,10 @@ ol.steps{list-style:none;padding:0;margin:0 0 12px;gap:8px;flex-wrap:nowrap}
 .idv-oval{width:46%;aspect-ratio:3/4;border:2px dashed rgba(255,255,255,.85);border-radius:50%}
 .idv-frame-caption{position:absolute;bottom:12px;left:12px;right:12px;font-size:12px}
 .idv-shot{position:relative;margin:8px 0}
-.idv-shot img{display:block;width:100%;border-radius:8px}
+.idv-photo-frame{position:relative;aspect-ratio:1000/630;min-height:240px;border-radius:8px;overflow:hidden;background:var(--panel);margin-top:4px}
+.idv-photo-frame img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain;border-radius:8px}
+.idv-photo-frame img.is-pending{opacity:0}
+.idv-photo-status{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:16px;text-align:center}
 .idv-watermark{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;color:#fff;font-size:13px;font-weight:700;line-height:1.35;text-align:center;pointer-events:none;background:linear-gradient(transparent,rgba(0,0,0,.55));text-shadow:0 1px 2px rgba(0,0,0,.85)}
 .idv-actions{display:flex;gap:8px;flex-wrap:wrap}
 .idv-actions .btn{position:relative}

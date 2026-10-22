@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { MAX_PHOTO_BYTES } from "@/lib/jpeg-size";
+import { withClient } from "@/server/db";
 import { FlowError } from "@/server/errors";
-import { openSignedPhoto, storeIdPhoto } from "@/server/id-docs";
-import { readSession } from "@/server/session";
+import { openSignedPhotoOn, storeIdPhoto } from "@/server/id-docs";
+import { completeSession, readSession, readSessionOn } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -37,26 +38,33 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const session = await readSession();
-  if (!session) return new NextResponse(null, { status: 404 });
   const token = new URL(request.url).searchParams.get("token") ?? "";
-  try {
-    const photo = await openSignedPhoto(session, token);
-    // Workers Free allows 10ms of CPU, which cannot decode and re-encode a
-    // capped JPEG, and this route adds no paid image dependency. The browser
-    // burns the CJK lines and a red bar into the pixels, then writes a
-    // condola-id-wm COM marker. Upload refuses a JPEG without that marker.
-    // These bytes are that burned scan after APP/COM segments are stripped.
-    // A client can forge the marker without burning pixels. A real server
-    // re-encode needs a Worker with a higher cpu_ms limit.
-    return new NextResponse(new Uint8Array(photo.bytes), {
-      headers: {
-        "content-type": photo.mime,
-        "cache-control": "private, no-store",
-        "x-content-type-options": "nosniff",
-      },
-    });
-  } catch {
-    return new NextResponse(null, { status: 404 });
-  }
+  // One connection for the session check and the photo. touch:false avoids
+  // three parallel GETs queueing on the same last_active row. The ciphertext
+  // for this slot comes back in one result (24KiB rows). No server re-encode:
+  // Workers Free allows 10ms of CPU, which cannot decode and re-encode a
+  // capped JPEG, and this route adds no paid image dependency. The browser
+  // burns the CJK lines and a red bar into the pixels, then writes a
+  // condola-id-wm COM marker. Upload refuses a JPEG without that marker.
+  // These bytes are that burned scan after APP/COM segments are stripped.
+  // A client can forge the marker without burning pixels. A real server
+  // re-encode needs a Worker with a higher cpu_ms limit.
+  const photo = await withClient(async (client) => {
+    const loaded = await readSessionOn(client, { touch: false });
+    const session = await completeSession(loaded);
+    if (!session) return null;
+    try {
+      return await openSignedPhotoOn(client, session, token);
+    } catch {
+      return null;
+    }
+  });
+  if (!photo) return new NextResponse(null, { status: 404 });
+  return new NextResponse(new Uint8Array(photo.bytes), {
+    headers: {
+      "content-type": photo.mime,
+      "cache-control": "private, no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }

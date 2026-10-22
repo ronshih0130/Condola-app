@@ -139,27 +139,26 @@ export async function copySlotCiphertext(
   if (wrote.rows[0]?.n !== total) throw new Error("ciphertext copy length mismatch");
 }
 
-/** Read ciphertext in slices small enough that the hex DataRow stays under 64KiB. */
+/**
+ * Read ciphertext in one round trip.
+ * Each slice is still 24KiB, so each hex DataRow stays under 64KiB. A ~68KB
+ * photo is three rows of one result, not three extra queries.
+ */
 export async function readCiphertext(client: Client, bucket: string, path: string) {
-  const head = await client.query<{ n: number | null }>(
-    `SELECT octet_length(ciphertext)::int AS n
+  const result = await client.query<{ n: number | null; chunk: unknown }>(
+    `SELECT octet_length(ciphertext)::int AS n,
+            substring(ciphertext from g.i for $3::int) AS chunk
        FROM id_document_objects
-      WHERE bucket = $1 AND path = $2`,
-    [bucket, path],
+       CROSS JOIN LATERAL generate_series(1, octet_length(ciphertext), $3::int) AS g(i)
+      WHERE bucket = $1 AND path = $2
+      ORDER BY g.i`,
+    [bucket, path, BYTEA_CHUNK],
   );
-  const total = head.rows[0]?.n;
-  if (total == null) return null;
-  const parts: Buffer[] = [];
-  for (let offset = 0; offset < total; offset += BYTEA_CHUNK) {
-    const row = await client.query<{ chunk: unknown }>(
-      `SELECT substring(ciphertext from $3::int for $4::int) AS chunk
-         FROM id_document_objects
-        WHERE bucket = $1 AND path = $2`,
-      [bucket, path, offset + 1, BYTEA_CHUNK],
-    );
-    const chunk = asBuffer(row.rows[0]?.chunk ?? Buffer.alloc(0));
-    if (chunk.length === 0) break;
-    parts.push(chunk);
+  const total = result.rows[0]?.n;
+  if (total == null || result.rows.length === 0) return null;
+  const parts = result.rows.map((row) => asBuffer(row.chunk ?? Buffer.alloc(0)));
+  if (parts.some((part) => part.length === 0 || part.length > BYTEA_CHUNK)) {
+    throw new Error("ciphertext chunk was outside the 24KiB cap");
   }
   const joined = Buffer.concat(parts);
   if (joined.length !== total) throw new Error("ciphertext read length mismatch");

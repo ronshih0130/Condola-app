@@ -51,11 +51,16 @@ test("ciphertext round-trips and the HMAC is not the ID number", async () => {
 });
 
 test("a photo token expires and a tampered signature is rejected", () => {
-  const token = signPhotoToken({ documentId: "doc", slot: "front", userId: "user", exp: Date.now() + 60_000 });
+  const exp = Date.now() + 60_000;
+  const token = signPhotoToken({ documentId: "doc", slot: "front", userId: "user", exp });
+  const again = signPhotoToken({ documentId: "doc", slot: "front", userId: "user", exp });
+  assert.notEqual(token, again);
   const parsed = readPhotoToken(token);
   assert.equal(parsed?.d, "doc");
   assert.equal(parsed?.s, "front");
   assert.equal(parsed?.u, "user");
+  assert.equal(parsed?.e, exp);
+  assert.equal(readPhotoToken(again)?.e, exp);
   const expired = signPhotoToken({ documentId: "doc", slot: "front", userId: "user", exp: Date.now() - 1000 });
   assert.equal(readPhotoToken(expired), null);
   const [body] = token.split(".");

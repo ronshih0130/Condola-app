@@ -69,18 +69,26 @@ test("copySlotCiphertext never binds a bytea", async () => {
   assert.ok(lengths.length >= 2);
 });
 
-test("readCiphertext reassembles 24KiB slices", async () => {
+test("readCiphertext reassembles 24KiB slices from one result", async () => {
   const blob = Buffer.alloc(70 * 1024, 4);
+  let calls = 0;
   const client = {
     query: async (sql: string, params: unknown[] = []) => {
-      if (sql.includes("octet_length")) return { rows: [{ n: blob.length }] };
-      const start = Number(params[2]);
-      const len = Number(params[3]);
-      assert.ok(len <= BYTEA_CHUNK);
-      return { rows: [{ chunk: blob.subarray(start - 1, start - 1 + len) }] };
+      calls += 1;
+      assert.match(sql, /generate_series/);
+      const size = Number(params[2]);
+      assert.equal(size, BYTEA_CHUNK);
+      const rows = [];
+      for (let start = 1; start <= blob.length; start += size) {
+        rows.push({ n: blob.length, chunk: blob.subarray(start - 1, start - 1 + size) });
+      }
+      assert.ok(rows.length > 1);
+      assert.equal(rows.every((row) => row.chunk.length <= BYTEA_CHUNK), true);
+      return { rows };
     },
   } as unknown as Client;
   const out = await readCiphertext(client, "b", "p");
+  assert.equal(calls, 1);
   assert.ok(out);
   assert.equal(out.equals(blob), true);
 });

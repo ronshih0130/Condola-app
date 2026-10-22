@@ -352,3 +352,39 @@ test("a compressed ID photo still uploads and shows 待核對", async ({ page })
   expect(stored?.height).toBe(1500);
   expect(Math.max(stored?.width ?? 0, stored?.height ?? 0)).toBeLessThanOrEqual(MAX_LONG_EDGE);
 });
+
+test("each photo fails on its own and reload asks for a new link", async ({ page }) => {
+  await resetDemo(page);
+  await signIn(page, ACCOUNTS.manager);
+  await zh(page, "/m/leases");
+  await page.getByRole("link", { name: "張雅文" }).click();
+  let failFirst = true;
+  await page.route("**/api/id-documents/photo?*", async (route) => {
+    if (failFirst) {
+      await route.fulfill({ status: 404, body: "" });
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await route.continue();
+  });
+  await page.getByTestId("idv-view").click();
+  await expect(page.getByTestId("idv-photo-error-front")).toContainText("照片沒有載入成功，請按「重新載入」再試一次");
+  await expect(page.getByTestId("idv-photo-retry-front")).toHaveText("重新載入");
+  await expect(page.getByTestId("idv-photo-error-back")).toBeVisible();
+  await expect(page.getByTestId("idv-photo-error-selfie")).toBeVisible();
+  const frame = await page.locator(".idv-photo-frame").first().boundingBox();
+  expect(frame?.height).toBeGreaterThanOrEqual(240);
+  const oldFront = await page.getByTestId("idv-photo-front").getAttribute("src");
+  expect(oldFront).toBeTruthy();
+  failFirst = false;
+  await page.getByTestId("idv-photo-retry-front").click();
+  await expect(page.getByTestId("idv-photo-loading-front")).toHaveText("照片載入中…");
+  await expect(page.getByTestId("idv-photo-error-back")).toBeVisible();
+  await expect(page.getByTestId("idv-photo-error-selfie")).toBeVisible();
+  await expect.poll(() => page.getByTestId("idv-photo-front").getAttribute("src")).not.toBe(oldFront);
+  const nextFront = await page.getByTestId("idv-photo-front").getAttribute("src");
+  expect(nextFront && nextFront !== oldFront).toBeTruthy();
+  await expect.poll(() => page.getByTestId("idv-photo-front").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.getByTestId("idv-photo-error-front")).toHaveCount(0);
+  await expect(page.getByTestId("idv-photo-error-back")).toBeVisible();
+});

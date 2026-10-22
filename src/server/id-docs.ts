@@ -19,7 +19,7 @@ import {
 import { acceptIdJpeg, acceptIdPng, sniffIdImage, stripJpegMetadata } from "@/lib/jpeg-size";
 import { ID_NOTICE_PATH, ID_NOTICE_SHA256, fullNoticeSha256Subtle, resolveFirmContact, uploadPageSha256Subtle } from "@/lib/id-notice";
 import { writeAudit } from "./audit";
-import { maybe, query, svc, tx } from "./db";
+import { maybe, svc, svcOn, tx, withClient } from "./db";
 import { FlowError, logServerError } from "./errors";
 import { copySlotCiphertext, readCiphertext, writeCiphertext, writeUploadSlot } from "./id-bytes";
 import {
@@ -785,14 +785,28 @@ export async function reviewIdCheck(session: Session, documentId: string, action
   });
 }
 
-export async function issuePhotoUrls(session: Session, documentId: string) {
+function assertPhotoViewer(session: Session) {
   if (session.kind === "owner" || session.role === "accountant" || session.role === "maintenance") {
     throw new FlowError("errors.forbidden");
   }
   if (session.kind === "staff" && !canReviewId(session)) throw new FlowError("errors.forbidden");
+  if (session.kind !== "staff" && session.kind !== "tenant") throw new FlowError("errors.forbidden");
+}
+
+export async function issuePhotoUrls(session: Session, documentId: string) {
+  assertPhotoViewer(session);
   // service_role bypasses RLS. Ownership is checked here, not by the policy.
-  const doc = await svc(session.userId, async (client) =>
-    maybe<{ id: string; org_id: string; contact_id: string; user_id: string | null; tenant_name: string; firm_name: string; slots: string[] }>(
+  // The lookup and both audit inserts share one connection.
+  const issued = await svc(session.userId, async (client) => {
+    const doc = await maybe<{
+      id: string;
+      org_id: string;
+      contact_id: string;
+      user_id: string | null;
+      tenant_name: string;
+      firm_name: string;
+      slots: string[];
+    }>(
       client,
       `SELECT d.id::text, d.org_id::text, d.contact_id::text, c.user_id::text,
               c.display_name AS tenant_name, o.name AS firm_name,
@@ -803,92 +817,105 @@ export async function issuePhotoUrls(session: Session, documentId: string) {
          JOIN organizations o ON o.id = d.org_id
         WHERE d.id = $1 AND d.deleted_at IS NULL`,
       [documentId],
-    ),
-  );
-  if (!doc) throw new FlowError("errors.forbidden");
-  if (session.kind === "staff" && doc.org_id !== session.orgId) throw new FlowError("errors.forbidden");
-  if (session.kind === "tenant" && doc.user_id !== session.userId) throw new FlowError("errors.forbidden");
-  if (session.kind !== "staff" && session.kind !== "tenant") throw new FlowError("errors.forbidden");
-  const exp = Date.now() + SIGNED_URL_TTL_SECONDS * 1000;
-  const expiresAt = new Date(exp).toISOString();
-  const purpose = session.kind === "staff" ? "staff_view" : "self_view";
-  const reason = session.kind === "staff" ? staffViewAuditReason(doc.tenant_name) : "租客查看自己的身分證件照片";
-  await query(
-    `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row, reason)
-     VALUES ($1,$2,'app','identity_documents',$3,'insert','id_document_view',$4::jsonb,$5)`,
-    [doc.org_id, session.userId, documentId, JSON.stringify({ documentId, contactId: doc.contact_id, purpose }), purpose],
-  );
-  await query(
-    `INSERT INTO identity_document_access_log (org_id, document_id, accessed_by, purpose, signed_url_expires_at)
-     VALUES ($1,$2,$3,$4,$5)`,
-    [doc.org_id, documentId, session.userId, purpose, expiresAt],
-  );
+    );
+    if (!doc) throw new FlowError("errors.forbidden");
+    if (session.kind === "staff" && doc.org_id !== session.orgId) throw new FlowError("errors.forbidden");
+    if (session.kind === "tenant" && doc.user_id !== session.userId) throw new FlowError("errors.forbidden");
+    const exp = Date.now() + SIGNED_URL_TTL_SECONDS * 1000;
+    const expiresAt = new Date(exp).toISOString();
+    const purpose = session.kind === "staff" ? "staff_view" : "self_view";
+    const reason = session.kind === "staff" ? staffViewAuditReason(doc.tenant_name) : "租客查看自己的身分證件照片";
+    await client.query(
+      `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row, reason)
+       VALUES ($1,$2,'app','identity_documents',$3,'insert','id_document_view',$4::jsonb,$5)`,
+      [doc.org_id, session.userId, documentId, JSON.stringify({ documentId, contactId: doc.contact_id, purpose }), purpose],
+    );
+    await client.query(
+      `INSERT INTO identity_document_access_log (org_id, document_id, accessed_by, purpose, signed_url_expires_at)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [doc.org_id, documentId, session.userId, purpose, expiresAt],
+    );
+    return { doc, exp, reason };
+  });
   const t = makeT(session.locale);
   const watermark =
     session.kind === "staff"
-      ? t("idv_wm", { firm: doc.firm_name, who: session.name, t: taipeiStamp() })
+      ? t("idv_wm", { firm: issued.doc.firm_name, who: session.name, t: taipeiStamp() })
       : t("idv_wm_ten");
-  const shots = doc.slots
+  const shots = issued.doc.slots
     .filter((slot): slot is IdSlot => slot === "front" || slot === "back" || slot === "selfie")
     .map((slot) => ({
       slot,
-      url: `/api/id-documents/photo?token=${encodeURIComponent(signPhotoToken({ documentId, slot, userId: session.userId, exp }))}`,
+      url: `/api/id-documents/photo?token=${encodeURIComponent(
+        signPhotoToken({ documentId, slot, userId: session.userId, exp: issued.exp }),
+      )}`,
       watermark,
     }));
-  return { shots, watermark, logged: reason };
+  return { shots, watermark, logged: issued.reason };
+}
+
+type OpenedPhoto = { mime: string; bytes: Buffer; firmName: string };
+
+async function loadSignedPhoto(
+  client: Client,
+  session: Session,
+  parsed: { d: string; s: string },
+): Promise<OpenedPhoto | null> {
+  const photo = await maybe<{
+    org_id: string;
+    user_id: string | null;
+    firm_name: string;
+    mime_type: string;
+    encryption_key_ref: string;
+    bucket: string;
+    path: string;
+  }>(
+    client,
+    `SELECT d.org_id::text, c.user_id::text, o.name AS firm_name,
+            obj.mime_type, d.encryption_key_ref, obj.bucket, obj.path
+       FROM identity_documents d
+       JOIN contacts c ON c.id = d.contact_id
+       JOIN organizations o ON o.id = d.org_id
+       JOIN identity_document_photos p ON p.document_id = d.id AND p.slot = $2
+       JOIN id_document_objects obj ON obj.bucket = p.storage_bucket AND obj.path = p.storage_path
+      WHERE d.id = $1 AND d.deleted_at IS NULL`,
+    [parsed.d, parsed.s],
+  );
+  if (!photo) return null;
+  if (session.kind === "tenant" && photo.user_id !== session.userId) return null;
+  if (session.kind === "staff" && photo.org_id !== session.orgId) return null;
+  const ciphertext = await readCiphertext(client, photo.bucket, photo.path);
+  if (!ciphertext) return null;
+  const bytes = await decryptBytes(
+    ciphertext,
+    { orgId: photo.org_id, documentId: parsed.d, slot: parsed.s },
+    photo.encryption_key_ref,
+  );
+  await client.query(
+    `INSERT INTO identity_document_access_log (org_id, document_id, accessed_by, purpose)
+     VALUES ($1,$2,$3,'download')`,
+    [photo.org_id, parsed.d, session.userId],
+  );
+  await client.query(
+    `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row)
+     VALUES ($1,$2,'app','identity_documents',$3,'insert','id_document_download',$4::jsonb)`,
+    [photo.org_id, session.userId, parsed.d, JSON.stringify({ documentId: parsed.d, slot: parsed.s })],
+  );
+  return { mime: photo.mime_type, bytes, firmName: photo.firm_name };
+}
+
+/** Photo bytes on a connection the caller already holds. The route uses this after the session lookup. */
+export async function openSignedPhotoOn(client: Client, session: Session, token: string) {
+  const parsed = readPhotoToken(token);
+  if (!parsed || parsed.u !== session.userId) throw new FlowError("errors.forbidden");
+  assertPhotoViewer(session);
+  const opened = await svcOn(client, session.userId, (tx) => loadSignedPhoto(tx, session, parsed));
+  if (!opened) throw new FlowError("errors.forbidden");
+  return opened;
 }
 
 export async function openSignedPhoto(session: Session, token: string) {
-  const parsed = readPhotoToken(token);
-  if (!parsed || parsed.u !== session.userId) throw new FlowError("errors.forbidden");
-  if (session.kind === "owner" || session.role === "accountant" || session.role === "maintenance") {
-    throw new FlowError("errors.forbidden");
-  }
-  if (session.kind === "staff" && !canReviewId(session)) throw new FlowError("errors.forbidden");
-  const opened = await svc(session.userId, async (client) => {
-    const doc = await maybe<{ org_id: string; user_id: string | null; firm_name: string; deleted_at: string | null }>(
-      client,
-      `SELECT d.org_id::text, c.user_id::text, o.name AS firm_name, d.deleted_at::text
-         FROM identity_documents d
-         JOIN contacts c ON c.id = d.contact_id
-         JOIN organizations o ON o.id = d.org_id
-        WHERE d.id = $1`,
-      [parsed.d],
-    );
-    if (!doc || doc.deleted_at) return null;
-    if (session.kind === "tenant" && doc.user_id !== session.userId) return null;
-    if (session.kind === "staff" && doc.org_id !== session.orgId) return null;
-    const photo = await maybe<{ mime_type: string; encryption_key_ref: string; bucket: string; path: string }>(
-      client,
-      `SELECT o.mime_type, d.encryption_key_ref, o.bucket, o.path
-         FROM identity_document_photos p
-         JOIN id_document_objects o ON o.bucket = p.storage_bucket AND o.path = p.storage_path
-         JOIN identity_documents d ON d.id = p.document_id
-        WHERE p.document_id = $1 AND p.slot = $2`,
-      [parsed.d, parsed.s],
-    );
-    if (!photo) return null;
-    const ciphertext = await readCiphertext(client, photo.bucket, photo.path);
-    if (!ciphertext) return null;
-    const bytes = await decryptBytes(
-      ciphertext,
-      { orgId: doc.org_id, documentId: parsed.d, slot: parsed.s },
-      photo.encryption_key_ref,
-    );
-    await client.query(
-      `INSERT INTO identity_document_access_log (org_id, document_id, accessed_by, purpose)
-       VALUES ($1,$2,$3,'download')`,
-      [doc.org_id, parsed.d, session.userId],
-    );
-    await client.query(
-      `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row)
-       VALUES ($1,$2,'app','identity_documents',$3,'insert','id_document_download',$4::jsonb)`,
-      [doc.org_id, session.userId, parsed.d, JSON.stringify({ documentId: parsed.d, slot: parsed.s })],
-    );
-    return { mime: photo.mime_type, bytes, firmName: doc.firm_name };
-  });
-  if (!opened) throw new FlowError("errors.forbidden");
-  return opened;
+  return withClient((client) => openSignedPhotoOn(client, session, token));
 }
 
 export async function attachSampleId(actorId: string, leaseId: string) {

@@ -9,6 +9,7 @@ import test from "node:test";
 import {
   DEFAULT_RETENTION_DAYS,
   GLARE_SHARE,
+  SIGNED_URL_TTL_SECONDS,
   isValidIdNumber,
   keepPhrase,
   maskIdNumber,
@@ -88,7 +89,7 @@ test("id check copy never says verified and the consent notice is verbatim", () 
   for (const locale of ["zh-TW", "en"] as const) {
     const catalog = JSON.parse(readFileSync(new URL(`../i18n/${locale}.json`, import.meta.url), "utf8")) as Record<string, string>;
     const keys = Object.keys(catalog).filter((key) => key.startsWith("idv_"));
-    assert.equal(keys.length, 77, locale);
+    assert.equal(keys.length, 80, locale);
     const copyKeys = Object.keys(catalog).filter((key) => key.startsWith("idv_") || key.startsWith("i_id_"));
     for (const key of copyKeys) {
       assert.equal(catalog[key].includes("已驗證"), false, key);
@@ -223,4 +224,39 @@ test("tenant bill status is settled or partial and does not say collected", () =
     const source = readFileSync(file, "utf8");
     for (const word of banned) assert.equal(source.includes(word), false, `${file} ${word}`);
   }
+});
+
+test("the photo modal keeps a fixed frame per slot and reloads with a new link", () => {
+  assert.equal(SIGNED_URL_TTL_SECONDS, 60);
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
+  assert.equal(zh.idv_photo_loading, "照片載入中…");
+  assert.equal(zh.idv_photo_error, "照片沒有載入成功，請按「重新載入」再試一次");
+  assert.equal(zh.idv_photo_retry, "重新載入");
+  assert.equal(en.idv_photo_loading, "Loading photo…");
+  assert.equal(en.idv_photo_error, "The photo did not load. Press Reload and try again.");
+  assert.equal(en.idv_photo_retry, "Reload");
+  assert.equal(zh.idv_photo_error.includes("過期"), false);
+  const card = readFileSync(new URL("../components/idv-card.tsx", import.meta.url), "utf8");
+  assert.match(card, /idv_photo_loading/);
+  assert.match(card, /idv_photo_error/);
+  assert.match(card, /idv_photo_retry/);
+  assert.match(card, /actionViewIdPhotos\(check\.documentId\)/);
+  assert.match(card, /url: ""/);
+  assert.match(card, /fresh\.url === previous/);
+  assert.match(card, /data-testid=\{`idv-photo-\$\{shot\.slot\}`\}/);
+  assert.match(card, /data-testid="idv-watermark"/);
+  assert.doesNotMatch(card, /連結已過期/);
+  assert.doesNotMatch(card, /照片載入中/);
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(css, /\.idv-photo-frame\{[^}]*aspect-ratio:1000\/630/);
+  assert.match(css, /\.idv-photo-frame\{[^}]*min-height:240px/);
+  const route = readFileSync(new URL("../app/api/id-documents/photo/route.ts", import.meta.url), "utf8");
+  const get = route.slice(route.indexOf("export async function GET"));
+  assert.match(get, /readSessionOn\(client, \{ touch: false \}\)/);
+  assert.match(get, /openSignedPhotoOn\(client, session, token\)/);
+  assert.match(get, /private, no-store/);
+  assert.doesNotMatch(get, /readSession\(\)/);
+  const bytes = readFileSync(new URL("../server/id-bytes.ts", import.meta.url), "utf8");
+  assert.match(bytes, /generate_series\(1, octet_length\(ciphertext\), \$3::int\)/);
 });

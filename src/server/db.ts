@@ -193,18 +193,27 @@ async function rollBack(client: Client, error: unknown): Promise<never> {
  * try-out flag run as service_role (BYPASSRLS), matching the schema comment
  * that those flows are server-side. Callers must authorize first.
  */
-export async function svc<T>(userId: string | null, fn: (client: Client) => Promise<T>): Promise<T> {
-  return withClient(async (client) => {
-    try {
-      await client.query("BEGIN");
-      if (userId) await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [userId]);
+/** service_role transaction on a connection the caller already holds. */
+export async function svcOn<T>(client: Client, userId: string | null, fn: (client: Client) => Promise<T>): Promise<T> {
+  try {
+    await client.query("BEGIN");
+    if (userId) {
+      await client.query(
+        `SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'service_role', true)`,
+        [userId],
+      );
+    } else {
       await client.query(`SELECT set_config('request.jwt.claim.role', 'service_role', true)`);
-      await client.query("SET LOCAL ROLE service_role");
-      const result = await fn(client);
-      await client.query("COMMIT");
-      return result;
-    } catch (error) {
-      return rollBack(client, error);
     }
-  });
+    await client.query("SET LOCAL ROLE service_role");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    return rollBack(client, error);
+  }
+}
+
+export async function svc<T>(userId: string | null, fn: (client: Client) => Promise<T>): Promise<T> {
+  return withClient((client) => svcOn(client, userId, fn));
 }

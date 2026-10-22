@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { actionMarkIdChecked, actionReturnId, actionViewIdPhotos } from "@/server/actions";
 import { IdKeepNotice } from "./id-keep";
@@ -13,6 +13,49 @@ const DOC_KEY: Record<IdDocType, string> = {
   arc_resident_cert: "idv_doc_arc",
   passport: "idv_doc_passport",
 };
+
+type ShotPhase = "loading" | "ready" | "error";
+
+type ShotState = {
+  slot: IdSlot;
+  url: string;
+  watermark: string;
+  phase: ShotPhase;
+};
+
+function slotLabel(slot: IdSlot, docType: IdDocType | null) {
+  if (slot === "front") return docType === "passport" ? "idv_photo" : "idv_front";
+  if (slot === "back") return "idv_back";
+  return "idv_selfie";
+}
+
+function IdPhoto({
+  shot,
+  onPhase,
+}: {
+  shot: ShotState;
+  onPhase: (slot: IdSlot, url: string, phase: "ready" | "error") => void;
+}) {
+  const ref = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const img = ref.current;
+    if (!img || shot.phase !== "loading" || !shot.url) return;
+    if (img.complete && img.naturalWidth > 0) onPhase(shot.slot, shot.url, "ready");
+    else if (img.complete && img.naturalWidth === 0) onPhase(shot.slot, shot.url, "error");
+  }, [onPhase, shot.phase, shot.slot, shot.url]);
+  if (!shot.url) return null;
+  return (
+    <img
+      ref={ref}
+      src={shot.url}
+      alt=""
+      data-testid={`idv-photo-${shot.slot}`}
+      className={shot.phase === "ready" ? undefined : "is-pending"}
+      onLoad={() => onPhase(shot.slot, shot.url, "ready")}
+      onError={() => onPhase(shot.slot, shot.url, "error")}
+    />
+  );
+}
 
 export function IdvCard({ check, toast }: { check: IdCheckView; toast?: string }) {
   const t = useT();
@@ -27,10 +70,15 @@ export function IdvCard({ check, toast }: { check: IdCheckView; toast?: string }
           : "idv_st_none";
   const chip = check.status === "checked" ? "ok" : check.status === "returned" ? "bad" : check.status === "pending_review" ? "warn" : "";
   const [open, setOpen] = useState(false);
-  const [shots, setShots] = useState<{ slot: IdSlot; url: string; watermark: string }[]>([]);
+  const [shots, setShots] = useState<ShotState[]>([]);
   const [logged, setLogged] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
+  const reloadGen = useRef<Partial<Record<IdSlot, number>>>({});
+
+  const onPhase = useCallback((slot: IdSlot, url: string, phase: "ready" | "error") => {
+    setShots((current) => current.map((shot) => (shot.slot === slot && shot.url === url ? { ...shot, phase } : shot)));
+  }, []);
 
   async function review(
     action: (formData: FormData) => Promise<{ error: string } | void>,
@@ -54,9 +102,33 @@ export function IdvCard({ check, toast }: { check: IdCheckView; toast?: string }
       setError(errorText(t, result.error));
       return;
     }
-    setShots(result.shots);
+    setShots(result.shots.map((shot) => ({ ...shot, phase: "loading" as const })));
     setLogged(result.logged);
     setOpen(true);
+  }
+
+  async function reload(slot: IdSlot) {
+    if (!check.documentId) return;
+    const previous = shots.find((shot) => shot.slot === slot)?.url ?? "";
+    const gen = (reloadGen.current[slot] ?? 0) + 1;
+    reloadGen.current[slot] = gen;
+    setShots((current) => current.map((shot) => (shot.slot === slot ? { ...shot, phase: "loading", url: "" } : shot)));
+    const result = await actionViewIdPhotos(check.documentId);
+    if (reloadGen.current[slot] !== gen) return;
+    if ("error" in result) {
+      setShots((current) => current.map((shot) => (shot.slot === slot ? { ...shot, phase: "error", url: "" } : shot)));
+      return;
+    }
+    const fresh = result.shots.find((shot) => shot.slot === slot);
+    if (!fresh || fresh.url === previous) {
+      setShots((current) => current.map((shot) => (shot.slot === slot ? { ...shot, phase: "error", url: "" } : shot)));
+      return;
+    }
+    setShots((current) =>
+      current.map((shot) =>
+        shot.slot === slot ? { slot, url: fresh.url, watermark: fresh.watermark, phase: "loading" } : shot,
+      ),
+    );
   }
 
   return (
@@ -142,19 +214,26 @@ export function IdvCard({ check, toast }: { check: IdCheckView; toast?: string }
               {shots.map((shot) => (
                 <div key={shot.slot} className="idv-shot">
                   <div className="f" data-testid={`idv-slot-${shot.slot}`}>
-                    {t(
-                      shot.slot === "front"
-                        ? check.docType === "passport"
-                          ? "idv_photo"
-                          : "idv_front"
-                        : shot.slot === "back"
-                          ? "idv_back"
-                          : "idv_selfie",
-                    )}
+                    {t(slotLabel(shot.slot, check.docType))}
                   </div>
-                  <img src={shot.url} alt="" data-testid={`idv-photo-${shot.slot}`} />
-                  <div className="idv-watermark" data-testid="idv-watermark">
-                    {shot.watermark}
+                  <div className="idv-photo-frame">
+                    <IdPhoto shot={shot} onPhase={onPhase} />
+                    {shot.phase === "loading" ? (
+                      <div className="idv-photo-status" data-testid={`idv-photo-loading-${shot.slot}`}>
+                        {t("idv_photo_loading")}
+                      </div>
+                    ) : null}
+                    {shot.phase === "error" ? (
+                      <div className="idv-photo-status" data-testid={`idv-photo-error-${shot.slot}`}>
+                        <p>{t("idv_photo_error")}</p>
+                        <button className="btn" type="button" data-testid={`idv-photo-retry-${shot.slot}`} onClick={() => reload(shot.slot)}>
+                          {t("idv_photo_retry")}
+                        </button>
+                      </div>
+                    ) : null}
+                    <div className="idv-watermark" data-testid="idv-watermark" hidden={shot.phase !== "ready"}>
+                      {shot.watermark}
+                    </div>
                   </div>
                 </div>
               ))}
