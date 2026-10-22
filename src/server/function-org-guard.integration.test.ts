@@ -113,20 +113,26 @@ test("post_reversal allows the pinned org, rejects another org, and service_role
   });
 });
 
-test("the 3-arg post_reversal has no pinned-org check, and app.audit_event rejects another org", async () => {
+test("the 3-arg post_reversal returns P0001 for another org, and app.audit_event returns 42501", async () => {
   await withClient(async (client) => {
     await client.query("BEGIN");
     try {
       const stamp = `org-rev3-${Date.now().toString(36)}`;
       const other = await ledger(client, ORG2_ID, `${stamp}-b`);
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, status)
+         VALUES ($1, $2, 'admin', 'active')
+         ON CONFLICT (org_id, user_id) DO NOTHING`,
+        [ORG2_ID, USERS.admin],
+      );
       await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.admin]);
       await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
       await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
       await client.query("SET LOCAL ROLE authenticated");
 
-      // Not a member of org B. RLS hides the ledger row. The 3-arg body raises
-      // the default exception, not 42501. The PM org-check follow-up is what
-      // adds 42501.
+      // Same pin and membership as the 2-arg test. This overload has no
+      // 42501 branch. app.is_member hides the other org while the pin is set,
+      // so the body raises the default "not found" exception (P0001).
       await client.query("SAVEPOINT expect_p0001");
       try {
         await client.query(`SELECT post_reversal($1::uuid, 'cross org', NULL::uuid)`, [other]);
@@ -152,21 +158,6 @@ test("the 3-arg post_reversal has no pinned-org check, and app.audit_event rejec
         assert.match(pg.message, /not allowed to audit this event/);
         await client.query("ROLLBACK TO SAVEPOINT expect_audit");
       }
-      await client.query("RESET ROLE");
-
-      await client.query(
-        `INSERT INTO org_members (org_id, user_id, role, status)
-         VALUES ($1, $2, 'admin', 'active')
-         ON CONFLICT (org_id, user_id) DO NOTHING`,
-        [ORG2_ID, USERS.admin],
-      );
-      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
-      await client.query("SET LOCAL ROLE authenticated");
-      const reversed = await client.query<{ id: string }>(
-        `SELECT post_reversal($1::uuid, 'member of the other org', NULL::uuid) AS id`,
-        [other],
-      );
-      assert.match(reversed.rows[0].id, /^[0-9a-f-]{36}$/);
     } finally {
       await client.query("ROLLBACK");
     }
