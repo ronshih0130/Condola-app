@@ -82,7 +82,7 @@ export async function resetAndSeed() {
        ) VALUES (
          $1, $2, $3, '82838485', 'TW', $4, 'TWD', 'zh-TW', 'Asia/Taipei', true, '北市租管字第1234號', 'beta', $5,
          '{"tryout":{"property":false,"lease":false,"statement":false}}'::jsonb,
-         '{"line_alerts":true,"branded_line_oa":false}'::jsonb, true
+         '{"line_alerts":true,"branded_line_oa":false,"rent_settlement":true}'::jsonb, true
        )`,
       [ORG_ID, FIRM_NAME, `${FIRM_NAME}有限公司`, twId, USERS.admin],
     );
@@ -92,6 +92,11 @@ export async function resetAndSeed() {
          is_rental_mgmt_business, rental_mgmt_license_no, created_by, live_enabled
        ) VALUES ($1, $2, $2, 'TW', $3, 'TWD', 'zh-TW', 'Asia/Taipei', true, '北市租管字第5678號', $4, true)`,
       [ORG2_ID, FIRM2_NAME, twId, USERS.coastAdmin],
+    );
+    await client.query(
+      `UPDATE organizations
+          SET feature_flags = coalesce(feature_flags, '{}'::jsonb) || '{"rent_settlement": true}'::jsonb
+        WHERE plan_tier = 'beta' OR environment = 'sandbox'`,
     );
 
     const members: { org: string; user: string; role: string; billing: boolean; title: string }[] = [

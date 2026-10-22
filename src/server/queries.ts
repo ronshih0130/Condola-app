@@ -13,6 +13,7 @@ import {
   type ListOpts,
 } from "./list-search";
 import { rentUtilityDueMinor, tenantBillLines } from "./money";
+import { rentSettlementEnabled } from "./rent-settlement-math";
 import type { Session } from "./types";
 
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
@@ -45,12 +46,21 @@ export async function loadManagerChrome(session: Session) {
     flags: EMPTY_TRYOUT,
     firm: { name: "", bankName: "", last5: "", defaultLocale: "zh-TW" as const },
     badge: { pending: 0, tickets: 0 },
+    rentSettlement: false,
   };
   try {
     return await tx(session.userId, async (client) => {
-      const row = await maybe<{ settings: { tryout?: Partial<Tryout> }; name: string; default_locale: string }>(
+      const row = await maybe<{
+        settings: { tryout?: Partial<Tryout> };
+        name: string;
+        default_locale: string;
+        plan_tier: string;
+        environment: string;
+        feature_flags: unknown;
+      }>(
         client,
-        `SELECT settings, name, default_locale FROM organizations WHERE id = $1`,
+        `SELECT settings, name, default_locale, plan_tier::text, environment::text, feature_flags
+           FROM organizations WHERE id = $1`,
         [session.orgId],
       );
       const flags = row?.settings?.tryout ?? {};
@@ -81,6 +91,11 @@ export async function loadManagerChrome(session: Session) {
           defaultLocale: (row?.default_locale === "en" ? "en" : "zh-TW") as "zh-TW" | "en",
         },
         badge: { pending: Number(countsRow?.pending ?? 0), tickets: Number(countsRow?.tickets ?? 0) },
+        rentSettlement: rentSettlementEnabled({
+          environment: row?.environment ?? session.environment,
+          planTier: row?.plan_tier,
+          featureFlags: row?.feature_flags,
+        }),
       };
     });
   } catch {

@@ -1,5 +1,6 @@
 "use server";
 
+import { makeT } from "@/i18n";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { appCookieOptions } from "./public-origin";
@@ -35,6 +36,7 @@ import { addTicketComment, saveRepairRecord } from "./repairs";
 import { getSession } from "./session";
 import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
+import { correctBillPayment, recordBillPayment, reverseBillPayment } from "./rent-settlement";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
 
 export type ActionState = {
@@ -653,6 +655,60 @@ export async function actionVoidUtility(formData: FormData) {
     redirect(`/m/rent/utilities?run=${runId}&saved=void`);
   } catch (error) {
     bounce(`/m/rent/utilities?run=${runId}`, error);
+  }
+}
+
+function settlePath(formData: FormData) {
+  const month = text(formData.get("month"));
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return "/m/rent/settlement";
+  return `/m/rent/settlement?month=${month}`;
+}
+
+export async function actionRecordBillPayment(formData: FormData) {
+  const back = settlePath(formData);
+  try {
+    const session = await getSession();
+    await recordBillPayment(session, {
+      invoiceId: text(formData.get("invoiceId")),
+      amount: text(formData.get("amount")),
+      paidOn: text(formData.get("paidOn")),
+      method: text(formData.get("method")),
+      reason: makeT(session.locale)("i_settle_recorded"),
+    });
+    revalidatePath("/m/rent/settlement");
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionCorrectBillPayment(formData: FormData) {
+  const back = settlePath(formData);
+  try {
+    const session = await getSession();
+    await correctBillPayment(session, {
+      paymentId: text(formData.get("paymentId")),
+      amount: text(formData.get("amount")),
+      paidOn: text(formData.get("paidOn")),
+      method: text(formData.get("method")),
+      reason: text(formData.get("reason")),
+    });
+    revalidatePath("/m/rent/settlement");
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionReverseBillPayment(formData: FormData) {
+  const back = settlePath(formData);
+  try {
+    const session = await getSession();
+    await reverseBillPayment(session, text(formData.get("paymentId")), text(formData.get("reason")));
+    revalidatePath("/m/rent/settlement");
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
   }
 }
 

@@ -25,7 +25,8 @@ export async function insertSandboxOrg(client: Client, liveOrgId: string, userId
      )
      SELECT name, legal_name, country_code, jurisdiction_id, default_currency, default_locale, timezone,
             date_calendar, id_doc_retention_days, is_rental_mgmt_business, rental_mgmt_license_no,
-            'free', feature_flags, '{"sandboxPrompt":"open"}'::jsonb,
+            'free', coalesce(feature_flags, '{}'::jsonb) || '{"rent_settlement": true}'::jsonb,
+            '{"sandboxPrompt":"open"}'::jsonb,
             'sandbox', id, $2
        FROM organizations
       WHERE id = $1 AND environment = 'live'

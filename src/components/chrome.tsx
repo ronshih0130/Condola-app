@@ -163,6 +163,7 @@ export function Sidebar({
   role,
   showReset,
   sandbox,
+  rentSettlement = false,
 }: {
   firm: string;
   pending: number;
@@ -170,6 +171,7 @@ export function Sidebar({
   role: OrgRole | null;
   showReset: boolean;
   sandbox: boolean;
+  rentSettlement?: boolean;
 }) {
   const t = useT();
   const path = usePathname() || "/m";
@@ -177,7 +179,13 @@ export function Sidebar({
     const box = document.getElementById("nav-open") as HTMLInputElement | null;
     if (box) box.checked = false;
   };
-  const sections = visibleNav(role);
+  const sections = visibleNav(role).map((section) => {
+    if (!rentSettlement || section.section !== "i_sec_acct" || !can(role, "stmt.view")) return section;
+    return {
+      ...section,
+      links: [...section.links, { href: "/m/rent/settlement", key: "i_settle_nav" }],
+    };
+  });
   const next = encodeURIComponent(path);
   const label = sandbox ? t("i_sandbox_company") : firm;
   return (
@@ -216,7 +224,13 @@ export function Sidebar({
             const on = link.href === "/m" ? path === "/m" : path === link.href || path.startsWith(`${link.href}/`);
             const badge = link.href === "/m/payments" ? pending : link.href === "/m/tickets" ? tickets : 0;
             return (
-              <Link key={link.href} href={link.href} className={`it${on ? " on" : ""}`} onClick={closeNav}>
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`it${on ? " on" : ""}`}
+                onClick={closeNav}
+                data-testid={link.href === "/m/rent/settlement" ? "nav-settlement" : undefined}
+              >
                 <span>{t(link.key)}</span>
                 {badge > 0 ? <span className="badge">{badge}</span> : null}
               </Link>
