@@ -14,6 +14,11 @@ test("default privileges revoke future execute and do not touch existing functio
   assert.match(sql, /FOR ROLE supabase_admin IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated/);
   assert.match(sql, /FOR ROLE supabase_admin REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC/);
   assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.example\(uuid\) TO authenticated/);
+  assert.match(sql, /WHEN insufficient_privilege THEN/);
+  assert.match(sql, /insufficient_privilege changing default privileges for role supabase_admin/);
+  const adminAt = sql.indexOf("DO $supabase_admin$");
+  const postgresAt = sql.indexOf("FOR ROLE postgres IN SCHEMA public REVOKE EXECUTE");
+  assert.ok(postgresAt > 0 && adminAt > postgresAt);
   assert.doesNotMatch(sql, /REVOKE EXECUTE ON FUNCTION /);
   assert.doesNotMatch(sql, /REVOKE EXECUTE ON ALL FUNCTIONS/);
   assert.doesNotMatch(sql, /DROP FUNCTION/i);
@@ -68,6 +73,28 @@ test("CI runs the local function privilege check", () => {
   assert.match(member, /GRANT EXECUTE ON FUNCTION app\.is_member\(uuid\) TO authenticated, service_role/);
   assert.doesNotMatch(member, /FROM authenticated/);
   assert.doesNotMatch(member, /FROM service_role/);
+  assert.match(script, /merged trigger revoke probe/);
+  assert.match(script, /public\.fn_id_photo_drop_wm\(\)/);
+  assert.match(script, /public\.fn_lease_close_end_date\(\)/);
+  assert.match(script, /20261029190000_revoke_id_photo_lease_close_execute\.sql/);
+});
+
+test("merged trigger functions lose EXECUTE only when they exist", () => {
+  const names = readdirSync("supabase/migrations").filter((name) => name.endsWith(".sql")).sort();
+  const file = "20261029190000_revoke_id_photo_lease_close_execute.sql";
+  assert.ok(names.includes(file));
+  assert.ok(file > "20261029180000_revoke_app_is_member_execute.sql");
+  const sql = read(`supabase/migrations/${file}`);
+  assert.match(sql, /Version 20261029190000/);
+  assert.match(sql, /IF EXISTS \(\s*SELECT 1 FROM pg_proc WHERE oid = to_regprocedure\('public\.fn_id_photo_drop_wm\(\)'\)/);
+  assert.match(sql, /IF EXISTS \(\s*SELECT 1 FROM pg_proc WHERE oid = to_regprocedure\('public\.fn_lease_close_end_date\(\)'\)/);
+  assert.match(sql, /REVOKE EXECUTE ON FUNCTION public\.fn_id_photo_drop_wm\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /REVOKE EXECUTE ON FUNCTION public\.fn_lease_close_end_date\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /skip missing function public\.fn_id_photo_drop_wm\(\)/);
+  assert.match(sql, /skip missing function public\.fn_lease_close_end_date\(\)/);
+  assert.doesNotMatch(sql, /GRANT EXECUTE/);
+  assert.doesNotMatch(sql, /CREATE (TABLE|FUNCTION|OR REPLACE)/i);
+  assert.doesNotMatch(sql, /\b(INSERT|UPDATE|DELETE|ALTER TABLE|DROP)\b/i);
 });
 
 test("the allowlist is authenticated-only and anon is not granted", () => {

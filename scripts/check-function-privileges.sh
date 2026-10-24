@@ -375,6 +375,90 @@ else
   echo "is_member revoke probe: skipped (migration not in tree)"
 fi
 
+# fn_id_photo_drop_wm and fn_lease_close_end_date come from migrations that
+# may already be on main and are not in this branch. The revoke file no-ops
+# when they are absent. Create them here, grant EXECUTE, re-apply that file
+# twice, and require anon, authenticated, and PUBLIC to lose EXECUTE. Drop
+# only the stand-ins so the allowlist scan below stays the real schema.
+trigger_revoke_file="supabase/migrations/20261029190000_revoke_id_photo_lease_close_execute.sql"
+if [[ -f "$trigger_revoke_file" ]]; then
+  echo "merged trigger revoke probe"
+  psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+SET ROLE postgres;
+CREATE TABLE IF NOT EXISTS public.fn_priv_trigger_created (sig text PRIMARY KEY);
+TRUNCATE public.fn_priv_trigger_created;
+DO $body$
+BEGIN
+  IF to_regprocedure('public.fn_id_photo_drop_wm()') IS NULL THEN
+    EXECUTE $fn$
+      CREATE FUNCTION public.fn_id_photo_drop_wm()
+      RETURNS trigger LANGUAGE plpgsql AS $sql$ BEGIN RETURN OLD; END $sql$
+    $fn$;
+    INSERT INTO public.fn_priv_trigger_created VALUES ('public.fn_id_photo_drop_wm()');
+  END IF;
+  IF to_regprocedure('public.fn_lease_close_end_date()') IS NULL THEN
+    EXECUTE $fn$
+      CREATE FUNCTION public.fn_lease_close_end_date()
+      RETURNS trigger LANGUAGE plpgsql AS $sql$ BEGIN RETURN NEW; END $sql$
+    $fn$;
+    INSERT INTO public.fn_priv_trigger_created VALUES ('public.fn_lease_close_end_date()');
+  END IF;
+END
+$body$;
+GRANT EXECUTE ON FUNCTION public.fn_id_photo_drop_wm() TO PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_lease_close_end_date() TO PUBLIC, anon, authenticated;
+RESET ROLE;
+SQL
+  {
+    echo "SET ROLE postgres;"
+    printf '\\i %s\n' "$trigger_revoke_file"
+    printf '\\i %s\n' "$trigger_revoke_file"
+    echo "RESET ROLE;"
+  } | psql "$scratch_url" -v ON_ERROR_STOP=1 -q
+  echo "permission table (anon / authenticated / public EXECUTE):"
+  psql "$scratch_url" -v ON_ERROR_STOP=1 <<'SQL'
+SELECT sig,
+       has_function_privilege('anon', sig::regprocedure, 'EXECUTE') AS anon,
+       has_function_privilege('authenticated', sig::regprocedure, 'EXECUTE') AS authenticated,
+       has_function_privilege('public', sig::regprocedure, 'EXECUTE') AS public
+FROM (VALUES
+  ('public.fn_id_photo_drop_wm()'),
+  ('public.fn_lease_close_end_date()')
+) AS f(sig)
+ORDER BY 1;
+SQL
+  trigger_ok="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+SELECT
+  NOT has_function_privilege('anon', 'public.fn_id_photo_drop_wm()', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.fn_id_photo_drop_wm()', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public.fn_id_photo_drop_wm()', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.fn_lease_close_end_date()', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.fn_lease_close_end_date()', 'EXECUTE')
+  AND NOT has_function_privilege('public', 'public.fn_lease_close_end_date()', 'EXECUTE');
+SQL
+)"
+  if [[ "$trigger_ok" != "t" ]]; then
+    echo "merged trigger revoke probe failed" >&2
+    exit 1
+  fi
+  psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+SET ROLE postgres;
+DO $drop$
+DECLARE sig text;
+BEGIN
+  FOR sig IN SELECT fn_priv_trigger_created.sig FROM public.fn_priv_trigger_created LOOP
+    EXECUTE 'DROP FUNCTION ' || sig;
+  END LOOP;
+END
+$drop$;
+DROP TABLE public.fn_priv_trigger_created;
+RESET ROLE;
+SQL
+  echo "merged trigger revoke probe: enforced"
+else
+  echo "merged trigger revoke probe: skipped (migration not in tree)"
+fi
+
 psql "$scratch_url" -v ON_ERROR_STOP=1 -tA -F $'\t' <<'SQL' > /tmp/condola-fn-priv.tsv
 SELECT n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',
        has_function_privilege('anon', p.oid, 'EXECUTE'),
