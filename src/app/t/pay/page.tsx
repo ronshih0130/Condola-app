@@ -1,7 +1,7 @@
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner, chargeKey } from "@/components/ui";
-import { moneyLabel, signedMoneyLabel } from "@/server/format";
+import { electricityMonthLabel, moneyLabel, signedMoneyLabel } from "@/server/format";
 import { unsignedRentNoteKey } from "@/server/pay-note";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -46,7 +46,8 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
           ))}
           {money.utilityLines.map((line, index) => (
             <p key={`${line.description}-${index}`} data-testid="tenant-utility-line">
-              {line.description || t("i_charge_utility")} {moneyLabel(Number(line.amount), money.currency, session.locale)}
+              {electricityMonthLabel(line.periodStart, line.description && line.description !== "utility" ? line.description : t("i_charge_utility"))}{" "}
+              {moneyLabel(Number(line.amount), money.currency, session.locale)}
             </p>
           ))}
           {money.otherLines.map((line, index) => (

@@ -2621,7 +2621,7 @@ export async function reversePayment(session: Session, paymentId: string, reason
     }
     await client.query(`SELECT post_reversal($1::uuid, $2)`, [payment.ledger_transaction_id, note]);
     await client.query(`UPDATE payments SET status = 'reversed' WHERE id = $1 AND org_id = $2`, [payment.id, session.orgId]);
-  });
+  }, { orgId: session.orgId, environment: session.environment });
 }
 
 export async function closeMonth(session: Session, month: string, note: string) {

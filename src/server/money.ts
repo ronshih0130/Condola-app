@@ -118,7 +118,7 @@ export function managementFeeMinor(rule: FeeRule, rentReceivedMinor: number): nu
   return 0;
 }
 
-export type ChargeLine = { charge_type: string; amount_minor: number; description?: string };
+export type ChargeLine = { charge_type: string; amount_minor: number; description?: string; period_start?: string | null };
 
 /** Existing allocation order. Late fees and similar charges sit between rent and utility. */
 const PAYMENT_ORDER = ["rent", "add_on", "late_fee", "one_off", "maintenance", "utility", "deposit", "adjustment", "credit"];
@@ -156,7 +156,16 @@ export function rentUtilityDueMinor(lines: ChargeLine[], paidMinor: number) {
   return Math.max(0, rent - applied.rent) + Math.max(0, utility - applied.utility);
 }
 
-export type TenantBillLine = { chargeType: string; description: string; amountMinor: number };
+export type TenantBillLine = { chargeType: string; description: string; amountMinor: number; periodStart?: string | null };
+
+function toBillLine(line: ChargeLine, amountMinor: number): TenantBillLine {
+  return {
+    chargeType: line.charge_type,
+    description: line.description ?? "",
+    amountMinor,
+    periodStart: line.period_start ?? null,
+  };
+}
 
 function paymentRank(chargeType: string) {
   return PAYMENT_ORDER.indexOf(chargeType);
@@ -174,7 +183,7 @@ export function tenantBillLines(lines: ChargeLine[], paidMinor: number): TenantB
   const outstanding: TenantBillLine[] = [];
   for (const line of sorted) {
     if (line.amount_minor < 0) {
-      outstanding.push({ chargeType: line.charge_type, description: line.description ?? "", amountMinor: line.amount_minor });
+      outstanding.push(toBillLine(line, line.amount_minor));
       continue;
     }
     if (line.amount_minor === 0) continue;
@@ -183,7 +192,7 @@ export function tenantBillLines(lines: ChargeLine[], paidMinor: number): TenantB
     remaining[bucket] -= take;
     const left = line.amount_minor - take;
     if (left > 0) {
-      outstanding.push({ chargeType: line.charge_type, description: line.description ?? "", amountMinor: left });
+      outstanding.push(toBillLine(line, left));
     }
   }
   outstanding.sort((a, b) => {

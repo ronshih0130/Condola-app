@@ -1365,17 +1365,25 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
       [leaseId],
     );
     const lines = invoices.length
-      ? await many<{ invoice_id: string; charge_type: string; amount: string; description: string }>(
+      ? await many<{ invoice_id: string; charge_type: string; amount: string; description: string; period_start: string | null }>(
           client,
-          `SELECT invoice_id::text, charge_type::text, amount_minor::text AS amount, description
-             FROM invoice_lines WHERE invoice_id = ANY($1::uuid[])`,
+          `SELECT il.invoice_id::text, il.charge_type::text, il.amount_minor::text AS amount, il.description,
+                  i.period_start::text AS period_start
+             FROM invoice_lines il
+             JOIN invoices i ON i.id = il.invoice_id
+            WHERE il.invoice_id = ANY($1::uuid[])`,
           [invoices.map((invoice) => invoice.id)],
         )
       : [];
     const billLines = invoices.flatMap((invoice) => {
       const invoiceLines = lines
         .filter((line) => line.invoice_id === invoice.id)
-        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount), description: line.description }));
+        .map((line) => ({
+          charge_type: line.charge_type,
+          amount_minor: Number(line.amount),
+          description: line.description,
+          period_start: line.period_start,
+        }));
       return tenantBillLines(invoiceLines, Number(invoice.paid));
     });
     const dueMinor = billLines.reduce((sum, line) => sum + line.amountMinor, 0);
@@ -1384,10 +1392,11 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
     // Rent and electricity are billed only after both parties sign. A pending_signature lease
     // is left out of the electricity split, so it has neither a rent row nor a new utility row.
     // Deposit and any other open charge stay on the bill so the rows match the invoice balance.
-    const asRow = (line: { chargeType: string; description: string; amountMinor: number }) => ({
+    const asRow = (line: { chargeType: string; description: string; amountMinor: number; periodStart?: string | null }) => ({
       chargeType: line.chargeType,
       description: line.description,
       amount: String(line.amountMinor),
+      periodStart: line.periodStart ?? null,
     });
     const rentLines = billLines.filter((line) => line.chargeType === "rent").map(asRow);
     const depositLines = billLines.filter((line) => line.chargeType === "deposit").map(asRow);
