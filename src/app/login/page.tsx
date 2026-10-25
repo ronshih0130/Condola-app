@@ -5,10 +5,10 @@ import { makeT } from "@/i18n";
 import { AuthHashForward } from "@/components/auth-hash";
 import { AuthBrand } from "@/components/brand";
 import { BackupCodes } from "@/components/backup-codes";
-import { PendingSubmit } from "@/components/pending-submit";
+import { SignupResendForm } from "@/components/signup-resend-form";
 import { BACKUP_COOKIE, backupDisplay } from "@/server/backup";
 import { actionLineLogin, actionSecondFactor, actionSignIn } from "@/server/auth-actions";
-import { actionResendSignup } from "@/server/signup-actions";
+import { signupResendWait } from "@/server/signup";
 import { CHALLENGE_COOKIE, peekChallenge } from "@/server/auth";
 import { appFooterText, footerHasProductLine } from "@/line-copy";
 import { demoModeEnabled, lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
@@ -25,11 +25,15 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; step?: string; next?: string; reset?: string; demoReset?: string; email?: string }>;
+  searchParams: Promise<{ error?: string; step?: string; next?: string; reset?: string; demoReset?: string; email?: string; resent?: string; wait?: string }>;
 }) {
   const params = await searchParams;
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
+  const unconfirmedEmail = params.email || "";
+  const queryWait = Number(params.wait);
+  const fromServer = params.error === "unconfirmed" && unconfirmedEmail ? await signupResendWait(unconfirmedEmail) : 0;
+  const resendWait = fromServer > 0 ? fromServer : Number.isFinite(queryWait) ? queryWait : 0;
   const session = await readSession();
   const demoLine = showDemoLineCopy(null);
   const loginFooter = appFooterText(t("i_login_footer"), demoLine);
@@ -53,11 +57,21 @@ export default async function LoginPage({
       <AuthHashForward />
       <AuthBrand name={t("i_brand")} />
       {params.error === "unconfirmed" ? (
-        <form className="card pad" action={actionResendSignup} data-testid="login-unconfirmed">
+        <div className="card pad" data-testid="login-unconfirmed">
           <p>{t("i_login_unconfirmed")}</p>
-          <input type="hidden" name="email" value={params.email || ""} />
-          <PendingSubmit className="btn" idle={t("i_signup_resend")} pending={t("i_signup_sending")} testId="login-resend" />
-        </form>
+          <SignupResendForm
+            email={unconfirmedEmail}
+            back="login"
+            wait={resendWait}
+            idle={t("i_signup_resend")}
+            pending={t("i_signup_sending")}
+            cooling={t("i_signup_resend_wait")}
+            success={params.resent === "1" ? t("i_signup_resent") : ""}
+            error={params.resent === "error" ? t("i_signup_resend_error") : ""}
+            waiting={params.resent === "wait" ? t("i_signup_resend_cooldown") : ""}
+            testId="login-resend"
+          />
+        </div>
       ) : null}
       <form className="card pad" action={params.step === "2fa" || params.step === "enroll" ? actionSecondFactor : actionSignIn}>
         <h1>{t("i_login_headline")}</h1>

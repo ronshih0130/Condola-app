@@ -27,6 +27,17 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
         </ol>
         <p className="small muted">{t("i_signup_step", { n: 1 })}</p>
         <h1>{t("i_signup_title")}</h1>
+        <div className="signup-fit" data-testid="signup-fit">
+          <p data-testid="signup-audience">{t("i_signup_audience")}</p>
+          <p data-testid="signup-free-seat">{t("i_signup_free_seat")}</p>
+          <p data-testid="signup-software-only">{t("i_signup_software_only")}</p>
+        </div>
+        <p className="signup-note" data-testid="signup-invited-owner">
+          {t("i_signup_invited_owner")}{" "}
+          <a href="/login" data-testid="signup-invited-login">
+            {t("i_signup_invited_login")}
+          </a>
+        </p>
         <SignupForm error={params.error} />
       </div>
     </div>

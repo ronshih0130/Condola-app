@@ -251,6 +251,8 @@ export type ImportIssue = {
   severity: "error" | "warn";
   key: string;
   vars?: Record<string, string | number>;
+  /** Bad cell text. Empty string means the cell was blank. */
+  value?: string;
 };
 
 export type SpaceKind = "room" | "whole_unit";
@@ -316,10 +318,10 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
     if (!raw.ownerName.trim()) issues.push(req(raw.line, ZH_HEADERS.ownerName));
     if (!raw.unitLabel.trim()) issues.push(req(raw.line, ZH_HEADERS.unitLabel));
     const kind = rentalKind(raw.rentalMode);
-      if (!kind) issues.push({ line: raw.line, severity: "error", key: "im_e_type", vars: { v: shown(raw.rentalMode) } });
+    if (!kind) issues.push({ line: raw.line, severity: "error", key: "im_e_type", vars: { v: shown(raw.rentalMode), f: ZH_HEADERS.rentalMode }, value: shown(raw.rentalMode) });
     const roomLabel = boundedText(raw.line, ZH_HEADERS.roomLabel, raw.roomLabel, issues);
     if (kind === "room" && !roomLabel) issues.push(req(raw.line, ZH_HEADERS.roomLabel));
-    if (kind === "whole_unit" && roomLabel) issues.push({ line: raw.line, severity: "error", key: "im_e_whole_room" });
+    if (kind === "whole_unit" && roomLabel) issues.push({ line: raw.line, severity: "error", key: "im_e_whole_room", vars: { f: ZH_HEADERS.roomLabel }, value: roomLabel });
     let roomType: RoomType = "suite";
     if (kind === "room") {
       const mapped = mapRoomType(raw.roomType);
@@ -338,8 +340,8 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
     const tenantEmail = emailField(raw.line, raw.tenantEmail, issues);
     const tenantName = blank(boundedText(raw.line, ZH_HEADERS.tenantName, raw.tenantName, issues));
     const tenantPhone = blank(boundedText(raw.line, ZH_HEADERS.tenantPhone, importPhone(raw.tenantPhone), issues));
-    const startDate = dateField(raw.line, raw.startDate, issues);
-    const endDate = dateField(raw.line, raw.endDate, issues);
+    const startDate = dateField(raw.line, ZH_HEADERS.startDate, raw.startDate, issues);
+    const endDate = dateField(raw.line, ZH_HEADERS.endDate, raw.endDate, issues);
     const electricity = electricityField(raw.line, raw.electricity, issues);
     const lease = Boolean(tenantName || tenantPhone || tenantEmail || raw.startDate.trim() || raw.endDate.trim() || raw.deposit.trim());
     let dueDay: number | null = null;
@@ -352,12 +354,12 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
       if (!tenantPhone) issues.push(req(raw.line, ZH_HEADERS.tenantPhone));
       else {
         phoneE164 = normalizePhone(tenantPhone);
-        if (!phoneE164) issues.push({ line: raw.line, severity: "error", key: "im_e_phone" });
+        if (!phoneE164) issues.push({ line: raw.line, severity: "error", key: "im_e_phone", vars: { f: ZH_HEADERS.tenantPhone }, value: tenantPhone ?? "" });
       }
       if (!startDate && !raw.startDate.trim()) issues.push(req(raw.line, ZH_HEADERS.startDate));
       if (!endDate && !raw.endDate.trim()) issues.push(req(raw.line, ZH_HEADERS.endDate));
-      if (startDate && endDate && endDate < startDate) issues.push({ line: raw.line, severity: "error", key: "im_e_order" });
-      if (endDate && endDate < today) issues.push({ line: raw.line, severity: "error", key: "im_e_ended" });
+      if (startDate && endDate && endDate < startDate) issues.push({ line: raw.line, severity: "error", key: "im_e_order", vars: { f: ZH_HEADERS.endDate }, value: endDate });
+      if (endDate && endDate < today) issues.push({ line: raw.line, severity: "error", key: "im_e_ended", vars: { f: ZH_HEADERS.endDate }, value: endDate });
       dueDay = dueField(raw.line, raw.dueDay, issues);
       depositMonths = rentMinor > 0 ? Math.round((depositMinor / rentMinor) * 100) / 100 : depositMinor > 0 ? 99 : 0;
       if (depositMonths > DEPOSIT_MONTHS_MAX) {
@@ -365,7 +367,7 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
       }
       const reason = raw.depositReason.trim();
       if (!depositReasonOk(depositMonths, reason)) {
-        issues.push({ line: raw.line, severity: "error", key: "im_e_dep", vars: { v: depositMonths, cap: DEPOSIT_CAP_MONTHS } });
+        issues.push({ line: raw.line, severity: "error", key: "im_e_dep", vars: { v: depositMonths, cap: DEPOSIT_CAP_MONTHS, f: ZH_HEADERS.deposit }, value: shown(raw.deposit) });
       } else if (depositExceedsCap(depositMonths)) {
         issues.push({ line: raw.line, severity: "warn", key: "im_w_dep", vars: { v: depositMonths, cap: DEPOSIT_CAP_MONTHS } });
       }
@@ -388,7 +390,10 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
     const key = propertyName && address && unitLabel ? `${unitKey(address, unitLabel)}\n${kind === "room" ? roomLabel : ""}` : "";
     if (key) {
       const first = seenSpace.get(key);
-      if (first) issues.push({ line: raw.line, severity: "error", key: "im_e_dup", vars: { n: first } });
+      if (first) {
+        const dupValue = [unitLabel, kind === "room" ? roomLabel : ""].filter(Boolean).join(" ");
+        issues.push({ line: raw.line, severity: "error", key: "im_e_dup", vars: { n: first, f: ZH_HEADERS.unitLabel }, value: dupValue });
+      }
       else seenSpace.set(key, raw.line);
     }
     if (propertyName && address) {
@@ -477,6 +482,59 @@ export function issuePreviewColumns(issue: ImportIssue): PreviewColumn[] {
     default:
       return [];
   }
+}
+
+const ISSUE_FIELD: Partial<Record<string, ImportField>> = {
+  im_e_due: "dueDay",
+  im_e_dup: "unitLabel",
+  im_e_ended: "endDate",
+  im_e_order: "endDate",
+  im_e_phone: "tenantPhone",
+  im_e_phone_dup: "tenantPhone",
+  im_e_phone_name: "tenantPhone",
+  im_e_whole_room: "roomLabel",
+  im_e_type: "rentalMode",
+  im_e_elec: "electricity",
+  im_e_exists: "propertyName",
+  im_e_mode: "rentalMode",
+  im_e_tenant: "tenantPhone",
+  im_e_occupied: "unitLabel",
+  im_e_terms: "rent",
+  im_e_dep: "deposit",
+  im_w_dep: "deposit",
+  im_e_cap: "rate",
+  im_w_cap: "rate",
+  im_w_nobill: "rate",
+  im_w_rtype: "roomType",
+  im_w_bal_vacant: "opening",
+  im_row_exists: "unitLabel",
+  i_email: "ownerEmail",
+};
+
+const CELL_VALUE_KEYS = new Set(["im_e_date", "im_e_type", "im_e_elec", "im_e_exists"]);
+
+export function importIssueColumn(issue: ImportIssue, locale: Locale): string {
+  const named = String(issue.vars?.f ?? "").trim();
+  if (named) return named;
+  const field = ISSUE_FIELD[issue.key];
+  return field ? fieldLabel(field, locale) : "";
+}
+
+/** Blank cells return "". Unknown cells return null so the caller can choose a placeholder. */
+export function importIssueValue(issue: ImportIssue): string | null {
+  if (typeof issue.value === "string") return issue.value;
+  if (issue.vars && CELL_VALUE_KEYS.has(issue.key) && issue.vars.v != null) return String(issue.vars.v);
+  return null;
+}
+
+export function formatImportIssueMessage(issue: ImportIssue, locale: Locale, expected: string, blank: string) {
+  const raw = importIssueValue(issue);
+  return {
+    line: issue.line,
+    column: importIssueColumn(issue, locale),
+    value: raw == null || raw === "" ? blank : raw,
+    expected,
+  };
 }
 
 export function previewBadColumns(row: ParsedImportRow) {
@@ -840,7 +898,7 @@ export function planIsDuplicate(plan: RowPlan) {
 }
 
 function req(line: number, field: string): ImportIssue {
-  return { line, severity: "error", key: "im_e_req", vars: { f: field } };
+  return { line, severity: "error", key: "im_e_req", vars: { f: field }, value: "" };
 }
 
 function blank(value: string) {
@@ -860,11 +918,11 @@ function numberField(line: number, field: string, raw: string, issues: ImportIss
   }
   const value = Number(text);
   if (!Number.isFinite(value) || value < 0) {
-    issues.push({ line, severity: "error", key: "im_e_num", vars: { f: field } });
+    issues.push({ line, severity: "error", key: "im_e_num", vars: { f: field }, value: shown(text) });
     return null;
   }
   if (value > max) {
-    issues.push({ line, severity: "error", key: "im_e_bound", vars: { f: field } });
+    issues.push({ line, severity: "error", key: "im_e_bound", vars: { f: field }, value: shown(text) });
     return null;
   }
   return value;
@@ -895,10 +953,10 @@ function emailField(line: number, raw: string, issues: ImportIssue[]) {
   return text;
 }
 
-function dateField(line: number, raw: string, issues: ImportIssue[]) {
+function dateField(line: number, field: string, raw: string, issues: ImportIssue[]) {
   const text = raw.normalize("NFKC").trim().replace(/\s+/g, "");
   if (text.length > IMPORT_FIELD_MAX) {
-    issues.push({ line, severity: "error", key: "im_e_len", vars: { f: "date", max: IMPORT_FIELD_MAX } });
+    issues.push({ line, severity: "error", key: "im_e_len", vars: { f: field, max: IMPORT_FIELD_MAX }, value: shown(text) });
     return null;
   }
   if (!text) return null;
@@ -906,13 +964,13 @@ function dateField(line: number, raw: string, issues: ImportIssue[]) {
   if (serial) return serial;
   const roc = rocDate(text);
   if (roc) {
-    if (roc === "invalid") issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) } });
+    if (roc === "invalid") issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text), f: field }, value: shown(text) });
     return roc === "invalid" ? null : roc;
   }
   const western = /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/.exec(text);
   const iso = western ? calendarDate(Number(western[1]), Number(western[2]), Number(western[3])) : null;
   if (!iso || iso === "invalid") {
-    issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) } });
+    issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text), f: field }, value: shown(text) });
     return null;
   }
   return iso;
@@ -959,12 +1017,12 @@ function importPhone(raw: string) {
 function dueField(line: number, raw: string, issues: ImportIssue[]) {
   const text = raw.normalize("NFKC").trim().replace(/[,\s]/g, "");
   if (!text) {
-    issues.push({ line, severity: "error", key: "im_e_due" });
+    issues.push({ line, severity: "error", key: "im_e_due", vars: { f: ZH_HEADERS.dueDay }, value: "" });
     return null;
   }
   const value = Number(text);
   if (!Number.isInteger(value) || value < 1 || value > 28) {
-    issues.push({ line, severity: "error", key: "im_e_due" });
+    issues.push({ line, severity: "error", key: "im_e_due", vars: { f: ZH_HEADERS.dueDay }, value: shown(text) });
     return null;
   }
   return value;
@@ -993,6 +1051,6 @@ function electricityField(line: number, raw: string, issues: ImportIssue[]): Ele
   if (["分表", "submeter", "sub-meter"].includes(text)) return "submeter";
   if (["包含", "included", "include"].includes(text)) return "included";
   if (["租客自繳", "tenantdirect", "tenant_direct"].includes(text)) return "tenant_direct";
-  issues.push({ line, severity: "error", key: "im_e_elec", vars: { v: shown(raw) } });
+  issues.push({ line, severity: "error", key: "im_e_elec", vars: { v: shown(raw), f: ZH_HEADERS.electricity }, value: shown(raw) });
   return null;
 }

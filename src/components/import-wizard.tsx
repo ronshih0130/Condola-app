@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
-import { useT } from "./locale";
+import { useLocale, useT } from "./locale";
 import { csvDocument, buildXlsx, readSpreadsheet, SpreadsheetError } from "@/lib/spreadsheet";
 import {
   IMPORT_FIELDS,
   IMPORT_MAX_ROWS,
   IMPORT_PREVIEW_BATCH,
+  formatImportIssueMessage,
   issuePreviewColumns,
   ignoredNationalIdHeaders,
   matchColumns,
@@ -40,6 +41,7 @@ const EMPTY: ImportResult = {
 
 export function ImportWizard() {
   const t = useT();
+  const locale = useLocale();
   const steps = [t("im_s1"), t("im_s2"), t("im_s3")];
   const [step, setStep] = useState(0);
   const [fileName, setFileName] = useState("");
@@ -238,17 +240,14 @@ export function ImportWizard() {
     const extra = new Map<number, string>();
     for (const issue of [...serverIssues, ...serverErrors]) {
       if (issue.severity !== "error") continue;
-      const text = t(issue.key, issue.vars);
+      const text = describeIssue(issue, t, locale);
       extra.set(issue.line, extra.has(issue.line) ? `${extra.get(issue.line)}；${text}` : text);
     }
     const lines: string[][] = [[...(table[0] ?? []), t("im_problem_col")]];
     const seen = new Set<number>();
     for (const row of problemRows) {
       seen.add(row.line);
-      const reason = row.issues
-        .filter((issue) => issue.severity === "error")
-        .map((issue) => t(issue.key, issue.vars))
-        .join("；");
+      const reason = describeRowErrors(row, t, locale);
       lines.push([...(table[row.line - 1] ?? []), reason]);
     }
     for (const [line, reason] of extra) {
@@ -400,6 +399,20 @@ export function ImportWizard() {
               {t("im_unit")}
             </span>
           </div>
+          <p data-testid="import-row-summary">
+            {t("im_ok_n", { n: Math.max(0, viewed.length - problemRows.length) })}
+            {" · "}
+            {t("im_err_n", { n: problemRows.length })}
+          </p>
+          {problemRows.length ? (
+            <ul className="import-errors" data-testid="import-error-list">
+              {problemRows.map((row) => (
+                <li key={row.line} data-testid="import-error-item">
+                  {describeRowErrors(row, t, locale)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {previewDone && importableCount === 0 ? (
             <p className="alert" data-testid="import-nothing" role="status">
               {t("im_nothing")}
@@ -428,7 +441,7 @@ export function ImportWizard() {
               <tbody>
                 {preview.map((row) => {
                   const bad = previewBadColumns(row);
-                  const status = rowStatus(row, t, previewDone);
+                  const status = rowStatus(row, t, locale, previewDone);
                   return (
                     <tr key={row.line} data-testid="import-issue-row" data-line={row.line}>
                       <td className={status.ok ? "import-ok" : "import-warn"}>{status.text}</td>
@@ -561,14 +574,25 @@ function Summary({ result }: { result: ImportResult }) {
   );
 }
 
-function rowStatus(row: ParsedImportRow, t: ReturnType<typeof useT>, checked: boolean) {
+function describeIssue(issue: ImportIssue, t: ReturnType<typeof useT>, locale: ReturnType<typeof useLocale>) {
+  const parts = formatImportIssueMessage(issue, locale, t(issue.key, issue.vars), t("im_blank"));
+  const column = parts.column || t("im_unknown_col");
+  return t("im_row_detail", { ...parts, column });
+}
+
+function describeRowErrors(row: ParsedImportRow, t: ReturnType<typeof useT>, locale: ReturnType<typeof useLocale>) {
+  return row.issues
+    .filter((issue) => issue.severity === "error")
+    .map((issue) => describeIssue(issue, t, locale))
+    .join("；");
+}
+
+function rowStatus(row: ParsedImportRow, t: ReturnType<typeof useT>, locale: ReturnType<typeof useLocale>, checked: boolean) {
   const error = row.issues.find((issue) => issue.severity === "error");
   if (!checked && !error) return { ok: false, text: t("im_checking") };
   if (!error && row.issues.some((issue) => issue.key === "im_row_exists")) return { ok: false, text: t("im_already") };
   if (!error) return { ok: true, text: t("im_row_ok") };
-  const field = String(error.vars?.f ?? "");
-  if (error.key === "im_e_req" && (field === "月租" || field === "Rent")) return { ok: false, text: t("im_rent_blank") };
-  return { ok: false, text: t("im_row_bad", { reason: t(error.key, error.vars) }) };
+  return { ok: false, text: describeRowErrors(row, t, locale) };
 }
 
 function cellTitle(row: ParsedImportRow, column: PreviewColumn, t: ReturnType<typeof useT>) {

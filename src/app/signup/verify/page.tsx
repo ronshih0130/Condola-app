@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
-import { PendingSubmit } from "@/components/pending-submit";
-import { actionChangeSignupEmail, actionResendSignup } from "@/server/signup-actions";
+import { SignupResendForm } from "@/components/signup-resend-form";
+import { actionChangeSignupEmail } from "@/server/signup-actions";
+import { signupResendWait } from "@/server/signup";
 import { requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -15,12 +16,15 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function VerifyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string; dev?: string; resent?: string; error?: string }>;
+  searchParams: Promise<{ email?: string; dev?: string; resent?: string; error?: string; wait?: string }>;
 }) {
   const params = await searchParams;
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
   const email = params.email || "";
+  const queryWait = Number(params.wait);
+  const fromServer = email ? await signupResendWait(email) : 0;
+  const wait = fromServer > 0 ? fromServer : Number.isFinite(queryWait) ? queryWait : 0;
   return (
     <div className="auth-wrap">
       <AuthBrand name={t("i_brand")} />
@@ -34,7 +38,6 @@ export default async function VerifyPage({
         <p className="small muted" data-testid="signup-step-label">{t("i_signup_step", { n: 2 })}</p>
         <h1>{t("i_signup_verify_title")}</h1>
         <p data-testid="verify-body">{t("i_signup_verify_body", { email })}</p>
-        {params.resent === "1" ? <div className="alert ok">{t("i_signup_resent")}</div> : null}
         {params.error === "duplicate" ? (
           <div className="alert bad" data-testid="signup-duplicate">
             <p>{t("i_signup_dup")}</p>
@@ -52,10 +55,17 @@ export default async function VerifyPage({
             </a>
           </p>
         ) : null}
-        <form action={actionResendSignup}>
-          <input type="hidden" name="email" value={email} />
-          <PendingSubmit className="btn" idle={t("i_signup_resend")} pending={t("i_signup_sending")} testId="signup-resend" />
-        </form>
+        <SignupResendForm
+          email={email}
+          wait={wait}
+          idle={t("i_signup_resend")}
+          pending={t("i_signup_sending")}
+          cooling={t("i_signup_resend_wait")}
+          success={params.resent === "1" ? t("i_signup_resent") : ""}
+          error={params.resent === "error" ? t("i_signup_resend_error") : ""}
+          waiting={params.resent === "wait" ? t("i_signup_resend_cooldown") : ""}
+          testId="signup-resend"
+        />
         <form action={actionChangeSignupEmail} className="col" style={{ marginTop: 16 }}>
           <h2 className="h3">{t("i_signup_change_email")}</h2>
           <input type="hidden" name="email" value={email} />

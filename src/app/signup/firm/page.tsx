@@ -25,6 +25,15 @@ export default async function FirmPage({ searchParams }: { searchParams: Promise
     <div className="auth-wrap">
       <AuthBrand name={t("i_brand")} />
       <div className="card pad">
+        <p className="signup-note" data-testid="signup-invited-owner">
+          {t("i_signup_invited_owner")}{" "}
+          <a href="/login" data-testid="signup-invited-login">
+            {t("i_signup_invited_login")}
+          </a>
+        </p>
+        <p className="small" data-testid="signup-software-only">
+          {t("i_signup_software_only")}
+        </p>
         <FirmSteps partnerCode={identity.partner_code || ""} error={params.error} />
       </div>
     </div>

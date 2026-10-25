@@ -331,6 +331,11 @@ table.t tr.click a.hit::after{content:"";position:absolute;inset:0}
 .env-pick-disabled{display:block;padding:8px 10px;border-radius:8px;background:var(--cd-surface2);color:var(--cd-ink3);cursor:not-allowed;opacity:1}
 .env-banner{position:sticky;top:var(--top-h);z-index:45;background:var(--cd-accent-soft);color:var(--ink);border-bottom:2px solid var(--cd-accent);padding:8px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px}
 .env-banner a{color:var(--pri3);font-weight:600;min-height:44px;display:inline-flex;align-items:center}
+.signup-fit p{margin:0 0 6px}
+.signup-note{border:1px solid var(--cd-border-strong);background:var(--infobg);border-radius:8px;padding:10px 12px;margin:0 0 12px;line-height:1.5}
+.signup-note a{font-weight:700;min-height:44px;display:inline-flex;align-items:center}
+.import-errors{margin:8px 0 0;padding-left:1.2em}
+.import-errors li{margin:4px 0}
 body:has(.env-banner) .side{top:88px;height:calc(100vh - 88px)}
 body:has(.env-banner) .nav-check:checked ~ .app .side{top:88px}
 body:has(.env-banner) .nav-check:checked ~ .app .nav-backdrop{inset:88px 0 0 0}

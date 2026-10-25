@@ -26,6 +26,7 @@ import {
   createFirm,
   readSignupIdentity,
   resendSignup,
+  signupResendLocation,
   startSignup,
 } from "./signup";
 
@@ -91,10 +92,9 @@ export async function actionStartSignup(formData: FormData) {
 
 export async function actionResendSignup(formData: FormData) {
   const email = text(formData.get("email"));
+  const back = text(formData.get("back"));
   const sent = await resendSignup(email, await origin());
-  const params = new URLSearchParams({ email, resent: "1" });
-  if (sent.devToken) params.set("dev", sent.devToken);
-  redirect(`/signup/verify?${params.toString()}`);
+  redirect(signupResendLocation(email, back, sent));
 }
 
 export async function actionChangeSignupEmail(formData: FormData) {

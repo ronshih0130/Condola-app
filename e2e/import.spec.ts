@@ -80,7 +80,14 @@ test("Big5 import maps columns, skips invalid rows, and is idempotent", async ({
   await expect(page.getByTestId("import-preview")).toContainText("預覽前 5 列");
   await expect(page.getByTestId("import-bad-cell")).toHaveText("（空白）");
   await expect(page.getByTestId("import-bad-cell")).toHaveAttribute("title", "此儲存格必填");
-  await expect(page.getByTestId("import-preview")).toContainText("⚠ 租金空白");
+  await expect(page.getByTestId("import-preview")).toContainText("第 3 列，月租「（空白）」：缺少「月租」");
+  await expect(page.getByTestId("import-row-summary")).toContainText("1 列正確");
+  await expect(page.getByTestId("import-row-summary")).toContainText("1 列錯誤");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.screenshot({ path: "test-results/import-errors-1280.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "test-results/import-errors-390.png", fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 800 });
   await expect(page.getByTestId("import-ok-count")).toHaveText("1");
   await expect(page.getByTestId("import-err-count")).toHaveText("1");
   await expect(page.getByTestId("import-ignored-id")).toHaveCount(0);

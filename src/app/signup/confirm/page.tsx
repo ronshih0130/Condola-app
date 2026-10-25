@@ -3,7 +3,8 @@ import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
 import { ConfirmHash } from "@/components/confirm-token";
 import { PendingSubmit } from "@/components/pending-submit";
-import { actionConfirmSupabaseHash, actionConfirmToken, actionResendSignup } from "@/server/signup-actions";
+import { SignupResendForm } from "@/components/signup-resend-form";
+import { actionConfirmSupabaseHash, actionConfirmToken } from "@/server/signup-actions";
 import { signupVerifyType } from "@/server/signup-gotrue";
 import { requestPrefs } from "@/server/session";
 
@@ -69,13 +70,16 @@ export default async function ConfirmPage({
             <div className="alert warn" data-testid="signup-expired">
               {t("i_signup_expired")}
             </div>
-            <form action={actionResendSignup} className="col">
-              <div className="fg">
-                <label className="f">{t("i_email_label")}</label>
-                <input className="inp" name="email" type="email" required data-testid="expired-email" />
-              </div>
-              <PendingSubmit className="btn pri" idle={t("i_signup_resend")} pending={t("i_signup_sending")} testId="signup-resend" />
-            </form>
+            <SignupResendForm
+              email=""
+              emailLabel={t("i_email_label")}
+              wait={0}
+              idle={t("i_signup_resend")}
+              pending={t("i_signup_sending")}
+              cooling={t("i_signup_resend_wait")}
+              testId="signup-resend"
+              primary
+            />
           </>
         )}
       </div>

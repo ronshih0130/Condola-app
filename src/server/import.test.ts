@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import test from "node:test";
 import { buildXlsx, csvDocument, decodeBytes, readSpreadsheet, SpreadsheetError } from "../lib/spreadsheet";
+import { makeT } from "@/i18n";
 import { FlowError } from "./errors";
 import { readdirSync, readFileSync } from "node:fs";
 import { HMAC_KEY_REF, hashIdNumber, parseIdHmacKey } from "./id-hash";
@@ -16,6 +17,7 @@ import {
   IMPORT_PREVIEW_BATCH,
   coerceImportRows,
   emptyIndex,
+  formatImportIssueMessage,
   ignoredNationalIdHeaders,
   indexTenantPhone,
   issuePreviewColumns,
@@ -643,4 +645,53 @@ test("zh-TW import copy uses 屋主 and 租客", () => {
   assert.match(zh.im_title, /匯入/);
   assert.match(zh.im_e_dep, /押金/);
   assert.match(zh.im_dry_h, /尚未寫入/);
+});
+
+test("row errors name the row, column, bad value, and what was expected", () => {
+  const t = makeT("zh-TW");
+  const blankRent = validateImportRows([lease({ line: 3, rent: "" })])[0];
+  const rent = blankRent.issues.find((issue) => issue.key === "im_e_req" && issue.vars?.f === "月租");
+  assert.ok(rent);
+  const rentText = t("im_row_detail", formatImportIssueMessage(rent, "zh-TW", t(rent.key, rent.vars), t("im_blank")));
+  assert.equal(rentText, "第 3 列，月租「（空白）」：缺少「月租」");
+
+  const dated = validateImportRows([lease({ line: 4, startDate: "2026/13/01", unitLabel: "4F" })])[0];
+  const date = dated.issues.find((issue) => issue.key === "im_e_date");
+  assert.ok(date);
+  const dateText = t("im_row_detail", formatImportIssueMessage(date, "zh-TW", t(date.key, date.vars), t("im_blank")));
+  assert.match(dateText, /^第 4 列，起租日「2026\/13\/01」：/);
+  assert.match(dateText, /日期「2026\/13\/01」無效/);
+
+  const due = validateImportRows([lease({ line: 5, dueDay: "31", unitLabel: "5F" })])[0];
+  const dueIssue = due.issues.find((issue) => issue.key === "im_e_due");
+  assert.ok(dueIssue);
+  const dueText = t("im_row_detail", formatImportIssueMessage(dueIssue, "zh-TW", t(dueIssue.key, dueIssue.vars), t("im_blank")));
+  assert.equal(dueText, "第 5 列，繳租日「31」：繳租日須為 1–28");
+
+  const dup = validateImportRows([
+    lease({ line: 2, unitLabel: "2F", rentalMode: "分租", roomLabel: "A" }),
+    lease({ line: 6, unitLabel: "2F", rentalMode: "分租", roomLabel: "A" }),
+  ]);
+  const dupIssue = dup[1].issues.find((issue) => issue.key === "im_e_dup");
+  assert.ok(dupIssue);
+  assert.equal(dupIssue.vars?.n, 2);
+  const dupText = t("im_row_detail", formatImportIssueMessage(dupIssue, "zh-TW", t(dupIssue.key, dupIssue.vars), t("im_blank")));
+  assert.equal(dupText, "第 6 列，戶別／樓層「2F A」：與第 2 列是同一戶／房");
+
+  const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+  const offered = [zh.im_up_types, zh.im_up_h, zh.im_title, zh.im_xls_note].join("\n");
+  assert.match(zh.im_up_types, /CSV/);
+  assert.match(zh.im_up_types, /\.xlsx/);
+  assert.match(zh.im_xls_note, /無法讀取/);
+  assert.doesNotMatch(offered, /Google|PDF|ZIP|\.ods|即將推出/);
+  const wizard = readFileSync(new URL("../components/import-wizard.tsx", import.meta.url), "utf8");
+  assert.match(wizard, /import-row-summary/);
+  assert.match(wizard, /im_ok_n/);
+  assert.match(wizard, /im_err_n/);
+  assert.match(wizard, /im_row_detail/);
+  const accept = wizard.match(/accept="([^"]+)"/)?.[1] ?? "";
+  const kinds = accept.split(",").map((part) => part.trim());
+  assert.ok(kinds.includes(".csv"));
+  assert.ok(kinds.includes(".xlsx"));
+  assert.equal(kinds.includes(".xls"), false);
 });

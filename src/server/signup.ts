@@ -14,6 +14,40 @@ import { seedSandboxForNewFirm } from "./sandbox";
 import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
 
 const VERIFY_HOURS = 24;
+export const SIGNUP_RESEND_COOLDOWN_SEC = 60;
+
+export type ResendSignupResult =
+  | { status: "sent"; devToken: string | null; wait: number }
+  | { status: "cooldown"; devToken: null; wait: number }
+  | { status: "error"; devToken: null; wait: number };
+
+/** Seconds still remaining before another signup verification email can be sent. */
+export function resendCooldownLeft(ageSeconds: number | null, window = SIGNUP_RESEND_COOLDOWN_SEC) {
+  if (ageSeconds == null || !Number.isFinite(ageSeconds)) return 0;
+  const age = Math.floor(ageSeconds);
+  if (age < 0) return window;
+  if (age >= window) return 0;
+  return window - age;
+}
+
+export function signupResendLocation(email: string, back: string, result: ResendSignupResult) {
+  const params = new URLSearchParams({ email });
+  if (result.status === "sent") {
+    params.set("resent", "1");
+    if (result.devToken) params.set("dev", result.devToken);
+    if (result.wait > 0) params.set("wait", String(result.wait));
+  } else if (result.status === "cooldown") {
+    params.set("resent", "wait");
+    params.set("wait", String(Math.max(1, result.wait)));
+  } else {
+    params.set("resent", "error");
+  }
+  if (back === "login") {
+    params.set("error", "unconfirmed");
+    return `/login?${params.toString()}`;
+  }
+  return `/signup/verify?${params.toString()}`;
+}
 
 export type SignupError = "duplicate" | "weak" | "mismatch" | "email" | "required";
 
@@ -154,15 +188,16 @@ async function supabaseSignUp(email: string, password: string, requestOrigin: st
   return parsed;
 }
 
-async function supabaseResend(email: string, requestOrigin: string) {
+async function supabaseResend(email: string, requestOrigin: string): Promise<"skipped" | "ok" | "failed"> {
   const { url, anon } = supabaseAuth();
-  if (!url || !anon) return;
+  if (!url || !anon) return "skipped";
   const redirectTo = signupConfirmUrl(requestOrigin);
-  await fetch(gotrueEndpoint(url, "/auth/v1/resend", redirectTo), {
+  const response = await fetch(gotrueEndpoint(url, "/auth/v1/resend", redirectTo), {
     method: "POST",
     headers: { apikey: anon, "Content-Type": "application/json" },
     body: JSON.stringify({ type: "signup", email }),
   });
+  return response.ok ? "ok" : "failed";
 }
 
 async function markConfirmed(userId: string, email: string) {
@@ -266,17 +301,54 @@ export async function startSignup(input: {
   return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null };
 }
 
-export async function resendSignup(emailRaw: string, origin: string) {
+export async function signupResendWait(emailRaw: string) {
   const email = normalizeEmail(emailRaw);
-  if (!email) return { devToken: null as string | null };
-  const sent = await inTx(async (client) => {
+  if (!email || !process.env.DATABASE_URL) return 0;
+  try {
+    const row = await query<{ age: number | null }>(
+      `SELECT floor(extract(epoch FROM (clock_timestamp() - v.created_at)))::int AS age
+         FROM signup_verifications v
+         JOIN auth.users u ON u.id = v.user_id
+        WHERE lower(u.email) = lower($1)
+        ORDER BY v.created_at DESC
+        LIMIT 1`,
+      [email],
+    );
+    return resendCooldownLeft(row.rows[0]?.age ?? null);
+  } catch {
+    return 0;
+  }
+}
+
+export async function resendSignup(emailRaw: string, requestOrigin: string): Promise<ResendSignupResult> {
+  const email = normalizeEmail(emailRaw);
+  if (!email) return { status: "error", devToken: null, wait: 0 };
+  const pending = await inTx(async (client) => {
     const existing = await findUser(client, email);
     if (!existing || existing.email_confirmed_at || existing.has_firm) return null;
-    return rotateVerification(client, existing.id, email);
+    const age = await client.query<{ age: number | null }>(
+      `SELECT floor(extract(epoch FROM (clock_timestamp() - created_at)))::int AS age
+         FROM signup_verifications
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [existing.id],
+    );
+    const wait = resendCooldownLeft(age.rows[0]?.age ?? null);
+    if (wait > 0) return { id: existing.id, wait, blocked: true as const };
+    return { id: existing.id, wait: 0, blocked: false as const };
   });
-  if (!sent) return { devToken: null as string | null };
-  await supabaseResend(email, origin);
-  return { devToken: signupLinksExposed() ? sent : null };
+  if (!pending) return { status: "sent", devToken: null, wait: 0 };
+  if (pending.blocked) return { status: "cooldown", devToken: null, wait: pending.wait };
+  let remote: "skipped" | "ok" | "failed";
+  try {
+    remote = await supabaseResend(email, requestOrigin);
+  } catch {
+    return { status: "error", devToken: null, wait: 0 };
+  }
+  if (remote === "failed") return { status: "error", devToken: null, wait: 0 };
+  const sent = await inTx((client) => rotateVerification(client, pending.id, email));
+  return { status: "sent", devToken: signupLinksExposed() ? sent : null, wait: SIGNUP_RESEND_COOLDOWN_SEC };
 }
 
 export async function changeSignupEmail(input: { currentEmail: string; password: string; nextEmail: string; origin: string }) {
