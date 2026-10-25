@@ -4,6 +4,7 @@
  * and the Worker only signs and confirms. Bytes are not written to Postgres.
  */
 import { createServer } from "node:http";
+import pg from "pg";
 
 const PORT = 4599;
 const KEY = "e2e-photo-key";
@@ -13,6 +14,38 @@ const BUCKET = "ticket-photos-private";
 const objects = new Map();
 /** @type {Map<string, string>} */
 const grants = new Map();
+/** Captured GoTrue signup bodies for the consent spec. Passwords stay in memory only. */
+const signups = [];
+
+function databaseUrl() {
+  return process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
+}
+
+async function insertSignupUser(body) {
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const metadata = body.data && typeof body.data === "object" ? body.data : {};
+  const client = new pg.Client({ connectionString: databaseUrl() });
+  await client.connect();
+  try {
+    const existing = await client.query(`SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+    if (existing.rows[0]) {
+      return { status: 422, payload: { msg: "User already registered", error_code: "user_already_exists" } };
+    }
+    const inserted = await client.query(
+      `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
+       VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), $3::jsonb, 'authenticated', 'authenticated')
+       RETURNING id::text AS id`,
+      [email, password, JSON.stringify(metadata)],
+    );
+    return {
+      status: 200,
+      payload: { id: inserted.rows[0].id, aud: "authenticated", email, email_confirmed_at: null },
+    };
+  } finally {
+    await client.end();
+  }
+}
 
 function send(res, status, body, headers = {}) {
   res.writeHead(status, {
@@ -56,6 +89,27 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "GET" && url.pathname === "/health") {
     send(res, 200, "ok", { "content-type": "text/plain" });
+    return;
+  }
+  if (url.pathname === "/e2e/signups" && req.method === "GET") {
+    send(res, 200, JSON.stringify(signups), { "content-type": "application/json" });
+    return;
+  }
+  if (url.pathname === "/e2e/signups" && req.method === "DELETE") {
+    signups.length = 0;
+    send(res, 200, "[]", { "content-type": "application/json" });
+    return;
+  }
+  if (url.pathname === "/auth/v1/signup" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    signups.push(body);
+    try {
+      const result = await insertSignupUser(body);
+      send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "signup failed";
+      send(res, 500, JSON.stringify({ message }), { "content-type": "application/json" });
+    }
     return;
   }
 

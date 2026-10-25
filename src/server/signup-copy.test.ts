@@ -3,13 +3,33 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
+const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
 
 test("sign-up and pricing copy stay on the handoff wording", () => {
   assert.equal(zh.i_signup_dup, "這個電子郵件已經註冊過了");
   assert.equal(zh.i_signup_verify_title, "請到信箱確認電子郵件");
   assert.equal(zh.i_signup_change_email, "更換電子郵件");
   assert.equal(zh.i_signup_kind_title, "您的身分");
-  assert.equal(zh.i_signup_firm_details, "事務所資料");
+  assert.equal(zh.i_signup_firm_details, "建立你的公司");
+  assert.equal(zh.i_signup_name_firm, "公司名稱");
+  assert.equal(zh.i_signup_name_hint, "個人屋主可填自己的名字");
+  assert.equal(zh.i_signup_create, "建立公司");
+  assert.equal(
+    `${zh.i_signup_consent_lead}${zh.i_signup_consent_terms}${zh.i_signup_consent_and}${zh.i_signup_consent_privacy}`,
+    "我已閱讀並同意《服務條款》與《隱私權政策》",
+  );
+  assert.equal(en.i_signup_firm_details, "Create your company");
+  assert.equal(en.i_signup_name_firm, "Company name");
+  assert.equal(en.i_signup_name_hint, "Individual owners can enter their own name");
+  assert.equal(en.i_signup_create, "Create company");
+  assert.equal(
+    `${en.i_signup_consent_lead}${en.i_signup_consent_terms}${en.i_signup_consent_and}${en.i_signup_consent_privacy}`,
+    "I have read and agree to the Terms of Service and Privacy Policy",
+  );
+  for (const key of Object.keys(zh)) {
+    if (!key.startsWith("i_signup_")) continue;
+    assert.equal(zh[key].includes("事務所"), false, key);
+  }
   assert.equal(zh.i_field_required, "請填寫此欄位");
   assert.equal(zh.i_signup_submitting, "建立中…");
   assert.equal(zh.i_env_banner_title, "範例公司");

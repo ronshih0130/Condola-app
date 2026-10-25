@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { PendingSubmit } from "./pending-submit";
 import { useT } from "./locale";
 import { actionPreviewCode, actionStartSignup } from "@/server/signup-actions";
@@ -10,8 +11,18 @@ export function SignupForm({ error }: { error?: string }) {
   const [code, setCode] = useState("");
   const [note, setNote] = useState("");
   const [bad, setBad] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const [consentError, setConsentError] = useState(error === "consent");
   return (
-    <form action={actionStartSignup} className="col">
+    <form
+      action={actionStartSignup}
+      className="col"
+      onSubmit={(event) => {
+        if (agreed) return;
+        event.preventDefault();
+        setConsentError(true);
+      }}
+    >
       {error === "duplicate" ? (
         <div className="alert bad" data-testid="signup-duplicate">
           <p>{t("i_signup_dup")}</p>
@@ -27,6 +38,8 @@ export function SignupForm({ error }: { error?: string }) {
         <div className="alert bad">{t("i_pw_mismatch")}</div>
       ) : error === "email" ? (
         <div className="alert bad">{t("i_email")}</div>
+      ) : error === "consent" ? (
+        <div className="alert bad" data-testid="signup-consent-error">{t("i_signup_consent_error")}</div>
       ) : error ? (
         <div className="alert bad">{t("i_required")}</div>
       ) : null}
@@ -90,7 +103,25 @@ export function SignupForm({ error }: { error?: string }) {
           </p>
         ) : null}
       </div>
-      <PendingSubmit className="btn pri block" idle={t("i_signup_submit")} pending={t("i_signup_submitting")} testId="signup-submit" />
+      <label className="radio" data-testid="signup-consent-label">
+        <input
+          type="checkbox"
+          name="consent"
+          value="on"
+          checked={agreed}
+          required
+          data-testid="signup-consent"
+          onChange={(event) => {
+            setAgreed(event.target.checked);
+            if (event.target.checked) setConsentError(false);
+          }}
+        />
+        <span>{t("i_signup_consent_lead")}<Link href="/terms" target="_blank" rel="noopener noreferrer" data-testid="signup-terms">{t("i_signup_consent_terms")}</Link>{t("i_signup_consent_and")}<Link href="/privacy" target="_blank" rel="noopener noreferrer" data-testid="signup-privacy">{t("i_signup_consent_privacy")}</Link></span>
+      </label>
+      {consentError && error !== "consent" ? (
+        <p className="hint" data-testid="signup-consent-error">{t("i_signup_consent_error")}</p>
+      ) : null}
+      <PendingSubmit className="btn pri block" idle={t("i_signup_submit")} pending={t("i_signup_submitting")} testId="signup-submit" disabled={!agreed} />
       <p className="small">
         <a href="/forgot">{t("i_forgot")}</a>
         {" · "}

@@ -16,6 +16,10 @@ export default defineConfig({
       url: "http://127.0.0.1:4599/health",
       reuseExistingServer: false,
       timeout: 30_000,
+      env: {
+        ...process.env,
+        DATABASE_URL: process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola",
+      },
     },
     {
       command: "npm run dev",
@@ -24,7 +28,11 @@ export default defineConfig({
       timeout: 180_000,
       env: {
         ...process.env,
+        DATABASE_URL: process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola",
+        DEMO_MODE: process.env.DEMO_MODE || "true",
+        ID_DOC_ENCRYPTION_KEY: process.env.ID_DOC_ENCRYPTION_KEY || "11".repeat(32),
         SUPABASE_URL: "http://127.0.0.1:4599",
+        SUPABASE_ANON_KEY: "e2e-anon-key",
         SUPABASE_SERVICE_ROLE_KEY: "e2e-photo-key",
       },
     },

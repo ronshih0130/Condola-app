@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { verifyRecoveryTokenHash } from "./auth";
 import { query } from "./db";
+import { PRIVACY_VERSION, TERMS_VERSION } from "./legal-versions";
 import { confirmSupabaseTokenHash, startSignup } from "./signup";
 
 const meta = { ua: "signup-gotrue", ip: "127.0.0.1" };
@@ -48,6 +49,7 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
       partnerCode: "",
       origin: "https://condola-staging.workers.dev",
       meta,
+      consent: true,
     });
     assert.equal(first.ok, true);
     if (!first.ok || first.status !== "verify") throw new Error("expected verify");
@@ -55,9 +57,16 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     const called = new URL(calls[0].url);
     assert.equal(called.pathname, "/auth/v1/signup");
     assert.equal(called.searchParams.get("redirect_to"), "https://staging.condola.app/signup/confirm");
-    const sent = JSON.parse(calls[0].body) as { email?: string; options?: unknown };
+    const sent = JSON.parse(calls[0].body) as {
+      email?: string;
+      data?: { terms_accepted_at?: string; terms_version?: string; privacy_version?: string };
+      options?: { data?: { terms_accepted_at?: string; terms_version?: string; privacy_version?: string } };
+    };
     assert.equal(sent.email, email);
-    assert.equal(sent.options, undefined);
+    assert.match(sent.data?.terms_accepted_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(sent.data?.terms_version, TERMS_VERSION);
+    assert.equal(sent.data?.privacy_version, PRIVACY_VERSION);
+    assert.deepEqual(sent.options?.data, sent.data);
 
     const userId = (await query<{ id: string }>(`SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`, [email])).rows[0].id;
     users.push(userId);
@@ -89,6 +98,7 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
       partnerCode: "",
       origin: "https://staging.condola.app",
       meta,
+      consent: true,
     });
     assert.equal(retry.ok, true);
     if (!retry.ok || retry.status !== "verify") throw new Error("expected retry verify");
@@ -109,6 +119,7 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
       partnerCode: "",
       origin: "https://staging.condola.app",
       meta,
+      consent: true,
     });
     assert.equal(calls.length, 1);
     assert.equal(await started(), 1);

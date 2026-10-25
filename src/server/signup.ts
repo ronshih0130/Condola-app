@@ -11,6 +11,7 @@ import { countryByCode } from "@/countries";
 import { normalizePhone } from "./lease-rules";
 import { passwordAcceptable } from "./password";
 import { seedSandboxForNewFirm } from "./sandbox";
+import { signupConsentMetadata, signupRequestBody, type SignupConsentMetadata } from "./legal-versions";
 import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
 
 const VERIFY_HOURS = 24;
@@ -41,7 +42,7 @@ export function gotrueAccessTokenLifetime(
   }
 }
 
-export type SignupError = "duplicate" | "weak" | "mismatch" | "email" | "required";
+export type SignupError = "duplicate" | "weak" | "mismatch" | "email" | "required" | "consent";
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -165,14 +166,14 @@ async function finishUnconfirmed(client: Client, userId: string, email: string, 
   return token;
 }
 
-async function supabaseSignUp(email: string, password: string, requestOrigin: string) {
+async function supabaseSignUp(email: string, password: string, requestOrigin: string, metadata: SignupConsentMetadata) {
   const { url, anon } = supabaseAuth();
   if (!url || !anon) return null;
   const redirectTo = signupConfirmUrl(requestOrigin);
   const response = await fetch(gotrueEndpoint(url, "/auth/v1/signup", redirectTo), {
     method: "POST",
     headers: { apikey: anon, "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(signupRequestBody(email, password, metadata)),
   });
   const body = await response.json().catch(() => ({}));
   const parsed = parseSupabaseSignup(response.status, body);
@@ -218,11 +219,15 @@ export async function startSignup(input: {
   partnerCode: string;
   origin: string;
   meta: RequestMeta;
+  consent?: boolean;
 }): Promise<
   | { ok: true; status: "verify"; email: string; devToken: string | null }
   | { ok: true; status: "firm"; token: string }
   | { ok: false; error: SignupError }
 > {
+  if (input.consent !== true) return { ok: false, error: "consent" };
+  const acceptedAt = new Date();
+  const metadata = signupConsentMetadata(acceptedAt);
   const email = normalizeEmail(input.email);
   const looked = await inTx(async (client) => {
     await client.query(`SELECT crypt($1, gen_salt('bf'))`, [input.password || "placeholder"]);
@@ -261,7 +266,7 @@ export async function startSignup(input: {
     return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
   }
 
-  const remote = await supabaseSignUp(email, input.password, input.origin);
+  const remote = await supabaseSignUp(email, input.password, input.origin, metadata);
   if (remote === "duplicate") return { ok: false, error: "duplicate" };
   if (remote === "unavailable") return { ok: false, error: "required" };
   let userId = remote?.id ?? "";
@@ -270,9 +275,9 @@ export async function startSignup(input: {
     if (!remote) {
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
-         VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
+         VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), $3::jsonb, 'authenticated', 'authenticated')
          RETURNING id::text`,
-        [email, input.password],
+        [email, input.password, JSON.stringify(metadata)],
       );
       userId = inserted.rows[0].id;
     }

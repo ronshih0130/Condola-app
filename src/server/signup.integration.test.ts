@@ -55,6 +55,7 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "ANJU2026",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     assert.equal(first.ok, true);
     if (!first.ok || first.status !== "verify" || !first.devToken) throw new Error("expected a local confirm link");
@@ -65,6 +66,7 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "NOPE",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     assert.equal(again.ok, true);
     if (!again.ok || again.status !== "verify" || !again.devToken) throw new Error("expected a rotated confirm link");
@@ -81,6 +83,7 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     assert.equal(wrong.ok, false);
     if (wrong.ok) throw new Error("duplicate");
@@ -152,6 +155,7 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     assert.equal(duplicate.ok, false);
 
@@ -173,6 +177,7 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "NOT-A-CODE",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     if (!secondStart.ok || secondStart.status !== "verify" || !secondStart.devToken) throw new Error("second verify");
     await confirmSignupToken(secondStart.devToken, meta);

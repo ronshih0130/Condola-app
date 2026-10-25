@@ -78,6 +78,7 @@ export async function actionStartSignup(formData: FormData) {
     partnerCode: text(formData.get("partnerCode")),
     origin: await origin(),
     meta: await meta(),
+    consent: formData.get("consent") === "on",
   });
   if (!result.ok) redirect(`/signup?error=${result.error}`);
   if (result.status === "firm") {
