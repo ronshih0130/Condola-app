@@ -28,6 +28,17 @@ export function formatMoney(minor: number | string, currency: string, locale: Lo
   }).format(value / 100);
 }
 
+/** Billing month in front of an electricity line, as `2026年11月` with no zero-padded month. A label that already starts with that month stays as it is. */
+export function electricityMonthLabel(period: string | null | undefined, description: string) {
+  const text = description.trim();
+  const match = period?.match(/^(\d{4})-(\d{2})/);
+  const monthNumber = match ? Number(match[2]) : 0;
+  if (!match || monthNumber < 1 || monthNumber > 12 || !text) return text;
+  const month = `${match[1]}年${monthNumber}月`;
+  if (text === month || text.startsWith(`${month} `)) return text;
+  return `${month} ${text}`;
+}
+
 /** TWD label. A negative amount is −NT$, and zero is NT$0. Non-TWD stays an absolute ICU amount. */
 export function moneyLabel(minor: number | string, currency: string, locale: Locale) {
   const code = currencyCode(currency);

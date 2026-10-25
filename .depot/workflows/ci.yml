@@ -52,6 +52,8 @@ jobs:
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
           done
           npm run db:reset
+      - name: Check function execute privileges
+        run: bash scripts/check-function-privileges.sh
       - run: npm run test:rls
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
@@ -131,8 +133,8 @@ jobs:
           fi
       - name: Build the OpenNext bundle
         run: |
-          if [[ -n "${DATABASE_URL:-}" || -n "${SUPABASE_URL:-}" || -n "${SUPABASE_ANON_KEY:-}" || -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || -n "${CLOUDFLARE_API_TOKEN:-}" || "${DEMO_MODE:-}" == "true" ]]; then
-            echo "Refusing to build with database secrets, the Cloudflare token, or DEMO_MODE=true in the environment." >&2
+          if [[ -n "${DATABASE_URL:-}" || -n "${SUPABASE_URL:-}" || -n "${SUPABASE_ANON_KEY:-}" || -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || -n "${ID_DOC_ENCRYPTION_KEY:-}" || -n "${ID_DOC_HMAC_KEY:-}" || -n "${ID_DOC_SIGNING_SECRET:-}" || -n "${CRON_SECRET:-}" || -n "${CLOUDFLARE_API_TOKEN:-}" || "${DEMO_MODE:-}" == "true" ]]; then
+            echo "Refusing to build with database secrets, ID document keys, the Cloudflare token, or DEMO_MODE=true in the environment." >&2
             exit 1
           fi
           npm run cf:build

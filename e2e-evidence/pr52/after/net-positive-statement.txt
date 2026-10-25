@@ -1,0 +1,34 @@
+version: after #52
+base: c47122251c9185c87fb2253626d330c6b6a0194a
+case: net-positive
+opening_minor: 200000
+rent_minor: 1800000
+other_minor: 0
+fee_minor: 180000
+expenses_minor: 120000
+payouts_minor: 0
+firm_minor: 1800000
+period_net_minor: 1500000
+closing_minor: 1700000
+owner_net_minor: 1500000
+identity_closing_eq_opening_plus_period_net: true
+surface: monthly-statement
+
+--- pdf model ---
+title: 屋主月結報表
+subtitle: QA屋主甲 · 2026年10月1日 - 2026年10月31日
+地址：台北市信義區松仁路88號
+期初餘額	NT$2,000
+已繳租金	NT$18,000
+其他收入（含電費）	NT$0
+管理費	NT$1,800
+支出	NT$1,200
+管理公司匯給屋主	NT$0
+屋主淨額（本月）	NT$15,000
+期末餘額	NT$17,000
+期初餘額 NT$2,000 ＋ 管理公司經手租金 NT$18,000 − 費用 NT$3,000 − 管理公司匯給屋主 NT$0 ＝ 期末餘額 NT$17,000
+# 明細
+冷氣維修	NT$1,200
+數字來自管理方確認的繳款紀錄。
+押金不計入淨額。此表僅供紀錄與對帳。Condola 只提供管理軟體，不經手任何款項。
+Condola 只提供管理軟體，不經手任何款項。

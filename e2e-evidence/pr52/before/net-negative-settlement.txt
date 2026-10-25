@@ -1,0 +1,17 @@
+source: c47122251c9185c87fb2253626d330c6b6a0194a
+case: net-negative
+surface: settlement
+opening_minor: -100000
+rent_minor: 200000
+other_minor: 0
+fee_minor: 80000
+expenses_minor: 450000
+payouts_minor: 0
+firm_minor: 200000
+period_net_minor: -330000
+closing_minor: -430000
+owner_net_minor: -330000
+identity_closing_eq_opening_plus_period_net: true
+
+本月已繳租金	NT$2,000
+應付屋主	屋主應補繳 NT$3,300

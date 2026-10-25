@@ -83,9 +83,9 @@ export async function renderPdf(doc: PdfDocument, fontBytes: Uint8Array): Promis
         out += ch;
         continue;
       }
-      // The embedded face has U+FF0D and not U+2212. Screen copy keeps U+2212.
+      // Screen copy uses U+2212. Helvetica draws ASCII hyphen, so the PDF text is -NT$.
       if (ch === "\u2212") {
-        out += "\uFF0D";
+        out += "-";
         continue;
       }
       if (hasCjk(ch) || canLatin(ch)) {

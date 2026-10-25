@@ -1,7 +1,7 @@
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner, chargeKey } from "@/components/ui";
-import { moneyLabel, signedMoneyLabel } from "@/server/format";
+import { electricityMonthLabel, moneyLabel, signedMoneyLabel } from "@/server/format";
 import { unsignedRentNoteKey } from "@/server/pay-note";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -46,7 +46,8 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
           ))}
           {money.utilityLines.map((line, index) => (
             <p key={`${line.description}-${index}`} data-testid="tenant-utility-line">
-              {line.description || t("i_charge_utility")} {moneyLabel(Number(line.amount), money.currency, session.locale)}
+              {electricityMonthLabel(line.periodStart, line.description && line.description !== "utility" ? line.description : t("i_charge_utility"))}{" "}
+              {moneyLabel(Number(line.amount), money.currency, session.locale)}
             </p>
           ))}
           {money.otherLines.map((line, index) => (
@@ -56,10 +57,17 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
           ))}
           <p className="b" data-testid="tenant-bill">{t("i_pay_total")} {moneyLabel(money.dueMinor, money.currency, session.locale)}</p>
           <p className="small">{t("i_account_last5", { last5: "88921" })}</p>
-          {money.dueMinor > 0 ? (
-            <PayDialog leaseId={lease.lease_id} dueMinor={money.dueMinor} currency={money.currency} label={t("i_report_pay")} returnTo="tenant" />
+          {money.dueMinor <= 0 ? (
+            <div className="alert ok" data-testid="pay-status">{t("i_pay_settled")}</div>
           ) : (
-            <div className="alert ok">{t("i_paid_up")}</div>
+            <PayDialog
+              leaseId={lease.lease_id}
+              dueMinor={money.dueMinor}
+              currency={money.currency}
+              label={t("i_report_pay")}
+              returnTo="tenant"
+              status={money.paidMinor > 0 ? t("i_pay_partial") : undefined}
+            />
           )}
         </>
       )}

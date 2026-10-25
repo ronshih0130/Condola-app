@@ -441,7 +441,7 @@ test("a new property stores a 7-day owner invite hash and drops the raw token", 
     unitLabel: "2F",
     floor: "2",
     rentalMode: "whole_unit",
-    rooms: [],
+    rooms: [{ label: "2F", roomType: "whole_home", baseRentMajor: 10000 }],
   });
   assert.equal(created.inviteCode, null);
   const invite = await query<{ code_hash: string; expires_at: Date; token: string }>(
@@ -811,13 +811,15 @@ test("portal invite secrets stay on service_role and disappear when the link exp
   );
   const issuedOther = await issuePortalInvite(manager, { kind: "owner", contactId: other.rows[0].id, pageId: other.rows[0].id }, "https://app.condola.app");
   assert.equal(issuedOther.activated, false);
-  assert.equal(await secretCount(issued.token), 0);
+  // A new link for someone else does not scan every secret. Opening this link does.
+  assert.equal(await secretCount(issued.token), 1);
   const stillPending = await query<{ status: string }>(
     `SELECT status::text FROM invitations WHERE code_hash = $1`,
     [hashInviteToken(issued.token)],
   );
   assert.equal(stillPending.rows[0].status, "pending");
   assert.equal((await describeInvite(issued.token, meta)).state, "expired");
+  assert.equal(await secretCount(issued.token), 0);
 });
 
 test("a pending invite stored before the secret table is replaced and copied", async () => {

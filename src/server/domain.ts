@@ -24,6 +24,7 @@ import { nextInvoiceNumber } from "./invoice-number";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
+import { leaseIdentityReady } from "./id-docs";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
 import { assertTicketStatus } from "./repair-rules";
@@ -1498,6 +1499,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
     const asTenant = Boolean(contact) && session.kind === "tenant";
     const asManager = Boolean(member) && (member?.role === "admin" || member?.role === "manager") && !asTenant;
     if (!asTenant && !asManager) throw new FlowError("errors.forbidden");
+    if (!(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
     const role = asTenant ? "tenant" : "manager";
     const signature = await maybe<{ id: string }>(
       client,
@@ -1561,6 +1563,7 @@ export async function uploadSignedLeasePdf(
     );
     if (!lease) throw new FlowError("errors.notFound");
     const imported = lease.esign === "imported";
+    if (!imported && !(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
     const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
     const stored = await one<{ id: string }>(
       client,
@@ -2862,7 +2865,7 @@ export async function reversePayment(session: Session, paymentId: string, reason
         [session.orgId, statement.id, note, session.userId, JSON.stringify({ summary, amount: payment.amount_minor, tenant: payment.tenant })],
       );
     }
-  });
+  }, { orgId: session.orgId, environment: session.environment });
 }
 
 export async function recordOwnerPayout(
@@ -2913,7 +2916,7 @@ export async function recordOwnerPayout(
        VALUES ($1,$2,'payout',$3,$4,$5::jsonb)`,
       [session.orgId, statement.id, input.note.trim() || "管理公司匯給屋主", session.userId, JSON.stringify({ amount: input.amountMinor.toString() })],
     );
-  });
+  }, { orgId: session.orgId, environment: session.environment });
 }
 
 export async function closeMonth(session: Session, month: string, note: string) {

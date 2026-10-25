@@ -166,6 +166,7 @@ export async function listUtilityBoard(
       status: string;
       period_start: string;
       period_end: string;
+      unit_id: string;
       unit_label: string;
       property_name: string;
       total: string;
@@ -173,7 +174,7 @@ export async function listUtilityBoard(
     }>(
       client,
       `SELECT r.id::text, r.status::text, r.period_start::text, r.period_end::text,
-              u.label AS unit_label, p.name AS property_name,
+              u.id::text AS unit_id, u.label AS unit_label, p.name AS property_name,
               r.total_amount_minor::text AS total, r.total_usage::text AS usage
          FROM utility_allocation_runs r
          JOIN meters m ON m.id = r.meter_id

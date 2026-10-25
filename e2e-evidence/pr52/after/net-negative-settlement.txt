@@ -1,0 +1,37 @@
+version: after #52
+base: c47122251c9185c87fb2253626d330c6b6a0194a
+case: net-negative
+opening_minor: -100000
+rent_minor: 200000
+other_minor: 0
+fee_minor: 80000
+expenses_minor: 450000
+payouts_minor: 0
+firm_minor: 200000
+period_net_minor: -330000
+closing_minor: -430000
+owner_net_minor: -330000
+identity_closing_eq_opening_plus_period_net: true
+surface: settlement
+
+--- list ---
+本月租金（已登記）	NT$2,000
+費用合計	NT$5,300
+屋主淨額	本期淨額為負 −NT$3,300
+
+--- pdf model ---
+title: 屋主月結報表
+subtitle: QA屋主甲 · 2026年10月1日 - 2026年10月31日
+期初餘額	NT$0
+已繳租金	NT$2,000
+其他收入（含電費）	NT$0
+管理費	NT$800
+支出	NT$4,500
+管理公司匯給屋主	NT$0
+屋主淨額（本月）	本期淨額為負 −NT$3,300
+期末餘額	−NT$3,300
+本月費用高於已登記租金，屋主淨額為 −NT$3,300。費用怎麼處理，請和屋主確認。
+期初餘額 NT$0 ＋ 管理公司經手租金 NT$0 − 費用 NT$5,300 − 管理公司匯給屋主 NT$0 ＝ 期末餘額 −NT$3,300
+數字來自管理方確認的繳款紀錄。
+押金不計入淨額。此表僅供紀錄與對帳。Condola 只提供管理軟體，不經手任何款項。
+Condola 只提供管理軟體，不經手任何款項。

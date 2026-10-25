@@ -12,6 +12,8 @@ export default async function TenantLayout({ children }: { children: React.React
   if (session.kind !== "tenant") redirect("/m");
   const t = makeT(session.locale);
   const path = (await headers()).get("x-pathname") || "";
+  const task = path === "/t/id" || path.startsWith("/t/id/");
+  const backHref = path === "/t/id/notice" || path.startsWith("/t/id/notice/") ? "/t/id" : "/t";
   const tiles = [
     ["/t/pay", "tenant-tile-pay", "i_rich_pay"],
     ["/t/repair", "tenant-tile-repair", "i_rich_repair"],
@@ -19,11 +21,16 @@ export default async function TenantLayout({ children }: { children: React.React
     ["/t/messages", "tenant-tile-messages", "i_rich_msg"],
   ] as const;
   return (
-    <div className="stage">
+    <div className={task ? "stage task" : "stage"}>
       <div className="phone" data-testid="liff-frame">
         <div className="scr">
-          <div className="notch" />
+          {task ? null : <div className="notch" />}
           <div className="lhead">
+            {task ? (
+              <Link href={backHref} className="task-back" data-testid="task-back">
+                {t("i_task_back")}
+              </Link>
+            ) : null}
             <BrandImage variant="symbolSmall" alt="" className="brand-symbol" />
             {t("i_brand")}
           </div>
@@ -35,15 +42,17 @@ export default async function TenantLayout({ children }: { children: React.React
             ) : null}
             {children}
           </div>
-          <div className="rich">
-            <div className="gridm">
-              {tiles.map(([href, testid, key]) => (
-                <Link key={href} href={href} data-testid={testid}>
-                  {t(key)}
-                </Link>
-              ))}
+          {task ? null : (
+            <div className="rich" data-testid="tenant-nav">
+              <div className="gridm">
+                {tiles.map(([href, testid, key]) => (
+                  <Link key={href} href={href} data-testid={testid}>
+                    {t(key)}
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -2,11 +2,18 @@
 
 import { useEffect } from "react";
 import { BUILD_SHA } from "@/build-info";
-import { installChunkReloadListeners, type ChunkReloadTarget } from "@/lib/chunk-reload";
+import {
+  installChunkReloadListeners,
+  installNavigationTracking,
+  recoverChunkFailure,
+  type ChunkReloadTarget,
+  type ClickEventTarget,
+  type HistoryLike,
+} from "@/lib/chunk-reload";
 
 export function ChunkReloadListener() {
   useEffect(() => {
-    const target: ChunkReloadTarget = {
+    const target: ChunkReloadTarget & ClickEventTarget = {
       addEventListener(type, listener, capture) {
         window.addEventListener(type, listener as EventListener, capture);
       },
@@ -14,11 +21,16 @@ export function ChunkReloadListener() {
         window.removeEventListener(type, listener as EventListener, capture);
       },
     };
-    return installChunkReloadListeners(target, {
+    const stopErrors = installChunkReloadListeners(target, {
       buildId: BUILD_SHA,
       storage: window.sessionStorage,
-      reload: () => window.location.reload(),
+      reload: () => recoverChunkFailure(window.location, Date.now()),
     });
+    const stopNavigation = installNavigationTracking(target, window.history as HistoryLike, () => window.location.href);
+    return () => {
+      stopErrors();
+      stopNavigation();
+    };
   }, []);
   return null;
 }

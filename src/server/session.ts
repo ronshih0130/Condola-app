@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import type { Client } from "pg";
 import { cache } from "react";
 import { isLocale, type Locale } from "@/i18n";
 import { withClient } from "./db";
@@ -14,6 +15,11 @@ export type Prefs = { locale: Locale; calendar: CalendarMode; leaseId: string | 
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+/** Same hash `readSessionOn` stores on `auth_sessions.token_hash`. */
+export function sessionTokenHash(token: string) {
+  return sha256(token);
 }
 
 export async function requestPrefs(): Promise<Prefs> {
@@ -31,11 +37,20 @@ type IdentityRow = {
   email: string | null;
 };
 
-async function readSessionOnce(): Promise<Session | null> {
+export type SessionLoad = {
+  session: (Session & { needsSandbox?: boolean }) | null;
+  seedSample: boolean;
+};
+
+/**
+ * Session lookup on a connection the caller already holds.
+ * Photo GETs pass touch:false so three parallel images do not queue on one last_active update.
+ */
+export async function readSessionOn(client: Client, options?: { touch?: boolean }): Promise<SessionLoad> {
   const prefs = await requestPrefs();
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
+  if (!token) return { session: null, seedSample: false };
   let path = "";
   try {
     path = (await headers()).get("x-pathname") || "";
@@ -43,10 +58,8 @@ async function readSessionOnce(): Promise<Session | null> {
     path = "";
   }
   const portalCookie = jar.get(PORTAL_ROLE_COOKIE)?.value ?? null;
-  try {
-    let seedSample = false;
-    const session = await withClient(async (client): Promise<(Session & { needsSandbox?: boolean }) | null> => {
-      const found = await client.query<IdentityRow>(
+  let seedSample = false;
+  const found = await client.query<IdentityRow>(
         `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
                 coalesce(p.email::text, u.email) AS email
            FROM auth_sessions s
@@ -55,15 +68,17 @@ async function readSessionOnce(): Promise<Session | null> {
           WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
         [sha256(token)],
       );
-      const identity = found.rows[0];
-      if (!identity) return null;
-      await client.query(
-        `UPDATE auth_sessions
-            SET last_active_at = now(),
-                expires_at = greatest(expires_at, now() + interval '12 hours')
-          WHERE id = $1`,
-        [identity.session_id],
-      );
+  const identity = found.rows[0];
+  if (!identity) return { session: null, seedSample: false };
+  if (options?.touch !== false) {
+    await client.query(
+      `UPDATE auth_sessions
+          SET last_active_at = now(),
+              expires_at = greatest(expires_at, now() + interval '12 hours')
+        WHERE id = $1`,
+      [identity.session_id],
+    );
+  }
       const preferredOrg = jar.get(ORG_COOKIE)?.value ?? null;
       const rawEnv = jar.get(ENV_COOKIE)?.value;
       const envChoice: OrgEnvironment | null = rawEnv === "sandbox" ? "sandbox" : rawEnv === "live" ? "live" : null;
@@ -96,14 +111,17 @@ async function readSessionOnce(): Promise<Session | null> {
           seedSample = true;
         }
         return {
-          ...base,
-          kind: "staff" as const,
-          role: firm.role,
-          orgId: firm.orgId,
-          liveOrgId: firm.liveOrgId,
-          environment: firm.environment,
-          liveEnabled: firm.liveEnabled,
-          needsSandbox: firm.needsSandbox,
+          seedSample,
+          session: {
+            ...base,
+            kind: "staff" as const,
+            role: firm.role,
+            orgId: firm.orgId,
+            liveOrgId: firm.liveOrgId,
+            environment: firm.environment,
+            liveEnabled: firm.liveEnabled,
+            needsSandbox: firm.needsSandbox,
+          },
         };
       }
       const contact = await client.query<{
@@ -158,7 +176,7 @@ async function readSessionOnce(): Promise<Session | null> {
         portalCookie,
       );
       const portal = picked?.row;
-      if (!portal) return null;
+      if (!portal) return { session: null, seedSample: false };
       let orgId = portal.org_id;
       let environment: OrgEnvironment = portal.environment === "sandbox" ? "sandbox" : "live";
       let liveOrgId = portal.live_org_id;
@@ -187,28 +205,41 @@ async function readSessionOnce(): Promise<Session | null> {
         isTenant: contact.rows.some((row) => row.is_tenant),
         latest,
       });
-      if (!kind) return null;
+      if (!kind) return { session: null, seedSample: false };
       return {
-        ...base,
-        kind,
-        role: null,
-        orgId,
-        liveOrgId,
-        environment,
-        portals: {
-          owner: contact.rows.some((row) => row.is_owner),
-          tenant: contact.rows.some((row) => row.is_tenant),
+        seedSample,
+        session: {
+          ...base,
+          kind,
+          role: null,
+          orgId,
+          liveOrgId,
+          environment,
+          portals: {
+            owner: contact.rows.some((row) => row.is_owner),
+            tenant: contact.rows.some((row) => row.is_tenant),
+          },
         },
       };
-    });
-    if (session?.kind === "staff" && session.environment === "sandbox") {
-      const sandboxId = session.needsSandbox ? await ensureSandbox(session) : session.orgId;
-      const opened = { ...session, orgId: sandboxId, environment: "sandbox" as const, needsSandbox: false };
-      if (seedSample) await ensureSampleLoaded(opened);
-      if (session.needsSandbox) await withClient((client) => correctRetiredSampleAddresses(client, sandboxId));
-      return opened;
-    }
-    return session;
+}
+
+/** Sandbox provisioning stays after the lookup, and may open its own connection. */
+export async function completeSession(loaded: SessionLoad): Promise<Session | null> {
+  const session = loaded.session;
+  if (session?.kind === "staff" && session.environment === "sandbox") {
+    const sandboxId = session.needsSandbox ? await ensureSandbox(session) : session.orgId;
+    const opened = { ...session, orgId: sandboxId, environment: "sandbox" as const, needsSandbox: false };
+    if (loaded.seedSample) await ensureSampleLoaded(opened);
+    if (session.needsSandbox) await withClient((client) => correctRetiredSampleAddresses(client, sandboxId));
+    return opened;
+  }
+  return session;
+}
+
+async function readSessionOnce(): Promise<Session | null> {
+  try {
+    const loaded = await withClient((client) => readSessionOn(client));
+    return completeSession(loaded);
   } catch (error) {
     if (process.env.NEXT_PHASE === "phase-production-build") return null;
     throw error;

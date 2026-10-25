@@ -1,0 +1,5 @@
+source: c47122251c9185c87fb2253626d330c6b6a0194a
+surface: settlement
+pdf: none on this commit
+list_shows_-NT$: false
+list_net: 屋主應補繳 NT$3,300

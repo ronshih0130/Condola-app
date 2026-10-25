@@ -2,14 +2,24 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  NAVIGATION_TARGET_MAX_AGE_MS,
   attemptChunkReload,
   chunkReloadStorageKey,
+  clearNavigationTarget,
+  hrefFromHistoryUrl,
+  hrefFromLinkClick,
   installChunkReloadListeners,
+  installNavigationTracking,
   isChunkLoadFailure,
+  navigationTargetHref,
+  noteNavigationTarget,
+  recoverChunkFailure,
   shouldAutoReload,
   type ChunkListener,
   type ChunkReloadStorage,
   type ChunkReloadTarget,
+  type ClickEventTarget,
+  type HistoryLike,
 } from "./chunk-reload";
 
 function memoryStorage(initial?: Record<string, string>): ChunkReloadStorage & { data: Map<string, string> } {
@@ -197,6 +207,133 @@ test("error boundaries reuse the zh-TW page and the reload guard", () => {
   assert.equal(app.includes("error.message"), false);
 
   assert.match(listener, /installChunkReloadListeners/);
+  assert.match(listener, /installNavigationTracking/);
+  assert.match(listener, /recoverChunkFailure/);
   assert.match(listener, /BUILD_SHA/);
+  assert.match(app, /recoverChunkFailure/);
+  assert.match(global, /recoverChunkFailure/);
   assert.match(layout, /<ChunkReloadListener \/>/);
+});
+
+const CURRENT = "https://app.condola.app/m";
+const DESTINATION = "https://app.condola.app/m/units";
+
+function linkClick(href: string, extra: Record<string, unknown> = {}) {
+  return {
+    button: 0,
+    target: {
+      closest: () => ({ href, ...extra }),
+    },
+  };
+}
+
+test("a link click or history update assigns that page, and an unknown target reloads", () => {
+  clearNavigationTarget();
+  const now = 5_000;
+  assert.equal(hrefFromLinkClick(linkClick(DESTINATION), CURRENT), DESTINATION);
+  assert.equal(hrefFromLinkClick(linkClick("/m/leases"), CURRENT), "https://app.condola.app/m/leases");
+  assert.equal(hrefFromLinkClick({ ...linkClick(DESTINATION), metaKey: true }, CURRENT), null);
+  assert.equal(hrefFromLinkClick({ ...linkClick(DESTINATION), button: 1 }, CURRENT), null);
+  assert.equal(hrefFromLinkClick({ ...linkClick(DESTINATION), defaultPrevented: true }, CURRENT), null);
+  assert.equal(hrefFromLinkClick(linkClick("https://example.com/away"), CURRENT), null);
+  assert.equal(hrefFromLinkClick(linkClick(DESTINATION, { target: "_blank" }), CURRENT), null);
+  assert.equal(hrefFromLinkClick(linkClick(DESTINATION, { hasAttribute: (name: string) => name === "download" }), CURRENT), null);
+  assert.equal(hrefFromLinkClick(linkClick(`${CURRENT}#section`), CURRENT), null);
+  assert.equal(hrefFromHistoryUrl("/m/units?floor=2", CURRENT), "https://app.condola.app/m/units?floor=2");
+  assert.equal(hrefFromHistoryUrl(null, CURRENT), null);
+
+  noteNavigationTarget(DESTINATION, now);
+  const assigned: string[] = [];
+  let reloads = 0;
+  const location = {
+    href: CURRENT,
+    assign(url: string) {
+      assigned.push(url);
+    },
+    reload() {
+      reloads += 1;
+    },
+  };
+  recoverChunkFailure(location, now);
+  assert.deepEqual(assigned, [DESTINATION]);
+  assert.equal(reloads, 0);
+
+  clearNavigationTarget();
+  recoverChunkFailure(location, now);
+  assert.equal(reloads, 1);
+
+  noteNavigationTarget(DESTINATION, now - NAVIGATION_TARGET_MAX_AGE_MS - 1);
+  assert.equal(navigationTargetHref(CURRENT, now), null);
+  recoverChunkFailure(location, now);
+  assert.equal(reloads, 2);
+
+  noteNavigationTarget(CURRENT, now);
+  recoverChunkFailure(location, now);
+  assert.equal(reloads, 3);
+  clearNavigationTarget();
+});
+
+test("the one-per-build guard still blocks a second destination load", () => {
+  clearNavigationTarget();
+  noteNavigationTarget(DESTINATION, 1);
+  const assigned: string[] = [];
+  let reloads = 0;
+  const reload = () =>
+    recoverChunkFailure(
+      {
+        href: CURRENT,
+        assign(url: string) {
+          assigned.push(url);
+        },
+        reload() {
+          reloads += 1;
+        },
+      },
+      1,
+    );
+  const deps = { buildId: "abc1234", storage: memoryStorage(), reload };
+  assert.equal(attemptChunkReload({ name: "ChunkLoadError", message: "Loading chunk 4 failed." }, deps), "reloaded");
+  assert.equal(attemptChunkReload({ name: "ChunkLoadError", message: "Loading chunk 4 failed." }, deps), "blocked");
+  assert.deepEqual(assigned, [DESTINATION]);
+  assert.equal(reloads, 0);
+  clearNavigationTarget();
+});
+
+test("click capture and history updates remember the in-app destination", () => {
+  clearNavigationTarget();
+  let now = 100;
+  let href = CURRENT;
+  const entries: { type: string; capture: boolean; listener: ChunkListener }[] = [];
+  const target: ClickEventTarget = {
+    addEventListener(type, listener, capture) {
+      entries.push({ type, capture: Boolean(capture), listener });
+    },
+    removeEventListener(type, listener, capture) {
+      const captureFlag = Boolean(capture);
+      const index = entries.findIndex((entry) => entry.type === type && entry.capture === captureFlag && entry.listener === listener);
+      if (index >= 0) entries.splice(index, 1);
+    },
+  };
+  const history: HistoryLike = {
+    pushState(_state, _title, url) {
+      if (url) href = new URL(String(url), href).href;
+    },
+    replaceState(_state, _title, url) {
+      if (url) href = new URL(String(url), href).href;
+    },
+  };
+  const stop = installNavigationTracking(target, history, () => href, () => now);
+  assert.equal(entries.some((entry) => entry.type === "click" && entry.capture), true);
+  history.pushState({}, "", "/m/units");
+  assert.equal(navigationTargetHref(CURRENT, now), DESTINATION);
+  now += 5;
+  history.replaceState({}, "", "/m/leases");
+  assert.equal(navigationTargetHref(CURRENT, now), "https://app.condola.app/m/leases");
+  entries.find((entry) => entry.type === "click")!.listener(linkClick("https://app.condola.app/t/pay"));
+  assert.equal(navigationTargetHref(CURRENT, now), "https://app.condola.app/t/pay");
+  stop();
+  assert.equal(entries.length, 0);
+  history.pushState({}, "", "/m/settings");
+  assert.equal(navigationTargetHref(CURRENT, now), "https://app.condola.app/t/pay");
+  clearNavigationTarget();
 });

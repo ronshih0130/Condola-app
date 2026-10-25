@@ -226,7 +226,7 @@ test("sandbox rows stay hidden from other firms and sample data loads once", asy
     assert.ok(marks.rows[0].n >= expected.properties + expected.owners + expected.tenants + expected.leases);
     assert.equal(marks.rows[0].other, 0);
     const masked = await query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM contacts WHERE org_id = $1 AND is_tenant AND notes LIKE '%A00****%'`,
+      `SELECT count(*)::int AS n FROM contacts WHERE org_id = $1 AND is_tenant AND notes LIKE '%A******%'`,
       [sandboxId],
     );
     assert.equal(masked.rows[0].n, expected.tenants);

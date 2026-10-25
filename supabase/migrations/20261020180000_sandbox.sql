@@ -1,3 +1,4 @@
+-- Version 20261020180000.
 -- Test mode is a separate firm, not a flag on live rows.
 -- One live firm has at most one sandbox. Child rows stay in their own org_id,
 -- and app.is_member hides the other environment unless the transaction is pinned

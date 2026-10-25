@@ -28,15 +28,18 @@ import {
   type PropertyInput,
 } from "./domain";
 import { createOwner, createSpace, updateOwner, updateProperty, updateSpace, type SpaceKind } from "./portfolio";
-import { FlowError } from "./errors";
+import { SESSION_COOKIE } from "./auth";
+import { FlowError, logServerError } from "./errors";
+import { finalizeTenantId, issuePhotoUrlsForToken, reviewIdCheck } from "./id-docs";
+import { ENV_COOKIE, ORG_COOKIE } from "./org-scope";
 import { parseAmountToMinor } from "./rent-settlement-math";
 import { normalizePhone } from "./lease-rules";
-import { taipeiToday } from "./money";
 import { typedStreet } from "@/property-address";
 import { loadOrgCountry } from "./org-country";
 import { createLeaseFromForm } from "./lease-form";
 import { addTicketComment, saveRepairRecord } from "./repairs";
-import { getSession } from "./session";
+import { taipeiToday } from "./money";
+import { getSession, sessionTokenHash } from "./session";
 import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { correctBillPayment, recordBillPayment, reverseBillPayment } from "./rent-settlement";
@@ -638,6 +641,68 @@ export async function actionUpdateSpace(formData: FormData) {
     redirect("/m/units");
   } catch (error) {
     bounce(back, error);
+  }
+}
+
+export async function actionFinalizeId(formData: FormData): Promise<{ error: string } | void> {
+  try {
+    const session = await getSession();
+    await finalizeTenantId(session, {
+      leaseId: text(formData.get("leaseId")),
+      docType: text(formData.get("docType")),
+      number: text(formData.get("number")),
+      consent: text(formData.get("consent")) === "on",
+    });
+    redirect("/t/id?sent=1");
+  } catch (error) {
+    if (isRedirect(error)) throw error;
+    if (!(error instanceof FlowError) || error.key === "errors.generic") logServerError("actionFinalizeId", error);
+    return { error: error instanceof FlowError ? error.key : "errors.generic" };
+  }
+}
+
+export async function actionViewIdPhotos(documentId: string) {
+  try {
+    const jar = await cookies();
+    const token = jar.get(SESSION_COOKIE)?.value;
+    if (!token) redirect("/login");
+    const rawEnv = jar.get(ENV_COOKIE)?.value;
+    return await issuePhotoUrlsForToken(
+      {
+        tokenHash: sessionTokenHash(token),
+        userId: null,
+        preferredOrg: jar.get(ORG_COOKIE)?.value ?? null,
+        env: rawEnv === "sandbox" || rawEnv === "live" ? rawEnv : null,
+      },
+      documentId,
+    );
+  } catch (error) {
+    if (isRedirect(error)) throw error;
+    return { error: error instanceof FlowError ? error.key : "errors.generic" };
+  }
+}
+
+export async function actionMarkIdChecked(formData: FormData): Promise<{ error: string } | void> {
+  const leaseId = text(formData.get("leaseId"));
+  try {
+    const session = await getSession();
+    await reviewIdCheck(session, text(formData.get("documentId")), "checked");
+    revalidatePath(`/m/leases/${leaseId}`);
+  } catch (error) {
+    if (isRedirect(error)) throw error;
+    return { error: error instanceof FlowError ? error.key : "errors.generic" };
+  }
+}
+
+export async function actionReturnId(formData: FormData): Promise<{ error: string } | void> {
+  const leaseId = text(formData.get("leaseId"));
+  try {
+    const session = await getSession();
+    await reviewIdCheck(session, text(formData.get("documentId")), "returned", text(formData.get("reason")));
+    revalidatePath(`/m/leases/${leaseId}`);
+  } catch (error) {
+    if (isRedirect(error)) throw error;
+    return { error: error instanceof FlowError ? error.key : "errors.generic" };
   }
 }
 

@@ -1,0 +1,17 @@
+source: c47122251c9185c87fb2253626d330c6b6a0194a
+case: net-zero
+surface: settlement
+opening_minor: 500000
+rent_minor: 1000000
+other_minor: 0
+fee_minor: 100000
+expenses_minor: 900000
+payouts_minor: 0
+firm_minor: 1000000
+period_net_minor: 0
+closing_minor: 500000
+owner_net_minor: 0
+identity_closing_eq_opening_plus_period_net: true
+
+本月已繳租金	NT$10,000
+應付屋主	NT$0

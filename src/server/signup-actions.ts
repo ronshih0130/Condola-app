@@ -127,10 +127,17 @@ export async function actionConfirmSupabaseHash(formData: FormData) {
 }
 
 export async function actionConfirmSupabase(accessToken: string) {
-  const result = await confirmSupabaseAccessToken(accessToken, await meta());
-  if (!result.ok) redirect("/signup/confirm?expired=1");
-  await setSession(result.token);
-  redirect(sessionEntryPath("/signup/firm"));
+  try {
+    const result = await confirmSupabaseAccessToken(accessToken, await meta());
+    if (!result.ok) redirect("/signup/confirm?expired=1");
+    await setSession(result.token);
+    redirect(sessionEntryPath("/signup/firm"));
+  } catch (error) {
+    if (isRedirect(error)) throw error;
+    // Do not log error. A server-action failure can include the argument.
+    console.error("confirm access token failed");
+    redirect("/signup/confirm?expired=1");
+  }
 }
 
 export async function actionCreateFirm(formData: FormData) {

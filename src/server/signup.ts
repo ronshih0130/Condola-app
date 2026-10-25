@@ -15,6 +15,32 @@ import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignu
 
 const VERIFY_HOURS = 24;
 
+/** GoTrue's default JWT lifetime. supabase/config.toml sets the same value for local Auth. */
+export const GOTRUE_JWT_EXPIRY_SECONDS = 3600;
+
+/**
+ * Implicit confirm links mint a user JWT. Reject one that is already expired
+ * or whose exp - iat is longer than the documented GoTrue JWT expiry.
+ * Returns a status only. Callers must not log the token.
+ */
+export function gotrueAccessTokenLifetime(
+  accessToken: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): "ok" | "expired" | "long" | "malformed" {
+  const parts = accessToken.split(".");
+  if (parts.length !== 3 || !parts[1]) return "malformed";
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as { exp?: unknown; iat?: unknown };
+    if (typeof payload.exp !== "number" || typeof payload.iat !== "number") return "malformed";
+    if (!Number.isFinite(payload.exp) || !Number.isFinite(payload.iat)) return "malformed";
+    if (payload.exp <= nowSeconds) return "expired";
+    if (payload.exp - payload.iat > GOTRUE_JWT_EXPIRY_SECONDS) return "long";
+    return "ok";
+  } catch {
+    return "malformed";
+  }
+}
+
 export type SignupError = "duplicate" | "weak" | "mismatch" | "email" | "required";
 
 function sha256(value: string) {
@@ -330,12 +356,46 @@ export async function confirmSignupToken(token: string, meta: RequestMeta) {
   return { ok: true as const, token: sessionToken };
 }
 
+/** Record a confirm JWT so a second presentation is rejected. The raw token is not stored. */
+export async function claimGotrueConfirmToken(accessToken: string) {
+  // A JWT cannot still be valid after GOTRUE_JWT_EXPIRY_SECONDS. Drop replay
+  // rows older than twice that, so a late clock skew cannot revive one.
+  await query(
+    `DELETE FROM gotrue_confirm_uses
+      WHERE used_at < now() - make_interval(secs => $1)`,
+    [GOTRUE_JWT_EXPIRY_SECONDS * 2],
+  );
+  const row = await query<{ token_hash: string }>(
+    `INSERT INTO gotrue_confirm_uses (token_hash) VALUES ($1)
+     ON CONFLICT (token_hash) DO NOTHING
+     RETURNING token_hash`,
+    [sha256(accessToken)],
+  );
+  return Boolean(row.rows[0]);
+}
+
+export async function releaseGotrueConfirmToken(accessToken: string) {
+  await query(`DELETE FROM gotrue_confirm_uses WHERE token_hash = $1`, [sha256(accessToken)]);
+}
+
 export async function confirmSupabaseAccessToken(accessToken: string, meta: RequestMeta) {
+  const raw = accessToken.trim();
+  // GoTrue GET /auth/v1/user does not consume the JWT. Lifetime is checked
+  // here against jwt_expiry (3600s). Reuse is rejected by gotrue_confirm_uses.
+  if (gotrueAccessTokenLifetime(raw) !== "ok") return { ok: false as const, error: "expired" as const };
   const { url, anon } = supabaseAuth();
-  if (!url || !anon || !accessToken.trim()) return { ok: false as const, error: "expired" as const };
-  const response = await fetch(`${url}/auth/v1/user`, {
-    headers: { apikey: anon, Authorization: `Bearer ${accessToken.trim()}` },
-  });
+  if (!url || !anon) return { ok: false as const, error: "expired" as const };
+  const claimed = await claimGotrueConfirmToken(raw);
+  if (!claimed) return { ok: false as const, error: "expired" as const };
+  let response: Response;
+  try {
+    response = await fetch(`${url}/auth/v1/user`, {
+      headers: { apikey: anon, Authorization: `Bearer ${raw}` },
+    });
+  } catch {
+    await releaseGotrueConfirmToken(raw);
+    return { ok: false as const, error: "expired" as const };
+  }
   if (!response.ok) return { ok: false as const, error: "expired" as const };
   const body = (await response.json()) as { id?: string; email?: string; email_confirmed_at?: string | null };
   if (!body.id || !body.email_confirmed_at) return { ok: false as const, error: "expired" as const };

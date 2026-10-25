@@ -1,0 +1,6 @@
+version: after #52
+base: c47122251c9185c87fb2253626d330c6b6a0194a
+surface: settlement
+pdf_contains_ascii_-NT$: true
+amounts: -NT$3,300
+byte_length: 1579500
