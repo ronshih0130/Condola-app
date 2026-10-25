@@ -326,6 +326,40 @@ test("creating a company ignores a user id submitted in the form or the query", 
   }
 });
 
+test("signup with the wrong password does not write consent onto an unconfirmed account", async ({ page }) => {
+  const email = `unconfirmed.idor.${Date.now().toString(36)}@example.com`;
+  const storedPassword = "Owner1234";
+  try {
+    const { userId, before } = await withDb(async (client) => {
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, raw_app_meta_data, role, aud)
+         VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), NULL, $3::jsonb, $4::jsonb, 'authenticated', 'authenticated')
+         RETURNING id::text AS id`,
+        [email, storedPassword, JSON.stringify(victimMeta), JSON.stringify(victimApp)],
+      );
+      const userId = inserted.rows[0].id;
+      return { userId, before: await metaSnapshot(client, userId) };
+    });
+    await page.goto("/signup");
+    await page.getByTestId("signup-email").fill(email);
+    await page.getByTestId("signup-password").fill(PASSWORD);
+    await page.getByTestId("signup-confirm").fill(PASSWORD);
+    await page.getByTestId("signup-consent").check();
+    await page.getByTestId("signup-submit").click();
+    await page.waitForURL((url) => url.pathname === "/signup/verify");
+    await expect(page.getByTestId("signup-duplicate")).toHaveCount(0);
+    await expect(page.getByTestId("verify-body")).toContainText(email);
+    expect(await metaOf(userId)).toEqual(before);
+    const stillOne = await withDb(async (client) => {
+      const row = await client.query(`SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+      return row.rows.map((item) => item.id);
+    });
+    expect(stillOne).toEqual([userId]);
+  } finally {
+    await removeUser(email);
+  }
+});
+
 test("a signed-in user with only user_metadata consent must tick before creating a company", async ({ page }) => {
   const email = `reconsent.firm.${Date.now().toString(36)}@example.com`;
   try {

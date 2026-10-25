@@ -274,6 +274,12 @@ test("a client-supplied user id cannot choose who receives the consent write", (
   assert.ok(lookedUp > 0 && written > lookedUp);
   const started = signup.slice(signup.indexOf("export async function startSignup"), signup.indexOf("export async function resendSignup"));
   assert.equal(started.includes("formData"), false);
-  assert.match(started, /writeConsent\(existing\.id, "signup"/);
-  assert.match(started, /writeConsent\(userId, "signup"/);
+  // Who startSignup may write is a database behaviour test: an unconfirmed account
+  // with the wrong password keeps both metadata columns. See consent-followups.
+  const verified = started.indexOf("existing.email_confirmed_at && matches && !existing.has_firm");
+  const verifiedWrite = started.indexOf('writeConsent(existing.id, "signup"', verified);
+  const created = started.indexOf("INSERT INTO auth.users");
+  const createdWrite = started.indexOf('writeConsent(userId, "signup"', created);
+  assert.ok(verified > 0 && verifiedWrite > verified, "a confirmed account is written only after the password matches");
+  assert.ok(created > 0 && createdWrite > created, "a user this request just inserted can be written");
 });

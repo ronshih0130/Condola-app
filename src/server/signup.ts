@@ -265,7 +265,10 @@ export async function startSignup(input: {
     }
     // Leave auth.users alone. An admin password update clears confirmation_token and
     // confirmation_sent_at, which expires the link already in the inbox, and this path does not send a new email.
-    await writeConsent(existing.id, "signup", acceptedAt);
+    // Consent only after the password matches. A wrong password still returns the verify
+    // page, so knowing an unconfirmed email cannot stamp this account. That person's
+    // own first login hits the re-consent gate.
+    if (matches) await writeConsent(existing.id, "signup", acceptedAt);
     const token = await inTx((client) => finishUnconfirmed(client, existing.id, email, code));
     return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
   }
