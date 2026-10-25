@@ -9,7 +9,7 @@ import { pdfContainsAscii } from "@/lib/pdf-text";
 import { renderPdf } from "@/lib/pdf-render";
 import { buildStatementPdf, type StatementPdfSource } from "@/server/pdf-docs";
 import { ownerSettlement } from "@/server/format";
-import { renderSettlementList, renderStatementPage } from "@/server/pr52-render-evidence";
+import { renderOwnerStatementList, renderSettlementList, renderStatementPage } from "@/server/pr52-render-evidence";
 import { settlementPdfSource } from "@/server/rent-settlement";
 import { closingBalance } from "@/server/rent-settlement-math";
 
@@ -234,8 +234,14 @@ before(async () => {
       join(AFTER, `${row.id}-settlement.html`),
       renderSettlementList({ ...row, closing }),
     );
+    writeFileSync(
+      join(AFTER, `${row.id}-owner-statements.html`),
+      renderOwnerStatementList({ ...row, closing }),
+    );
     const statementPdf = await renderPdf(statement.doc, font);
     const settlementPdf = await renderPdf(settlement.doc, font);
+    writeFileSync(join(AFTER, `${row.id}-statement.pdf`), statementPdf);
+    writeFileSync(join(AFTER, `${row.id}-settlement.pdf`), settlementPdf);
     writeFileSync(join(AFTER, `${row.id}-statement.pdf.txt`), pdfText(statementPdf));
     writeFileSync(join(AFTER, `${row.id}-settlement.pdf.txt`), pdfText(settlementPdf));
     if (row.id === "net-negative") {
@@ -299,6 +305,16 @@ test("before and after snapshots keep the three nets and show the signed closing
   assert.match(readFileSync(join(AFTER, "net-positive-settlement.html"), "utf8"), /NT\$2,000/);
   assert.match(readFileSync(join(AFTER, "net-positive-settlement.html"), "utf8"), /NT\$17,000/);
   assert.match(readFileSync(join(AFTER, "net-zero-settlement.html"), "utf8"), /NT\$5,000/);
+  const negativeOwner = readFileSync(join(AFTER, "net-negative-owner-statements.html"), "utf8");
+  assert.match(negativeOwner, /href="\/o\/statements\//);
+  assert.match(negativeOwner, /期初餘額/);
+  assert.match(negativeOwner, /期末餘額/);
+  assert.match(negativeOwner, /\u2212NT\$1,000/);
+  assert.match(negativeOwner, /\u2212NT\$4,300/);
+  assert.match(readFileSync(join(AFTER, "net-positive-owner-statements.html"), "utf8"), /期初餘額 NT\$2,000/);
+  assert.match(readFileSync(join(AFTER, "net-positive-owner-statements.html"), "utf8"), /期末餘額 NT\$17,000/);
+  assert.match(readFileSync(join(AFTER, "net-zero-owner-statements.html"), "utf8"), /期初餘額 NT\$5,000/);
+  assert.match(readFileSync(join(AFTER, "net-zero-owner-statements.html"), "utf8"), /期末餘額 NT\$5,000/);
   const negativeSettlementModel = readFileSync(join(AFTER, "net-negative-settlement.txt"), "utf8");
   assert.match(negativeSettlementModel, /期初餘額\t−NT\$1,000/);
   assert.match(negativeSettlementModel, /期末餘額\t−NT\$4,300/);
@@ -318,6 +334,7 @@ test("negative-case wording skips the banned payment terms", () => {
     readFileSync(join(AFTER, "net-negative-statement.html"), "utf8"),
     readFileSync(join(AFTER, "net-negative-settlement.txt"), "utf8"),
     readFileSync(join(AFTER, "net-negative-settlement.html"), "utf8"),
+    readFileSync(join(AFTER, "net-negative-owner-statements.html"), "utf8"),
     readFileSync(join(AFTER, "net-negative-statement.pdf.txt"), "utf8"),
     readFileSync(join(AFTER, "net-negative-settlement.pdf.txt"), "utf8"),
   ].join("\n");

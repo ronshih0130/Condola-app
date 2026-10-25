@@ -2,8 +2,9 @@
 -- Payment and owner-settlement rules.
 --
 -- Additive on existing tables: new nullable columns only.
--- No new NOT NULL, CHECK, foreign key, or column default is added to an existing table.
--- leases.due_day keeps its existing default.
+-- No new NOT NULL, CHECK, or foreign key is added to an existing table.
+-- owner_statements.changed_after_generate and properties.records_only are new
+-- nullable columns with DEFAULT false. leases.due_day keeps its existing default.
 -- statement_change_log and owner_payouts are new tables. Safe to apply again.
 --
 -- post_reversal is restated from 20261030120000_org_scoped_reversal_audit.sql
