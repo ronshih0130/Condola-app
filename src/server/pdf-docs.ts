@@ -1,6 +1,6 @@
 import { dictionary, type Locale, type T } from "@/i18n";
 import type { PdfBlock, PdfDocument, PdfRow } from "@/lib/pdf-document";
-import { formatDate, moneyLabel, ownerSettlement, signedMoneyLabel, statementPeriodNet } from "@/server/format";
+import { formatDate, moneyLabel, ownerSettlement, statementPeriodNet, statementSignedMoney } from "@/server/format";
 import { renderOfficialLease } from "@/server/official-lease";
 import { can } from "@/server/perms";
 import type { CalendarMode, Session } from "@/server/types";
@@ -114,7 +114,7 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     closing: source.closing,
   });
   const money = (minor: number) => moneyLabel(minor, source.currency, locale);
-  const signed = (minor: number) => signedMoneyLabel(minor, source.currency, locale);
+  const signed = (minor: number) => statementSignedMoney(minor, source.currency, locale);
   const periodNet = statementPeriodNet(figures);
   const rows: PdfRow[] = [
     { label: t("i_stmt_opening"), value: signed(figures.opening) },
@@ -123,10 +123,10 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     { label: t("i_fee"), value: money(figures.fee) },
     { label: t("i_expenses"), value: money(figures.expenses) },
   ];
-  if (figures.owes > 0) {
-    rows.push({ label: t("i_net_owner"), value: `${t("owner_owes")} ${signed(-figures.owes)}` });
+  if (periodNet < 0) {
+    rows.push({ label: t("owner_owes"), value: signed(periodNet) });
   } else {
-    rows.push({ label: t("i_net_owner"), value: money(figures.payable) });
+    rows.push({ label: t("i_net_owner"), value: money(periodNet) });
   }
   rows.push({ label: t("i_stmt_closing"), value: signed(figures.closing) });
   const blocks: PdfBlock[] = [];
@@ -146,12 +146,11 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
       }),
     ],
   });
-  if (figures.owes > 0) {
-    const bare = money(figures.owes).replace(/^NT\$/, "");
+  if (periodNet < 0) {
     blocks.push({
       kind: "text",
       heading: "",
-      lines: [t("i_stmt_negative", { amount: bare })],
+      lines: [t("i_stmt_negative", { amount: signed(periodNet) })],
     });
   }
   if (source.lines.length) {

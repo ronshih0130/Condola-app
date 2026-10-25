@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { makeT } from "@/i18n";
-import { moneyLabel } from "@/server/format";
+import { moneyLabel, signedMoneyLabel, statementSignedMoney } from "@/server/format";
 import { buildStatementPdf } from "@/server/pdf-docs";
 
 const root = new URL("../", import.meta.url);
@@ -23,6 +23,23 @@ const SCREENS = [
   "app/m/rent/page.tsx",
   "app/m/reports/page.tsx",
 ];
+
+test("utilities and pay keep the ASCII hyphen, and statements use U+2212", () => {
+  assert.equal(signedMoneyLabel(-5_000, "TWD", "zh-TW"), "-NT$50");
+  assert.equal(signedMoneyLabel(-30_000, "TWD", "zh-TW"), "-NT$300");
+  assert.equal(signedMoneyLabel(0, "TWD", "zh-TW"), "NT$0");
+  assert.equal(statementSignedMoney(-5_000, "TWD", "zh-TW"), "\u2212NT$50");
+  for (const file of ["app/m/rent/utilities/page.tsx", "app/t/pay/page.tsx", "app/m/statements/page.tsx", "app/o/statements/page.tsx"]) {
+    const source = read(file);
+    assert.match(source, /signedMoneyLabel/, file);
+    assert.doesNotMatch(source, /statementSignedMoney/, file);
+  }
+  for (const file of ["components/statement-document.tsx", "server/pdf-docs.ts"]) {
+    const source = read(file);
+    assert.match(source, /statementSignedMoney/, file);
+    assert.doesNotMatch(source, /signedMoneyLabel/, file);
+  }
+});
 
 test("TWD amounts stay NT$ when the currency code is padded, and 已收 is not payment copy", () => {
   assert.equal(moneyLabel(0, "TWD ", "zh-TW"), "NT$0");

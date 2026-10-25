@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { makeT } from "@/i18n";
+import { statementPeriodNet } from "@/server/format";
 import {
   buildLeasePdf,
   buildStatementPdf,
@@ -171,6 +172,7 @@ test("a shortfall statement says 本期淨額為負 and keeps the signed closing
   assert.equal(text.includes("收款紀錄"), false);
   assert.equal(text.includes("電子發票"), false);
   assert.equal(text.includes("屋主應補繳"), false);
+  assert.equal(text.includes("應付屋主"), false);
   assert.equal(text.includes("房東"), false);
   assert.equal(text.includes("-NT"), false);
   assert.equal(doc.footerHash, "2026-11-01/2026-11-30");
@@ -182,4 +184,39 @@ test("a shortfall statement says 本期淨額為負 and keeps the signed closing
   assert.match(staffText, /NT\$10,000/);
   assert.equal(staffText.replaceAll("NT$", "").includes("$"), false);
   assert.equal(staffText.includes("屋主應補繳"), false);
+});
+
+test("payouts stay in the same net on the chip and the formula", () => {
+  const source: StatementPdfSource = {
+    id: "10000000-0000-4000-8000-000000000089",
+    orgId: "10000000-0000-4000-8000-000000000001",
+    ownerName: "陳建宏",
+    periodStart: "2026-10-01",
+    periodEnd: "2026-10-31",
+    currency: "TWD",
+    opening: 0,
+    rent: 200_000,
+    other: 0,
+    fee: 0,
+    expenses: 0,
+    payouts: 500_000,
+    closing: -300_000,
+    lines: [],
+    addresses: [],
+    audience: "owner",
+  };
+  const netMinor = statementPeriodNet(source);
+  assert.equal(source.opening + netMinor, source.closing);
+  const doc = buildStatementPdf(source, "zh-TW", "gregorian", makeT("zh-TW"));
+  const rows = doc.blocks.flatMap((block) => (block.kind === "rows" ? block.rows : []));
+  const chip = rows.find((row) => row.label === "本期淨額為負");
+  assert.equal(chip?.value, "−NT$3,000");
+  assert.equal(rows.some((row) => row.label === "應付屋主"), false);
+  const formula = doc.blocks
+    .flatMap((block) => (block.kind === "text" ? block.lines : []))
+    .find((line) => line.includes("本期淨額"));
+  assert.equal(formula, "期初餘額 NT$0 ＋ 本期淨額 −NT$3,000 ＝ 期末餘額 −NT$3,000");
+  assert.equal(formula?.includes(chip?.value ?? ""), true);
+  const warning = doc.blocks.flatMap((block) => (block.kind === "text" ? block.lines : [])).join("\n");
+  assert.match(warning, /屋主淨額為 −NT\$3,000/);
 });

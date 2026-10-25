@@ -52,13 +52,18 @@ export type StatementFigures = {
   closing: number;
 };
 
-/** Signed TWD amounts keep the NT$ prefix. A negative uses U+2212, and zero stays NT$0. */
+/** Signed TWD amounts keep the NT$ prefix. A negative uses an ASCII hyphen, and zero stays NT$0. */
 export function signedMoneyLabel(minor: number | string, currency: string, locale: Locale) {
   const value = Number(minor);
   const label = moneyLabel(value, currency, locale);
-  if (!(value < 0)) return label;
-  if (label.startsWith("\u2212") || label.startsWith("-")) return label;
-  return `\u2212${label}`;
+  return value < 0 ? `-${label}` : label;
+}
+
+/** Statement page and statement PDF only. A negative uses U+2212, and zero stays NT$0. */
+export function statementSignedMoney(minor: number | string, currency: string, locale: Locale) {
+  const value = Number(minor);
+  const label = moneyLabel(value, currency, locale);
+  return value < 0 ? `\u2212${label}` : label;
 }
 
 /** Period movement stored on owner_statements: rent + other − fee − expenses − payouts. */

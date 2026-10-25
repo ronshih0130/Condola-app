@@ -1,7 +1,7 @@
 import React, { type ReactNode } from "react";
 import type { Locale, T } from "@/i18n";
 import { BrandImage } from "@/components/brand";
-import { moneyLabel, ownerSettlement, signedMoneyLabel, statementPeriodNet } from "@/server/format";
+import { moneyLabel, ownerSettlement, statementPeriodNet, statementSignedMoney } from "@/server/format";
 
 export function StatementDocument({
   t,
@@ -35,9 +35,9 @@ export function StatementDocument({
     closing: Number(row.closing),
   });
   const money = (minor: number) => moneyLabel(minor, row.currency, locale);
-  const signed = (minor: number) => signedMoneyLabel(minor, row.currency, locale);
+  const signed = (minor: number) => statementSignedMoney(minor, row.currency, locale);
   const periodNet = statementPeriodNet(figures);
-  const bare = money(Math.abs(figures.net)).replace(/^NT\$/, "");
+  const negative = periodNet < 0;
   const summary = [
     ["i_stmt_opening", signed(figures.opening), "statement-opening"],
     ["i_rent_received", money(figures.rent), "statement-rent"],
@@ -58,16 +58,10 @@ export function StatementDocument({
               </td>
             </tr>
           ))}
-          <tr>
-            <td>{t("i_net_owner")}</td>
+          <tr data-testid={negative ? "owner-owes" : undefined}>
+            <td>{negative ? t("owner_owes") : t("i_net_owner")}</td>
             <td className="num" data-testid="statement-net">
-              {figures.owes > 0 ? (
-                <span className="chip warn" data-testid="owner-owes">
-                  {t("owner_owes")} {signed(-figures.owes)}
-                </span>
-              ) : (
-                money(figures.payable)
-              )}
+              {negative ? <span className="chip warn">{signed(periodNet)}</span> : money(periodNet)}
             </td>
           </tr>
           <tr>
@@ -85,10 +79,10 @@ export function StatementDocument({
           closing: signed(figures.closing),
         })}
       </p>
-      {figures.owes > 0 ? (
+      {negative ? (
         <div className="bd">
           <div className="alert warn small" data-testid="owner-owes-reason">
-            ⚠ {t("i_stmt_negative", { amount: bare })}
+            ⚠ {t("i_stmt_negative", { amount: signed(periodNet) })}
           </div>
         </div>
       ) : null}
@@ -98,7 +92,7 @@ export function StatementDocument({
             {lines.map((line, index) => (
               <tr key={`${line.line_type}-${index}`}>
                 <td data-testid="statement-line">{line.description || t("i_expenses")}</td>
-                <td className="num" data-testid="statement-line-amount">{signedMoneyLabel(Number(line.amount), row.currency, locale)}</td>
+                <td className="num" data-testid="statement-line-amount">{signed(Number(line.amount))}</td>
               </tr>
             ))}
           </tbody>

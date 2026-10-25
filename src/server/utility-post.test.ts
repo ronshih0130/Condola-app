@@ -232,7 +232,6 @@ test("electricity registration copy uses 登記 and does not say 入帳", () => 
   assert.equal(zh.i_utility_pending, "待重新登記");
   assert.equal(zh.i_utility_posted_locked, "這期電費已登記，新租約不會改動金額");
   assert.equal(zh.i_pay_hint, "預設帶入未結租金與已登記電費，不含押金。押金仍列在帳單上，由屋主保管。");
-  assert.equal(zh.owner_owes_reason, "本月代墊費用與代管費（{cost}）高於已繳租金（{rent}），差額請屋主補繳，或依委託約定從下期租金扣抵。");
   const keys = Object.keys(zh).filter((key) => key.startsWith("i_utility_") || key === "i_even_sample" || key === "i_meter_sample");
   for (const key of keys) assert.equal(zh[key].includes("入帳"), false, key);
 });
