@@ -240,3 +240,40 @@ test("each gate calls the server helper before the protected action", () => {
   const signupStart = signup.slice(signup.indexOf("export async function startSignup"), signup.indexOf("export async function resendSignup"));
   assert.match(signupStart, /writeConsent\([^)]*"signup"/);
 });
+
+test("a client-supplied user id cannot choose who receives the consent write", () => {
+  const actions = readFileSync(new URL("./consent-actions.ts", import.meta.url), "utf8");
+  const firmAction = readFileSync(new URL("./signup-actions.ts", import.meta.url), "utf8");
+  const acceptAction = readFileSync(new URL("./auth-actions.ts", import.meta.url), "utf8");
+  const auth = readFileSync(new URL("./auth.ts", import.meta.url), "utf8");
+  const signup = readFileSync(new URL("./signup.ts", import.meta.url), "utf8");
+  const firmPage = readFileSync(new URL("../app/signup/firm/page.tsx", import.meta.url), "utf8");
+  const consentPage = readFileSync(new URL("../app/consent/page.tsx", import.meta.url), "utf8");
+  const portalPage = readFileSync(new URL("../app/consent/portal/page.tsx", import.meta.url), "utf8");
+  for (const source of [actions, firmAction, acceptAction, auth, signup, firmPage, consentPage, portalPage]) {
+    assert.equal(source.includes('formData.get("userId")'), false);
+    assert.equal(source.includes('formData.get("user_id")'), false);
+    assert.equal(source.includes("searchParams.get(\"userId\")"), false);
+    assert.equal(source.includes("searchParams.get(\"user_id\")"), false);
+    assert.equal(source.includes("params.userId"), false);
+    assert.equal(source.includes("params.user_id"), false);
+  }
+  assert.match(actions, /passConsentGate\(identity\.user_id, "reconsent"/);
+  assert.match(actions, /passConsentGate\(session\.userId, "portal"/);
+  assert.match(actions, /readSignupIdentity\(\)/);
+  assert.match(actions, /readSession\(\)/);
+  const create = firmAction.slice(firmAction.indexOf("export async function actionCreateFirm"), firmAction.indexOf("export async function actionRequestUpgrade"));
+  assert.match(create, /userId: identity\.user_id/);
+  assert.match(create, /readSignupIdentity\(\)/);
+  const accept = acceptAction.slice(acceptAction.indexOf("export async function actionAccept"), acceptAction.indexOf("export async function actionIssuePortalInvite"));
+  assert.equal(accept.includes("userId"), false);
+  assert.match(accept, /formData\.get\("consent"\) === "on"/);
+  const once = auth.slice(auth.indexOf("async function acceptInviteOnce"), auth.indexOf("export async function listSessions"));
+  const lookedUp = once.indexOf("upsertInvitedUser(client, row.email");
+  const written = once.indexOf('writeConsent(userId, "invite")');
+  assert.ok(lookedUp > 0 && written > lookedUp);
+  const started = signup.slice(signup.indexOf("export async function startSignup"), signup.indexOf("export async function resendSignup"));
+  assert.equal(started.includes("formData"), false);
+  assert.match(started, /writeConsent\(existing\.id, "signup"/);
+  assert.match(started, /writeConsent\(userId, "signup"/);
+});

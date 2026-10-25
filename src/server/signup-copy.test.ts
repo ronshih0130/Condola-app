@@ -21,6 +21,12 @@ test("sign-up and pricing copy stay on the handoff wording", () => {
     `${zh.i_signup_consent_lead}${zh.i_signup_consent_terms}${zh.i_signup_consent_and}${zh.i_signup_consent_privacy}`,
     "我已閱讀並同意《服務條款》與《隱私權政策》",
   );
+  assert.equal(
+    `${zh.i_portal_consent_lead}${zh.i_portal_consent_terms}${zh.i_portal_consent_and}${zh.i_portal_consent_privacy}`,
+    "我已閱讀並同意《服務條款》與《隱私權政策》",
+  );
+  assert.equal(zh.i_portal_consent_error, "請先同意《服務條款》與《隱私權政策》，才能繼續。");
+  assert.equal(zh.i_portal_consent_terms, zh.i_signup_consent_terms);
   assert.equal(en.i_signup_firm_details, "Create your company");
   assert.equal(en.i_signup_name_firm, "Company name");
   assert.equal(en.i_signup_name_hint, "Individual owners can enter their own name");
