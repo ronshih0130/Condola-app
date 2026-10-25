@@ -196,7 +196,7 @@ test("owner statements say 已繳租金 and not 已收租金", () => {
     if (proto[key]?.includes(oldPhrase)) hits.push(`design ${key}`);
   }
   assert.deepEqual(hits, []);
-  assert.match(read(join(root, "src/components/statement-document.tsx")), /owner_owes_reason/);
+  assert.match(read(join(root, "src/components/statement-document.tsx")), /i_stmt_negative/);
   assert.match(read(join(root, "src/app/m/statements/page.tsx")), /owner_owes/);
   assert.match(read(join(root, "src/app/o/statements/[id]/page.tsx")), /StatementDocument/);
 });

@@ -1,3 +1,5 @@
+import React from "react";
+
 const LOCKUP = {
   horizontal: "/brand/condola_lockup_horizontal.svg",
   horizontalDark: "/brand/condola_lockup_horizontal_dark.svg",

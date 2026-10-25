@@ -5,7 +5,7 @@ import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionAddExpense } from "@/server/auth-actions";
 import { actionStatement } from "@/server/actions";
-import { moneyLabel, ownerSettlement } from "@/server/format";
+import { moneyLabel, ownerSettlement, signedMoneyLabel } from "@/server/format";
 import { taipeiToday } from "@/server/money";
 import { can, rolesFor } from "@/server/perms";
 import { listOwners, listProperties, listStatements, statementRoster } from "@/server/queries";
@@ -120,6 +120,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                     })
                   : null;
                 const label = (minor: number) => moneyLabel(minor, row.currency, session.locale);
+                const signed = (minor: number) => signedMoneyLabel(minor, row.currency, session.locale);
                 const period = row.period_start.slice(0, 7);
                 return (
                   <tr key={`${row.owner_id}-${period}`}>
@@ -133,7 +134,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                     <Cell label={t("i_net_owner")}>
                       {figures && figures.owes > 0 ? (
                         <span className="chip warn" data-testid="owner-owes">
-                          {t("owner_owes")} {label(figures.owes)}
+                          {t("owner_owes")} {signed(-figures.owes)}
                         </span>
                       ) : figures ? (
                         label(figures.payable)

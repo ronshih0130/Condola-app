@@ -1,6 +1,6 @@
 import { dictionary, type Locale, type T } from "@/i18n";
 import type { PdfBlock, PdfDocument, PdfRow } from "@/lib/pdf-document";
-import { formatDate, moneyLabel, ownerSettlement } from "@/server/format";
+import { formatDate, moneyLabel, ownerSettlement, signedMoneyLabel, statementPeriodNet } from "@/server/format";
 import { renderOfficialLease } from "@/server/official-lease";
 import { can } from "@/server/perms";
 import type { CalendarMode, Session } from "@/server/types";
@@ -114,30 +114,44 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     closing: source.closing,
   });
   const money = (minor: number) => moneyLabel(minor, source.currency, locale);
+  const signed = (minor: number) => signedMoneyLabel(minor, source.currency, locale);
+  const periodNet = statementPeriodNet(figures);
   const rows: PdfRow[] = [
-    { label: t("i_opening"), value: money(figures.opening) },
+    { label: t("i_stmt_opening"), value: signed(figures.opening) },
     { label: t("i_rent_received"), value: money(figures.rent) },
     { label: t("i_other_income"), value: money(figures.other) },
     { label: t("i_fee"), value: money(figures.fee) },
     { label: t("i_expenses"), value: money(figures.expenses) },
   ];
   if (figures.owes > 0) {
-    rows.push({ label: t("i_net_owner"), value: `${t("owner_owes")} ${money(figures.owes)}` });
+    rows.push({ label: t("i_net_owner"), value: `${t("owner_owes")} ${signed(-figures.owes)}` });
   } else {
     rows.push({ label: t("i_net_owner"), value: money(figures.payable) });
-    rows.push({ label: t("i_closing"), value: money(Math.max(0, figures.closing)) });
   }
+  rows.push({ label: t("i_stmt_closing"), value: signed(figures.closing) });
   const blocks: PdfBlock[] = [];
   const addresses = source.addresses.map((address) => address.trim()).filter(Boolean);
   if (addresses.length) {
     blocks.push({ kind: "text", heading: "", lines: addresses.map((address) => `${t("i_address")}：${address}`) });
   }
   blocks.push({ kind: "rows", heading: "", rows });
+  blocks.push({
+    kind: "text",
+    heading: "",
+    lines: [
+      t("i_stmt_formula", {
+        opening: signed(figures.opening),
+        net: signed(periodNet),
+        closing: signed(figures.closing),
+      }),
+    ],
+  });
   if (figures.owes > 0) {
+    const bare = money(figures.owes).replace(/^NT\$/, "");
     blocks.push({
       kind: "text",
       heading: "",
-      lines: [t("owner_owes_reason", { cost: money(figures.costs), rent: money(figures.rent + figures.other) })],
+      lines: [t("i_stmt_negative", { amount: bare })],
     });
   }
   if (source.lines.length) {

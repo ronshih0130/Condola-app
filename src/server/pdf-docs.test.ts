@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { makeT } from "@/i18n";
-import { moneyLabel } from "@/server/format";
 import {
   buildLeasePdf,
   buildStatementPdf,
@@ -138,7 +137,7 @@ test("an English lease PDF localizes the paper note and keeps the official claus
   assert.equal(text.split(sublessor).join("").includes("房東"), false);
 });
 
-test("a shortfall statement says 屋主應補繳 and a zero fee is NT$0", () => {
+test("a shortfall statement says 本期淨額為負 and keeps the signed closing", () => {
   const source: StatementPdfSource = {
     id: "10000000-0000-4000-8000-000000000088",
     orgId: "10000000-0000-4000-8000-000000000001",
@@ -160,19 +159,20 @@ test("a shortfall statement says 屋主應補繳 and a zero fee is NT$0", () => 
   const doc = buildStatementPdf(source, "zh-TW", "gregorian", makeT("zh-TW"));
   const text = JSON.stringify(doc);
   assert.match(text, /屋主月結報表/);
-  assert.match(text, /屋主應補繳/);
-  assert.match(text, new RegExp(moneyLabel(280000, "TWD", "zh-TW").replace("$", "\\$")));
+  assert.match(text, /本期淨額為負/);
+  assert.match(text, /−NT\$2,800/);
+  assert.match(text, /期末餘額/);
+  assert.match(text, /期初餘額 NT\$0 ＋ 本期淨額 −NT\$2,800 ＝ 期末餘額 −NT\$2,800/);
   assert.match(text, /NT\$0/);
   assert.equal(text.replaceAll("NT$", "").includes("$"), false);
   assert.match(text, /冷氣維修/);
   assert.match(text, /地址：台北市信義區松仁路88號/);
   assert.match(text, /數字來自管理方確認的繳款紀錄。/);
   assert.equal(text.includes("收款紀錄"), false);
-  assert.equal(text.includes("期末"), false);
   assert.equal(text.includes("電子發票"), false);
+  assert.equal(text.includes("屋主應補繳"), false);
   assert.equal(text.includes("房東"), false);
   assert.equal(text.includes("-NT"), false);
-  assert.equal(text.includes("−"), false);
   assert.equal(doc.footerHash, "2026-11-01/2026-11-30");
 
   const staff = buildStatementPdf({ ...source, audience: "staff", expenses: 0, rent: 1_000_000, closing: 920000, lines: [] }, "zh-TW", "gregorian", makeT("zh-TW"));

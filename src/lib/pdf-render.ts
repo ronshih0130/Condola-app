@@ -83,6 +83,11 @@ export async function renderPdf(doc: PdfDocument, fontBytes: Uint8Array): Promis
         out += ch;
         continue;
       }
+      // Screen copy uses U+2212. Helvetica draws ASCII hyphen, so the PDF text is -NT$.
+      if (ch === "\u2212") {
+        out += "-";
+        continue;
+      }
       if (hasCjk(ch) || canLatin(ch)) {
         out += ch;
         continue;

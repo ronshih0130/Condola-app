@@ -52,11 +52,18 @@ export type StatementFigures = {
   closing: number;
 };
 
-/** Signed TWD amounts keep the NT$ prefix, including a leading minus for a credit. */
+/** Signed TWD amounts keep the NT$ prefix. A negative uses U+2212, and zero stays NT$0. */
 export function signedMoneyLabel(minor: number | string, currency: string, locale: Locale) {
   const value = Number(minor);
   const label = moneyLabel(value, currency, locale);
-  return value < 0 ? `-${label}` : label;
+  if (!(value < 0)) return label;
+  if (label.startsWith("\u2212") || label.startsWith("-")) return label;
+  return `\u2212${label}`;
+}
+
+/** Period movement stored on owner_statements: rent + other − fee − expenses − payouts. */
+export function statementPeriodNet(row: Pick<StatementFigures, "rent" | "other" | "fee" | "expenses" | "payouts">) {
+  return row.rent + row.other - row.fee - row.expenses - row.payouts;
 }
 
 /** Month settlement. A negative net is what the owner owes — never a negative payout. */

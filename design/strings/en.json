@@ -593,7 +593,7 @@
  "ow_title": "Owners",
  "ow_view": "View as owner",
  "own_tenant_masked": "Tenant (hidden)",
- "owner_owes": "Owner owes",
+ "owner_owes": "Negative net this period",
  "owner_owes_reason": "This month’s expenses and fee ({cost}) exceed the rent collected ({rent}). The owner pays the difference, or it is deducted from the next payout as agreed.",
  "paren": "({v})",
  "ph_addroom": "Use “+ Add room” on the left to add rooms.",

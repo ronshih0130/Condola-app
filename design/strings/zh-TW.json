@@ -593,7 +593,7 @@
  "ow_title": "屋主",
  "ow_view": "以屋主身分檢視",
  "own_tenant_masked": "租客（已隱藏）",
- "owner_owes": "屋主應補繳",
+ "owner_owes": "本期淨額為負",
  "owner_owes_reason": "本月代墊費用與代管費（{cost}）高於已繳租金（{rent}），差額請屋主補繳，或依委託約定從下期租金扣抵。",
  "paren": "（{v}）",
  "ph_addroom": "按左側「＋ 新增房間」開始建立房間。",
