@@ -110,7 +110,7 @@ export function supabaseAdminAuth(): { url: string; service: string } | null {
   return { url, service };
 }
 
-/** Service-role update when it is configured. Otherwise the SQL merge. */
+/** Service-role update when it is configured. A failed admin call uses the SQL merge. */
 export async function deliverConsent(userId: string, record: StoredConsent, deps: ConsentDeps): Promise<"admin" | "sql"> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   if (deps.admin) {
@@ -125,8 +125,9 @@ export async function deliverConsent(userId: string, record: StoredConsent, deps
         body: JSON.stringify(consentAdminBody(record)),
       });
       if (response.ok) return "admin";
+      console.error("consent admin update failed; using SQL merge");
     } catch {
-      // A missing admin API still has to store the record.
+      console.error("consent admin update failed; using SQL merge");
     }
   }
   await deps.sql(userId, record);

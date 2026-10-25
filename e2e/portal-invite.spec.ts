@@ -101,7 +101,7 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
   await guestPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-password.png", fullPage: true });
   await guestPage.getByTestId("new-password").fill("Fresh1234");
   await guestPage.getByTestId("portal-submit").click();
-  await waitPastConsent(guestPage, /\/t\/?$/);
+  await waitPastConsent(guestPage, "liff-frame");
   await expect(guestPage.getByTestId("liff-frame")).toBeVisible();
   await guestPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-tenant-home.png", fullPage: true });
   await guestPage.goto(liveUrl || "/");
@@ -157,7 +157,7 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
   await ownerPage.getByTestId("portal-email").fill(freshEmail);
   await ownerPage.getByTestId("new-password").fill("Owner1234");
   await ownerPage.getByTestId("portal-submit").click();
-  await waitPastConsent(ownerPage, /\/o\/statements/);
+  await waitPastConsent(ownerPage, "owner-sign-out");
   await ownerGuest.close();
 
   await signIn(page, ACCOUNTS.owner);
@@ -334,7 +334,7 @@ test("copying owner B after owner A opens B's email and binds only B", async ({ 
   await expect(pageB.locator("body")).not.toContainText("morgan.lee@owner.demo");
   await pageB.getByTestId("new-password").fill("Owner1234");
   await pageB.getByTestId("portal-submit").click();
-  await waitPastConsent(pageB, /\/o\/statements/);
+  await waitPastConsent(pageB, "owner-property");
   await expect(pageB.getByTestId("owner-property")).toHaveText("物件乙");
   await expect(pageB.getByTestId("owner-properties")).not.toContainText("物件甲");
   await expect(pageB.getByTestId("owner-properties")).not.toContainText("Oakland");
@@ -387,7 +387,7 @@ test("a tenant account accepts an owner invite and can open both portals", async
   expect((await contactUser(ownerId)).user_id).toBeNull();
   await guestPage.getByTestId("new-password").fill("Demo1234");
   await guestPage.getByTestId("portal-submit").click();
-  await waitPastConsent(guestPage, /\/o\/statements/);
+  await waitPastConsent(guestPage, "owner-sign-out");
   await expect(guestPage.getByTestId("switch-role")).toHaveText("切換身分：租客");
   await guestPage.getByTestId("switch-role").click();
   await guestPage.waitForURL(/\/t\/?$/);

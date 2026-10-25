@@ -1546,7 +1546,7 @@
  "i_signup_phone": "電話",
  "i_signup_admin_note": "註冊者會成為這個帳號的管理員",
  "i_signup_create": "建立公司",
- "i_signup_dup_firm": "已有同名的公司。您仍可完成註冊，我們會再確認。若您已是其中一員，請向管理員索取邀請。",
+ "i_signup_dup_firm": "已有同名的公司。你仍可完成註冊，我們會再確認。若你已是其中一員，請向管理員索取邀請。",
  "i_signup_code_list": "代碼在送出時已無法使用，已先以公告價格建立。之後可以再聯絡我們。",
  "i_nav_pricing": "方案與價格",
  "i_price_title": "方案與價格",

@@ -20,12 +20,23 @@ export async function finishConsentGate(page: Page) {
   await page.waitForURL((url) => !url.pathname.startsWith("/consent"));
 }
 
-/** Portal invites land on the consent screen before the portal home. */
-export async function waitPastConsent(page: Page, pattern: RegExp) {
-  await page.waitForURL((url) => pattern.test(url.pathname) || url.pathname.startsWith("/consent"));
-  if (new URL(page.url()).pathname.startsWith("/consent")) {
-    await finishConsentGate(page);
-    await page.waitForURL((url) => pattern.test(url.pathname));
+/**
+ * Portal invites pass through /t or /o before the layout redirects to the
+ * consent gate. Wait until the checkbox or the destination landmark is
+ * actually on screen, then tick the gate if it is the one that showed up.
+ */
+export async function waitPastConsent(page: Page, readyTestId: string) {
+  const gate = page.getByTestId("consent-check");
+  const ready = page.getByTestId(readyTestId);
+  const gateShown = gate.waitFor({ state: "visible" }).then(() => "gate" as const);
+  const readyShown = ready.waitFor({ state: "visible" }).then(() => "ready" as const);
+  gateShown.catch(() => undefined);
+  readyShown.catch(() => undefined);
+  const which = await Promise.race([gateShown, readyShown]);
+  if (which === "gate") {
+    await gate.check();
+    await page.getByTestId("consent-submit").click();
+    await ready.waitFor({ state: "visible" });
   }
 }
 

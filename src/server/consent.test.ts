@@ -100,27 +100,42 @@ test("the service-role write sends app_metadata and keeps user_metadata compatib
   assert.match(CONSENT_WRITE_SQL, /raw_user_meta_data/);
 
   let sqlRecord: StoredConsent | null = null;
-  const failed = await deliverConsent("user-1", record, {
-    admin: { url: "https://example.supabase.co", service: "service-key" },
-    fetchImpl: async () => new Response("no", { status: 500 }),
-    sql: async (_id, row) => {
-      sqlRecord = row;
-    },
-  });
-  assert.equal(failed, "sql");
-  assert.deepEqual(sqlRecord, record);
+  const logged: string[] = [];
+  const write = console.error;
+  console.error = (...args: unknown[]) => {
+    logged.push(args.map((arg) => String(arg)).join(" "));
+  };
+  try {
+    const failed = await deliverConsent("user-1", record, {
+      admin: { url: "https://example.supabase.co", service: "service-key" },
+      fetchImpl: async () => new Response("no", { status: 500 }),
+      sql: async (_id, row) => {
+        sqlRecord = row;
+      },
+    });
+    assert.equal(failed, "sql");
+    assert.deepEqual(sqlRecord, record);
 
-  let threw = false;
-  const offline = await deliverConsent("user-1", record, {
-    admin: { url: "https://example.supabase.co", service: "service-key" },
-    fetchImpl: async () => {
-      threw = true;
-      throw new Error("offline");
-    },
-    sql: async () => undefined,
-  });
-  assert.equal(threw, true);
-  assert.equal(offline, "sql");
+    let threw = false;
+    const offline = await deliverConsent("user-1", record, {
+      admin: { url: "https://example.supabase.co", service: "service-key" },
+      fetchImpl: async () => {
+        threw = true;
+        throw new Error("offline");
+      },
+      sql: async () => undefined,
+    });
+    assert.equal(threw, true);
+    assert.equal(offline, "sql");
+  } finally {
+    console.error = write;
+  }
+  assert.equal(logged.length, 2);
+  for (const line of logged) {
+    assert.match(line, /consent admin update failed; using SQL merge/);
+    assert.equal(line.includes("service-key"), false);
+    assert.equal(line.includes("user-1"), false);
+  }
 
   const local = await deliverConsent("user-1", record, {
     admin: null,
