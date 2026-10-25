@@ -123,6 +123,9 @@ export function buildStatementPdf(source: StatementPdfSource, locale: Locale, ca
     { label: t("i_fee"), value: money(figures.fee) },
     { label: t("i_expenses"), value: money(figures.expenses) },
   ];
+  if (figures.payouts !== 0) {
+    rows.push({ label: t("i_payouts"), value: signed(figures.payouts) });
+  }
   if (periodNet < 0) {
     rows.push({ label: t("owner_owes"), value: signed(periodNet) });
   } else {

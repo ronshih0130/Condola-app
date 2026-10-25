@@ -1062,7 +1062,7 @@
  "i_stmt_closing": "期末餘額",
  "i_stmt_period_net": "本期淨額",
  "i_stmt_formula": "期初餘額 {opening} ＋ 本期淨額 {net} ＝ 期末餘額 {closing}",
- "i_stmt_negative": "本月費用高於已登記租金，屋主淨額為 {amount}。費用怎麼處理，請和屋主確認。",
+ "i_stmt_negative": "本期支出與撥付高於已登記租金，屋主淨額為 {amount}。請和屋主確認怎麼處理。",
  "i_actor": "數字來自管理方確認的繳款紀錄。",
  "i_einvoice": "電子發票欄位保留，但沒有開立。",
  "i_w1": "管理方新增物件，選擇屋主並設定管理費規則（固定／百分比／混合）。",

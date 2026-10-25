@@ -58,6 +58,14 @@ export function StatementDocument({
               </td>
             </tr>
           ))}
+          {figures.payouts !== 0 ? (
+            <tr>
+              <td>{t("i_payouts")}</td>
+              <td className="num" data-testid="statement-payouts">
+                {signed(figures.payouts)}
+              </td>
+            </tr>
+          ) : null}
           <tr data-testid={negative ? "owner-owes" : undefined}>
             <td>{negative ? t("owner_owes") : t("i_net_owner")}</td>
             <td className="num" data-testid="statement-net">

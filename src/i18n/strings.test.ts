@@ -177,7 +177,11 @@ test("owner statements say 已繳租金 and not 已收租金", () => {
   assert.equal(zh.owner_owes, "本期淨額為負");
   assert.equal(proto.owner_owes, "本期淨額為負");
   assert.equal(zh.i_stmt_negative.includes("−NT$"), false);
-  assert.equal(zh.i_stmt_negative.includes("{amount}"), true);
+  assert.equal(zh.i_stmt_negative.includes("費用"), false);
+  assert.match(zh.i_stmt_negative, /本期支出與撥付高於已登記租金，屋主淨額為 \{amount\}/);
+  const en = catalog("app", "en");
+  assert.match(en.i_stmt_negative, /Expenses and payouts this period are higher than recorded rent, so the owner net is \{amount\}/);
+  assert.equal(en.i_payouts, "Payouts");
   assert.equal(zh.i_rent_received, "已繳租金");
 
   const oldPhrase = "已收" + "租金";

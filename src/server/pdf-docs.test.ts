@@ -173,6 +173,8 @@ test("a shortfall statement says 本期淨額為負 and keeps the signed closing
   assert.equal(text.includes("電子發票"), false);
   assert.equal(text.includes("屋主應補繳"), false);
   assert.equal(text.includes("應付屋主"), false);
+  const shortfallRows = doc.blocks.flatMap((block) => (block.kind === "rows" ? block.rows : []));
+  assert.equal(shortfallRows.some((row) => row.label === "撥付"), false);
   assert.equal(text.includes("房東"), false);
   assert.equal(text.includes("-NT"), false);
   assert.equal(doc.footerHash, "2026-11-01/2026-11-30");
@@ -209,6 +211,8 @@ test("payouts stay in the same net on the chip and the formula", () => {
   assert.equal(source.opening + netMinor, source.closing);
   const doc = buildStatementPdf(source, "zh-TW", "gregorian", makeT("zh-TW"));
   const rows = doc.blocks.flatMap((block) => (block.kind === "rows" ? block.rows : []));
+  const payoutRow = rows.find((row) => row.label === "撥付");
+  assert.equal(payoutRow?.value, "NT$5,000");
   const chip = rows.find((row) => row.label === "本期淨額為負");
   assert.equal(chip?.value, "−NT$3,000");
   assert.equal(rows.some((row) => row.label === "應付屋主"), false);
@@ -218,5 +222,9 @@ test("payouts stay in the same net on the chip and the formula", () => {
   assert.equal(formula, "期初餘額 NT$0 ＋ 本期淨額 −NT$3,000 ＝ 期末餘額 −NT$3,000");
   assert.equal(formula?.includes(chip?.value ?? ""), true);
   const warning = doc.blocks.flatMap((block) => (block.kind === "text" ? block.lines : [])).join("\n");
+  assert.match(warning, /本期支出與撥付高於已登記租金/);
   assert.match(warning, /屋主淨額為 −NT\$3,000/);
+  const english = buildStatementPdf(source, "en", "gregorian", makeT("en"));
+  const englishRows = english.blocks.flatMap((block) => (block.kind === "rows" ? block.rows : []));
+  assert.equal(englishRows.find((row) => row.label === "Payouts")?.value, "NT$5,000");
 });

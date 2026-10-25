@@ -120,7 +120,11 @@ test("opening plus period net equals closing for positive, zero, negative, and p
   assert.equal(negative.includes("屋主應補繳"), false);
   assert.equal(negative.includes("應付屋主"), false);
   assert.equal(negative.includes("差額請屋主補繳"), false);
+  assert.equal(negative.includes("statement-payouts"), false);
+  assert.match(negative, /本期支出與撥付高於已登記租金/);
   assert.match(payouts, /data-testid="owner-owes"/);
+  assert.match(payouts, />撥付</);
+  assert.match(payouts, /data-testid="statement-payouts">NT\$5,000/);
   assert.match(payouts, /本期淨額為負/);
   assert.match(payouts, /data-testid="statement-net"[^>]*>\s*(?:<span[^>]*>)?\u2212NT\$3,000/);
   assert.match(payouts, /本期淨額 \u2212NT\$3,000/);
@@ -155,6 +159,7 @@ test("rendered statement PDFs show -NT$ and opening plus net equals closing", ()
   assert.match(positiveText, /NT\$17,000/);
   assert.match(zeroText, /NT\$5,000/);
   assert.match(payoutsText, /-NT\$3,000/);
+  assert.match(payoutsText, /撥付\s+NT\$5,000/);
   assert.match(payoutsText, /本期淨額為負/);
   assert.match(payoutsText, /期末餘額/);
   assert.equal(payoutsText.includes("應付屋主"), false);

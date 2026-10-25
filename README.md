@@ -73,7 +73,7 @@ Schema notes for this demo:
 - Shared meters use `meters.serial_number` (電號). An empty number shows an add-meter prompt. The field itself starts blank.
 - Lease template language defaults to `organizations.default_locale` (zh-TW for the Taiwan firm), not the bilingual template.
 - Manager list tables use `table.t.rf` and `data-label`. They become cards when the `.main` content column is 800px or narrower (`@container`), including a narrowed desktop window. Ledger, statement documents, and split previews stay tables.
-- An owner statement whose period net is negative shows 本期淨額為負 / Negative net this period beside the signed amount. The net chip and the formula use that same net, including payouts, and opening plus that net equals the closing balance. A zero fee is NT$0.
+- An owner statement whose period net is negative shows 本期淨額為負 / Negative net this period beside the signed amount. The warning says expenses and payouts are higher than recorded rent. The net chip and the formula use that same net, including payouts, and opening plus that net equals the closing balance. A 撥付 / Payouts row appears when that amount is not zero. A zero fee is NT$0.
 - Buildings, rooms, and whole units are edited by Admin and Manager. 屋主 belong to one firm and can own several properties. `listing_terms` stores the sample CSV's lease columns so a file can be seeded; those screens do not create tenants.
 - Files are references (`storage_path` like `demo/{uuid}.csv`). Bytes are not uploaded to Supabase Storage.
 - LINE deliveries are inserted as `skipped` / `demo_line`. E-invoice status stays `not_applicable`.

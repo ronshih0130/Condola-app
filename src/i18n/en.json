@@ -1062,7 +1062,7 @@
  "i_stmt_closing": "Closing balance",
  "i_stmt_period_net": "Period net",
  "i_stmt_formula": "Opening balance {opening} + period net {net} = closing balance {closing}",
- "i_stmt_negative": "Fees this month are higher than recorded rent, so the owner net is {amount}. Please confirm with the owner how to handle the fees.",
+ "i_stmt_negative": "Expenses and payouts this period are higher than recorded rent, so the owner net is {amount}. Please confirm with the owner how to handle them.",
  "i_actor": "Figures come from payments the manager confirmed.",
  "i_einvoice": "E-invoice fields are reserved. Nothing is issued.",
  "i_w1": "The manager adds a property, links the owner and sets the fee rule (fixed / % / hybrid).",
