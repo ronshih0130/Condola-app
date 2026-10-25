@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { LegalConsentCheckbox } from "./consent-check";
 import { PendingSubmit } from "./pending-submit";
 import { useT } from "./locale";
 import { actionPreviewCode, actionStartSignup } from "@/server/signup-actions";
@@ -103,24 +103,20 @@ export function SignupForm({ error }: { error?: string }) {
           </p>
         ) : null}
       </div>
-      <label className="radio" data-testid="signup-consent-label">
-        <input
-          type="checkbox"
-          name="consent"
-          value="on"
-          checked={agreed}
-          required
-          data-testid="signup-consent"
-          onChange={(event) => {
-            setAgreed(event.target.checked);
-            if (event.target.checked) setConsentError(false);
-          }}
-        />
-        <span>{t("i_signup_consent_lead")}<Link href="/terms" target="_blank" rel="noopener noreferrer" data-testid="signup-terms">{t("i_signup_consent_terms")}</Link>{t("i_signup_consent_and")}<Link href="/privacy" target="_blank" rel="noopener noreferrer" data-testid="signup-privacy">{t("i_signup_consent_privacy")}</Link></span>
-      </label>
-      {consentError && error !== "consent" ? (
-        <p className="hint" data-testid="signup-consent-error">{t("i_signup_consent_error")}</p>
-      ) : null}
+      <LegalConsentCheckbox
+        variant="service"
+        checked={agreed}
+        onChange={(value) => {
+          setAgreed(value);
+          if (value) setConsentError(false);
+        }}
+        showError={consentError && error !== "consent"}
+        labelTestId="signup-consent-label"
+        inputTestId="signup-consent"
+        termsTestId="signup-terms"
+        privacyTestId="signup-privacy"
+        errorTestId="signup-consent-error"
+      />
       <PendingSubmit className="btn pri block" idle={t("i_signup_submit")} pending={t("i_signup_submitting")} testId="signup-submit" disabled={!agreed} />
       <p className="small">
         <a href="/forgot">{t("i_forgot")}</a>

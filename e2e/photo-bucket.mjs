@@ -16,6 +16,8 @@ const objects = new Map();
 const grants = new Map();
 /** Captured GoTrue signup bodies for the consent spec. Passwords stay in memory only. */
 const signups = [];
+/** Captured admin user updates. Passwords are stripped before they are stored. */
+const adminUpdates = [];
 
 function databaseUrl() {
   return process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
@@ -42,6 +44,41 @@ async function insertSignupUser(body) {
       status: 200,
       payload: { id: inserted.rows[0].id, aud: "authenticated", email, email_confirmed_at: null },
     };
+  } finally {
+    await client.end();
+  }
+}
+
+function withoutPassword(body) {
+  const copy = { ...body };
+  delete copy.password;
+  return copy;
+}
+
+async function updateAdminUser(userId, body) {
+  const app = body.app_metadata && typeof body.app_metadata === "object" ? JSON.stringify(body.app_metadata) : null;
+  const user = body.user_metadata && typeof body.user_metadata === "object" ? JSON.stringify(body.user_metadata) : null;
+  const password = typeof body.password === "string" ? body.password : null;
+  const email = typeof body.email === "string" && body.email.trim() ? body.email.trim().toLowerCase() : null;
+  const client = new pg.Client({ connectionString: databaseUrl() });
+  await client.connect();
+  try {
+    const updated = await client.query(
+      `UPDATE auth.users
+          SET raw_app_meta_data = CASE WHEN $2::jsonb IS NULL THEN raw_app_meta_data
+                                       ELSE coalesce(raw_app_meta_data, '{}'::jsonb) || $2::jsonb END,
+              raw_user_meta_data = CASE WHEN $3::jsonb IS NULL THEN raw_user_meta_data
+                                        ELSE coalesce(raw_user_meta_data, '{}'::jsonb) || $3::jsonb END,
+              encrypted_password = CASE WHEN $4::text IS NULL THEN encrypted_password ELSE crypt($4, gen_salt('bf')) END,
+              email = coalesce($5, email),
+              email_confirmed_at = CASE WHEN $5::text IS NULL THEN email_confirmed_at ELSE coalesce(email_confirmed_at, now()) END,
+              updated_at = now()
+        WHERE id = $1
+        RETURNING id::text AS id`,
+      [userId, app, user, password, email],
+    );
+    if (!updated.rows[0]) return { status: 404, payload: { message: "user not found" } };
+    return { status: 200, payload: { id: updated.rows[0].id } };
   } finally {
     await client.end();
   }
@@ -98,6 +135,29 @@ const server = createServer(async (req, res) => {
   if (url.pathname === "/e2e/signups" && req.method === "DELETE") {
     signups.length = 0;
     send(res, 200, "[]", { "content-type": "application/json" });
+    return;
+  }
+  if (url.pathname === "/e2e/admin-users" && req.method === "GET") {
+    send(res, 200, JSON.stringify(adminUpdates), { "content-type": "application/json" });
+    return;
+  }
+  if (url.pathname === "/e2e/admin-users" && req.method === "DELETE") {
+    adminUpdates.length = 0;
+    send(res, 200, "[]", { "content-type": "application/json" });
+    return;
+  }
+  const adminUser = url.pathname.match(/^\/auth\/v1\/admin\/users\/([^/]+)$/);
+  if (adminUser && req.method === "PUT") {
+    if (!authorized(req)) return send(res, 401, "unauthorized");
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    adminUpdates.push({ id: decodeURIComponent(adminUser[1]), body: withoutPassword(body) });
+    try {
+      const result = await updateAdminUser(decodeURIComponent(adminUser[1]), body);
+      send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "admin update failed";
+      send(res, 500, JSON.stringify({ message }), { "content-type": "application/json" });
+    }
     return;
   }
   if (url.pathname === "/auth/v1/signup" && req.method === "POST") {

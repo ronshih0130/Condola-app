@@ -38,7 +38,7 @@ export function expiredEnvChoiceCookies() {
 
 export function sessionEntryPath(next: string) {
   const safe = next.startsWith("/") && !next.startsWith("//") ? next : "/auth/continue";
-  return `/api/auth/enter?next=${encodeURIComponent(safe)}`;
+  return `/auth/enter?next=${encodeURIComponent(safe)}`;
 }
 
 export function expiredAuthCookies(extraNames: string[] = []) {

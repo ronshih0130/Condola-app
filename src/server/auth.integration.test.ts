@@ -96,9 +96,10 @@ test("invite rejects a duplicate and accept signs the member in once", async () 
     return error instanceof FlowError && error.key === "errors.emailTaken";
   });
   const invited = await inviteMember(admin(), { email: "new.hire@songxin.demo", name: "新人", role: "accountant" });
-  const weak = await acceptInvite(invited.token, "新人", "short", "short", meta);
+  const weak = await acceptInvite(invited.token, "新人", "short", "short", meta, "", "", true);
   assert.equal(weak.ok, false);
-  const accepted = await acceptInvite(invited.token, "新人", "Fresh1234", "Fresh1234", meta);
+  if (!weak.ok) assert.equal(weak.error, "weak");
+  const accepted = await acceptInvite(invited.token, "新人", "Fresh1234", "Fresh1234", meta, "", "", true);
   assert.equal(accepted.ok, true);
   const again = await describeInvite(invited.token);
   assert.equal(again.state, "used");

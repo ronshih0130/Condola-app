@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
+import { writeConsent } from "./consent";
+import { teamInviteBlocked } from "./consent-gate";
 import { query, withClient } from "./db";
 import { recordFunnel } from "./funnel";
 import { SERVICE_EMAIL, sendMail } from "./mail";
@@ -1090,9 +1092,10 @@ export async function acceptInvite(
   meta: RequestMeta,
   emailRaw = "",
   sessionEmail = "",
+  consent = false,
 ) {
   try {
-    return await withInviteLock(token, () => acceptInviteOnce(token, name, password, confirm, meta, emailRaw, sessionEmail));
+    return await withInviteLock(token, () => acceptInviteOnce(token, name, password, confirm, meta, emailRaw, sessionEmail, consent));
   } catch (error) {
     if (dbTimeout(error)) return { ok: false as const, error: "timeout" as const, kind: "unknown" as const };
     throw error;
@@ -1107,9 +1110,13 @@ async function acceptInviteOnce(
   meta: RequestMeta,
   emailRaw = "",
   sessionEmail = "",
+  consent = false,
 ) {
   const view = await describeInvite(token, meta);
   if (view.state !== "ready") return { ok: false as const, error: view.state, kind: view.kind };
+  if (teamInviteBlocked(view.kind, consent)) {
+    return { ok: false as const, error: "consent" as const, kind: "team_member" as const };
+  }
   if (view.kind === "owner" || view.kind === "tenant") {
     if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const, kind: view.kind };
     return acceptPortalInvite(token, password, meta, view.kind, emailRaw, sessionEmail);
@@ -1157,6 +1164,12 @@ async function acceptInviteOnce(
     );
     await deletePortalInviteSecret(client, row.id);
     await client.query("COMMIT");
+    try {
+      await writeConsent(userId, "invite");
+    } catch (error) {
+      console.error("invite consent", error instanceof Error ? error.message : "failed");
+      return { ok: false as const, error: "consent" as const, kind: "team_member" as const };
+    }
     await writeAudit(row.org_id, userId, "invite_accept", { role: row.role });
     const sessionToken = await createSession(userId, true, meta);
     return { ok: true as const, token: sessionToken, role: row.role, kind: "team_member" as const };

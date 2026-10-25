@@ -67,11 +67,13 @@ test("signup posts consent metadata and the form refuses to continue without it"
   assert.match(start.slice(insertAt, insertAt + 700), /JSON\.stringify\(metadata\)/);
 
   const form = readFileSync(new URL("../components/signup-form.tsx", import.meta.url), "utf8");
-  assert.match(form, /name="consent"/);
+  const checkbox = readFileSync(new URL("../components/consent-check.tsx", import.meta.url), "utf8");
+  assert.match(form, /LegalConsentCheckbox/);
   assert.match(form, /disabled=\{!agreed\}/);
-  assert.match(form, /href="\/terms"/);
-  assert.match(form, /href="\/privacy"/);
-  assert.match(form, /target="_blank"/);
+  assert.match(checkbox, /name="consent"/);
+  assert.match(checkbox, /href="\/terms"/);
+  assert.match(checkbox, /href="\/privacy"/);
+  assert.match(checkbox, /target="_blank"/);
   const actions = readFileSync(new URL("./signup-actions.ts", import.meta.url), "utf8");
   assert.match(actions, /formData\.get\("consent"\) === "on"/);
   assert.match(actions, /consent: formData\.get\("consent"\) === "on"/);

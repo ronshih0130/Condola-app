@@ -24,10 +24,14 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_ANON_KEY = "test-anon";
   delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const signupCalls = () => calls.filter((call) => new URL(call.url).pathname === "/auth/v1/signup");
   global.fetch = async (input, init) => {
     const url = String(input);
     const body = String(init?.body ?? "");
     calls.push({ url, body });
+    if (new URL(url).pathname.startsWith("/auth/v1/admin/users")) {
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }
     if (url.includes("/auth/v1/resend")) return new Response("{}", { status: 200 });
     const payload = JSON.parse(body) as { email: string; password: string };
     const inserted = await query<{ id: string }>(
@@ -53,11 +57,11 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     });
     assert.equal(first.ok, true);
     if (!first.ok || first.status !== "verify") throw new Error("expected verify");
-    assert.equal(calls.length, 1);
-    const called = new URL(calls[0].url);
+    assert.equal(signupCalls().length, 1);
+    const called = new URL(signupCalls()[0].url);
     assert.equal(called.pathname, "/auth/v1/signup");
     assert.equal(called.searchParams.get("redirect_to"), "https://staging.condola.app/signup/confirm");
-    const sent = JSON.parse(calls[0].body) as {
+    const sent = JSON.parse(signupCalls()[0].body) as {
       email?: string;
       data?: { terms_accepted_at?: string; terms_version?: string; privacy_version?: string };
       options?: { data?: { terms_accepted_at?: string; terms_version?: string; privacy_version?: string } };
@@ -102,7 +106,7 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     });
     assert.equal(retry.ok, true);
     if (!retry.ok || retry.status !== "verify") throw new Error("expected retry verify");
-    assert.equal(calls.length, 1, "a plain retry must not call GoTrue resend");
+    assert.equal(signupCalls().length, 1, "a plain retry must not call GoTrue resend");
     const kept = await query<{ confirmation_token: string; confirmation_sent_at: Date }>(
       `SELECT confirmation_token, confirmation_sent_at FROM auth.users WHERE id = $1`,
       [userId],
@@ -121,7 +125,7 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
       meta,
       consent: true,
     });
-    assert.equal(calls.length, 1);
+    assert.equal(signupCalls().length, 1);
     assert.equal(await started(), 1);
   } finally {
     global.fetch = saved.fetch;

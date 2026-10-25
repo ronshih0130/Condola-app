@@ -12,14 +12,33 @@ export const ACCOUNTS = {
   owner: "jianhong.chen@owner.demo",
 } as const;
 
+/** Demo users have no app_metadata consent until they tick the gate. */
+export async function finishConsentGate(page: Page) {
+  if (!new URL(page.url()).pathname.startsWith("/consent")) return;
+  await page.getByTestId("consent-check").check();
+  await page.getByTestId("consent-submit").click();
+  await page.waitForURL((url) => !url.pathname.startsWith("/consent"));
+}
+
+/** Portal invites land on the consent screen before the portal home. */
+export async function waitPastConsent(page: Page, pattern: RegExp) {
+  await page.waitForURL((url) => pattern.test(url.pathname) || url.pathname.startsWith("/consent"));
+  if (new URL(page.url()).pathname.startsWith("/consent")) {
+    await finishConsentGate(page);
+    await page.waitForURL((url) => pattern.test(url.pathname));
+  }
+}
+
 export async function signIn(page: Page, email: string) {
   await page.context().clearCookies();
   await page.goto("/login");
   await page.getByTestId("login-email").fill(email);
   await page.getByTestId("login-password").fill(DEMO_PASSWORD);
   await page.getByTestId("login-submit").click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/login"));
+  await page.waitForURL((url) => !url.pathname.startsWith("/login") && url.pathname !== "/auth/enter" && !url.pathname.startsWith("/api/auth/enter"));
+  await finishConsentGate(page);
   await page.goto("/api/env?set=live&next=/m");
+  await finishConsentGate(page);
 }
 
 export async function resetDemo(page: Page) {

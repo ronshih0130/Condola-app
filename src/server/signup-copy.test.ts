@@ -9,7 +9,8 @@ test("sign-up and pricing copy stay on the handoff wording", () => {
   assert.equal(zh.i_signup_dup, "這個電子郵件已經註冊過了");
   assert.equal(zh.i_signup_verify_title, "請到信箱確認電子郵件");
   assert.equal(zh.i_signup_change_email, "更換電子郵件");
-  assert.equal(zh.i_signup_kind_title, "您的身分");
+  assert.equal(zh.i_signup_kind_title, "你的身分");
+  assert.equal(zh.i_signup_admin_note, "註冊者會成為這個帳號的管理員");
   assert.equal(zh.i_signup_firm_details, "建立你的公司");
   assert.equal(zh.i_signup_name_firm, "公司名稱");
   assert.equal(zh.i_signup_name_hint, "個人屋主可填自己的名字");

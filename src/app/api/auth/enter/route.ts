@@ -1,11 +1,14 @@
+import { resolveEntryLocation } from "@/server/consent-gate";
+import { readSession } from "@/server/session";
 import { expiredEnvChoiceCookies } from "@/server/sign-out";
-import { sameAppPath } from "@/server/public-origin";
 
+/** Document navigation. Server actions use /auth/enter so the address bar follows. */
 export async function GET(request: Request) {
-  const next = sameAppPath(new URL(request.url).searchParams.get("next")) || "/auth/continue";
+  const session = await readSession();
+  const location = await resolveEntryLocation(new URL(request.url).searchParams.get("next"), session);
   const headers = new Headers();
   headers.set("Cache-Control", "private, no-store");
-  headers.set("Location", next);
+  headers.set("Location", location);
   for (const line of expiredEnvChoiceCookies()) headers.append("Set-Cookie", line);
   return new Response(null, { status: 303, headers });
 }

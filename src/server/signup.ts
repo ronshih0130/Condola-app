@@ -11,6 +11,8 @@ import { countryByCode } from "@/countries";
 import { normalizePhone } from "./lease-rules";
 import { passwordAcceptable } from "./password";
 import { seedSandboxForNewFirm } from "./sandbox";
+import { writeConsent, type ConsentRepository } from "./consent";
+import { passConsentGate } from "./consent-gate";
 import { signupConsentMetadata, signupRequestBody, type SignupConsentMetadata } from "./legal-versions";
 import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
 
@@ -255,6 +257,7 @@ export async function startSignup(input: {
             [existing.id, code],
           ),
         );
+        await writeConsent(existing.id, "signup", acceptedAt);
         const token = await createSession(existing.id, true, input.meta);
         return { ok: true, status: "firm", token };
       }
@@ -262,6 +265,7 @@ export async function startSignup(input: {
     }
     // Leave auth.users alone. An admin password update clears confirmation_token and
     // confirmation_sent_at, which expires the link already in the inbox, and this path does not send a new email.
+    await writeConsent(existing.id, "signup", acceptedAt);
     const token = await inTx((client) => finishUnconfirmed(client, existing.id, email, code));
     return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
   }
@@ -289,6 +293,8 @@ export async function startSignup(input: {
     throw error;
   });
   if (saved === "duplicate") return { ok: false, error: "duplicate" };
+  if (!userId) return { ok: false, error: "required" };
+  await writeConsent(userId, "signup", acceptedAt);
   if (confirmed) {
     await markConfirmed(userId, email);
     const token = await createSession(userId, true, input.meta);
@@ -466,7 +472,11 @@ export async function createFirm(input: {
   partnerCode: string;
   country?: string;
   phoneCountry?: string;
+  consent?: boolean;
+  consentRepo?: ConsentRepository;
 }) {
+  const gate = await passConsentGate(input.userId, "reconsent", input.consent === true, input.consentRepo);
+  if (!gate.ok) return { ok: false as const, error: "consent" as const };
   const kind = input.kind === "firm" || input.kind === "self" ? input.kind : null;
   const contactName = input.contactName.trim();
   if (!kind || !contactName) return { ok: false as const, error: "required" as const };

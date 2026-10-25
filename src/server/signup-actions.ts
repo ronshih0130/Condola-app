@@ -157,8 +157,9 @@ export async function actionCreateFirm(formData: FormData) {
       phoneCountry: text(formData.get("phoneCountry")),
       country: text(formData.get("country")),
       partnerCode: text(formData.get("partnerCode")) || identity.partner_code || "",
+      consent: formData.get("consent") === "on",
     });
-    if (!created.ok) redirect("/signup/firm?error=required");
+    if (!created.ok) redirect(`/signup/firm?error=${created.error === "consent" ? "consent" : "required"}`);
     const jar = await cookies();
     const persisted = appCookieOptions({ httpOnly: false, maxAge: ENV_COOKIE_MAX_AGE });
     clearStoredEnvChoice(jar);

@@ -45,7 +45,7 @@ export type EnvChoice = {
  * existing callers compile; they do not choose the environment.
  * Sign-in clears condola_env. A host-only sandbox cookie from before
  * Domain=.condola.app is not the cookie the jar expires, so sign-in also
- * redirects through /api/auth/enter, which expires every domain variant.
+ * redirects through /auth/enter, which expires every domain variant.
  */
 export function resolveStaffEnvironment(input: {
   cookie: OrgEnvironment | null;
