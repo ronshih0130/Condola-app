@@ -36,6 +36,7 @@ import { createLeaseFromForm } from "./lease-form";
 import { addTicketComment, saveRepairRecord } from "./repairs";
 import { taipeiToday } from "./money";
 import { getSession, sessionTokenHash } from "./session";
+import { assertTeamInvitesEnabled } from "./team-invites";
 import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
@@ -453,6 +454,7 @@ export async function actionMessage(formData: FormData) {
 
 export async function actionInvite(formData: FormData) {
   try {
+    assertTeamInvitesEnabled();
     const session = await getSession();
     const role = text(formData.get("role")) as OrgRole;
     const result = await inviteTeammate(session, { email: text(formData.get("email")), role });

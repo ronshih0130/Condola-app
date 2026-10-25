@@ -9,6 +9,7 @@ import { seatLimit } from "@/server/billing";
 import { listTeam } from "@/server/queries";
 import { commercialTier, seatUsage } from "@/server/seats";
 import { getSession } from "@/server/session";
+import { TEAM_INVITES_ENABLED } from "@/server/team-invites";
 import type { OrgRole } from "@/server/types";
 
 export const dynamic = "force-dynamic";
@@ -166,7 +167,13 @@ export default async function TeamPage({
           </p>
           <p className="small">{t("i_price_pending", { n: usage.pending })}</p>
         </div>
-        {seatBlocked && seatCap != null ? (
+        {!TEAM_INVITES_ENABLED ? (
+          <div className="card pad" data-testid="team-invite-card">
+            <button className="btn" type="button" disabled aria-disabled="true" data-testid="team-invite-soon">
+              {t("i_team_invites_soon")}
+            </button>
+          </div>
+        ) : seatBlocked && seatCap != null ? (
           <p data-testid="seat-limit">{t("i_seat_upsell", { n: seatCap })}</p>
         ) : (
         <form className="card pad" action={actionInvite}>

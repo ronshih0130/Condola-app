@@ -44,6 +44,7 @@ import { PORTAL_ROLE_COOKIE } from "./portal-role";
 import { appCookieOptions, sameAppPath } from "./public-origin";
 import { clearAuthCookies, sessionEntryPath } from "./sign-out";
 import { getSession, readSession } from "./session";
+import { assertTeamInvitesEnabled } from "./team-invites";
 import type { OrgRole } from "./types";
 
 function isRedirect(error: unknown) {
@@ -307,6 +308,7 @@ export async function actionIssuePortalInvite(input: {
 export async function actionInvite(formData: FormData) {
   const back = "/m/team";
   try {
+    assertTeamInvitesEnabled();
     const session = await getSession();
     const invited = await inviteMember(session, {
       email: text(formData.get("email")),

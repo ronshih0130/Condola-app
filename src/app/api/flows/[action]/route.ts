@@ -19,6 +19,7 @@ import {
 } from "@/server/domain";
 import { FlowError } from "@/server/errors";
 import { readSession } from "@/server/session";
+import { TEAM_INVITES_ENABLED } from "@/server/team-invites";
 import type { Session } from "@/server/types";
 
 type Handler = (session: Session, body: Record<string, never>) => Promise<unknown>;
@@ -45,6 +46,9 @@ const handlers: Record<string, Handler> = {
 
 export async function POST(request: Request, context: { params: Promise<{ action: string }> }) {
   const { action } = await context.params;
+  if (action === "inviteTeammate" && !TEAM_INVITES_ENABLED) {
+    return NextResponse.json({ ok: false, error: "errors.teamInvitesSoon" }, { status: 400 });
+  }
   const handler = handlers[action];
   if (!handler) return NextResponse.json({ error: "errors.notFound" }, { status: 404 });
   try {
