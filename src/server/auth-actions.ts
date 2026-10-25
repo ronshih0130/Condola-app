@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import {
   acceptInvite,
   beginMfa,
+  describeInvite,
   challengeCookie,
   changePassword,
   CHALLENGE_COOKIE,
@@ -44,7 +45,7 @@ import { PORTAL_ROLE_COOKIE } from "./portal-role";
 import { appCookieOptions, sameAppPath } from "./public-origin";
 import { clearAuthCookies, sessionEntryPath } from "./sign-out";
 import { getSession, readSession } from "./session";
-import { assertTeamInvitesEnabled } from "./team-invites";
+import { TEAM_INVITES_ENABLED, assertTeamInvitesEnabled } from "./team-invites";
 import type { OrgRole } from "./types";
 
 function isRedirect(error: unknown) {
@@ -220,6 +221,12 @@ export async function actionOrgMail(formData: FormData) {
 
 export async function actionAccept(formData: FormData) {
   const token = text(formData.get("token"));
+  if (!TEAM_INVITES_ENABLED) {
+    const invite = await describeInvite(token, await meta());
+    if (invite.kind === "team_member") {
+      redirect(`/accept/${encodeURIComponent(token)}?error=errors.teamInvitesSoon`);
+    }
+  }
   const current = await readSession();
   const result = await acceptInvite(
     token,
@@ -325,6 +332,7 @@ export async function actionInvite(formData: FormData) {
 export async function actionResendInvite(formData: FormData) {
   const back = "/m/team";
   try {
+    assertTeamInvitesEnabled();
     const session = await getSession();
     const invited = await resendInvite(session, text(formData.get("invitationId")));
     redirect(demoModeEnabled() ? `${back}?invited=1&token=${encodeURIComponent(invited.token)}` : `${back}?invited=1`);

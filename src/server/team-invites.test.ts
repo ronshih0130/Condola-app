@@ -5,7 +5,7 @@ import { makeT } from "@/i18n";
 import { errorText } from "@/i18n/errors";
 import { POST } from "@/app/api/flows/[action]/route";
 import { actionInvite as legacyActionInvite } from "./actions";
-import { actionInvite } from "./auth-actions";
+import { actionInvite, actionResendInvite } from "./auth-actions";
 import { TEAM_INVITES_ENABLED } from "./team-invites";
 
 function redirectTarget(error: unknown) {
@@ -62,4 +62,20 @@ test("team invite actions and the API refuse while invites are off", async () =>
   const guard = route.indexOf('action === "inviteTeammate" && !TEAM_INVITES_ENABLED');
   assert.ok(guard < route.indexOf("readSession()"));
   assert.ok(guard < route.indexOf("handler(session, body)"));
+
+  const accept = auth.slice(auth.indexOf("export async function actionAccept"), auth.indexOf("export async function actionIssuePortalInvite"));
+  assert.match(accept, /!TEAM_INVITES_ENABLED/);
+  assert.ok(accept.indexOf('invite.kind === "team_member"') < accept.indexOf("acceptInvite("));
+  const resend = auth.slice(auth.indexOf("export async function actionResendInvite"), auth.indexOf("export async function actionRevokeInvite"));
+  assert.ok(resend.indexOf("assertTeamInvitesEnabled()") < resend.indexOf("resendInvite("));
+});
+
+test("resend refuses while team invites are off", async () => {
+  assert.equal(TEAM_INVITES_ENABLED, false);
+  const form = new FormData();
+  form.set("invitationId", "10000000-0000-4000-8000-000000000099");
+  await assert.rejects(() => actionResendInvite(form), (error: unknown) => {
+    assert.equal(redirectTarget(error), "/m/team?error=errors.teamInvitesSoon");
+    return true;
+  });
 });

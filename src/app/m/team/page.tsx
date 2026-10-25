@@ -120,12 +120,18 @@ export default async function TeamPage({
                     <td className="r">
                       {member.invitation_id && member.status === "pending" ? (
                         <div className="col">
-                          <form action={actionResendInvite}>
-                            <input type="hidden" name="invitationId" value={member.invitation_id} />
-                            <button className="btn sm" type="submit">
+                          {TEAM_INVITES_ENABLED ? (
+                            <form action={actionResendInvite}>
+                              <input type="hidden" name="invitationId" value={member.invitation_id} />
+                              <button className="btn sm" type="submit" data-testid={`resend-${member.email}`}>
+                                {t("i_resend")}
+                              </button>
+                            </form>
+                          ) : (
+                            <button className="btn sm" type="button" disabled aria-disabled="true" data-testid={`resend-${member.email}`}>
                               {t("i_resend")}
                             </button>
-                          </form>
+                          )}
                           <form action={actionRevokeInvite}>
                             <input type="hidden" name="invitationId" value={member.invitation_id} />
                             <button className="btn sm danger" type="submit">

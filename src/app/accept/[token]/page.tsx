@@ -6,6 +6,7 @@ import { PasswordFields } from "@/components/password-field";
 import { actionAccept } from "@/server/auth-actions";
 import { describeInvite } from "@/server/auth";
 import { lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
+import { TEAM_INVITES_ENABLED } from "@/server/team-invites";
 import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -129,6 +130,11 @@ export default async function AcceptPage({
             <AcceptSubmit idle={t("i_continue")} pending={t("i_portal_working")} testId="portal-submit" />
           </>
         ) : invite.kind === "team_member" ? (
+          !TEAM_INVITES_ENABLED ? (
+            <button className="btn" type="button" disabled aria-disabled="true" data-testid="team-accept-soon">
+              {t("i_team_invites_soon")}
+            </button>
+          ) : (
           <>
             <p>
               {invite.inviter} · {invite.firm} · {t(roleKey[invite.role] ?? "i_role_label")}
@@ -149,6 +155,7 @@ export default async function AcceptPage({
               </div>
             ) : null}
           </>
+          )
         ) : null}
       </AcceptForm>
       )}
