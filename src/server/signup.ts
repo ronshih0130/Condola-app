@@ -12,7 +12,8 @@ import { normalizePhone } from "./lease-rules";
 import { passwordAcceptable } from "./password";
 import { seedSandboxForNewFirm } from "./sandbox";
 import { signupConsentMetadata, signupRequestBody, type SignupConsentMetadata } from "./legal-versions";
-import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
+import { createSignupLink, deliverSignupMail, gateSignupMail } from "./signup-mail";
+import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl, signupMailVia } from "./signup-gotrue";
 
 const VERIFY_HOURS = 24;
 
@@ -43,6 +44,7 @@ export function gotrueAccessTokenLifetime(
 }
 
 export type SignupError = "duplicate" | "weak" | "mismatch" | "email" | "required" | "consent";
+export type SignupMailFlag = "failed" | "wait";
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -130,7 +132,7 @@ async function rotateVerification(client: Client, userId: string, email: string)
 
 /**
  * Profile, funnel row, partner draft, and the confirm token. One statement.
- * Does not send mail. GoTrue already did that on the signup call.
+ * Does not send mail.
  */
 async function finishUnconfirmed(client: Client, userId: string, email: string, partnerCode: string | null) {
   const token = newToken();
@@ -221,7 +223,7 @@ export async function startSignup(input: {
   meta: RequestMeta;
   consent?: boolean;
 }): Promise<
-  | { ok: true; status: "verify"; email: string; devToken: string | null }
+  | { ok: true; status: "verify"; email: string; devToken: string | null; mail?: SignupMailFlag }
   | { ok: true; status: "firm"; token: string }
   | { ok: false; error: SignupError }
 > {
@@ -266,9 +268,38 @@ export async function startSignup(input: {
     return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
   }
 
-  const remote = await supabaseSignUp(email, input.password, input.origin, metadata);
-  if (remote === "duplicate") return { ok: false, error: "duplicate" };
-  if (remote === "unavailable") return { ok: false, error: "required" };
+  const auth = supabaseAuth();
+  const appMail = Boolean(auth.url) && signupMailVia() !== "supabase";
+  let remote: { id: string; confirmed: boolean } | null = null;
+  let hashedToken: string | null = null;
+  let mail: SignupMailFlag | undefined;
+  if (!auth.url) {
+    remote = null;
+  } else if (!appMail) {
+    const legacy = await supabaseSignUp(email, input.password, input.origin, metadata);
+    if (legacy === "duplicate") return { ok: false, error: "duplicate" };
+    if (legacy === "unavailable") return { ok: false, error: "required" };
+    remote = legacy;
+  } else {
+    // Refuse before generate_link so a brake does not create a user or burn a confirmation token.
+    const gate = await gateSignupMail(null, email, input.meta.ip);
+    if (gate !== "ok") {
+      return { ok: true, status: "verify", email, devToken: null, mail: gate === "wait" ? "wait" : "failed" };
+    }
+    const issued = await createSignupLink({
+      email,
+      password: input.password,
+      data: metadata,
+      origin: input.origin,
+    });
+    if (!issued.ok) {
+      if (issued.error === "duplicate") return { ok: false, error: "duplicate" };
+      if (issued.error === "weak") return { ok: false, error: "weak" };
+      return { ok: false, error: "required" };
+    }
+    remote = { id: issued.userId, confirmed: issued.confirmed };
+    hashedToken = issued.hashedToken;
+  }
   let userId = remote?.id ?? "";
   const confirmed = remote?.confirmed ?? false;
   const saved = await inTx(async (client) => {
@@ -294,23 +325,49 @@ export async function startSignup(input: {
     const token = await createSession(userId, true, input.meta);
     return { ok: true, status: "firm", token };
   }
-  return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null };
+  if (hashedToken) {
+    const delivered = await deliverSignupMail(email, hashedToken, input.origin);
+    if (!delivered) mail = "failed";
+  }
+  return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null, ...(mail ? { mail } : {}) };
 }
 
-export async function resendSignup(emailRaw: string, origin: string) {
+export async function resendSignup(emailRaw: string, origin: string, ip?: string | null) {
   const email = normalizeEmail(emailRaw);
   if (!email) return { devToken: null as string | null };
-  const sent = await inTx(async (client) => {
+  const userId = await inTx(async (client) => {
     const existing = await findUser(client, email);
     if (!existing || existing.email_confirmed_at || existing.has_firm) return null;
-    return rotateVerification(client, existing.id, email);
+    return existing.id;
   });
-  if (!sent) return { devToken: null as string | null };
-  await supabaseResend(email, origin);
-  return { devToken: signupLinksExposed() ? sent : null };
+  if (!userId) return { devToken: null as string | null };
+  const auth = supabaseAuth();
+  const appMail = Boolean(auth.url) && signupMailVia() !== "supabase";
+  if (appMail) {
+    // generate_link rotates the confirmation token. Do that only when a send is allowed.
+    const gate = await gateSignupMail(userId, email, ip);
+    if (gate !== "ok") return { devToken: null as string | null, mail: (gate === "wait" ? "wait" : "failed") as SignupMailFlag };
+    const issued = await createSignupLink({ email, origin });
+    if (!issued.ok) {
+      console.warn(`signup mail failed ${issued.error}`);
+      return { devToken: null as string | null, mail: "failed" as const };
+    }
+    const token = await inTx((client) => rotateVerification(client, userId, email));
+    const delivered = await deliverSignupMail(email, issued.hashedToken, origin);
+    return { devToken: signupLinksExposed() ? token : null, ...(delivered ? {} : { mail: "failed" as const }) };
+  }
+  const token = await inTx((client) => rotateVerification(client, userId, email));
+  if (auth.url) await supabaseResend(email, origin);
+  return { devToken: signupLinksExposed() ? token : null };
 }
 
-export async function changeSignupEmail(input: { currentEmail: string; password: string; nextEmail: string; origin: string }) {
+export async function changeSignupEmail(input: {
+  currentEmail: string;
+  password: string;
+  nextEmail: string;
+  origin: string;
+  ip?: string | null;
+}) {
   const current = normalizeEmail(input.currentEmail);
   const next = normalizeEmail(input.nextEmail);
   if (!current || !next) return { ok: false as const, error: "email" as const };
@@ -325,6 +382,14 @@ export async function changeSignupEmail(input: { currentEmail: string; password:
   });
   if (!checked.ok) return checked;
   const { url, service } = supabaseAuth();
+  const appMail = Boolean(url) && signupMailVia() !== "supabase";
+  if (appMail && !service) return { ok: false as const, error: "required" as const };
+  if (appMail) {
+    const gate = await gateSignupMail(checked.id, next, input.ip);
+    if (gate !== "ok") {
+      return { ok: true as const, email: current, devToken: null, mail: (gate === "wait" ? "wait" : "failed") as SignupMailFlag };
+    }
+  }
   if (url && service) {
     const response = await fetch(`${url}/auth/v1/admin/users/${checked.id}`, {
       method: "PUT",
@@ -333,6 +398,16 @@ export async function changeSignupEmail(input: { currentEmail: string; password:
     });
     if (!response.ok) return { ok: false as const, error: "required" as const };
   }
+  let hashedToken: string | null = null;
+  if (appMail) {
+    const issued = await createSignupLink({ email: next, origin: input.origin });
+    if (!issued.ok) {
+      console.warn(`signup mail failed ${issued.error}`);
+      await query(`UPDATE profiles SET email = $2 WHERE id = $1`, [checked.id, next]);
+      return { ok: true as const, email: next, devToken: null, mail: "failed" as const };
+    }
+    hashedToken = issued.hashedToken;
+  }
   const token = await inTx(async (client) => {
     if (!url || !service) {
       await client.query(`UPDATE auth.users SET email = $2, email_confirmed_at = NULL, updated_at = now() WHERE id = $1`, [checked.id, next]);
@@ -340,7 +415,16 @@ export async function changeSignupEmail(input: { currentEmail: string; password:
     await client.query(`UPDATE profiles SET email = $2 WHERE id = $1`, [checked.id, next]);
     return rotateVerification(client, checked.id, next);
   });
-  await supabaseResend(next, input.origin);
+  if (appMail && hashedToken) {
+    const delivered = await deliverSignupMail(next, hashedToken, input.origin);
+    return {
+      ok: true as const,
+      email: next,
+      devToken: signupLinksExposed() ? token : null,
+      ...(delivered ? {} : { mail: "failed" as const }),
+    };
+  }
+  if (url) await supabaseResend(next, input.origin);
   return { ok: true as const, email: next, devToken: signupLinksExposed() ? token : null };
 }
 

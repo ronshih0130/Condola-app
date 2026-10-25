@@ -74,6 +74,22 @@ const OVERDUE_TENANT_BODY = `{租客姓名} 您好：
 
 ${MAIL_FOOTER}`;
 
+/** Shared by signup confirmation and password reset. */
+export const MAIL_DISCLAIMER = "租多啦 Condola 只提供管理軟體，不經手任何款項。";
+
+const SIGNUP_SUBJECT = "請確認您的租多啦 Condola 帳號";
+const SIGNUP_BODY = `您好：
+
+請在 60 分鐘內點下方按鈕確認您的電子郵件，完成租多啦帳號註冊。
+
+[確認電子郵件]({確認連結})
+
+如果不是您本人註冊，請忽略這封信。
+
+${MAIL_DISCLAIMER}
+
+${MAIL_FOOTER}`;
+
 const RESET_SUBJECT = "重設您的租多啦密碼";
 const RESET_BODY = `您好：
 
@@ -82,6 +98,8 @@ const RESET_BODY = `您好：
 [設定新密碼]({重設連結})
 
 如果不是您本人申請，請忽略此信，您的密碼不會改變。
+
+${MAIL_DISCLAIMER}
 
 ${MAIL_FOOTER}`;
 
@@ -259,4 +277,8 @@ export function overdueTenantMail(vars: {
 
 export function passwordResetMail(url: string) {
   return renderTemplate(RESET_SUBJECT, RESET_BODY, { 重設連結: url });
+}
+
+export function signupConfirmMail(url: string) {
+  return renderTemplate(SIGNUP_SUBJECT, SIGNUP_BODY, { 確認連結: url });
 }

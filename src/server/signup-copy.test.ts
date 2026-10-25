@@ -8,6 +8,12 @@ const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), 
 test("sign-up and pricing copy stay on the handoff wording", () => {
   assert.equal(zh.i_signup_dup, "這個電子郵件已經註冊過了");
   assert.equal(zh.i_signup_verify_title, "請到信箱確認電子郵件");
+  assert.equal(zh.i_signup_verify_body, "我們已寄出確認信到 {email}。連結 60 分鐘內有效。");
+  assert.equal(en.i_signup_verify_body, "We sent a confirmation link to {email}. It works for 60 minutes.");
+  assert.equal(zh.i_signup_mail_failed, "驗證信暫時無法寄出，請稍後按「重寄驗證信」。");
+  assert.equal(zh.i_signup_mail_wait, "請稍候再重寄驗證信。");
+  assert.equal(en.i_signup_mail_failed, "We couldn't send the confirmation email. Please use Resend confirmation in a moment.");
+  assert.equal(en.i_signup_mail_wait, "Please wait before resending the confirmation email.");
   assert.equal(zh.i_signup_change_email, "更換電子郵件");
   assert.equal(zh.i_signup_kind_title, "您的身分");
   assert.equal(zh.i_signup_firm_details, "建立你的公司");

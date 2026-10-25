@@ -7,7 +7,9 @@ import {
   MAIL_FOOTER,
   overdueAdminMail,
   overdueTenantMail,
+  MAIL_DISCLAIMER,
   passwordResetMail,
+  signupConfirmMail,
 } from "./mail-copy";
 import {
   BREVO_FROM_EMAIL,
@@ -197,6 +199,7 @@ test("overdue and reset copy matches the revised file and never says 收款", ()
   assert.match(tenant.text, /不經手租金與押金/);
   assert.equal(reset.subject, "重設您的租多啦密碼");
   assert.match(reset.text, /請在 60 分鐘內點下方連結設定新密碼/);
+  assert.match(reset.text, new RegExp(MAIL_DISCLAIMER));
   assert.match(reset.text, /\[設定新密碼\]\(https:\/\/app\.condola\.app\/reset\?token_hash=abc&type=recovery\)/);
   for (const text of [admin.text, admin.subject, tenant.text, tenant.subject, reset.text, reset.subject]) assertClean(text);
   for (const mail of [admin, tenant, reset]) {
@@ -238,6 +241,23 @@ test("lease expiry copy keeps the footer, reply facts, and thousands separators"
   }
   assert.equal(tenant.subject, "您的租約將於 2026年10月31日 到期");
   for (const text of [admin.text, tenant.text]) assertClean(text);
+});
+
+test("signup confirmation uses the shared disclaimer and the 60-minute copy", () => {
+  const url = "https://app.condola.app/signup/confirm?token_hash=X&type=signup";
+  const mail = signupConfirmMail(url);
+  const reset = passwordResetMail("https://app.condola.app/reset?token_hash=abc&type=recovery");
+  assert.equal(mail.subject, "請確認您的租多啦 Condola 帳號");
+  assert.match(mail.text, /您好：/);
+  assert.match(mail.text, /請在 60 分鐘內點下方按鈕確認您的電子郵件，完成租多啦帳號註冊。/);
+  assert.match(mail.text, /\[確認電子郵件\]\(https:\/\/app\.condola\.app\/signup\/confirm\?token_hash=X&type=signup\)/);
+  assert.match(mail.text, /如果不是您本人註冊，請忽略這封信。/);
+  assert.equal(mail.text.includes(MAIL_DISCLAIMER), true);
+  assert.equal(reset.text.includes(MAIL_DISCLAIMER), true);
+  assert.equal(mail.text.endsWith(MAIL_FOOTER), true);
+  assert.equal(reset.text.endsWith(MAIL_FOOTER), true);
+  assert.match(mail.html, /<a href="https:\/\/app\.condola\.app\/signup\/confirm\?token_hash=X&amp;type=signup">確認電子郵件<\/a>/);
+  for (const text of [mail.subject, mail.text, reset.text]) assertClean(text);
 });
 
 test("transactional templates share one operator footer", () => {

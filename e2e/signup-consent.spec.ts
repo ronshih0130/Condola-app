@@ -40,20 +40,23 @@ test("signup requires consent, then signUp stores the legal versions", async ({ 
   const captured = await page.request.get("http://127.0.0.1:4599/e2e/signups");
   expect(captured.ok()).toBeTruthy();
   const bodies = (await captured.json()) as {
+    type?: string;
     email?: string;
     password?: string;
+    redirect_to?: string;
     data?: { terms_accepted_at?: string; terms_version?: string; privacy_version?: string };
-    options?: { data?: { terms_accepted_at?: string; terms_version?: string; privacy_version?: string } };
   }[];
   const match = bodies.find((body) => body.email === email);
+  expect(match?.type).toBe("signup");
+  expect(match?.redirect_to).toMatch(/\/signup\/confirm$/);
   expect(match?.data?.terms_version).toBe(TERMS_VERSION);
   expect(match?.data?.privacy_version).toBe(PRIVACY_VERSION);
   expect(match?.data?.terms_accepted_at ?? "").toMatch(/^\d{4}-\d{2}-\d{2}T/);
-  expect(match?.options?.data).toEqual(match?.data);
   const evidence = {
     email,
+    type: match?.type,
+    redirect_to: match?.redirect_to,
     data: match?.data,
-    options: { data: match?.options?.data },
   };
   writeFileSync(`${EVIDENCE}/signup-payload.json`, `${JSON.stringify(evidence, null, 2)}\n`);
   expect(JSON.stringify(evidence)).not.toContain(password);

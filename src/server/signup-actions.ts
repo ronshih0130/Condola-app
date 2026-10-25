@@ -85,30 +85,35 @@ export async function actionStartSignup(formData: FormData) {
     await setSession(result.token);
     redirect(sessionEntryPath("/signup/firm"));
   }
-  const params = new URLSearchParams({ email: result.email });
-  if (result.devToken) params.set("dev", result.devToken);
-  redirect(`/signup/verify?${params.toString()}`);
+  redirect(verifyTarget(result.email, result, false));
+}
+
+function verifyTarget(email: string, result: { devToken: string | null; mail?: "failed" | "wait" }, resent: boolean) {
+  const params = new URLSearchParams({ email });
+  if (result.mail) params.set("mail", result.mail);
+  else if (resent) params.set("resent", "1");
+  if (!result.mail && result.devToken) params.set("dev", result.devToken);
+  return `/signup/verify?${params.toString()}`;
 }
 
 export async function actionResendSignup(formData: FormData) {
+  const request = await meta();
   const email = text(formData.get("email"));
-  const sent = await resendSignup(email, await origin());
-  const params = new URLSearchParams({ email, resent: "1" });
-  if (sent.devToken) params.set("dev", sent.devToken);
-  redirect(`/signup/verify?${params.toString()}`);
+  const sent = await resendSignup(email, await origin(), request.ip);
+  redirect(verifyTarget(email, sent, true));
 }
 
 export async function actionChangeSignupEmail(formData: FormData) {
+  const request = await meta();
   const result = await changeSignupEmail({
     currentEmail: text(formData.get("email")),
     password: String(formData.get("password") ?? ""),
     nextEmail: text(formData.get("nextEmail")),
     origin: await origin(),
+    ip: request.ip,
   });
   if (!result.ok) redirect(`/signup/verify?email=${encodeURIComponent(text(formData.get("email")))}&error=${result.error}`);
-  const params = new URLSearchParams({ email: result.email, resent: "1" });
-  if (result.devToken) params.set("dev", result.devToken);
-  redirect(`/signup/verify?${params.toString()}`);
+  redirect(verifyTarget(result.email, result, true));
 }
 
 export async function actionConfirmToken(formData: FormData) {

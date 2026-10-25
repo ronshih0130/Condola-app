@@ -21,10 +21,14 @@ function databaseUrl() {
   return process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
 }
 
+function signupMetadata(body) {
+  return body.data && typeof body.data === "object" ? body.data : {};
+}
+
 async function insertSignupUser(body) {
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
-  const metadata = body.data && typeof body.data === "object" ? body.data : {};
+  const metadata = signupMetadata(body);
   const client = new pg.Client({ connectionString: databaseUrl() });
   await client.connect();
   try {
@@ -41,6 +45,55 @@ async function insertSignupUser(body) {
     return {
       status: 200,
       payload: { id: inserted.rows[0].id, aud: "authenticated", email, email_confirmed_at: null },
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+/** Mirrors GoTrue admin generate_link type=signup: create or rotate, never send mail. */
+async function generateSignupLink(body) {
+  const email = String(body.email || "").trim().toLowerCase();
+  if (String(body.type || "") !== "signup") {
+    return { status: 400, payload: { error_code: "validation_failed", msg: "Invalid email action link type" } };
+  }
+  const client = new pg.Client({ connectionString: databaseUrl() });
+  await client.connect();
+  try {
+    const existing = await client.query(
+      `SELECT id::text AS id, email_confirmed_at FROM auth.users WHERE lower(email) = lower($1)`,
+      [email],
+    );
+    const row = existing.rows[0];
+    if (row?.email_confirmed_at) {
+      return {
+        status: 422,
+        payload: { error_code: "email_exists", msg: "A user with this email address has already been registered" },
+      };
+    }
+    if (!row && !body.password) {
+      return { status: 400, payload: { error_code: "validation_failed", msg: "Signup requires a valid password" } };
+    }
+    const id = row
+      ? row.id
+      : (
+          await client.query(
+            `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
+             VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), $3::jsonb, 'authenticated', 'authenticated')
+             RETURNING id::text AS id`,
+            [email, String(body.password || ""), JSON.stringify(signupMetadata(body))],
+          )
+        ).rows[0].id;
+    return {
+      status: 200,
+      payload: {
+        id,
+        aud: "authenticated",
+        email,
+        email_confirmed_at: null,
+        hashed_token: `e2e-${id}`,
+        verification_type: "signup",
+      },
     };
   } finally {
     await client.end();
@@ -108,6 +161,18 @@ const server = createServer(async (req, res) => {
       send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "signup failed";
+      send(res, 500, JSON.stringify({ message }), { "content-type": "application/json" });
+    }
+    return;
+  }
+  if (url.pathname === "/auth/v1/admin/generate_link" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    if (body.type === "signup") signups.push(body);
+    try {
+      const result = await generateSignupLink(body);
+      send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "generate_link failed";
       send(res, 500, JSON.stringify({ message }), { "content-type": "application/json" });
     }
     return;

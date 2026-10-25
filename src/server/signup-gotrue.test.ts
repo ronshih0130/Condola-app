@@ -2,16 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { describeRecoveryHash, normalizeEmail, recoverySentAtStatus, requestPasswordReset } from "./auth";
-import { useEmailBinding } from "./mail";
+import { CLOUDFLARE_FROM, SERVICE_EMAIL, useEmailBinding } from "./mail";
+import { signupConsentMetadata } from "./legal-versions";
+import { createSignupLink, deliverSignupMail } from "./signup-mail";
 import {
   classifyPasswordGrant,
+  classifySignupGenerateLink,
   confirmHashTarget,
   gotrueEndpoint,
   gotrueVerifyBody,
   parseGenerateLink,
   parseSupabaseSignup,
   passwordResetUrl,
+  signupConfirmLink,
   signupConfirmUrl,
+  signupMailVia,
   signupVerifyType,
 } from "./signup-gotrue";
 
@@ -171,6 +176,69 @@ test("a hash access_token is forwarded to /signup/confirm and not looped", () =>
   assert.equal(confirmHashTarget("/m", ""), null);
 });
 
+test("signup generate_link maps email_exists, weak passwords, and a hashed token", () => {
+  assert.deepEqual(
+    classifySignupGenerateLink(422, {
+      error_code: "email_exists",
+      msg: "A user with this email address has already been registered",
+    }),
+    { ok: false, error: "duplicate" },
+  );
+  assert.deepEqual(
+    classifySignupGenerateLink(422, { error_code: "weak_password", msg: "Password should be at least 6 characters." }),
+    { ok: false, error: "weak" },
+  );
+  assert.deepEqual(
+    classifySignupGenerateLink(400, { error_code: "validation_failed", msg: "Signup requires a valid password" }),
+    { ok: false, error: "weak" },
+  );
+  assert.deepEqual(classifySignupGenerateLink(500, { msg: "database unavailable" }), { ok: false, error: "unavailable" });
+  assert.deepEqual(classifySignupGenerateLink(200, { hashed_token: "hash" }), { ok: false, error: "unavailable" });
+  assert.deepEqual(classifySignupGenerateLink(200, { id: "user-1", hashed_token: " hash ", email_confirmed_at: null }), {
+    ok: true,
+    hashedToken: "hash",
+    userId: "user-1",
+    confirmed: false,
+  });
+  assert.deepEqual(
+    classifySignupGenerateLink(200, {
+      hashed_token: "abc",
+      user: { id: "user-2", email_confirmed_at: "2026-10-25T00:00:00Z" },
+    }),
+    { ok: true, hashedToken: "abc", userId: "user-2", confirmed: true },
+  );
+});
+
+test("signup confirm links keep token_hash and type on the allow-listed origin", () => {
+  const previousEnv = process.env.CONDOLA_ENV;
+  const previousSite = process.env.CONDOLA_SITE_URL;
+  try {
+    process.env.CONDOLA_ENV = "production";
+    process.env.CONDOLA_SITE_URL = "https://app.condola.app";
+    assert.equal(
+      signupConfirmLink("https://app.condola.app", "X"),
+      "https://app.condola.app/signup/confirm?token_hash=X&type=signup",
+    );
+    process.env.CONDOLA_ENV = "staging";
+    process.env.CONDOLA_SITE_URL = "https://staging.condola.app";
+    assert.equal(
+      signupConfirmLink("https://condola-staging.workers.dev", "X"),
+      "https://staging.condola.app/signup/confirm?token_hash=X&type=signup",
+    );
+  } finally {
+    if (previousEnv === undefined) delete process.env.CONDOLA_ENV;
+    else process.env.CONDOLA_ENV = previousEnv;
+    if (previousSite === undefined) delete process.env.CONDOLA_SITE_URL;
+    else process.env.CONDOLA_SITE_URL = previousSite;
+  }
+});
+
+test("signup mail defaults to the app and supabase is the kill switch", () => {
+  assert.equal(signupMailVia({}), "app");
+  assert.equal(signupMailVia({ SIGNUP_MAIL_VIA: "app" }), "app");
+  assert.equal(signupMailVia({ SIGNUP_MAIL_VIA: " Supabase " }), "supabase");
+});
+
 test("generate_link keeps the hashed token and ignores a body without one", () => {
   assert.deepEqual(parseGenerateLink({ id: "user-1", hashed_token: " hash " }), { hashedToken: "hash", userId: "user-1" });
   assert.deepEqual(parseGenerateLink({ user: { id: "user-2" }, hashed_token: "abc" }), { hashedToken: "abc", userId: "user-2" });
@@ -252,5 +320,100 @@ test("password reset asks GoTrue for a link and sends it through the mail module
     else process.env.RESEND_API_KEY = saved.resend;
     if (saved.database === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = saved.database;
+  }
+});
+
+test("signup confirmation asks GoTrue for a link and sends it through the Cloudflare binding", async () => {
+  const saved = {
+    url: process.env.SUPABASE_URL,
+    service: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    provider: process.env.MAIL_PROVIDER,
+    site: process.env.CONDOLA_SITE_URL,
+    env: process.env.CONDOLA_ENV,
+    fetch: global.fetch,
+  };
+  const calls: { url: string; authorization: string; apikey: string; body: string }[] = [];
+  const sent: { from: unknown; to: string; subject: string; text: string; replyTo?: string }[] = [];
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-test";
+  process.env.MAIL_PROVIDER = "cloudflare";
+  process.env.CONDOLA_ENV = "production";
+  process.env.CONDOLA_SITE_URL = "https://app.condola.app";
+  useEmailBinding({
+    async send(message) {
+      sent.push({ from: message.from, to: message.to, subject: message.subject, text: message.text || "", replyTo: message.replyTo });
+      return { messageId: "msg-signup" };
+    },
+  });
+  global.fetch = async (input, init) => {
+    const headers = new Headers(init?.headers);
+    calls.push({
+      url: String(input),
+      authorization: headers.get("authorization") || "",
+      apikey: headers.get("apikey") || "",
+      body: String(init?.body ?? ""),
+    });
+    const payload = JSON.parse(String(init?.body ?? "{}")) as { email?: string; password?: string };
+    if (payload.email === "confirmed@example.com") {
+      return Response.json(
+        { error_code: "email_exists", msg: "A user with this email address has already been registered" },
+        { status: 422 },
+      );
+    }
+    if (payload.password === "short") {
+      return Response.json({ error_code: "weak_password", msg: "Password should be at least 6 characters." }, { status: 422 });
+    }
+    return Response.json({ id: "user-1", hashed_token: "hashed-signup", email_confirmed_at: null });
+  };
+  try {
+    const metadata = signupConsentMetadata(new Date("2026-10-25T07:00:00.000Z"));
+    const created = await createSignupLink({
+      email: "owner@example.com",
+      password: "Fresh1234",
+      data: metadata,
+      origin: "https://app.condola.app",
+    });
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    const delivered = await deliverSignupMail("owner@example.com", created.hashedToken, "https://app.condola.app");
+    assert.equal(delivered, true);
+    const duplicate = await createSignupLink({ email: "confirmed@example.com", password: "Fresh1234", origin: "https://app.condola.app" });
+    const weak = await createSignupLink({ email: "new@example.com", password: "short", origin: "https://app.condola.app" });
+    const rotated = await createSignupLink({ email: "owner@example.com", origin: "https://staging.condola.app" });
+    assert.deepEqual(duplicate, { ok: false, error: "duplicate" });
+    assert.deepEqual(weak, { ok: false, error: "weak" });
+    assert.equal(rotated.ok, true);
+    assert.equal(calls.length, 4);
+    assert.equal(new URL(calls[0].url).pathname, "/auth/v1/admin/generate_link");
+    assert.equal(calls[0].authorization, "Bearer service-test");
+    assert.equal(calls[0].apikey, "service-test");
+    assert.deepEqual(JSON.parse(calls[0].body), {
+      type: "signup",
+      email: "owner@example.com",
+      redirect_to: "https://app.condola.app/signup/confirm",
+      password: "Fresh1234",
+      data: metadata,
+    });
+    assert.equal(JSON.parse(calls[3].body).password, undefined);
+    assert.equal(JSON.parse(calls[3].body).data, undefined);
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0].from, CLOUDFLARE_FROM);
+    assert.equal(sent[0].to, "owner@example.com");
+    assert.equal(sent[0].replyTo, SERVICE_EMAIL);
+    assert.equal(sent[0].subject, "請確認您的租多啦 Condola 帳號");
+    assert.match(sent[0].text, /https:\/\/app\.condola\.app\/signup\/confirm\?token_hash=hashed-signup&type=signup/);
+  } finally {
+    global.fetch = saved.fetch;
+    useEmailBinding(undefined);
+    if (saved.url === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = saved.url;
+    if (saved.service === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = saved.service;
+    if (saved.provider === undefined) delete process.env.MAIL_PROVIDER;
+    else process.env.MAIL_PROVIDER = saved.provider;
+    if (saved.site === undefined) delete process.env.CONDOLA_SITE_URL;
+    else process.env.CONDOLA_SITE_URL = saved.site;
+    if (saved.env === undefined) delete process.env.CONDOLA_ENV;
+    else process.env.CONDOLA_ENV = saved.env;
   }
 });
