@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 import { makeT } from "@/i18n";
+import { pdfContainsAscii } from "@/lib/pdf-text";
+import { renderPdf } from "@/lib/pdf-render";
+import { buildStatementPdf } from "./pdf-docs";
+import { settlementPdfSource } from "./rent-settlement";
 import { signedMoneyLabel } from "./format";
 import {
   attributeMinor,
@@ -49,13 +53,20 @@ test("the flag is on only for the sample company and beta orgs", () => {
 test("sample company creation and the beta seed store the flag", () => {
   const sandbox = readFileSync(new URL("./sandbox.ts", import.meta.url), "utf8");
   const seed = readFileSync(new URL("./seed.ts", import.meta.url), "utf8");
+  assert.match(sandbox, /environment = 'live'/);
+  assert.match(sandbox, /'sandbox'/);
   assert.match(sandbox, /rent_settlement": true/);
-  assert.match(seed, /rent_settlement": true/);
+  assert.match(seed, /rent_settlement":true/);
+  assert.doesNotMatch(seed, /UPDATE organizations[\s\S]{0,240}rent_settlement/);
   const migration = readFileSync(new URL("../../supabase/migrations/20261030160000_rent_settlement.sql", import.meta.url), "utf8");
   assert.match(migration, /-- Version 20261030160000\./);
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /app\.is_member\(org_id\)/);
   assert.match(migration, /feature_flags ->> 'rent_settlement'/);
+  assert.doesNotMatch(migration, /UPDATE\s+organizations/);
+  assert.match(migration, /REVOKE ALL ON TABLE payment_corrections FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT SELECT, INSERT ON TABLE payment_corrections TO authenticated;/);
+  assert.doesNotMatch(migration, /GRANT [^;]*\b(TRIGGER|REFERENCES|MAINTAIN)\b/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS payment_corrections/);
   assert.match(migration, /DROP POLICY IF EXISTS/);
   assert.match(migration, /DROP TRIGGER IF EXISTS/);
@@ -94,6 +105,12 @@ test("payment rules migration is additive and sorts after the release privilege 
   assert.doesNotMatch(rules, /ADD COLUMN (?!IF NOT EXISTS)/);
   assert.doesNotMatch(rules, /ALTER TABLE (payments|owner_statements|properties|leases)[^;]*NOT NULL/);
   assert.doesNotMatch(rules, /ADD CONSTRAINT/);
+  assert.doesNotMatch(rules, /ALTER COLUMN due_day|due_day SET DEFAULT|SET DEFAULT 5/);
+  assert.match(rules, /REVOKE ALL ON TABLE statement_change_log FROM PUBLIC, anon, authenticated/);
+  assert.match(rules, /REVOKE ALL ON TABLE owner_payouts FROM PUBLIC, anon, authenticated/);
+  assert.match(rules, /GRANT SELECT, INSERT ON TABLE statement_change_log TO authenticated;/);
+  assert.match(rules, /GRANT SELECT, INSERT ON TABLE owner_payouts TO authenticated;/);
+  assert.doesNotMatch(rules, /GRANT [^;]*\b(TRIGGER|REFERENCES|MAINTAIN)\b/);
   assert.doesNotMatch(rules, /SECURITY DEFINER/);
   assert.doesNotMatch(rules, /fn_invoice_recalc|fn_invoice_lines_changed|fn_payment_status_changed|fn_id_photo_drop_wm|fn_lease_close_end_date/);
   assert.doesNotMatch(rules, /GRANT\s+(?:ALL|EXECUTE)[^;]*\b(?:PUBLIC|anon)\b/);
@@ -148,6 +165,11 @@ test("after every migration in order, post_reversal stays the org-scoped body an
   assert.match(check, /SQLSTATE <> '42501'/);
   assert.match(check, /org mismatch/);
   assert.match(check, /ROLLBACK;/);
+  assert.match(check, /INSERT INTO organizations/);
+  assert.match(check, /INSERT INTO ledger_transactions/);
+  assert.match(check, /gen_random_uuid\(\)/);
+  assert.doesNotMatch(check, /10000000-0000-4000-8000-000000000001/);
+  assert.doesNotMatch(check, /20000000-0000-4000-8000-000000000009/);
 });
 
 test("TWD amounts are whole NT$ minor units, with no float parsing", () => {
@@ -279,6 +301,75 @@ test("closing balance is opening plus firm rent minus costs minus payouts", () =
   assert.equal(signedMoneyLabel(-330_000, "TWD", "zh-TW"), "\u2212NT$3,300");
   assert.equal(signedMoneyLabel(0, "TWD", "zh-TW"), "NT$0");
   assert.equal(signedMoneyLabel(-330_000, "TWD", "zh-TW").includes("-NT$"), false);
+});
+
+test("settlement PDF prints opening plus period net as closing", async () => {
+  const font = readFileSync(new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url));
+  const t = makeT("zh-TW");
+  const cases = [
+    {
+      id: "net-positive",
+      opening: 200_000,
+      rent: 1_800_000,
+      firm: 1_800_000,
+      fee: 180_000,
+      expenses: 120_000,
+      payouts: 0,
+      ascii: ["NT$2,000", "NT$15,000", "NT$17,000", "NT$18,000"],
+    },
+    {
+      id: "net-zero",
+      opening: 500_000,
+      rent: 1_000_000,
+      firm: 1_000_000,
+      fee: 100_000,
+      expenses: 900_000,
+      payouts: 0,
+      ascii: ["NT$5,000", "NT$0", "NT$10,000"],
+    },
+    {
+      id: "net-negative",
+      opening: -100_000,
+      rent: 200_000,
+      firm: 200_000,
+      fee: 80_000,
+      expenses: 450_000,
+      payouts: 0,
+      ascii: ["-NT$1,000", "-NT$3,300", "-NT$4,300", "NT$2,000"],
+    },
+  ];
+  for (const row of cases) {
+    const source = settlementPdfSource({
+      ownerId: "00000000-0000-4000-8000-000000000088",
+      orgId: "00000000-0000-4000-8000-000000000001",
+      ownerName: "QA屋主甲",
+      periodStart: "2026-10-01",
+      periodEnd: "2026-10-31",
+      currency: "TWD",
+      openingMinor: row.opening,
+      rentMinor: row.rent,
+      otherMinor: 0,
+      feeMinor: row.fee,
+      expenseMinor: row.expenses,
+      firmMinor: row.firm,
+      payoutMinor: row.payouts,
+    });
+    const closing = row.opening + row.firm - row.fee - row.expenses - row.payouts;
+    assert.equal(source.opening, row.opening, row.id);
+    assert.equal(source.firm, row.firm, row.id);
+    assert.equal(source.closing, closing, row.id);
+    const doc = buildStatementPdf(source, "zh-TW", "gregorian", t);
+    const formula = doc.blocks
+      .flatMap((block) => (block.kind === "text" ? block.lines : []))
+      .find((line) => line.includes("管理公司經手租金"));
+    assert.ok(formula, row.id);
+    assert.match(formula, new RegExp(`管理公司經手租金 ${row.id === "net-negative" ? "NT\\$2,000" : row.id === "net-zero" ? "NT\\$10,000" : "NT\\$18,000"}`));
+    assert.match(formula, /期末餘額/);
+    const bytes = await renderPdf(doc, font);
+    for (const needle of row.ascii) {
+      assert.equal(pdfContainsAscii(bytes, needle), true, `${row.id} ${needle}`);
+    }
+  }
 });
 
 test("settlement copy uses 屋主, 未繳租金, 已繳, and 款項到帳", () => {

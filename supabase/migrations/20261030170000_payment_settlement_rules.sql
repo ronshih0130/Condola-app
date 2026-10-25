@@ -1,8 +1,9 @@
 -- Version 20261030170000. After 20261030160000_rent_settlement.sql.
 -- Payment and owner-settlement rules.
 --
--- Additive on existing tables: new nullable columns and a due_day default.
--- No new NOT NULL, CHECK, or foreign key is added to an existing table.
+-- Additive on existing tables: new nullable columns only.
+-- No new NOT NULL, CHECK, foreign key, or column default is added to an existing table.
+-- leases.due_day keeps its existing default.
 -- statement_change_log and owner_payouts are new tables. Safe to apply again.
 --
 -- post_reversal is restated from 20261030120000_org_scoped_reversal_audit.sql
@@ -31,8 +32,6 @@ ALTER TABLE owner_statements ADD COLUMN IF NOT EXISTS changed_after_generate boo
 ALTER TABLE owner_statements ADD COLUMN IF NOT EXISTS content_snapshot jsonb;
 
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS records_only boolean DEFAULT false;
-
-ALTER TABLE leases ALTER COLUMN due_day SET DEFAULT 5;
 
 CREATE TABLE IF NOT EXISTS statement_change_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -67,9 +66,9 @@ CREATE TRIGGER trg_statement_change_log_audit
   AFTER INSERT ON statement_change_log
   FOR EACH ROW EXECUTE FUNCTION fn_audit();
 
-REVOKE ALL ON TABLE statement_change_log FROM PUBLIC, anon;
-GRANT SELECT, INSERT ON TABLE statement_change_log TO authenticated, service_role;
-REVOKE UPDATE, DELETE ON TABLE statement_change_log FROM authenticated;
+REVOKE ALL ON TABLE statement_change_log FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE statement_change_log TO authenticated;
+GRANT SELECT, INSERT ON TABLE statement_change_log TO service_role;
 
 CREATE TABLE IF NOT EXISTS owner_payouts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -102,9 +101,9 @@ CREATE POLICY team_insert ON owner_payouts
     AND app.has_role(org_id, '{admin,manager,accountant}'::org_role[])
   );
 
-REVOKE ALL ON TABLE owner_payouts FROM PUBLIC, anon;
-GRANT SELECT, INSERT ON TABLE owner_payouts TO authenticated, service_role;
-REVOKE UPDATE, DELETE ON TABLE owner_payouts FROM authenticated;
+REVOKE ALL ON TABLE owner_payouts FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE owner_payouts TO authenticated;
+GRANT SELECT, INSERT ON TABLE owner_payouts TO service_role;
 
 -- Restate 20261030120000. Hidden RLS row: 42501. Missing id: not found.
 -- authenticated and anon must match app.active_org_id and app.is_member.

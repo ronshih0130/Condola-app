@@ -2,14 +2,12 @@
 -- Rent payment records and owner settlement, behind feature flag rent_settlement.
 --
 -- Additive only and safe to apply again. No new NOT NULL, CHECK, or foreign key
--- is added to an existing table. organizations.feature_flags already exists;
--- this only sets a jsonb key on sample (sandbox) and beta firms.
--- payment_corrections is a new append-only audit table. Older Workers do not read it.
-
-UPDATE organizations
-   SET feature_flags = coalesce(feature_flags, '{}'::jsonb) || '{"rent_settlement": true}'::jsonb
- WHERE environment = 'sandbox'
-    OR plan_tier = 'beta';
+-- is added to an existing table. This file does not update organizations.
+-- The flag stays off. plan_tier defaults to beta, so a beta match would turn
+-- the flag on for production firms and write audit_log plus updated_at.
+-- The sample company sets the flag only when its environment is sandbox
+-- (insertSandboxOrg). Any other firm needs a separate, explicit update.
+-- payment_corrections is a new append-only audit table. Older workers do not write it.
 
 CREATE TABLE IF NOT EXISTS payment_corrections (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -64,6 +62,6 @@ CREATE TRIGGER trg_payment_corrections_audit
   AFTER INSERT ON payment_corrections
   FOR EACH ROW EXECUTE FUNCTION fn_audit();
 
-REVOKE ALL ON TABLE payment_corrections FROM PUBLIC, anon;
-GRANT SELECT, INSERT ON TABLE payment_corrections TO authenticated, service_role;
-REVOKE UPDATE, DELETE ON TABLE payment_corrections FROM authenticated;
+REVOKE ALL ON TABLE payment_corrections FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE payment_corrections TO authenticated;
+GRANT SELECT, INSERT ON TABLE payment_corrections TO service_role;

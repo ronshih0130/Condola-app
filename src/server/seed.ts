@@ -94,12 +94,6 @@ export async function resetAndSeed() {
        ) VALUES ($1, $2, $2, 'TW', $3, 'TWD', 'zh-TW', 'Asia/Taipei', true, '北市租管字第5678號', $4, true)`,
       [ORG2_ID, FIRM2_NAME, twId, USERS.coastAdmin],
     );
-    await client.query(
-      `UPDATE organizations
-          SET feature_flags = coalesce(feature_flags, '{}'::jsonb) || '{"rent_settlement": true}'::jsonb
-        WHERE plan_tier = 'beta' OR environment = 'sandbox'`,
-    );
-
     const members: { org: string; user: string; role: string; billing: boolean; title: string }[] = [
       { org: ORG_ID, user: USERS.admin, role: "admin", billing: true, title: "負責人" },
       { org: ORG_ID, user: USERS.manager, role: "manager", billing: false, title: "物業經理" },

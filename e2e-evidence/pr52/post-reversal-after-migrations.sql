@@ -84,17 +84,44 @@ $shape$;
 
 BEGIN;
 
+-- Synthetic rows only. Nothing here is a demo id, and ROLLBACK drops it all.
 DO $pick$
 DECLARE
-  org_a uuid := '10000000-0000-4000-8000-000000000001';
-  org_b uuid := '10000000-0000-4000-8000-000000000002';
-  user_b uuid := '20000000-0000-4000-8000-000000000009';
+  org_a uuid := gen_random_uuid();
+  org_b uuid := gen_random_uuid();
+  user_b uuid := gen_random_uuid();
   txn uuid;
+  email text;
 BEGIN
-  SELECT id INTO txn FROM ledger_transactions WHERE org_id = org_a LIMIT 1;
-  IF txn IS NULL THEN
-    RAISE EXCEPTION 'no ledger row in org % for the cross-org post_reversal check', org_a;
-  END IF;
+  email := 'pr52-' || replace(user_b::text, '-', '') || '@example.test';
+  INSERT INTO auth.users (
+    instance_id, id, aud, role, email, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change_token_new, email_change,
+    email_change_token_current, email_change_confirm_status,
+    phone_change, phone_change_token, reauthentication_token,
+    is_sso_user, is_anonymous
+  ) VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    user_b, 'authenticated', 'authenticated', email, now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('name', 'pr52 cross-org'),
+    now(), now(),
+    '', '', '', '', '', 0, '', '', '', false, false
+  );
+  INSERT INTO profiles (id, display_name, email, locale)
+  VALUES (user_b, 'pr52 cross-org', email, 'zh-TW');
+  INSERT INTO organizations (id, name, country_code, default_currency)
+  VALUES (org_a, 'pr52 org a', 'TW', 'TWD'),
+         (org_b, 'pr52 org b', 'TW', 'TWD');
+  INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status)
+  VALUES (org_b, user_b, 'admin', true, 'active');
+  INSERT INTO ledger_transactions (org_id, kind, currency, effective_date, description)
+  VALUES (org_a, 'invoice', 'TWD', current_date, 'pr52 cross-org')
+  RETURNING id INTO txn;
+  INSERT INTO ledger_entries (org_id, transaction_id, account, amount_minor, currency, memo)
+  VALUES (org_a, txn, 'tenant_receivable', 100, 'TWD', 'pr52'),
+         (org_a, txn, 'rental_income', -100, 'TWD', 'pr52');
   PERFORM set_config('request.jwt.claim.sub', user_b::text, true);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('app.active_org_id', org_b::text, true);

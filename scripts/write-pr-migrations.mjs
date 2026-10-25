@@ -75,11 +75,11 @@ const added = {
   },
   "supabase/migrations/20261030160000_rent_settlement.sql": {
     addOnly: false,
-    reason: "Sets rent_settlement on existing sandbox and beta firms. New payment_corrections table has NOT NULL columns, CHECK constraints, and foreign keys. Existing tables are not altered. Older workers do not write the new table.",
+    reason: "New payment_corrections table has NOT NULL columns, CHECK constraints, and foreign keys. Does not update organizations or turn rent_settlement on. Existing tables are not altered. Older workers do not write the new table.",
   },
   "supabase/migrations/20261030170000_payment_settlement_rules.sql": {
     addOnly: false,
-    reason: "Nullable columns and a due_day default on existing tables, plus new statement_change_log and owner_payouts tables. Restates the org-scoped post_reversal from 20261030120000 and revokes EXECUTE from PUBLIC and anon. No NOT NULL or new constraint on an existing table. Does not grant back EXECUTE revoked by 20261030100000 or 20261030150000.",
+    reason: "Nullable columns on existing tables, plus new statement_change_log and owner_payouts tables. Does not change leases.due_day. Restates the org-scoped post_reversal from 20261030120000 and revokes EXECUTE from PUBLIC and anon. No NOT NULL or new constraint on an existing table. Does not grant back EXECUTE revoked by 20261030100000 or 20261030150000.",
   },
   "supabase/migrations/20261030100000_lock_public_function_execute.sql": {
     addOnly: false,

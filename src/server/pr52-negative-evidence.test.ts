@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, test } from "node:test";
 import { makeT } from "@/i18n";
 import { pdfContainsAscii } from "@/lib/pdf-text";
 import { renderPdf } from "@/lib/pdf-render";
 import { buildStatementPdf, type StatementPdfSource } from "@/server/pdf-docs";
-import { moneyLabel, ownerSettlement, signedMoneyLabel } from "@/server/format";
+import { ownerSettlement } from "@/server/format";
+import { renderSettlementList, renderStatementPage } from "@/server/pr52-render-evidence";
+import { settlementPdfSource } from "@/server/rent-settlement";
 import { closingBalance } from "@/server/rent-settlement-math";
 
 const ROOT = join(import.meta.dirname, "../..");
@@ -16,7 +20,20 @@ const AFTER = join(EVIDENCE, "after");
 const BASE = "c47122251c9185c87fb2253626d330c6b6a0194a";
 
 const BANNED = ["收租", "收款", "欠租", "已收", "入帳", "房東", "代收", "轉付", "統一編號", "含稅", "本公司"];
-const ALLOW = ["已收到", "自動計入帳單"];
+const ALLOW_REQUIRED = ["已收到", "自動計入帳單", ["一起成為完美", "房", "東"].join(""), "不開立統一發票", "登入帳號"];
+
+function copyAllowlist() {
+  const md = readFileSync(join(ROOT, "rental-crm/prod/banned_terms.md"), "utf8");
+  const start = md.indexOf("## 白名單");
+  assert.ok(start >= 0);
+  const phrases: string[] = [];
+  for (const line of md.slice(start).split("\n").slice(1)) {
+    if (line.startsWith("## ")) break;
+    const phrase = line.trim();
+    if (phrase) phrases.push(phrase);
+  }
+  return phrases.sort((a, b) => b.length - a.length);
+}
 
 type CaseId = "net-positive" | "net-zero" | "net-negative";
 
@@ -90,19 +107,11 @@ function header(text: string, key: string) {
 
 function bannedHits(text: string) {
   let masked = text;
-  for (const phrase of ALLOW) masked = masked.replaceAll(phrase, "");
+  for (const phrase of copyAllowlist()) masked = masked.replaceAll(phrase, "");
   return BANNED.filter((term) => masked.includes(term));
 }
 
 const t = makeT("zh-TW");
-
-function money(minor: number) {
-  return moneyLabel(minor, "TWD", "zh-TW");
-}
-
-function signed(minor: number) {
-  return signedMoneyLabel(minor, "TWD", "zh-TW");
-}
 
 function pdfLines(source: StatementPdfSource) {
   const doc = buildStatementPdf(source, "zh-TW", "gregorian", t);
@@ -140,47 +149,30 @@ function statementSource(row: Fixture, closing: number): StatementPdfSource {
   };
 }
 
-/** Settlement PDF uses the same inputs as settlementPdfForSession: opening 0, closing = month net. */
-function settlementSource(row: Fixture, net: number): StatementPdfSource {
-  return {
-    ...statementSource(row, net),
-    opening: 0,
-    payouts: 0,
-    closing: net,
-    firm: undefined,
-    lines: [],
-    addresses: [],
-    audience: "staff",
-  };
-}
-
-function htmlTable(title: string, rows: [string, string][]) {
-  const body = rows
-    .map(([label, value]) => `<tr><td>${label}</td><td class="num">${value}</td></tr>`)
-    .join("");
-  return `<!DOCTYPE html><meta charset="utf-8"><title>${title}</title><table><tbody>${body}</tbody></table>\n`;
-}
-
-function settlementList(row: Fixture) {
-  const figures = ownerSettlement({
-    opening: row.opening,
-    rent: row.rent,
-    other: row.other,
-    fee: row.fee,
-    expenses: row.expenses,
-    payouts: row.payouts,
-    closing: closingOf(row),
+/** Same source settlementPdfForSession builds: opening + firm − costs − payouts = closing. */
+function settlementSource(row: Fixture): StatementPdfSource {
+  return settlementPdfSource({
+    ownerId: "10000000-0000-4000-8000-000000000088",
+    orgId: "10000000-0000-4000-8000-000000000001",
+    ownerName: "QA屋主甲",
+    periodStart: "2026-10-01",
+    periodEnd: "2026-10-31",
+    currency: "TWD",
+    openingMinor: row.opening,
+    rentMinor: row.rent,
+    otherMinor: row.other,
+    feeMinor: row.fee,
+    expenseMinor: row.expenses,
+    firmMinor: row.firm,
+    payoutMinor: row.payouts,
   });
-  const netLabel =
-    figures.owes > 0 ? `${t("owner_owes")} ${signed(-figures.owes)}` : money(figures.payable);
-  return {
-    figures,
-    rows: [
-      [t("i_stmt_rent"), money(figures.rent)],
-      [t("i_stmt_costs"), money(figures.costs)],
-      [t("i_stmt_net"), netLabel],
-    ] as [string, string][],
-  };
+}
+
+function pdfText(bytes: Uint8Array) {
+  const dir = mkdtempSync(join(tmpdir(), "pr52-pdf-"));
+  const file = join(dir, "doc.pdf");
+  writeFileSync(file, bytes);
+  return execFileSync("pdftotext", ["-layout", "-enc", "UTF-8", file, "-"], { encoding: "utf8" });
 }
 
 let negativeStatementPdf: Uint8Array;
@@ -193,8 +185,20 @@ before(async () => {
     const net = periodNet(row);
     const closing = closingOf(row);
     const statement = pdfLines(statementSource(row, closing));
-    const settlement = pdfLines(settlementSource(row, net));
-    const list = settlementList(row);
+    const settlementModel = settlementSource(row);
+    assert.equal(settlementModel.opening, row.opening);
+    assert.equal(settlementModel.firm, row.firm);
+    assert.equal(settlementModel.closing, closing);
+    const settlement = pdfLines(settlementModel);
+    const figures = ownerSettlement({
+      opening: row.opening,
+      rent: row.rent,
+      other: row.other,
+      fee: row.fee,
+      expenses: row.expenses,
+      payouts: row.payouts,
+      closing,
+    });
     const head = [
       "version: after #52",
       `base: ${BASE}`,
@@ -208,7 +212,7 @@ before(async () => {
       `firm_minor: ${row.firm}`,
       `period_net_minor: ${net}`,
       `closing_minor: ${closing}`,
-      `owner_net_minor: ${list.figures.net}`,
+      `owner_net_minor: ${figures.net}`,
       `identity_closing_eq_opening_plus_period_net: ${closing === row.opening + net}`,
     ];
     const statementText = [...head, "surface: monthly-statement", "", "--- pdf model ---", statement.text, ""].join("\n");
@@ -216,56 +220,30 @@ before(async () => {
       ...head,
       "surface: settlement",
       "",
-      "--- list ---",
-      ...list.rows.map(([label, value]) => `${label}\t${value}`),
-      "",
       "--- pdf model ---",
       settlement.text,
       "",
     ].join("\n");
     writeFileSync(join(AFTER, `${row.id}-statement.txt`), statementText);
     writeFileSync(join(AFTER, `${row.id}-settlement.txt`), settlementText);
-    writeFileSync(join(AFTER, `${row.id}-statement.html`), htmlTable(`${row.id} monthly statement`, statementRows(statement.text)));
-    writeFileSync(join(AFTER, `${row.id}-settlement.html`), htmlTable(`${row.id} settlement`, list.rows));
+    writeFileSync(
+      join(AFTER, `${row.id}-statement.html`),
+      renderStatementPage({ ...row, closing }),
+    );
+    writeFileSync(
+      join(AFTER, `${row.id}-settlement.html`),
+      renderSettlementList({ ...row, closing }),
+    );
+    const statementPdf = await renderPdf(statement.doc, font);
+    const settlementPdf = await renderPdf(settlement.doc, font);
+    writeFileSync(join(AFTER, `${row.id}-statement.pdf.txt`), pdfText(statementPdf));
+    writeFileSync(join(AFTER, `${row.id}-settlement.pdf.txt`), pdfText(settlementPdf));
     if (row.id === "net-negative") {
-      negativeStatementPdf = await renderPdf(statement.doc, font);
-      negativeSettlementPdf = await renderPdf(settlement.doc, font);
-      writeFileSync(
-        join(AFTER, "net-negative-statement.pdf.txt"),
-        pdfEvidence("monthly-statement", negativeStatementPdf),
-      );
-      writeFileSync(
-        join(AFTER, "net-negative-settlement.pdf.txt"),
-        pdfEvidence("settlement", negativeSettlementPdf),
-      );
+      negativeStatementPdf = statementPdf;
+      negativeSettlementPdf = settlementPdf;
     }
   }
 });
-
-function statementRows(model: string): [string, string][] {
-  return model
-    .split("\n")
-    .filter((line) => line.includes("\t"))
-    .map((line) => {
-      const [label, value] = line.split("\t");
-      return [label, value] as [string, string];
-    });
-}
-
-function pdfEvidence(surface: string, bytes: Uint8Array) {
-  const amounts = ["-NT$1,000", "-NT$3,300", "-NT$4,300", "-NT$15,000", "-NT$17,000"].filter((amount) =>
-    pdfContainsAscii(bytes, amount),
-  );
-  return [
-    "version: after #52",
-    `base: ${BASE}`,
-    `surface: ${surface}`,
-    `pdf_contains_ascii_-NT$: ${pdfContainsAscii(bytes, "-NT$")}`,
-    `amounts: ${amounts.join(", ")}`,
-    `byte_length: ${bytes.length}`,
-    "",
-  ].join("\n");
-}
 
 test("closing balance equals opening balance plus period net for each case", () => {
   for (const row of CASES) {
@@ -307,20 +285,41 @@ test("before and after snapshots keep the three nets and show the signed closing
   assert.match(negativeAfter, /期初餘額\t−NT\$1,000/);
   assert.match(negativeAfter, /本期淨額為負 −NT\$3,300/);
   assert.match(negativeAfter, /期末餘額\t−NT\$4,300/);
-  assert.match(readFileSync(join(AFTER, "net-negative-statement.html"), "utf8"), /期末餘額/);
-  assert.match(readFileSync(join(AFTER, "net-negative-settlement.txt"), "utf8"), /屋主淨額\t本期淨額為負 −NT\$3,300/);
-  assert.match(readFileSync(join(AFTER, "net-positive-settlement.txt"), "utf8"), /屋主淨額\tNT\$15,000/);
-  assert.match(readFileSync(join(AFTER, "net-zero-settlement.txt"), "utf8"), /屋主淨額\tNT\$0/);
+  const negativeHtml = readFileSync(join(AFTER, "net-negative-statement.html"), "utf8");
+  const negativeList = readFileSync(join(AFTER, "net-negative-settlement.html"), "utf8");
+  assert.match(negativeHtml, /data-testid="statement-document"/);
+  assert.match(negativeHtml, /期末餘額/);
+  assert.match(negativeHtml, /\u2212NT\$1,000/);
+  assert.match(negativeHtml, /\u2212NT\$4,300/);
+  assert.match(negativeList, /data-testid="statement-list"/);
+  assert.match(negativeList, /statement-list-opening/);
+  assert.match(negativeList, /statement-list-closing/);
+  assert.match(negativeList, /\u2212NT\$1,000/);
+  assert.match(negativeList, /\u2212NT\$4,300/);
+  assert.match(readFileSync(join(AFTER, "net-positive-settlement.html"), "utf8"), /NT\$2,000/);
+  assert.match(readFileSync(join(AFTER, "net-positive-settlement.html"), "utf8"), /NT\$17,000/);
+  assert.match(readFileSync(join(AFTER, "net-zero-settlement.html"), "utf8"), /NT\$5,000/);
+  const negativeSettlementModel = readFileSync(join(AFTER, "net-negative-settlement.txt"), "utf8");
+  assert.match(negativeSettlementModel, /期初餘額\t−NT\$1,000/);
+  assert.match(negativeSettlementModel, /期末餘額\t−NT\$4,300/);
+  assert.match(negativeSettlementModel, /管理公司經手租金 NT\$2,000/);
 });
 
 test("negative-case wording skips the banned payment terms", () => {
+  for (const phrase of ALLOW_REQUIRED) assert.ok(copyAllowlist().includes(phrase), phrase);
   assert.deepEqual(bannedHits("已收到租金，自動計入帳單"), []);
+  assert.deepEqual(bannedHits(["一起成為完美", "房", "東"].join("")), []);
+  assert.deepEqual(bannedHits("不開立統一發票"), []);
+  assert.deepEqual(bannedHits("登入帳號"), []);
   assert.deepEqual(bannedHits("已收"), ["已收"]);
+  assert.deepEqual(bannedHits("房東"), ["房東"]);
   const negative = [
     readFileSync(join(AFTER, "net-negative-statement.txt"), "utf8"),
     readFileSync(join(AFTER, "net-negative-statement.html"), "utf8"),
     readFileSync(join(AFTER, "net-negative-settlement.txt"), "utf8"),
     readFileSync(join(AFTER, "net-negative-settlement.html"), "utf8"),
+    readFileSync(join(AFTER, "net-negative-statement.pdf.txt"), "utf8"),
+    readFileSync(join(AFTER, "net-negative-settlement.pdf.txt"), "utf8"),
   ].join("\n");
   assert.deepEqual(bannedHits(negative), []);
   assert.equal(negative.includes("差額請屋主補繳"), false);
@@ -331,13 +330,20 @@ test("the negative PDF shows -NT$ for the statement and the settlement", () => {
   assert.equal(pdfContainsAscii(negativeStatementPdf, "-NT$1,000"), true);
   assert.equal(pdfContainsAscii(negativeStatementPdf, "-NT$3,300"), true);
   assert.equal(pdfContainsAscii(negativeStatementPdf, "-NT$4,300"), true);
+  assert.equal(pdfContainsAscii(negativeSettlementPdf, "-NT$1,000"), true);
   assert.equal(pdfContainsAscii(negativeSettlementPdf, "-NT$3,300"), true);
-  assert.equal(pdfContainsAscii(negativeSettlementPdf, "-NT$4,300"), false);
+  assert.equal(pdfContainsAscii(negativeSettlementPdf, "-NT$4,300"), true);
+  assert.equal(pdfContainsAscii(negativeSettlementPdf, "NT$2,000"), true);
   const statementNote = readFileSync(join(AFTER, "net-negative-statement.pdf.txt"), "utf8");
   const settlementNote = readFileSync(join(AFTER, "net-negative-settlement.pdf.txt"), "utf8");
-  assert.match(statementNote, /pdf_contains_ascii_-NT\$: true/);
+  const positiveNote = readFileSync(join(AFTER, "net-positive-settlement.pdf.txt"), "utf8");
+  const zeroNote = readFileSync(join(AFTER, "net-zero-settlement.pdf.txt"), "utf8");
   assert.match(statementNote, /-NT\$1,000/);
   assert.match(statementNote, /-NT\$4,300/);
-  assert.match(settlementNote, /pdf_contains_ascii_-NT\$: true/);
-  assert.match(settlementNote, /-NT\$3,300/);
+  assert.match(settlementNote, /-NT\$1,000/);
+  assert.match(settlementNote, /-NT\$4,300/);
+  assert.match(settlementNote, /NT\$2,000/);
+  assert.match(positiveNote, /NT\$2,000/);
+  assert.match(positiveNote, /NT\$17,000/);
+  assert.match(zeroNote, /NT\$5,000/);
 });

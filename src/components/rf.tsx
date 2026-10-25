@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import React, { type ReactNode } from "react";
 
 export function RfTable({ testId, children }: { testId: string; children: ReactNode }) {
   return (

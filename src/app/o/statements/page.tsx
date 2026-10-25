@@ -30,10 +30,11 @@ export default async function OwnerStatementsPage() {
           const amount = figures.owes > 0
             ? signedMoneyLabel(-figures.owes, row.currency, session.locale)
             : moneyLabel(Math.max(0, figures.payable), row.currency, session.locale);
+          const signed = (minor: number) => signedMoneyLabel(minor, row.currency, session.locale);
           return (
             <p key={row.id}>
               <Link href={`/o/statements/${row.id}`}>
-                {civilPeriodLabel(row.period_start.slice(0, 7))} ·{" "}
+                {civilPeriodLabel(row.period_start.slice(0, 7))} · {t("i_opening")} {signed(figures.opening)} · {t("i_closing")} {signed(figures.closing)} ·{" "}
                 {figures.owes > 0 ? (
                   <span className="chip warn" data-testid="owner-owes">
                     {t("owner_owes")} {amount}

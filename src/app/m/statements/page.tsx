@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { StatementForm } from "@/components/dialogs";
-import { Cell, RfTable } from "@/components/rf";
+import { StatementRosterTable } from "@/components/statement-roster";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionAddExpense } from "@/server/auth-actions";
 import { actionStatement } from "@/server/actions";
@@ -100,83 +100,73 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
             <Link className="btn pri" href="/m/payments">{t("i_stmt_empty_cta")}</Link>
           </div>
         ) : (
-          <RfTable testId="statement-list">
-            <thead>
-              <tr>
-                <th>{t("i_owner")}</th>
-                <th>{t("i_stmt_units")}</th>
-                <th>{t("i_stmt_rent")}</th>
-                <th>{t("i_stmt_costs")}</th>
-                <th>{t("i_stmt_net")}</th>
-                <th>{t("i_status")}</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {roster.map((row) => {
-                const figures = row.generated
-                  ? ownerSettlement({
-                      opening: Number(row.opening),
-                      rent: Number(row.rent),
-                      other: Number(row.other),
-                      fee: Number(row.fee),
-                      expenses: Number(row.expenses),
-                      payouts: Number(row.payouts),
-                      closing: Number(row.closing),
-                    })
-                  : null;
-                const label = (minor: number) => moneyLabel(minor, row.currency, session.locale);
-                const period = row.period_start.slice(0, 7);
-                const costs = figures ? figures.fee + figures.expenses : 0;
-                return (
-                  <tr key={`${row.owner_id}-${period}`}>
-                    <Cell>
-                      <b>{row.owner_name}</b>
-                      <div className="small muted">{civilPeriodLabel(period)}</div>
-                    </Cell>
-                    <Cell label={t("i_stmt_units")}>{row.units || dash}</Cell>
-                    <Cell label={t("i_stmt_rent")}>{figures ? label(figures.rent) : dash}</Cell>
-                    <Cell label={t("i_stmt_costs")}>{figures ? label(costs) : dash}</Cell>
-                    <Cell label={t("i_stmt_net")}>
-                      {figures && figures.owes > 0 ? (
-                        <span className="chip warn" data-testid="owner-owes">
-                          {t("owner_owes")} {signedMoneyLabel(-figures.owes, row.currency, session.locale)}
-                        </span>
-                      ) : figures ? (
-                        label(figures.payable)
-                      ) : (
-                        dash
-                      )}
-                    </Cell>
-                    <Cell label={t("i_status")}>
-                      <span className={`chip ${row.generated ? "ok" : ""}`}>{row.generated ? t("i_generated") : t("i_stmt_draft")}</span>
-                      {row.changed ? <span className="chip warn">{t("i_stmt_changed")}</span> : null}
-                      {figures && figures.owes > 0 ? <span className="chip warn">{t("owner_owes")}</span> : null}
-                    </Cell>
-                    <Cell action>
-                      <Link className="btn" href={row.id ? `/m/statements/${row.id}` : `/m/statements/preview?owner=${row.owner_id}&month=${period}`}>
-                        {t("i_preview")}
-                      </Link>
-                      {canGenerate ? (
-                        <form action={actionStatement}>
-                          <input type="hidden" name="ownerContactId" value={row.owner_id} />
-                          <input type="hidden" name="month" value={period} />
-                          {row.generated ? <input type="hidden" name="regenerate" value="1" /> : null}
-                          <button className={row.generated ? "btn" : "btn pri"} type="submit">
-                            {row.generated ? t("i_stmt_regen") : t("s_705a524")}
-                          </button>
-                        </form>
-                      ) : (
-                        <button className="btn" type="button" disabled title={denied} aria-disabled="true">
-                          {row.generated ? t("s_1bd133f") : t("s_705a524")}
+          <StatementRosterTable
+            t={t}
+            rows={roster.map((row) => {
+              const figures = row.generated
+                ? ownerSettlement({
+                    opening: Number(row.opening),
+                    rent: Number(row.rent),
+                    other: Number(row.other),
+                    fee: Number(row.fee),
+                    expenses: Number(row.expenses),
+                    payouts: Number(row.payouts),
+                    closing: Number(row.closing),
+                  })
+                : null;
+              const label = (minor: number) => moneyLabel(minor, row.currency, session.locale);
+              const signed = (minor: number) => signedMoneyLabel(minor, row.currency, session.locale);
+              const period = row.period_start.slice(0, 7);
+              const costs = figures ? figures.fee + figures.expenses : 0;
+              return {
+                key: `${row.owner_id}-${period}`,
+                ownerName: row.owner_name,
+                periodLabel: civilPeriodLabel(period),
+                units: row.units || dash,
+                opening: figures ? signed(figures.opening) : dash,
+                rent: figures ? label(figures.rent) : dash,
+                costs: figures ? label(costs) : dash,
+                net: figures && figures.owes > 0 ? (
+                  <span className="chip warn" data-testid="owner-owes">
+                    {t("owner_owes")} {signed(-figures.owes)}
+                  </span>
+                ) : figures ? (
+                  label(figures.payable)
+                ) : (
+                  dash
+                ),
+                closing: figures ? signed(figures.closing) : dash,
+                status: (
+                  <>
+                    <span className={`chip ${row.generated ? "ok" : ""}`}>{row.generated ? t("i_generated") : t("i_stmt_draft")}</span>
+                    {row.changed ? <span className="chip warn">{t("i_stmt_changed")}</span> : null}
+                    {figures && figures.owes > 0 ? <span className="chip warn">{t("owner_owes")}</span> : null}
+                  </>
+                ),
+                action: (
+                  <>
+                    <Link className="btn" href={row.id ? `/m/statements/${row.id}` : `/m/statements/preview?owner=${row.owner_id}&month=${period}`}>
+                      {t("i_preview")}
+                    </Link>
+                    {canGenerate ? (
+                      <form action={actionStatement}>
+                        <input type="hidden" name="ownerContactId" value={row.owner_id} />
+                        <input type="hidden" name="month" value={period} />
+                        {row.generated ? <input type="hidden" name="regenerate" value="1" /> : null}
+                        <button className={row.generated ? "btn" : "btn pri"} type="submit">
+                          {row.generated ? t("i_stmt_regen") : t("s_705a524")}
                         </button>
-                      )}
-                    </Cell>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </RfTable>
+                      </form>
+                    ) : (
+                      <button className="btn" type="button" disabled title={denied} aria-disabled="true">
+                        {row.generated ? t("s_1bd133f") : t("s_705a524")}
+                      </button>
+                    )}
+                  </>
+                ),
+              };
+            })}
+          />
         )}
       </div>
     </>

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import type { Locale, T } from "@/i18n";
 import { BrandImage } from "@/components/brand";
 import { moneyLabel, ownerSettlement, signedMoneyLabel } from "@/server/format";

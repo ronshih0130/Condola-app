@@ -4,14 +4,14 @@ import { writePdfDownload } from "./audit";
 import { maybe, many, tx } from "./db";
 import { FlowError } from "./errors";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
-import { buildStatementPdf } from "./pdf-docs";
+import { buildStatementPdf, type StatementPdfSource } from "./pdf-docs";
 import { assertPerm, can } from "./perms";
-import type { Session } from "./types";
+import type { CalendarMode, Session } from "./types";
 import {
   attributeMinor,
+  closingBalance,
   defaultPaidOn,
   isSettlementMethod,
-  minorNumber,
   monthWindow,
   parseAmountToMinor,
   parseCivilDate,
@@ -72,7 +72,55 @@ export type OwnerSettlementRow = MonthSettlement & {
   ownerName: string;
   currency: string;
   month: string;
+  openingMinor: bigint;
+  firmMinor: bigint;
+  payoutMinor: bigint;
 };
+
+/** Settlement PDF: closing is opening + firm-handled rent − fee − expenses − payouts. */
+export function settlementPdfSource(input: {
+  ownerId: string;
+  orgId: string;
+  ownerName: string;
+  periodStart: string;
+  periodEnd: string;
+  currency: string;
+  openingMinor: number;
+  rentMinor: number;
+  otherMinor: number;
+  feeMinor: number;
+  expenseMinor: number;
+  firmMinor: number;
+  payoutMinor: number;
+}): StatementPdfSource {
+  const closing = Number(
+    closingBalance(
+      BigInt(input.openingMinor),
+      BigInt(input.firmMinor),
+      BigInt(input.feeMinor + input.expenseMinor),
+      BigInt(input.payoutMinor),
+    ),
+  );
+  return {
+    id: input.ownerId,
+    orgId: input.orgId,
+    ownerName: input.ownerName,
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
+    currency: input.currency,
+    opening: input.openingMinor,
+    rent: input.rentMinor,
+    other: input.otherMinor,
+    fee: input.feeMinor,
+    expenses: input.expenseMinor,
+    payouts: input.payoutMinor,
+    closing,
+    firm: input.firmMinor,
+    lines: [],
+    addresses: [],
+    audience: "staff",
+  };
+}
 
 export type SettlementPage = {
   month: string;
@@ -359,11 +407,12 @@ async function ownerRows(
     paid_minor: string;
     paid_on: string;
     status: string;
+    payee: string | null;
     lines: unknown;
   }>(
     client,
     `SELECT po.owner_contact_id::text AS owner_id, btrim(pay.currency) AS currency,
-            a.amount_minor::text AS paid_minor, pay.paid_on::text, pay.status::text,
+            a.amount_minor::text AS paid_minor, pay.paid_on::text, pay.status::text, pay.payee,
             coalesce((
               SELECT jsonb_agg(jsonb_build_object(
                        'charge_type', il.charge_type::text,
@@ -428,20 +477,42 @@ async function ownerRows(
       minimumMinor: BigInt(rule.minimum_minor ?? 0),
     });
   }
-  const grouped = new Map<string, { rent: bigint; utility: bigint; other: bigint }>();
+  const grouped = new Map<string, { rent: bigint; utility: bigint; other: bigint; firm: bigint }>();
   for (const row of allocations) {
     const key = `${row.owner_id}:${row.currency}`;
-    const bucket = grouped.get(key) ?? { rent: BigInt(0), utility: BigInt(0), other: BigInt(0) };
+    const bucket = grouped.get(key) ?? { rent: BigInt(0), utility: BigInt(0), other: BigInt(0), firm: BigInt(0) };
     const split = attributeMinor(asLines(row.lines), BigInt(row.paid_minor));
     bucket.rent += split.rent;
     bucket.utility += split.utility;
     bucket.other += split.other;
+    if (row.payee === "firm") bucket.firm += split.rent;
     grouped.set(key, bucket);
   }
   const expenseByKey = new Map(expenses.map((row) => [`${row.owner_id}:${row.currency}`, BigInt(row.amount_minor)]));
+  const openings = await many<{ owner_id: string; currency: string; opening: string }>(
+    client,
+    `SELECT DISTINCT ON (s.owner_contact_id, btrim(s.currency))
+            s.owner_contact_id::text AS owner_id, btrim(s.currency) AS currency,
+            s.closing_balance_minor::text AS opening
+       FROM owner_statements s
+      WHERE s.org_id = $1 AND s.status = 'issued' AND s.period_end < $2::date
+      ORDER BY s.owner_contact_id, btrim(s.currency), s.period_end DESC`,
+    [orgId, bounds.start],
+  );
+  const payouts = await many<{ owner_id: string; currency: string; amount_minor: string }>(
+    client,
+    `SELECT owner_contact_id::text AS owner_id, btrim(currency) AS currency,
+            coalesce(sum(amount_minor), 0)::text AS amount_minor
+       FROM owner_payouts
+      WHERE org_id = $1 AND period_start = $2::date
+      GROUP BY owner_contact_id, btrim(currency)`,
+    [orgId, bounds.start],
+  );
+  const openingByKey = new Map(openings.map((row) => [`${row.owner_id}:${row.currency}`, BigInt(row.opening)]));
+  const payoutByKey = new Map(payouts.map((row) => [`${row.owner_id}:${row.currency}`, BigInt(row.amount_minor)]));
   return owners.map((owner) => {
     const key = `${owner.owner_id}:${owner.currency}`;
-    const bucket = grouped.get(key) ?? { rent: BigInt(0), utility: BigInt(0), other: BigInt(0) };
+    const bucket = grouped.get(key) ?? { rent: BigInt(0), utility: BigInt(0), other: BigInt(0), firm: BigInt(0) };
     const figures = projectMonth(
       [
         {
@@ -463,6 +534,9 @@ async function ownerRows(
       currency: owner.currency,
       month,
       ...figures,
+      openingMinor: openingByKey.get(key) ?? BigInt(0),
+      firmMinor: bucket.firm,
+      payoutMinor: payoutByKey.get(key) ?? BigInt(0),
     };
   });
 }
@@ -712,27 +786,55 @@ export async function settlementPdfForSession(
   if (!row) return null;
   const bounds = monthWindow(page.month);
   const t = makeT(session.locale);
+  const stored = await tx(
+    session.userId,
+    async (client) =>
+      maybe<{
+        opening: string;
+        rent: string;
+        other: string;
+        fee: string;
+        expenses: string;
+        payouts: string;
+        firm: string;
+      }>(
+        client,
+        `SELECT opening_balance_minor::text AS opening,
+                rent_received_minor::text AS rent,
+                other_income_minor::text AS other,
+                management_fee_minor::text AS fee,
+                expenses_minor::text AS expenses,
+                payouts_minor::text AS payouts,
+                coalesce(firm_handled_minor, 0)::text AS firm
+           FROM owner_statements
+          WHERE org_id = $1
+            AND owner_contact_id = $2
+            AND btrim(currency) = $3
+            AND period_start = $4::date
+            AND status <> 'void'
+          LIMIT 1`,
+        [session.orgId, row.ownerId, row.currency, bounds.start],
+      ),
+    scope(session),
+  );
   const doc = buildStatementPdf(
-    {
-      id: row.ownerId,
+    settlementPdfSource({
+      ownerId: row.ownerId,
       orgId: session.orgId,
       ownerName: row.ownerName,
       periodStart: bounds.start,
       periodEnd: bounds.end,
       currency: row.currency,
-      opening: 0,
-      rent: minorNumber(row.rentMinor),
-      other: minorNumber(row.otherMinor),
-      fee: minorNumber(row.feeMinor),
-      expenses: minorNumber(row.expenseMinor),
-      payouts: 0,
-      closing: minorNumber(row.netMinor),
-      lines: [],
-      addresses: [],
-      audience: "staff",
-    },
+      openingMinor: Number(stored?.opening ?? row.openingMinor),
+      rentMinor: Number(stored?.rent ?? row.rentMinor),
+      otherMinor: Number(stored?.other ?? row.otherMinor),
+      feeMinor: Number(stored?.fee ?? row.feeMinor),
+      expenseMinor: Number(stored?.expenses ?? row.expenseMinor),
+      firmMinor: Number(stored?.firm ?? row.firmMinor),
+      payoutMinor: Number(stored?.payouts ?? row.payoutMinor),
+    }),
     session.locale as Locale,
-    session.calendar,
+    session.calendar as CalendarMode,
     t,
   );
   await writePdfDownload(session.orgId, session.userId, session.role ?? "staff", "owner_statements", row.ownerId, {
