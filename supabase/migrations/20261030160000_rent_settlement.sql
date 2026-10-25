@@ -1,4 +1,4 @@
--- Version 20261029180000.
+-- Version 20261030160000. After 20261030150000_revoke_id_photo_lease_close_execute.sql.
 -- Rent payment records and owner settlement, behind feature flag rent_settlement.
 --
 -- Additive only and safe to apply again. No new NOT NULL, CHECK, or foreign key

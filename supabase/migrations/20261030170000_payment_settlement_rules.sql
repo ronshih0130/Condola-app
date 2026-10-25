@@ -1,38 +1,25 @@
--- Version 20261029190000.
+-- Version 20261030170000. After 20261030160000_rent_settlement.sql.
 -- Payment and owner-settlement rules.
 --
--- Invoice recalc stays a trigger. fn_invoice_lines_changed and
--- fn_payment_status_changed are SECURITY DEFINER with a fixed search_path
--- (public, then pg_temp, so a temp object cannot shadow public). EXECUTE on
--- those trigger functions, and on fn_invoice_recalc, is revoked from PUBLIC,
--- anon, and authenticated. Trigger fire does not check EXECUTE, so a member
--- insert still recalculates. Direct calls are server-side only.
---
--- REVOKE is idempotent. The same revoke may also land in another migration;
--- applying this block again is safe, and a missing function is skipped.
---
--- Additive only on existing tables: new nullable columns and a default change.
+-- Additive on existing tables: new nullable columns and a due_day default.
 -- No new NOT NULL, CHECK, or foreign key is added to an existing table.
 -- statement_change_log and owner_payouts are new tables. Safe to apply again.
-
-DO $$
-BEGIN
-  IF to_regprocedure('public.fn_invoice_recalc(uuid)') IS NOT NULL THEN
-    ALTER FUNCTION public.fn_invoice_recalc(uuid) SECURITY DEFINER SET search_path = public, pg_temp;
-    REVOKE EXECUTE ON FUNCTION public.fn_invoice_recalc(uuid) FROM PUBLIC, anon, authenticated;
-    GRANT EXECUTE ON FUNCTION public.fn_invoice_recalc(uuid) TO service_role;
-  END IF;
-  IF to_regprocedure('public.fn_invoice_lines_changed()') IS NOT NULL THEN
-    ALTER FUNCTION public.fn_invoice_lines_changed() SECURITY DEFINER SET search_path = public, pg_temp;
-    REVOKE EXECUTE ON FUNCTION public.fn_invoice_lines_changed() FROM PUBLIC, anon, authenticated;
-    GRANT EXECUTE ON FUNCTION public.fn_invoice_lines_changed() TO service_role;
-  END IF;
-  IF to_regprocedure('public.fn_payment_status_changed()') IS NOT NULL THEN
-    ALTER FUNCTION public.fn_payment_status_changed() SECURITY DEFINER SET search_path = public, pg_temp;
-    REVOKE EXECUTE ON FUNCTION public.fn_payment_status_changed() FROM PUBLIC, anon, authenticated;
-    GRANT EXECUTE ON FUNCTION public.fn_payment_status_changed() TO service_role;
-  END IF;
-END $$;
+--
+-- post_reversal is restated from 20261030120000_org_scoped_reversal_audit.sql
+-- so this later file cannot replace that body. Both overloads stay
+-- SECURITY INVOKER. A row hidden by RLS still raises 42501 through
+-- app.reversal_target_exists. A missing id stays "transaction % not found".
+-- app.is_member and app.active_org_id still reject a cross-org caller.
+-- The settlement columns in this file are not written by post_reversal;
+-- the insert is the #47 body. app.audit_event is not replaced.
+--
+-- Invoice and lease trigger functions are not altered. 20261030100000 and
+-- 20261030150000 already revoked their EXECUTE, and this file does not
+-- grant it back.
+--
+-- Each replaced function ends with REVOKE EXECUTE FROM PUBLIC, anon and
+-- GRANT EXECUTE TO authenticated, service_role, matching the helper
+-- pattern in 20261030100000_lock_public_function_execute.sql.
 
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS payee text;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS charge_kind text;
@@ -119,12 +106,11 @@ REVOKE ALL ON TABLE owner_payouts FROM PUBLIC, anon;
 GRANT SELECT, INSERT ON TABLE owner_payouts TO authenticated, service_role;
 REVOKE UPDATE, DELETE ON TABLE owner_payouts FROM authenticated;
 
--- Not-found is raised before the organization check, so a missing id is not 42501.
--- A null auth.uid() (service cleanup) may still reverse. Members of another org get 42501.
+-- Restate 20261030120000. Hidden RLS row: 42501. Missing id: not found.
+-- authenticated and anon must match app.active_org_id and app.is_member.
 CREATE OR REPLACE FUNCTION post_reversal(p_txn uuid, p_reason text) RETURNS uuid
 LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   t ledger_transactions;
@@ -133,10 +119,16 @@ DECLARE
 BEGIN
   SELECT * INTO t FROM ledger_transactions WHERE id = p_txn;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'transaction % not found', p_txn USING ERRCODE = 'no_data_found';
+    IF app.reversal_target_exists(p_txn) AND current_user IN ('authenticated', 'anon') THEN
+      RAISE EXCEPTION 'transaction org mismatch' USING ERRCODE = '42501';
+    END IF;
+    RAISE EXCEPTION 'transaction % not found', p_txn;
   END IF;
-  IF auth.uid() IS NOT NULL AND NOT app.is_member(t.org_id) THEN
-    RAISE EXCEPTION 'cross-organization reversal' USING ERRCODE = '42501';
+  IF current_user IN ('authenticated', 'anon') THEN
+    IF t.org_id::text IS DISTINCT FROM nullif(current_setting('app.active_org_id', true), '')
+       OR NOT app.is_member(t.org_id) THEN
+      RAISE EXCEPTION 'transaction org mismatch' USING ERRCODE = '42501';
+    END IF;
   END IF;
   posted_on := (timezone('Asia/Taipei', now()))::date;
   INSERT INTO ledger_transactions (
@@ -155,19 +147,27 @@ BEGIN
   RETURN new_id;
 END $$;
 
+REVOKE EXECUTE ON FUNCTION post_reversal(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION post_reversal(uuid, text) TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION post_reversal(p_txn uuid, p_reason text, p_invoice uuid) RETURNS uuid
 LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE t ledger_transactions; new_id uuid;
 BEGIN
   SELECT * INTO t FROM ledger_transactions WHERE id = p_txn;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'transaction % not found', p_txn USING ERRCODE = 'no_data_found';
+    IF app.reversal_target_exists(p_txn) AND current_user IN ('authenticated', 'anon') THEN
+      RAISE EXCEPTION 'transaction org mismatch' USING ERRCODE = '42501';
+    END IF;
+    RAISE EXCEPTION 'transaction % not found', p_txn;
   END IF;
-  IF auth.uid() IS NOT NULL AND NOT app.is_member(t.org_id) THEN
-    RAISE EXCEPTION 'cross-organization reversal' USING ERRCODE = '42501';
+  IF current_user IN ('authenticated', 'anon') THEN
+    IF t.org_id::text IS DISTINCT FROM nullif(current_setting('app.active_org_id', true), '')
+       OR NOT app.is_member(t.org_id) THEN
+      RAISE EXCEPTION 'transaction org mismatch' USING ERRCODE = '42501';
+    END IF;
   END IF;
   IF p_invoice IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM invoices WHERE id = p_invoice AND org_id = t.org_id
@@ -186,3 +186,6 @@ BEGIN
     FROM ledger_entries WHERE transaction_id = p_txn;
   RETURN new_id;
 END $$;
+
+REVOKE EXECUTE ON FUNCTION post_reversal(uuid, text, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION post_reversal(uuid, text, uuid) TO authenticated, service_role;

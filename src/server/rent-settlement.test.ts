@@ -51,8 +51,8 @@ test("sample company creation and the beta seed store the flag", () => {
   const seed = readFileSync(new URL("./seed.ts", import.meta.url), "utf8");
   assert.match(sandbox, /rent_settlement": true/);
   assert.match(seed, /rent_settlement": true/);
-  const migration = readFileSync(new URL("../../supabase/migrations/20261029180000_rent_settlement.sql", import.meta.url), "utf8");
-  assert.match(migration, /-- Version 20261029180000\./);
+  const migration = readFileSync(new URL("../../supabase/migrations/20261030160000_rent_settlement.sql", import.meta.url), "utf8");
+  assert.match(migration, /-- Version 20261030160000\./);
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /app\.is_member\(org_id\)/);
   assert.match(migration, /feature_flags ->> 'rent_settlement'/);
@@ -64,16 +64,28 @@ test("sample company creation and the beta seed store the flag", () => {
   assert.equal(existsSync(new URL("../../supabase/migrations/20261029120000_rent_settlement.sql", import.meta.url)), false);
 });
 
-test("payment rules migration is additive, idempotent, and locks the trigger functions", () => {
-  const names = readdirSync(new URL("../../supabase/migrations/", import.meta.url))
+test("payment rules migration is additive and sorts after the release privilege files", () => {
+  const dir = new URL("../../supabase/migrations/", import.meta.url);
+  const names = readdirSync(dir)
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  assert.equal(names.includes("20261029180000_rent_settlement.sql"), true);
-  assert.equal(names.includes("20261029190000_payment_settlement_rules.sql"), true);
+  const rent = "20261030160000_rent_settlement.sql";
+  const rulesName = "20261030170000_payment_settlement_rules.sql";
+  const releaseTail = "20261030150000_revoke_id_photo_lease_close_execute.sql";
+  assert.equal(names.includes(rent), true);
+  assert.equal(names.includes(rulesName), true);
+  assert.equal(names.includes("20261029180000_rent_settlement.sql"), false);
+  assert.equal(names.includes("20261029190000_payment_settlement_rules.sql"), false);
   assert.equal(names.includes("20261029120000_rent_settlement.sql"), false);
   assert.equal(names.includes("20261029130000_payment_settlement_rules.sql"), false);
-  const rules = readFileSync(new URL("../../supabase/migrations/20261029190000_payment_settlement_rules.sql", import.meta.url), "utf8");
-  assert.match(rules, /-- Version 20261029190000\./);
+  assert.equal(names.includes("20261030140000_rent_settlement.sql"), false);
+  assert.equal(names.includes("20261030140000_payment_settlement_rules.sql"), false);
+  assert.deepEqual(
+    names.filter((name) => name > releaseTail),
+    [rent, rulesName],
+  );
+  const rules = readFileSync(new URL(rulesName, dir), "utf8");
+  assert.match(rules, /-- Version 20261030170000\./);
   assert.match(rules, /ADD COLUMN IF NOT EXISTS/);
   assert.match(rules, /CREATE TABLE IF NOT EXISTS statement_change_log/);
   assert.match(rules, /CREATE TABLE IF NOT EXISTS owner_payouts/);
@@ -82,26 +94,60 @@ test("payment rules migration is additive, idempotent, and locks the trigger fun
   assert.doesNotMatch(rules, /ADD COLUMN (?!IF NOT EXISTS)/);
   assert.doesNotMatch(rules, /ALTER TABLE (payments|owner_statements|properties|leases)[^;]*NOT NULL/);
   assert.doesNotMatch(rules, /ADD CONSTRAINT/);
-  const locked = [
-    "public.fn_invoice_recalc(uuid)",
-    "public.fn_invoice_lines_changed()",
-    "public.fn_payment_status_changed()",
-  ];
-  for (const fn of locked) {
-    assert.match(rules, new RegExp(`to_regprocedure\\('${fn.replace(/[()]/g, "\\$&")}'\\)`));
-    assert.match(
-      rules,
-      new RegExp(`ALTER FUNCTION ${fn.replace(/[()]/g, "\\$&")} SECURITY DEFINER SET search_path = public, pg_temp`),
-    );
-    assert.match(
-      rules,
-      new RegExp(`REVOKE EXECUTE ON FUNCTION ${fn.replace(/[()]/g, "\\$&")} FROM PUBLIC, anon, authenticated`),
-    );
+  assert.doesNotMatch(rules, /SECURITY DEFINER/);
+  assert.doesNotMatch(rules, /fn_invoice_recalc|fn_invoice_lines_changed|fn_payment_status_changed|fn_id_photo_drop_wm|fn_lease_close_end_date/);
+  assert.doesNotMatch(rules, /GRANT\s+(?:ALL|EXECUTE)[^;]*\b(?:PUBLIC|anon)\b/);
+  const rentSql = readFileSync(new URL(rent, dir), "utf8");
+  assert.doesNotMatch(rentSql, /CREATE (?:OR REPLACE )?FUNCTION/);
+  assert.doesNotMatch(rentSql, /ALTER TABLE (?!payment_corrections\b)/);
+  const blocks = [...rules.matchAll(/CREATE OR REPLACE FUNCTION [\s\S]*?(?=CREATE OR REPLACE FUNCTION |$)/g)].map((match) => match[0]);
+  assert.equal(blocks.length, 2);
+  for (const block of blocks) {
+    assert.match(block, /REVOKE EXECUTE ON FUNCTION post_reversal\([\s\S]*FROM PUBLIC, anon;/);
+    assert.match(block, /GRANT EXECUTE ON FUNCTION post_reversal\([\s\S]*TO authenticated, service_role;/);
+    assert.match(block, /app\.reversal_target_exists\(p_txn\)/);
+    assert.match(block, /app\.is_member\(t\.org_id\)/);
+    assert.match(block, /app\.active_org_id/);
+    assert.match(block, /ERRCODE = '42501'/);
+    assert.match(block, /transaction org mismatch/);
+    assert.match(block, /SET search_path = pg_catalog, public, pg_temp/);
+    assert.doesNotMatch(block, /SECURITY DEFINER/);
   }
-  const triggerAt = rules.indexOf("public.fn_invoice_lines_changed()");
-  const definerAt = rules.indexOf("ALTER FUNCTION public.fn_invoice_lines_changed() SECURITY DEFINER SET search_path = public, pg_temp");
-  const revokeAt = rules.indexOf("REVOKE EXECUTE ON FUNCTION public.fn_invoice_lines_changed() FROM PUBLIC, anon, authenticated");
-  assert.ok(triggerAt >= 0 && definerAt > triggerAt && revokeAt > definerAt);
+});
+
+test("after every migration in order, post_reversal stays the org-scoped body and anon stays closed", () => {
+  const dir = new URL("../../supabase/migrations/", import.meta.url);
+  const names = readdirSync(dir)
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  const ordered = names.map((name) => readFileSync(new URL(name, dir), "utf8")).join("\n");
+  const twoArg = [...ordered.matchAll(/CREATE OR REPLACE FUNCTION post_reversal\(p_txn uuid, p_reason text\)/g)];
+  const threeArg = [...ordered.matchAll(/CREATE OR REPLACE FUNCTION post_reversal\(p_txn uuid, p_reason text, p_invoice uuid\)/g)];
+  assert.ok(twoArg.length >= 1);
+  assert.ok(threeArg.length >= 1);
+  const lastTwo = ordered.slice(twoArg[twoArg.length - 1].index ?? 0);
+  const lastThree = ordered.slice(threeArg[threeArg.length - 1].index ?? 0);
+  for (const body of [lastTwo, lastThree]) {
+    assert.match(body, /app\.reversal_target_exists\(p_txn\)/);
+    assert.match(body, /app\.is_member\(t\.org_id\)/);
+    assert.match(body, /current_setting\('app\.active_org_id', true\)/);
+    assert.match(body, /ERRCODE = '42501'/);
+    assert.doesNotMatch(body.slice(0, body.indexOf("END $$;")), /SECURITY DEFINER/);
+  }
+  assert.match(lastTwo, /REVOKE EXECUTE ON FUNCTION post_reversal\(uuid, text\) FROM PUBLIC, anon;/);
+  assert.match(lastTwo, /GRANT EXECUTE ON FUNCTION post_reversal\(uuid, text\) TO authenticated, service_role;/);
+  assert.match(lastThree, /REVOKE EXECUTE ON FUNCTION post_reversal\(uuid, text, uuid\) FROM PUBLIC, anon;/);
+  assert.match(lastThree, /GRANT EXECUTE ON FUNCTION post_reversal\(uuid, text, uuid\) TO authenticated, service_role;/);
+  const check = readFileSync(new URL("../../e2e-evidence/pr52/post-reversal-after-migrations.sql", import.meta.url), "utf8");
+  assert.match(check, /anon executable public functions/);
+  assert.match(check, /anon_count <> 0/);
+  assert.match(check, /has_function_privilege\('anon'/);
+  assert.match(check, /SET LOCAL ROLE authenticated/);
+  assert.match(check, /PERFORM post_reversal\(txn, 'cross-org check'\)/);
+  assert.match(check, /PERFORM post_reversal\(txn, 'cross-org check', NULL::uuid\)/);
+  assert.match(check, /SQLSTATE <> '42501'/);
+  assert.match(check, /org mismatch/);
+  assert.match(check, /ROLLBACK;/);
 });
 
 test("TWD amounts are whole NT$ minor units, with no float parsing", () => {

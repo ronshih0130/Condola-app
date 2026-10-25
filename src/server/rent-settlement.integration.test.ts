@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { query, tx, withClient } from "./db";
 import { FlowError } from "./errors";
-import { ORG_ID, USERS } from "./ids";
+import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { correctBillPayment, loadRentSettlement, recordBillPayment, reverseBillPayment } from "./rent-settlement";
 import { instantSettlementMonth, taipeiCalendarDate } from "./rent-settlement-math";
 import type { OrgRole, Session } from "./types";
@@ -163,88 +163,39 @@ test("bill payments stay org-scoped, partial, correctable, and reversible", asyn
   }
 });
 
-test("anon and authenticated cannot execute invoice recalc, and a member insert still recalculates", async () => {
-  const rules = readFileSync(new URL("../../supabase/migrations/20261029190000_payment_settlement_rules.sql", import.meta.url), "utf8");
-  await withClient(async (client) => {
-    await client.query(rules);
-    await client.query(rules);
-  });
-
-  const defs = await query<{ proname: string; prosecdef: boolean; proconfig: string | null }>(
-    `SELECT p.proname, p.prosecdef, p.proconfig::text AS proconfig
+test("settlement rules leave invoice triggers alone, and a member insert still recalculates", async () => {
+  const rules = readFileSync(new URL("../../supabase/migrations/20261030170000_payment_settlement_rules.sql", import.meta.url), "utf8");
+  assert.doesNotMatch(rules, /SECURITY DEFINER/);
+  assert.doesNotMatch(rules, /fn_invoice_recalc|fn_invoice_lines_changed|fn_payment_status_changed/);
+  const before = await query<{ proname: string; prosecdef: boolean; anon: boolean; auth: boolean; service: boolean }>(
+    `SELECT p.proname,
+            p.prosecdef,
+            has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+            has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth,
+            has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
        FROM pg_proc p
        JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
         AND p.proname IN ('fn_invoice_recalc', 'fn_invoice_lines_changed', 'fn_payment_status_changed')
       ORDER BY p.proname`,
   );
-  assert.deepEqual(
-    defs.rows.map((row) => row.proname),
-    ["fn_invoice_lines_changed", "fn_invoice_recalc", "fn_payment_status_changed"],
-  );
-  for (const row of defs.rows) {
-    assert.equal(row.prosecdef, true, row.proname);
-    assert.match(row.proconfig ?? "", /search_path=public, pg_temp/, row.proname);
-  }
-
-  const priv = await query<{
-    anon_recalc: boolean;
-    auth_recalc: boolean;
-    anon_lines: boolean;
-    auth_lines: boolean;
-    anon_payment: boolean;
-    auth_payment: boolean;
-    service_recalc: boolean;
-    service_lines: boolean;
-    service_payment: boolean;
-  }>(
-    `SELECT
-       has_function_privilege('anon', 'public.fn_invoice_recalc(uuid)', 'EXECUTE') AS anon_recalc,
-       has_function_privilege('authenticated', 'public.fn_invoice_recalc(uuid)', 'EXECUTE') AS auth_recalc,
-       has_function_privilege('anon', 'public.fn_invoice_lines_changed()', 'EXECUTE') AS anon_lines,
-       has_function_privilege('authenticated', 'public.fn_invoice_lines_changed()', 'EXECUTE') AS auth_lines,
-       has_function_privilege('anon', 'public.fn_payment_status_changed()', 'EXECUTE') AS anon_payment,
-       has_function_privilege('authenticated', 'public.fn_payment_status_changed()', 'EXECUTE') AS auth_payment,
-       has_function_privilege('service_role', 'public.fn_invoice_recalc(uuid)', 'EXECUTE') AS service_recalc,
-       has_function_privilege('service_role', 'public.fn_invoice_lines_changed()', 'EXECUTE') AS service_lines,
-       has_function_privilege('service_role', 'public.fn_payment_status_changed()', 'EXECUTE') AS service_payment`,
-  );
-  assert.equal(priv.rows[0]?.anon_recalc, false);
-  assert.equal(priv.rows[0]?.auth_recalc, false);
-  assert.equal(priv.rows[0]?.anon_lines, false);
-  assert.equal(priv.rows[0]?.auth_lines, false);
-  assert.equal(priv.rows[0]?.anon_payment, false);
-  assert.equal(priv.rows[0]?.auth_payment, false);
-  assert.equal(priv.rows[0]?.service_recalc, true);
-  assert.equal(priv.rows[0]?.service_lines, true);
-  assert.equal(priv.rows[0]?.service_payment, true);
-
   await withClient(async (client) => {
-    await client.query("BEGIN");
-    await client.query("SET LOCAL ROLE anon");
-    await client.query("SAVEPOINT recalc");
-    await assert.rejects(
-      () => client.query(`SELECT fn_invoice_recalc('00000000-0000-4000-8000-000000000099'::uuid)`),
-      /permission denied/i,
-    );
-    await client.query("ROLLBACK TO SAVEPOINT recalc");
-    await assert.rejects(() => client.query(`SELECT fn_invoice_lines_changed()`), /permission denied/i);
-    await client.query("ROLLBACK TO SAVEPOINT recalc");
-    await assert.rejects(() => client.query(`SELECT fn_payment_status_changed()`), /permission denied/i);
-    await client.query("ROLLBACK");
+    await client.query(rules);
+    await client.query(rules);
   });
-
-  await tx(USERS.admin, async (client) => {
-    await client.query("SAVEPOINT recalc");
-    await assert.rejects(
-      () => client.query(`SELECT fn_invoice_recalc('00000000-0000-4000-8000-000000000099'::uuid)`),
-      /permission denied/i,
-    );
-    await client.query("ROLLBACK TO SAVEPOINT recalc");
-    await assert.rejects(() => client.query(`SELECT fn_invoice_lines_changed()`), /permission denied/i);
-    await client.query("ROLLBACK TO SAVEPOINT recalc");
-    await assert.rejects(() => client.query(`SELECT fn_payment_status_changed()`), /permission denied/i);
-  });
+  const afterPriv = await query<{ proname: string; prosecdef: boolean; anon: boolean; auth: boolean; service: boolean }>(
+    `SELECT p.proname,
+            p.prosecdef,
+            has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+            has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth,
+            has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+       FROM pg_proc p
+       JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND p.proname IN ('fn_invoice_recalc', 'fn_invoice_lines_changed', 'fn_payment_status_changed')
+      ORDER BY p.proname`,
+  );
+  assert.deepEqual(afterPriv.rows, before.rows);
 
   const invoice = await tx(USERS.admin, async (client) => {
     const row = await client.query<{ id: string; total: string }>(
@@ -278,16 +229,35 @@ test("anon and authenticated cannot execute invoice recalc, and a member insert 
       /not found/i,
     );
   });
+  const anonFns = await query<{ n: string }>(
+    `SELECT count(*)::text AS n
+       FROM pg_proc p
+       JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND p.prokind = 'f'
+        AND has_function_privilege('anon', p.oid, 'EXECUTE')
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_depend d
+           WHERE d.objid = p.oid
+             AND d.classid = 'pg_proc'::regclass
+             AND d.deptype = 'e'
+        )`,
+  );
+  assert.equal(anonFns.rows[0]?.n, "0");
   const txn = await query<{ id: string }>(`SELECT id::text FROM ledger_transactions WHERE org_id = $1 LIMIT 1`, [ORG_ID]);
   assert.ok(txn.rows[0]);
   await withClient(async (client) => {
     await client.query("BEGIN");
     await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.coastAdmin]);
     await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
+    await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG2_ID]);
     await client.query("SET LOCAL ROLE authenticated");
     await assert.rejects(
       () => client.query(`SELECT post_reversal($1::uuid, 'cross')`, [txn.rows[0].id]),
-      (error: unknown) => error instanceof Error && /42501|insufficient_privilege|cross-organization/i.test(error.message),
+      (error: unknown) => {
+        const pg = error as { code?: string; message?: string };
+        return pg.code === "42501" && /org mismatch/.test(pg.message ?? "");
+      },
     );
     await client.query("ROLLBACK");
   });
