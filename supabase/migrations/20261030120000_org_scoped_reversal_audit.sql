@@ -1,9 +1,9 @@
--- Version 20261029170000. After 20261029150000_lock_public_function_execute.sql.
+-- Version 20261030120000. After 20261030100000_lock_public_function_execute.sql.
 -- Additive. Both post_reversal overloads stay. service_role is unchanged.
 --
--- 20261029150000 already replaces post_reversal(uuid, text). This file replaces
+-- 20261030100000 already replaces post_reversal(uuid, text). This file replaces
 -- it again because that body is not the same:
---   * 29150000 checks only current_user = 'authenticated', compares the pin to
+--   * 30100000 checks only current_user = 'authenticated', compares the pin to
 --     org_id, and raises 42501 for every missing SELECT (hidden row and unknown
 --     id look the same). search_path is public, pg_temp. It does not call
 --     app.is_member.
@@ -11,7 +11,7 @@
 --     app.reversal_target_exists so a row hidden by RLS raises 42501 while a
 --     missing id stays "transaction % not found". search_path is
 --     pg_catalog, public, pg_temp.
--- The 3-arg overload is not replaced in 29150000 (that file only revokes
+-- The 3-arg overload is not replaced in 30100000 (that file only revokes
 -- EXECUTE). The org check below is new: cross-org calls raise 42501.
 -- app.audit_event records the session org. A p_org that differs is 42501.
 --

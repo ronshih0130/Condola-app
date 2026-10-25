@@ -73,6 +73,30 @@ const added = {
     addOnly: true,
     reason: "BEFORE trigger fills a null end_date when a lease becomes terminated or cancelled. An end date that is already set stays. No NOT NULL and no new constraint.",
   },
+  "supabase/migrations/20261030100000_lock_public_function_execute.sql": {
+    addOnly: false,
+    reason: "Replaces post_reversal and fn_invoice_recalc with a caller-org check and REVOKEs EXECUTE on trigger and utility functions. Privilege change and a rewrite of existing function bodies.",
+  },
+  "supabase/migrations/20261030110000_gotrue_confirm_single_use.sql": {
+    addOnly: false,
+    reason: "New gotrue_confirm_uses table with a NOT NULL primary key, plus REVOKE ALL from PUBLIC, anon, and authenticated.",
+  },
+  "supabase/migrations/20261030120000_org_scoped_reversal_audit.sql": {
+    addOnly: false,
+    reason: "Replaces both post_reversal overloads so a cross-org call raises 42501, and replaces app.audit_event to record the session org. Rewrite of existing function bodies.",
+  },
+  "supabase/migrations/20261030130000_default_function_privileges.sql": {
+    addOnly: false,
+    reason: "ALTER DEFAULT PRIVILEGES revokes EXECUTE on future public functions from PUBLIC, anon, and authenticated. Privilege change. No existing function body changes.",
+  },
+  "supabase/migrations/20261030140500_revoke_app_is_member_execute.sql": {
+    addOnly: false,
+    reason: "REVOKE EXECUTE on app.is_member from PUBLIC and anon. authenticated and service_role keep EXECUTE. Privilege change.",
+  },
+  "supabase/migrations/20261030150000_revoke_id_photo_lease_close_execute.sql": {
+    addOnly: false,
+    reason: "REVOKE EXECUTE on fn_id_photo_drop_wm and fn_lease_close_end_date from PUBLIC, anon, and authenticated when those trigger functions exist. Privilege change. Trigger firing is unchanged.",
+  },
 };
 
 const functions = [
