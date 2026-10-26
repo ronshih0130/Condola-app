@@ -7,6 +7,8 @@
 -- DROP COLUMN IF EXISTS sharing_approved_by,
 -- DROP COLUMN IF EXISTS sharing_approved_at, DROP COLUMN IF EXISTS scope;
 
+BEGIN;
+
 SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE public.repair_vendor_jobs
@@ -63,3 +65,5 @@ DROP POLICY IF EXISTS repair_vendor_job_shared_photos_read
 CREATE POLICY repair_vendor_job_shared_photos_read
   ON public.repair_vendor_job_shared_photos
   FOR SELECT TO authenticated USING (app.is_member(org_id));
+
+COMMIT;

@@ -55,7 +55,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   public.vendor_document_sequences,
   public.vendor_documents
 TO service_role;
-GRANT EXECUTE ON FUNCTION app.next_vendor_document_seq(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION app.next_vendor_document_seq(uuid, text) TO service_role;
 
 -- Bytes and operation grants are service-only. Authorized reads pass through
 -- the service and revalidate their session or scoped token.

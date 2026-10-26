@@ -36,7 +36,7 @@ export interface VendorDocumentContext {
   actor: VendorDocumentActor;
   ticketId: string;
   vendorProfileId: string;
-  /** Required for staff; token callers use the manager-confirmed selection. */
+  /** Required for staff preview; token callers use the confirmed selection. */
   buyer?: VendorBuyerSelection;
   items: readonly JobTypeLineItem[];
   totalMinor: number;
@@ -94,6 +94,11 @@ export interface StoredVendorDocument {
 
 function notFound(): never {
   throw new FlowError("errors.notFound");
+}
+
+/** Execution requires a live vendor document capability, never a staff session. */
+function requireVendorToken(actor: VendorDocumentActor): asserts actor is string {
+  if (typeof actor !== "string") throw new FlowError("errors.forbidden");
 }
 
 function validKey(key: string) {
@@ -497,6 +502,45 @@ export async function revokeVendorDocumentInvite(
   });
 }
 
+/** Record the staff request without changing the vendor's document or bytes. */
+export async function requestVendorDocumentCorrection(
+  session: Session,
+  id: string,
+  reason: string,
+) {
+  if (typeof reason !== "string" || !reason.trim()) {
+    throw new Error("missing_correction_reason");
+  }
+  return svc(session.userId, async (client) => {
+    await authorizeVendorStaff(client, session);
+    const initial = await persistedOn(client, id);
+    if (initial.org_id !== session.orgId) notFound();
+    const access = await authorize(
+      client,
+      session,
+      initial.ticket_id,
+      initial.vendor_profile_id,
+    );
+    const current = resultOf(await persistedOn(client, id));
+    if (current.document.status !== "issued") {
+      throw new Error("document_not_issued");
+    }
+    await writeAudit(
+      access.orgId,
+      session.userId,
+      "vendor_document_correction_request",
+      {
+        documentId: id,
+        ticketId: initial.ticket_id,
+        profileId: initial.vendor_profile_id,
+        reason: reason.trim(),
+      },
+      client,
+    );
+    return { documentId: id, status: "requested" as const };
+  });
+}
+
 export async function previewVendorDocument(ctx: VendorDocumentContext) {
   return svc(typeof ctx.actor === "string" ? null : ctx.actor.userId, async (client) => {
     const access = await authorize(client, ctx.actor, ctx.ticketId, ctx.vendorProfileId);
@@ -518,6 +562,7 @@ async function issueOn(
   key: string,
   sourceId?: string,
 ): Promise<StoredVendorDocument> {
+  requireVendorToken(ctx.actor);
   validKey(key);
   const access = await authorize(client, ctx.actor, ctx.ticketId, ctx.vendorProfileId);
 
@@ -585,12 +630,14 @@ async function issueOn(
   }
 
   const id = globalThis.crypto.randomUUID();
-  await issueInput(client, access, ctx, id, 1).then(applyIssueRules);
+  const checked = applyIssueRules(await issueInput(client, access, ctx, id, 1));
+  // Counters remain scoped to this organization's profile and document kind.
+  // Cross-org issuer identity reconciliation awaits a CEO/R&D decision.
   const allocation = await one<{ seq: string; issued_at: string }>(
     client,
-    `SELECT app.next_vendor_document_seq($1)::text AS seq,
+    `SELECT app.next_vendor_document_seq($1, $2)::text AS seq,
             clock_timestamp()::text AS issued_at`,
-    [access.profile.id],
+    [access.profile.id, checked.kind],
   );
   const seq = Number(allocation.seq);
   const input = await issueInput(client, access, ctx, id, seq);
@@ -668,7 +715,7 @@ async function issueOn(
       documentId: id,
       ticketId: ctx.ticketId,
       grantId: access.grantId,
-      actorKind: access.grantId ? "document_token" : "staff",
+      actorKind: "document_token",
       reissuedFrom: sourceId ?? null,
       sha256: pdf.sha256,
     },
@@ -681,10 +728,8 @@ export async function issueVendorDocument(
   ctx: VendorDocumentContext,
   options: { idempotencyKey: string },
 ) {
-  return svc(
-    typeof ctx.actor === "string" ? null : ctx.actor.userId,
-    (client) => issueOn(client, ctx, options.idempotencyKey),
-  );
+  requireVendorToken(ctx.actor);
+  return svc(null, (client) => issueOn(client, ctx, options.idempotencyKey));
 }
 
 export async function voidVendorDocument(
@@ -692,7 +737,8 @@ export async function voidVendorDocument(
   id: string,
   reason: string,
 ) {
-  return svc(typeof actor === "string" ? null : actor.userId, async (client) => {
+  requireVendorToken(actor);
+  return svc(null, async (client) => {
     const initial = await persistedOn(client, id);
     const access = await authorize(
       client,
@@ -720,7 +766,7 @@ export async function voidVendorDocument(
       {
         documentId: id,
         grantId: access.grantId,
-        actorKind: access.grantId ? "document_token" : "staff",
+        actorKind: "document_token",
         reason: document.void_reason,
       },
       client,
@@ -734,9 +780,9 @@ export async function reissueVendorDocument(
   sourceId: string,
   options: { idempotencyKey: string },
 ) {
-  return svc(
-    typeof ctx.actor === "string" ? null : ctx.actor.userId,
-    (client) => issueOn(client, ctx, options.idempotencyKey, sourceId),
+  requireVendorToken(ctx.actor);
+  return svc(null, (client) =>
+    issueOn(client, ctx, options.idempotencyKey, sourceId),
   );
 }
 

@@ -1,4 +1,6 @@
--- Version 20261030150800. Vendor onboarding profiles, multi-job-type catalog, and vendor e-seal receipts / completion statements (Lane A step 1, Class B). Additive only, no backfill or data deletion. Down: DROP FUNCTION IF EXISTS app.next_vendor_document_seq(uuid); DROP TABLE IF EXISTS public.vendor_documents, public.vendor_document_sequences, public.vendor_onboarding_invites, public.vendor_profile_versions, public.vendor_profiles; ALTER TABLE public.contacts DROP COLUMN IF EXISTS receipt_title; ALTER TABLE public.ticket_attachments DROP COLUMN IF EXISTS phase; ALTER TABLE public.maintenance_tickets DROP CONSTRAINT IF EXISTS maintenance_tickets_job_type_code_fkey; DROP TABLE IF EXISTS public.job_types;
+-- Version 20261030150800. Vendor onboarding profiles, multi-job-type catalog, and vendor e-seal receipts / completion statements (Lane A step 1, Class B). Additive only, no backfill or data deletion. Down: DROP FUNCTION IF EXISTS app.next_vendor_document_seq(uuid, text); DROP TABLE IF EXISTS public.vendor_documents, public.vendor_document_sequences, public.vendor_onboarding_invites, public.vendor_profile_versions, public.vendor_profiles; ALTER TABLE public.contacts DROP COLUMN IF EXISTS receipt_title; ALTER TABLE public.ticket_attachments DROP COLUMN IF EXISTS phase; ALTER TABLE public.maintenance_tickets DROP CONSTRAINT IF EXISTS maintenance_tickets_job_type_code_fkey; DROP TABLE IF EXISTS public.job_types;
+
+BEGIN;
 
 SET LOCAL lock_timeout = '5s';
 
@@ -73,7 +75,7 @@ INSERT INTO public.job_types (
     'Air Conditioning',
     '[{"key":"model_or_unit_count","label_zh":"機型或台數","label_en":"Model or Unit Count","type":"text","required":true},{"key":"service_or_repair_item","label_zh":"保養或維修項目","label_en":"Maintenance or Repair Item","type":"text","required":true}]'::jsonb,
     '{"before":{"required":true,"min":1,"max":5},"during":{"required":false,"min":0,"max":5},"after":{"required":true,"min":1,"max":5}}'::jsonb,
-    '[{"key":"operation_normal","label_zh":"運轉正常","label_en":"Normal operation"},{"key":"outlet_temp_normal","label_zh":"出風溫度正常","label_en":"Normal outlet temperature"},{"key":"filter_cleaned","label_zh":"濾網清潔完成","label_en":"Filter cleaned"},{"key":"no_condensate_leak","label_zh":"無漏水","label_en":"No water leakage"}]'::jsonb,
+    '[{"key":"operation_normal","label_zh":"運轉正常","label_en":"Normal operation"},{"key":"outlet_temp_normal","label_zh":"出風溫度正常","label_en":"Normal outlet temperature"},{"key":"filter_cleaned","label_zh":"濾網清潔完成","label_en":"Filter cleaned"},{"key":"no_condensate_leak","label_zh":"無漏水","label_en":"No condensate leakage"}]'::jsonb,
     ARRAY['per_item', 'per_visit', 'lump_sum']::text[],
     40,
     true
@@ -203,6 +205,9 @@ CREATE TABLE IF NOT EXISTS public.vendor_profiles (
   )
 );
 
+COMMENT ON TABLE public.vendor_profiles IS
+  'Organization-scoped issuer profiles. Cross-org issuer identity reconciliation is pending a CEO/R&D decision; do not merge profiles or counters across organizations.';
+
 CREATE INDEX IF NOT EXISTS vendor_profiles_org_idx
   ON public.vendor_profiles (org_id, created_at DESC);
 
@@ -295,9 +300,14 @@ CREATE POLICY vendor_onboarding_invites_read ON public.vendor_onboarding_invites
 
 -- 6. vendor_document_sequences, vendor_documents, and app.next_vendor_document_seq
 CREATE TABLE IF NOT EXISTS public.vendor_document_sequences (
-  vendor_profile_id uuid PRIMARY KEY REFERENCES public.vendor_profiles(id) ON DELETE CASCADE,
-  next_seq          bigint NOT NULL DEFAULT 1 CHECK (next_seq >= 1)
+  vendor_profile_id uuid NOT NULL REFERENCES public.vendor_profiles(id) ON DELETE CASCADE,
+  kind              text NOT NULL CHECK (kind IN ('receipt', 'completion_statement')),
+  next_seq          bigint NOT NULL DEFAULT 1 CHECK (next_seq >= 1),
+  PRIMARY KEY (vendor_profile_id, kind)
 );
+
+COMMENT ON TABLE public.vendor_document_sequences IS
+  'Independent continuous counters per organization-scoped vendor profile and document kind. Cross-org issuer identity reconciliation awaits CEO/R&D; no cross-org merge.';
 
 ALTER TABLE public.vendor_document_sequences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vendor_document_sequences FORCE ROW LEVEL SECURITY;
@@ -340,7 +350,7 @@ CREATE TABLE IF NOT EXISTS public.vendor_documents (
   reissued_from             uuid NULL REFERENCES public.vendor_documents(id),
   idempotency_key           text NOT NULL,
   created_at                timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (vendor_profile_id, seq),
+  UNIQUE (vendor_profile_id, kind, seq),
   UNIQUE (vendor_profile_id, doc_no),
   UNIQUE (org_id, idempotency_key),
   FOREIGN KEY (org_id, vendor_profile_id) REFERENCES public.vendor_profiles(org_id, id) ON DELETE RESTRICT,
@@ -369,7 +379,7 @@ CREATE POLICY vendor_documents_read ON public.vendor_documents
   FOR SELECT TO authenticated
   USING (app.is_member(org_id));
 
-CREATE OR REPLACE FUNCTION app.next_vendor_document_seq(vendor_profile uuid)
+CREATE OR REPLACE FUNCTION app.next_vendor_document_seq(vendor_profile uuid, document_kind text)
 RETURNS bigint
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -378,13 +388,18 @@ AS $$
 DECLARE
   v_seq bigint;
 BEGIN
-  INSERT INTO public.vendor_document_sequences (vendor_profile_id, next_seq)
-  VALUES (vendor_profile, 1)
-  ON CONFLICT (vendor_profile_id) DO NOTHING;
+  IF document_kind IS NULL OR document_kind NOT IN ('receipt', 'completion_statement') THEN
+    RAISE EXCEPTION 'invalid document kind'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  INSERT INTO public.vendor_document_sequences (vendor_profile_id, kind, next_seq)
+  VALUES (vendor_profile, document_kind, 1)
+  ON CONFLICT (vendor_profile_id, kind) DO NOTHING;
 
   UPDATE public.vendor_document_sequences
      SET next_seq = next_seq + 1
-   WHERE vendor_profile_id = vendor_profile
+   WHERE vendor_profile_id = vendor_profile AND kind = document_kind
   RETURNING next_seq - 1 INTO v_seq;
 
   IF v_seq IS NULL THEN
@@ -396,7 +411,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION app.next_vendor_document_seq(uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION app.next_vendor_document_seq(uuid) FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION app.next_vendor_document_seq(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION app.next_vendor_document_seq(uuid) TO service_role;
+REVOKE ALL ON FUNCTION app.next_vendor_document_seq(uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION app.next_vendor_document_seq(uuid, text) FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION app.next_vendor_document_seq(uuid, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION app.next_vendor_document_seq(uuid, text) TO service_role;
+
+COMMIT;

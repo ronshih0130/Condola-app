@@ -32,31 +32,46 @@ export async function authorizeVendorStaff(client: Client, session: Session) {
   }
 }
 
+async function lockContact(client: Client, orgId: string, contactId: string) {
+  const contact = await maybe<{ id: string }>(
+    client,
+    `SELECT id::text FROM contacts
+      WHERE id = $1 AND org_id = $2 AND is_vendor AND archived_at IS NULL
+      FOR UPDATE`,
+    [contactId, orgId],
+  );
+  if (!contact) throw new FlowError("errors.notFound");
+}
+
+/** Discover without locking, then always lock contact before invite. */
 async function liveInvite(client: Client, token: string) {
   if (!/^[A-Za-z0-9_-]{32,256}$/.test(token)) {
     throw new FlowError("errors.notFound");
   }
+  const tokenHash = hashVendorToken(token);
+  const candidate = await maybe<OnboardingInvite>(
+    client,
+    `SELECT id::text, org_id::text, contact_id::text,
+            created_by::text, created_at::text
+       FROM vendor_onboarding_invites
+      WHERE token_hash = $1 AND scope = 'vendor_onboarding'`,
+    [tokenHash],
+  );
+  if (!candidate) throw new FlowError("errors.notFound");
+  await lockContact(client, candidate.org_id, candidate.contact_id);
   const invite = await maybe<OnboardingInvite>(
     client,
     `SELECT id::text, org_id::text, contact_id::text,
             created_by::text, created_at::text
        FROM vendor_onboarding_invites
-      WHERE token_hash = $1 AND scope = 'vendor_onboarding'
+      WHERE id = $1 AND org_id = $2 AND contact_id = $3
+        AND token_hash = $4 AND scope = 'vendor_onboarding'
+        AND used_at IS NULL AND revoked_at IS NULL
+        AND expires_at > clock_timestamp()
       FOR UPDATE`,
-    [hashVendorToken(token)],
+    [candidate.id, candidate.org_id, candidate.contact_id, tokenHash],
   );
   if (!invite) throw new FlowError("errors.notFound");
-  const valid = await maybe<{ id: string }>(
-    client,
-    `SELECT i.id::text
-       FROM vendor_onboarding_invites i
-       JOIN contacts c ON c.id = i.contact_id AND c.org_id = i.org_id
-      WHERE i.id = $1 AND i.used_at IS NULL AND i.revoked_at IS NULL
-        AND i.expires_at > clock_timestamp()
-        AND c.is_vendor AND c.archived_at IS NULL`,
-    [invite.id],
-  );
-  if (!valid) throw new FlowError("errors.notFound");
   return invite;
 }
 
@@ -66,14 +81,7 @@ export async function createVendorOnboardingInvite(
 ) {
   return svc(session.userId, async (client) => {
     await authorizeVendorStaff(client, session);
-    const contact = await maybe<{ id: string }>(
-      client,
-      `SELECT id::text FROM contacts
-        WHERE id = $1 AND org_id = $2 AND is_vendor AND archived_at IS NULL
-        FOR UPDATE`,
-      [contactId, session.orgId],
-    );
-    if (!contact) throw new FlowError("errors.notFound");
+    await lockContact(client, session.orgId, contactId);
     await client.query(
       `UPDATE vendor_onboarding_invites SET revoked_at = clock_timestamp()
         WHERE org_id = $1 AND contact_id = $2
@@ -131,14 +139,6 @@ export async function submitVendorOnboarding(
 ) {
   return svc(null, async (client) => {
     const invite = await liveInvite(client, token);
-    const contact = await maybe<{ id: string }>(
-      client,
-      `SELECT id::text FROM contacts
-        WHERE id = $1 AND org_id = $2 AND is_vendor AND archived_at IS NULL
-        FOR UPDATE`,
-      [invite.contact_id, invite.org_id],
-    );
-    if (!contact) throw new FlowError("errors.notFound");
 
     let sealBytes: Uint8Array | undefined;
     let sealFileId: string | null = null;
@@ -213,7 +213,8 @@ export async function submitVendorOnboarding(
       [
         invite.org_id,
         invite.contact_id,
-        // Preserve all UUID bits while fitting vendor_code's 32-character limit.
+        // Identity reconciliation across organizations awaits CEO/R&D.
+        // Keep this organization's profile and all UUID bits; never merge here.
         invite.contact_id.replaceAll("-", ""),
         value.kind,
         value.display_name,
@@ -273,13 +274,21 @@ export async function revokeVendorOnboarding(
 ) {
   return svc(session.userId, async (client) => {
     await authorizeVendorStaff(client, session);
+    const candidate = await maybe<{ contact_id: string }>(
+      client,
+      `SELECT contact_id::text FROM vendor_onboarding_invites
+        WHERE id = $1 AND org_id = $2`,
+      [inviteId, session.orgId],
+    );
+    if (!candidate) throw new FlowError("errors.notFound");
+    await lockContact(client, session.orgId, candidate.contact_id);
     const invite = await maybe<{ id: string }>(
       client,
       `UPDATE vendor_onboarding_invites
-          SET revoked_at = clock_timestamp()
-        WHERE id = $1 AND org_id = $2
+          SET revoked_at = COALESCE(revoked_at, clock_timestamp())
+        WHERE id = $1 AND org_id = $2 AND contact_id = $3
         RETURNING id::text`,
-      [inviteId, session.orgId],
+      [inviteId, session.orgId, candidate.contact_id],
     );
     if (!invite) throw new FlowError("errors.notFound");
     await writeAudit(
