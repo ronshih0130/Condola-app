@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS repair_vendor_jobs (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id               uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   ticket_id            uuid NOT NULL,
-  job_type             text NULL,
   vendor_name          text NOT NULL CHECK (char_length(vendor_name) BETWEEN 1 AND 80),
   vendor_phone         text NOT NULL CHECK (vendor_phone ~ '^\+[1-9][0-9]{6,14}$'),
   contact_window       text NOT NULL CHECK (char_length(contact_window) BETWEEN 1 AND 160),
@@ -36,7 +35,12 @@ CREATE TABLE IF NOT EXISTS repair_vendor_jobs (
   CHECK (confirmed_at IS NULL OR reported_at IS NOT NULL)
 );
 
-COMMENT ON COLUMN repair_vendor_jobs.job_type IS 'Reserved for multi job-type work orders (cleaning, plumbing/electrical, ...). Schema pending R&D job_types_v1 (10/27). Nullable; no template tables yet.';
+ALTER TABLE maintenance_tickets
+  ADD COLUMN IF NOT EXISTS job_type_code text NULL,
+  ADD COLUMN IF NOT EXISTS type_fields jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+COMMENT ON COLUMN maintenance_tickets.job_type_code IS 'Reserved: work-order job type code (cleaning, plumbing, electrical, ...). FK to job_types(code) and backfill decided in the 10/29 migration per job_types_v1 section 3. NULL = unspecified.';
+COMMENT ON COLUMN maintenance_tickets.type_fields IS 'Reserved: per-job-type template field values (job_types.required_fields). Structure/version decided in the 10/29 migration.';
 
 CREATE UNIQUE INDEX IF NOT EXISTS repair_vendor_jobs_one_active
   ON repair_vendor_jobs (ticket_id)
