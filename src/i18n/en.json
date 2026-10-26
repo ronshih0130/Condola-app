@@ -2202,7 +2202,7 @@
  "i_lic_loading": "This file loads only in your browser, only when you choose a HEIC/HEIF photo. It is loaded as its own separate file and is neither bundled into nor modified with our code.",
  "i_lic_asset": "Separate file",
  "i_lic_hash": "SHA-256",
- "i_lic_replace": "Under LGPL-3.0 §4, you may obtain the corresponding source code using the links below, build a compatible modified version, and replace this separate file in a copy of the application you run. Keep the same file path and compatible module interface when replacing it.",
+ "i_lic_replace": "Under LGPL-3.0 §4, you may obtain the corresponding source code using the links below, build a compatible modified version, and replace this separate file in a copy of the application you run.",
  "i_lic_lgpl": "LGPL-3.0 licence text",
  "i_lic_gpl": "GPL-3.0 licence text",
  "i_lic_notice": "Upstream licence and notices",
@@ -2215,5 +2215,16 @@
  "i_lic_delivery_bundled": "Included in browser bundles",
  "i_lic_delivery_separate": "Separate, unmodified upstream file",
  "i_lic_delivery_inside": "Embedded inside libheif-js",
- "i_lic_full_text": "Full licence text"
+ "i_lic_full_text": "Full licence text",
+ "i_lic_offer": "To request the complete corresponding source code, email {email}.",
+ "i_lic_replace_steps": "How to replace the decoder",
+ "i_lic_step_source": "Obtain the corresponding source archives and build inputs:",
+ "i_lic_step_build": "Modify and rebuild libheif using the same Emscripten flow described in BUILD.md, then build libheif-bundle.mjs using libheif-js scripts/install.js with your local libheif.tar.gz.",
+ "i_lic_step_interface": "The replacement must be an ES module whose default export is a factory returning a libheif module with .ready and HeifDecoder, compatible with the libheif-js 1.23.5 API.",
+ "i_lic_step_place": "Place the replacement at the following path in your copy of the site's static files, or override this URL in your browser using a local override or proxy:",
+ "i_lic_runtime": "The application performs no integrity or hash check on this file at runtime. A compatible replacement is loaded as is. The SHA-256 shown above identifies the shipped original.",
+ "i_lic_build_inputs": "Build instructions and preserved build inputs",
+ "i_lic_holders": "Upstream copyright lines",
+ "i_lic_authors": "libde265 AUTHORS",
+ "i_lic_integrity": "npm archive integrity (SHA-512 SRI)"
 }

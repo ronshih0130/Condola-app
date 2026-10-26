@@ -1,29 +1,13 @@
 import manifestJson from "@/generated/third-party-licenses.json";
+import type {
+  LicenseEntry,
+  Manifest,
+} from "../../scripts/third-party-licenses.mjs";
 
-export type LicenseDelivery = "bundled" | "separate-unmodified-file" | "inside:libheif-js";
+export type { LicenseEntry };
+export type LicenseDelivery = LicenseEntry["delivery"];
 
-export interface LicenseEntry {
-  name: string;
-  version: string;
-  license: string;
-  licenseText: string | null;
-  licenseUrl: string | null;
-  gplUrl: string | null;
-  noticeUrl: string | null;
-  repository: string | null;
-  sourceUrl: string;
-  delivery: LicenseDelivery;
-  assetPath: string | null;
-  sha256: string | null;
-  requiredBy: string[];
-}
-
-interface LicenseManifest {
-  generatedBy: string;
-  packages: LicenseEntry[];
-}
-
-const manifest = manifestJson as LicenseManifest;
+const manifest = manifestJson as Manifest;
 
 export function licenseEntries(): readonly LicenseEntry[] {
   return manifest.packages;

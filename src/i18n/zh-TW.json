@@ -2202,7 +2202,7 @@
  "i_lic_loading": "此檔案僅在您選擇 HEIC/HEIF 照片時，於瀏覽器中獨立載入。它以獨立檔案提供，未與我們的程式碼合併打包，也未經我們修改。",
  "i_lic_asset": "獨立檔案",
  "i_lic_hash": "SHA-256",
- "i_lic_replace": "依 LGPL-3.0 第 4 節，您可以透過下方連結取得對應原始碼，建置相容的修改版本，並在您自行執行的應用程式副本中替換此獨立檔案。替換時請維持相同的檔案路徑與相容的模組介面。",
+ "i_lic_replace": "依 LGPL-3.0 第 4 節，您可以透過下方連結取得對應原始碼，建置相容的修改版本，並在您自行執行的應用程式副本中替換此獨立檔案。",
  "i_lic_lgpl": "LGPL-3.0 授權全文",
  "i_lic_gpl": "GPL-3.0 授權全文",
  "i_lic_notice": "上游授權與聲明",
@@ -2215,5 +2215,16 @@
  "i_lic_delivery_bundled": "包含於瀏覽器程式碼套件",
  "i_lic_delivery_separate": "未經修改的獨立上游檔案",
  "i_lic_delivery_inside": "內嵌於 libheif-js",
- "i_lic_full_text": "授權全文"
+ "i_lic_full_text": "授權全文",
+ "i_lic_offer": "如需完整對應原始碼，請來信 {email}。",
+ "i_lic_replace_steps": "如何替換解碼器",
+ "i_lic_step_source": "取得對應原始碼封存檔與建置輸入檔案：",
+ "i_lic_step_build": "修改 libheif，依 BUILD.md 所述的相同 Emscripten 流程重新建置，再使用 libheif-js 的 scripts/install.js 與您本機的 libheif.tar.gz 建置 libheif-bundle.mjs。",
+ "i_lic_step_interface": "替換檔案必須是 ES 模組，其預設匯出為工廠函式，回傳具有 .ready 與 HeifDecoder 的 libheif 模組，並與 libheif-js 1.23.5 的 API 相容。",
+ "i_lic_step_place": "在您持有的網站靜態檔案副本中，將替換檔案放在下列路徑；或使用瀏覽器本機覆寫功能或代理伺服器覆寫此網址：",
+ "i_lic_runtime": "應用程式在執行時不會對此檔案進行完整性或雜湊檢查，相容的替換檔案會直接載入。上方顯示的 SHA-256 用於識別原先提供的檔案。",
+ "i_lic_build_inputs": "建置說明與保留的建置輸入檔案",
+ "i_lic_holders": "上游著作權聲明原文",
+ "i_lic_authors": "libde265 作者名單（AUTHORS）",
+ "i_lic_integrity": "npm 封存檔完整性（SHA-512 SRI）"
 }

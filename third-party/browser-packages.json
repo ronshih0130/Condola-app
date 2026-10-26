@@ -27,8 +27,10 @@
     {
       "name": "@swc/helpers",
       "walk": true,
-      "exclude": [],
-      "why": "Explicit dependency of the Next client runtime."
+      "exclude": [
+        "tslib"
+      ],
+      "why": "Explicit dependency of the Next client runtime. Its tslib dependency is not emitted in the client bundle (verified by --verify-bundle)."
     },
     {
       "name": "pdf-lib",
@@ -45,7 +47,10 @@
     {
       "name": "heic-convert",
       "walk": true,
-      "exclude": ["jpeg-js", "pngjs"],
+      "exclude": [
+        "jpeg-js",
+        "pngjs"
+      ],
       "why": "Browser conversion uses canvas encoders; jpeg-js and pngjs belong exclusively to formats-node.js."
     }
   ],
@@ -92,5 +97,52 @@
       "from": "libheif-js/libheif-wasm/LICENSE",
       "public": "third-party/libheif-js/{version}/LICENSE"
     }
-  ]
+  ],
+  "upstreamSources": {
+    "libheif": {
+      "version": "1.23.5",
+      "url": "https://github.com/strukturag/libheif/releases/download/v1.23.5/libheif-1.23.5.tar.gz",
+      "sha256": "fd9036064c4432f0550d15072ddf34956a248279ee9aeaff0fba3fa0f77d8f1a",
+      "file": "libheif-1.23.5.tar.gz",
+      "kind": "release",
+      "topDir": "libheif-1.23.5",
+      "libraryDir": "libheif"
+    },
+    "libde265": {
+      "version": "1.0.15",
+      "url": "https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz",
+      "sha256": "00251986c29d34d3af7117ed05874950c875dd9292d016be29d3b3762666511d",
+      "file": "libde265-1.0.15.tar.gz",
+      "kind": "release",
+      "topDir": "libde265-1.0.15",
+      "libraryDir": "libde265"
+    },
+    "libheif-js": {
+      "version": "1.23.5",
+      "url": "https://github.com/catdad-experiments/libheif-js/archive/refs/tags/1.23.5.tar.gz",
+      "sha256": "b2bcc4d1e94a47eff30afa05671374170f2f9f5ad88dd2e3cb1196d2df4d6f76",
+      "file": "libheif-js-1.23.5-src.tar.gz",
+      "kind": "tag",
+      "topDir": "libheif-js-1.23.5"
+    },
+    "libheif-emscripten": {
+      "version": "1.23.5",
+      "url": "https://github.com/catdad-experiments/libheif-emscripten/archive/refs/tags/v1.23.5.tar.gz",
+      "sha256": "8e3395ca983e369448bea84d223c35f1117373953e00219588415f1bc37c86ea",
+      "file": "libheif-emscripten-v1.23.5-src.tar.gz",
+      "kind": "tag",
+      "topDir": "libheif-emscripten-1.23.5"
+    }
+  },
+  "buildProvenance": {
+    "prebuiltUrl": "https://github.com/catdad-experiments/libheif-emscripten/releases/download/v1.23.5/libheif.tar.gz",
+    "libheifCommit": "413e2a87e6a70b3eccc3a3adc5801179dd2d9e00",
+    "emscriptenVersion": "3.1.61"
+  },
+  "notInWebpackBundle": {
+    "libheif-js": "Delivered as a separate, unmodified file.",
+    "libheif": "Embedded in the libheif-js WebAssembly module.",
+    "libde265": "Embedded in the libheif-js WebAssembly module.",
+    "tailwindcss": "Delivered as generated CSS."
+  }
 }

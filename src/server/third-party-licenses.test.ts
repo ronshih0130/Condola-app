@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
@@ -12,6 +13,7 @@ import {
   npmTarballUrl,
   readLicenseText,
   resolvePackageDir,
+  verifyBundle,
 } from "../../scripts/third-party-licenses.mjs";
 import type { BrowserConfig, Manifest } from "../../scripts/third-party-licenses.mjs";
 import { LIBHEIF_ASSET } from "../generated/libheif-asset";
@@ -114,15 +116,161 @@ test("public copyleft texts and upstream notices retain exact bytes", () => {
     readFileSync(join(root, `public/third-party/libheif-js/${LIBHEIF_ASSET.version}/LICENSE`)),
     readFileSync(join(directory, "libheif-wasm/LICENSE")),
   );
+  assert.deepEqual(
+    readFileSync(join(root, "third-party/upstream/libheif-1.23.5/COPYING")),
+    readFileSync(join(directory, "libheif-wasm/LICENSE")),
+  );
+});
+
+function allFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? allFiles(path) : [path];
+  }).sort();
+}
+
+test("upstream notices, holders, source archives and build provenance are complete", () => {
+  const asset = manifest.packages.find((entry) => entry.name === "libheif-js");
+  assert.ok(asset?.noticeUrl);
+  const notice = readFileSync(join(root, "public", asset.noticeUrl.slice(1)));
+  for (const name of ["libheif", "libde265"]) {
+    const entry = manifest.packages.find((item) => item.name === name);
+    assert.ok(entry);
+    assert.ok(entry.copyrightHolders.length);
+    assert.ok(entry.copyrightHolders.some((line) => line.includes("Dirk Farin")));
+    if (name === "libde265") {
+      assert.ok(entry.copyrightHolders.some((line) => line.includes("struktur AG")));
+    }
+    for (const line of entry.copyrightHolders) {
+      assert.ok(notice.includes(Buffer.from(line)), line);
+    }
+    const prefix = `third-party/upstream/${name}-${entry.version}`;
+    const holders = read(`${prefix}/COPYRIGHT-HOLDERS.txt`);
+    for (const line of entry.copyrightHolders) assert.ok(holders.includes(line));
+    assert.ok(notice.includes(readFileSync(join(root, prefix, "COPYING"))));
+    if (name === "libde265") {
+      assert.ok(notice.includes(readFileSync(join(root, prefix, "AUTHORS"))));
+    }
+    assert.equal(entry.noticeUrl, asset.noticeUrl);
+    assert.equal(entry.licenseUrl, `/third-party/upstream/${name}-${entry.version}/COPYING`);
+    const pin = config.upstreamSources[name];
+    assert.deepEqual(entry.sourceArchives, [{
+      label: `${name} ${pin.version} (${pin.kind})`,
+      url: pin.url,
+      sha256: pin.sha256,
+    }]);
+  }
+  for (const file of allFiles(join(root, "third-party/upstream"))) {
+    const path = relative(join(root, "third-party/upstream"), file);
+    assert.deepEqual(readFileSync(file), readFileSync(join(root, "public/third-party/upstream", path)));
+  }
+  assert.ok(asset.buildInputsUrl);
+  const build = read(`public${asset.buildInputsUrl}`);
+  assert.ok(build.includes("413e2a87e6a70b3eccc3a3adc5801179dd2d9e00"));
+  assert.ok(build.includes("3.1.61"));
+  for (const pin of Object.values(config.upstreamSources)) {
+    assert.ok(build.includes(pin.url));
+    assert.ok(build.includes(pin.sha256));
+  }
+  for (const file of asset.buildInputFiles) {
+    assert.ok(readFileSync(join(root, "public", file.url.slice(1))).length, file.label);
+  }
+  for (const name of ["libheif-js", "libheif-emscripten"]) {
+    const pin = config.upstreamSources[name];
+    const source: { url: string; sha256?: string } | undefined =
+      asset.sourceArchives.find(
+        (item: { url: string; sha256?: string }) => item.url === pin.url,
+      );
+    assert.ok(source);
+    assert.equal(source.sha256, pin.sha256);
+  }
+  const lock = JSON.parse(read("package-lock.json")) as {
+    packages: Record<string, { integrity?: string }>;
+  };
+  const npm = asset.sourceArchives.find((item) => item.url === asset.sourceUrl);
+  assert.ok(npm);
+  assert.equal(npm.integrity, lock.packages["node_modules/libheif-js"].integrity);
+});
+
+function snapshot(directory: string): {
+  path: string;
+  mtime: string;
+  size: string;
+  kind: string;
+  hash: string | null;
+}[] {
+  if (!existsSync(directory)) return [];
+  const paths = [directory, ...readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? snapshotPaths(path) : [path];
+  })];
+  return paths.sort().map((path) => {
+    const stat = statSync(path, { bigint: true });
+    return {
+      path: relative(root, path),
+      mtime: stat.mtimeNs.toString(),
+      size: stat.size.toString(),
+      kind: stat.isDirectory() ? "directory" : "file",
+      hash: stat.isFile() ? sha256(readFileSync(path)) : null,
+    };
+  });
+}
+
+function snapshotPaths(directory: string): string[] {
+  return [directory, ...readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? snapshotPaths(path) : [path];
+  })];
+}
+
+test("--check leaves public and src/generated listings, bytes and mtimes unchanged", () => {
+  const directories = ["public", "src/generated"].map((path) => join(root, path));
+  const before = directories.map(snapshot);
+  execFileSync(process.execPath, ["scripts/third-party-licenses.mjs", "--check"], {
+    cwd: root,
+    stdio: "pipe",
+  });
+  assert.deepEqual(directories.map(snapshot), before);
+});
+
+test("verifyBundle reports exact missing and unexpected versions without mutating inputs", () => {
+  const existing = manifest.packages[0];
+  assert.ok(existing);
+  const fake = {
+    packages: [
+      { ...existing, name: "present", version: "1.0.0" },
+      { ...existing, name: "absent", version: "2.0.0" },
+      { ...existing, name: "separate", version: "3.0.0" },
+    ],
+  };
+  const bundled = [
+    { name: "present", version: "1.0.0" },
+    { name: "present", version: "1.0.0" },
+    { name: "present", version: "2.0.0" },
+    { name: "extra", version: "4.0.0" },
+  ];
+  const options = { notInWebpackBundle: { separate: "Separate static file." } };
+  const before = JSON.stringify({ fake, bundled, options });
+  assert.deepEqual(verifyBundle(fake, bundled, options), {
+    missing: ["extra@4.0.0", "present@2.0.0"],
+    unexpected: ["absent@2.0.0"],
+  });
+  assert.equal(JSON.stringify({ fake, bundled, options }), before);
+  assert.deepEqual(verifyBundle(
+    { packages: [fake.packages[0]] },
+    [{ name: "present", version: "1.0.0" }],
+    { notInWebpackBundle: {} },
+  ), { missing: [], unexpected: [] });
+  assert.throws(() => verifyBundle(fake, bundled, {
+    notInWebpackBundle: { separate: "" },
+  }), /reason/);
 });
 
 function sourceFiles(directory: string): string[] {
   if (!existsSync(directory)) return [];
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      return sourceFiles(path);
-    }
+    if (entry.isDirectory()) return sourceFiles(path);
     return /\.[cm]?[jt]sx?$/.test(entry.name) &&
       !/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(entry.name) &&
       !/\.d\.[cm]?ts$/.test(entry.name) ? [path] : [];
@@ -157,9 +305,7 @@ function moduleSpecifiers(source: ts.SourceFile): string[] {
       }
     } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       const argument = node.arguments[0];
-      if (argument && ts.isStringLiteral(argument)) {
-        imports.push(argument.text);
-      }
+      if (argument && ts.isStringLiteral(argument)) imports.push(argument.text);
     }
     ts.forEachChild(node, visit);
   };
@@ -237,17 +383,33 @@ test("direct browser imports are covered by the manifest", () => {
     `Browser imports uncovered by the manifest:\n${[...uncovered].sort().join("\n")}`);
 });
 
-test("browser conversion loads the separate asset and client aliases fail closed", () => {
+test("browser conversion loads the separate asset without runtime hash verification", () => {
   const source = read("src/lib/heic-browser.ts");
   assert.doesNotMatch(source, /(?:from\s*|import\s*\(\s*)["'](?:heic-convert\/browser|heic-decode|libheif-js)["']/);
   assert.match(source, /import\(\s*\/\*\s*webpackIgnore:\s*true\s*\*\/\s*LIBHEIF_ASSET\.path\s*\)/);
   assert.match(source, /import\("heic-decode\/lib\.js"\)/);
   assert.match(source, /import\("heic-convert\/lib\.js"\)/);
   assert.match(source, /import\("heic-convert\/formats-browser\.js"\)/);
+  assert.doesNotMatch(source, /sha256|integrity|crypto\.subtle/i);
   const clientAliases = read("next.config.ts").split("} else {")[1];
   assert.ok(clientAliases);
   assert.match(clientAliases, /"libheif-js": false/);
   assert.match(clientAliases, /"libheif-js\/wasm-bundle": false/);
+});
+
+test("page uses the service email and renders replacement instructions and attribution", () => {
+  const page = read("src/app/licenses/page.tsx");
+  assert.match(page, /import\s*\{\s*SERVICE_EMAIL\s*\}\s*from\s*["']@\/server\/mail["']/);
+  assert.match(page, /t\("i_lic_offer"\)\.split\("\{email\}"\)/);
+  assert.match(page, /mailto:\$\{SERVICE_EMAIL\}/);
+  assert.match(page, />\{SERVICE_EMAIL\}<\/a>/);
+  assert.doesNotMatch(page, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  assert.match(page, /<ol>/);
+  assert.match(page, /entry\.copyrightHolders\.map/);
+  assert.match(page, /entry\.sourceArchives\.map/);
+  assert.match(page, /asset\.buildInputFiles\.map/);
+  assert.match(page, /asset\.assetPath/);
+  assert.match(page, /AUTHORS/);
 });
 
 test("licence copy exists in both locales with matching keys and safe wording", () => {
@@ -271,14 +433,22 @@ test("licence copy exists in both locales with matching keys and safe wording", 
     assert.ok(en[key].trim(), key);
     assert.ok(zh[key].trim(), key);
     for (const word of banned) assert.equal(zh[key].includes(word), false, key);
+    assert.doesNotMatch(en[key], /\bdemo\b/i);
+    assert.doesNotMatch(zh[key], /\bdemo\b/i);
   }
-  for (const signature of ["heif_context_alloc", "HeifDecoder", "_de265_get_version"]) {
+  assert.equal(en.i_lic_offer, "To request the complete corresponding source code, email {email}.");
+  assert.equal(zh.i_lic_offer, "如需完整對應原始碼，請來信 {email}。");
+  for (const signature of ["heif_context_alloc", "_de265_get_version"]) {
     assert.equal(JSON.stringify(manifest).includes(signature), false);
     assert.equal(read("src/app/licenses/page.tsx").includes(signature), false);
     for (const key of keys) {
       assert.equal(en[key].includes(signature), false);
       assert.equal(zh[key].includes(signature), false);
     }
+  }
+  for (const locale of [en, zh]) {
+    assert.ok(locale.i_lic_step_interface.includes("HeifDecoder"));
+    assert.ok(locale.i_lic_step_interface.includes(".ready"));
   }
 });
 

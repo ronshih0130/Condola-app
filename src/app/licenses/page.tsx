@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { makeT } from "@/i18n";
+import { SERVICE_EMAIL } from "@/server/mail";
 import { requestPrefs } from "@/server/session";
 import { deliveryLabelKey, licenseEntries } from "@/server/third-party-licenses";
 
@@ -16,9 +17,15 @@ export default async function LicensesPage() {
   const entries = licenseEntries();
   const asset = entries.find((entry) => entry.name === "libheif-js");
   const embedded = entries.filter((entry) => entry.delivery === "inside:libheif-js");
-  if (!asset?.assetPath || !asset.sha256 || !asset.licenseUrl || !asset.gplUrl || !asset.noticeUrl) {
+  if (
+    !asset?.assetPath || !asset.sha256 || !asset.licenseUrl ||
+    !asset.gplUrl || !asset.noticeUrl || !asset.buildInputsUrl
+  ) {
     throw new Error("Incomplete third-party asset metadata");
   }
+  const offerParts = t("i_lic_offer").split("{email}");
+  if (offerParts.length !== 2) throw new Error("Invalid licence offer translation");
+
   return (
     <main className="legal" data-testid="licenses-page">
       <h1>{t("i_lic_title")}</h1>
@@ -33,19 +40,39 @@ export default async function LicensesPage() {
         <p>{t("i_lic_asset")}: <a href={asset.assetPath}>{asset.assetPath}</a></p>
         <p>{t("i_lic_hash")}: <code style={{ overflowWrap: "anywhere" }}>{asset.sha256}</code></p>
         <p>{t("i_lic_replace")}</p>
+        <p>
+          {offerParts[0]}
+          <a href={`mailto:${SERVICE_EMAIL}`}>{SERVICE_EMAIL}</a>
+          {offerParts[1]}
+        </p>
+        <h3>{t("i_lic_replace_steps")}</h3>
+        <ol>
+          <li>
+            {t("i_lic_step_source")}{" "}
+            <a href={asset.buildInputsUrl}>{t("i_lic_build_inputs")}</a>
+            <ul>
+              {[asset, ...embedded].flatMap((entry) =>
+                entry.sourceArchives.map((source) => (
+                  <li key={source.url}><a href={source.url}>{source.label}</a></li>
+                )),
+              )}
+            </ul>
+          </li>
+          <li>{t("i_lic_step_build")}</li>
+          <li>{t("i_lic_step_interface")}</li>
+          <li>
+            {t("i_lic_step_place")}{" "}
+            <a href={asset.assetPath}><code>{asset.assetPath}</code></a>
+            <p>{t("i_lic_runtime")}</p>
+          </li>
+        </ol>
         <ul>
           <li><a href={asset.licenseUrl}>{t("i_lic_lgpl")}</a></li>
           <li><a href={asset.gplUrl}>{t("i_lic_gpl")}</a></li>
           <li><a href={asset.noticeUrl}>{t("i_lic_notice")}</a></li>
-          <li>
-            <code>libheif-js</code>: <a href={asset.sourceUrl}>{t("i_lic_source")}</a>
-            {asset.repository ? <> · <a href={asset.repository}>{t("i_lic_repository")}</a></> : null}
-          </li>
-          {embedded.map((entry) => (
-            <li key={entry.name}>
-              <code>{entry.name} {entry.version}</code>: <a href={entry.sourceUrl}>{t("i_lic_source")}</a>
-              {entry.repository ? <> · <a href={entry.repository}>{t("i_lic_repository")}</a></> : null}
-            </li>
+          <li><a href={asset.buildInputsUrl}>{t("i_lic_build_inputs")}</a></li>
+          {asset.buildInputFiles.map((file) => (
+            <li key={file.url}><a href={file.url}>{file.label}</a></li>
           ))}
         </ul>
       </section>
@@ -59,10 +86,42 @@ export default async function LicensesPage() {
               <dt>{t("i_lic_license")}</dt><dd>{entry.license}</dd>
               <dt>{t("i_lic_delivery")}</dt><dd>{t(deliveryLabelKey(entry.delivery))}</dd>
             </dl>
+            {entry.copyrightHolders.length ? (
+              <>
+                <h4>{t("i_lic_holders")}</h4>
+                <ul>
+                  {entry.copyrightHolders.map((line) => (
+                    <li key={line} style={{ overflowWrap: "anywhere" }}>{line}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
             <p>
               <a href={entry.sourceUrl}>{t("i_lic_source")}</a>
               {entry.repository ? <> · <a href={entry.repository}>{t("i_lic_repository")}</a></> : null}
             </p>
+            {entry.sourceArchives.length ? (
+              <ul>
+                {entry.sourceArchives.map((source) => (
+                  <li key={source.url}>
+                    <a href={source.url}>{source.label}</a>
+                    <p>
+                      {source.sha256 ? t("i_lic_hash") : t("i_lic_integrity")}:{" "}
+                      <code style={{ overflowWrap: "anywhere" }}>
+                        {source.sha256 ?? source.integrity}
+                      </code>
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {entry.name === "libde265" ? (
+              <p>
+                <a href={`/third-party/upstream/libde265-${entry.version}/AUTHORS`}>
+                  {t("i_lic_authors")}
+                </a>
+              </p>
+            ) : null}
             {entry.licenseText ? (
               <details>
                 <summary>{t("i_lic_full_text")}</summary>

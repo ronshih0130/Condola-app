@@ -1,6 +1,12 @@
 import { execSync } from "node:child_process";
+import { createRequire } from "node:module";
 import type { NextConfig } from "next";
 import { PRODUCTION_HOSTS } from "./src/server/public-origin";
+
+const loadPlugin = createRequire(`${process.cwd()}/package.json`);
+const { ClientPackagesPlugin } = loadPlugin("./scripts/client-packages-plugin.cjs") as {
+  ClientPackagesPlugin: new () => { apply(compiler: unknown): void };
+};
 
 function buildSha() {
   const fromEnv = (process.env.CONDOLA_BUILD_SHA || process.env.CONDOLA_COMMIT || process.env.CF_PAGES_COMMIT_SHA || "").trim();
@@ -41,6 +47,9 @@ const nextConfig: NextConfig = {
         "libheif-js": false,
         "libheif-js/wasm-bundle": false,
       };
+      if (config.mode === "production") {
+        config.plugins.push(new ClientPackagesPlugin());
+      }
     }
     config.module.rules.push({
       test: /\.md$/,

@@ -1,0 +1,356 @@
+Copyright lines quoted verbatim from libheif-1.23.5.tar.gz (fd9036064c4432f0550d15072ddf34956a248279ee9aeaff0fba3fa0f77d8f1a), library sources only.
+
+Copyright (C) 2024 Brad Hards
+  libheif/plugins/encoder_openjph.cc
+  libheif/plugins/encoder_openjph.h
+
+Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif_brands.cc
+  libheif/api/libheif/heif_color.cc
+  libheif/api/libheif/heif_image.cc
+  libheif/api/libheif/heif_library.cc
+  libheif/api/libheif/heif_plugin.cc
+  libheif/api/libheif/heif_plugin.h
+  libheif/api/libheif/heif_properties.cc
+  libheif/api_structs.h
+  libheif/bitstream.cc
+  libheif/bitstream.h
+  libheif/box.cc
+  libheif/box.h
+  libheif/codecs/avif_boxes.cc
+  libheif/codecs/avif_boxes.h
+  libheif/codecs/hevc_boxes.cc
+  libheif/codecs/hevc_boxes.h
+  libheif/color-conversion/colorconversion.cc
+  libheif/color-conversion/colorconversion.h
+  libheif/context.cc
+  libheif/context.h
+  libheif/error.cc
+  libheif/error.h
+  libheif/file.cc
+  libheif/file.h
+  libheif/image-items/avif.cc
+  libheif/image-items/avif.h
+  libheif/image-items/hevc.cc
+  libheif/image-items/hevc.h
+  libheif/image/pixelimage.cc
+  libheif/image/pixelimage.h
+  libheif/logging.h
+  libheif/plugin_registry.cc
+  libheif/plugin_registry.h
+  libheif/plugins/decoder_aom.h
+  libheif/plugins/decoder_dav1d.h
+  libheif/plugins/decoder_libde265.cc
+  libheif/plugins/decoder_libde265.h
+  libheif/plugins/decoder_vvdec.h
+  libheif/plugins/encoder_aom.cc
+  libheif/plugins/encoder_aom.h
+  libheif/plugins/encoder_mask.cc
+  libheif/plugins/encoder_mask.h
+  libheif/plugins/encoder_rav1e.cc
+  libheif/plugins/encoder_rav1e.h
+  libheif/plugins/encoder_uncompressed.cc
+  libheif/plugins/encoder_uncompressed.h
+  libheif/plugins/encoder_x265.cc
+
+Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>x
+  libheif/plugins/encoder_x265.h
+
+Copyright (c) 2017-2023 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif_brands.h
+  libheif/api/libheif/heif_color.h
+  libheif/api/libheif/heif_error.h
+  libheif/api/libheif/heif_library.h
+  libheif/api/libheif/heif_metadata.h
+  libheif/api/libheif/heif_properties.h
+
+Copyright (c) 2017-2025 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif.cc
+  libheif/api/libheif/heif.h
+  libheif/api/libheif/heif_aux_images.cc
+  libheif/api/libheif/heif_aux_images.h
+  libheif/api/libheif/heif_context.cc
+  libheif/api/libheif/heif_context.h
+  libheif/api/libheif/heif_decoding.cc
+  libheif/api/libheif/heif_decoding.h
+  libheif/api/libheif/heif_encoding.cc
+  libheif/api/libheif/heif_encoding.h
+  libheif/api/libheif/heif_entity_groups.cc
+  libheif/api/libheif/heif_entity_groups.h
+  libheif/api/libheif/heif_image.h
+  libheif/api/libheif/heif_image_handle.cc
+  libheif/api/libheif/heif_image_handle.h
+  libheif/api/libheif/heif_metadata.cc
+  libheif/api/libheif/heif_security.cc
+  libheif/api/libheif/heif_security.h
+  libheif/api/libheif/heif_tiling.cc
+  libheif/api/libheif/heif_tiling.h
+
+Copyright (c) 2017-2026 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif_export.h
+
+Copyright (c) 2018 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif_cxx.h
+  libheif/security_limits.h
+
+Copyright (c) 2019 Dirk Farin <dirk.farin@gmail.com>
+  libheif/plugins/decoder_aom.cc
+  libheif/plugins/decoder_vvdec.cc
+
+Copyright (c) 2019, Aous Naman
+  libheif/plugins/encoder_openjph.cc
+
+Copyright (c) 2019, Kakadu Software Pty Ltd, Australia
+  libheif/plugins/encoder_openjph.cc
+
+Copyright (c) 2019, The University of New South Wales, Australia
+  libheif/plugins/encoder_openjph.cc
+
+Copyright (c) 2020 Dirk Farin <dirk.farin@gmail.com>
+  libheif/nclx.cc
+  libheif/nclx.h
+  libheif/plugins/decoder_dav1d.cc
+
+Copyright (c) 2022 Dirk Farin <dirk.farin@gmail.com>
+  libheif/compression.h
+  libheif/compression_zlib.cc
+  libheif/init.cc
+  libheif/init.h
+  libheif/plugins/encoder_svt.cc
+  libheif/plugins/encoder_svt.h
+
+Copyright (c) 2023 Brad Hards <bradh@frogmouth.net>
+  libheif/api/libheif/heif_regions.cc
+  libheif/api/libheif/heif_regions.h
+  libheif/codecs/avc_boxes.cc
+  libheif/codecs/avc_boxes.h
+  libheif/codecs/jpeg2000_boxes.cc
+  libheif/codecs/jpeg2000_boxes.h
+  libheif/image-items/avc.cc
+  libheif/image-items/avc.h
+  libheif/image-items/jpeg2000.cc
+  libheif/image-items/jpeg2000.h
+  libheif/image-items/mask_image.cc
+  libheif/image-items/mask_image.h
+
+Copyright (c) 2023 Devon Sookhoo
+  libheif/plugins/decoder_openjpeg.cc
+  libheif/plugins/decoder_openjpeg.h
+  libheif/plugins/encoder_openjpeg.cc
+  libheif/plugins/encoder_openjpeg.h
+  libheif/plugins/encoder_openjph.cc
+  libheif/plugins/encoder_openjph.h
+
+Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif_items.cc
+  libheif/api/libheif/heif_items.h
+  libheif/api/libheif/heif_regions.cc
+  libheif/api/libheif/heif_regions.h
+  libheif/api/libheif/heif_text.cc
+  libheif/api/libheif/heif_text.h
+  libheif/codecs/jpeg_boxes.cc
+  libheif/codecs/jpeg_boxes.h
+  libheif/codecs/uncompressed/unc_boxes.cc
+  libheif/codecs/uncompressed/unc_boxes.h
+  libheif/codecs/uncompressed/unc_codec.cc
+  libheif/codecs/uncompressed/unc_codec.h
+  libheif/codecs/uncompressed/unc_decoder.cc
+  libheif/codecs/uncompressed/unc_decoder.h
+  libheif/codecs/uncompressed/unc_decoder_component_interleave.cc
+  libheif/codecs/uncompressed/unc_decoder_component_interleave.h
+  libheif/codecs/uncompressed/unc_decoder_legacybase.cc
+  libheif/codecs/uncompressed/unc_decoder_legacybase.h
+  libheif/codecs/uncompressed/unc_decoder_mixed_interleave.cc
+  libheif/codecs/uncompressed/unc_decoder_mixed_interleave.h
+  libheif/codecs/uncompressed/unc_decoder_pixel_interleave.cc
+  libheif/codecs/uncompressed/unc_decoder_pixel_interleave.h
+  libheif/codecs/uncompressed/unc_decoder_row_interleave.cc
+  libheif/codecs/uncompressed/unc_decoder_row_interleave.h
+  libheif/codecs/uncompressed/unc_types.h
+  libheif/codecs/vvc_boxes.cc
+  libheif/codecs/vvc_boxes.h
+  libheif/color-conversion/alpha.cc
+  libheif/color-conversion/alpha.h
+  libheif/color-conversion/chroma_sampling.cc
+  libheif/color-conversion/chroma_sampling.h
+  libheif/color-conversion/hdr_sdr.cc
+  libheif/color-conversion/hdr_sdr.h
+  libheif/color-conversion/monochrome.cc
+  libheif/color-conversion/monochrome.h
+  libheif/color-conversion/rgb2rgb.cc
+  libheif/color-conversion/rgb2rgb.h
+  libheif/color-conversion/rgb2yuv.cc
+  libheif/color-conversion/rgb2yuv.h
+  libheif/color-conversion/rgb2yuv_sharp.cc
+  libheif/color-conversion/rgb2yuv_sharp.h
+  libheif/color-conversion/yuv2rgb.cc
+  libheif/color-conversion/yuv2rgb.h
+  libheif/common_utils.cc
+  libheif/common_utils.h
+  libheif/image-items/jpeg.cc
+  libheif/image-items/jpeg.h
+  libheif/image-items/mask_image.cc
+  libheif/image-items/mask_image.h
+  libheif/image-items/unc_image.cc
+  libheif/image-items/unc_image.h
+  libheif/image-items/vvc.cc
+  libheif/image-items/vvc.h
+  libheif/plugins/decoder_ffmpeg.cc
+  libheif/plugins/decoder_ffmpeg.h
+  libheif/plugins/decoder_jpeg.cc
+  libheif/plugins/decoder_jpeg.h
+  libheif/plugins/decoder_openjpeg.cc
+  libheif/plugins/decoder_openjpeg.h
+  libheif/plugins/decoder_uncompressed.cc
+  libheif/plugins/decoder_uncompressed.h
+  libheif/plugins/encoder_jpeg.cc
+  libheif/plugins/encoder_jpeg.h
+  libheif/plugins/encoder_kvazaar.cc
+  libheif/plugins/encoder_kvazaar.h
+  libheif/plugins/encoder_openjpeg.cc
+  libheif/plugins/encoder_openjpeg.h
+  libheif/plugins/encoder_openjph.cc
+  libheif/plugins/encoder_openjph.h
+  libheif/plugins/encoder_uvg266.cc
+  libheif/plugins/encoder_uvg266.h
+  libheif/plugins/encoder_vvenc.cc
+  libheif/plugins/encoder_vvenc.h
+  libheif/plugins/nalu_utils.cc
+  libheif/plugins/nalu_utils.h
+  libheif/plugins_unix.cc
+  libheif/plugins_unix.h
+  libheif/plugins_windows.cc
+  libheif/plugins_windows.h
+  libheif/region.cc
+  libheif/region.h
+  libheif/text.cc
+  libheif/text.h
+
+Copyright (c) 2024 Brad Hards <bradh@frogmouth.net>
+  libheif/compression_brotli.cc
+  libheif/mini.cc
+  libheif/mini.h
+
+Copyright (c) 2024 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif_experimental.cc
+  libheif/api/libheif/heif_experimental.h
+  libheif/api/libheif/heif_sequences.cc
+  libheif/api/libheif/heif_uncompressed.cc
+  libheif/codecs/avc_dec.cc
+  libheif/codecs/avc_dec.h
+  libheif/codecs/avif_dec.cc
+  libheif/codecs/avif_dec.h
+  libheif/codecs/avif_enc.cc
+  libheif/codecs/avif_enc.h
+  libheif/codecs/decoder.cc
+  libheif/codecs/decoder.h
+  libheif/codecs/encoder.cc
+  libheif/codecs/encoder.h
+  libheif/codecs/hevc_dec.cc
+  libheif/codecs/hevc_dec.h
+  libheif/codecs/hevc_enc.cc
+  libheif/codecs/hevc_enc.h
+  libheif/codecs/jpeg2000_dec.cc
+  libheif/codecs/jpeg2000_dec.h
+  libheif/codecs/jpeg2000_enc.cc
+  libheif/codecs/jpeg2000_enc.h
+  libheif/codecs/jpeg_dec.cc
+  libheif/codecs/jpeg_dec.h
+  libheif/codecs/jpeg_enc.cc
+  libheif/codecs/jpeg_enc.h
+  libheif/codecs/uncompressed/unc_dec.cc
+  libheif/codecs/uncompressed/unc_dec.h
+  libheif/codecs/uncompressed/unc_enc.cc
+  libheif/codecs/vvc_dec.cc
+  libheif/codecs/vvc_dec.h
+  libheif/codecs/vvc_enc.cc
+  libheif/codecs/vvc_enc.h
+  libheif/file_layout.cc
+  libheif/file_layout.h
+  libheif/image-items/grid.cc
+  libheif/image-items/grid.h
+  libheif/image-items/iden.cc
+  libheif/image-items/iden.h
+  libheif/image-items/image_item.cc
+  libheif/image-items/image_item.h
+  libheif/image-items/overlay.cc
+  libheif/image-items/overlay.h
+  libheif/image-items/tiled.cc
+  libheif/image-items/tiled.h
+  libheif/logging.cc
+  libheif/mdat_data.h
+  libheif/plugins/decoder_openh264.cc
+  libheif/plugins/decoder_openh264.h
+  libheif/security_limits.cc
+  libheif/sequences/chunk.cc
+  libheif/sequences/chunk.h
+  libheif/sequences/seq_boxes.cc
+  libheif/sequences/seq_boxes.h
+  libheif/sequences/track.cc
+  libheif/sequences/track.h
+
+Copyright (c) 2024-2025 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif_uncompressed.h
+
+Copyright (c) 2025 Brad Hards <bradh@frogmouth.net>
+  libheif/api/libheif/heif_text.cc
+  libheif/api/libheif/heif_text.h
+  libheif/text.cc
+  libheif/text.h
+
+Copyright (c) 2025 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif_sequences.h
+  libheif/api/libheif/heif_tai_timestamps.cc
+  libheif/api/libheif/heif_tai_timestamps.h
+  libheif/brands.cc
+  libheif/brands.h
+  libheif/codecs/avc_enc.cc
+  libheif/codecs/avc_enc.h
+  libheif/codecs/uncompressed/unc_enc.h
+  libheif/image-items/avc.cc
+  libheif/image-items/avc.h
+  libheif/plugins/decoder_webcodecs.cc
+  libheif/plugins/decoder_webcodecs.h
+  libheif/plugins/encoder_x264.cc
+  libheif/plugins/encoder_x264.h
+  libheif/sequences/track_metadata.cc
+  libheif/sequences/track_metadata.h
+  libheif/sequences/track_visual.cc
+  libheif/sequences/track_visual.h
+
+Copyright (c) 2026 Brad Hards <bradh@frogmouth.net>
+  libheif/api/libheif/heif_omaf.cc
+  libheif/api/libheif/heif_omaf.h
+  libheif/omaf_boxes.cc
+  libheif/omaf_boxes.h
+
+Copyright (c) 2026 Dirk Farin <dirk.farin@gmail.com>
+  libheif/api/libheif/heif_components.cc
+  libheif/api/libheif/heif_components.h
+  libheif/api/libheif/heif_omaf.cc
+  libheif/api/libheif/heif_omaf.h
+  libheif/codecs/uncompressed/unc_decoder_block_component_interleave.cc
+  libheif/codecs/uncompressed/unc_decoder_block_component_interleave.h
+  libheif/codecs/uncompressed/unc_decoder_block_pixel_interleave.cc
+  libheif/codecs/uncompressed/unc_decoder_block_pixel_interleave.h
+  libheif/codecs/uncompressed/unc_decoder_bytealign_component_interleave.cc
+  libheif/codecs/uncompressed/unc_decoder_bytealign_component_interleave.h
+  libheif/codecs/uncompressed/unc_encoder.cc
+  libheif/codecs/uncompressed/unc_encoder.h
+  libheif/codecs/uncompressed/unc_encoder_component_interleave.cc
+  libheif/codecs/uncompressed/unc_encoder_component_interleave.h
+  libheif/codecs/uncompressed/unc_encoder_rgb_block_pixel_interleave.cc
+  libheif/codecs/uncompressed/unc_encoder_rgb_block_pixel_interleave.h
+  libheif/codecs/uncompressed/unc_encoder_rgb_bytealign_pixel_interleave.cc
+  libheif/codecs/uncompressed/unc_encoder_rgb_bytealign_pixel_interleave.h
+  libheif/codecs/uncompressed/unc_encoder_rgb_pixel_interleave.cc
+  libheif/codecs/uncompressed/unc_encoder_rgb_pixel_interleave.h
+  libheif/color-conversion/bayer_bilinear.cc
+  libheif/color-conversion/bayer_bilinear.h
+  libheif/compression.cc
+  libheif/id_creator.cc
+  libheif/id_creator.h
+  libheif/image/image_description.cc
+  libheif/image/image_description.h
+  libheif/mini.cc
+  libheif/plugins/encoder_input_check.h

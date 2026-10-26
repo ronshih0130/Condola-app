@@ -21,7 +21,15 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       "public/vendor/**",
+      "public/third-party/**",
+      "third-party/upstream/**",
     ],
+  },
+  {
+    files: ["scripts/**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
   },
 ];
 
