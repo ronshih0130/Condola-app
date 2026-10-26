@@ -30,6 +30,9 @@ const openActions: Record<string, Record<string, string>> = {
     actionConfirmToken: "Verify identity", actionConfirmSupabaseHash: "Verify identity",
     actionConfirmSupabase: "Verify identity", actionCreateFirm: "createFirm checks acceptance",
   },
+  "server/actions.ts": {
+    actionVendorReport: "Vendor link token, no user session",
+  },
   "server/consent-actions.ts": {
     actionAcceptReconsent: "Record acceptance", actionAcceptPortalConsent: "Record acceptance",
   },

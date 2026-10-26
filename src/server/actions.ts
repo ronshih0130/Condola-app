@@ -433,6 +433,7 @@ export async function actionSaveRepair(formData: FormData) {
 }
 
 export async function actionCancelRepair(formData: FormData) {
+  await requireCurrentConsent();
   const ticketId = text(formData.get("ticketId"));
   const back = `/t/repair?id=${ticketId}`;
   try {
@@ -465,6 +466,7 @@ async function requestOrigin() {
 }
 
 export async function actionAddVendor(formData: FormData) {
+  await requireCurrentConsent();
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
@@ -481,6 +483,7 @@ export async function actionAddVendor(formData: FormData) {
 }
 
 export async function actionDispatchVendor(formData: FormData) {
+  await requireCurrentConsent();
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
@@ -504,6 +507,7 @@ export async function actionDispatchVendor(formData: FormData) {
 }
 
 export async function actionRevokeVendor(formData: FormData) {
+  await requireCurrentConsent();
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
@@ -516,6 +520,7 @@ export async function actionRevokeVendor(formData: FormData) {
 }
 
 export async function actionConfirmVendor(formData: FormData) {
+  await requireCurrentConsent();
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
