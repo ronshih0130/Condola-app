@@ -322,6 +322,105 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
           uploadToken: issueVendorUploadGrant(hashVendorToken(token), ticketId, path),
         }, { remove: async () => { assert.fail("attached object must never be removed"); } });
         assert.equal(confirmed, attached.rows[0].id);
+
+        const raceFileId = randomUUID();
+        const racePath = ticketPhotoPath(ORG, ticketId, raceFileId, "image/jpeg");
+        const removed: string[] = [];
+        const remove = async (objectPath: string) => { removed.push(objectPath); };
+        let displacedAttachment: string | undefined;
+        try {
+          const displaced = await svc(null, (client) =>
+            client.query<{ attachment: string }>(
+              `DELETE FROM ticket_attachments WHERE ticket_id = $1 AND file_id = $2
+               RETURNING to_jsonb(ticket_attachments)::text AS attachment`,
+              [ticketId, internalId],
+            ),
+          );
+          displacedAttachment = displaced.rows[0]?.attachment;
+          assert.equal(displaced.rowCount, 1);
+          await withClient(async (holder) => {
+            await holder.query("BEGIN");
+            let pending: Promise<{ id: string; error?: never } | { id?: never; error: unknown }> | undefined;
+            try {
+              await holder.query(`SET LOCAL ROLE service_role`);
+              await holder.query(`SELECT set_config('request.jwt.claim.role', 'service_role', true)`);
+              await holder.query(`SELECT 1 FROM maintenance_tickets WHERE id = $1 FOR UPDATE`, [ticketId]);
+              pending = confirmVendorPhoto(token, {
+                path: racePath,
+                fileName: `${title}-race.jpg`,
+                mime: "application/octet-stream",
+                size: 4,
+                uploadToken: issueVendorUploadGrant(hashVendorToken(token), ticketId, racePath),
+              }, { remove }).then(
+                (id) => ({ id }),
+                (error: unknown) => ({ error }),
+              );
+              const deadline = Date.now() + 5000;
+              for (;;) {
+                const waiting = await holder.query<{ blocked: boolean }>(
+                  `SELECT EXISTS (
+                     SELECT 1 FROM pg_locks
+                      WHERE NOT granted
+                        AND pid <> pg_backend_pid()
+                        AND pg_backend_pid() = ANY(pg_blocking_pids(pid))
+                   ) AS blocked`,
+                );
+                if (waiting.rows[0].blocked) break;
+                assert.ok(Date.now() < deadline, "confirmVendorPhoto must block on the ticket lock");
+                await new Promise((resolve) => setTimeout(resolve, 20));
+              }
+              await holder.query(
+                `INSERT INTO files (id, org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes)
+                 VALUES ($1,$2,$3,$4,$5,'image/jpeg',4)`,
+                [raceFileId, ORG, PHOTO_BUCKET, racePath, `${title}-race.jpg`],
+              );
+              const inserted = await holder.query<{ id: string }>(
+                `INSERT INTO ticket_attachments (org_id, ticket_id, file_id, is_internal, vendor_job_id)
+                 VALUES ($1,$2,$3,false,$4) RETURNING id::text`,
+                [ORG, ticketId, raceFileId, issued.jobId],
+              );
+              await holder.query("COMMIT");
+              const result = await pending;
+              if ("error" in result) throw result.error;
+              assert.equal(result.id, inserted.rows[0].id);
+              assert.deepEqual(removed, []);
+              const surviving = await holder.query(
+                `SELECT a.id FROM ticket_attachments a JOIN files f ON f.id = a.file_id
+                  WHERE a.id = $1 AND f.storage_path = $2`,
+                [inserted.rows[0].id, racePath],
+              );
+              assert.equal(surviving.rowCount, 1);
+            } finally {
+              await holder.query("ROLLBACK");
+              if (pending) await pending;
+            }
+          });
+
+          const discardPath = ticketPhotoPath(ORG, ticketId, randomUUID(), "image/jpeg");
+          await assert.rejects(
+            () => confirmVendorPhoto(token, {
+              path: discardPath,
+              fileName: `${title}-discard.jpg`,
+              mime: "application/octet-stream",
+              size: 4,
+              uploadToken: issueVendorUploadGrant(hashVendorToken(token), ticketId, discardPath),
+            }, { remove }),
+            (error: unknown) => error instanceof FlowError && error.key === "errors.photoType",
+          );
+          assert.deepEqual(removed, [discardPath]);
+        } finally {
+          await svc(null, async (client) => {
+            await client.query(`DELETE FROM ticket_attachments WHERE file_id = $1`, [raceFileId]);
+            await client.query(`DELETE FROM files WHERE id = $1`, [raceFileId]);
+            if (displacedAttachment !== undefined) {
+              await client.query(
+                `INSERT INTO ticket_attachments
+                 SELECT * FROM jsonb_populate_record(NULL::ticket_attachments, $1::jsonb)`,
+                [displacedAttachment],
+              );
+            }
+          });
+        }
       } finally {
         if (previousKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
         else process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey;
