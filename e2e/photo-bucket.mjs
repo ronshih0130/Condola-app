@@ -137,6 +137,54 @@ async function updateAdminUser(userId, body) {
   }
 }
 
+/** Minimal GoTrue admin/password endpoints for the local Postgres stub. */
+async function inviteAuth(pathname, body, userId) {
+  const client = new pg.Client({ connectionString: databaseUrl() });
+  await client.connect();
+  try {
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    if (pathname.startsWith("/auth/v1/admin/users")) {
+      if (!email || !password || body.email_confirm !== true) {
+        return { status: 400, payload: { error_code: "validation_failed" } };
+      }
+      if (userId) {
+        const updated = await client.query(
+          `UPDATE auth.users SET email = $2, encrypted_password = crypt($3, gen_salt('bf')),
+                  email_confirmed_at = now(), updated_at = now()
+            WHERE id = $1 RETURNING id::text, email`,
+          [userId, email, password],
+        );
+        return updated.rows[0]
+          ? { status: 200, payload: updated.rows[0] }
+          : { status: 404, payload: { error_code: "user_not_found" } };
+      }
+      const existing = await client.query(`SELECT id FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+      if (existing.rows[0]) return { status: 422, payload: { error_code: "email_exists" } };
+      const created = await client.query(
+        `INSERT INTO auth.users
+           (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
+         VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), now(), '{}'::jsonb,
+                 'authenticated', 'authenticated')
+         RETURNING id::text, email`,
+        [email, password],
+      );
+      return { status: 200, payload: created.rows[0] };
+    }
+    const account = await client.query(
+      `SELECT id::text, email, email_confirmed_at FROM auth.users
+        WHERE lower(email) = lower($1) AND encrypted_password = crypt($2, encrypted_password)`,
+      [email, password],
+    );
+    const user = account.rows[0];
+    if (!user) return { status: 400, payload: { error_code: "invalid_credentials" } };
+    if (!user.email_confirmed_at) return { status: 400, payload: { error_code: "email_not_confirmed" } };
+    return { status: 200, payload: { user } };
+  } finally {
+    await client.end();
+  }
+}
+
 function send(res, status, body, headers = {}) {
   res.writeHead(status, {
     "access-control-allow-origin": "*",
@@ -222,6 +270,22 @@ const server = createServer(async (req, res) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : "signup failed";
       send(res, 500, JSON.stringify({ message }), { "content-type": "application/json" });
+    }
+    return;
+  }
+  const adminUser = url.pathname.match(/^\/auth\/v1\/admin\/users\/([0-9a-f-]+)$/i);
+  const adminCreate = req.method === "POST" && url.pathname === "/auth/v1/admin/users";
+  const adminUpdate = req.method === "PUT" && adminUser;
+  const passwordGrant = req.method === "POST" && url.pathname === "/auth/v1/token" &&
+    url.searchParams.get("grant_type") === "password";
+  if (adminCreate || adminUpdate || passwordGrant) {
+    if ((adminCreate || adminUpdate) && !authorized(req)) return send(res, 401, "unauthorized");
+    try {
+      const body = JSON.parse((await readBody(req)).toString() || "{}");
+      const result = await inviteAuth(url.pathname, body, adminUpdate ? adminUser[1] : null);
+      send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
+    } catch {
+      send(res, 500, JSON.stringify({ message: "auth failed" }), { "content-type": "application/json" });
     }
     return;
   }

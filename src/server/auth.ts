@@ -101,7 +101,7 @@ async function localPasswordCheck(email: string, password: string): Promise<stri
   return row.id;
 }
 
-async function verifyPassword(email: string, password: string): Promise<string | "unconfirmed" | "unavailable" | null> {
+export async function verifyPassword(email: string, password: string): Promise<string | "unconfirmed" | "unavailable" | null> {
   const url = supabaseUrl();
   const anon = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
   if (url && anon) {
@@ -852,29 +852,65 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
   return reject("invalid", kind);
 }
 
-async function upsertInvitedUser(client: Client, email: string, name: string, password: string) {
-  const existing = await client.query<{ id: string }>(
-    `SELECT id::text FROM auth.users WHERE lower(email) = lower($1)`,
-    [email],
+/** Hosted team logins must be provisioned by GoTrue, including identities and tokens. */
+export async function upsertInvitedUser(client: Client, email: string, name: string, password: string) {
+  const existing = await client.query<{ id: string; has_password: boolean; matches: boolean }>(
+    `SELECT id::text,
+            (encrypted_password IS NOT NULL AND btrim(encrypted_password) <> '') AS has_password,
+            (encrypted_password IS NOT NULL AND encrypted_password = crypt($2, encrypted_password)) AS matches
+       FROM auth.users WHERE lower(email) = lower($1)`,
+    [email, password],
   );
-  if (existing.rows[0]) {
-    await setUserPassword(existing.rows[0].id, password);
-    await client.query(
-      `INSERT INTO profiles (id, display_name, email, locale) VALUES ($1, $2, $3, 'zh-TW')
-       ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, email = EXCLUDED.email`,
-      [existing.rows[0].id, name, email],
+  const account = existing.rows[0];
+  // Like portal acceptance, never replace an established password.
+  if (account?.has_password && !account.matches) return null;
+
+  let id = account?.id ?? "";
+  const url = supabaseUrl();
+  if (url && !account?.has_password) {
+    const service = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    if (!service) throw new Error("Invite login provisioning unavailable");
+    const response = await fetch(
+      `${url.replace(/\/$/, "")}/auth/v1/admin/users${id ? `/${encodeURIComponent(id)}` : ""}`,
+      {
+        method: id ? "PUT" : "POST",
+        headers: {
+          apikey: service,
+          Authorization: `Bearer ${service}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password, email_confirm: true }),
+        signal: AbortSignal.timeout(8_000),
+      },
     );
-    return existing.rows[0].id;
+    if (!response.ok) throw new Error("Invite login provisioning unavailable");
+    const user = parseGotrueUserId(await response.json().catch(() => ({})));
+    if (!user || (id && user.id !== id)) throw new Error("Invite login provisioning unavailable");
+    id = user.id;
+  } else if (!url && !account?.has_password) {
+    // The local Postgres stub has no GoTrue service.
+    if (id) {
+      await client.query(
+        `UPDATE auth.users
+            SET encrypted_password = crypt($2, gen_salt('bf')),
+                email_confirmed_at = coalesce(email_confirmed_at, now()),
+                updated_at = now()
+          WHERE id = $1`,
+        [id, password],
+      );
+    } else {
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
+         VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), now(), $3::jsonb, 'authenticated', 'authenticated')
+         RETURNING id::text`,
+        [email, password, JSON.stringify({ name })],
+      );
+      id = inserted.rows[0].id;
+    }
   }
-  const inserted = await client.query<{ id: string }>(
-    `INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
-     VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), now(), $3::jsonb, 'authenticated', 'authenticated')
-     RETURNING id::text`,
-    [email, password, JSON.stringify({ name })],
-  );
-  const id = inserted.rows[0].id;
   await client.query(
-    `INSERT INTO profiles (id, display_name, email, locale) VALUES ($1, $2, $3, 'zh-TW')`,
+    `INSERT INTO profiles (id, display_name, email, locale) VALUES ($1, $2, $3, 'zh-TW')
+     ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, email = EXCLUDED.email`,
     [id, name, email],
   );
   return id;
@@ -1124,7 +1160,11 @@ async function acceptInviteOnce(
   if (password !== confirm) return { ok: false as const, error: "mismatch" as const, kind: view.kind };
   if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const, kind: view.kind };
   if (!name.trim()) return { ok: false as const, error: "required" as const, kind: "team_member" as const };
-  return withClient(async (client) => {
+  return withClient((client) => acceptTeamInvite(client, token, name, password, meta));
+}
+
+/** Keep provisioning and invitation consumption in the same acceptance transaction. */
+export async function acceptTeamInvite(client: Client, token: string, name: string, password: string, meta: RequestMeta) {
   try {
     await client.query("BEGIN");
     const invite = await client.query<{ id: string; org_id: string; role: OrgRole; email: string }>(
@@ -1138,7 +1178,19 @@ async function acceptInviteOnce(
       await client.query("ROLLBACK");
       return { ok: false as const, error: "used" as const, kind: "team_member" as const };
     }
-    const userId = await upsertInvitedUser(client, row.email, name.trim(), password);
+    let userId: string | null;
+    try {
+      // GoTrue commits independently. On a later rollback, retry requires the
+      // created account's password and leaves the invitation available.
+      userId = await upsertInvitedUser(client, row.email, name.trim(), password);
+    } catch {
+      await client.query("ROLLBACK");
+      return { ok: false as const, error: "failed" as const, kind: "team_member" as const };
+    }
+    if (!userId) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, error: "auth" as const, kind: "team_member" as const };
+    }
     const member = await client.query(
       `SELECT status::text FROM org_members WHERE org_id = $1 AND user_id = $2`,
       [row.org_id, userId],
@@ -1177,7 +1229,6 @@ async function acceptInviteOnce(
     await client.query("ROLLBACK");
     throw error;
   }
-  });
 }
 
 export async function listSessions(userId: string) {

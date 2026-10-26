@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
 import { Client } from "pg";
+import { TEAM_INVITES_ENABLED } from "../src/server/team-invites";
 import { ACCOUNTS, resetDemo, signIn } from "./session";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
@@ -174,22 +175,23 @@ test("a team member invite shows 即將開放, refuses accept and resend, and cr
   expect(await accountCount(email)).toEqual({ users: 0, members: 0 });
 });
 
-test("an owner invitation can still be accepted", async ({ page, browser }) => {
-  const email = `owner.keep.${Date.now()}@example.com`;
+for (const kind of ["owner", "tenant"] as const) {
+test(`a ${kind} invitation can still be accepted`, async ({ page, browser }) => {
+  const email = `${kind}.keep.${Date.now()}@example.com`;
   await resetDemo(page);
   const token = randomBytes(32).toString("base64url");
   const codeHash = createHash("sha256").update(token).digest("hex");
   await withDb(async (client) => {
     const contact = await client.query<{ id: string }>(
-      `INSERT INTO contacts (org_id, is_owner, display_name, email, locale)
-       VALUES ($1, true, '保留屋主', $2, 'zh-TW')
+      `INSERT INTO contacts (org_id, is_owner, is_tenant, display_name, email, locale)
+       VALUES ($1, $3, $4, '保留聯絡人', $2, 'zh-TW')
        RETURNING id::text`,
-      [ORG_ID, email],
+      [ORG_ID, email, kind === "owner", kind === "tenant"],
     );
     await client.query(
       `INSERT INTO invitations (org_id, kind, contact_id, email, code_hash, status, expires_at, invited_by)
-       VALUES ($1, 'owner', $2, $3, $4, 'pending', now() + interval '7 days', $5)`,
-      [ORG_ID, contact.rows[0].id, email, codeHash, ADMIN_ID],
+       VALUES ($1, $6::invitation_kind, $2, $3, $4, 'pending', now() + interval '7 days', $5)`,
+      [ORG_ID, contact.rows[0].id, email, codeHash, ADMIN_ID, kind],
     );
   });
 
@@ -201,7 +203,7 @@ test("an owner invitation can still be accepted", async ({ page, browser }) => {
   await expect(guestPage.getByTestId("portal-password-title")).toHaveText("請設定或輸入密碼");
   await guestPage.getByTestId("new-password").fill("Owner1234");
   await guestPage.getByTestId("portal-submit").click();
-  await guestPage.waitForURL(/\/o\/statements\/?$/);
+  await guestPage.waitForURL(kind === "tenant" ? /\/t\/?$/ : /\/o\/statements\/?$/);
   await guest.close();
   const bound = await withDb(async (client) => {
     const row = await client.query<{ users: string; linked: string }>(
@@ -215,4 +217,48 @@ test("an owner invitation can still be accepted", async ({ page, browser }) => {
     return { users: Number(row.rows[0].users), linked: Number(row.rows[0].linked) };
   });
   expect(bound).toEqual({ users: 1, linked: 1 });
+});
+}
+
+test("invitee can log in after accepting", async ({ page, browser }) => {
+  await resetDemo(page);
+  const email = `login.invitee.${Date.now()}@example.com`;
+  const invite = await insertTeamInvite(email);
+  const guest = await browser.newContext();
+  try {
+    const invitee = await guest.newPage();
+    await invitee.goto(`/api/demo/locale?set=zh-TW&next=${encodeURIComponent(`/accept/${invite.token}`)}`);
+    if (!TEAM_INVITES_ENABLED) {
+      // Shipped off; flipping the source constant exercises the login flow below.
+      await expect(invitee.getByTestId("team-accept-soon")).toBeDisabled();
+      const response = await postAction(invitee, `/accept/${invite.token}`, "actionAccept", {
+        token: invite.token, name: "登入新人", password: "Fresh1234", confirm: "Fresh1234",
+      });
+      expect(refusalTarget(response)).toContain("error=errors.teamInvitesSoon");
+      expect((await inviteRow(invite.id)).status).toBe("pending");
+      expect(await accountCount(email)).toEqual({ users: 0, members: 0 });
+      return;
+    }
+    await invitee.getByTestId("accept-name").fill("登入新人");
+    await invitee.getByTestId("new-password").fill("Fresh1234");
+    await invitee.getByTestId("password-confirm").fill("Fresh1234");
+    await invitee.getByTestId("accept-submit").click();
+    await invitee.waitForURL((url) => !url.pathname.startsWith("/accept/"));
+    expect((await inviteRow(invite.id)).status).toBe("accepted");
+    expect(await accountCount(email)).toEqual({ users: 1, members: 1 });
+
+    await invitee.goto("/m");
+    // Use browser navigation: cookie-expiry headers exceed Node's API client limit.
+    await invitee.getByTestId("sign-out").click();
+    await expect(invitee).toHaveURL(/\/login\/?$/);
+    await invitee.goto("/m");
+    await expect(invitee).toHaveURL(/\/login(?:[/?]|$)/);
+    await invitee.getByTestId("login-email").fill(email);
+    await invitee.getByTestId("login-password").fill("Fresh1234");
+    await invitee.getByTestId("login-submit").click();
+    await expect(invitee).toHaveURL(/\/m\/?$/);
+    await expect(invitee.getByTestId("sign-out")).toBeVisible();
+  } finally {
+    await guest.close();
+  }
 });

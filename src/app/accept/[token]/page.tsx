@@ -7,7 +7,7 @@ import { PasswordFields } from "@/components/password-field";
 import { actionAccept } from "@/server/auth-actions";
 import { describeInvite } from "@/server/auth";
 import { lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
-import { TEAM_INVITES_ENABLED } from "@/server/team-invites";
+import { TEAM_INVITES_ENABLED, inviteStateMessageKey } from "@/server/team-invites";
 import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -41,22 +41,8 @@ export default async function AcceptPage({
     accountant: "i_role_accountant",
     maintenance: "i_role_maintenance",
   };
-  const stateMessage =
-    invite.state === "timeout"
-      ? t("i_portal_timeout")
-      : invite.state === "locked"
-      ? t("i_portal_invite_locked")
-      : portal
-      ? t("i_portal_invite_invalid")
-      : invite.state === "used"
-      ? t("i_invite_used")
-      : invite.state === "revoked"
-        ? t("i_invite_revoked")
-        : invite.state === "expired"
-          ? t("i_invite_expired")
-          : invite.state === "invalid"
-            ? t("i_invite_invalid")
-            : "";
+  const stateKey = inviteStateMessageKey(invite.kind, invite.state, TEAM_INVITES_ENABLED);
+  const stateMessage = stateKey ? t(stateKey) : "";
   const error =
     query.error === "weak"
       ? t("i_pw_weak")
