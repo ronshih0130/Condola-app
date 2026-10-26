@@ -32,9 +32,14 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   const ok = assertPhotoMeta({ fileName: "浴室.jpg", mime: "image/jpeg", size: 1200 });
   assert.equal(ok.mime, "image/jpeg");
   assert.equal(ok.size, 1200);
-  assert.throws(() => assertPhotoMeta({ fileName: "a.heic", mime: "image/heic", size: 100 }), (error: unknown) => {
-    return error instanceof FlowError && error.key === "errors.photoType";
-  });
+  for (const input of [
+    { fileName: "a.jpg", mime: "image/heic", size: 100 },
+    { fileName: "a.jpg", mime: "image/heif", size: 100 },
+    { fileName: "a.heic", mime: "image/jpeg", size: 100 },
+    { fileName: "a.HEIF", mime: "image/jpeg", size: 100 },
+  ]) {
+    assert.throws(() => assertPhotoMeta(input), (error: unknown) => error instanceof FlowError && error.key === "errors.photoHeic");
+  }
   assert.throws(() => assertPhotoMeta({ fileName: "a.jpg", mime: "image/jpeg", size: PHOTO_MAX_BYTES + 1 }), (error: unknown) => {
     return error instanceof FlowError && error.key === "errors.photoSize";
   });
@@ -46,6 +51,13 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   webp.set([0x52, 0x49, 0x46, 0x46], 0);
   webp.set([0x57, 0x45, 0x42, 0x50], 8);
   assert.equal(sniffPhotoMime(webp), "image/webp");
+  const png = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+  for (const [header, mime] of [[jpeg, "image/jpeg"], [png, "image/png"], [webp, "image/webp"]] as const) {
+    assert.deepEqual(
+      acceptPhotoObject({ size: 40, mime: "application/octet-stream", header }, mime),
+      { size: 40, mime },
+    );
+  }
   assert.equal(sniffPhotoMime(Uint8Array.of(0x47, 0x49, 0x46, 0x38, 0x39, 0x61)), null);
   assert.throws(
     () => acceptPhotoObject({ size: 40, mime: "image/jpeg", header: Uint8Array.of(0x25, 0x50, 0x44, 0x46) }, "image/jpeg"),
@@ -105,6 +117,10 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   heic.set([0, 0, 0, 12, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]);
   assert.equal(sniffHeic(heic), true);
   assert.equal(sniffHeic(Uint8Array.of(0xff, 0xd8, 0xff)), false);
+  assert.throws(
+    () => acceptPhotoObject({ size: 40, mime: "image/jpeg", header: heic }, "image/jpeg"),
+    (error: unknown) => error instanceof FlowError && error.key === "errors.photoHeic",
+  );
   assert.match(server, /bytes=0-/);
   assert.match(server, /AbortSignal\.timeout/);
   assert.match(server, /object\/info/);
@@ -118,6 +134,49 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   assert.match(view, /\/api\/tickets\/photos\//);
   assert.match(view, /repair-photo-preview/);
   assert.doesNotMatch(view, /from "next\/image"/);
+});
+
+test("HEIC decoding stays behind a browser event and is excluded from server bundles", () => {
+  const sources = (dir: URL): URL[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
+    return entry.isDirectory() ? sources(path) : /\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+  const decoderImport = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)["'](?:heic-convert(?:\/[^"']*)?|heic-decode(?:\/[^"']*)?|libheif-js(?:\/[^"']*)?|\.\/heic-jpeg)["']/;
+  for (const dir of ["src/server/", "src/app/"]) {
+    for (const path of sources(new URL(dir, root))) {
+      assert.doesNotMatch(readFileSync(path, "utf8"), decoderImport, path.pathname);
+    }
+  }
+  assert.equal(existsSync(new URL("./heic-jpeg.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("./heic-convert.d.ts", import.meta.url)), false);
+  for (const path of sources(new URL("src/", root))) {
+    assert.doesNotMatch(
+      readFileSync(path, "utf8"),
+      /(?:\bfrom\s*|\bimport\s*|\bimport\s+\w+\s*=\s*require\s*\(\s*)["']heic-convert(?:\/[^"']*)?["']/,
+      path.pathname,
+    );
+  }
+  const browser = readFileSync(new URL("src/lib/heic-browser.ts", root), "utf8");
+  assert.match(browser, /async function heicFileToJpeg\(file: File\): Promise<File>/);
+  assert.match(browser, /await import\("heic-convert\/browser"\)/);
+  assert.match(browser, /sniffPhotoMime/);
+  assert.match(browser, /PHOTO_MAX_BYTES/);
+  const client = readFileSync(new URL("src/components/ticket-photos.tsx", root), "utf8");
+  assert.doesNotMatch(client, /heicToJpeg/);
+  assert.match(client, /sniffHeic/);
+  assert.match(client, /async function onChange[\s\S]*await heicFileToJpeg\(file\)/);
+  assert.doesNotMatch(client, /"content-type":\s*heic/);
+  const config = readFileSync(new URL("next.config.ts", root), "utf8");
+  assert.match(config, /webpack:\s*\(config,\s*\{\s*isServer\s*\}\)/);
+  for (const name of ["heic-convert", "heic-convert/browser", "heic-decode", "libheif-js"]) {
+    assert.ok(
+      config.includes(`"${name}": false`),
+      `${name} must be excluded from server bundles`,
+    );
+  }
+  assert.match(config, /if \(isServer\)\s*\{\s*config\.resolve\.alias\s*=\s*\{[^}]*"heic-convert": false[^}]*"heic-convert\/browser": false[^}]*"heic-decode": false[^}]*"libheif-js": false/);
+  const vendor = readFileSync(new URL("./vendor-repair.ts", import.meta.url), "utf8");
+  assert.match(vendor, /const DISCARD = new Set\(\[[^\]]*"errors\.photoHeic"/);
 });
 
 test("dates, money, vendor, and the expense link stay optional", () => {
@@ -306,6 +365,23 @@ test("confirm returns an attached photo and deletes only an unattached upload is
         },
       ),
       (error: unknown) => error instanceof FlowError && error.key === "errors.photoType",
+    );
+    assert.deepEqual(removed, [path]);
+
+    removed.length = 0;
+    await assert.rejects(
+      confirmTicketPhoto(
+        session,
+        { ticketId, path, fileName: "a.jpg", mime: "image/jpeg", size: 40, internal: false, uploadToken: token },
+        {
+          target,
+          existing: async () => null,
+          info: async () => ({ ok: true, size: 40, mime: "image/jpeg" }),
+          header: async () => Uint8Array.of(0, 0, 0, 12, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63),
+          remove,
+        },
+      ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.photoHeic",
     );
     assert.deepEqual(removed, [path]);
 

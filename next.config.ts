@@ -26,7 +26,16 @@ const nextConfig: NextConfig = {
       allowedOrigins: [...PRODUCTION_HOSTS],
     },
   },
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        "heic-convert": false,
+        "heic-convert/browser": false,
+        "heic-decode": false,
+        "libheif-js": false,
+      };
+    }
     config.module.rules.push({
       test: /\.md$/,
       type: "asset/source",

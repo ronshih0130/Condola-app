@@ -724,7 +724,7 @@ async function attachVendorPhoto(
   });
 }
 
-const DISCARD = new Set(["errors.photoLimit", "errors.photoType", "errors.photoSize", "errors.photoStorage"]);
+const DISCARD = new Set(["errors.photoLimit", "errors.photoType", "errors.photoSize", "errors.photoStorage", "errors.photoHeic"]);
 
 export async function confirmVendorPhoto(
   token: string,

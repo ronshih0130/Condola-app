@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { heicFileToJpeg } from "@/lib/heic-browser";
 import { PHOTO_HEADER_BYTES, PHOTO_MAX_BYTES, PHOTO_MIMES, normalizePhotoMime, sniffHeic, sniffPhotoMime } from "@/server/repair-rules";
 
 type Messages = {
@@ -32,7 +33,7 @@ function messageFor(key: string | undefined, messages: Messages) {
 }
 
 /**
- * Sends the original file to a signed upload URL. No canvas, no re-encode.
+ * Converts HEIC in the browser, then sends JPEG, PNG, or WEBP to a signed URL.
  */
 export function TicketPhotoUpload({
   ticketId,
@@ -61,26 +62,39 @@ export function TicketPhotoUpload({
   const [pending, setPending] = useState(false);
 
   async function onChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    let file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
     setError("");
-    if (file.size > PHOTO_MAX_BYTES) {
-      setError(photoFailed(messages, file.name, messages.size));
-      return;
-    }
-    const header = new Uint8Array(await file.slice(0, PHOTO_HEADER_BYTES).arrayBuffer());
-    const sniffed = sniffPhotoMime(header);
-    const heic = sniffHeic(header);
-    const declared = normalizePhotoMime(file.type);
-    if (!heic && (!sniffed || (file.type !== "" && declared !== sniffed))) {
-      setError(photoFailed(messages, file.name, messages.type));
-      return;
-    }
-    const mime = sniffed ?? "image/jpeg";
-    const fileName = heic ? file.name.replace(/\.(heic|heif)$/i, "") + ".jpg" : file.name;
     setPending(true);
     try {
+      const header = new Uint8Array(await file.slice(0, PHOTO_HEADER_BYTES).arrayBuffer());
+      const heic = sniffHeic(header) || /\.(heic|heif)$/i.test(file.name) || /^image\/hei[cf]$/i.test(file.type);
+      if (heic) {
+        const originalName = file.name;
+        try {
+          file = await heicFileToJpeg(file);
+          const convertedHeader = new Uint8Array(await file.slice(0, PHOTO_HEADER_BYTES).arrayBuffer());
+          if (sniffPhotoMime(convertedHeader) !== "image/jpeg" || file.size <= 0 || file.size > PHOTO_MAX_BYTES) {
+            throw new Error("HEIC conversion did not produce an accepted JPEG");
+          }
+        } catch {
+          setError(photoFailed(messages, originalName, messages.heic));
+          return;
+        }
+      }
+      if (file.size <= 0 || file.size > PHOTO_MAX_BYTES) {
+        setError(photoFailed(messages, file.name, messages.size));
+        return;
+      }
+      const uploadHeader = new Uint8Array(await file.slice(0, PHOTO_HEADER_BYTES).arrayBuffer());
+      const mime = sniffPhotoMime(uploadHeader);
+      const declared = normalizePhotoMime(file.type);
+      if (!mime || (file.type !== "" && declared !== mime)) {
+        setError(photoFailed(messages, file.name, messages.type));
+        return;
+      }
+      const fileName = file.name;
       const signed = await fetch(signPath, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -97,7 +111,7 @@ export function TicketPhotoUpload({
         setError(messageFor(signBody.error, messages));
         return;
       }
-      const headers: Record<string, string> = { "content-type": heic ? "image/heic" : mime };
+      const headers: Record<string, string> = { "content-type": mime };
       if (signBody.token) headers.authorization = `Bearer ${signBody.token}`;
       const uploaded = await fetch(signBody.uploadUrl, { method: "PUT", headers, body: file });
       if (!uploaded.ok) {
