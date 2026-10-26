@@ -71,7 +71,6 @@ export function TicketPhotoUpload({
       const header = new Uint8Array(await file.slice(0, PHOTO_HEADER_BYTES).arrayBuffer());
       const heic = sniffHeic(header) || /\.(heic|heif)$/i.test(file.name) || /^image\/hei[cf]$/i.test(file.type);
       if (heic) {
-        const originalName = file.name;
         try {
           file = await heicFileToJpeg(file);
           const convertedHeader = new Uint8Array(await file.slice(0, PHOTO_HEADER_BYTES).arrayBuffer());
@@ -79,7 +78,7 @@ export function TicketPhotoUpload({
             throw new Error("HEIC conversion did not produce an accepted JPEG");
           }
         } catch {
-          setError(photoFailed(messages, originalName, messages.heic));
+          setError(messages.heic);
           return;
         }
       }

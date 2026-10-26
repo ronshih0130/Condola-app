@@ -136,6 +136,13 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   assert.doesNotMatch(view, /from "next\/image"/);
 });
 
+test("HEIC conversion failures and server rejections show the specific HEIC message", () => {
+  const client = readFileSync(new URL("../components/ticket-photos.tsx", import.meta.url), "utf8");
+  assert.match(client, /await heicFileToJpeg\(file\);[\s\S]*?\} catch \{\s*setError\(messages\.heic\);\s*return;\s*\}/);
+  assert.doesNotMatch(client, /photoFailed\(messages,\s*[^,]+,\s*messages\.heic\)/);
+  assert.match(client, /if \(key === "errors\.photoHeic"\) return messages\.heic;/);
+});
+
 test("HEIC decoding stays behind a browser event and is excluded from server bundles", () => {
   const sources = (dir: URL): URL[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
