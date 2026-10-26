@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { Client } from "pg";
 import { expect, test } from "@playwright/test";
+import { parseAppConsent } from "../src/server/consent";
 import { PRIVACY_VERSION, TERMS_VERSION } from "../src/server/legal-versions";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
@@ -65,6 +66,14 @@ async function insertUser(
     [email, PASSWORD, JSON.stringify(meta), JSON.stringify(app)],
   );
   const userId = inserted.rows[0].id;
+  const consent = parseAppConsent(app);
+  if (consent) {
+    await client.query(
+      `INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, consent.accepted_at, consent.terms_version, consent.privacy_version, consent.source],
+    );
+  }
   await client.query(`INSERT INTO profiles (id, display_name, email, locale) VALUES ($1, $2, $3, 'zh-TW')`, [
     userId,
     "Consent Followup",

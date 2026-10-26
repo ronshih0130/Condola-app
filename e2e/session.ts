@@ -12,7 +12,7 @@ export const ACCOUNTS = {
   owner: "jianhong.chen@owner.demo",
 } as const;
 
-/** Demo users have no app_metadata consent until they tick the gate. */
+/** Seeded demo users have table consent; fresh invitees may still need the gate. */
 export async function finishConsentGate(page: Page) {
   if (!new URL(page.url()).pathname.startsWith("/consent")) return;
   await page.getByTestId("consent-check").check();

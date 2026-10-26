@@ -133,8 +133,8 @@ export async function writeConsentSql(userId: string, record: StoredConsent, cli
   await query(CONSENT_WRITE_SQL, params);
 }
 
-async function loadConsentRow(userId: string): Promise<StoredConsent | null> {
-  return svc(userId, async (client) => {
+export async function loadConsentRow(userId: string, service: typeof svc = svc): Promise<StoredConsent | null> {
+  return service(userId, async (client) => {
     const row = await client.query<StoredConsent>(
       `SELECT accepted_at::text, terms_version, privacy_version, source
          FROM public.consents WHERE user_id = $1
@@ -145,8 +145,8 @@ async function loadConsentRow(userId: string): Promise<StoredConsent | null> {
   });
 }
 
-async function persistConsent(userId: string, record: StoredConsent) {
-  await svc(userId, async (client) => {
+export async function persistConsent(userId: string, record: StoredConsent, service: typeof svc = svc) {
+  await service(userId, async (client) => {
     await client.query(
       `INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
        VALUES ($1, $2, $3, $4, $5)

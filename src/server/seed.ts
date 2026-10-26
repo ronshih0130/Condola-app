@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "./db";
+import { buildStoredConsent, writeConsentSql } from "./consent";
 import { DEMO_PASSWORD } from "./demo-password";
 import { seedSampleCheck } from "./id-docs";
 import { FIRM2_NAME, FIRM_NAME, ORG2_ID, ORG_ID, USERS } from "./ids";
@@ -64,6 +65,13 @@ export async function resetAndSeed() {
          VALUES ($1, $2, crypt($3, gen_salt('bf')), $4::jsonb, now(), 'authenticated', 'authenticated')`,
         [person.id, person.email, DEMO_PASSWORD, JSON.stringify({ name: person.name })],
       );
+      const consent = buildStoredConsent("signup");
+      await client.query(
+        `INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [person.id, consent.accepted_at, consent.terms_version, consent.privacy_version, consent.source],
+      );
+      await writeConsentSql(person.id, consent, client);
       await client.query(
         `INSERT INTO profiles (id, display_name, email, phone_e164, locale, timezone, line_linked)
          VALUES ($1, $2, $3, $4, $5, 'Asia/Taipei', $6)`,

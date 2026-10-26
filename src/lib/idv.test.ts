@@ -276,7 +276,15 @@ test("the photo modal keeps a fixed frame per slot and reloads with a new link",
   assert.match(get, /watermark;dur=/);
   assert.match(get, /total;dur=/);
   assert.match(get, /private, no-store/);
-  assert.doesNotMatch(get, /readSessionOn/);
+  // The consent lookup reuses the photo connection, after fast token rejection.
+  assert.ok(get.indexOf("readPhotoToken(token)") < get.indexOf("serveSignedPhoto({"));
+  assert.ok(get.indexOf("if (!sessionCookie)") < get.indexOf("serveSignedPhoto({"));
+  assert.match(get, /async \(client\) => \{\s*const \{ session \} = await readSessionOn\(client, \{ touch: false \}\)/);
+  assert.match(get, /await requireCurrentConsent\(session, "api"\)/);
+  assert.doesNotMatch(get, /withClient|withDeferredClient/);
+  const docs = readFileSync(new URL("../server/id-docs.ts", import.meta.url), "utf8");
+  const serve = docs.slice(docs.indexOf("export async function serveSignedPhoto"));
+  assert.ok(serve.indexOf("await authorize?.(client)") < serve.indexOf("FROM id_photo_open"));
   assert.doesNotMatch(get, /readSession\(\)/);
   assert.doesNotMatch(get, /SET LOCAL ROLE/);
   assert.doesNotMatch(get, /openSignedPhotoOn/);
