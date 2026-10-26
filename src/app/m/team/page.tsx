@@ -2,6 +2,8 @@ import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { ConfirmDeactivate } from "@/components/confirm-deactivate";
+import { TeamInviteForm } from "@/components/team-invite-form";
+import { TeamInviteLinkButton } from "@/components/team-invite-link-button";
 import { actionInvite, actionMemberActive, actionMemberRole, actionResendInvite, actionRevokeInvite } from "@/server/auth-actions";
 import { formatTaipei, formatTaipeiDate } from "@/server/time";
 import { mfaStatus } from "@/server/auth";
@@ -24,7 +26,9 @@ export default async function TeamPage({
 }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
-  const invitesOpen = teamInvitesAllowedForOrg(session.orgId);
+  const invitesOpen = session.kind === "staff" && session.role === "admin" &&
+    session.environment === "live" && teamInvitesAllowedForOrg(session.orgId);
+  const legacyInvitesOpen = session.environment !== "live" && teamInvitesAllowedForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   const [team, factor, usage, tier] = await Promise.all([
@@ -57,7 +61,7 @@ export default async function TeamPage({
       <ErrorBanner t={t} error={params.error} />
       {params.token && demoModeEnabled() ? (
         <div className="alert info" data-testid="invite-link">
-          {t("i_invite_link", { path: `/accept/${params.token}` })}
+          {t("i_invite_link", { path: `/join#t=${params.token}` })}
         </div>
       ) : null}
       <div className="col">
@@ -124,6 +128,10 @@ export default async function TeamPage({
                       {member.invitation_id && member.status === "pending" ? (
                         <div className="col">
                           {invitesOpen ? (
+                            member.expires_at && new Date(member.expires_at).getTime() > Date.now() ? (
+                              <TeamInviteLinkButton invitationId={member.invitation_id} />
+                            ) : null
+                          ) : legacyInvitesOpen ? (
                             <form action={actionResendInvite}>
                               <input type="hidden" name="invitationId" value={member.invitation_id} />
                               <button className="btn sm" type="submit" data-testid={`resend-${member.email}`}>
@@ -176,7 +184,7 @@ export default async function TeamPage({
           </p>
           <p className="small">{t("i_price_pending", { n: usage.pending })}</p>
         </div>
-        {!invitesOpen ? (
+        {!invitesOpen && !legacyInvitesOpen ? (
           <div className="card pad" data-testid="team-invite-card">
             <button className="btn" type="button" disabled aria-disabled="true" data-testid="team-invite-soon">
               {t("i_team_invites_soon")}
@@ -184,6 +192,8 @@ export default async function TeamPage({
           </div>
         ) : seatBlocked && seatCap != null ? (
           <p data-testid="seat-limit">{t("i_seat_upsell", { n: seatCap })}</p>
+        ) : invitesOpen ? (
+          <TeamInviteForm />
         ) : (
         <form className="card pad" action={actionInvite}>
           <h3>{t("s_f320582")}</h3>

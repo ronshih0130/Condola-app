@@ -1,13 +1,10 @@
 import { headers } from "next/headers";
 import { makeT } from "@/i18n";
 import { AcceptForm, AcceptSubmit } from "@/components/accept-form";
-import { LegalConsentCheckbox } from "@/components/consent-check";
 import { AuthBrand } from "@/components/brand";
-import { PasswordFields } from "@/components/password-field";
 import { actionAccept } from "@/server/auth-actions";
 import { describeInvite } from "@/server/auth";
-import { lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
-import { teamInvitesAllowedForOrg, inviteStateMessageKey } from "@/server/team-invites";
+import { inviteStateMessageKey } from "@/server/team-invites";
 import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -27,21 +24,25 @@ export default async function AcceptPage({
   const invite = await describeInvite(token, {
     ip: headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip"),
   });
+  if (invite.kind === "team_member") {
+    return (
+      <div className="auth-wrap">
+        <AuthBrand name={t("i_brand")} />
+        <div className="card pad">
+          <h1>{t("i_team_join_title")}</h1>
+          <div className="alert bad" data-testid="invite-state">{t("i_team_invite_unavailable")}</div>
+        </div>
+      </div>
+    );
+  }
   const session = await readSession();
-  const portal = invite.kind !== "team_member";
   const otherAccount =
     invite.state === "ready" &&
     (invite.kind === "owner" || invite.kind === "tenant") &&
     invite.email !== "" &&
     (session?.email ?? "").trim() !== "" &&
     (session?.email ?? "").trim().toLowerCase() !== invite.email.trim().toLowerCase();
-  const roleKey: Record<string, string> = {
-    admin: "i_role_admin",
-    manager: "i_role_manager",
-    accountant: "i_role_accountant",
-    maintenance: "i_role_maintenance",
-  };
-  const invitesOpen = teamInvitesAllowedForOrg("orgId" in invite ? invite.orgId ?? null : null);
+  const invitesOpen = false;
   const stateKey = inviteStateMessageKey(invite.kind, invite.state, invitesOpen);
   const stateMessage = stateKey ? t(stateKey) : "";
   const error =
@@ -61,9 +62,7 @@ export default async function AcceptPage({
                   ? t("i_portal_email_unusable")
                   : query.error === "consent"
                     ? t("i_reconsent_error")
-                  : !portal && query.error === "used"
-              ? t("i_invite_used")
-              : "";
+                  : "";
   return (
     <div className="auth-wrap">
       <AuthBrand name={t("i_brand")} />
@@ -119,42 +118,6 @@ export default async function AcceptPage({
             </p>
             <AcceptSubmit idle={t("i_continue")} pending={t("i_portal_working")} testId="portal-submit" />
           </>
-        ) : invite.kind === "team_member" ? (
-          !invitesOpen ? (
-            <button className="btn" type="button" disabled aria-disabled="true" data-testid="team-accept-soon">
-              {t("i_team_invites_soon")}
-            </button>
-          ) : (
-          <>
-            <p>
-              {invite.inviter} · {invite.firm} · {t(roleKey[invite.role] ?? "i_role_label")}
-            </p>
-            {error ? <div className="alert bad">{error}</div> : null}
-            <input type="hidden" name="token" value={token} />
-            <div className="fg">
-              <label className="f">{t("i_name")}</label>
-              <input className="inp" name="name" data-testid="accept-name" defaultValue="" />
-            </div>
-            <PasswordFields />
-            <LegalConsentCheckbox
-              variant="service"
-              labelTestId="invite-consent-label"
-              inputTestId="invite-consent"
-              termsTestId="invite-terms"
-              privacyTestId="invite-privacy"
-              errorTestId="invite-consent-error"
-              errorKey="i_reconsent_error"
-            />
-            <AcceptSubmit idle={t("i_accept")} pending={t("i_portal_working")} testId="accept-submit" />
-            {showDemoLineCopy(null) && lineLoginEnabled() ? (
-              <div data-demo-line="true">
-                <button className="btn line block" type="button" data-testid="line-login">
-                  LINE Login
-                </button>
-              </div>
-            ) : null}
-          </>
-          )
         ) : null}
       </AcceptForm>
       )}

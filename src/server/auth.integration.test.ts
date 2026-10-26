@@ -105,7 +105,10 @@ test("invite rejects a duplicate and accept signs the member in once", async () 
     const accepted = await acceptInvite(invited.token, "新人", "Fresh1234", "Fresh1234", meta, "", "", true);
     assert.equal(accepted.ok, true);
     const again = await describeInvite(invited.token);
-    assert.equal(again.state, "used");
+    assert.equal(again.state, "invalid");
+    const acceptedAgain = await acceptInvite(invited.token, "新人", "Fresh1234", "Fresh1234", meta, "", "", true);
+    assert.equal(acceptedAgain.ok, false);
+    if (!acceptedAgain.ok) assert.equal(acceptedAgain.error, "invalid");
   } finally {
     setEnv("TEAM_INVITES_ORG_ALLOWLIST", previous);
   }

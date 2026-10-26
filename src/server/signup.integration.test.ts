@@ -180,12 +180,14 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
         () => inviteMember(staff(users[0], created.orgId, "live", email), { email: `extra.${stamp}@example.com`, name: "多的人", role: "manager" }),
         (error: unknown) => error instanceof FlowError && error.key === "errors.seatLimit",
       );
-      const sandboxInvite = await inviteMember(staff(users[0], created.sandboxId, "sandbox", email), {
-        email: `sand.${stamp}@example.com`,
-        name: "測試邀請",
-        role: "manager",
-      });
-      assert.ok(sandboxInvite.token);
+      await assert.rejects(
+        () => inviteMember(staff(users[0], created.sandboxId, "sandbox", email), {
+          email: `sand.${stamp}@example.com`,
+          name: "測試邀請",
+          role: "manager",
+        }),
+        (error: unknown) => error instanceof FlowError && error.key === "errors.teamInvitesSoon",
+      );
     } finally {
       if (previousTeamInvitesOrgAllowlist === undefined) {
         delete process.env.TEAM_INVITES_ORG_ALLOWLIST;

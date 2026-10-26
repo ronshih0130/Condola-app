@@ -140,27 +140,21 @@ test("a team member invite shows 即將開放, refuses accept and resend, and cr
   expect(beforeRow.status).toBe("pending");
   expect(beforeAccount).toEqual({ users: 0, members: 0 });
 
-  await page.goto(`/api/demo/locale?set=zh-TW&next=${encodeURIComponent(`/accept/${invite.token}`)}`);
-  const soon = page.getByTestId("team-accept-soon");
-  await expect(soon).toBeVisible();
-  await expect(soon).toBeDisabled();
-  await expect(soon).toHaveText("即將開放");
+  await page.goto(`/api/demo/locale?set=zh-TW&next=${encodeURIComponent(`/join#t=${invite.token}`)}`);
+  await expect(page.getByTestId("invite-state")).toHaveText("此邀請無法使用，請向管理員索取新連結。");
+  await expect(page).toHaveURL(/\/join$/);
   await expect(page.getByTestId("accept-name")).toHaveCount(0);
   await expect(page.getByTestId("new-password")).toHaveCount(0);
   await expect(page.getByTestId("accept-submit")).toHaveCount(0);
 
-  const accepted = await postAction(page, `/accept/${invite.token}`, "actionAccept", {
-    token: invite.token,
-    name: "新人",
-    password: "Fresh1234",
-    confirm: "Fresh1234",
-  });
-  expect(refusalTarget(accepted)).toContain("error=errors.teamInvitesSoon");
+  // /join has no HTML action carrying a token in the URL. Its client action
+  // refuses this non-allowlisted invitation before rendering an acceptance form.
+  await expect(page.getByTestId("team-join-form")).toHaveCount(0);
   expect(await inviteRow(invite.id)).toEqual(beforeRow);
   expect(await accountCount(email)).toEqual({ users: 0, members: 0 });
 
-  await page.goto(`/api/demo/locale?set=en&next=${encodeURIComponent(`/accept/${invite.token}`)}`);
-  await expect(page.getByTestId("team-accept-soon")).toHaveText("Coming soon");
+  await page.goto(`/api/demo/locale?set=en&next=${encodeURIComponent(`/join#t=${invite.token}`)}`);
+  await expect(page.getByTestId("invite-state")).toHaveText("This invitation is unavailable. Ask your admin for a new link.");
 
   await signIn(page, ACCOUNTS.admin);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/team");
@@ -227,14 +221,12 @@ test("invitee can log in after accepting", async ({ page, browser }) => {
   const guest = await browser.newContext();
   try {
     const invitee = await guest.newPage();
-    await invitee.goto(`/api/demo/locale?set=zh-TW&next=${encodeURIComponent(`/accept/${invite.token}`)}`);
+    await invitee.goto(`/api/demo/locale?set=zh-TW&next=${encodeURIComponent(`/join#t=${invite.token}`)}`);
     if (!TEAM_INVITES_ENABLED) {
-      // Shipped off; flipping the source constant exercises the login flow below.
-      await expect(invitee.getByTestId("team-accept-soon")).toBeDisabled();
-      const response = await postAction(invitee, `/accept/${invite.token}`, "actionAccept", {
-        token: invite.token, name: "登入新人", password: "Fresh1234", confirm: "Fresh1234",
-      });
-      expect(refusalTarget(response)).toContain("error=errors.teamInvitesSoon");
+      // This server has no org allowlist. The dedicated link spec exercises
+      // successful acceptance on a separately configured local demo server.
+      await expect(invitee.getByTestId("invite-state")).toHaveText("此邀請無法使用，請向管理員索取新連結。");
+      await expect(invitee.getByTestId("team-join-form")).toHaveCount(0);
       expect((await inviteRow(invite.id)).status).toBe("pending");
       expect(await accountCount(email)).toEqual({ users: 0, members: 0 });
       return;
@@ -242,8 +234,9 @@ test("invitee can log in after accepting", async ({ page, browser }) => {
     await invitee.getByTestId("accept-name").fill("登入新人");
     await invitee.getByTestId("new-password").fill("Fresh1234");
     await invitee.getByTestId("password-confirm").fill("Fresh1234");
+    await invitee.getByTestId("invite-consent").check();
     await invitee.getByTestId("accept-submit").click();
-    await invitee.waitForURL((url) => !url.pathname.startsWith("/accept/"));
+    await invitee.waitForURL((url) => url.pathname !== "/join");
     expect((await inviteRow(invite.id)).status).toBe("accepted");
     expect(await accountCount(email)).toEqual({ users: 1, members: 1 });
 

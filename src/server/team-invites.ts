@@ -42,17 +42,12 @@ export function assertTeamInvitesAllowed(orgId: string | null | undefined, env?:
   if (!teamInvitesAllowedForOrg(orgId, env)) throw new FlowError("errors.teamInvitesSoon");
 }
 
-/** Accept-page state copy; explicit enabled input also covers the unreleased flow. */
+/** Token-state failures deliberately share one public message. */
 export function inviteStateMessageKey(kind: string, state: string, enabled: boolean): string {
-  if (kind === "team_member" && !enabled) return "i_team_invites_soon";
+  if (kind === "team_member") {
+    return state === "ready" && enabled ? "" : "i_team_invite_unavailable";
+  }
   if (state === "timeout") return "i_portal_timeout";
   if (state === "locked") return "i_portal_invite_locked";
-  if (kind !== "team_member") return "i_portal_invite_invalid";
-  switch (state) {
-    case "used": return "i_invite_used";
-    case "revoked": return "i_invite_revoked";
-    case "expired": return "i_invite_expired";
-    case "invalid": return "i_invite_invalid";
-    default: return "";
-  }
+  return "i_portal_invite_invalid";
 }

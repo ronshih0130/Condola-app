@@ -38,6 +38,7 @@ export const ERRORS: Record<string, string> = {
   "errors.email": "i_email",
   "errors.emailTaken": "i_email_taken",
   "errors.teamInvitesSoon": "i_team_invites_soon",
+  "errors.teamInviteUnavailable": "i_team_invite_unavailable",
   "errors.tenantExists": "i_tenant_exists",
   "errors.phone": "i_phone",
   "errors.meter": "i_meter",

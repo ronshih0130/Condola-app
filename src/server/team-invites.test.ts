@@ -8,7 +8,7 @@ import { makeT } from "@/i18n";
 import { errorText } from "@/i18n/errors";
 import { POST } from "@/app/api/flows/[action]/route";
 import { TEAM_INVITES_ENABLED, assertTeamInvitesAllowed, inviteStateMessageKey } from "./team-invites";
-import { acceptTeamInvite, upsertInvitedUser, verifyPassword } from "./auth";
+import { acceptTeamInvite, hashInviteToken, upsertInvitedUser, verifyPassword } from "./auth";
 
 function before(source: string, first: string, second: string) {
   const a = source.indexOf(first);
@@ -40,12 +40,6 @@ test.beforeEach(() => {
 });
 test.afterEach(() => mock.restoreAll());
 
-function redirectTarget(error: unknown) {
-  const digest = typeof error === "object" && error && "digest" in error ? String((error as { digest?: string }).digest) : "";
-  assert.match(digest, /^NEXT_REDIRECT;/);
-  return digest.split(";").slice(2, -2).join(";");
-}
-
 function source(path: string) {
   return readFileSync(new URL(path, import.meta.url), "utf8");
 }
@@ -76,17 +70,31 @@ test("team invite guards use the session or invitation org at every entry point"
   before(route, "teamInvitesAllowedForOrg(session?.orgId)", "handler(session, body)");
   before(route, "teamInvitesAllowedForOrg(session?.orgId)", "if (!session)");
 
-  const accept = authActions.slice(authActions.indexOf("export async function actionAccept("));
-  before(accept, "teamInvitesAllowedForOrg(invite.orgId)", "acceptInvite(");
-  assert.match(accept, /result\.error === "soon"/);
+  const accept = authActions.slice(
+    authActions.indexOf("export async function actionAccept("),
+    authActions.indexOf("function teamLinkFailure("),
+  );
+  before(accept, 'invite.kind === "team_member"', "acceptInvite(");
+  assert.match(accept, /error: "errors\.teamInviteUnavailable"/);
+  assert.doesNotMatch(accept, /errors\.teamInvitesSoon/);
+
+  for (const name of ["actionIssueTeamInviteLink", "actionCreateTeamInviteLink"]) {
+    const start = authActions.indexOf(`export async function ${name}(`);
+    assert.ok(start >= 0);
+    const end = authActions.indexOf("\nexport async function ", start + 1);
+    const body = authActions.slice(start, end < 0 ? undefined : end);
+    before(body, "await requireCurrentConsent()", "readSession()");
+    before(body, "await requireCurrentConsent()", name === "actionIssueTeamInviteLink" ? "resendInvite(" : "inviteMember(");
+  }
 
   const auth = source("./auth.ts");
   const teamAccept = auth.slice(auth.indexOf("export async function acceptTeamInvite("));
   before(teamAccept, "teamInvitesAllowedForOrg(row.org_id)", "upsertInvitedUser(");
   for (const name of ["inviteMember", "resendInvite"]) {
     const body = auth.slice(auth.indexOf(`export async function ${name}(`));
-    before(body, 'assertPerm(session, "team.manage")', "assertTeamInvitesAllowed(session.orgId)");
-    before(body, "assertTeamInvitesAllowed(session.orgId)", "await query");
+    before(body, "assertTeamAdmin(session)", "assertTeamInvitesAllowed(session.orgId)");
+    before(body, "assertTeamInvitesAllowed(session.orgId)", "await withClient(");
+    before(body, "lockSeatOrganization(client, session.orgId)", 'organization.environment !== "live"');
   }
   const domain = source("./domain.ts");
   const teammate = domain.slice(domain.indexOf("export async function inviteTeammate("));
@@ -94,13 +102,19 @@ test("team invite guards use the session or invitation org at every entry point"
   before(teammate, "assertTeamInvitesAllowed(session.orgId)", "await tx(");
 
   const teamPage = source("../app/m/team/page.tsx");
-  assert.match(teamPage, /const invitesOpen = teamInvitesAllowedForOrg\(session\.orgId\)/);
-  assert.match(teamPage, /\{invitesOpen \? \(/);
-  assert.match(teamPage, /\{!invitesOpen \? \(/);
+  before(teamPage, 'await requireCurrentConsent(undefined, "page")', "getSession()");
+  assert.match(teamPage, /const invitesOpen = session\.kind === "staff" && session\.role === "admin" &&\s*session\.environment === "live" && teamInvitesAllowedForOrg\(session\.orgId\)/);
+  assert.match(teamPage, /const legacyInvitesOpen = session\.environment !== "live" && teamInvitesAllowedForOrg\(session\.orgId\)/);
+  assert.match(teamPage, /\{invitesOpen \? \(\s*member\.expires_at && new Date\(member\.expires_at\)\.getTime\(\) > Date\.now\(\) \? \(\s*<TeamInviteLinkButton invitationId=\{member\.invitation_id\} \/>\s*\) : null\s*\) : legacyInvitesOpen \? \(/);
+  assert.match(teamPage, /!invitesOpen && !legacyInvitesOpen/);
+  assert.match(teamPage, /invitesOpen \? \(\s*<TeamInviteForm/);
   const acceptPage = source("../app/accept/[token]/page.tsx");
-  assert.match(acceptPage, /teamInvitesAllowedForOrg\("orgId" in invite \? invite\.orgId \?\? null : null\)/);
-  assert.match(acceptPage, /inviteStateMessageKey\(invite\.kind, invite\.state, invitesOpen\)/);
-  assert.match(acceptPage, /!invitesOpen \? \(/);
+  before(acceptPage, 'invite.kind === "team_member"', "const session = await readSession()");
+  assert.match(acceptPage, /i_team_invite_unavailable/);
+  assert.doesNotMatch(acceptPage, /team-accept-soon|accept-name|<PasswordFields|<LegalConsentCheckbox/);
+  const join = source("../components/team-join.tsx");
+  assert.match(join, /if \(!captured\) return;\s*void actionDescribeTeamJoin\(captured\)/);
+  assert.match(join, /actionAcceptTeamJoin\(\{/);
 });
 
 test("empty config refuses invites and unauthenticated API probes without sending mail", async () => {
@@ -132,15 +146,23 @@ test("empty config refuses invites and unauthenticated API probes without sendin
   }
 });
 
-test("team link copy preserves enabled errors and uses the real soon copy when disabled", () => {
-  const t = makeT("zh-TW");
-  for (const state of ["expired", "used", "revoked"]) {
-    const key = `i_invite_${state}`;
-    assert.equal(inviteStateMessageKey("team_member", state, true), key);
-    assert.equal(t(inviteStateMessageKey("team_member", state, true)), t(key));
-    assert.notEqual(t(key), key);
-    assert.equal(t(inviteStateMessageKey("team_member", state, false)), t("i_team_invites_soon"));
+test("team token failures share the generic unavailable message", () => {
+  for (const locale of ["zh-TW", "en"] as const) {
+    const t = makeT(locale);
+    for (const state of ["expired", "used", "revoked", "invalid"]) {
+      for (const enabled of [true, false]) {
+        const key = inviteStateMessageKey("team_member", state, enabled);
+        assert.equal(key, "i_team_invite_unavailable");
+        assert.equal(t(key), t("i_team_invite_unavailable"));
+        assert.notEqual(t(key), key);
+      }
+    }
   }
+  assert.equal(inviteStateMessageKey("team_member", "ready", true), "");
+  assert.equal(inviteStateMessageKey("team_member", "ready", false), "i_team_invite_unavailable");
+  assert.equal(inviteStateMessageKey("owner", "timeout", true), "i_portal_timeout");
+  assert.equal(inviteStateMessageKey("tenant", "locked", true), "i_portal_invite_locked");
+  assert.equal(inviteStateMessageKey("owner", "invalid", true), "i_portal_invite_invalid");
 });
 
 const INVITEE_ID = "20000000-0000-4000-8000-000000000099";
@@ -175,8 +197,15 @@ function inviteClient(account?: { id: string; has_password: boolean; matches: bo
   const client = {
     async query(sql: string) {
       statements.push(sql);
+      if (sql.includes("FROM organizations") && sql.includes("FOR UPDATE")) {
+        return { rows: [{ environment: "live", plan_tier: "standard", settings: {} }] };
+      }
+      if (sql.includes(")::int AS used")) return { rows: [{ used: 1 }] };
       if (sql.includes("FROM invitations")) {
-        return { rows: [{ id: INVITEE_ID, org_id: INVITEE_ID, role: "manager", email: "invitee@example.com" }] };
+        return { rows: [{
+          id: INVITEE_ID, org_id: INVITEE_ID, role: "manager", email: "invitee@example.com",
+          code_hash: hashInviteToken("token"), status: "pending", unexpired: true,
+        }] };
       }
       if (sql.includes("SELECT id::text")) return { rows: account ? [account] : [] };
       if (sql.includes("INSERT INTO auth.users")) return { rows: [{ id: INVITEE_ID }] };

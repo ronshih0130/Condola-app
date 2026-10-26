@@ -12,7 +12,7 @@ export function AcceptForm({
   children,
   requireConsent = false,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (formData: FormData) => unknown | Promise<unknown>;
   children: ReactNode;
   requireConsent?: boolean;
 }) {
@@ -34,7 +34,7 @@ export function AcceptForm({
   return (
     <form
       className="card pad"
-      action={action}
+      action={async (formData) => { await action(formData); }}
       onSubmit={(event) => {
         if (requireConsent && !agreed) {
           event.preventDefault();

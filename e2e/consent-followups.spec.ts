@@ -10,6 +10,10 @@ const EVIDENCE = "e2e-evidence/consent-followups";
 const SERVICE = "我已閱讀並同意《服務條款》與《隱私權政策》";
 const PORTAL = "我已閱讀並同意《服務條款》與《隱私權政策》";
 const PASSWORD = "Fresh1234";
+const allowlisted = (process.env.TEAM_INVITES_ORG_ALLOWLIST ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .includes("10000000-0000-4000-8000-000000000001");
 
 const userMetaOnly = {
   terms_accepted_at: "2026-10-22T00:00:00.000Z",
@@ -244,9 +248,10 @@ test("portal consent ignores a user id submitted in the form or the query", asyn
 });
 
 test("accepting a team invite ignores a user id submitted in the form or the query", async ({ page }) => {
+  test.skip(!allowlisted, 'requires TEAM_INVITES_ORG_ALLOWLIST to include the demo org');
   const email = `invite.idor.${Date.now().toString(36)}@example.com`;
   const victimEmail = `victim.invite.${Date.now().toString(36)}@example.com`;
-  const token = randomBytes(24).toString("base64url");
+  const token = randomBytes(32).toString("base64url");
   try {
     const { victimId, before } = await withDb(async (client) => {
       const { orgId, adminId } = await songxinOrg(client);
@@ -259,7 +264,8 @@ test("accepting a team invite ignores a user id submitted in the form or the que
       const victimId = await insertUser(client, victimEmail, victimMeta, victimApp);
       return { victimId, before: await metaSnapshot(client, victimId) };
     });
-    await page.goto(`/accept/${token}?userId=${victimId}&user_id=${victimId}`);
+    await page.goto(`/join?userId=${victimId}&user_id=${victimId}#t=${token}`);
+    await expect(page).toHaveURL(/\/join$/);
     await expect(page.getByTestId("accept-submit")).toBeVisible();
     await page.getByTestId("accept-name").fill("新同事");
     await page.getByTestId("new-password").fill(PASSWORD);
@@ -267,7 +273,7 @@ test("accepting a team invite ignores a user id submitted in the form or the que
     await page.getByTestId("invite-consent").check();
     await spoofUserId(page, 'form:has([data-testid="accept-submit"])', victimId);
     await page.getByTestId("accept-submit").click();
-    await page.waitForURL((url) => !url.pathname.startsWith("/accept"));
+    await page.waitForURL((url) => url.pathname !== "/join");
     const stored = await consentOf(email);
     expect(stored?.consent?.source).toBe("invite");
     const created = await withDb(async (client) => {
@@ -444,8 +450,9 @@ test("the first login sends a stale app_metadata consent through the re-consent 
 });
 
 test("a team invite requires the signup checkbox and records source invite", async ({ page }) => {
+  test.skip(!allowlisted, 'requires TEAM_INVITES_ORG_ALLOWLIST to include the demo org');
   const email = `invite.consent.${Date.now().toString(36)}@example.com`;
-  const token = randomBytes(24).toString("base64url");
+  const token = randomBytes(32).toString("base64url");
   try {
     await withDb(async (client) => {
       const { orgId, adminId } = await songxinOrg(client);
@@ -456,7 +463,8 @@ test("a team invite requires the signup checkbox and records source invite", asy
         [orgId, email, hash, adminId],
       );
     });
-    await page.goto(`/accept/${token}`);
+    await page.goto(`/join#t=${token}`);
+    await expect(page).toHaveURL(/\/join$/);
     await expect(page.getByTestId("invite-consent-label")).toHaveText(SERVICE);
     await expect(page.getByTestId("invite-terms")).toHaveAttribute("href", "/terms");
     await expect(page.getByTestId("invite-terms")).toHaveAttribute("target", "_blank");
@@ -464,13 +472,14 @@ test("a team invite requires the signup checkbox and records source invite", asy
     await expect(page.getByTestId("invite-privacy")).toHaveAttribute("target", "_blank");
     await expect(page.getByTestId("password-confirm")).toBeVisible();
     const submit = page.getByTestId("accept-submit");
-    await expect(submit).toBeDisabled();
-    await page.screenshot({ path: `${EVIDENCE}/invite-consent.png`, fullPage: true });
+    // TeamJoin shows a consent error before submitting an unchecked form.
+    await expect(submit).toBeEnabled();
     await page.getByTestId("accept-name").fill("新同事");
     await page.getByTestId("new-password").fill(PASSWORD);
     await page.getByTestId("password-confirm").fill(PASSWORD);
-    await submit.click({ force: true });
-    await expect(page).toHaveURL(new RegExp(`/accept/${token}`));
+    await submit.click();
+    await expect(page.getByTestId("invite-consent-error")).toBeVisible();
+    await expect(page).toHaveURL(/\/join$/);
     const pending = await withDb(async (client) => {
       const row = await client.query<{ status: string }>(
         `SELECT status::text AS status FROM invitations WHERE lower(email) = lower($1)`,
@@ -483,7 +492,7 @@ test("a team invite requires the signup checkbox and records source invite", asy
     await page.getByTestId("invite-consent").check();
     await expect(submit).toBeEnabled();
     await submit.click();
-    await page.waitForURL((url) => !url.pathname.startsWith("/accept"));
+    await page.waitForURL((url) => url.pathname !== "/join");
     const stored = await consentOf(email);
     expect(stored?.consent?.source).toBe("invite");
     expect(stored?.consent?.terms_version).toBe(TERMS_VERSION);

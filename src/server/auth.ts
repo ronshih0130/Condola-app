@@ -10,7 +10,6 @@ import { passwordResetMail } from "./mail-copy";
 import { consumePasswordReset } from "./reset-limit";
 import { classifyPasswordGrant, gotrueVerifyBody, parseGenerateLink, parseGotrueUserId, passwordResetUrl } from "./signup-gotrue";
 import { lineLoginEnabled } from "./demo";
-import { outboundNote } from "./outbound";
 import { FlowError } from "./errors";
 import { LOCKOUT_LIMIT, lockActive, nextFailure } from "./lockout";
 import { passwordAcceptable } from "./password";
@@ -27,7 +26,7 @@ import {
   tokenInviteLocked,
   withInviteLock,
 } from "./portal-invite";
-import { assertSeatAvailable } from "./seats";
+import { assertSeatAvailableOn, lockSeatOrganization } from "./seats";
 import { assertTeamInvitesAllowed, teamInvitesAllowedForOrg } from "./team-invites";
 
 export { hashInviteToken } from "./portal-invite";
@@ -683,50 +682,99 @@ async function assertLastAdmin(orgId: string, userId: string, nextRole: OrgRole 
   if (isAdmin && count <= 1 && nextRole !== "admin") throw new FlowError("errors.lastAdmin");
 }
 
+function assertTeamAdmin(session: Session) {
+  if (session.kind !== "staff" || session.role !== "admin") throw new FlowError("errors.forbidden");
+}
+
 export async function inviteMember(session: Session, input: { email: string; name: string; role: string }) {
-  assertPerm(session, "team.manage");
+  assertTeamAdmin(session);
   assertTeamInvitesAllowed(session.orgId);
   const email = normalizeEmail(input.email);
   if (!email) throw new FlowError("errors.email");
   if (!TEAM_ROLES.has(input.role as OrgRole)) throw new FlowError("errors.required");
   const role = input.role as OrgRole;
-  const duplicate = await query(
-    `SELECT 1 FROM profiles p JOIN org_members m ON m.user_id = p.id
-      WHERE m.org_id = $1 AND lower(p.email::text) = lower($2) AND m.status <> 'removed'
-     UNION ALL
-     SELECT 1 FROM invitations
-      WHERE org_id = $1 AND lower(email::text) = lower($2) AND status = 'pending' AND expires_at > now()`,
-    [session.orgId, email],
-  );
-  if (duplicate.rows[0]) throw new FlowError("errors.emailTaken");
-  await assertSeatAvailable(session.orgId, session.environment);
   const token = newToken();
-  await query(
-    `INSERT INTO invitations (org_id, kind, role, email, code_hash, expires_at, invited_by)
-     VALUES ($1, 'team_member', $2::org_role, $3, $4, now() + make_interval(days => $5), $6)`,
-    [session.orgId, role, email, sha256(token), INVITE_DAYS, session.userId],
-  );
-  const note = outboundNote(session.environment);
-  await writeAudit(session.orgId, session.userId, "invite", { email, role, ...(note ? { note } : {}) });
-  return { token, email };
+  const issued = await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const organization = await lockSeatOrganization(client, session.orgId);
+      if (session.environment !== "live" || organization.environment !== "live") {
+        throw new FlowError("errors.teamInvitesSoon");
+      }
+      assertTeamInvitesAllowed(session.orgId);
+      const duplicate = await client.query(
+        `SELECT 1 FROM profiles p JOIN org_members m ON m.user_id = p.id
+          WHERE m.org_id = $1 AND lower(p.email::text) = lower($2) AND m.status <> 'removed'
+         UNION ALL
+         SELECT 1 FROM invitations
+          WHERE org_id = $1 AND lower(email::text) = lower($2) AND status = 'pending' AND expires_at > now()`,
+        [session.orgId, email],
+      );
+      if (duplicate.rows[0]) throw new FlowError("errors.emailTaken");
+      await assertSeatAvailableOn(client, session.orgId, organization);
+      const inserted = await client.query<{ id: string; expires_at: Date }>(
+        `INSERT INTO invitations (org_id, kind, role, email, code_hash, expires_at, invited_by)
+         VALUES ($1, 'team_member', $2::org_role, $3, $4, now() + make_interval(days => $5), $6)
+         RETURNING id::text, expires_at`,
+        [session.orgId, role, email, sha256(token), INVITE_DAYS, session.userId],
+      );
+      await client.query("COMMIT");
+      return inserted.rows[0];
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
+  await writeAudit(session.orgId, session.userId, "invite_link_issued", {
+    invitationId: issued.id, email, role,
+  });
+  return { token, email, invitationId: issued.id, expiresAt: issued.expires_at.toISOString() };
 }
 
 export async function resendInvite(session: Session, invitationId: string) {
-  assertPerm(session, "team.manage");
+  assertTeamAdmin(session);
   assertTeamInvitesAllowed(session.orgId);
   const token = newToken();
-  const updated = await query(
-    `UPDATE invitations SET code_hash = $3, expires_at = now() + make_interval(days => $4), status = 'pending'
-      WHERE id = $1 AND org_id = $2 AND kind = 'team_member' AND status = 'pending'`,
-    [invitationId, session.orgId, sha256(token), INVITE_DAYS],
-  );
-  if (updated.rowCount !== 1) throw new FlowError("errors.notFound");
-  await writeAudit(session.orgId, session.userId, "invite_resend", { invitationId });
-  return { token };
+  const issued = await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const organization = await lockSeatOrganization(client, session.orgId);
+      if (session.environment !== "live" || organization.environment !== "live") {
+        throw new FlowError("errors.teamInvitesSoon");
+      }
+      assertTeamInvitesAllowed(session.orgId);
+      const found = await client.query<{
+        org_id: string; kind: string; status: string; email: string; role: OrgRole;
+      }>(
+        `SELECT org_id::text, kind::text, status::text, email::text, role::text
+           FROM invitations WHERE id::text = $1 FOR UPDATE`,
+        [invitationId],
+      );
+      const row = found.rows[0];
+      if (row && row.org_id !== session.orgId) throw new FlowError("errors.forbidden");
+      if (!row || row.kind !== "team_member" || row.status !== "pending") {
+        throw new FlowError("errors.teamInviteUnavailable");
+      }
+      const updated = await client.query<{ expires_at: Date }>(
+        `UPDATE invitations SET code_hash = $2, expires_at = now() + make_interval(days => $3)
+          WHERE id::text = $1 RETURNING expires_at`,
+        [invitationId, sha256(token), INVITE_DAYS],
+      );
+      await client.query("COMMIT");
+      return { email: row.email, role: row.role, expiresAt: updated.rows[0].expires_at.toISOString() };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
+  await writeAudit(session.orgId, session.userId, "invite_link_issued", {
+    invitationId, email: issued.email, role: issued.role,
+  });
+  return { token, invitationId, email: issued.email, expiresAt: issued.expiresAt };
 }
 
 export async function revokeInvite(session: Session, invitationId: string) {
-  assertPerm(session, "team.manage");
+  assertTeamAdmin(session);
   const updated = await query(
     `UPDATE invitations SET status = 'revoked' WHERE id = $1 AND org_id = $2 AND kind = 'team_member' AND status = 'pending'`,
     [invitationId, session.orgId],
@@ -768,8 +816,28 @@ export async function setMemberActive(session: Session, memberId: string, active
     await writeAudit(session.orgId, session.userId, "deactivate", { memberId });
     return;
   }
-  await assertSeatAvailable(session.orgId, session.environment);
-  await query(`UPDATE org_members SET status = 'active' WHERE id = $1 AND org_id = $2`, [memberId, session.orgId]);
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const organization = await lockSeatOrganization(client, session.orgId);
+      const current = await client.query<{ status: string }>(
+        `SELECT status::text FROM org_members WHERE id = $1 AND org_id = $2 FOR UPDATE`,
+        [memberId, session.orgId],
+      );
+      if (!current.rows[0]) throw new FlowError("errors.notFound");
+      if (current.rows[0].status !== "active") {
+        await assertSeatAvailableOn(client, session.orgId, organization, false);
+        await client.query(
+          `UPDATE org_members SET status = 'active' WHERE id = $1 AND org_id = $2`,
+          [memberId, session.orgId],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
   await writeAudit(session.orgId, session.userId, "reactivate", { memberId });
 }
 
@@ -815,12 +883,13 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
         email: string | null;
         contact_email: string | null;
         org_id: string;
+        environment: string;
         role: OrgRole | null;
         firm: string;
         inviter: string | null;
       }>(
         `SELECT i.status::text, i.expires_at, i.kind::text, i.email::text, c.email::text AS contact_email,
-                i.org_id::text AS org_id, i.role::text, o.name AS firm, p.display_name AS inviter
+                i.org_id::text AS org_id, o.environment::text, i.role::text, o.name AS firm, p.display_name AS inviter
            FROM invitations i
            JOIN organizations o ON o.id = i.org_id
            LEFT JOIN contacts c ON c.id = i.contact_id AND c.org_id = i.org_id
@@ -843,10 +912,13 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
   const kind: InviteKind =
     invite?.kind === "team_member" || invite?.kind === "owner" || invite?.kind === "tenant" ? invite.kind : "unknown";
   const reject = (state: "expired" | "revoked" | "used" | "invalid", badKind: InviteKind): InviteView => {
-    if (badKind === "team_member") return { state, kind: badKind, orgId: invite?.org_id };
+    if (badKind === "team_member") return { state: "invalid", kind: badKind };
     return { state, kind: badKind };
   };
   if (!invite) return reject("invalid", "unknown");
+  if (kind === "team_member" && (
+    invite.environment !== "live" || !teamInvitesAllowedForOrg(invite.org_id)
+  )) return reject("invalid", kind);
   if (invite.status === "accepted") return reject("used", kind);
   if (invite.status === "revoked") return reject("revoked", kind);
   if (invite.status !== "pending" || invite.expires_at.getTime() <= Date.now()) return reject("expired", kind);
@@ -1168,28 +1240,56 @@ async function acceptInviteOnce(
   if (password !== confirm) return { ok: false as const, error: "mismatch" as const, kind: view.kind };
   if (!passwordAcceptable(password)) return { ok: false as const, error: "weak" as const, kind: view.kind };
   if (!name.trim()) return { ok: false as const, error: "required" as const, kind: "team_member" as const };
-  return withClient((client) => acceptTeamInvite(client, token, name, password, meta));
+  return withClient((client) => acceptTeamInvite(client, token, name, password, meta, sessionEmail));
 }
 
 /** Keep provisioning and invitation consumption in the same acceptance transaction. */
-export async function acceptTeamInvite(client: Client, token: string, name: string, password: string, meta: RequestMeta) {
+export async function acceptTeamInvite(
+  client: Client,
+  token: string,
+  name: string,
+  password: string,
+  meta: RequestMeta,
+  sessionEmail = "",
+) {
+  const unavailable = {
+    ok: false as const, error: "errors.teamInviteUnavailable" as const, kind: "team_member" as const,
+  };
   try {
     await client.query("BEGIN");
-    const invite = await client.query<{ id: string; org_id: string; role: OrgRole; email: string }>(
-      `SELECT id::text, org_id::text, role::text, email::text FROM invitations
-        WHERE code_hash = $1 AND kind = 'team_member' AND status = 'pending' AND expires_at > now()
-        FOR UPDATE`,
-      [hashInviteToken(token)],
+    // Discover the organization without taking an invitation lock. Every seat
+    // increase locks the organization first; the token is rechecked afterward.
+    const candidate = await client.query<{ org_id: string }>(
+      `SELECT org_id::text FROM invitations WHERE code_hash = $1 AND kind = 'team_member'`,
+      [sha256(token)],
+    );
+    if (!candidate.rows[0]) {
+      await client.query("ROLLBACK");
+      return unavailable;
+    }
+    const organization = await lockSeatOrganization(client, candidate.rows[0].org_id);
+    const invite = await client.query<{
+      id: string; org_id: string; role: OrgRole; email: string;
+      code_hash: string; status: string; unexpired: boolean;
+    }>(
+      `SELECT id::text, org_id::text, role::text, email::text, code_hash,
+              status::text, expires_at > now() AS unexpired
+         FROM invitations WHERE code_hash = $1 AND kind = 'team_member' FOR UPDATE`,
+      [sha256(token)],
     );
     const row = invite.rows[0];
-    if (!row) {
+    if (!row || row.org_id !== candidate.rows[0].org_id || row.code_hash !== sha256(token) ||
+        row.status !== "pending" || !row.unexpired || !TEAM_ROLES.has(row.role) ||
+        !normalizeEmail(row.email) || organization.environment !== "live" ||
+        !teamInvitesAllowedForOrg(row.org_id)) {
       await client.query("ROLLBACK");
-      return { ok: false as const, error: "used" as const, kind: "team_member" as const };
+      return unavailable;
     }
-    if (!teamInvitesAllowedForOrg(row.org_id)) {
+    if (sessionEmail && normalizeEmail(sessionEmail) !== normalizeEmail(row.email)) {
       await client.query("ROLLBACK");
-      return { ok: false as const, error: "soon" as const, kind: "team_member" as const };
+      return { ok: false as const, error: "account" as const, kind: "team_member" as const };
     }
+    await assertSeatAvailableOn(client, row.org_id, organization, false);
     let userId: string | null;
     try {
       // GoTrue commits independently. On a later rollback, retry requires the
@@ -1209,7 +1309,7 @@ export async function acceptTeamInvite(client: Client, token: string, name: stri
     );
     if (member.rows[0]?.status === "active") {
       await client.query("ROLLBACK");
-      return { ok: false as const, error: "used" as const, kind: "team_member" as const };
+      return unavailable;
     }
     if (member.rows[0]) {
       await client.query(
@@ -1226,7 +1326,6 @@ export async function acceptTeamInvite(client: Client, token: string, name: stri
       `UPDATE invitations SET status = 'accepted', accepted_by = $2, accepted_at = now() WHERE id = $1`,
       [row.id, userId],
     );
-    await deletePortalInviteSecret(client, row.id);
     await client.query("COMMIT");
     try {
       await writeConsent(userId, "invite");
@@ -1239,6 +1338,9 @@ export async function acceptTeamInvite(client: Client, token: string, name: stri
     return { ok: true as const, token: sessionToken, role: row.role, kind: "team_member" as const };
   } catch (error) {
     await client.query("ROLLBACK");
+    if (error instanceof FlowError && error.key === "errors.seatLimit") {
+      return { ok: false as const, error: "errors.seatLimit" as const, kind: "team_member" as const };
+    }
     throw error;
   }
 }

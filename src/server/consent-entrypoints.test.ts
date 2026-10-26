@@ -21,6 +21,8 @@ const openActions: Record<string, Record<string, string>> = {
     actionSignIn: "Establish identity", actionLineLogin: "Establish identity",
     actionSecondFactor: "Complete authentication", actionForgot: "Recover identity",
     actionReset: "Recover identity", actionAccept: "Invitation acceptance has its own consent check",
+    actionDescribeTeamJoin: "Public invitation description, no user session required",
+    actionAcceptTeamJoin: "Invitation acceptance has its own consent check",
     actionRevokeSession: "Terminate sessions", actionRevokeOthers: "Terminate sessions",
     actionClearBackup: "Clear recovery cookie", actionSignOut: "Always permit leaving",
   },

@@ -236,7 +236,9 @@ test("portal invite copy hands the link over and stays on the locked wording", (
     assert.equal(zh[key].includes("寄"), false, key);
   }
   const page = readFileSync(new URL("../app/accept/[token]/page.tsx", import.meta.url), "utf8");
-  const portal = page.slice(page.indexOf('invite.kind === "owner"'), page.indexOf('invite.kind === "team_member"'));
+  const portalStart = page.indexOf('invite.kind === "owner"');
+  const teamReturn = page.indexOf('invite.kind === "team_member"', portalStart);
+  const portal = page.slice(portalStart, teamReturn < 0 ? undefined : teamReturn);
   assert.equal(portal.includes("PasswordFields"), false);
   assert.equal(portal.includes('name="confirm"'), false);
   assert.equal(portal.includes("portal-password-title"), true);
@@ -244,7 +246,11 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(portal.includes("portal-forgot"), true);
   assert.equal(portal.includes('href="/forgot"'), true);
   assert.equal(portal.includes("i_portal_forgot"), true);
-  assert.equal(page.includes("<PasswordFields />"), true);
+  assert.equal(page.includes("<PasswordFields />"), false);
+  assert.equal(page.includes('data-testid="accept-name"'), false);
+  const teamJoin = readFileSync(new URL("../components/team-join.tsx", import.meta.url), "utf8");
+  assert.equal(teamJoin.includes("<PasswordFields />"), true);
+  assert.equal(teamJoin.includes('data-testid="accept-name"'), true);
   assert.equal(page.includes("portal-sign-out-continue"), true);
   assert.equal(page.includes("i_portal_signed_in_other"), true);
   assert.equal(page.includes('autoComplete="off"'), true);

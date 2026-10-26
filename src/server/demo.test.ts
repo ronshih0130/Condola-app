@@ -267,7 +267,9 @@ test("live screens do not render LINE product copy, including the app footer", (
   assert.doesNotMatch(account, /LINE/);
   assert.doesNotMatch(settings, /LINE/);
   const accept = readFileSync(new URL("../app/accept/[token]/page.tsx", import.meta.url), "utf8");
-  assert.match(accept, /showDemoLineCopy\(null\) && lineLoginEnabled\(\)/);
+  assert.doesNotMatch(accept, /line-login|LINE Login/);
+  const teamJoin = readFileSync(new URL("../components/team-join.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(teamJoin, /LINE/);
   const walk = readFileSync(new URL("../app/walk/page.tsx", import.meta.url), "utf8");
   assert.match(walk, /demoLine \|\| !step\.includes\("LINE"\)/);
   assert.equal(ungated.some((hit) => hit.includes("i_invite_help") || hit.includes("s_9f8fee8")), false);

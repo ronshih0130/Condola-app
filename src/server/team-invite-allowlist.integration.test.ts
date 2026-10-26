@@ -154,16 +154,19 @@ test("acceptance checks the invitation org and creates no refused login", async 
      VALUES ($1, 'team_member', 'accountant', $2, $3, now() + interval '1 day', $4)`,
     [ORG2_ID, target, hashInviteToken(token), USERS.coastAdmin],
   );
-  assert.deepEqual(await accept(token), { ok: false, error: "soon", kind: "team_member" });
+  assert.deepEqual(
+    await withClient((client) => acceptTeamInvite(client, token, "Hire", password, meta)),
+    { ok: false, error: "errors.teamInviteUnavailable", kind: "team_member" },
+  );
   assert.equal(await invitationState(target), "pending");
   const users = await query(`SELECT id FROM auth.users WHERE lower(email) = lower($1)`, [target]);
   assert.equal(users.rows.length, 0);
 
   await query(`UPDATE invitations SET status = 'revoked' WHERE code_hash = $1`, [hashInviteToken(token)]);
   const view = await describeInvite(token);
-  assert.equal(view.state, "revoked");
+  assert.equal(view.state, "invalid");
   assert.equal(view.kind, "team_member");
-  if (view.kind === "team_member") assert.equal(view.orgId, ORG2_ID);
+  assert.equal("orgId" in view, false);
 });
 
 test("empty and malformed config refuse even the otherwise allowed org", async () => {

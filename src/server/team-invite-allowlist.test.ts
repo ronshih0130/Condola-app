@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { Client } from "pg";
 import { POST } from "@/app/api/flows/[action]/route";
-import { acceptTeamInvite, inviteMember, resendInvite } from "./auth";
+import { acceptTeamInvite, hashInviteToken, inviteMember, resendInvite } from "./auth";
 import { inviteTeammate } from "./domain";
 import { FlowError } from "./errors";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
@@ -124,10 +124,15 @@ function fakeClient(options: { orgId?: string; role?: string; throwOn?: RegExp }
         memberRole = pendingRole;
         return { rows: [] };
       }
+      if (sql.includes("FROM organizations") && sql.includes("FOR UPDATE")) {
+        return { rows: [{ environment: "live", plan_tier: "standard", settings: {} }] };
+      }
+      if (sql.includes(")::int AS used")) return { rows: [{ used: 1 }] };
       if (sql.includes("FROM invitations")) {
         return { rows: accepted ? [] : [{
           id: USER_ID, org_id: options.orgId ?? ORG_ID,
           email: "fault@example.com", role: options.role ?? "accountant",
+          code_hash: hashInviteToken("token"), status: "pending", unexpired: true,
         }] };
       }
       if (sql.includes("FROM auth.users")) {
@@ -173,7 +178,7 @@ test("refused invitation org rolls back before any provisioning or writes", asyn
     const fake = fakeClient({ orgId: ORG2_ID });
     assert.deepEqual(
       await acceptTeamInvite(fake.client, "token", "Hire", "Fresh1234", meta),
-      { ok: false, error: "soon", kind: "team_member" },
+      { ok: false, error: "errors.teamInviteUnavailable", kind: "team_member" },
     );
     assert.equal(fake.statements.at(-1)?.sql, "ROLLBACK");
     noWrites(fake.statements);

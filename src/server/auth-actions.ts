@@ -41,7 +41,7 @@ import { closeMonth, reversePayment } from "./domain";
 import { addExpense, approveExpense, createExpense, updateExpense, voidExpense } from "./expenses";
 import { FlowError, isDbTimeout } from "./errors";
 import { portalPageTarget, sameId } from "@/lib/portal-page";
-import { issuePortalInvite } from "./portal-invite";
+import { issuePortalInvite, portalInviteOrigin } from "./portal-invite";
 import { clearStoredEnvChoice } from "./org-scope";
 import { PORTAL_ROLE_COOKIE } from "./portal-role";
 import { appCookieOptions, sameAppPath } from "./public-origin";
@@ -226,8 +226,8 @@ export async function actionOrgMail(formData: FormData) {
 export async function actionAccept(formData: FormData) {
   const token = text(formData.get("token"));
   const invite = await describeInvite(token, await meta());
-  if (invite.kind === "team_member" && !teamInvitesAllowedForOrg(invite.orgId)) {
-    redirect(`/accept/${encodeURIComponent(token)}?error=errors.teamInvitesSoon`);
+  if (invite.kind === "team_member") {
+    return { ok: false as const, error: "errors.teamInviteUnavailable" };
   }
   const current = await readSession();
   const result = await acceptInvite(
@@ -241,13 +241,12 @@ export async function actionAccept(formData: FormData) {
     formData.get("consent") === "on",
   );
   if (!result.ok) {
-    if (result.error === "soon") {
-      redirect(`/accept/${encodeURIComponent(token)}?error=errors.teamInvitesSoon`);
+    if (result.kind === "team_member") {
+      return { ok: false as const, error: "errors.teamInviteUnavailable" };
     }
     const portal = result.kind === "owner" || result.kind === "tenant" || result.kind === "unknown";
     const fieldError =
       result.error === "weak" ||
-      result.error === "mismatch" ||
       result.error === "email" ||
       result.error === "auth" ||
       result.error === "timeout" ||
@@ -266,6 +265,138 @@ export async function actionAccept(formData: FormData) {
   jar.delete(PORTAL_ROLE_COOKIE);
   if ("destination" in result && result.destination) redirect(result.destination);
   redirect(sessionEntryPath("/auth/continue"));
+}
+
+function teamLinkFailure(error: unknown) {
+  return {
+    ok: false as const,
+    error: error instanceof FlowError ? error.key : "errors.generic",
+  };
+}
+
+export async function actionDescribeTeamJoin(token: string) {
+  try {
+    if (typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
+      return { ok: false as const, error: "errors.teamInviteUnavailable" };
+    }
+    const invite = await describeInvite(token, await meta());
+    if (invite.kind !== "team_member" || invite.state !== "ready") {
+      return { ok: false as const, error: "errors.teamInviteUnavailable" };
+    }
+    const current = await readSession();
+    if (current && normalizeEmail(current.email) !== normalizeEmail(invite.email)) {
+      return { ok: false as const, error: "account" };
+    }
+    return {
+      ok: true as const,
+      email: invite.email,
+      role: invite.role,
+      firm: invite.firm,
+      inviter: invite.inviter,
+    };
+  } catch {
+    return { ok: false as const, error: "errors.teamInviteUnavailable" };
+  }
+}
+
+export async function actionAcceptTeamJoin(input: {
+  token: string;
+  name: string;
+  password: string;
+  confirm: string;
+  consent: boolean;
+}) {
+  if (typeof input?.token !== "string") {
+    return { ok: false as const, error: "errors.teamInviteUnavailable" };
+  }
+  const description = await actionDescribeTeamJoin(input.token);
+  if (!description.ok) return description;
+  const current = await readSession();
+  let result: Awaited<ReturnType<typeof acceptInvite>>;
+  try {
+    result = await acceptInvite(
+      input.token,
+      typeof input.name === "string" ? input.name : "",
+      typeof input.password === "string" ? input.password : "",
+      typeof input.confirm === "string" ? input.confirm : "",
+      await meta(),
+      "",
+      current?.email ?? "",
+      input.consent === true,
+    );
+  } catch {
+    return { ok: false as const, error: "errors.generic" };
+  }
+  if (!result.ok) {
+    const fields: Record<string, string> = {
+      account: "account",
+      weak: "errors.weakPassword",
+      mismatch: "errors.mismatch",
+      required: "errors.required",
+      consent: "errors.consentRequired",
+      auth: "errors.authInvalid",
+      failed: "errors.generic",
+      "errors.seatLimit": "errors.seatLimit",
+    };
+    return {
+      ok: false as const,
+      error: fields[result.error] ?? "errors.teamInviteUnavailable",
+    };
+  }
+  const jar = await cookies();
+  const cookie = sessionCookie(result.token, true);
+  jar.set(cookie.name, cookie.value, cookie.options);
+  clearStoredEnvChoice(jar);
+  jar.delete(PORTAL_ROLE_COOKIE);
+  redirect(sessionEntryPath("/auth/continue"));
+}
+
+export async function actionIssueTeamInviteLink(input: { invitationId: string }) {
+  await requireCurrentConsent();
+  try {
+    const session = await readSession();
+    if (!session || session.kind !== "staff" || session.role !== "admin") {
+      return { ok: false as const, error: "errors.forbidden" };
+    }
+    if (session.environment !== "live" || !teamInvitesAllowedForOrg(session.orgId)) {
+      return { ok: false as const, error: "errors.teamInvitesSoon" };
+    }
+    const issued = await resendInvite(session, typeof input?.invitationId === "string" ? input.invitationId : "");
+    return {
+      ok: true as const,
+      url: `${portalInviteOrigin(await requestOrigin())}/join#t=${issued.token}`,
+      expiresAt: issued.expiresAt,
+      email: issued.email,
+    };
+  } catch (error) {
+    return teamLinkFailure(error);
+  }
+}
+
+export async function actionCreateTeamInviteLink(formData: FormData) {
+  await requireCurrentConsent();
+  try {
+    const session = await readSession();
+    if (!session || session.kind !== "staff" || session.role !== "admin") {
+      return { ok: false as const, error: "errors.forbidden" };
+    }
+    if (session.environment !== "live" || !teamInvitesAllowedForOrg(session.orgId)) {
+      return { ok: false as const, error: "errors.teamInvitesSoon" };
+    }
+    const issued = await inviteMember(session, {
+      email: text(formData.get("email")),
+      name: text(formData.get("name")),
+      role: text(formData.get("role")),
+    });
+    return {
+      ok: true as const,
+      url: `${portalInviteOrigin(await requestOrigin())}/join#t=${issued.token}`,
+      expiresAt: issued.expiresAt,
+      email: issued.email,
+    };
+  } catch (error) {
+    return teamLinkFailure(error);
+  }
 }
 
 export async function actionIssuePortalInvite(input: {

@@ -19,6 +19,7 @@ function buildSha() {
 }
 
 const NO_STORE = [{ key: "Cache-Control", value: "private, no-store" }];
+const INVITE_HEADERS = [...NO_STORE, { key: "Referrer-Policy", value: "no-referrer" }];
 const sha = buildSha();
 
 const nextConfig: NextConfig = {
@@ -65,7 +66,9 @@ const nextConfig: NextConfig = {
       { source: "/reset", headers: NO_STORE },
       { source: "/reset/:path*", headers: NO_STORE },
       { source: "/auth/:path*", headers: NO_STORE },
-      { source: "/accept/:path*", headers: NO_STORE },
+      { source: "/join", headers: INVITE_HEADERS },
+      { source: "/accept/:path*", headers: INVITE_HEADERS },
+      { source: "/m/team", headers: INVITE_HEADERS },
     ];
   },
 };
