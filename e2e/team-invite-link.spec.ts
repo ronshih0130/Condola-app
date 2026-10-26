@@ -78,21 +78,39 @@ test("admin hands over a masked fragment link; join is private, account-bound an
     const invitee = await guest.newPage();
     const thirdParty: string[] = [];
     const leakedTokens: string[] = [];
-    const token = first.hash.slice(3);
-    invitee.on("request", (request) => {
-      const url = new URL(request.url());
-      if (url.protocol === "http:" || url.protocol === "https:") {
-        if (url.origin !== origin) thirdParty.push(url.origin);
-        if (url.pathname.includes(token) || url.search.includes(token)) leakedTokens.push("request URL");
+    const tokens = new Set([first.hash.slice(3)]);
+    const requests: Array<{ url: string; referer: string }> = [];
+    const watchRequests = (watchedPage: Page) => {
+      watchedPage.on("request", (request) => {
+        const url = new URL(request.url());
+        if (url.protocol === "http:" || url.protocol === "https:") {
+          if (url.origin !== origin) thirdParty.push(url.origin);
+          requests.push({
+            url: request.url(),
+            referer: request.headers()["referer"] ?? "",
+          });
+        }
+      });
+    };
+    const assertNoTokenLeaks = () => {
+      leakedTokens.length = 0;
+      for (const request of requests) {
+        for (const token of tokens) {
+          if (request.url.includes(token)) leakedTokens.push("request URL");
+          if (request.referer.includes(token)) leakedTokens.push("Referer header");
+        }
       }
-    });
+      expect(leakedTokens).toEqual([]);
+    };
+    watchRequests(page);
+    watchRequests(invitee);
     await invitee.goto("about:blank");
     const response = await invitee.goto(firstLink);
     expect(response?.headers()["referrer-policy"]).toBe("no-referrer");
     await expect(invitee.getByTestId("team-join-form")).toBeVisible();
     await expect(invitee).toHaveURL(`${origin}/join`);
     expect(thirdParty).toEqual([]);
-    expect(leakedTokens).toEqual([]);
+    assertNoTokenLeaks();
 
     // An existing signed-in staff account is different from the invited email.
     await page.goto("about:blank");
@@ -110,6 +128,8 @@ test("admin hands over a masked fragment link; join is private, account-bound an
     const replacementLink = await readInvitationLink(page, firstLink);
     expect(replacementLink).not.toBe(firstLink);
     const replacement = new URL(replacementLink);
+    tokens.add(replacement.hash.slice(3));
+    assertNoTokenLeaks();
     expect(replacement.pathname).toBe("/join");
     expect(replacement.search).toBe("");
     expect(replacement.hash).toMatch(/^#t=[A-Za-z0-9_-]{43}$/);
@@ -160,13 +180,16 @@ test("admin hands over a masked fragment link; join is private, account-bound an
     const reuse = await browser.newContext({ baseURL: origin });
     guests.push(reuse);
     const reusePage = await reuse.newPage();
+    watchRequests(reusePage);
     await reusePage.goto("about:blank");
-    await reusePage.goto(`/api/demo/locale?set=en&next=${encodeURIComponent(`/join${replacement.hash}`)}`);
+    await reusePage.goto("/api/demo/locale?set=en&next=/join");
+    await reusePage.goto(replacementLink);
     await expect(reusePage.getByTestId("invite-state")).toHaveText(
       "This invitation is unavailable. Ask your admin for a new link.",
     );
     await expect(reusePage.getByTestId("team-join-form")).toHaveCount(0);
     await expect(reusePage).toHaveURL(`${origin}/join`);
+    assertNoTokenLeaks();
   } finally {
     await Promise.all(guests.map((context) => context.close()));
     await resetDemo(page);

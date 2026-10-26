@@ -745,14 +745,16 @@ export async function resendInvite(session: Session, invitationId: string) {
       assertTeamInvitesAllowed(session.orgId);
       const found = await client.query<{
         org_id: string; kind: string; status: string; email: string; role: OrgRole;
+        unexpired: boolean;
       }>(
-        `SELECT org_id::text, kind::text, status::text, email::text, role::text
+        `SELECT org_id::text, kind::text, status::text, email::text, role::text,
+                expires_at > clock_timestamp() AS unexpired
            FROM invitations WHERE id::text = $1 FOR UPDATE`,
         [invitationId],
       );
       const row = found.rows[0];
       if (row && row.org_id !== session.orgId) throw new FlowError("errors.forbidden");
-      if (!row || row.kind !== "team_member" || row.status !== "pending") {
+      if (!row || row.kind !== "team_member" || row.status !== "pending" || !row.unexpired) {
         throw new FlowError("errors.teamInviteUnavailable");
       }
       const updated = await client.query<{ expires_at: Date }>(
@@ -879,6 +881,7 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
       const result = await client.query<{
         status: string;
         expires_at: Date;
+        unexpired: boolean;
         kind: string;
         email: string | null;
         contact_email: string | null;
@@ -888,7 +891,8 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
         firm: string;
         inviter: string | null;
       }>(
-        `SELECT i.status::text, i.expires_at, i.kind::text, i.email::text, c.email::text AS contact_email,
+        `SELECT i.status::text, i.expires_at, i.expires_at > clock_timestamp() AS unexpired,
+                i.kind::text, i.email::text, c.email::text AS contact_email,
                 i.org_id::text AS org_id, o.environment::text, i.role::text, o.name AS firm, p.display_name AS inviter
            FROM invitations i
            JOIN organizations o ON o.id = i.org_id
@@ -921,7 +925,10 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
   )) return reject("invalid", kind);
   if (invite.status === "accepted") return reject("used", kind);
   if (invite.status === "revoked") return reject("revoked", kind);
-  if (invite.status !== "pending" || invite.expires_at.getTime() <= Date.now()) return reject("expired", kind);
+  if (invite.status !== "pending" ||
+      (kind === "team_member" ? !invite.unexpired : invite.expires_at.getTime() <= Date.now())) {
+    return reject("expired", kind);
+  }
   if (kind === "team_member" && invite.role && invite.email) {
     return { state: "ready", kind, orgId: invite.org_id, email: invite.email, role: invite.role, firm: invite.firm, inviter: invite.inviter ?? "" };
   }
@@ -1273,7 +1280,7 @@ export async function acceptTeamInvite(
       code_hash: string; status: string; unexpired: boolean;
     }>(
       `SELECT id::text, org_id::text, role::text, email::text, code_hash,
-              status::text, expires_at > now() AS unexpired
+              status::text, expires_at > clock_timestamp() AS unexpired
          FROM invitations WHERE code_hash = $1 AND kind = 'team_member' FOR UPDATE`,
       [sha256(token)],
     );

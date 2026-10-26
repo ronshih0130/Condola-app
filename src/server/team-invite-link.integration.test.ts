@@ -100,8 +100,8 @@ async function accept(token: string, sessionEmail = "") {
 }
 
 async function row(id: string) {
-  const result = await query<{ status: string; code_hash: string; role: string }>(
-    `SELECT status::text, code_hash, role::text FROM invitations WHERE id = $1`, [id],
+  const result = await query<{ status: string; code_hash: string; role: string; expires_at: Date }>(
+    `SELECT status::text, code_hash, role::text, expires_at FROM invitations WHERE id = $1`, [id],
   );
   assert.equal(result.rows.length, 1);
   return result.rows[0];
@@ -232,6 +232,77 @@ test("used, expired, revoked, rotated and unknown tokens have exactly the same e
   assert.equal(errors.length, 5);
   for (const error of errors) assert.strictEqual(error, "errors.teamInviteUnavailable");
   assert.equal(new Set(errors).size, 1);
+});
+
+test("expired pending invitations cannot be reissued or mutated", async () => {
+  const invited = await issue("expired-reissue");
+  await query(
+    `UPDATE invitations SET expires_at = now() - interval '1 second' WHERE id = $1`,
+    [invited.invitationId],
+  );
+  const before = await row(invited.invitationId);
+  assert.equal(before.status, "pending");
+  await assert.rejects(
+    () => resendInvite(admin(), invited.invitationId),
+    hasKey("errors.teamInviteUnavailable"),
+  );
+  assert.deepEqual(await row(invited.invitationId), before);
+});
+
+async function acceptConcurrently(firstToken: string, secondToken: string) {
+  return withClient((first) => withClient(async (second) => {
+    const firstBackend = await first.query<{ pid: number }>(`SELECT pg_backend_pid() AS pid`);
+    const secondBackend = await second.query<{ pid: number }>(`SELECT pg_backend_pid() AS pid`);
+    assert.notEqual(firstBackend.rows[0].pid, secondBackend.rows[0].pid);
+    return Promise.all([
+      acceptTeamInvite(first, firstToken, "Hire", password, meta),
+      acceptTeamInvite(second, secondToken, "Hire", password, meta),
+    ]);
+  }));
+}
+
+test("concurrent double acceptance consumes the token exactly once", async () => {
+  const invited = await issue("double-accept");
+  const results = await acceptConcurrently(invited.token, invited.token);
+  assert.equal(results.filter((result) => result.ok).length, 1);
+  assert.deepEqual(results.filter((result) => !result.ok), [{
+    ok: false, error: "errors.teamInviteUnavailable", kind: "team_member",
+  }]);
+  assert.equal((await row(invited.invitationId)).status, "accepted");
+  const accounts = await accountRows(invited.email);
+  assert.equal(accounts.users.length, 1);
+  assert.deepEqual(accounts.members, [{ role: "accountant" }]);
+});
+
+test("concurrent invitations competing for the last standard seat accept exactly one", async () => {
+  for (let index = 0; index < 3; index++) {
+    const user = await createUser(`competing-seat-${index}`);
+    await query(
+      `INSERT INTO org_members (org_id, user_id, role, status)
+       VALUES ($1, $2, 'accountant', 'active')`,
+      [liveOrgId, user.id],
+    );
+  }
+  const first = await pending();
+  const second = await pending();
+  const results = await acceptConcurrently(first.token, second.token);
+  assert.equal(results.filter((result) => result.ok).length, 1);
+  assert.deepEqual(results.filter((result) => !result.ok), [{
+    ok: false, error: "errors.seatLimit", kind: "team_member",
+  }]);
+  const statuses = await Promise.all([
+    row(first.invitationId), row(second.invitationId),
+  ]);
+  assert.deepEqual(statuses.map((invitation) => invitation.status).sort(), ["accepted", "pending"]);
+  const accounts = await Promise.all([
+    accountRows(first.email), accountRows(second.email),
+  ]);
+  assert.equal(accounts.reduce((count, account) => count + account.members.length, 0), 1);
+  const active = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM org_members WHERE org_id = $1 AND status = 'active'`,
+    [liveOrgId],
+  );
+  assert.equal(active.rows[0].n, 5);
 });
 
 test("wrong signed-in email cannot provision a user or consume the invitation", async () => {
