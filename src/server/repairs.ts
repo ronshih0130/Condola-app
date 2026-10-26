@@ -435,6 +435,10 @@ export async function cancelTenantRepair(session: Session, ticketId: string) {
   if (!visible) throw new FlowError("errors.notFound");
   if (!tenantCancelAllowed(visible.status)) throw new FlowError("errors.repairCancelLocked");
   await svc(session.userId, async (client) => {
+    await client.query(
+      `SELECT id FROM maintenance_tickets WHERE id = $1 AND org_id = $2 FOR UPDATE`,
+      [ticketId, session.orgId],
+    );
     const updated = await client.query(
       `UPDATE maintenance_tickets SET status = 'cancelled', updated_at = now()
         WHERE id = $1 AND org_id = $2 AND status = 'open'`,

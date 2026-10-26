@@ -51,6 +51,17 @@ async function storageRequest(method: string, path: string, body?: unknown) {
   return response;
 }
 
+/** Service-authenticated download; callers must authorize the ticket and object path. */
+export async function downloadRepairObject(path: string): Promise<Uint8Array> {
+  const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
+  const response = await storageRequest("GET", `/object/${PHOTO_BUCKET}/${encoded}`);
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new FlowError("errors.photoStorage");
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
+
 export async function signRepairUpload(path: string) {
   const encoded = path.split("/").map((part) => encodeURIComponent(part)).join("/");
   const response = await storageRequest("POST", `/object/upload/sign/${PHOTO_BUCKET}/${encoded}`);
