@@ -166,7 +166,7 @@ export async function vendorLinkEnabledForOrg(orgId: string) {
 type LinkState = { active: boolean; revoked_at: string | null; expires_at: string };
 
 /** Always lock the ticket before the assignment, then revalidate both flags and state. */
-async function lockTicketThenJobs(client: Client, orgId: string, ticketId: string) {
+export async function lockTicketThenJobs(client: Client, orgId: string, ticketId: string) {
   const ticket = await maybe<{ id: string }>(
     client,
     `SELECT id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2 FOR UPDATE`,
@@ -485,7 +485,6 @@ export async function approveVendorSharing(
       [jobId, ticketId, session.orgId],
     );
     if (!job) throw new FlowError("errors.notFound");
-    // Lock selected attachments so an internal/scope change cannot race approval.
     const photos = await client.query<{ id: string }>(
       `SELECT id::text FROM ticket_attachments
         WHERE org_id = $1 AND ticket_id = $2 AND id = ANY($3::uuid[])
@@ -691,7 +690,6 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
       if (capability === "invalid") return null;
       const sharingApproved = Boolean(state.sharing_approved_at);
       const safe = vendorLinkSafeView({
-        // Free-text title is not reviewed; only manager-redacted text is exposed.
         title: "",
         description: sharingApproved ? state.shared_description ?? "" : "",
         address: sharingApproved ? (ticket.place ? `${ticket.address} ${ticket.place}` : ticket.address) : "",

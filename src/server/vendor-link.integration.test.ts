@@ -9,6 +9,7 @@ import { ticketPhotoPath } from "./repair-rules";
 import type { Session } from "./types";
 import {
   __setVendorLinkKillSwitchForTests,
+  approveVendorSharing,
   confirmVendorPhoto,
   dispatchVendor,
   loadVendorJob,
@@ -87,6 +88,12 @@ describe("vendor link gating", { concurrency: false }, () => {
       }, "http://127.0.0.1:43123");
       return { ...issued, ticketId, token: tokenOf(issued.url) };
     }
+    async function approve(job: { ticketId: string; jobId: string }) {
+      await approveVendorSharing(admin, job.ticketId, job.jobId, {
+        description: "Shared repair",
+        attachmentIds: [],
+      });
+    }
     async function rejectsWrites(job: { token: string; ticketId: string }) {
       await assert.rejects(() => submitVendorReport(job.token, { done: true, cost: "100" }), notFound);
       await assert.rejects(() => prepareVendorPhoto(job.token, {
@@ -128,6 +135,7 @@ describe("vendor link gating", { concurrency: false }, () => {
       await flags(true);
       for (const status of ["closed", "cancelled"]) {
         const job = await issue(status);
+        await approve(job);
         const page = await loadVendorJob(job.token);
         assert.equal(page?.vendorLink?.capability, "write");
         assert.deepEqual(page?.vendorLink?.typeFields, []);
@@ -145,12 +153,19 @@ describe("vendor link gating", { concurrency: false }, () => {
       }
 
       const revoked = await issue("revoked");
+      await approve(revoked);
       await revokeVendorJob(admin, revoked.ticketId, revoked.jobId);
       assert.equal(await loadVendorJob(revoked.token), null);
       await rejectsWrites(revoked);
 
       const own = await issue("own");
       const other = await issue("other");
+      await assert.rejects(
+        () => submitVendorReport(own.token, { done: true, cost: "200" }),
+        notFound,
+      );
+      await approve(own);
+      await approve(other);
       await assert.rejects(() => dispatchVendor(staff(USERS.coastAdmin, ORG2_ID), own.ticketId, {
         vendorName, vendorPhone: "0912000111", vendorTrade: "plumbing", contactWindow: "Monday",
       }, "http://127.0.0.1:43123"), notFound);
