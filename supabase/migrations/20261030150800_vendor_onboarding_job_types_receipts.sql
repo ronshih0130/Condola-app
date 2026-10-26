@@ -3,6 +3,7 @@
 BEGIN;
 
 SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
 
 -- 1. Job types catalog and seed data
 CREATE TABLE IF NOT EXISTS public.job_types (
@@ -75,7 +76,7 @@ INSERT INTO public.job_types (
     'Air Conditioning',
     '[{"key":"model_or_unit_count","label_zh":"機型或台數","label_en":"Model or Unit Count","type":"text","required":true},{"key":"service_or_repair_item","label_zh":"保養或維修項目","label_en":"Maintenance or Repair Item","type":"text","required":true}]'::jsonb,
     '{"before":{"required":true,"min":1,"max":5},"during":{"required":false,"min":0,"max":5},"after":{"required":true,"min":1,"max":5}}'::jsonb,
-    '[{"key":"operation_normal","label_zh":"運轉正常","label_en":"Normal operation"},{"key":"outlet_temp_normal","label_zh":"出風溫度正常","label_en":"Normal outlet temperature"},{"key":"filter_cleaned","label_zh":"濾網清潔完成","label_en":"Filter cleaned"},{"key":"no_condensate_leak","label_zh":"無漏水","label_en":"No condensate leakage"}]'::jsonb,
+    '[{"key":"operation_normal","label_zh":"運轉正常","label_en":"Normal operation"},{"key":"outlet_temp_normal","label_zh":"出風溫度正常","label_en":"Normal outlet temperature"},{"key":"no_condensate_leak","label_zh":"無漏水","label_en":"No condensate leakage"}]'::jsonb,
     ARRAY['per_item', 'per_visit', 'lump_sum']::text[],
     40,
     true
@@ -153,23 +154,97 @@ ALTER TABLE public.maintenance_tickets
   ADD COLUMN IF NOT EXISTS job_type_code text NULL,
   ADD COLUMN IF NOT EXISTS type_fields jsonb NOT NULL DEFAULT '{}'::jsonb;
 
-ALTER TABLE public.maintenance_tickets
-  DROP CONSTRAINT IF EXISTS maintenance_tickets_job_type_code_fkey;
-ALTER TABLE public.maintenance_tickets
-  ADD CONSTRAINT maintenance_tickets_job_type_code_fkey
-  FOREIGN KEY (job_type_code) REFERENCES public.job_types(code) NOT VALID;
-ALTER TABLE public.maintenance_tickets
-  VALIDATE CONSTRAINT maintenance_tickets_job_type_code_fkey;
+-- ADD FOREIGN KEY NOT VALID takes SHARE ROW EXCLUSIVE on both tables without
+-- scanning existing rows. VALIDATE takes SHARE UPDATE EXCLUSIVE on the child
+-- (and ROW SHARE on the referenced table). Earlier locks, including the
+-- ACCESS EXCLUSIVE column-DDL lock, remain held until this transaction commits.
+-- Matching validated constraints need neither replacement nor another scan.
+DO $$
+DECLARE
+  v_constraint pg_catalog.pg_constraint%ROWTYPE;
+BEGIN
+  SELECT c.* INTO v_constraint
+    FROM pg_catalog.pg_constraint c
+   WHERE c.conrelid = 'public.maintenance_tickets'::regclass
+     AND c.conname = 'maintenance_tickets_job_type_code_fkey';
+
+  IF NOT FOUND THEN
+    ALTER TABLE public.maintenance_tickets
+      ADD CONSTRAINT maintenance_tickets_job_type_code_fkey
+      FOREIGN KEY (job_type_code) REFERENCES public.job_types(code) NOT VALID;
+  ELSIF v_constraint.contype <> 'f'
+     OR v_constraint.confrelid <> 'public.job_types'::regclass
+     OR v_constraint.conkey IS DISTINCT FROM ARRAY[
+       (SELECT attnum FROM pg_catalog.pg_attribute
+         WHERE attrelid = 'public.maintenance_tickets'::regclass
+           AND attname = 'job_type_code' AND NOT attisdropped)
+     ]::smallint[]
+     OR v_constraint.confkey IS DISTINCT FROM ARRAY[
+       (SELECT attnum FROM pg_catalog.pg_attribute
+         WHERE attrelid = 'public.job_types'::regclass
+           AND attname = 'code' AND NOT attisdropped)
+     ]::smallint[]
+     OR v_constraint.confmatchtype <> 's'
+     OR v_constraint.confupdtype <> 'a'
+     OR v_constraint.confdeltype <> 'a'
+     OR v_constraint.condeferrable
+     OR v_constraint.condeferred THEN
+    RAISE EXCEPTION 'maintenance_tickets_job_type_code_fkey has an unexpected definition';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint
+     WHERE conrelid = 'public.maintenance_tickets'::regclass
+       AND conname = 'maintenance_tickets_job_type_code_fkey'
+       AND convalidated
+  ) THEN
+    ALTER TABLE public.maintenance_tickets
+      VALIDATE CONSTRAINT maintenance_tickets_job_type_code_fkey;
+  END IF;
+END;
+$$;
 
 -- 2. ticket_attachments.phase (nullable; legacy rows stay NULL; 8-photo trigger unchanged)
 ALTER TABLE public.ticket_attachments
   ADD COLUMN IF NOT EXISTS phase text NULL;
 
-ALTER TABLE public.ticket_attachments
-  DROP CONSTRAINT IF EXISTS ticket_attachments_phase_check;
-ALTER TABLE public.ticket_attachments
-  ADD CONSTRAINT ticket_attachments_phase_check
-  CHECK (phase IS NULL OR phase IN ('before', 'during', 'after'));
+-- ADD CHECK NOT VALID takes ACCESS EXCLUSIVE without scanning existing rows;
+-- VALIDATE takes SHARE UPDATE EXCLUSIVE. The earlier ACCESS EXCLUSIVE locks
+-- remain held until COMMIT, so the timeouts bound execution, not just waiting.
+DO $$
+DECLARE
+  v_constraint pg_catalog.pg_constraint%ROWTYPE;
+BEGIN
+  SELECT c.* INTO v_constraint
+    FROM pg_catalog.pg_constraint c
+   WHERE c.conrelid = 'public.ticket_attachments'::regclass
+     AND c.conname = 'ticket_attachments_phase_check';
+
+  IF NOT FOUND THEN
+    ALTER TABLE public.ticket_attachments
+      ADD CONSTRAINT ticket_attachments_phase_check
+      CHECK (phase IS NULL OR phase IN ('before', 'during', 'after')) NOT VALID;
+  ELSIF v_constraint.contype <> 'c'
+     OR v_constraint.connoinherit
+     OR v_constraint.condeferrable
+     OR v_constraint.condeferred
+     OR pg_catalog.pg_get_expr(v_constraint.conbin, v_constraint.conrelid)
+        IS DISTINCT FROM
+        '((phase IS NULL) OR (phase = ANY (ARRAY[''before''::text, ''during''::text, ''after''::text])))' THEN
+    RAISE EXCEPTION 'ticket_attachments_phase_check has an unexpected definition';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint
+     WHERE conrelid = 'public.ticket_attachments'::regclass
+       AND conname = 'ticket_attachments_phase_check'
+       AND convalidated
+  ) THEN
+    ALTER TABLE public.ticket_attachments
+      VALIDATE CONSTRAINT ticket_attachments_phase_check;
+  END IF;
+END;
+$$;
 
 -- 3. contacts.receipt_title (owner-supplied receipt buyer title)
 ALTER TABLE public.contacts

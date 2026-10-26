@@ -14,6 +14,7 @@ test("vendor batch migration SQL structure and integration checks", async (t) =>
   assert.match(sqlText, /^-- Version 20261030150800\./);
   assert.match(sqlText, /Down:/);
   assert.match(sqlText, /\nBEGIN;\s+SET LOCAL lock_timeout = '5s';/);
+  assert.match(sqlText, /SET LOCAL statement_timeout = '30s';/);
   assert.match(sqlText, /COMMIT;\s*$/);
   const sharingSql = readFileSync(
     "supabase/migrations/20261030150700_vendor_link_sharing_approval.sql",
@@ -73,6 +74,25 @@ test("vendor batch migration SQL structure and integration checks", async (t) =>
       await clientA.query("ROLLBACK");
       throw error;
     }
+  }
+
+  async function onboardingConstraintSnapshot() {
+    const result = await clientA.query(
+      `SELECT c.oid::text AS oid, c.xmin::text AS xmin,
+              c.conrelid::regclass::text AS table_name, c.conname,
+              c.convalidated, pg_get_constraintdef(c.oid) AS definition
+         FROM pg_constraint c
+        WHERE (c.conrelid = 'public.maintenance_tickets'::regclass
+               AND c.conname = 'maintenance_tickets_job_type_code_fkey')
+           OR (c.conrelid = 'public.ticket_attachments'::regclass
+               AND c.conname = 'ticket_attachments_phase_check')
+        ORDER BY table_name, c.conname`,
+    );
+    assert.equal(result.rows.length, 2);
+    for (const row of result.rows) {
+      assert.equal(row.convalidated, true);
+    }
+    return result.rows;
   }
 
   async function sharingSnapshot() {
@@ -200,7 +220,15 @@ test("vendor batch migration SQL structure and integration checks", async (t) =>
          $3,'Vendor batch legacy ticket',NULL)`,
       [legacyTicketId, ORG_ID, propertyId],
     );
+
+    // Fresh lanes have already migrated. Preserve catalog identity and xmin:
+    // equal definitions alone would not detect a drop/re-add or catalog rewrite.
+    const constraintsBeforeReplay = await onboardingConstraintSnapshot();
     await applyMigration();
+    assert.deepEqual(
+      await onboardingConstraintSnapshot(),
+      constraintsBeforeReplay,
+    );
 
     // Fresh lanes have already migrated. Replay each migration twice and compare
     // both complete affected rows and object definitions after every application.
@@ -400,6 +428,10 @@ test("vendor batch migration SQL structure and integration checks", async (t) =>
     await clientA.query("ROLLBACK");
 
     await applyMigration();
+    assert.deepEqual(
+      await onboardingConstraintSnapshot(),
+      constraintsBeforeReplay,
+    );
     const state = await clientA.query<{ kind: string; next_seq: string }>(
       `SELECT kind,next_seq::text FROM public.vendor_document_sequences
         WHERE vendor_profile_id = $1 ORDER BY kind`,
