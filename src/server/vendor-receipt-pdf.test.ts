@@ -13,6 +13,23 @@ import {
   type VendorReceiptPdfInput,
 } from "./vendor-receipt-pdf";
 
+const BANNED = [
+  "收租",
+  "收款",
+  "欠租",
+  "已收",
+  "入帳",
+  "房東",
+  "代收",
+  "轉付",
+  "統一編號",
+  "含稅",
+  "本公司",
+  "事務所",
+  "已驗證",
+  "保證可報帳",
+];
+
 const font = readFileSync(
   new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url),
 );
@@ -88,15 +105,15 @@ test("fixed input and timestamp produce identical bytes and SHA-256", async () =
 });
 
 test("document models contain required copy and exclude banned copy", () => {
-  const banned =
-    /收租|收款|欠租|已收|入帳|房東|代收|轉付|統一編號|含稅|本公司|事務所|已驗證|保證可報帳/;
   const completion = buildVendorReceiptPdf(fixture(false));
   const receipt = buildVendorReceiptPdf(fixture(true));
   assert.match(JSON.stringify(completion), /本文件非稅務憑證/);
   assert.equal(receipt.title, "免用統一發票收據");
   assert.match(JSON.stringify(receipt), /統編/);
-  assert.doesNotMatch(JSON.stringify(completion), banned);
-  assert.doesNotMatch(JSON.stringify(receipt), banned);
+  for (const word of BANNED) {
+    assert.equal(JSON.stringify(completion).includes(word), false);
+    assert.equal(JSON.stringify(receipt).includes(word), false);
+  }
   assert.doesNotMatch(JSON.stringify(completion), /買受人地址|買受人統編/);
 });
 
@@ -121,10 +138,9 @@ test("generated PDFs extract required Chinese text and contain no banned copy", 
         business ? /免用統一發票收據/ : /本文件非稅務憑證/,
       );
       if (business) assert.match(text, /統編/);
-      assert.doesNotMatch(
-        text,
-        /收租|收款|欠租|已收|入帳|房東|代收|轉付|統一編號|含稅|本公司|事務所|已驗證|保證可報帳/,
-      );
+      for (const word of BANNED) {
+        assert.equal(text.includes(word), false);
+      }
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });

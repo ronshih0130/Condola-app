@@ -172,6 +172,7 @@ test(
            JOIN properties p ON p.id = l.property_id AND p.org_id = l.org_id
           WHERE c.user_id = $1 AND l.org_id = $2 AND l.status = 'active'
             AND p.archived_at IS NULL
+            AND p.currency = 'TWD'
             AND COALESCE(p.address_display, '') <> ''
           ORDER BY l.created_at LIMIT 1`,
         [USERS.tenant2, ORG_ID],
@@ -214,7 +215,8 @@ test(
           `UPDATE maintenance_tickets
               SET status = 'closed',
                   assigned_vendor_contact_id = $3,
-                  final_cost_minor = 120000
+                  final_cost_minor = 120000,
+                  currency = 'TWD'
             WHERE id = $1 AND org_id = $2`,
           [ticketId, ORG_ID, contactId],
         );
@@ -422,13 +424,24 @@ test(
     assert.equal(await sha256(stored.bytes), first.sha256);
 
     const holder = await pool.connect();
-    let pending: Promise<PromiseSettledResult<Awaited<ReturnType<typeof issueVendorDocument>>>[]> | undefined;
+    let pending:
+      | Promise<
+          PromiseSettledResult<
+            Awaited<ReturnType<typeof issueVendorDocument>>
+          >[]
+        >
+      | undefined;
     try {
       await holder.query("BEGIN");
-      await holder.query(
-        `SELECT id FROM vendor_profiles WHERE id = $1 FOR UPDATE`,
-        [profileId],
+      // Authorization locks the ticket before jobs and the vendor profile.
+      // Hold both distinct tickets so neither issuer can pass that first lock.
+      const locked = await holder.query<{ id: string }>(
+        `SELECT id::text FROM maintenance_tickets
+          WHERE org_id = $1 AND id = ANY($2::uuid[])
+          ORDER BY id FOR UPDATE`,
+        [ORG_ID, [ticketIds[1], ticketIds[2]]],
       );
+      assert.equal(locked.rowCount, 2);
       pending = Promise.allSettled([
         issueVendorDocument(context(ticketIds[1]), {
           idempotencyKey: `${prefix}:parallel-1`,
@@ -439,15 +452,27 @@ test(
       ]);
       const deadline = Date.now() + 10000;
       for (;;) {
+        // Statistics snapshots are otherwise cached inside the holder's
+        // transaction, hiding changes made by the two issuing connections.
+        await holder.query("SELECT pg_stat_clear_snapshot()");
         const waiting = await holder.query<{ count: string }>(
-          `SELECT count(DISTINCT pid)::text AS count
-             FROM pg_locks
-            WHERE NOT granted
-              AND pid <> pg_backend_pid()
-              AND pg_backend_pid() = ANY(pg_blocking_pids(pid))`,
+          `SELECT count(DISTINCT a.pid)::text AS count
+             FROM pg_stat_activity a
+            WHERE a.datname = current_database()
+              AND a.pid <> pg_backend_pid()
+              AND a.state = 'active'
+              AND a.wait_event_type = 'Lock'
+              AND pg_backend_pid() = ANY(pg_blocking_pids(a.pid))
+              AND EXISTS (
+                SELECT 1 FROM pg_locks l
+                 WHERE l.pid = a.pid AND NOT l.granted
+              )`,
         );
-        if (Number(waiting.rows[0].count) >= 2) break;
-        assert.ok(Date.now() < deadline, "both issue connections must block");
+        if (Number(waiting.rows[0].count) === 2) break;
+        assert.ok(
+          Date.now() < deadline,
+          "both issue connections must wait on the held ticket locks",
+        );
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
       await holder.query("COMMIT");
@@ -456,15 +481,32 @@ test(
         if (result.status === "rejected") throw result.reason;
         return result.value;
       });
+      // Distinct tickets may each issue a document for the same profile.
       assert.deepEqual(
         documents.map((result) => result.document.seq).sort((a, b) => a - b),
         [2, 3],
       );
-      assert.equal(new Set(documents.map((result) => result.document.doc_no)).size, 2);
+      assert.equal(
+        new Set(documents.map((result) => result.document.id)).size,
+        2,
+      );
+      assert.equal(
+        new Set(documents.map((result) => result.document.doc_no)).size,
+        2,
+      );
+      assert.deepEqual(
+        documents.map((result) => result.document.ticket_id).sort(),
+        [ticketIds[1], ticketIds[2]].sort(),
+      );
     } finally {
-      await holder.query("ROLLBACK");
-      holder.release();
-      if (pending) await pending;
+      try {
+        await holder.query("ROLLBACK");
+      } finally {
+        // Destroy the holder even if rollback fails, releasing its locks
+        // before waiting for the issuers and before the cleanup pool ends.
+        holder.release(true);
+        if (pending) await pending;
+      }
     }
 
     await assert.rejects(
