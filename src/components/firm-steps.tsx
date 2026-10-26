@@ -81,7 +81,6 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
             <input
               className="inp"
               name="name"
-              placeholder={t("i_signup_name_hint")}
               data-testid="firm-name"
               onChange={() => setNameError(false)}
             />

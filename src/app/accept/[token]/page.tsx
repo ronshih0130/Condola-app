@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { makeT } from "@/i18n";
 import { AcceptForm, AcceptSubmit } from "@/components/accept-form";
+import { LegalConsentCheckbox } from "@/components/consent-check";
 import { AuthBrand } from "@/components/brand";
 import { PasswordFields } from "@/components/password-field";
 import { actionAccept } from "@/server/auth-actions";
@@ -71,6 +72,8 @@ export default async function AcceptPage({
                 ? t("i_portal_accept_failed")
                 : query.error === "email" || query.error === "emailTaken"
                   ? t("i_portal_email_unusable")
+                  : query.error === "consent"
+                    ? t("i_reconsent_error")
                   : !portal && query.error === "used"
               ? t("i_invite_used")
               : "";
@@ -94,7 +97,7 @@ export default async function AcceptPage({
           </form>
         </div>
       ) : (
-      <AcceptForm action={actionAccept}>
+      <AcceptForm action={actionAccept} requireConsent={needsTeamConsent(invite.state, invite.kind)}>
         {invite.state === "ready" && (invite.kind === "owner" || invite.kind === "tenant") ? (
           <h1 data-testid="portal-invite-title">{t("i_portal_invite_title", { firm: invite.firm })}</h1>
         ) : (
@@ -146,6 +149,15 @@ export default async function AcceptPage({
               <input className="inp" name="name" data-testid="accept-name" defaultValue="" />
             </div>
             <PasswordFields />
+            <LegalConsentCheckbox
+              variant="service"
+              labelTestId="invite-consent-label"
+              inputTestId="invite-consent"
+              termsTestId="invite-terms"
+              privacyTestId="invite-privacy"
+              errorTestId="invite-consent-error"
+              errorKey="i_reconsent_error"
+            />
             <AcceptSubmit idle={t("i_accept")} pending={t("i_portal_working")} testId="accept-submit" />
             {showDemoLineCopy(null) && lineLoginEnabled() ? (
               <div data-demo-line="true">
@@ -161,4 +173,8 @@ export default async function AcceptPage({
       )}
     </div>
   );
+}
+
+function needsTeamConsent(state: string, kind: string) {
+  return state === "ready" && kind === "team_member";
 }

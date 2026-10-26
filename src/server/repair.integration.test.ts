@@ -498,7 +498,7 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
       leaseId: zhang.id,
       category: "other",
       title: `${title}-staff`,
-      description: "事務所代報",
+      description: "公司代報",
     });
     const zhangSeesStaff = await tx(USERS.tenant, (client) =>
       client.query(`SELECT id FROM maintenance_tickets WHERE id = $1`, [staffTicket]),

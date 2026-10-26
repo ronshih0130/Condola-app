@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { BrandImage } from "@/components/brand";
+import { entryConsentRedirect } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ export default async function TenantLayout({ children }: { children: React.React
   if (session.kind !== "tenant") redirect("/m");
   const t = makeT(session.locale);
   const path = (await headers()).get("x-pathname") || "";
+  const gate = await entryConsentRedirect(session.userId, "portal", path || "/t");
+  if (gate) redirect(gate);
   const task = path === "/t/id" || path.startsWith("/t/id/");
   const backHref = path === "/t/id/notice" || path.startsWith("/t/id/notice/") ? "/t/id" : "/t";
   const tiles = [

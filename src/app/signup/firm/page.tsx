@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
+import { ConsentGateForm } from "@/components/consent-check";
 import { FirmSteps } from "@/components/firm-steps";
+import { actionAcceptReconsent } from "@/server/consent-actions";
+import { consentCoversCurrent, readConsent } from "@/server/consent";
 import { readSignupIdentity } from "@/server/signup";
 import { requestPrefs } from "@/server/session";
 
@@ -21,6 +24,14 @@ export default async function FirmPage({ searchParams }: { searchParams: Promise
   if (identity.org_id) redirect("/m");
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
+  if (!consentCoversCurrent(await readConsent(identity.user_id))) {
+    return (
+      <div className="auth-wrap">
+        <AuthBrand name={t("i_brand")} />
+        <ConsentGateForm action={actionAcceptReconsent} variant="service" next="/signup/firm" error={params.error} titleKey="i_reconsent_title" />
+      </div>
+    );
+  }
   return (
     <div className="auth-wrap">
       <AuthBrand name={t("i_brand")} />

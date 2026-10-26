@@ -88,12 +88,14 @@ test("signup requires consent, then signUp stores the legal versions", async ({ 
   }
 
   await page.goto("/signup/firm");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("你的身分");
   await page.getByTestId("kind-self").check();
   await page.getByTestId("kind-next").click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("建立你的公司");
   await expect(page.locator("[data-testid='signup-details'] label.f").first()).toHaveText("公司名稱");
   await expect(page.getByTestId("firm-name-hint")).toHaveText("個人屋主可填自己的名字");
-  await expect(page.getByTestId("firm-name")).toHaveAttribute("placeholder", "個人屋主可填自己的名字");
+  await expect(page.getByTestId("firm-name")).not.toHaveAttribute("placeholder");
+  await expect(page.getByTestId("signup-admin-note")).toHaveText("註冊者會成為這個帳號的管理員");
   await expect(page.getByTestId("firm-submit")).toHaveText("建立公司");
   await expect(page.getByTestId("firm-form")).not.toContainText("事務所");
   await expect(page.getByTestId("firm-submit")).toBeEnabled();

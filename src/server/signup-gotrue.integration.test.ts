@@ -39,10 +39,15 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     },
   });
   await query(`DELETE FROM password_reset_attempts WHERE ip_key = $1`, [meta.ip]).catch(() => undefined);
+  const signupCalls = () => calls.filter((call) => new URL(call.url).pathname === "/auth/v1/admin/generate_link");
+  const resendCalls = () => calls.filter((call) => new URL(call.url).pathname === "/auth/v1/resend");
   global.fetch = async (input, init) => {
     const url = String(input);
     const body = String(init?.body ?? "");
     calls.push({ url, body });
+    if (new URL(url).pathname.startsWith("/auth/v1/admin/users")) {
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }
     if (url.includes("/auth/v1/resend")) return new Response("{}", { status: 200 });
     const payload = JSON.parse(body) as { email: string; password?: string; data?: unknown };
     const inserted = await query<{ id: string }>(
@@ -74,10 +79,10 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     });
     assert.equal(first.ok, true);
     if (!first.ok || first.status !== "verify") throw new Error("expected verify");
-    assert.equal(calls.length, 1);
-    const called = new URL(calls[0].url);
+    assert.equal(signupCalls().length, 1);
+    const called = new URL(signupCalls()[0].url);
     assert.equal(called.pathname, "/auth/v1/admin/generate_link");
-    const sent = JSON.parse(calls[0].body) as {
+    const sent = JSON.parse(signupCalls()[0].body) as {
       type?: string;
       email?: string;
       redirect_to?: string;
@@ -129,7 +134,9 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     });
     assert.equal(retry.ok, true);
     if (!retry.ok || retry.status !== "verify") throw new Error("expected retry verify");
-    assert.equal(calls.length, 1, "a plain retry must not call GoTrue again");
+    assert.equal(signupCalls().length, 1, "a plain retry must not generate another signup link");
+    assert.equal(resendCalls().length, 0, "a plain retry must not call GoTrue resend");
+    assert.equal(mailed.length, 1, "a plain retry must not send another email");
     const kept = await query<{ confirmation_token: string; confirmation_sent_at: Date }>(
       `SELECT confirmation_token, confirmation_sent_at FROM auth.users WHERE id = $1`,
       [userId],
@@ -148,7 +155,9 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
       meta,
       consent: true,
     });
-    assert.equal(calls.length, 1);
+    assert.equal(signupCalls().length, 1);
+    assert.equal(resendCalls().length, 0);
+    assert.equal(mailed.length, 1);
     assert.equal(await started(), 1);
   } finally {
     global.fetch = saved.fetch;
@@ -195,10 +204,15 @@ test("SIGNUP_MAIL_VIA=supabase keeps the anon signup and resend calls", async ()
   process.env.SUPABASE_ANON_KEY = "test-anon";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-test";
   process.env.SIGNUP_MAIL_VIA = "supabase";
+  const signupCalls = () => calls.filter((call) => new URL(call.url).pathname === "/auth/v1/signup");
+  const resendCalls = () => calls.filter((call) => new URL(call.url).pathname === "/auth/v1/resend");
   global.fetch = async (input, init) => {
     const url = String(input);
     const body = String(init?.body ?? "");
     calls.push({ url, body });
+    if (new URL(url).pathname.startsWith("/auth/v1/admin/users")) {
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }
     if (url.includes("/auth/v1/resend")) return new Response("{}", { status: 200 });
     const payload = JSON.parse(body) as { email: string; password: string };
     const inserted = await query<{ id: string }>(
@@ -224,8 +238,9 @@ test("SIGNUP_MAIL_VIA=supabase keeps the anon signup and resend calls", async ()
       consent: true,
     });
     assert.equal(started.ok, true);
-    assert.equal(new URL(calls[0].url).pathname, "/auth/v1/signup");
-    const sent = JSON.parse(calls[0].body) as {
+    assert.equal(signupCalls().length, 1);
+    assert.equal(new URL(signupCalls()[0].url).pathname, "/auth/v1/signup");
+    const sent = JSON.parse(signupCalls()[0].body) as {
       data?: { terms_version?: string; privacy_version?: string };
       options?: { data?: { terms_version?: string; privacy_version?: string } };
     };
@@ -234,7 +249,8 @@ test("SIGNUP_MAIL_VIA=supabase keeps the anon signup and resend calls", async ()
     assert.deepEqual(sent.options?.data, sent.data);
     const resent = await resendSignup(email, "https://staging.condola.app", meta.ip);
     assert.equal(resent.devToken, null);
-    assert.equal(new URL(calls[1].url).pathname, "/auth/v1/resend");
+    assert.equal(resendCalls().length, 1);
+    assert.equal(new URL(resendCalls()[0].url).pathname, "/auth/v1/resend");
     assert.equal(calls.some((call) => call.url.includes("generate_link")), false);
   } finally {
     global.fetch = saved.fetch;

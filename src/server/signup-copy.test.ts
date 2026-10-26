@@ -15,7 +15,10 @@ test("sign-up and pricing copy stay on the handoff wording", () => {
   assert.equal(en.i_signup_mail_failed, "We couldn't send the confirmation email. Please use Resend confirmation in a moment.");
   assert.equal(en.i_signup_mail_wait, "Please wait before resending the confirmation email.");
   assert.equal(zh.i_signup_change_email, "更換電子郵件");
-  assert.equal(zh.i_signup_kind_title, "您的身分");
+  assert.equal(zh.i_signup_kind_title, "你的身分");
+  assert.equal(zh.i_signup_admin_note, "註冊者會成為這個帳號的管理員");
+  assert.equal(zh.i_signup_dup_firm, "已有同名的公司。你仍可完成註冊，我們會再確認。若你已是其中一員，請向管理員索取邀請。");
+  assert.equal(zh.i_signup_dup_firm.includes("您"), false);
   assert.equal(zh.i_signup_firm_details, "建立你的公司");
   assert.equal(zh.i_signup_name_firm, "公司名稱");
   assert.equal(zh.i_signup_name_hint, "個人屋主可填自己的名字");
@@ -24,6 +27,12 @@ test("sign-up and pricing copy stay on the handoff wording", () => {
     `${zh.i_signup_consent_lead}${zh.i_signup_consent_terms}${zh.i_signup_consent_and}${zh.i_signup_consent_privacy}`,
     "我已閱讀並同意《服務條款》與《隱私權政策》",
   );
+  assert.equal(
+    `${zh.i_portal_consent_lead}${zh.i_portal_consent_terms}${zh.i_portal_consent_and}${zh.i_portal_consent_privacy}`,
+    "我已閱讀並同意《服務條款》與《隱私權政策》",
+  );
+  assert.equal(zh.i_portal_consent_error, "請先同意《服務條款》與《隱私權政策》，才能繼續。");
+  assert.equal(zh.i_portal_consent_terms, zh.i_signup_consent_terms);
   assert.equal(en.i_signup_firm_details, "Create your company");
   assert.equal(en.i_signup_name_firm, "Company name");
   assert.equal(en.i_signup_name_hint, "Individual owners can enter their own name");

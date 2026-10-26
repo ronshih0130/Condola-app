@@ -236,6 +236,7 @@ export async function actionAccept(formData: FormData) {
     await meta(),
     text(formData.get("email")),
     current?.email ?? "",
+    formData.get("consent") === "on",
   );
   if (!result.ok) {
     const portal = result.kind === "owner" || result.kind === "tenant" || result.kind === "unknown";
