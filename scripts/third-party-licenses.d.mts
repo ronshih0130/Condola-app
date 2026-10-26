@@ -8,13 +8,29 @@ export interface UpstreamSource {
   libraryDir?: string;
 }
 
+export interface BuildProvenance {
+  prebuiltUrl: string;
+  prebuiltSha256: string;
+  prebuiltWasmSha256: string;
+  prebuiltWasmBytes: number;
+  shippedBundleSha256: string;
+  libheifCommit: string;
+  emscriptenVersion: string;
+  reproducedWith: {
+    node: string;
+    esbuild: string;
+    "esbuild-plugins-node-modules-polyfill": string;
+  };
+}
+
+export interface VerifiedDecoder {
+  shippedBundleSha256: string;
+  embeddedWasmSha256: string;
+  embeddedWasmBytes: number;
+}
+
 export interface BrowserConfig {
-  roots: {
-    name: string;
-    walk: boolean;
-    exclude: string[];
-    why: string;
-  }[];
+  roots: { name: string; walk: boolean; exclude: string[]; why: string }[];
   embedded: {
     name: string;
     parent: string;
@@ -23,27 +39,13 @@ export interface BrowserConfig {
     homepage: string;
     sourceUrlTemplate: string;
   }[];
-  vendored: {
-    package: string;
-    file: string;
-    publicDir: string;
-  }[];
+  vendored: { package: string; file: string; publicDir: string }[];
   copyrightHolders?: Record<string, string>;
-  copyleftTexts: Record<string, {
-    from?: string;
-    public: string;
-    sha256?: string;
-  }>;
-  extraNotices: {
-    from: string;
-    public: string;
-  }[];
+  copyleftTexts: Record<string, { from?: string; public: string; sha256?: string }>;
+  extraNotices: { from: string; public: string }[];
   upstreamSources: Record<string, UpstreamSource>;
-  buildProvenance: {
-    prebuiltUrl: string;
-    libheifCommit: string;
-    emscriptenVersion: string;
-  };
+  sourceOfferEmail: string;
+  buildProvenance: BuildProvenance;
   notInWebpackBundle: Record<string, string>;
 }
 
@@ -64,12 +66,14 @@ export interface LicenseEntry {
   licenseUrl: string | null;
   gplUrl: string | null;
   noticeUrl: string | null;
+  sourceNoticesUrl: string | null;
   repository: string | null;
   sourceUrl: string;
   sourceArchives: SourceArchive[];
   copyrightHolders: string[];
   buildInputsUrl: string | null;
   buildInputFiles: { label: string; url: string }[];
+  buildProvenance: (BuildProvenance & VerifiedDecoder) | null;
   delivery: "bundled" | "separate-unmodified-file" | "inside:libheif-js";
   assetPath: string | null;
   sha256: string | null;
@@ -102,7 +106,12 @@ export function collectBrowserPackages(rootDir: string, config: BrowserConfig): 
   requiredBy: string[];
 }[];
 export function probeEmbedded(rootDir: string): Promise<{ libheif: string; libde265: string }>;
-export function buildManifest(rootDir: string, config: BrowserConfig): Promise<Manifest>;
+export function verifyDecoderProvenance(bytes: Uint8Array, provenance: BuildProvenance): VerifiedDecoder;
+export function buildManifest(
+  rootDir: string,
+  config: BrowserConfig,
+  options?: { verifyPublic?: boolean },
+): Promise<Manifest>;
 export function assetModule(manifest: Manifest): string;
 export function generate(rootDir: string, config: BrowserConfig, check?: boolean): Promise<Manifest>;
 export function vendorAssets(rootDir: string, config: BrowserConfig): Promise<Manifest>;

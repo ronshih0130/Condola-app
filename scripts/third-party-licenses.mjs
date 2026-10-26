@@ -1,18 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
+  existsSync, mkdirSync, readFileSync, readdirSync, realpathSync,
+  renameSync, rmSync, writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { BUILD_INPUTS, buildReadme } from "./extract-upstream-notices.mjs";
+import {
+  BUILD_INPUTS, buildReadme, extractionHeader, holdersFromNotices,
+} from "./extract-upstream-notices.mjs";
 
 const GENERATED_BY = "scripts/third-party-licenses.mjs";
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
@@ -56,9 +52,7 @@ function atomicWrite(path, bytes) {
 }
 
 export function resolvePackageDir(fromDir, name) {
-  if (!/^(?:@[^/]+\/)?[^/]+$/.test(name)) {
-    throw new Error(`Invalid package name: ${name}`);
-  }
+  if (!/^(?:@[^/]+\/)?[^/]+$/.test(name)) throw new Error(`Invalid package name: ${name}`);
   let current = resolve(fromDir);
   while (true) {
     const candidate = join(current, "node_modules", name);
@@ -73,8 +67,7 @@ export function resolvePackageDir(fromDir, name) {
 function licenseFiles(pkgDir) {
   return readdirSync(pkgDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && /^(?:licen[sc]e|copying)(?:[._-].*)?$/i.test(entry.name))
-    .map((entry) => entry.name)
-    .sort(compare);
+    .map((entry) => entry.name).sort(compare);
 }
 
 function readLicenseFiles(pkgDir, files) {
@@ -98,8 +91,7 @@ function packageLicense(pkgDir, pkg, config) {
   }
   const template = SPDX_TEMPLATES.get(pkg.license);
   if (!template) throw new Error(`No licence file in ${pkgDir}`);
-  const configured = config.copyrightHolders &&
-    Object.hasOwn(config.copyrightHolders, pkg.name);
+  const configured = config.copyrightHolders && Object.hasOwn(config.copyrightHolders, pkg.name);
   const author = typeof pkg.author === "string" ? pkg.author : pkg.author?.name;
   const value = configured ? config.copyrightHolders[pkg.name] : author;
   const holders = typeof value === "string"
@@ -113,8 +105,7 @@ function packageLicense(pkgDir, pkg, config) {
 }
 
 export function npmTarballUrl(name, version) {
-  const unscoped = name.split("/").at(-1);
-  return `https://registry.npmjs.org/${name}/-/${unscoped}-${version}.tgz`;
+  return `https://registry.npmjs.org/${name}/-/${name.split("/").at(-1)}-${version}.tgz`;
 }
 
 function repositoryUrl(repository) {
@@ -131,10 +122,8 @@ function repositoryUrl(repository) {
 }
 
 function validateLibheifVersions(rootDir, collected) {
-  const versions = new Set(
-    collected.filter((item) => item.metadata.name === "libheif-js")
-      .map((item) => item.metadata.version),
-  );
+  const versions = new Set(collected.filter((item) => item.metadata.name === "libheif-js")
+    .map((item) => item.metadata.version));
   const lock = readJson(join(rootDir, "package-lock.json"));
   for (const [path, item] of Object.entries(lock.packages ?? {})) {
     if (/(?:^|\/)node_modules\/libheif-js$/.test(path)) {
@@ -211,14 +200,46 @@ export async function probeEmbedded(rootDir) {
   return { libheif, libde265 };
 }
 
+/** Verify literal embedded wasm without executing the bundle. No network access. */
+export function verifyDecoderProvenance(bytes, provenance) {
+  for (const field of ["prebuiltSha256", "prebuiltWasmSha256", "shippedBundleSha256"]) {
+    if (!/^[a-f0-9]{64}$/.test(provenance[field] ?? "")) {
+      throw new Error(`Decoder provenance: invalid ${field}`);
+    }
+  }
+  if (!Number.isSafeInteger(provenance.prebuiltWasmBytes) || provenance.prebuiltWasmBytes <= 0) {
+    throw new Error("Decoder provenance: invalid prebuiltWasmBytes");
+  }
+  const bundle = Buffer.from(bytes);
+  const shippedBundleSha256 = hash(bundle);
+  if (shippedBundleSha256 !== provenance.shippedBundleSha256) {
+    throw new Error(`Decoder bundle SHA-256 mismatch: expected ${provenance.shippedBundleSha256}, got ${shippedBundleSha256}`);
+  }
+  const candidates = [];
+  for (const match of bundle.toString("utf8").matchAll(/["']([A-Za-z0-9+/]{64,}={0,2})["']/g)) {
+    const wasm = Buffer.from(match[1], "base64");
+    if (wasm.toString("base64") !== match[1]) continue;
+    if (wasm.subarray(0, 4).equals(Buffer.from([0, 97, 115, 109]))) candidates.push(wasm);
+  }
+  if (candidates.length !== 1) {
+    throw new Error(`Decoder bundle: expected exactly one base64 wasm literal with \\0asm magic; found ${candidates.length}`);
+  }
+  const wasm = candidates[0];
+  const embeddedWasmSha256 = hash(wasm);
+  if (wasm.length !== provenance.prebuiltWasmBytes) {
+    throw new Error(`Embedded wasm length mismatch: expected ${provenance.prebuiltWasmBytes}, got ${wasm.length}`);
+  }
+  if (embeddedWasmSha256 !== provenance.prebuiltWasmSha256) {
+    throw new Error(`Embedded wasm SHA-256 mismatch: expected ${provenance.prebuiltWasmSha256}, got ${embeddedWasmSha256}`);
+  }
+  return { shippedBundleSha256, embeddedWasmSha256, embeddedWasmBytes: wasm.length };
+}
+
 function sourceReference(rootDir, reference) {
   const parts = reference.split("/");
   const name = reference.startsWith("@") ? parts.splice(0, 2).join("/") : parts.shift();
   const directory = resolvePackageDir(rootDir, name);
-  return {
-    path: join(directory, ...parts),
-    version: readJson(join(directory, "package.json")).version,
-  };
+  return { path: join(directory, ...parts), version: readJson(join(directory, "package.json")).version };
 }
 
 function publicUrl(path) {
@@ -242,7 +263,9 @@ function upstreamPath(name, config) {
 }
 
 function walkFiles(directory, prefix = "") {
-  if (!existsSync(directory)) throw new Error(`Missing upstream directory: ${directory}`);
+  if (!existsSync(directory)) {
+    throw new Error(`Missing upstream directory: ${directory}; rerun licenses:extract-upstream.`);
+  }
   return readdirSync(directory, { withFileTypes: true })
     .sort((a, b) => compare(a.name, b.name))
     .flatMap((entry) => {
@@ -260,25 +283,34 @@ function upstreamData(rootDir, config) {
   const bytes = new Map(files.map((file) => [file, readFileSync(join(base, file))]));
   const required = (path) => {
     const value = bytes.get(path);
-    if (!value?.length) throw new Error(`Missing or empty third-party/upstream/${path}`);
+    if (!value?.length) {
+      throw new Error(`Missing or empty third-party/upstream/${path}; rerun licenses:extract-upstream.`);
+    }
     return value;
   };
   const libraries = new Map();
   for (const name of ["libheif", "libde265"]) {
     const prefix = upstreamPath(name, config);
     const pin = config.upstreamSources[name];
+    const sourceNotices = required(`${prefix}/SOURCE-NOTICES.txt`);
+    const noticesText = sourceNotices.toString("utf8");
     const holdersBytes = required(`${prefix}/COPYRIGHT-HOLDERS.txt`);
-    const holdersText = holdersBytes.toString("utf8");
-    const expectedHeader = `Copyright lines quoted verbatim from ${pin.file} (${pin.sha256}), library sources only.`;
-    if (holdersText.split("\n")[0] !== expectedHeader) {
-      throw new Error(`Stale copyright extraction for ${name}; rerun licenses:extract-upstream.`);
+    if (
+      noticesText.split("\n")[0] !== extractionHeader(pin) ||
+      !/^Files scanned: \d+; files with no notice block: \d+\.$/m.test(noticesText) ||
+      !noticesText.includes("\nSource paths:\n") ||
+      !holdersBytes.equals(Buffer.from(holdersFromNotices(noticesText)))
+    ) {
+      throw new Error(`Stale notice extraction for ${name}; rerun licenses:extract-upstream.`);
     }
-    const holders = [...new Set(holdersText.split("\n")
-      .filter((line) => /^\S/.test(line) && /copyright\s*(\(c\)|©)/i.test(line)))].sort(compare);
-    if (!holders.length) throw new Error(`Empty copyright holders list: ${name}`);
+    const holders = [...new Set(noticesText.split(/\r?\n/)
+      .filter((line) => /copyright|©|\(c\)\s*\d{4}/i.test(line))
+      .map((line) => line.replace(/^\s*(?:\/\*+|\/\/|[*#@;])?\s?/, "").trim())
+      .filter((line) => /(?:copyright\s*(?:(?:\(c\)|©)\s*)?\d{4}|©\s*\d{4}|\(c\)\s*\d{4})/i.test(line)))]
+      .sort(compare);
+    if (!holders.length) throw new Error(`Empty copyright holders list: ${name}; rerun licenses:extract-upstream.`);
     libraries.set(name, {
-      holders,
-      holdersBytes,
+      holders, holdersBytes, sourceNotices,
       copying: required(`${prefix}/COPYING`),
       authors: name === "libde265" ? required(`${prefix}/AUTHORS`) : null,
     });
@@ -303,9 +335,8 @@ function noticeBytes(upstream, config) {
     const item = upstream.libraries.get(name);
     chunks.push(Buffer.from(`=== ${name} ${config.upstreamSources[name].version} ===\n\n`));
     chunks.push(item.holdersBytes);
-    if (item.authors) {
-      chunks.push(Buffer.from("\nAUTHORS\n\n"), item.authors);
-    }
+    if (item.authors) chunks.push(Buffer.from("\nAUTHORS\n\n"), item.authors);
+    chunks.push(Buffer.from("\n\n----- SOURCE-NOTICES.txt -----\n\n"), item.sourceNotices);
     chunks.push(Buffer.from("\n\n----- COPYING -----\n\n"), item.copying, Buffer.from("\n\n"));
   }
   return Buffer.concat(chunks);
@@ -319,12 +350,13 @@ function npmIntegrity(lock, version) {
   return item.integrity;
 }
 
-export async function buildManifest(rootDir, config) {
+export async function buildManifest(rootDir, config, options = {}) {
   verifySuppliedTexts(rootDir, config);
   const upstream = upstreamData(rootDir, config);
   const collected = collectBrowserPackages(rootDir, config);
   const lock = validateLibheifVersions(rootDir, collected);
   const entries = new Map();
+  let verifiedProvenance;
   for (const item of collected) {
     const { metadata: pkg, directory, requiredBy } = item;
     const key = `${pkg.name}\0${pkg.version}`;
@@ -338,6 +370,22 @@ export async function buildManifest(rootDir, config) {
     if (special && pkg.version !== config.upstreamSources["libheif-js"].version) {
       throw new Error(`libheif-js ${pkg.version} does not match pinned upstream sources`);
     }
+    const assetPath = vendor
+      ? publicUrl(`${substitute(vendor.publicDir, pkg.version)}/${basename(vendor.file)}`) : null;
+    const vendorBytes = vendor ? readFileSync(join(directory, vendor.file)) : null;
+    if (special) {
+      if (!vendorBytes || !assetPath) throw new Error("Missing separate decoder asset configuration");
+      const checked = verifyDecoderProvenance(vendorBytes, config.buildProvenance);
+      if (options.verifyPublic !== false || options.requirePublic) {
+        const target = join(rootDir, "public", assetPath.slice(1));
+        if (existsSync(target)) {
+          verifyDecoderProvenance(readFileSync(target), config.buildProvenance);
+        } else if (options.requirePublic) {
+          throw new Error(`Missing vendored decoder ${assetPath}; run npm run licenses:vendor.`);
+        }
+      }
+      verifiedProvenance = { ...config.buildProvenance, ...checked };
+    }
     const entry = {
       name: pkg.name,
       version: pkg.version,
@@ -346,9 +394,9 @@ export async function buildManifest(rootDir, config) {
       licenseTextSource: license.licenseTextSource,
       licenseUrl: copyleft(pkg.license) ? publicUrl(config.copyleftTexts[pkg.license].public) : null,
       gplUrl: lgpl(pkg.license) ? publicUrl(config.copyleftTexts["GPL-3.0"].public) : null,
-      noticeUrl: special
-        ? `/third-party/libheif-js/${pkg.version}/NOTICE.txt`
+      noticeUrl: special ? `/third-party/libheif-js/${pkg.version}/NOTICE.txt`
         : notice ? publicUrl(substitute(notice.public, pkg.version)) : null,
+      sourceNoticesUrl: null,
       repository: repositoryUrl(pkg.repository),
       sourceUrl: npmTarballUrl(pkg.name, pkg.version),
       sourceArchives: special ? [
@@ -366,15 +414,15 @@ export async function buildManifest(rootDir, config) {
         label: `${name}/${path}`,
         url: `/third-party/upstream/${upstream.buildPrefix}/${name}/${path}`,
       })) : [],
+      buildProvenance: special ? verifiedProvenance : null,
       delivery: vendor ? "separate-unmodified-file" : "bundled",
-      assetPath: vendor ? publicUrl(`${substitute(vendor.publicDir, pkg.version)}/${basename(vendor.file)}`) : null,
-      sha256: vendor ? hash(readFileSync(join(directory, vendor.file))) : null,
+      assetPath,
+      sha256: vendorBytes ? hash(vendorBytes) : null,
       requiredBy,
     };
     const existing = entries.get(key);
     if (existing) {
-      if (JSON.stringify({ ...existing, requiredBy: [] }) !==
-          JSON.stringify({ ...entry, requiredBy: [] })) {
+      if (JSON.stringify({ ...existing, requiredBy: [] }) !== JSON.stringify({ ...entry, requiredBy: [] })) {
         throw new Error(`Conflicting metadata for ${pkg.name}@${pkg.version}`);
       }
       existing.requiredBy = [...new Set([...existing.requiredBy, ...requiredBy])].sort(compare);
@@ -395,21 +443,24 @@ export async function buildManifest(rootDir, config) {
       }
       const data = upstream.libraries.get(embedded.name);
       if (!data) throw new Error(`Missing upstream notices: ${embedded.name}`);
+      const prefix = `/third-party/upstream/${upstreamPath(embedded.name, config)}`;
       const entry = {
         name: embedded.name,
         version,
         license: embedded.license,
         licenseText: null,
         licenseTextSource: `upstream-file:${upstreamPath(embedded.name, config)}/COPYING`,
-        licenseUrl: `/third-party/upstream/${upstreamPath(embedded.name, config)}/COPYING`,
+        licenseUrl: `${prefix}/COPYING`,
         gplUrl: lgpl(embedded.license) ? publicUrl(config.copyleftTexts["GPL-3.0"].public) : null,
         noticeUrl: parents[0].noticeUrl,
+        sourceNoticesUrl: `${prefix}/SOURCE-NOTICES.txt`,
         repository: embedded.homepage,
         sourceUrl: substitute(embedded.sourceUrlTemplate, version),
         sourceArchives: [archive(embedded.name, config)],
         copyrightHolders: data.holders,
         buildInputsUrl: parents[0].buildInputsUrl,
         buildInputFiles: [],
+        buildProvenance: null,
         delivery: `inside:${embedded.parent}`,
         assetPath: null,
         sha256: null,
@@ -420,8 +471,7 @@ export async function buildManifest(rootDir, config) {
   }
   return {
     generatedBy: GENERATED_BY,
-    packages: [...entries.values()].sort((a, b) =>
-      compare(a.name, b.name) || compare(a.version, b.version)),
+    packages: [...entries.values()].sort((a, b) => compare(a.name, b.name) || compare(a.version, b.version)),
   };
 }
 
@@ -440,17 +490,13 @@ export async function generate(rootDir, config, check = false) {
     ["src/generated/libheif-asset.ts", Buffer.from(assetModule(manifest))],
   ]);
   for (const text of Object.values(config.copyleftTexts)) {
-    if (text.from) {
-      outputs.set(`public/${text.public}`, readFileSync(sourceReference(rootDir, text.from).path));
-    }
+    if (text.from) outputs.set(`public/${text.public}`, readFileSync(sourceReference(rootDir, text.from).path));
   }
   for (const notice of config.extraNotices) {
     const source = sourceReference(rootDir, notice.from);
     outputs.set(`public/${substitute(notice.public, source.version)}`, readFileSync(source.path));
   }
-  for (const [path, bytes] of upstream.bytes) {
-    outputs.set(`public/third-party/upstream/${path}`, bytes);
-  }
+  for (const [path, bytes] of upstream.bytes) outputs.set(`public/third-party/upstream/${path}`, bytes);
   outputs.set(
     `public/third-party/libheif-js/${config.upstreamSources["libheif-js"].version}/NOTICE.txt`,
     noticeBytes(upstream, config),
@@ -472,7 +518,7 @@ export async function generate(rootDir, config, check = false) {
 
 export async function vendorAssets(rootDir, config) {
   const collected = collectBrowserPackages(rootDir, config);
-  const manifest = await buildManifest(rootDir, config);
+  const manifest = await buildManifest(rootDir, config, { verifyPublic: false });
   for (const vendor of config.vendored) {
     const items = collected.filter((item) => item.metadata.name === vendor.package);
     const versions = [...new Set(items.map((item) => item.metadata.version))];
@@ -489,9 +535,8 @@ export async function vendorAssets(rootDir, config) {
     const targetDirectory = join(rootDir, "public", substitute(vendor.publicDir, item.metadata.version));
     const target = join(targetDirectory, basename(vendor.file));
     atomicWrite(target, sourceBytes);
-    if (hash(readFileSync(target)) !== entry.sha256) {
-      throw new Error(`Copied asset hash mismatch: ${target}`);
-    }
+    if (hash(readFileSync(target)) !== entry.sha256) throw new Error(`Copied asset hash mismatch: ${target}`);
+    if (vendor.package === "libheif-js") verifyDecoderProvenance(readFileSync(target), config.buildProvenance);
     const parent = dirname(targetDirectory);
     for (const other of readdirSync(parent, { withFileTypes: true })) {
       if (other.isDirectory() && other.name !== basename(targetDirectory)) {
@@ -506,10 +551,10 @@ function packageKeys(packages, label) {
   if (!Array.isArray(packages)) throw new Error(`${label} must be an array`);
   const keys = new Set();
   for (const item of packages) {
-    if (
-      typeof item?.name !== "string" || !item.name.trim() ||
-      typeof item.version !== "string" || !item.version.trim()
-    ) throw new Error(`Invalid ${label} entry`);
+    if (typeof item?.name !== "string" || !item.name.trim() ||
+        typeof item.version !== "string" || !item.version.trim()) {
+      throw new Error(`Invalid ${label} entry`);
+    }
     keys.add(`${item.name}@${item.version}`);
   }
   return keys;
@@ -527,11 +572,9 @@ export function verifyBundle(manifest, bundled, config) {
   return {
     missing: [...bundledKeys].filter((key) => !manifestKeys.has(key)).sort(compare),
     unexpected: manifest.packages
-      .filter((item) => !bundledKeys.has(`${item.name}@${item.version}`) &&
-        !Object.hasOwn(exceptions, item.name))
+      .filter((item) => !bundledKeys.has(`${item.name}@${item.version}`) && !Object.hasOwn(exceptions, item.name))
       .map((item) => `${item.name}@${item.version}`)
-      .filter((key, index, all) => all.indexOf(key) === index)
-      .sort(compare),
+      .filter((key, index, all) => all.indexOf(key) === index).sort(compare),
   };
 }
 
@@ -549,6 +592,7 @@ async function main() {
     if (!existsSync(path)) {
       throw new Error("Missing .next/client-packages.json; run the production Next webpack build first.");
     }
+    await buildManifest(rootDir, config, { requirePublic: true });
     const manifest = readJson(join(rootDir, "src/generated/third-party-licenses.json"));
     const bundled = readJson(path);
     const result = verifyBundle(manifest, bundled, config);
@@ -556,11 +600,9 @@ async function main() {
       throw new Error([
         "Client bundle licence verification failed.",
         "Bundled packages missing from manifest:",
-        ...result.missing.map((key) => `  ${key}`),
-        ...(result.missing.length ? [] : ["  (none)"]),
+        ...(result.missing.length ? result.missing.map((key) => `  ${key}`) : ["  (none)"]),
         "Manifest packages absent from client bundle without a configured reason:",
-        ...result.unexpected.map((key) => `  ${key}`),
-        ...(result.unexpected.length ? [] : ["  (none)"]),
+        ...(result.unexpected.length ? result.unexpected.map((key) => `  ${key}`) : ["  (none)"]),
         "Adjust third-party/browser-packages.json roots/exclude/notInWebpackBundle, regenerate, and rebuild.",
       ].join("\n"));
     }
@@ -576,10 +618,7 @@ async function main() {
   console.log(mode === "--check" ? "Third-party outputs are current." : "Third-party outputs generated.");
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

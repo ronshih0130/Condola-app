@@ -1,10 +1,256 @@
-Copyright lines quoted verbatim from libheif-1.23.5.tar.gz (fd9036064c4432f0550d15072ddf34956a248279ee9aeaff0fba3fa0f77d8f1a), library sources only.
+Copyright-holder reference; complete extracted notice blocks follow.
+Notice extraction v3: verbatim blocks from libheif-1.23.5.tar.gz (fd9036064c4432f0550d15072ddf34956a248279ee9aeaff0fba3fa0f77d8f1a).
+Files scanned: 286; files with no notice block: 1.
+Conservative extraction: includes sources that may not be compiled into the shipped wasm, including encoder/plugin sources.
+See COPYING for the library's accompanying licence text.
 
-Copyright (C) 2024 Brad Hards
-  libheif/plugins/encoder_openjph.cc
-  libheif/plugins/encoder_openjph.h
+/*
+ * AVIF codec.
+ * Copyright (c) 2019 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
-Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>
+Source paths:
+  libheif/plugins/decoder_aom.cc
+  libheif/plugins/decoder_vvdec.cc
+
+/*
+ * AVIF codec.
+ * Copyright (c) 2020 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/plugins/decoder_dav1d.cc
+
+/*
+ * C++ interface to libheif
+ *
+ * MIT License
+ *
+ * Copyright (c) 2018 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+Source paths:
+  libheif/api/libheif/heif_cxx.h
+
+/*
+ * Dummy decoder plugin for the 'uncompressed' codec.
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/plugins/decoder_uncompressed.h
+
+/*
+ * HEIF AVC codec.
+ * Copyright (c) 2023 Brad Hards <bradh@frogmouth.net>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/codecs/avc_boxes.cc
+  libheif/codecs/avc_boxes.h
+
+/*
+ * HEIF AVC codec.
+ * Copyright (c) 2023 Brad Hards <bradh@frogmouth.net>
+ * Copyright (c) 2025 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/image-items/avc.cc
+  libheif/image-items/avc.h
+
+/*
+ * HEIF JPEG 2000 codec.
+ * Copyright (c) 2023 Brad Hards <bradh@frogmouth.net>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/codecs/jpeg2000_boxes.cc
+  libheif/codecs/jpeg2000_boxes.h
+  libheif/image-items/jpeg2000.cc
+  libheif/image-items/jpeg2000.h
+
+/*
+ * HEIF JPEG codec.
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/codecs/jpeg_boxes.cc
+  libheif/codecs/jpeg_boxes.h
+  libheif/image-items/jpeg.cc
+  libheif/image-items/jpeg.h
+
+/*
+ * HEIF VVC codec.
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/codecs/vvc_boxes.cc
+  libheif/codecs/vvc_boxes.h
+  libheif/image-items/vvc.cc
+  libheif/image-items/vvc.h
+
+/*
+ * HEIF codec.
+ * Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/api/libheif/heif_brands.cc
   libheif/api/libheif/heif_color.cc
   libheif/api/libheif/heif_image.cc
@@ -21,8 +267,6 @@ Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>
   libheif/codecs/avif_boxes.h
   libheif/codecs/hevc_boxes.cc
   libheif/codecs/hevc_boxes.h
-  libheif/color-conversion/colorconversion.cc
-  libheif/color-conversion/colorconversion.h
   libheif/context.cc
   libheif/context.h
   libheif/error.cc
@@ -33,8 +277,6 @@ Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>
   libheif/image-items/avif.h
   libheif/image-items/hevc.cc
   libheif/image-items/hevc.h
-  libheif/image/pixelimage.cc
-  libheif/image/pixelimage.h
   libheif/logging.h
   libheif/plugin_registry.cc
   libheif/plugin_registry.h
@@ -53,10 +295,76 @@ Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>
   libheif/plugins/encoder_uncompressed.h
   libheif/plugins/encoder_x265.cc
 
-Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>x
+/*
+ * HEIF codec.
+ * Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+Source paths:
+  libheif/color-conversion/colorconversion.cc
+  libheif/color-conversion/colorconversion.h
+  libheif/image/pixelimage.cc
+  libheif/image/pixelimage.h
+
+/*
+ * HEIF codec.
+ * Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>x
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/plugins/encoder_x265.h
 
-Copyright (c) 2017-2023 Dirk Farin <dirk.farin@gmail.com>
+/*
+ * HEIF codec.
+ * Copyright (c) 2017-2023 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/api/libheif/heif_brands.h
   libheif/api/libheif/heif_color.h
   libheif/api/libheif/heif_error.h
@@ -64,7 +372,27 @@ Copyright (c) 2017-2023 Dirk Farin <dirk.farin@gmail.com>
   libheif/api/libheif/heif_metadata.h
   libheif/api/libheif/heif_properties.h
 
-Copyright (c) 2017-2025 Dirk Farin <dirk.farin@gmail.com>
+/*
+ * HEIF codec.
+ * Copyright (c) 2017-2025 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/api/libheif/heif.cc
   libheif/api/libheif/heif.h
   libheif/api/libheif/heif_aux_images.cc
@@ -86,32 +414,97 @@ Copyright (c) 2017-2025 Dirk Farin <dirk.farin@gmail.com>
   libheif/api/libheif/heif_tiling.cc
   libheif/api/libheif/heif_tiling.h
 
-Copyright (c) 2017-2026 Dirk Farin <dirk.farin@gmail.com>
+/*
+ * HEIF codec.
+ * Copyright (c) 2017-2026 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/api/libheif/heif_export.h
 
-Copyright (c) 2018 Dirk Farin <dirk.farin@gmail.com>
-  libheif/api/libheif/heif_cxx.h
+/*
+ * HEIF codec.
+ * Copyright (c) 2018 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/security_limits.h
 
-Copyright (c) 2019 Dirk Farin <dirk.farin@gmail.com>
-  libheif/plugins/decoder_aom.cc
-  libheif/plugins/decoder_vvdec.cc
+/*
+ * HEIF codec.
+ * Copyright (c) 2020 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
-Copyright (c) 2019, Aous Naman
-  libheif/plugins/encoder_openjph.cc
-
-Copyright (c) 2019, Kakadu Software Pty Ltd, Australia
-  libheif/plugins/encoder_openjph.cc
-
-Copyright (c) 2019, The University of New South Wales, Australia
-  libheif/plugins/encoder_openjph.cc
-
-Copyright (c) 2020 Dirk Farin <dirk.farin@gmail.com>
+Source paths:
   libheif/nclx.cc
   libheif/nclx.h
-  libheif/plugins/decoder_dav1d.cc
 
-Copyright (c) 2022 Dirk Farin <dirk.farin@gmail.com>
+/*
+ * HEIF codec.
+ * Copyright (c) 2022 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/compression.h
   libheif/compression_zlib.cc
   libheif/init.cc
@@ -119,37 +512,29 @@ Copyright (c) 2022 Dirk Farin <dirk.farin@gmail.com>
   libheif/plugins/encoder_svt.cc
   libheif/plugins/encoder_svt.h
 
-Copyright (c) 2023 Brad Hards <bradh@frogmouth.net>
-  libheif/api/libheif/heif_regions.cc
-  libheif/api/libheif/heif_regions.h
-  libheif/codecs/avc_boxes.cc
-  libheif/codecs/avc_boxes.h
-  libheif/codecs/jpeg2000_boxes.cc
-  libheif/codecs/jpeg2000_boxes.h
-  libheif/image-items/avc.cc
-  libheif/image-items/avc.h
-  libheif/image-items/jpeg2000.cc
-  libheif/image-items/jpeg2000.h
-  libheif/image-items/mask_image.cc
-  libheif/image-items/mask_image.h
+/*
+ * HEIF codec.
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
-Copyright (c) 2023 Devon Sookhoo
-  libheif/plugins/decoder_openjpeg.cc
-  libheif/plugins/decoder_openjpeg.h
-  libheif/plugins/encoder_openjpeg.cc
-  libheif/plugins/encoder_openjpeg.h
-  libheif/plugins/encoder_openjph.cc
-  libheif/plugins/encoder_openjph.h
-
-Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+Source paths:
   libheif/api/libheif/heif_items.cc
   libheif/api/libheif/heif_items.h
-  libheif/api/libheif/heif_regions.cc
-  libheif/api/libheif/heif_regions.h
-  libheif/api/libheif/heif_text.cc
-  libheif/api/libheif/heif_text.h
-  libheif/codecs/jpeg_boxes.cc
-  libheif/codecs/jpeg_boxes.h
   libheif/codecs/uncompressed/unc_boxes.cc
   libheif/codecs/uncompressed/unc_boxes.h
   libheif/codecs/uncompressed/unc_codec.cc
@@ -167,8 +552,6 @@ Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
   libheif/codecs/uncompressed/unc_decoder_row_interleave.cc
   libheif/codecs/uncompressed/unc_decoder_row_interleave.h
   libheif/codecs/uncompressed/unc_types.h
-  libheif/codecs/vvc_boxes.cc
-  libheif/codecs/vvc_boxes.h
   libheif/color-conversion/alpha.cc
   libheif/color-conversion/alpha.h
   libheif/color-conversion/chroma_sampling.cc
@@ -187,30 +570,15 @@ Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
   libheif/color-conversion/yuv2rgb.h
   libheif/common_utils.cc
   libheif/common_utils.h
-  libheif/image-items/jpeg.cc
-  libheif/image-items/jpeg.h
-  libheif/image-items/mask_image.cc
-  libheif/image-items/mask_image.h
   libheif/image-items/unc_image.cc
   libheif/image-items/unc_image.h
-  libheif/image-items/vvc.cc
-  libheif/image-items/vvc.h
   libheif/plugins/decoder_ffmpeg.cc
   libheif/plugins/decoder_ffmpeg.h
-  libheif/plugins/decoder_jpeg.cc
   libheif/plugins/decoder_jpeg.h
-  libheif/plugins/decoder_openjpeg.cc
-  libheif/plugins/decoder_openjpeg.h
-  libheif/plugins/decoder_uncompressed.cc
-  libheif/plugins/decoder_uncompressed.h
   libheif/plugins/encoder_jpeg.cc
   libheif/plugins/encoder_jpeg.h
   libheif/plugins/encoder_kvazaar.cc
   libheif/plugins/encoder_kvazaar.h
-  libheif/plugins/encoder_openjpeg.cc
-  libheif/plugins/encoder_openjpeg.h
-  libheif/plugins/encoder_openjph.cc
-  libheif/plugins/encoder_openjph.h
   libheif/plugins/encoder_uvg266.cc
   libheif/plugins/encoder_uvg266.h
   libheif/plugins/encoder_vvenc.cc
@@ -223,15 +591,128 @@ Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
   libheif/plugins_windows.h
   libheif/region.cc
   libheif/region.h
+
+/*
+ * HEIF codec.
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ * Copyright (c) 2023 Brad Hards <bradh@frogmouth.net>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/api/libheif/heif_regions.cc
+  libheif/api/libheif/heif_regions.h
+
+/*
+ * HEIF codec.
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ * Copyright (c) 2025 Brad Hards <bradh@frogmouth.net>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/api/libheif/heif_text.cc
+  libheif/api/libheif/heif_text.h
   libheif/text.cc
   libheif/text.h
 
-Copyright (c) 2024 Brad Hards <bradh@frogmouth.net>
+/*
+ * HEIF codec.
+ * Copyright (c) 2024 Brad Hards <bradh@frogmouth.net>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/compression_brotli.cc
-  libheif/mini.cc
   libheif/mini.h
 
-Copyright (c) 2024 Dirk Farin <dirk.farin@gmail.com>
+/*
+ * HEIF codec.
+ * Copyright (c) 2024 Brad Hards <bradh@frogmouth.net>
+ * Copyright (c) 2026 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/mini.cc
+
+/*
+ * HEIF codec.
+ * Copyright (c) 2024 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/api/libheif/heif_experimental.cc
   libheif/api/libheif/heif_experimental.h
   libheif/api/libheif/heif_sequences.cc
@@ -271,34 +752,61 @@ Copyright (c) 2024 Dirk Farin <dirk.farin@gmail.com>
   libheif/image-items/grid.h
   libheif/image-items/iden.cc
   libheif/image-items/iden.h
-  libheif/image-items/image_item.cc
-  libheif/image-items/image_item.h
   libheif/image-items/overlay.cc
   libheif/image-items/overlay.h
   libheif/image-items/tiled.cc
   libheif/image-items/tiled.h
   libheif/logging.cc
   libheif/mdat_data.h
-  libheif/plugins/decoder_openh264.cc
   libheif/plugins/decoder_openh264.h
   libheif/security_limits.cc
-  libheif/sequences/chunk.cc
-  libheif/sequences/chunk.h
   libheif/sequences/seq_boxes.cc
   libheif/sequences/seq_boxes.h
-  libheif/sequences/track.cc
-  libheif/sequences/track.h
 
-Copyright (c) 2024-2025 Dirk Farin <dirk.farin@gmail.com>
+/*
+ * HEIF codec.
+ * Copyright (c) 2024-2025 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/api/libheif/heif_uncompressed.h
 
-Copyright (c) 2025 Brad Hards <bradh@frogmouth.net>
-  libheif/api/libheif/heif_text.cc
-  libheif/api/libheif/heif_text.h
-  libheif/text.cc
-  libheif/text.h
+/*
+ * HEIF codec.
+ * Copyright (c) 2025 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
-Copyright (c) 2025 Dirk Farin <dirk.farin@gmail.com>
+Source paths:
   libheif/api/libheif/heif_sequences.h
   libheif/api/libheif/heif_tai_timestamps.cc
   libheif/api/libheif/heif_tai_timestamps.h
@@ -307,28 +815,59 @@ Copyright (c) 2025 Dirk Farin <dirk.farin@gmail.com>
   libheif/codecs/avc_enc.cc
   libheif/codecs/avc_enc.h
   libheif/codecs/uncompressed/unc_enc.h
-  libheif/image-items/avc.cc
-  libheif/image-items/avc.h
   libheif/plugins/decoder_webcodecs.cc
   libheif/plugins/decoder_webcodecs.h
   libheif/plugins/encoder_x264.cc
   libheif/plugins/encoder_x264.h
-  libheif/sequences/track_metadata.cc
-  libheif/sequences/track_metadata.h
-  libheif/sequences/track_visual.cc
-  libheif/sequences/track_visual.h
 
-Copyright (c) 2026 Brad Hards <bradh@frogmouth.net>
+/*
+ * HEIF codec.
+ * Copyright (c) 2026 Brad Hards <bradh@frogmouth.net>
+ * Copyright (c) 2026 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/api/libheif/heif_omaf.cc
   libheif/api/libheif/heif_omaf.h
-  libheif/omaf_boxes.cc
-  libheif/omaf_boxes.h
 
-Copyright (c) 2026 Dirk Farin <dirk.farin@gmail.com>
+/*
+ * HEIF codec.
+ * Copyright (c) 2026 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
   libheif/api/libheif/heif_components.cc
   libheif/api/libheif/heif_components.h
-  libheif/api/libheif/heif_omaf.cc
-  libheif/api/libheif/heif_omaf.h
   libheif/codecs/uncompressed/unc_decoder_block_component_interleave.cc
   libheif/codecs/uncompressed/unc_decoder_block_component_interleave.h
   libheif/codecs/uncompressed/unc_decoder_block_pixel_interleave.cc
@@ -350,7 +889,293 @@ Copyright (c) 2026 Dirk Farin <dirk.farin@gmail.com>
   libheif/compression.cc
   libheif/id_creator.cc
   libheif/id_creator.h
+  libheif/plugins/encoder_input_check.h
+
+/*
+ * HEIF codec.
+ * Copyright (c) 2026 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+Source paths:
   libheif/image/image_description.cc
   libheif/image/image_description.h
-  libheif/mini.cc
-  libheif/plugins/encoder_input_check.h
+
+/*
+ * HEIF image base codec.
+ * Copyright (c) 2024 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/image-items/image_item.cc
+  libheif/image-items/image_item.h
+  libheif/sequences/chunk.cc
+  libheif/sequences/chunk.h
+  libheif/sequences/track.cc
+  libheif/sequences/track.h
+
+/*
+ * HEIF image base codec.
+ * Copyright (c) 2025 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/sequences/track_metadata.cc
+  libheif/sequences/track_metadata.h
+  libheif/sequences/track_visual.cc
+  libheif/sequences/track_visual.h
+
+/*
+ * HEIF mask image codec.
+ *
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ * Copyright (c) 2023 Brad Hards <bradh@frogmouth.net>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/image-items/mask_image.cc
+  libheif/image-items/mask_image.h
+
+/*
+ * JPEG codec.
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/plugins/decoder_jpeg.cc
+  libheif/plugins/decoder_uncompressed.cc
+
+/*
+ * OpenJPEG codec.
+ * Copyright (c) 2023 Devon Sookhoo
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/plugins/decoder_openjpeg.cc
+  libheif/plugins/decoder_openjpeg.h
+  libheif/plugins/encoder_openjpeg.cc
+  libheif/plugins/encoder_openjpeg.h
+
+/*
+ * OpenJPH codec.
+ * Copyright (c) 2023 Devon Sookhoo
+ * Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>
+ * Copyright (C) 2024 Brad Hards
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/plugins/encoder_openjph.cc
+  libheif/plugins/encoder_openjph.h
+
+/*
+ * libheif OMAF (ISO/IEC 23090-2)
+ *
+ * Copyright (c) 2026 Brad Hards <bradh@frogmouth.net>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/omaf_boxes.h
+
+/*
+ * libheif OMAF (ISO/IEC 23090-2)
+ *
+ * Copyright (c) 2026 Brad Hards <bradh@frogmouth.net>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+Source paths:
+  libheif/omaf_boxes.cc
+
+/*
+ * openh264 codec.
+ * Copyright (c) 2024 Dirk Farin <dirk.farin@gmail.com>
+ *
+ * This file is part of libheif.
+ *
+ * libheif is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * libheif is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with libheif.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+Source paths:
+  libheif/plugins/decoder_openh264.cc
+
+// Portions of this code adapted from OpenJPH's ojph_compress.cpp
+// which is under the following license:
+//***************************************************************************/
+// This software is released under the 2-Clause BSD license, included
+// below.
+//
+// Copyright (c) 2019, Aous Naman 
+// Copyright (c) 2019, Kakadu Software Pty Ltd, Australia
+// Copyright (c) 2019, The University of New South Wales, Australia
+// 
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+// 
+// 1. Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+// 
+// 2. Redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution.
+// 
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+// TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+// PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+// TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+// LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+// NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//***************************************************************************/
+
+Source paths:
+  libheif/plugins/encoder_openjph.cc

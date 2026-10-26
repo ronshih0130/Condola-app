@@ -19,10 +19,12 @@ export default async function LicensesPage() {
   const embedded = entries.filter((entry) => entry.delivery === "inside:libheif-js");
   if (
     !asset?.assetPath || !asset.sha256 || !asset.licenseUrl ||
-    !asset.gplUrl || !asset.noticeUrl || !asset.buildInputsUrl
+    !asset.gplUrl || !asset.noticeUrl || !asset.buildInputsUrl ||
+    !asset.buildProvenance
   ) {
     throw new Error("Incomplete third-party asset metadata");
   }
+  const provenance = asset.buildProvenance;
   const offerParts = t("i_lic_offer").split("{email}");
   if (offerParts.length !== 2) throw new Error("Invalid licence offer translation");
 
@@ -38,7 +40,13 @@ export default async function LicensesPage() {
         <p>{t("i_lic_upstream")} <code>libheif-bundle.mjs</code> — <code>libheif-js {asset.version}</code>.</p>
         <p>{t("i_lic_loading")}</p>
         <p>{t("i_lic_asset")}: <a href={asset.assetPath}>{asset.assetPath}</a></p>
-        <p>{t("i_lic_hash")}: <code style={{ overflowWrap: "anywhere" }}>{asset.sha256}</code></p>
+        <p>{t("i_lic_bundle_hash")}: <code style={{ overflowWrap: "anywhere" }}>{provenance.shippedBundleSha256}</code></p>
+        <p>
+          {t("i_lic_prebuilt")}:{" "}
+          <a href={provenance.prebuiltUrl} style={{ overflowWrap: "anywhere" }}>{provenance.prebuiltUrl}</a>
+        </p>
+        <p>{t("i_lic_hash")}: <code style={{ overflowWrap: "anywhere" }}>{provenance.prebuiltSha256}</code></p>
+        <p>{t("i_lic_wasm_hash")}: <code style={{ overflowWrap: "anywhere" }}>{provenance.embeddedWasmSha256}</code></p>
         <p>{t("i_lic_replace")}</p>
         <p>
           {offerParts[0]}
@@ -59,6 +67,7 @@ export default async function LicensesPage() {
             </ul>
           </li>
           <li>{t("i_lic_step_build")}</li>
+          <li>{t("i_lic_step_install")}</li>
           <li>{t("i_lic_step_interface")}</li>
           <li>
             {t("i_lic_step_place")}{" "}
@@ -66,6 +75,7 @@ export default async function LicensesPage() {
             <p>{t("i_lic_runtime")}</p>
           </li>
         </ol>
+        <p>{t("i_lic_tested")}</p>
         <ul>
           <li><a href={asset.licenseUrl}>{t("i_lic_lgpl")}</a></li>
           <li><a href={asset.gplUrl}>{t("i_lic_gpl")}</a></li>
@@ -107,13 +117,14 @@ export default async function LicensesPage() {
                     <a href={source.url}>{source.label}</a>
                     <p>
                       {source.sha256 ? t("i_lic_hash") : t("i_lic_integrity")}:{" "}
-                      <code style={{ overflowWrap: "anywhere" }}>
-                        {source.sha256 ?? source.integrity}
-                      </code>
+                      <code style={{ overflowWrap: "anywhere" }}>{source.sha256 ?? source.integrity}</code>
                     </p>
                   </li>
                 ))}
               </ul>
+            ) : null}
+            {entry.sourceNoticesUrl ? (
+              <p><a href={entry.sourceNoticesUrl}>{t("i_lic_source_notices")}</a></p>
             ) : null}
             {entry.name === "libde265" ? (
               <p>
