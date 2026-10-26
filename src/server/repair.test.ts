@@ -193,7 +193,11 @@ test("HEIC decoding stays behind a browser event and is excluded from server bun
   }
   const browser = readFileSync(new URL("src/lib/heic-browser.ts", root), "utf8");
   assert.match(browser, /async function heicFileToJpeg\(file: File\): Promise<File>/);
-  assert.match(browser, /await import\("heic-convert\/browser"\)/);
+  assert.match(browser, /await import\(\s*\/\*\s*webpackIgnore:\s*true\s*\*\/\s*LIBHEIF_ASSET\.path\s*\)/);
+  assert.match(browser, /await import\("heic-decode\/lib\.js"\)/);
+  assert.match(browser, /await import\("heic-convert\/formats-browser\.js"\)/);
+  assert.match(browser, /await import\("heic-convert\/lib\.js"\)/);
+  assert.doesNotMatch(browser, /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)(?:\/\*[\s\S]*?\*\/\s*)*["'](?:heic-convert\/browser|heic-decode|libheif-js)["']/);
   assert.match(browser, /sniffPhotoMime/);
   assert.match(browser, /PHOTO_MAX_BYTES/);
   const client = readFileSync(new URL("src/components/ticket-photos.tsx", root), "utf8");

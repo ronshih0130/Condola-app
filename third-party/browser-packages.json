@@ -1,0 +1,96 @@
+{
+  "roots": [
+    {
+      "name": "react",
+      "walk": true,
+      "exclude": [],
+      "why": "Browser UI runtime."
+    },
+    {
+      "name": "react-dom",
+      "walk": true,
+      "exclude": [],
+      "why": "Browser renderer and scheduler."
+    },
+    {
+      "name": "next",
+      "walk": false,
+      "exclude": [],
+      "why": "The Next client runtime is self-contained in next/dist; package dependencies are build or server dependencies."
+    },
+    {
+      "name": "tailwindcss",
+      "walk": false,
+      "exclude": [],
+      "why": "Generated Tailwind CSS (preflight and utilities) is shipped in the global stylesheet; its npm dependencies are build-time only."
+    },
+    {
+      "name": "@swc/helpers",
+      "walk": true,
+      "exclude": [],
+      "why": "Explicit dependency of the Next client runtime."
+    },
+    {
+      "name": "pdf-lib",
+      "walk": true,
+      "exclude": [],
+      "why": "Dynamically loaded browser PDF generation."
+    },
+    {
+      "name": "@pdf-lib/fontkit",
+      "walk": true,
+      "exclude": [],
+      "why": "Browser PDF font embedding."
+    },
+    {
+      "name": "heic-convert",
+      "walk": true,
+      "exclude": ["jpeg-js", "pngjs"],
+      "why": "Browser conversion uses canvas encoders; jpeg-js and pngjs belong exclusively to formats-node.js."
+    }
+  ],
+  "embedded": [
+    {
+      "name": "libheif",
+      "parent": "libheif-js",
+      "license": "LGPL-3.0",
+      "probe": "libheif",
+      "homepage": "https://github.com/strukturag/libheif",
+      "sourceUrlTemplate": "https://github.com/strukturag/libheif/releases/tag/v{version}"
+    },
+    {
+      "name": "libde265",
+      "parent": "libheif-js",
+      "license": "LGPL-3.0",
+      "probe": "libde265",
+      "homepage": "https://github.com/strukturag/libde265",
+      "sourceUrlTemplate": "https://github.com/strukturag/libde265/releases/tag/v{version}"
+    }
+  ],
+  "vendored": [
+    {
+      "package": "libheif-js",
+      "file": "libheif-wasm/libheif-bundle.mjs",
+      "publicDir": "vendor/libheif-js/{version}"
+    }
+  ],
+  "copyrightHolders": {
+    "@pdf-lib/fontkit": "Devon Govett; Andrew Dillon"
+  },
+  "copyleftTexts": {
+    "LGPL-3.0": {
+      "from": "libheif-js/LICENSE",
+      "public": "third-party/LGPL-3.0.txt"
+    },
+    "GPL-3.0": {
+      "public": "third-party/GPL-3.0.txt",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    }
+  },
+  "extraNotices": [
+    {
+      "from": "libheif-js/libheif-wasm/LICENSE",
+      "public": "third-party/libheif-js/{version}/LICENSE"
+    }
+  ]
+}

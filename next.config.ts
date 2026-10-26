@@ -35,6 +35,12 @@ const nextConfig: NextConfig = {
         "heic-decode": false,
         "libheif-js": false,
       };
+    } else {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        "libheif-js": false,
+        "libheif-js/wasm-bundle": false,
+      };
     }
     config.module.rules.push({
       test: /\.md$/,

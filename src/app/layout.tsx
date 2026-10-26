@@ -66,6 +66,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <nav className="site-legal" aria-label={t("i_legal_nav")}>
               <Link href="/terms">{t("i_legal_terms")}</Link>
               <Link href="/privacy">{t("i_legal_privacy")}</Link>
+              <Link href="/licenses">{t("i_legal_licenses")}</Link>
               <Link href="/refund">{t("i_legal_refund")}</Link>
             </nav>
             <p data-testid="app-version">{process.env.NEXT_PUBLIC_COMMIT || "unknown"}</p>

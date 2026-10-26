@@ -1,4 +1,32 @@
+import { LIBHEIF_ASSET } from "@/generated/libheif-asset";
 import { PHOTO_HEADER_BYTES, PHOTO_MAX_BYTES, sniffPhotoMime } from "@/server/repair-rules";
+
+type BrowserModule = { ready: Promise<unknown> };
+type BrowserFactory = (options?: Record<string, unknown>) => BrowserModule;
+
+let instancePromise: Promise<BrowserModule> | undefined;
+
+async function loadInstance(): Promise<BrowserModule> {
+  const factory = (await import(/* webpackIgnore: true */ LIBHEIF_ASSET.path) as {
+    default: BrowserFactory;
+  }).default;
+  if (typeof factory !== "function") {
+    throw new Error("Invalid HEIC browser module");
+  }
+  const libheif = factory();
+  await libheif.ready;
+  return libheif;
+}
+
+function browserInstance(): Promise<BrowserModule> {
+  if (!instancePromise) {
+    instancePromise = loadInstance().catch((error: unknown) => {
+      instancePromise = undefined;
+      throw error;
+    });
+  }
+  return instancePromise;
+}
 
 /** Called only by the browser upload handler. */
 export async function heicFileToJpeg(file: File): Promise<File> {
@@ -9,8 +37,11 @@ export async function heicFileToJpeg(file: File): Promise<File> {
   if (typeof canvas.toBlob !== "function" || !canvas.getContext("2d")) {
     throw new Error("HEIC conversion requires canvas support");
   }
-  const mod = await import("heic-convert/browser");
-  const output = await mod.default({
+  const libheif = await browserInstance();
+  const decodeLib = (await import("heic-decode/lib.js")).default(libheif);
+  const formats = (await import("heic-convert/formats-browser.js")).default;
+  const convertLib = (await import("heic-convert/lib.js")).default(decodeLib.one, formats);
+  const output = await convertLib.one({
     buffer: new Uint8Array(await file.arrayBuffer()),
     format: "JPEG",
     quality: 0.9,
