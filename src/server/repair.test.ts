@@ -18,7 +18,9 @@ import {
   ticketPhotoPaths,
   parseOptionalDate,
   parseOptionalMoney,
+  sniffHeic,
   sniffPhotoMime,
+  tenantCancelAllowed,
   ticketPhotoPath,
 } from "./repair-rules";
 import { confirmTicketPhoto, discardUploadAllowed, issueUploadGrant, uploadGrantMatches } from "./ticket-photos";
@@ -92,6 +94,17 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   assert.doesNotMatch(client, /FormData/);
   assert.doesNotMatch(client, /\/api\/tickets\/photos"/);
   assert.match(client, /sniffPhotoMime/);
+  assert.match(client, /sniffHeic/);
+  assert.match(client, /body: file/);
+  assert.doesNotMatch(client, /heicToJpeg/);
+  assert.match(server, /ensureJpegObject/);
+  assert.equal(tenantCancelAllowed("open"), true);
+  assert.equal(tenantCancelAllowed("assigned"), false);
+  assert.equal(tenantCancelAllowed("triaged"), false);
+  const heic = new Uint8Array(12);
+  heic.set([0, 0, 0, 12, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]);
+  assert.equal(sniffHeic(heic), true);
+  assert.equal(sniffHeic(Uint8Array.of(0xff, 0xd8, 0xff)), false);
   assert.match(server, /bytes=0-/);
   assert.match(server, /AbortSignal\.timeout/);
   assert.match(server, /object\/info/);

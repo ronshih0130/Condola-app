@@ -29,6 +29,21 @@ export function expenseCountsOnStatement(status: string, billTo: string) {
   return billTo === "owner" && (STATEMENT_EXPENSE_STATUSES as readonly string[]).includes(status);
 }
 
+/**
+ * A repair cost reaches the owner settlement only after the ticket is closed.
+ * Expenses with no ticket are unchanged.
+ */
+export function repairCostOnStatement(input: {
+  status: string;
+  billTo: string;
+  ticketId: string | null;
+  ticketStatus: string | null;
+}) {
+  if (!expenseCountsOnStatement(input.status, input.billTo)) return false;
+  if (!input.ticketId) return true;
+  return input.ticketStatus === "closed";
+}
+
 /** A month is closed when its YYYY-MM is on or before the latest month_closes row. */
 export function monthIsClosed(isoDate: string, closedThrough: string | null) {
   if (!closedThrough) return false;
@@ -130,6 +145,7 @@ export type ExpenseListRow = {
   receipt_name: string | null;
   ticket_id: string | null;
   ticket_number: string | null;
+  ticket_status: string | null;
   included: boolean;
 };
 
@@ -146,8 +162,13 @@ function day(value: string) {
   return value.slice(0, 10);
 }
 
-function asIncluded(status: string, billTo: string) {
-  return expenseCountsOnStatement(status, billTo);
+function asIncluded(row: { status: string; bill_to: string; ticket_id: string | null; ticket_status: string | null }) {
+  return repairCostOnStatement({
+    status: row.status,
+    billTo: row.bill_to,
+    ticketId: row.ticket_id,
+    ticketStatus: row.ticket_status,
+  });
 }
 
 async function setReason(client: Client, reason: string) {
@@ -271,7 +292,7 @@ const LIST_SQL = `SELECT e.id::text, e.property_id::text, p.name AS property_nam
             e.category, coalesce(e.description, '') AS description,
             e.currency, e.amount_minor::text, e.incurred_on::text, e.status::text, e.bill_to::text,
             c.display_name AS vendor_name, f.file_name AS receipt_name,
-            e.ticket_id::text, t.ticket_number::text AS ticket_number
+            e.ticket_id::text, t.ticket_number::text AS ticket_number, t.status::text AS ticket_status
        FROM expenses e
        JOIN properties p ON p.id = e.property_id
        LEFT JOIN units u ON u.id = e.unit_id
@@ -282,7 +303,16 @@ const LIST_SQL = `SELECT e.id::text, e.property_id::text, p.name AS property_nam
 
 function mapRow(row: Omit<ExpenseListRow, "included" | "incurred_on"> & { incurred_on: string }): ExpenseListRow {
   const incurred_on = day(row.incurred_on);
-  return { ...row, incurred_on, included: asIncluded(row.status, row.bill_to) };
+  return {
+    ...row,
+    incurred_on,
+    included: asIncluded({
+      status: row.status,
+      bill_to: row.bill_to,
+      ticket_id: row.ticket_id,
+      ticket_status: row.ticket_status,
+    }),
+  };
 }
 
 export async function expenseFormOptions(session: Session) {
@@ -556,6 +586,69 @@ async function releaseRepairLink(client: Client, orgId: string, expenseId: strin
     expenseId,
     next?.id ?? null,
   ]);
+}
+
+/**
+ * Posted owner repair from a confirmed vendor cost.
+ * Same shape as a staff expense: bill_to owner, status posted, ledger entry.
+ * A closed month moves the date to the first open day, matching other repairs.
+ */
+export async function insertPostedRepairExpense(
+  client: Client,
+  session: Session,
+  input: {
+    propertyId: string;
+    unitId: string | null;
+    ticketId: string;
+    vendorName: string;
+    description: string;
+    currency: string;
+    amountCents: number;
+    incurredOn: string;
+  },
+) {
+  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0 || input.amountCents > MAX_EXPENSE_CENTS) {
+    throw new FlowError("errors.expenseAmount");
+  }
+  const closed = await closedThrough(client, session.orgId);
+  const incurred = monthIsClosed(input.incurredOn, closed) ? await firstOpenDay(client, session.orgId) : input.incurredOn;
+  if (monthIsClosed(incurred, closed)) throw new FlowError("errors.monthClosed");
+  await setReason(client, "repair_vendor_confirm");
+  const vendorId = await vendorIdFor(client, session.orgId, input.vendorName);
+  const description = input.description.trim().slice(0, 2000);
+  const expense = await one<{ id: string }>(
+    client,
+    `INSERT INTO expenses (
+       org_id, property_id, unit_id, ticket_id, vendor_contact_id,
+       category, description, currency, amount_minor, incurred_on,
+       paid_by, bill_to, status, approved_by, approved_at, created_by
+     ) VALUES (
+       $1,$2,$3,$4,$5,
+       'repair', NULLIF($6, ''), $7, $8, $9::date,
+       'manager_firm', 'owner', 'posted', $10, now(), $10
+     ) RETURNING id::text`,
+    [
+      session.orgId,
+      input.propertyId,
+      input.unitId,
+      input.ticketId,
+      vendorId,
+      description,
+      input.currency.trim(),
+      input.amountCents,
+      incurred,
+      session.userId,
+    ],
+  );
+  await postLedger(client, session, {
+    expenseId: expense.id,
+    propertyId: input.propertyId,
+    currency: input.currency.trim(),
+    incurred,
+    memo: description || "repair",
+    amount: input.amountCents,
+  });
+  return { expenseId: expense.id, incurred };
 }
 
 /**

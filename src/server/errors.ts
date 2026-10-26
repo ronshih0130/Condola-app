@@ -85,7 +85,7 @@ export function mapDbError(error: unknown): Error {
   else if (/utility_bills_meter_id_period/i.test(message) || /meter_id, period_start/i.test(message)) key = "errors.billExists";
   else if (/invalid input syntax for type numeric/i.test(message)) key = "errors.amount";
   else if (/ticket photo limit/i.test(message)) key = "errors.photoLimit";
-  else if (/ticket photo path|files_ticket_photo_path/i.test(message)) key = "errors.forbidden";
+  else if (/ticket photo path|files_ticket_photo_path|vendor job photo|repair_vendor_jobs_one_active/i.test(message)) key = "errors.forbidden";
   else if (/files_ticket_photo_cap/i.test(message)) key = "errors.photoSize";
   else if (/maintenance_tickets_schedule_order/i.test(message)) key = "errors.date";
   else if (/rented as whole_unit/i.test(message)) key = "errors.wholeUnit";

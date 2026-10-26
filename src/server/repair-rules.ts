@@ -188,6 +188,28 @@ export function cleanVendorName(raw: string) {
   return value;
 }
 
+/** Vendor master category. Required when adding a vendor. */
+export function cleanVendorTrade(raw: string) {
+  const value = raw.trim().replace(/\s+/g, " ");
+  if (!value || [...value].length > 40) throw new FlowError("errors.required");
+  return value;
+}
+
+/** A tenant may cancel only while the ticket is still 新進 (open). */
+export function tenantCancelAllowed(status: string) {
+  return status === "open";
+}
+
+const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "heif", "mif1", "msf1", "heim", "heis"]);
+
+/** ISO-BMFF ftyp brand. The browser uploads these bytes unchanged. */
+export function sniffHeic(bytes: Uint8Array) {
+  if (bytes.length < 12) return false;
+  if (bytes[4] !== 0x66 || bytes[5] !== 0x74 || bytes[6] !== 0x79 || bytes[7] !== 0x70) return false;
+  const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]).toLowerCase();
+  return HEIC_BRANDS.has(brand);
+}
+
 export type ExpenseLink = "skip" | "keep" | "create";
 
 /**

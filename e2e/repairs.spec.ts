@@ -6,7 +6,7 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
   await signIn(page, ACCOUNTS.tenant2);
   await page.goto("/t/repair");
   await expect(page.getByRole("heading", { name: "報修" })).toBeVisible();
-  await expect(page.getByText("只顯示您這份租約的報修。")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "我的報修" })).toBeVisible();
   await page.getByTestId("repair-title").fill("廚房漏水測試");
   await page.getByTestId("submit-repair").click();
   await expect(page.locator(".alert.ok")).toContainText("已送出");
@@ -43,7 +43,7 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
 
   await signIn(page, ACCOUNTS.admin);
   await page.goto("/m/tickets");
-  await expect(page.getByRole("heading", { name: "修繕紀錄" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "報修" })).toBeVisible();
   await page.getByRole("link", { name: /廚房漏水測試/ }).click();
   await page.getByTestId("repair-vendor").fill("老張水電");
   await page.getByTestId("repair-estimate").fill("1500");

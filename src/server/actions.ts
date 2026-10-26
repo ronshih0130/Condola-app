@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { appCookieOptions } from "./public-origin";
 import { redirect } from "next/navigation";
 import {
@@ -33,7 +33,8 @@ import { normalizePhone } from "./lease-rules";
 import { typedStreet } from "@/property-address";
 import { loadOrgCountry } from "./org-country";
 import { createLeaseFromForm } from "./lease-form";
-import { addTicketComment, saveRepairRecord } from "./repairs";
+import { addTicketComment, cancelTenantRepair, saveRepairRecord } from "./repairs";
+import { addVendor, confirmVendorCost, dispatchVendor, revokeVendorJob, submitVendorReport } from "./vendor-repair";
 import { taipeiToday } from "./money";
 import { getSession, sessionTokenHash } from "./session";
 import { assertTeamInvitesEnabled } from "./team-invites";
@@ -415,12 +416,105 @@ export async function actionSaveRepair(formData: FormData) {
   }
 }
 
+export async function actionCancelRepair(formData: FormData) {
+  const ticketId = text(formData.get("ticketId"));
+  const back = `/t/repair?id=${ticketId}`;
+  try {
+    const session = await getSession();
+    await cancelTenantRepair(session, ticketId);
+    redirect(`${back}&cancelled=1`);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
 export async function actionTicketComment(formData: FormData) {
   const ticketId = text(formData.get("ticketId"));
   const back = text(formData.get("returnTo")) === "tenant" ? `/t/repair?id=${ticketId}` : `/m/tickets/${ticketId}`;
   try {
     const session = await getSession();
     await addTicketComment(session, ticketId, text(formData.get("body")), formData.get("internal") === "on");
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+async function requestOrigin() {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host") || "";
+  const proto = h.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+  return host ? `${proto}://${host}` : "";
+}
+
+export async function actionAddVendor(formData: FormData) {
+  const ticketId = text(formData.get("ticketId"));
+  const back = `/m/tickets/${ticketId}`;
+  try {
+    const session = await getSession();
+    const vendorId = await addVendor(session, ticketId, {
+      name: text(formData.get("vendorName")),
+      phone: text(formData.get("vendorPhone")),
+      trade: text(formData.get("vendorTrade")),
+    });
+    redirect(`${back}?vendor=${vendorId}`);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionDispatchVendor(formData: FormData) {
+  const ticketId = text(formData.get("ticketId"));
+  const back = `/m/tickets/${ticketId}`;
+  try {
+    const session = await getSession();
+    await dispatchVendor(
+      session,
+      ticketId,
+      {
+        vendorId: text(formData.get("vendorId")),
+        vendorName: text(formData.get("vendorName")),
+        vendorPhone: text(formData.get("vendorPhone")),
+        vendorTrade: text(formData.get("vendorTrade")),
+        contactWindow: text(formData.get("contactWindow")),
+      },
+      await requestOrigin(),
+    );
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionRevokeVendor(formData: FormData) {
+  const ticketId = text(formData.get("ticketId"));
+  const back = `/m/tickets/${ticketId}`;
+  try {
+    const session = await getSession();
+    await revokeVendorJob(session, ticketId, text(formData.get("jobId")));
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionConfirmVendor(formData: FormData) {
+  const ticketId = text(formData.get("ticketId"));
+  const back = `/m/tickets/${ticketId}`;
+  try {
+    const session = await getSession();
+    await confirmVendorCost(session, ticketId, text(formData.get("jobId")));
+    redirect(back);
+  } catch (error) {
+    bounce(back, error);
+  }
+}
+
+export async function actionVendorReport(formData: FormData) {
+  const token = text(formData.get("token")).trim();
+  const back = `/v/${encodeURIComponent(token)}`;
+  try {
+    await submitVendorReport(token, { done: formData.get("done") === "on", cost: text(formData.get("cost")) });
     redirect(back);
   } catch (error) {
     bounce(back, error);

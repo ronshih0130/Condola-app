@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
-import { maybe, one, tx } from "./db";
+import { maybe, one, svc, tx } from "./db";
 import { FlowError } from "./errors";
 import { taipeiToday } from "./money";
 import { can, assertPerm } from "./perms";
@@ -22,6 +22,7 @@ import {
   parseOptionalDate,
   parseOptionalMoney,
   photoFileId,
+  tenantCancelAllowed,
 } from "./repair-rules";
 import type { Session } from "./types";
 
@@ -415,6 +416,37 @@ export async function attachRepairPhoto(
 
 export function newPhotoFileId() {
   return randomUUID();
+}
+
+/**
+ * A tenant cancels only while the ticket is still 新進.
+ * Any later status tells them to contact the management company.
+ */
+export async function cancelTenantRepair(session: Session, ticketId: string) {
+  if (session.kind !== "tenant") throw new FlowError("errors.forbidden");
+  if (!isUuid(ticketId)) throw new FlowError("errors.notFound");
+  const visible = await tx(session.userId, (client) =>
+    maybe<{ status: string }>(
+      client,
+      `SELECT status::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`,
+      [ticketId, session.orgId],
+    ),
+  );
+  if (!visible) throw new FlowError("errors.notFound");
+  if (!tenantCancelAllowed(visible.status)) throw new FlowError("errors.repairCancelLocked");
+  await svc(session.userId, async (client) => {
+    const updated = await client.query(
+      `UPDATE maintenance_tickets SET status = 'cancelled', updated_at = now()
+        WHERE id = $1 AND org_id = $2 AND status = 'open'`,
+      [ticketId, session.orgId],
+    );
+    if (updated.rowCount !== 1) throw new FlowError("errors.repairCancelLocked");
+    await client.query(
+      `INSERT INTO ticket_comments (org_id, ticket_id, author_user_id, status_from, status_to)
+       VALUES ($1,$2,$3,'open'::ticket_status,'cancelled'::ticket_status)`,
+      [session.orgId, ticketId, session.userId],
+    );
+  });
 }
 
 /** The stored photo, if this session is allowed to see the attachment. */

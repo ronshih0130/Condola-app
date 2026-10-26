@@ -260,7 +260,12 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
     await approveExpense(manager, repairId);
     const postedRepair = await getExpense(accountant, repairId);
     assert.equal(postedRepair?.status, "posted");
-    assert.equal(postedRepair?.included, true);
+    assert.equal(postedRepair?.included, false);
+    await tx(USERS.admin, (client) =>
+      client.query(`UPDATE maintenance_tickets SET status = 'closed', closed_at = now() WHERE id = $1`, [ticket.id]),
+    );
+    const closedRepair = await getExpense(accountant, repairId);
+    assert.equal(closedRepair?.included, true);
     assert.equal(postedRepair?.ticket_id, ticket.id);
     assert.equal(postedRepair?.amount_minor, "50000");
     const postedCount = await tx(USERS.admin, (client) =>
@@ -484,6 +489,12 @@ test("staff can add, edit, and void an expense; the statement only keeps approve
       }
     }
     await svc(null, async (client) => {
+      await client.query(
+        `UPDATE maintenance_tickets
+            SET status = 'in_progress', closed_at = NULL
+          WHERE org_id = $1 AND ticket_number = 1002`,
+        [ORG_ID],
+      );
       await client.query(`DELETE FROM month_closes WHERE org_id = $1 AND period_month = '2020-01-01'`, [ORG_ID]);
       await client.query(`DELETE FROM expenses WHERE org_id = $1 AND description = $2`, [ORG_ID, draftNote]);
       await client.query(`DELETE FROM expenses WHERE org_id = $1 AND description = $2`, [ORG_ID, `closed-${stamp}`]);

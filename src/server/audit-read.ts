@@ -43,6 +43,10 @@ export const AUDIT_EVENTS = [
   "go_live",
   "firm_created",
   "owner_privacy",
+  "repair_dispatch",
+  "repair_dispatch_revoke",
+  "repair_vendor_report",
+  "repair_cost_confirm",
 ] as const;
 
 export const AUDIT_TABLES = [
@@ -121,6 +125,10 @@ const EVENT_KEYS: Record<string, string> = {
   go_live: "i_audit_ev_go_live",
   firm_created: "i_audit_ev_firm_created",
   owner_privacy: "i_audit_ev_owner_privacy",
+  repair_dispatch: "i_audit_ev_repair_dispatch",
+  repair_dispatch_revoke: "i_audit_ev_repair_dispatch_revoke",
+  repair_vendor_report: "i_audit_ev_repair_vendor_report",
+  repair_cost_confirm: "i_audit_ev_repair_cost_confirm",
 };
 
 const RECORD_KEYS: Record<string, string> = {
