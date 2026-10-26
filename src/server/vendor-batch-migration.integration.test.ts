@@ -20,7 +20,15 @@ test("vendor batch migration SQL structure and integration checks", async (t) =>
     "utf8",
   );
   assert.match(sharingSql, /\nBEGIN;\s+SET LOCAL lock_timeout = '5s';/);
+  assert.match(sharingSql, /SET LOCAL statement_timeout = '30s';/);
   assert.match(sharingSql, /COMMIT;\s*$/);
+  const assignmentSql = readFileSync(
+    "supabase/migrations/20261030150802_vendor_job_assignment.sql",
+    "utf8",
+  );
+  assert.match(assignmentSql, /\nBEGIN;\s+SET LOCAL lock_timeout = '5s';/);
+  assert.match(assignmentSql, /SET LOCAL statement_timeout = '30s';/);
+  assert.match(assignmentSql, /COMMIT;\s*$/);
 
   if (!DATABASE_URL) {
     t.skip("DATABASE_URL is not set; skipping live Postgres integration test");
@@ -57,14 +65,70 @@ test("vendor batch migration SQL structure and integration checks", async (t) =>
   const legacyTicketId = randomUUID();
   const vendorProfileId = randomUUID();
 
-  async function applyMigration() {
+  async function applyMigration(sql = sqlText) {
     try {
       // The migration owns its transaction, including SET LOCAL.
-      await clientA.query(sqlText);
+      await clientA.query(sql);
     } catch (error) {
       await clientA.query("ROLLBACK");
       throw error;
     }
+  }
+
+  async function sharingSnapshot() {
+    const data = await clientA.query(
+      `SELECT source, data
+         FROM (
+           SELECT 'jobs' AS source, to_jsonb(j) AS data
+             FROM public.repair_vendor_jobs j
+           UNION ALL
+           SELECT 'photos', to_jsonb(s)
+             FROM public.repair_vendor_job_shared_photos s
+           UNION ALL
+           SELECT 'history', to_jsonb(h)
+             FROM public.repair_vendor_sharing_history h
+           UNION ALL
+           SELECT 'tickets', to_jsonb(t)
+             FROM public.maintenance_tickets t
+         ) AS snapshot
+       ORDER BY source, data::text`,
+    );
+    const objects = await clientA.query(
+      `SELECT 'index' AS kind, c.relname AS name, i.indisvalid::text AS definition
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         JOIN pg_index i ON i.indexrelid = c.oid
+        WHERE n.nspname = 'public'
+          AND c.relname IN (
+            'repair_vendor_jobs_org_id_id_sharing',
+            'ticket_attachments_org_id_id_sharing',
+            'repair_vendor_sharing_history_job'
+          )
+       UNION ALL
+       SELECT 'trigger', t.tgname, pg_get_triggerdef(t.oid)
+         FROM pg_trigger t
+        WHERE NOT t.tgisinternal
+          AND t.tgname IN (
+            'repair_vendor_assignment_changed',
+            'repair_vendor_sharing_history',
+            'repair_vendor_sharing_history_immutable'
+          )
+       UNION ALL
+       SELECT 'function', p.proname, pg_get_functiondef(p.oid)
+         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'app'
+          AND p.proname IN (
+            'record_vendor_sharing_history',
+            'reject_vendor_sharing_history_mutation',
+            'revoke_reassigned_vendor_jobs'
+          )
+       ORDER BY kind, name`,
+    );
+    assert.equal(objects.rows.length, 9);
+    for (const row of objects.rows) {
+      if (row.kind === "index") assert.equal(row.definition, "true");
+    }
+    return { data: data.rows, objects: objects.rows };
   }
 
   async function asAuthenticated<T>(
@@ -138,6 +202,77 @@ test("vendor batch migration SQL structure and integration checks", async (t) =>
     );
     await applyMigration();
 
+    // Fresh lanes have already migrated. Replay each migration twice and compare
+    // both complete affected rows and object definitions after every application.
+    const beforeReplay = await sharingSnapshot();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await applyMigration(sharingSql);
+      assert.deepEqual(await sharingSnapshot(), beforeReplay);
+      await applyMigration(assignmentSql);
+      assert.deepEqual(await sharingSnapshot(), beforeReplay);
+    }
+
+    const historyPrivileges = await clientA.query(
+      `SELECT
+         has_table_privilege('service_role',
+           'public.repair_vendor_sharing_history', 'SELECT') AS readable,
+         has_table_privilege('service_role',
+           'public.repair_vendor_sharing_history', 'INSERT') AS insertable,
+         has_table_privilege('service_role',
+           'public.repair_vendor_sharing_history', 'UPDATE') AS updatable,
+         has_table_privilege('service_role',
+           'public.repair_vendor_sharing_history', 'DELETE') AS deletable,
+         has_table_privilege('service_role',
+           'public.repair_vendor_sharing_history', 'TRUNCATE') AS truncatable`,
+    );
+    assert.deepEqual(historyPrivileges.rows, [{
+      readable: true,
+      insertable: false,
+      updatable: false,
+      deletable: false,
+      truncatable: false,
+    }]);
+    for (const statement of [
+      "UPDATE public.repair_vendor_sharing_history SET reason = reason WHERE false",
+      "DELETE FROM public.repair_vendor_sharing_history WHERE false",
+      "TRUNCATE public.repair_vendor_sharing_history",
+    ]) {
+      await clientA.query("BEGIN");
+      try {
+        // The mutation trigger also rejects the migration owner's statements,
+        // independently of the application-role grant restrictions.
+        await assert.rejects(clientA.query(statement), { code: "42501" });
+      } finally {
+        await clientA.query("ROLLBACK");
+      }
+    }
+    const historyFunctions = await clientA.query(
+      `SELECT p.proname, p.prosecdef, p.proconfig,
+              EXISTS (
+                SELECT 1 FROM aclexplode(p.proacl) a
+                 WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE'
+              ) AS public_execute,
+              has_function_privilege('anon',p.oid,'EXECUTE') AS anon_execute,
+              has_function_privilege('authenticated',p.oid,'EXECUTE') AS authenticated_execute,
+              has_function_privilege('service_role',p.oid,'EXECUTE') AS service_execute
+         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'app'
+          AND p.proname IN (
+            'record_vendor_sharing_history',
+            'reject_vendor_sharing_history_mutation',
+            'revoke_reassigned_vendor_jobs'
+          )`,
+    );
+    assert.equal(historyFunctions.rows.length, 3);
+    for (const info of historyFunctions.rows) {
+      assert.equal(info.prosecdef, true);
+      assert.ok(info.proconfig.includes("search_path=pg_catalog, public"));
+      assert.equal(info.public_execute, false);
+      assert.equal(info.anon_execute, false);
+      assert.equal(info.authenticated_execute, false);
+      assert.equal(info.service_execute, true);
+    }
+
     const tables = await clientA.query<{
       relname: string;
       relrowsecurity: boolean;
@@ -154,9 +289,10 @@ test("vendor batch migration SQL structure and integration checks", async (t) =>
         "vendor_onboarding_invites",
         "vendor_document_sequences",
         "vendor_documents",
+        "repair_vendor_sharing_history",
       ]],
     );
-    assert.equal(tables.rows.length, 6);
+    assert.equal(tables.rows.length, 7);
     for (const row of tables.rows) {
       assert.equal(row.relrowsecurity, true, `${row.relname} must enable RLS`);
       assert.equal(row.relforcerowsecurity, true, `${row.relname} must force RLS`);

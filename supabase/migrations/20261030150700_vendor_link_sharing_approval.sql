@@ -10,6 +10,7 @@
 BEGIN;
 
 SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
 
 ALTER TABLE public.repair_vendor_jobs
   ADD COLUMN IF NOT EXISTS scope text NOT NULL DEFAULT 'case_collaboration',
@@ -33,6 +34,27 @@ $$;
 
 COMMENT ON COLUMN public.repair_vendor_jobs.shared_description IS
   'Manager-reviewed and redacted text; vendor links never expose the raw ticket description.';
+
+-- These ordinary index builds are allowed only on small relations (including
+-- TOAST): enforce a 32 MiB ceiling rather than assume production table sizes.
+-- The transaction-local timeouts also bound lock acquisition and each build.
+-- Larger installations must prepare these exact indexes CONCURRENTLY outside
+-- a transaction before running this migration. Existing indexes skip the size
+-- guard on replay, so subsequent table growth does not prevent replay.
+DO $$
+BEGIN
+  IF to_regclass('public.repair_vendor_jobs_org_id_id_sharing') IS NULL
+     AND pg_table_size('public.repair_vendor_jobs'::regclass) > 33554432 THEN
+    RAISE EXCEPTION
+      'Prepare repair_vendor_jobs_org_id_id_sharing CONCURRENTLY before migration 150700';
+  END IF;
+  IF to_regclass('public.ticket_attachments_org_id_id_sharing') IS NULL
+     AND pg_table_size('public.ticket_attachments'::regclass) > 33554432 THEN
+    RAISE EXCEPTION
+      'Prepare ticket_attachments_org_id_id_sharing CONCURRENTLY before migration 150700';
+  END IF;
+END;
+$$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS repair_vendor_jobs_org_id_id_sharing
   ON public.repair_vendor_jobs (org_id, id);
