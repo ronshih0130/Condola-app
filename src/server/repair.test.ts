@@ -23,10 +23,38 @@ import {
   tenantCancelAllowed,
   ticketPhotoPath,
 } from "./repair-rules";
-import { confirmTicketPhoto, discardUploadAllowed, issueUploadGrant, uploadGrantMatches } from "./ticket-photos";
+import { confirmTicketPhoto, discardUploadAllowed, issueUploadGrant, ticketPhotoResponse, uploadGrantMatches } from "./ticket-photos";
 import type { Session } from "./types";
 
 const root = new URL("../../", import.meta.url);
+
+test("photo GET hides expected access failures and preserves redirects and server errors", async () => {
+  for (const key of ["errors.forbidden", "errors.notFound"]) {
+    const response = await ticketPhotoResponse(async () => {
+      throw new FlowError(key);
+    });
+    assert.equal(response.status, 404);
+    assert.equal(await response.text(), "Not found");
+  }
+
+  const missing = await ticketPhotoResponse(async () => null);
+  assert.equal(missing.status, 404);
+  assert.equal(await missing.text(), "Not found");
+
+  for (const error of [new Error("storage unavailable"), new FlowError("errors.photoStorage")]) {
+    await assert.rejects(
+      ticketPhotoResponse(async () => {
+        throw error;
+      }),
+      (caught: unknown) => caught === error,
+    );
+  }
+
+  const url = "https://storage.example/photo.jpg";
+  const response = await ticketPhotoResponse(async () => ({ url }));
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), url);
+});
 
 test("photo rules cap size and type and never describe a re-encode", () => {
   const ok = assertPhotoMeta({ fileName: "浴室.jpg", mime: "image/jpeg", size: 1200 });
@@ -275,7 +303,7 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   assert.match(repairs, /does not write/);
   assert.doesNotMatch(repairs, /INSERT INTO ticket_attachments \([^)]*content/);
   const photoRoute = readFileSync(new URL("../app/api/tickets/photos/[id]/route.ts", import.meta.url), "utf8");
-  assert.match(photoRoute, /NextResponse\.redirect/);
+  assert.match(photoRoute, /return ticketPhotoResponse\(\(\) => openTicketPhoto\(session, id\)\)/);
   assert.doesNotMatch(photoRoute, /photo\.bytes/);
   assert.equal(existsSync(new URL("../app/api/tickets/photos/route.ts", import.meta.url)), false);
   const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");

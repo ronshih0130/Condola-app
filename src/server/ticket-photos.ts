@@ -259,6 +259,20 @@ export async function confirmTicketPhoto(
   }
 }
 
+/** Map expected photo access failures to the GET route's existing 404 response. */
+export async function ticketPhotoResponse(open: () => Promise<{ url: string } | null>): Promise<Response> {
+  try {
+    const photo = await open();
+    if (!photo) return new Response("Not found", { status: 404 });
+    return Response.redirect(photo.url, 302);
+  } catch (error) {
+    if (error instanceof FlowError && (error.key === "errors.forbidden" || error.key === "errors.notFound")) {
+      return new Response("Not found", { status: 404 });
+    }
+    throw error;
+  }
+}
+
 /**
  * Short-lived read URL after the org and ticket path check.
  * The browser loads the object from the bucket. This does not read ticket_attachments.content.

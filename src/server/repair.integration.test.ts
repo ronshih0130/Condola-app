@@ -7,7 +7,7 @@ import { ORG_ID, USERS } from "./ids";
 import { propertyDetail, tenantRepairs, ticketDetail } from "./queries";
 import { PHOTO_BUCKET, PHOTO_MAX_BYTES, ticketPhotoPath } from "./repair-rules";
 import { addTicketComment, attachRepairPhoto, readRepairPhoto, saveRepairRecord } from "./repairs";
-import { confirmTicketPhoto } from "./ticket-photos";
+import { confirmTicketPhoto, openTicketPhoto, ticketPhotoResponse } from "./ticket-photos";
 import type { Session } from "./types";
 
 const ORG = ORG_ID;
@@ -328,6 +328,13 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
     assert.equal(storedPhoto?.name, `${title}.jpg`);
     assert.equal(storedPhoto?.mime, "image/jpeg");
     assert.equal(storedPhoto?.ticket_id, ticketId);
+    await assert.rejects(
+      readRepairPhoto(accountant, seen.rows[0].id),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+    );
+    const accountantPhoto = await ticketPhotoResponse(() => openTicketPhoto(accountant, seen.rows[0].id));
+    assert.equal(accountantPhoto.status, 404);
+    assert.equal(await accountantPhoto.text(), "Not found");
     const storedBytes = await tx(USERS.tenant2, (client) =>
       client.query<{ empty: boolean }>(`SELECT content IS NULL AS empty FROM ticket_attachments WHERE id = $1`, [seen.rows[0].id]),
     );
