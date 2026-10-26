@@ -462,6 +462,16 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
     const jurisdictionId = tw.rows[0]?.id;
     assert.ok(jurisdictionId);
     await dropFirms();
+    const existingSandbox = await svc(null, (client) =>
+      client.query<{ id: string; feature_flags: string | null }>(
+        `SELECT id::text, feature_flags::text
+           FROM organizations
+          WHERE environment = 'sandbox' AND live_org_id = $1 AND id <> $2`,
+        [ORG, SANDBOX_ORG],
+      ),
+    );
+    const sandbox = existingSandbox.rows[0];
+    const sandboxOrgId = sandbox?.id ?? SANDBOX_ORG;
     try {
       await svc(null, (client) =>
         client.query(
@@ -471,24 +481,33 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
           [PRO_ORG, jurisdictionId, USERS.admin],
         ),
       );
-      await svc(null, (client) =>
-        client.query(
-          `INSERT INTO organizations (
-             id, name, country_code, jurisdiction_id, default_currency, timezone, plan_tier, environment, live_org_id, created_by
-           ) VALUES ($1, '練習公司', 'TW', $2, 'TWD', 'Asia/Taipei', 'free', 'sandbox', $3, $4)`,
-          [SANDBOX_ORG, jurisdictionId, ORG, USERS.admin],
-        ),
-      );
+      if (sandbox) {
+        await svc(null, (client) =>
+          client.query(
+            `UPDATE organizations SET feature_flags = feature_flags - 'vendor_dispatch' WHERE id = $1`,
+            [sandboxOrgId],
+          ),
+        );
+      } else {
+        await svc(null, (client) =>
+          client.query(
+            `INSERT INTO organizations (
+               id, name, country_code, jurisdiction_id, default_currency, timezone, plan_tier, environment, live_org_id, created_by
+             ) VALUES ($1, '練習公司', 'TW', $2, 'TWD', 'Asia/Taipei', 'free', 'sandbox', $3, $4)`,
+            [sandboxOrgId, jurisdictionId, ORG, USERS.admin],
+          ),
+        );
+      }
       const flags = await svc(null, (client) =>
         client.query<{ id: string; ok: boolean }>(
           `SELECT id::text, app.vendor_dispatch_enabled(id) AS ok
              FROM organizations WHERE id = ANY($1::uuid[])`,
-          [[PRO_ORG, SANDBOX_ORG, ORG]],
+          [[PRO_ORG, sandboxOrgId, ORG]],
         ),
       );
       const byId = new Map(flags.rows.map((row) => [row.id, row.ok]));
       assert.equal(byId.get(PRO_ORG), false);
-      assert.equal(byId.get(SANDBOX_ORG), true);
+      assert.equal(byId.get(sandboxOrgId), true);
       assert.equal(byId.get(ORG), true);
       await assert.rejects(
         () => dispatchVendor(staff(USERS.admin, "admin", PRO_ORG), randomUUID(), { vendorName: "陳水電", vendorPhone: "0912000111", contactWindow: "週三" }, ORIGIN),
@@ -504,6 +523,14 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
         (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
       );
     } finally {
+      if (sandbox) {
+        await svc(null, (client) =>
+          client.query(
+            `UPDATE organizations SET feature_flags = $2::jsonb WHERE id = $1`,
+            [sandboxOrgId, sandbox.feature_flags],
+          ),
+        );
+      }
       await svc(null, (client) =>
         client.query(`UPDATE organizations SET feature_flags = feature_flags - 'vendor_dispatch' WHERE id = $1`, [ORG]),
       );
