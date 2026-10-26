@@ -46,6 +46,22 @@ import {
   vendorTokenAcceptable,
 } from "./vendor-repair-rules";
 
+import {
+  VENDOR_LINK_ENABLED,
+  renderableTypeFields,
+  vendorLinkCapability,
+  vendorLinkOn,
+  vendorLinkSafeView,
+  type VendorLinkCapability,
+} from "./vendor-link-rules";
+
+let vendorLinkKillSwitch: boolean = VENDOR_LINK_ENABLED;
+
+/** Changes only the in-process kill switch; organization flags remain authoritative. */
+export function __setVendorLinkKillSwitchForTests(on: boolean) {
+  vendorLinkKillSwitch = on;
+}
+
 type OpenJob = {
   job_id: string;
   org_id: string;
@@ -103,6 +119,10 @@ export type VendorJobPage = {
   reported: boolean;
   issuePhotos: { id: string; name: string }[];
   donePhotos: { id: string; name: string }[];
+  vendorLink?: {
+    capability: VendorLinkCapability;
+    typeFields: Array<{ key: string; label: string; value: string }>;
+  };
 };
 
 export function vendorJobUrl(origin: string, token: string) {
@@ -124,6 +144,48 @@ export async function orgVendorDispatchEnabled(orgId: string) {
     planTier: row.plan_tier,
     featureFlags: row.feature_flags,
   });
+}
+
+async function vendorLinkEnabledOn(client: Client, orgId: string) {
+  const row = await maybe<{ feature_flags: unknown }>(
+    client,
+    `SELECT feature_flags FROM organizations WHERE id = $1`,
+    [orgId],
+  );
+  return vendorLinkOn(vendorLinkKillSwitch, row?.feature_flags);
+}
+
+export async function vendorLinkEnabledForOrg(orgId: string) {
+  return svc(null, (client) => vendorLinkEnabledOn(client, orgId));
+}
+
+type LinkState = { active: boolean; revoked_at: string | null; expires_at: string };
+
+/** Always lock the ticket before the assignment, then revalidate both flags and state. */
+async function lockedVendorLink(client: Client, job: OpenJob, hash: string) {
+  const ticket = await loadTicket(client, job.ticket_id, job.org_id);
+  const state = await maybe<LinkState & { dispatch_enabled: boolean }>(
+    client,
+    `SELECT active, revoked_at::text, expires_at::text,
+            app.vendor_dispatch_enabled(org_id) AS dispatch_enabled
+       FROM repair_vendor_jobs
+      WHERE id = $1 AND ticket_id = $2 AND org_id = $3 AND token_hash = $4
+      FOR UPDATE`,
+    [job.job_id, job.ticket_id, job.org_id, hash],
+  );
+  if (!ticket || !state || !state.dispatch_enabled || !(await vendorLinkEnabledOn(client, job.org_id))) {
+    throw new FlowError("errors.notFound");
+  }
+  // Wall time matters after waiting for locks; SQL now() is transaction-start time.
+  const capability = vendorLinkCapability({
+    ticketStatus: ticket.status,
+    active: state.active,
+    revokedAt: state.revoked_at,
+    expiresAt: state.expires_at,
+    now: new Date(),
+  });
+  if (capability !== "write") throw new FlowError("errors.notFound");
+  return ticket;
 }
 
 async function assertDispatchFlag(client: Client, orgId: string) {
@@ -499,6 +561,43 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
     );
     const issuePhotos = photos.rows.filter((row) => !row.vendor_job_id).map((row) => ({ id: row.id, name: row.name }));
     const donePhotos = photos.rows.filter((row) => row.vendor_job_id === job.job_id).map((row) => ({ id: row.id, name: row.name }));
+    if (await vendorLinkEnabledOn(client, job.org_id)) {
+      const state = await maybe<LinkState & { status: string }>(
+        client,
+        `SELECT t.status::text, j.active, j.revoked_at::text, j.expires_at::text
+           FROM maintenance_tickets t
+           JOIN repair_vendor_jobs j ON j.ticket_id = t.id AND j.org_id = t.org_id
+          WHERE t.id = $1 AND t.org_id = $2 AND j.id = $3 AND j.token_hash = $4
+            AND app.vendor_dispatch_enabled(j.org_id)`,
+        [job.ticket_id, job.org_id, job.job_id, hashVendorToken(token)],
+      );
+      if (!state) return null;
+      const capability = vendorLinkCapability({
+        ticketStatus: state.status,
+        active: state.active,
+        revokedAt: state.revoked_at,
+        expiresAt: state.expires_at,
+        now: new Date(),
+      });
+      if (capability === "invalid") return null;
+      const safe = vendorLinkSafeView({
+        title: ticket.title,
+        description: ticket.description ?? "",
+        address: ticket.place ? `${ticket.address} ${ticket.place}` : ticket.address,
+        place: ticket.place,
+        window: job.contact_window,
+        status: state.status,
+        expiresAt: state.expires_at,
+        issuePhotos,
+        donePhotos,
+      });
+      return {
+        ...safe,
+        currency: ticket.currency,
+        reported: Boolean(job.reported_at),
+        vendorLink: { capability, typeFields: renderableTypeFields(null, null) },
+      };
+    }
     return {
       title: ticket.title,
       description: ticket.description ?? "",
@@ -516,11 +615,15 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
 export async function submitVendorReport(token: string, input: { done: boolean; cost: string }) {
   const opened = await openJob(token);
   if (!opened) throw new FlowError("errors.notFound");
-  if (opened.reported_at) return;
+  const enhanced = await vendorLinkEnabledForOrg(opened.org_id);
+  if (opened.reported_at && !enhanced) return;
   if (!input.done) throw new FlowError("errors.required");
   const cost = vendorCostMinor(input.cost);
   const today = taipeiToday();
   await svc(null, async (client) => {
+    const lockedTicket = enhanced || await vendorLinkEnabledOn(client, opened.org_id)
+      ? await lockedVendorLink(client, opened, hashVendorToken(token))
+      : null;
     const job = await maybe<OpenJob>(
       client,
       `SELECT job_id::text, org_id::text, ticket_id::text, vendor_name, contact_window,
@@ -530,7 +633,7 @@ export async function submitVendorReport(token: string, input: { done: boolean; 
     );
     if (!job || job.job_id !== opened.job_id) throw new FlowError("errors.notFound");
     if (job.reported_at) return;
-    const ticket = await loadTicket(client, job.ticket_id, job.org_id);
+    const ticket = lockedTicket ?? await loadTicket(client, job.ticket_id, job.org_id);
     if (!ticket || !reportableTicket(ticket.status)) throw new FlowError("errors.notFound");
     const completed = vendorCompletedOn(ticket.scheduled_on, today);
     const currency = (ticket.currency || ticket.property_currency).trim();
@@ -659,6 +762,26 @@ export async function prepareVendorPhoto(
 ) {
   const job = await openJob(token);
   if (!job) throw new FlowError("errors.notFound");
+  if (await vendorLinkEnabledForOrg(job.org_id)) {
+    return svc(null, async (client) => {
+      await lockedVendorLink(client, job, hashVendorToken(token));
+      const meta = assertPhotoMeta(input);
+      const count = await maybe<{ n: string }>(
+        client,
+        `SELECT count(*)::text AS n FROM ticket_attachments WHERE ticket_id = $1 AND org_id = $2`,
+        [job.ticket_id, job.org_id],
+      );
+      if (Number(count?.n ?? 0) >= PHOTO_LIMIT) throw new FlowError("errors.photoLimit");
+      const path = ticketPhotoPath(job.org_id, job.ticket_id, newPhotoFileId(), meta.mime);
+      const signed = await signRepairUpload(path);
+      return {
+        path,
+        token: signed.token,
+        uploadUrl: signed.uploadUrl,
+        uploadToken: issueVendorUploadGrant(hashVendorToken(token), job.ticket_id, path),
+      };
+    });
+  }
   const meta = assertPhotoMeta(input);
   if ((await photoCount(job.ticket_id, job.org_id)) >= PHOTO_LIMIT) throw new FlowError("errors.photoLimit");
   const path = ticketPhotoPath(job.org_id, job.ticket_id, newPhotoFileId(), meta.mime);
@@ -686,11 +809,15 @@ async function attachVendorPhoto(
   job: OpenJob,
   hash: string,
   input: { path: string; fileName: string; mime: string; size: number },
+  enhanced: boolean,
 ) {
   const fileId = photoFileId(input.path);
   if (!fileId) throw new FlowError("errors.forbidden");
   return svc(null, async (client) => {
     await lockVendorPhotoTicket(client, job);
+    if (enhanced || await vendorLinkEnabledOn(client, job.org_id)) {
+      await lockedVendorLink(client, job, hash);
+    }
     const still = await maybe<{ job_id: string }>(client, `SELECT job_id::text FROM app.open_vendor_job($1)`, [hash]);
     if (!still || still.job_id !== job.job_id) throw new FlowError("errors.notFound");
     const existing = await maybe<{ id: string }>(
@@ -733,6 +860,10 @@ export async function confirmVendorPhoto(
 ) {
   const job = await openJob(token);
   if (!job) throw new FlowError("errors.notFound");
+  const enhanced = await vendorLinkEnabledForOrg(job.org_id);
+  if (enhanced) {
+    await svc(null, (client) => lockedVendorLink(client, job, hashVendorToken(token)));
+  }
   if (!isTicketPhotoPath(input.path, job.org_id, job.ticket_id)) throw new FlowError("errors.forbidden");
   const hash = hashVendorToken(token);
   if (!vendorUploadGrantMatches(hash, job.ticket_id, input.path, input.uploadToken ?? "")) {
@@ -747,7 +878,7 @@ export async function confirmVendorPhoto(
       fileName: meta.fileName,
       mime: accepted.mime,
       size: accepted.size,
-    });
+    }, enhanced);
   } catch (error) {
     if (error instanceof FlowError && DISCARD.has(error.key)) {
       if (vendorUploadGrantMatches(hash, job.ticket_id, input.path, input.uploadToken ?? "")) {

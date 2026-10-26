@@ -1,4 +1,5 @@
 import { makeT } from "@/i18n";
+import { VendorLinkDetails } from "@/components/vendor-link-details";
 import { TicketPhotoUpload } from "@/components/ticket-photos";
 import { ErrorBanner } from "@/components/ui";
 import { actionVendorReport } from "@/server/actions";
@@ -19,7 +20,7 @@ export default async function VendorJobPage({
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
   const job = await loadVendorJob(token);
-  if (!job) {
+  if (!job || job.vendorLink?.capability === "invalid") {
     return (
       <div className="card pad" data-testid="vendor-job" style={{ maxWidth: 560, margin: "24px auto" }}>
         <h1>{t("i_vendor_page_title")}</h1>
@@ -38,6 +39,57 @@ export default async function VendorJobPage({
     wait: t("i_repair_upload_wait"),
     failed: t("i_repair_photo_failed"),
   };
+  function renderReportControls(enhanced = false) {
+    return (
+      <>
+        {job!.reported ? (
+          <p data-testid="vendor-sent">{t("i_vendor_sent")}</p>
+        ) : (
+          <form action={actionVendorReport}>
+            <input type="hidden" name="token" value={token} />
+            <label className="small">
+              <input type="checkbox" name="done" required data-testid="vendor-done" /> {t(enhanced ? "i_vlink_done" : "i_vendor_done")}
+            </label>
+            <div className="fg">
+              <label className="f">
+                {t("i_vendor_cost")} ({job!.currency})
+              </label>
+              <input className="inp" name="cost" inputMode="decimal" required data-testid="vendor-cost" />
+            </div>
+            <button className="btn pri" type="submit" data-testid="vendor-submit">
+              {t("i_vendor_submit")}
+            </button>
+          </form>
+        )}
+        <div style={{ marginTop: 16 }}>
+          <TicketPhotoUpload
+            ticketId=""
+            label={t("i_repair_photo_add")}
+            hint={t("i_repair_photo_hint")}
+            allowInternal={false}
+            messages={photoMessages}
+            signPath="/api/vendor-jobs/photos/sign"
+            confirmPath="/api/vendor-jobs/photos/confirm"
+            extra={{ token }}
+            inputTestId="vendor-photo"
+          />
+        </div>
+      </>
+    );
+  }
+  if (job.vendorLink !== undefined) {
+    return (
+      <VendorLinkDetails
+        job={job}
+        vendorLink={job.vendorLink}
+        token={token}
+        t={t}
+      >
+        <ErrorBanner t={t} error={query.error} />
+        {job.vendorLink.capability === "write" ? renderReportControls(true) : null}
+      </VendorLinkDetails>
+    );
+  }
   return (
     <div className="card pad" data-testid="vendor-job" style={{ maxWidth: 560, margin: "24px auto" }}>
       <h1>{t("i_vendor_page_title")}</h1>
@@ -70,38 +122,7 @@ export default async function VendorJobPage({
           </div>
         </>
       ) : null}
-      {job.reported ? (
-        <p data-testid="vendor-sent">{t("i_vendor_sent")}</p>
-      ) : (
-        <form action={actionVendorReport}>
-          <input type="hidden" name="token" value={token} />
-          <label className="small">
-            <input type="checkbox" name="done" required data-testid="vendor-done" /> {t("i_vendor_done")}
-          </label>
-          <div className="fg">
-            <label className="f">
-              {t("i_vendor_cost")} ({job.currency})
-            </label>
-            <input className="inp" name="cost" inputMode="decimal" required data-testid="vendor-cost" />
-          </div>
-          <button className="btn pri" type="submit" data-testid="vendor-submit">
-            {t("i_vendor_submit")}
-          </button>
-        </form>
-      )}
-      <div style={{ marginTop: 16 }}>
-        <TicketPhotoUpload
-          ticketId=""
-          label={t("i_repair_photo_add")}
-          hint={t("i_repair_photo_hint")}
-          allowInternal={false}
-          messages={photoMessages}
-          signPath="/api/vendor-jobs/photos/sign"
-          confirmPath="/api/vendor-jobs/photos/confirm"
-          extra={{ token }}
-          inputTestId="vendor-photo"
-        />
-      </div>
+      {renderReportControls()}
     </div>
   );
 }
