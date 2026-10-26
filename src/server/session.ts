@@ -1,3 +1,4 @@
+import { consentCoversCurrent, type StoredConsent } from "./consent";
 import { createHash } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -31,6 +32,7 @@ export async function requestPrefs(): Promise<Prefs> {
 }
 
 type IdentityRow = {
+  consent: StoredConsent | null;
   session_id: string;
   user_id: string;
   name: string | null;
@@ -61,10 +63,18 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
   let seedSample = false;
   const found = await client.query<IdentityRow>(
         `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
-                coalesce(p.email::text, u.email) AS email
+                coalesce(p.email::text, u.email) AS email, latest.consent
            FROM auth_sessions s
            JOIN auth.users u ON u.id = s.user_id
            LEFT JOIN profiles p ON p.id = u.id
+           LEFT JOIN LATERAL (
+             SELECT jsonb_build_object(
+               'accepted_at', c.accepted_at, 'terms_version', c.terms_version,
+               'privacy_version', c.privacy_version, 'source', c.source
+             ) AS consent
+               FROM public.consents c WHERE c.user_id = u.id
+              ORDER BY c.recorded_at DESC, c.id DESC LIMIT 1
+           ) latest ON true
           WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
         [sha256(token)],
       );
@@ -84,6 +94,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
       const envChoice: OrgEnvironment | null = rawEnv === "sandbox" ? "sandbox" : rawEnv === "live" ? "live" : null;
       const base = {
         userId: identity.user_id,
+        consent: identity.consent,
         sessionId: identity.session_id,
         email: identity.email ?? "",
         name: identity.name ?? "",
@@ -93,7 +104,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
       };
       const firm = await resolveStaffOrg(client, identity.user_id, preferredOrg, envChoice);
       if (firm) {
-        if (firm.environment === "sandbox" && !firm.needsSandbox) {
+        if (consentCoversCurrent(identity.consent) && firm.environment === "sandbox" && !firm.needsSandbox) {
           await correctRetiredSampleAddresses(client, firm.orgId);
           const peek = await client.query<{ needed: boolean }>(
             `SELECT (o.sample_loaded_at IS NULL AND NOT (
@@ -226,7 +237,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
 /** Sandbox provisioning stays after the lookup, and may open its own connection. */
 export async function completeSession(loaded: SessionLoad): Promise<Session | null> {
   const session = loaded.session;
-  if (session?.kind === "staff" && session.environment === "sandbox") {
+  if (session?.kind === "staff" && consentCoversCurrent(session.consent ?? null) && session.environment === "sandbox") {
     const sandboxId = session.needsSandbox ? await ensureSandbox(session) : session.orgId;
     const opened = { ...session, orgId: sandboxId, environment: "sandbox" as const, needsSandbox: false };
     if (loaded.seedSample) await ensureSampleLoaded(opened);

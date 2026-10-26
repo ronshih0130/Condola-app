@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
@@ -11,6 +12,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerStatementPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const { id } = await params;
   const session = await getSession();
   const t = makeT(session.locale);

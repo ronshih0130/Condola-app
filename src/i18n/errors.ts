@@ -16,7 +16,7 @@ export const ERRORS: Record<string, string> = {
   "errors.lineId": "lease_line_invalid",
   "errors.pdf": "lease_pdf_invalid",
   "errors.ledger": "i_ledger",
-  "errors.consentRequired": "i_consent_required",
+  "errors.consentRequired": "i_legal_consent_required",
   "errors.alreadySigned": "i_already_signed",
   "errors.noInvoice": "i_no_invoice",
   "errors.amount": "i_amount",

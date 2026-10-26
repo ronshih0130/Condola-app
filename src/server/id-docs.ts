@@ -1000,10 +1000,11 @@ async function materializeWatermark(
  * the original is never the response. The download audit is deferred.
  * `db` includes connect. `total` runs until this function returns.
  */
-export async function serveSignedPhoto(input: PhotoCaller & { documentId: string; slot: string }): Promise<ServedPhoto | null> {
+export async function serveSignedPhoto(input: PhotoCaller & { documentId: string; slot: string }, authorize?: (client: Client) => Promise<void>): Promise<ServedPhoto | null> {
   const started = performance.now();
   let db = 0;
   const opened = await withDeferredClient(async (client, defer) => {
+    await authorize?.(client);
     const result = await client.query<{
       user_id: string;
       viewer_name: string;

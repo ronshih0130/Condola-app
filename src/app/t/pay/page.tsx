@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner, chargeKey } from "@/components/ui";
@@ -10,6 +11,7 @@ import { selectedLease } from "@/lib/tenant-lease";
 export const dynamic = "force-dynamic";
 
 export default async function TenantPayPage({ searchParams }: { searchParams: Promise<{ error?: string; done?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const { session, lease } = await selectedLease();
   const t = makeT(session.locale);
   const params = await searchParams;

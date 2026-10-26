@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { RepairThread } from "@/components/repair-thread";
@@ -21,6 +22,7 @@ export default async function RepairPage({
 }: {
   searchParams: Promise<{ error?: string; done?: string; id?: string; cancel?: string; cancelled?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const { session, lease } = await selectedLease();
   const t = makeT(session.locale);
   const params = await searchParams;

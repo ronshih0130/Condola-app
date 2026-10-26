@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { ConfirmDeactivate } from "@/components/confirm-deactivate";
@@ -21,6 +22,7 @@ export default async function TeamPage({
 }: {
   searchParams: Promise<{ error?: string; token?: string; invited?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const invitesOpen = teamInvitesAllowedForOrg(session.orgId);
   const t = makeT(session.locale);

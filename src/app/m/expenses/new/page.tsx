@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { ExpenseForm } from "@/components/expense-form";
@@ -14,6 +15,7 @@ export default async function NewExpensePage({
 }: {
   searchParams: Promise<{ error?: string; property?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;

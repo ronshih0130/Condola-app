@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCurrentConsent } from "./consent-gate";
+
 import { redirect } from "next/navigation";
 import { FlowError } from "./errors";
 import { dismissSamplePrompt, loadSampleData } from "./sandbox";
@@ -16,6 +18,7 @@ function fail(error: unknown, to: string): never {
 }
 
 export async function actionLoadSample() {
+  await requireCurrentConsent();
   const session = await getSession();
   try {
     await loadSampleData(session);
@@ -26,6 +29,7 @@ export async function actionLoadSample() {
 }
 
 export async function actionBlankSandbox() {
+  await requireCurrentConsent();
   const session = await getSession();
   try {
     await dismissSamplePrompt(session);

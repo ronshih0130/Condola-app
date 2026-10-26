@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { FlowError, logServerError } from "@/server/errors";
 import { abandonIdUpload, finalizeTenantId } from "@/server/id-docs";
@@ -17,6 +18,8 @@ function asText(value: unknown) {
 export async function POST(request: Request) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: "errors.forbidden" }, { status: 401 });
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   let body: { leaseId?: unknown; docType?: unknown; number?: unknown; consent?: unknown };
   try {
     body = (await request.json()) as typeof body;
@@ -44,6 +47,8 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: "errors.forbidden" }, { status: 401 });
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   const leaseId = request.headers.get("x-id-lease") ?? "";
   if (!leaseId) return NextResponse.json({ error: "errors.generic" }, { status: 400 });
   try {

@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { IdvFlow } from "@/components/idv-flow";
 import { ErrorBanner } from "@/components/ui";
 import { makeT } from "@/i18n";
@@ -9,6 +10,7 @@ import { issuePhotoUrls, loadFirmNoticeContact, loadLeaseIdCheck } from "@/serve
 export const dynamic = "force-dynamic";
 
 export default async function TenantIdPage({ searchParams }: { searchParams: Promise<{ sent?: string; error?: string; compress?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const query = await searchParams;
   const { session, lease } = await selectedLease();
   const t = makeT(session.locale);

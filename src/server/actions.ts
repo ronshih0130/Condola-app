@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCurrentConsent } from "./consent-gate";
+
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
 import { appCookieOptions } from "./public-origin";
@@ -201,6 +203,7 @@ function actionError(error: unknown, fallback = "errors.generic"): ActionState {
 }
 
 export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
+  await requireCurrentConsent();
   void prev;
   try {
     const session = await getSession();
@@ -218,6 +221,7 @@ export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, for
 }
 
 export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
+  await requireCurrentConsent();
   void prev;
   try {
     const session = await getSession();
@@ -237,6 +241,7 @@ export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formDa
 }
 
 export async function actionUpdateLease(prev: ActionState = EMPTY_ACTION, formData: FormData): Promise<ActionState> {
+  await requireCurrentConsent();
   void prev;
   const leaseId = text(formData.get("leaseId"));
   try {
@@ -256,6 +261,7 @@ export async function actionUpdateLease(prev: ActionState = EMPTY_ACTION, formDa
 }
 
 export async function actionSimulateSign(formData: FormData) {
+  await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   const back = `/m/leases/${leaseId}?tab=sign`;
   try {
@@ -268,6 +274,7 @@ export async function actionSimulateSign(formData: FormData) {
 }
 
 export async function actionUploadSignedPdf(formData: FormData) {
+  await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   const back = `/m/leases/${leaseId}?tab=sign`;
   try {
@@ -283,6 +290,7 @@ export async function actionUploadSignedPdf(formData: FormData) {
 }
 
 export async function actionSign(formData: FormData) {
+  await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   const back = `/m/leases/${leaseId}?tab=sign`;
   try {
@@ -299,6 +307,7 @@ export async function actionSign(formData: FormData) {
 }
 
 export async function actionRecordPayment(formData: FormData) {
+  await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   const staff = text(formData.get("returnTo")) !== "tenant";
   const back = staff ? `/m/leases/${leaseId}?tab=ledger` : "/t/pay";
@@ -318,6 +327,7 @@ export async function actionRecordPayment(formData: FormData) {
 }
 
 export async function actionConfirmPayment(formData: FormData) {
+  await requireCurrentConsent();
   const id = text(formData.get("paymentId"));
   try {
     const session = await getSession();
@@ -329,6 +339,7 @@ export async function actionConfirmPayment(formData: FormData) {
 }
 
 export async function actionRejectPayment(formData: FormData) {
+  await requireCurrentConsent();
   const id = text(formData.get("paymentId"));
   try {
     const session = await getSession();
@@ -340,6 +351,7 @@ export async function actionRejectPayment(formData: FormData) {
 }
 
 export async function actionImportCsv(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await importBankCsv(session, text(formData.get("csv")));
@@ -350,6 +362,7 @@ export async function actionImportCsv(formData: FormData) {
 }
 
 export async function actionApproveMatch(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await approveMatch(session, text(formData.get("suggestionId")));
@@ -360,6 +373,7 @@ export async function actionApproveMatch(formData: FormData) {
 }
 
 export async function actionStatement(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const result = await generateStatement(session, {
@@ -376,6 +390,7 @@ export async function actionStatement(formData: FormData) {
 }
 
 export async function actionTicket(formData: FormData) {
+  await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   const back = text(formData.get("returnTo")) === "staff" ? "/m/tickets" : "/t/repair";
   try {
@@ -394,6 +409,7 @@ export async function actionTicket(formData: FormData) {
 }
 
 export async function actionSaveRepair(formData: FormData) {
+  await requireCurrentConsent();
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
@@ -429,6 +445,7 @@ export async function actionCancelRepair(formData: FormData) {
 }
 
 export async function actionTicketComment(formData: FormData) {
+  await requireCurrentConsent();
   const ticketId = text(formData.get("ticketId"));
   const back = text(formData.get("returnTo")) === "tenant" ? `/t/repair?id=${ticketId}` : `/m/tickets/${ticketId}`;
   try {
@@ -522,6 +539,7 @@ export async function actionVendorReport(formData: FormData) {
 }
 
 export async function actionUpdateTicket(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await updateTicket(session, text(formData.get("ticketId")), {
@@ -535,6 +553,7 @@ export async function actionUpdateTicket(formData: FormData) {
 }
 
 export async function actionMessage(formData: FormData) {
+  await requireCurrentConsent();
   const threadId = text(formData.get("threadId"));
   const back = text(formData.get("returnTo")) === "tenant" ? "/t/messages" : `/m/messages/${threadId}`;
   try {
@@ -547,6 +566,7 @@ export async function actionMessage(formData: FormData) {
 }
 
 export async function actionInvite(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     assertTeamInvitesAllowed(session.orgId);
@@ -559,6 +579,7 @@ export async function actionInvite(formData: FormData) {
 }
 
 export async function actionSetMeter(formData: FormData) {
+  await requireCurrentConsent();
   const propertyId = text(formData.get("propertyId"));
   const back = `/m/properties/${propertyId}`;
   try {
@@ -571,6 +592,7 @@ export async function actionSetMeter(formData: FormData) {
 }
 
 export async function actionPhoneVisibility(formData: FormData) {
+  await requireCurrentConsent();
   const propertyId = text(formData.get("propertyId"));
   try {
     const session = await getSession();
@@ -582,6 +604,7 @@ export async function actionPhoneVisibility(formData: FormData) {
 }
 
 export async function actionCreateOwner(formData: FormData) {
+  await requireCurrentConsent();
   const back = "/m/owners/new";
   try {
     const session = await getSession();
@@ -598,6 +621,7 @@ export async function actionCreateOwner(formData: FormData) {
 }
 
 export async function actionUpdateOwner(formData: FormData) {
+  await requireCurrentConsent();
   const ownerId = text(formData.get("ownerId"));
   const back = `/m/owners/${ownerId}`;
   try {
@@ -615,6 +639,7 @@ export async function actionUpdateOwner(formData: FormData) {
 }
 
 export async function actionUpdateProperty(formData: FormData) {
+  await requireCurrentConsent();
   const propertyId = text(formData.get("propertyId"));
   const back = `/m/properties/${propertyId}/edit`;
   try {
@@ -640,6 +665,7 @@ export async function actionUpdateProperty(formData: FormData) {
 }
 
 export async function actionCreateSpace(formData: FormData) {
+  await requireCurrentConsent();
   const back = "/m/units/new";
   try {
     const session = await getSession();
@@ -651,6 +677,7 @@ export async function actionCreateSpace(formData: FormData) {
 }
 
 export async function actionUpdateSpace(formData: FormData) {
+  await requireCurrentConsent();
   const kind = text(formData.get("kind")) === "whole_unit" ? "whole_unit" : "room";
   const spaceId = text(formData.get("spaceId"));
   const back = kind === "whole_unit" ? `/m/units/whole/${spaceId}` : `/m/units/room/${spaceId}`;
@@ -664,6 +691,7 @@ export async function actionUpdateSpace(formData: FormData) {
 }
 
 export async function actionFinalizeId(formData: FormData): Promise<{ error: string } | void> {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await finalizeTenantId(session, {
@@ -681,6 +709,7 @@ export async function actionFinalizeId(formData: FormData): Promise<{ error: str
 }
 
 export async function actionViewIdPhotos(documentId: string) {
+  await requireCurrentConsent();
   try {
     const jar = await cookies();
     const token = jar.get(SESSION_COOKIE)?.value;
@@ -702,6 +731,7 @@ export async function actionViewIdPhotos(documentId: string) {
 }
 
 export async function actionMarkIdChecked(formData: FormData): Promise<{ error: string } | void> {
+  await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   try {
     const session = await getSession();
@@ -714,6 +744,7 @@ export async function actionMarkIdChecked(formData: FormData): Promise<{ error: 
 }
 
 export async function actionReturnId(formData: FormData): Promise<{ error: string } | void> {
+  await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   try {
     const session = await getSession();
@@ -774,6 +805,7 @@ function utilityBack(formData: FormData) {
 }
 
 export async function actionPrepareUtility(formData: FormData) {
+  await requireCurrentConsent();
   const unitId = text(formData.get("unitId"));
   const month = text(formData.get("periodStart")).slice(0, 7);
   const back = utilityBack(formData);
@@ -787,6 +819,7 @@ export async function actionPrepareUtility(formData: FormData) {
 }
 
 export async function actionConfirmUtility(formData: FormData) {
+  await requireCurrentConsent();
   const runId = text(formData.get("runId"));
   const month = text(formData.get("month"));
   const unitId = text(formData.get("unitId"));
@@ -807,6 +840,7 @@ export async function actionConfirmUtility(formData: FormData) {
 }
 
 export async function actionVoidUtility(formData: FormData) {
+  await requireCurrentConsent();
   const runId = text(formData.get("runId"));
   try {
     const session = await getSession();
@@ -818,6 +852,7 @@ export async function actionVoidUtility(formData: FormData) {
 }
 
 export async function actionPickLease(formData: FormData) {
+  await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   const jar = await cookies();
   jar.set("condola_lease", leaseId, appCookieOptions({ httpOnly: false }));

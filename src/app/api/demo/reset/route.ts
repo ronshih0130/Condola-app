@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/server/auth";
@@ -11,6 +12,8 @@ export async function POST() {
   if (!session || session.kind !== "staff" || session.role !== "admin") {
     return new NextResponse(null, { status: 404 });
   }
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   await resetAndSeed();
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);

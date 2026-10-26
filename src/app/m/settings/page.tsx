@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionOrgMail } from "@/server/auth-actions";
@@ -9,6 +10,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const query = await searchParams;
   const session = await getSession();
   const t = makeT(session.locale);

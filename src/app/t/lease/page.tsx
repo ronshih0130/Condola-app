@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { dictionary, makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
@@ -10,6 +11,7 @@ import { displaySampleName } from "@/server/sandbox-data";
 export const dynamic = "force-dynamic";
 
 export default async function TenantLeasePage() {
+  await requireCurrentConsent(undefined, "page");
   const { session, lease } = await selectedLease();
   const t = makeT(session.locale);
   const dict = dictionary(session.locale);

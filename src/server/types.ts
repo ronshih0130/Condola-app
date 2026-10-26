@@ -6,6 +6,7 @@ export type CalendarMode = "gregorian" | "roc";
 
 export type Session = {
   userId: string;
+  consent?: import("./consent").StoredConsent | null;
   sessionId: string;
   email: string;
   name: string;

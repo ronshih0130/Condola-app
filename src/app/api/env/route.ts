@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ENV_COOKIE, ORG_COOKIE } from "@/server/org-scope";
@@ -12,6 +13,8 @@ function safeNext(value: string | null) {
 export async function GET(request: Request) {
   const session = await readSession();
   if (!session || session.kind !== "staff") redirect("/login");
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   const url = new URL(request.url);
   const set = url.searchParams.get("set");
   const next = safeNext(url.searchParams.get("next"));

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCurrentConsent } from "./consent-gate";
+
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { sessionCookie, type RequestMeta } from "./auth";
@@ -179,6 +181,7 @@ export async function actionCreateFirm(formData: FormData) {
 }
 
 export async function actionRequestUpgrade(formData: FormData) {
+  await requireCurrentConsent();
   const session = await getSession();
   const tier = text(formData.get("tier")) === "pro" ? "pro" : "standard";
   try {
@@ -198,6 +201,7 @@ async function requirePlatformAdmin() {
 }
 
 export async function actionCreatePartnerCode(formData: FormData) {
+  await requireCurrentConsent();
   const session = await requirePlatformAdmin();
   const number = (name: string, fallback: number) => {
     const raw = text(formData.get(name));
@@ -224,6 +228,7 @@ export async function actionCreatePartnerCode(formData: FormData) {
 }
 
 export async function actionSetPriceOverride(formData: FormData) {
+  await requireCurrentConsent();
   const session = await requirePlatformAdmin();
   try {
     await setFirmOverride(session.userId, text(formData.get("orgId")), Number(text(formData.get("rate"))));
@@ -234,6 +239,7 @@ export async function actionSetPriceOverride(formData: FormData) {
 }
 
 export async function actionClearPriceOverride(formData: FormData) {
+  await requireCurrentConsent();
   const session = await requirePlatformAdmin();
   try {
     await clearFirmOverride(session.userId, text(formData.get("orgId")));

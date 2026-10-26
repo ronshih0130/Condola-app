@@ -1,3 +1,4 @@
+import { ConsentRequiredError, consentRequiredResponse, requireCurrentConsent } from "@/server/consent-gate";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { MAX_PHOTO_BYTES } from "@/lib/jpeg-size";
@@ -6,7 +7,7 @@ import { FlowError } from "@/server/errors";
 import { serveSignedPhoto, storeIdPhoto } from "@/server/id-docs";
 import { readPhotoToken } from "@/server/id-crypto";
 import { ENV_COOKIE, ORG_COOKIE } from "@/server/org-scope";
-import { readSession, sessionTokenHash } from "@/server/session";
+import { readSession, readSessionOn, sessionTokenHash } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ const SLOTS = new Set(["front", "back", "selfie"]);
 export async function POST(request: Request) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: "errors.forbidden" }, { status: 401 });
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   const length = Number(request.headers.get("content-length") ?? "");
   if (Number.isFinite(length) && length > MAX_PHOTO_BYTES) return NextResponse.json({ error: "errors.idPhoto" }, { status: 413 });
   const slot = request.headers.get("x-id-slot") ?? "";
@@ -42,8 +45,8 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get("token") ?? "";
-  // Missing cookie or a bad signature never opens a connection. A valid cookie
-  // is one id_photo_open call. The response is the upload-time watermarked copy.
+  // Missing cookie or a bad signature never opens a connection. Consent is
+  // checked before id_photo_open. The response is the upload-time watermarked copy.
   // GET decrypts that object. A row with no copy is burned once and stored;
   // the original is never the response. Viewer and Taiwan time stay on screen.
   if (!token) return new NextResponse(null, { status: 404 });
@@ -62,8 +65,13 @@ export async function GET(request: Request) {
       slot: parsed.s,
       preferredOrg: jar.get(ORG_COOKIE)?.value ?? null,
       env: rawEnv === "sandbox" || rawEnv === "live" ? rawEnv : null,
+    }, async (client) => {
+      const { session } = await readSessionOn(client, { touch: false });
+      if (!session || session.userId !== parsed.u) throw new Error("Invalid photo session");
+      if (await requireCurrentConsent(session, "api")) throw new ConsentRequiredError();
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof ConsentRequiredError) return consentRequiredResponse();
     return new NextResponse(null, { status: 404 });
   }
   if (!photo) return new NextResponse(null, { status: 404 });

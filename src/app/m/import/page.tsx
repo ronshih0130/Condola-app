@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ImportWizard } from "@/components/import-wizard";
 import { PageHeader } from "@/components/ui";
@@ -7,6 +8,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function ImportPage() {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   if (!can(session.role, "props.edit")) {

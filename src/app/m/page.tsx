@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { dictionary, makeT } from "@/i18n";
 import { FooterNote } from "@/components/chrome";
@@ -16,6 +17,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ dupFirm?: string; code?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const query = await searchParams;
   const t = makeT(session.locale);

@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { ListPager, ListSearch, listSummary } from "@/components/list-search";
@@ -9,6 +10,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function PropertiesPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const raw = await searchParams;
   const t = makeT(session.locale);

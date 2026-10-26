@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCurrentConsent } from "./consent-gate";
+
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
@@ -192,6 +194,7 @@ export async function actionReset(formData: FormData) {
 }
 
 export async function actionEmailPrefs(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await saveMemberEmailPrefs(session, {
@@ -205,6 +208,7 @@ export async function actionEmailPrefs(formData: FormData) {
 }
 
 export async function actionOrgMail(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await saveOrgMailSettings(session, {
@@ -271,6 +275,7 @@ export async function actionIssuePortalInvite(input: {
   leaseId?: string;
   rotate?: boolean;
 }) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const kind = input.kind === "owner" || input.kind === "tenant" ? input.kind : "";
@@ -315,6 +320,7 @@ export async function actionIssuePortalInvite(input: {
 }
 
 export async function actionInvite(formData: FormData) {
+  await requireCurrentConsent();
   const back = "/m/team";
   try {
     const session = await getSession();
@@ -332,6 +338,7 @@ export async function actionInvite(formData: FormData) {
 }
 
 export async function actionResendInvite(formData: FormData) {
+  await requireCurrentConsent();
   const back = "/m/team";
   try {
     const session = await getSession();
@@ -344,6 +351,7 @@ export async function actionResendInvite(formData: FormData) {
 }
 
 export async function actionRevokeInvite(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await revokeInvite(session, text(formData.get("invitationId")));
@@ -354,6 +362,7 @@ export async function actionRevokeInvite(formData: FormData) {
 }
 
 export async function actionMemberRole(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await setMemberRole(session, text(formData.get("memberId")), text(formData.get("role")) as OrgRole);
@@ -364,6 +373,7 @@ export async function actionMemberRole(formData: FormData) {
 }
 
 export async function actionMemberActive(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const active = text(formData.get("active")) === "1";
@@ -375,6 +385,7 @@ export async function actionMemberActive(formData: FormData) {
 }
 
 export async function actionChangePassword(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await changePassword(session, text(formData.get("current")), text(formData.get("password")), text(formData.get("confirm")));
@@ -385,6 +396,7 @@ export async function actionChangePassword(formData: FormData) {
 }
 
 export async function actionBeginMfa() {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const started = await beginMfa(session);
@@ -398,6 +410,7 @@ export async function actionBeginMfa() {
 }
 
 export async function actionConfirmMfa(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const jar = await cookies();
@@ -411,6 +424,7 @@ export async function actionConfirmMfa(formData: FormData) {
 }
 
 export async function actionDisableMfa() {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await disableMfa(session);
@@ -421,6 +435,7 @@ export async function actionDisableMfa() {
 }
 
 export async function actionRequireMfa(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await setRequireMfa(session, formData.get("require") === "on");
@@ -431,6 +446,7 @@ export async function actionRequireMfa(formData: FormData) {
 }
 
 export async function actionOwnerPrivacy(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await setOwnerPrivacy(session, {
@@ -493,6 +509,7 @@ function expenseFields(formData: FormData) {
 }
 
 export async function actionAddExpense(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await addExpense(session, {
@@ -508,6 +525,7 @@ export async function actionAddExpense(formData: FormData) {
 }
 
 export async function actionCreateExpense(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const created = await createExpense(session, expenseFields(formData));
@@ -518,6 +536,7 @@ export async function actionCreateExpense(formData: FormData) {
 }
 
 export async function actionUpdateExpense(formData: FormData) {
+  await requireCurrentConsent();
   const id = text(formData.get("expenseId"));
   try {
     const session = await getSession();
@@ -529,6 +548,7 @@ export async function actionUpdateExpense(formData: FormData) {
 }
 
 export async function actionApproveExpense(formData: FormData) {
+  await requireCurrentConsent();
   const id = text(formData.get("expenseId"));
   try {
     const session = await getSession();
@@ -540,6 +560,7 @@ export async function actionApproveExpense(formData: FormData) {
 }
 
 export async function actionVoidExpense(formData: FormData) {
+  await requireCurrentConsent();
   const id = text(formData.get("expenseId"));
   try {
     const session = await getSession();
@@ -551,6 +572,7 @@ export async function actionVoidExpense(formData: FormData) {
 }
 
 export async function actionReversePayment(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await reversePayment(session, text(formData.get("paymentId")), text(formData.get("reason")));
@@ -561,6 +583,7 @@ export async function actionReversePayment(formData: FormData) {
 }
 
 export async function actionCloseMonth(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await closeMonth(session, text(formData.get("month")), text(formData.get("note")));

@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionCloseMonth } from "@/server/auth-actions";
@@ -8,6 +9,7 @@ import { maybe, tx } from "@/server/db";
 export const dynamic = "force-dynamic";
 
 export default async function ClosePage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;

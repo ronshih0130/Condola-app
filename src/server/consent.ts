@@ -1,17 +1,7 @@
-import { query } from "./db";
+import { query, svc } from "./db";
 import { PRIVACY_VERSION, TERMS_VERSION } from "./legal-versions";
 
-/**
- * Consent recorded on the auth user.
- *
- * `app_metadata` is the source of truth because end users cannot edit it.
- * `user_metadata` is still written for older readers. A record that exists
- * only there counts as missing.
- *
- * Storage is `consentRepository`. A later change can replace that object
- * with an append-only consents table. Callers should use `readConsent` and
- * `writeConsent` and not write `raw_app_meta_data` themselves.
- */
+/** Table evidence is authoritative; metadata is mirrored for rollback. */
 export type ConsentSource = "signup" | "reconsent" | "invite" | "portal";
 
 export type StoredConsent = {
@@ -144,16 +134,26 @@ export async function writeConsentSql(userId: string, record: StoredConsent, cli
 }
 
 async function loadConsentRow(userId: string): Promise<StoredConsent | null> {
-  const row = await query<{ app: unknown; user_meta: unknown }>(
-    `SELECT raw_app_meta_data AS app, raw_user_meta_data AS user_meta FROM auth.users WHERE id = $1`,
-    [userId],
-  );
-  const found = row.rows[0];
-  if (!found) return null;
-  return effectiveConsent(found.app, found.user_meta);
+  return svc(userId, async (client) => {
+    const row = await client.query<StoredConsent>(
+      `SELECT accepted_at::text, terms_version, privacy_version, source
+         FROM public.consents WHERE user_id = $1
+        ORDER BY recorded_at DESC, id DESC LIMIT 1`,
+      [userId],
+    );
+    return row.rows[0] ?? null;
+  });
 }
 
 async function persistConsent(userId: string, record: StoredConsent) {
+  await svc(userId, async (client) => {
+    await client.query(
+      `INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id, accepted_at, terms_version, privacy_version, source) DO NOTHING`,
+      [userId, record.accepted_at, record.terms_version, record.privacy_version, record.source],
+    );
+  });
   await deliverConsent(userId, record, {
     admin: supabaseAdminAuth(),
     sql: (id, row) => writeConsentSql(id, row),

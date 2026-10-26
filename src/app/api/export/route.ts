@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { withoutIdentityFields } from "@/lib/idv";
 import { listProperties } from "@/server/queries";
@@ -6,6 +7,8 @@ import { getSession } from "@/server/session";
 export async function GET() {
   const session = await getSession();
   if (session.kind !== "staff") return NextResponse.json({ error: "errors.forbidden" }, { status: 403 });
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   const rows = withoutIdentityFields((await listProperties(session)).map((row) => ({ ...row })));
   const header = "name,address,currency,mode,rooms,owner";
   const body = rows

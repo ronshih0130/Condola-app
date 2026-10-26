@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -23,6 +24,7 @@ export default async function TicketDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; vendor?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const session = await getSession();

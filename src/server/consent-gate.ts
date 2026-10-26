@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getSession } from "./session";
+import type { Session } from "./types";
 import {
   buildStoredConsent,
   consentCoversCurrent,
@@ -11,7 +15,7 @@ import { sameAppPath } from "./public-origin";
 export type ConsentGateResult = { ok: true; recorded: boolean } | { ok: false; error: "consent" };
 
 /**
- * Missing or stale app_metadata consent blocks the action unless the person
+ * Missing or stale table consent blocks the action unless the person
  * ticked the checkbox on this request. A tick writes a server-timed record.
  * An already-current record does not need another tick.
  */
@@ -65,4 +69,29 @@ export async function entryConsentRedirect(
   repo: ConsentRepository = consentRepository,
 ) {
   return consentGateTarget(await repo.read(userId), variant, next);
+}
+
+/** Used by file handlers whose authorization runs on an existing connection. */
+export class ConsentRequiredError extends Error {}
+
+export function consentRequiredResponse() {
+  return Response.json(
+    { ok: false, error: "errors.consentRequired" },
+    { status: 403, headers: { "Cache-Control": "private, no-store" } },
+  );
+}
+
+/** Trusted session evidence only. No metadata fallback or additional query. */
+export async function requireCurrentConsent(
+  session?: Session,
+  mode: "api" | "action" | "page" = "action",
+  next?: string,
+): Promise<Response | null> {
+  const current = session ?? await getSession();
+  if (consentCoversCurrent(current.consent ?? null)) return null;
+  if (mode === "api") return consentRequiredResponse();
+  const fallback = current.kind === "staff" ? "/m" : current.kind === "owner" ? "/o" : "/t";
+  const path = consentNextPath(next ?? (await headers()).get("x-pathname") ?? "", fallback);
+  const base = current.kind === "staff" ? "/consent" : "/consent/portal";
+  redirect(`${base}?next=${encodeURIComponent(path)}`);
 }

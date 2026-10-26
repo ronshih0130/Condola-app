@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { moneyLabel, ownerSettlement, signedMoneyLabel, statementPeriodNet } from "@/server/format";
@@ -7,6 +8,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerStatementsPage() {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const rows = await listStatements(session);

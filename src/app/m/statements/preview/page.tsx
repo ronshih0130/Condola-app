@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
@@ -13,6 +14,7 @@ export default async function StatementPreviewPage({
 }: {
   searchParams: Promise<{ owner?: string; month?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;

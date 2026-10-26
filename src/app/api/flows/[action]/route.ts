@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import {
   approveMatch,
@@ -57,6 +58,8 @@ export async function POST(request: Request, context: { params: Promise<{ action
       return NextResponse.json({ ok: false, error: "errors.teamInvitesSoon" }, { status: 400 });
     }
     if (!session) return NextResponse.json({ ok: false, error: "errors.forbidden" }, { status: 401 });
+    const blocked = await requireCurrentConsent(session, "api");
+    if (blocked) return blocked;
     const body = (await request.json()) as Record<string, never>;
     const result = await handler(session, body);
     return NextResponse.json({ ok: true, result });

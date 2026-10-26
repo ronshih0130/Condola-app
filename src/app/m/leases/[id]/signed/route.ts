@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { signedLeasePdf } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -7,6 +8,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const session = await getSession();
   if (session.kind !== "staff") return new Response("Not found", { status: 404 });
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   const file = await signedLeasePdf(session, id);
   if (!file) return new Response("Not found", { status: 404 });
   const bytes = Uint8Array.from(file.content);

@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { OwnerForm } from "@/components/owner-form";
@@ -18,6 +19,7 @@ export default async function EditOwnerPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const query = await searchParams;

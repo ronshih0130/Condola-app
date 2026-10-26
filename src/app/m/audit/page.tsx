@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
@@ -23,6 +24,7 @@ export default async function AuditPage({
 }: {
   searchParams: Promise<{ user?: string; action?: string; record?: string; from?: string; to?: string; cursor?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const denied = noPermHref("/m/audit", session.role);
   if (denied) redirect(denied);

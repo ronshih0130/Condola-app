@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { FlowError } from "@/server/errors";
 import { commitImportBatch, dryRunImport, previewImport, readImportBody } from "@/server/import-batch";
@@ -9,6 +10,8 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const session = await readSession();
   if (!session || session.kind !== "staff") return NextResponse.json({ error: "errors.forbidden" }, { status: 401 });
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   try {
     const body = await readImportBody(request);
     if (body.mode === "preview") {

@@ -234,9 +234,9 @@ test("each gate calls the server helper before the protected action", () => {
   const manager = readFileSync(new URL("../app/m/layout.tsx", import.meta.url), "utf8");
   const owner = readFileSync(new URL("../app/o/layout.tsx", import.meta.url), "utf8");
   const tenant = readFileSync(new URL("../app/t/layout.tsx", import.meta.url), "utf8");
-  assert.match(manager, /entryConsentRedirect\(session\.userId, "reconsent"/);
-  assert.match(owner, /entryConsentRedirect\(session\.userId, "portal"/);
-  assert.match(tenant, /entryConsentRedirect\(session\.userId, "portal"/);
+  assert.match(manager, /requireCurrentConsent\(session, "page"/);
+  assert.match(owner, /requireCurrentConsent\(session, "page"/);
+  assert.match(tenant, /requireCurrentConsent\(session, "page"/);
   const signupStart = signup.slice(signup.indexOf("export async function startSignup"), signup.indexOf("export async function resendSignup"));
   assert.match(signupStart, /writeConsent\([^)]*"signup"/);
 });

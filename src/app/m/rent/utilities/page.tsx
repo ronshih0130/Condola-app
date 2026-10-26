@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { connection } from "next/server";
 import { makeT } from "@/i18n";
@@ -54,6 +55,7 @@ export default async function UtilityPostingPage({
 }: {
   searchParams: Promise<{ unit?: string; run?: string; error?: string; saved?: string; page?: string; month?: string; bill?: string; kwh?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   await connection();
   const session = await getSession();
   const t = makeT(session.locale);

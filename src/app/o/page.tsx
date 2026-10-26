@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ownerPrivacy } from "@/server/auth";
 import { moneyLabel } from "@/server/format";
@@ -8,6 +9,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerHomePage() {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const [rows, privacy] = await Promise.all([ownerHome(session), ownerPrivacy(session.orgId)]);
