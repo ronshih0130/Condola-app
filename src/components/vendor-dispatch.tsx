@@ -1,6 +1,6 @@
 import { dictionary, type T, type Locale } from "@/i18n";
 import { actionAddVendor, actionConfirmVendor, actionDispatchVendor, actionRevokeVendor } from "@/server/actions";
-import { formatDate, formatMoney } from "@/server/format";
+import { formatDate, moneyLabel } from "@/server/format";
 import type { CalendarMode } from "@/server/types";
 import type { VendorChoice, VendorDispatchView } from "@/server/vendor-repair";
 import { VENDOR_CATEGORIES, VENDOR_CATEGORY_KEY, VENDOR_LINK_DAYS, vendorMenuLabel } from "@/server/vendor-repair-rules";
@@ -77,7 +77,7 @@ export function VendorDispatch({
       ) : null}
       {job?.reported && job.reportedCost ? (
         <p data-testid="vendor-reported">
-          {t("i_vendor_reported")} {formatMoney(job.reportedCost, currency, locale)}
+          {t("i_vendor_reported")} {moneyLabel(job.reportedCost, currency, locale)}
         </p>
       ) : null}
       {job?.confirmed && job.expenseId ? (
