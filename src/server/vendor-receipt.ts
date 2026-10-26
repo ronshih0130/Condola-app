@@ -2,7 +2,7 @@ import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { maybe, one, svc } from "./db";
 import { FlowError } from "./errors";
-import type { JobTypeLineItem } from "./job-types-rules";
+import { deriveTicketDocumentItems, type JobTypeLineItem } from "./job-types-rules";
 import { authorizeVendorStaff } from "./vendor-onboarding";
 import { PHOTO_BUCKET } from "./repair-rules";
 import { downloadRepairObject } from "./ticket-photos";
@@ -56,12 +56,14 @@ interface Grant {
 
 interface Ticket {
   id: string;
+  ticket_number: string;
   org_id: string;
   property_id: string;
   assigned_vendor_contact_id: string | null;
   final_cost_minor: string | null;
   status: string;
   work_address: string | null;
+  type_fields: Record<string, unknown>;
 }
 
 interface Profile extends VendorPdfIssuer {
@@ -102,10 +104,7 @@ function requireVendorToken(actor: VendorDocumentActor): asserts actor is string
 }
 
 function validKey(key: string) {
-  if (
-    typeof key !== "string" ||
-    !/^[A-Za-z0-9._:-]{1,160}$/.test(key)
-  ) {
+  if (typeof key !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(key)) {
     throw new Error("invalid_idempotency_key");
   }
 }
@@ -113,9 +112,9 @@ function validKey(key: string) {
 async function ticketOn(client: Client, orgId: string, ticketId: string) {
   const ticket = await maybe<Ticket>(
     client,
-    `SELECT t.id::text, t.org_id::text, t.property_id::text,
+    `SELECT t.id::text, t.ticket_number::text, t.org_id::text, t.property_id::text,
             t.assigned_vendor_contact_id::text, t.final_cost_minor::text,
-            t.status::text, p.address_display AS work_address
+            t.status::text, t.type_fields, p.address_display AS work_address
        FROM maintenance_tickets t
        JOIN properties p ON p.id = t.property_id AND p.org_id = t.org_id
       WHERE t.id = $1 AND t.org_id = $2`,
@@ -149,11 +148,7 @@ async function authorize(
   let orgId: string;
   let userId: string | null;
   if (typeof actor === "string") {
-    if (
-      !grant ||
-      grant.ticket_id !== ticketId ||
-      grant.vendor_profile_id !== profileId
-    ) {
+    if (!grant || grant.ticket_id !== ticketId || grant.vendor_profile_id !== profileId) {
       notFound();
     }
     orgId = grant.org_id;
@@ -257,9 +252,7 @@ async function issueInput(
   seq: number,
 ): Promise<IssueVendorDocumentInput> {
   if (access.ticket.status !== "closed") throw new Error("ticket_not_closed");
-  if (!access.ticket.work_address?.trim()) {
-    throw new Error("missing_work_address");
-  }
+  if (!access.ticket.work_address?.trim()) throw new Error("missing_work_address");
   const clock = await one<{ today: string }>(
     client,
     `SELECT (clock_timestamp() AT TIME ZONE 'Asia/Taipei')::date::text AS today`,
@@ -277,11 +270,7 @@ async function issueInput(
     throw new Error("vendor_profile_incomplete");
   }
 
-  const buyer = await buyerOn(
-    client,
-    access,
-    access.buyerSelection ?? ctx.buyer,
-  );
+  const buyer = await buyerOn(client, access, access.buyerSelection ?? ctx.buyer);
   // Repair costs are cents; document rules require integer NT$.
   const cents = access.ticket.final_cost_minor;
   if (
@@ -305,7 +294,7 @@ async function issueInput(
     },
     seq,
     buyer: buyer as BuyerInput,
-    items: ctx.items,
+    items: deriveTicketDocumentItems(ctx.items, access.ticket.type_fields),
     total_minor: ctx.totalMinor,
     ticket_actual_cost_minor: actual,
     locale: "zh-TW",
@@ -358,6 +347,7 @@ async function renderOn(
       documentDate: ctx.documentDate,
       issuedAt,
       workAddress: access.ticket.work_address!,
+      ticketNumber: access.ticket.ticket_number,
       preview,
       seal: await sealOn(client, access),
     },
@@ -471,10 +461,7 @@ export async function createVendorDocumentInvite(
   });
 }
 
-export async function revokeVendorDocumentInvite(
-  session: Session,
-  grantId: string,
-) {
+export async function revokeVendorDocumentInvite(session: Session, grantId: string) {
   return svc(session.userId, async (client) => {
     await authorizeVendorStaff(client, session);
     const grant = await maybe<Grant>(
@@ -522,9 +509,7 @@ export async function requestVendorDocumentCorrection(
       initial.vendor_profile_id,
     );
     const current = resultOf(await persistedOn(client, id));
-    if (current.document.status !== "issued") {
-      throw new Error("document_not_issued");
-    }
+    if (current.document.status !== "issued") throw new Error("document_not_issued");
     await writeAudit(
       access.orgId,
       session.userId,
@@ -641,17 +626,8 @@ async function issueOn(
   );
   const seq = Number(allocation.seq);
   const input = await issueInput(client, access, ctx, id, seq);
-  const document = source
-    ? applyReissueRules(source, input)
-    : applyIssueRules(input);
-  const pdf = await renderOn(
-    client,
-    access,
-    ctx,
-    document,
-    allocation.issued_at,
-    false,
-  );
+  const document = source ? applyReissueRules(source, input) : applyIssueRules(input);
+  const pdf = await renderOn(client, access, ctx, document, allocation.issued_at, false);
   const version = await one<{ id: string }>(
     client,
     `SELECT id::text FROM vendor_profile_versions
@@ -704,6 +680,7 @@ async function issueOn(
         sealFileId: access.profile.seal_file_id,
         profileVersionId: version.id,
         workAddress: access.ticket.work_address,
+        ticketNumber: access.ticket.ticket_number,
       }),
     ],
   );
@@ -740,12 +717,7 @@ export async function voidVendorDocument(
   requireVendorToken(actor);
   return svc(null, async (client) => {
     const initial = await persistedOn(client, id);
-    const access = await authorize(
-      client,
-      actor,
-      initial.ticket_id,
-      initial.vendor_profile_id,
-    );
+    const access = await authorize(client, actor, initial.ticket_id, initial.vendor_profile_id);
     if (access.orgId !== initial.org_id) notFound();
     const current = resultOf(await persistedOn(client, id));
     const clock = await one<{ now: string }>(
@@ -781,23 +753,13 @@ export async function reissueVendorDocument(
   options: { idempotencyKey: string },
 ) {
   requireVendorToken(ctx.actor);
-  return svc(null, (client) =>
-    issueOn(client, ctx, options.idempotencyKey, sourceId),
-  );
+  return svc(null, (client) => issueOn(client, ctx, options.idempotencyKey, sourceId));
 }
 
-export async function readVendorDocumentPdf(
-  actor: VendorDocumentActor,
-  id: string,
-) {
+export async function readVendorDocumentPdf(actor: VendorDocumentActor, id: string) {
   return svc(typeof actor === "string" ? null : actor.userId, async (client) => {
     const initial = await persistedOn(client, id);
-    const access = await authorize(
-      client,
-      actor,
-      initial.ticket_id,
-      initial.vendor_profile_id,
-    );
+    const access = await authorize(client, actor, initial.ticket_id, initial.vendor_profile_id);
     if (access.orgId !== initial.org_id) notFound();
     const row = await one<{ bytes: Buffer }>(
       client,

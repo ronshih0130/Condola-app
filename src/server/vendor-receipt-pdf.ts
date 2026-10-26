@@ -1,5 +1,6 @@
-import { PDFDocument } from "pdf-lib";
-import type { PdfDocument } from "../lib/pdf-document";
+import * as fontkitModule from "@pdf-lib/fontkit";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+import type { PdfBlock, PdfDocument } from "../lib/pdf-document";
 import { renderPdf } from "../lib/pdf-render";
 import type { VendorDocument } from "./vendor-receipt-rules";
 
@@ -18,6 +19,8 @@ export interface VendorReceiptPdfInput {
   documentDate: string;
   issuedAt: string;
   workAddress: string;
+  /** Human-facing maintenance ticket number; legacy callers fall back to ID. */
+  ticketNumber?: string;
   preview?: boolean;
   seal?: { bytes: Uint8Array; mimeType: "image/png" | "image/jpeg" };
 }
@@ -31,11 +34,6 @@ export async function sha256(bytes: Uint8Array): Promise<string> {
   ).join("");
 }
 
-/**
- * Uses the same lazy, bundled Traditional Chinese font as pdf-client.ts.
- * An absolute trusted application origin is required on the server.
- * Tests and asset-binding callers can instead pass font bytes directly.
- */
 export async function loadVendorPdfFont(origin: string): Promise<Uint8Array> {
   const url = new URL("/fonts/DroidSansFallback-subset.ttf", origin);
   const response = await fetch(url, { redirect: "error" });
@@ -45,6 +43,8 @@ export async function loadVendorPdfFont(origin: string): Promise<Uint8Array> {
 
 export function buildVendorReceiptPdf(input: VendorReceiptPdfInput): PdfDocument {
   const { document, issuer } = input;
+  // TODO: CEO decision pending on the company-buyer PDF label exception to the
+  // banned-copy policy; retain 買受人統編 until that decision is approved.
   const buyerRows =
     document.buyer.kind === "owner"
       ? [{ label: "收據抬頭", value: document.buyer.receipt_title }]
@@ -54,10 +54,7 @@ export function buildVendorReceiptPdf(input: VendorReceiptPdfInput): PdfDocument
           { label: "買受人統編", value: document.buyer.tax_id },
         ];
   const issuerRows = [
-    {
-      label: "廠商名稱",
-      value: issuer.business_name || issuer.display_name,
-    },
+    { label: "廠商名稱", value: issuer.business_name || issuer.display_name },
     { label: "電話", value: issuer.phone_e164 },
   ];
   if (document.kind === "receipt") {
@@ -82,6 +79,7 @@ export function buildVendorReceiptPdf(input: VendorReceiptPdfInput): PdfDocument
         heading: "",
         rows: [
           { label: "日期", value: input.documentDate },
+          { label: "工單編號", value: input.ticketNumber ?? document.ticket_id },
           { label: "維修地點", value: input.workAddress },
           ...buyerRows,
         ],
@@ -92,7 +90,7 @@ export function buildVendorReceiptPdf(input: VendorReceiptPdfInput): PdfDocument
         lines: document.items.map(
           (item) =>
             `${item.name}　${item.quantity}　${item.unit}　` +
-            `NT$${item.unit_price_minor}　NT$${item.amount_minor}`,
+            `NT$${Math.round(item.amount_minor / item.quantity)}　NT$${item.amount_minor}`,
         ),
       },
       {
@@ -104,50 +102,139 @@ export function buildVendorReceiptPdf(input: VendorReceiptPdfInput): PdfDocument
           ...issuerRows,
         ],
       },
-      {
-        kind: "text",
-        heading: "",
-        lines: [...document.notices],
-      },
+      { kind: "text", heading: "", lines: [...document.notices] },
     ],
   };
 }
 
-/** Final artifact metadata uses only the injected issue time. */
+function blockLines(block: PdfBlock): string[] {
+  const lines = block.kind === "rows"
+    ? block.rows.map((row) => `${row.label}：${row.value}`)
+    : block.lines;
+  return block.heading ? [block.heading, ...lines] : lines;
+}
+
+/**
+ * Paginate document content before rendering. Every page has a repeated title,
+ * document identifier and page count. Work-detail pages also repeat the non-tax
+ * statement in the footer. The final group is indivisible, including wrapped
+ * issuer details, notices and the reserved seal rectangle.
+ */
 export async function renderVendorReceiptPdf(
   input: VendorReceiptPdfInput,
   fontBytes: Uint8Array,
 ): Promise<{ bytes: Uint8Array; sha256: string }> {
   const timestamp = new Date(input.issuedAt);
   if (!Number.isFinite(timestamp.getTime())) throw new Error("invalid_issue_time");
+  if (input.document.kind === "receipt" && !input.seal) {
+    throw new Error("missing_seal_image");
+  }
   const model = buildVendorReceiptPdf(input);
-  const rendered = await renderPdf(model, fontBytes);
-  const pdf = await PDFDocument.load(rendered, { updateMetadata: false });
+  const pdf = await PDFDocument.create();
+  type Fontkit = Parameters<PDFDocument["registerFontkit"]>[0];
+  const fontkit = fontkitModule as unknown as Fontkit & { default?: Fontkit };
+  pdf.registerFontkit(fontkit.default ?? fontkit);
+  const cjk = await pdf.embedFont(fontBytes, { subset: false });
+  const latin = await pdf.embedFont(StandardFonts.Helvetica);
 
-  // Replace renderPdf's wall-clock metadata before saving the final artifact.
+  // Measure conservatively using both faces: renderPdf selects its face per
+  // glyph. Keeping a small width margin also avoids floating-point rewrapping.
+  const width = (ch: string, size: number) => {
+    let latinWidth = 0;
+    try {
+      latinWidth = latin.widthOfTextAtSize(ch, size);
+    } catch {
+      // Chinese text uses the bundled font.
+    }
+    return Math.max(cjk.widthOfTextAtSize(ch, size), latinWidth);
+  };
+  const wrap = (text: string, size: number): string[] => {
+    const lines: string[] = [];
+    for (const paragraph of text.replaceAll("\r", "").split("\n")) {
+      let line = "";
+      let used = 0;
+      for (const ch of paragraph) {
+        const next = width(ch, size);
+        if (line && used + next > 495) {
+          lines.push(line);
+          line = "";
+          used = 0;
+        }
+        line += ch;
+        used += next;
+      }
+      lines.push(line);
+    }
+    return lines;
+  };
+  const flatten = (blocks: PdfBlock[]) =>
+    blocks.flatMap(blockLines).flatMap((line) => wrap(line, 11));
+
+  const body = flatten(model.blocks.slice(0, 2));
+  const finalGroup = flatten(model.blocks.slice(2));
+  const titleHeight = wrap(model.title, 18).length * 24;
+  const subtitleHeight = model.subtitle.trim()
+    ? wrap(model.subtitle, 11).length * 16
+    : 0;
+  // renderPdf starts at 783.89, then consumes title, subtitle and a six-point gap.
+  const contentTop = 841.89 - 58 - titleHeight - subtitleHeight - 6;
+  const capacity = Math.floor((contentTop - 68) / 16);
+  const sealLines = input.document.kind === "receipt" ? 6 : 0;
+  const finalHeight = finalGroup.length + sealLines;
+  if (capacity < 1 || finalHeight > capacity) {
+    throw new Error("vendor_pdf_final_group_too_large");
+  }
+
+  const pages: string[][] = [];
+  let remaining = body.slice();
+  while (remaining.length + finalHeight > capacity) {
+    pages.push(remaining.slice(0, capacity));
+    remaining = remaining.slice(capacity);
+  }
+  pages.push([...remaining, ...finalGroup]);
+  const sealTop = contentTop - pages[pages.length - 1].length * 16;
+  const footerLabel = [
+    input.preview ? "預覽，尚未開立" : "",
+    input.document.kind !== "receipt" ? "本文件非稅務憑證" : "",
+  ].filter(Boolean).join(" | ");
+
+  for (let index = 0; index < pages.length; index += 1) {
+    const identifier = input.document.doc_no;
+    const trailer = `${identifier ? `${identifier} | ` : ""}page ${index + 1}/${pages.length}`;
+    const rendered = await renderPdf(
+      {
+        ...model,
+        footerLabel,
+        footerHash: trailer,
+        blocks: [{ kind: "text", heading: "", lines: pages[index] }],
+      },
+      fontBytes,
+    );
+    const source = await PDFDocument.load(rendered, { updateMetadata: false });
+    if (source.getPageCount() !== 1) throw new Error("vendor_pdf_pagination_overflow");
+    const [page] = await pdf.copyPages(source, [0]);
+    pdf.addPage(page);
+  }
+
+  if (input.document.kind === "receipt" && input.seal) {
+    const image = input.seal.mimeType === "image/png"
+      ? await pdf.embedPng(input.seal.bytes)
+      : await pdf.embedJpg(input.seal.bytes);
+    const scale = Math.min(110 / image.width, 80 / image.height);
+    pdf.getPages()[pages.length - 1].drawImage(image, {
+      x: 437 - (image.width * scale) / 2,
+      y: sealTop - 80,
+      width: image.width * scale,
+      height: image.height * scale,
+    });
+  }
+
   pdf.setCreationDate(timestamp);
   pdf.setModificationDate(timestamp);
   pdf.setCreator("Condola");
   pdf.setProducer("Condola");
   pdf.setTitle(model.title);
   pdf.setSubject(input.preview ? "預覽，尚未開立" : input.document.doc_no);
-
-  if (input.document.kind === "receipt") {
-    if (!input.seal) throw new Error("missing_seal_image");
-    const image =
-      input.seal.mimeType === "image/png"
-        ? await pdf.embedPng(input.seal.bytes)
-        : await pdf.embedJpg(input.seal.bytes);
-    const scale = Math.min(110 / image.width, 80 / image.height);
-    const page = pdf.addPage([595.28, 841.89]);
-    page.drawImage(image, {
-      x: 437 - (image.width * scale) / 2,
-      y: 650,
-      width: image.width * scale,
-      height: image.height * scale,
-    });
-  }
-
   const bytes = await pdf.save({ useObjectStreams: false });
   return { bytes, sha256: await sha256(bytes) };
 }

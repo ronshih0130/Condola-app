@@ -53,6 +53,7 @@ export interface JobTypeLineItem {
   name: string;
   quantity: number;
   unit: string;
+  /** Rounded display value; never multiply this to reconstruct the row amount. */
   unit_price_minor: number;
   amount_minor: number;
   category: LineItemCategory;
@@ -407,7 +408,7 @@ export const DEFAULT_JOB_TYPES: readonly JobTypeDefinition[] = [
     },
     acceptance_checklist: [
       { key: "water_test_no_leak", label_zh: "試水無滲漏", label_en: "Water test passed with no seepage" },
-      { key: "leak_source_marked", label_zh: "抓漏位置標記", label_en: "Leak source marked" },
+      { key: "leak_source_marked", label_zh: "漏水位置標記", label_en: "Leak source marked" },
       { key: "followup_days_noted", label_zh: "後續追蹤天數說明", label_en: "Follow-up observation days noted" },
     ],
     pricing_modes: ["quote_then_approve", "material_and_labor", "lump_sum"],
@@ -431,27 +432,17 @@ export function validateJobTypeFields(
   for (const field of requiredFields) {
     const raw = values[field.key];
     if (raw === undefined || raw === null) {
-      if (field.required) {
-        missingKeys.push(field.key);
-      }
+      if (field.required) missingKeys.push(field.key);
       continue;
     }
-
     if (field.type === "text") {
       const str = typeof raw === "string" ? raw.trim() : String(raw).trim();
-      if (str.length === 0) {
-        if (field.required) {
-          missingKeys.push(field.key);
-        }
-      }
-    } else if (field.type === "number") {
+      if (!str && field.required) missingKeys.push(field.key);
+    } else {
       const num = typeof raw === "number" ? raw : Number(raw);
-      if (!Number.isFinite(num) || num <= 0) {
-        invalidKeys.push(field.key);
-      }
+      if (!Number.isFinite(num) || num <= 0) invalidKeys.push(field.key);
     }
   }
-
   return {
     ok: missingKeys.length === 0 && invalidKeys.length === 0,
     missingKeys,
@@ -467,19 +458,13 @@ export function validatePhasePhotoCounts(
   for (const phase of ["before", "during", "after"] as const) {
     const rule = photoRules[phase];
     const count = counts[phase] ?? 0;
-    if (!Number.isInteger(count) || count < 0) {
-      violations.push(phase);
-      continue;
-    }
-    if (rule.required && count < Math.max(1, rule.min)) {
-      violations.push(phase);
-      continue;
-    }
-    if (!rule.required && count > 0 && count < rule.min) {
-      violations.push(phase);
-      continue;
-    }
-    if (count > rule.max) {
+    if (
+      !Number.isInteger(count) ||
+      count < 0 ||
+      (rule.required && count < Math.max(1, rule.min)) ||
+      (!rule.required && count > 0 && count < rule.min) ||
+      count > rule.max
+    ) {
       violations.push(phase);
     }
   }
@@ -487,11 +472,8 @@ export function validatePhasePhotoCounts(
 }
 
 /**
- * Validates photo requirements on completion report (CA-10).
- * Spec decision pending R&D confirmation: flow_spec_v1 §9 wins over job_types_v1 J03
- * for after-photos — completion requires required after-photos OR a non-empty
- * `missing_photo_reason`. Required `during` photos (e.g. masonry, leak_repair)
- * and phase max limits are still enforced.
+ * Completion requires after-photos OR a missing-photo reason.
+ * Required during photos and all phase maxima remain enforced.
  */
 export function validateCompletionPhotos(
   photoRules: JobTypePhotoRules,
@@ -513,7 +495,6 @@ export function validateCompletionPhotos(
   if (!Number.isInteger(beforeCount) || beforeCount < 0 || beforeCount > photoRules.before.max) {
     violations.push("before");
   }
-
   if (
     !Number.isInteger(duringCount) ||
     duringCount < 0 ||
@@ -522,7 +503,6 @@ export function validateCompletionPhotos(
   ) {
     violations.push("during");
   }
-
   if (!Number.isInteger(afterCount) || afterCount < 0 || afterCount > photoRules.after.max) {
     violations.push("after");
   } else if (
@@ -532,7 +512,6 @@ export function validateCompletionPhotos(
   ) {
     violations.push("after");
   }
-
   return { ok: violations.length === 0, violations };
 }
 
@@ -540,10 +519,8 @@ export function validatePricingMode(
   jobType: Pick<JobTypeDefinition, "pricing_modes">,
   mode: string,
 ): mode is PricingMode {
-  if (mode === "lump_sum") {
-    return true;
-  }
-  return (jobType.pricing_modes as readonly string[]).includes(mode);
+  return mode === "lump_sum" ||
+    (jobType.pricing_modes as readonly string[]).includes(mode);
 }
 
 export function prefixItemNameWithJobType(
@@ -552,9 +529,7 @@ export function prefixItemNameWithJobType(
 ): string {
   const cleanJobName = jobTypeNameZh.trim();
   const cleanItemName = itemName.trim();
-  if (!cleanJobName) {
-    return cleanItemName;
-  }
+  if (!cleanJobName) return cleanItemName;
   const prefix = `${cleanJobName} - `;
   if (cleanItemName.startsWith(prefix) || cleanItemName === cleanJobName) {
     return cleanItemName;
@@ -568,21 +543,12 @@ export function buildJobTypeLineItem(input: {
   pricingMode: PricingMode;
   quantity?: number;
   unit?: string;
-  unit_price_minor: number;
+  unit_price_minor?: number;
   amount_minor?: number;
   category?: LineItemCategory;
 }): { ok: true; item: JobTypeLineItem } | { ok: false; error: string } {
   const trimmedName = input.name.trim();
-  if (!trimmedName) {
-    return { ok: false, error: "empty_item_name" };
-  }
-
-  if (
-    !Number.isSafeInteger(input.unit_price_minor) ||
-    input.unit_price_minor <= 0
-  ) {
-    return { ok: false, error: "invalid_unit_price_minor" };
-  }
+  if (!trimmedName) return { ok: false, error: "empty_item_name" };
 
   const isLumpSum = input.pricingMode === "lump_sum";
   const quantity = isLumpSum ? 1 : (input.quantity ?? 1);
@@ -592,24 +558,27 @@ export function buildJobTypeLineItem(input: {
 
   const unit = isLumpSum
     ? "式"
-    : (input.unit?.trim() || PRICING_MODE_DEFAULT_UNITS[input.pricingMode] || "式");
+    : (input.unit?.trim() || PRICING_MODE_DEFAULT_UNITS[input.pricingMode]);
 
-  const expectedAmount = isLumpSum
-    ? input.unit_price_minor
-    : quantity * input.unit_price_minor;
-
-  if (!Number.isSafeInteger(expectedAmount) || expectedAmount <= 0) {
+  // Retain the legacy unit-price-only input path. An explicit row amount always
+  // wins; its rounded unit price is derived, never used to validate the amount.
+  let amount = input.amount_minor;
+  if (amount === undefined) {
+    if (
+      !Number.isSafeInteger(input.unit_price_minor) ||
+      (input.unit_price_minor ?? 0) <= 0
+    ) {
+      return { ok: false, error: "invalid_unit_price_minor" };
+    }
+    amount = quantity * input.unit_price_minor!;
+  }
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
     return { ok: false, error: "invalid_amount_minor" };
   }
-
-  if (
-    input.amount_minor !== undefined &&
-    input.amount_minor !== expectedAmount
-  ) {
-    return { ok: false, error: "amount_mismatch" };
+  const category = input.category ?? "service";
+  if (!["service", "material", "labor"].includes(category)) {
+    return { ok: false, error: "invalid_category" };
   }
-
-  const category: LineItemCategory = input.category ?? "service";
 
   return {
     ok: true,
@@ -617,11 +586,72 @@ export function buildJobTypeLineItem(input: {
       name: prefixItemNameWithJobType(input.jobTypeNameZh, trimmedName),
       quantity,
       unit,
-      unit_price_minor: input.unit_price_minor,
-      amount_minor: expectedAmount,
+      unit_price_minor: Math.round(amount / quantity),
+      amount_minor: amount,
       category,
     },
   };
+}
+
+/**
+ * Persisted ticket type_fields.pricing contains either one mode/quantity/unit
+ * shared by document rows, or an ordered items array with those fields per row.
+ * Only persisted data supplies these fields when pricing exists. Malformed or
+ * incomplete persisted pricing must not silently fall back to caller values.
+ */
+export function deriveTicketDocumentItems(
+  items: readonly JobTypeLineItem[],
+  typeFields: Record<string, unknown> | null | undefined,
+): JobTypeLineItem[] {
+  const pricing = typeFields?.pricing;
+  if (pricing === undefined || pricing === null) {
+    return items.map((item) => ({
+      ...item,
+      unit_price_minor: Math.round(item.amount_minor / item.quantity),
+    }));
+  }
+  const record = (value: unknown): Record<string, unknown> => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("invalid_ticket_pricing");
+    }
+    return value as Record<string, unknown>;
+  };
+  const saved = record(pricing);
+  const rows = saved.items;
+  if (rows !== undefined && (!Array.isArray(rows) || rows.length !== items.length)) {
+    throw new Error("invalid_ticket_pricing");
+  }
+
+  return items.map((item, index) => {
+    const row = rows === undefined ? saved : record((rows as unknown[])[index]);
+    const mode = row.mode ?? saved.mode;
+    if (
+      typeof mode !== "string" ||
+      !Object.prototype.hasOwnProperty.call(PRICING_MODE_DEFAULT_UNITS, mode)
+    ) {
+      throw new Error("invalid_ticket_pricing");
+    }
+    const lumpSum = mode === "lump_sum";
+    const quantity = lumpSum ? 1 : row.quantity;
+    if (typeof quantity !== "number" || !Number.isSafeInteger(quantity) || quantity <= 0) {
+      throw new Error("invalid_ticket_pricing");
+    }
+    const savedUnit = row.unit;
+    if (savedUnit !== undefined && (typeof savedUnit !== "string" || !savedUnit.trim())) {
+      throw new Error("invalid_ticket_pricing");
+    }
+    const unit = lumpSum
+      ? "式"
+      : (typeof savedUnit === "string"
+          ? savedUnit.trim()
+          : PRICING_MODE_DEFAULT_UNITS[mode as PricingMode]);
+    return {
+      ...item,
+      quantity,
+      unit,
+      unit_price_minor: Math.round(item.amount_minor / quantity),
+    };
+  });
 }
 
 export function computeMaterialLaborSplitTotals(
@@ -635,43 +665,38 @@ export function computeMaterialLaborSplitTotals(
       total_minor: number;
     }
   | { ok: false; error: string } {
-  if (items.length === 0) {
-    return { ok: false, error: "empty_items" };
-  }
+  if (items.length === 0) return { ok: false, error: "empty_items" };
 
   let materialTotal = 0;
   let laborTotal = 0;
   let serviceTotal = 0;
-
+  let total = 0;
   for (const item of items) {
     if (
       !Number.isSafeInteger(item.quantity) ||
       item.quantity <= 0 ||
-      !Number.isSafeInteger(item.unit_price_minor) ||
-      item.unit_price_minor <= 0 ||
       !Number.isSafeInteger(item.amount_minor) ||
-      item.amount_minor <= 0
+      item.amount_minor <= 0 ||
+      !Number.isSafeInteger(item.unit_price_minor) ||
+      item.unit_price_minor < 0 ||
+      item.unit_price_minor !== Math.round(item.amount_minor / item.quantity) ||
+      !["service", "material", "labor"].includes(item.category)
     ) {
       return { ok: false, error: "invalid_item_numbers" };
     }
-    if (item.amount_minor !== item.quantity * item.unit_price_minor) {
-      return { ok: false, error: "amount_mismatch" };
+    total += item.amount_minor;
+    if (!Number.isSafeInteger(total)) {
+      return { ok: false, error: "invalid_item_numbers" };
     }
-
-    if (item.category === "material") {
-      materialTotal += item.amount_minor;
-    } else if (item.category === "labor") {
-      laborTotal += item.amount_minor;
-    } else {
-      serviceTotal += item.amount_minor;
-    }
+    if (item.category === "material") materialTotal += item.amount_minor;
+    else if (item.category === "labor") laborTotal += item.amount_minor;
+    else serviceTotal += item.amount_minor;
   }
-
   return {
     ok: true,
     material_total_minor: materialTotal,
     labor_total_minor: laborTotal,
     service_total_minor: serviceTotal,
-    total_minor: materialTotal + laborTotal + serviceTotal,
+    total_minor: total,
   };
 }

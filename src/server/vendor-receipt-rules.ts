@@ -29,8 +29,7 @@ function validMoney(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
-// Local helper: vendor-onboarding-rules.ts was absent in the supplied worktree.
-// Keep the checksum policy aligned with onboarding when that module lands.
+// Keep the checksum policy aligned with onboarding.
 function validTaxId(value: string): boolean {
   if (!/^\d{8}$/.test(value)) return false;
   const weights = [1, 2, 1, 2, 1, 2, 4, 1];
@@ -52,9 +51,7 @@ export interface ReceiptVendor {
   qualification_attested: boolean;
 }
 
-export function decideDocumentKind(
-  vendor: ReceiptVendor,
-): VendorDocumentKind {
+export function decideDocumentKind(vendor: ReceiptVendor): VendorDocumentKind {
   if (vendor.kind === "individual") return "completion_statement";
   return vendor.qualification_attested === true &&
     typeof vendor.tax_id === "string" &&
@@ -82,11 +79,7 @@ export type BuyerSnapshot =
 export function validateBuyer(input: BuyerInput): BuyerSnapshot {
   if (input.kind === "owner") {
     if (!nonEmpty(input.receipt_title)) fail("ownerReceiptTitleMissing");
-    if (
-      Object.keys(input).some(
-        (key) => key !== "kind" && key !== "receipt_title",
-      )
-    ) {
+    if (Object.keys(input).some((key) => key !== "kind" && key !== "receipt_title")) {
       fail("buyerPiiForbidden");
     }
     return { kind: "owner", receipt_title: input.receipt_title.trim() };
@@ -100,7 +93,6 @@ export function validateBuyer(input: BuyerInput): BuyerSnapshot {
   ) {
     fail("companyBuyerIncomplete");
   }
-  // Whitelist snapshot fields; never copy a contact record wholesale.
   return {
     kind: "company",
     name: input.name.trim(),
@@ -177,9 +169,7 @@ export function validateDocumentTotals(
   totalMinor: number,
   ticketActualCostMinor: number,
 ): number {
-  if (!validMoney(totalMinor) || items.length === 0) {
-    fail("invalidLineItems");
-  }
+  if (!validMoney(totalMinor) || items.length === 0) fail("invalidLineItems");
 
   let sum = 0;
   for (const item of items) {
@@ -189,23 +179,19 @@ export function validateDocumentTotals(
       !Number.isSafeInteger(item.quantity) ||
       item.quantity <= 0 ||
       !validMoney(item.unit_price_minor) ||
-      item.unit_price_minor <= 0 ||
       !validMoney(item.amount_minor) ||
       item.amount_minor <= 0 ||
-      !["service", "material", "labor"].includes(item.category) ||
-      !Number.isSafeInteger(item.quantity * item.unit_price_minor) ||
-      item.amount_minor !== item.quantity * item.unit_price_minor
+      !["service", "material", "labor"].includes(item.category)
     ) {
       fail("invalidLineItems");
     }
+    // Amounts are authoritative. A rounded display price may be zero and its
+    // product with quantity need not equal the row amount.
     sum += item.amount_minor;
     if (!Number.isSafeInteger(sum)) fail("invalidLineItems");
   }
   if (sum !== totalMinor) fail("invalidLineItems");
-  if (
-    !validMoney(ticketActualCostMinor) ||
-    totalMinor !== ticketActualCostMinor
-  ) {
+  if (!validMoney(ticketActualCostMinor) || totalMinor !== ticketActualCostMinor) {
     fail("totalMismatchWithTicketCost");
   }
   return sum;
@@ -246,9 +232,7 @@ export interface IssueVendorDocumentInput {
   locale?: VendorReceiptLocale;
 }
 
-export function issueVendorDocument(
-  input: IssueVendorDocumentInput,
-): VendorDocument {
+export function issueVendorDocument(input: IssueVendorDocumentInput): VendorDocument {
   if (
     !nonEmpty(input.id) ||
     !nonEmpty(input.vendor_profile_id) ||
@@ -259,11 +243,7 @@ export function issueVendorDocument(
   const kind = decideDocumentKind(input.vendor);
   const docNo = formatDocumentNo(input.vendor_code, input.seq, kind);
   const buyer = validateBuyer(input.buyer);
-  validateDocumentTotals(
-    input.items,
-    input.total_minor,
-    input.ticket_actual_cost_minor,
-  );
+  validateDocumentTotals(input.items, input.total_minor, input.ticket_actual_cost_minor);
   const labels = getVendorReceiptCopy(input.locale).labels;
   const notices =
     kind === "receipt"
@@ -285,13 +265,13 @@ export function issueVendorDocument(
     seq: input.seq,
     doc_no: docNo,
     buyer,
-    items: input.items.map((item) => ({ ...item })),
+    items: input.items.map((item) => ({
+      ...item,
+      unit_price_minor: Math.round(item.amount_minor / item.quantity),
+    })),
     total_minor: input.total_minor,
     uppercase_total: toChineseUppercaseAmount(input.total_minor),
-    title:
-      kind === "receipt"
-        ? labels.receiptTitle
-        : labels.completionStatementTitle,
+    title: kind === "receipt" ? labels.receiptTitle : labels.completionStatementTitle,
     notices,
     apply_receipt_seal: kind === "receipt",
     status: "issued",
@@ -332,8 +312,6 @@ export function reissueVendorDocument(
   source: VendorDocument,
   input: IssueVendorDocumentInput,
 ): VendorDocument {
-  // The caller supplies an atomically allocated fresh sequence. Never mutate
-  // the source, reactivate it, or reuse its ID or number.
   if (
     source.status !== "voided" ||
     !nonEmpty(source.void_reason) ||
