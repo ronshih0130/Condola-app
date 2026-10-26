@@ -44,6 +44,7 @@ function tokenOf(url: string) {
 describe("vendor link gating", { concurrency: false }, () => {
   test("legacy behavior, terminal states, revocation and ticket isolation", async () => {
     const title = `vendor-link-${randomUUID()}`;
+    const vendorName = `v-${randomUUID()}`;
     const tickets: string[] = [];
     const admin = staff(USERS.admin);
     const saved = await svc(null, (client) =>
@@ -82,7 +83,7 @@ describe("vendor link gating", { concurrency: false }, () => {
       });
       tickets.push(ticketId);
       const issued = await dispatchVendor(admin, ticketId, {
-        vendorName: title, vendorPhone: "0912000111", contactWindow: "Monday",
+        vendorName, vendorPhone: "0912000111", vendorTrade: "plumbing", contactWindow: "Monday",
       }, "http://127.0.0.1:43123");
       return { ...issued, ticketId, token: tokenOf(issued.url) };
     }
@@ -151,7 +152,7 @@ describe("vendor link gating", { concurrency: false }, () => {
       const own = await issue("own");
       const other = await issue("other");
       await assert.rejects(() => dispatchVendor(staff(USERS.coastAdmin, ORG2_ID), own.ticketId, {
-        vendorName: title, vendorPhone: "0912000111", contactWindow: "Monday",
+        vendorName, vendorPhone: "0912000111", vendorTrade: "plumbing", contactWindow: "Monday",
       }, "http://127.0.0.1:43123"), notFound);
       // Token APIs accept no target ID; prove mutation is bound to the token's own ticket.
       await submitVendorReport(own.token, { done: true, cost: "200" });
@@ -188,7 +189,7 @@ describe("vendor link gating", { concurrency: false }, () => {
             ]);
           }
           await client.query(`DELETE FROM contacts WHERE org_id = $1 AND is_vendor AND display_name = $2`, [
-            ORG_ID, title,
+            ORG_ID, vendorName,
           ]);
         });
       }
