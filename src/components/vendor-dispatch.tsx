@@ -4,6 +4,8 @@ import { formatDate, moneyLabel } from "@/server/format";
 import type { CalendarMode } from "@/server/types";
 import type { VendorChoice, VendorDispatchView } from "@/server/vendor-repair";
 import { VENDOR_CATEGORIES, VENDOR_CATEGORY_KEY, VENDOR_LINK_DAYS, vendorMenuLabel } from "@/server/vendor-repair-rules";
+import { vendorLinkCopy } from "@/i18n/lanes/vendor-link";
+import { actionApproveVendorSharing } from "@/server/vendor-link-actions";
 import { VendorLinkField } from "./vendor-link-field";
 
 function vendorOption(vendor: VendorChoice, t: T) {
@@ -41,6 +43,7 @@ export function VendorDispatch({
   calendar: CalendarMode;
 }) {
   const dict = dictionary(locale);
+  const sharingCopy = vendorLinkCopy(locale);
   const awaiting = Boolean(job?.reported && !job.confirmed && !job.revoked);
   const showForm = canDispatch && (!job || job.revoked || (!job.linkOpen && !awaiting && !job.confirmed));
   const when = job ? formatDate(job.expiresAt, locale, calendar, dict) : "";
@@ -74,6 +77,28 @@ export function VendorDispatch({
           <p className="tiny muted">{t("i_vendor_link_hint", { days: VENDOR_LINK_DAYS })}</p>
           <VendorLinkField url={job.link} copyLabel={t("i_vendor_copy")} copiedLabel={t("i_vendor_copied")} />
         </>
+      ) : null}
+      {canDispatch && job?.linkOpen && job.sharing ? (
+        <form action={actionApproveVendorSharing} data-testid="vendor-sharing-form" style={{ marginTop: 16 }}>
+          <input type="hidden" name="ticketId" value={ticketId} />
+          <input type="hidden" name="jobId" value={job.jobId} />
+          <h4>{sharingCopy.review}</h4>
+          <p className="small">{sharingCopy.guidance}</p>
+          {job.sharing.approved ? <p>{sharingCopy.approved}</p> : null}
+          <label className="f" htmlFor="vendor-shared-description">{sharingCopy.description}</label>
+          <textarea id="vendor-shared-description" className="inp" name="description" defaultValue="" maxLength={10000} />
+          <fieldset>
+            <legend>{sharingCopy.photos}</legend>
+            {job.sharing.photos.map((photo) => (
+              <label key={photo.id} className="f">
+                <input type="checkbox" name="attachmentIds" value={photo.id} />
+                {photo.name}{" "}
+                <a href={`/api/tickets/photos/${photo.id}`} target="_blank" rel="noreferrer">{photo.name}</a>
+              </label>
+            ))}
+          </fieldset>
+          <button className="btn pri" type="submit">{sharingCopy.approve}</button>
+        </form>
       ) : null}
       {job?.reported && job.reportedCost ? (
         <p data-testid="vendor-reported">

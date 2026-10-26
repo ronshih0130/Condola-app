@@ -1,16 +1,26 @@
 import type { ReactNode } from "react";
-import type { makeT } from "@/i18n";
+import type { Locale, makeT } from "@/i18n";
+import { vendorLinkCopy } from "@/i18n/lanes/vendor-link";
 import type { VendorJobPage } from "@/server/vendor-repair";
 
 type Props = {
   job: VendorJobPage;
   vendorLink: NonNullable<VendorJobPage["vendorLink"]>;
   token: string;
+  locale: Locale;
   t: ReturnType<typeof makeT>;
   children?: ReactNode;
 };
 
-export function VendorLinkDetails({ job, vendorLink, token, t, children }: Props) {
+export function VendorLinkDetails({ job, vendorLink, token, t, locale, children }: Props) {
+  if (!vendorLink.sharingApproved) {
+    return (
+      <div className="card pad" data-testid="vendor-job" style={{ maxWidth: 560, margin: "24px auto" }}>
+        <h1>{t("i_vlink_title")}</h1>
+        <p data-testid="vendor-sharing-waiting">{vendorLinkCopy(locale).waiting}</p>
+      </div>
+    );
+  }
   const readOnly = vendorLink.capability === "read_only";
   return (
     <div

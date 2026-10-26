@@ -84,9 +84,10 @@ export default async function VendorJobPage({
         vendorLink={job.vendorLink}
         token={token}
         t={t}
+        locale={prefs.locale}
       >
         <ErrorBanner t={t} error={query.error} />
-        {job.vendorLink.capability === "write" ? renderReportControls(true) : null}
+        {job.vendorLink.sharingApproved && job.vendorLink.capability === "write" ? renderReportControls(true) : null}
       </VendorLinkDetails>
     );
   }

@@ -11,7 +11,8 @@ import { issueVendorUploadGrant } from "./ticket-photos";
 import type { Session } from "./types";
 import { hashVendorToken } from "./vendor-repair-rules";
 import {
-  __setVendorLinkKillSwitchForTests, confirmVendorPhoto, dispatchVendor,
+  __setVendorLinkKillSwitchForTests, approveVendorSharing, confirmVendorPhoto, dispatchVendor,
+  loadVendorJob, prepareVendorPhoto,
   openVendorPhoto, revokeVendorJob, streamVendorPhoto, submitVendorReport,
 } from "./vendor-repair";
 import { GET } from "../app/api/vendor-jobs/[token]/photos/[id]/route";
@@ -177,6 +178,64 @@ test("flag ON serializes invalidation and proxies authorized photos; OFF retains
 
     const valid = await issue();
     const photo = await attachment(valid.ticketId);
+    // Unreviewed links expose no work data and cannot write, including uploads.
+    const unapproved = await loadVendorJob(valid.token);
+    assert.ok(unapproved?.vendorLink);
+    assert.equal(unapproved.vendorLink.sharingApproved, false);
+    for (const field of ["description", "title", "address", "place", "window"] as const) {
+      assert.equal(unapproved[field], "");
+    }
+    assert.deepEqual(unapproved.issuePhotos, []);
+    assert.deepEqual(unapproved.donePhotos, []);
+    await assert.rejects(report(valid.token), notFound);
+    await assert.rejects(prepareVendorPhoto(valid.token, {
+      fileName: "photo.jpg", mime: "image/jpeg", size: 3,
+    }), notFound);
+    assert.equal(await streamVendorPhoto(valid.token, photo.id), null);
+    const unapprovedPath = ticketPhotoPath(ORG_ID, valid.ticketId, randomUUID(), "image/jpeg");
+    const beforeUnapprovedConfirm = downloads;
+    await assert.rejects(confirmVendorPhoto(valid.token, {
+      path: unapprovedPath, fileName: "photo.jpg", mime: "image/jpeg", size: 3,
+      uploadToken: issueVendorUploadGrant(hashVendorToken(valid.token), valid.ticketId, unapprovedPath),
+    }), notFound);
+    assert.equal(downloads, beforeUnapprovedConfirm);
+    const unshared = await attachment(valid.ticketId);
+    const own = await attachment(valid.ticketId);
+    await svc(null, (c) => c.query(
+      "UPDATE ticket_attachments SET vendor_job_id = $2 WHERE id = $1", [own.id, valid.jobId],
+    ));
+    const internal = await attachment(valid.ticketId);
+    await svc(null, (c) => c.query(
+      "UPDATE ticket_attachments SET is_internal = true WHERE id = $1", [internal.id],
+    ));
+    await assert.rejects(approveVendorSharing(admin, valid.ticketId, valid.jobId, {
+      description: "Do not share", attachmentIds: [internal.id],
+    }), notFound);
+    const forbidden = (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden";
+    for (const session of [tenant, { ...admin, role: "accountant" as const }]) {
+      await assert.rejects(approveVendorSharing(session, valid.ticketId, valid.jobId, {
+        description: "Rejected", attachmentIds: [photo.id],
+      }), forbidden);
+    }
+    await approveVendorSharing(admin, valid.ticketId, valid.jobId, {
+      description: "Redacted work instructions", attachmentIds: [photo.id],
+    });
+    const approved = await loadVendorJob(valid.token);
+    assert.ok(approved?.vendorLink?.sharingApproved);
+    assert.equal(approved.description, "Redacted work instructions");
+    assert.equal(approved.title, "");
+    assert.deepEqual(approved.issuePhotos.map((p) => p.id), [photo.id]);
+    assert.deepEqual(approved.donePhotos.map((p) => p.id), [own.id]);
+    assert.equal(await streamVendorPhoto(valid.token, unshared.id), null);
+    assert.equal(await streamVendorPhoto(valid.token, internal.id), null);
+    assert.deepEqual(await streamVendorPhoto(valid.token, own.id), { bytes, contentType: "image/jpeg" });
+    const persisted = await svc(null, (c) => c.query(
+      `SELECT scope, sharing_approved_at, sharing_approved_by::text
+         FROM repair_vendor_jobs WHERE id = $1`, [valid.jobId],
+    ));
+    assert.equal(persisted.rows[0].scope, "case_collaboration");
+    assert.ok(persisted.rows[0].sharing_approved_at);
+    assert.equal(persisted.rows[0].sharing_approved_by, admin.userId);
     assert.deepEqual(await streamVendorPhoto(valid.token, photo.id), { bytes, contentType: "image/jpeg" });
     const response = await GET(new Request("http://localhost"), {
       params: Promise.resolve({ token: valid.token, id: photo.id }),
@@ -202,7 +261,26 @@ test("flag ON serializes invalidation and proxies authorized photos; OFF retains
     tickets.push(foreignOrgTicket.rows[0].id);
     const otherOrgPhoto = await attachment(foreignOrgTicket.rows[0].id, ORG2_ID);
     assert.equal(await streamVendorPhoto(valid.token, otherOrgPhoto.id), null);
+    for (const attachmentId of [foreignPhoto.id, otherOrgPhoto.id]) {
+      await assert.rejects(approveVendorSharing(admin, valid.ticketId, valid.jobId, {
+        description: "Rejected", attachmentIds: [attachmentId],
+      }), notFound);
+    }
+    assert.equal((await loadVendorJob(valid.token))?.description, "Redacted work instructions");
+    await assert.rejects(approveVendorSharing(admin, revoked.ticketId, revoked.jobId, {
+      description: "Rejected after revoke", attachmentIds: [],
+    }), notFound);
+    // Reapproval replaces the durable selection; earlier photos immediately lose access.
+    await approveVendorSharing(admin, valid.ticketId, valid.jobId, {
+      description: "Replacement redaction", attachmentIds: [unshared.id],
+    });
+    assert.equal(await streamVendorPhoto(valid.token, photo.id), null);
+    assert.deepEqual(await streamVendorPhoto(valid.token, unshared.id), { bytes, contentType: "image/jpeg" });
+    await approveVendorSharing(admin, valid.ticketId, valid.jobId, {
+      description: "Redacted work instructions", attachmentIds: [photo.id],
+    });
     assert.equal(await streamVendorPhoto(revoked.token, photo.id), null);
+    await report(valid.token);
     await svc(null, (c) => c.query(
       "UPDATE repair_vendor_jobs SET expires_at = clock_timestamp() - interval '1 second' WHERE id = $1",
       [valid.jobId],

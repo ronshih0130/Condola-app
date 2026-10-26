@@ -109,6 +109,7 @@ export type VendorDispatchView = {
   confirmed: boolean;
   revoked: boolean;
   expenseId: string | null;
+  sharing?: { approved: boolean; photos: { id: string; name: string }[] };
 };
 
 export type VendorJobPage = {
@@ -123,6 +124,7 @@ export type VendorJobPage = {
   donePhotos: { id: string; name: string }[];
   vendorLink?: {
     capability: VendorLinkCapability;
+    sharingApproved: boolean;
     typeFields: Array<{ key: string; label: string; value: string }>;
   };
 };
@@ -181,12 +183,13 @@ async function lockTicketThenJobs(client: Client, orgId: string, ticketId: strin
 async function lockedVendorLink(client: Client, job: OpenJob, hash: string) {
   await lockTicketThenJobs(client, job.org_id, job.ticket_id);
   const ticket = await loadTicket(client, job.ticket_id, job.org_id);
-  const state = await maybe<LinkState & { dispatch_enabled: boolean }>(
+  const state = await maybe<LinkState & { dispatch_enabled: boolean; sharing_approved_at: string | null }>(
     client,
-    `SELECT active, revoked_at::text, expires_at::text,
+    `SELECT active, revoked_at::text, expires_at::text, sharing_approved_at::text,
             app.vendor_dispatch_enabled(org_id) AS dispatch_enabled
        FROM repair_vendor_jobs
       WHERE id = $1 AND ticket_id = $2 AND org_id = $3 AND token_hash = $4
+        AND scope = 'case_collaboration'
       FOR UPDATE`,
     [job.job_id, job.ticket_id, job.org_id, hash],
   );
@@ -201,7 +204,7 @@ async function lockedVendorLink(client: Client, job: OpenJob, hash: string) {
     expiresAt: state.expires_at,
     now: new Date(),
   });
-  if (capability !== "write") throw new FlowError("errors.notFound");
+  if (capability !== "write" || !state.sharing_approved_at) throw new FlowError("errors.notFound");
   return ticket;
 }
 
@@ -454,6 +457,64 @@ export async function revokeVendorJob(session: Session, ticketId: string, jobId:
   });
 }
 
+export async function approveVendorSharing(
+  session: Session,
+  ticketId: string,
+  jobId: string,
+  input: { description: string; attachmentIds: string[] },
+) {
+  assertStaff(session);
+  assertPerm(session, "tickets.update");
+  if (!isUuid(ticketId) || !isUuid(jobId)) throw new FlowError("errors.notFound");
+  if (typeof input.description !== "string" || input.description.length > 10000 ||
+      !Array.isArray(input.attachmentIds) || input.attachmentIds.length > PHOTO_LIMIT ||
+      !input.attachmentIds.every((id) => typeof id === "string" && isUuid(id))) {
+    throw new FlowError("errors.required");
+  }
+  const ids = [...new Set(input.attachmentIds)];
+  await svc(session.userId, async (client) => {
+    await assertDispatchFlag(client, session.orgId);
+    if (!(await vendorLinkEnabledOn(client, session.orgId))) throw new FlowError("errors.forbidden");
+    await lockTicketThenJobs(client, session.orgId, ticketId);
+    const job = await maybe<{ id: string }>(
+      client,
+      `SELECT id::text FROM repair_vendor_jobs
+        WHERE id = $1 AND ticket_id = $2 AND org_id = $3
+          AND scope = 'case_collaboration' AND active AND revoked_at IS NULL
+          AND expires_at > clock_timestamp()`,
+      [jobId, ticketId, session.orgId],
+    );
+    if (!job) throw new FlowError("errors.notFound");
+    // Lock selected attachments so an internal/scope change cannot race approval.
+    const photos = await client.query<{ id: string }>(
+      `SELECT id::text FROM ticket_attachments
+        WHERE org_id = $1 AND ticket_id = $2 AND id = ANY($3::uuid[])
+          AND NOT is_internal AND (vendor_job_id IS NULL OR vendor_job_id = $4)
+        ORDER BY id FOR UPDATE`,
+      [session.orgId, ticketId, ids, jobId],
+    );
+    if (photos.rows.length !== ids.length) throw new FlowError("errors.notFound");
+    await client.query(
+      "DELETE FROM repair_vendor_job_shared_photos WHERE org_id = $1 AND job_id = $2",
+      [session.orgId, jobId],
+    );
+    await client.query(
+      `INSERT INTO repair_vendor_job_shared_photos
+         (org_id, job_id, attachment_id, approved_by, approved_at)
+       SELECT $1, $2, id, $4, statement_timestamp() FROM unnest($3::uuid[]) AS selected(id)`,
+      [session.orgId, jobId, ids, session.userId],
+    );
+    await client.query(
+      `UPDATE repair_vendor_jobs SET shared_description = $4,
+              sharing_approved_at = statement_timestamp(), sharing_approved_by = $5
+        WHERE org_id = $1 AND ticket_id = $2 AND id = $3`,
+      [session.orgId, ticketId, jobId, input.description.trim(), session.userId],
+    );
+    await writeAudit(session.orgId, session.userId, "repair_vendor_sharing_approve",
+      { ticketId, jobId, attachmentIds: ids }, client);
+  });
+}
+
 export async function loadVendorDispatch(session: Session, ticketId: string, origin: string) {
   assertStaff(session);
   if (!isUuid(ticketId)) return null;
@@ -528,9 +589,26 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
     );
     if (secret?.token) link = vendorJobUrl(origin, secret.token);
   }
+  const sharing = can(session.role, "tickets.update")
+    ? await svc(session.userId, async (client) => {
+      if (!(await vendorLinkEnabledOn(client, session.orgId))) return undefined;
+      const state = await maybe<{ approved: boolean }>(client,
+        `SELECT sharing_approved_at IS NOT NULL AS approved FROM repair_vendor_jobs
+          WHERE id = $1 AND ticket_id = $2 AND org_id = $3`,
+        [job.id, ticketId, session.orgId]);
+      const photos = await client.query<{ id: string; name: string }>(
+        `SELECT a.id::text, f.file_name AS name FROM ticket_attachments a
+           JOIN files f ON f.id = a.file_id AND f.org_id = a.org_id
+          WHERE a.ticket_id = $1 AND a.org_id = $2 AND NOT a.is_internal
+            AND (a.vendor_job_id IS NULL OR a.vendor_job_id = $3)
+          ORDER BY a.created_at`, [ticketId, session.orgId, job.id]);
+      return { approved: Boolean(state?.approved), photos: photos.rows };
+    })
+    : undefined;
   return {
     job: {
       jobId: job.id,
+      ...(sharing ? { sharing } : {}),
       vendorName: job.vendor_name,
       phone: displayVendorPhone(job.vendor_phone),
       window: job.contact_window,
@@ -551,6 +629,8 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
   const job = await openJob(token);
   if (!job) return null;
   return svc(null, async (client) => {
+    const enhanced = await vendorLinkEnabledOn(client, job.org_id);
+    if (enhanced) await lockTicketThenJobs(client, job.org_id, job.ticket_id);
     const still = await maybe<{ job_id: string }>(client, `SELECT job_id::text FROM app.open_vendor_job($1)`, [
       hashVendorToken(token),
     ]);
@@ -578,22 +658,26 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
     const photos = await client.query<{ id: string; name: string; vendor_job_id: string | null }>(
       `SELECT a.id::text, f.file_name AS name, a.vendor_job_id::text
          FROM ticket_attachments a
-         JOIN files f ON f.id = a.file_id
+         JOIN files f ON f.id = a.file_id AND f.org_id = a.org_id
         WHERE a.ticket_id = $1 AND a.org_id = $2 AND NOT a.is_internal
           AND (a.vendor_job_id IS NULL OR a.vendor_job_id = $3)
+          AND (NOT $4::boolean OR a.vendor_job_id = $3 OR EXISTS (
+            SELECT 1 FROM repair_vendor_job_shared_photos s
+             WHERE s.org_id = a.org_id AND s.job_id = $3 AND s.attachment_id = a.id))
         ORDER BY a.created_at`,
-      [job.ticket_id, job.org_id, job.job_id],
+      [job.ticket_id, job.org_id, job.job_id, enhanced],
     );
     const issuePhotos = photos.rows.filter((row) => !row.vendor_job_id).map((row) => ({ id: row.id, name: row.name }));
     const donePhotos = photos.rows.filter((row) => row.vendor_job_id === job.job_id).map((row) => ({ id: row.id, name: row.name }));
-    if (await vendorLinkEnabledOn(client, job.org_id)) {
-      const state = await maybe<LinkState & { status: string }>(
+    if (enhanced) {
+      const state = await maybe<LinkState & { status: string; sharing_approved_at: string | null; shared_description: string | null }>(
         client,
-        `SELECT t.status::text, j.active, j.revoked_at::text, j.expires_at::text
+        `SELECT t.status::text, j.active, j.revoked_at::text, j.expires_at::text,
+                j.sharing_approved_at::text, j.shared_description
            FROM maintenance_tickets t
            JOIN repair_vendor_jobs j ON j.ticket_id = t.id AND j.org_id = t.org_id
           WHERE t.id = $1 AND t.org_id = $2 AND j.id = $3 AND j.token_hash = $4
-            AND app.vendor_dispatch_enabled(j.org_id)`,
+            AND j.scope = 'case_collaboration' AND app.vendor_dispatch_enabled(j.org_id)`,
         [job.ticket_id, job.org_id, job.job_id, hashVendorToken(token)],
       );
       if (!state) return null;
@@ -605,22 +689,24 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
         now: new Date(),
       });
       if (capability === "invalid") return null;
+      const sharingApproved = Boolean(state.sharing_approved_at);
       const safe = vendorLinkSafeView({
-        title: ticket.title,
-        description: ticket.description ?? "",
-        address: ticket.place ? `${ticket.address} ${ticket.place}` : ticket.address,
-        place: ticket.place,
-        window: job.contact_window,
+        // Free-text title is not reviewed; only manager-redacted text is exposed.
+        title: "",
+        description: sharingApproved ? state.shared_description ?? "" : "",
+        address: sharingApproved ? (ticket.place ? `${ticket.address} ${ticket.place}` : ticket.address) : "",
+        place: sharingApproved ? ticket.place : "",
+        window: sharingApproved ? job.contact_window : "",
         status: state.status,
         expiresAt: state.expires_at,
-        issuePhotos,
-        donePhotos,
+        issuePhotos: sharingApproved ? issuePhotos : [],
+        donePhotos: sharingApproved ? donePhotos : [],
       });
       return {
         ...safe,
         currency: ticket.currency,
         reported: Boolean(job.reported_at),
-        vendorLink: { capability, typeFields: renderableTypeFields(null, null) },
+        vendorLink: { capability, sharingApproved, typeFields: renderableTypeFields(null, null) },
       };
     }
     return {
@@ -940,6 +1026,7 @@ export async function findVendorPhoto(token: string, attachmentId: string) {
   if (!isUuid(attachmentId)) return null;
   const job = await openJob(token);
   if (!job) return null;
+  if (await vendorLinkEnabledForOrg(job.org_id)) return null;
   return svc(null, (client) =>
     maybe<{ name: string; mime: string | null; path: string }>(
       client,
@@ -973,6 +1060,10 @@ export async function streamVendorPhoto(token: string, attachmentId: string) {
            JOIN files f ON f.id = a.file_id AND f.org_id = a.org_id
           WHERE j.id = $1 AND j.org_id = $2 AND j.ticket_id = $3 AND j.token_hash = $4
             AND a.id = $5 AND NOT a.is_internal
+            AND j.scope = 'case_collaboration' AND j.sharing_approved_at IS NOT NULL
+            AND (a.vendor_job_id = j.id OR EXISTS (
+              SELECT 1 FROM repair_vendor_job_shared_photos s
+               WHERE s.org_id = a.org_id AND s.job_id = j.id AND s.attachment_id = a.id))
             AND (a.vendor_job_id IS NULL OR a.vendor_job_id = j.id)
             AND f.storage_bucket = $6 AND app.vendor_dispatch_enabled(j.org_id)`,
         [job.job_id, job.org_id, job.ticket_id, hashVendorToken(token), attachmentId, PHOTO_BUCKET],
