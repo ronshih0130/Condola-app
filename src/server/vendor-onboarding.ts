@@ -213,9 +213,10 @@ export async function submitVendorOnboarding(
       [
         invite.org_id,
         invite.contact_id,
-        // Identity reconciliation across organizations awaits CEO/R&D.
-        // Keep this organization's profile and all UUID bits; never merge here.
-        invite.contact_id.replaceAll("-", ""),
+        // The database binds validated businesses to their private tax-ID issuer
+        // and supplies its random code. Individual identity is unique by phone
+        // within an org; cross-org individual linkage requires a CEO decision.
+        globalThis.crypto.randomUUID().replaceAll("-", ""),
         value.kind,
         value.display_name,
         value.business_name,

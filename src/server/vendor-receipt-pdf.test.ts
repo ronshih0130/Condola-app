@@ -132,15 +132,49 @@ test("document models contain required copy, ticket number and rounded prices", 
     assert.equal(JSON.stringify(completion).includes(word), false);
     assert.equal(JSON.stringify(receipt).includes(word), false);
   }
-  assert.doesNotMatch(JSON.stringify(completion), /買受人地址|買受人統編/);
-  const input = fixture(true);
-  input.document = {
-    ...input.document,
-    buyer: { kind: "company", name: "測試公司", address: "測試公司地址", tax_id: "24536806" },
-  };
-  const company = JSON.stringify(buildVendorReceiptPdf(input));
-  assert.match(company, /買受人統編/);
-  for (const word of BANNED) assert.equal(company.includes(word), false);
+  for (const model of [completion, receipt]) {
+    const header = model.blocks[0];
+    assert.equal(header.kind, "rows");
+    if (header.kind !== "rows") throw new Error("expected_header_rows");
+    assert.deepEqual(header.rows.slice(3), [
+      { label: "收據抬頭", value: "測試抬頭" },
+    ]);
+    assert.doesNotMatch(JSON.stringify(model), /買受人名稱|買受人地址|買受人統編|買受人統一編號|身分證/);
+  }
+});
+
+test("company buyer uses the exact PDF tax label with no other banned copy", () => {
+  for (const business of [false, true]) {
+    const input = fixture(business);
+    input.document = {
+      ...input.document,
+      buyer: { kind: "company", name: "測試公司", address: "測試公司地址", tax_id: "24536806" },
+    };
+    const model = buildVendorReceiptPdf(input);
+    const header = model.blocks[0];
+    assert.equal(header.kind, "rows");
+    if (header.kind !== "rows") throw new Error("expected_header_rows");
+    assert.deepEqual(header.rows.slice(3), [
+      { label: "買受人名稱", value: "測試公司" },
+      { label: "買受人地址", value: "測試公司地址" },
+      { label: "買受人統一編號", value: "24536806" },
+    ]);
+    assert.doesNotMatch(JSON.stringify(model), /買受人統編|收據抬頭/);
+    // Only this exact company-buyer field label is exempt under spec §3/B16.
+    const guarded = JSON.stringify({
+      ...model,
+      blocks: [
+        {
+          ...header,
+          rows: header.rows.map((row) =>
+            row.label === "買受人統一編號" ? { ...row, label: "統編" } : row,
+          ),
+        },
+        ...model.blocks.slice(1),
+      ],
+    });
+    for (const word of BANNED) assert.equal(guarded.includes(word), false);
+  }
 });
 
 test("multi-page PDFs put the seal only on the final page and remain deterministic", async () => {

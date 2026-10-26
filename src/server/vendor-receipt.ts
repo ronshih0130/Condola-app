@@ -616,8 +616,9 @@ async function issueOn(
 
   const id = globalThis.crypto.randomUUID();
   const checked = applyIssueRules(await issueInput(client, access, ctx, id, 1));
-  // Counters remain scoped to this organization's profile and document kind.
-  // Cross-org issuer identity reconciliation awaits a CEO/R&D decision.
+  // Receipts allocate from the private validated tax-ID issuer across profiles
+  // and organizations. Completion counters remain local to the unique profile.
+  // CEO decision required for cross-org linkage of individuals.
   const allocation = await one<{ seq: string; issued_at: string }>(
     client,
     `SELECT app.next_vendor_document_seq($1, $2)::text AS seq,

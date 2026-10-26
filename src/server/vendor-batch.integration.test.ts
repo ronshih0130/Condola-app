@@ -6,6 +6,7 @@ import { Pool, type PoolClient } from "pg";
 import { svc, tx } from "./db";
 import { createTicket } from "./domain";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
+import { getJobTypeByCode } from "./job-types-rules";
 import type { Session } from "./types";
 import {
   createVendorOnboardingInvite,
@@ -13,6 +14,7 @@ import {
   revokeVendorOnboarding,
   submitVendorOnboarding,
 } from "./vendor-onboarding";
+import { validateTaiwanTaxId } from "./vendor-onboarding-rules";
 import {
   createVendorDocumentInvite,
   issueVendorDocument,
@@ -103,6 +105,8 @@ test(
     const ticketIds: string[] = [];
     let profileId = "";
     const prefix = `vendor-batch-${randomUUID()}`;
+    const jobTypeCode = prefix;
+    const pricing = { mode: "per_visit", quantity: 2, unit: "次" };
 
     t.after(async () => {
       try {
@@ -162,6 +166,10 @@ test(
             [ticketIds],
           );
           await cleanup.query(
+            `DELETE FROM job_types WHERE code = $1`,
+            [jobTypeCode],
+          );
+          await cleanup.query(
             `DELETE FROM property_owners WHERE owner_contact_id = $1`,
             [ownerId],
           );
@@ -215,6 +223,26 @@ test(
     }
 
     await svc(null, async (client) => {
+      // resetAndSeed() wipes job_types after migrations. Own this catalog row
+      // rather than depending on migration replay or changing shared seed rows.
+      const cleaning = getJobTypeByCode("cleaning");
+      assert.ok(cleaning);
+      await client.query(
+        `INSERT INTO job_types
+           (code,name_zh,name_en,required_fields,photo_rules,
+            acceptance_checklist,pricing_modes,sort,active)
+         VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7::text[],$8,true)`,
+        [
+          jobTypeCode,
+          cleaning.name_zh,
+          cleaning.name_en,
+          JSON.stringify(cleaning.required_fields),
+          JSON.stringify(cleaning.photo_rules),
+          JSON.stringify(cleaning.acceptance_checklist),
+          cleaning.pricing_modes,
+          cleaning.sort,
+        ],
+      );
       await client.query(
         `INSERT INTO contacts (id,org_id,is_vendor,display_name,phone_e164)
          VALUES ($1,$2,true,$3,'+886912000111')`,
@@ -236,20 +264,32 @@ test(
         await client.query(
           `UPDATE maintenance_tickets
               SET status = 'closed', assigned_vendor_contact_id = $3,
-                  final_cost_minor = 120000, currency = 'TWD'
+                  final_cost_minor = 120000, currency = 'TWD',
+                  job_type_code = $4,
+                  type_fields = $5::jsonb
             WHERE id = $1 AND org_id = $2`,
-          [ticketId, ORG_ID, contactId],
+          [
+            ticketId,
+            ORG_ID,
+            contactId,
+            jobTypeCode,
+            JSON.stringify({
+              cleaning_scope: "室內",
+              area_ping_or_rooms: "2 rooms",
+            }),
+          ],
         );
         await client.query(
           `INSERT INTO repair_vendor_jobs
              (org_id,ticket_id,vendor_name,vendor_phone,contact_window,
-              token_hash,expires_at,created_by)
+              token_hash,expires_at,created_by,vendor_contact_id)
            VALUES ($1,$2,'Test','+886912000111','Test',
-                   $3,clock_timestamp() + interval '1 day',$4)`,
+                   $3,clock_timestamp() + interval '1 day',$4,$5)`,
           [
             ORG_ID, ticketId,
             randomUUID().replaceAll("-", "").padEnd(64, "0"),
             USERS.admin,
+            contactId,
           ],
         );
       }
@@ -259,7 +299,7 @@ test(
       kind: "individual",
       display_name: "測試師傅",
       phone: "0912-000-111",
-      service_job_types: ["cleaning"],
+      service_job_types: [jobTypeCode],
     };
     await assert.rejects(createVendorOnboardingInvite(outsider, contactId));
     const invite = await createVendorOnboardingInvite(admin, contactId);
@@ -394,6 +434,34 @@ test(
     const vendorContext = vendorContexts[0];
     const operation = operations[0];
 
+    // Caller-supplied pricing cannot substitute for missing persisted pricing.
+    const invalidPricing = (error: unknown) =>
+      error instanceof Error &&
+      error.cause instanceof Error &&
+      error.cause.message === "invalid_ticket_pricing";
+    await assert.rejects(previewVendorDocument(vendorContext), invalidPricing);
+    await assert.rejects(issueVendorDocument(vendorContext, {
+      idempotencyKey: `${prefix}:missing-pricing`,
+    }), invalidPricing);
+    await svc(null, async (client) => {
+      const counters = await client.query(
+        `SELECT next_seq FROM vendor_document_sequences WHERE vendor_profile_id = $1`,
+        [profileId],
+      );
+      assert.equal(counters.rowCount, 0, "missing pricing must not consume a sequence");
+      const documents = await client.query(
+        `SELECT id FROM vendor_documents WHERE vendor_profile_id = $1`,
+        [profileId],
+      );
+      assert.equal(documents.rowCount, 0, "missing pricing must not persist a document");
+      await client.query(
+        `UPDATE maintenance_tickets
+            SET type_fields = type_fields || jsonb_build_object('pricing', $3::jsonb)
+          WHERE org_id = $1 AND id = ANY($2::uuid[])`,
+        [ORG_ID, ticketIds, JSON.stringify(pricing)],
+      );
+    });
+
     await assert.rejects(previewVendorDocument({ ...vendorContext, actor: token }));
     await assert.rejects(
       previewVendorDocument({ ...vendorContext, ticketId: ticketIds[1] }),
@@ -412,7 +480,19 @@ test(
       }),
     );
 
-    const draft = await previewVendorDocument(vendorContext);
+    const draft = await previewVendorDocument({
+      ...vendorContext,
+      items: vendorContext.items.map((item) => ({
+        ...item,
+        quantity: 99,
+        unit: "caller unit",
+        unit_price_minor: 1,
+      })),
+    });
+    assert.equal(draft.document.items[0].quantity, 2);
+    assert.equal(draft.document.items[0].unit, "次");
+    assert.equal(draft.document.items[0].unit_price_minor, 600);
+    assert.equal(draft.document.items[0].amount_minor, 1200);
     const staffDraft = await previewVendorDocument(context(ticketIds[0]));
     assert.equal(staffDraft.document.kind, draft.document.kind);
     assert.equal(draft.document.kind, "completion_statement");
@@ -429,6 +509,26 @@ test(
         [profileId],
       );
       assert.equal(rows.rowCount, 0, "preview must not allocate a sequence");
+    });
+
+    // Fail after allocation during PDF rendering, then retry the same operation.
+    await assert.rejects(issueVendorDocument({
+      ...vendorContext,
+      fontBytes: new Uint8Array([0, 1, 2]),
+    }, {
+      idempotencyKey: `${prefix}:first`,
+    }));
+    await svc(null, async (client) => {
+      const counters = await client.query(
+        `SELECT next_seq FROM vendor_document_sequences WHERE vendor_profile_id = $1`,
+        [profileId],
+      );
+      assert.equal(counters.rowCount, 0, "failed PDF must roll allocation back");
+      const documents = await client.query(
+        `SELECT id FROM vendor_documents WHERE org_id = $1 AND idempotency_key = $2`,
+        [ORG_ID, `${prefix}:first`],
+      );
+      assert.equal(documents.rowCount, 0);
     });
 
     // A same-org administrator with update permission cannot execute.
@@ -609,6 +709,260 @@ test(
     ]) {
       const source = readFileSync(new URL(name, import.meta.url), "utf8");
       assert.doesNotMatch(source, /\b(?:national_id|id_number|id_no)\s*[?:=]/i);
+    }
+  },
+);
+
+test(
+  "tax-ID issuer spans organizations and duplicate profiles with transactional allocation",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 3 });
+    const a = await pool.connect();
+    const b = await pool.connect();
+    const observer = await pool.connect();
+    const contacts = Array.from({ length: 5 }, () => randomUUID());
+    const profiles = Array.from({ length: 5 }, () => randomUUID());
+    let taxId: string;
+    do {
+      taxId = String(Math.floor(Math.random() * 90000000) + 10000000);
+    } while (!validateTaiwanTaxId(taxId));
+    const phone = `+8869${String(Math.floor(Math.random() * 100000000)).padStart(8, "0")}`;
+
+    async function allocate(client: PoolClient, profile: string) {
+      const result = await client.query<{ seq: string }>(
+        `SELECT app.next_vendor_document_seq($1,'receipt')::text AS seq`,
+        [profile],
+      );
+      return Number(result.rows[0].seq);
+    }
+
+    try {
+      // Exercise the same database identity binding used by onboarding without
+      // requiring an external seal-object upload for this allocation test.
+      await a.query("BEGIN");
+      await a.query("SET LOCAL ROLE service_role");
+      for (let i = 0; i < contacts.length; i++) {
+        const org = i === 1 || i === 4 ? ORG2_ID : ORG_ID;
+        await a.query(
+          `INSERT INTO contacts (id,org_id,is_vendor,display_name,phone_e164)
+           VALUES ($1,$2,true,'Issuer test',$3)`,
+          [contacts[i], org, phone],
+        );
+        if (i < 3) {
+          await a.query(
+            `INSERT INTO vendor_profiles
+               (id,org_id,contact_id,vendor_code,kind,display_name,
+                business_name,tax_id,phone_e164)
+             VALUES ($1,$2,$3,'ignored','business','Issuer test',
+                     'Issuer test',$4,$5)`,
+            [profiles[i], org, contacts[i], taxId, phone],
+          );
+        }
+      }
+      await a.query(
+        `INSERT INTO vendor_profiles
+           (id,org_id,contact_id,vendor_code,kind,display_name,phone_e164)
+         VALUES ($1,$2,$3,'ignored','individual','Individual test',$4)`,
+        [profiles[3], ORG_ID, contacts[3], phone],
+      );
+      await a.query(
+        `INSERT INTO vendor_profiles
+           (id,org_id,contact_id,vendor_code,kind,display_name,phone_e164)
+         VALUES ($1,$2,$3,'ignored','individual','Individual test',$4)`,
+        [profiles[4], ORG2_ID, contacts[4], phone],
+      );
+      await a.query("COMMIT");
+
+      const identities = await a.query(
+        `SELECT issuer_id::text,vendor_code FROM vendor_profiles
+          WHERE id = ANY($1::uuid[])`,
+        [profiles.slice(0, 3)],
+      );
+      assert.equal(identities.rowCount, 3);
+      assert.equal(new Set(identities.rows.map((r) => r.issuer_id)).size, 1);
+      assert.equal(new Set(identities.rows.map((r) => r.vendor_code)).size, 1);
+      assert.match(identities.rows[0].vendor_code, /^[0-9a-f]{32}$/);
+      assert.ok(!contacts.some((id) =>
+        id.replaceAll("-", "") === identities.rows[0].vendor_code,
+      ));
+
+      const security = await a.query(
+        `SELECT relrowsecurity,relforcerowsecurity,
+                has_table_privilege('anon',oid,'SELECT') AS anon_read,
+                has_table_privilege('authenticated',oid,'SELECT') AS auth_read,
+                has_table_privilege('service_role',oid,'SELECT') AS service_read,
+                has_table_privilege('service_role',oid,'UPDATE') AS service_update
+           FROM pg_class WHERE oid = 'public.vendor_issuers'::regclass`,
+      );
+      assert.deepEqual(security.rows, [{
+        relrowsecurity: true,
+        relforcerowsecurity: true,
+        anon_read: false,
+        auth_read: false,
+        service_read: false,
+        service_update: false,
+      }]);
+
+      // Independently authenticated members cannot see another org's profiles
+      // or invoke the private allocator/binding function.
+      await a.query("BEGIN");
+      await a.query("SET LOCAL ROLE authenticated");
+      await a.query(
+        `SELECT set_config('request.jwt.claim.sub',$1,true)`,
+        [USERS.admin],
+      );
+      assert.equal((await a.query(
+        `SELECT id FROM vendor_profiles WHERE id = $1`,
+        [profiles[1]],
+      )).rowCount, 0);
+      await assert.rejects(a.query(`SELECT * FROM vendor_issuers`), {
+        code: "42501",
+      });
+      await a.query("ROLLBACK");
+
+      for (const functionName of [
+        "app.bind_vendor_issuer()",
+        "app.next_vendor_document_seq(uuid,text)",
+      ]) {
+        const info = await a.query(
+          `SELECT prosecdef,proconfig,
+                  has_function_privilege('anon',oid,'EXECUTE') AS anon_execute,
+                  has_function_privilege('authenticated',oid,'EXECUTE') AS auth_execute,
+                  has_function_privilege('service_role',oid,'EXECUTE') AS service_execute,
+                  EXISTS (
+                    SELECT 1 FROM aclexplode(proacl)
+                     WHERE grantee = 0 AND privilege_type = 'EXECUTE'
+                  ) AS public_execute
+             FROM pg_proc WHERE oid = $1::regprocedure`,
+          [functionName],
+        );
+        assert.equal(info.rows[0].prosecdef, true);
+        assert.ok(info.rows[0].proconfig.includes("search_path=pg_catalog, public"));
+        assert.equal(info.rows[0].anon_execute, false);
+        assert.equal(info.rows[0].auth_execute, false);
+        assert.equal(info.rows[0].service_execute, true);
+        assert.equal(info.rows[0].public_execute, false);
+      }
+
+      // Read backend identities before b starts its blocked allocation.
+      const aBackend = await a.query<{ pid: number }>(
+        `SELECT pg_backend_pid() AS pid`,
+      );
+      const bBackend = await b.query<{ pid: number }>(
+        `SELECT pg_backend_pid() AS pid`,
+      );
+      const aPid = aBackend.rows[0].pid;
+      const bPid = bBackend.rows[0].pid;
+      assert.notEqual(aPid, bPid);
+
+      await a.query("BEGIN");
+      await a.query("SET LOCAL ROLE service_role");
+      assert.equal(await allocate(a, profiles[0]), 1);
+      await b.query("BEGIN");
+      await b.query("SET LOCAL ROLE service_role");
+      const blocked = Promise.allSettled([allocate(b, profiles[1])]);
+      try {
+        // Observe b waiting specifically on a's issuer allocation lock.
+        const deadline = Date.now() + 10000;
+        for (;;) {
+          const state = await observer.query<{ blockers: number[] }>(
+            `SELECT pg_blocking_pids($1) AS blockers`,
+            [bPid],
+          );
+          if (state.rows[0].blockers.includes(aPid)) break;
+          assert.ok(Date.now() < deadline, "cross-org allocation must serialize");
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        await a.query("COMMIT");
+        const [result] = await blocked;
+        if (result.status === "rejected") throw result.reason;
+        assert.equal(result.value, 2);
+        await b.query("COMMIT");
+      } finally {
+        await a.query("ROLLBACK");
+        await b.query("ROLLBACK");
+        await blocked;
+      }
+
+      await a.query("BEGIN");
+      await a.query("SET LOCAL ROLE service_role");
+      assert.equal(await allocate(a, profiles[2]), 3, "same-org duplicate shares issuer");
+      await a.query("COMMIT");
+
+      // A downstream persistence error aborts allocation and its local mirror.
+      await a.query("BEGIN");
+      await a.query("SET LOCAL ROLE service_role");
+      assert.equal(await allocate(a, profiles[1]), 4);
+      await assert.rejects(a.query("SELECT 1 / 0"), { code: "22012" });
+      await a.query("ROLLBACK");
+      await b.query("BEGIN");
+      await b.query("SET LOCAL ROLE service_role");
+      assert.equal(await allocate(b, profiles[0]), 4, "failed issuance consumes nothing");
+      await b.query("COMMIT");
+
+      // Individual duplicates in the same org cannot create a second counter.
+      await a.query("BEGIN");
+      await a.query("SET LOCAL ROLE service_role");
+      await assert.rejects(a.query(
+        `INSERT INTO vendor_profiles
+           (org_id,contact_id,vendor_code,kind,display_name,phone_e164)
+         VALUES ($1,$2,'ignored','individual','Duplicate',$3)`,
+        [ORG_ID, contacts[0], phone],
+      ), { code: "23505" });
+      await a.query("ROLLBACK");
+      await a.query("BEGIN");
+      await a.query("SET LOCAL ROLE service_role");
+      await assert.rejects(a.query(
+        `UPDATE vendor_profiles SET phone_e164 = '+886900000000'
+          WHERE id = $1`,
+        [profiles[3]],
+      ), { code: "23514" });
+      await a.query("ROLLBACK");
+
+      await a.query("BEGIN");
+      await a.query("SET LOCAL ROLE service_role");
+      for (const profile of profiles.slice(3)) {
+        const completion = await a.query(
+          `SELECT app.next_vendor_document_seq($1,'completion_statement')::text AS seq`,
+          [profile],
+        );
+        assert.equal(completion.rows[0].seq, "1");
+      }
+      await assert.rejects(allocate(a, profiles[3]), { code: "23514" });
+      await a.query("ROLLBACK");
+
+      // Replaying the edited migration must preserve issuer identity/counter.
+      await a.query(readFileSync(
+        new URL(
+          "../../supabase/migrations/20261030150800_vendor_onboarding_job_types_receipts.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ));
+      await a.query("BEGIN");
+      await a.query("SET LOCAL ROLE service_role");
+      assert.equal(await allocate(a, profiles[1]), 5);
+      await a.query("COMMIT");
+    } finally {
+      try {
+        await a.query("ROLLBACK");
+        await b.query("ROLLBACK");
+        await a.query(`DELETE FROM vendor_profiles WHERE id = ANY($1::uuid[])`, [profiles]);
+        await a.query(`DELETE FROM contacts WHERE id = ANY($1::uuid[])`, [contacts]);
+        await a.query(
+          `DELETE FROM vendor_issuers WHERE tax_id = $1
+             AND NOT EXISTS (
+               SELECT 1 FROM vendor_profiles WHERE issuer_id = vendor_issuers.id
+             )`,
+          [taxId],
+        );
+      } finally {
+        a.release();
+        b.release();
+        observer.release();
+        await pool.end();
+      }
     }
   },
 );

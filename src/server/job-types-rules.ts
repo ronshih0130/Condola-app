@@ -205,9 +205,9 @@ export const DEFAULT_JOB_TYPES: readonly JobTypeDefinition[] = [
       { key: "operation_normal", label_zh: "運轉正常", label_en: "Normal operation" },
       { key: "outlet_temp_normal", label_zh: "出風溫度正常", label_en: "Normal outlet temperature" },
       { key: "filter_cleaned", label_zh: "濾網清潔完成", label_en: "Filter cleaned" },
-      { key: "no_condensate_leak", label_zh: "無漏水", label_en: "No water leakage" },
+      { key: "no_condensate_leak", label_zh: "無漏水", label_en: "No condensate leak" },
     ],
-    pricing_modes: ["per_item", "per_visit", "lump_sum"],
+    pricing_modes: ["per_item", "material_and_labor", "lump_sum"],
     sort: 40,
     active: true,
   },
@@ -596,8 +596,8 @@ export function buildJobTypeLineItem(input: {
 /**
  * Persisted ticket type_fields.pricing contains either one mode/quantity/unit
  * shared by document rows, or an ordered items array with those fields per row.
- * Only persisted data supplies these fields when pricing exists. Malformed or
- * incomplete persisted pricing must not silently fall back to caller values.
+ * Only persisted data supplies these fields. Missing, malformed or incomplete
+ * persisted pricing must never fall back to caller quantity, unit or unit price.
  */
 export function deriveTicketDocumentItems(
   items: readonly JobTypeLineItem[],
@@ -605,10 +605,7 @@ export function deriveTicketDocumentItems(
 ): JobTypeLineItem[] {
   const pricing = typeFields?.pricing;
   if (pricing === undefined || pricing === null) {
-    return items.map((item) => ({
-      ...item,
-      unit_price_minor: Math.round(item.amount_minor / item.quantity),
-    }));
+    throw new Error("invalid_ticket_pricing");
   }
   const record = (value: unknown): Record<string, unknown> => {
     if (!value || typeof value !== "object" || Array.isArray(value)) {

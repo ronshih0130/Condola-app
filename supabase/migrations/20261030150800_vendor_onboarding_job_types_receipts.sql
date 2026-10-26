@@ -1,4 +1,4 @@
--- Version 20261030150800. Vendor onboarding profiles, multi-job-type catalog, and vendor e-seal receipts / completion statements (Lane A step 1, Class B). Additive only, no backfill or data deletion. Down: DROP FUNCTION IF EXISTS app.next_vendor_document_seq(uuid, text); DROP TABLE IF EXISTS public.vendor_documents, public.vendor_document_sequences, public.vendor_onboarding_invites, public.vendor_profile_versions, public.vendor_profiles; ALTER TABLE public.contacts DROP COLUMN IF EXISTS receipt_title; ALTER TABLE public.ticket_attachments DROP COLUMN IF EXISTS phase; ALTER TABLE public.maintenance_tickets DROP CONSTRAINT IF EXISTS maintenance_tickets_job_type_code_fkey; DROP TABLE IF EXISTS public.job_types;
+-- Version 20261030150800. Vendor onboarding profiles, multi-job-type catalog, and vendor e-seal receipts / completion statements (Lane A step 1, Class B). Additive only, no backfill or data deletion. Down: DROP FUNCTION IF EXISTS app.next_vendor_document_seq(uuid, text); DROP TABLE IF EXISTS public.vendor_documents, public.vendor_document_sequences, public.vendor_onboarding_invites, public.vendor_profile_versions, public.vendor_profiles; DROP FUNCTION IF EXISTS app.bind_vendor_issuer(); DROP TABLE IF EXISTS public.vendor_issuers; ALTER TABLE public.contacts DROP COLUMN IF EXISTS receipt_title; ALTER TABLE public.ticket_attachments DROP COLUMN IF EXISTS phase; ALTER TABLE public.maintenance_tickets DROP CONSTRAINT IF EXISTS maintenance_tickets_job_type_code_fkey; DROP TABLE IF EXISTS public.job_types;
 
 BEGIN;
 
@@ -42,7 +42,7 @@ INSERT INTO public.job_types (
     'Cleaning',
     '[{"key":"cleaning_scope","label_zh":"清潔範圍（室內／陽台／頂樓等）","label_en":"Cleaning Scope","type":"text","required":true},{"key":"area_ping_or_rooms","label_zh":"坪數或空間數","label_en":"Area (Ping) or Room Count","type":"text","required":true}]'::jsonb,
     '{"before":{"required":true,"min":1,"max":5},"during":{"required":false,"min":0,"max":0},"after":{"required":true,"min":1,"max":5}}'::jsonb,
-    '[{"key":"floor_clean","label_zh":"地面清潔完成","label_en":"Floor cleaned"},{"key":"kitchen_clean","label_zh":"廚房清潔完成","label_en":"Kitchen cleaned"},{"key":"bathroom_clean","label_zh":"衛浴清潔完成","label_en":"Bathroom cleaned"},{"key":"trash_removed","label_zh":"垃圾與雜物清運完成","label_en":"Trash and debris removed"}]'::jsonb,
+    '[{"key":"floor_clean","label_zh":"地面清潔完成","label_en":"Floor cleaned"},{"key":"kitchen_clean","label_zh":"廚房清潔完成","label_en":"Kitchen cleaned"},{"key":"bathroom_clean","label_zh":"浴室清潔完成","label_en":"Bathroom cleaned"},{"key":"trash_removed","label_zh":"垃圾與雜物清運完成","label_en":"Trash and debris removed"}]'::jsonb,
     ARRAY['per_visit', 'per_ping', 'lump_sum']::text[],
     10,
     true
@@ -86,7 +86,7 @@ INSERT INTO public.job_types (
     'Moving',
     '[{"key":"item_list_or_count","label_zh":"搬運物件清單或件數","label_en":"Item List or Count","type":"text","required":true},{"key":"origin_destination","label_zh":"起訖地址","label_en":"Origin and Destination Addresses","type":"text","required":true}]'::jsonb,
     '{"before":{"required":true,"min":1,"max":5},"during":{"required":false,"min":0,"max":0},"after":{"required":true,"min":1,"max":5}}'::jsonb,
-    '[{"key":"item_count_verified","label_zh":"物件件數清點一致","label_en":"Item count verified"},{"key":"no_new_damage","label_zh":"外觀無新增損壞","label_en":"No new exterior damage"},{"key":"placed_as_requested","label_zh":"依指定位置擺放","label_en":"Placed at designated locations"}]'::jsonb,
+    '[{"key":"item_count_verified","label_zh":"搬運物件件數一致","label_en":"Item count verified"},{"key":"no_new_damage","label_zh":"外觀無新增損壞","label_en":"No new exterior damage"},{"key":"placed_as_requested","label_zh":"依指定位置擺放","label_en":"Placed at designated locations"}]'::jsonb,
     ARRAY['per_visit', 'per_item', 'lump_sum']::text[],
     50,
     true
@@ -175,7 +175,25 @@ ALTER TABLE public.ticket_attachments
 ALTER TABLE public.contacts
   ADD COLUMN IF NOT EXISTS receipt_title text NULL;
 
--- 4. vendor_profiles & vendor_profile_versions (org-scoped, no cross-org merge, no national ID column)
+-- 4. Private issuing identities. No organization membership or profile data
+-- is stored here, and application roles cannot read or mutate this table.
+CREATE TABLE IF NOT EXISTS public.vendor_issuers (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tax_id      text NOT NULL UNIQUE CHECK (tax_id ~ '^[0-9]{8}$'),
+  vendor_code text NOT NULL UNIQUE DEFAULT replace(gen_random_uuid()::text, '-', '')
+              CHECK (vendor_code ~ '^[0-9a-f]{32}$'),
+  next_seq    bigint NOT NULL DEFAULT 1 CHECK (next_seq >= 1)
+);
+
+ALTER TABLE public.vendor_issuers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.vendor_issuers FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.vendor_issuers
+  FROM PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON TABLE public.vendor_issuers IS
+  'Private validated tax-ID issuing identities. Receipt counters survive profile deletion and are shared across organizations. Access only through SECURITY DEFINER functions.';
+
+-- Profiles remain organization-scoped; only issuing identity is shared.
 CREATE TABLE IF NOT EXISTS public.vendor_profiles (
   id                         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id                     uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -196,7 +214,6 @@ CREATE TABLE IF NOT EXISTS public.vendor_profiles (
   updated_at                 timestamptz NOT NULL DEFAULT now(),
   UNIQUE (org_id, id),
   UNIQUE (org_id, contact_id),
-  UNIQUE (org_id, vendor_code),
   FOREIGN KEY (org_id, contact_id) REFERENCES public.contacts(org_id, id) ON DELETE CASCADE,
   FOREIGN KEY (org_id, seal_file_id) REFERENCES public.files(org_id, id),
   CHECK (
@@ -205,8 +222,92 @@ CREATE TABLE IF NOT EXISTS public.vendor_profiles (
   )
 );
 
+ALTER TABLE public.vendor_profiles
+  ADD COLUMN IF NOT EXISTS issuer_id uuid NULL REFERENCES public.vendor_issuers(id);
+-- Duplicate business profiles intentionally have the same issuer's code.
+ALTER TABLE public.vendor_profiles
+  DROP CONSTRAINT IF EXISTS vendor_profiles_org_id_vendor_code_key;
+
+-- Local individuals use their normalized onboarding phone as their stable
+-- identity. Reject duplicate profiles rather than merging tenant contact data.
+-- CEO decision required: whether/how to link individuals across organizations,
+-- or reconcile an individual whose phone changes. No national ID is collected.
+CREATE UNIQUE INDEX IF NOT EXISTS vendor_profiles_individual_identity
+  ON public.vendor_profiles (org_id, phone_e164)
+  WHERE kind = 'individual';
+
 COMMENT ON TABLE public.vendor_profiles IS
-  'Organization-scoped issuer profiles. Cross-org issuer identity reconciliation is pending a CEO/R&D decision; do not merge profiles or counters across organizations.';
+  'Organization-scoped profiles. Businesses bind to a private validated tax-ID issuer. Individuals are unique by normalized phone within an organization; cross-org individual linkage and phone-identity reconciliation require a CEO decision.';
+
+CREATE OR REPLACE FUNCTION app.bind_vendor_issuer()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_sum integer := 0;
+  v_product integer;
+  v_weights integer[] := ARRAY[1,2,1,2,1,2,4,1];
+  v_issuer uuid;
+  v_code text;
+BEGIN
+  -- Once established, identity cannot be repurposed to fork or transfer a
+  -- counter. Descriptive onboarding corrections remain available.
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.id IS DISTINCT FROM OLD.id
+       OR NEW.org_id IS DISTINCT FROM OLD.org_id
+       OR NEW.contact_id IS DISTINCT FROM OLD.contact_id
+       OR NEW.kind IS DISTINCT FROM OLD.kind
+       OR NEW.tax_id IS DISTINCT FROM OLD.tax_id
+       OR (OLD.kind = 'individual'
+           AND NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164) THEN
+      RAISE EXCEPTION 'vendor issuing identity is immutable'
+        USING ERRCODE = '23514';
+    END IF;
+  END IF;
+
+  IF NEW.kind = 'business' THEN
+    IF NEW.tax_id IS NULL OR NEW.tax_id !~ '^[0-9]{8}$' THEN
+      RAISE EXCEPTION 'invalid tax ID' USING ERRCODE = '23514';
+    END IF;
+    FOR i IN 1..8 LOOP
+      v_product := substring(NEW.tax_id FROM i FOR 1)::integer * v_weights[i];
+      v_sum := v_sum + v_product / 10 + v_product % 10;
+    END LOOP;
+    IF v_sum % 5 <> 0
+       AND NOT (substring(NEW.tax_id FROM 7 FOR 1) = '7'
+                AND (v_sum + 1) % 5 = 0) THEN
+      RAISE EXCEPTION 'invalid tax ID' USING ERRCODE = '23514';
+    END IF;
+
+    INSERT INTO public.vendor_issuers (tax_id)
+    VALUES (NEW.tax_id)
+    ON CONFLICT (tax_id) DO NOTHING;
+    SELECT id, vendor_code INTO STRICT v_issuer, v_code
+      FROM public.vendor_issuers WHERE tax_id = NEW.tax_id;
+    NEW.issuer_id := v_issuer;
+    NEW.vendor_code := v_code;
+  ELSE
+    NEW.issuer_id := NULL;
+    IF TG_OP = 'UPDATE' THEN
+      NEW.vendor_code := OLD.vendor_code;
+    ELSE
+      NEW.vendor_code := replace(gen_random_uuid()::text, '-', '');
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION app.bind_vendor_issuer()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION app.bind_vendor_issuer() TO service_role;
+
+DROP TRIGGER IF EXISTS vendor_profiles_bind_issuer ON public.vendor_profiles;
+CREATE TRIGGER vendor_profiles_bind_issuer
+BEFORE INSERT OR UPDATE ON public.vendor_profiles
+FOR EACH ROW EXECUTE FUNCTION app.bind_vendor_issuer();
 
 CREATE INDEX IF NOT EXISTS vendor_profiles_org_idx
   ON public.vendor_profiles (org_id, created_at DESC);
@@ -298,7 +399,8 @@ CREATE POLICY vendor_onboarding_invites_read ON public.vendor_onboarding_invites
   FOR SELECT TO authenticated
   USING (app.is_member(org_id));
 
--- 6. vendor_document_sequences, vendor_documents, and app.next_vendor_document_seq
+-- 6. Individual completion counters and profile-local allocation observations.
+-- Receipt authority lives exclusively in vendor_issuers.next_seq.
 CREATE TABLE IF NOT EXISTS public.vendor_document_sequences (
   vendor_profile_id uuid NOT NULL REFERENCES public.vendor_profiles(id) ON DELETE CASCADE,
   kind              text NOT NULL CHECK (kind IN ('receipt', 'completion_statement')),
@@ -307,7 +409,7 @@ CREATE TABLE IF NOT EXISTS public.vendor_document_sequences (
 );
 
 COMMENT ON TABLE public.vendor_document_sequences IS
-  'Independent continuous counters per organization-scoped vendor profile and document kind. Cross-org issuer identity reconciliation awaits CEO/R&D; no cross-org merge.';
+  'Completion counters per organization/profile/kind. Receipt rows record only this profile''s last allocation; the private tax-ID issuer owns the receipt counter. Cross-org linkage of individuals requires a CEO decision.';
 
 ALTER TABLE public.vendor_document_sequences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vendor_document_sequences FORCE ROW LEVEL SECURITY;
@@ -387,10 +489,43 @@ SET search_path = pg_catalog, public
 AS $$
 DECLARE
   v_seq bigint;
+  v_issuer uuid;
+  v_kind text;
 BEGIN
   IF document_kind IS NULL OR document_kind NOT IN ('receipt', 'completion_statement') THEN
     RAISE EXCEPTION 'invalid document kind'
       USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT issuer_id, kind INTO v_issuer, v_kind
+    FROM public.vendor_profiles WHERE id = vendor_profile FOR SHARE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'vendor_profile not found'
+      USING ERRCODE = 'foreign_key_violation';
+  END IF;
+
+  IF document_kind = 'receipt' THEN
+    IF v_kind <> 'business' OR v_issuer IS NULL THEN
+      RAISE EXCEPTION 'receipt requires a validated issuer'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    -- An ordinary row update, never a PostgreSQL sequence: concurrent callers
+    -- serialize here, and rollback of rendering/persistence restores the number.
+    UPDATE public.vendor_issuers
+       SET next_seq = next_seq + 1
+     WHERE id = v_issuer
+    RETURNING next_seq - 1 INTO v_seq;
+    IF v_seq IS NULL THEN
+      RAISE EXCEPTION 'vendor issuer not found'
+        USING ERRCODE = 'foreign_key_violation';
+    END IF;
+    -- Preserve only the local profile's observation, not other organizations'
+    -- activity. This row is never consulted for receipt allocation.
+    INSERT INTO public.vendor_document_sequences (vendor_profile_id, kind, next_seq)
+    VALUES (vendor_profile, document_kind, v_seq + 1)
+    ON CONFLICT (vendor_profile_id, kind)
+    DO UPDATE SET next_seq = EXCLUDED.next_seq;
+    RETURN v_seq;
   END IF;
 
   INSERT INTO public.vendor_document_sequences (vendor_profile_id, kind, next_seq)
@@ -401,11 +536,6 @@ BEGIN
      SET next_seq = next_seq + 1
    WHERE vendor_profile_id = vendor_profile AND kind = document_kind
   RETURNING next_seq - 1 INTO v_seq;
-
-  IF v_seq IS NULL THEN
-    RAISE EXCEPTION 'vendor_profile not found: %', vendor_profile
-      USING ERRCODE = 'foreign_key_violation';
-  END IF;
 
   RETURN v_seq;
 END;

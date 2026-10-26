@@ -43,15 +43,13 @@ export async function loadVendorPdfFont(origin: string): Promise<Uint8Array> {
 
 export function buildVendorReceiptPdf(input: VendorReceiptPdfInput): PdfDocument {
   const { document, issuer } = input;
-  // TODO: CEO decision pending on the company-buyer PDF label exception to the
-  // banned-copy policy; retain 買受人統編 until that decision is approved.
   const buyerRows =
     document.buyer.kind === "owner"
       ? [{ label: "收據抬頭", value: document.buyer.receipt_title }]
       : [
           { label: "買受人名稱", value: document.buyer.name },
           { label: "買受人地址", value: document.buyer.address },
-          { label: "買受人統編", value: document.buyer.tax_id },
+          { label: "買受人統一編號", value: document.buyer.tax_id },
         ];
   const issuerRows = [
     { label: "廠商名稱", value: issuer.business_name || issuer.display_name },

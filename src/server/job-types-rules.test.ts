@@ -168,10 +168,28 @@ test("persisted pricing supports ordered material/labor rows and custom units", 
   assert.equal(split.total_minor, 201);
 });
 
-test("absent pricing preserves legacy quantities; malformed persisted pricing fails closed", () => {
-  const [legacy] = deriveTicketDocumentItems([item], {});
-  assert.equal(legacy.quantity, 99);
-  assert.equal(legacy.unit_price_minor, 1);
+test("absent persisted pricing rejects caller quantities and unit prices", () => {
+  for (const typeFields of [undefined, null, {}, { pricing: undefined }, { pricing: null }]) {
+    for (const callerItem of [
+      item,
+      { ...item, quantity: 1, unit: "式", unit_price_minor: 100 },
+    ]) {
+      assert.throws(
+        () => deriveTicketDocumentItems([callerItem], typeFields),
+        { message: "invalid_ticket_pricing" },
+      );
+    }
+    assert.throws(
+      () => deriveTicketDocumentItems([], typeFields),
+      { message: "invalid_ticket_pricing" },
+    );
+  }
+  assert.equal(item.quantity, 99);
+  assert.equal(item.unit, "錯誤單位");
+  assert.equal(item.unit_price_minor, 999);
+});
+
+test("malformed persisted pricing fails closed", () => {
   for (const pricing of [
     [], "bad", {}, { mode: "unknown", quantity: 3 },
     { mode: "per_hour" }, { mode: "per_hour", quantity: 0 },
