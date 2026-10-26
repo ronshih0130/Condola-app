@@ -6,7 +6,7 @@ import type { Client } from "pg";
 import { buildStoredConsent, consentCoversCurrent } from "./consent";
 import { withClient } from "./db";
 
-const migration = readFileSync(new URL("../../supabase/migrations/20261030150100_consents.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../../supabase/migrations/20261030150600_consents.sql", import.meta.url), "utf8");
 const backfill = readFileSync(new URL("../../supabase/ops/consents_backfill.sql", import.meta.url), "utf8");
 const current = buildStoredConsent("signup", new Date("2026-10-25T00:00:00Z"));
 const stale = { ...current, terms_version: "old", privacy_version: "old" };

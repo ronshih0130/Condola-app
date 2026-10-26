@@ -1,4 +1,4 @@
--- Version 20261030150100: server-recorded, append-only legal acceptances.
+-- Version 20261030150600: server-recorded, append-only legal acceptances.
 -- Keep the small backfill here to prevent lockout if reconciliation is forgotten.
 -- The FK locks auth.users until commit: fail fast instead of queueing signups.
 -- Use session settings for both plain psql and transactional migration runners;
