@@ -170,9 +170,12 @@ test("new vendor copy is in both catalogs and skips the banned words", () => {
   assert.equal(zh.i_repair_internal, "僅管理公司可見");
   assert.equal(zh.i_repair_cancel_locked, "已安排廠商，如需取消請聯絡管理公司。");
   assert.equal(zh.i_vendor_record_only, "由你聯絡並安排廠商，Condola 只記錄指派資訊。");
-  assert.equal(zh.i_vendor_notify_tenant, "通知租客到場時間");
-  assert.equal(zh.i_vendor_notify_tenant_hint, "透過 Email 和站內通知");
+  assert.equal(zh.i_vendor_notify_tenant, "請另行告知租客到場時間");
+  assert.equal(zh.i_vendor_notify_tenant_hint, "系統目前不會自動通知租客");
+  assert.equal(en.i_vendor_notify_tenant, "Tell the tenant the arrival time yourself");
+  assert.equal(en.i_vendor_notify_tenant_hint, "Condola does not notify the tenant automatically yet");
   assert.equal(zh.i_vendor_notify_tenant_hint.includes("LINE"), false);
+  assert.doesNotMatch(zh.i_vendor_notify_tenant_hint, /Email|站內通知/);
   assert.equal(Object.values(zh).some((value) => value.includes("僅事務所可見")), false);
   assert.equal(Object.values(en).some((value) => value.includes("僅事務所可見")), false);
 });

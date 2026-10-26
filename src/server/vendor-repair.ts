@@ -4,7 +4,7 @@ import { maybe, svc, tx } from "./db";
 import { insertPostedRepairExpense } from "./expenses";
 import { FlowError } from "./errors";
 import { loadOrgCountry } from "./org-country";
-import { assertPerm } from "./perms";
+import { assertPerm, can } from "./perms";
 import { portalInviteOrigin } from "./portal-invite";
 import { taipeiToday } from "./money";
 import {
@@ -427,7 +427,7 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
   }));
   if (!job) return { job: null as VendorDispatchView | null, vendors: choices };
   let link = "";
-  if (job.link_open) {
+  if (can(session.role, "tickets.update") && job.link_open) {
     const secret = await svc(session.userId, (client) =>
       maybe<{ token: string }>(
         client,
@@ -671,6 +671,17 @@ export async function prepareVendorPhoto(
   };
 }
 
+async function lockVendorPhotoTicket(client: Client, job: OpenJob) {
+  const ticket = await maybe<{ id: string }>(
+    client,
+    `SELECT id::text FROM maintenance_tickets
+      WHERE id = $1 AND org_id = $2
+      FOR UPDATE`,
+    [job.ticket_id, job.org_id],
+  );
+  if (!ticket) throw new FlowError("errors.notFound");
+}
+
 async function attachVendorPhoto(
   job: OpenJob,
   hash: string,
@@ -679,6 +690,7 @@ async function attachVendorPhoto(
   const fileId = photoFileId(input.path);
   if (!fileId) throw new FlowError("errors.forbidden");
   return svc(null, async (client) => {
+    await lockVendorPhotoTicket(client, job);
     const still = await maybe<{ job_id: string }>(client, `SELECT job_id::text FROM app.open_vendor_job($1)`, [hash]);
     if (!still || still.job_id !== job.job_id) throw new FlowError("errors.notFound");
     const existing = await maybe<{ id: string }>(
@@ -717,6 +729,7 @@ const DISCARD = new Set(["errors.photoLimit", "errors.photoType", "errors.photoS
 export async function confirmVendorPhoto(
   token: string,
   input: { path: string; fileName: string; mime: string; size: number; uploadToken: string },
+  deps?: { remove?: typeof removeRepairObject },
 ) {
   const job = await openJob(token);
   if (!job) throw new FlowError("errors.notFound");
@@ -738,7 +751,23 @@ export async function confirmVendorPhoto(
   } catch (error) {
     if (error instanceof FlowError && DISCARD.has(error.key)) {
       if (vendorUploadGrantMatches(hash, job.ticket_id, input.path, input.uploadToken ?? "")) {
-        await removeRepairObject(input.path);
+        const existingId = await svc(null, async (client) => {
+          await lockVendorPhotoTicket(client, job);
+          const reference = await maybe<{ id: string | null }>(
+            client,
+            `SELECT a.id::text
+               FROM files f
+               LEFT JOIN ticket_attachments a ON a.file_id = f.id
+              WHERE f.storage_path = $1
+              ORDER BY a.id NULLS LAST
+              LIMIT 1`,
+            [input.path],
+          );
+          if (reference) return reference.id;
+          await (deps?.remove ?? removeRepairObject)(input.path);
+          return null;
+        });
+        if (existingId) return existingId;
       }
     }
     throw error;

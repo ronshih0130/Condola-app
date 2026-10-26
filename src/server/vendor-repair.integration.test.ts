@@ -7,11 +7,13 @@ import { cancelTenantRepair } from "./repairs";
 import { FlowError } from "./errors";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { loadIncomeExpense } from "./income-expense";
-import { PHOTO_BUCKET, ticketPhotoPath } from "./repair-rules";
+import { PHOTO_BUCKET, PHOTO_LIMIT, ticketPhotoPath } from "./repair-rules";
+import { issueVendorUploadGrant } from "./ticket-photos";
 import type { Session } from "./types";
 import {
   addVendor,
   confirmVendorCost,
+  confirmVendorPhoto,
   dispatchVendor,
   findVendorPhoto,
   loadVendorDispatch,
@@ -168,6 +170,18 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
       }, ORIGIN);
       const token = tokenOf(issued.url);
       assert.equal(token.length >= 43, true);
+      const readOnly = await loadVendorDispatch(accountant, ticketId, ORIGIN);
+      assert.equal(readOnly?.job?.jobId, issued.jobId);
+      assert.equal(readOnly?.job?.link, "");
+      assert.equal(readOnly?.job?.linkOpen, false);
+      assert.equal(JSON.stringify(readOnly).includes(token), false);
+      const editable = await loadVendorDispatch(admin, ticketId, ORIGIN);
+      assert.equal(editable?.job?.link, issued.url);
+      assert.equal(editable?.job?.linkOpen, true);
+      await assert.rejects(
+        () => dispatchVendor(accountant, ticketId, { vendorName: "陳水電", vendorPhone: "0912000111", contactWindow: "週三" }, ORIGIN),
+        (error: unknown) => error instanceof FlowError && error.key === "errors.forbidden",
+      );
       const page = await loadVendorJob(token);
       assert.equal(page?.title, title);
       assert.equal(page?.window, "週三 14:00-17:00");
@@ -272,6 +286,50 @@ describe("vendor repair dispatch", { concurrency: false }, () => {
       assert.equal(await findVendorPhoto(token, otherAttachment), null);
       assert.equal(await findVendorPhoto("not-a-token", visible?.path ? (await svc(null, (client) => client.query<{ id: string }>(`SELECT id::text FROM ticket_attachments WHERE file_id = $1`, [fileId]))).rows[0].id : ""), null);
       assert.equal(await loadVendorJob("not-a-token"), null);
+
+      await svc(null, async (client) => {
+        for (let n = 2; n < PHOTO_LIMIT; n++) {
+          const extraId = randomUUID();
+          await client.query(
+            `INSERT INTO files (id, org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes)
+             VALUES ($1,$2,$3,$4,$5,'image/jpeg',4)`,
+            [extraId, ORG, PHOTO_BUCKET, ticketPhotoPath(ORG, ticketId, extraId, "image/jpeg"), `${title}-${n}.jpg`],
+          );
+          await client.query(
+            `INSERT INTO ticket_attachments (org_id, ticket_id, file_id, is_internal)
+             VALUES ($1,$2,$3,false)`,
+            [ORG, ticketId, extraId],
+          );
+        }
+      });
+      const attached = await svc(null, (client) =>
+        client.query<{ id: string; n: string }>(
+          `SELECT id::text,
+                  (SELECT count(*)::text FROM ticket_attachments WHERE ticket_id = $2) AS n
+             FROM ticket_attachments WHERE file_id = $1`,
+          [fileId, ticketId],
+        ),
+      );
+      assert.equal(Number(attached.rows[0].n), PHOTO_LIMIT);
+      const previousKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey || "vendor-integration-key";
+      try {
+        const confirmed = await confirmVendorPhoto(token, {
+          path,
+          fileName: `${title}.jpg`,
+          mime: "application/octet-stream",
+          size: 4,
+          uploadToken: issueVendorUploadGrant(hashVendorToken(token), ticketId, path),
+        }, { remove: async () => { assert.fail("attached object must never be removed"); } });
+        assert.equal(confirmed, attached.rows[0].id);
+      } finally {
+        if (previousKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+        else process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey;
+      }
+      const retained = await svc(null, (client) =>
+        client.query(`SELECT a.id FROM ticket_attachments a JOIN files f ON f.id = a.file_id WHERE a.id = $1 AND f.storage_path = $2`, [attached.rows[0].id, path]),
+      );
+      assert.equal(retained.rowCount, 1);
 
       await svc(null, (client) =>
         client.query(`UPDATE repair_vendor_jobs SET expires_at = now() - interval '1 minute' WHERE id = $1`, [issued.jobId]),

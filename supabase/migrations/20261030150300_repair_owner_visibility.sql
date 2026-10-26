@@ -16,12 +16,23 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION app.repair_cost_on_statement(p_ticket uuid, p_org uuid) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT p_ticket IS NULL
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  IF current_setting('request.jwt.claim.role', true) = 'authenticated' THEN
+    IF NOT coalesce(app.is_member(p_org), false)
+       OR (
+         nullif(current_setting('app.active_org_id', true), '') IS NOT NULL
+         AND p_org::text IS DISTINCT FROM current_setting('app.active_org_id', true)
+       ) THEN
+      RETURN false;
+    END IF;
+  END IF;
+  RETURN p_ticket IS NULL
       OR EXISTS (
            SELECT 1 FROM maintenance_tickets t
             WHERE t.id = p_ticket AND t.org_id = p_org AND t.status = 'closed'
          );
+END;
 $$;
 
 REVOKE ALL ON FUNCTION app.repair_cost_on_statement(uuid, uuid) FROM PUBLIC;

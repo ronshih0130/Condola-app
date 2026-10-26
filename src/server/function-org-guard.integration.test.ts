@@ -73,6 +73,70 @@ async function expectOrgMismatch(client: Client, sql: string, params: unknown[])
   }
 }
 
+test("repair statement costs enforce membership and the pinned org before allowing NULL tickets", async () => {
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const ownPlace = await place(client, ORG_ID);
+      const otherPlace = await place(client, ORG2_ID);
+      const tickets = await client.query<{ id: string; org_id: string }>(
+        `INSERT INTO maintenance_tickets (org_id, property_id, title, category, status, ticket_number)
+         VALUES ($1,$2,'repair guard A','other','closed',900001),
+                ($3,$4,'repair guard B','other','closed',900002)
+         RETURNING id::text, org_id::text`,
+        [ORG_ID, ownPlace.propertyId, ORG2_ID, otherPlace.propertyId],
+      );
+      const own = tickets.rows.find((row) => row.org_id === ORG_ID);
+      const other = tickets.rows.find((row) => row.org_id === ORG2_ID);
+      assert.ok(own);
+      assert.ok(other);
+      await client.query(`DELETE FROM org_members WHERE org_id = $1 AND user_id = $2`, [ORG2_ID, USERS.admin]);
+      await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.admin]);
+      await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+      const checked = await client.query<{ own: boolean; own_null: boolean; foreign: boolean; foreign_null: boolean }>(
+        `SELECT app.repair_cost_on_statement($1::uuid,$2::uuid) AS own,
+                app.repair_cost_on_statement(NULL,$2::uuid) AS own_null,
+                app.repair_cost_on_statement($3::uuid,$4::uuid) AS foreign,
+                app.repair_cost_on_statement(NULL,$4::uuid) AS foreign_null`,
+        [own.id, ORG_ID, other.id, ORG2_ID],
+      );
+      assert.deepEqual(checked.rows[0], { own: true, own_null: true, foreign: false, foreign_null: false });
+      await client.query("RESET ROLE");
+      await client.query(`SELECT set_config('app.active_org_id', '', true)`);
+      await client.query("SET LOCAL ROLE authenticated");
+      const unpinned = await client.query<{ ok: boolean }>(
+        `SELECT app.repair_cost_on_statement(NULL,$1::uuid) AS ok`, [ORG2_ID],
+      );
+      assert.equal(unpinned.rows[0].ok, false);
+      await client.query("RESET ROLE");
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, status)
+         VALUES ($1,$2,'admin','active')`,
+        [ORG2_ID, USERS.admin],
+      );
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+      const pinned = await client.query<{ ok: boolean }>(
+        `SELECT app.repair_cost_on_statement(NULL,$1::uuid) AS ok`, [ORG2_ID],
+      );
+      assert.equal(pinned.rows[0].ok, false);
+      await client.query("RESET ROLE");
+      await client.query(`SELECT set_config('request.jwt.claim.role', 'service_role', true)`);
+      await client.query("SET LOCAL ROLE service_role");
+      const bypass = await client.query<{ ok: boolean; no_ticket: boolean }>(
+        `SELECT app.repair_cost_on_statement($1::uuid,$2::uuid) AS ok,
+                app.repair_cost_on_statement(NULL,$2::uuid) AS no_ticket`,
+        [other.id, ORG2_ID],
+      );
+      assert.deepEqual(bypass.rows[0], { ok: true, no_ticket: true });
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  });
+});
+
 test("post_reversal allows the pinned org, rejects another org, and service_role bypasses", async () => {
   await withClient(async (client) => {
     await client.query("BEGIN");
