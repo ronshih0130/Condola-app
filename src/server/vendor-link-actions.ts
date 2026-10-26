@@ -1,5 +1,6 @@
 "use server";
 
+import { requireCurrentConsent } from "./consent-gate";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { FlowError } from "./errors";
@@ -8,6 +9,7 @@ import { getSession } from "./session";
 import { approveVendorSharing } from "./vendor-repair";
 
 export async function actionApproveVendorSharing(formData: FormData) {
+  await requireCurrentConsent();
   const ticketId = String(formData.get("ticketId") ?? "");
   const back = isUuid(ticketId) ? `/m/tickets/${ticketId}` : "/m/tickets";
   try {

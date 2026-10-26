@@ -16,6 +16,8 @@ const program = ts.createProgram(paths, {
   baseUrl: resolve("."), paths: { "@/*": ["src/*"] },
 });
 const checker = program.getTypeChecker();
+// Staff exports in server/vendor-link-actions.ts use the default guarded classification.
+// vendor-onboarding.ts and vendor-receipt.ts are services, not entrypoints.
 const openActions: Record<string, Record<string, string>> = {
   "server/auth-actions.ts": {
     actionSignIn: "Establish identity", actionLineLogin: "Establish identity",
@@ -38,6 +40,9 @@ const openActions: Record<string, Record<string, string>> = {
   "server/consent-actions.ts": {
     actionAcceptReconsent: "Record acceptance", actionAcceptPortalConsent: "Record acceptance",
   },
+};
+const openPages: Record<string, Record<string, string>> = {
+  "app/v/[token]/page.tsx": { default: "Vendor link token authentication, no user session" },
 };
 const openRoutes: Record<string, Record<string, string>> = {
   "api/auth/enter/route.ts": { GET: "Authentication continuation checks consent" },
@@ -131,7 +136,7 @@ test("all runtime server exports, routes and protected pages are classified", ()
       if (directive(node)) assert.equal(node.parent, file, name + ": inline action needs explicit classification");
     }
     const route = name.startsWith("app/") && name.endsWith("/route.ts");
-    const page = /^app\/[mot]\/(?:.*\/)?page\.tsx$/.test(name);
+    const page = /^app\/[motv]\/(?:.*\/)?page\.tsx$/.test(name);
     if (!server && !route && !page) continue;
     const moduleSymbol = checker.getSymbolAtLocation(file);
     assert.ok(moduleSymbol, name);
@@ -142,6 +147,7 @@ test("all runtime server exports, routes and protected pages are classified", ()
       const label = name + "#" + key;
       if (server && openActions[name]?.[key]) continue;
       if (route && openRoutes[name.slice(4)]?.[key]) continue;
+      if (page && openPages[name]?.[key]) continue;
       if ((route || page) && ["dynamic", "revalidate", "runtime", "maxDuration", "fetchCache", "metadata", "generateMetadata"].includes(key)) {
         assert.notEqual(key, "generateMetadata", label + ": classify data-producing metadata");
         continue;
