@@ -8,6 +8,7 @@ import { contractVersionDigest } from "./document";
 import { emailCode, matchesEmailCode } from "./email";
 import { signaturePng } from "./evidence";
 import { EsignRepo, type Connection, type TransactionRunner } from "./repo";
+import { recordReviewDelivery, requireReviewDelivery } from "./review";
 import { auditView, replacementLine, type Version, type Stroke, type AuditEvent } from "./rules";
 import { generateContractPdf, stampSignature } from "./stamp";
 
@@ -230,9 +231,17 @@ export class EsignFlow {
           ensure(typeof command.response === "string" && command.response.length <= 128);
           await repo.recordEmailStep(actor, caseId, { versionId, signerId: self(), response: command.response, at });
           break;
-        case "review":
-          await repo.apply(actor, caseId, { type: "review", versionId, signerId: self(), scrolledToEnd: true, at });
+        case "review": {
+          const signerId = self();
+          ensure(!loaded.state.halted && signer?.status === "pending_review", "Review out of order");
+          await requireReviewDelivery(c, {
+            caseId, versionId, signerId, digest: loaded.state.documentDigest,
+          }, (await PDFDocument.load(loaded.pdf_bytes)).getPageCount());
+          // The acknowledgement requires durable delivery evidence. The browser
+          // additionally gates this command on scrolling; neither proves reading.
+          await repo.apply(actor, caseId, { type: "review", versionId, signerId, scrolledToEnd: true, at });
           break;
+        }
         case "document":
           await this.company(c, session);
           await repo.apply(actor, caseId, { type: "check_foreign_document", versionId, at,
@@ -363,14 +372,21 @@ export class EsignFlow {
       const bytes = new Uint8Array(final ? loaded.final_pdf_bytes! : loaded.pdf_bytes);
       const digest = final ? loaded.state.finalDigest! : loaded.state.documentDigest;
       ensure(await contractVersionDigest(bytes) === digest, "Document digest mismatch");
+      let responseBytes = bytes;
       if (page !== undefined) {
         const source = await PDFDocument.load(bytes);
         ensure(Number.isInteger(page) && page >= 1 && page <= source.getPageCount());
         const one = await PDFDocument.create();
         one.addPage((await one.copyPages(source, [page - 1]))[0]);
-        return { bytes: await one.save(), digest };
+        responseBytes = new Uint8Array(await one.save());
       }
-      return { bytes, digest };
+      const signer = loaded.state.signers.find((s) => s.id === session.userId && s.role === session.kind);
+      if (!final && !loaded.state.halted && signer?.status === "pending_review") {
+        await recordReviewDelivery(c, {
+          caseId, versionId, signerId: session.userId, digest,
+        }, page ?? null);
+      }
+      return { bytes: responseBytes, digest };
     });
   }
 }

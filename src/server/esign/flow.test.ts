@@ -3,12 +3,16 @@ import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
 import { PNG } from "pngjs";
+import { PDFDocument } from "pdf-lib";
 import { buildStoredConsent } from "../consent";
 import type { Session } from "../types";
 import { EsignDenied, EsignUnavailable, esignEnabled, management, requireManagement } from "./access";
 import { EsignFlow, type Command } from "./flow";
 import { emailCode, matchesEmailCode } from "./email";
 import { signaturePng } from "./evidence";
+import { contractVersionDigest } from "./document";
+import type { Connection } from "./repo";
+import { requireReviewDelivery, type ReviewBinding } from "./review";
 import { esignUi } from "../../i18n/lanes/esign";
 
 const session: Session = {
@@ -132,4 +136,72 @@ test("mounted copy follows the lane's banned-word and guarantee rules", () => {
     assert.equal(text.includes(word), false, word);
   }
   assert.doesNotMatch(text, /guarantee(?:d|s)?\s+(?:to\s+be\s+)?(?:legally\s+binding|legal(?:ly)?\s+valid(?:ity)?)/i);
+});
+
+test("direct review submission requires complete, signer/version/digest-bound delivery", async () => {
+  const signer: Session = { ...session, kind: "tenant", role: null };
+  const pdf = await PDFDocument.create();
+  pdf.addPage();
+  pdf.addPage();
+  const bytes = Buffer.from(await pdf.save());
+  const digest = await contractVersionDigest(bytes);
+  const binding: ReviewBinding = { caseId: id, versionId: id, signerId: signer.userId, digest };
+  const deliveries: { actorId: string; payload: ReviewBinding & { page: number | null } }[] = [];
+  let stateDigest = digest;
+  const c: Connection = {
+    query: (async (sql: string, params: unknown[] = []) => {
+      if (sql.startsWith("SELECT lease_id::text")) return { rows: [{ lease_id: id }], rowCount: 1 };
+      if (sql.startsWith("SELECT state,pdf_bytes,final_pdf_bytes")) {
+        return { rows: [{
+          state: { documentDigest: stateDigest, signers: [{ id: signer.userId, role: "tenant", status: "pending_review" }] },
+          pdf_bytes: bytes, final_pdf_bytes: null,
+        }], rowCount: 1 };
+      }
+      if (sql.startsWith("SELECT 1 FROM org_members")) return { rows: [], rowCount: 0 };
+      if (sql.includes("INSERT INTO esign_audit_events")) {
+        assert.match(sql, /'review_delivery'/);
+        deliveries.push({ actorId: signer.userId, payload: JSON.parse(params[2] as string) });
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("SELECT payload FROM esign_audit_events")) {
+        assert.match(sql, /actor_id=\$3/);
+        assert.match(sql, /event_type='review_delivery'/);
+        assert.match(sql, /payload @> \$4::jsonb/);
+        const expected = JSON.parse(params[3] as string) as ReviewBinding;
+        const rows = deliveries.filter((row) => row.actorId === params[2] &&
+          row.payload.caseId === params[0] && row.payload.versionId === params[1] &&
+          (Object.keys(expected) as (keyof ReviewBinding)[]).every((key) => row.payload[key] === expected[key]));
+        return { rows, rowCount: rows.length };
+      }
+      throw new Error("Unexpected SQL: " + sql);
+    }) as Connection["query"],
+  };
+  const flow = new EsignFlow({ enabled: () => true, run: async (_actor, work) => work(c) });
+  const review: Command = { type: "review", caseId: id, versionId: id };
+
+  await assert.rejects(flow.execute(signer, review), /Document delivery required/);
+  assert.equal(deliveries.length, 0);
+  await assert.rejects(flow.pdf(signer, id, id, false, 3));
+  assert.equal(deliveries.length, 0);
+
+  await flow.pdf(signer, id, id, false, 1);
+  await flow.pdf(signer, id, id, false, 1);
+  await assert.rejects(flow.execute(signer, review), /Document delivery required/);
+  await flow.pdf(signer, id, id, false, 2);
+  await requireReviewDelivery(c, binding, 2);
+
+  for (const key of Object.keys(binding) as (keyof ReviewBinding)[]) {
+    await assert.rejects(requireReviewDelivery(c, { ...binding, [key]: binding[key] + "-other" }, 2), /Document delivery required/);
+  }
+  stateDigest = "0".repeat(64);
+  await assert.rejects(flow.execute(signer, review), /Document delivery required/);
+  const count = deliveries.length;
+  await assert.rejects(flow.pdf(signer, id, id, false), /Document digest mismatch/);
+  assert.equal(deliveries.length, count);
+
+  stateDigest = digest;
+  deliveries.length = 0;
+  await flow.pdf(signer, id, id, false);
+  assert.equal(deliveries[0].payload.page, null);
+  await requireReviewDelivery(c, binding, 2);
 });

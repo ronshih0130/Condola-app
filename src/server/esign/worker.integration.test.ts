@@ -10,11 +10,13 @@ import { contractVersionDigest } from "./document";
 
 test("Workers executes e-sign CJK generation, two signatures and hashing within bounds", { timeout: 180000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "condola-esign-worker-"));
-  const worker = await unstable_dev("src/server/esign/worker-fixture.ts", {
-    config: "src/server/esign/wrangler.test.jsonc", local: true, compatibilityDate: "2026-10-26",
-    compatibilityFlags: ["nodejs_compat"], experimental: { disableExperimentalWarning: true },
-  });
+  let worker: Awaited<ReturnType<typeof unstable_dev>> | undefined;
   try {
+    worker = await unstable_dev("src/server/esign/worker-fixture.ts", {
+      config: "src/server/esign/wrangler.test.jsonc", local: true, compatibilityDate: "2026-10-26",
+      compatibilityFlags: ["nodejs_compat"], experimental: { disableExperimentalWarning: true },
+      persistTo: join(dir, "state"),
+    });
     const response = await worker.fetch("/", {
       method: "POST", body: readFileSync("public/fonts/DroidSansFallback-subset.ttf"),
     });
@@ -48,7 +50,10 @@ test("Workers executes e-sign CJK generation, two signatures and hashing within 
       assert.ok(dark > 30, "Chinese glyph region must contain ink on page " + page);
     }
   } finally {
-    await worker.stop();
-    rmSync(dir, { recursive: true, force: true });
+    try {
+      await worker?.stop();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });

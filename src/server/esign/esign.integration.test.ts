@@ -13,6 +13,7 @@ import { buildStoredConsent } from "../consent";
 import type { Session } from "../types";
 import { EsignFlow } from "./flow";
 import { contractVersionDigest } from "./document";
+import { EsignDenied } from "./access";
 
 const databaseUrl = process.env.DATABASE_URL;
 assert.ok(databaseUrl, "DATABASE_URL is required");
@@ -429,7 +430,7 @@ test("mounted action service on PG: Email replay, permissions, atomic replacemen
         await assert.rejects(flow.execute(owner, { ...target, type: "review" }));
         await assert.rejects(flow.execute(owner, { ...target, type: "confirm", response: "no challenge" }));
 
-        async function prepare(actor: Session, version: { caseId: string; id: string }) {
+        async function prepare(actor: Session, version: { caseId: string; id: string; digest: string; pages: number }) {
           const target = { caseId: version.caseId, versionId: version.id };
           await flow.execute(actor, { ...target, type: "consent" });
           await flow.execute(actor, { ...target, type: "email" });
@@ -441,6 +442,23 @@ test("mounted action service on PG: Email replay, permissions, atomic replacemen
           assert.equal((await flow.list(actor, leaseId)).versions.find((v) => v.id === version.id)!.own!.status, "pending_identity");
           await flow.execute(actor, { ...target, type: "confirm", response: code });
           await assert.rejects(flow.execute(actor, { ...target, type: "confirm", response: code }));
+
+          // Identity alone cannot acknowledge review. Check this for each signer
+          // and replacement so delivery evidence cannot carry across bindings.
+          assert.equal((await flow.list(actor, leaseId)).versions.find((v) => v.id === version.id)!.own!.status, "pending_review");
+          await assert.rejects(
+            flow.execute(actor, { ...target, type: "review" }),
+            (error: unknown) => error instanceof EsignDenied
+              && error.message === "Document delivery required before acknowledgement",
+          );
+          assert.equal((await flow.list(actor, leaseId)).versions.find((v) => v.id === version.id)!.own!.status, "pending_review");
+
+          // Fetch the complete unsigned PDF through the production flow, which
+          // records durable delivery evidence for this signer and version.
+          const delivered = await flow.pdf(actor, version.caseId, version.id, false);
+          assert.equal(delivered.digest, version.digest);
+          assert.equal(await contractVersionDigest(delivered.bytes), version.digest);
+          assert.equal((await PDFDocument.load(delivered.bytes)).getPageCount(), version.pages);
           await flow.execute(actor, { ...target, type: "review" });
           return code;
         }
