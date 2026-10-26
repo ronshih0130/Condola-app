@@ -273,16 +273,16 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
-  const adminUser = url.pathname.match(/^\/auth\/v1\/admin\/users\/([0-9a-f-]+)$/i);
+  const inviteAdminUser = url.pathname.match(/^\/auth\/v1\/admin\/users\/([0-9a-f-]+)$/i);
   const adminCreate = req.method === "POST" && url.pathname === "/auth/v1/admin/users";
-  const adminUpdate = req.method === "PUT" && adminUser;
+  const adminUpdate = req.method === "PUT" && inviteAdminUser;
   const passwordGrant = req.method === "POST" && url.pathname === "/auth/v1/token" &&
     url.searchParams.get("grant_type") === "password";
   if (adminCreate || adminUpdate || passwordGrant) {
     if ((adminCreate || adminUpdate) && !authorized(req)) return send(res, 401, "unauthorized");
     try {
       const body = JSON.parse((await readBody(req)).toString() || "{}");
-      const result = await inviteAuth(url.pathname, body, adminUpdate ? adminUser[1] : null);
+      const result = await inviteAuth(url.pathname, body, adminUpdate ? inviteAdminUser[1] : null);
       send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
     } catch {
       send(res, 500, JSON.stringify({ message: "auth failed" }), { "content-type": "application/json" });
