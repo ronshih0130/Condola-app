@@ -7,11 +7,12 @@ import { createTicket } from "./domain";
 import { FlowError } from "./errors";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { PHOTO_BUCKET, ticketPhotoPath } from "./repair-rules";
+import { saveRepairRecord } from "./repairs";
 import { issueVendorUploadGrant } from "./ticket-photos";
 import type { Session } from "./types";
 import { hashVendorToken } from "./vendor-repair-rules";
 import {
-  __setVendorLinkKillSwitchForTests, approveVendorSharing, confirmVendorPhoto, dispatchVendor,
+  __setVendorLinkKillSwitchForTests, addVendor, approveVendorSharing, confirmVendorPhoto, dispatchVendor,
   loadVendorJob, prepareVendorPhoto,
   openVendorPhoto, revokeVendorJob, streamVendorPhoto, submitVendorReport,
 } from "./vendor-repair";
@@ -52,7 +53,7 @@ async function waitForBlocked(observer: Client, root: number, count: number) {
   assert.fail("request did not enter the ticket lock wait queue");
 }
 
-test("flag ON serializes invalidation and proxies authorized photos; OFF retains redirects", async () => {
+test("flag ON serializes invalidation and proxies authorized photos; OFF retains redirects", async (t) => {
   assert.ok(process.env.DATABASE_URL, "use local PostgreSQL DATABASE_URL");
   const blocker = new Client({ connectionString: process.env.DATABASE_URL });
   const observer = new Client({ connectionString: process.env.DATABASE_URL });
@@ -63,6 +64,7 @@ test("flag ON serializes invalidation and proxies authorized photos; OFF retains
   const files: string[] = [];
   const pending: Promise<unknown>[] = [];
   const vendorName = `lane-c-${randomUUID()}`;
+  const replacementName = `lane-y-${randomUUID()}`;
   const input = { vendorName, vendorPhone: "0912000111", vendorTrade: "plumbing", contactWindow: "Monday" };
   const saved = await svc(null, (c) => c.query(
     "SELECT feature_flags FROM organizations WHERE id = $1", [ORG_ID],
@@ -175,6 +177,108 @@ test("flag ON serializes invalidation and proxies authorized photos; OFF retains
     assert.equal(state.rows[0].active, false);
     assert.ok(state.rows[0].revoked_at);
     assert.equal(state.rows[0].reported_at, null);
+
+    await t.test("flag ON manual reassignment rejects the previous vendor capability", async () => {
+      const assigned = await issue();
+      const shared = await attachment(assigned.ticketId);
+      const ownPhoto = await attachment(assigned.ticketId);
+      await svc(null, (c) => c.query(
+        "UPDATE ticket_attachments SET vendor_job_id = $2 WHERE id = $1",
+        [ownPhoto.id, assigned.jobId],
+      ));
+      const nextVendorId = await addVendor(admin, assigned.ticketId, {
+        name: replacementName, phone: "0912000222", trade: "water",
+      });
+      await approveVendorSharing(admin, assigned.ticketId, assigned.jobId, {
+        description: "Approved work", attachmentIds: [shared.id],
+      });
+      assert.ok((await loadVendorJob(assigned.token))?.vendorLink?.sharingApproved);
+      assert.deepEqual(await streamVendorPhoto(assigned.token, shared.id), { bytes, contentType: "image/jpeg" });
+      const uploadPath = ticketPhotoPath(ORG_ID, assigned.ticketId, randomUUID(), "image/jpeg");
+      const uploadToken = issueVendorUploadGrant(hashVendorToken(assigned.token), assigned.ticketId, uploadPath);
+      assert.ok(uploadToken);
+      const beforeReassignment = downloads;
+      await lock(assigned.ticketId);
+      const reassign = track(saveRepairRecord(admin, assigned.ticketId, {
+        status: "assigned", note: "", internal: false, vendorName: replacementName,
+        estimated: "", finalCost: "", costBearer: "undecided",
+        scheduledOn: "", completedOn: "", postExpense: false,
+      }));
+      await waitForBlocked(observer, root, 1);
+      const queuedReport = track(report(assigned.token));
+      await waitForBlocked(observer, root, 2);
+      await blocker.query("COMMIT");
+      assert.equal((await reassign).error, null);
+      assert.ok(notFound((await queuedReport).error));
+      const reassigned = await svc(null, (c) => c.query(
+        `SELECT t.assigned_vendor_contact_id::text, j.vendor_contact_id::text,
+                j.active, j.revoked_at, j.sharing_approved_at, j.sharing_approved_by,
+                j.shared_description, j.reported_at,
+                (SELECT count(*)::int FROM repair_vendor_job_shared_photos s
+                  WHERE s.job_id = j.id) AS shared_count
+           FROM maintenance_tickets t
+           JOIN repair_vendor_jobs j ON j.ticket_id = t.id AND j.org_id = t.org_id
+          WHERE t.id = $1 AND j.id = $2`, [assigned.ticketId, assigned.jobId],
+      ));
+      const job = reassigned.rows[0];
+      assert.equal(job.assigned_vendor_contact_id, nextVendorId);
+      assert.ok(job.vendor_contact_id);
+      assert.notEqual(job.vendor_contact_id, nextVendorId);
+      assert.equal(job.active, false);
+      assert.ok(job.revoked_at);
+      assert.equal(job.sharing_approved_at, null);
+      assert.equal(job.sharing_approved_by, null);
+      assert.equal(job.shared_description, null);
+      assert.equal(job.reported_at, null);
+      assert.equal(job.shared_count, 0);
+
+      async function assertRejected() {
+        assert.equal(await loadVendorJob(assigned.token), null);
+        await assert.rejects(report(assigned.token), notFound);
+        await assert.rejects(prepareVendorPhoto(assigned.token, {
+          fileName: "photo.jpg", mime: "image/jpeg", size: 3,
+        }), notFound);
+        await assert.rejects(confirmVendorPhoto(assigned.token, {
+          path: uploadPath, fileName: "photo.jpg", mime: "image/jpeg", size: 3, uploadToken,
+        }), notFound);
+        assert.equal(await streamVendorPhoto(assigned.token, shared.id), null);
+        assert.equal(await streamVendorPhoto(assigned.token, ownPhoto.id), null);
+        assert.equal(await openVendorPhoto(assigned.token, shared.id), null);
+        const response = await GET(new Request("http://localhost"), {
+          params: Promise.resolve({ token: assigned.token, id: shared.id }),
+        });
+        assert.equal(response.status, 404);
+        await assert.rejects(approveVendorSharing(admin, assigned.ticketId, assigned.jobId, {
+          description: "Rejected", attachmentIds: [shared.id],
+        }), notFound);
+        assert.equal(downloads, beforeReassignment);
+      }
+      await assertRejected();
+
+      // Simulate a stale active job with approval to exercise identity checks independently.
+      await svc(null, async (c) => {
+        await c.query(
+          `UPDATE repair_vendor_jobs
+              SET active = true, revoked_at = NULL,
+                  sharing_approved_at = clock_timestamp(), sharing_approved_by = $2,
+                  shared_description = 'Approved work'
+            WHERE id = $1`, [assigned.jobId, admin.userId],
+        );
+        await c.query(
+          `INSERT INTO repair_vendor_secrets (job_id, token) VALUES ($1,$2)`,
+          [assigned.jobId, assigned.token],
+        );
+        await c.query(
+          `INSERT INTO repair_vendor_job_shared_photos (org_id, job_id, attachment_id, approved_by)
+           VALUES ($1,$2,$3,$4)`, [ORG_ID, assigned.jobId, shared.id, admin.userId],
+        );
+      });
+      await assertRejected();
+      const untouched = await svc(null, (c) => c.query(
+        `SELECT reported_at FROM repair_vendor_jobs WHERE id = $1`, [assigned.jobId],
+      ));
+      assert.equal(untouched.rows[0].reported_at, null);
+    });
 
     const valid = await issue();
     const photo = await attachment(valid.ticketId);
@@ -319,16 +423,19 @@ test("flag ON serializes invalidation and proxies authorized photos; OFF retains
     else process.env.SUPABASE_URL = savedUrl;
     if (savedKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = savedKey;
-    await svc(null, async (c) => {
-      await c.query("UPDATE organizations SET feature_flags = $2::jsonb WHERE id = $1",
-        [ORG_ID, JSON.stringify(saved.rows[0].feature_flags)]);
-      await c.query("DELETE FROM ticket_attachments WHERE ticket_id = ANY($1::uuid[])", [tickets]);
-      await c.query("DELETE FROM files WHERE id = ANY($1::uuid[])", [files]);
-      await c.query("DELETE FROM repair_vendor_jobs WHERE ticket_id = ANY($1::uuid[])", [tickets]);
-      await c.query("DELETE FROM maintenance_tickets WHERE id = ANY($1::uuid[])", [tickets]);
-      await c.query("DELETE FROM contacts WHERE org_id = $1 AND display_name = $2", [ORG_ID, vendorName]);
-    });
-    await blocker.end();
-    await observer.end();
+    try {
+      await svc(null, async (c) => {
+        await c.query("UPDATE organizations SET feature_flags = $2::jsonb WHERE id = $1",
+          [ORG_ID, JSON.stringify(saved.rows[0].feature_flags)]);
+        await c.query("DELETE FROM ticket_attachments WHERE ticket_id = ANY($1::uuid[])", [tickets]);
+        await c.query("DELETE FROM files WHERE id = ANY($1::uuid[])", [files]);
+        await c.query("DELETE FROM repair_vendor_jobs WHERE ticket_id = ANY($1::uuid[])", [tickets]);
+        await c.query("DELETE FROM maintenance_tickets WHERE id = ANY($1::uuid[])", [tickets]);
+        await c.query("DELETE FROM contacts WHERE org_id = $1 AND display_name = ANY($2::text[])",
+          [ORG_ID, [vendorName, replacementName]]);
+      });
+    } finally {
+      await Promise.allSettled([blocker.end(), observer.end()]);
+    }
   }
 });

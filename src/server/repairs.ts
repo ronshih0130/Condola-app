@@ -181,6 +181,16 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
     const vendorId = vendorName ? matchedVendor?.id ?? ticket.assigned_vendor_contact_id : null;
     const currency = estimated !== null || finalCost !== null ? ticket.property_currency : ticket.currency;
 
+    if (vendorId !== ticket.assigned_vendor_contact_id) {
+      // Resolve lazily because vendor-repair also uses the photo helpers in this module.
+      const { vendorLinkEnabledForOrg } = await import("./vendor-repair");
+      const enhanced = await vendorLinkEnabledForOrg(session.orgId);
+      await client.query(
+        `SELECT set_config('app.vendor_link_reassignment', $1, true)`,
+        [enhanced ? "on" : "off"],
+      );
+    }
+
     await client.query(
       `UPDATE maintenance_tickets
           SET status = $3::ticket_status,

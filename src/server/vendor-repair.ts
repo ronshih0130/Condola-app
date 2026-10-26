@@ -85,6 +85,7 @@ type TicketRow = {
   currency: string | null;
   property_currency: string;
   expense_id: string | null;
+  assigned_vendor_contact_id: string | null;
 };
 
 export type VendorChoice = {
@@ -183,9 +184,14 @@ export async function lockTicketThenJobs(client: Client, orgId: string, ticketId
 async function lockedVendorLink(client: Client, job: OpenJob, hash: string) {
   await lockTicketThenJobs(client, job.org_id, job.ticket_id);
   const ticket = await loadTicket(client, job.ticket_id, job.org_id);
-  const state = await maybe<LinkState & { dispatch_enabled: boolean; sharing_approved_at: string | null }>(
+  const state = await maybe<LinkState & {
+    dispatch_enabled: boolean;
+    sharing_approved_at: string | null;
+    vendor_contact_id: string | null;
+  }>(
     client,
     `SELECT active, revoked_at::text, expires_at::text, sharing_approved_at::text,
+            vendor_contact_id::text,
             app.vendor_dispatch_enabled(org_id) AS dispatch_enabled
        FROM repair_vendor_jobs
       WHERE id = $1 AND ticket_id = $2 AND org_id = $3 AND token_hash = $4
@@ -193,7 +199,9 @@ async function lockedVendorLink(client: Client, job: OpenJob, hash: string) {
       FOR UPDATE`,
     [job.job_id, job.ticket_id, job.org_id, hash],
   );
-  if (!ticket || !state || !state.dispatch_enabled || !(await vendorLinkEnabledOn(client, job.org_id))) {
+  if (!ticket || !state || !state.dispatch_enabled ||
+      !state.vendor_contact_id || state.vendor_contact_id !== ticket.assigned_vendor_contact_id ||
+      !(await vendorLinkEnabledOn(client, job.org_id))) {
     throw new FlowError("errors.notFound");
   }
   // Wall time matters after waiting for locks; SQL now() is transaction-start time.
@@ -248,7 +256,8 @@ async function loadTicket(client: Client, ticketId: string, orgId: string) {
   return maybe<TicketRow>(
     client,
     `SELECT t.id::text, t.status::text, t.title, t.property_id::text, t.unit_id::text,
-            t.scheduled_on::text, t.currency, p.currency AS property_currency, t.expense_id::text
+            t.scheduled_on::text, t.currency, p.currency AS property_currency, t.expense_id::text,
+            t.assigned_vendor_contact_id::text
        FROM maintenance_tickets t
        JOIN properties p ON p.id = t.property_id
       WHERE t.id = $1 AND t.org_id = $2
@@ -387,12 +396,20 @@ export async function dispatchVendor(
     if (current && !current.revoked && !current.expired && !enhanced) throw new FlowError("errors.forbidden");
     if (current) {
       await client.query(enhanced
-        ? `UPDATE repair_vendor_jobs SET active = false, revoked_at = coalesce(revoked_at, clock_timestamp())
+        ? `UPDATE repair_vendor_jobs
+              SET active = false, revoked_at = coalesce(revoked_at, clock_timestamp()),
+                  sharing_approved_at = NULL, sharing_approved_by = NULL, shared_description = NULL
             WHERE id = $1 AND org_id = $2`
         : `UPDATE repair_vendor_jobs SET active = false WHERE id = $1 AND org_id = $2`, [
         current.id,
         session.orgId,
       ]);
+      if (enhanced) {
+        await client.query(
+          `DELETE FROM repair_vendor_job_shared_photos WHERE job_id = $1 AND org_id = $2`,
+          [current.id, session.orgId],
+        );
+      }
     }
     let vendorNameSaved = name;
     let vendorPhoneSaved = phone;
@@ -407,18 +424,24 @@ export async function dispatchVendor(
       vendorPhoneSaved = saved.phone;
       contactId = vendorId;
     }
+    if (!contactId) throw new FlowError("errors.generic");
     const job = await maybe<{ id: string }>(
       client,
       `INSERT INTO repair_vendor_jobs (
-         org_id, ticket_id, vendor_name, vendor_phone, contact_window, token_hash, expires_at, created_by
+         org_id, ticket_id, vendor_name, vendor_phone, contact_window, token_hash, expires_at, created_by,
+         vendor_contact_id
        ) VALUES (
-         $1,$2,$3,$4,$5,$6, now() + make_interval(days => $7), $8
+         $1,$2,$3,$4,$5,$6, now() + make_interval(days => $7), $8,$9
        ) RETURNING id::text`,
-      [session.orgId, ticket.id, vendorNameSaved, vendorPhoneSaved, window, hash, VENDOR_LINK_DAYS, session.userId],
+      [session.orgId, ticket.id, vendorNameSaved, vendorPhoneSaved, window, hash, VENDOR_LINK_DAYS, session.userId, contactId],
     );
     if (!job) throw new FlowError("errors.generic");
     await client.query(`INSERT INTO repair_vendor_secrets (job_id, token) VALUES ($1,$2)`, [job.id, token]);
     const nextStatus = ticket.status === "open" || ticket.status === "triaged" ? "assigned" : ticket.status;
+    await client.query(
+      `SELECT set_config('app.vendor_link_reassignment', $1, true)`,
+      [enhanced ? "on" : "off"],
+    );
     await client.query(
       `UPDATE maintenance_tickets
           SET vendor_name = $3,
@@ -478,10 +501,14 @@ export async function approveVendorSharing(
     await lockTicketThenJobs(client, session.orgId, ticketId);
     const job = await maybe<{ id: string }>(
       client,
-      `SELECT id::text FROM repair_vendor_jobs
+      `SELECT id::text FROM repair_vendor_jobs j
         WHERE id = $1 AND ticket_id = $2 AND org_id = $3
           AND scope = 'case_collaboration' AND active AND revoked_at IS NULL
-          AND expires_at > clock_timestamp()`,
+          AND expires_at > clock_timestamp()
+          AND EXISTS (
+            SELECT 1 FROM maintenance_tickets t
+             WHERE t.id = j.ticket_id AND t.org_id = j.org_id
+               AND j.vendor_contact_id = t.assigned_vendor_contact_id)`,
       [jobId, ticketId, session.orgId],
     );
     if (!job) throw new FlowError("errors.notFound");
@@ -676,6 +703,7 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
            FROM maintenance_tickets t
            JOIN repair_vendor_jobs j ON j.ticket_id = t.id AND j.org_id = t.org_id
           WHERE t.id = $1 AND t.org_id = $2 AND j.id = $3 AND j.token_hash = $4
+            AND j.vendor_contact_id = t.assigned_vendor_contact_id
             AND j.scope = 'case_collaboration' AND app.vendor_dispatch_enabled(j.org_id)`,
         [job.ticket_id, job.org_id, job.job_id, hashVendorToken(token)],
       );
@@ -909,9 +937,7 @@ export async function prepareVendorPhoto(
 async function lockVendorPhotoTicket(client: Client, job: OpenJob) {
   const ticket = await maybe<{ id: string }>(
     client,
-    `SELECT id::text FROM maintenance_tickets
-      WHERE id = $1 AND org_id = $2
-      FOR UPDATE`,
+    `SELECT id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2 FOR UPDATE`,
     [job.ticket_id, job.org_id],
   );
   if (!ticket) throw new FlowError("errors.notFound");
@@ -1057,6 +1083,7 @@ export async function streamVendorPhoto(token: string, attachmentId: string) {
            JOIN ticket_attachments a ON a.ticket_id = t.id AND a.org_id = t.org_id
            JOIN files f ON f.id = a.file_id AND f.org_id = a.org_id
           WHERE j.id = $1 AND j.org_id = $2 AND j.ticket_id = $3 AND j.token_hash = $4
+            AND j.vendor_contact_id = t.assigned_vendor_contact_id
             AND a.id = $5 AND NOT a.is_internal
             AND j.scope = 'case_collaboration' AND j.sharing_approved_at IS NOT NULL
             AND (a.vendor_job_id = j.id OR EXISTS (
