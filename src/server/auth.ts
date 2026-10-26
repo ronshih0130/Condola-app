@@ -28,6 +28,9 @@ import {
   withInviteLock,
 } from "./portal-invite";
 import { assertSeatAvailable } from "./seats";
+import { assertTeamInvitesAllowed, teamInvitesAllowedForOrg } from "./team-invites";
+
+export { hashInviteToken } from "./portal-invite";
 import { assertPerm } from "./perms";
 import { appCookieOptions } from "./public-origin";
 import { privacyFromSettings, type OwnerPrivacy } from "./privacy";
@@ -682,6 +685,7 @@ async function assertLastAdmin(orgId: string, userId: string, nextRole: OrgRole 
 
 export async function inviteMember(session: Session, input: { email: string; name: string; role: string }) {
   assertPerm(session, "team.manage");
+  assertTeamInvitesAllowed(session.orgId);
   const email = normalizeEmail(input.email);
   if (!email) throw new FlowError("errors.email");
   if (!TEAM_ROLES.has(input.role as OrgRole)) throw new FlowError("errors.required");
@@ -709,6 +713,7 @@ export async function inviteMember(session: Session, input: { email: string; nam
 
 export async function resendInvite(session: Session, invitationId: string) {
   assertPerm(session, "team.manage");
+  assertTeamInvitesAllowed(session.orgId);
   const token = newToken();
   const updated = await query(
     `UPDATE invitations SET code_hash = $3, expires_at = now() + make_interval(days => $4), status = 'pending'
@@ -771,9 +776,10 @@ export async function setMemberActive(session: Session, memberId: string, active
 export type InviteKind = "team_member" | "owner" | "tenant" | "unknown";
 
 export type InviteView =
-  | { state: "ready"; kind: "team_member"; email: string; role: OrgRole; firm: string; inviter: string }
+  | { state: "ready"; kind: "team_member"; orgId: string; email: string; role: OrgRole; firm: string; inviter: string }
   | { state: "ready"; kind: "owner" | "tenant"; email: string; firm: string; collectEmail: boolean }
-  | { state: "expired" | "revoked" | "used" | "invalid" | "locked" | "timeout"; kind: InviteKind };
+  | { state: "expired" | "revoked" | "used" | "invalid" | "locked" | "timeout"; kind: "team_member"; orgId?: string }
+  | { state: "expired" | "revoked" | "used" | "invalid" | "locked" | "timeout"; kind: Exclude<InviteKind, "team_member"> };
 
 function dbTimeout(error: unknown) {
   const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
@@ -808,12 +814,13 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
         kind: string;
         email: string | null;
         contact_email: string | null;
+        org_id: string;
         role: OrgRole | null;
         firm: string;
         inviter: string | null;
       }>(
         `SELECT i.status::text, i.expires_at, i.kind::text, i.email::text, c.email::text AS contact_email,
-                i.role::text, o.name AS firm, p.display_name AS inviter
+                i.org_id::text AS org_id, i.role::text, o.name AS firm, p.display_name AS inviter
            FROM invitations i
            JOIN organizations o ON o.id = i.org_id
            LEFT JOIN contacts c ON c.id = i.contact_id AND c.org_id = i.org_id
@@ -836,6 +843,7 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
   const kind: InviteKind =
     invite?.kind === "team_member" || invite?.kind === "owner" || invite?.kind === "tenant" ? invite.kind : "unknown";
   const reject = (state: "expired" | "revoked" | "used" | "invalid", badKind: InviteKind): InviteView => {
+    if (badKind === "team_member") return { state, kind: badKind, orgId: invite?.org_id };
     return { state, kind: badKind };
   };
   if (!invite) return reject("invalid", "unknown");
@@ -843,7 +851,7 @@ async function describeInviteOnce(token: string, meta?: { ip: string | null }): 
   if (invite.status === "revoked") return reject("revoked", kind);
   if (invite.status !== "pending" || invite.expires_at.getTime() <= Date.now()) return reject("expired", kind);
   if (kind === "team_member" && invite.role && invite.email) {
-    return { state: "ready", kind, email: invite.email, role: invite.role, firm: invite.firm, inviter: invite.inviter ?? "" };
+    return { state: "ready", kind, orgId: invite.org_id, email: invite.email, role: invite.role, firm: invite.firm, inviter: invite.inviter ?? "" };
   }
   if (kind === "owner" || kind === "tenant") {
     const email = portalShownEmail(invite.email, invite.contact_email);
@@ -1177,6 +1185,10 @@ export async function acceptTeamInvite(client: Client, token: string, name: stri
     if (!row) {
       await client.query("ROLLBACK");
       return { ok: false as const, error: "used" as const, kind: "team_member" as const };
+    }
+    if (!teamInvitesAllowedForOrg(row.org_id)) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, error: "soon" as const, kind: "team_member" as const };
     }
     let userId: string | null;
     try {

@@ -28,6 +28,7 @@ import { leaseIdentityReady } from "./id-docs";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
 import { assertTicketStatus } from "./repair-rules";
+import { assertTeamInvitesAllowed } from "./team-invites";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
 function sha256(value: string) {
@@ -2589,6 +2590,7 @@ export async function postMessage(session: Session, threadId: string, body: stri
 
 export async function inviteTeammate(session: Session, input: { email: string; role: OrgRole }) {
   assertStaff(session, ["admin"]);
+  assertTeamInvitesAllowed(session.orgId);
   const email = cleanEmail(input.email);
   if (!email) throw new FlowError("errors.required");
   const code = `CND-${randomUUID().slice(0, 8).toUpperCase()}`;

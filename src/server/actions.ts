@@ -37,7 +37,7 @@ import { addTicketComment, cancelTenantRepair, saveRepairRecord } from "./repair
 import { addVendor, confirmVendorCost, dispatchVendor, revokeVendorJob, submitVendorReport } from "./vendor-repair";
 import { taipeiToday } from "./money";
 import { getSession, sessionTokenHash } from "./session";
-import { assertTeamInvitesEnabled } from "./team-invites";
+import { assertTeamInvitesAllowed } from "./team-invites";
 import type { OrgRole } from "./types";
 import { meterUsageKwh } from "./utility-post";
 import { confirmUtilityRun, prepareUtilityRun, voidUtilityRun } from "./utility-posting";
@@ -548,8 +548,8 @@ export async function actionMessage(formData: FormData) {
 
 export async function actionInvite(formData: FormData) {
   try {
-    assertTeamInvitesEnabled();
     const session = await getSession();
+    assertTeamInvitesAllowed(session.orgId);
     const role = text(formData.get("role")) as OrgRole;
     const result = await inviteTeammate(session, { email: text(formData.get("email")), role });
     redirect(`/m/team?code=${encodeURIComponent(result.code)}`);

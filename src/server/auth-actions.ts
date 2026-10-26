@@ -45,7 +45,7 @@ import { PORTAL_ROLE_COOKIE } from "./portal-role";
 import { appCookieOptions, sameAppPath } from "./public-origin";
 import { clearAuthCookies, sessionEntryPath } from "./sign-out";
 import { getSession, readSession } from "./session";
-import { TEAM_INVITES_ENABLED, assertTeamInvitesEnabled } from "./team-invites";
+import { assertTeamInvitesAllowed, teamInvitesAllowedForOrg } from "./team-invites";
 import type { OrgRole } from "./types";
 
 function isRedirect(error: unknown) {
@@ -221,11 +221,9 @@ export async function actionOrgMail(formData: FormData) {
 
 export async function actionAccept(formData: FormData) {
   const token = text(formData.get("token"));
-  if (!TEAM_INVITES_ENABLED) {
-    const invite = await describeInvite(token, await meta());
-    if (invite.kind === "team_member") {
-      redirect(`/accept/${encodeURIComponent(token)}?error=errors.teamInvitesSoon`);
-    }
+  const invite = await describeInvite(token, await meta());
+  if (invite.kind === "team_member" && !teamInvitesAllowedForOrg(invite.orgId)) {
+    redirect(`/accept/${encodeURIComponent(token)}?error=errors.teamInvitesSoon`);
   }
   const current = await readSession();
   const result = await acceptInvite(
@@ -239,6 +237,9 @@ export async function actionAccept(formData: FormData) {
     formData.get("consent") === "on",
   );
   if (!result.ok) {
+    if (result.error === "soon") {
+      redirect(`/accept/${encodeURIComponent(token)}?error=errors.teamInvitesSoon`);
+    }
     const portal = result.kind === "owner" || result.kind === "tenant" || result.kind === "unknown";
     const fieldError =
       result.error === "weak" ||
@@ -316,8 +317,8 @@ export async function actionIssuePortalInvite(input: {
 export async function actionInvite(formData: FormData) {
   const back = "/m/team";
   try {
-    assertTeamInvitesEnabled();
     const session = await getSession();
+    assertTeamInvitesAllowed(session.orgId);
     const invited = await inviteMember(session, {
       email: text(formData.get("email")),
       name: text(formData.get("name")),
@@ -333,8 +334,8 @@ export async function actionInvite(formData: FormData) {
 export async function actionResendInvite(formData: FormData) {
   const back = "/m/team";
   try {
-    assertTeamInvitesEnabled();
     const session = await getSession();
+    assertTeamInvitesAllowed(session.orgId);
     const invited = await resendInvite(session, text(formData.get("invitationId")));
     redirect(demoModeEnabled() ? `${back}?invited=1&token=${encodeURIComponent(invited.token)}` : `${back}?invited=1`);
   } catch (error) {

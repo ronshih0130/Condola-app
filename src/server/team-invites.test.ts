@@ -4,41 +4,85 @@ import test from "node:test";
 import { makeT } from "@/i18n";
 import { errorText } from "@/i18n/errors";
 import { POST } from "@/app/api/flows/[action]/route";
-import { actionInvite as legacyActionInvite } from "./actions";
-import { actionInvite, actionResendInvite } from "./auth-actions";
-import { TEAM_INVITES_ENABLED, inviteStateMessageKey } from "./team-invites";
-
+import { TEAM_INVITES_ENABLED, assertTeamInvitesAllowed, inviteStateMessageKey } from "./team-invites";
 import { acceptTeamInvite, upsertInvitedUser, verifyPassword } from "./auth";
 import type { Client } from "pg";
 
-function redirectTarget(error: unknown) {
-  const digest = typeof error === "object" && error && "digest" in error ? String((error as { digest?: string }).digest) : "";
-  assert.match(digest, /^NEXT_REDIRECT;/);
-  return digest.split(";").slice(2, -2).join(";");
+function before(source: string, first: string, second: string) {
+  const a = source.indexOf(first);
+  const b = source.indexOf(second);
+  assert.ok(a >= 0, `Missing ${first}`);
+  assert.ok(b > a, `${first} must precede ${second}`);
 }
 
-test("team invite actions and the API refuse while invites are off", async () => {
+function source(path: string) {
+  return readFileSync(new URL(path, import.meta.url), "utf8");
+}
+
+test("team invite guards use the session or invitation org at every entry point", () => {
   assert.equal(TEAM_INVITES_ENABLED, false);
   assert.equal(errorText(makeT("zh-TW"), "errors.teamInvitesSoon"), "即將開放");
   assert.equal(errorText(makeT("en"), "errors.teamInvitesSoon"), "Coming soon");
 
-  const form = new FormData();
-  form.set("email", "blocked.hire@example.com");
-  form.set("name", "新人");
-  form.set("role", "manager");
+  const authActions = source("./auth-actions.ts");
+  const legacy = source("./actions.ts");
+  for (const [text, start, end, call] of [
+    [authActions, "export async function actionInvite(", "export async function actionResendInvite(", "inviteMember("],
+    [authActions, "export async function actionResendInvite(", "export async function actionRevokeInvite(", "resendInvite("],
+    [legacy, "export async function actionInvite(", "export async function actionSetMeter(", "inviteTeammate("],
+  ]) {
+    const startIndex = text.indexOf(start);
+    assert.ok(startIndex >= 0);
+    const endIndex = text.indexOf(end, startIndex + start.length);
+    const body = text.slice(startIndex, endIndex < 0 ? undefined : endIndex);
+    before(body, "getSession()", "assertTeamInvitesAllowed(session.orgId)");
+    before(body, "assertTeamInvitesAllowed(session.orgId)", call);
+  }
+
+  const route = source("../app/api/flows/[action]/route.ts");
+  before(route, "!teamInviteAllowlistConfigured()", "readSession()");
+  before(route, "readSession()", "teamInvitesAllowedForOrg(session?.orgId)");
+  before(route, "teamInvitesAllowedForOrg(session?.orgId)", "handler(session, body)");
+  before(route, "teamInvitesAllowedForOrg(session?.orgId)", "if (!session)");
+
+  const accept = authActions.slice(authActions.indexOf("export async function actionAccept("));
+  before(accept, "teamInvitesAllowedForOrg(invite.orgId)", "acceptInvite(");
+  assert.match(accept, /result\.error === "soon"/);
+
+  const auth = source("./auth.ts");
+  const teamAccept = auth.slice(auth.indexOf("export async function acceptTeamInvite("));
+  before(teamAccept, "teamInvitesAllowedForOrg(row.org_id)", "upsertInvitedUser(");
+  for (const name of ["inviteMember", "resendInvite"]) {
+    const body = auth.slice(auth.indexOf(`export async function ${name}(`));
+    before(body, 'assertPerm(session, "team.manage")', "assertTeamInvitesAllowed(session.orgId)");
+    before(body, "assertTeamInvitesAllowed(session.orgId)", "await query");
+  }
+  const domain = source("./domain.ts");
+  const teammate = domain.slice(domain.indexOf("export async function inviteTeammate("));
+  before(teammate, 'assertStaff(session, ["admin"])', "assertTeamInvitesAllowed(session.orgId)");
+  before(teammate, "assertTeamInvitesAllowed(session.orgId)", "await tx(");
+
+  const teamPage = source("../app/m/team/page.tsx");
+  assert.match(teamPage, /const invitesOpen = teamInvitesAllowedForOrg\(session\.orgId\)/);
+  assert.match(teamPage, /\{invitesOpen \? \(/);
+  assert.match(teamPage, /\{!invitesOpen \? \(/);
+  const acceptPage = source("../app/accept/[token]/page.tsx");
+  assert.match(acceptPage, /teamInvitesAllowedForOrg\("orgId" in invite \? invite\.orgId \?\? null : null\)/);
+  assert.match(acceptPage, /inviteStateMessageKey\(invite\.kind, invite\.state, invitesOpen\)/);
+  assert.match(acceptPage, /!invitesOpen \? \(/);
+});
+
+test("empty config refuses invites and unauthenticated API probes without sending mail", async () => {
+  const previous = process.env.TEAM_INVITES_ORG_ALLOWLIST;
+  const savedFetch = global.fetch;
   const calls: string[] = [];
-  const saved = global.fetch;
-  global.fetch = async (input) => {
-    calls.push(String(input));
-    throw new Error("team invite must not send mail");
-  };
   try {
-    for (const invite of [actionInvite, legacyActionInvite]) {
-      await assert.rejects(() => invite(form), (error: unknown) => {
-        assert.equal(redirectTarget(error), "/m/team?error=errors.teamInvitesSoon");
-        return true;
-      });
-    }
+    delete process.env.TEAM_INVITES_ORG_ALLOWLIST;
+    global.fetch = async (input) => {
+      calls.push(String(input));
+      throw new Error("Must not send mail");
+    };
+    assert.throws(() => assertTeamInvitesAllowed(INVITEE_ID), { key: "errors.teamInvitesSoon" });
     const response = await POST(
       new Request("http://127.0.0.1/api/flows/inviteTeammate", {
         method: "POST",
@@ -51,36 +95,10 @@ test("team invite actions and the API refuse while invites are off", async () =>
     assert.deepEqual(await response.json(), { ok: false, error: "errors.teamInvitesSoon" });
     assert.deepEqual(calls, []);
   } finally {
-    global.fetch = saved;
+    global.fetch = savedFetch;
+    if (previous === undefined) delete process.env.TEAM_INVITES_ORG_ALLOWLIST;
+    else process.env.TEAM_INVITES_ORG_ALLOWLIST = previous;
   }
-
-  const auth = readFileSync(new URL("./auth-actions.ts", import.meta.url), "utf8");
-  const authInvite = auth.slice(auth.indexOf("export async function actionInvite"), auth.indexOf("export async function actionResendInvite"));
-  assert.ok(authInvite.indexOf("assertTeamInvitesEnabled()") < authInvite.indexOf("inviteMember("));
-  const legacy = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
-  const legacyInvite = legacy.slice(legacy.indexOf("export async function actionInvite"), legacy.indexOf("export async function actionSetMeter"));
-  assert.ok(legacyInvite.indexOf("assertTeamInvitesEnabled()") < legacyInvite.indexOf("inviteTeammate("));
-  const route = readFileSync(new URL("../app/api/flows/[action]/route.ts", import.meta.url), "utf8");
-  assert.match(route, /action === "inviteTeammate" && !TEAM_INVITES_ENABLED/);
-  const guard = route.indexOf('action === "inviteTeammate" && !TEAM_INVITES_ENABLED');
-  assert.ok(guard < route.indexOf("readSession()"));
-  assert.ok(guard < route.indexOf("handler(session, body)"));
-
-  const accept = auth.slice(auth.indexOf("export async function actionAccept"), auth.indexOf("export async function actionIssuePortalInvite"));
-  assert.match(accept, /!TEAM_INVITES_ENABLED/);
-  assert.ok(accept.indexOf('invite.kind === "team_member"') < accept.indexOf("acceptInvite("));
-  const resend = auth.slice(auth.indexOf("export async function actionResendInvite"), auth.indexOf("export async function actionRevokeInvite"));
-  assert.ok(resend.indexOf("assertTeamInvitesEnabled()") < resend.indexOf("resendInvite("));
-});
-
-test("resend refuses while team invites are off", async () => {
-  assert.equal(TEAM_INVITES_ENABLED, false);
-  const form = new FormData();
-  form.set("invitationId", "10000000-0000-4000-8000-000000000099");
-  await assert.rejects(() => actionResendInvite(form), (error: unknown) => {
-    assert.equal(redirectTarget(error), "/m/team?error=errors.teamInvitesSoon");
-    return true;
-  });
 });
 
 test("team link copy preserves enabled errors and uses the real soon copy when disabled", () => {
@@ -99,12 +117,13 @@ const INVITEE_ID = "20000000-0000-4000-8000-000000000099";
 async function withInviteAuthEnv(run: () => Promise<void>, remote = true) {
   const keys = [
     "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
-    "SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "TEAM_INVITES_ORG_ALLOWLIST",
   ] as const;
   const previous = keys.map((key) => process.env[key]);
   const savedFetch = global.fetch;
   try {
     for (const key of keys) delete process.env[key];
+    process.env.TEAM_INVITES_ORG_ALLOWLIST = INVITEE_ID;
     if (remote) {
       process.env.SUPABASE_URL = "http://gotrue.test";
       process.env.SUPABASE_SERVICE_ROLE_KEY = "unit-service";

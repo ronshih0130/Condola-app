@@ -7,7 +7,7 @@ import { PasswordFields } from "@/components/password-field";
 import { actionAccept } from "@/server/auth-actions";
 import { describeInvite } from "@/server/auth";
 import { lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
-import { TEAM_INVITES_ENABLED, inviteStateMessageKey } from "@/server/team-invites";
+import { teamInvitesAllowedForOrg, inviteStateMessageKey } from "@/server/team-invites";
 import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,8 @@ export default async function AcceptPage({
     accountant: "i_role_accountant",
     maintenance: "i_role_maintenance",
   };
-  const stateKey = inviteStateMessageKey(invite.kind, invite.state, TEAM_INVITES_ENABLED);
+  const invitesOpen = teamInvitesAllowedForOrg("orgId" in invite ? invite.orgId ?? null : null);
+  const stateKey = inviteStateMessageKey(invite.kind, invite.state, invitesOpen);
   const stateMessage = stateKey ? t(stateKey) : "";
   const error =
     query.error === "weak"
@@ -119,7 +120,7 @@ export default async function AcceptPage({
             <AcceptSubmit idle={t("i_continue")} pending={t("i_portal_working")} testId="portal-submit" />
           </>
         ) : invite.kind === "team_member" ? (
-          !TEAM_INVITES_ENABLED ? (
+          !invitesOpen ? (
             <button className="btn" type="button" disabled aria-disabled="true" data-testid="team-accept-soon">
               {t("i_team_invites_soon")}
             </button>

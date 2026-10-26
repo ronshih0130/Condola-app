@@ -9,7 +9,7 @@ import { seatLimit } from "@/server/billing";
 import { listTeam } from "@/server/queries";
 import { commercialTier, seatUsage } from "@/server/seats";
 import { getSession } from "@/server/session";
-import { TEAM_INVITES_ENABLED } from "@/server/team-invites";
+import { teamInvitesAllowedForOrg } from "@/server/team-invites";
 import type { OrgRole } from "@/server/types";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,7 @@ export default async function TeamPage({
   searchParams: Promise<{ error?: string; token?: string; invited?: string }>;
 }) {
   const session = await getSession();
+  const invitesOpen = teamInvitesAllowedForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   const [team, factor, usage, tier] = await Promise.all([
@@ -120,7 +121,7 @@ export default async function TeamPage({
                     <td className="r">
                       {member.invitation_id && member.status === "pending" ? (
                         <div className="col">
-                          {TEAM_INVITES_ENABLED ? (
+                          {invitesOpen ? (
                             <form action={actionResendInvite}>
                               <input type="hidden" name="invitationId" value={member.invitation_id} />
                               <button className="btn sm" type="submit" data-testid={`resend-${member.email}`}>
@@ -173,7 +174,7 @@ export default async function TeamPage({
           </p>
           <p className="small">{t("i_price_pending", { n: usage.pending })}</p>
         </div>
-        {!TEAM_INVITES_ENABLED ? (
+        {!invitesOpen ? (
           <div className="card pad" data-testid="team-invite-card">
             <button className="btn" type="button" disabled aria-disabled="true" data-testid="team-invite-soon">
               {t("i_team_invites_soon")}

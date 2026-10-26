@@ -92,17 +92,23 @@ test("the last admin cannot be demoted", async () => {
 });
 
 test("invite rejects a duplicate and accept signs the member in once", async () => {
-  await assert.rejects(() => inviteMember(admin(), { email: "yating.lin@songxin.demo", name: "林", role: "manager" }), (error: unknown) => {
-    return error instanceof FlowError && error.key === "errors.emailTaken";
-  });
-  const invited = await inviteMember(admin(), { email: "new.hire@songxin.demo", name: "新人", role: "accountant" });
-  const weak = await acceptInvite(invited.token, "新人", "short", "short", meta, "", "", true);
-  assert.equal(weak.ok, false);
-  if (!weak.ok) assert.equal(weak.error, "weak");
-  const accepted = await acceptInvite(invited.token, "新人", "Fresh1234", "Fresh1234", meta, "", "", true);
-  assert.equal(accepted.ok, true);
-  const again = await describeInvite(invited.token);
-  assert.equal(again.state, "used");
+  const previous = process.env.TEAM_INVITES_ORG_ALLOWLIST;
+  try {
+    process.env.TEAM_INVITES_ORG_ALLOWLIST = ORG_ID;
+    await assert.rejects(() => inviteMember(admin(), { email: "yating.lin@songxin.demo", name: "林", role: "manager" }), (error: unknown) => {
+      return error instanceof FlowError && error.key === "errors.emailTaken";
+    });
+    const invited = await inviteMember(admin(), { email: "new.hire@songxin.demo", name: "新人", role: "accountant" });
+    const weak = await acceptInvite(invited.token, "新人", "short", "short", meta, "", "", true);
+    assert.equal(weak.ok, false);
+    if (!weak.ok) assert.equal(weak.error, "weak");
+    const accepted = await acceptInvite(invited.token, "新人", "Fresh1234", "Fresh1234", meta, "", "", true);
+    assert.equal(accepted.ok, true);
+    const again = await describeInvite(invited.token);
+    assert.equal(again.state, "used");
+  } finally {
+    setEnv("TEAM_INVITES_ORG_ALLOWLIST", previous);
+  }
 });
 
 test("deactivating a member without confirmation is rejected", async () => {
