@@ -125,9 +125,9 @@ test("all runtime server exports, routes and protected pages are classified", ()
     const route = name.startsWith("app/") && name.endsWith("/route.ts");
     const page = /^app\/[mot]\/(?:.*\/)?page\.tsx$/.test(name);
     if (!server && !route && !page) continue;
-    const module = checker.getSymbolAtLocation(file);
-    assert.ok(module, name);
-    const exports = checker.getExportsOfModule(module);
+    const moduleSymbol = checker.getSymbolAtLocation(file);
+    assert.ok(moduleSymbol, name);
+    const exports = checker.getExportsOfModule(moduleSymbol);
     for (const symbol of exports) {
       if (!(unalias(symbol).flags & ts.SymbolFlags.Value)) continue;
       const key = symbol.name;

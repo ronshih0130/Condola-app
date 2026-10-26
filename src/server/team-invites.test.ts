@@ -1,18 +1,49 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import test from "node:test";
+import test, { mock } from "node:test";
+import nextHeaders from "next/headers";
+import { Client } from "pg";
+import { buildStoredConsent } from "./consent";
 import { makeT } from "@/i18n";
 import { errorText } from "@/i18n/errors";
 import { POST } from "@/app/api/flows/[action]/route";
 import { TEAM_INVITES_ENABLED, assertTeamInvitesAllowed, inviteStateMessageKey } from "./team-invites";
 import { acceptTeamInvite, upsertInvitedUser, verifyPassword } from "./auth";
-import type { Client } from "pg";
 
 function before(source: string, first: string, second: string) {
   const a = source.indexOf(first);
   const b = source.indexOf(second);
   assert.ok(a >= 0, `Missing ${first}`);
   assert.ok(b > a, `${first} must precede ${second}`);
+}
+
+// Exercise the real consent/session lookup with a current live staff identity.
+// Only session reads and its last-active update are allowed; no domain SQL runs.
+test.beforeEach(() => {
+  mock.method(nextHeaders, "cookies", async () => ({
+    get: (name: string) => name === "condola_session" ? { value: "unit-session" } : undefined,
+  }));
+  mock.method(nextHeaders, "headers", async () => new Headers({ "x-pathname": "/m/team" }));
+  mock.method(Client.prototype, "connect", async () => {});
+  mock.method(Client.prototype, "end", async () => {});
+  mock.method(Client.prototype, "query", async (sql: string) => {
+    if (sql.includes("FROM auth_sessions s")) return { rows: [{
+      session_id: "unit-session", user_id: "unit-user", name: "Unit Staff",
+      email: "staff@example.com", consent: buildStoredConsent("reconsent"),
+    }] };
+    if (sql.includes("UPDATE auth_sessions")) return { rows: [] };
+    if (sql.includes("FROM org_members m")) return { rows: [{
+      org_id: "unit-org", role: "admin", live_enabled: true, has_live_data: true,
+    }] };
+    assert.fail("Unexpected SQL before invite refusal: " + sql);
+  });
+});
+test.afterEach(() => mock.restoreAll());
+
+function redirectTarget(error: unknown) {
+  const digest = typeof error === "object" && error && "digest" in error ? String((error as { digest?: string }).digest) : "";
+  assert.match(digest, /^NEXT_REDIRECT;/);
+  return digest.split(";").slice(2, -2).join(";");
 }
 
 function source(path: string) {

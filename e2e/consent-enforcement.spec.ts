@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { expect, test, type Page } from "@playwright/test";
-import { signPhotoToken } from "../src/server/id-crypto";
+import { readPhotoToken, signPhotoToken } from "../src/server/id-crypto";
 import { PRIVACY_VERSION, TERMS_VERSION } from "../src/server/legal-versions";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
@@ -86,9 +86,19 @@ for (const stale of [false, true]) {
       await session(page, user);
       const ids = await db(async (client) => ({
         lease: (await client.query("SELECT id::text FROM leases WHERE org_id = $1 LIMIT 1", [user.orgId])).rows[0].id as string,
-        document: (await client.query("SELECT id::text FROM identity_documents WHERE org_id = $1 LIMIT 1", [user.orgId])).rows[0].id as string,
+        // Select a real front photo through the same viewer ACL as photo GET.
+        // id_photo_gate is read-only: it neither decrypts nor records a download.
+        document: (await client.query(
+          "SELECT g.document_id::text AS id FROM identity_documents d CROSS JOIN LATERAL public.id_photo_gate($1, $2, d.id, $3, 'live') g WHERE d.org_id = $3::uuid AND 'front' = ANY(g.slots) LIMIT 1",
+          [createHash("sha256").update(user.token).digest("hex"), user.id, user.orgId],
+        )).rows[0]?.id as string,
         statement: (await client.query("SELECT id::text FROM owner_statements WHERE org_id = $1 LIMIT 1", [user.orgId])).rows[0].id as string,
       }));
+      expect(ids.document, "viewer must be authorized for a stored front photo").toBeTruthy();
+      const photoToken = signPhotoToken({
+        documentId: ids.document, userId: user.id, slot: "front", exp: Date.now() + 60_000,
+      });
+      expect(readPhotoToken(photoToken), "photo token must be valid before testing consent").not.toBeNull();
       const before = await snapshot(user.orgId);
       const routes: [string, string][] = [
         ["POST", "/api/flows/createProperty"], ["POST", "/api/flows/confirmPayment"],
@@ -97,9 +107,7 @@ for (const stale of [false, true]) {
         ["GET", "/m/leases/" + ids.lease + "/signed"], ["GET", "/m/reports/export"],
         ["GET", "/api/tickets/photos/" + randomUUID()],
         ["POST", "/api/tickets/photos/sign"], ["POST", "/api/tickets/photos/confirm"],
-        ["GET", "/api/id-documents/photo?token=" + encodeURIComponent(signPhotoToken({
-          documentId: ids.document, userId: user.id, slot: "front", exp: Math.floor(Date.now() / 1000) + 60,
-        }))],
+        ["GET", "/api/id-documents/photo?token=" + encodeURIComponent(photoToken)],
         ["POST", "/api/id-documents/photo"], ["POST", "/api/id-documents/finalize"],
         ["DELETE", "/api/id-documents/finalize"],
       ];
