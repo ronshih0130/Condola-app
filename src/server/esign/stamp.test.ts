@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PDFDocument } from "pdf-lib";
+import { readFile } from "node:fs/promises";
+import { PDFArray, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from "pdf-lib";
 import { contractVersionDigest } from "./document";
 import { stampSignature, taipeiIso } from "./stamp";
 
@@ -55,4 +56,53 @@ test("reject wrong digest, empty name and Chinese name without font bytes", asyn
     () => stampSignature(source, png, { ...input, signerDisplayName: "測試簽署人" }),
     /Font bytes required/,
   );
+});
+
+// All names, images and contract pages here are synthetic.
+test("CJK font embeds successfully and two stamps preserve both signatures and digests", async () => {
+  const fontBytes = new Uint8Array(await readFile("public/fonts/DroidSansFallback-subset.ttf"));
+  const source = await fixture();
+  const before = await contractVersionDigest(source);
+  const first = await stampSignature(source, png, {
+    signerDisplayName: "屋主", signedAt: "2026-10-26T16:30:00Z",
+    documentDigest: before, fontBytes,
+  });
+  const snapshot = first.bytes.slice();
+  const second = await stampSignature(first.bytes, png, {
+    signerDisplayName: "租客", signedAt: "2026-10-26T16:31:00Z",
+    documentDigest: first.postSigningDigest, fontBytes,
+  });
+  assert.deepEqual(first.bytes, snapshot);
+  assert.equal(first.postSigningDigest, await contractVersionDigest(first.bytes));
+  assert.equal(second.postSigningDigest, await contractVersionDigest(second.bytes));
+  assert.notEqual(second.postSigningDigest, first.postSigningDigest);
+  const pdf = await PDFDocument.load(second.bytes);
+  assert.equal(pdf.getPageCount(), 3);
+  for (const [index, digest] of [[1, before], [2, first.postSigningDigest]] as const) {
+    const page = pdf.getPage(index);
+    const contents = page.node.Contents();
+    assert.ok(contents instanceof PDFArray);
+    const text = Array.from({ length: contents.size() }, (_, i) => {
+      const stream = contents.lookup(i, PDFRawStream);
+      return new TextDecoder().decode(decodePDFRawStream(stream).decode());
+    }).join("\n");
+    const hex = Array.from(new TextEncoder().encode(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+    assert.ok(text.toLowerCase().includes(hex));
+    assert.match(text, /\/[^\s]+ Do/); // Image drawing operation on each signature page.
+    const resources = page.node.Resources();
+    assert.ok(resources);
+    assert.ok(resources.has(PDFName.of("XObject")));
+    assert.ok(resources.has(PDFName.of("Font")));
+  }
+  // Embedded Unicode maps prove both CJK names survive the second save.
+  const maps = pdf.context.enumerateIndirectObjects().flatMap(([, object]) => {
+    if (!(object instanceof PDFRawStream)) return [];
+    const decoded = new TextDecoder().decode(decodePDFRawStream(object).decode());
+    return decoded.includes("beginbfchar") || decoded.includes("beginbfrange") ? [decoded.toLowerCase()] : [];
+  }).join("\n");
+  for (const ch of "屋主租客") assert.ok(maps.includes(ch.codePointAt(0)!.toString(16)), ch);
+  await assert.rejects(() => stampSignature(first.bytes, png, {
+    signerDisplayName: "租客", signedAt: "2026-10-26T16:31:00Z",
+    documentDigest: before, fontBytes,
+  }), /digest mismatch/);
 });

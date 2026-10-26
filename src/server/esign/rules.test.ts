@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { before, test } from "node:test";
+import { readFile } from "node:fs/promises";
+import { generateContractPdf, type GeneratedContractProof } from "./stamp";
 import {
   acceptableSignature,
   auditView,
@@ -17,17 +19,25 @@ import {
 
 const at = "2026-10-26T16:30:00Z";
 const deadline = "2026-10-27T16:30:00Z";
-const hash = "a".repeat(64);
+let hash = "a".repeat(64);
+let documentProof: GeneratedContractProof;
+const replacementBody = `${replacementLine(at)}\nNew contract`;
+before(async () => {
+  const font = new Uint8Array(await readFile("public/fonts/DroidSansFallback-subset.ttf"));
+  const generated = await generateContractPdf(replacementBody, font);
+  hash = generated.documentDigest;
+  documentProof = generated.proof;
+});
 const finalHash = "b".repeat(64);
 const strokes = [[{ x: 0, y: 0 }, { x: 10, y: 20 }, { x: 20, y: 10 }]];
 const admin = { actorId: "staff", role: "company_admin" as const, at };
 
-function draft() {
+function draft(documentCheckRequired = false) {
   return createCase({
     versionId: "v1",
     body: "Contract",
     documentDigest: hash,
-    signers: [{ id: "o", role: "owner" }, { id: "t", role: "tenant" }],
+    signers: [{ id: "o", role: "owner", documentCheckRequired }, { id: "t", role: "tenant" }],
   });
 }
 
@@ -67,7 +77,7 @@ function finish(state = send(), versionId = "v1") {
 function replacement(state = finish(), body = `${replacementLine(at)}\nNew contract`) {
   return transition(state, {
     ...admin, versionId: "v1", type: "create_version",
-    newVersionId: "v2", body, documentDigest: hash,
+    newVersionId: "v2", body, documentDigest: hash, documentProof,
   });
 }
 
@@ -172,11 +182,24 @@ test("foreign document record contains only document type, staff and time", () =
       ...admin, versionId: "v1", signerId: "o", type: "check_foreign_document" as const,
       documentType, documentNumber: "MUST-NOT-PERSIST",
     };
-    const state = transition(send(), event);
+    const ready = prepare(send(draft(true)), "o");
+    assert.throws(() => transition(ready, signEvent("o")), /Document check required/);
+    const state = transition(ready, event);
     assert.deepEqual(state.versions[0].signers[0].foreignDocumentCheck, {
       documentType, checkedByStaffId: "staff", checkedAt: at,
     });
     assert.equal(JSON.stringify(state).includes("MUST-NOT-PERSIST"), false);
+    const signed = transition(state, signEvent("o"));
+    assert.equal(signed.versions[0].signers[0].status, "completed");
+    const voided = transition(signed, { ...admin, versionId: "v1", type: "void", reason: "Retry" });
+    const fresh = transition(voided, {
+      ...admin, versionId: "v1", type: "create_version", newVersionId: "v2",
+      body: "Retry", documentDigest: hash,
+    });
+    assert.equal(fresh.versions[1].signers[0].documentCheckRequired, true);
+    assert.equal(fresh.versions[1].signers[0].foreignDocumentCheck, undefined);
+    const retryReady = prepare(send(fresh, "v2"), "o", "v2");
+    assert.throws(() => transition(retryReady, signEvent("o", "v2")), /Document check required/);
     assert.throws(() => transition(send(), { ...event, role: "owner", actorId: "o" }));
   }
 });
@@ -274,7 +297,7 @@ test("voiding a pending replacement preserves the effective original", () => {
   assert.throws(() => transition(voided, signEvent("t", "v2")));
   const retry = transition(voided, {
     ...admin, versionId: "v2", type: "create_version",
-    newVersionId: "v3", body: replacementLine(at), documentDigest: hash,
+    newVersionId: "v3", body: replacementBody, documentDigest: hash, documentProof,
   });
   assert.equal(retry.versions[2].supersedes_version_id, "v1");
   const done = finish(send(retry, "v3"), "v3");
@@ -294,7 +317,24 @@ test("replacement line uses Asia/Taipei completion date and is mandatory", () =>
   }));
 });
 
-test("role visibility matrix excludes technical data except for company admin", () => {
+test("replacement rejects a valid body paired with another PDF or forged proof", async () => {
+  const font = new Uint8Array(await readFile("public/fonts/DroidSansFallback-subset.ttf"));
+  const other = await generateContractPdf("Different contract", font);
+  const event = {
+    ...admin, versionId: "v1", type: "create_version" as const, newVersionId: "v2",
+    body: replacementBody, documentDigest: other.documentDigest, documentProof: other.proof,
+  };
+  assert.throws(() => transition(finish(), event), /Replacement PDF/);
+  assert.throws(() => transition(finish(), {
+    ...event, documentDigest: hash, documentProof: { ...documentProof },
+  }), /Replacement PDF/);
+  assert.throws(() => transition(finish(), {
+    ...event, documentDigest: hash, documentProof: undefined,
+  }), /Replacement PDF/);
+  assert.equal(replacement().versions[1].documentDigest, hash);
+});
+
+test("role visibility matrix exposes technical data to company management", () => {
   const version = finish().versions[0];
   for (const viewer of [
     { id: "o", role: "owner" as const },
@@ -307,7 +347,7 @@ test("role visibility matrix excludes technical data except for company admin", 
     assert.equal(view.signedAt, at);
     assert.equal(view.documentDigest, finalHash);
     for (const key of ["ip", "device", "userAgent"]) {
-      assert.equal(key in view, viewer.role === "company_admin");
+      assert.equal(key in view, viewer.role === "company_admin" || viewer.role === "company_staff");
     }
   }
   assert.throws(() => auditView(version, "o", { id: "stranger", role: "owner" }));

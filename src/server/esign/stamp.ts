@@ -2,6 +2,54 @@ import * as fontkitModule from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { contractVersionDigest } from "./document";
 
+export type GeneratedContractProof = Readonly<{ body: string; documentDigest: string }>;
+const generatedContracts = new WeakSet<GeneratedContractProof>();
+
+/** Proofs cannot be constructed from a caller-supplied body/digest pair. */
+export function matchesGeneratedContract(
+  proof: GeneratedContractProof | undefined,
+  body: string,
+  documentDigest: string,
+): boolean {
+  return !!proof && generatedContracts.has(proof) &&
+    proof.body === body && proof.documentDigest === documentDigest;
+}
+
+/** Render every body line, then hash exactly the PDF bytes returned for display. */
+export async function generateContractPdf(body: string, fontBytes: Uint8Array) {
+  if (!body.trim()) throw new Error("Contract body required");
+  const pdf = await PDFDocument.create();
+  const mod = fontkitModule as unknown as {
+    default?: Parameters<typeof pdf.registerFontkit>[0];
+  };
+  pdf.registerFontkit(mod.default ?? (
+    fontkitModule as unknown as Parameters<typeof pdf.registerFontkit>[0]
+  ));
+  const font = await pdf.embedFont(fontBytes, { subset: false });
+  const latin = await pdf.embedFont(StandardFonts.Helvetica);
+  const supported = new Set(font.getCharacterSet());
+  let page = pdf.addPage([595.28, 841.89]);
+  let y = 790;
+  for (const line of body.split(/\r?\n/)) {
+    let x = 48;
+    for (const ch of line) {
+      const face = supported.has(ch.codePointAt(0)!) ? font : latin;
+      face.encodeText(ch); // Reject missing glyphs rather than silently omit text.
+      const width = face.widthOfTextAtSize(ch, 12);
+      if (x + width > 547) { x = 48; y -= 20; }
+      if (y < 48) { page = pdf.addPage([595.28, 841.89]); y = 790; }
+      page.drawText(ch, { x, y, size: 12, font: face });
+      x += width;
+    }
+    y -= 20;
+  }
+  const bytes = await pdf.save();
+  const documentDigest = await contractVersionDigest(bytes);
+  const proof: GeneratedContractProof = Object.freeze({ body, documentDigest });
+  generatedContracts.add(proof);
+  return { bytes, documentDigest, proof };
+}
+
 export type SignatureStamp = {
   signerDisplayName: string;
   signedAt: string;

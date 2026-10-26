@@ -6,6 +6,7 @@ import { EMAIL_IDENTITY_LABEL } from "./rules";
 const banned = [
   "收租", "收款", "欠租", "已收", "入帳", "房東", "代收", "轉付",
   "統一編號", "含稅", "本公司", "事務所", "已驗證",
+  "保證有效", "保證具法律效力",
 ];
 
 test("both locales cover ES-01 through ES-09 and avoid prohibited copy", () => {
@@ -16,6 +17,7 @@ test("both locales cover ES-01 through ES-09 and avoid prohibited copy", () => {
     ]);
     const serialized = JSON.stringify(locale);
     for (const word of banned) assert.equal(serialized.includes(word), false, word);
+    assert.doesNotMatch(serialized, /guarantee(?:d|s)?\s+(?:to\s+be\s+)?(?:legally\s+binding|legal(?:ly)?\s+valid(?:ity)?)/i);
     for (const screen of Object.values(locale)) {
       assert.equal(typeof screen.label, "string");
       assert.equal(typeof screen.error, "string");

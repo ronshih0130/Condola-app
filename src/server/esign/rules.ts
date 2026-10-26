@@ -1,7 +1,9 @@
 /**
  * Pure domain rules. Callers must authenticate actors and verify email codes
- * before constructing events. No database, delivery, clock or PDF dependencies.
+ * before constructing events. No database, delivery or clock dependencies.
  */
+import { matchesGeneratedContract, type GeneratedContractProof } from "./stamp";
+
 export type CaseStatus = "draft" | "sent" | "signing" | "completed" | "voided" | "superseded";
 export type Role = "company_admin" | "company_staff" | "owner" | "tenant";
 export type IdentityMethod = "email" | "otp";
@@ -62,6 +64,8 @@ export type Signer = {
   objectionAt?: string;
   identity?: { method: IdentityMethod; result: IdentityResult; at: string; attempts: number };
   emailChallenge?: { issuedAt: string; expiresAt: string; attemptCap: number; attempts: number };
+  /** Set by the authenticated company adapter, never by signer input. */
+  documentCheckRequired: boolean;
   foreignDocumentCheck?: ForeignDocumentCheck;
   reviewedAt?: string;
   signature?: {
@@ -154,6 +158,8 @@ export type Event =
   | (Base & { type: "void"; reason: string })
   | (Base & {
       type: "create_version";
+      /** In-process proof from generateContractPdf; re-generate after reload. */
+      documentProof?: GeneratedContractProof;
       newVersionId: string;
       body: string;
       documentDigest: string;
@@ -197,7 +203,8 @@ export function createCase(input: {
   versionId: string;
   body: string;
   documentDigest: string;
-  signers: ReadonlyArray<{ id: string; role: "owner" | "tenant" }>;
+  /** Trusted company configuration; do not bind this input from a signer request. */
+  signers: ReadonlyArray<{ id: string; role: "owner" | "tenant"; documentCheckRequired?: boolean }>;
   order?: "parallel" | "sequential";
 }): SigningCase {
   requireRule(nonempty(input.versionId) && nonempty(input.body), "Version and body required");
@@ -215,7 +222,10 @@ export function createCase(input: {
       order: input.order ?? "parallel",
       status: "draft",
       effect: "pending",
-      signers: input.signers.map((s) => ({ id: s.id, role: s.role, status: "pending_consent" })),
+      signers: input.signers.map((s) => ({
+        id: s.id, role: s.role, status: "pending_consent",
+        documentCheckRequired: s.documentCheckRequired === true,
+      })),
     }],
     audit: [],
   };
@@ -277,6 +287,10 @@ export function transition(state: SigningCase, event: Event): SigningCase {
       requireRule(
         !next.versions.some((x) => x.supersedes_version_id === effectiveId && x.effect === "pending"),
         "Replacement already pending",
+      );
+      requireRule(
+        matchesGeneratedContract(event.documentProof, event.body, event.documentDigest),
+        "Replacement PDF must be generated from the validated body",
       );
       fresh.supersedes_version_id = effectiveId;
     }
@@ -418,6 +432,7 @@ export function transition(state: SigningCase, event: Event): SigningCase {
             break;
           case "sign": {
             requireRule(s.status === "pending_signature", "Signature out of order");
+            requireRule(!s.documentCheckRequired || s.foreignDocumentCheck, "Document check required");
             requireRule(acceptableSignature(event.strokes), "Handwritten signature required");
             requireRule(
               nonempty(event.imageRef) && nonempty(event.ip) &&
@@ -479,7 +494,7 @@ export function transition(state: SigningCase, event: Event): SigningCase {
 
 export type AuditViewer = { id: string; role: Role };
 
-/** Allowlist projection. Staff see summary data; technical fields require admin. */
+/** Company management sees technical fields; adapter must authorize organization access. */
 export function auditView(version: Version, signerId: string, viewer: AuditViewer) {
   const staff = viewer.role === "company_admin" || viewer.role === "company_staff";
   requireRule(
@@ -494,7 +509,7 @@ export function auditView(version: Version, signerId: string, viewer: AuditViewe
     signedAt: signer.signature?.signedAt ?? null,
     identityLabel: signer.identity?.result === "completed" ? EMAIL_IDENTITY_LABEL : null,
     documentDigest: version.finalDigest ?? version.documentDigest,
-    ...(viewer.role === "company_admin" ? {
+    ...(staff ? {
       ip: signer.signature?.ip ?? null,
       userAgent: signer.signature?.userAgent ?? null,
       device: signer.signature?.device ?? null,
