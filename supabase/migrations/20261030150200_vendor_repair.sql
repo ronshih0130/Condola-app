@@ -1,4 +1,4 @@
--- Version 20261031120000.
+-- Version 20261030150200.
 -- Vendor dispatch for one repair job.
 -- Additive only: new tables, one nullable column, triggers.
 -- No NOT NULL on existing columns, and no new constraint that older ticket
@@ -34,13 +34,6 @@ CREATE TABLE IF NOT EXISTS repair_vendor_jobs (
   CHECK (reported_at IS NOT NULL OR reported_cost_minor IS NULL),
   CHECK (confirmed_at IS NULL OR reported_at IS NOT NULL)
 );
-
-ALTER TABLE maintenance_tickets
-  ADD COLUMN IF NOT EXISTS job_type_code text NULL,
-  ADD COLUMN IF NOT EXISTS type_fields jsonb NOT NULL DEFAULT '{}'::jsonb;
-
-COMMENT ON COLUMN maintenance_tickets.job_type_code IS 'Reserved: work-order job type code (cleaning, plumbing, electrical, ...). FK to job_types(code) and backfill decided in the 10/29 migration per job_types_v1 section 3. NULL = unspecified.';
-COMMENT ON COLUMN maintenance_tickets.type_fields IS 'Reserved: per-job-type template field values (job_types.required_fields). Structure/version decided in the 10/29 migration.';
 
 CREATE UNIQUE INDEX IF NOT EXISTS repair_vendor_jobs_one_active
   ON repair_vendor_jobs (ticket_id)
