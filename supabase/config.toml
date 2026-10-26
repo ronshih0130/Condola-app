@@ -1,0 +1,38 @@
+# Minimal config so `supabase start` (Docker) can boot this project.
+# Apply supabase/migrations only. Do not apply supabase/stub on Supabase.
+project_id = "condola"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:43123"
+# GoTrue's default. An implicit confirm link puts a user JWT in the URL hash.
+# confirmSupabaseAccessToken rejects a token whose exp - iat is longer than this.
+# Hosted Auth must keep the same JWT expiry. This file does not change the hosted project.
+jwt_expiry = 3600
+
+[auth.email]
+# GoTrue's default email-link lifetime, in seconds. The link is single-use at
+# GoTrue. The access_token it mints is not; the app stores a hash and rejects
+# a second confirm. Hosted Auth must keep the same OTP expiry.
+enable_confirmations = true
+otp_expiry = 3600
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"

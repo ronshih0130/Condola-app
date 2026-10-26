@@ -1,0 +1,15 @@
+{
+  "email": "consent.mvo2bvnc@example.com",
+  "data": {
+    "terms_accepted_at": "2026-10-25T16:49:27.923Z",
+    "terms_version": "2026-10-22",
+    "privacy_version": "2026-10-22"
+  },
+  "options": {
+    "data": {
+      "terms_accepted_at": "2026-10-25T16:49:27.923Z",
+      "terms_version": "2026-10-22",
+      "privacy_version": "2026-10-22"
+    }
+  }
+}

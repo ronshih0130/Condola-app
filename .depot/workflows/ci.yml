@@ -1,0 +1,108 @@
+# Migrated from .github/workflows/ci.yml.
+# Changes:
+# - runs-on: ubuntu-latest -> depot-ubuntu-latest
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  check:
+    # Remapped from ubuntu-latest. Depot CI runs its own runner labels.
+    runs-on: depot-ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: condola
+          POSTGRES_PASSWORD: condola
+          POSTGRES_DB: condola
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U condola -d condola"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://condola:condola@127.0.0.1:5432/condola
+      DEMO_MODE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install PDF raster tools
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run copy:check
+      - run: npm run test:unit
+      - name: Apply schema and seed
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/stub/supabase_stub.sql
+          for migration in supabase/migrations/*.sql; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+          npm run db:reset
+      - name: Check function execute privileges
+        run: bash scripts/check-function-privileges.sh
+      - run: npm run test:rls
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  # Staging Worker only. This job never deploys production.
+  # It runs after `check` succeeds, and only on a push to main, when the
+  # repository variable STAGING_AUTODEPLOY is exactly "true". Unset, empty,
+  # or any other value skips the job (the default is off).
+  # CLOUDFLARE_API_TOKEN is required; the job fails before deploy when it is missing.
+  deploy-staging:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_AUTODEPLOY == 'true'
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Require the Cloudflare API token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [[ -z "${CLOUDFLARE_API_TOKEN}" ]]; then
+            echo "CLOUDFLARE_API_TOKEN is required to deploy staging." >&2
+            exit 1
+          fi
+      - name: Build the OpenNext bundle
+        run: |
+          if [[ -n "${DATABASE_URL:-}" || -n "${SUPABASE_URL:-}" || -n "${SUPABASE_ANON_KEY:-}" || -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || -n "${ID_DOC_ENCRYPTION_KEY:-}" || -n "${ID_DOC_HMAC_KEY:-}" || -n "${ID_DOC_SIGNING_SECRET:-}" || -n "${CRON_SECRET:-}" || -n "${CLOUDFLARE_API_TOKEN:-}" || "${DEMO_MODE:-}" == "true" ]]; then
+            echo "Refusing to build with database secrets, ID document keys, the Cloudflare token, or DEMO_MODE=true in the environment." >&2
+            exit 1
+          fi
+          npm run cf:build
+      - name: Apply staging migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [[ -z "${DATABASE_URL}" ]]; then
+            echo "DATABASE_URL is required to apply staging migrations. Use the Tokyo session connection (port 5432). The value is not printed." >&2
+            exit 1
+          fi
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          bash scripts/db-migrate.sh
+      - name: Deploy the staging Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/cf-deploy-staging.sh
