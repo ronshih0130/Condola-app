@@ -71,7 +71,7 @@ async function cleanup(user: Fixture) {
 async function snapshot(orgId: string) {
   return db(async (client) => {
     const result: Record<string, unknown> = {};
-    for (const table of ["properties", "payments", "import_jobs", "invitations", "messages", "identity_documents", "identity_document_photos", "ticket_attachments", "files", "audit_log", "ledger_transactions"]) {
+    for (const table of ["contacts", "property_owners", "properties", "payments", "import_jobs", "invitations", "messages", "identity_documents", "identity_document_photos", "ticket_attachments", "files", "audit_log", "ledger_transactions"]) {
       result[table] = (await client.query(
         "SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb) AS rows FROM " + table + " t WHERE org_id = $1", [orgId])).rows[0].rows;
     }
@@ -133,7 +133,23 @@ for (const stale of [false, true]) {
       await expect(page).toHaveURL(/\/m(?:\?|$)/);
       expect((await page.request.get("/api/export")).ok()).toBeTruthy();
       await record(user.id, true);
-      expect((await page.request.post("/api/auth/sign-out", { maxRedirects: 0 })).status()).toBeLessThan(400);
+      await page.goto("/m");
+      await expect(page).toHaveURL(/\/consent\?next=/);
+      // Let the browser handle the sign-out headers and manual redirect.
+      const signedOut = await page.evaluate(async () => {
+        const response = await fetch("/api/auth/sign-out", { method: "POST", redirect: "manual" });
+        return { type: response.type, status: response.status };
+      });
+      expect(signedOut).toEqual({ type: "opaqueredirect", status: 0 });
+      expect((await page.context().cookies()).some((cookie) => cookie.name === "condola_session")).toBe(false);
+      const sessions = await db((client) => client.query(
+        "SELECT revoked_at FROM auth_sessions WHERE user_id = $1 AND token_hash = $2",
+        [user.id, createHash("sha256").update(user.token).digest("hex")],
+      ));
+      expect(sessions.rows).toHaveLength(1);
+      expect(sessions.rows[0].revoked_at).not.toBeNull();
+      await page.goto("/m");
+      await expect(page).toHaveURL(/\/login(?:\?|$)/);
     } finally { await cleanup(user); }
   });
 }
@@ -142,21 +158,21 @@ for (const kind of ["staff", "tenant"] as const) {
     const user = await fixture(kind);
     const portal = kind === "tenant";
     const home = portal ? "/t" : "/m";
-    const formPage = portal ? "/t/messages" : "/m/team";
+    const formPage = portal ? "/t/messages" : "/m/owners/new";
     const gate = portal ? /\/consent\/portal\?next=/ : /\/consent\?next=/;
     try {
       await record(user.id);
       await session(page, user);
       await page.goto(formPage);
-      const field = portal ? page.locator('textarea[name="body"]') : page.getByTestId("invite-email");
+      const field = portal ? page.locator('textarea[name="body"]') : page.getByTestId("owner-email");
       await expect(field).toBeVisible();
       await field.fill(portal ? "must not be written " + user.id : "blocked." + user.email);
-      if (!portal) await page.getByTestId("invite-name").fill("Blocked Invite");
+      if (!portal) await page.getByTestId("owner-name").fill("Blocked Owner");
       const before = await snapshot(user.orgId);
       await record(user.id, true);
       // Submit the existing browser form with Next's actual action transport.
       await field.locator("xpath=ancestor::form").locator('button[type="submit"]').click();
-      await expect(page).toHaveURL(gate);
+      await expect(page).toHaveURL(new RegExp((portal ? "/consent/portal" : "/consent") + "\\?next=" + encodeURIComponent(formPage) + "$"));
       expect(await snapshot(user.orgId)).toEqual(before);
       await page.getByTestId("consent-check").check();
       await page.getByTestId("consent-submit").click();
