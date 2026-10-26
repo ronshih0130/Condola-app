@@ -43,6 +43,9 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/demo/mode/route.ts": { GET: "Removed, always 404" },
   "api/demo/persona/route.ts": { GET: "Removed, always 404" },
   "api/demo/tryout/route.ts": { GET: "Public preference" },
+  "api/vendor-jobs/[token]/photos/[id]/route.ts": { GET: "Vendor link token authentication, no user session" },
+  "api/vendor-jobs/photos/sign/route.ts": { POST: "Vendor link token authentication, no user session" },
+  "api/vendor-jobs/photos/confirm/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/reset-flash/route.ts": { POST: "Recovery feedback cookie" },
   "api/version/route.ts": { GET: "Public version" },
 };
