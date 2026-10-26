@@ -8,6 +8,11 @@ import { ORG_ID, ORG2_ID, USERS } from "../ids";
 import { EsignRepo, type Actor, type TransactionRunner } from "./repo";
 import { generateContractPdf } from "./stamp";
 import type { SigningCase } from "./rules";
+import { PDFDocument } from "pdf-lib";
+import { buildStoredConsent } from "../consent";
+import type { Session } from "../types";
+import { EsignFlow } from "./flow";
+import { contractVersionDigest } from "./document";
 
 const databaseUrl = process.env.DATABASE_URL;
 assert.ok(databaseUrl, "DATABASE_URL is required");
@@ -343,5 +348,166 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
     } catch (error) {
       if (error !== rollback) throw error;
     }
+  });
+});
+
+test("mounted action service on PG: Email replay, permissions, atomic replacement and purge isolation", async () => {
+  const leaseId = randomUUID(), propertyId = randomUUID(), unitId = randomUUID();
+  const font = new Uint8Array(await readFile(new URL("../../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url)));
+  const initial = await generateContractPdf("住宅租約\n屋主與租客", font);
+  const messages: { to: string; text: string }[] = [];
+  let now = new Date("2026-10-26T12:00:00Z");
+  const base: Session = {
+    userId: USERS.admin, orgId: ORG_ID, liveOrgId: ORG_ID, sessionId: "synthetic-session",
+    kind: "staff", role: "admin", environment: "live", calendar: "gregorian", locale: "zh-TW",
+    leaseId, email: "admin@example.com", name: "測試", consent: buildStoredConsent("reconsent"),
+  };
+  const manager = { ...base, userId: USERS.manager, role: "manager" as const };
+  const owner = { ...base, userId: USERS.owner, kind: "owner" as const, role: null };
+  const tenant = { ...base, userId: USERS.tenant, kind: "tenant" as const, role: null };
+  const outsider = { ...base, userId: USERS.owner2, kind: "owner" as const, role: null };
+  const foreign = { ...base, userId: USERS.coastAdmin, orgId: ORG2_ID, liveOrgId: ORG2_ID };
+  const strokes = [[{ x: 2, y: 2 }, { x: 30, y: 40 }, { x: 80, y: 8 }]];
+  await withClient(async (client) => {
+    const rollback = new FlowError("Rollback mounted e-sign fixtures");
+    try {
+      await svcOn(client, USERS.admin, async () => {
+        let index = 0;
+        const run: TransactionRunner = async (actorId, work) => {
+          const save = "mounted_esign_" + (++index);
+          await client.query("SAVEPOINT " + save);
+          try {
+            await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [actorId]);
+            const result = await work(client);
+            await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [USERS.admin]);
+            await client.query("RELEASE SAVEPOINT " + save);
+            return result;
+          } catch (error) {
+            await client.query("ROLLBACK TO SAVEPOINT " + save);
+            await client.query("RELEASE SAVEPOINT " + save);
+            throw error;
+          }
+        };
+        const flow = new EsignFlow({
+          run, enabled: () => true, font: async () => font, now: () => now,
+          secret: "synthetic-esign-secret-only-at-least-32-bytes",
+          mail: async (message) => { messages.push(message); return { ok: true, messageId: "synthetic", provider: "cloudflare" }; },
+        });
+        await client.query(
+          "INSERT INTO properties(id,org_id,name,country_code,currency,timezone) VALUES ($1,$2,'Synthetic mounted property','TW','TWD','Asia/Taipei')",
+          [propertyId, ORG_ID],
+        );
+        await client.query("INSERT INTO units(id,org_id,property_id,label) VALUES ($1,$2,$3,'Synthetic mounted unit')", [unitId, ORG_ID, propertyId]);
+        await client.query(
+          "INSERT INTO leases(id,org_id,property_id,unit_id,target_unit_id,start_date,end_date,currency,rent_amount_minor) VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',0)",
+          [leaseId, ORG_ID, propertyId, unitId],
+        );
+        const contacts = await client.query<{ id: string; user_id: string }>(
+          "SELECT id::text,user_id::text FROM contacts WHERE org_id=$1 AND user_id=ANY($2::uuid[]) AND archived_at IS NULL",
+          [ORG_ID, [USERS.owner, USERS.tenant]],
+        );
+        const ownerContact = contacts.rows.find((r) => r.user_id === USERS.owner)!.id;
+        const tenantContact = contacts.rows.find((r) => r.user_id === USERS.tenant)!.id;
+        await client.query("INSERT INTO property_owners(org_id,property_id,owner_contact_id) VALUES ($1,$2,$3)", [ORG_ID, propertyId, ownerContact]);
+        await client.query("INSERT INTO lease_parties(org_id,lease_id,contact_id) VALUES ($1,$2,$3)", [ORG_ID, leaseId, tenantContact]);
+        const create = {
+          type: "create" as const, leaseId, pdf: initial.bytes, ownerId: USERS.owner, tenantId: USERS.tenant,
+          ownerDocument: true, tenantDocument: false, order: "parallel" as const, deadline: "2026-11-01T12:00:00Z",
+        };
+        await assert.rejects(flow.execute({ ...base, role: "accountant" }, create));
+        await assert.rejects(flow.execute(owner, create));
+        await assert.rejects(flow.execute(foreign, create));
+        await assert.rejects(flow.execute(manager, { ...create, tenantId: USERS.tenant2 }));
+        await flow.execute(manager, create);
+        assert.equal(messages.length, 2);
+        const first = (await flow.list(manager, leaseId)).versions[0];
+        const target = { caseId: first.caseId, versionId: first.id };
+        await assert.rejects(flow.list(outsider, leaseId));
+        await assert.rejects(flow.pdf(foreign, first.caseId, first.id, false));
+        await assert.rejects(flow.execute(manager, { ...target, type: "consent" }));
+        await assert.rejects(flow.execute(manager, { ...target, type: "void", reason: "Manager cannot void" }));
+        await assert.rejects(flow.execute(owner, { ...target, type: "review" }));
+        await assert.rejects(flow.execute(owner, { ...target, type: "confirm", response: "no challenge" }));
+
+        async function prepare(actor: Session, version: { caseId: string; id: string }) {
+          const target = { caseId: version.caseId, versionId: version.id };
+          await flow.execute(actor, { ...target, type: "consent" });
+          await flow.execute(actor, { ...target, type: "email" });
+          const count = messages.length;
+          const code = messages.at(-1)!.text.match(/[a-f0-9]{32}$/)![0];
+          await flow.execute(actor, { ...target, type: "email" });
+          assert.equal(messages.length, count, "duplicate requests cannot reset attempts or send more mail");
+          await flow.execute(actor, { ...target, type: "confirm", response: "wrong" });
+          assert.equal((await flow.list(actor, leaseId)).versions.find((v) => v.id === version.id)!.own!.status, "pending_identity");
+          await flow.execute(actor, { ...target, type: "confirm", response: code });
+          await assert.rejects(flow.execute(actor, { ...target, type: "confirm", response: code }));
+          await flow.execute(actor, { ...target, type: "review" });
+          return code;
+        }
+        const firstCode = await prepare(owner, first);
+        await prepare(tenant, first);
+        const sign = (actor: Session, v: typeof first) => flow.execute(actor, {
+          type: "sign", caseId: v.caseId, versionId: v.id, strokes, digest: v.digest,
+          ip: "127.0.0.1", userAgent: "Synthetic mounted action test",
+        });
+        await assert.rejects(sign(owner, first), /Document check required/);
+        await flow.execute(manager, { ...target, type: "document", signerId: USERS.owner, documentType: "passport" });
+        await sign(owner, first);
+        await assert.rejects(flow.pdf(owner, first.caseId, first.id, true));
+        await sign(tenant, first);
+        const complete = await flow.pdf(tenant, first.caseId, first.id, true);
+        assert.equal((await PDFDocument.load(complete.bytes)).getPageCount(), 3);
+        assert.equal(await contractVersionDigest(complete.bytes), complete.digest);
+        const ownView = (await flow.list(owner, leaseId)).versions[0];
+        assert.equal(ownView.audit.length, 1);
+        assert.equal(ownView.history.length, 0);
+        assert.equal(ownView.own!.identityLabel, "已完成 Email 身分確認步驟");
+        assert.ok(ownView.audit.every((r) => !("ip" in r) && !("device" in r) && !("userAgent" in r)));
+        const staffView = (await flow.list(manager, leaseId)).versions[0];
+        assert.ok(staffView.history.length > 0);
+        assert.ok(staffView.audit.every((r) => r.ip === "127.0.0.1"));
+        await assert.rejects(flow.execute(base, { ...target, type: "void", reason: "Signed cannot be voided" }));
+
+        await flow.execute(manager, { ...target, type: "replace", body: "新版住宅租約", deadline: create.deadline });
+        let versions = (await flow.list(manager, leaseId)).versions;
+        const next = versions.find((v) => v.previousId === first.id)!;
+        assert.ok(next.replacementText?.includes("本版取代 2026-10-26 簽署之前版"));
+        assert.equal(versions.find((v) => v.id === first.id)!.effect, "effective");
+        await flow.execute(owner, { caseId: next.caseId, versionId: next.id, type: "consent" });
+        await flow.execute(owner, { caseId: next.caseId, versionId: next.id, type: "email" });
+        await flow.execute(owner, { caseId: next.caseId, versionId: next.id, type: "confirm", response: firstCode });
+        assert.equal((await flow.list(owner, leaseId)).versions.find((v) => v.id === next.id)!.own!.status, "pending_identity");
+        // This replacement is cancelled unsigned; the original remains effective.
+        await flow.execute(base, { caseId: next.caseId, versionId: next.id, type: "void", reason: "Synthetic restart" });
+        await flow.execute(manager, { caseId: next.caseId, versionId: next.id, type: "replace", body: "重新建立新版住宅租約", deadline: create.deadline });
+        versions = (await flow.list(manager, leaseId)).versions;
+        const fresh = versions.find((v) => v.previousId === next.id)!;
+        await prepare(owner, fresh);
+        await prepare(tenant, fresh);
+        await assert.rejects(sign(owner, fresh), /Document check required/);
+        await flow.execute(manager, { caseId: fresh.caseId, versionId: fresh.id, type: "document", signerId: USERS.owner, documentType: "residence_permit" });
+        await sign(owner, fresh);
+        assert.equal((await flow.list(owner, leaseId)).versions.find((v) => v.id === first.id)!.effect, "effective");
+        await sign(tenant, fresh);
+        assert.equal((await flow.list(owner, leaseId)).versions.find((v) => v.id === first.id)!.effect, "superseded");
+        assert.deepEqual((await flow.pdf(owner, first.caseId, first.id, true)).bytes, complete.bytes);
+
+        const retained = await client.query<{ row: unknown }>(
+          "SELECT to_jsonb(v) AS row FROM esign_versions v WHERE case_id=$1 ORDER BY id", [first.caseId],
+        );
+        await client.query("SELECT purge_due_identity_documents(1)");
+        assert.deepEqual((await client.query(
+          "SELECT to_jsonb(v) AS row FROM esign_versions v WHERE case_id=$1 ORDER BY id", [first.caseId],
+        )).rows, retained.rows);
+        assert.equal((await client.query<{ ok: boolean }>(
+          "SELECT bool_and(retention_until='2042-01-31T00:00:00Z'::timestamptz) AS ok FROM esign_versions WHERE case_id=$1", [first.caseId],
+        )).rows[0].ok, true);
+        assert.equal((await client.query(
+          "SELECT id FROM esign_audit_events WHERE case_id=$1 AND payload::text LIKE $2", [first.caseId, "%" + firstCode + "%"],
+        )).rowCount, 0);
+        now = new Date("2026-10-26T13:00:00Z");
+        throw rollback;
+      });
+    } catch (error) { if (error !== rollback) throw error; }
   });
 });

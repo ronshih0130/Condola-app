@@ -1,0 +1,5 @@
+{
+  "name": "condola-esign-evidence",
+  "compatibility_date": "2026-10-26",
+  "compatibility_flags": ["nodejs_compat"]
+}

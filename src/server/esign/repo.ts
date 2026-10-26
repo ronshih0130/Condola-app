@@ -108,8 +108,10 @@ export class EsignRepo {
     return signer.role;
   }
 
-  private async admin(client: Connection, actor: Actor) {
-    requireValue(await this.role(client, actor) === "company_admin", "Company admin required");
+  private async company(client: Connection, actor: Actor) {
+    // TODO decision: "which Condola roles = 管理團隊"; M3 uses admin/manager.
+    const role = await this.role(client, actor);
+    requireValue(role === "company_admin" || role === "company_staff", "Company management required");
   }
 
   private async load(client: Connection, caseId: string) {
@@ -232,7 +234,7 @@ export class EsignRepo {
     order?: "parallel" | "sequential";
   }): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
-      await this.admin(client, actor);
+      await this.company(client, actor);
       const state = createDomainCase({
         versionId: input.versionId,
         body: input.body,
@@ -256,7 +258,7 @@ export class EsignRepo {
   async addSigner(actor: Actor, caseId: string, versionId: string, input: SignerInput) {
     return this.run(actor.userId, async (client) => {
       await this.lock(client, actor, caseId);
-      await this.admin(client, actor);
+      await this.company(client, actor);
       const loaded = await this.load(client, caseId);
       const v = loaded.state.versions.find((x) => x.id === versionId);
       requireValue(v?.status === "draft", "Only drafts accept signers");
@@ -288,7 +290,10 @@ export class EsignRepo {
           .includes(event.type),
         "Use the dedicated adapter",
       );
-      const after = transition(state, { ...event, actorId: actor.userId, role } as Event);
+      // The original domain calls send authority company_admin. Both M3 company
+      // roles may create/send; void still receives the actual role.
+      const eventRole = event.type === "send" && role === "company_staff" ? "company_admin" : role;
+      const after = transition(state, { ...event, actorId: actor.userId, role: eventRole } as Event);
       await this.save(client, caseId, state, after);
       return after;
     });
@@ -384,7 +389,7 @@ export class EsignRepo {
   }): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
       await this.lock(client, actor, caseId);
-      await this.admin(client, actor);
+      await this.company(client, actor);
       const { state } = await this.load(client, caseId);
       const after = transition(state, {
         type: "create_version", versionId: input.previousVersionId,
