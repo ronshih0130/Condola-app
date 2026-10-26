@@ -106,7 +106,7 @@ function guarded(body: ts.Node, route: boolean, label: string) {
   }
   else {
     const safe = new Set(["readSession", "getSession", "demoModeEnabled", "can",
-      "NextResponse.json", "redirect", "UUID.test"]);
+      "NextResponse.json", "redirect", "UUID.test", "teamInviteAllowlistConfigured"]);
     for (const call of priorCalls) {
       assert.ok(safe.has(call.expression.getText()), label + ": call before guard: " + call.expression.getText());
     }
