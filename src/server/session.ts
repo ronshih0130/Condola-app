@@ -1,4 +1,4 @@
-import { consentCoversCurrent, type StoredConsent } from "./consent";
+import { consentCoversCurrent, withMissingConsentFallback, type StoredConsent } from "./consent";
 import { createHash } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -61,7 +61,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
   }
   const portalCookie = jar.get(PORTAL_ROLE_COOKIE)?.value ?? null;
   let seedSample = false;
-  const found = await client.query<IdentityRow>(
+  const found = await withMissingConsentFallback(() => client.query<IdentityRow>(
         `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
                 coalesce(p.email::text, u.email) AS email, latest.consent
            FROM auth_sessions s
@@ -77,7 +77,15 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
            ) latest ON true
           WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
         [sha256(token)],
-      );
+      ), () => client.query<IdentityRow>(
+        `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
+                coalesce(p.email::text, u.email) AS email, NULL::jsonb AS consent
+           FROM auth_sessions s
+           JOIN auth.users u ON u.id = s.user_id
+           LEFT JOIN profiles p ON p.id = u.id
+          WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
+        [sha256(token)],
+      ));
   const identity = found.rows[0];
   if (!identity) return { session: null, seedSample: false };
   if (options?.touch !== false) {

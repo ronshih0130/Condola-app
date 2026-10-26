@@ -133,15 +133,45 @@ export async function writeConsentSql(userId: string, record: StoredConsent, cli
   await query(CONSENT_WRITE_SQL, params);
 }
 
+let loggedMissingConsents = false;
+
+/** Only a missing public.consents relation permits a fail-closed fallback. */
+export async function withMissingConsentFallback<T>(
+  read: () => Promise<T>,
+  fallback: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    const dbError = error as { code?: string; message?: string } | null;
+    if (dbError?.code !== "42P01" ||
+        dbError.message !== 'relation "public.consents" does not exist') throw error;
+    if (!loggedMissingConsents) {
+      loggedMissingConsents = true;
+      console.error("public.consents unavailable; consent required");
+    }
+    return fallback();
+  }
+}
+
 export async function loadConsentRow(userId: string, service: typeof svc = svc): Promise<StoredConsent | null> {
   return service(userId, async (client) => {
-    const row = await client.query<StoredConsent>(
-      `SELECT accepted_at::text, terms_version, privacy_version, source
-         FROM public.consents WHERE user_id = $1
-        ORDER BY recorded_at DESC, id DESC LIMIT 1`,
-      [userId],
-    );
-    return row.rows[0] ?? null;
+    // Recover the service transaction before returning missing evidence.
+    await client.query("SAVEPOINT consent_read");
+    return withMissingConsentFallback(async () => {
+      const row = await client.query<StoredConsent>(
+        `SELECT accepted_at::text, terms_version, privacy_version, source
+           FROM public.consents WHERE user_id = $1
+          ORDER BY recorded_at DESC, id DESC LIMIT 1`,
+        [userId],
+      );
+      await client.query("RELEASE SAVEPOINT consent_read");
+      return row.rows[0] ?? null;
+    }, async () => {
+      await client.query("ROLLBACK TO SAVEPOINT consent_read");
+      await client.query("RELEASE SAVEPOINT consent_read");
+      return null;
+    });
   });
 }
 

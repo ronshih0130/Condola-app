@@ -81,7 +81,12 @@ export function consentRequiredResponse() {
   );
 }
 
-/** Trusted session evidence only. No metadata fallback or additional query. */
+/**
+ * Trusted session evidence only. No metadata fallback or additional query.
+ * Class B notes: session touching (last_active_at and expiry extension) is
+ * allowed authentication bookkeeping before this gate. Business mutations
+ * and sandbox provisioning still require current consent.
+ */
 export async function requireCurrentConsent(
   session?: Session,
   mode: "api" | "action" | "page" = "action",

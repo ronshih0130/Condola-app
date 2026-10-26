@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { Client } from "pg";
-import { buildStoredConsent, loadConsentRow, persistConsent } from "./consent";
+import { buildStoredConsent, loadConsentRow, persistConsent, withMissingConsentFallback } from "./consent";
 import { consentNextPath, passConsentGate, requireCurrentConsent } from "./consent-gate";
 import { svc } from "./db";
 import type { Session } from "./types";
@@ -63,7 +64,7 @@ test("the repository selects the latest row, even when an older row matches", as
   let sql = "";
   const service = (async (_id: unknown, run: (client: Client) => Promise<unknown>) =>
     run({ query: async (query: string) => {
-      sql = query;
+      if (query.includes("SELECT accepted_at")) sql = query;
       return { rows: [stale, current] };
     } } as unknown as Client)) as typeof svc;
   const latest = await loadConsentRow("user", service);
@@ -87,4 +88,92 @@ test("persistConsent cannot report success or mirror metadata after a failed INS
     write: (id, record) => persistConsent(id, record, service),
   }), (error) => error === failure);
   assert.equal(inserts, 2);
+});
+
+test("missing consents fails closed, recovers the read transaction and logs once without identifiers", async () => {
+  const missing = Object.assign(new Error('relation "public.consents" does not exist'), { code: "42P01" });
+  const statements: string[] = [];
+  const service = (async (_id: unknown, run: (client: Client) => Promise<unknown>) =>
+    run({ query: async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes("SELECT accepted_at")) throw missing;
+      return { rows: [] };
+    } } as unknown as Client)) as typeof svc;
+  const logged: unknown[][] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { logged.push(args); };
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      assert.equal(await loadConsentRow("private-user", service), null);
+      assert.equal((await requireCurrentConsent(session("staff", null), "api"))?.status, 403);
+    }
+    const identity = { rows: [{ user_id: "private-user", consent: null }] };
+    assert.equal(await withMissingConsentFallback(
+      async () => { throw missing; },
+      async () => identity,
+    ), identity);
+  } finally {
+    console.error = original;
+  }
+  assert.deepEqual(logged, [["public.consents unavailable; consent required"]]);
+  assert.equal(statements.filter((sql) => sql === "ROLLBACK TO SAVEPOINT consent_read").length, 2);
+  assert.equal(statements.filter((sql) => sql === "RELEASE SAVEPOINT consent_read").length, 2);
+
+  for (const failure of [
+    Object.assign(new Error('relation "auth.users" does not exist'), { code: "42P01" }),
+    Object.assign(new Error('relation "public.consents" does not exist'), { code: "42501" }),
+    new Error("connection terminated"),
+  ]) {
+    await assert.rejects(withMissingConsentFallback(
+      async () => { throw failure; },
+      async () => { throw new Error("unexpected fallback"); },
+    ), (error) => error === failure);
+    const failingService = (async (_id: unknown, run: (client: Client) => Promise<unknown>) =>
+      run({ query: async (sql: string) => {
+        if (sql.includes("SELECT accepted_at")) throw failure;
+        return { rows: [] };
+      } } as unknown as Client)) as typeof svc;
+    await assert.rejects(loadConsentRow("private-user", failingService), (error) => error === failure);
+  }
+});
+
+test("missing-table acceptance propagates the existing controlled write error", async () => {
+  const { FlowError } = await import("./errors");
+  const unavailable = new FlowError("errors.generic");
+  let inserts = 0;
+  const service = (async (_id: unknown, run: (client: Client) => Promise<unknown>) => {
+    try {
+      return await run({ query: async (sql: string) => {
+        assert.match(sql, /INSERT INTO public.consents/);
+        inserts++;
+        throw Object.assign(new Error('relation "public.consents" does not exist'), { code: "42P01" });
+      } } as unknown as Client);
+    } catch {
+      // svc maps a failed INSERT to the existing controlled database error.
+      throw unavailable;
+    }
+  }) as typeof svc;
+  await assert.rejects(passConsentGate("user", "portal", true, {
+    read: async () => null,
+    write: (id, record) => persistConsent(id, record, service),
+  }), (error) => error === unavailable);
+  assert.equal(inserts, 1);
+});
+
+test("session fallback retries identity without the lateral consent join", () => {
+  const source = readFileSync(new URL("./session.ts", import.meta.url), "utf8");
+  const lookup = source.slice(source.indexOf("const found ="), source.indexOf("const identity ="));
+  assert.match(lookup, /withMissingConsentFallback/);
+  assert.match(lookup, /LEFT JOIN LATERAL/);
+  const fallback = lookup.slice(lookup.indexOf("NULL::jsonb AS consent"));
+  assert.match(fallback, /FROM auth_sessions s/);
+  assert.match(fallback, /JOIN auth\.users u ON u\.id = s\.user_id/);
+  assert.match(fallback, /s\.revoked_at IS NULL AND s\.expires_at > now\(\)/);
+  assert.doesNotMatch(fallback, /public\.consents|LATERAL|raw_app_meta_data|raw_user_meta_data/);
+});
+
+test("Class B notes allow session touching as authentication bookkeeping", () => {
+  const source = readFileSync(new URL("./consent-gate.ts", import.meta.url), "utf8");
+  assert.match(source, /Class B notes: session touching \(last_active_at and expiry extension\) is\s+\* allowed authentication bookkeeping before this gate/);
+  assert.match(source, /Business mutations\s+\* and sandbox provisioning still require current consent/);
 });

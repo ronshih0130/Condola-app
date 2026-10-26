@@ -1,4 +1,11 @@
 -- Version 20261030150100: server-recorded, append-only legal acceptances.
+-- Keep the small backfill here to prevent lockout if reconciliation is forgotten.
+-- The FK locks auth.users until commit: fail fast instead of queueing signups.
+-- Use session settings for both plain psql and transactional migration runners;
+-- reset them below so these timeouts do not affect subsequent migration files.
+SET lock_timeout = '5s';
+SET statement_timeout = '30s';
+
 CREATE TABLE IF NOT EXISTS public.consents (
   id uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -60,7 +67,7 @@ BEGIN
        OR pg_catalog.jsonb_typeof(consent -> 'terms_version') IS DISTINCT FROM 'string'
        OR pg_catalog.jsonb_typeof(consent -> 'privacy_version') IS DISTINCT FROM 'string'
        OR pg_catalog.jsonb_typeof(consent -> 'source') IS DISTINCT FROM 'string'
-       OR pg_catalog.btrim(consent ->> 'accepted_at') = ''
+       OR (consent ->> 'accepted_at') !~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:?\d{2})$'
        OR pg_catalog.btrim(consent ->> 'terms_version') = ''
        OR pg_catalog.btrim(consent ->> 'privacy_version') = ''
        OR (consent ->> 'source') NOT IN ('signup', 'reconsent', 'invite', 'portal')
@@ -75,9 +82,17 @@ BEGIN
     IF NOT pg_catalog.isfinite(accepted) THEN
       CONTINUE;
     END IF;
-    INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
-    VALUES (candidate.id, accepted, consent ->> 'terms_version', consent ->> 'privacy_version', consent ->> 'source')
-    ON CONFLICT (user_id, accepted_at, terms_version, privacy_version, source) DO NOTHING;
+    BEGIN
+      INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
+      VALUES (candidate.id, accepted, consent ->> 'terms_version', consent ->> 'privacy_version', consent ->> 'source')
+      ON CONFLICT (user_id, accepted_at, terms_version, privacy_version, source) DO NOTHING;
+    EXCEPTION WHEN foreign_key_violation THEN
+      -- A candidate may have been deleted since the loop's snapshot.
+      CONTINUE;
+    END;
   END LOOP;
 END
 $backfill$;
+
+RESET lock_timeout;
+RESET statement_timeout;

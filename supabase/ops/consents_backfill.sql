@@ -14,7 +14,7 @@ BEGIN
        OR pg_catalog.jsonb_typeof(consent -> 'terms_version') IS DISTINCT FROM 'string'
        OR pg_catalog.jsonb_typeof(consent -> 'privacy_version') IS DISTINCT FROM 'string'
        OR pg_catalog.jsonb_typeof(consent -> 'source') IS DISTINCT FROM 'string'
-       OR pg_catalog.btrim(consent ->> 'accepted_at') = ''
+       OR (consent ->> 'accepted_at') !~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:?\d{2})$'
        OR pg_catalog.btrim(consent ->> 'terms_version') = ''
        OR pg_catalog.btrim(consent ->> 'privacy_version') = ''
        OR (consent ->> 'source') NOT IN ('signup', 'reconsent', 'invite', 'portal')
@@ -29,9 +29,14 @@ BEGIN
     IF NOT pg_catalog.isfinite(accepted) THEN
       CONTINUE;
     END IF;
-    INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
-    VALUES (candidate.id, accepted, consent ->> 'terms_version', consent ->> 'privacy_version', consent ->> 'source')
-    ON CONFLICT (user_id, accepted_at, terms_version, privacy_version, source) DO NOTHING;
+    BEGIN
+      INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
+      VALUES (candidate.id, accepted, consent ->> 'terms_version', consent ->> 'privacy_version', consent ->> 'source')
+      ON CONFLICT (user_id, accepted_at, terms_version, privacy_version, source) DO NOTHING;
+    EXCEPTION WHEN foreign_key_violation THEN
+      -- A candidate may have been deleted since the loop's snapshot.
+      CONTINUE;
+    END;
   END LOOP;
 END
 $backfill$;

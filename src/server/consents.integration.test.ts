@@ -33,10 +33,15 @@ test("consents enforce RLS, append-only evidence, cascading user deletion and id
         null, [], "current", { ...current, accepted_at: "bad-date" },
         { ...current, accepted_at: "" }, { ...current, terms_version: " " },
         { ...current, privacy_version: 12 }, { ...current, source: "client" },
+        ...["now", "tomorrow", "infinity", "2026-13-01T00:00:00Z",
+          "2026-10-25T00:00:00", "2026-10-25"]
+          .map((accepted_at) => ({ ...current, accepted_at })),
       ]) await user({ consent: bad });
       // Run both actual files twice, including migration DDL and privilege resets.
       for (let attempt = 0; attempt < 2; attempt++) {
         await client.query(migration);
+        assert.equal((await client.query("SHOW lock_timeout")).rows[0].lock_timeout, "5s");
+        assert.equal((await client.query("SHOW statement_timeout")).rows[0].statement_timeout, "30s");
         await client.query(backfill);
         const rows = await client.query<{ user_id: string; terms_version: string }>(
           "SELECT user_id::text, terms_version FROM public.consents WHERE user_id = ANY($1::uuid[]) ORDER BY user_id", [ids]);
@@ -96,6 +101,48 @@ test("consents enforce RLS, append-only evidence, cascading user deletion and id
       assert.equal(consentCoversCurrent(latest.rows[0]), false);
       await client.query("DELETE FROM auth.users WHERE id = $1", [own]);
       assert.equal((await client.query("SELECT 1 FROM public.consents WHERE user_id = $1", [own])).rowCount, 0);
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  });
+});
+
+test("both backfills skip a candidate whose parent disappeared and continue", async () => {
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const missing = randomUUID();
+      const surviving = randomUUID();
+      await client.query(
+        "INSERT INTO auth.users (id, email, raw_app_meta_data) VALUES ($1, $2, $3)",
+        [surviving, surviving + "@consents.example.com", JSON.stringify({ consent: current })],
+      );
+      // Inject the stale snapshot row deterministically. Its INSERT must hit
+      // the real FK, and the following valid candidate must still be inserted.
+      for (const file of [migration, backfill]) {
+        await client.query("SAVEPOINT backfill_file");
+        try {
+          const sql = file.replace(
+            "SELECT id, raw_app_meta_data -> 'consent' AS value FROM auth.users",
+            `SELECT id, value FROM (
+               SELECT '${missing}'::uuid AS id, '${JSON.stringify(current)}'::jsonb AS value, 0 AS position
+               UNION ALL
+               SELECT id, raw_app_meta_data -> 'consent', 1 FROM auth.users
+             ) candidates ORDER BY position`,
+          );
+          assert.notEqual(sql, file);
+          for (let attempt = 0; attempt < 2; attempt++) {
+            await client.query(sql);
+            assert.equal((await client.query(
+              "SELECT 1 FROM public.consents WHERE user_id = $1", [missing])).rowCount, 0);
+            assert.equal((await client.query(
+              "SELECT 1 FROM public.consents WHERE user_id = $1", [surviving])).rowCount, 1);
+          }
+        } finally {
+          await client.query("ROLLBACK TO SAVEPOINT backfill_file");
+          await client.query("RELEASE SAVEPOINT backfill_file");
+        }
+      }
     } finally {
       await client.query("ROLLBACK");
     }
