@@ -114,3 +114,89 @@ test("the allowlist is authenticated-only and anon is not granted", () => {
   assert.doesNotMatch(allow, /purge_due_identity_documents/);
   assert.doesNotMatch(allow, /fn_org_country_setting/);
 });
+
+test("PUBLIC loses EXECUTE on app helper functions; authenticated and service_role keep it", () => {
+  const names = readdirSync("supabase/migrations").filter((name) => name.endsWith(".sql")).sort();
+  const file = "20261030150500_revoke_public_function_execute.sql";
+  assert.ok(names.includes(file));
+  assert.ok(names.indexOf(file) > names.indexOf("20261030150400_ticket_job_type_reserve.sql"));
+  assert.ok(file > "20261030150400_ticket_job_type_reserve.sql");
+  assert.ok(file < "20261030160000");
+  const sql = read(`supabase/migrations/${file}`);
+  assert.match(sql, /Version 20261030150500/);
+
+  const signatures = [
+    "app.can_see_ticket(uuid)",
+    "app.has_role(uuid, org_role[])",
+    "app.in_thread(uuid)",
+    "app.income_expense_report(uuid, uuid, uuid, date, date)",
+    "app.is_lease_tenant(uuid)",
+    "app.is_my_contact(uuid)",
+    "app.is_property_owner(uuid)",
+    "app.lease_context_prefix(uuid)",
+    "app.my_contact_ids()",
+    "app.my_tenant_leases()",
+    "app.tenant_of_property(uuid)",
+  ];
+  for (const signature of signatures) {
+    const escaped = signature.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s*");
+    assert.match(sql, new RegExp(`REVOKE\\s+EXECUTE\\s+ON\\s+FUNCTION\\s+${escaped}\\s+FROM\\s+PUBLIC\\s*;`, "i"), signature);
+    assert.match(sql, new RegExp(`GRANT\\s+EXECUTE\\s+ON\\s+FUNCTION\\s+${escaped}\\s+TO\\s+authenticated\\s*,\\s*service_role\\s*;`, "i"), signature);
+  }
+
+  const revokes = sql.split("\n").filter((line) => /^\s*REVOKE\b/i.test(line));
+  assert.equal(revokes.length, signatures.length);
+  for (const line of revokes) {
+    assert.doesNotMatch(line, /FROM\s+(anon|authenticated|service_role)/i);
+    assert.match(line, /FROM\s+PUBLIC\s*;$/i);
+  }
+  assert.doesNotMatch(sql, /\bCREATE\s+(OR\s+REPLACE\s+)?FUNCTION\b/i);
+  assert.doesNotMatch(sql, /\bALTER\s+FUNCTION\b/i);
+  assert.doesNotMatch(sql, /\b(INSERT|UPDATE|DELETE|DROP)\b/i);
+  assert.doesNotMatch(sql, /skip missing|IF EXISTS/i);
+  assert.doesNotMatch(sql, /\b(skip|missing)\b/i);
+  assert.match(sql, /SET LOCAL lock_timeout = '5s';/);
+  assert.match(sql, /DO\s+\$assert_function_privileges\$/);
+
+  const helperArray = sql.match(/helper_signatures\s+text\[\]\s*:=\s*ARRAY\[([\s\S]*?)\];/);
+  assert.ok(helperArray);
+  assert.deepEqual(
+    Array.from(helperArray[1].matchAll(/'([^']+)'/g), (match) => match[1]),
+    signatures,
+  );
+
+  const publicCheck = sql.match(
+    /SELECT string_agg\([\s\S]*?RAISE EXCEPTION 'PUBLIC still has EXECUTE on: %', offending;\s*END IF;/,
+  );
+  assert.ok(publicCheck);
+  assert.match(publicCheck[0], /FROM unnest\(helper_signatures\) AS helpers\(signature\)/);
+  assert.match(publicCheck[0], /JOIN pg_proc AS p ON p\.oid = helpers\.signature::regprocedure/);
+  assert.match(publicCheck[0], /aclexplode\(coalesce\(p\.proacl, acldefault\('f', p\.proowner\)\)\)/);
+  assert.match(publicCheck[0], /acl\.grantee = 0/);
+  assert.match(publicCheck[0], /acl\.privilege_type = 'EXECUTE'/);
+  assert.match(publicCheck[0], /IF offending IS NOT NULL THEN/);
+
+  assert.match(sql, /FROM unnest\(helper_signatures\) AS helpers\(signature\)\s+CROSS JOIN/);
+  assert.match(sql, /has_function_privilege\(/);
+  assert.match(sql, /roles\.role_name, helpers\.signature::regprocedure, 'EXECUTE'/);
+  assert.match(sql, /RAISE EXCEPTION 'Required role lacks EXECUTE on: %', offending/);
+  assert.equal((sql.match(/\bRAISE EXCEPTION\b/g) ?? []).length, 2);
+
+  const otherCheck = sql.match(
+    /SELECT string_agg\(\s*format\('%I\.%I\(%s\)'[\s\S]*?RAISE NOTICE 'other functions with PUBLIC EXECUTE \(not changed here\): %', offending;\s*END IF;/,
+  );
+  assert.ok(otherCheck);
+  assert.match(otherCheck[0], /n\.nspname IN \('app', 'public'\)/);
+  assert.match(otherCheck[0], /AND NOT \(p\.oid = ANY \(helper_signatures::regprocedure\[\]\)\)/);
+  assert.match(otherCheck[0], /AND NOT EXISTS \(/);
+  assert.match(otherCheck[0], /d\.classid = 'pg_proc'::regclass/);
+  assert.match(otherCheck[0], /d\.objid = p\.oid/);
+  assert.match(otherCheck[0], /d\.objsubid = 0/);
+  assert.match(otherCheck[0], /d\.deptype = 'e'/);
+  assert.match(otherCheck[0], /aclexplode\(coalesce\(p\.proacl, acldefault\('f', p\.proowner\)\)\)/);
+  assert.match(otherCheck[0], /acl\.grantee = 0/);
+  assert.match(otherCheck[0], /acl\.privilege_type = 'EXECUTE'/);
+  assert.match(otherCheck[0], /IF offending IS NOT NULL THEN/);
+  assert.doesNotMatch(otherCheck[0], /RAISE EXCEPTION/);
+  assert.match(sql, /global PUBLIC scan is the ops pre\/post check/);
+});
