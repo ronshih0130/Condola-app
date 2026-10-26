@@ -143,6 +143,7 @@ async function authorize(
   actor: VendorDocumentActor,
   ticketId: string,
   profileId: string,
+  purpose: "issuance" | "issued_document" = "issuance",
 ): Promise<Access> {
   const grant = typeof actor === "string" ? await grantOn(client, actor) : null;
   let orgId: string;
@@ -172,11 +173,18 @@ async function authorize(
       FOR UPDATE`,
     [profileId, orgId],
   );
-  if (!profile || profile.contact_id !== ticket.assigned_vendor_contact_id) {
+  if (
+    !profile ||
+    (purpose === "issuance" &&
+      profile.contact_id !== ticket.assigned_vendor_contact_id)
+  ) {
     notFound();
   }
 
   if (grant) {
+    // Document grants have their own expiry and explicit revocation. Losing
+    // collaboration access does not remove access to the issuer's documents.
+    // Fresh issuance still requires both the current assignment and a live job.
     const live = await maybe<{ id: string }>(
       client,
       `SELECT g.id::text
@@ -185,9 +193,9 @@ async function authorize(
            ON j.id = g.job_id AND j.ticket_id = g.ticket_id AND j.org_id = g.org_id
         WHERE g.id = $1 AND g.scope = 'vendor_document'
           AND g.revoked_at IS NULL AND g.expires_at > clock_timestamp()
-          AND j.active AND j.revoked_at IS NULL
+          AND ($2::boolean OR (j.active AND j.revoked_at IS NULL))
         FOR UPDATE OF g`,
-      [grant.id],
+      [grant.id, purpose === "issued_document"],
     );
     if (!live) notFound();
   }
@@ -387,6 +395,23 @@ async function persistedOn(client: Client, id: string) {
   return row;
 }
 
+/** Historical access is bound to the persisted document's org, ticket and issuer. */
+async function authorizeDocument(
+  client: Client,
+  actor: VendorDocumentActor,
+  document: Persisted,
+) {
+  const access = await authorize(
+    client,
+    actor,
+    document.ticket_id,
+    document.vendor_profile_id,
+    "issued_document",
+  );
+  if (access.orgId !== document.org_id) notFound();
+  return access;
+}
+
 function resultOf(row: Persisted): StoredVendorDocument {
   const document = {
     ...row.snapshot.document,
@@ -427,10 +452,13 @@ export async function createVendorDocumentInvite(
       [ticketId, session.orgId],
     );
     if (!job) notFound();
+    // Replacing this issuer's invitation must not revoke another issuer's
+    // independent capability to read or correct its historical documents.
     await client.query(
       `UPDATE vendor_document_grants SET revoked_at = clock_timestamp()
-        WHERE ticket_id = $1 AND org_id = $2 AND revoked_at IS NULL`,
-      [ticketId, session.orgId],
+        WHERE ticket_id = $1 AND org_id = $2 AND vendor_profile_id = $3
+          AND revoked_at IS NULL`,
+      [ticketId, session.orgId, vendorProfileId],
     );
     const token = newVendorToken();
     const grant = await one<{ id: string }>(
@@ -502,12 +530,7 @@ export async function requestVendorDocumentCorrection(
     await authorizeVendorStaff(client, session);
     const initial = await persistedOn(client, id);
     if (initial.org_id !== session.orgId) notFound();
-    const access = await authorize(
-      client,
-      session,
-      initial.ticket_id,
-      initial.vendor_profile_id,
-    );
+    const access = await authorizeDocument(client, session, initial);
     const current = resultOf(await persistedOn(client, id));
     if (current.document.status !== "issued") throw new Error("document_not_issued");
     await writeAudit(
@@ -549,7 +572,14 @@ async function issueOn(
 ): Promise<StoredVendorDocument> {
   requireVendorToken(ctx.actor);
   validKey(key);
-  const access = await authorize(client, ctx.actor, ctx.ticketId, ctx.vendorProfileId);
+  // Reissue corrects an existing issuer's document. Only fresh issuance
+  // derives authority from the ticket's current assignment.
+  const access = sourceId
+    ? await authorizeDocument(client, ctx.actor, await persistedOn(client, sourceId))
+    : await authorize(client, ctx.actor, ctx.ticketId, ctx.vendorProfileId);
+  if (access.ticket.id !== ctx.ticketId || access.profile.id !== ctx.vendorProfileId) {
+    notFound();
+  }
 
   await client.query(
     `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
@@ -718,8 +748,7 @@ export async function voidVendorDocument(
   requireVendorToken(actor);
   return svc(null, async (client) => {
     const initial = await persistedOn(client, id);
-    const access = await authorize(client, actor, initial.ticket_id, initial.vendor_profile_id);
-    if (access.orgId !== initial.org_id) notFound();
+    const access = await authorizeDocument(client, actor, initial);
     const current = resultOf(await persistedOn(client, id));
     const clock = await one<{ now: string }>(
       client,
@@ -760,8 +789,7 @@ export async function reissueVendorDocument(
 export async function readVendorDocumentPdf(actor: VendorDocumentActor, id: string) {
   return svc(typeof actor === "string" ? null : actor.userId, async (client) => {
     const initial = await persistedOn(client, id);
-    const access = await authorize(client, actor, initial.ticket_id, initial.vendor_profile_id);
-    if (access.orgId !== initial.org_id) notFound();
+    const access = await authorizeDocument(client, actor, initial);
     const row = await one<{ bytes: Buffer }>(
       client,
       `SELECT bytes FROM vendor_document_pdf_bytes

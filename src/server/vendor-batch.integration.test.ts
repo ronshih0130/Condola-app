@@ -101,6 +101,8 @@ test(
       max: 4,
     });
     const contactId = randomUUID();
+    const nextContactId = randomUUID();
+    const vendorContactIds = [contactId, nextContactId];
     const ownerId = randomUUID();
     const ticketIds: string[] = [];
     let profileId = "";
@@ -142,20 +144,27 @@ test(
             [ticketIds],
           );
           await cleanup.query(
-            `DELETE FROM vendor_onboarding_invites WHERE contact_id = $1`,
-            [contactId],
+            `DELETE FROM vendor_onboarding_invites
+              WHERE contact_id = ANY($1::uuid[])`,
+            [vendorContactIds],
           );
           await cleanup.query(
-            `DELETE FROM vendor_profile_versions WHERE vendor_profile_id = $1`,
-            [profileId || "00000000-0000-0000-0000-000000000000"],
+            `DELETE FROM vendor_profile_versions
+              WHERE vendor_profile_id IN (
+                SELECT id FROM vendor_profiles WHERE contact_id = ANY($1::uuid[])
+              )`,
+            [vendorContactIds],
           );
           await cleanup.query(
-            `DELETE FROM vendor_document_sequences WHERE vendor_profile_id = $1`,
-            [profileId || "00000000-0000-0000-0000-000000000000"],
+            `DELETE FROM vendor_document_sequences
+              WHERE vendor_profile_id IN (
+                SELECT id FROM vendor_profiles WHERE contact_id = ANY($1::uuid[])
+              )`,
+            [vendorContactIds],
           );
           await cleanup.query(
-            `DELETE FROM vendor_profiles WHERE contact_id = $1`,
-            [contactId],
+            `DELETE FROM vendor_profiles WHERE contact_id = ANY($1::uuid[])`,
+            [vendorContactIds],
           );
           await cleanup.query(
             `DELETE FROM repair_vendor_jobs WHERE ticket_id = ANY($1::uuid[])`,
@@ -175,7 +184,7 @@ test(
           );
           await cleanup.query(
             `DELETE FROM contacts WHERE id = ANY($1::uuid[])`,
-            [[contactId, ownerId]],
+            [[...vendorContactIds, ownerId]],
           );
           await cleanup.query(
             `ALTER TABLE vendor_document_pdf_bytes
@@ -622,6 +631,94 @@ test(
       }
     }
 
+    // Exercise enhanced reassignment invalidation without changing the kill switch.
+    // The document capability must survive the original collaboration job's revoke.
+    await svc(null, async (client) => {
+      await client.query(
+        `INSERT INTO contacts (id,org_id,is_vendor,display_name,phone_e164)
+         VALUES ($1,$2,true,'Next vendor','+886912000112')`,
+        [nextContactId, ORG_ID],
+      );
+      await client.query(
+        `SELECT set_config('app.vendor_link_reassignment','on',true)`,
+      );
+      await client.query(
+        `UPDATE maintenance_tickets SET assigned_vendor_contact_id = $3
+          WHERE id = $1 AND org_id = $2`,
+        [ticketIds[0], ORG_ID, nextContactId],
+      );
+      const oldJobs = await client.query<{ active: boolean; revoked: boolean }>(
+        `SELECT active,revoked_at IS NOT NULL AS revoked
+           FROM repair_vendor_jobs
+          WHERE ticket_id = $1 AND org_id = $2 AND vendor_contact_id = $3`,
+        [ticketIds[0], ORG_ID, contactId],
+      );
+      assert.equal(oldJobs.rowCount, 1);
+      assert.deepEqual(oldJobs.rows, [{ active: false, revoked: true }]);
+      await client.query(
+        `INSERT INTO repair_vendor_jobs
+           (org_id,ticket_id,vendor_name,vendor_phone,contact_window,
+            token_hash,expires_at,created_by,vendor_contact_id)
+         VALUES ($1,$2,'Next vendor','+886912000112','Test',
+                 $3,clock_timestamp() + interval '1 day',$4,$5)`,
+        [
+          ORG_ID, ticketIds[0],
+          randomUUID().replaceAll("-", "").padEnd(64, "0"),
+          USERS.admin, nextContactId,
+        ],
+      );
+    });
+    const nextOnboarding = await createVendorOnboardingInvite(admin, nextContactId);
+    const nextProfile = await submitVendorOnboarding(tokenOf(nextOnboarding.url), {
+      ...onboardingInput,
+      display_name: "接手師傅",
+      phone: "0912-000-112",
+    });
+    const nextOperation = await createVendorDocumentInvite(
+      admin, ticketIds[0], nextProfile.profileId,
+      { kind: "owner", contactId: ownerId },
+    );
+    const nextContext = {
+      ...vendorContext,
+      actor: tokenOf(nextOperation.url),
+      vendorProfileId: nextProfile.profileId,
+    };
+
+    const historicalStaffCopy = await readVendorDocumentPdf(admin, first.document.id);
+    assert.equal(historicalStaffCopy.document.status, "issued");
+    assert.equal(historicalStaffCopy.sha256, first.sha256);
+    assert.deepEqual(historicalStaffCopy.bytes, stored.bytes);
+    const historicalVendorCopy = await readVendorDocumentPdf(
+      tokenOf(operation.url), first.document.id,
+    );
+    assert.deepEqual(historicalVendorCopy.bytes, stored.bytes);
+    assert.equal((await requestVendorDocumentCorrection(
+      admin, first.document.id, "重新指派後更正",
+    )).status, "requested");
+    await assert.rejects(readVendorDocumentPdf(outsider, first.document.id));
+    await assert.rejects(
+      requestVendorDocumentCorrection(outsider, first.document.id, "Test"),
+    );
+    await assert.rejects(
+      readVendorDocumentPdf(tokenOf(operations[1].url), first.document.id),
+    );
+    await assert.rejects(
+      readVendorDocumentPdf(tokenOf(nextOperation.url), first.document.id),
+    );
+    await assert.rejects(
+      voidVendorDocument(tokenOf(nextOperation.url), first.document.id, "Test"),
+    );
+    await assert.rejects(voidVendorDocument(admin, first.document.id, "Test"));
+    await assert.rejects(previewVendorDocument(vendorContext));
+    await assert.rejects(issueVendorDocument(vendorContext, {
+      idempotencyKey: `${prefix}:old-vendor-new-issue`,
+    }));
+    await assert.rejects(
+      createVendorDocumentInvite(
+        admin, ticketIds[0], profileId, { kind: "owner", contactId: ownerId },
+      ),
+    );
+
     await assert.rejects(
       voidVendorDocument(tokenOf(operation.url), first.document.id, " "),
     );
@@ -631,6 +728,28 @@ test(
     assert.equal(voided.document.status, "voided");
     await assert.rejects(
       voidVendorDocument(tokenOf(operation.url), first.document.id, "Again"),
+    );
+    // A valid voided source still belongs exclusively to its original issuer.
+    await assert.rejects(
+      reissueVendorDocument(nextContext, first.document.id, {
+        idempotencyKey: `${prefix}:next-vendor-replacement`,
+      }),
+    );
+    await assert.rejects(
+      reissueVendorDocument({
+        ...nextContext,
+        vendorProfileId: profileId,
+      }, first.document.id, {
+        idempotencyKey: `${prefix}:spoofed-issuer`,
+      }),
+    );
+    await assert.rejects(
+      reissueVendorDocument({
+        ...vendorContext,
+        ticketId: ticketIds[1],
+      }, first.document.id, {
+        idempotencyKey: `${prefix}:wrong-reissue-ticket`,
+      }),
     );
     await assert.rejects(
       reissueVendorDocument(context(ticketIds[0]), first.document.id, {
@@ -663,6 +782,57 @@ test(
     assert.equal(original.sha256, first.sha256);
     assert.deepEqual(original.bytes, stored.bytes);
 
+    // The current assignee can issue independently while the old issuer's
+    // replacement remains issued; neither vendor gains the other's authority.
+    const nextDocument = await issueVendorDocument(nextContext, {
+      idempotencyKey: `${prefix}:next-vendor-first`,
+    });
+    assert.equal(nextDocument.document.vendor_profile_id, nextProfile.profileId);
+    assert.equal(nextDocument.document.ticket_id, ticketIds[0]);
+    assert.equal(nextDocument.document.seq, 1);
+    assert.equal(nextDocument.document.reissued_from, null);
+    assert.notEqual(nextDocument.document.doc_no, replacement.document.doc_no);
+    assert.equal(
+      (await readVendorDocumentPdf(admin, replacement.document.id)).document.status,
+      "issued",
+    );
+    await assert.rejects(
+      readVendorDocumentPdf(outsider, nextDocument.document.id),
+    );
+    await assert.rejects(
+      readVendorDocumentPdf(tokenOf(operation.url), nextDocument.document.id),
+    );
+    await assert.rejects(
+      voidVendorDocument(tokenOf(operation.url), nextDocument.document.id, "Test"),
+    );
+    await assert.rejects(
+      voidVendorDocument(tokenOf(nextOperation.url), replacement.document.id, "Test"),
+    );
+
+    // Expiry and explicit revocation remain effective for historical authority.
+    await svc(null, (client) => client.query(
+      `UPDATE vendor_document_grants
+          SET expires_at = clock_timestamp() - interval '1 second'
+        WHERE id = $1`,
+      [operation.grantId],
+    ));
+    await assert.rejects(
+      readVendorDocumentPdf(tokenOf(operation.url), replacement.document.id),
+    );
+    await assert.rejects(
+      voidVendorDocument(tokenOf(operation.url), replacement.document.id, "Test"),
+    );
+    await assert.rejects(
+      reissueVendorDocument(vendorContext, first.document.id, {
+        idempotencyKey: `${prefix}:replacement`,
+      }),
+    );
+    await svc(null, (client) => client.query(
+      `UPDATE vendor_document_grants
+          SET expires_at = clock_timestamp() + interval '14 days'
+        WHERE id = $1`,
+      [operation.grantId],
+    ));
     await revokeVendorDocumentInvite(admin, operation.grantId);
     await assert.rejects(
       readVendorDocumentPdf(tokenOf(operation.url), replacement.document.id),
@@ -674,6 +844,16 @@ test(
       reissueVendorDocument(vendorContext, first.document.id, {
         idempotencyKey: `${prefix}:replacement`,
       }),
+    );
+    assert.equal(
+      (await readVendorDocumentPdf(
+        tokenOf(nextOperation.url), nextDocument.document.id,
+      )).sha256,
+      nextDocument.sha256,
+    );
+    assert.deepEqual(
+      (await readVendorDocumentPdf(admin, first.document.id)).bytes,
+      stored.bytes,
     );
 
     await svc(null, async (client) => {
