@@ -348,7 +348,8 @@ async function assertCurrentSchema(databaseUrl: string) {
     assert.match(body("fn_id_document_allow_log_delete"), /array_append/);
     assert.match(body("id_document_delete_after"), /l\.status IN \('active', 'ended', 'terminated'\)/);
     assert.match(body("id_document_delete_after"), /voided/);
-    assert.match(body("id_document_keep_days"), /SELECT 90/);
+    // Historical upgrade replay restores SELECT 90; the current tail uses config.
+    assert.match(body("id_document_keep_days"), /SELECT (?:90|public\.platform_max_id_retention_days\(\))/);
     const keep = await client.query<{ days: number }>(`SELECT id_document_keep_days() AS days`);
     assert.equal(keep.rows[0]?.days, 90);
     const closed = await client.query<{ proname: string; anon: boolean; authn: boolean; pub: boolean; svc: boolean }>(

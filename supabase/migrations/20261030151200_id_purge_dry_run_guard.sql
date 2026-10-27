@@ -1,3 +1,61 @@
+-- Retention stays configurable. Only explicit JSON false reopens org writes.
+INSERT INTO public.platform_settings (key, value, description)
+VALUES ('id_documents.org_retention_locked', 'true'::jsonb,
+        'Require org retention to equal the platform cap; false reopens org writes.')
+ON CONFLICT (key) DO NOTHING;
+
+-- CREATE OR REPLACE preserves ACLs, including the existing execute revokes.
+-- Keep SECURITY INVOKER and the existing unset function search_path.
+CREATE OR REPLACE FUNCTION public.id_document_keep_days() RETURNS integer
+LANGUAGE sql STABLE AS $$
+  SELECT public.platform_max_id_retention_days()
+$$;
+
+-- Both consent clocks use the platform duration even when org writes reopen:
+-- the existing no-argument helper has no organization context.
+ALTER TABLE public.organizations ALTER COLUMN id_doc_retention_days
+  SET DEFAULT public.platform_max_id_retention_days();
+
+CREATE OR REPLACE FUNCTION public.fn_org_retention_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  v_cap integer := public.platform_max_id_retention_days();
+  v_locked boolean := (SELECT value FROM public.platform_settings
+    WHERE key = 'id_documents.org_retention_locked') IS DISTINCT FROM 'false'::jsonb;
+BEGIN
+  IF (v_locked AND NEW.id_doc_retention_days IS DISTINCT FROM v_cap)
+     OR (NOT v_locked AND NEW.id_doc_retention_days > v_cap) THEN
+    RAISE EXCEPTION 'id_doc_retention_days % violates platform retention %',
+      NEW.id_doc_retention_days, v_cap USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.fn_platform_retention_clamp() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.key = 'id_documents.max_retention_days_after_close' THEN
+    IF (SELECT value FROM public.platform_settings
+        WHERE key = 'id_documents.org_retention_locked') = 'false'::jsonb THEN
+      UPDATE public.organizations
+         SET id_doc_retention_days = (NEW.value #>> '{}')::int
+       WHERE id_doc_retention_days > (NEW.value #>> '{}')::int;
+    END IF;
+    -- Due dates are stored: config changes must reach existing live documents.
+    UPDATE public.identity_documents
+       SET delete_after = public.id_document_delete_after(lease_id, org_id, created_at)
+     WHERE deleted_at IS NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+
+-- Ignore legacy org values at read time; never normalize organizations here.
+UPDATE public.identity_documents
+   SET delete_after = public.id_document_delete_after(lease_id, org_id, created_at)
+ WHERE deleted_at IS NULL
+   AND delete_after IS DISTINCT FROM
+       public.id_document_delete_after(lease_id, org_id, created_at);
+
 -- Harden the existing ID-photo purge; do not introduce another scheduler.
 -- Invocation summaries use the existing 'insert' audit action.
 

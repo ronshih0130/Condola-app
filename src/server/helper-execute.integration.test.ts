@@ -42,7 +42,7 @@ test("org A cannot read org B through effective_rule or platform_max_id_retentio
         [jurisdictionId, ORG2_ID],
       );
       await client.query(
-        `UPDATE organizations SET id_doc_retention_days = 30 WHERE id = $1`,
+        `UPDATE organizations SET id_doc_retention_days = platform_max_id_retention_days() WHERE id = $1`,
         [ORG2_ID],
       );
 
