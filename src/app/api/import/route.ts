@@ -1,6 +1,6 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
-import { FlowError, logServerError } from "@/server/errors";
+import { FlowError } from "@/server/errors";
 import { commitImportBatch, dryRunImport, previewImport, readImportBody } from "@/server/import-batch";
 import { readSession } from "@/server/session";
 import type { Session } from "@/server/types";
@@ -65,18 +65,34 @@ function streamCommit(session: Session, body: { fileName: string; rows: unknown 
 }
 
 function importErrorResponse(error: unknown) {
+  logImportFailure(error);
   if (error instanceof FlowError) {
     const status = error.key === "errors.forbidden" ? 403 : 400;
     return NextResponse.json({ error: error.key, vars: error.vars ?? {} }, { status });
   }
-  logImportFailure(error);
   return NextResponse.json({ error: "errors.generic" }, { status: 500 });
 }
 
 function logImportFailure(error: unknown) {
-  // mapDbError already logged this failure, including its driver metadata.
-  if (error instanceof FlowError) return;
   const cause = error instanceof Error ? error.cause : undefined;
   const reported = cause && typeof cause === "object" ? cause : error;
-  logServerError("import", reported);
+  const metadata = reported && typeof reported === "object"
+    ? reported as { code?: unknown; constraint?: unknown }
+    : undefined;
+  const reason = cause && typeof cause === "object" && "reason" in cause ? cause.reason : undefined;
+  const safeToken = (value: unknown, pattern: RegExp) =>
+    typeof value === "string" && pattern.test(value) ? value : undefined;
+  const name = error instanceof FlowError
+    ? "FlowError"
+    : error instanceof Error
+      ? safeToken(error.name, /^(?:Error|TypeError|RangeError|SyntaxError|ReferenceError|URIError|EvalError|AggregateError)$/) ?? "Error"
+      : "UnknownError";
+  // mapDbError may also emit its own redacted database line.
+  console.error("import failed", {
+    name,
+    ...(error instanceof FlowError ? { key: safeToken(error.key, /^errors\.[a-zA-Z][a-zA-Z0-9_]{0,63}$/) } : {}),
+    code: safeToken(metadata?.code, /^[0-9A-Z]{5}$/),
+    constraint: safeToken(metadata?.constraint, /^[a-z_][a-z0-9_]{0,62}$/),
+    reason: safeToken(reason, /^[a-z0-9_.:-]{1,64}$/),
+  });
 }
