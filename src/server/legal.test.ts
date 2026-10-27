@@ -8,7 +8,7 @@ const root = new URL("../../", import.meta.url);
 
 const SHA256 = {
   terms: "6e3e21efe05686751b88bd36ce21c46c50c0a939562d706c95e36bb458d0c7d9",
-  privacy: "970919a0ceb992322cebb705f2d2109204cfbdd51116c46686918ab15010138f",
+  privacy: "aa9e46305c843f34582fb169c1190743cf2309048338f77d90de631b570f4cf6",
   refund: "14ae40e0b97d2e74b07dfe973176be4823af987f233cbe1a520f337d7aa1253d",
 } as const;
 
