@@ -133,9 +133,9 @@ test("the worker cron calls the protected reminder route", () => {
   assert.match(purge, /DELETE FROM id_document_wm_objects/);
   assert.match(purge, /DELETE FROM id_document_objects/);
   assert.doesNotMatch(purge, /SET LOCAL ROLE anon/);
-  assert.doesNotMatch(purge, /console\.(log|error|warn)/);
+  assert.match(purge, /status: "disabled"/);
   const route = read("src/app/api/cron/purge-id-documents/route.ts");
-  assert.match(route, /purgeDueIdDocumentsUntilDone/);
+  assert.match(route, /runDueIdDocuments/);
   assert.match(route, /getCloudflareContext/);
   assert.match(route, /cronAuthorized/);
   assert.match(route, /status: 404/);

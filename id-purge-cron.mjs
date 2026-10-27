@@ -66,7 +66,36 @@ export async function runIdPurge(source, options = {}) {
         }
       };
 
-  const dryRun = options.dryRun === true;
+  // Global, fresh service-role read before any purge/preview transaction.
+  // Keep this outside the failure-audit path: OFF/read errors must write nothing.
+  let mode = "off";
+  let reason = "missing";
+  try {
+    const result = await transaction((client) => client.query(
+      "SELECT value FROM public.platform_settings WHERE key = 'ID_PURGE_ENABLED'",
+    ));
+    const value = result.rows[0]?.value;
+    if (value === "on" || value === "dry_run") {
+      mode = value;
+    } else {
+      reason = value === "off" ? "off" : result.rows.length ? "invalid" : "missing";
+    }
+  } catch {
+    mode = "off";
+    reason = "read_error";
+  }
+  if (mode === "off") {
+    console.log(JSON.stringify({ event: "id-purge", status: "disabled", reason }));
+    return {
+      disabled: true, mode: "off", dryRun: false,
+      wouldDelete: 0, byBucket: {}, batches: 0, documents: 0,
+      files: 0, storageFailed: 0,
+      uploadSlotsDeleted: 0, uploadSlotsWouldDelete: 0,
+    };
+  }
+
+  // Explicit preview can only reduce permission; it never overrides OFF.
+  const dryRun = mode === "dry_run" || options.dryRun === true;
   const limit = clamp(options.limit ?? PURGE_LIMIT, PURGE_LIMIT, 1000);
   const maxBatches = clamp(options.maxBatches ?? PURGE_MAX_BATCHES, PURGE_MAX_BATCHES, 100);
   const assertTarget = options.assertTarget ?? defaultAssertTarget;
@@ -212,6 +241,8 @@ export async function runIdPurge(source, options = {}) {
   }
 
   return {
+    disabled: false,
+    mode: dryRun ? "dry_run" : "on",
     dryRun,
     wouldDelete,
     byBucket,

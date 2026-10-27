@@ -25,9 +25,26 @@ test.before(() => {
 async function withDb<T>(fn: (client: Client) => Promise<T>) {
   const client = new Client({ connectionString: DATABASE_URL });
   await client.connect();
+  const saved = await client.query(
+    "SELECT * FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'",
+  );
   try {
+    await client.query(
+      `INSERT INTO platform_settings (key, value) VALUES ('ID_PURGE_ENABLED', '"on"')
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    );
     return await fn(client);
   } finally {
+    if (saved.rows.length) {
+      const row = saved.rows[0];
+      await client.query(
+        `UPDATE platform_settings SET value = $1, description = $2, updated_at = $3
+          WHERE key = 'ID_PURGE_ENABLED'`,
+        [JSON.stringify(row.value), row.description, row.updated_at],
+      );
+    } else {
+      await client.query("DELETE FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'");
+    }
     await client.end();
   }
 }
@@ -558,6 +575,28 @@ test("ID purge dry-run, protected rows, bucket guard, missing objects, and rerun
       const oldAudit = await auditRows();
       const oldAccess = await accessRows();
 
+      // Missing global flag: scheduled and manual preview both leave every
+      // fingerprint/count, sentinel, e-sign row and audit/access row unchanged.
+      await client.query("DELETE FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'");
+      for (const dryRun of [false, true]) {
+        const disabled = await runIdPurge(client, { dryRun });
+        assert.equal(disabled.disabled, true);
+        assert.equal(disabled.documents, 0);
+        await assertSentinels();
+        await assertEsignUnchanged();
+        for (const table of protectedTables) {
+          assert.deepEqual(await snapshot(table), before.get(table), table);
+        }
+        for (const table of idTables) {
+          assert.deepEqual(await snapshot(table), beforeIds.get(table), table);
+        }
+        assert.deepEqual(await auditRows(), oldAudit);
+        assert.deepEqual(await accessRows(), oldAccess);
+      }
+      await client.query(
+        `INSERT INTO platform_settings (key, value) VALUES ('ID_PURGE_ENABLED', '"dry_run"')`,
+      );
+
       // Preview EXECUTE remains unavailable to tenant roles.
       await client.query("BEGIN");
       try {
@@ -583,7 +622,7 @@ test("ID purge dry-run, protected rows, bucket guard, missing objects, and rerun
       );
       assert.ok(ours.every((row) => row.storage_bucket === "id-documents-private"));
 
-      const dry = await runIdPurge(client, { dryRun: true, limit: 1000 });
+      const dry = await runIdPurge(client, { limit: 1000 });
       assert.equal(dry.dryRun, true);
       assert.equal(dry.wouldDelete, new Set(preview.rows.map((row) => row.document_id)).size);
       assert.equal(dry.uploadSlotsWouldDelete, expiredSlots);
@@ -672,6 +711,9 @@ test("ID purge dry-run, protected rows, bucket guard, missing objects, and rerun
         )
       ).rows[0]?.data;
 
+      await client.query(
+        `UPDATE platform_settings SET value = '"on"' WHERE key = 'ID_PURGE_ENABLED'`,
+      );
       const real = await runIdPurge(client);
       assert.ok(real.documents >= 1);
       assert.equal(real.storageFailed, 0);

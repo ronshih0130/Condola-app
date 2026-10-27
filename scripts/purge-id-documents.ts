@@ -1,6 +1,5 @@
-import { previewDueIdDocuments, purgeDueIdDocumentsUntilDone } from "../src/server/id-docs";
+import { runDueIdDocuments } from "../src/server/id-docs";
 
-const result = process.argv.includes("--dry-run")
-  ? await previewDueIdDocuments(500, 40)
-  : { removed: await purgeDueIdDocumentsUntilDone(500, 40) };
-console.log(JSON.stringify(result));
+// Manual invocations obey the same DB mode; --dry-run cannot bypass OFF.
+const result = await runDueIdDocuments(500, 40, process.argv.includes("--dry-run"));
+if (!result.disabled) console.log(JSON.stringify(result));

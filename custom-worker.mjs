@@ -43,7 +43,14 @@ const worker = {
         const response = await handler.fetch(siteRequest(env, "/api/cron/purge-id-documents"), env, ctx);
         if (!response.ok) throw new Error("status");
         const body = await response.json().catch(() => ({}));
-        console.log(JSON.stringify({ event: "id-purge", removed: Number(body.removed) || 0 }));
+        if (!body.disabled) {
+          console.log(JSON.stringify({
+            event: "id-purge", mode: body.mode,
+            removed: Number(body.removed) || 0,
+            wouldDelete: Number(body.wouldDelete) || 0,
+            uploadSlotsWouldDelete: Number(body.uploadSlotsWouldDelete) || 0,
+          }));
+        }
       } catch (error) {
         console.error("id-purge failed", error instanceof Error ? error.name : "error");
         throw error;

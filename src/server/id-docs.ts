@@ -1213,26 +1213,30 @@ export async function backfillIdWatermarks(limit = 50) {
   });
 }
 
-/** Each batch uses svc; the final batch commits the invocation summary. */
+/** Shared scheduled/manual entry. The runner reads the global DB kill switch. */
+export async function runDueIdDocuments(limit = 500, maxBatches = 40, dryRun = false) {
+  return runIdPurge(
+    (batch) => svc(null, (client) => batch(client)),
+    { limit, maxBatches, dryRun, assertTarget: assertIdPurgeTarget },
+  );
+}
+
+/** Each batch uses svc; OFF returns zero without a summary or cleanup. */
 export async function purgeDueIdDocumentsUntilDone(
   limit = 500,
   maxBatches = 40,
 ): Promise<number> {
-  const result = await runIdPurge(
-    (batch) => svc(null, (client) => batch(client)),
-    { limit, maxBatches, assertTarget: assertIdPurgeTarget },
-  );
+  const result = await runDueIdDocuments(limit, maxBatches);
   return result.documents;
 }
 
 /** Preview one bounded batch and expired upload slots without deleting either. */
 export async function previewDueIdDocuments(limit = 500, maxBatches = 40) {
-  const result = await runIdPurge(
-    (batch) => svc(null, (client) => batch(client)),
-    { limit, maxBatches, dryRun: true, assertTarget: assertIdPurgeTarget },
-  );
+  const result = await runDueIdDocuments(limit, maxBatches, true);
   return {
-    dryRun: true as const,
+    disabled: result.disabled,
+    mode: result.mode,
+    dryRun: result.dryRun,
     wouldDelete: result.wouldDelete,
     byBucket: result.byBucket,
     uploadSlotsWouldDelete: result.uploadSlotsWouldDelete,

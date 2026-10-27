@@ -57,6 +57,14 @@ test.before(async () => {
     });
   }
   await resetAndSeed();
+  await query(
+    `INSERT INTO platform_settings (key, value) VALUES ('ID_PURGE_ENABLED', '"on"')
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+  );
+});
+
+test.after(async () => {
+  await query("DELETE FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'");
 });
 
 test("identity photos stay private, masked, audited, and are purged only after the clock", async () => {
