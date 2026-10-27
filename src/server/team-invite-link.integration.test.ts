@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   acceptTeamInvite, hashInviteToken, inviteMember, resendInvite, revokeInvite,
@@ -423,6 +424,184 @@ test("free tier with one active admin refuses acceptance and leaves the invitati
   });
   assert.equal((await row(invited.invitationId)).status, "pending");
   assert.deepEqual(await accountRows(invited.email), { users: [], members: [] });
+});
+
+test("standard sequential acceptance fills three available seats and refuses a fourth", async () => {
+  const member = await createUser("sequential-seat");
+  await query(
+    `INSERT INTO org_members (org_id, user_id, role, status)
+     VALUES ($1, $2, 'accountant', 'active')`,
+    [liveOrgId, member.id],
+  );
+  const initial = await query<{ active: number; pending: number }>(
+    `SELECT
+       (SELECT count(*)::int FROM org_members WHERE org_id = $1 AND status = 'active') AS active,
+       (SELECT count(*)::int FROM invitations WHERE org_id = $1
+         AND kind = 'team_member' AND status = 'pending') AS pending`,
+    [liveOrgId],
+  );
+  assert.deepEqual(initial.rows, [{ active: 2, pending: 0 }]);
+
+  const invitations = [];
+  for (let index = 0; index < 3; index++) {
+    invitations.push(await issue(`sequential-${index}`));
+  }
+  // Issuance reserves pending seats. Seed an additional outstanding invitation
+  // with the existing fixture, as in the competing-last-seat test.
+  const fourth = await pending();
+  const fourthBefore = await row(fourth.invitationId);
+  const accountsBefore = await accountRows(fourth.email);
+  assert.deepEqual(accountsBefore, { users: [], members: [] });
+
+  for (const [index, invited] of invitations.entries()) {
+    const result = await accept(invited.token);
+    if (!result.ok) assert.fail(JSON.stringify(result));
+    assert.equal((await row(invited.invitationId)).status, "accepted");
+    assert.deepEqual((await accountRows(invited.email)).members, [{ role: "accountant" }]);
+    const active = await query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM org_members WHERE org_id = $1 AND status = 'active'`,
+      [liveOrgId],
+    );
+    assert.equal(active.rows[0].n, 3 + index);
+  }
+
+  const membersBefore = await query(
+    `SELECT to_jsonb(m) AS data FROM org_members m WHERE org_id = $1 ORDER BY id`,
+    [liveOrgId],
+  );
+  assert.deepEqual(await accept(fourth.token), {
+    ok: false, error: "errors.seatLimit", kind: "team_member",
+  });
+  assert.deepEqual(await row(fourth.invitationId), fourthBefore);
+  assert.equal((await row(fourth.invitationId)).status, "pending");
+  assert.deepEqual(await accountRows(fourth.email), accountsBefore);
+  const membersAfter = await query(
+    `SELECT to_jsonb(m) AS data FROM org_members m WHERE org_id = $1 ORDER BY id`,
+    [liveOrgId],
+  );
+  assert.deepEqual(membersAfter.rows, membersBefore.rows);
+});
+
+test("an existing registered user accepts with their password without replacing credentials", async () => {
+  const user = await createUser("registered");
+  const credentialsBefore = await query<{ encrypted_password: string }>(
+    `SELECT encrypted_password FROM auth.users WHERE id = $1`, [user.id],
+  );
+  assert.equal(credentialsBefore.rows.length, 1);
+  assert.ok(credentialsBefore.rows[0].encrypted_password);
+  assert.deepEqual(await accountRows(user.email), {
+    users: [{ id: user.id }], members: [],
+  });
+
+  const invited = await inviteMember(admin(), {
+    email: user.email, name: "Hire", role: "accountant",
+  });
+  const result = await accept(invited.token);
+  if (!result.ok) assert.fail(JSON.stringify(result));
+  assert.equal(result.role, "accountant");
+  assert.equal((await row(invited.invitationId)).status, "accepted");
+  assert.deepEqual(await accountRows(user.email), {
+    users: [{ id: user.id }], members: [{ role: "accountant" }],
+  });
+  const credentialsAfter = await query<{ encrypted_password: string }>(
+    `SELECT encrypted_password FROM auth.users WHERE id = $1`, [user.id],
+  );
+  assert.deepEqual(credentialsAfter.rows, credentialsBefore.rows);
+});
+
+test("legacy actionAccept refuses a real team token without any account or invitation mutation", async () => {
+  const invited = await issue("legacy-refusal");
+  const before = await query(
+    `SELECT to_jsonb(i) AS data FROM invitations i WHERE id = $1`, [invited.invitationId],
+  );
+  assert.deepEqual(await accountRows(invited.email), { users: [], members: [] });
+
+  // Use the existing unit harness approach to execute the actual action body.
+  // Only Next request metadata is substituted; describeInvite uses the real DB.
+  const actions = readFileSync(new URL("./auth-actions.ts", import.meta.url), "utf8");
+  const start = actions.indexOf("export async function actionAccept(");
+  assert.ok(start >= 0);
+  const end = actions.indexOf("\nfunction teamLinkFailure(", start);
+  assert.ok(end > start);
+  const declaration = actions.slice(start, end);
+  const opening = declaration.indexOf(") {");
+  assert.ok(opening >= 0);
+  const body = declaration.slice(opening + 3, declaration.lastIndexOf("}"))
+    .replace(/ as const\b/g, "");
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const { describeInvite } = await import("./auth");
+  let descriptions = 0;
+  const run = new AsyncFunction(
+    "formData", "text", "describeInvite", "meta", "readSession", "acceptInvite", body,
+  );
+  const form = new FormData();
+  form.set("token", invited.token);
+  form.set("name", "Hire");
+  form.set("password", password);
+  form.set("confirm", password);
+  form.set("consent", "on");
+  const unexpected = () => assert.fail("Legacy team refusal reached acceptance dependencies");
+  const result = await run(
+    form,
+    (value: FormDataEntryValue | null) => String(value ?? ""),
+    async (token: string, requestMeta: { ip: string | null }) => {
+      descriptions++;
+      const view = await describeInvite(token, requestMeta);
+      assert.equal(view.state, "ready");
+      assert.equal(view.kind, "team_member");
+      return view;
+    },
+    async () => meta,
+    unexpected,
+    unexpected,
+  );
+  assert.equal(descriptions, 1);
+  assert.deepEqual(result, { ok: false, error: "errors.teamInviteUnavailable" });
+  const after = await query(
+    `SELECT to_jsonb(i) AS data FROM invitations i WHERE id = $1`, [invited.invitationId],
+  );
+  // Includes status, code_hash and accepted_by.
+  assert.deepEqual(after.rows, before.rows);
+  assert.deepEqual(await accountRows(invited.email), { users: [], members: [] });
+});
+
+test("accountant and maintenance members cannot create or issue team links", async () => {
+  const invited = await issue("non-admin-link");
+  for (const role of ["accountant", "maintenance"] as const) {
+    const user = await createUser(`non-admin-${role}`);
+    await query(
+      `INSERT INTO org_members (org_id, user_id, role, status)
+       VALUES ($1, $2, $3::org_role, 'active')`,
+      [liveOrgId, user.id, role],
+    );
+    const session: Session = {
+      ...admin(), userId: user.id, email: user.email, name: "Fixture member", role,
+    };
+    const before = await query(
+      `SELECT to_jsonb(i) AS data FROM invitations i WHERE org_id = $1 ORDER BY id`,
+      [liveOrgId],
+    );
+    await assert.rejects(
+      () => inviteMember(session, {
+        email: email(`forbidden-${role}`), name: "Hire", role: "accountant",
+      }),
+      hasKey("errors.forbidden"),
+    );
+    const afterCreate = await query(
+      `SELECT to_jsonb(i) AS data FROM invitations i WHERE org_id = $1 ORDER BY id`,
+      [liveOrgId],
+    );
+    assert.deepEqual(afterCreate.rows, before.rows);
+    await assert.rejects(
+      () => resendInvite(session, invited.invitationId),
+      hasKey("errors.forbidden"),
+    );
+    const afterIssue = await query(
+      `SELECT to_jsonb(i) AS data FROM invitations i WHERE org_id = $1 ORDER BY id`,
+      [liveOrgId],
+    );
+    assert.deepEqual(afterIssue.rows, before.rows);
+  }
 });
 
 test("standard accepts with four active members and one pending invitation", async () => {
