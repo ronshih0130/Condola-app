@@ -444,10 +444,12 @@ test(
     const operation = operations[0];
 
     // Caller-supplied pricing cannot substitute for missing persisted pricing.
-    const invalidPricing = (error: unknown) =>
-      error instanceof Error &&
-      error.cause instanceof Error &&
-      error.cause.message === "invalid_ticket_pricing";
+    const invalidPricing = (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, "errors.generic");
+      assert.equal((error.cause as { reason?: unknown } | undefined)?.reason, "invalid_ticket_pricing");
+      return true;
+    };
     await assert.rejects(previewVendorDocument(vendorContext), invalidPricing);
     await assert.rejects(issueVendorDocument(vendorContext, {
       idempotencyKey: `${prefix}:missing-pricing`,

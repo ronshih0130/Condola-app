@@ -89,7 +89,7 @@ test("every error key has a translation, and an empty amount uses the amount sen
   const logged: string[] = [];
   const write = console.error;
   console.error = (...args: unknown[]) => {
-    logged.push(args.map((arg) => String(arg)).join(" "));
+    logged.push(JSON.stringify(args));
   };
   try {
     const hidden = mapDbError(new Error('duplicate key value violates unique constraint "invoice_lines_alloc_uniq"'));
@@ -222,4 +222,124 @@ test("sign-out expires every auth cookie variant and the wizard keeps amount err
   assert.match(envRoute, /jar\.set\(ENV_COOKIE, set,/);
   const actions = readFileSync(new URL("../server/actions.ts", import.meta.url), "utf8");
   assert.match(actions, /redirect\(`\/m\/properties\/\$\{created\.propertyId\}\?created=1`\)/);
+});
+
+test("database errors log once, redact personal data, and retain only safe cause metadata", () => {
+  const uuid = "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed";
+  const detail = `Key (org_id, email)=(${uuid}, alice@example.com) already exists.`;
+  const personal = `0912-345-678 A123456789 ${uuid} alice@example.com`;
+  const constraint = "contacts_org_tenant_email_uniq";
+  const original = { error: console.error, warn: console.warn, log: console.log };
+  const errors: unknown[][] = [];
+  const warnings: unknown[][] = [];
+  const logs: unknown[][] = [];
+  console.error = (...args: unknown[]) => { errors.push(args); };
+  console.warn = (...args: unknown[]) => { warnings.push(args); };
+  console.log = (...args: unknown[]) => { logs.push(args); };
+  try {
+    for (const asError of [false, true]) {
+      for (const [message, key] of [
+        [`duplicate key value violates unique constraint "${constraint}"`, "errors.tenantExists"],
+        ["duplicate key value violates unique constraint email_uniq", "errors.emailTaken"],
+      ]) {
+        errors.length = 0;
+        const fields = {
+          message: `${message} ${personal}`,
+          code: "23505",
+          constraint,
+          detail,
+          where: "private query context",
+          hint: "private hint",
+          query: "private query",
+          parameters: ["alice@example.com"],
+          stack: "private driver stack",
+          table: "contacts",
+          column: "email",
+        };
+        const pg = asError ? Object.assign(new Error(fields.message), fields) : fields;
+        const mapped = mapDbError(pg);
+        assert.ok(mapped instanceof FlowError);
+        assert.equal(mapped.key, key);
+        assert.equal(errors.length, 1);
+        assert.equal(warnings.length, 0);
+        assert.equal(logs.length, 0);
+        const serialized = JSON.stringify(errors);
+        assert.ok(serialized.includes("23505"));
+        assert.ok(serialized.includes(constraint));
+        for (const secret of [
+          "alice@example.com", "0912-345-678", "A123456789", uuid,
+          "Key (", detail, "private query context", "private hint",
+          "private query", "parameters", "stack",
+        ]) {
+          assert.equal(serialized.includes(secret), false, secret);
+        }
+        const payload = errors[0][1] as Record<string, unknown>;
+        assert.equal(payload.table, "contacts");
+        assert.equal(payload.column, "email");
+        assert.deepEqual(mapped.cause, { code: "23505", constraint });
+        assert.equal(Object.hasOwn(mapped.cause as object, "message"), false);
+        assert.equal(Object.hasOwn(mapped.cause as object, "detail"), false);
+        assert.equal(Object.hasOwn(mapped.cause as object, "stack"), false);
+      }
+    }
+  } finally {
+    Object.assign(console, original);
+  }
+});
+
+test("server message redaction covers personal tokens, key details, and quoted literals", () => {
+  for (const value of [
+    "alice@example.com",
+    "0912-345-678",
+    "+886 912 345 678",
+    "A123456789",
+    "A823456789",
+    "AC12345678",
+    "AB1234567",
+    "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
+    "Key (org_id, email)=(private-org, private-person) already exists.",
+    "'private-name'",
+    '"private-name"',
+    "'private''name'",
+    '"private""name"',
+    "'private unterminated literal",
+    '"private unterminated literal',
+  ]) {
+    const redacted = redactServerMessage(value);
+    assert.notEqual(redacted, value, value);
+    assert.equal(redacted.includes("private"), false, value);
+    assert.equal(redacted.includes("Key ("), false, value);
+  }
+  assert.equal(redactServerMessage("x".repeat(250)), "[redacted]");
+  assert.equal(redactServerMessage("safe text ".repeat(25)), "safe text ".repeat(25).slice(0, 200));
+  assert.equal(redactServerMessage("12345678901234567890"), "[phone]");
+  for (const keyword of ["constraint", "relation", "table", "column", "index", "type", "function", "trigger", "schema"]) {
+    const message = `${keyword} "invoice_lines_alloc_uniq"`;
+    assert.equal(redactServerMessage(message), message);
+    const longIdentifier = `${keyword} "${"identifier".repeat(6)}"`;
+    assert.equal(redactServerMessage(longIdentifier), longIdentifier);
+    assert.equal(redactServerMessage(`${keyword} "private-name"`), `${keyword} "[redacted]"`);
+    assert.equal(redactServerMessage(`${keyword} 'private_name'`), `${keyword} '[redacted]'`);
+  }
+});
+
+test("sanitized causes retain safe application reasons without free text or driver content", () => {
+  const original = console.error;
+  console.error = () => {};
+  try {
+    const reason = "invalid_ticket_pricing";
+    assert.deepEqual(mapDbError(new Error(reason)).cause, {
+      code: undefined, constraint: undefined, reason,
+    });
+    for (const message of ["private free text", "alice@example.com", "x".repeat(65)]) {
+      assert.deepEqual(mapDbError(new Error(message)).cause, {
+        code: undefined, constraint: undefined,
+      });
+    }
+    assert.deepEqual(mapDbError(Object.assign(new Error(reason), {
+      code: "23514", constraint: "pricing_check", detail: "private detail",
+    })).cause, { code: "23514", constraint: "pricing_check" });
+  } finally {
+    console.error = original;
+  }
 });

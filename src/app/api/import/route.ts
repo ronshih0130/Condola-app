@@ -1,6 +1,6 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
-import { FlowError } from "@/server/errors";
+import { FlowError, logServerError } from "@/server/errors";
 import { commitImportBatch, dryRunImport, previewImport, readImportBody } from "@/server/import-batch";
 import { readSession } from "@/server/session";
 import type { Session } from "@/server/types";
@@ -74,12 +74,9 @@ function importErrorResponse(error: unknown) {
 }
 
 function logImportFailure(error: unknown) {
-  const cause = error instanceof Error && error.cause !== undefined ? error.cause : error;
-  const reported = cause instanceof Error ? cause : error;
-  const code = reported && typeof reported === "object" && "code" in reported ? (reported as { code?: unknown }).code : undefined;
-  console.error("import failed", {
-    message: reported instanceof Error ? reported.message : String(reported),
-    code,
-    stack: reported instanceof Error ? reported.stack : undefined,
-  });
+  // mapDbError already logged this failure, including its driver metadata.
+  if (error instanceof FlowError) return;
+  const cause = error instanceof Error ? error.cause : undefined;
+  const reported = cause && typeof cause === "object" ? cause : error;
+  logServerError("import", reported);
 }
