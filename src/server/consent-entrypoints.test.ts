@@ -136,7 +136,7 @@ test("all runtime server exports, routes and protected pages are classified", ()
       if (directive(node)) assert.equal(node.parent, file, name + ": inline action needs explicit classification");
     }
     const route = name.startsWith("app/") && name.endsWith("/route.ts");
-    const page = /^app\/[motv]\/(?:.*\/)?page\.tsx$/.test(name);
+    const page = /^app\/[motv]\/(?:.*\/)?page\.tsx$/.test(name) || ["app/m/leases/[id]/layout.tsx", "app/t/lease/layout.tsx"].includes(name);
     if (!server && !route && !page) continue;
     const moduleSymbol = checker.getSymbolAtLocation(file);
     assert.ok(moduleSymbol, name);
