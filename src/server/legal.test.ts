@@ -7,8 +7,8 @@ import { legalTitle, renderLegalMarkdown } from "./legal";
 const root = new URL("../../", import.meta.url);
 
 const SHA256 = {
-  terms: "d38ecc1fcc8a720dd43dcad8b09f5759ac31fc581ccae67dccb87b35dd81a1d2",
-  privacy: "d5e19dc9433f344d88de7caa6ce1501ce96cad001eae2883f9ae3a7571211662",
+  terms: "6e3e21efe05686751b88bd36ce21c46c50c0a939562d706c95e36bb458d0c7d9",
+  privacy: "970919a0ceb992322cebb705f2d2109204cfbdd51116c46686918ab15010138f",
   refund: "14ae40e0b97d2e74b07dfe973176be4823af987f233cbe1a520f337d7aa1253d",
 } as const;
 
