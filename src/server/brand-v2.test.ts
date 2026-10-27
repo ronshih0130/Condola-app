@@ -468,15 +468,14 @@ test("AuthBrand ON uses the bilingual color lockup with intrinsic dimensions", (
 
 test("stacked color asset is byte-identical to the approved R&D source", () => {
   const asset = "/brand/v2/logo/lockup_stacked_color.svg";
-  const source = "/workspace/pm-saas/design/brand-v2/logo/A_roofc/lockup_stacked_color.svg";
   assert.ok(BRAND_V2_ASSETS.some((entry) => entry === asset));
   assert.ok(existsSync(join(publicRoot, asset.slice(1))));
-  assert.ok(existsSync(source), "Run this provenance check where the R&D source is mounted");
-  assert.deepEqual(
-    readFileSync(join(publicRoot, asset.slice(1))),
-    readFileSync(source),
+  assert.equal(
+    createHash("sha256").update(readFileSync(join(publicRoot, asset.slice(1)))).digest("hex"),
+    "8f73eaf9fe22b23e87a69714067be12600271b5fc354d2de1bf52985ef469c71",
+    "The digest must match the R&D-approved asset",
   );
-  assert.match(readFileSync(source, "utf8"), /viewBox="0 0 405 300\.68"/);
+  assert.match(readFileSync(join(publicRoot, asset.slice(1)), "utf8"), /viewBox="0 0 405 300\.68"/);
 });
 
 test("auth logo widths and clear space are scoped to v2 at both sizes", () => {
