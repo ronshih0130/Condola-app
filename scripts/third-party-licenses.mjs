@@ -350,6 +350,74 @@ function npmIntegrity(lock, version) {
   return item.integrity;
 }
 
+function selfHostedFontEntries(rootDir, config) {
+  const readVerified = (file) => {
+    if (
+      typeof file?.path !== "string" ||
+      !/^public\/[^\\]+$/.test(file.path) ||
+      file.path.split("/").some((part) => !part || part === "." || part === "..") ||
+      !/^[a-f0-9]{64}$/.test(file.sha256 ?? "")
+    ) {
+      throw new Error("Invalid self-hosted asset path or SHA-256");
+    }
+    const bytes = readFileSync(join(rootDir, file.path));
+    const actual = hash(bytes);
+    if (actual !== file.sha256) {
+      throw new Error(`Self-hosted asset SHA-256 mismatch: ${file.path}; expected ${file.sha256}, got ${actual}`);
+    }
+    return bytes;
+  };
+  return (config.selfHostedAssets ?? []).map((asset) => {
+    if (
+      !/^(?:@[^/]+\/)?[^/]+$/.test(asset.package ?? "") ||
+      typeof asset.version !== "string" || !asset.version.trim() ||
+      asset.license !== "OFL-1.1" ||
+      !Array.isArray(asset.files) || !asset.files.length ||
+      asset.sourceArchive?.url !== npmTarballUrl(asset.package, asset.version) ||
+      !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(asset.sourceArchive?.integrity ?? "")
+    ) {
+      throw new Error(`Invalid self-hosted font configuration: ${asset.package}`);
+    }
+    for (const file of asset.files) readVerified(file);
+    const licenseText = readVerified(asset.licenseFile).toString("utf8");
+    const copyrightHolders = [...new Set(licenseText.split(/\r?\n/)
+      .filter((line) => /^\s*Copyright\s+\d{4}\b/i.test(line))
+      .map((line) => line.trim()))].sort(compare);
+    if (!copyrightHolders.length) {
+      throw new Error(`Missing self-hosted font copyright lines: ${asset.package}`);
+    }
+    const repository = repositoryUrl(asset.repository);
+    if (!repository) throw new Error(`Missing self-hosted font repository: ${asset.package}`);
+    const file = asset.files[0];
+    return {
+      name: asset.package,
+      version: asset.version,
+      license: asset.license,
+      licenseText,
+      licenseTextSource: `public-file:${asset.licenseFile.path}`,
+      licenseUrl: publicUrl(asset.licenseFile.path.slice("public/".length)),
+      gplUrl: null,
+      noticeUrl: null,
+      sourceNoticesUrl: null,
+      repository,
+      sourceUrl: `https://www.npmjs.com/package/${asset.package}/v/${asset.version}`,
+      sourceArchives: [{
+        label: `${asset.package} ${asset.version} (npm)`,
+        url: asset.sourceArchive.url,
+        integrity: asset.sourceArchive.integrity,
+      }],
+      copyrightHolders,
+      buildInputsUrl: null,
+      buildInputFiles: [],
+      buildProvenance: null,
+      delivery: "self-hosted-font",
+      assetPath: publicUrl(file.path.slice("public/".length)),
+      sha256: file.sha256,
+      requiredBy: ["brand-v2"],
+    };
+  });
+}
+
 export async function buildManifest(rootDir, config, options = {}) {
   verifySuppliedTexts(rootDir, config);
   const upstream = upstreamData(rootDir, config);
@@ -429,6 +497,13 @@ export async function buildManifest(rootDir, config, options = {}) {
     } else {
       entries.set(key, entry);
     }
+  }
+  for (const entry of selfHostedFontEntries(rootDir, config)) {
+    const key = `${entry.name}\0${entry.version}`;
+    if (entries.has(key)) {
+      throw new Error(`Duplicate self-hosted font package: ${entry.name}@${entry.version}`);
+    }
+    entries.set(key, entry);
   }
   if (config.embedded.length) {
     const versions = await probeEmbedded(rootDir);
@@ -572,6 +647,7 @@ export function verifyBundle(manifest, bundled, config) {
   return {
     missing: [...bundledKeys].filter((key) => !manifestKeys.has(key)).sort(compare),
     unexpected: manifest.packages
+      .filter((item) => item.delivery !== "self-hosted-font")
       .filter((item) => !bundledKeys.has(`${item.name}@${item.version}`) && !Object.hasOwn(exceptions, item.name))
       .map((item) => `${item.name}@${item.version}`)
       .filter((key, index, all) => all.indexOf(key) === index).sort(compare),

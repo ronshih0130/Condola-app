@@ -192,11 +192,25 @@ html[data-brand="v2"] .auth-brand img.auth-brand-v2 {
   width: 160px;
   height: auto;
 }
+html[data-brand="v2"] .liff-welcome {
+  padding: 28px 0;
+}
+html[data-brand="v2"] .liff-welcome img.stacked-v2 {
+  width: 160px;
+  height: auto;
+}
 @media (min-width: 640px) {
   html[data-brand="v2"] .auth-brand {
     margin: 35px 0;
   }
   html[data-brand="v2"] .auth-brand img.auth-brand-v2 {
+    width: 200px;
+    height: auto;
+  }
+  html[data-brand="v2"] .liff-welcome {
+    padding: 35px 0;
+  }
+  html[data-brand="v2"] .liff-welcome img.stacked-v2 {
     width: 200px;
     height: auto;
   }

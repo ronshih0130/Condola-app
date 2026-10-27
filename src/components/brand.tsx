@@ -27,6 +27,11 @@ export function BrandImage({
   className?: string;
   v2?: boolean;
 }) {
+  if (v2 && variant === "stacked") {
+    // R&D 02:09: use lockup_stacked_dark.svg on navy surfaces; no current placement is navy (see e2e brand-v2 probe)
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className={[className, "stacked-v2"].filter(Boolean).join(" ")} src="/brand/v2/logo/lockup_stacked_color.svg" alt={alt} width={200} height={148} />;
+  }
   if (v2 && (variant === "horizontalDark" || variant === "symbolSmall")) {
     const symbol = variant === "symbolSmall";
     // Existing CSS retains the responsive box; dimensions supply the intrinsic ratio.

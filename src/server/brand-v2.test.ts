@@ -438,6 +438,91 @@ test("BrandImage preserves defaults and selects both color header variants", () 
   }
 });
 
+test("BrandImage stacked OFF preserves exact legacy markup and ON uses v2", () => {
+  for (const className of [undefined, "welcome-logo"]) {
+    const props = { variant: "stacked" as const, alt: "Condola 租多啦", className };
+    const expected =
+      '<link rel="preload" as="image" href="/brand/condola_lockup_stacked.svg"/>'
+      + `<img${className ? ` class="${className}"` : ""} src="/brand/condola_lockup_stacked.svg" alt="Condola 租多啦"/>`;
+    for (const offProps of [props, { ...props, v2: false }]) {
+      assert.equal(renderToStaticMarkup(React.createElement(BrandImage, offProps)), expected);
+    }
+    assert.equal(
+      renderToStaticMarkup(React.createElement(BrandImage, { ...props, v2: true })),
+      '<link rel="preload" as="image" href="/brand/v2/logo/lockup_stacked_color.svg"/>'
+      + `<img class="${className ? `${className} ` : ""}stacked-v2" src="/brand/v2/logo/lockup_stacked_color.svg" alt="Condola 租多啦" width="200" height="148"/>`,
+    );
+  }
+});
+
+test("tenant welcome passes the server flag through an ON-only spread", () => {
+  const layout = read("src/app/t/layout.tsx");
+  assert.ok(layout.includes('import { brandV2Enabled } from "@/server/brand-v2";'));
+  assert.doesNotMatch(layout, /^\s*["']use client["']/);
+  assert.match(
+    layout,
+    /\{path === "\/t" \? \(\s*<div className="liff-welcome">\s*<BrandImage variant="stacked" alt=\{t\("i_brand"\)\} \{\.\.\.\(brandV2Enabled\(\) \? \{ v2: true \} : \{\}\)\} \/>\s*<\/div>/,
+  );
+});
+
+test("tenant welcome geometry is scoped to v2 at both sizes", () => {
+  const css = read("public/brand/v2/theme.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const media = css.match(
+    /@media \(min-width: 640px\)\s*\{((?:\s*[^{}]+\{[^{}]*\})+\s*)\}/,
+  );
+  assert.ok(media);
+  const mobile = css.replace(media[0], "");
+  const assertGeometry = (rules: string, width: number, padding: number) => {
+    const wrapper = rules.match(/html\[data-brand="v2"\] \.liff-welcome\s*\{([^{}]*)\}/);
+    const image = rules.match(/html\[data-brand="v2"\] \.liff-welcome img\.stacked-v2\s*\{([^{}]*)\}/);
+    assert.ok(wrapper);
+    assert.ok(image);
+    assert.match(wrapper[1], new RegExp(`padding:\\s*${padding}px 0\\s*;`));
+    assert.match(image[1], new RegExp(`width:\\s*${width}px\\s*;`));
+    assert.match(image[1], /height:\s*auto\s*;/);
+    assert.ok(padding >= width * 140 / 405 / 2);
+  };
+  assertGeometry(mobile, 160, 28);
+  assertGeometry(media[1], 200, 35);
+  for (const [, selectors] of css.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+    for (const selector of selectors.split(",")) {
+      if (selector.includes(".liff-welcome")) {
+        assert.ok(selector.trim().startsWith('html[data-brand="v2"]'), selector);
+      }
+    }
+  }
+});
+
+test("v2 stacked dark asset has no file or active reference until a navy placement exists", () => {
+  const filename = ["lockup", "stacked", "dark"].join("_") + ".svg";
+  assert.equal(existsSync(join(publicRoot, "brand/v2/logo", filename)), false);
+  assert.ok(BRAND_V2_ASSETS.every((asset) => !asset.includes(filename)));
+  const approvedComment =
+    "// R&D 02:09: use " + filename
+    + " on navy surfaces; no current placement is navy (see e2e brand-v2 probe)";
+  assert.ok(read("src/components/brand.tsx").includes(approvedComment));
+  const walk = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(path);
+      } else {
+        assert.notEqual(entry.name, filename, path);
+        if (/\.(?:[cm]?[jt]sx?|css|svg|json|webmanifest|html|txt)$/.test(entry.name)) {
+          const source = readFileSync(path, "utf8");
+          const active = path === join(root, "src/components/brand.tsx")
+            ? source.replace(approvedComment, "")
+            : source;
+          assert.ok(!active.includes("brand/v2/logo/" + filename), path);
+          assert.ok(!/(^|[^a-z_])lockup_stacked_dark\.svg/.test(active), path);
+        }
+      }
+    }
+  };
+  walk(join(root, "src"));
+  walk(publicRoot);
+});
+
 test("AuthBrand OFF preserves the exact legacy serialization", () => {
   const expected =
     '<link rel="preload" as="image" href="/brand/condola_lockup_stacked.svg"/>'

@@ -2225,6 +2225,7 @@
  "i_lic_delivery_bundled": "Included in browser bundles",
  "i_lic_delivery_separate": "Separate, unmodified upstream file",
  "i_lic_delivery_inside": "Embedded inside libheif-js",
+"i_lic_delivery_font": "Self-hosted font file (unmodified)",
  "i_lic_full_text": "Full licence text",
  "i_lic_offer": "To request the complete corresponding source code, email {email}. This written offer is available to anyone and remains valid for at least three years from our last distribution of the relevant decoder version.",
  "i_lic_replace_steps": "How to replace the decoder",

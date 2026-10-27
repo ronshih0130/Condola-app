@@ -2225,6 +2225,7 @@
  "i_lic_delivery_bundled": "包含於瀏覽器程式碼套件",
  "i_lic_delivery_separate": "未經修改的獨立上游檔案",
  "i_lic_delivery_inside": "內嵌於 libheif-js",
+"i_lic_delivery_font": "自架字型檔（未經修改）",
  "i_lic_full_text": "授權全文",
  "i_lic_offer": "如需完整對應原始碼，請來信 {email}。任何人皆可依此書面承諾提出請求；承諾效期至少持續至我們最後提供該解碼器版本後三年。",
  "i_lic_replace_steps": "如何替換解碼器",

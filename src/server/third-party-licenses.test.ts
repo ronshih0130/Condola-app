@@ -39,6 +39,65 @@ test("generated manifest and asset module are current", async () => {
   assert.deepEqual(licenseEntries(), manifest.packages);
 });
 
+test("self-hosted brand fonts retain shipped licences and pinned provenance", () => {
+  const assets = config.selfHostedAssets;
+  assert.ok(assets);
+  assert.deepEqual(assets.map((asset) => asset.package).sort(), [
+    "@fontsource-variable/inter",
+    "@fontsource-variable/plus-jakarta-sans",
+  ]);
+  const fonts = manifest.packages.filter((entry) => entry.delivery === "self-hosted-font");
+  assert.equal(fonts.length, 2);
+  for (const asset of assets) {
+    const entry = fonts.find((item) => item.name === asset.package);
+    assert.ok(entry, asset.package);
+    assert.equal(entry.version, "5.3.0");
+    assert.equal(entry.version, asset.version);
+    assert.equal(entry.license, "OFL-1.1");
+    assert.equal(entry.delivery, "self-hosted-font");
+    assert.equal(deliveryLabelKey(entry.delivery), "i_lic_delivery_font");
+    assert.equal(entry.licenseText, read(asset.licenseFile.path));
+    assert.equal(entry.licenseTextSource, `public-file:${asset.licenseFile.path}`);
+    assert.equal(entry.licenseUrl, `/${asset.licenseFile.path.slice("public/".length)}`);
+    assert.equal(sha256(readFileSync(join(root, asset.licenseFile.path))), asset.licenseFile.sha256);
+    for (const file of asset.files) {
+      assert.equal(sha256(readFileSync(join(root, file.path))), file.sha256, file.path);
+    }
+    assert.equal(entry.assetPath, `/${asset.files[0].path.slice("public/".length)}`);
+    assert.equal(entry.sha256, asset.files[0].sha256);
+    assert.deepEqual(entry.copyrightHolders, [...new Set(read(asset.licenseFile.path)
+      .split(/\r?\n/)
+      .filter((line) => /^\s*Copyright\s+\d{4}\b/i.test(line))
+      .map((line) => line.trim()))].sort());
+    assert.ok(entry.copyrightHolders.length);
+    assert.equal(entry.sourceUrl,
+      `https://www.npmjs.com/package/${asset.package}/v/${asset.version}`);
+    assert.equal(entry.repository, asset.repository);
+    assert.deepEqual(entry.sourceArchives, [{
+      label: `${asset.package} ${asset.version} (npm)`,
+      url: npmTarballUrl(asset.package, asset.version),
+      integrity: asset.sourceArchive.integrity,
+    }]);
+  }
+});
+
+test("self-hosted font and licence hash mismatches reject manifest generation", async () => {
+  const assets = config.selfHostedAssets;
+  assert.ok(assets?.length);
+  for (const asset of assets) {
+    for (const file of [...asset.files, asset.licenseFile]) {
+      const changed = structuredClone(config);
+      const changedAsset = changed.selfHostedAssets?.find((item) => item.package === asset.package);
+      assert.ok(changedAsset);
+      const changedFile = [...changedAsset.files, changedAsset.licenseFile]
+        .find((item) => item.path === file.path);
+      assert.ok(changedFile);
+      changedFile.sha256 = "0".repeat(64);
+      await assert.rejects(buildManifest(root, changed), /Self-hosted asset SHA-256 mismatch/);
+    }
+  }
+});
+
 test("browser graph includes required packages and excludes server encoders and build tools", () => {
   const required = [
     "libheif-js", "heic-decode", "heic-convert", "react", "react-dom", "scheduler",
@@ -324,7 +383,8 @@ test("generation checks optional public decoder and --verify-bundle requires it"
     symlinkSync(join(root, "node_modules"), join(temporary, "node_modules"), "junction");
     mkdirSync(join(temporary, ".next"));
     writeFileSync(join(temporary, ".next/client-packages.json"), JSON.stringify(
-      manifest.packages.map(({ name, version }) => ({ name, version })),
+      manifest.packages.filter((entry) => entry.delivery !== "self-hosted-font")
+        .map(({ name, version }) => ({ name, version })),
     ));
     const target = join(temporary, "public", LIBHEIF_ASSET.path.slice(1));
     const bytes = readFileSync(
@@ -351,6 +411,22 @@ test("generation checks optional public decoder and --verify-bundle requires it"
     assert.deepEqual(await buildManifest(temporary, config), manifest);
     checkUnchanged();
     run("--verify-bundle");
+
+    for (const asset of config.selfHostedAssets ?? []) {
+      for (const file of [...asset.files, asset.licenseFile]) {
+        const path = join(temporary, file.path);
+        const original = readFileSync(path);
+        try {
+          writeFileSync(path, Buffer.concat([original, Buffer.from("\n// tampered")]));
+          await assert.rejects(buildManifest(temporary, config), /Self-hosted asset SHA-256 mismatch/);
+          assert.throws(() => run("--check"), /Self-hosted asset SHA-256 mismatch/);
+          assert.throws(() => run("--verify-bundle"), /Self-hosted asset SHA-256 mismatch/);
+        } finally {
+          writeFileSync(path, original);
+        }
+      }
+    }
+    checkUnchanged();
 
     writeFileSync(target, Buffer.concat([bytes, Buffer.from("\n// tampered")]));
     await assert.rejects(buildManifest(temporary, config), /bundle SHA-256 mismatch/);
@@ -399,9 +475,9 @@ test("verifyBundle reports exact missing and unexpected versions without mutatio
   const existing = manifest.packages[0];
   assert.ok(existing);
   const fake = { packages: [
-    { ...existing, name: "present", version: "1.0.0" },
-    { ...existing, name: "absent", version: "2.0.0" },
-    { ...existing, name: "separate", version: "3.0.0" },
+    { ...existing, name: "present", version: "1.0.0", delivery: "bundled" as const },
+    { ...existing, name: "absent", version: "2.0.0", delivery: "bundled" as const },
+    { ...existing, name: "separate", version: "3.0.0", delivery: "separate-unmodified-file" as const },
   ] };
   const bundled = [
     { name: "present", version: "1.0.0" }, { name: "present", version: "1.0.0" },
@@ -417,6 +493,19 @@ test("verifyBundle reports exact missing and unexpected versions without mutatio
     [{ name: "present", version: "1.0.0" }], { notInWebpackBundle: {} }),
   { missing: [], unexpected: [] });
   assert.throws(() => verifyBundle(fake, bundled, { notInWebpackBundle: { separate: "" } }), /reason/);
+});
+
+test("verifyBundle ignores self-hosted fonts absent from the client bundle", () => {
+  const fonts = manifest.packages.filter((entry) => entry.delivery === "self-hosted-font");
+  assert.equal(fonts.length, 2);
+  const before = JSON.stringify(fonts);
+  assert.deepEqual(verifyBundle({ packages: fonts }, [], { notInWebpackBundle: {} }),
+    { missing: [], unexpected: [] });
+  assert.deepEqual(verifyBundle({ packages: fonts },
+    [{ name: "unlisted-client-package", version: "1.0.0" }],
+    { notInWebpackBundle: {} }),
+  { missing: ["unlisted-client-package@1.0.0"], unexpected: [] });
+  assert.equal(JSON.stringify(fonts), before);
 });
 
 function sourceFiles(directory: string): string[] {
