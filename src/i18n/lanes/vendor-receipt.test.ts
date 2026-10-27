@@ -20,6 +20,20 @@ const BANNED_VENDOR_RECEIPT_TERMS: readonly string[] = [
   "事務所",
   "已驗證",
   "保證可報帳",
+  "全平台流水號",
+  "跨平台流水號",
+  "跨公司流水號",
+  "全平台連續編號",
+  "保證可抵稅",
+  "已完全合規",
+  "完全合規",
+  "platform-wide serial",
+  "cross-platform serial",
+  "global serial number",
+  "guaranteed deductible",
+  "guaranteed reimbursable",
+  "fully compliant",
+  "guaranteed compliant",
 ] as const;
 
 function collectStrings(value: unknown): string[] {
@@ -45,7 +59,7 @@ test("vendor-receipt copy contains no banned terms in zh-TW or en", () => {
     for (const text of allStrings) {
       for (const banned of BANNED_VENDOR_RECEIPT_TERMS) {
         assert.equal(
-          text.includes(banned),
+          text.toLowerCase().includes(banned.toLowerCase()),
           false,
           `Locale ${locale} text "${text}" must not contain banned term "${banned}"`,
         );

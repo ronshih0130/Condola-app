@@ -188,6 +188,9 @@ export async function submitVendorOnboarding(
       throw new Error("invalid_service_job_types");
     }
 
+    // Resolve only by org/contact. A phone change updates this profile and its
+    // version; the database audits old/new phone values in this transaction.
+    // Never use a phone to recover or link another profile's issuer/counter.
     const profile = await one<{ id: string; current_version: number }>(
       client,
       `INSERT INTO vendor_profiles
@@ -213,9 +216,10 @@ export async function submitVendorOnboarding(
       [
         invite.org_id,
         invite.contact_id,
-        // The database binds validated businesses to their private tax-ID issuer
-        // and supplies its random code. Individual identity is unique by phone
-        // within an org; cross-org individual linkage requires a CEO decision.
+        // Businesses bind to their private tax-ID issuer. Individuals retain a
+        // random profile code and per-company/profile numbering across phone
+        // changes, with no cross-org identity or phone continuity across profiles.
+        // Cross-org 統編 linkage for individuals is post-11/9 backlog.
         globalThis.crypto.randomUUID().replaceAll("-", ""),
         value.kind,
         value.display_name,

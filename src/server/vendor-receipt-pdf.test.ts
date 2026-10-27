@@ -28,7 +28,32 @@ const BANNED = [
   "事務所",
   "已驗證",
   "保證可報帳",
+  "全平台流水號",
+  "跨平台流水號",
+  "跨公司流水號",
+  "全平台連續編號",
+  "保證可抵稅",
+  "已完全合規",
+  "完全合規",
+  "platform-wide serial",
+  "cross-platform serial",
+  "global serial number",
+  "guaranteed deductible",
+  "guaranteed reimbursable",
+  "fully compliant",
+  "guaranteed compliant",
 ];
+
+function assertNoBannedCopy(text: string): void {
+  const normalized = text.replace(/\s/g, "").toLowerCase();
+  for (const word of BANNED) {
+    assert.equal(
+      normalized.includes(word.replace(/\s/g, "").toLowerCase()),
+      false,
+      `PDF copy must not contain banned term "${word}"`,
+    );
+  }
+}
 
 const font = readFileSync(
   new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url),
@@ -128,10 +153,8 @@ test("document models contain required copy, ticket number and rounded prices", 
   assert.match(JSON.stringify(receipt), /工單編號/);
   assert.match(JSON.stringify(receipt), /1027/);
   assert.match(JSON.stringify(receipt), /NT\$33　NT\$100/);
-  for (const word of BANNED) {
-    assert.equal(JSON.stringify(completion).includes(word), false);
-    assert.equal(JSON.stringify(receipt).includes(word), false);
-  }
+  assertNoBannedCopy(JSON.stringify(completion));
+  assertNoBannedCopy(JSON.stringify(receipt));
   for (const model of [completion, receipt]) {
     const header = model.blocks[0];
     assert.equal(header.kind, "rows");
@@ -173,7 +196,7 @@ test("company buyer uses the exact PDF tax label with no other banned copy", () 
         ...model.blocks.slice(1),
       ],
     });
-    for (const word of BANNED) assert.equal(guarded.includes(word), false);
+    assertNoBannedCopy(guarded);
   }
 });
 
@@ -220,7 +243,7 @@ test("PDF extraction verifies per-page identifiers and the indivisible final gro
           assert.ok(text.includes(input.document.doc_no));
           assert.ok(text.includes(`page${index + 1}/${pages.length}`));
           assert.match(text, business ? /免用統一發票收據/ : /本文件非稅務憑證/);
-          for (const word of BANNED) assert.equal(text.includes(word), false);
+          assertNoBannedCopy(pages[index]);
           if (index < pages.length - 1) {
             assert.doesNotMatch(text, /合計|國字大寫|廠商名稱|測試商號|測試師傅/);
           } else {

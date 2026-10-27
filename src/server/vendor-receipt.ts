@@ -646,9 +646,10 @@ async function issueOn(
 
   const id = globalThis.crypto.randomUUID();
   const checked = applyIssueRules(await issueInput(client, access, ctx, id, 1));
-  // Receipts allocate from the private validated tax-ID issuer across profiles
-  // and organizations. Completion counters remain local to the unique profile.
-  // CEO decision required for cross-org linkage of individuals.
+  // Business receipts allocate from the private validated tax-ID issuer across
+  // profiles and organizations. Individual numbering is per company and bound
+  // to vendor_profiles.id: no cross-org identity or phone continuity across
+  // profiles. Cross-org 統編 linkage for individuals is post-11/9 backlog.
   const allocation = await one<{ seq: string; issued_at: string }>(
     client,
     `SELECT app.next_vendor_document_seq($1, $2)::text AS seq,

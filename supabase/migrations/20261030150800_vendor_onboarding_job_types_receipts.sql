@@ -268,7 +268,7 @@ REVOKE ALL ON TABLE public.vendor_issuers
 COMMENT ON TABLE public.vendor_issuers IS
   'Private validated tax-ID issuing identities. Receipt counters survive profile deletion and are shared across organizations. Access only through SECURITY DEFINER functions.';
 
--- Profiles remain organization-scoped; only issuing identity is shared.
+-- Profiles remain organization-scoped; only business issuing identity is shared.
 CREATE TABLE IF NOT EXISTS public.vendor_profiles (
   id                         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id                     uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -303,16 +303,19 @@ ALTER TABLE public.vendor_profiles
 ALTER TABLE public.vendor_profiles
   DROP CONSTRAINT IF EXISTS vendor_profiles_org_id_vendor_code_key;
 
--- Local individuals use their normalized onboarding phone as their stable
--- identity. Reject duplicate profiles rather than merging tenant contact data.
--- CEO decision required: whether/how to link individuals across organizations,
--- or reconcile an individual whose phone changes. No national ID is collected.
+-- Individual issuer identity is vendor_profiles.id; numbering is per company
+-- and profile, with no cross-org identity or phone-based continuity.
+-- This existing index is only a duplicate-profile guard on current phones.
+-- Updating a phone releases its old value for a new, independent profile.
+-- Swapping occupied phones requires a temporary unused phone; never merge or
+-- look up an issuer by phone. Cross-org 統編 linkage for individuals is
+-- post-11/9 backlog. No national ID is collected.
 CREATE UNIQUE INDEX IF NOT EXISTS vendor_profiles_individual_identity
   ON public.vendor_profiles (org_id, phone_e164)
   WHERE kind = 'individual';
 
 COMMENT ON TABLE public.vendor_profiles IS
-  'Organization-scoped profiles. Businesses bind to a private validated tax-ID issuer. Individuals are unique by normalized phone within an organization; cross-org individual linkage and phone-identity reconciliation require a CEO decision.';
+  'Organization-scoped profiles. Businesses bind to a private validated tax-ID issuer. Individual issuer identity is vendor_profiles.id: per-company/profile numbering, no cross-org identity and no phone-based continuity across profiles. Current-phone uniqueness is only a duplicate-profile guard; phone changes retain the profile and counter. Cross-org 統編 linkage for individuals is post-11/9 backlog.';
 
 CREATE OR REPLACE FUNCTION app.bind_vendor_issuer()
 RETURNS trigger
@@ -328,15 +331,13 @@ DECLARE
   v_code text;
 BEGIN
   -- Once established, identity cannot be repurposed to fork or transfer a
-  -- counter. Descriptive onboarding corrections remain available.
+  -- counter. Phone and descriptive onboarding corrections remain available.
   IF TG_OP = 'UPDATE' THEN
     IF NEW.id IS DISTINCT FROM OLD.id
        OR NEW.org_id IS DISTINCT FROM OLD.org_id
        OR NEW.contact_id IS DISTINCT FROM OLD.contact_id
        OR NEW.kind IS DISTINCT FROM OLD.kind
-       OR NEW.tax_id IS DISTINCT FROM OLD.tax_id
-       OR (OLD.kind = 'individual'
-           AND NEW.phone_e164 IS DISTINCT FROM OLD.phone_e164) THEN
+       OR NEW.tax_id IS DISTINCT FROM OLD.tax_id THEN
       RAISE EXCEPTION 'vendor issuing identity is immutable'
         USING ERRCODE = '23514';
     END IF;
@@ -383,6 +384,17 @@ DROP TRIGGER IF EXISTS vendor_profiles_bind_issuer ON public.vendor_profiles;
 CREATE TRIGGER vendor_profiles_bind_issuer
 BEFORE INSERT OR UPDATE ON public.vendor_profiles
 FOR EACH ROW EXECUTE FUNCTION app.bind_vendor_issuer();
+
+-- Reuse the contact/profile audit convention: fn_audit stores old/new row
+-- snapshots, including phone_e164, in the organization-scoped audit_log.
+-- AFTER UPDATE also covers onboarding's ON CONFLICT update and direct SQL;
+-- failed updates roll back the audit together with the profile change.
+DROP TRIGGER IF EXISTS vendor_profiles_individual_phone_audit ON public.vendor_profiles;
+CREATE TRIGGER vendor_profiles_individual_phone_audit
+AFTER UPDATE ON public.vendor_profiles
+FOR EACH ROW
+WHEN (OLD.kind = 'individual' AND OLD.phone_e164 IS DISTINCT FROM NEW.phone_e164)
+EXECUTE FUNCTION public.fn_audit();
 
 CREATE INDEX IF NOT EXISTS vendor_profiles_org_idx
   ON public.vendor_profiles (org_id, created_at DESC);
@@ -484,7 +496,7 @@ CREATE TABLE IF NOT EXISTS public.vendor_document_sequences (
 );
 
 COMMENT ON TABLE public.vendor_document_sequences IS
-  'Completion counters per organization/profile/kind. Receipt rows record only this profile''s last allocation; the private tax-ID issuer owns the receipt counter. Cross-org linkage of individuals requires a CEO decision.';
+  'Completion counters per organization/profile/kind. Receipt rows record only this profile''s last allocation; the private tax-ID issuer owns the receipt counter. Individual numbering is per company and bound to vendor_profiles.id, with no cross-org identity or phone-based continuity across profiles. Cross-org 統編 linkage for individuals is post-11/9 backlog.';
 
 ALTER TABLE public.vendor_document_sequences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vendor_document_sequences FORCE ROW LEVEL SECURITY;

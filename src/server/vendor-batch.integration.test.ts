@@ -1081,7 +1081,7 @@ test(
       assert.equal(await allocate(b, profiles[0]), 4, "failed issuance consumes nothing");
       await b.query("COMMIT");
 
-      // Individual duplicates in the same org cannot create a second counter.
+      // Current-phone uniqueness is only a same-org duplicate-profile guard.
       await a.query("BEGIN");
       await a.query("SET LOCAL ROLE service_role");
       await assert.rejects(a.query(
@@ -1091,12 +1091,14 @@ test(
         [ORG_ID, contacts[0], phone],
       ), { code: "23505" });
       await a.query("ROLLBACK");
+
+      // Business tax-ID identity remains immutable; individual phone updates
+      // and their audit/counter continuity have a dedicated integration suite.
       await a.query("BEGIN");
       await a.query("SET LOCAL ROLE service_role");
       await assert.rejects(a.query(
-        `UPDATE vendor_profiles SET phone_e164 = '+886900000000'
-          WHERE id = $1`,
-        [profiles[3]],
+        `UPDATE vendor_profiles SET tax_id = NULL WHERE id = $1`,
+        [profiles[0]],
       ), { code: "23514" });
       await a.query("ROLLBACK");
 
