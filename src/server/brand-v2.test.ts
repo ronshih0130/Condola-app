@@ -185,6 +185,18 @@ test("legacy binaries are unchanged public assets with no metadata file conventi
   assert.equal(existsSync(join(root, "src/app/manifest.ts")), false);
 });
 
+test("static asset headers preserve legacy icon caching for exactly two paths", () => {
+  const lines = read("public/_headers")
+    .split(/\r?\n/)
+    .filter((line) => line.trim() && !line.trimStart().startsWith("#"));
+  assert.deepEqual(lines, [
+    "/icon.svg",
+    "  Cache-Control: public, immutable, no-transform, max-age=31536000",
+    "/apple-icon.png",
+    "  Cache-Control: public, immutable, no-transform, max-age=31536000",
+  ]);
+});
+
 test("every declared public asset exists", () => {
   assert.equal(new Set(BRAND_V2_ASSETS).size, BRAND_V2_ASSETS.length);
   for (const asset of BRAND_V2_ASSETS) {
