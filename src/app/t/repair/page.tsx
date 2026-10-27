@@ -98,6 +98,7 @@ export default async function RepairPage({
             calendar={session.calendar}
             canComment
             canUpload
+            canViewPhotos={true}
             allowInternal={false}
             returnTo="tenant"
           />

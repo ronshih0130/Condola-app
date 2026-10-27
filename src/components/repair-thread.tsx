@@ -2,6 +2,7 @@ import { dictionary, type T, type Locale } from "@/i18n";
 import { formatDate } from "@/server/format";
 import { statusKey } from "@/components/ui";
 import { TicketPhotoUpload } from "@/components/ticket-photos";
+import { RepairPhotos } from "@/components/repair-photos";
 import { actionTicketComment } from "@/server/actions";
 import type { CalendarMode } from "@/server/types";
 
@@ -26,6 +27,7 @@ export function RepairThread({
   calendar,
   canComment,
   canUpload,
+  canViewPhotos,
   allowInternal,
   returnTo,
 }: {
@@ -37,6 +39,7 @@ export function RepairThread({
   calendar: CalendarMode;
   canComment: boolean;
   canUpload: boolean;
+  canViewPhotos: boolean;
   allowInternal: boolean;
   returnTo: "tenant" | "staff";
 }) {
@@ -92,26 +95,7 @@ export function RepairThread({
         </form>
       ) : null}
       <h3 style={{ marginTop: 16 }}>{t("i_repair_photos")}</h3>
-      {photos.length ? (
-        <div className="repair-photos" data-testid="repair-photos">
-          {photos.map((photo, index) => {
-            const href = `/api/tickets/photos/${photo.id}`;
-            return (
-              <a key={photo.id} href={href} target="_blank" rel="noreferrer">
-                {/* The browser follows a short-lived signed URL. The image optimizer would re-encode the file on the server. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={href} alt={t("i_repair_photo_alt", { n: index + 1 })} data-testid="repair-photo-preview" />
-                <span className="tiny">
-                  {photo.name}
-                  {photo.internal ? ` (${t("i_repair_internal")})` : ""}
-                </span>
-              </a>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="small muted">{t("i_repair_none")}</p>
-      )}
+      <RepairPhotos photos={photos} canView={canViewPhotos} t={t} />
       {canUpload ? (
         <TicketPhotoUpload
           ticketId={ticketId}

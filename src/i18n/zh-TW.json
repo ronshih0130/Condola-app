@@ -1815,6 +1815,7 @@
  "i_repair_cancel_locked": "已安排廠商，如需取消請聯絡管理公司。",
  "i_repair_timeline": "狀態歷程",
  "i_repair_photos": "照片",
+ "i_repair_photo_noperm": "無權限查看照片",
  "i_repair_photo_add": "新增",
  "i_repair_photo_alt": "照片 {n}",
  "i_repair_photo_hint": "支援 iPhone 照片、JPG、PNG、WEBP，單張 5 MB 以內。拍下問題位置和周圍環境，比較好判斷。",

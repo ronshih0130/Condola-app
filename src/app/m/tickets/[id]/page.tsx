@@ -162,6 +162,7 @@ export default async function TicketDetailPage({
             calendar={session.calendar}
             canComment={canWrite}
             canUpload={canWrite}
+            canViewPhotos={can(session.role, "tickets.update")}
             allowInternal={canWrite}
             returnTo="staff"
           />

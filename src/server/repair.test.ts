@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { RepairPhotos } from "@/components/repair-photos";
+import { makeT } from "@/i18n";
+import { can } from "@/server/perms";
 import { FlowError } from "./errors";
 import {
   EXPENSE_STATUSES,
@@ -121,7 +126,7 @@ test("photo rules cap size and type and never describe a re-encode", () => {
 
   const server = readFileSync(new URL("./ticket-photos.ts", import.meta.url), "utf8");
   const client = readFileSync(new URL("../components/ticket-photos.tsx", import.meta.url), "utf8");
-  const view = readFileSync(new URL("../components/repair-thread.tsx", import.meta.url), "utf8");
+  const view = readFileSync(new URL("../components/repair-photos.tsx", import.meta.url), "utf8");
   for (const source of [server, client, view]) {
     assert.equal(source.includes("sharp"), false);
     assert.equal(source.includes("createImageBitmap"), false);
@@ -470,4 +475,102 @@ test("confirm returns an attached photo and deletes only an unattached upload is
     if (previous === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = previous;
   }
+});
+
+test("RepairPhotos hides accountant photos behind one permission notice", () => {
+  const t = makeT("zh-TW");
+  const canView = can("accountant", "tickets.update");
+  assert.equal(canView, false);
+  const photos = [
+    { id: "photo-1", name: "one.jpg", internal: false },
+    { id: "photo-2", name: "two.jpg", internal: true },
+    { id: "photo-3", name: "three.jpg", internal: false },
+  ];
+  const html = renderToStaticMarkup(React.createElement(RepairPhotos, { photos, canView, t }));
+
+  assert.equal(html.split("無權限查看照片").length - 1, 1);
+  assert.equal((html.match(/data-testid="repair-photo-noperm"/g) ?? []).length, 1);
+  for (const forbidden of ["<img", "/api/tickets/photos", "<button", "<a "]) {
+    assert.equal(html.includes(forbidden), false, forbidden);
+  }
+});
+
+test("RepairPhotos renders two admin photo previews", () => {
+  const t = makeT("zh-TW");
+  const canView = can("admin", "tickets.update");
+  assert.equal(canView, true);
+  const photos = [
+    { id: "admin-photo-1", name: "one.jpg", internal: false },
+    { id: "admin-photo-2", name: "two.jpg", internal: true },
+  ];
+  const html = renderToStaticMarkup(React.createElement(RepairPhotos, { photos, canView, t }));
+  const images = html.match(/<img\b[^>]*>/g) ?? [];
+
+  assert.equal(images.length, 2);
+  for (const [index, photo] of photos.entries()) {
+    assert.ok(images[index].includes(`src="/api/tickets/photos/${photo.id}"`));
+    assert.ok(images[index].includes('data-testid="repair-photo-preview"'));
+  }
+  assert.equal(html.includes("無權限查看照片"), false);
+  assert.equal(html.includes("repair-photo-noperm"), false);
+});
+
+for (const role of ["manager", "maintenance"] as const) {
+  test(`RepairPhotos renders thumbnails for ${role}`, () => {
+    const t = makeT("zh-TW");
+    const canView = can(role, "tickets.update");
+    assert.equal(canView, true);
+    const photos = [
+      { id: `${role}-photo`, name: "repair.jpg", internal: false },
+    ];
+    const html = renderToStaticMarkup(React.createElement(RepairPhotos, { photos, canView, t }));
+    const images = html.match(/<img\b[^>]*>/g) ?? [];
+
+    assert.equal(images.length, 1);
+    assert.ok(images[0].includes(`src="/api/tickets/photos/${photos[0].id}"`));
+    assert.ok(images[0].includes('data-testid="repair-photo-preview"'));
+    assert.equal(html.includes("repair-photo-noperm"), false);
+  });
+}
+
+for (const canView of [true, false]) {
+  test(`RepairPhotos renders the empty state with canView=${canView}`, () => {
+    const t = makeT("zh-TW");
+    const html = renderToStaticMarkup(
+      React.createElement(RepairPhotos, { photos: [], canView, t }),
+    );
+
+    assert.notEqual(t("i_repair_none"), "i_repair_none");
+    assert.ok(html.includes(t("i_repair_none")));
+    assert.equal(html.includes("<img"), false);
+    assert.equal(html.includes("repair-photo-noperm"), false);
+    assert.equal(html.includes(t("i_repair_photo_noperm")), false);
+  });
+}
+
+test("RepairPhotos shows the English permission notice for accountants", () => {
+  const t = makeT("en");
+  const canView = can("accountant", "tickets.update");
+  assert.equal(canView, false);
+  const photos = [{ id: "english-photo", name: "repair.jpg", internal: false }];
+  const html = renderToStaticMarkup(React.createElement(RepairPhotos, { photos, canView, t }));
+
+  assert.ok(html.includes("No permission to view photos"));
+  assert.equal(html.includes("<img"), false);
+});
+
+test("repair page wires photo permissions and thread delegates photo rendering", () => {
+  const page = readFileSync(new URL("../app/m/tickets/[id]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /canViewPhotos=\{can\(session\.role, "tickets\.update"\)\}/);
+
+  const thread = readFileSync(new URL("../components/repair-thread.tsx", import.meta.url), "utf8");
+  assert.ok(thread.includes("<RepairPhotos"));
+  assert.equal(thread.includes("<img"), false);
+});
+
+test("Traditional Chinese photo permission notice has the expected translation", () => {
+  const dictionary = JSON.parse(
+    readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8"),
+  );
+  assert.equal(dictionary.i_repair_photo_noperm, "無權限查看照片");
 });
