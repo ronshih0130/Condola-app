@@ -17,6 +17,7 @@ ALTER TABLE public.organizations ALTER COLUMN id_doc_retention_days
   SET DEFAULT public.platform_max_id_retention_days();
 
 CREATE OR REPLACE FUNCTION public.fn_org_retention_guard() RETURNS trigger
+SET search_path = pg_catalog, public
 LANGUAGE plpgsql AS $$
 DECLARE
   v_cap integer := public.platform_max_id_retention_days();
@@ -32,6 +33,7 @@ BEGIN
 END $$;
 
 CREATE OR REPLACE FUNCTION public.fn_platform_retention_clamp() RETURNS trigger
+SET search_path = pg_catalog, public
 LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.key = 'id_documents.max_retention_days_after_close' THEN
