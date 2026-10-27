@@ -1,6 +1,6 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
-import { FlowError } from "@/server/errors";
+import { FlowError, safeDbCode, safeDbIdentifier, safeErrorReason } from "@/server/errors";
 import { commitImportBatch, dryRunImport, previewImport, readImportBody } from "@/server/import-batch";
 import { readSession } from "@/server/session";
 import type { Session } from "@/server/types";
@@ -79,20 +79,27 @@ function logImportFailure(error: unknown) {
   const metadata = reported && typeof reported === "object"
     ? reported as { code?: unknown; constraint?: unknown }
     : undefined;
-  const reason = cause && typeof cause === "object" && "reason" in cause ? cause.reason : undefined;
+  const reason = safeErrorReason(
+    cause && typeof cause === "object" && "reason" in cause ? cause.reason : undefined,
+  );
   const safeToken = (value: unknown, pattern: RegExp) =>
     typeof value === "string" && pattern.test(value) ? value : undefined;
   const name = error instanceof FlowError
     ? "FlowError"
     : error instanceof Error
       ? safeToken(error.name, /^(?:Error|TypeError|RangeError|SyntaxError|ReferenceError|URIError|EvalError|AggregateError)$/) ?? "Error"
-      : "UnknownError";
-  // mapDbError may also emit its own redacted database line.
+      : "Error";
+  const key = error instanceof FlowError
+    ? safeToken(error.key, /^errors\.[a-zA-Z][a-zA-Z0-9_]{0,63}$/)
+    : undefined;
+  const code = safeDbCode(metadata?.code);
+  const constraint = safeDbIdentifier(metadata?.constraint);
   console.error("import failed", {
     name,
-    ...(error instanceof FlowError ? { key: safeToken(error.key, /^errors\.[a-zA-Z][a-zA-Z0-9_]{0,63}$/) } : {}),
-    code: safeToken(metadata?.code, /^[0-9A-Z]{5}$/),
-    constraint: safeToken(metadata?.constraint, /^[a-z_][a-z0-9_]{0,62}$/),
-    reason: safeToken(reason, /^[a-z0-9_.:-]{1,64}$/),
+    ...(key === undefined ? {} : { key }),
+    ...(code === undefined ? {} : { code }),
+    ...(constraint === undefined ? {} : { constraint }),
+    ...(reason === undefined ? {} : { reason }),
   });
 }
+

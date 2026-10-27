@@ -7,93 +7,60 @@ export class FlowError extends Error {
   }
 }
 
-const HEX_BLOB = /\\x[0-9a-fA-F]{8,}/g;
-const B64_BLOB = /[A-Za-z0-9+/]{40,}={0,2}/g;
-const TWID = /[A-Z][1289]\d{8}/g;
-const ARC = /[A-Z]{2}\d{8}/g;
-const PASSPORT = /\b[A-Z]{1,2}\d{5,10}\b/g;
-const EMAIL = /[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+/gi;
-const PHONE = /(?<!\w)\+?\d(?:[\d ().-]{5,}\d)(?!\w)/g;
-const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
-const KEY_DETAIL = /\([^)]*\)\s*=\s*\([^\r\n]*/g;
-const QUOTED = /'(?:[^'\\]|\\.|'')*(?:'|$)|"(?:[^"\\]|\\.|"")*(?:"|$)/g;
+export const SAFE_ERROR_REASONS = Object.freeze([
+  "invalid_ticket_pricing",
+  "missing_seal_image",
+  "vendor_profile_incomplete",
+  "ticket_not_closed",
+  "invalid_ticket_cost",
+  "vendor_pdf_pagination_overflow",
+  "vendor_pdf_font_unavailable",
+  "vendor_pdf_font_origin_required",
+  "vendor_pdf_final_group_too_large",
+  "vendor_document_integrity_failure",
+  "reissue_required",
+  "missing_work_address",
+  "missing_correction_reason",
+  "missing_buyer_selection",
+  "invalid_service_job_types",
+  "invalid_seal_file",
+  "invalid_reissue_source",
+  "invalid_issue_time",
+  "invalid_idempotency_key",
+  "invalid_document_date",
+  "idempotency_key_conflict",
+  "document_not_issued",
+  "document_already_reissued",
+  "document_already_issued",
+  "insufficient_privilege",
+] as const);
 
-function redactTokens(raw: string) {
-  return raw
-    .replace(EMAIL, "[email]")
-    .replace(UUID, "[uuid]")
-    .replace(HEX_BLOB, "\\x…")
-    .replace(B64_BLOB, "[redacted]")
-    .replace(TWID, "[id]")
-    .replace(ARC, "[arc]")
-    .replace(PASSPORT, "[doc]")
-    .replace(PHONE, "[phone]")
-    .replace(/\d{7,}/g, "[redacted]");
+export function safeErrorReason(value: unknown): string | undefined {
+  return typeof value === "string" && SAFE_ERROR_REASONS.some((reason) => reason === value)
+    ? value
+    : undefined;
 }
 
-/** Redact values and personal tokens, preserving contextual schema identifiers. */
+export function safeDbCode(value: unknown): string | undefined {
+  return typeof value === "string" && /^[0-9A-Z]{5}$/.test(value) ? value : undefined;
+}
+
+export function safeDbIdentifier(value: unknown): string | undefined {
+  return typeof value === "string" && /^[a-z_][a-z0-9_]{0,62}$/.test(value) ? value : undefined;
+}
+
+/** Compatibility API: arbitrary server messages always become fixed safe text. */
 export function redactServerMessage(raw: string) {
-  const message = raw.replace(KEY_DETAIL, "[redacted]");
-  let result = "";
-  let cursor = 0;
-  for (const match of message.matchAll(QUOTED)) {
-    const literal = match[0];
-    const offset = match.index!;
-    result += redactTokens(message.slice(cursor, offset));
-    const isIdentifier =
-      /^"[a-z_][a-z0-9_]*"$/.test(literal) &&
-      /\b(?:constraint|relation|table|column|index|type|function|trigger|schema)\s+$/i.test(message.slice(0, offset));
-    result += isIdentifier ? literal : `${literal[0]}[redacted]${literal[0]}`;
-    cursor = offset + literal.length;
-  }
-  result += redactTokens(message.slice(cursor));
-  return result.slice(0, 200);
+  void raw;
+  return "database error";
 }
 
 function pgText(value: unknown) {
   return typeof value === "string" ? value : undefined;
 }
 
-/** Server log line with the driver code and a short redacted message. No names or ID numbers. */
-export function logServerError(tag: string, error: unknown) {
-  const err = error as {
-    name?: string;
-    message?: string;
-    code?: string;
-    routine?: string;
-    severity?: string;
-    constraint?: string;
-    table?: string;
-    column?: string;
-  };
-  const raw = err?.message ?? (error instanceof Error ? error.message : String(error));
-  const message = redactServerMessage(raw);
-  console.error(`${tag} failed`, {
-    code: pgText(err?.code),
-    routine: pgText(err?.routine),
-    severity: pgText(err?.severity),
-    constraint: pgText(err?.constraint),
-    table: pgText(err?.table),
-    column: pgText(err?.column),
-    message,
-  });
-}
-
-/** Lock, statement, and connect timeouts. These must not fall through to the generic banner. */
-export function isDbTimeout(error: unknown) {
-  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    code === "55P03" ||
-    code === "57014" ||
-    /lock timeout|canceling statement due to statement timeout|statement timeout|timeout exceeded when trying to connect/i.test(message)
-  );
-}
-
-export function mapDbError(error: unknown): Error {
-  if (error instanceof FlowError) return error;
+function dbErrorKey(error: unknown) {
   const message = pgText((error as { message?: unknown } | null)?.message) ?? String(error);
-  logServerError("database", error);
   let key = "errors.generic";
   if (/row-level security|permission denied|insufficient_privilege/i.test(message)) key = "errors.forbidden";
   else if (/override reason|exceeds bill average/i.test(message)) key = "errors.capReason";
@@ -115,17 +82,63 @@ export function mapDbError(error: unknown): Error {
   else if (/expense is on an issued statement/i.test(message)) key = "errors.expenseLocked";
   else if (/id_doc_retention_days/i.test(message)) key = "errors.idRetention";
   else if (/identity number must be stored masked/i.test(message)) key = "errors.idNumber";
+  return key;
+}
+
+function logDatabaseError(tag: string, error: unknown, key: string) {
+  const metadata = error as {
+    code?: unknown;
+    constraint?: unknown;
+    table?: unknown;
+    column?: unknown;
+  } | null;
+  const code = safeDbCode(metadata?.code);
+  const constraint = safeDbIdentifier(metadata?.constraint);
+  const table = safeDbIdentifier(metadata?.table);
+  const column = safeDbIdentifier(metadata?.column);
+  console.error(`${tag} failed`, {
+    ...(code === undefined ? {} : { code }),
+    ...(constraint === undefined ? {} : { constraint }),
+    key,
+    ...(table === undefined ? {} : { table }),
+    ...(column === undefined ? {} : { column }),
+    message: "database error",
+  });
+}
+
+/** Log validated database metadata and fixed safe text. */
+export function logServerError(tag: string, error: unknown) {
+  logDatabaseError(tag, error, dbErrorKey(error));
+}
+
+/** Lock, statement, and connect timeouts. These must not fall through to the generic banner. */
+export function isDbTimeout(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    code === "55P03" ||
+    code === "57014" ||
+    /lock timeout|canceling statement due to statement timeout|statement timeout|timeout exceeded when trying to connect/i.test(message)
+  );
+}
+
+export function mapDbError(error: unknown): Error {
+  if (error instanceof FlowError) return error;
+  const key = dbErrorKey(error);
+  logDatabaseError("database", error, key);
   const wrapped = new FlowError(key);
   const metadata = error as { code?: unknown; constraint?: unknown } | null;
-  const code = pgText(metadata?.code);
-  const constraint = pgText(metadata?.constraint);
-  const isPgError = (code !== undefined && /^[0-9A-Z]{5}$/.test(code)) || constraint !== undefined;
+  const code = safeDbCode(metadata?.code);
+  const constraint = safeDbIdentifier(metadata?.constraint);
+  const isPgError = code !== undefined || pgText(metadata?.constraint) !== undefined;
+  const reason = !isPgError && error instanceof Error
+    ? safeErrorReason(error.message)
+    : undefined;
   wrapped.cause = {
-    code,
-    constraint,
-    ...(!isPgError && error instanceof Error && /^[a-z0-9_.:-]{1,64}$/.test(message)
-      ? { reason: message }
-      : {}),
+    ...(code === undefined ? {} : { code }),
+    ...(constraint === undefined ? {} : { constraint }),
+    ...(reason === undefined ? {} : { reason }),
   };
   return wrapped;
 }
+
