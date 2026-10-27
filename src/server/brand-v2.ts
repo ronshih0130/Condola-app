@@ -7,6 +7,25 @@ export function brandV2Enabled(env: Record<string, string | undefined> = process
 export const BRAND_V2_THEME_COLOR = "#14325C";
 export const LEGACY_THEME_COLOR = "#2E2622";
 
+export function brandMetadata(
+  locale: "zh-TW" | "en",
+  env: Record<string, string | undefined> = process.env,
+): Partial<Metadata> {
+  if (brandV2Enabled(env)) return brandV2Metadata(locale, env);
+  return {
+    manifest: "/manifest.webmanifest",
+    icons: {
+      icon: [
+        { url: "/favicon.ico", type: "image/x-icon", sizes: "16x16" },
+        { url: "/icon.svg?e3e157dd9f40b850", type: "image/svg+xml", sizes: "any" },
+      ],
+      apple: [
+        { url: "/apple-icon.png?9721f2c0ec0085a3", type: "image/png", sizes: "180x180" },
+      ],
+    },
+  };
+}
+
 export function brandV2Metadata(
   locale: "zh-TW" | "en",
   env: Record<string, string | undefined> = process.env,
@@ -33,12 +52,13 @@ export function brandV2Metadata(
 
   return {
     metadataBase,
+    manifest: "/brand/v2/favicon/site.webmanifest",
     icons: {
       icon: [
         { url: "/brand/v2/favicon/favicon.svg", type: "image/svg+xml" },
-        { url: "/brand/v2/favicon/favicon.ico" },
+        { url: "/brand/v2/favicon/favicon.ico?v=20261027", sizes: "16x16 32x32 48x48" },
       ],
-      apple: [{ url: "/brand/v2/favicon/apple-touch-icon.png" }],
+      apple: [{ url: "/brand/v2/favicon/apple-touch-icon.png", sizes: "180x180" }],
     },
     openGraph: {
       images: [
@@ -54,8 +74,12 @@ export function brandV2Metadata(
 
 export const BRAND_V2_ASSETS = [
   "/brand/v2/theme.css",
-  "/brand/v2/logo/lockup_en_dark.svg",
-  "/brand/v2/logo/symbol_dark.svg",
+  "/brand/v2/logo/lockup_en_color.svg",
+  "/brand/v2/logo/symbol_color.svg",
+  "/brand/v2/fonts/Inter-latin-wght.woff2",
+  "/brand/v2/fonts/PlusJakartaSans-latin-wght.woff2",
+  "/brand/v2/fonts/LICENSE-Inter.txt",
+  "/brand/v2/fonts/LICENSE-PlusJakartaSans.txt",
   "/brand/v2/og/og-zh-1200x630.png",
   "/brand/v2/og/og-en-1200x630.png",
   "/brand/v2/favicon/favicon.svg",

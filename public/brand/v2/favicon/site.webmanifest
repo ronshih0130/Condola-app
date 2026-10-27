@@ -1,8 +1,8 @@
 {
   "name": "Condola 租多啦",
-  "short_name": "租多啦",
+  "short_name": "Condola",
   "theme_color": "#14325C",
-  "background_color": "#FFFFFF",
+  "background_color": "#F4F6F8",
   "display": "standalone",
   "icons": [
     {

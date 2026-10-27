@@ -1,16 +1,37 @@
 /* Source: /workspace/pm-saas/design/brand-v2/tokens.css.
-   Scoped Lane A adaptation: color, radius, elevation and font properties only. */
+   Font registrations load only with this ON-only stylesheet.
+   Every style selector is scoped to the v2 root. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/brand/v2/fonts/Inter-latin-wght.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/brand/v2/fonts/PlusJakartaSans-latin-wght.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF,U+FEFF,U+FFFD;
+}
+
 html[data-brand="v2"] {
   --c-bg: #F4F6F8;
   --c-surface: #FFFFFF;
   --c-surface-2: #EEF2F6;
   --c-border: #DDE3EA;
   --c-divider: #E8ECF1;
+  --c-border-strong: #7F8B9C;
+  --c-focus: #2F6BFF;
   --c-text: #1B2533;
   --c-text-2: #4A5668;
   --c-text-3: #687384;
   --c-primary: #14325C;
   --c-primary-hover: #0F2748;
+  --c-primary-pressed: #0B1F3A;
   --c-primary-soft: #E3EAF3;
   --c-on-primary: #FFFFFF;
   --c-brand: #2F6BFF;
@@ -29,6 +50,7 @@ html[data-brand="v2"] {
   --font-sans: "Inter", "Inter Variable", "Noto Sans TC", "Noto Sans CJK TC", -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --font-display: "Plus Jakarta Sans", "Inter", "Noto Sans TC", "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --font-features: "tnum" 1, "cv11" 1;
+  --font: var(--font-sans);
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
@@ -38,6 +60,7 @@ html[data-brand="v2"] {
 
   --cd-primary: #14325C;
   --cd-primary-hover: #0F2748;
+  --cd-primary-pressed: var(--c-primary-pressed);
   --cd-primary-soft: #E3EAF3;
   --cd-accent: #2F6BFF;
   --cd-accent-soft: #E8EFFF;
@@ -47,6 +70,14 @@ html[data-brand="v2"] {
   --cd-surface: #FFFFFF;
   --cd-surface2: #EEF2F6;
   --cd-border: #DDE3EA;
+  --cd-border-strong: var(--c-border-strong);
+  --cd-cream: var(--c-bg);
+  --cd-focus: var(--c-focus);
+  --cd-focus-ring: 0 0 0 2px #fff, 0 0 0 4px var(--c-focus);
+  --cd-topbar: #FFFFFF;
+  --cd-topbar-2: var(--c-surface-2);
+  --cd-topbar-3: var(--c-surface-2);
+  --cd-topbar-4: var(--c-divider);
   --cd-success: #2A7254;
   --cd-success-bg: #E3F1EA;
   --cd-warning: #935C0F;
@@ -58,4 +89,94 @@ html[data-brand="v2"] {
   --cd-radius-sm: 6px;
   --cd-radius-md: 10px;
   --cd-radius-lg: 14px;
+}
+
+html[data-brand="v2"] body {
+  font-feature-settings: var(--font-features);
+}
+html[data-brand="v2"] .wordmark,
+html[data-brand="v2"] h1,
+html[data-brand="v2"] h2,
+html[data-brand="v2"] .display-face {
+  font-family: var(--font-display);
+}
+html[data-brand="v2"] input,
+html[data-brand="v2"] select,
+html[data-brand="v2"] textarea,
+html[data-brand="v2"] button {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+html[data-brand="v2"] .num,
+html[data-brand="v2"] .kpi .val,
+html[data-brand="v2"] .display {
+  font-family: var(--font-latin), var(--font-cjk), sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+html[data-brand="v2"] header.top {
+  border-bottom: 1px solid var(--c-divider);
+  color: var(--c-text);
+}
+html[data-brand="v2"] header.top a,
+html[data-brand="v2"] header.top .brand,
+html[data-brand="v2"] header.top .nav,
+html[data-brand="v2"] header.top .nav a,
+html[data-brand="v2"] header.top .nav button,
+html[data-brand="v2"] header.top .nav-toggle {
+  color: var(--c-primary);
+}
+html[data-brand="v2"] header.top .tabs button,
+html[data-brand="v2"] header.top .tabs a,
+html[data-brand="v2"] header.top .seg button,
+html[data-brand="v2"] header.top .seg a,
+html[data-brand="v2"] header.top .btn,
+html[data-brand="v2"] header.top select.top-field,
+html[data-brand="v2"] .demo-pill,
+html[data-brand="v2"] .env-switch summary,
+html[data-brand="v2"] .env-switch .env-toggle {
+  color: var(--c-text);
+}
+html[data-brand="v2"] header.top .tabs button.on,
+html[data-brand="v2"] header.top .tabs a.on,
+html[data-brand="v2"] header.top .tabs button:hover,
+html[data-brand="v2"] header.top .tabs a:hover,
+html[data-brand="v2"] header.top .seg button.on,
+html[data-brand="v2"] header.top .seg a.on {
+  color: var(--c-primary);
+  background: var(--c-surface-2);
+}
+html[data-brand="v2"] header.top .btn,
+html[data-brand="v2"] header.top .seg,
+html[data-brand="v2"] header.top select.top-field,
+html[data-brand="v2"] header.top .nav-toggle,
+html[data-brand="v2"] .env-switch summary,
+html[data-brand="v2"] .env-switch .env-toggle {
+  border-color: var(--c-border-strong);
+}
+html[data-brand="v2"] header.top .btn:disabled,
+html[data-brand="v2"] header.top .btn[disabled] {
+  color: var(--c-text-3);
+  background: var(--c-surface-2);
+}
+html[data-brand="v2"] header.top :focus-visible,
+html[data-brand="v2"] .seg button:focus-visible,
+html[data-brand="v2"] .seg a:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+html[data-brand="v2"] .btn.pri:focus-visible,
+html[data-brand="v2"] .seg button.on:focus-visible,
+html[data-brand="v2"] .seg a.on:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+  box-shadow: var(--cd-focus-ring);
+}
+/* The consent banner also consumes --top; preserve its navy/white contrast. */
+html[data-brand="v2"] .consent {
+  --top: var(--c-primary);
+  --top-2: var(--c-primary-hover);
+  --cream: var(--c-on-primary);
 }

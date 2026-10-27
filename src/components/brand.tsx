@@ -12,8 +12,8 @@ const LOCKUP = {
 export type BrandVariant = keyof typeof LOCKUP;
 
 const V2_HEADER = {
-  horizontalDark: "/brand/v2/logo/lockup_en_dark.svg",
-  symbolSmall: "/brand/v2/logo/symbol_dark.svg",
+  horizontalDark: "/brand/v2/logo/lockup_en_color.svg",
+  symbolSmall: "/brand/v2/logo/symbol_color.svg",
 } as const;
 
 export function BrandImage({

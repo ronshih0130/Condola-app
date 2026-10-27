@@ -8,7 +8,7 @@ import { RequiredValidity } from "@/components/required-validity";
 import { EnvBanner } from "@/components/env-mode";
 import { LocaleProvider } from "@/components/locale";
 import { demoModeEnabled } from "@/server/demo";
-import { brandV2Enabled, brandV2Metadata, BRAND_V2_THEME_COLOR, LEGACY_THEME_COLOR } from "@/server/brand-v2";
+import { brandV2Enabled, brandMetadata, BRAND_V2_THEME_COLOR, LEGACY_THEME_COLOR } from "@/server/brand-v2";
 import { sandboxChrome } from "@/server/sandbox";
 import { readSession, requestPrefs } from "@/server/session";
 import "./globals.css";
@@ -21,8 +21,7 @@ export async function generateViewport(): Promise<Viewport> {
 
 export async function generateMetadata(): Promise<Metadata> {
   const prefs = await requestPrefs();
-  if (!brandV2Enabled()) return { title: makeT(prefs.locale)("i_brand") };
-  return { title: makeT(prefs.locale)("i_brand"), ...brandV2Metadata(prefs.locale) };
+  return { title: makeT(prefs.locale)("i_brand"), ...brandMetadata(prefs.locale) };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -36,6 +35,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={prefs.locale === "zh-TW" ? "zh-Hant-TW" : "en"} {...(v2 ? { "data-brand": "v2" } : {})}>
       {v2 ? (
         <head>
+          <link
+            rel="preload"
+            as="font"
+            type="font/woff2"
+            crossOrigin="anonymous"
+            href="/brand/v2/fonts/Inter-latin-wght.woff2"
+          />
           {
             // Load the external theme only for v2 to preserve OFF behavior without changing globals.css.
             // eslint-disable-next-line @next/next/no-css-tags
