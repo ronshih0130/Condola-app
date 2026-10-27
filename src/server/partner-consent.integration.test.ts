@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import type { Client } from "pg";
+import { Client } from "pg";
 import { buildStoredConsent } from "./consent";
 import { requireCurrentConsent } from "./consent-gate";
 import { query, svc, withClient } from "./db";
@@ -132,110 +132,131 @@ test("partner migration applies twice; staff RLS, ACL, append-only triggers and 
   });
 });
 
-test("partner signup OFF is unchanged; ON requires checkbox, rolls back failures, writes pair, then gate passes", { timeout: 180_000 }, async () => {
-  const key = "design_partner_consent_gate";
-  const saved = await query<{ value: unknown; description: string | null }>(
-    "SELECT value, description FROM platform_settings WHERE key = $1", [key],
-  );
-  const users: string[] = [];
-  const orgs: string[] = [];
-  async function flag(value: unknown) {
-    await query(
-      `INSERT INTO platform_settings (key, value, description) VALUES ($1, $2::jsonb, 'partner consent integration')
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-      [key, JSON.stringify(value)],
-    );
-  }
-  async function user() {
-    const id = randomUUID();
-    users.push(id);
-    const email = id + "@partner-signup.example.com";
-    await query("INSERT INTO auth.users (id, email, email_confirmed_at) VALUES ($1, $2, now())", [id, email]);
-    await query("INSERT INTO profiles (id, display_name, email) VALUES ($1, 'Signer', $2)", [id, email]);
-    return { id, email };
-  }
-  function input(person: { id: string; email: string }, name: string) {
-    return {
-      userId: person.id, email: person.email, name, kind: "firm", contactName: "Signer",
-      phone: "", partnerCode: "", partnerLocale: "en", partnerRuntime: runtime,
-      consentRepo: { read: async () => buildStoredConsent("signup"), write: async () => {} },
-    };
-  }
-  try {
-    await flag("off");
-    const old = await user();
-    const unchanged = await createFirm(input(old, "Partner-off-" + old.id));
-    assert.ok(unchanged.ok);
-    if (!unchanged.ok) throw new Error("OFF signup failed");
-    orgs.push(unchanged.orgId);
-    assert.equal((await query("SELECT 1 FROM partner_agreement_consents WHERE company_id = $1", [unchanged.orgId])).rowCount, 0);
+test("partner signup OFF is unchanged; ON requires checkbox, rolls back failures, writes pair, then gate passes", { timeout: 180_000 }, async (t) => {
+  await withClient(async (client) => {
+    const execute = client.query.bind(client);
+    await execute("BEGIN");
 
-    await flag("on");
-    const person = await user();
-    const name = "Partner-on-" + person.id;
-    assert.deepEqual(await createFirm(input(person, name)), { ok: false, error: "consent" });
-    assert.equal((await query("SELECT 1 FROM organizations WHERE name = $1", [name])).rowCount, 0);
-    await assert.rejects(createFirm({
-      ...input(person, name), partnerConsent: true, partnerMeta: { ip: "invalid-inet", ua: "x" },
-    }));
-    assert.equal((await query("SELECT 1 FROM organizations WHERE name = $1", [name])).rowCount, 0);
-    assert.equal((await query("SELECT 1 FROM partner_agreement_consents WHERE user_id = $1", [person.id])).rowCount, 0);
-
-    const created = await createFirm({
-      ...input(person, name), partnerConsent: true, partnerMeta: { ip: "203.0.113.9", ua: "x".repeat(900) },
-    });
-    assert.ok(created.ok);
-    if (!created.ok) throw new Error("ON signup failed");
-    orgs.push(created.orgId);
-    const current = session(person.id, created.orgId);
-    const state = await withClient((client) => readPartnerStateOn(client, current, runtime));
-    assert.equal(state.active, true);
-    assert.equal(state.required, false);
-    assert.equal(await requireCurrentConsent({ ...current, partnerConsent: state }, "api"), null);
-    const evidence = await query(
-      `SELECT doc_type, version, document_sha256, user_id::text, ip_address::text AS ip,
-              user_agent, consented_at
-         FROM partner_agreement_consents WHERE company_id = $1`, [created.orgId],
-    );
-    assert.equal(evidence.rowCount, 2);
-    for (const doc of state.documents) {
-      const row = evidence.rows.find((row) => row.doc_type === doc.doc_type);
-      assert.ok(row, `missing evidence for ${doc.doc_type}`);
-      assert.equal(row.document_sha256, doc.sha256);
-      assert.equal(row.version, doc.version);
-      assert.equal(row.user_id, person.id);
-      assert.equal(row.ip, "203.0.113.9/32");
-      assert.equal(row.user_agent.length, 512);
-      assert.ok(Number.isFinite(new Date(row.consented_at).getTime()));
+    // Production helpers open their own clients and transactions. Keep their
+    // real SQL on this connection, using savepoints for their transaction
+    // boundaries so COMMIT cannot persist any fixture or sandbox seed data.
+    // These mocks are scoped to this serial test and restored in finally.
+    t.mock.method(Client.prototype, "connect", async () => {});
+    t.mock.method(Client.prototype, "end", async () => {});
+    t.mock.method(Client.prototype, "query", (async (
+      sql: string, params?: unknown[],
+    ) => {
+      switch (sql.trim().toUpperCase()) {
+        case "BEGIN":
+          return execute("SAVEPOINT partner_signup_operation");
+        case "COMMIT":
+          // A real COMMIT ends SET LOCAL ROLE. Restore that boundary while
+          // keeping successful writes inside the rollback-owned transaction.
+          await execute("RESET ROLE");
+          return execute("RELEASE SAVEPOINT partner_signup_operation");
+        case "ROLLBACK":
+          await execute("ROLLBACK TO SAVEPOINT partner_signup_operation");
+          return execute("RELEASE SAVEPOINT partner_signup_operation");
+        default:
+          return execute(sql, params);
+      }
+    }) as Client["query"]);
+    const key = "design_partner_consent_gate";
+    async function flag(value: unknown) {
+      await query(
+        `INSERT INTO platform_settings (key, value, description) VALUES ($1, $2::jsonb, 'partner consent integration')
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [key, JSON.stringify(value)],
+      );
     }
-    // Real concurrent transactions exercise the company lock and idempotence.
-    await Promise.all([1, 2].map(() => svc(person.id, (client) =>
-      recordPartnerConsentOn(client, current, true, { ip: "203.0.113.9", ua: "again" }, runtime))));
-    assert.equal((await query("SELECT 1 FROM partner_agreement_consents WHERE company_id = $1", [created.orgId])).rowCount, 2);
-
-    const history = await partnerConsentHistory({ ...current, partnerConsent: state });
-    assert.equal(history.length, 2);
-    assert.ok(history.every((row) => row.consenter.includes("Signer") && row.consenter.includes(person.email)));
-    const bump = partnerTestRuntime();
-    bump.config.documents.partner_agreement.find((doc) => doc.locale === "en")!.version = "v0.2";
-    assert.equal((await withClient((client) => readPartnerStateOn(client, current, bump))).required, true);
-
-    await query("UPDATE org_members SET role = 'manager' WHERE org_id = $1 AND user_id = $2", [created.orgId, person.id]);
-    await assert.rejects(svc(person.id, (client) =>
-      recordPartnerConsentOn(client, current, true, { ip: null, ua: null }, runtime)));
-    const nonAdmin = await withClient((client) => readPartnerStateOn(client, current, bump));
-    assert.equal(nonAdmin.admin, false);
-    assert.equal(nonAdmin.required, true);
-  } finally {
-    if (orgs.length) await query(
-      "DELETE FROM organizations WHERE id = ANY($1::uuid[]) OR live_org_id = ANY($1::uuid[])", [orgs],
-    );
-    if (users.length) await query("DELETE FROM auth.users WHERE id = ANY($1::uuid[])", [users]);
-    if (saved.rows[0]) {
-      await query("UPDATE platform_settings SET value = $2::jsonb, description = $3 WHERE key = $1",
-        [key, JSON.stringify(saved.rows[0].value), saved.rows[0].description]);
-    } else {
-      await query("DELETE FROM platform_settings WHERE key = $1", [key]);
+    async function user() {
+      const id = randomUUID();
+      const email = id + "@partner-signup.example.com";
+      await query("INSERT INTO auth.users (id, email, email_confirmed_at) VALUES ($1, $2, now())", [id, email]);
+      await query("INSERT INTO profiles (id, display_name, email) VALUES ($1, 'Signer', $2)", [id, email]);
+      return { id, email };
     }
-  }
+    function input(person: { id: string; email: string }, name: string) {
+      return {
+        userId: person.id, email: person.email, name, kind: "firm", contactName: "Signer",
+        phone: "", partnerCode: "", partnerLocale: "en", partnerRuntime: runtime,
+        consentRepo: { read: async () => buildStoredConsent("signup"), write: async () => {} },
+      };
+    }
+    try {
+      await flag("off");
+      const old = await user();
+      const unchanged = await createFirm(input(old, "Partner-off-" + old.id));
+      assert.ok(unchanged.ok);
+      if (!unchanged.ok) throw new Error("OFF signup failed");
+      assert.equal((await query("SELECT 1 FROM partner_agreement_consents WHERE company_id = $1", [unchanged.orgId])).rowCount, 0);
+
+      await flag("on");
+      const person = await user();
+      const name = "Partner-on-" + person.id;
+      assert.deepEqual(await createFirm(input(person, name)), { ok: false, error: "consent" });
+      assert.equal((await query("SELECT 1 FROM organizations WHERE name = $1", [name])).rowCount, 0);
+      await assert.rejects(createFirm({
+        ...input(person, name), partnerConsent: true, partnerMeta: { ip: "invalid-inet", ua: "x" },
+      }));
+      assert.equal((await query("SELECT 1 FROM organizations WHERE name = $1", [name])).rowCount, 0);
+      assert.equal((await query("SELECT 1 FROM partner_agreement_consents WHERE user_id = $1", [person.id])).rowCount, 0);
+
+      const created = await createFirm({
+        ...input(person, name), partnerConsent: true, partnerMeta: { ip: "203.0.113.9", ua: "x".repeat(900) },
+      });
+      assert.ok(created.ok);
+      if (!created.ok) throw new Error("ON signup failed");
+      const current = session(person.id, created.orgId);
+      const state = await withClient((client) => readPartnerStateOn(client, current, runtime));
+      assert.equal(state.active, true);
+      assert.equal(state.required, false);
+      assert.equal(await requireCurrentConsent({ ...current, partnerConsent: state }, "api"), null);
+      const evidence = await query(
+        `SELECT doc_type, version, document_sha256, user_id::text, ip_address::text AS ip,
+                user_agent, consented_at
+           FROM partner_agreement_consents WHERE company_id = $1`, [created.orgId],
+      );
+      assert.equal(evidence.rowCount, 2);
+      for (const doc of state.documents) {
+        const row = evidence.rows.find((row) => row.doc_type === doc.doc_type);
+        assert.ok(row, `missing evidence for ${doc.doc_type}`);
+        assert.equal(row.document_sha256, doc.sha256);
+        assert.equal(row.version, doc.version);
+        assert.equal(row.user_id, person.id);
+        assert.equal(row.ip, "203.0.113.9/32");
+        assert.equal(row.user_agent.length, 512);
+        assert.ok(Number.isFinite(new Date(row.consented_at).getTime()));
+      }
+      // Repeat submissions exercise idempotence. A single rollback-owned
+      // connection requires serial transactions; this is not a concurrency check.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await svc(person.id, (client) =>
+          recordPartnerConsentOn(client, current, true, { ip: "203.0.113.9", ua: "again" }, runtime));
+      }
+      assert.equal((await query("SELECT 1 FROM partner_agreement_consents WHERE company_id = $1", [created.orgId])).rowCount, 2);
+
+      const history = await partnerConsentHistory({ ...current, partnerConsent: state });
+      assert.equal(history.length, 2);
+      assert.ok(history.every((row) => row.consenter.includes("Signer") && row.consenter.includes(person.email)));
+      const bump = partnerTestRuntime();
+      bump.config.documents.partner_agreement.find((doc) => doc.locale === "en")!.version = "v0.2";
+      assert.equal((await withClient((client) => readPartnerStateOn(client, current, bump))).required, true);
+
+      await query("UPDATE org_members SET role = 'manager' WHERE org_id = $1 AND user_id = $2", [created.orgId, person.id]);
+      await assert.rejects(svc(person.id, (client) =>
+        recordPartnerConsentOn(client, current, true, { ip: null, ua: null }, runtime)));
+      const nonAdmin = await withClient((client) => readPartnerStateOn(client, current, bump));
+      assert.equal(nonAdmin.admin, false);
+      assert.equal(nonAdmin.required, true);
+    } finally {
+      // Restore the real client methods before ending the outer transaction.
+      // ROLLBACK also restores the flag, including an originally absent row.
+      try {
+        t.mock.restoreAll();
+      } finally {
+        await execute("ROLLBACK");
+      }
+    }
+  });
 });
