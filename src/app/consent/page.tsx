@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { ConsentGateForm } from "@/components/consent-check";
 import { actionAcceptReconsent } from "@/server/consent-actions";
 import { consentCoversCurrent, readConsent } from "@/server/consent";
@@ -25,7 +26,7 @@ export default async function ReconsentPage({ searchParams }: { searchParams: Pr
   const t = makeT(prefs.locale);
   return (
     <div className="auth-wrap">
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
       <ConsentGateForm action={actionAcceptReconsent} variant="service" next={next} error={params.error} titleKey="i_reconsent_title" />
     </div>
   );

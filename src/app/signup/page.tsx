@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { SignupForm } from "@/components/signup-form";
 import { requestPrefs } from "@/server/session";
 
@@ -17,7 +18,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
   const t = makeT(prefs.locale);
   return (
     <div className="auth-wrap">
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
       <div className="card pad">
         <ol className="steps" data-testid="signup-steps">
           <li className="on">1</li>

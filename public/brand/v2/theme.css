@@ -183,3 +183,21 @@ html[data-brand="v2"] .consent .btn:focus-visible {
   outline-offset: 2px;
   box-shadow: none;
 }
+
+/* Half the symbol height: width * 140 / 405 / 2, rounded up. */
+html[data-brand="v2"] .auth-brand {
+  margin: 28px 0;
+}
+html[data-brand="v2"] .auth-brand img.auth-brand-v2 {
+  width: 160px;
+  height: auto;
+}
+@media (min-width: 640px) {
+  html[data-brand="v2"] .auth-brand {
+    margin: 35px 0;
+  }
+  html[data-brand="v2"] .auth-brand img.auth-brand-v2 {
+    width: 200px;
+    height: auto;
+  }
+}

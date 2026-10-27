@@ -75,6 +75,7 @@ export function brandV2Metadata(
 export const BRAND_V2_ASSETS = [
   "/brand/v2/theme.css",
   "/brand/v2/logo/lockup_en_color.svg",
+  "/brand/v2/logo/lockup_stacked_color.svg",
   "/brand/v2/logo/symbol_color.svg",
   "/brand/v2/fonts/Inter-latin-wght.woff2",
   "/brand/v2/fonts/PlusJakartaSans-latin-wght.woff2",

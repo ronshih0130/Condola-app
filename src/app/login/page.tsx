@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { AuthHashForward } from "@/components/auth-hash";
 import { AuthBrand } from "@/components/brand";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { BackupCodes } from "@/components/backup-codes";
 import { PendingSubmit } from "@/components/pending-submit";
 import { BACKUP_COOKIE, backupDisplay } from "@/server/backup";
@@ -51,7 +52,7 @@ export default async function LoginPage({
   return (
     <div className="auth-wrap">
       <AuthHashForward />
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
       {params.error === "unconfirmed" ? (
         <form className="card pad" action={actionResendSignup} data-testid="login-unconfirmed">
           <p>{t("i_login_unconfirmed")}</p>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { ConsentGateForm } from "@/components/consent-check";
 import { FirmSteps } from "@/components/firm-steps";
 import { actionAcceptReconsent } from "@/server/consent-actions";
@@ -27,14 +28,14 @@ export default async function FirmPage({ searchParams }: { searchParams: Promise
   if (!consentCoversCurrent(await readConsent(identity.user_id))) {
     return (
       <div className="auth-wrap">
-        <AuthBrand name={t("i_brand")} />
+        <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
         <ConsentGateForm action={actionAcceptReconsent} variant="service" next="/signup/firm" error={params.error} titleKey="i_reconsent_title" />
       </div>
     );
   }
   return (
     <div className="auth-wrap">
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
       <div className="card pad">
         <FirmSteps partnerCode={identity.partner_code || ""} error={params.error} partnerDocuments={await (await import("@/server/partner-consent")).signupPartnerDocuments(prefs.locale)} />
       </div>

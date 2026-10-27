@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import type { Metadata } from "next";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BrandImage } from "../components/brand";
+import { AuthBrand, BrandImage } from "../components/brand";
 import {
   brandV2Enabled,
   brandMetadata,
@@ -290,7 +290,15 @@ test("theme has approved mappings, scoped selectors and local Latin font faces",
     assert.match(body, /unicode-range:\s*U\+0000-00FF/i);
     assert.ok(body.includes(`url("/brand/v2/fonts/${file}")`));
   }
-  const styles = css.replace(/@font-face\s*\{[^{}]*\}/g, "");
+  // Validate the supported media wrapper, then inspect every nested selector too.
+  const withoutFaces = css.replace(/@font-face\s*\{[^{}]*\}/g, "");
+  const mediaHeaders = [...withoutFaces.matchAll(/@media[^{]*\{/g)];
+  assert.equal(mediaHeaders.length, 1);
+  assert.equal(mediaHeaders[0][0], "@media (min-width: 640px) {");
+  const styles = withoutFaces.replace(
+    /@media \(min-width: 640px\)\s*\{((?:\s*[^{}]+\{[^{}]*\})+\s*)\}/g,
+    "$1",
+  );
   assert.doesNotMatch(styles, /@/);
   assert.equal(styles.replace(/[^{}]+\{[^{}]*\}/g, "").trim(), "");
   for (const [, selectors] of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -428,6 +436,101 @@ test("BrandImage preserves defaults and selects both color header variants", () 
       `<BrandImage variant="${variant}" alt="" className="${className}" {...(v2 ? { v2: true } : {})} />`,
     ));
   }
+});
+
+test("AuthBrand OFF preserves the exact legacy serialization", () => {
+  const expected =
+    '<link rel="preload" as="image" href="/brand/condola_lockup_stacked.svg"/>'
+    + '<div class="auth-brand"><img src="/brand/condola_lockup_stacked.svg" alt="Condola 租多啦"/></div>';
+  for (const props of [
+    { name: "Condola 租多啦" },
+    { name: "Condola 租多啦", v2: false },
+  ]) {
+    assert.equal(renderToStaticMarkup(React.createElement(AuthBrand, props)), expected);
+  }
+});
+
+test("AuthBrand ON uses the bilingual color lockup with intrinsic dimensions", () => {
+  const html = renderToStaticMarkup(React.createElement(AuthBrand, {
+    name: "Condola 租多啦",
+    v2: true,
+  }));
+  const images = [...html.matchAll(/<img\b[^>]*>/g)];
+  assert.equal(images.length, 1);
+  assert.equal(
+    images[0][0],
+    '<img class="auth-brand-v2" src="/brand/v2/logo/lockup_stacked_color.svg" alt="Condola 租多啦" width="200" height="148"/>',
+  );
+  assert.ok(Math.abs(148 - 200 * 300.68 / 405) < 0.5);
+  assert.doesNotMatch(html, /\/brand\/condola_lockup_stacked\.svg/);
+  assert.doesNotMatch(read("src/components/brand.tsx"), /process\.env/);
+});
+
+test("stacked color asset is byte-identical to the approved R&D source", () => {
+  const asset = "/brand/v2/logo/lockup_stacked_color.svg";
+  const source = "/workspace/pm-saas/design/brand-v2/logo/A_roofc/lockup_stacked_color.svg";
+  assert.ok(BRAND_V2_ASSETS.some((entry) => entry === asset));
+  assert.ok(existsSync(join(publicRoot, asset.slice(1))));
+  assert.ok(existsSync(source), "Run this provenance check where the R&D source is mounted");
+  assert.deepEqual(
+    readFileSync(join(publicRoot, asset.slice(1))),
+    readFileSync(source),
+  );
+  assert.match(readFileSync(source, "utf8"), /viewBox="0 0 405 300\.68"/);
+});
+
+test("auth logo widths and clear space are scoped to v2 at both sizes", () => {
+  const css = read("public/brand/v2/theme.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const media = css.match(
+    /@media \(min-width: 640px\)\s*\{((?:\s*[^{}]+\{[^{}]*\})+\s*)\}/,
+  );
+  assert.ok(media);
+  const mobile = css.replace(media[0], "");
+  const assertGeometry = (rules: string, width: number, margin: number) => {
+    const wrapper = rules.match(/html\[data-brand="v2"\] \.auth-brand\s*\{([^{}]*)\}/);
+    const image = rules.match(/html\[data-brand="v2"\] \.auth-brand img\.auth-brand-v2\s*\{([^{}]*)\}/);
+    assert.ok(wrapper);
+    assert.ok(image);
+    assert.match(wrapper[1], new RegExp(`margin:\\s*${margin}px 0\\s*;`));
+    assert.match(image[1], new RegExp(`width:\\s*${width}px\\s*;`));
+    assert.match(image[1], /height:\s*auto\s*;/);
+    assert.ok(margin >= width * 140 / 405 / 2);
+  };
+  assertGeometry(mobile, 160, 28);
+  assertGeometry(media[1], 200, 35);
+});
+
+test("every server auth page passes the flag and join omits the OFF client prop", () => {
+  const pages: string[] = [];
+  const walk = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name === "page.tsx") pages.push(path);
+    }
+  };
+  walk(join(root, "src/app"));
+  let usages = 0;
+  for (const path of pages) {
+    const source = readFileSync(path, "utf8");
+    const tags = [...source.matchAll(/<AuthBrand\b[^>]*\/>/g)];
+    if (!tags.length) continue;
+    assert.ok(source.includes('import { brandV2Enabled } from "@/server/brand-v2";'), path);
+    assert.doesNotMatch(source, /^\s*["']use client["']/);
+    for (const [tag] of tags) {
+      usages++;
+      assert.match(tag, /\bv2=\{brandV2Enabled\(\)\}/, path);
+    }
+  }
+  assert.equal(usages, 13, "update when auth pages change");
+  const joinPage = read("src/app/join/page.tsx");
+  assert.ok(joinPage.includes(
+    '<TeamJoin {...(brandV2Enabled() ? { brandV2: true } : {})} />',
+  ));
+  assert.doesNotMatch(joinPage, /brandV2=\{/);
+  const teamJoin = read("src/components/team-join.tsx");
+  assert.ok(teamJoin.includes('<AuthBrand name={t("i_brand")} v2={brandV2} />'));
+  assert.doesNotMatch(teamJoin, /process\.env|import.*@\/server\/brand-v2/);
 });
 
 test("new text files and supplied SVGs contain no banned terms", () => {

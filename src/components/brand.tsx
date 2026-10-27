@@ -38,8 +38,16 @@ export function BrandImage({
   return <img className={className} src={LOCKUP[variant]} alt={alt} />;
 }
 
-/** Centred stacked mark for auth and onboarding. The file is wider than 140px. */
-export function AuthBrand({ name }: { name: string }) {
+/** Centred stacked mark for auth and onboarding. */
+export function AuthBrand({ name, v2 }: { name: string; v2?: boolean }) {
+  if (v2) {
+    return (
+      <div className="auth-brand">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="auth-brand-v2" src="/brand/v2/logo/lockup_stacked_color.svg" alt={name} width={200} height={148} />
+      </div>
+    );
+  }
   return (
     <div className="auth-brand">
       <BrandImage variant="stacked" alt={name} />
