@@ -7,7 +7,6 @@ import test from "node:test";
 import type { Metadata } from "next";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { GET, dynamic } from "../app/manifest.webmanifest/route";
 import { BrandImage } from "../components/brand";
 import {
   brandV2Enabled,
@@ -157,8 +156,7 @@ test("metadataBase falls back for missing or invalid origins", () => {
   }
 });
 
-test("legacy manifest preserves base source, JSON bytes, content type and cache policy", async () => {
-  assert.equal(read("src/server/legacy-manifest.ts"), baseFile("src/app/manifest.ts").toString("utf8"));
+test("static legacy manifest preserves the expected object and exact JSON bytes", () => {
   const expected = {
     name: "Condola",
     short_name: "Condola",
@@ -171,13 +169,11 @@ test("legacy manifest preserves base source, JSON bytes, content type and cache 
       { src: "/icons/condola_app_icon_512.png", sizes: "512x512", type: "image/png" },
     ],
   };
-  const response = GET();
-  assert.equal(dynamic, "force-static");
-  assert.equal(response.headers.get("content-type"), "application/manifest+json");
-  assert.equal(response.headers.get("cache-control"), "public, max-age=0, must-revalidate");
-  const body = await response.text();
-  assert.equal(body, JSON.stringify(expected));
+  const body = read("public/manifest.webmanifest");
   assert.deepEqual(JSON.parse(body), expected);
+  assert.equal(body, JSON.stringify(expected));
+  assert.equal(existsSync(join(root, "src/app/manifest.webmanifest/route.ts")), false);
+  assert.equal(existsSync(join(root, "src/server/legacy-manifest.ts")), false);
 });
 
 test("legacy binaries are unchanged public assets with no metadata file conventions", () => {
@@ -352,8 +348,7 @@ test("new text files and supplied SVGs contain no banned terms", () => {
   const files = [
     "src/server/brand-v2.ts",
     "src/server/brand-v2.test.ts",
-    "src/server/legacy-manifest.ts",
-    "src/app/manifest.webmanifest/route.ts",
+    "public/manifest.webmanifest",
     "src/app/layout.tsx",
     "src/components/brand.tsx",
     "scripts/brand-v2-ci.sh",
