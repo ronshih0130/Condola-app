@@ -21,6 +21,8 @@ import { acceptIdJpeg, acceptIdPng, sniffIdImage, stripJpegMetadata } from "@/li
 import { ID_NOTICE_PATH, ID_NOTICE_SHA256, fullNoticeSha256Subtle, resolveFirmContact, uploadPageSha256Subtle } from "@/lib/id-notice";
 import { writeAudit } from "./audit";
 import { maybe, svc, tx, withDeferredClient } from "./db";
+import { runIdPurge } from "../../id-purge-cron.mjs";
+import { assertIdPurgeTarget } from "./id-purge-guard";
 import { FlowError, logServerError } from "./errors";
 import { copySlotCiphertext, readCiphertext, writeCiphertext, writeUploadSlot } from "./id-bytes";
 import {
@@ -1161,38 +1163,9 @@ export async function seedSampleCheck(
   });
 }
 
-/**
- * Deletes live ID ciphertext once delete_after has passed (lease end + 90 days,
- * or upload date + 90 days when the lease never took effect) and upload slots
- * older than 24 hours. Supabase backups are outside this job; they must age
- * out within 14 days. See docs/STAGING.md.
- */
-export async function purgeDueIdDocuments(limit = 500) {
-  return svc(null, async (client) => {
-    await client.query(`DELETE FROM id_upload_slots WHERE created_at < now() - interval '24 hours'`);
-    const purged = await client.query<{ document_id: string; storage_bucket: string; storage_path: string }>(
-      `SELECT document_id::text, storage_bucket, storage_path FROM purge_due_identity_documents($1)`,
-      [limit],
-    );
-    const rows = purged.rows;
-    if (rows.length > 0) {
-      const ids = [...new Set(rows.map((row) => row.document_id))];
-      const buckets = rows.map((row) => row.storage_bucket);
-      const paths = rows.map((row) => row.storage_path);
-      await client.query(
-        `DELETE FROM id_document_wm_objects AS w
-          WHERE (w.bucket, w.path) IN (SELECT * FROM unnest($1::text[], $2::text[]))`,
-        [buckets, paths.map((path) => `${path}.wm`)],
-      );
-      await client.query(
-        `DELETE FROM id_document_objects AS o
-          WHERE (o.bucket, o.path) IN (SELECT * FROM unnest($1::text[], $2::text[]))`,
-        [buckets, paths],
-      );
-      await client.query(`DELETE FROM identity_document_photos WHERE document_id = ANY($1::uuid[])`, [ids]);
-    }
-    return new Set(rows.map((row) => row.document_id)).size;
-  });
+/** Purge one bounded document batch and temporary upload slots older than 24 hours. */
+export async function purgeDueIdDocuments(limit = 500): Promise<number> {
+  return purgeDueIdDocumentsUntilDone(limit, 1);
 }
 
 /**
@@ -1240,13 +1213,28 @@ export async function backfillIdWatermarks(limit = 50) {
   });
 }
 
-/** Keep calling the locked batch until a short batch comes back, or the cap is hit. */
-export async function purgeDueIdDocumentsUntilDone(limit = 500, maxBatches = 40) {
-  let removed = 0;
-  for (let batch = 0; batch < maxBatches; batch += 1) {
-    const n = await purgeDueIdDocuments(limit);
-    removed += n;
-    if (n < limit) break;
-  }
-  return removed;
+/** Each batch uses svc; the final batch commits the invocation summary. */
+export async function purgeDueIdDocumentsUntilDone(
+  limit = 500,
+  maxBatches = 40,
+): Promise<number> {
+  const result = await runIdPurge(
+    (batch) => svc(null, (client) => batch(client)),
+    { limit, maxBatches, assertTarget: assertIdPurgeTarget },
+  );
+  return result.documents;
+}
+
+/** Preview one bounded batch and expired upload slots without deleting either. */
+export async function previewDueIdDocuments(limit = 500, maxBatches = 40) {
+  const result = await runIdPurge(
+    (batch) => svc(null, (client) => batch(client)),
+    { limit, maxBatches, dryRun: true, assertTarget: assertIdPurgeTarget },
+  );
+  return {
+    dryRun: true as const,
+    wouldDelete: result.wouldDelete,
+    byBucket: result.byBucket,
+    uploadSlotsWouldDelete: result.uploadSlotsWouldDelete,
+  };
 }

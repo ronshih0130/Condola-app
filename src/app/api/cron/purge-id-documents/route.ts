@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cronAuthorized } from "@/server/cron-auth";
 import { logServerError } from "@/server/errors";
-import { purgeDueIdDocumentsUntilDone } from "@/server/id-docs";
+import { previewDueIdDocuments, purgeDueIdDocumentsUntilDone } from "@/server/id-docs";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +29,11 @@ export async function POST(request: Request) {
     return new NextResponse(null, { status: 404 });
   }
   try {
-    const removed = await purgeDueIdDocumentsUntilDone();
-    return NextResponse.json({ removed });
+    const dryRun = new URL(request.url).searchParams.get("dry_run") === "1";
+    const result = dryRun
+      ? await previewDueIdDocuments(500, 40)
+      : { removed: await purgeDueIdDocumentsUntilDone(500, 40) };
+    return NextResponse.json(result);
   } catch (error) {
     logServerError("purge-id-documents", error);
     return NextResponse.json({ error: "purge_failed" }, { status: 500 });

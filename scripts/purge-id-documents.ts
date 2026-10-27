@@ -1,4 +1,6 @@
-import { purgeDueIdDocuments } from "../src/server/id-docs";
+import { previewDueIdDocuments, purgeDueIdDocumentsUntilDone } from "../src/server/id-docs";
 
-const removed = await purgeDueIdDocuments();
-console.log(`Purged ${removed} identity document${removed === 1 ? "" : "s"}.`);
+const result = process.argv.includes("--dry-run")
+  ? await previewDueIdDocuments(500, 40)
+  : { removed: await purgeDueIdDocumentsUntilDone(500, 40) };
+console.log(JSON.stringify(result));
