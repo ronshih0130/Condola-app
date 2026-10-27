@@ -60,7 +60,7 @@ function pgText(value: unknown) {
 }
 
 function dbErrorKey(error: unknown) {
-  const message = pgText((error as { message?: unknown } | null)?.message) ?? String(error);
+  const message = error instanceof Error ? error.message : String(error);
   let key = "errors.generic";
   if (/row-level security|permission denied|insufficient_privilege/i.test(message)) key = "errors.forbidden";
   else if (/override reason|exceeds bill average/i.test(message)) key = "errors.capReason";

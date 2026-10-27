@@ -265,14 +265,15 @@ test("database errors log once with safe metadata and never log arbitrary messag
           column: "email",
         };
         const pg = asError ? Object.assign(new Error(fields.message), fields) : fields;
+        const expectedKey = asError ? key : "errors.generic";
         const mapped = mapDbError(pg);
         assert.ok(mapped instanceof FlowError);
-        assert.equal(mapped.key, key);
+        assert.equal(mapped.key, expectedKey);
         assert.equal(errors.length, 1);
         assert.equal(warnings.length, 0);
         assert.equal(logs.length, 0);
         const serialized = JSON.stringify(errors);
-        for (const safe of ["23505", constraint, key]) {
+        for (const safe of ["23505", constraint, expectedKey]) {
           assert.ok(serialized.includes(safe), safe);
         }
         for (const secret of [
@@ -286,7 +287,7 @@ test("database errors log once with safe metadata and never log arbitrary messag
         assert.deepEqual(errors[0], ["database failed", {
           code: "23505",
           constraint,
-          key,
+          key: expectedKey,
           table: "contacts",
           column: "email",
           message: "database error",
@@ -312,6 +313,25 @@ test("database errors log once with safe metadata and never log arbitrary messag
     }
   } finally {
     Object.assign(console, original);
+  }
+});
+
+test("plain-object tenant constraint messages preserve generic error mapping", () => {
+  const original = console.error;
+  const lines: unknown[][] = [];
+  console.error = (...args: unknown[]) => { lines.push(args); };
+  try {
+    const mapped = mapDbError({
+      message: 'duplicate key value violates unique constraint "contacts_org_tenant_email_uniq"',
+    });
+    assert.ok(mapped instanceof FlowError);
+    assert.equal(mapped.key, "errors.generic");
+    assert.deepEqual(lines, [["database failed", {
+      key: "errors.generic",
+      message: "database error",
+    }]]);
+  } finally {
+    console.error = original;
   }
 });
 
@@ -357,7 +377,7 @@ test("database metadata validators omit invalid fields instead of logging their 
     assert.deepEqual(lines, [["database failed", {
       code: "23514",
       constraint: "leases_deposit_override_pair",
-      key: "errors.depositCap",
+      key: "errors.generic",
       table: "leases",
       column: "deposit",
       message: "database error",
