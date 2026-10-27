@@ -4,7 +4,7 @@
  * signup-consent tests fail if a page's 生效日期 moves without this constant.
  */
 export const TERMS_VERSION = "2026-10-22";
-export const PRIVACY_VERSION = "2026-10-22";
+export const PRIVACY_VERSION = "2026-10-27";
 
 export type SignupConsentMetadata = {
   terms_accepted_at: string;

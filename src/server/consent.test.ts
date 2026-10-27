@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  CONSENT_GATE_MIN_VERSION,
   CONSENT_WRITE_SQL,
   buildStoredConsent,
   consentAdminBody,
@@ -37,7 +38,7 @@ function memoryRepo(initial: StoredConsent | null) {
   return { writes, repo };
 }
 
-test("app_metadata consent is current only for these legal versions", () => {
+test("app_metadata consent accepts current versions and dates at or after the gate baseline", () => {
   const current = buildStoredConsent("signup", new Date("2026-10-25T07:00:00.000Z"));
   assert.equal(current.accepted_at, "2026-10-25T07:00:00.000Z");
   assert.equal(current.terms_version, TERMS_VERSION);
@@ -45,11 +46,58 @@ test("app_metadata consent is current only for these legal versions", () => {
   assert.equal(consentCoversCurrent(current), true);
   assert.equal(consentCoversCurrent({ ...current, terms_version: "2026-01-01" }), false);
   assert.equal(consentCoversCurrent({ ...current, privacy_version: "2026-10-21" }), false);
-  assert.equal(consentCoversCurrent({ ...current, terms_version: "2026-12-01", privacy_version: "2026-12-01" }), false);
+  assert.equal(consentCoversCurrent({ ...current, terms_version: "2026-12-01", privacy_version: "2026-12-01" }), true);
   assert.equal(consentCoversCurrent(null), false);
   assert.equal(parseAppConsent({ consent: { ...current, accepted_at: "not-a-date" } }), null);
   assert.equal(parseAppConsent({ consent: { ...current, source: "client" } }), null);
   assert.deepEqual(parseAppConsent({ provider: "email", consent: current }), current);
+});
+
+test("baseline and current privacy consent pass without writes", async () => {
+  assert.equal(CONSENT_GATE_MIN_VERSION, "2026-10-22");
+  const current = buildStoredConsent("signup");
+  assert.equal(current.privacy_version, "2026-10-27");
+  assert.equal(current.terms_version, "2026-10-22");
+  for (const privacy_version of ["2026-10-22", "2026-10-27"]) {
+    const record = { ...current, privacy_version };
+    const bucket = memoryRepo(record);
+    assert.equal(consentCoversCurrent(record), true);
+    assert.equal(consentGateTarget(record, "reconsent", "/m"), null);
+    assert.deepEqual(await passConsentGate("user-1", "reconsent", false, bucket.repo), {
+      ok: true,
+      recorded: false,
+    });
+    assert.equal(bucket.writes.length, 0);
+  }
+});
+
+test("invalid or missing privacy consent blocks until a fresh consent is recorded", async () => {
+  const current = buildStoredConsent("signup");
+  const { privacy_version, ...withoutPrivacy } = current;
+  const records = [
+    ...["2026-10-21", "old", "2026-02-30", "2026-1-01"].map((value) => ({
+      ...current,
+      privacy_version: value,
+    })),
+    null,
+    withoutPrivacy as StoredConsent,
+  ];
+  for (const record of records) {
+    const bucket = memoryRepo(record);
+    assert.equal(consentCoversCurrent(record), false);
+    assert.match(consentGateTarget(record, "reconsent", "/m")!, /^\/consent\?next=/);
+    assert.deepEqual(await passConsentGate("user-1", "reconsent", false, bucket.repo), {
+      ok: false,
+      error: "consent",
+    });
+    assert.equal(bucket.writes.length, 0);
+  }
+  const missing = memoryRepo(null);
+  assert.deepEqual(await passConsentGate("user-1", "reconsent", true, missing.repo), {
+    ok: true, recorded: true,
+  });
+  assert.equal(missing.writes.length, 1);
+  assert.equal(missing.writes[0].privacy_version, "2026-10-27");
 });
 
 test("user_metadata-only consent counts as missing", async () => {

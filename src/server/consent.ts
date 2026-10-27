@@ -76,9 +76,26 @@ export function effectiveConsent(appMetadata: unknown, userMetadata: unknown): S
   return null;
 }
 
+export const CONSENT_GATE_MIN_VERSION = "2026-10-22";
+
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value + "T00:00:00.000Z");
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+/**
+ * Accept valid evidence at or after the original gate baseline, or matching the
+ * current constants. A disclosure version bump does not force re-consent.
+ */
 export function consentCoversCurrent(record: StoredConsent | null): boolean {
-  if (!record?.accepted_at) return false;
-  return record.terms_version === TERMS_VERSION && record.privacy_version === PRIVACY_VERSION;
+  const valid = parseAppConsent({ consent: record });
+  if (!valid) return false;
+  return [
+    [valid.terms_version, TERMS_VERSION],
+    [valid.privacy_version, PRIVACY_VERSION],
+  ].every(([version, current]) =>
+    version === current || (isIsoDate(version) && version >= CONSENT_GATE_MIN_VERSION));
 }
 
 /** Admin update body. `user_metadata` keeps the signup field names. */

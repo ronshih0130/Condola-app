@@ -9,10 +9,10 @@ const meta = { ua: "signup-consent", ip: "127.0.0.1" };
 test("legal page effective dates are the signup consent versions", () => {
   const terms = readFileSync(new URL("../../content/legal/terms.md", import.meta.url), "utf8");
   const privacy = readFileSync(new URL("../../content/legal/privacy.md", import.meta.url), "utf8");
-  assert.match(terms, new RegExp(`生效日期：${TERMS_VERSION}`));
-  assert.match(privacy, new RegExp(`生效日期：${PRIVACY_VERSION}`));
+  assert.equal(terms.match(/^- 生效日期：(.+)$/m)?.[1], TERMS_VERSION);
+  assert.equal(privacy.match(/^- 生效日期：(.+)$/m)?.[1], PRIVACY_VERSION);
   assert.equal(TERMS_VERSION, "2026-10-22");
-  assert.equal(PRIVACY_VERSION, "2026-10-22");
+  assert.equal(PRIVACY_VERSION, "2026-10-27");
 });
 
 test("the signUp payload carries terms_accepted_at and both versions", () => {
@@ -22,7 +22,7 @@ test("the signUp payload carries terms_accepted_at and both versions", () => {
   assert.equal(body.email, "owner@example.com");
   assert.equal(body.data.terms_accepted_at, "2026-10-25T07:00:00.000Z");
   assert.equal(body.data.terms_version, TERMS_VERSION);
-  assert.equal(body.data.privacy_version, PRIVACY_VERSION);
+  assert.equal(body.data.privacy_version, "2026-10-27");
   assert.deepEqual(body.options.data, body.data);
   assert.equal(Object.hasOwn(body.data, "password"), false);
 });
