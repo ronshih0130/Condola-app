@@ -161,22 +161,25 @@ html[data-brand="v2"] header.top .btn[disabled] {
   background: var(--c-surface-2);
 }
 html[data-brand="v2"] header.top :focus-visible,
+html[data-brand="v2"] .seg:focus-visible,
 html[data-brand="v2"] .seg button:focus-visible,
-html[data-brand="v2"] .seg a:focus-visible {
+html[data-brand="v2"] .seg a:focus-visible,
+html[data-brand="v2"] .seg .on:focus-visible,
+html[data-brand="v2"] .btn:focus-visible,
+html[data-brand="v2"] .btn.pri:focus-visible {
   outline: 2px solid var(--c-focus);
   outline-offset: 2px;
   box-shadow: none;
-}
-html[data-brand="v2"] .btn.pri:focus-visible,
-html[data-brand="v2"] .seg button.on:focus-visible,
-html[data-brand="v2"] .seg a.on:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: -4px;
-  box-shadow: var(--cd-focus-ring);
 }
 /* The consent banner also consumes --top; preserve its navy/white contrast. */
 html[data-brand="v2"] .consent {
   --top: var(--c-primary);
   --top-2: var(--c-primary-hover);
   --cream: var(--c-on-primary);
+}
+html[data-brand="v2"] .consent :focus-visible,
+html[data-brand="v2"] .consent .btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  box-shadow: none;
 }

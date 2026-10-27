@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
@@ -185,6 +186,22 @@ test("legacy binaries are unchanged public assets with no metadata file conventi
   assert.equal(existsSync(join(root, "src/app/manifest.ts")), false);
 });
 
+test("legacy immutable icon URLs stay consistent with pinned asset bytes", () => {
+  for (const [file, expected] of [
+    ["icon.svg", "03839603e2d6cbb1fb6ca4549a30c73ca978223fa53b0c88688de943484b84d9"],
+    ["apple-icon.png", "52cb58062f9a28939c253e1d3d630560d7d749abb462cb515f4f82a9275c9a15"],
+  ] as const) {
+    const actual = createHash("sha256")
+      .update(readFileSync(join(publicRoot, file)))
+      .digest("hex");
+    assert.equal(
+      actual,
+      expected,
+      `${file} bytes changed: change the query string in brandMetadata before updating this SHA-256 pin.`,
+    );
+  }
+});
+
 test("static asset headers preserve legacy icon caching for exactly two paths", () => {
   const lines = read("public/_headers")
     .split(/\r?\n/)
@@ -243,7 +260,6 @@ const mappings = {
   "--cd-border-strong": "var(--c-border-strong)",
   "--cd-cream": "var(--c-bg)",
   "--cd-focus": "var(--c-focus)",
-  "--cd-focus-ring": "0 0 0 2px #fff, 0 0 0 4px var(--c-focus)",
   "--cd-topbar": "#FFFFFF",
   "--cd-topbar-2": "var(--c-surface-2)",
   "--cd-topbar-3": "var(--c-surface-2)",
@@ -300,6 +316,59 @@ test("theme has approved mappings, scoped selectors and local Latin font faces",
   assert.match(styles, /header\.top\s*\{[^}]*border-bottom:\s*1px solid var\(--c-divider\)/);
   assert.match(styles, /header\.top\s*\{[^}]*color:\s*var\(--c-text\)/);
   assert.ok(styles.includes("font-feature-settings: \"tnum\" 1;"));
+});
+
+test("v2 focus rings use approved geometry and white rings on consent", () => {
+  const css = read("public/brand/v2/theme.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, selectors, body]) => ({
+      selectors: selectors.split(",").map((selector) => selector.trim()),
+      body,
+    }))
+    .filter((rule) => rule.selectors.some((selector) =>
+      selector.startsWith('html[data-brand="v2"]'),
+    ));
+
+  for (const rule of rules) {
+    assert.doesNotMatch(rule.body, /(?:^|;)\s*outline-offset\s*:\s*-/i);
+  }
+  assert.match(css, /--cd-focus-ring: 0 0 0 2px #fff, 0 0 0 4px var\(--c-focus\);/);
+
+  const assertRing = (selector: string, outline: string) => {
+    const matches = rules.filter((rule) => rule.selectors.includes(selector));
+    assert.equal(matches.length, 1, selector);
+    const declarations = new Map(
+      matches[0].body.split(";").filter((part) => part.trim()).map((part) => {
+        const colon = part.indexOf(":");
+        return [part.slice(0, colon).trim(), part.slice(colon + 1).trim()];
+      }),
+    );
+    assert.equal(declarations.get("outline"), outline, selector);
+    assert.equal(declarations.get("outline-offset"), "2px", selector);
+    assert.equal(declarations.get("box-shadow"), "none", selector);
+    return rules.indexOf(matches[0]);
+  };
+
+  const genericIndices = [
+    "header.top :focus-visible",
+    ".seg:focus-visible",
+    ".seg button:focus-visible",
+    ".seg a:focus-visible",
+    ".seg .on:focus-visible",
+    ".btn:focus-visible",
+    ".btn.pri:focus-visible",
+  ].map((selector) => assertRing(
+    `html[data-brand="v2"] ${selector}`,
+    "2px solid var(--c-focus)",
+  ));
+
+  for (const selector of [
+    ".consent :focus-visible",
+    ".consent .btn:focus-visible",
+  ]) {
+    const index = assertRing(`html[data-brand="v2"] ${selector}`, "2px solid #fff");
+    assert.ok(genericIndices.every((genericIndex) => genericIndex < index), selector);
+  }
 });
 
 test("only Inter is preloaded inside the ON head", () => {
