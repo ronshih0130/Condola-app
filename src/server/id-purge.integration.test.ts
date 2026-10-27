@@ -13,8 +13,8 @@ test.before(() => {
   for (const file of [
     "20261029150000_id_watermark_copy.sql",
     "20261029160000_lease_close_end_date.sql",
-    "20261030151000_id_purge_dry_run_guard.sql",
-    "20261030151000_id_purge_dry_run_guard.sql",
+    "20261030151200_id_purge_dry_run_guard.sql",
+    "20261030151200_id_purge_dry_run_guard.sql",
   ]) {
     execFileSync("psql", [DATABASE_URL, "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", path.join(ROOT, "supabase/migrations", file)], {
       stdio: "pipe",
