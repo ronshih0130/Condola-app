@@ -11,6 +11,7 @@ import {
   type StoredConsent,
 } from "./consent";
 import { sameAppPath } from "./public-origin";
+import { requirePartnerConsent } from "./partner-consent-gate";
 
 export type ConsentGateResult = { ok: true; recorded: boolean } | { ok: false; error: "consent" };
 
@@ -93,7 +94,7 @@ export async function requireCurrentConsent(
   next?: string,
 ): Promise<Response | null> {
   const current = session ?? await getSession();
-  if (consentCoversCurrent(current.consent ?? null)) return null;
+  if (consentCoversCurrent(current.consent ?? null)) return requirePartnerConsent(current, mode);
   if (mode === "api") return consentRequiredResponse();
   const fallback = current.kind === "staff" ? "/m" : current.kind === "owner" ? "/o" : "/t";
   const path = consentNextPath(next ?? (await headers()).get("x-pathname") ?? "", fallback);

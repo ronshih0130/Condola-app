@@ -13,6 +13,10 @@ import { passwordAcceptable } from "./password";
 import { seedSandboxForNewFirm } from "./sandbox";
 import { writeConsent, type ConsentRepository } from "./consent";
 import { passConsentGate } from "./consent-gate";
+import {
+  signupPartnerDocuments, insertSignupPartnerConsentOn,
+  type PartnerRequestMeta, type PartnerRuntime,
+} from "./partner-consent";
 import { signupConsentMetadata, signupRequestBody, type SignupConsentMetadata } from "./legal-versions";
 import { createSignupLink, deliverSignupMail, gateSignupMail } from "./signup-mail";
 import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl, signupMailVia } from "./signup-gotrue";
@@ -561,6 +565,10 @@ export async function createFirm(input: {
   phoneCountry?: string;
   consent?: boolean;
   consentRepo?: ConsentRepository;
+  partnerConsent?: boolean;
+  partnerLocale?: string;
+  partnerMeta?: PartnerRequestMeta;
+  partnerRuntime?: PartnerRuntime;
 }) {
   const gate = await passConsentGate(input.userId, "reconsent", input.consent === true, input.consentRepo);
   if (!gate.ok) return { ok: false as const, error: "consent" as const };
@@ -573,6 +581,10 @@ export async function createFirm(input: {
   const usableCode = code || null;
   const profile = countryByCode(input.country);
   const callingCode = input.phoneCountry?.trim() || profile.callingCode;
+  const partnerDocuments = await signupPartnerDocuments(input.partnerLocale ?? profile.locale, input.partnerRuntime);
+  if (partnerDocuments.length && input.partnerConsent !== true) {
+    return { ok: false as const, error: "consent" as const };
+  }
 
   const created = await withClient(async (client) => {
     await client.query("BEGIN");
@@ -610,6 +622,7 @@ export async function createFirm(input: {
         ],
       );
       const orgId = inserted.rows[0].id;
+      await insertSignupPartnerConsentOn(client, orgId, input.userId, partnerDocuments, input.partnerMeta ?? { ip: null, ua: null });
       await client.query(
         `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status)
          VALUES ($1, $2, 'admin', true, 'active')`,

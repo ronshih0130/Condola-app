@@ -6,6 +6,7 @@ import type { Client } from "pg";
 import { cache } from "react";
 import { isLocale, type Locale } from "@/i18n";
 import { withClient } from "./db";
+import { readPartnerStateOn } from "./partner-consent";
 import { SESSION_COOKIE } from "./auth";
 import { ENV_COOKIE, ORG_COOKIE, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
 import { PORTAL_ROLE_COOKIE, pickPortalOrg, resolvePortalKind } from "./portal-role";
@@ -112,7 +113,10 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
       };
       const firm = await resolveStaffOrg(client, identity.user_id, preferredOrg, envChoice);
       if (firm) {
-        if (consentCoversCurrent(identity.consent) && firm.environment === "sandbox" && !firm.needsSandbox) {
+        const partnerConsent = await readPartnerStateOn(client, {
+          ...base, ...firm, kind: "staff",
+        });
+        if (consentCoversCurrent(identity.consent) && !partnerConsent.required && firm.environment === "sandbox" && !firm.needsSandbox) {
           await correctRetiredSampleAddresses(client, firm.orgId);
           const peek = await client.query<{ needed: boolean }>(
             `SELECT (o.sample_loaded_at IS NULL AND NOT (
@@ -134,6 +138,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
           session: {
             ...base,
             kind: "staff" as const,
+            partnerConsent,
             role: firm.role,
             orgId: firm.orgId,
             liveOrgId: firm.liveOrgId,
@@ -245,7 +250,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
 /** Sandbox provisioning stays after the lookup, and may open its own connection. */
 export async function completeSession(loaded: SessionLoad): Promise<Session | null> {
   const session = loaded.session;
-  if (session?.kind === "staff" && consentCoversCurrent(session.consent ?? null) && session.environment === "sandbox") {
+  if (session?.kind === "staff" && consentCoversCurrent(session.consent ?? null) && !session.partnerConsent?.required && session.environment === "sandbox") {
     const sandboxId = session.needsSandbox ? await ensureSandbox(session) : session.orgId;
     const opened = { ...session, orgId: sandboxId, environment: "sandbox" as const, needsSandbox: false };
     if (loaded.seedSample) await ensureSampleLoaded(opened);

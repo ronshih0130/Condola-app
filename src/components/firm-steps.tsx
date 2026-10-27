@@ -5,16 +5,21 @@ import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
 import { offeredCountries } from "@/countries";
 import { PendingSubmit } from "./pending-submit";
 import { PhoneField } from "./phone-field";
-import { useT } from "./locale";
+import { useLocale, useT } from "./locale";
+import { PartnerConsentFields } from "./partner-consent-form";
+import type { SelectedPartnerDocument } from "@/server/partner-consent-rules";
 import { actionCreateFirm } from "@/server/signup-actions";
 
-export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?: string }) {
+export function FirmSteps({ partnerCode, error, partnerDocuments }: { partnerCode: string; error?: string; partnerDocuments?: SelectedPartnerDocument[] }) {
   const t = useT();
+  const locale = useLocale();
+  const [partnerChecked, setPartnerChecked] = useState(false);
   const [step, setStep] = useState<3 | 4>(3);
   const [kind, setKind] = useState<"firm" | "self" | "">("");
   const [nameError, setNameError] = useState(false);
   const [contactError, setContactError] = useState(false);
-  const [submitReady, setSubmitReady] = useState(false);
+  const [submitArmed, setSubmitReady] = useState(false);
+  const submitReady = submitArmed && !(Boolean(partnerDocuments?.length) && !partnerChecked);
   const armSubmit = useRef<number | null>(null);
 
   function goDetails() {
@@ -38,6 +43,10 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
           return;
         }
         const data = new FormData(event.currentTarget);
+        if (partnerDocuments?.length && data.get("partnerConsent") !== "on") {
+          event.preventDefault();
+          return;
+        }
         const name = String(data.get("name") ?? "").trim();
         const contact = String(data.get("contactName") ?? "").trim();
         const needName = kind === "firm" && name === "";
@@ -112,6 +121,9 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
             <input className="inp" name="partnerCode" defaultValue={partnerCode} data-testid="firm-code" />
           </div>
           <p className="small" data-testid="signup-admin-note">{t("i_signup_admin_note")}</p>
+          {partnerDocuments?.length ? (
+            <PartnerConsentFields locale={locale} documents={partnerDocuments} checked={partnerChecked} onChange={setPartnerChecked} />
+          ) : null}
           <PendingSubmit className="btn pri" idle={t("i_signup_create")} pending={t("i_portal_working")} testId="firm-submit" disabled={!submitReady} />
         </div>
       )}

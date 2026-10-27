@@ -17,7 +17,8 @@ import {
 } from "./partners";
 import { isPlatformAdmin } from "./platform";
 import { appCookieOptions } from "./public-origin";
-import { getSession } from "./session";
+import { getSession, requestPrefs } from "./session";
+import { partnerRequestMeta } from "./partner-consent";
 import { sessionEntryPath } from "./sign-out";
 import { signupVerifyType } from "./signup-gotrue";
 import {
@@ -164,6 +165,9 @@ export async function actionCreateFirm(formData: FormData) {
       phoneCountry: text(formData.get("phoneCountry")),
       country: text(formData.get("country")),
       partnerCode: text(formData.get("partnerCode")) || identity.partner_code || "",
+      partnerConsent: formData.get("partnerConsent") === "on",
+      partnerLocale: (await requestPrefs()).locale,
+      partnerMeta: partnerRequestMeta(await headers()),
       consent: formData.get("consent") === "on",
     });
     if (!created.ok) redirect(`/signup/firm?error=${created.error === "consent" ? "consent" : "required"}`);

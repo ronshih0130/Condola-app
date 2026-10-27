@@ -36,7 +36,7 @@ export default async function FirmPage({ searchParams }: { searchParams: Promise
     <div className="auth-wrap">
       <AuthBrand name={t("i_brand")} />
       <div className="card pad">
-        <FirmSteps partnerCode={identity.partner_code || ""} error={params.error} />
+        <FirmSteps partnerCode={identity.partner_code || ""} error={params.error} partnerDocuments={await (await import("@/server/partner-consent")).signupPartnerDocuments(prefs.locale)} />
       </div>
     </div>
   );

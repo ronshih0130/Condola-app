@@ -11,6 +11,9 @@ function text(value: FormDataEntryValue | null) {
 }
 
 export async function actionAcceptReconsent(formData: FormData) {
+  if (formData.get("partnerConsentPage") === "1") {
+    return (await import("./partner-consent-submit")).submitPartnerConsent(formData);
+  }
   const identity = await readSignupIdentity();
   if (!identity) redirect("/login");
   const session = await readSession();

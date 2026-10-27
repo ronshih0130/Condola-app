@@ -1,3 +1,4 @@
+import "./partner-consent.integration.test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
