@@ -304,7 +304,9 @@ test("theme has approved mappings, scoped selectors and local Latin font faces",
 
 test("only Inter is preloaded inside the ON head", () => {
   const layout = read("src/app/layout.tsx");
-  const onHead = layout.match(/\{v2 \? \(\s*<head>([\s\S]*?)<\/head>\s*\) : null\}/)?.[1];
+  const heads = [...layout.matchAll(/<head>([\s\S]*?)<\/head>/g)];
+  assert.equal(heads.length, 1);
+  const onHead = heads[0]?.[1];
   assert.ok(onHead);
   assert.equal([...onHead.matchAll(/rel="preload"/g)].length, 1);
   assert.match(onHead, /as="font"/);
@@ -313,6 +315,14 @@ test("only Inter is preloaded inside the ON head", () => {
   assert.match(onHead, /href="\/brand\/v2\/fonts\/Inter-latin-wght\.woff2"/);
   assert.doesNotMatch(onHead, /PlusJakartaSans/);
   assert.match(onHead, /href="\/brand\/v2\/theme\.css"/);
+});
+
+test("OFF layout returns only the legacy html wrapper and shared body", () => {
+  const layout = read("src/app/layout.tsx");
+  assert.match(
+    layout,
+    /if\s*\(!v2\)\s*\{\s*return\s+<html lang=\{prefs\.locale === "zh-TW" \? "zh-Hant-TW" : "en"\}>\{body\}<\/html>;\s*\}/,
+  );
 });
 
 test("BrandImage preserves defaults and selects both color header variants", () => {
