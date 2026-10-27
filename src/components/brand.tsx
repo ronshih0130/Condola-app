@@ -11,7 +11,28 @@ const LOCKUP = {
 
 export type BrandVariant = keyof typeof LOCKUP;
 
-export function BrandImage({ variant, alt, className }: { variant: BrandVariant; alt: string; className?: string }) {
+const V2_HEADER = {
+  horizontalDark: "/brand/v2/logo/lockup_en_dark.svg",
+  symbolSmall: "/brand/v2/logo/symbol_dark.svg",
+} as const;
+
+export function BrandImage({
+  variant,
+  alt,
+  className,
+  v2,
+}: {
+  variant: BrandVariant;
+  alt: string;
+  className?: string;
+  v2?: boolean;
+}) {
+  if (v2 && (variant === "horizontalDark" || variant === "symbolSmall")) {
+    const symbol = variant === "symbolSmall";
+    // Existing CSS retains the responsive box; dimensions supply the intrinsic ratio.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className={className} src={V2_HEADER[variant]} alt={alt} width={symbol ? 24 : 24 * 479.16 / 120} height={24} />;
+  }
   // The Cloudflare adapter does not run the Next image optimizer.
   // eslint-disable-next-line @next/next/no-img-element
   return <img className={className} src={LOCKUP[variant]} alt={alt} />;

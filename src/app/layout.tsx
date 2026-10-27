@@ -8,17 +8,21 @@ import { RequiredValidity } from "@/components/required-validity";
 import { EnvBanner } from "@/components/env-mode";
 import { LocaleProvider } from "@/components/locale";
 import { demoModeEnabled } from "@/server/demo";
+import { brandV2Enabled, brandV2Metadata, BRAND_V2_THEME_COLOR, LEGACY_THEME_COLOR } from "@/server/brand-v2";
 import { sandboxChrome } from "@/server/sandbox";
 import { readSession, requestPrefs } from "@/server/session";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
 
-export const viewport: Viewport = { themeColor: "#2E2622" };
+export async function generateViewport(): Promise<Viewport> {
+  return { themeColor: brandV2Enabled() ? BRAND_V2_THEME_COLOR : LEGACY_THEME_COLOR };
+}
 
 export async function generateMetadata(): Promise<Metadata> {
   const prefs = await requestPrefs();
-  return { title: makeT(prefs.locale)("i_brand") };
+  if (!brandV2Enabled()) return { title: makeT(prefs.locale)("i_brand") };
+  return { title: makeT(prefs.locale)("i_brand"), ...brandV2Metadata(prefs.locale) };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -27,8 +31,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const chrome = await sandboxChrome(session);
   const t = makeT(prefs.locale);
   const showReset = demoModeEnabled() && session?.kind === "staff" && session.role === "admin";
+  const v2 = brandV2Enabled();
   return (
-    <html lang={prefs.locale === "zh-TW" ? "zh-Hant-TW" : "en"}>
+    <html lang={prefs.locale === "zh-TW" ? "zh-Hant-TW" : "en"} {...(v2 ? { "data-brand": "v2" } : {})}>
+      {v2 ? (
+        <head>
+          {
+            // Load the external theme only for v2 to preserve OFF behavior without changing globals.css.
+            // eslint-disable-next-line @next/next/no-css-tags
+            <link rel="stylesheet" href="/brand/v2/theme.css" />
+          }
+        </head>
+      ) : null}
       <body>
         <LocaleProvider locale={prefs.locale}>
           <RequiredValidity message={t("i_field_required")} />
@@ -38,7 +52,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <label htmlFor="nav-open" className="nav-toggle" data-testid="nav-toggle" aria-label={t("i_menu")}>
               <span aria-hidden="true">☰</span>
             </label>
-            <BrandLink />
+            {v2 ? <BrandLink v2 /> : <BrandLink />}
             <span className="top-extra">
               {session ? <span className="small">{session.name}</span> : <a href="/login">{t("i_sign_in")}</a>}
             </span>

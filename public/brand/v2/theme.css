@@ -1,0 +1,61 @@
+/* Source: /workspace/pm-saas/design/brand-v2/tokens.css.
+   Scoped Lane A adaptation: color, radius, elevation and font properties only. */
+html[data-brand="v2"] {
+  --c-bg: #F4F6F8;
+  --c-surface: #FFFFFF;
+  --c-surface-2: #EEF2F6;
+  --c-border: #DDE3EA;
+  --c-divider: #E8ECF1;
+  --c-text: #1B2533;
+  --c-text-2: #4A5668;
+  --c-text-3: #687384;
+  --c-primary: #14325C;
+  --c-primary-hover: #0F2748;
+  --c-primary-soft: #E3EAF3;
+  --c-on-primary: #FFFFFF;
+  --c-brand: #2F6BFF;
+  --c-brand-soft: #E8EFFF;
+  --c-brand-ink: #1F4FD1;
+  --c-success: #2A7254;
+  --c-success-soft: #E3F1EA;
+  --c-warning: #935C0F;
+  --c-warning-soft: #F8EEDB;
+  --c-danger: #B0413E;
+  --c-danger-soft: #F7E4E3;
+  --c-info: #23748A;
+  --c-info-soft: #E2F1F4;
+  --font-latin: "Inter", "Inter Variable";
+  --font-cjk: "Noto Sans TC", "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei";
+  --font-sans: "Inter", "Inter Variable", "Noto Sans TC", "Noto Sans CJK TC", -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", "Noto Sans TC", "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-features: "tnum" 1, "cv11" 1;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(20,50,92,.06), 0 1px 1px rgba(20,50,92,.04);
+  --shadow-2: 0 4px 16px rgba(20,50,92,.08);
+
+  --cd-primary: #14325C;
+  --cd-primary-hover: #0F2748;
+  --cd-primary-soft: #E3EAF3;
+  --cd-accent: #2F6BFF;
+  --cd-accent-soft: #E8EFFF;
+  --cd-ink: #1B2533;
+  --cd-ink2: #4A5668;
+  --cd-ink3: #687384;
+  --cd-surface: #FFFFFF;
+  --cd-surface2: #EEF2F6;
+  --cd-border: #DDE3EA;
+  --cd-success: #2A7254;
+  --cd-success-bg: #E3F1EA;
+  --cd-warning: #935C0F;
+  --cd-warning-bg: #F8EEDB;
+  --cd-danger: #B0413E;
+  --cd-danger-bg: #F7E4E3;
+  --cd-info: #23748A;
+  --cd-info-bg: #E2F1F4;
+  --cd-radius-sm: 6px;
+  --cd-radius-md: 10px;
+  --cd-radius-lg: 14px;
+}
