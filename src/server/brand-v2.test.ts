@@ -37,9 +37,10 @@ test("only the exact true flag enables v2", () => {
   assert.equal(LEGACY_THEME_COLOR, "#2E2622");
 });
 
-test("metadata selects v2 icons, manifest and locale OG", () => {
+test("metadata selects v2 icons and locale OG without overriding the file manifest", () => {
   for (const locale of ["zh-TW", "en"] as const) {
-    assert.deepEqual(brandV2Metadata(locale), {
+    assert.deepEqual(brandV2Metadata(locale, {}), {
+      metadataBase: new URL("https://app.condola.app"),
       icons: {
         icon: [
           { url: "/brand/v2/favicon/favicon.svg", type: "image/svg+xml" },
@@ -47,7 +48,6 @@ test("metadata selects v2 icons, manifest and locale OG", () => {
         ],
         apple: [{ url: "/brand/v2/favicon/apple-touch-icon.png" }],
       },
-      manifest: "/brand/v2/favicon/site.webmanifest",
       openGraph: {
         images: [{
           url: `/brand/v2/og/og-${locale === "zh-TW" ? "zh" : "en"}-1200x630.png`,
@@ -56,6 +56,38 @@ test("metadata selects v2 icons, manifest and locale OG", () => {
         }],
       },
     });
+  }
+});
+
+test("metadataBase accepts HTTPS origins and local HTTP origins", () => {
+  for (const origin of [
+    "https://app.condola.app",
+    "https://staging.condola.app",
+    "https://staging.condola.app/",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ]) {
+    const metadata = brandV2Metadata("en", { CONDOLA_SITE_URL: origin });
+    assert.equal(metadata.metadataBase?.href, new URL(origin).href, origin);
+  }
+});
+
+test("metadataBase falls back for missing or invalid origins", () => {
+  for (const value of [
+    undefined,
+    "",
+    "not a URL",
+    "/relative",
+    "http://app.condola.app",
+    "http://localhost.example.com",
+    "ftp://localhost",
+    "https://user:password@staging.condola.app",
+    "https://staging.condola.app/path",
+    "https://staging.condola.app?query=1",
+    "https://staging.condola.app#fragment",
+  ]) {
+    const metadata = brandV2Metadata("en", { CONDOLA_SITE_URL: value });
+    assert.equal(metadata.metadataBase?.href, "https://app.condola.app/", String(value));
   }
 });
 

@@ -7,8 +7,32 @@ export function brandV2Enabled(env: Record<string, string | undefined> = process
 export const BRAND_V2_THEME_COLOR = "#14325C";
 export const LEGACY_THEME_COLOR = "#2E2622";
 
-export function brandV2Metadata(locale: "zh-TW" | "en"): Partial<Metadata> {
+export function brandV2Metadata(
+  locale: "zh-TW" | "en",
+  env: Record<string, string | undefined> = process.env,
+): Partial<Metadata> {
+  let metadataBase = new URL("https://app.condola.app");
+  try {
+    const candidate = new URL(env.CONDOLA_SITE_URL ?? "");
+    const allowedProtocol = candidate.protocol === "https:"
+      || (candidate.protocol === "http:"
+        && ["127.0.0.1", "localhost"].includes(candidate.hostname));
+    if (
+      allowedProtocol
+      && !candidate.username
+      && !candidate.password
+      && candidate.pathname === "/"
+      && !candidate.search
+      && !candidate.hash
+    ) {
+      metadataBase = new URL(candidate.origin);
+    }
+  } catch {
+    // Missing or malformed configuration uses the production origin.
+  }
+
   return {
+    metadataBase,
     icons: {
       icon: [
         { url: "/brand/v2/favicon/favicon.svg", type: "image/svg+xml" },
@@ -16,7 +40,6 @@ export function brandV2Metadata(locale: "zh-TW" | "en"): Partial<Metadata> {
       ],
       apple: [{ url: "/brand/v2/favicon/apple-touch-icon.png" }],
     },
-    manifest: "/brand/v2/favicon/site.webmanifest",
     openGraph: {
       images: [
         {
