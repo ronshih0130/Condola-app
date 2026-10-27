@@ -1385,7 +1385,15 @@ export async function revokeAllSessions(userId: string) {
   try {
     await query(`SELECT app.end_auth_sessions($1::uuid)`, [userId]);
   } catch (error) {
-    console.error("end_auth_sessions", error);
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      /^[0-9A-Z]{5}$/.test(error.code)
+        ? error.code
+        : "unknown";
+    console.error("AUTH_HOSTED_REVOKE_FAILED", { code });
   }
   try {
     await writeAudit(await primaryOrg(userId), userId, "sign_out", { scope: "all" });

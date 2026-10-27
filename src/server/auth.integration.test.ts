@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import test from "node:test";
 import {
   acceptInvite,
@@ -7,6 +10,7 @@ import {
   inviteMember,
   requestPasswordReset,
   resetPassword,
+  revokeAllSessions,
   setMemberActive,
   setMemberRole,
   signIn,
@@ -246,4 +250,323 @@ test("a plus-addressed email signs in, including when the form turned + into a s
     await query(`DELETE FROM auth_login_attempts WHERE email = ANY($1::text[])`, [[email, unconfirmed, noFirm]]);
     await query(`DELETE FROM auth.users WHERE id = ANY($1::uuid[])`, [ids]);
   }
+});
+
+test("hosted session revocation migration and application integration", async (t) => {
+  const databaseUrl: string = process.env.DATABASE_URL ?? "";
+  assert.ok(databaseUrl, "DATABASE_URL is required");
+  const migrations = path.join(process.cwd(), "supabase", "migrations");
+  const oldMigration = "20261022160000_end_auth_sessions.sql";
+  const fixedMigration = "20261030151100_end_auth_sessions_varchar_fix.sql";
+  let createdSessions = false;
+  let createdTokens = false;
+  const triggerFunction = `end_auth_sessions_test_${randomUUID().replaceAll("-", "")}`;
+  const localSessionIds: string[] = [];
+
+  function applyMigration(filename: string) {
+    // Pass the throwaway test DB URL directly to psql; capture stderr for failures.
+    execFileSync(
+      "psql",
+      [
+        databaseUrl,
+        "-X",
+        "--no-password",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "--single-transaction",
+        "-f",
+        path.join(migrations, filename),
+      ],
+      {
+        stdio: ["ignore", "ignore", "pipe"],
+      },
+    );
+  }
+  async function createTokens(type: "varchar(255)" | "uuid") {
+    await query(`
+      CREATE TABLE auth.refresh_tokens (
+        id bigserial PRIMARY KEY,
+        token varchar(255),
+        user_id ${type},
+        session_id uuid REFERENCES auth.sessions(id) ON DELETE CASCADE,
+        revoked bool DEFAULT false
+      )
+    `);
+    createdTokens = true;
+  }
+
+  async function seedHosted(userId = randomUUID()) {
+    const first = randomUUID();
+    const second = randomUUID();
+    await query(
+      `INSERT INTO auth.sessions (id, user_id) VALUES ($1, $3), ($2, $3)`,
+      [first, second, userId],
+    );
+    await query(
+      `INSERT INTO auth.refresh_tokens (token, user_id, session_id)
+       VALUES ($1, $4, $5), ($2, $4, $6), ($3, $4, NULL)`,
+      [randomUUID(), randomUUID(), randomUUID(), userId, first, second],
+    );
+    return userId;
+  }
+
+  async function counts(userId: string) {
+    const sessions = await query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM auth.sessions WHERE user_id = $1::uuid`,
+      [userId],
+    );
+    // Test assertions support both fixture column types.
+    const tokens = await query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM auth.refresh_tokens WHERE user_id::text = $1::text`,
+      [userId],
+    );
+    return { sessions: sessions.rows[0].n, tokens: tokens.rows[0].n };
+  }
+
+  async function seedLocal() {
+    const id = randomUUID();
+    await query(
+      `INSERT INTO auth_sessions (id, user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3, now() + interval '1 day')`,
+      [id, USERS.admin, randomUUID()],
+    );
+    localSessionIds.push(id);
+    return id;
+  }
+
+  async function assertLocalRevoked(id: string) {
+    const result = await query<{ revoked: boolean }>(
+      `SELECT revoked_at IS NOT NULL AS revoked FROM auth_sessions WHERE id = $1`,
+      [id],
+    );
+    assert.equal(result.rows[0]?.revoked, true);
+    const active = await query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM auth_sessions
+       WHERE user_id = $1 AND revoked_at IS NULL`,
+      [USERS.admin],
+    );
+    assert.equal(active.rows[0].n, 0);
+  }
+
+  async function installFailure() {
+    await query(`
+      CREATE FUNCTION auth.${triggerFunction}()
+      RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'test refresh token deletion failure';
+      END
+      $$;
+      CREATE TRIGGER end_auth_sessions_test_failure
+        BEFORE DELETE ON auth.refresh_tokens
+        FOR EACH ROW EXECUTE FUNCTION auth.${triggerFunction}();
+    `);
+  }
+
+  async function removeFailure() {
+    if (createdTokens) {
+      await query(`DROP TRIGGER IF EXISTS end_auth_sessions_test_failure ON auth.refresh_tokens`);
+    }
+    await query(`DROP FUNCTION IF EXISTS auth.${triggerFunction}()`);
+  }
+
+  function codedFailure(error: unknown) {
+    assert.ok(error instanceof Error);
+    const pgError = error as Error & { code?: string; detail?: string };
+    assert.equal(pgError.code, "CA401");
+    assert.match(pgError.message, /^END_AUTH_SESSIONS_FAILED/);
+    assert.equal(pgError.detail, "original_sqlstate=P0001");
+    return true;
+  }
+
+  const existing = await query<{ sessions: string | null; tokens: string | null }>(
+    `SELECT to_regclass('auth.sessions')::text AS sessions,
+            to_regclass('auth.refresh_tokens')::text AS tokens`,
+  );
+  // This suite owns its DDL only in the specified fresh stub lane.
+  // Refuse to alter or drop pre-existing hosted tables.
+  assert.equal(existing.rows[0].sessions, null, "requires fresh stub lane without auth.sessions");
+  assert.equal(existing.rows[0].tokens, null, "requires fresh stub lane without auth.refresh_tokens");
+
+  t.after(async () => {
+    try {
+      await removeFailure();
+    } finally {
+      try {
+        if (createdTokens) await query(`DROP TABLE IF EXISTS auth.refresh_tokens`);
+      } finally {
+        try {
+          if (createdSessions) await query(`DROP TABLE IF EXISTS auth.sessions`);
+        } finally {
+          try {
+            if (localSessionIds.length) {
+              await query(`DELETE FROM auth_sessions WHERE id = ANY($1::uuid[])`, [localSessionIds]);
+            }
+          } finally {
+            applyMigration(fixedMigration);
+          }
+        }
+      }
+    }
+  });
+
+  await query(`
+    CREATE TABLE auth.sessions (
+      id uuid PRIMARY KEY,
+      user_id uuid NOT NULL,
+      created_at timestamptz DEFAULT now()
+    )
+  `);
+  createdSessions = true;
+  await query(`CREATE INDEX auth_sessions_hosted_test_user_idx ON auth.sessions(user_id)`);
+  await createTokens("varchar(255)");
+
+  applyMigration(oldMigration);
+  applyMigration(fixedMigration);
+  applyMigration(fixedMigration);
+
+  await t.test("varchar revocation isolates users and is idempotent", async () => {
+    applyMigration(fixedMigration);
+    const userA = await seedHosted();
+    const userB = await seedHosted();
+    await query(`SELECT app.end_auth_sessions($1::uuid)`, [userA]);
+    assert.deepEqual(await counts(userA), { sessions: 0, tokens: 0 });
+    assert.deepEqual(await counts(userB), { sessions: 2, tokens: 3 });
+    await query(`SELECT app.end_auth_sessions($1::uuid)`, [userA]);
+    assert.deepEqual(await counts(userA), { sessions: 0, tokens: 0 });
+    assert.deepEqual(await counts(userB), { sessions: 2, tokens: 3 });
+  });
+
+  await t.test("old definition raises 42883 and rolls back session deletion", async () => {
+    const userA = await seedHosted();
+    const userB = await seedHosted();
+    try {
+      applyMigration(oldMigration);
+      await assert.rejects(
+        () => query(`SELECT app.end_auth_sessions($1::uuid)`, [userA]),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.equal((error as Error & { code?: string }).code, "42883");
+          return true;
+        },
+      );
+      assert.deepEqual(await counts(userA), { sessions: 2, tokens: 3 });
+      assert.deepEqual(await counts(userB), { sessions: 2, tokens: 3 });
+    } finally {
+      applyMigration(fixedMigration);
+    }
+    await query(`SELECT app.end_auth_sessions($1::uuid)`, [userA]);
+    assert.deepEqual(await counts(userA), { sessions: 0, tokens: 0 });
+  });
+
+  await t.test("uuid refresh token user IDs also revoke both tables", async () => {
+    applyMigration(fixedMigration);
+    try {
+      await query(`DROP TABLE auth.refresh_tokens`);
+      createdTokens = false;
+      await createTokens("uuid");
+      const userA = await seedHosted();
+      const userB = await seedHosted();
+      await query(`SELECT app.end_auth_sessions($1::uuid)`, [userA]);
+      assert.deepEqual(await counts(userA), { sessions: 0, tokens: 0 });
+      assert.deepEqual(await counts(userB), { sessions: 2, tokens: 3 });
+      await query(`SELECT app.end_auth_sessions($1::uuid)`, [userA]);
+      assert.deepEqual(await counts(userA), { sessions: 0, tokens: 0 });
+    } finally {
+      if (createdTokens) await query(`DROP TABLE auth.refresh_tokens`);
+      createdTokens = false;
+      await createTokens("varchar(255)");
+    }
+  });
+
+  await t.test("refresh token deletion failure is coded and atomic", async () => {
+    applyMigration(fixedMigration);
+    const userA = await seedHosted();
+    const userB = await seedHosted();
+    try {
+      await installFailure();
+      await assert.rejects(
+        () => query(`SELECT app.end_auth_sessions($1::uuid)`, [userA]),
+        codedFailure,
+      );
+      assert.deepEqual(await counts(userA), { sessions: 2, tokens: 3 });
+      assert.deepEqual(await counts(userB), { sessions: 2, tokens: 3 });
+    } finally {
+      await removeFailure();
+    }
+  });
+
+  await t.test("revokeAllSessions commits local and hosted revocation", async (st) => {
+    applyMigration(fixedMigration);
+    const localId = await seedLocal();
+    await seedHosted(USERS.admin);
+    const logged = st.mock.method(console, "error", () => {});
+    try {
+      await revokeAllSessions(USERS.admin);
+      await assertLocalRevoked(localId);
+      assert.deepEqual(await counts(USERS.admin), { sessions: 0, tokens: 0 });
+      assert.equal(logged.mock.callCount(), 0);
+    } finally {
+      logged.mock.restore();
+    }
+  });
+
+  await t.test("hosted failure preserves local revocation and logs only a code", async (st) => {
+    applyMigration(fixedMigration);
+    const localId = await seedLocal();
+    await seedHosted(USERS.admin);
+    const logged = st.mock.method(console, "error", () => {});
+    try {
+      await installFailure();
+      await assert.doesNotReject(() => revokeAllSessions(USERS.admin));
+      await assertLocalRevoked(localId);
+      assert.deepEqual(await counts(USERS.admin), { sessions: 2, tokens: 3 });
+      assert.equal(logged.mock.callCount(), 1);
+      assert.deepEqual(logged.mock.calls[0].arguments, [
+        "AUTH_HOSTED_REVOKE_FAILED",
+        { code: "CA401" },
+      ]);
+    } finally {
+      logged.mock.restore();
+      await removeFailure();
+    }
+  });
+
+  await t.test("execute ACL, security definer and search path remain restricted", async () => {
+    applyMigration(fixedMigration);
+    const result = await query<{
+      service: boolean;
+      anon: boolean;
+      authenticated: boolean;
+      public_execute: boolean;
+      prosecdef: boolean;
+      proconfig: string[];
+    }>(`
+      SELECT
+        has_function_privilege('service_role', p.oid, 'EXECUTE') AS service,
+        has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+        has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+        EXISTS (
+          SELECT 1
+          FROM pg_catalog.aclexplode(
+            coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+          ) AS acl
+          WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+        ) AS public_execute,
+        p.prosecdef,
+        p.proconfig
+      FROM pg_catalog.pg_proc AS p
+      WHERE p.oid = 'app.end_auth_sessions(uuid)'::regprocedure
+    `);
+    assert.equal(result.rows.length, 1);
+    assert.deepEqual(result.rows[0], {
+      service: true,
+      anon: false,
+      authenticated: false,
+      public_execute: false,
+      prosecdef: true,
+      proconfig: ["search_path=auth, public, pg_temp"],
+    });
+  });
 });
