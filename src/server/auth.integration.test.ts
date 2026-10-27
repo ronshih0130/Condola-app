@@ -486,9 +486,21 @@ test("hosted session revocation migration and application integration", async (t
     const userB = await seedHosted();
     try {
       await installFailure();
+      await query(`
+        DROP TRIGGER end_auth_sessions_test_failure ON auth.refresh_tokens;
+        CREATE TRIGGER end_auth_sessions_test_failure
+          BEFORE DELETE ON auth.refresh_tokens
+          FOR EACH ROW WHEN (OLD.session_id IS NULL)
+          EXECUTE FUNCTION auth.${triggerFunction}();
+      `);
       await assert.rejects(
         () => query(`SELECT app.end_auth_sessions($1::uuid)`, [userA]),
-        codedFailure,
+        (error: unknown) => {
+          codedFailure(error);
+          assert.ok(error instanceof Error);
+          assert.equal(error.message, "END_AUTH_SESSIONS_FAILED");
+          return true;
+        },
       );
       assert.deepEqual(await counts(userA), { sessions: 2, tokens: 3 });
       assert.deepEqual(await counts(userB), { sessions: 2, tokens: 3 });
@@ -516,12 +528,21 @@ test("hosted session revocation migration and application integration", async (t
     applyMigration(fixedMigration);
     const localId = await seedLocal();
     await seedHosted(USERS.admin);
+    const userB = await seedHosted();
     const logged = st.mock.method(console, "error", () => {});
     try {
       await installFailure();
+      await query(`
+        DROP TRIGGER end_auth_sessions_test_failure ON auth.refresh_tokens;
+        CREATE TRIGGER end_auth_sessions_test_failure
+          BEFORE DELETE ON auth.refresh_tokens
+          FOR EACH ROW WHEN (OLD.session_id IS NULL)
+          EXECUTE FUNCTION auth.${triggerFunction}();
+      `);
       await assert.doesNotReject(() => revokeAllSessions(USERS.admin));
       await assertLocalRevoked(localId);
       assert.deepEqual(await counts(USERS.admin), { sessions: 2, tokens: 3 });
+      assert.deepEqual(await counts(userB), { sessions: 2, tokens: 3 });
       assert.equal(logged.mock.callCount(), 1);
       assert.deepEqual(logged.mock.calls[0].arguments, [
         "AUTH_HOSTED_REVOKE_FAILED",
