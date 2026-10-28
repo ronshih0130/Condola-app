@@ -8,7 +8,7 @@
         "effective_date": "2026-10-27",
         "full_text_url": "/privacy",
         "source": "content/legal/privacy.md",
-        "sha256": "aa9e46305c843f34582fb169c1190743cf2309048338f77d90de631b570f4cf6"
+        "min_privacy_version": "2026-10-27"
       }
     ],
     "partner_agreement": [
@@ -18,7 +18,7 @@
         "effective_date": "2026-10-27",
         "full_text_url": "/partner-agreement?locale=zh-TW",
         "source": "content/partner/partner-agreement.zh-TW.md",
-        "sha256": "7a9bc0b996817f3c4dd91b3c6e94023c9c5e0bd7a1bf2768c9466bca7a926bea"
+        "sha256": "5bff518d67825e9d7b9093b7320fe80d49bd9ccb29b90f79f45e866c45c8b64b"
       },
       {
         "locale": "en",
@@ -26,7 +26,7 @@
         "effective_date": "2026-10-27",
         "full_text_url": "/partner-agreement?locale=en",
         "source": "content/partner/partner-agreement.en.md",
-        "sha256": "77ef2131281d270bbb7546bfe9b0f4be04284d00242d2878a4f5e52d9de45e9b"
+        "sha256": "5366167c9227c183190756677bde450dc107608fb0458b077301ef2a407ddb13"
       }
     ]
   }

@@ -14,7 +14,8 @@ export async function submitPartnerConsent(form: FormData): Promise<never> {
   const meta = partnerRequestMeta(await headers());
   try {
     await svc(session.userId, (client) =>
-      recordPartnerConsentOn(client, session, form.get("partnerConsent") === "on", meta));
+      recordPartnerConsentOn(client, session, form.get("partnerConsent") === "on",
+        form.get("partnerAuthority") === "on", meta));
   } catch (error) {
     if (error instanceof FlowError && error.key === "errors.consentRequired") {
       redirect("/partner-consent?error=consent");

@@ -566,12 +566,20 @@ export async function createFirm(input: {
   consent?: boolean;
   consentRepo?: ConsentRepository;
   partnerConsent?: boolean;
+  partnerAuthority?: boolean;
   partnerLocale?: string;
   partnerMeta?: PartnerRequestMeta;
   partnerRuntime?: PartnerRuntime;
 }) {
   const gate = await passConsentGate(input.userId, "reconsent", input.consent === true, input.consentRepo);
   if (!gate.ok) return { ok: false as const, error: "consent" as const };
+  const partnerDocuments = await signupPartnerDocuments(
+    input.partnerLocale ?? countryByCode(input.country).locale, input.partnerRuntime,
+  );
+  if (partnerDocuments === null || (partnerDocuments.length
+      && (input.partnerConsent !== true || input.partnerAuthority !== true))) {
+    return { ok: false as const, error: "consent" as const };
+  }
   const kind = input.kind === "firm" || input.kind === "self" ? input.kind : null;
   const contactName = input.contactName.trim();
   if (!kind || !contactName) return { ok: false as const, error: "required" as const };
@@ -581,10 +589,6 @@ export async function createFirm(input: {
   const usableCode = code || null;
   const profile = countryByCode(input.country);
   const callingCode = input.phoneCountry?.trim() || profile.callingCode;
-  const partnerDocuments = await signupPartnerDocuments(input.partnerLocale ?? profile.locale, input.partnerRuntime);
-  if (partnerDocuments.length && input.partnerConsent !== true) {
-    return { ok: false as const, error: "consent" as const };
-  }
 
   const created = await withClient(async (client) => {
     await client.query("BEGIN");
@@ -622,13 +626,13 @@ export async function createFirm(input: {
         ],
       );
       const orgId = inserted.rows[0].id;
-      await insertSignupPartnerConsentOn(client, orgId, input.userId, partnerDocuments, input.partnerMeta ?? { ip: null, ua: null });
       await client.query(
         `INSERT INTO org_members (org_id, user_id, role, is_billing_owner, status)
          VALUES ($1, $2, 'admin', true, 'active')`,
         [orgId, input.userId],
       );
       await client.query(`UPDATE profiles SET display_name = $2, email = $3 WHERE id = $1`, [input.userId, contactName, input.email]);
+      await insertSignupPartnerConsentOn(client, orgId, input.userId, partnerDocuments, input.partnerMeta ?? { ip: null, ua: null });
       let redeemed = null as Awaited<ReturnType<typeof redeemPartnerCode>>;
       if (usableCode) redeemed = await redeemPartnerCode(client, { orgId, code: usableCode, where: "signup" });
       await client.query(`DELETE FROM signup_drafts WHERE user_id = $1`, [input.userId]);

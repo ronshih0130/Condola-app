@@ -7,19 +7,24 @@ import { PendingSubmit } from "./pending-submit";
 import { PhoneField } from "./phone-field";
 import { useLocale, useT } from "./locale";
 import { PartnerConsentFields } from "./partner-consent-form";
+import { partnerConsentCopy } from "@/i18n/lanes/partner-consent";
+import { partnerConsentReady } from "@/lib/partner-consent-ready";
 import type { SelectedPartnerDocument } from "@/server/partner-consent-rules";
 import { actionCreateFirm } from "@/server/signup-actions";
 
-export function FirmSteps({ partnerCode, error, partnerDocuments }: { partnerCode: string; error?: string; partnerDocuments?: SelectedPartnerDocument[] }) {
+export function FirmSteps({ partnerCode, error, partnerDocuments }: { partnerCode: string; error?: string; partnerDocuments?: SelectedPartnerDocument[] | null }) {
   const t = useT();
   const locale = useLocale();
   const [partnerChecked, setPartnerChecked] = useState(false);
+  const [partnerAuthority, setPartnerAuthority] = useState(false);
+  const partnerCopy = partnerConsentCopy(locale);
   const [step, setStep] = useState<3 | 4>(3);
   const [kind, setKind] = useState<"firm" | "self" | "">("");
   const [nameError, setNameError] = useState(false);
   const [contactError, setContactError] = useState(false);
   const [submitArmed, setSubmitReady] = useState(false);
-  const submitReady = submitArmed && !(Boolean(partnerDocuments?.length) && !partnerChecked);
+  const submitReady = submitArmed && partnerDocuments !== null
+    && !(Boolean(partnerDocuments?.length) && !partnerConsentReady(partnerChecked, partnerAuthority));
   const armSubmit = useRef<number | null>(null);
 
   function goDetails() {
@@ -43,7 +48,8 @@ export function FirmSteps({ partnerCode, error, partnerDocuments }: { partnerCod
           return;
         }
         const data = new FormData(event.currentTarget);
-        if (partnerDocuments?.length && data.get("partnerConsent") !== "on") {
+        if (partnerDocuments === null || (partnerDocuments?.length
+            && (data.get("partnerConsent") !== "on" || data.get("partnerAuthority") !== "on"))) {
           event.preventDefault();
           return;
         }
@@ -65,7 +71,8 @@ export function FirmSteps({ partnerCode, error, partnerDocuments }: { partnerCod
       </ol>
       <p className="small muted" data-testid="signup-step-label">{t("i_signup_step", { n: step })}</p>
       <h1>{step === 3 ? t("i_signup_kind_title") : t("i_signup_firm_details")}</h1>
-      {error ? <div className="alert bad">{t("i_required")}</div> : null}
+      {partnerDocuments === null ? <div className="alert bad" role="alert">{partnerCopy.unavailable}</div> : null}
+      {error ? <div className="alert bad">{error === "consent" && partnerDocuments?.length ? partnerCopy.required : t("i_required")}</div> : null}
       <input type="hidden" name="kind" value={kind} />
       {step === 3 ? (
         <fieldset key="signup-kind" className="col" data-testid="signup-kind">
@@ -122,7 +129,7 @@ export function FirmSteps({ partnerCode, error, partnerDocuments }: { partnerCod
           </div>
           <p className="small" data-testid="signup-admin-note">{t("i_signup_admin_note")}</p>
           {partnerDocuments?.length ? (
-            <PartnerConsentFields locale={locale} documents={partnerDocuments} checked={partnerChecked} onChange={setPartnerChecked} />
+            <PartnerConsentFields locale={locale} documents={partnerDocuments} checked={partnerChecked} authority={partnerAuthority} onChange={setPartnerChecked} onAuthorityChange={setPartnerAuthority} />
           ) : null}
           <PendingSubmit className="btn pri" idle={t("i_signup_create")} pending={t("i_portal_working")} testId="firm-submit" disabled={!submitReady} />
         </div>

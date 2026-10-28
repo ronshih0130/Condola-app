@@ -166,6 +166,7 @@ export async function actionCreateFirm(formData: FormData) {
       country: text(formData.get("country")),
       partnerCode: text(formData.get("partnerCode")) || identity.partner_code || "",
       partnerConsent: formData.get("partnerConsent") === "on",
+      partnerAuthority: formData.get("partnerAuthority") === "on",
       partnerLocale: (await requestPrefs()).locale,
       partnerMeta: partnerRequestMeta(await headers()),
       consent: formData.get("consent") === "on",
