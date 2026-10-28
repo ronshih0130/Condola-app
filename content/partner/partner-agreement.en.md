@@ -9,7 +9,7 @@
 
 **2. Partner commitments.** Party B joins a short feedback call weekly for the first 2 months, then every two weeks with Party A (about 30 minutes) and runs real rent cycles in the product (billing, payment records, reconciliation) using real leases.
 
-**3. Positioning.** Condola is software only. Party A does not manage or sublease property, collect rent or deposits, guarantee rent, or hold any funds. Party B handles all rent and deposit payments itself or through its own financial institution.
+**3. Positioning.** Condola is software only. Party A does not manage or sublease property, collect rent or deposits, or hold any funds, and does not guarantee that tenants pay rent on time. Party B handles all rent and deposit payments itself or through its own financial institution.
 
 **4. Data ownership.** Party B owns its data. Data that Party B enters or generates in the product belongs to Party B. Party B may export it at any time in a common format such as CSV. On Party B's request, or ＿＿ days after this agreement ends (proposed 30 days, to allow export), Party A deletes Party B's data and confirms the deletion in writing; backup copies Party A keeps itself are purged within 14 days, and backups inside the hosting platform are handled under the provider's backup process.
 
