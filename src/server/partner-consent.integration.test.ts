@@ -224,14 +224,15 @@ test("AC1 AC4 AC5 AC6 AC7 signup requires both boxes, rolls back, snapshots pair
       const person = await user();
       const name = "Partner-on-" + person.id;
       let consentWrites = 0;
-      for (const [agreement, authority] of [[false, false], [true, false], [false, true]]) {
+      for (const [attempt, [agreement, authority]] of [[false, false], [true, false], [false, true]].entries()) {
         const rejected = await createFirm({
           ...input(person, name), partnerConsent: agreement, partnerAuthority: authority,
           consent: true,
           consentRepo: { read: async () => null, write: async () => { consentWrites++; } },
         });
         assert.deepEqual(rejected, { ok: false, error: "consent" });
-        assert.equal(consentWrites, 0);
+        // Personal consent is recorded before the partner gate rejects this attempt.
+        assert.equal(consentWrites, attempt + 1);
         assert.equal((await query("SELECT 1 FROM organizations WHERE name = $1", [name])).rowCount, 0);
         assert.equal((await query("SELECT 1 FROM partner_agreement_consents WHERE user_id = $1", [person.id])).rowCount, 0);
       }

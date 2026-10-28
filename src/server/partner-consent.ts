@@ -201,8 +201,8 @@ export async function insertPartnerDocumentsOn(
   if (member.rows[0]?.role !== "admin") throw new FlowError("errors.consentRequired");
   const profile = await client.query<{ consenter: string }>(
     `SELECT left(coalesce(nullif(btrim(display_name), ''),
-                          nullif(btrim(email::text), ''), $1::text), 200) AS consenter
-       FROM public.profiles WHERE id = $1 FOR SHARE`,
+                          nullif(btrim(email::text), ''), $1::uuid::text), 200) AS consenter
+       FROM public.profiles WHERE id = $1::uuid FOR SHARE`,
     [userId],
   );
   const actorRole = member.rows[0].is_billing_owner ? "owner" : "admin";
