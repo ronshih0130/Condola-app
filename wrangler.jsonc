@@ -67,6 +67,7 @@
     },
     "production": {
       "name": "condola-prod",
+      "logpush": true,
       "compatibility_flags": ["nodejs_compat"],
       "workers_dev": false,
       "placement": {
