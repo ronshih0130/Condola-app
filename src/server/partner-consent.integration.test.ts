@@ -243,7 +243,7 @@ test("partner signup OFF is unchanged; ON requires checkbox, rolls back failures
       bump.config.documents.partner_agreement.find((doc) => doc.locale === "en")!.version = "v0.2";
       assert.equal((await withClient((client) => readPartnerStateOn(client, current, bump))).required, true);
 
-      await query("UPDATE org_members SET role = 'manager' WHERE org_id = $1 AND user_id = $2", [created.orgId, person.id]);
+      await query("UPDATE org_members SET role = 'manager', is_billing_owner = false WHERE org_id = $1 AND user_id = $2", [created.orgId, person.id]);
       await assert.rejects(svc(person.id, (client) =>
         recordPartnerConsentOn(client, current, true, { ip: null, ua: null }, runtime)));
       const nonAdmin = await withClient((client) => readPartnerStateOn(client, current, bump));
