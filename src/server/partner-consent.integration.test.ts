@@ -12,6 +12,7 @@ import {
 import { partnerTestRuntime } from "./partner-consent-test-fixture";
 import { createFirm } from "./signup";
 import type { Session } from "./types";
+import { FlowError } from "./errors";
 
 const migration = readFileSync(new URL("../../supabase/migrations/20261030151300_partner_agreement_consents.sql", import.meta.url), "utf8");
 const attestationMigration = readFileSync(new URL("../../supabase/migrations/20261030151301_partner_consent_attestation.sql", import.meta.url), "utf8");
@@ -319,4 +320,203 @@ test("AC1 AC4 AC5 AC6 AC7 signup requires both boxes, rolls back, snapshots pair
       }
     }
   });
+});
+
+test("AC4 concurrency: admin suspended while signing is refused or serialized", { timeout: 90_000 }, async () => {
+  // These are real, independent connections; no Client prototype mocks.
+  const a = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 8000 });
+  const b = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 8000 });
+  const observer = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 8000 });
+  const connected: Client[] = [];
+  const org = randomUUID();
+  const user = randomUUID();
+  const key = "design_partner_consent_gate";
+  let saved: Record<string, unknown> | undefined;
+  let flagSaved = false;
+  let pending: Promise<unknown> | undefined;
+  const backendPids: number[] = [];
+
+  function noDeadlock(error: unknown) {
+    assert.notEqual((error as { code?: string } | null)?.code, "40P01", "deadlock");
+  }
+  function track<T>(promise: Promise<T>) {
+    // Attach rejection handling immediately, including while lock polling runs.
+    const result = promise.then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    pending = result;
+    return result;
+  }
+  async function waiting(pid: number, blocker: number) {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      const result = await observer.query(
+        `SELECT a.wait_event_type = 'Lock'
+                AND $2::int = ANY(pg_blocking_pids(a.pid))
+                AND EXISTS (SELECT 1 FROM pg_locks l WHERE l.pid = a.pid AND NOT l.granted)
+                  AS blocked
+           FROM pg_stat_activity a WHERE a.pid = $1`,
+        [pid, blocker],
+      );
+      if (result.rows[0]?.blocked === true) return;
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    assert.fail(`backend ${pid} did not wait on backend ${blocker}`);
+  }
+  async function beginSigner() {
+    await a.query("BEGIN");
+    await a.query("SET LOCAL lock_timeout = '10s'");
+    // Explicitly reproduce svcOn(): no additional org/GUC scope is implicit.
+    await a.query(
+      "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'service_role', true)",
+      [user],
+    );
+    await a.query("SET LOCAL ROLE service_role");
+  }
+  async function count(expected: number) {
+    const rows = await observer.query(
+      "SELECT authority_attested, actor_role, consenter_name FROM partner_agreement_consents WHERE company_id = $1",
+      [org],
+    );
+    assert.equal(rows.rowCount, expected);
+    for (const row of rows.rows) {
+      assert.equal(row.authority_attested, true);
+      assert.equal(row.actor_role, "admin");
+      assert.equal(row.consenter_name, "Concurrency Signer");
+    }
+  }
+  const sign = () => recordPartnerConsentOn(
+    a, session(user, org), true, true, { ip: null, ua: "concurrency-f1" }, runtime,
+  );
+  const suspend = () => b.query(
+    "UPDATE org_members SET status = 'suspended' WHERE org_id = $1 AND user_id = $2",
+    [org, user],
+  );
+  try {
+    for (const client of [a, b, observer]) {
+      await client.connect();
+      connected.push(client);
+      await client.query("SET lock_timeout = '10s'");
+      await client.query("SET statement_timeout = '15s'");
+    }
+    const apid = (await a.query<{ pid: number }>("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+    const bpid = (await b.query<{ pid: number }>("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+    backendPids.push(apid, bpid);
+    saved = (await observer.query(
+      "SELECT * FROM platform_settings WHERE key = $1", [key],
+    )).rows[0];
+    flagSaved = true;
+
+    // Committed fixtures are essential for cross-connection visibility.
+    // Direct inserts avoid createFirm and its sandbox seeds.
+    await observer.query("BEGIN");
+    await observer.query(
+      "INSERT INTO organizations (id, name, country_code, default_currency) VALUES ($1, $2, 'TW', 'TWD')",
+      [org, "Concurrency-" + org],
+    );
+    await observer.query("INSERT INTO auth.users (id, email) VALUES ($1, $2)", [user, user + "@concurrency.example.com"]);
+    await observer.query(
+      "INSERT INTO profiles (id, display_name, email) VALUES ($1, 'Concurrency Signer', $2)",
+      [user, user + "@concurrency.example.com"],
+    );
+    await observer.query(
+      "INSERT INTO org_members (org_id, user_id, role, status, is_billing_owner) VALUES ($1, $2, 'admin', 'active', false)",
+      [org, user],
+    );
+    await observer.query(
+      `INSERT INTO platform_settings (key, value, description)
+       VALUES ($1, '"on"'::jsonb, 'concurrency-f1')
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key],
+    );
+    await observer.query("COMMIT");
+    await count(0);
+
+    // A: suspension owns the membership lock before signing starts.
+    await b.query("BEGIN");
+    await b.query("SET LOCAL lock_timeout = '10s'");
+    await suspend();
+    await beginSigner();
+    const refused = track(sign());
+    await waiting(apid, bpid);
+    await b.query("COMMIT");
+    const rejection = await refused;
+    assert.equal(rejection.ok, false);
+    if (rejection.ok) assert.fail("suspended administrator signed");
+    noDeadlock(rejection.error);
+    assert.ok(rejection.error instanceof FlowError);
+    assert.equal(rejection.error.key, "errors.consentRequired");
+    await a.query("ROLLBACK");
+    await count(0);
+
+    // B/B2: signing owns FOR UPDATE on the org and FOR SHARE on membership.
+    for (const commit of [false, true]) {
+      await observer.query(
+        "UPDATE org_members SET status = 'active' WHERE org_id = $1 AND user_id = $2", [org, user],
+      );
+      await beginSigner();
+      try { await sign(); } catch (error) { noDeadlock(error); throw error; }
+      await b.query("BEGIN");
+      await b.query("SET LOCAL lock_timeout = '10s'");
+      const suspension = track(suspend());
+      await waiting(bpid, apid);
+      await a.query(commit ? "COMMIT" : "ROLLBACK");
+      const outcome = await suspension;
+      if (!outcome.ok) { noDeadlock(outcome.error); throw outcome.error; }
+      assert.equal(outcome.value.rowCount, 1);
+      await b.query("COMMIT");
+      await count(commit ? 2 : 0);
+      assert.equal((await observer.query(
+        "SELECT status FROM org_members WHERE org_id = $1 AND user_id = $2", [org, user],
+      )).rows[0].status, "suspended");
+    }
+  } finally {
+    // Release both transactions before waiting for an outstanding blocked query.
+    // Query cancellation uses the third connection, never the blocked socket.
+    try {
+      if (connected.includes(observer)) {
+        await observer.query("ROLLBACK");
+        if (pending) {
+          const pids = backendPids;
+          if (pids.length) await observer.query(
+            "SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE pid = ANY($1::int[]) AND state = 'active'",
+            [pids],
+          );
+        }
+      }
+      for (const client of [a, b]) {
+        if (connected.includes(client)) await client.query("ROLLBACK");
+      }
+      if (pending) await pending;
+      if (connected.includes(observer)) {
+        await observer.query("BEGIN");
+        // Parent deletion is the append-only trigger's permitted cascade.
+        await observer.query("DELETE FROM organizations WHERE id = $1", [org]);
+        await observer.query("DELETE FROM org_members WHERE user_id = $1", [user]);
+        await observer.query("DELETE FROM profiles WHERE id = $1", [user]);
+        await observer.query("DELETE FROM auth.users WHERE id = $1", [user]);
+        if (flagSaved) {
+          await observer.query("DELETE FROM platform_settings WHERE key = $1", [key]);
+          if (saved) await observer.query(
+            "INSERT INTO platform_settings SELECT (jsonb_populate_record(NULL::platform_settings, $1::jsonb)).*",
+            [JSON.stringify(saved)],
+          );
+        }
+        await observer.query("COMMIT");
+        for (const [table, column, id] of [
+          ["organizations", "id", org], ["partner_agreement_consents", "company_id", org],
+          ["org_members", "user_id", user], ["profiles", "id", user], ["auth.users", "id", user],
+        ]) {
+          assert.equal((await observer.query(
+            `SELECT 1 FROM ${table} WHERE ${column} = $1`, [id],
+          )).rowCount, 0, `leaked ${table} fixture`);
+        }
+        if (flagSaved) assert.deepEqual((await observer.query(
+          "SELECT * FROM platform_settings WHERE key = $1", [key],
+        )).rows, saved ? [saved] : []);
+      }
+    } finally {
+      await Promise.all(connected.map((client) => client.end()));
+    }
+  }
 });
