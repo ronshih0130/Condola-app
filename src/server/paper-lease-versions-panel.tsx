@@ -1,5 +1,5 @@
 import { paperLeaseCopy } from "@/i18n/paper-lease-versions";
-import { listPaperLeaseVersions } from "./paper-lease-versions";
+import { listPaperLeaseVersions, REASON_MAX } from "./paper-lease-versions";
 import type { Session } from "./types";
 
 export async function paperLeaseVersionPanel(
@@ -19,7 +19,11 @@ export async function paperLeaseVersionPanel(
       <ul data-testid="paper-version-history">
         {versions.map((version) => (
           <li key={version.id} data-current={version.current ? "true" : "false"}>
-            <strong>{version.current ? copy.current : copy.history}</strong>{" "}
+            <strong>
+              {version.legacyFallback
+                ? copy.currentLegacy
+                : version.current ? copy.current : copy.history}
+            </strong>{" "}
             <a href={`/m/leases/${leaseId}/signed/${version.id}`}>{version.file_name || copy.pdf}</a>
             <dl>
               <dt>{copy.uploadedAt}</dt>
@@ -51,11 +55,11 @@ export async function paperLeaseVersionPanel(
                 id="paper-replace-reason"
                 name="replaceReason"
                 required
-                maxLength={500}
+                maxLength={REASON_MAX}
                 aria-describedby="paper-replace-reason-hint"
                 data-testid="paper-replace-reason"
               />
-              <p id="paper-replace-reason-hint" className="small muted">{copy.reasonHint}</p>
+              <p id="paper-replace-reason-hint" className="small muted">{copy.reasonInvalid}</p>
             </div>
           ) : null}
           <button className="btn" type="submit" data-testid="upload-signed-pdf" style={{ marginTop: 8 }}>

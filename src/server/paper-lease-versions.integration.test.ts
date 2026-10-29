@@ -10,6 +10,7 @@ import {
   insertPaperLeaseVersion,
   paperLeaseVersionsEnabled,
   preparePaperLeaseVersion,
+  REASON_MAX,
 } from "./paper-lease-versions";
 import type { Session } from "./types";
 
@@ -59,6 +60,16 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
     [ORG_ID],
   );
   const originalFlags = flags.rows[0].feature_flags;
+
+  const policies = await query<{ policyname: string }>(
+    `SELECT policyname FROM pg_policies
+      WHERE schemaname = 'public' AND tablename = 'lease_signed_pdfs'
+      ORDER BY policyname`,
+  );
+  assert.deepEqual(
+    policies.rows.map((row) => row.policyname),
+    ["team_delete", "team_insert", "team_read"],
+  );
 
   try {
     await query(
@@ -123,6 +134,7 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
     // Exercise the real upload entry point twice, without replacement reasons.
     await uploadSignedLeasePdf(admin, leaseId, { bytes, fileName: "legacy-first.pdf" });
     await uploadSignedLeasePdf(admin, leaseId, { bytes, fileName: "legacy-second.pdf" });
+    await uploadSignedLeasePdf(admin, otherLeaseId, { bytes, fileName: "other-lease.pdf" });
     const legacy = await query<{
       id: string;
       file_id: string;
@@ -148,6 +160,72 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
     assert.ok(legacy.rows.every((row) => row.content.equals(bytes)));
     assert.equal(legacy.rows.filter((row) => row.current).length, 1);
     assert.equal(legacy.rows.find((row) => row.current)?.file_name, "legacy-second.pdf");
+
+    // With the global flag off, team_read still exposes both leases to org staff.
+    const flagOffRows = await query<{ id: string }>(
+      `SELECT id::text FROM lease_signed_pdfs
+        WHERE org_id = $1 AND lease_id = ANY($2::uuid[])
+        ORDER BY id`,
+      [ORG_ID, leaseIds],
+    );
+    assert.equal(flagOffRows.rows.length, 3);
+    await tx(admin.userId, async (client) => {
+      const history = await client.query<{ id: string }>(
+        `SELECT id::text FROM lease_signed_pdfs
+          WHERE org_id = $1 AND lease_id = ANY($2::uuid[])
+          ORDER BY id`,
+        [ORG_ID, leaseIds],
+      );
+      assert.deepEqual(history.rows, flagOffRows.rows);
+    }, { orgId: ORG_ID });
+
+    // There is no tenant SELECT policy, including for the tenant's own lease.
+    for (const tenantUserId of tenantUserIds) {
+      await withClient(async (client) => {
+        await client.query("BEGIN");
+        try {
+          await client.query("SET LOCAL ROLE authenticated");
+          await client.query(
+            `SELECT set_config('request.jwt.claim.sub', $1, true),
+                    set_config('request.jwt.claims', $2, true)`,
+            [tenantUserId, JSON.stringify({ sub: tenantUserId, role: "authenticated" })],
+          );
+          const history = await client.query(`SELECT id FROM lease_signed_pdfs`);
+          assert.equal(history.rows.length, 0);
+        } finally {
+          await client.query("ROLLBACK");
+        }
+      });
+    }
+
+    await withClient(async (client) => {
+      await client.query("BEGIN");
+      try {
+        await client.query("SET LOCAL ROLE authenticated");
+        await client.query(
+          `SELECT set_config('request.jwt.claim.sub', $1, true),
+                  set_config('request.jwt.claims', $2, true)`,
+          [
+            tenantUserIds[0],
+            JSON.stringify({ sub: tenantUserIds[0], role: "authenticated" }),
+          ],
+        );
+        await assert.rejects(
+          client.query(
+            `INSERT INTO lease_signed_pdfs
+               (org_id, lease_id, file_id, bucket, object_path, content)
+             VALUES ($1,$2,$3,'lease-documents-private',$4,$5)`,
+            [
+              ORG_ID, leaseId, legacy.rows[0].file_id,
+              `${ORG_ID}/${leaseId}/${randomUUID()}.pdf`, bytes,
+            ],
+          ),
+          databaseError("42501"),
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
+    });
 
     // Reset the legacy fixture on one client, suppressing append-only guards
     // only within this cleanup transaction.
@@ -185,7 +263,7 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
     }, { orgId: ORG_ID });
 
     const firstId = await uploadEnabled();
-    for (const reason of [undefined, "", " \n ", "x".repeat(501)]) {
+    for (const reason of [undefined, "", " \n ", "x".repeat(REASON_MAX + 1)]) {
       await assert.rejects(() => uploadEnabled(reason), requiredReason);
     }
     const secondId = await uploadEnabled("  corrected signature \n");
@@ -256,7 +334,7 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
       ],
     ), { orgId: ORG_ID });
 
-    for (const reason of ["", "   ", "x".repeat(501)]) {
+    for (const reason of ["", "   ", "x".repeat(REASON_MAX + 1)]) {
       await assert.rejects(
         () => directInsert(leaseId, reason, secondId),
         databaseError("23514", "lease_signed_pdfs_replace_reason_length"),
@@ -273,8 +351,8 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
 
     await tx(tenantUserIds[0], async (client) => {
       const history = await client.query(
-        `SELECT id FROM lease_signed_pdfs WHERE lease_id = $1`,
-        [leaseId],
+        `SELECT id FROM lease_signed_pdfs WHERE lease_id = ANY($1::uuid[])`,
+        [leaseIds],
       );
       assert.equal(history.rows.length, 0);
     }, { orgId: ORG_ID });
