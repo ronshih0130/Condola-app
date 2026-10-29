@@ -76,6 +76,7 @@
       },
       "vars": {
         "CONDOLA_ENV": "production",
+        "BRAND_V2": "true",
         "CONDOLA_SITE_URL": "https://app.condola.app",
         "DEMO_MODE": "false",
         "LINE_LOGIN_ENABLED": "false",

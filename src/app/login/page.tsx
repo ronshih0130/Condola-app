@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { AuthHashForward } from "@/components/auth-hash";
 import { AuthBrand } from "@/components/brand";
-import { brandV2Enabled } from "@/server/brand-v2";
+import { brandV2Enabled, brandV2Tokens } from "@/server/brand-v2";
 import { BackupCodes } from "@/components/backup-codes";
 import { PendingSubmit } from "@/components/pending-submit";
 import { BACKUP_COOKIE, backupDisplay } from "@/server/backup";
@@ -32,6 +32,7 @@ export default async function LoginPage({
   const prefs = await requestPrefs();
   const t = makeT(prefs.locale);
   const session = await readSession();
+  const v2 = brandV2Enabled();
   const demoLine = showDemoLineCopy(null);
   const loginFooter = appFooterText(t("i_login_footer"), demoLine);
   if (session && params.step !== "backup") redirect(roleHome(session.kind, session.role));
@@ -52,7 +53,7 @@ export default async function LoginPage({
   return (
     <div className="auth-wrap">
       <AuthHashForward />
-      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
+      <AuthBrand name={t("i_brand")} v2={v2} />
       {params.error === "unconfirmed" ? (
         <form className="card pad" action={actionResendSignup} data-testid="login-unconfirmed">
           <p>{t("i_login_unconfirmed")}</p>
@@ -111,7 +112,7 @@ export default async function LoginPage({
         ) : (
           <>
             <input type="hidden" name="next" value={next} />
-            <div className="fg">
+            <div className="fg" style={v2 ? { paddingTop: brandV2Tokens.space["sp-3"].value } : undefined}>
               <label className="f">{t("i_email_label")}</label>
               <input className="inp" name="email" type="email" data-testid="login-email" autoComplete="username" />
             </div>
@@ -125,7 +126,7 @@ export default async function LoginPage({
             <button className="btn pri block" type="submit" data-testid="login-submit">
               {t("i_sign_in")}
             </button>
-            <p className="small">
+            <p className="small" style={v2 ? { paddingTop: brandV2Tokens.space["sp-3"].value } : undefined}>
               <a href="/forgot">{t("i_forgot")}</a>
             </p>
             {demoLine && lineLoginEnabled() ? (
@@ -142,9 +143,6 @@ export default async function LoginPage({
               {t("i_login_invite_lead")}
               <a href="/signup" data-testid="login-signup">{t("i_login_signup")}</a>
               {t("i_login_invite_tail")}
-            </p>
-            <p className="small" data-testid="login-pricing">
-              <a href="/pricing">{t("i_login_pricing")}</a>
             </p>
           </>
         )}

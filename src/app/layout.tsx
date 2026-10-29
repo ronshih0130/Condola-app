@@ -73,7 +73,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Link href="/licenses">{t("i_legal_licenses")}</Link>
             <Link href="/refund">{t("i_legal_refund")}</Link>
           </nav>
-          <p data-testid="app-version">{process.env.NEXT_PUBLIC_COMMIT || "unknown"}</p>
+          {session?.kind !== "staff" ? <p data-testid="app-version">{process.env.NEXT_PUBLIC_COMMIT || "unknown"}</p> : null}
         </footer>
       </LocaleProvider>
     </body>
