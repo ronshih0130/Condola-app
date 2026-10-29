@@ -125,9 +125,10 @@ else
                 candidate = substr(text, RSTART, RLENGTH)
                 previous = RSTART > 1 ? substr(text, RSTART - 1, 1) : ""
 
-                # Only absolute paths, rather than the slash in ./ or ../.
-                if (previous != "." &&
+                # Only absolute paths, rather than slashes within relative paths.
+                if (previous !~ /[A-Za-z0-9._~$@+\/-]/ &&
                     candidate ~ /\/node_modules$/) {
+                    gsub(/\/+/, "/", candidate)
                     print candidate
                 }
                 text = substr(text, RSTART + RLENGTH)
