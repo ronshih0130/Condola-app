@@ -5,7 +5,7 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
   await resetDemo(page);
   await signIn(page, ACCOUNTS.tenant2);
   await page.goto("/t/repair");
-  await expect(page.getByRole("heading", { name: "報修" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "報修", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "我的報修" })).toBeVisible();
   await page.getByTestId("repair-title").fill("廚房漏水測試");
   await page.getByTestId("submit-repair").click();
@@ -47,13 +47,13 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
   await page.getByRole("button", { name: /松信住宅管理/ }).click();
   await expect(page.getByTestId("lease-picker")).toHaveCount(0);
   await page.getByTestId("tenant-tile-repair").click();
-  await expect(page.getByRole("heading", { name: "報修" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "報修", exact: true })).toBeVisible();
   await expect(page.getByTestId("tenant-repairs")).not.toContainText("廚房漏水測試");
   await expect(page.getByTestId("tenant-repairs")).not.toContainText("浴室水龍頭滲水");
 
   await signIn(page, ACCOUNTS.admin);
   await page.goto("/m/tickets");
-  await expect(page.getByRole("heading", { name: "報修" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "報修", exact: true })).toBeVisible();
   await page.getByRole("link", { name: /廚房漏水測試/ }).click();
   await page.getByTestId("repair-vendor").fill("老張水電");
   await page.getByTestId("repair-estimate").fill("1500");

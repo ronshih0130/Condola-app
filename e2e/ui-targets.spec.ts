@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 
-const globals = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
-const targets = readFileSync(new URL("../src/app/ui-targets.css", import.meta.url), "utf8");
-const theme = readFileSync(new URL("../public/brand/v2/theme.css", import.meta.url), "utf8");
+const globals = readFileSync(path.resolve(__dirname, "../src/app/globals.css"), "utf8");
+const targets = readFileSync(path.resolve(__dirname, "../src/app/ui-targets.css"), "utf8");
+const theme = readFileSync(path.resolve(__dirname, "../public/brand/v2/theme.css"), "utf8");
 
 for (const brand of ["v1", "v2"] as const) {
   test(`${brand}: checkbox labels provide 44px targets and preserve hidden controls`, async ({ page }) => {
