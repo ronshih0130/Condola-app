@@ -1,6 +1,19 @@
 /* Preserve the existing tenant/rent/phone table and its reading order.
    Report summaries, approval controls and footer copy have no source elements. */
 
+/* The property summary is a layout sibling of the home page. */
+html[data-brand="v2"] [data-testid="owner-properties"]:has(~ [data-v2-page="o-home"]) {
+  --sp-1: 4px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+
+  padding-inline: var(--sp-4);
+}
+
+html[data-brand="v2"] [data-testid="owner-properties"]:has(~ [data-v2-page="o-home"]) > .small {
+  margin-bottom: var(--sp-1);
+}
+
 html[data-brand="v2"] [data-v2-page="o-home"] {
   --sp-1: 4px;
   --sp-2: 8px;
@@ -137,6 +150,10 @@ html[data-brand="v2"] [data-v2-page="o-home"] .t [data-testid="tenant-phone"][da
 }
 
 @media (min-width: 1024px) {
+  html[data-brand="v2"] [data-testid="owner-properties"]:has(~ [data-v2-page="o-home"]) {
+    padding-inline: var(--sp-6);
+  }
+
   html[data-brand="v2"] [data-v2-page="o-home"] {
     padding: var(--sp-8) var(--sp-6);
   }
