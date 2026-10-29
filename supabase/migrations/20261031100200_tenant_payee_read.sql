@@ -1,3 +1,6 @@
+-- Invariant: every call that completes writes exactly one audit_log row.
+-- ACL-denied (anon/PUBLIC) and context-rejected calls never return data.
+-- PostgreSQL cannot run function code for ACL-denied calls.
 CREATE FUNCTION public.tenant_payee_account(p_lease uuid)
 RETURNS TABLE (
   bank_account_id uuid,
@@ -23,9 +26,8 @@ DECLARE
   v_audit_org_id uuid;
   v_found boolean := false;
 BEGIN
-  -- anon and PUBLIC are blocked by the EXECUTE ACL and cannot reach this
-  -- function. Missing identity or invalid authenticated context raises
-  -- 42501 before auditing.
+  -- Missing identity or invalid authenticated context raises 42501 before
+  -- auditing. These rejected calls never return data.
   -- current_user is the function owner inside SECURITY DEFINER. The role
   -- setting preserves the caller's SET ROLE context; session_user covers
   -- connections made directly as authenticated.
@@ -65,14 +67,32 @@ BEGIN
   WHERE l.id = p_lease
   FOR SHARE OF l;
 
+  -- Attribution does not grant access: any non-archived caller contact
+  -- qualifies here, while account access still requires a tenant party.
   SELECT c.org_id
   INTO v_caller_org_id
   FROM public.contacts AS c
   WHERE c.user_id = v_user_id
-    AND c.is_tenant
     AND c.archived_at IS NULL
   ORDER BY c.created_at, c.id
   LIMIT 1;
+
+  IF v_caller_org_id IS NULL THEN
+    SELECT m.org_id
+    INTO v_caller_org_id
+    FROM public.org_members AS m
+    WHERE m.user_id = v_user_id
+      AND m.status = 'active'
+    ORDER BY m.org_id
+    LIMIT 1;
+  END IF;
+
+  v_audit_org_id := coalesce(v_caller_org_id, v_lease.org_id);
+
+  IF v_audit_org_id IS NULL THEN
+    RAISE EXCEPTION 'tenant payee read requires an attributable caller'
+      USING ERRCODE = '42501';
+  END IF;
 
   IF v_lease.status = 'active'
      AND v_lease.start_date <= current_date
@@ -109,38 +129,30 @@ BEGIN
     v_found := FOUND;
   END IF;
 
-  v_audit_org_id := CASE
-    WHEN v_found THEN v_lease.org_id
-    ELSE coalesce(v_caller_org_id, v_lease.org_id)
-  END;
-
   -- Every non-success uses the same row_id and payload shape, including
-  -- missing, unauthorized and inactive leases. Prefer the caller's own
-  -- tenant organization; fall back to the lease organization.
-  -- If neither organization exists, skip the insert because audit org_id
-  -- must be non-null.
-  IF v_audit_org_id IS NOT NULL THEN
-    INSERT INTO public.audit_log (
-      org_id, actor_user_id, actor_role, table_name, row_id, action,
-      old_row, new_row, changed_cols, reason
-    )
-    VALUES (
-      v_audit_org_id,
-      v_user_id,
-      current_user,
-      'payee_account_numbers',
-      CASE WHEN v_found THEN v_account.bank_account_id::text ELSE p_lease::text END,
-      'select'::public.audit_action,
-      NULL,
-      jsonb_build_object(
-        'lease_id', p_lease,
-        'result', CASE WHEN v_found THEN 'one' ELSE 'none' END,
-        'account_last5', CASE WHEN v_found THEN v_account.account_last5 ELSE NULL END
-      ),
-      NULL,
-      'tenant_payee_read'
-    );
-  END IF;
+  -- missing, unauthorized and inactive leases. Attribution prefers the
+  -- caller's first non-archived contact org, then first active membership
+  -- org, then the lease org. Unattributable calls raise before completion.
+  INSERT INTO public.audit_log (
+    org_id, actor_user_id, actor_role, table_name, row_id, action,
+    old_row, new_row, changed_cols, reason
+  )
+  VALUES (
+    v_audit_org_id,
+    v_user_id,
+    current_user,
+    'payee_account_numbers',
+    CASE WHEN v_found THEN v_account.bank_account_id::text ELSE p_lease::text END,
+    'select'::public.audit_action,
+    NULL,
+    jsonb_build_object(
+      'lease_id', p_lease,
+      'result', CASE WHEN v_found THEN 'one' ELSE 'none' END,
+      'account_last5', CASE WHEN v_found THEN v_account.account_last5 ELSE NULL END
+    ),
+    NULL,
+    'tenant_payee_read'
+  );
 
   IF v_found THEN
     RETURN QUERY

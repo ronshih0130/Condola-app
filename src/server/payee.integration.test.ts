@@ -406,6 +406,7 @@ test("tenant payee RPC: narrow escalation tests", {
 
       const tenantA = randomUUID();
       const tenantB = randomUUID();
+      const unattributableUser = randomUUID();
       const contactA = randomUUID();
       const contactB = randomUUID();
       const unitA = randomUUID();
@@ -419,8 +420,8 @@ test("tenant payee RPC: narrow escalation tests", {
       const numberB = "842015739623456";
 
       await client.query(
-        "INSERT INTO auth.users (id) VALUES ($1), ($2)",
-        [tenantA, tenantB],
+        "INSERT INTO auth.users (id) VALUES ($1), ($2), ($3)",
+        [tenantA, tenantB, unattributableUser],
       );
       await client.query(
         `INSERT INTO contacts (id,org_id,user_id,display_name,is_tenant)
@@ -428,6 +429,13 @@ test("tenant payee RPC: narrow escalation tests", {
                 ($2,$3,$5,'Payee RPC tenant B',true)`,
         [contactA, contactB, seed.org_id, tenantA, tenantB],
       );
+      assert.equal((await client.query(
+        `SELECT
+           (SELECT count(*) FROM contacts WHERE user_id=$1)
+           + (SELECT count(*) FROM org_members WHERE user_id=$1)
+           AS count`,
+        [unattributableUser],
+      )).rows[0].count, "0");
       await client.query(
         `INSERT INTO bank_accounts
          (id,org_id,nickname,holder_name,bank_name,bank_code,branch_code,
@@ -490,7 +498,7 @@ test("tenant payee RPC: narrow escalation tests", {
           account_last5: string | null;
         };
       }[] = [];
-      let authenticatedCalls = 0;
+      let completedCalls = 0;
 
       const callAs = async (
         userId: string,
@@ -500,8 +508,11 @@ test("tenant payee RPC: narrow escalation tests", {
         const auditOrg = (await client.query(
           `SELECT coalesce(
              (SELECT c.org_id FROM contacts c
-              WHERE c.user_id=$1 AND c.is_tenant AND c.archived_at IS NULL
+              WHERE c.user_id=$1 AND c.archived_at IS NULL
               ORDER BY c.created_at, c.id LIMIT 1),
+             (SELECT m.org_id FROM org_members m
+              WHERE m.user_id=$1 AND m.status='active'
+              ORDER BY m.org_id LIMIT 1),
              (SELECT l.org_id FROM leases l WHERE l.id=$2)
            ) AS org_id`,
           [userId, leaseId],
@@ -515,11 +526,11 @@ test("tenant payee RPC: narrow escalation tests", {
           "SELECT * FROM public.tenant_payee_account($1)",
           [leaseId],
         )).rows;
-        authenticatedCalls += 1;
+        completedCalls += 1;
         await client.query("RESET ROLE");
         expectedAudit.push({
           actor: userId,
-          org_id: account ? seed.org_id : auditOrg,
+          org_id: auditOrg,
           row_id: account ? account.id : leaseId,
           new_row: {
             lease_id: leaseId,
@@ -591,6 +602,26 @@ test("tenant payee RPC: narrow escalation tests", {
 
       await callAs(tenantA, missingLease);
 
+      // A valid authenticated identity without a contact, membership or
+      // existing lease org must raise rather than complete without audit.
+      await client.query("SET LOCAL ROLE authenticated");
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [unattributableUser],
+      );
+      await client.query("SAVEPOINT unattributable_payee");
+      await assert.rejects(client.query(
+        "SELECT * FROM public.tenant_payee_account($1)",
+        [missingLease],
+      ), (error: unknown) => {
+        const failure = error as { code: string; message: string };
+        return failure.code === "42501"
+          && failure.message === "tenant payee read requires an attributable caller";
+      });
+      await client.query("ROLLBACK TO SAVEPOINT unattributable_payee");
+      await client.query("RELEASE SAVEPOINT unattributable_payee");
+      await client.query("RESET ROLE");
+
       await client.query("SET LOCAL ROLE anon");
       // Even forged authenticated claims cannot bypass the EXECUTE ACL.
       await client.query(
@@ -631,8 +662,9 @@ test("tenant payee RPC: narrow escalation tests", {
       await client.query("RELEASE SAVEPOINT wrong_payee_claim");
       await client.query("RESET ROLE");
 
-      // ACL-denied and invalid-context calls raise before audit. Every
-      // authenticated call with valid identity above must have one row.
+      // ACL-denied, context-rejected and unattributable calls never return
+      // data. PostgreSQL cannot run function code for ACL-denied calls.
+      // Every call that completes must write exactly one audit row.
       const audit = (await client.query(
         `SELECT * FROM audit_log
          WHERE reason='tenant_payee_read'
@@ -640,14 +672,17 @@ test("tenant payee RPC: narrow escalation tests", {
          ORDER BY id`,
         [[leaseA, leaseB, missingLease]],
       )).rows;
-      assert.equal(authenticatedCalls, 9);
-      assert.equal(audit.length, authenticatedCalls);
+      assert.equal(completedCalls, 9);
+      assert.equal(audit.length, completedCalls);
       assert.deepEqual(audit.map((row) => ({
         actor: row.actor_user_id,
         org_id: row.org_id,
         row_id: row.row_id,
         new_row: row.new_row,
       })), expectedAudit);
+      assert.equal(audit.some((row) =>
+        row.actor_user_id === unattributableUser
+      ), false);
       const missingAudit = audit.filter((row) =>
         row.new_row.lease_id === missingLease
       );
