@@ -51,6 +51,7 @@ export async function paperLeaseVersionPanel(
                 id="paper-replace-reason"
                 name="replaceReason"
                 required
+                maxLength={500}
                 aria-describedby="paper-replace-reason-hint"
                 data-testid="paper-replace-reason"
               />

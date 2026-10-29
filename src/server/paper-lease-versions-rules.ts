@@ -20,10 +20,3 @@ export function validatePaperLeaseReason(replacing: boolean, input: unknown): Pa
   if (length > 500 || (replacing && length === 0)) return { ok: false };
   return { ok: true, value: value || null };
 }
-
-export class PaperLeaseReasonError extends Error {
-  constructor() {
-    super("paper_lease_replace_reason");
-    this.name = "PaperLeaseReasonError";
-  }
-}

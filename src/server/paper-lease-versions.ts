@@ -1,9 +1,7 @@
-import { writeAudit } from "./audit";
 import { many, tx } from "./db";
 import { FlowError } from "./errors";
 import {
   PAPER_LEASE_VERSIONS_ENABLED,
-  PaperLeaseReasonError,
   paperLeaseVersionsOn,
   validatePaperLeaseReason,
 } from "./paper-lease-versions-rules";
@@ -30,7 +28,7 @@ export async function paperLeaseVersionsEnabled(
 }
 
 /**
- * Called before inserting files. Serialize enabled uploads on the parent lease
+ * Called before inserting files. Serialize enabled uploads by lease ID
  * so concurrent replacements cannot both replace the same current version.
  * The explicit switch supports integration coverage while production callers
  * always use the global default.
@@ -48,10 +46,14 @@ export async function preparePaperLeaseVersion(
   }
   const leases = await many<{ id: string }>(
     client,
-    `SELECT id::text FROM leases WHERE org_id = $1 AND id = $2 FOR UPDATE`,
+    `SELECT id::text FROM leases WHERE org_id = $1 AND id = $2`,
     [session.orgId, leaseId],
   );
   if (!leases.length) throw new FlowError("errors.notFound");
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtextextended('paper_lease_versions:' || $1, 0))`,
+    [leases[0].id],
+  );
   const previous = await many<{ id: string }>(
     client,
     `SELECT p.id::text
@@ -64,11 +66,11 @@ export async function preparePaperLeaseVersion(
     [session.orgId, leaseId],
   );
   const validated = validatePaperLeaseReason(previous.length > 0, reason);
-  if (!validated.ok) throw new PaperLeaseReasonError();
+  if (!validated.ok) throw new FlowError("errors.required");
   return { enabled: true, supersedesId: previous[0]?.id ?? null, reason: validated.value };
 }
 
-/** Uses the caller's transaction so the file, lease pointer and audit commit together. */
+/** Uses the caller's transaction so the file, lease pointer and trigger audit commit together. */
 export async function insertPaperLeaseVersion(
   client: Client,
   session: Session,
@@ -91,18 +93,7 @@ export async function insertPaperLeaseVersion(
       session.userId, input.version.reason, input.version.supersedesId,
     ],
   );
-  const id = rows[0].id;
-  if (input.version.supersedesId) {
-    await writeAudit(session.orgId, session.userId, "paper_lease_replaced", {
-      lease_id: input.leaseId,
-      lease_signed_pdf_id: id,
-      file_id: input.fileId,
-      size_bytes: input.content.byteLength,
-      supersedes_id: input.version.supersedesId,
-      reason: input.version.reason,
-    }, client);
-  }
-  return id;
+  return rows[0].id;
 }
 
 export type PaperLeaseVersion = {
@@ -115,6 +106,7 @@ export type PaperLeaseVersion = {
   replace_reason: string | null;
   supersedes_id: string | null;
   current: boolean;
+  legacyFallback: boolean;
 };
 
 /** null means disabled; callers must render their existing HTML verbatim. */
@@ -127,19 +119,25 @@ export async function listPaperLeaseVersions(
     if (!(await paperLeaseVersionsEnabled(client, session.orgId))) return null;
     return many<PaperLeaseVersion>(
       client,
-      `SELECT p.id::text, f.id::text AS file_id, f.file_name,
-              f.size_bytes::text, p.created_at::text,
-              coalesce(p.uploaded_by, f.uploaded_by)::text AS uploaded_by,
-              p.replace_reason, p.supersedes_id::text,
-              row_number() OVER (
-                ORDER BY (p.file_id = l.document_file_id) DESC NULLS LAST,
-                         p.created_at DESC, p.id DESC
-              ) = 1 AS current
-         FROM lease_signed_pdfs p
-         JOIN files f ON f.org_id = p.org_id AND f.id = p.file_id
-         JOIN leases l ON l.org_id = p.org_id AND l.id = p.lease_id
-        WHERE p.org_id = $1 AND p.lease_id = $2
-        ORDER BY current DESC, p.created_at DESC, p.id DESC`,
+      `WITH ranked AS (
+         SELECT p.id::text, f.id::text AS file_id, f.file_name,
+                f.size_bytes::text, p.created_at,
+                coalesce(p.uploaded_by, f.uploaded_by)::text AS uploaded_by,
+                p.replace_reason, p.supersedes_id::text,
+                coalesce(p.file_id = l.document_file_id, false) AS matches_pointer,
+                bool_or(coalesce(p.file_id = l.document_file_id, false)) OVER () AS has_current,
+                row_number() OVER (ORDER BY p.created_at DESC, p.id DESC) AS newest
+           FROM lease_signed_pdfs p
+           JOIN files f ON f.org_id = p.org_id AND f.id = p.file_id
+           JOIN leases l ON l.org_id = p.org_id AND l.id = p.lease_id
+          WHERE p.org_id = $1 AND p.lease_id = $2
+       )
+       SELECT id, file_id, file_name, size_bytes, created_at::text,
+              uploaded_by, replace_reason, supersedes_id,
+              (matches_pointer OR (NOT has_current AND newest = 1)) AS current,
+              (NOT has_current AND newest = 1) AS "legacyFallback"
+         FROM ranked
+        ORDER BY current DESC, created_at DESC, id DESC`,
       [session.orgId, leaseId],
     );
   }, { orgId: session.orgId });

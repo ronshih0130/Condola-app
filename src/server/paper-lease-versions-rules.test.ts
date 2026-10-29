@@ -21,6 +21,18 @@ test("paper versions require the global switch and strict boolean org opt-in", (
   }
 });
 
+test("the default switch keeps the legacy panel path regardless of org opt-in", () => {
+  for (const flags of [
+    undefined, null, false, true, "true", [], {},
+    { paper_lease_versions: true },
+    { paper_lease_versions: false },
+    { paper_lease_versions: "true" },
+    { paper_lease_versions: 1 },
+  ]) {
+    assert.equal(paperLeaseVersionsOn(PAPER_LEASE_VERSIONS_ENABLED, flags), false);
+  }
+});
+
 test("first upload needs no reason; replacements require trimmed 1..500 characters", () => {
   assert.deepEqual(validatePaperLeaseReason(false, undefined), { ok: true, value: null });
   assert.deepEqual(validatePaperLeaseReason(false, null), { ok: true, value: null });
