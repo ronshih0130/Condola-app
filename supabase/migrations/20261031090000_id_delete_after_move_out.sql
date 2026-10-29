@@ -1,7 +1,7 @@
 -- Version 20261031090000.
 ALTER TABLE leases ADD COLUMN IF NOT EXISTS moved_out_on date;
 COMMENT ON COLUMN leases.moved_out_on IS
-  'Actual move-out date; starts formed-lease ID retention when earlier than terminated_on, falling back to end_date when neither is set.';
+  'Actual move-out date; formed-lease ID retention starts at the later of terminated_on and moved_out_on, falling back to end_date when neither is set.';
 
 CREATE OR REPLACE FUNCTION id_document_delete_after(p_lease_id uuid, p_org_id uuid, p_created_at timestamptz)
 RETURNS date
@@ -15,7 +15,7 @@ DECLARE
   v_formed boolean;
 BEGIN
   IF p_lease_id IS NOT NULL THEN
-    SELECT coalesce(least(l.terminated_on, l.moved_out_on), l.end_date), true
+    SELECT coalesce(greatest(l.terminated_on, l.moved_out_on), l.end_date), true
       INTO v_move, v_formed
       FROM leases l
      WHERE l.id = p_lease_id

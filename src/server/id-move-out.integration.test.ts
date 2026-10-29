@@ -51,23 +51,31 @@ async function withLease(
         [orgId],
       );
 
-      // Local integration DB administrator only: skip unrelated property/unit
-      // foreign keys while creating the lease fixture. Restore triggers before
-      // inserting documents or exercising any lease updates.
-      await client.query("SET LOCAL session_replication_role = replica");
+      const property = await client.query<{ id: string }>(
+        `INSERT INTO properties (
+           org_id, name, country_code, currency, timezone, default_rental_mode
+         )
+         VALUES ($1, 'Move-out property', 'TW', 'TWD', 'Asia/Taipei', 'whole_unit')
+         RETURNING id::text`,
+        [orgId],
+      );
+      const propertyId = property.rows[0]!.id;
+      const unit = await client.query<{ id: string }>(
+        `INSERT INTO units (org_id, property_id, label, rental_mode)
+         VALUES ($1, $2, 'Move-out unit', 'whole_unit')
+         RETURNING id::text`,
+        [orgId, propertyId],
+      );
+      const unitId = unit.rows[0]!.id;
       const lease = await client.query<{ id: string; moved_out_on: string | null }>(
-        `WITH space AS (SELECT gen_random_uuid() AS id)
-         INSERT INTO leases (
+        `INSERT INTO leases (
            org_id, property_id, unit_id, target_unit_id, status,
            start_date, currency, rent_amount_minor
          )
-         SELECT $1, gen_random_uuid(), space.id, space.id, 'active',
-                DATE '2020-01-01', 'TWD', 0
-           FROM space
+         VALUES ($1, $2, $3, $3, 'active', DATE '2020-01-01', 'TWD', 0)
          RETURNING id::text, moved_out_on::text`,
-        [orgId],
+        [orgId, propertyId, unitId],
       );
-      await client.query("SET LOCAL session_replication_role = origin");
       assert.equal(lease.rows[0]!.moved_out_on, null);
       const leaseId = lease.rows[0]!.id;
 
@@ -131,8 +139,8 @@ test("open-ended active lease with no closing dates keeps the sentinel", async (
 const formedCases = [
   { name: "moved_out_on only", moved: "2026-06-10", terminated: null, start: "2026-06-10" },
   { name: "terminated_on only", moved: null, terminated: "2026-06-20", start: "2026-06-20" },
-  { name: "move-out earlier", moved: "2026-06-10", terminated: "2026-06-20", start: "2026-06-10" },
-  { name: "termination earlier", moved: "2026-06-20", terminated: "2026-06-10", start: "2026-06-10" },
+  { name: "both: move-out earlier", moved: "2026-06-10", terminated: "2026-06-20", start: "2026-06-20" },
+  { name: "both: termination earlier", moved: "2026-06-20", terminated: "2026-06-10", start: "2026-06-20" },
 ] as const;
 
 for (const scenario of formedCases) {
@@ -155,6 +163,25 @@ for (const scenario of formedCases) {
     });
   });
 }
+
+test("fixed-term early termination still takes precedence over end_date", async () => {
+  await withLease(async (client, leaseId, documentId) => {
+    await client.query(
+      `UPDATE leases
+          SET end_date = DATE '2026-12-31',
+              terminated_on = DATE '2026-06-10'
+        WHERE id = $1`,
+      [leaseId],
+    );
+    const result = await client.query<{ due: string; expected: string }>(
+      `SELECT delete_after::text AS due,
+              (DATE '2026-06-10' + id_document_keep_days())::text AS expected
+         FROM identity_documents WHERE id = $1`,
+      [documentId],
+    );
+    assert.equal(result.rows[0]!.due, result.rows[0]!.expected);
+  });
+});
 
 for (const status of ["pending_signature", "cancelled"] as const) {
   test(`${status} keeps the Taipei upload clock despite moved_out_on`, async () => {
