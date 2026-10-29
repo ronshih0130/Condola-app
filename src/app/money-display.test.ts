@@ -50,8 +50,9 @@ test("server pages select signed money by brand, and documents use U+2212", () =
   assert.equal(statementSignedMoney(-5_000, "TWD", "zh-TW"), "\u2212NT$50");
   for (const file of ["app/m/rent/utilities/page.tsx", "app/t/pay/page.tsx", "app/m/statements/page.tsx", "app/o/statements/page.tsx"]) {
     const source = read(file);
-    assert.match(source, /import \{ brandV2Enabled \} from "@\/server\/brand-v2";/, file);
-    assert.match(source, /signedMoney\([^;\n]*brandV2Enabled\(\)\)/, file);
+    assert.match(source, /import \{ brandV2EnabledForOrg \} from "@\/server\/brand-v2";/, file);
+    assert.match(source, /const v2 = await brandV2EnabledForOrg\(session\.orgId\);/, file);
+    assert.match(source, /signedMoney\([^;\n]*, v2\)/, file);
     assert.doesNotMatch(source, /signedMoneyLabel|statementSignedMoney/, file);
   }
   for (const file of ["components/statement-document.tsx", "server/pdf-docs.ts"]) {

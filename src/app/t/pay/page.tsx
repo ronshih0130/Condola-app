@@ -2,7 +2,7 @@ import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner, chargeKey } from "@/components/ui";
-import { brandV2Enabled } from "@/server/brand-v2";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { electricityMonthLabel, moneyLabel, signedMoney } from "@/server/format";
 import { unsignedRentNoteKey } from "@/server/pay-note";
 import { tenantLeaseMoney } from "@/server/queries";
@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function TenantPayPage({ searchParams }: { searchParams: Promise<{ error?: string; done?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const { session, lease } = await selectedLease();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   if (!lease) return <p>{t("i_empty")}</p>;
@@ -55,7 +56,7 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
           ))}
           {money.otherLines.map((line, index) => (
             <p key={`other-${line.chargeType}-${index}`} data-testid="tenant-other-line" data-charge-type={line.chargeType}>
-              {line.description || t(chargeKey(line.chargeType))} {signedMoney(Number(line.amount), money.currency, session.locale, brandV2Enabled())}
+              {line.description || t(chargeKey(line.chargeType))} {signedMoney(Number(line.amount), money.currency, session.locale, v2)}
             </p>
           ))}
           <p className="b" data-testid="tenant-bill">{t("i_pay_total")} {moneyLabel(money.dueMinor, money.currency, session.locale)}</p>

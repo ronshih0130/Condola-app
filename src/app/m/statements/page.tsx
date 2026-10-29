@@ -6,7 +6,7 @@ import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionAddExpense } from "@/server/auth-actions";
 import { actionStatement } from "@/server/actions";
-import { brandV2Enabled } from "@/server/brand-v2";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { moneyLabel, ownerSettlement, signedMoney, statementPeriodNet } from "@/server/format";
 import { taipeiToday } from "@/server/money";
 import { can, rolesFor } from "@/server/perms";
@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function StatementsPage({ searchParams }: { searchParams: Promise<{ error?: string; month?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   const month = params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : taipeiToday().slice(0, 7);
@@ -123,7 +124,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                     })
                   : null;
                 const label = (minor: number) => moneyLabel(minor, row.currency, session.locale);
-                const signed = (minor: number) => signedMoney(minor, row.currency, session.locale, brandV2Enabled());
+                const signed = (minor: number) => signedMoney(minor, row.currency, session.locale, v2);
                 const periodNet = figures ? statementPeriodNet(figures) : 0;
                 const period = row.period_start.slice(0, 7);
                 return (
@@ -138,7 +139,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                     <Cell label={t("i_net_owner")}>
                       {figures && periodNet < 0 ? (
                         <span className="chip warn" data-testid="owner-owes">
-                          {t("owner_owes")} {brandV2Enabled() ? <span className="amount-neg">{signed(periodNet)}</span> : signed(periodNet)}
+                          {t("owner_owes")} {v2 ? <span className="amount-neg">{signed(periodNet)}</span> : signed(periodNet)}
                         </span>
                       ) : figures ? (
                         label(periodNet)

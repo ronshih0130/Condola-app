@@ -4,7 +4,7 @@ import { dictionary, makeT } from "@/i18n";
 import { FooterNote } from "@/components/chrome";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader } from "@/components/ui";
-import { brandV2Enabled } from "@/server/brand-v2";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { showDemoLineCopy } from "@/server/demo";
 import { formatDate, moneyLabel } from "@/server/format";
 import { dashboard } from "@/server/queries";
@@ -19,8 +19,8 @@ export default async function DashboardPage({
   searchParams: Promise<{ dupFirm?: string; code?: string }>;
 }) {
   await requireCurrentConsent(undefined, "page");
-  const v2 = brandV2Enabled();
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const query = await searchParams;
   const t = makeT(session.locale);
   const data = await dashboard(session);

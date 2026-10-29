@@ -11,6 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AuthBrand, BrandImage } from "../components/brand";
 import {
   brandV2Enabled,
+  brandV2EnabledForOrg,
   brandMetadata,
   brandV2Metadata,
   BRAND_V2_ASSETS,
@@ -483,9 +484,10 @@ test("BrandImage horizontal variants select locale lockups and preserve exact le
 
 test("owner, tenant header, and statement logos forward the optional v2 flag", () => {
   const ownerLayout = read("src/app/o/layout.tsx");
-  assert.ok(ownerLayout.includes('import { brandV2Enabled } from "@/server/brand-v2";'));
+  assert.ok(ownerLayout.includes('import { brandV2EnabledForOrg } from "@/server/brand-v2";'));
+  assert.ok(ownerLayout.includes('const v2 = await brandV2EnabledForOrg(session.orgId);'));
   assert.ok(ownerLayout.includes(
-    '<OwnerNav properties={properties} {...(brandV2Enabled() ? { v2: true } : {})}>{children}</OwnerNav>',
+    '<OwnerNav properties={properties} {...(v2 ? { v2: true } : {})}>{children}</OwnerNav>',
   ));
   const ownerNav = read("src/components/owner-nav.tsx");
   assert.ok(ownerNav.includes("v2?: boolean;"));
@@ -495,7 +497,7 @@ test("owner, tenant header, and statement logos forward the optional v2 flag", (
   ));
   const tenantLayout = read("src/app/t/layout.tsx");
   assert.ok(tenantLayout.includes(
-    '<BrandImage variant="symbolSmall" alt="" className="brand-symbol" {...(brandV2Enabled() ? { v2: true } : {})} />',
+    '<BrandImage variant="symbolSmall" alt="" className="brand-symbol" {...(v2 ? { v2: true } : {})} />',
   ));
   const statement = read("src/components/statement-document.tsx");
   assert.ok(statement.includes("v2?: boolean;"));
@@ -523,11 +525,12 @@ test("BrandImage stacked OFF preserves exact legacy markup and ON uses v2", () =
 
 test("tenant welcome passes the server flag through an ON-only spread", () => {
   const layout = read("src/app/t/layout.tsx");
-  assert.ok(layout.includes('import { brandV2Enabled } from "@/server/brand-v2";'));
+  assert.ok(layout.includes('import { brandV2EnabledForOrg } from "@/server/brand-v2";'));
+  assert.ok(layout.includes('const v2 = await brandV2EnabledForOrg(session.orgId);'));
   assert.doesNotMatch(layout, /^\s*["']use client["']/);
   assert.match(
     layout,
-    /\{path === "\/t" \? \(\s*<div className="liff-welcome">\s*<BrandImage variant="stacked" alt=\{t\("i_brand"\)\} \{\.\.\.\(brandV2Enabled\(\) \? \{ v2: true \} : \{\}\)\} \/>\s*<\/div>/,
+    /\{path === "\/t" \? \(\s*<div className="liff-welcome">\s*<BrandImage variant="stacked" alt=\{t\("i_brand"\)\} \{\.\.\.\(v2 \? \{ v2: true \} : \{\}\)\} \/>\s*<\/div>/,
   );
 });
 
@@ -706,4 +709,66 @@ test("new text files and supplied SVGs contain no banned terms", () => {
     const text = read(file);
     for (const term of banned) assert.ok(!text.includes(term), `${file}: forbidden term`);
   }
+});
+
+test("brandV2EnabledForOrg short-circuits when env is on", async () => {
+  let calls = 0;
+  const lookup = async (): Promise<unknown> => {
+    calls += 1;
+    throw new Error("Lookup must not run");
+  };
+
+  for (const orgId of ["org-123", null, undefined]) {
+    assert.equal(
+      await brandV2EnabledForOrg(orgId, { BRAND_V2: "true" }, lookup),
+      true,
+    );
+  }
+  assert.equal(calls, 0);
+});
+
+test("brandV2EnabledForOrg returns false without an org and skips lookup", async () => {
+  let calls = 0;
+  const lookup = async (): Promise<unknown> => {
+    calls += 1;
+    return true;
+  };
+
+  for (const orgId of [null, undefined, ""]) {
+    assert.equal(await brandV2EnabledForOrg(orgId, {}, lookup), false);
+  }
+  assert.equal(calls, 0);
+});
+
+test("brandV2EnabledForOrg enables the JSON boolean true for the viewer's org", async () => {
+  let calls = 0;
+  const lookup = async (orgId: string): Promise<unknown> => {
+    calls += 1;
+    assert.equal(orgId, "org-123");
+    return true;
+  };
+
+  assert.equal(
+    await brandV2EnabledForOrg("org-123", { BRAND_V2: "false" }, lookup),
+    true,
+  );
+  assert.equal(calls, 1);
+});
+
+test("brandV2EnabledForOrg rejects flags other than boolean true", async () => {
+  for (const flag of [false, "true", 1, {}, null, undefined]) {
+    assert.equal(
+      await brandV2EnabledForOrg("org-123", {}, async () => flag),
+      false,
+    );
+  }
+});
+
+test("brandV2EnabledForOrg returns false when lookup throws", async () => {
+  assert.equal(
+    await brandV2EnabledForOrg("org-123", {}, async () => {
+      throw new Error("Database unavailable");
+    }),
+    false,
+  );
 });

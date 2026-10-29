@@ -1,14 +1,14 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
-import { brandV2Enabled } from "@/server/brand-v2";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function ApprovalsPage() {
   await requireCurrentConsent(undefined, "page");
-  const v2 = brandV2Enabled();
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   return (
     <div data-v2-page={v2 ? "o-approvals" : undefined}>

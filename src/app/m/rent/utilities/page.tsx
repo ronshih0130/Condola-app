@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionPrepareUtility, actionVoidUtility } from "@/server/actions";
-import { brandV2Enabled } from "@/server/brand-v2";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { PendingSubmit, UtilityConfirmForm } from "@/components/utility-confirm";
 import { UtilityUnitSelect } from "@/components/utility-unit-select";
 import { electricityMonthLabel, signedMoney } from "@/server/format";
@@ -59,6 +59,7 @@ export default async function UtilityPostingPage({
   await requireCurrentConsent(undefined, "page");
   await connection();
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   const month = utilityMonth(params.month);
@@ -93,7 +94,7 @@ export default async function UtilityPostingPage({
     });
   }
   const selected = (params.unit ? units.get(params.unit) : undefined) ?? (resultUnit ? units.get(resultUnit.unit_id) : undefined) ?? [...units.values()][0];
-  const money = (minor: number, currency: string) => signedMoney(minor, currency, session.locale, brandV2Enabled());
+  const money = (minor: number, currency: string) => signedMoney(minor, currency, session.locale, v2);
   const statusLabel = utilityStatusLabel(t, detail?.run.status);
   const formPeriod = detail
     ? { start: detail.run.period_start, end: detail.run.period_end }

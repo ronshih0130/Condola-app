@@ -2,7 +2,7 @@ import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { actionPickLease } from "@/server/actions";
-import { brandV2Enabled } from "@/server/brand-v2";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { moneyLabel } from "@/server/format";
 import { loadLeaseIdCheck } from "@/server/id-docs";
 import { tenantLeaseMoney, tenantLeases } from "@/server/queries";
@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function TenantHome() {
   await requireCurrentConsent(undefined, "page");
-  const v2 = brandV2Enabled();
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const leases = await tenantLeases(session);
   if (leases.length > 1 && !session.leaseId) {

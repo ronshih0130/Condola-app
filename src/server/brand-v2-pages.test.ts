@@ -49,7 +49,7 @@ for (const id of Object.keys(pages)) {
   test(`${id}: TSX hooks render nothing when the flag is OFF`, () => {
     for (const file of pages[id]) {
       const src = read(file);
-      assert.match(src, /brandV2Enabled\(\)/);
+      assert.match(src, id === "v-job" ? /brandV2Enabled\(\)/ : /const v2 = await brandV2EnabledForOrg\(session\.orgId\);/);
       for (const m of src.matchAll(/data-v2-[a-z-]+=\{([^}]*)\}/g)) {
         assert.match(m[1], /^v2( && [^?]+)? \? .+ : undefined$/, `${file}: ${m[0]}`);
       }

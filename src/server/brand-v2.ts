@@ -25,6 +25,30 @@ export function brandV2Enabled(env: Record<string, string | undefined> = process
   return env.BRAND_V2 === "true";
 }
 
+async function readOrgBrandV2Flag(orgId: string): Promise<unknown> {
+  const { query } = await import("./db");
+  const { rows } = await query<{ flag: unknown }>(
+    "SELECT feature_flags -> 'brand_v2' AS flag FROM public.organizations WHERE id = $1",
+    [orgId],
+  );
+  return rows[0]?.flag;
+}
+
+export async function brandV2EnabledForOrg(
+  orgId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+  lookup: (orgId: string) => Promise<unknown> = readOrgBrandV2Flag,
+): Promise<boolean> {
+  if (brandV2Enabled(env)) return true;
+  if (!orgId) return false;
+
+  try {
+    return (await lookup(orgId)) === true;
+  } catch {
+    return false;
+  }
+}
+
 export const BRAND_V2_THEME_COLOR = "#14325C";
 export const LEGACY_THEME_COLOR = "#2E2622";
 
