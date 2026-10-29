@@ -19,10 +19,12 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ pdfId: string }> },
 ) {
-  if (!TENANT_SIGNED_PDF_ENABLED) return missing();
   const session = await getSession();
-  if (session.kind !== "tenant") return missing();
+  if (session.kind !== "tenant") {
+    return new Response("Not found", { status: 404, headers: privateHeaders });
+  }
   const blocked = await requireCurrentConsent(session, "api");
+  if (!TENANT_SIGNED_PDF_ENABLED) return missing();
   if (blocked) return blocked;
   const { pdfId } = await context.params;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pdfId)) {
