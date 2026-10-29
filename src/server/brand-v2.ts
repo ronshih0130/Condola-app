@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import tokens from "../brand/v2/tokens.json";
 
 export const brandV2Tokens: typeof tokens = tokens;
@@ -25,14 +26,14 @@ export function brandV2Enabled(env: Record<string, string | undefined> = process
   return env.BRAND_V2 === "true";
 }
 
-async function readOrgBrandV2Flag(orgId: string): Promise<unknown> {
+const readOrgBrandV2Flag = cache(async (orgId: string): Promise<unknown> => {
   const { query } = await import("./db");
   const { rows } = await query<{ flag: unknown }>(
     "SELECT feature_flags -> 'brand_v2' AS flag FROM public.organizations WHERE id = $1",
     [orgId],
   );
   return rows[0]?.flag;
-}
+});
 
 export async function brandV2EnabledForOrg(
   orgId: string | null | undefined,

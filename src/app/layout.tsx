@@ -8,7 +8,7 @@ import { RequiredValidity } from "@/components/required-validity";
 import { EnvBanner } from "@/components/env-mode";
 import { LocaleProvider } from "@/components/locale";
 import { demoModeEnabled } from "@/server/demo";
-import { BRAND_V2_PAGE_STYLES, brandV2Enabled, brandMetadata, BRAND_V2_THEME_COLOR, LEGACY_THEME_COLOR } from "@/server/brand-v2";
+import { BRAND_V2_PAGE_STYLES, brandV2EnabledForOrg, brandMetadata, BRAND_V2_THEME_COLOR, LEGACY_THEME_COLOR } from "@/server/brand-v2";
 import { sandboxChrome } from "@/server/sandbox";
 import { readSession, requestPrefs } from "@/server/session";
 import "./globals.css";
@@ -16,7 +16,8 @@ import "./globals.css";
 export const dynamic = "force-dynamic";
 
 export async function generateViewport(): Promise<Viewport> {
-  return { themeColor: brandV2Enabled() ? BRAND_V2_THEME_COLOR : LEGACY_THEME_COLOR };
+  const session = await readSession();
+  return { themeColor: (await brandV2EnabledForOrg(session?.orgId)) ? BRAND_V2_THEME_COLOR : LEGACY_THEME_COLOR };
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,7 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const chrome = await sandboxChrome(session);
   const t = makeT(prefs.locale);
   const showReset = demoModeEnabled() && session?.kind === "staff" && session.role === "admin";
-  const v2 = brandV2Enabled();
+  const v2 = await brandV2EnabledForOrg(session?.orgId);
   const body = (
     <body>
       <LocaleProvider locale={prefs.locale}>
