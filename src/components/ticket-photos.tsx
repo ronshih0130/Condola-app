@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { heicFileToJpeg } from "@/lib/heic-browser";
 import { PHOTO_HEADER_BYTES, PHOTO_MAX_BYTES, PHOTO_MIMES, normalizePhotoMime, sniffHeic, sniffPhotoMime } from "@/server/repair-rules";
@@ -38,6 +38,7 @@ function messageFor(key: string | undefined, messages: Messages) {
 export function TicketPhotoUpload({
   ticketId,
   label,
+  chooseLabel,
   hint,
   allowInternal,
   messages,
@@ -48,6 +49,7 @@ export function TicketPhotoUpload({
 }: {
   ticketId: string;
   label: string;
+  chooseLabel: string;
   hint: string;
   allowInternal: boolean;
   messages: Messages;
@@ -57,6 +59,7 @@ export function TicketPhotoUpload({
   inputTestId?: string;
 }) {
   const router = useRouter();
+  const uploadId = useId();
   const internalRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -147,25 +150,29 @@ export function TicketPhotoUpload({
 
   return (
     <div>
-      <label className="f">{label}</label>
-      <p className="tiny muted">{hint}</p>
+      <h4 className="ticket-photo-heading">{label}</h4>
+      <p className="tiny muted" id={`${uploadId}-hint`}>{hint}</p>
       {allowInternal ? (
         <label className="small">
           <input ref={internalRef} type="checkbox" /> {messages.internal}
           {messages.internalHint ? <div className="tiny muted">{messages.internalHint}</div> : null}
         </label>
       ) : null}
-      <input
-        className="inp"
-        type="file"
-        accept={`${PHOTO_MIMES.join(",")},.heic,.heif,image/heic,image/heif`}
-        data-testid={inputTestId}
-        onChange={onChange}
-        disabled={pending}
-      />
-      {pending && messages.wait ? <p className="tiny">{messages.wait}</p> : null}
+      <label className="btn ticket-photo-choose" aria-disabled={pending}>
+        {chooseLabel}
+        <input
+          className="ticket-photo-file"
+          type="file"
+          accept={`${PHOTO_MIMES.join(",")},.heic,.heif,image/heic,image/heif`}
+          aria-describedby={`${uploadId}-hint`}
+          data-testid={inputTestId}
+          onChange={onChange}
+          disabled={pending}
+        />
+      </label>
+      {pending && messages.wait ? <p className="tiny" role="status">{messages.wait}</p> : null}
       {error ? (
-        <div className="alert bad" data-testid="repair-photo-error">
+        <div className="alert bad" data-testid="repair-photo-error" role="alert">
           {error}
         </div>
       ) : null}

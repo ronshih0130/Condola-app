@@ -15,12 +15,22 @@ test("a tenant files a repair and staff records the repair history", async ({ pa
   await page.getByTestId("repair-comment").fill("請盡快處理");
   await page.getByTestId("repair-comment-send").click();
   await expect(page.getByTestId("repair-timeline")).toContainText("請盡快處理");
-  await expect(page.getByTestId("repair-photo")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "新增照片", exact: true })).toBeVisible();
+  const photoInput = page.getByTestId("repair-photo");
+  await expect(photoInput).toBeAttached();
+  await expect(photoInput).toHaveAccessibleName("選擇照片");
+  const chooser = page.locator("label.ticket-photo-choose").filter({ has: photoInput });
+  await expect(chooser).toBeVisible();
+  const [fileChooser] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    chooser.click(),
+  ]);
   const jpeg = Buffer.from(
     "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxISEhUQEhIVFhUVFRUVFRUVFRUVFRUWFxUVFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OGhAQGy0lHyUtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAMBAAMBIgACEQEDEQH/xAAbAAACAgMBAAAAAAAAAAAAAAADBAECBQYAB//EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJr0X/9k=",
     "base64",
   );
-  await page.getByTestId("repair-photo").setInputFiles({ name: "leak.jpg", mimeType: "image/jpeg", buffer: jpeg });
+  expect(await fileChooser.element().getAttribute("data-testid")).toBe("repair-photo");
+  await photoInput.setInputFiles({ name: "leak.jpg", mimeType: "image/jpeg", buffer: jpeg });
   const preview = page.getByTestId("repair-photo-preview");
   await expect(preview).toBeVisible();
   const src = await preview.getAttribute("src");

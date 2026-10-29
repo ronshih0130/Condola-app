@@ -1816,7 +1816,7 @@
  "i_repair_timeline": "狀態歷程",
  "i_repair_photos": "照片",
  "i_repair_photo_noperm": "無權限查看照片",
- "i_repair_photo_add": "新增",
+ "i_repair_photo_add": "新增照片",
  "i_repair_photo_alt": "照片 {n}",
  "i_repair_photo_hint": "支援 iPhone 照片、JPG、PNG、WEBP，單張 5 MB 以內。拍下問題位置和周圍環境，比較好判斷。",
  "i_repair_bearer": "費用負擔",
@@ -2243,5 +2243,6 @@
  "i_lic_prebuilt": "上游預先建置版本",
  "i_lic_bundle_hash": "提供的程式碼套件 SHA-256",
  "i_lic_wasm_hash": "內嵌 wasm SHA-256",
- "i_lic_source_notices": "原始碼聲明區塊原文"
+ "i_lic_source_notices": "原始碼聲明區塊原文",
+ "i_repair_photo_choose": "選擇照片"
 }

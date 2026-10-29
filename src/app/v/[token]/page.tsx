@@ -47,6 +47,7 @@ export default async function VendorJobPage({
         <TicketPhotoUpload
           ticketId=""
           label={t("i_repair_photo_add")}
+          chooseLabel={t("i_repair_photo_choose")}
           hint={t("i_repair_photo_hint")}
           allowInternal={false}
           messages={photoMessages}

@@ -1816,7 +1816,7 @@
  "i_repair_timeline": "Status history",
  "i_repair_photos": "Photos",
  "i_repair_photo_noperm": "No permission to view photos",
- "i_repair_photo_add": "Add",
+ "i_repair_photo_add": "Add photos",
  "i_repair_photo_alt": "Photo {n}",
  "i_repair_photo_hint": "iPhone photos, JPG, PNG, or WEBP. 5 MB each. Photograph the problem and the area around it so it is easier to judge.",
  "i_repair_bearer": "Who pays",
@@ -2243,5 +2243,6 @@
  "i_lic_prebuilt": "Upstream prebuilt release",
  "i_lic_bundle_hash": "Shipped bundle SHA-256",
  "i_lic_wasm_hash": "Embedded wasm SHA-256",
- "i_lic_source_notices": "Verbatim source notice blocks"
+ "i_lic_source_notices": "Verbatim source notice blocks",
+ "i_repair_photo_choose": "Choose photos"
 }

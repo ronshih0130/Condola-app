@@ -12,6 +12,7 @@ import { BRAND_V2_PAGE_STYLES, brandV2EnabledForOrg, brandMetadata, BRAND_V2_THE
 import { sandboxChrome } from "@/server/sandbox";
 import { readSession, requestPrefs } from "@/server/session";
 import "./globals.css";
+import "./ui-targets.css";
 
 export const dynamic = "force-dynamic";
 

@@ -1,0 +1,84 @@
+/* Shared by v1 and v2; imported after globals.css. */
+label:has(> input[type="checkbox"]:not(.nav-check, .sr-only, .visually-hidden, [hidden])) {
+  min-height: 44px;
+  box-sizing: border-box;
+  display: flex;
+}
+
+label:not(.radio):has(> input[type="checkbox"]:not(.nav-check, .sr-only, .visually-hidden, [hidden])) {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+label:has(> input[type="checkbox"]:not(.nav-check, .sr-only, .visually-hidden, [hidden])) > input[type="checkbox"] {
+  flex: none;
+}
+
+label:not(.radio):has(> input[type="checkbox"]:not(.nav-check, .sr-only, .visually-hidden, [hidden])) > .tiny {
+  flex-basis: 100%;
+}
+
+.ticket-photo-heading {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--ink2);
+  font-weight: 600;
+}
+
+.ticket-photo-choose {
+  position: relative;
+  min-height: 44px;
+}
+
+.ticket-photo-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ticket-photo-choose:has(> input:focus-visible) {
+  outline: 2px solid var(--pri);
+  outline-offset: 3px;
+}
+
+.ticket-photo-choose[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* Match the tenant task layout on mobile, including the existing top bar. */
+@media (max-width: 480px) {
+  .stage:has(> .phone[data-testid="liff-frame"]) {
+    padding: 0;
+    width: 100%;
+    min-height: calc(100vh - var(--top-h));
+    min-height: calc(100dvh - var(--top-h));
+    align-items: stretch;
+  }
+
+  .stage > .phone[data-testid="liff-frame"] {
+    width: 100%;
+    height: calc(100vh - var(--top-h));
+    height: calc(100dvh - var(--top-h));
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    background: #fff;
+  }
+
+  .stage > .phone[data-testid="liff-frame"] > .scr {
+    border-radius: 0;
+  }
+
+  .stage > .phone[data-testid="liff-frame"] > .scr > .notch {
+    display: none;
+  }
+}
