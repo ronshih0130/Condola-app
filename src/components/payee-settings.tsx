@@ -1,5 +1,6 @@
 import { payeeStrings } from "@/i18n/payee";
-import { payeeSettings, type PayeeAccount } from "@/server/payee";
+import { payeeSettings } from "@/server/payee";
+import type { PayeeAccount } from "@/server/payee-rules";
 import { actionSavePayee, actionSetLeasePayee } from "@/server/payee-actions";
 import type { Session } from "@/server/types";
 

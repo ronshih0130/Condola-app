@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   PAYEE_DETAILS_ENABLED, payeeDetailsOn, validatePayee,
-  payeeAccount, resolvePayee, type PayeeInput,
+  payeeAccount, resolvePayee, tenantPayeeDisplay, type PayeeAccount, type PayeeInput,
 } from "./payee-rules";
 
 const input: PayeeInput = {
@@ -62,4 +62,38 @@ test("tenant payment page contains no sample account literal and retains disclai
   const source = readFileSync(new URL("../app/t/pay/page.tsx", import.meta.url), "utf8");
   assert.equal(source.includes("88921"), false);
   assert.match(source, /i_pay_direct/);
+});
+
+test("tenant display preserves OFF fallback and renders enabled selection or none", () => {
+  const company: PayeeAccount = {
+    id: "company", holder_name: "Company", bank_name: "Bank",
+    bank_code: "012", branch_code: "1234", account_number: "1234567890",
+    account_last5: "67890", owner_contact_id: null, is_default_payee: true, details: {},
+  };
+  const owner: PayeeAccount = {
+    ...company, id: "owner", owner_contact_id: "owner", is_default_payee: false,
+    account_number: "9876543210",
+  };
+  assert.deepEqual(tenantPayeeDisplay({
+    enabled: false, last5: "11111", account: owner,
+  }), { kind: "legacy", last5: "11111" });
+  assert.deepEqual(tenantPayeeDisplay({
+    enabled: false, last5: null, account: company,
+  }), { kind: "none" });
+  for (const [override, expected] of [[owner, owner], [null, company]] as const) {
+    assert.deepEqual(tenantPayeeDisplay({
+      enabled: true, last5: "11111", account: resolvePayee(override, company),
+    }), { kind: "account", account: expected, number: expected.account_number });
+  }
+  assert.deepEqual(tenantPayeeDisplay({
+    enabled: true, last5: "11111", account: null,
+  }), { kind: "none" });
+  assert.deepEqual(tenantPayeeDisplay({
+    enabled: true, last5: null,
+    account: { ...company, account_number: null, account_last5: null },
+  }), { kind: "none" });
+  const legacy = { ...company, account_number: null };
+  assert.deepEqual(tenantPayeeDisplay({
+    enabled: true, last5: null, account: legacy,
+  }), { kind: "account", account: legacy, number: "…67890" });
 });

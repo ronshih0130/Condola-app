@@ -1,19 +1,19 @@
 import { makeT } from "@/i18n";
 import { payeeStrings } from "@/i18n/payee";
 import { tenantPayee } from "@/server/payee";
-import { payeeAccount } from "@/server/payee-rules";
+import { tenantPayeeDisplay } from "@/server/payee-rules";
 import type { Session } from "@/server/types";
 
 export async function TenantPayee({ session, leaseId }: { session: Session; leaseId: string }) {
-  const view = await tenantPayee(session, leaseId);
+  const view = tenantPayeeDisplay(await tenantPayee(session, leaseId));
   const t = makeT(session.locale);
   const s = payeeStrings(session.locale);
-  if (!view.enabled) {
-    return <p className="small">{view.last5 ? t("i_account_last5", { last5: view.last5 }) : s.notSet}</p>;
+  if (view.kind === "legacy") {
+    return <p className="small">{t("i_account_last5", { last5: view.last5 })}</p>;
   }
-  const account = view.account;
-  const number = account ? payeeAccount(account.account_number, account.account_last5) : "";
-  if (!account || !number) return <p className="small">{s.notSet}</p>;
+  if (view.kind === "none") return <p className="small">{s.notSet}</p>;
+  const { account, number } = view;
+
   return (
     <div className="small" data-testid="tenant-payee">
       <p className="b">{account.owner_contact_id ? s.owner : s.company}</p>

@@ -1,3 +1,34 @@
+
+export type PayeeAccount = {
+  id: string;
+  holder_name: string | null;
+  bank_name: string | null;
+  bank_code: string | null;
+  branch_code: string | null;
+  account_number: string | null;
+  account_last5: string | null;
+  owner_contact_id: string | null;
+  is_default_payee: boolean;
+  details: { swift?: string; routing?: string };
+};
+
+export type TenantPayeeView = {
+  enabled: boolean;
+  last5: string | null | undefined;
+  account: PayeeAccount | null;
+};
+
+export type PayeeDisplay =
+  | { kind: "legacy"; last5: string }
+  | { kind: "account"; account: PayeeAccount; number: string }
+  | { kind: "none" };
+
+export function tenantPayeeDisplay(view: TenantPayeeView): PayeeDisplay {
+  if (!view.enabled) return view.last5 ? { kind: "legacy", last5: view.last5 } : { kind: "none" };
+  const account = view.account;
+  const number = account ? payeeAccount(account.account_number, account.account_last5) : "";
+  return account && number ? { kind: "account", account, number } : { kind: "none" };
+}
 /** Global kill switch; an organization must also explicitly opt in. */
 export const PAYEE_DETAILS_ENABLED = false;
 

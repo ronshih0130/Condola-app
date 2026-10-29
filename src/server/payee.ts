@@ -4,28 +4,20 @@ import { can } from "./perms";
 import type { Session } from "./types";
 import {
   PAYEE_DETAILS_ENABLED, payeeDetailsOn, resolvePayee, validatePayee,
-  validUuid, type PayeeInput,
+  validUuid, type PayeeInput, type PayeeAccount,
 } from "./payee-rules";
 
-export type PayeeAccount = {
-  id: string;
-  holder_name: string | null;
-  bank_name: string | null;
-  bank_code: string | null;
-  branch_code: string | null;
-  account_number: string | null;
-  account_last5: string | null;
-  owner_contact_id: string | null;
-  is_default_payee: boolean;
-  details: { swift?: string; routing?: string };
-};
+export type { PayeeAccount } from "./payee-rules";
 
 function assertAdmin(session: Session) {
   if (!can(session.role, "settings.edit")) throw new FlowError("forbidden");
 }
 
-const columns = `id, holder_name, bank_name, bank_code, branch_code,
-  account_number, account_last5, owner_contact_id, is_default_payee, details`;
+const columns = `b.id, b.holder_name, b.bank_name, b.bank_code, b.branch_code,
+  n.account_number, b.account_last5, b.owner_contact_id, b.is_default_payee, b.details`;
+const accountSource = `bank_accounts b
+  LEFT JOIN payee_account_numbers n
+    ON n.org_id = b.org_id AND n.bank_account_id = b.id`;
 
 export async function tenantPayee(session: Session, leaseId: string) {
   return tx(session.userId, async (client) => {
@@ -48,9 +40,9 @@ export async function tenantPayee(session: Session, leaseId: string) {
     )).rows[0];
     if (!lease) return { enabled: true as const, last5: null, account: null };
     const accounts = (await client.query<PayeeAccount>(
-      `SELECT ${columns} FROM bank_accounts
-       WHERE org_id = $1 AND archived_at IS NULL AND show_to_tenants
-         AND (id = $2 OR (is_default_payee AND owner_contact_id IS NULL))`,
+      `SELECT ${columns} FROM ${accountSource}
+       WHERE b.org_id = $1 AND b.archived_at IS NULL AND b.show_to_tenants
+         AND (b.id = $2 OR (b.is_default_payee AND b.owner_contact_id IS NULL))`,
       [session.orgId, lease.payee_bank_account_id],
     )).rows;
     return {
@@ -72,8 +64,8 @@ export async function payeeSettings(session: Session) {
     )).rows[0];
     if (!org || !payeeDetailsOn(PAYEE_DETAILS_ENABLED, org.feature_flags)) return null;
     const accounts = (await client.query<PayeeAccount>(
-      `SELECT ${columns} FROM bank_accounts
-       WHERE org_id = $1 AND archived_at IS NULL ORDER BY created_at, id`, [session.orgId],
+      `SELECT ${columns} FROM ${accountSource}
+       WHERE b.org_id = $1 AND b.archived_at IS NULL ORDER BY b.created_at, b.id`, [session.orgId],
     )).rows;
     const owners = (await client.query<{ id: string; display_name: string }>(
       `SELECT id, display_name FROM contacts
@@ -124,24 +116,32 @@ export async function savePayee(session: Session, input: PayeeInput): Promise<st
     }
     const values = [
       session.orgId, data.holderName, data.bankName || null, data.bankCode || null,
-      data.branchCode || null, data.accountNumber, org.country_code,
+      data.branchCode || null, org.country_code,
       JSON.stringify(data.details), data.ownerContactId, data.isDefault,
     ];
     const result = data.id
       ? await client.query<{ id: string }>(
         `UPDATE bank_accounts SET holder_name=$2, bank_name=$3, bank_code=$4,
-         branch_code=$5, account_number=$6, country_code=$7, details=$8::jsonb,
-         owner_contact_id=$9, is_default_payee=$10, show_to_tenants=true, updated_at=now()
-         WHERE org_id=$1 AND id=$11 RETURNING id`, [...values, data.id],
+         branch_code=$5, country_code=$6, details=$7::jsonb,
+         owner_contact_id=$8, is_default_payee=$9, show_to_tenants=true, updated_at=now()
+         WHERE org_id=$1 AND id=$10 RETURNING id`, [...values, data.id],
       )
       : await client.query<{ id: string }>(
         `INSERT INTO bank_accounts
-         (org_id, holder_name, bank_name, bank_code, branch_code, account_number,
+         (org_id, holder_name, bank_name, bank_code, branch_code,
           country_code, details, owner_contact_id, is_default_payee,
           nickname, currency, show_to_tenants, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$2,$11,true,now())
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$2,$10,true,now())
          RETURNING id`, [...values, org.default_currency],
       );
+    await client.query(
+      `INSERT INTO payee_account_numbers (bank_account_id, org_id, account_number)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (bank_account_id) DO UPDATE
+       SET account_number = EXCLUDED.account_number
+       WHERE payee_account_numbers.org_id = EXCLUDED.org_id`,
+      [result.rows[0].id, session.orgId, data.accountNumber],
+    );
     // Usage metering hook: retain the account ID; no metering table yet.
     return result.rows[0].id;
   });
