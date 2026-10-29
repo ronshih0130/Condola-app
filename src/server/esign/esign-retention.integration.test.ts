@@ -42,6 +42,7 @@ test("e-sign retention extensions and gated post-retention disposal", async () =
     async function scoped<T>(
       role: "authenticated" | "service_role" | null,
       work: () => Promise<T>,
+      actorId: string = USERS.admin,
     ): Promise<T> {
       const savepoint = `esign_retention_${++savepointNo}`;
       await client.query(`SAVEPOINT ${savepoint}`);
@@ -50,7 +51,7 @@ test("e-sign retention extensions and gated post-retention disposal", async () =
           await client.query(
             `SELECT set_config('request.jwt.claim.sub',$1::text,true),
                     set_config('request.jwt.claim.role',$2::text,true)`,
-            [USERS.admin, role],
+            [actorId, role],
           );
           await client.query(`SET LOCAL ROLE ${role}`);
         }
@@ -68,6 +69,8 @@ test("e-sign retention extensions and gated post-retention disposal", async () =
     const service = <T>(work: () => Promise<T>) => scoped("service_role", work);
     const authenticated = <T>(work: () => Promise<T>) =>
       scoped("authenticated", work);
+    const asUser = <T>(id: string, work: () => Promise<T>) =>
+      scoped("authenticated", work, id);
 
     async function effective(id: string): Promise<string> {
       const result = await client.query<{ horizon: string }>(
@@ -197,6 +200,80 @@ test("e-sign retention extensions and gated post-retention disposal", async () =
         [extensionCase],
       )).rows[0].ok, true);
 
+      // Both staff roles must update leases under authenticated RLS. Roll back
+      // each scenario afterward so the existing service-role assertions remain
+      // independent. Inspect trigger-created evidence as the lane superuser.
+      for (const actorId of [USERS.admin, USERS.manager]) {
+        await scoped(null, async () => {
+          const scenario = `esign_staff_${++savepointNo}`;
+          await client.query(`SAVEPOINT ${scenario}`);
+          try {
+            await asUser(actorId, async () => {
+              const updated = await client.query(
+                `UPDATE public.leases SET end_date='2040-01-31'::date
+                 WHERE id=$1::uuid RETURNING id`,
+                [extensionLease],
+              );
+              assert.equal(updated.rowCount, 1);
+            });
+
+            assert.equal((await client.query(
+              `SELECT rolsuper AS superuser
+               FROM pg_roles WHERE rolname=current_user`,
+            )).rows[0].superuser, true);
+            assert.equal((await client.query(
+              `SELECT count(*)::int AS n
+               FROM public.esign_retention_extensions
+               WHERE org_id=$1::uuid AND case_id=$2::uuid
+                 AND retention_until='2055-01-31T00:00:00Z'::timestamptz
+                 AND lease_end_date='2040-01-31'::date`,
+              [ORG_ID, extensionCase],
+            )).rows[0].n, 1);
+            assert.equal((await client.query(
+              `SELECT public.esign_effective_retention($1::uuid)
+                        ='2055-01-31T00:00:00Z'::timestamptz AS ok`,
+              [extensionCase],
+            )).rows[0].ok, true);
+
+            await asUser(actorId, async () => {
+              const updated = await client.query(
+                `UPDATE public.leases SET end_date=NULL
+                 WHERE id=$1::uuid RETURNING id`,
+                [extensionLease],
+              );
+              assert.equal(updated.rowCount, 1);
+            });
+
+            assert.equal((await client.query(
+              `SELECT rolsuper AS superuser
+               FROM pg_roles WHERE rolname=current_user`,
+            )).rows[0].superuser, true);
+            assert.equal((await client.query(
+              `SELECT count(*)::int AS n
+               FROM public.esign_retention_extensions
+               WHERE org_id=$1::uuid AND case_id=$2::uuid
+                 AND retention_until='infinity'::timestamptz
+                 AND lease_end_date IS NULL`,
+              [ORG_ID, extensionCase],
+            )).rows[0].n, 1);
+            assert.equal((await client.query(
+              `SELECT count(*)::int AS n
+               FROM public.esign_retention_extensions WHERE case_id=$1::uuid`,
+              [extensionCase],
+            )).rows[0].n, 5);
+            assert.equal(await effective(extensionCase), "infinity");
+            assert.equal((await client.query(
+              `SELECT retention_until::text AS horizon
+               FROM public.esign_cases WHERE id=$1::uuid`,
+              [extensionCase],
+            )).rows[0].horizon, original);
+          } finally {
+            await client.query(`ROLLBACK TO SAVEPOINT ${scenario}`);
+            await client.query(`RELEASE SAVEPOINT ${scenario}`);
+          }
+        });
+      }
+
       await service(() => client.query(
         `UPDATE public.leases SET end_date=NULL WHERE id=$1::uuid`,
         [extensionLease],
@@ -274,6 +351,15 @@ test("e-sign retention extensions and gated post-retention disposal", async () =
           [extensionCase],
         )).rowCount);
       });
+      for (const actorId of [USERS.tenant, USERS.owner2]) {
+        await asUser(actorId, async () => {
+          assert.equal((await client.query(
+            `SELECT id FROM public.esign_retention_extensions
+             WHERE case_id=ANY($1::uuid[])`,
+            [caseIds],
+          )).rowCount, 0);
+        });
+      }
       await assert.rejects(authenticated(() => client.query(
         `SELECT * FROM public.esign_dispose_expired()`,
       )), /permission denied/);
@@ -419,6 +505,14 @@ test("e-sign retention extensions and gated post-retention disposal", async () =
       assert.equal((await client.query(
         `SELECT current_setting('esign.disposal',true) AS value`,
       )).rows[0].value, "off");
+
+      // Check denial against a tombstone known to exist, not an empty table.
+      for (const actorId of [USERS.tenant, USERS.owner2]) {
+        await assert.rejects(asUser(actorId, () => client.query(
+          `SELECT * FROM public.esign_disposals WHERE case_id=$1::uuid`,
+          [expiredCase],
+        )), /permission denied/);
+      }
 
       await assert.rejects(scoped(null, async () => {
         await client.query(`SELECT set_config('esign.disposal','on',true)`);
