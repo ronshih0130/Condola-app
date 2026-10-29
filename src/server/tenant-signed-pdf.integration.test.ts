@@ -4,7 +4,7 @@ import test from "node:test";
 import { withClient } from "./db";
 import { ORG_ID, USERS } from "./ids";
 
-test("tenant signed PDF RLS requires flag and own lease; team access is unchanged", async () => {
+test("tenant signed PDF RLS requires global and org flags and own lease; team access is unchanged", async () => {
   await withClient(async (client) => {
     await client.query("BEGIN");
     try {
@@ -100,8 +100,27 @@ test("tenant signed PDF RLS requires flag and own lease; team access is unchange
         );
       }
 
+      await client.query(
+        "DELETE FROM platform_settings WHERE key = 'tenant_signed_pdf'",
+      );
+      await setFlag(true);
+      assert.deepEqual(
+        await readAs(own.user_id),
+        [],
+        "an absent global switch denies tenant reads even with the org flag on",
+      );
+      assert.deepEqual(
+        await readAs(USERS.admin),
+        ids.slice(0, 3).sort(),
+        "team SELECT remains available with the global switch off",
+      );
+
+      await client.query(
+        `INSERT INTO platform_settings (key, value)
+         VALUES ('tenant_signed_pdf', 'true'::jsonb)`,
+      );
       await setFlag(false);
-      assert.deepEqual(await readAs(own.user_id), []);
+      assert.deepEqual(await readAs(own.user_id), [], "global on alone must not enable RLS");
       assert.deepEqual(
         await readAs(USERS.admin),
         ids.slice(0, 3).sort(),
@@ -123,6 +142,29 @@ test("tenant signed PDF RLS requires flag and own lease; team access is unchange
         "team SELECT remains scoped to its organization with the tenant flag on",
       );
 
+      // readAs left the tenant JWT claims in place after resetting the role.
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true)",
+        [own.user_id],
+      );
+      await client.query("SET LOCAL ROLE authenticated");
+      try {
+        const readable = (await client.query<{
+          own: boolean;
+          other_lease: boolean;
+          other_org: boolean;
+        }>(
+          `SELECT
+             app.tenant_signed_pdf_readable($1::uuid, $2::uuid) AS own,
+             app.tenant_signed_pdf_readable($1::uuid, $3::uuid) AS other_lease,
+             app.tenant_signed_pdf_readable($4::uuid, $5::uuid) AS other_org`,
+          [own.org_id, own.id, otherLease.id, otherOrg.org_id, otherOrg.id],
+        )).rows[0];
+        assert.deepEqual(readable, { own: true, other_lease: false, other_org: false });
+      } finally {
+        await client.query("RESET ROLE");
+      }
+
       const privileges = (await client.query<{
         public_execute: boolean;
         anon_execute: boolean;
@@ -130,10 +172,10 @@ test("tenant signed PDF RLS requires flag and own lease; team access is unchange
         service_execute: boolean;
       }>(
         `SELECT
-          has_function_privilege('public', 'app.tenant_signed_pdf_on(uuid)', 'EXECUTE') AS public_execute,
-          has_function_privilege('anon', 'app.tenant_signed_pdf_on(uuid)', 'EXECUTE') AS anon_execute,
-          has_function_privilege('authenticated', 'app.tenant_signed_pdf_on(uuid)', 'EXECUTE') AS authenticated_execute,
-          has_function_privilege('service_role', 'app.tenant_signed_pdf_on(uuid)', 'EXECUTE') AS service_execute`,
+          has_function_privilege('public', 'app.tenant_signed_pdf_readable(uuid,uuid)', 'EXECUTE') AS public_execute,
+          has_function_privilege('anon', 'app.tenant_signed_pdf_readable(uuid,uuid)', 'EXECUTE') AS anon_execute,
+          has_function_privilege('authenticated', 'app.tenant_signed_pdf_readable(uuid,uuid)', 'EXECUTE') AS authenticated_execute,
+          has_function_privilege('service_role', 'app.tenant_signed_pdf_readable(uuid,uuid)', 'EXECUTE') AS service_execute`,
       )).rows[0];
       assert.deepEqual(privileges, {
         public_execute: false,
@@ -142,7 +184,14 @@ test("tenant signed PDF RLS requires flag and own lease; team access is unchange
         service_execute: true,
       });
     } finally {
-      await client.query("ROLLBACK");
+      try {
+        await client.query("RESET ROLE");
+        await client.query(
+          "DELETE FROM platform_settings WHERE key = 'tenant_signed_pdf'",
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
     }
   });
 });
