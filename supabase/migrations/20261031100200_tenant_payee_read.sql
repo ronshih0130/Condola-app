@@ -19,8 +19,13 @@ DECLARE
   v_user_id uuid := auth.uid();
   v_lease record;
   v_account record;
+  v_caller_org_id uuid;
+  v_audit_org_id uuid;
   v_found boolean := false;
 BEGIN
+  -- anon and PUBLIC are blocked by the EXECUTE ACL and cannot reach this
+  -- function. Missing identity or invalid authenticated context raises
+  -- 42501 before auditing.
   -- current_user is the function owner inside SECURITY DEFINER. The role
   -- setting preserves the caller's SET ROLE context; session_user covers
   -- connections made directly as authenticated.
@@ -36,28 +41,43 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  SELECT l.org_id, l.status, l.end_date, l.payee_bank_account_id
+  -- Read lease state, membership and the payee together. The lease lock
+  -- remains held through account retrieval and until transaction end:
+  -- a concurrent termination either commits before this read or waits.
+  SELECT l.org_id,
+         l.status,
+         l.start_date,
+         l.end_date,
+         l.payee_bank_account_id,
+         EXISTS (
+           SELECT 1
+           FROM public.lease_parties AS lp
+           JOIN public.contacts AS c
+             ON c.org_id = lp.org_id AND c.id = lp.contact_id
+           WHERE lp.org_id = l.org_id
+             AND lp.lease_id = l.id
+             AND c.user_id = v_user_id
+             AND c.is_tenant
+             AND c.archived_at IS NULL
+         ) AS is_tenant_party
   INTO v_lease
   FROM public.leases AS l
-  WHERE l.id = p_lease;
+  WHERE l.id = p_lease
+  FOR SHARE OF l;
 
-  IF NOT FOUND THEN
-    RETURN;
-  END IF;
+  SELECT c.org_id
+  INTO v_caller_org_id
+  FROM public.contacts AS c
+  WHERE c.user_id = v_user_id
+    AND c.is_tenant
+    AND c.archived_at IS NULL
+  ORDER BY c.created_at, c.id
+  LIMIT 1;
 
   IF v_lease.status = 'active'
+     AND v_lease.start_date <= current_date
      AND (v_lease.end_date IS NULL OR v_lease.end_date >= current_date)
-     AND EXISTS (
-       SELECT 1
-       FROM public.lease_parties AS lp
-       JOIN public.contacts AS c
-         ON c.org_id = lp.org_id AND c.id = lp.contact_id
-       WHERE lp.org_id = v_lease.org_id
-         AND lp.lease_id = p_lease
-         AND c.user_id = v_user_id
-         AND c.is_tenant
-         AND c.archived_at IS NULL
-     )
+     AND v_lease.is_tenant_party
   THEN
     SELECT b.id AS bank_account_id,
            b.holder_name,
@@ -89,26 +109,38 @@ BEGIN
     v_found := FOUND;
   END IF;
 
-  INSERT INTO public.audit_log (
-    org_id, actor_user_id, actor_role, table_name, row_id, action,
-    old_row, new_row, changed_cols, reason
-  )
-  VALUES (
-    v_lease.org_id,
-    v_user_id,
-    current_user,
-    'payee_account_numbers',
-    CASE WHEN v_found THEN v_account.bank_account_id::text ELSE p_lease::text END,
-    'select'::public.audit_action,
-    NULL,
-    jsonb_build_object(
-      'lease_id', p_lease,
-      'result', CASE WHEN v_found THEN 'one' ELSE 'none' END,
-      'account_last5', CASE WHEN v_found THEN v_account.account_last5 ELSE NULL END
-    ),
-    NULL,
-    'tenant_payee_read'
-  );
+  v_audit_org_id := CASE
+    WHEN v_found THEN v_lease.org_id
+    ELSE coalesce(v_caller_org_id, v_lease.org_id)
+  END;
+
+  -- Every non-success uses the same row_id and payload shape, including
+  -- missing, unauthorized and inactive leases. Prefer the caller's own
+  -- tenant organization; fall back to the lease organization.
+  -- If neither organization exists, skip the insert because audit org_id
+  -- must be non-null.
+  IF v_audit_org_id IS NOT NULL THEN
+    INSERT INTO public.audit_log (
+      org_id, actor_user_id, actor_role, table_name, row_id, action,
+      old_row, new_row, changed_cols, reason
+    )
+    VALUES (
+      v_audit_org_id,
+      v_user_id,
+      current_user,
+      'payee_account_numbers',
+      CASE WHEN v_found THEN v_account.bank_account_id::text ELSE p_lease::text END,
+      'select'::public.audit_action,
+      NULL,
+      jsonb_build_object(
+        'lease_id', p_lease,
+        'result', CASE WHEN v_found THEN 'one' ELSE 'none' END,
+        'account_last5', CASE WHEN v_found THEN v_account.account_last5 ELSE NULL END
+      ),
+      NULL,
+      'tenant_payee_read'
+    );
+  END IF;
 
   IF v_found THEN
     RETURN QUERY
