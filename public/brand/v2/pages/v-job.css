@@ -1,9 +1,30 @@
 html[data-brand="v2"] [data-v2-page="v-job"] {
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --fs-h1: 22px;
+  --lh-h1: 30px;
+  --fs-h2: 17px;
+  --lh-h2: 24px;
+  --fs-body: 15px;
+  --lh-body: 22px;
+  --fs-small: 13px;
+  --lh-small: 19px;
+  --fs-caption: 12px;
+  --lh-caption: 17px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-bold: 700;
+  --h-control: 48px;
+
   box-sizing: border-box;
   width: calc(100% - 32px);
   max-width: 390px !important;
   margin: 24px auto !important;
-  padding: var(--sp-5);
+  padding: var(--sp-5) !important;
   background: var(--c-surface);
   color: var(--c-text);
   border: 1px solid var(--c-border);
@@ -44,6 +65,10 @@ html[data-brand="v2"] [data-v2-page="v-job"] .f {
   font-size: var(--fs-small);
   line-height: var(--lh-small);
   font-weight: var(--fw-medium);
+}
+
+html[data-brand="v2"] [data-v2-page="v-job"] .f + p {
+  margin-top: 0;
 }
 
 html[data-brand="v2"] [data-v2-page="v-job"] [data-testid="vendor-address"] {
@@ -135,7 +160,7 @@ html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-report="vendor"] .inp {
   padding: var(--sp-2) var(--sp-3);
   background: var(--c-surface);
   color: var(--c-text);
-  border: 1px solid var(--c-border);
+  border: 1px solid var(--c-border-strong);
   border-radius: var(--r-md);
   font: inherit;
   font-variant-numeric: tabular-nums;
@@ -157,6 +182,7 @@ html[data-brand="v2"] [data-v2-page="v-job"] .btn {
 
 html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-report="vendor"] [data-testid="vendor-submit"] {
   width: 100%;
+  min-height: max(44px, var(--h-control));
   background: var(--c-primary);
   color: var(--c-on-primary);
   border-color: var(--c-primary);
@@ -172,12 +198,51 @@ html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-report="vendor"] [data-tes
   border-color: var(--c-primary-pressed);
 }
 
+html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-upload="vendor"] {
+  margin-top: 0 !important;
+}
+
 html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-upload="vendor"] .card {
   padding: 0;
   background: var(--c-surface);
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-upload="vendor"] input[type="file"] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 96px;
+  padding: var(--sp-5) var(--sp-4);
+  border: 1.5px dashed var(--c-border-strong);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+  color: var(--c-text-2);
+  font-family: var(--font-sans);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  text-align: center;
+  cursor: pointer;
+}
+
+html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-upload="vendor"] input[type="file"]:hover,
+html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-upload="vendor"] input[type="file"]:focus-visible {
+  border-color: var(--c-primary);
+}
+
+html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-upload="vendor"] input[type="file"]::file-selector-button {
+  box-sizing: border-box;
+  min-height: 40px;
+  margin-right: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  color: var(--c-primary);
+  font: inherit;
+  cursor: pointer;
 }
 
 html[data-brand="v2"] [data-v2-page="v-job"] [data-v2-upload="vendor"] .hint,

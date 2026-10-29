@@ -42,6 +42,21 @@ export default async function VendorJobPage({
     failed: t("i_repair_photo_failed"),
   };
   function renderReportControls(enhanced = false) {
+    const upload = (
+      <div style={{ marginTop: 16 }} data-v2-upload={v2 ? "vendor" : undefined}>
+        <TicketPhotoUpload
+          ticketId=""
+          label={t("i_repair_photo_add")}
+          hint={t("i_repair_photo_hint")}
+          allowInternal={false}
+          messages={photoMessages}
+          signPath="/api/vendor-jobs/photos/sign"
+          confirmPath="/api/vendor-jobs/photos/confirm"
+          extra={{ token }}
+          inputTestId="vendor-photo"
+        />
+      </div>
+    );
     return (
       <>
         {job!.reported ? (
@@ -58,24 +73,13 @@ export default async function VendorJobPage({
               </label>
               <input className="inp" name="cost" inputMode="decimal" required data-testid="vendor-cost" />
             </div>
+            {v2 ? upload : null}
             <button className="btn pri" type="submit" data-testid="vendor-submit">
               {t("i_vendor_submit")}
             </button>
           </form>
         )}
-        <div style={{ marginTop: 16 }} data-v2-upload={v2 ? "vendor" : undefined}>
-          <TicketPhotoUpload
-            ticketId=""
-            label={t("i_repair_photo_add")}
-            hint={t("i_repair_photo_hint")}
-            allowInternal={false}
-            messages={photoMessages}
-            signPath="/api/vendor-jobs/photos/sign"
-            confirmPath="/api/vendor-jobs/photos/confirm"
-            extra={{ token }}
-            inputTestId="vendor-photo"
-          />
-        </div>
+        {job!.reported || !v2 ? upload : null}
       </>
     );
   }
