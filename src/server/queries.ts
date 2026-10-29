@@ -1875,7 +1875,8 @@ export type TenantSignedLeasePdfSummary = {
 
 /**
  * All reads use the tenant's authenticated database role. RLS independently
- * checks lease-party ownership and the organization flag.
+ * checks lease-party ownership, lease organization, and the DB global/org flags.
+ * App routes additionally require TENANT_SIGNED_PDF_ENABLED.
  * No signing state or audit event is written by these download queries.
  */
 export async function tenantSignedLeasePdfs(
@@ -1886,8 +1887,8 @@ export async function tenantSignedLeasePdfs(
   return tx(session.userId, async (client) => {
     const gate = await maybe<{ enabled: boolean }>(
       client,
-      `SELECT app.tenant_signed_pdf_on($1::uuid) AS enabled`,
-      [session.orgId],
+      `SELECT app.tenant_signed_pdf_readable($1::uuid, $2::uuid) AS enabled`,
+      [session.orgId, leaseId],
     );
     if (!tenantSignedPdfOn(TENANT_SIGNED_PDF_ENABLED, {
       tenant_signed_pdf: gate?.enabled,
@@ -1918,7 +1919,7 @@ export async function tenantSignedLeasePdf(
               'signed-lease-' || pdf.id::text || '.pdf' AS file_name
          FROM lease_signed_pdfs pdf
         WHERE pdf.org_id = $1 AND pdf.lease_id = $2 AND pdf.id = $3
-          AND app.tenant_signed_pdf_on(pdf.org_id)
+          AND app.tenant_signed_pdf_readable(pdf.org_id, pdf.lease_id)
           AND app.is_lease_tenant(pdf.lease_id)`,
       [session.orgId, leaseId, pdfId],
     ),

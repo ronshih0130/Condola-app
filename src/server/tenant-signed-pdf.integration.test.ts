@@ -100,6 +100,8 @@ test("tenant signed PDF RLS requires global and org flags and own lease; team ac
         );
       }
 
+      // This suite exercises the DB-layer kill switch, including direct reads.
+      // App routes additionally require the independent TS code constant.
       await client.query(
         "DELETE FROM platform_settings WHERE key = 'tenant_signed_pdf'",
       );
@@ -142,7 +144,7 @@ test("tenant signed PDF RLS requires global and org flags and own lease; team ac
         "team SELECT remains scoped to its organization with the tenant flag on",
       );
 
-      // readAs left the tenant JWT claims in place after resetting the role.
+      // Set tenant claims explicitly after the preceding admin read.
       await client.query(
         "SELECT set_config('request.jwt.claim.sub', $1, true)",
         [own.user_id],
@@ -153,14 +155,21 @@ test("tenant signed PDF RLS requires global and org flags and own lease; team ac
           own: boolean;
           other_lease: boolean;
           other_org: boolean;
+          own_lease_other_org: boolean;
         }>(
           `SELECT
              app.tenant_signed_pdf_readable($1::uuid, $2::uuid) AS own,
              app.tenant_signed_pdf_readable($1::uuid, $3::uuid) AS other_lease,
-             app.tenant_signed_pdf_readable($4::uuid, $5::uuid) AS other_org`,
+             app.tenant_signed_pdf_readable($4::uuid, $5::uuid) AS other_org,
+             app.tenant_signed_pdf_readable($4::uuid, $2::uuid) AS own_lease_other_org`,
           [own.org_id, own.id, otherLease.id, otherOrg.org_id, otherOrg.id],
         )).rows[0];
-        assert.deepEqual(readable, { own: true, other_lease: false, other_org: false });
+        assert.deepEqual(readable, {
+          own: true,
+          other_lease: false,
+          other_org: false,
+          own_lease_other_org: false,
+        }, "own lease paired with another org must be denied even with the global switch and both org flags on");
       } finally {
         await client.query("RESET ROLE");
       }
