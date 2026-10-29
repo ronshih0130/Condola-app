@@ -6,7 +6,8 @@ import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionAddExpense } from "@/server/auth-actions";
 import { actionStatement } from "@/server/actions";
-import { moneyLabel, ownerSettlement, signedMoneyLabel, statementPeriodNet } from "@/server/format";
+import { brandV2Enabled } from "@/server/brand-v2";
+import { moneyLabel, ownerSettlement, signedMoney, statementPeriodNet } from "@/server/format";
 import { taipeiToday } from "@/server/money";
 import { can, rolesFor } from "@/server/perms";
 import { listOwners, listProperties, listStatements, statementRoster } from "@/server/queries";
@@ -122,7 +123,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                     })
                   : null;
                 const label = (minor: number) => moneyLabel(minor, row.currency, session.locale);
-                const signed = (minor: number) => signedMoneyLabel(minor, row.currency, session.locale);
+                const signed = (minor: number) => signedMoney(minor, row.currency, session.locale, brandV2Enabled());
                 const periodNet = figures ? statementPeriodNet(figures) : 0;
                 const period = row.period_start.slice(0, 7);
                 return (

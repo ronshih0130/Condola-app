@@ -9,6 +9,7 @@ export function StatementDocument({
   row,
   lines,
   note,
+  v2,
 }: {
   t: T;
   locale: Locale;
@@ -24,6 +25,7 @@ export function StatementDocument({
     closing: string;
   };
   note?: ReactNode;
+  v2?: boolean;
 }) {
   const figures = ownerSettlement({
     opening: Number(row.opening),
@@ -47,7 +49,7 @@ export function StatementDocument({
   ] as const;
   return (
     <div className="card" style={{ maxWidth: 640 }} data-testid="statement-document">
-      <BrandImage variant="horizontal" alt={t("i_brand")} className="statement-logo" />
+      <BrandImage variant="horizontal" alt={t("i_brand")} className="statement-logo" {...(v2 ? { v2: true, locale } : {})} />
       <table className="t">
         <tbody>
           {summary.map(([key, value, testid]) => (

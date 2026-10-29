@@ -4,9 +4,10 @@ import { connection } from "next/server";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionPrepareUtility, actionVoidUtility } from "@/server/actions";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { PendingSubmit, UtilityConfirmForm } from "@/components/utility-confirm";
 import { UtilityUnitSelect } from "@/components/utility-unit-select";
-import { electricityMonthLabel, signedMoneyLabel } from "@/server/format";
+import { electricityMonthLabel, signedMoney } from "@/server/format";
 import { monthBounds, taipeiToday } from "@/server/money";
 import { can } from "@/server/perms";
 import { listUtilityBoard, utilityRunDetail } from "@/server/utility-posting";
@@ -92,7 +93,7 @@ export default async function UtilityPostingPage({
     });
   }
   const selected = (params.unit ? units.get(params.unit) : undefined) ?? (resultUnit ? units.get(resultUnit.unit_id) : undefined) ?? [...units.values()][0];
-  const money = (minor: number, currency: string) => signedMoneyLabel(minor, currency, session.locale);
+  const money = (minor: number, currency: string) => signedMoney(minor, currency, session.locale, brandV2Enabled());
   const statusLabel = utilityStatusLabel(t, detail?.run.status);
   const formPeriod = detail
     ? { start: detail.run.period_start, end: detail.run.period_end }

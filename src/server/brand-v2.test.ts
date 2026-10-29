@@ -326,6 +326,21 @@ test("theme has approved mappings, scoped selectors and local Latin font faces",
   assert.ok(styles.includes("font-feature-settings: \"tnum\" 1;"));
 });
 
+test("v2 header and portal lockups use 28px geometry and remain visible", () => {
+  const css = read("public/brand/v2/theme.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const lockup = css.match(/html\[data-brand="v2"\] header\.top \.brand-lockup\s*\{([^{}]*)\}/);
+  assert.ok(lockup);
+  assert.match(lockup[1], /height:\s*28px\s*;/);
+  assert.match(lockup[1], /width:\s*auto\s*;/);
+  assert.match(lockup[1], /max-width:\s*100%\s*;/);
+  assert.match(lockup[1], /display:\s*block\s*;/);
+  assert.match(css, /html\[data-brand="v2"\] header\.top \.brand-symbol\s*\{[^{}]*display:\s*none\s*;/);
+  const portal = css.match(/html\[data-brand="v2"\] \.portal-brand img\s*\{([^{}]*)\}/);
+  assert.ok(portal);
+  assert.match(portal[1], /height:\s*28px\s*;/);
+  assert.match(portal[1], /width:\s*auto\s*;/);
+});
+
 test("v2 focus rings use approved geometry and white rings on consent", () => {
   const css = read("public/brand/v2/theme.css").replace(/\/\*[\s\S]*?\*\//g, "");
   const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
@@ -424,18 +439,69 @@ test("BrandImage preserves defaults and selects both color header variants", () 
     const images = [...enabled.matchAll(/<img\b[^>]*>/g)];
     assert.equal(images.length, 1);
     assert.match(images[0][0], /alt=""/);
-    assert.match(images[0][0], /height="24"/);
+    assert.ok(images[0][0].includes(`height="${variant === "horizontalDark" ? 28 : 24}"`));
   }
   const chrome = read("src/components/chrome.tsx");
   assert.ok(chrome.includes('export function BrandLink({ v2 }: { v2?: boolean } = {})'));
+  assert.ok(chrome.includes("const locale = useLocale();"));
   for (const [variant, className] of [
     ["horizontalDark", "brand-lockup"],
     ["symbolSmall", "brand-symbol"],
   ]) {
     assert.ok(chrome.includes(
-      `<BrandImage variant="${variant}" alt="" className="${className}" {...(v2 ? { v2: true } : {})} />`,
+      `<BrandImage variant="${variant}" alt="" className="${className}" {...(v2 ? { v2: true, locale } : {})} />`,
     ));
   }
+});
+
+test("BrandImage horizontal variants select locale lockups and preserve exact legacy markup", () => {
+  for (const variant of ["horizontal", "horizontalDark"] as const) {
+    const legacy = variant === "horizontal"
+      ? "/brand/condola_lockup_horizontal.svg"
+      : "/brand/condola_lockup_horizontal_dark.svg";
+    const expected =
+      `<link rel="preload" as="image" href="${legacy}"/>`
+      + `<img class="test-logo" src="${legacy}" alt="Condola"/>`;
+    for (const locale of ["zh-TW", "en"] as const) {
+      const props = { variant, alt: "Condola", className: "test-logo", locale };
+      for (const offProps of [props, { ...props, v2: false }]) {
+        const html = renderToStaticMarkup(React.createElement(BrandImage, offProps));
+        assert.equal(html, expected);
+        assert.doesNotMatch(html, /\/brand\/v2\//);
+      }
+      const html = renderToStaticMarkup(React.createElement(BrandImage, { ...props, v2: true }));
+      const asset = locale === "zh-TW" ? "lockup_zh_color.svg" : "lockup_en_color.svg";
+      assert.ok(html.includes(`/brand/v2/logo/${asset}`));
+      const images = [...html.matchAll(/<img\b[^>]*>/g)];
+      assert.equal(images.length, 1);
+      assert.match(images[0][0], /height="28"/);
+      assert.ok(images[0][0].includes(`width="${locale === "zh-TW" ? 89 : 112}"`));
+      assert.doesNotMatch(html, /\/brand\/condola_/);
+    }
+  }
+});
+
+test("owner, tenant header, and statement logos forward the optional v2 flag", () => {
+  const ownerLayout = read("src/app/o/layout.tsx");
+  assert.ok(ownerLayout.includes('import { brandV2Enabled } from "@/server/brand-v2";'));
+  assert.ok(ownerLayout.includes(
+    '<OwnerNav properties={properties} {...(brandV2Enabled() ? { v2: true } : {})}>{children}</OwnerNav>',
+  ));
+  const ownerNav = read("src/components/owner-nav.tsx");
+  assert.ok(ownerNav.includes("v2?: boolean;"));
+  assert.ok(ownerNav.includes("const locale = useLocale();"));
+  assert.ok(ownerNav.includes(
+    '<BrandImage variant="horizontal" alt={t("i_brand")} {...(v2 ? { v2: true, locale } : {})} />',
+  ));
+  const tenantLayout = read("src/app/t/layout.tsx");
+  assert.ok(tenantLayout.includes(
+    '<BrandImage variant="symbolSmall" alt="" className="brand-symbol" {...(brandV2Enabled() ? { v2: true } : {})} />',
+  ));
+  const statement = read("src/components/statement-document.tsx");
+  assert.ok(statement.includes("v2?: boolean;"));
+  assert.ok(statement.includes(
+    '<BrandImage variant="horizontal" alt={t("i_brand")} className="statement-logo" {...(v2 ? { v2: true, locale } : {})} />',
+  ));
 });
 
 test("BrandImage stacked OFF preserves exact legacy markup and ON uses v2", () => {

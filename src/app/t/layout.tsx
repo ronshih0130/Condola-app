@@ -34,7 +34,7 @@ export default async function TenantLayout({ children }: { children: React.React
                 {t("i_task_back")}
               </Link>
             ) : null}
-            <BrandImage variant="symbolSmall" alt="" className="brand-symbol" />
+            <BrandImage variant="symbolSmall" alt="" className="brand-symbol" {...(brandV2Enabled() ? { v2: true } : {})} />
             {t("i_brand")}
           </div>
           <div className="liffb" data-testid="bill-list">

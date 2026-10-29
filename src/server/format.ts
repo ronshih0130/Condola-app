@@ -66,6 +66,13 @@ export function statementSignedMoney(minor: number | string, currency: string, l
   return value < 0 ? `\u2212${label}` : label;
 }
 
+/** Select the signed amount typography for the active brand. */
+export function signedMoney(minor: number | string, currency: string, locale: Locale, v2: boolean) {
+  return v2
+    ? statementSignedMoney(minor, currency, locale)
+    : signedMoneyLabel(minor, currency, locale);
+}
+
 /** Period movement stored on owner_statements: rent + other − fee − expenses − payouts. */
 export function statementPeriodNet(row: Pick<StatementFigures, "rent" | "other" | "fee" | "expenses" | "payouts">) {
   return row.rent + row.other - row.fee - row.expenses - row.payouts;

@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { makeT } from "@/i18n";
-import { moneyLabel, signedMoneyLabel, statementSignedMoney } from "@/server/format";
+import { moneyLabel, signedMoney, signedMoneyLabel, statementSignedMoney } from "@/server/format";
 import { buildStatementPdf } from "@/server/pdf-docs";
 
 const root = new URL("../", import.meta.url);
@@ -24,15 +24,24 @@ const SCREENS = [
   "app/m/reports/page.tsx",
 ];
 
-test("utilities and pay keep the ASCII hyphen, and statements use U+2212", () => {
+test("signedMoney selects the brand minus sign and keeps zero unsigned", () => {
+  assert.equal(signedMoney(-280000, "TWD", "zh-TW", true), "\u2212NT$2,800");
+  assert.equal(signedMoney(-280000, "TWD", "zh-TW", false), "-NT$2,800");
+  for (const v2 of [false, true]) {
+    assert.equal(signedMoney(0, "TWD", "zh-TW", v2), "NT$0");
+  }
+});
+
+test("server pages select signed money by brand, and documents use U+2212", () => {
   assert.equal(signedMoneyLabel(-5_000, "TWD", "zh-TW"), "-NT$50");
   assert.equal(signedMoneyLabel(-30_000, "TWD", "zh-TW"), "-NT$300");
   assert.equal(signedMoneyLabel(0, "TWD", "zh-TW"), "NT$0");
   assert.equal(statementSignedMoney(-5_000, "TWD", "zh-TW"), "\u2212NT$50");
   for (const file of ["app/m/rent/utilities/page.tsx", "app/t/pay/page.tsx", "app/m/statements/page.tsx", "app/o/statements/page.tsx"]) {
     const source = read(file);
-    assert.match(source, /signedMoneyLabel/, file);
-    assert.doesNotMatch(source, /statementSignedMoney/, file);
+    assert.match(source, /import \{ brandV2Enabled \} from "@\/server\/brand-v2";/, file);
+    assert.match(source, /signedMoney\([^;\n]*brandV2Enabled\(\)\)/, file);
+    assert.doesNotMatch(source, /signedMoneyLabel|statementSignedMoney/, file);
   }
   for (const file of ["components/statement-document.tsx", "server/pdf-docs.ts"]) {
     const source = read(file);
