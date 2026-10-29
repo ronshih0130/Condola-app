@@ -56,9 +56,9 @@ test("app_metadata consent accepts current versions and dates at or after the ga
 test("baseline and current privacy consent pass without writes", async () => {
   assert.equal(CONSENT_GATE_MIN_VERSION, "2026-10-22");
   const current = buildStoredConsent("signup");
-  assert.equal(current.privacy_version, "2026-10-27");
+  assert.equal(current.privacy_version, PRIVACY_VERSION);
   assert.equal(current.terms_version, "2026-10-22");
-  for (const privacy_version of ["2026-10-22", "2026-10-27"]) {
+  for (const privacy_version of ["2026-10-22", "2026-10-27", PRIVACY_VERSION]) {
     const record = { ...current, privacy_version };
     const bucket = memoryRepo(record);
     assert.equal(consentCoversCurrent(record), true);
@@ -97,7 +97,7 @@ test("invalid or missing privacy consent blocks until a fresh consent is recorde
     ok: true, recorded: true,
   });
   assert.equal(missing.writes.length, 1);
-  assert.equal(missing.writes[0].privacy_version, "2026-10-27");
+  assert.equal(missing.writes[0].privacy_version, PRIVACY_VERSION);
 });
 
 test("user_metadata-only consent counts as missing", async () => {

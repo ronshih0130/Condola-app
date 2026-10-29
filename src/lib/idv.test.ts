@@ -124,7 +124,7 @@ test("id check copy never says verified and the consent notice is verbatim", () 
       assert.equal(catalog.i_pay_hint_tenant.includes("收款"), false);
       assert.equal(
         catalog.i_id_retain,
-        "身分證件照片：已生效之租約，於租約結束（期滿或提前終止）後滿90日自動刪除（系統每日執行，最遲次日完成）；租約為草稿、未簽署、取消或作廢者，自上傳日起滿90日自動刪除（系統每日執行，最遲次日完成），不另行通知。刪除後，備份中之副本於14日內一併清除。",
+        "身分證件照片：有固定期限之租約，於租約結束（期滿或提前終止）後滿90日自動刪除（系統每日執行，最遲次日完成）；不定期租約，自實際終止或搬離日起滿90日自動刪除，租約進行中不起算；草稿、未簽署、取消或作廢之租約，自上傳日起滿90日自動刪除，皆不另行通知。我們自行保管之備份副本於14日內清除，託管平台內部之備份則依供應商機制處理。",
       );
       assert.equal(catalog.idv_ten_pending.includes("LINE"), false);
       assert.equal(catalog.idv_doc_hint_2, "需要正面與背面各一張。");

@@ -56,7 +56,7 @@ test("sign-up and pricing copy stay on the handoff wording", () => {
   assert.equal(zh.i_signup_kind_firm, "管理公司");
   assert.equal(zh.i_signup_kind_self, "自己管房的屋主");
   assert.equal(zh.i_live_locked, "正式資料啟用前，請先與我們確認");
-  assert.equal(zh.i_price_headline, "依實際出租戶數計費，前 4 戶永遠免費");
+  assert.equal(zh.i_price_headline, "依實際出租戶數計費，免費方案依官網公告");
   assert.equal(zh.i_price_sub, "只計算有生效租約的戶／房。空房、範例公司資料都不收費。");
   assert.equal(zh.i_price_note, "年繳享 1 個月免費。");
   assert.equal(zh.i_price_year, "年繳 {money}（送 1 個月）");
@@ -64,7 +64,7 @@ test("sign-up and pricing copy stay on the handoff wording", () => {
   assert.equal(zh.i_price_receipt, "目前提供收據，暫無法開立統一發票");
   assert.equal(zh.i_price_a5, "目前提供收據，暫無法開立統一發票");
   assert.equal(zh.i_login_signup, "免費註冊");
-  assert.equal(zh.i_login_invite_tail, "（前 4 戶永遠免費，可先看範例公司）");
+  assert.equal(zh.i_login_invite_tail, "（免費方案依官網公告，可先看範例公司）");
   assert.equal(zh.i_price_footer, "本服務為軟體工具，不代為管理物業或收取租金，也不保證法規遵循。");
   assert.equal(zh.i_price_fit_pro, "多據點、人數較多的團隊");
   assert.equal(zh.i_price_seat_free, "1 個席次（待接受的邀請也計入）");

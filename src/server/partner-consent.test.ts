@@ -74,6 +74,8 @@ function render(element: React.ReactElement) {
   }
 }
 
+import { PRIVACY_VERSION } from "./legal-versions";
+const LATER = new Date(Date.parse(PRIVACY_VERSION) + 86_400_000).toISOString().slice(0, 10);
 test("AC1 flag matrix: OFF, invalid values, strict company overrides", () => {
   for (const override of [undefined, null, true, false, "true", "false", 0, 1, {}]) {
     for (const flag of [undefined, null, "off", "", "invalid", true, false, {}]) {
@@ -221,7 +223,7 @@ test("D privacy minimum/header failures retain an active gate, refuse signing an
   const reports: unknown[] = [];
   for (const runtime of [
     partnerTestRuntime(undefined, "2026-10-22"),
-    partnerTestRuntime("# Privacy\n- 版本：v2\n- 生效日期：2026-10-28\n"),
+    partnerTestRuntime(`# Privacy\n- 版本：v2.1\n- 生效日期：${LATER}\n`),
     partnerTestRuntime("# Privacy\n- 生效日期：2026-10-27\n"),
     { ...partnerTestRuntime(), text: () => "changed agreement and privacy" },
   ]) {
@@ -247,10 +249,10 @@ test("D privacy minimum/header failures retain an active gate, refuse signing an
 
 test("D same privacy header accepts v4.2-style body changes with fresh signing hash; canonical bump requires consent", async () => {
   const first = partnerTestRuntime();
-  const second = partnerTestRuntime("# Privacy\n- 版本：v2\n- 生效日期：2026-10-27\n\nHosting backups follow the provider's backup process.\n");
+  const second = partnerTestRuntime(`# Privacy\n- 版本：v2.1\n- 生效日期：${PRIVACY_VERSION}\n\nHosting backups follow the provider's backup process.\n`);
   const before = (await verifiedPartnerDocuments("en", first))!;
   const after = (await verifiedPartnerDocuments("en", second))!;
-  assert.equal(after[0].version, "v2@2026-10-27");
+  assert.equal(after[0].version, `v2.1@${PRIVACY_VERSION}`);
   assert.equal(before[0].version, after[0].version);
   assert.notEqual(before[0].sha256, after[0].sha256);
   assert.equal(after[0].sha256, createHash("sha256").update(await second.text(after[0])).digest("hex"));
@@ -266,8 +268,11 @@ test("D same privacy header accepts v4.2-style body changes with fresh signing h
   assert.equal(covered.active, true);
   assert.equal(covered.required, false);
   assert.deepEqual(covered.documents, []);
-  const bumped = partnerTestRuntime("# Privacy\n- 版本：v2.1\n- 生效日期：2026-10-28\n", "2026-10-28");
+  const bumped = partnerTestRuntime(`# Privacy\n- 版本：v2.2\n- 生效日期：${LATER}\n`, LATER);
   assert.equal((await readPartnerStateOn(fake({ evidence }).client, staff(), bumped)).required, true);
+  // v2 consent (2026-10-27) does not cover v2.1: design partners must accept v2.1.
+  const v2Evidence = evidence.map((doc) => doc.doc_type === "privacy" ? { ...doc, version: "v2@2026-10-27" } : doc);
+  assert.equal((await readPartnerStateOn(fake({ evidence: v2Evidence }).client, staff(), second)).required, true);
 });
 
 test("D check script fails specifically for minimum, header and agreement hash; body-only privacy change passes", async () => {
@@ -290,14 +295,14 @@ test("D check script fails specifically for minimum, header and agreement hash; 
     write("src/server/legal-versions.ts", 'export const PRIVACY_VERSION = "2026-10-22";\n');
     let result = run();
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /privacy\/zh-TW: PRIVACY_VERSION 2026-10-22 < min 2026-10-27/);
-    write("src/server/legal-versions.ts", 'export const PRIVACY_VERSION = "2026-10-27";\n');
+    assert.match(result.stderr, new RegExp(`privacy/zh-TW: PRIVACY_VERSION 2026-10-22 < min ${PRIVACY_VERSION}`));
+    write("src/server/legal-versions.ts", `export const PRIVACY_VERSION = "${PRIVACY_VERSION}";\n`);
     assert.equal(run().status, 0);
-    write(runtime.config.documents.privacy[0].source, "# Privacy\n- 版本：v2\n- 生效日期：2026-10-28\n");
+    write(runtime.config.documents.privacy[0].source, `# Privacy\n- 版本：v2.1\n- 生效日期：${LATER}\n`);
     result = run();
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /生效日期 header must equal PRIVACY_VERSION 2026-10-27/);
-    write(runtime.config.documents.privacy[0].source, "# Privacy\n- 版本：v2\n- 生效日期：2026-10-27\n\nRevised backup clause.\n");
+    assert.match(result.stderr, new RegExp(`生效日期 header must equal PRIVACY_VERSION ${PRIVACY_VERSION}`));
+    write(runtime.config.documents.privacy[0].source, `# Privacy\n- 版本：v2.1\n- 生效日期：${PRIVACY_VERSION}\n\nRevised backup clause.\n`);
     assert.equal(run().status, 0);
     write(runtime.config.documents.partner_agreement[0].source, "tampered");
     result = run();

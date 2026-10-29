@@ -4,11 +4,11 @@ import { ACCOUNTS, resetDemo, signIn } from "./session";
 test("pricing and upgrade list only implemented plan terms", async ({ page }) => {
   await page.goto("/api/demo/locale?set=zh-TW&next=/pricing");
   const pricing = page.locator(".pricing-page");
-  await expect(page.getByTestId("price-headline")).toContainText("前 4 戶永遠免費");
+  await expect(page.getByTestId("price-headline")).toContainText("免費方案依官網公告");
   await expect(pricing.getByText("NT$0", { exact: true })).toBeVisible();
   await expect(page.getByTestId("plan-price-standard")).toHaveText("第 5 戶起每戶每月 NT$30");
   await expect(page.getByTestId("plan-price-pro")).toHaveText("第 5 戶起每戶每月 NT$40");
-  await expect(pricing.getByText("自己管房的屋主（4 戶以內）")).toBeVisible();
+  await expect(pricing.getByText("自己管房的屋主（依官網公告之免費戶數內）")).toBeVisible();
   await expect(pricing.getByText("1 個席次（待接受的邀請也計入）")).toBeVisible();
   await expect(pricing.getByText("中小型管理公司")).toBeVisible();
   await expect(pricing.getByText("5 個席次")).toBeVisible();
@@ -34,7 +34,7 @@ test("pricing and upgrade list only implemented plan terms", async ({ page }) =>
   await expect(main).not.toContainText("目前以銀行轉帳付款");
   await expect(page.getByTestId("upgrade-form")).toHaveCount(0);
   await expect(page.getByTestId("upgrade-submit")).toHaveCount(0);
-  await expect(page.getByTestId("settings-plan")).toHaveText("方案：前 4 戶永遠免費");
+  await expect(page.getByTestId("settings-plan")).toHaveText("方案：免費方案依官網公告・設計夥伴合作期間免費");
 });
 
 test("property export offers a properties CSV", async ({ page }) => {
