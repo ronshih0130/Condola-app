@@ -6,8 +6,8 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function ApprovalsPage() {
-  const v2 = brandV2Enabled();
   await requireCurrentConsent(undefined, "page");
+  const v2 = brandV2Enabled();
   const session = await getSession();
   const t = makeT(session.locale);
   return (

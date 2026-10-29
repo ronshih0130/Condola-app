@@ -10,8 +10,8 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerHomePage() {
-  const v2 = brandV2Enabled();
   await requireCurrentConsent(undefined, "page");
+  const v2 = brandV2Enabled();
   const session = await getSession();
   const t = makeT(session.locale);
   const [rows, privacy] = await Promise.all([ownerHome(session), ownerPrivacy(session.orgId)]);

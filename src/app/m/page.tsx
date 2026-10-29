@@ -18,8 +18,8 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ dupFirm?: string; code?: string }>;
 }) {
-  const v2 = brandV2Enabled();
   await requireCurrentConsent(undefined, "page");
+  const v2 = brandV2Enabled();
   const session = await getSession();
   const query = await searchParams;
   const t = makeT(session.locale);
