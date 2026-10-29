@@ -14,7 +14,12 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
     await client.query("BEGIN");
     try {
       const orgs = (await client.query(
-        "SELECT id, default_currency FROM organizations ORDER BY id LIMIT 2",
+        `SELECT o.id, o.default_currency FROM organizations o
+         WHERE o.environment::text <> 'sandbox'
+         ORDER BY (EXISTS (SELECT 1 FROM org_members m WHERE m.org_id=o.id AND m.role='admin')
+               AND EXISTS (SELECT 1 FROM org_members m WHERE m.org_id=o.id AND m.role='manager')
+               AND EXISTS (SELECT 1 FROM contacts c WHERE c.org_id=o.id AND c.is_tenant AND c.user_id IS NOT NULL)) DESC, o.id
+         LIMIT 2`,
       )).rows;
       assert.equal(orgs.length, 2, "integration database needs two seeded organizations");
       const [org, other] = orgs;
@@ -54,8 +59,8 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
       const fullNumber = "987654321012345";
       await client.query("SET LOCAL ROLE authenticated");
       await client.query(
-        "SELECT set_config('request.jwt.claims', $1, true)",
-        [JSON.stringify({ sub: admin.user_id, role: "authenticated" })],
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [admin.user_id],
       );
       assert.equal(
         (await client.query("SELECT current_user AS name")).rows[0].name,
@@ -155,8 +160,8 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
 
       await client.query("SET LOCAL ROLE authenticated");
       await client.query(
-        "SELECT set_config('request.jwt.claims', $1, true)",
-        [JSON.stringify({ sub: tenant.user_id, role: "authenticated" })],
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [tenant.user_id],
       );
       assert.equal(
         (await client.query("SELECT current_user AS name")).rows[0].name,
@@ -171,8 +176,8 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
 
       for (const userId of [tenant.user_id, manager.user_id]) {
         await client.query(
-          "SELECT set_config('request.jwt.claims', $1, true)",
-          [JSON.stringify({ sub: userId, role: "authenticated" })],
+          "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+          [userId],
         );
         await client.query("SAVEPOINT denied_number");
         await assert.rejects(client.query(
