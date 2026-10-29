@@ -52,3 +52,8 @@ public.fn_invoice_recalc(p_invoice uuid)
 # @mode authenticated
 public.post_reversal(p_txn uuid, p_reason text, p_invoice uuid)
 app.audit_event(p_org uuid, p_event text, p_detail jsonb)
+
+# Tenant signed-PDF RLS organization gate. Fixed-search-path SECURITY DEFINER;
+# returns only whether the explicit organization feature flag is enabled.
+# @mode authenticated
+app.tenant_signed_pdf_on(p_org uuid)

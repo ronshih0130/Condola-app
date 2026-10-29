@@ -14,6 +14,10 @@ import {
 } from "./list-search";
 import { rentUtilityDueMinor, tenantBillLines } from "./money";
 import type { Session } from "./types";
+import {
+  TENANT_SIGNED_PDF_ENABLED,
+  tenantSignedPdfOn,
+} from "./tenant-signed-pdf-rules";
 
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
 
@@ -1858,6 +1862,66 @@ export async function tenantDetail(session: Session, id: string) {
       );
       return { tenant, leases };
     },
+    { orgId: session.orgId, environment: session.environment },
+  );
+}
+
+export type TenantSignedLeasePdfSummary = {
+  id: string;
+  source_pdf_id: string;
+  created_at: Date | string;
+  size_bytes: number;
+};
+
+/**
+ * All reads use the tenant's authenticated database role. RLS independently
+ * checks lease-party ownership and the organization flag.
+ * No signing state or audit event is written by these download queries.
+ */
+export async function tenantSignedLeasePdfs(
+  session: Session,
+  leaseId: string,
+): Promise<TenantSignedLeasePdfSummary[]> {
+  if (session.kind !== "tenant" || !TENANT_SIGNED_PDF_ENABLED) return [];
+  return tx(session.userId, async (client) => {
+    const gate = await maybe<{ enabled: boolean }>(
+      client,
+      `SELECT app.tenant_signed_pdf_on($1::uuid) AS enabled`,
+      [session.orgId],
+    );
+    if (!tenantSignedPdfOn(TENANT_SIGNED_PDF_ENABLED, {
+      tenant_signed_pdf: gate?.enabled,
+    })) return [];
+    return many<TenantSignedLeasePdfSummary>(
+      client,
+      `SELECT pdf.id, pdf.id AS source_pdf_id, pdf.created_at,
+              octet_length(pdf.content) AS size_bytes
+         FROM lease_signed_pdfs pdf
+        WHERE pdf.org_id = $1 AND pdf.lease_id = $2
+        ORDER BY pdf.created_at DESC, pdf.id DESC`,
+      [session.orgId, leaseId],
+    );
+  }, { orgId: session.orgId, environment: session.environment });
+}
+
+export async function tenantSignedLeasePdf(
+  session: Session,
+  leaseId: string,
+  pdfId: string,
+) {
+  if (session.kind !== "tenant" || !TENANT_SIGNED_PDF_ENABLED) return null;
+  return tx(session.userId, async (client) =>
+    maybe<TenantSignedLeasePdfSummary & { content: Buffer; file_name: string }>(
+      client,
+      `SELECT pdf.id, pdf.id AS source_pdf_id, pdf.created_at,
+              octet_length(pdf.content) AS size_bytes, pdf.content,
+              'signed-lease-' || pdf.id::text || '.pdf' AS file_name
+         FROM lease_signed_pdfs pdf
+        WHERE pdf.org_id = $1 AND pdf.lease_id = $2 AND pdf.id = $3
+          AND app.tenant_signed_pdf_on(pdf.org_id)
+          AND app.is_lease_tenant(pdf.lease_id)`,
+      [session.orgId, leaseId, pdfId],
+    ),
     { orgId: session.orgId, environment: session.environment },
   );
 }
