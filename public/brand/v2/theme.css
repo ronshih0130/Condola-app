@@ -125,15 +125,11 @@ html[data-brand="v2"] header.top {
   border-bottom: 1px solid var(--c-divider);
   color: var(--c-text);
 }
-/* Keep the 28px lockup visible when legacy container queries select the symbol. */
+/* v2 header lockup at mockup size (28px); the legacy container query still swaps to the symbol on narrow headers. */
 html[data-brand="v2"] header.top .brand-lockup {
-  display: block;
   height: 28px;
   width: auto;
   max-width: 100%;
-}
-html[data-brand="v2"] header.top .brand-symbol {
-  display: none;
 }
 html[data-brand="v2"] .portal-brand img {
   height: 28px;

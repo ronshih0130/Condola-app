@@ -326,15 +326,15 @@ test("theme has approved mappings, scoped selectors and local Latin font faces",
   assert.ok(styles.includes("font-feature-settings: \"tnum\" 1;"));
 });
 
-test("v2 header and portal lockups use 28px geometry and remain visible", () => {
+test("v2 header and portal lockups use 28px geometry and keep the legacy narrow-screen symbol switch", () => {
   const css = read("public/brand/v2/theme.css").replace(/\/\*[\s\S]*?\*\//g, "");
   const lockup = css.match(/html\[data-brand="v2"\] header\.top \.brand-lockup\s*\{([^{}]*)\}/);
   assert.ok(lockup);
   assert.match(lockup[1], /height:\s*28px\s*;/);
   assert.match(lockup[1], /width:\s*auto\s*;/);
   assert.match(lockup[1], /max-width:\s*100%\s*;/);
-  assert.match(lockup[1], /display:\s*block\s*;/);
-  assert.match(css, /html\[data-brand="v2"\] header\.top \.brand-symbol\s*\{[^{}]*display:\s*none\s*;/);
+  assert.doesNotMatch(lockup[1], /display\s*:/);
+  assert.doesNotMatch(css, /header\.top \.brand-symbol\s*\{/);
   const portal = css.match(/html\[data-brand="v2"\] \.portal-brand img\s*\{([^{}]*)\}/);
   assert.ok(portal);
   assert.match(portal[1], /height:\s*28px\s*;/);
