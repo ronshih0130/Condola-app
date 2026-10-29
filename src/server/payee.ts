@@ -3,7 +3,7 @@ import { FlowError } from "./errors";
 import { can } from "./perms";
 import type { Session } from "./types";
 import {
-  PAYEE_DETAILS_ENABLED, payeeDetailsOn, resolvePayee, validatePayee,
+  PAYEE_DETAILS_ENABLED, payeeDetailsOn, validatePayee,
   validUuid, type PayeeInput, type PayeeAccount,
 } from "./payee-rules";
 
@@ -18,6 +18,14 @@ const columns = `b.id, b.holder_name, b.bank_name, b.bank_code, b.branch_code,
 const accountSource = `bank_accounts b
   LEFT JOIN payee_account_numbers n
     ON n.org_id = b.org_id AND n.bank_account_id = b.id`;
+
+type TenantPayeeRow = Pick<PayeeAccount,
+  "holder_name" | "bank_name" | "bank_code" | "branch_code" |
+  "account_number" | "account_last5" | "details"
+> & {
+  bank_account_id: string;
+  is_owner_account: boolean;
+};
 
 export async function tenantPayee(session: Session, leaseId: string) {
   return tx(session.userId, async (client) => {
@@ -34,24 +42,25 @@ export async function tenantPayee(session: Session, leaseId: string) {
       )).rows[0];
       return { enabled: false as const, last5: row?.account_last5 as string | null, account: null };
     }
-    const lease = (await client.query(
-      "SELECT payee_bank_account_id FROM leases WHERE org_id = $1 AND id = $2",
-      [session.orgId, leaseId],
+    const row = (await client.query<TenantPayeeRow>(
+      "SELECT * FROM public.tenant_payee_account($1)",
+      [leaseId],
     )).rows[0];
-    if (!lease) return { enabled: true as const, last5: null, account: null };
-    const accounts = (await client.query<PayeeAccount>(
-      `SELECT ${columns} FROM ${accountSource}
-       WHERE b.org_id = $1 AND b.archived_at IS NULL AND b.show_to_tenants
-         AND (b.id = $2 OR (b.is_default_payee AND b.owner_contact_id IS NULL))`,
-      [session.orgId, lease.payee_bank_account_id],
-    )).rows;
-    return {
-      enabled: true as const, last5: null,
-      account: resolvePayee(
-        accounts.find((a) => a.id === lease.payee_bank_account_id) ?? null,
-        accounts.find((a) => a.is_default_payee && !a.owner_contact_id) ?? null,
-      ),
-    };
+    const account: PayeeAccount | null = row ? {
+      id: row.bank_account_id,
+      holder_name: row.holder_name,
+      bank_name: row.bank_name,
+      bank_code: row.bank_code,
+      branch_code: row.branch_code,
+      account_number: row.account_number,
+      account_last5: row.account_last5,
+      // The tenant RPC deliberately omits owner IDs and default-setting metadata.
+      // RPC omits owner IDs; a marker keeps the company/owner label (tenant-payee.tsx).
+      owner_contact_id: row.is_owner_account ? "owner" : null,
+      is_default_payee: false,
+      details: row.details,
+    } : null;
+    return { enabled: true as const, last5: null, account };
   });
 }
 

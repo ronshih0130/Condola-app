@@ -52,3 +52,5 @@ public.fn_invoice_recalc(p_invoice uuid)
 # @mode authenticated
 public.post_reversal(p_txn uuid, p_reason text, p_invoice uuid)
 app.audit_event(p_org uuid, p_event text, p_detail jsonb)
+# Tenant payee read from tx(); SECURITY DEFINER checks tenant lease membership and audits last five only.
+public.tenant_payee_account(p_lease uuid)

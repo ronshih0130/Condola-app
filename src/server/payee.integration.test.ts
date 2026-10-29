@@ -341,3 +341,343 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
     }
   });
 });
+
+test("tenant payee RPC: narrow escalation tests", {
+  skip: !process.env.DATABASE_URL,
+}, async () => {
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const seed = (await client.query(
+        `SELECT l.org_id, l.property_id, l.unit_id, l.currency,
+                o.default_currency
+         FROM leases l
+         JOIN organizations o ON o.id=l.org_id
+         WHERE o.environment::text <> 'sandbox'
+           AND EXISTS (
+             SELECT 1 FROM org_members m
+             WHERE m.org_id=l.org_id AND m.role='admin'
+           )
+           AND EXISTS (
+             SELECT 1 FROM org_members m
+             WHERE m.org_id=l.org_id AND m.role='manager'
+           )
+         ORDER BY l.org_id, l.id
+         LIMIT 1`,
+      )).rows[0];
+      assert.ok(seed, "integration database needs a lease, admin and manager");
+
+      const members = (await client.query(
+        `SELECT user_id, role FROM org_members
+         WHERE org_id=$1 AND role IN ('admin','manager')`,
+        [seed.org_id],
+      )).rows;
+      const admin = members.find((member) => member.role === "admin");
+      const manager = members.find((member) => member.role === "manager");
+      assert.ok(admin);
+      assert.ok(manager);
+
+      const functionInfo = (await client.query(
+        `SELECT p.prosecdef, p.provolatile, p.proconfig,
+                pg_get_userbyid(p.proowner) AS owner_name,
+                has_function_privilege(
+                  'anon', p.oid, 'EXECUTE'
+                ) AS anon_execute,
+                has_function_privilege(
+                  'authenticated', p.oid, 'EXECUTE'
+                ) AS authenticated_execute,
+                EXISTS (
+                  SELECT 1
+                  FROM aclexplode(
+                    coalesce(p.proacl, acldefault('f', p.proowner))
+                  ) AS acl
+                  WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE'
+                ) AS public_execute
+         FROM pg_proc p
+         WHERE p.oid='public.tenant_payee_account(uuid)'::regprocedure`,
+      )).rows[0];
+      assert.ok(functionInfo);
+      assert.equal(functionInfo.prosecdef, true);
+      assert.equal(functionInfo.provolatile, "v");
+      assert.ok(functionInfo.proconfig.includes("search_path=pg_catalog, public"));
+      assert.equal(functionInfo.anon_execute, false);
+      assert.equal(functionInfo.authenticated_execute, true);
+      assert.equal(functionInfo.public_execute, false);
+
+      const tenantA = randomUUID();
+      const tenantB = randomUUID();
+      const contactA = randomUUID();
+      const contactB = randomUUID();
+      const leaseA = randomUUID();
+      const leaseB = randomUUID();
+      const accountA = randomUUID();
+      const accountB = randomUUID();
+      const numberA = "731904628512345";
+      const numberB = "842015739623456";
+
+      await client.query(
+        "INSERT INTO auth.users (id) VALUES ($1), ($2)",
+        [tenantA, tenantB],
+      );
+      await client.query(
+        `INSERT INTO contacts (id,org_id,user_id,display_name,is_tenant)
+         VALUES ($1,$3,$4,'Payee RPC tenant A',true),
+                ($2,$3,$5,'Payee RPC tenant B',true)`,
+        [contactA, contactB, seed.org_id, tenantA, tenantB],
+      );
+      await client.query(
+        `INSERT INTO bank_accounts
+         (id,org_id,nickname,holder_name,bank_name,bank_code,branch_code,
+          currency,show_to_tenants)
+         VALUES
+           ($1,$3,'RPC payee A','Holder A','Bank A','012','1001',$4,true),
+           ($2,$3,'RPC payee B','Holder B','Bank B','013','1002',$4,true)`,
+        [accountA, accountB, seed.org_id, seed.default_currency],
+      );
+      await client.query(
+        `INSERT INTO payee_account_numbers
+         (bank_account_id,org_id,account_number)
+         VALUES ($1,$3,$4), ($2,$3,$5)`,
+        [accountA, accountB, seed.org_id, numberA, numberB],
+      );
+
+      // Choose disjoint future terms beyond every existing finite term
+      // on this unit. Open-ended leases are shortened only within this
+      // transaction so the fixtures also work with exclusion constraints.
+      await client.query(
+        `UPDATE leases
+         SET end_date=greatest(start_date,current_date)
+         WHERE org_id=$1 AND unit_id=$2 AND end_date IS NULL`,
+        [seed.org_id, seed.unit_id],
+      );
+      const fixtureStart = (await client.query(
+        `SELECT (
+           greatest(current_date, coalesce(max(end_date),current_date)) + 10
+         )::text AS start_date
+         FROM leases
+         WHERE org_id=$1 AND unit_id=$2`,
+        [seed.org_id, seed.unit_id],
+      )).rows[0].start_date;
+      await client.query(
+        `INSERT INTO leases
+         (id,org_id,property_id,unit_id,target_unit_id,status,start_date,end_date,
+          currency,rent_amount_minor,payee_bank_account_id)
+         VALUES
+           ($1,$3,$4,$5,$5,'active',$7::date,$7::date+1,$6,0,$8),
+           ($2,$3,$4,$5,$5,'active',$7::date+3,$7::date+4,$6,0,$9)`,
+        [
+          leaseA, leaseB, seed.org_id, seed.property_id, seed.unit_id,
+          seed.currency, fixtureStart, accountA, accountB,
+        ],
+      );
+      await client.query(
+        `INSERT INTO lease_parties (org_id,lease_id,contact_id)
+         VALUES ($1,$2,$3), ($1,$4,$5)`,
+        [seed.org_id, leaseA, contactA, leaseB, contactB],
+      );
+
+      await client.query("SET LOCAL ROLE authenticated");
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [tenantA],
+      );
+
+      const own = (await client.query(
+        "SELECT * FROM public.tenant_payee_account($1)",
+        [leaseA],
+      )).rows;
+      assert.equal(own.length, 1);
+      assert.deepEqual(own[0], {
+        bank_account_id: accountA,
+        holder_name: "Holder A",
+        bank_name: "Bank A",
+        bank_code: "012",
+        branch_code: "1001",
+        account_number: numberA,
+        account_last5: numberA.slice(-5),
+        is_owner_account: false,
+        details: {},
+      });
+
+      assert.deepEqual((await client.query(
+        "SELECT * FROM public.tenant_payee_account($1)",
+        [leaseB],
+      )).rows, []);
+
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [tenantB],
+      );
+      const ownB = (await client.query(
+        "SELECT * FROM public.tenant_payee_account($1)",
+        [leaseB],
+      )).rows;
+      assert.equal(ownB.length, 1);
+      assert.equal(ownB[0].bank_account_id, accountB);
+      assert.equal(ownB[0].account_number, numberB);
+
+      await client.query("RESET ROLE");
+      await client.query(
+        "UPDATE leases SET status='ended' WHERE id=$1",
+        [leaseA],
+      );
+      await client.query("SET LOCAL ROLE authenticated");
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [tenantA],
+      );
+      assert.deepEqual((await client.query(
+        "SELECT * FROM public.tenant_payee_account($1)",
+        [leaseA],
+      )).rows, []);
+
+      // Test staff against the still-active lease so lease status cannot
+      // conceal an accidental staff bypass.
+      for (const member of [manager, admin]) {
+        await client.query(
+          "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+          [member.user_id],
+        );
+        assert.deepEqual((await client.query(
+          "SELECT * FROM public.tenant_payee_account($1)",
+          [leaseB],
+        )).rows, [], `${member.role} is not a tenant party`);
+      }
+
+      await client.query("RESET ROLE");
+      await client.query("SET LOCAL ROLE anon");
+      // Even forged authenticated claims cannot bypass the EXECUTE ACL.
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [tenantB],
+      );
+      await client.query("SAVEPOINT anon_payee");
+      await assert.rejects(client.query(
+        "SELECT * FROM public.tenant_payee_account($1)",
+        [leaseB],
+      ), (error: unknown) => (error as { code: string }).code === "42501");
+      await client.query("ROLLBACK TO SAVEPOINT anon_payee");
+      await client.query("RELEASE SAVEPOINT anon_payee");
+      await client.query("RESET ROLE");
+
+      await client.query("SET LOCAL ROLE authenticated");
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', '', true), set_config('request.jwt.claim.role', 'authenticated', true)",
+      );
+      await client.query("SAVEPOINT missing_payee_identity");
+      await assert.rejects(client.query(
+        "SELECT * FROM public.tenant_payee_account($1)",
+        [leaseB],
+      ), (error: unknown) => (error as { code: string }).code === "42501");
+      await client.query("ROLLBACK TO SAVEPOINT missing_payee_identity");
+      await client.query("RELEASE SAVEPOINT missing_payee_identity");
+
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'anon', true)",
+        [tenantB],
+      );
+      await client.query("SAVEPOINT wrong_payee_claim");
+      await assert.rejects(client.query(
+        "SELECT * FROM public.tenant_payee_account($1)",
+        [leaseB],
+      ), (error: unknown) => (error as { code: string }).code === "42501");
+      await client.query("ROLLBACK TO SAVEPOINT wrong_payee_claim");
+      await client.query("RELEASE SAVEPOINT wrong_payee_claim");
+
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [tenantA],
+      );
+      const missingLease = randomUUID();
+      assert.deepEqual((await client.query(
+        "SELECT * FROM public.tenant_payee_account($1)",
+        [missingLease],
+      )).rows, []);
+      await client.query("RESET ROLE");
+
+      const audit = (await client.query(
+        `SELECT * FROM audit_log
+         WHERE reason='tenant_payee_read'
+           AND new_row->>'lease_id'=ANY($1::text[])
+         ORDER BY id`,
+        [[leaseA, leaseB, missingLease]],
+      )).rows;
+      assert.equal(audit.length, 6);
+      assert.deepEqual(audit.map((row) => ({
+        actor: row.actor_user_id,
+        row_id: row.row_id,
+        new_row: row.new_row,
+      })), [
+        {
+          actor: tenantA,
+          row_id: accountA,
+          new_row: {
+            lease_id: leaseA, result: "one",
+            account_last5: numberA.slice(-5),
+          },
+        },
+        {
+          actor: tenantA,
+          row_id: leaseB,
+          new_row: {
+            lease_id: leaseB, result: "none", account_last5: null,
+          },
+        },
+        {
+          actor: tenantB,
+          row_id: accountB,
+          new_row: {
+            lease_id: leaseB, result: "one",
+            account_last5: numberB.slice(-5),
+          },
+        },
+        {
+          actor: tenantA,
+          row_id: leaseA,
+          new_row: {
+            lease_id: leaseA, result: "none", account_last5: null,
+          },
+        },
+        {
+          actor: manager.user_id,
+          row_id: leaseB,
+          new_row: {
+            lease_id: leaseB, result: "none", account_last5: null,
+          },
+        },
+        {
+          actor: admin.user_id,
+          row_id: leaseB,
+          new_row: {
+            lease_id: leaseB, result: "none", account_last5: null,
+          },
+        },
+      ]);
+      for (const row of audit) {
+        assert.equal(row.org_id, seed.org_id);
+        assert.equal(row.actor_role, functionInfo.owner_name);
+        assert.equal(row.table_name, "payee_account_numbers");
+        assert.equal(row.action, "select");
+        assert.equal(row.old_row, null);
+        assert.equal(row.changed_cols, null);
+        assert.equal(row.reason, "tenant_payee_read");
+        assert.deepEqual(
+          Object.keys(row.new_row).sort(),
+          ["account_last5", "lease_id", "result"],
+        );
+      }
+      const allFixtureAudit = (await client.query(
+        `SELECT * FROM audit_log
+         WHERE row_id=ANY($1::text[])
+            OR (reason='tenant_payee_read'
+                AND new_row->>'lease_id'=ANY($2::text[]))`,
+        [[accountA, accountB, leaseA, leaseB], [leaseA, leaseB]],
+      )).rows;
+      const serializedAudit = JSON.stringify(allFixtureAudit);
+      assert.equal(serializedAudit.includes(numberA), false);
+      assert.equal(serializedAudit.includes(numberB), false);
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  });
+});
