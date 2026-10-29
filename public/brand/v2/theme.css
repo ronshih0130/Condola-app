@@ -1,4 +1,10 @@
-/* Source: /workspace/pm-saas/design/brand-v2/tokens.css.
+/* Token alignment with src/brand/v2/tokens.json:
+   --font-latin, --font-cjk, --font-sans, --font-display,
+   --font-features and --shadow-1: match token comma spacing verbatim.
+   All other existing token custom-property values already match.
+   Solid (filled) buttons use --c-primary navy only; neutral surface
+   backgrounds for tabs/disabled states are not solid brand fills.
+   Noto names reference locally installed fonts only; P0 ships no Noto font.
    Font registrations load only with this ON-only stylesheet.
    Every style selector is scoped to the v2 root. */
 @font-face {
@@ -45,17 +51,17 @@ html[data-brand="v2"] {
   --c-danger-soft: #F7E4E3;
   --c-info: #23748A;
   --c-info-soft: #E2F1F4;
-  --font-latin: "Inter", "Inter Variable";
-  --font-cjk: "Noto Sans TC", "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei";
-  --font-sans: "Inter", "Inter Variable", "Noto Sans TC", "Noto Sans CJK TC", -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  --font-display: "Plus Jakarta Sans", "Inter", "Noto Sans TC", "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  --font-features: "tnum" 1, "cv11" 1;
+  --font-latin: "Inter","Inter Variable";
+  --font-cjk: "Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei";
+  --font-sans: "Inter","Inter Variable","Noto Sans TC","Noto Sans CJK TC",-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --font-display: "Plus Jakarta Sans","Inter","Noto Sans TC","Noto Sans CJK TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --font-features: "tnum" 1,"cv11" 1;
   --font: var(--font-sans);
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
   --r-pill: 999px;
-  --shadow-1: 0 1px 2px rgba(20,50,92,.06), 0 1px 1px rgba(20,50,92,.04);
+  --shadow-1: 0 1px 2px rgba(20,50,92,.06),0 1px 1px rgba(20,50,92,.04);
   --shadow-2: 0 4px 16px rgba(20,50,92,.08);
 
   --cd-primary: #14325C;

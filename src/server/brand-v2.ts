@@ -1,4 +1,25 @@
 import type { Metadata } from "next";
+import tokens from "../brand/v2/tokens.json";
+
+export const brandV2Tokens: typeof tokens = tokens;
+
+export function brandV2CssVars(): Record<string, string> {
+  const variables: Record<string, string> = {};
+  for (const group of [
+    brandV2Tokens.color,
+    brandV2Tokens.font,
+    brandV2Tokens.size,
+    brandV2Tokens.space,
+    brandV2Tokens.radius,
+    brandV2Tokens.shadow,
+    brandV2Tokens.layout,
+  ]) {
+    for (const [name, token] of Object.entries(group)) {
+      variables[`--${name}`] = token.value;
+    }
+  }
+  return variables;
+}
 
 export function brandV2Enabled(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_V2 === "true";
