@@ -2,6 +2,21 @@
    Report summaries, approval controls and footer copy have no source elements. */
 
 html[data-brand="v2"] [data-v2-page="o-home"] {
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --fs-h1: 22px;
+  --lh-h1: 30px;
+  --fs-body: 15px;
+  --lh-body: 22px;
+  --fs-small: 13px;
+  --lh-small: 19px;
+  --fw-medium: 500;
+  --fw-bold: 700;
+
   box-sizing: border-box;
   width: 100%;
   max-width: var(--w-desktop-content);
