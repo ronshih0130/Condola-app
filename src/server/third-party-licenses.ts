@@ -19,6 +19,8 @@ export function deliveryLabelKey(delivery: LicenseDelivery) {
       return "i_lic_delivery_bundled";
     case "separate-unmodified-file":
       return "i_lic_delivery_separate";
+    case "self-hosted-font":
+      return "i_lic_delivery_font";
     case "inside:libheif-js":
       return "i_lic_delivery_inside";
   }

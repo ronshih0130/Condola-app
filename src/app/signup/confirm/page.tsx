@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { ConfirmHash } from "@/components/confirm-token";
 import { PendingSubmit } from "@/components/pending-submit";
 import { actionConfirmSupabaseHash, actionConfirmToken, actionResendSignup } from "@/server/signup-actions";
@@ -28,7 +29,7 @@ export default async function ConfirmPage({
   const expired = params.expired === "1";
   return (
     <div className="auth-wrap">
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
       <div className="card pad">
         {tokenHash && verifyType && !expired ? (
           <>

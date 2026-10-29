@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { OwnerNav } from "@/components/owner-nav";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { ownerPropertyNames } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -13,5 +14,5 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
   const path = (await headers()).get("x-pathname") || "";
   await requireCurrentConsent(session, "page", path || "/o");
   const properties = await ownerPropertyNames(session);
-  return <OwnerNav properties={properties}>{children}</OwnerNav>;
+  return <OwnerNav properties={properties} {...(brandV2Enabled() ? { v2: true } : {})}>{children}</OwnerNav>;
 }

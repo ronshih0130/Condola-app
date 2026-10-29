@@ -1,0 +1,197 @@
+/* Load through the existing ON-only v2 stylesheet loader.
+   Only existing content is styled; unavailable mockup content is not fabricated. */
+
+html[data-brand="v2"] [data-v2-page="t-home"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--w-mobile);
+  margin-inline: auto;
+  padding: var(--sp-5);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] * {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] > h2 {
+  margin: 0 0 var(--sp-1);
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: var(--fw-bold);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] > h2 + p {
+  margin: 0 0 var(--sp-5);
+  color: var(--c-text-2);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  overflow-wrap: anywhere;
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] [data-testid="rent-due-notice"] {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin: 0;
+  padding: var(--sp-6) var(--sp-5);
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-1);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] .fh {
+  margin: 0 0 var(--sp-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--c-text-3);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-regular);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] .fb {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] [data-minor] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--font-features);
+  overflow-wrap: anywhere;
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] [data-testid="rent-due-amount"] {
+  margin: 0;
+  color: var(--c-primary);
+  font-size: var(--fs-display);
+  line-height: var(--lh-display);
+  font-weight: var(--fw-bold);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] [data-testid="rent-due-rent"] {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--c-divider);
+  color: var(--c-text-2);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] [data-testid="rent-due-deposit"] {
+  margin-top: var(--sp-1);
+  color: var(--c-text-2);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] [data-minor^="-"] {
+  color: var(--c-danger);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] .fbtn,
+html[data-brand="v2"] [data-v2-page="t-home"] [data-testid="idv-home-link"],
+html[data-brand="v2"] [data-v2-page="t-home"] form > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--h-control);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  color: var(--c-primary);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: none;
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] .fbtn {
+  margin-top: var(--sp-5);
+  border-color: var(--c-primary);
+  background: var(--c-primary);
+  color: var(--c-on-primary);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"]:not(:has(.fbtn)) [data-testid="idv-home-link"],
+html[data-brand="v2"] [data-v2-page="t-home"][data-testid="lease-picker"] form:first-of-type > button {
+  border-color: var(--c-primary);
+  background: var(--c-primary);
+  color: var(--c-on-primary);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] .fbtn:hover,
+html[data-brand="v2"] [data-v2-page="t-home"]:not(:has(.fbtn)) [data-testid="idv-home-link"]:hover,
+html[data-brand="v2"] [data-v2-page="t-home"][data-testid="lease-picker"] form:first-of-type > button:hover {
+  border-color: var(--c-primary-hover);
+  background: var(--c-primary-hover);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] .fbtn:active,
+html[data-brand="v2"] [data-v2-page="t-home"]:not(:has(.fbtn)) [data-testid="idv-home-link"]:active,
+html[data-brand="v2"] [data-v2-page="t-home"][data-testid="lease-picker"] form:first-of-type > button:active {
+  border-color: var(--c-primary-pressed);
+  background: var(--c-primary-pressed);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] :focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] [data-testid="idv-home-link"] + .small {
+  display: block;
+  margin-top: var(--sp-3);
+  color: var(--c-text-3);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] > .small {
+  margin: var(--sp-5) 0 0;
+  color: var(--c-text-2);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] > .fn {
+  margin: var(--sp-6) 0 0;
+  padding: var(--sp-4) var(--sp-1);
+  color: var(--c-text-3);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+  text-align: center;
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] form {
+  margin-top: var(--sp-3);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] form > button {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+}
+
+html[data-brand="v2"] [data-v2-page="t-home"] form > button .small {
+  color: inherit;
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+}

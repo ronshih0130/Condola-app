@@ -1,0 +1,42 @@
+/* Style the existing placeholder without adding approval content or actions. */
+
+html[data-brand="v2"] [data-v2-page="o-approvals"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--w-desktop-content);
+  margin-inline: auto;
+  padding: var(--sp-5) var(--sp-4) var(--sp-8);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+html[data-brand="v2"] [data-v2-page="o-approvals"] > h2 {
+  margin: 0 0 var(--sp-5);
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: var(--fw-bold);
+}
+
+html[data-brand="v2"] [data-v2-page="o-approvals"] > p {
+  box-sizing: border-box;
+  margin: 0;
+  padding: var(--sp-6);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-1);
+  color: var(--c-text-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 1024px) {
+  html[data-brand="v2"] [data-v2-page="o-approvals"] {
+    padding: var(--sp-8) var(--sp-6);
+  }
+}

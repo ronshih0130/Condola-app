@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { BrandImage } from "@/components/brand";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
 
@@ -33,13 +34,13 @@ export default async function TenantLayout({ children }: { children: React.React
                 {t("i_task_back")}
               </Link>
             ) : null}
-            <BrandImage variant="symbolSmall" alt="" className="brand-symbol" />
+            <BrandImage variant="symbolSmall" alt="" className="brand-symbol" {...(brandV2Enabled() ? { v2: true } : {})} />
             {t("i_brand")}
           </div>
           <div className="liffb" data-testid="bill-list">
             {path === "/t" ? (
               <div className="liff-welcome">
-                <BrandImage variant="stacked" alt={t("i_brand")} />
+                <BrandImage variant="stacked" alt={t("i_brand")} {...(brandV2Enabled() ? { v2: true } : {})} />
               </div>
             ) : null}
             {children}

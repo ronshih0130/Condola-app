@@ -1,0 +1,5 @@
+/icon.svg
+  Cache-Control: public, immutable, no-transform, max-age=31536000
+
+/apple-icon.png
+  Cache-Control: public, immutable, no-transform, max-age=31536000

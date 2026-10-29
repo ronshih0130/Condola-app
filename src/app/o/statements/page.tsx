@@ -1,7 +1,8 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
-import { moneyLabel, ownerSettlement, signedMoneyLabel, statementPeriodNet } from "@/server/format";
+import { brandV2Enabled } from "@/server/brand-v2";
+import { moneyLabel, ownerSettlement, signedMoney, statementPeriodNet } from "@/server/format";
 import { listStatements } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -30,7 +31,7 @@ export default async function OwnerStatementsPage() {
           });
           const periodNet = statementPeriodNet(figures);
           const amount = periodNet < 0
-            ? signedMoneyLabel(periodNet, row.currency, session.locale)
+            ? signedMoney(periodNet, row.currency, session.locale, brandV2Enabled())
             : moneyLabel(periodNet, row.currency, session.locale);
           return (
             <p key={row.id}>
@@ -38,7 +39,7 @@ export default async function OwnerStatementsPage() {
                 {row.period_start.slice(0, 7)} ·{" "}
                 {periodNet < 0 ? (
                   <span className="chip warn" data-testid="owner-owes">
-                    {t("owner_owes")} {amount}
+                    {t("owner_owes")} {brandV2Enabled() ? <span className="amount-neg">{amount}</span> : amount}
                   </span>
                 ) : (
                   amount

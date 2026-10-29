@@ -40,6 +40,15 @@ export interface BrowserConfig {
     sourceUrlTemplate: string;
   }[];
   vendored: { package: string; file: string; publicDir: string }[];
+  selfHostedAssets?: {
+    package: string;
+    version: string;
+    license: "OFL-1.1";
+    files: { path: string; sha256: string }[];
+    licenseFile: { path: string; sha256: string };
+    sourceArchive: { url: string; integrity: string };
+    repository: string;
+  }[];
   copyrightHolders?: Record<string, string>;
   copyleftTexts: Record<string, { from?: string; public: string; sha256?: string }>;
   extraNotices: { from: string; public: string }[];
@@ -62,7 +71,7 @@ export interface LicenseEntry {
   version: string;
   license: string;
   licenseText: string | null;
-  licenseTextSource: "spdx-template" | `package-file:${string}` | `upstream-file:${string}`;
+  licenseTextSource: "spdx-template" | `package-file:${string}` | `upstream-file:${string}` | `public-file:${string}`;
   licenseUrl: string | null;
   gplUrl: string | null;
   noticeUrl: string | null;
@@ -74,7 +83,7 @@ export interface LicenseEntry {
   buildInputsUrl: string | null;
   buildInputFiles: { label: string; url: string }[];
   buildProvenance: (BuildProvenance & VerifiedDecoder) | null;
-  delivery: "bundled" | "separate-unmodified-file" | "inside:libheif-js";
+  delivery: "bundled" | "separate-unmodified-file" | "inside:libheif-js" | "self-hosted-font";
   assetPath: string | null;
   sha256: string | null;
   requiredBy: string[];

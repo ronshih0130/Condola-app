@@ -10,7 +10,7 @@ import { useT } from "./locale";
 
 type Description = Awaited<ReturnType<typeof actionDescribeTeamJoin>>;
 
-export function TeamJoin() {
+export function TeamJoin({ brandV2 }: { brandV2?: boolean } = {}) {
   const t = useT();
   const [token, setToken] = useState("");
   const [description, setDescription] = useState<Description | null>(null);
@@ -77,7 +77,7 @@ export function TeamJoin() {
 
   return (
     <div className="auth-wrap">
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2} />
       <div className="card pad">
         <h1>{t("i_team_join_title")}</h1>
         {account ? (

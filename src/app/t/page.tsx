@@ -2,6 +2,7 @@ import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { actionPickLease } from "@/server/actions";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { moneyLabel } from "@/server/format";
 import { loadLeaseIdCheck } from "@/server/id-docs";
 import { tenantLeaseMoney, tenantLeases } from "@/server/queries";
@@ -12,12 +13,13 @@ export const dynamic = "force-dynamic";
 
 export default async function TenantHome() {
   await requireCurrentConsent(undefined, "page");
+  const v2 = brandV2Enabled();
   const session = await getSession();
   const t = makeT(session.locale);
   const leases = await tenantLeases(session);
   if (leases.length > 1 && !session.leaseId) {
     return (
-      <div data-testid="lease-picker">
+      <div data-testid="lease-picker" data-v2-page={v2 ? "t-home" : undefined}>
         <h2>{t("i_select_lease")}</h2>
         <p className="small">{t("i_pick_hint")}</p>
         {leases.map((lease) => (
@@ -35,7 +37,7 @@ export default async function TenantHome() {
     );
   }
   const lease = leases.find((item) => item.lease_id === session.leaseId) ?? leases[0];
-  if (!lease) return <p>{t("i_empty")}</p>;
+  if (!lease) return <p data-v2-page={v2 ? "t-home" : undefined}>{t("i_empty")}</p>;
   const [money, idCheck] = await Promise.all([
     tenantLeaseMoney(session, lease.lease_id),
     loadLeaseIdCheck(session, lease.lease_id),
@@ -46,7 +48,7 @@ export default async function TenantHome() {
   const currency = money?.lease.currency ?? "TWD";
   const pendingUnsigned = (money?.lease.status ?? lease.lease_status) === "pending_signature";
   return (
-    <div>
+    <div data-v2-page={v2 ? "t-home" : undefined}>
       <h2>{t("i_hello", { name: session.name })}</h2>
       <p>
         {lease.firm_name} · {displaySampleName(`${lease.property_name} ${lease.room_label ?? ""}`)}

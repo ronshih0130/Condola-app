@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { makeT } from "@/i18n";
 import { AcceptForm, AcceptSubmit } from "@/components/accept-form";
 import { AuthBrand } from "@/components/brand";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { actionAccept } from "@/server/auth-actions";
 import { describeInvite } from "@/server/auth";
 import { inviteStateMessageKey } from "@/server/team-invites";
@@ -27,7 +28,7 @@ export default async function AcceptPage({
   if (invite.kind === "team_member") {
     return (
       <div className="auth-wrap">
-        <AuthBrand name={t("i_brand")} />
+        <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
         <div className="card pad">
           <h1>{t("i_team_join_title")}</h1>
           <div className="alert bad" data-testid="invite-state">{t("i_team_invite_unavailable")}</div>
@@ -65,7 +66,7 @@ export default async function AcceptPage({
                   : "";
   return (
     <div className="auth-wrap">
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
       {invite.state === "ready" && (invite.kind === "owner" || invite.kind === "tenant") && otherAccount ? (
         <div className="card pad">
           <h1 data-testid="portal-invite-title">{t("i_portal_invite_title", { firm: invite.firm })}</h1>

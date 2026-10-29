@@ -2,7 +2,8 @@ import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner, chargeKey } from "@/components/ui";
-import { electricityMonthLabel, moneyLabel, signedMoneyLabel } from "@/server/format";
+import { brandV2Enabled } from "@/server/brand-v2";
+import { electricityMonthLabel, moneyLabel, signedMoney } from "@/server/format";
 import { unsignedRentNoteKey } from "@/server/pay-note";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -54,7 +55,7 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
           ))}
           {money.otherLines.map((line, index) => (
             <p key={`other-${line.chargeType}-${index}`} data-testid="tenant-other-line" data-charge-type={line.chargeType}>
-              {line.description || t(chargeKey(line.chargeType))} {signedMoneyLabel(Number(line.amount), money.currency, session.locale)}
+              {line.description || t(chargeKey(line.chargeType))} {signedMoney(Number(line.amount), money.currency, session.locale, brandV2Enabled())}
             </p>
           ))}
           <p className="b" data-testid="tenant-bill">{t("i_pay_total")} {moneyLabel(money.dueMinor, money.currency, session.locale)}</p>
