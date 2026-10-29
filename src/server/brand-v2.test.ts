@@ -59,10 +59,10 @@ test("only the exact true flag enables v2", () => {
     else process.env.BRAND_V2 = previous;
   }
   assert.equal(BRAND_V2_THEME_COLOR, "#14325C");
-  assert.equal(LEGACY_THEME_COLOR, "#2E2622");
+  assert.equal(LEGACY_THEME_COLOR, "#14325C");
 });
 
-test("OFF metadata preserves all four legacy links and their serialized order", () => {
+test("OFF metadata uses navy v2 icons in the expected serialized order", () => {
   const previous = process.env.VERCEL_ENV;
   try {
     delete process.env.VERCEL_ENV;
@@ -73,20 +73,24 @@ test("OFF metadata preserves all four legacy links and their serialized order", 
           manifest: "/manifest.webmanifest",
           icons: {
             icon: [
-              { url: "/favicon.ico", type: "image/x-icon", sizes: "16x16" },
-              { url: "/icon.svg?e3e157dd9f40b850", type: "image/svg+xml", sizes: "any" },
+              { url: "/favicon.ico?v=20261029", type: "image/x-icon", sizes: "16x16 32x32 48x48" },
+              { url: "/icon.svg?v=20261029", type: "image/svg+xml", sizes: "any" },
+              { url: "/favicon-32x32.png?v=20261029", type: "image/png", sizes: "32x32" },
+              { url: "/favicon-16x16.png?v=20261029", type: "image/png", sizes: "16x16" },
             ],
             apple: [
-              { url: "/apple-icon.png?9721f2c0ec0085a3", type: "image/png", sizes: "180x180" },
+              { url: "/apple-icon.png?v=20261029", type: "image/png", sizes: "180x180" },
             ],
           },
         });
         assert.equal(
           metadataLinks(metadata),
           '<link rel="manifest" href="/manifest.webmanifest"/>'
-          + '<link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="16x16"/>'
-          + '<link rel="icon" href="/icon.svg?e3e157dd9f40b850" type="image/svg+xml" sizes="any"/>'
-          + '<link rel="apple-touch-icon" href="/apple-icon.png?9721f2c0ec0085a3" type="image/png" sizes="180x180"/>',
+          + '<link rel="icon" href="/favicon.ico?v=20261029" type="image/x-icon" sizes="16x16 32x32 48x48"/>'
+          + '<link rel="icon" href="/icon.svg?v=20261029" type="image/svg+xml" sizes="any"/>'
+          + '<link rel="icon" href="/favicon-32x32.png?v=20261029" type="image/png" sizes="32x32"/>'
+          + '<link rel="icon" href="/favicon-16x16.png?v=20261029" type="image/png" sizes="16x16"/>'
+          + '<link rel="apple-touch-icon" href="/apple-icon.png?v=20261029" type="image/png" sizes="180x180"/>',
         );
       }
     }
@@ -160,15 +164,16 @@ test("metadataBase falls back for missing or invalid origins", () => {
 
 test("static legacy manifest preserves the expected object and exact JSON bytes", () => {
   const expected = {
-    name: "Condola",
+    name: "Condola 租多啦",
     short_name: "Condola",
     start_url: "/",
     display: "standalone",
-    background_color: "#F7F1EA",
-    theme_color: "#2E2622",
+    background_color: "#F4F6F8",
+    theme_color: "#14325C",
     icons: [
       { src: "/icons/condola_app_icon_192.png", sizes: "192x192", type: "image/png" },
       { src: "/icons/condola_app_icon_512.png", sizes: "512x512", type: "image/png" },
+      { src: "/brand/v2/favicon/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
   const body = read("public/manifest.webmanifest");
@@ -178,19 +183,27 @@ test("static legacy manifest preserves the expected object and exact JSON bytes"
   assert.equal(existsSync(join(root, "src/server/legacy-manifest.ts")), false);
 });
 
-test("legacy binaries are unchanged public assets with no metadata file conventions", () => {
-  for (const file of ["favicon.ico", "icon.svg", "apple-icon.png"]) {
+test("legacy public icons match v2 assets with no metadata file conventions", () => {
+  for (const [file, source] of [
+    ["favicon.ico", "favicon.ico"],
+    ["icon.svg", "favicon.svg"],
+    ["apple-icon.png", "apple-touch-icon.png"],
+  ] as const) {
     assert.equal(existsSync(join(root, "src/app", file)), false, file);
     assert.ok(statSync(join(publicRoot, file)).isFile(), file);
-    assert.deepEqual(readFileSync(join(publicRoot, file)), baseFile(`src/app/${file}`), file);
+    assert.deepEqual(
+      readFileSync(join(publicRoot, file)),
+      readFileSync(join(publicRoot, "brand/v2/favicon", source)),
+      file,
+    );
   }
   assert.equal(existsSync(join(root, "src/app/manifest.ts")), false);
 });
 
-test("legacy immutable icon URLs stay consistent with pinned asset bytes", () => {
+test("immutable icon URLs with v=20261029 match pinned v2 asset bytes", () => {
   for (const [file, expected] of [
-    ["icon.svg", "03839603e2d6cbb1fb6ca4549a30c73ca978223fa53b0c88688de943484b84d9"],
-    ["apple-icon.png", "52cb58062f9a28939c253e1d3d630560d7d749abb462cb515f4f82a9275c9a15"],
+    ["icon.svg", "6fc40fd16b614023cdbd616be30e0e14ec410154857ad3e3d92ec84906812427"],
+    ["apple-icon.png", "a5e7207db033f326352064e91b2da69413b91e58643722b555d3c419fe1e4a17"],
   ] as const) {
     const actual = createHash("sha256")
       .update(readFileSync(join(publicRoot, file)))
@@ -198,7 +211,7 @@ test("legacy immutable icon URLs stay consistent with pinned asset bytes", () =>
     assert.equal(
       actual,
       expected,
-      `${file} bytes changed: change the query string in brandMetadata before updating this SHA-256 pin.`,
+      `${file} bytes differ from the pinned v2 asset: update the versioned URL in brandMetadata and this SHA-256 pin together.`,
     );
   }
 });

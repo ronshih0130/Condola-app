@@ -51,7 +51,7 @@ export async function brandV2EnabledForOrg(
 }
 
 export const BRAND_V2_THEME_COLOR = "#14325C";
-export const LEGACY_THEME_COLOR = "#2E2622";
+export const LEGACY_THEME_COLOR = "#14325C";
 
 export function brandMetadata(
   locale: "zh-TW" | "en",
@@ -62,11 +62,13 @@ export function brandMetadata(
     manifest: "/manifest.webmanifest",
     icons: {
       icon: [
-        { url: "/favicon.ico", type: "image/x-icon", sizes: "16x16" },
-        { url: "/icon.svg?e3e157dd9f40b850", type: "image/svg+xml", sizes: "any" },
+        { url: "/favicon.ico?v=20261029", type: "image/x-icon", sizes: "16x16 32x32 48x48" },
+        { url: "/icon.svg?v=20261029", type: "image/svg+xml", sizes: "any" },
+        { url: "/favicon-32x32.png?v=20261029", type: "image/png", sizes: "32x32" },
+        { url: "/favicon-16x16.png?v=20261029", type: "image/png", sizes: "16x16" },
       ],
       apple: [
-        { url: "/apple-icon.png?9721f2c0ec0085a3", type: "image/png", sizes: "180x180" },
+        { url: "/apple-icon.png?v=20261029", type: "image/png", sizes: "180x180" },
       ],
     },
   };
