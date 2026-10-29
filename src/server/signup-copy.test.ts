@@ -64,7 +64,7 @@ test("sign-up and pricing copy stay on the handoff wording", () => {
   assert.equal(zh.i_price_receipt, "目前提供收據，暫無法開立統一發票");
   assert.equal(zh.i_price_a5, "目前提供收據，暫無法開立統一發票");
   assert.equal(zh.i_login_signup, "免費註冊");
-  assert.equal(zh.i_login_invite_tail, "（免費方案依官網公告，可先看範例公司）");
+  assert.equal(zh.i_login_invite_tail, undefined);
   assert.equal(zh.i_price_footer, "本服務為軟體工具，不代為管理物業或收取租金，也不保證法規遵循。");
   assert.equal(zh.i_price_fit_pro, "多據點、人數較多的團隊");
   assert.equal(zh.i_price_seat_free, "1 個席次（待接受的邀請也計入）");

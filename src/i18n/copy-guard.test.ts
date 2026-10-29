@@ -110,8 +110,12 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   assert.equal(zh.i_dash_sample, "先看看範例公司");
   assert.equal(zh.i_login_invite_lead, "還沒有帳號？");
   assert.equal(zh.i_login_signup, "免費註冊");
-  assert.equal(zh.i_login_invite_tail, "（免費方案依官網公告，可先看範例公司）");
-  assert.equal(`${zh.i_login_invite_lead}${zh.i_login_signup}${zh.i_login_invite_tail}`, "還沒有帳號？免費註冊（免費方案依官網公告，可先看範例公司）");
+  assert.equal(zh.i_login_invite_tail, undefined);
+  assert.equal(zh.i_login_invite, "還沒有帳號？免費註冊");
+  assert.equal(`${zh.i_login_invite_lead}${zh.i_login_signup}`, "還沒有帳號？免費註冊");
+  const en = JSON.parse(read(join(root, "src/i18n/en.json"))) as Record<string, string>;
+  assert.equal(en.i_login_invite_tail, undefined);
+  assert.equal(en.i_login_invite, "No account yet? Sign up free");
   assert.equal(zh.i_nav_inbox, "待確認繳款");
   assert.equal(zh.i_audit_ev_line_sign_in, "租客登入");
   assert.equal(zh.i_audit_rec_line, "邀請連結");
@@ -172,7 +176,6 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
     "i_login_invite",
     "i_login_invite_lead",
     "i_login_signup",
-    "i_login_invite_tail",
     "i_sandbox_banner",
     "i_sandbox_suffix",
     "i_sandbox_plan",
