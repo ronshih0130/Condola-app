@@ -235,3 +235,5 @@ html[data-brand="v2"] .liff-welcome img.stacked-v2 {
     height: auto;
   }
 }
+
+html[data-brand="v2"] .amount-neg{color:var(--c-danger);}

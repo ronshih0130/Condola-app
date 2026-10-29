@@ -32,6 +32,17 @@ test("signedMoney selects the brand minus sign and keeps zero unsigned", () => {
   }
 });
 
+test("statement document wraps negative row amounts only when v2 is enabled", () => {
+  const source = read("components/statement-document.tsx");
+  assert.match(source, /const amount = \(value: string\) => v2 && value\.startsWith\("\\u2212"\) \? <span className="amount-neg">\{value\}<\/span> : value;/);
+  assert.equal((source.match(/className="amount-neg"/g) || []).length, 1);
+  assert.match(source, /\{amount\(value\)\}/);
+  assert.match(source, /\{amount\(signed\(figures\.payouts\)\)\}/);
+  assert.match(source, /\{amount\(signed\(periodNet\)\)\}/);
+  assert.match(source, /\{amount\(signed\(figures\.closing\)\)\}/);
+  assert.match(source, /\{amount\(signed\(Number\(line\.amount\)\)\)\}/);
+});
+
 test("server pages select signed money by brand, and documents use U+2212", () => {
   assert.equal(signedMoneyLabel(-5_000, "TWD", "zh-TW"), "-NT$50");
   assert.equal(signedMoneyLabel(-30_000, "TWD", "zh-TW"), "-NT$300");

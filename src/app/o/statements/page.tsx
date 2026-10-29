@@ -39,7 +39,7 @@ export default async function OwnerStatementsPage() {
                 {row.period_start.slice(0, 7)} ·{" "}
                 {periodNet < 0 ? (
                   <span className="chip warn" data-testid="owner-owes">
-                    {t("owner_owes")} {amount}
+                    {t("owner_owes")} {brandV2Enabled() ? <span className="amount-neg">{amount}</span> : amount}
                   </span>
                 ) : (
                   amount

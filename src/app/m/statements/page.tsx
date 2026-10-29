@@ -138,7 +138,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                     <Cell label={t("i_net_owner")}>
                       {figures && periodNet < 0 ? (
                         <span className="chip warn" data-testid="owner-owes">
-                          {t("owner_owes")} {signed(periodNet)}
+                          {t("owner_owes")} {brandV2Enabled() ? <span className="amount-neg">{signed(periodNet)}</span> : signed(periodNet)}
                         </span>
                       ) : figures ? (
                         label(periodNet)

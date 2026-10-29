@@ -5,6 +5,7 @@ import { makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { StatementDocument } from "@/components/statement-document";
 import { ownerPrivacy, tenantDisplayNames } from "@/server/auth";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { maskTenantNames } from "@/server/privacy";
 import { statementDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -42,6 +43,7 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
         />
       </p>
       <StatementDocument
+        {...(brandV2Enabled() ? { v2: true } : {})}
         t={t}
         locale={session.locale}
         row={row}

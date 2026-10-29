@@ -38,6 +38,7 @@ export function StatementDocument({
   });
   const money = (minor: number) => moneyLabel(minor, row.currency, locale);
   const signed = (minor: number) => statementSignedMoney(minor, row.currency, locale);
+  const amount = (value: string) => v2 && value.startsWith("\u2212") ? <span className="amount-neg">{value}</span> : value;
   const periodNet = statementPeriodNet(figures);
   const negative = periodNet < 0;
   const summary = [
@@ -56,7 +57,7 @@ export function StatementDocument({
             <tr key={key}>
               <td>{t(key)}</td>
               <td className="num" data-testid={testid || undefined}>
-                {value}
+                {amount(value)}
               </td>
             </tr>
           ))}
@@ -64,20 +65,20 @@ export function StatementDocument({
             <tr>
               <td>{t("i_payouts")}</td>
               <td className="num" data-testid="statement-payouts">
-                {signed(figures.payouts)}
+                {amount(signed(figures.payouts))}
               </td>
             </tr>
           ) : null}
           <tr data-testid={negative ? "owner-owes" : undefined}>
             <td>{negative ? t("owner_owes") : t("i_net_owner")}</td>
             <td className="num" data-testid="statement-net">
-              {negative ? <span className="chip warn">{signed(periodNet)}</span> : money(periodNet)}
+              {negative ? <span className="chip warn">{amount(signed(periodNet))}</span> : money(periodNet)}
             </td>
           </tr>
           <tr>
             <td>{t("i_stmt_closing")}</td>
             <td className="num" data-testid="statement-closing">
-              {signed(figures.closing)}
+              {amount(signed(figures.closing))}
             </td>
           </tr>
         </tbody>
@@ -102,7 +103,7 @@ export function StatementDocument({
             {lines.map((line, index) => (
               <tr key={`${line.line_type}-${index}`}>
                 <td data-testid="statement-line">{line.description || t("i_expenses")}</td>
-                <td className="num" data-testid="statement-line-amount">{signed(Number(line.amount))}</td>
+                <td className="num" data-testid="statement-line-amount">{amount(signed(Number(line.amount)))}</td>
               </tr>
             ))}
           </tbody>
