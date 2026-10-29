@@ -8,7 +8,7 @@ import { RequiredValidity } from "@/components/required-validity";
 import { EnvBanner } from "@/components/env-mode";
 import { LocaleProvider } from "@/components/locale";
 import { demoModeEnabled } from "@/server/demo";
-import { brandV2Enabled, brandMetadata, BRAND_V2_THEME_COLOR, LEGACY_THEME_COLOR } from "@/server/brand-v2";
+import { BRAND_V2_PAGE_STYLES, brandV2Enabled, brandMetadata, BRAND_V2_THEME_COLOR, LEGACY_THEME_COLOR } from "@/server/brand-v2";
 import { sandboxChrome } from "@/server/sandbox";
 import { readSession, requestPrefs } from "@/server/session";
 import "./globals.css";
@@ -97,6 +97,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           // eslint-disable-next-line @next/next/no-css-tags
           <link rel="stylesheet" href="/brand/v2/theme.css" />
         }
+        {BRAND_V2_PAGE_STYLES.map((href) => (
+          // eslint-disable-next-line @next/next/no-css-tags
+          <link key={href} rel="stylesheet" href={href} />
+        ))}
       </head>
       {body}
     </html>

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Locale, makeT } from "@/i18n";
 import { vendorLinkCopy } from "@/i18n/lanes/vendor-link";
+import { brandV2Enabled } from "@/server/brand-v2";
 import type { VendorJobPage } from "@/server/vendor-repair";
 
 type Props = {
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function VendorLinkDetails({ job, vendorLink, token, t, locale, children }: Props) {
+  const v2 = brandV2Enabled();
   if (!vendorLink.sharingApproved) {
     return (
       <div className="card pad" data-testid="vendor-job" style={{ maxWidth: 560, margin: "24px auto" }}>
@@ -26,6 +28,7 @@ export function VendorLinkDetails({ job, vendorLink, token, t, locale, children 
     <div
       className="card pad"
       data-testid="vendor-job"
+      data-v2-page={v2 ? "v-job" : undefined}
       style={{
         maxWidth: 560,
         margin: "24px auto",
@@ -34,14 +37,14 @@ export function VendorLinkDetails({ job, vendorLink, token, t, locale, children 
       }}
     >
       <h1>{t("i_vlink_title")}</h1>
-      <p data-testid="vendor-link-status">{t("i_vlink_status")}</p>
+      <p data-testid="vendor-link-status" data-v2-status={v2 ? "link" : undefined}>{t("i_vlink_status")}</p>
       {readOnly ? (
-        <p data-testid="vendor-read-only">{t("i_vlink_read_only")}</p>
+        <p data-testid="vendor-read-only" data-v2-status={v2 ? "readonly" : undefined}>{t("i_vlink_read_only")}</p>
       ) : null}
       <p className="f">{t("i_vlink_address")}</p>
       <p data-testid="vendor-address">{job.address}</p>
       <p className="f">{t("i_vlink_issue")}</p>
-      <p data-testid="vendor-issue">{job.title}</p>
+      <p data-testid="vendor-issue" data-v2-issue={v2 ? "title" : undefined}>{job.title}</p>
       {job.description ? <p>{job.description}</p> : null}
       <p className="f">{t("i_vlink_window")}</p>
       <p data-testid="vendor-window-view">{job.window}</p>

@@ -4,6 +4,7 @@ import { dictionary, makeT } from "@/i18n";
 import { FooterNote } from "@/components/chrome";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader } from "@/components/ui";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { showDemoLineCopy } from "@/server/demo";
 import { formatDate, moneyLabel } from "@/server/format";
 import { dashboard } from "@/server/queries";
@@ -17,6 +18,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ dupFirm?: string; code?: string }>;
 }) {
+  const v2 = brandV2Enabled();
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const query = await searchParams;
@@ -30,10 +32,10 @@ export default async function DashboardPage({
         title={t("i_morning", { name: session.name })}
         actions={
           <>
-            <Link className="btn" href="/m/leases/new">
+            <Link className="btn" href="/m/leases/new" data-v2-page={v2 ? "m-home" : undefined} data-v2-action={v2 ? "secondary" : undefined}>
               + {t("s_e96eefc")}
             </Link>
-            <Link className="btn pri" href="/m/properties/new">
+            <Link className="btn pri" href="/m/properties/new" data-v2-page={v2 ? "m-home" : undefined} data-v2-action={v2 ? "primary" : undefined}>
               + {t("s_aed91da")}
             </Link>
           </>
@@ -50,7 +52,7 @@ export default async function DashboardPage({
         </p>
       ) : null}
       {session.environment === "live" && data.properties.length === 0 ? (
-        <div data-testid="dashboard-empty">
+        <div data-testid="dashboard-empty" data-v2-page={v2 ? "m-home" : undefined} data-v2-section={v2 ? "empty" : undefined}>
           <div className="card" style={{ textAlign: "center", padding: 36 }}>
             <h2 style={{ marginTop: 0 }}>{t("i_dash_welcome")}</h2>
             <p className="hint">{t("i_dash_steps")}</p>
@@ -92,7 +94,7 @@ export default async function DashboardPage({
       ) : null}
       {session.environment === "live" && data.properties.length === 0 ? null : (
       <>
-      <div className="grid5" style={{ marginBottom: 16 }}>
+      <div className="grid5" style={{ marginBottom: 16 }} data-v2-page={v2 ? "m-home" : undefined} data-v2-section={v2 ? "stats" : undefined}>
         <Link className="card kpi" href="/m/rent">
           <div className="lbl">{t("i_paid")}</div>
           <div className="val" data-testid="dash-received">{money(data.received)}</div>
@@ -117,7 +119,7 @@ export default async function DashboardPage({
           </div>
         </Link>
       </div>
-      <div className="grid2">
+      <div className="grid2" data-v2-page={v2 ? "m-home" : undefined} data-v2-section={v2 ? "panels" : undefined}>
         <div className="card">
           <div className="hd">
             <h3>{t("i_nav_props")}</h3>
@@ -174,7 +176,7 @@ export default async function DashboardPage({
           )}
         </div>
       </div>
-      <div className="card" style={{ marginTop: 16 }}>
+      <div className="card" style={{ marginTop: 16 }} data-v2-page={v2 ? "m-home" : undefined} data-v2-section={v2 ? "expiring" : undefined}>
         <div className="hd">
           <h3>{t("i_expiring")}</h3>
         </div>

@@ -115,3 +115,12 @@ export const BRAND_V2_ASSETS = [
   "/brand/v2/favicon/maskable-512.png",
   "/brand/v2/favicon/site.webmanifest",
 ] as const;
+
+/** Per-page v2 stylesheets (R&D mockups 10/28); loaded only when BRAND_V2 is ON. */
+export const BRAND_V2_PAGE_STYLES = [
+  "/brand/v2/pages/t-home.css",
+  "/brand/v2/pages/o-home.css",
+  "/brand/v2/pages/o-approvals.css",
+  "/brand/v2/pages/v-job.css",
+  "/brand/v2/pages/m-home.css",
+] as const;
