@@ -70,27 +70,27 @@ test("OFF metadata uses navy v2 icons in the expected serialized order", () => {
       for (const locale of ["zh-TW", "en"] as const) {
         const metadata = brandMetadata(locale, env);
         assert.deepEqual(metadata, {
-          manifest: "/manifest.webmanifest",
+          manifest: "/manifest.webmanifest?v=2",
           icons: {
             icon: [
-              { url: "/favicon.ico?v=20261029", type: "image/x-icon", sizes: "16x16 32x32 48x48" },
-              { url: "/icon.svg?v=20261029", type: "image/svg+xml", sizes: "any" },
-              { url: "/favicon-32x32.png?v=20261029", type: "image/png", sizes: "32x32" },
-              { url: "/favicon-16x16.png?v=20261029", type: "image/png", sizes: "16x16" },
+              { url: "/favicon.ico?v=2", type: "image/x-icon", sizes: "16x16 32x32 48x48" },
+              { url: "/icon.svg?v=2", type: "image/svg+xml", sizes: "any" },
+              { url: "/favicon-32x32.png?v=2", type: "image/png", sizes: "32x32" },
+              { url: "/favicon-16x16.png?v=2", type: "image/png", sizes: "16x16" },
             ],
             apple: [
-              { url: "/apple-icon.png?v=20261029", type: "image/png", sizes: "180x180" },
+              { url: "/apple-icon.png?v=2", type: "image/png", sizes: "180x180" },
             ],
           },
         });
         assert.equal(
           metadataLinks(metadata),
-          '<link rel="manifest" href="/manifest.webmanifest"/>'
-          + '<link rel="icon" href="/favicon.ico?v=20261029" type="image/x-icon" sizes="16x16 32x32 48x48"/>'
-          + '<link rel="icon" href="/icon.svg?v=20261029" type="image/svg+xml" sizes="any"/>'
-          + '<link rel="icon" href="/favicon-32x32.png?v=20261029" type="image/png" sizes="32x32"/>'
-          + '<link rel="icon" href="/favicon-16x16.png?v=20261029" type="image/png" sizes="16x16"/>'
-          + '<link rel="apple-touch-icon" href="/apple-icon.png?v=20261029" type="image/png" sizes="180x180"/>',
+          '<link rel="manifest" href="/manifest.webmanifest?v=2"/>'
+          + '<link rel="icon" href="/favicon.ico?v=2" type="image/x-icon" sizes="16x16 32x32 48x48"/>'
+          + '<link rel="icon" href="/icon.svg?v=2" type="image/svg+xml" sizes="any"/>'
+          + '<link rel="icon" href="/favicon-32x32.png?v=2" type="image/png" sizes="32x32"/>'
+          + '<link rel="icon" href="/favicon-16x16.png?v=2" type="image/png" sizes="16x16"/>'
+          + '<link rel="apple-touch-icon" href="/apple-icon.png?v=2" type="image/png" sizes="180x180"/>',
         );
       }
     }
@@ -107,13 +107,13 @@ test("ON metadata uses only v2 icons and manifest with locale OG", () => {
     const metadata = brandMetadata(locale, { BRAND_V2: "true" });
     assert.deepEqual(metadata, {
       metadataBase: new URL("https://app.condola.app"),
-      manifest: "/brand/v2/favicon/site.webmanifest",
+      manifest: "/brand/v2/favicon/site.webmanifest?v=2",
       icons: {
         icon: [
-          { url: "/brand/v2/favicon/favicon.svg", type: "image/svg+xml" },
-          { url: "/brand/v2/favicon/favicon.ico?v=20261027", sizes: "16x16 32x32 48x48" },
+          { url: "/brand/v2/favicon/favicon.svg?v=2", type: "image/svg+xml" },
+          { url: "/brand/v2/favicon/favicon.ico?v=2", sizes: "16x16 32x32 48x48" },
         ],
-        apple: [{ url: "/brand/v2/favicon/apple-touch-icon.png", sizes: "180x180" }],
+        apple: [{ url: "/brand/v2/favicon/apple-touch-icon.png?v=2", sizes: "180x180" }],
       },
       openGraph: {
         images: [{
@@ -171,9 +171,9 @@ test("static legacy manifest preserves the expected object and exact JSON bytes"
     background_color: "#F4F6F8",
     theme_color: "#14325C",
     icons: [
-      { src: "/icons/condola_app_icon_192.png", sizes: "192x192", type: "image/png" },
-      { src: "/icons/condola_app_icon_512.png", sizes: "512x512", type: "image/png" },
-      { src: "/brand/v2/favicon/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/icons/condola_app_icon_192.png?v=2", sizes: "192x192", type: "image/png" },
+      { src: "/icons/condola_app_icon_512.png?v=2", sizes: "512x512", type: "image/png" },
+      { src: "/brand/v2/favicon/maskable-512.png?v=2", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
   const body = read("public/manifest.webmanifest");

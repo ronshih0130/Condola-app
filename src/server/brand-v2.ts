@@ -53,22 +53,24 @@ export async function brandV2EnabledForOrg(
 export const BRAND_V2_THEME_COLOR = "#14325C";
 export const LEGACY_THEME_COLOR = "#14325C";
 
+export const ICON_VERSION = "2";
+
 export function brandMetadata(
   locale: "zh-TW" | "en",
   env: Record<string, string | undefined> = process.env,
 ): Partial<Metadata> {
   if (brandV2Enabled(env)) return brandV2Metadata(locale, env);
   return {
-    manifest: "/manifest.webmanifest",
+    manifest: `/manifest.webmanifest?v=${ICON_VERSION}`,
     icons: {
       icon: [
-        { url: "/favicon.ico?v=20261029", type: "image/x-icon", sizes: "16x16 32x32 48x48" },
-        { url: "/icon.svg?v=20261029", type: "image/svg+xml", sizes: "any" },
-        { url: "/favicon-32x32.png?v=20261029", type: "image/png", sizes: "32x32" },
-        { url: "/favicon-16x16.png?v=20261029", type: "image/png", sizes: "16x16" },
+        { url: `/favicon.ico?v=${ICON_VERSION}`, type: "image/x-icon", sizes: "16x16 32x32 48x48" },
+        { url: `/icon.svg?v=${ICON_VERSION}`, type: "image/svg+xml", sizes: "any" },
+        { url: `/favicon-32x32.png?v=${ICON_VERSION}`, type: "image/png", sizes: "32x32" },
+        { url: `/favicon-16x16.png?v=${ICON_VERSION}`, type: "image/png", sizes: "16x16" },
       ],
       apple: [
-        { url: "/apple-icon.png?v=20261029", type: "image/png", sizes: "180x180" },
+        { url: `/apple-icon.png?v=${ICON_VERSION}`, type: "image/png", sizes: "180x180" },
       ],
     },
   };
@@ -100,13 +102,13 @@ export function brandV2Metadata(
 
   return {
     metadataBase,
-    manifest: "/brand/v2/favicon/site.webmanifest",
+    manifest: `/brand/v2/favicon/site.webmanifest?v=${ICON_VERSION}`,
     icons: {
       icon: [
-        { url: "/brand/v2/favicon/favicon.svg", type: "image/svg+xml" },
-        { url: "/brand/v2/favicon/favicon.ico?v=20261027", sizes: "16x16 32x32 48x48" },
+        { url: `/brand/v2/favicon/favicon.svg?v=${ICON_VERSION}`, type: "image/svg+xml" },
+        { url: `/brand/v2/favicon/favicon.ico?v=${ICON_VERSION}`, sizes: "16x16 32x32 48x48" },
       ],
-      apple: [{ url: "/brand/v2/favicon/apple-touch-icon.png", sizes: "180x180" }],
+      apple: [{ url: `/brand/v2/favicon/apple-touch-icon.png?v=${ICON_VERSION}`, sizes: "180x180" }],
     },
     openGraph: {
       images: [
