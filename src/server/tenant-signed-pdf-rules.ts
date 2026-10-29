@@ -1,5 +1,5 @@
-/** Global kill switch. Enable only after tenant paper-PDF rollout approval. */
-export const TENANT_SIGNED_PDF_ENABLED = false;
+/** App-level gate on; rollout is controlled by platform_settings tenant_signed_pdf (global) + organizations.feature_flags.tenant_signed_pdf (per org), both enforced in RLS (20261030151400). */
+export const TENANT_SIGNED_PDF_ENABLED = true;
 
 export function tenantSignedPdfOn(killSwitch: boolean, featureFlags: unknown): boolean {
   if (
