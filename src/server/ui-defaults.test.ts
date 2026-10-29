@@ -40,7 +40,8 @@ test("staff copy names the payments queue 待確認繳款", () => {
   assert.equal(zh.i_sandbox_back, "回到正式公司");
   assert.equal(zh.i_dash_first, "新增第一個物件");
   assert.equal(zh.i_dash_sample, "先看看範例公司");
-  assert.equal(zh.i_dash_free, "免費方案及收費方式依官網公告・付費方案前 3 個月免費");
+  assert.equal(zh.i_dash_free, undefined);
+  assert.equal(zh.i_login_pricing, undefined);
   assert.equal(zh.i_outstanding, "未繳清租客");
   assert.equal(zh.i_receipt, "收據（範例檔名）");
   assert.equal(zh.i_none_pending, "沒有待確認的繳款。");

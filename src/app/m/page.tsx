@@ -83,7 +83,6 @@ export default async function DashboardPage({
                 {t("i_dash_sample")}
               </a>
             </p>
-            <p className="hint" data-testid="dash-free">{t("i_dash_free")}</p>
             <p className="hint">
               <Link href="/m/import" data-testid="dash-import">
                 {t("i_dash_import")}
