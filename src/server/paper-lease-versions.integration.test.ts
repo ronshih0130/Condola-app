@@ -68,7 +68,7 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
   );
   assert.deepEqual(
     policies.rows.map((row) => row.policyname),
-    ["team_delete", "team_insert", "team_read"],
+    ["team_delete", "team_insert", "team_read", "tenant_read_signed_pdf"],
   );
 
   try {
