@@ -1877,7 +1877,9 @@ export type TenantSignedLeasePdfSummary = {
  * All reads use the tenant's authenticated database role. RLS independently
  * checks lease-party ownership, lease organization, and the DB global/org flags.
  * App routes additionally require TENANT_SIGNED_PDF_ENABLED.
- * No signing state or audit event is written by these download queries.
+ * These queries only read; they never change signing state.
+ * The download route records signed_pdf_downloaded after an authorized read
+ * and successful PDF response construction. Listing PDFs does not write audit.
  */
 export async function tenantSignedLeasePdfs(
   session: Session,
