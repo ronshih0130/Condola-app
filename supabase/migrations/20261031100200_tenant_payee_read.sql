@@ -87,7 +87,9 @@ BEGIN
     LIMIT 1;
   END IF;
 
-  v_audit_org_id := coalesce(v_caller_org_id, v_lease.org_id);
+  -- Caller attribution only (no lease-org fallback): unattributable callers get a uniform 42501,
+  -- so the result does not reveal whether a lease exists (review r3 oracle).
+  v_audit_org_id := v_caller_org_id;
 
   IF v_audit_org_id IS NULL THEN
     RAISE EXCEPTION 'tenant payee read requires an attributable caller'
