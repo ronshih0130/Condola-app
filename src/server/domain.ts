@@ -1538,7 +1538,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
 export async function uploadSignedLeasePdf(
   session: Session,
   leaseId: string,
-  file: { bytes: Uint8Array; fileName: string },
+  file: { bytes: Uint8Array; fileName: string; replaceReason?: unknown },
 ) {
   assertStaff(session, ["admin", "manager"]);
   if (!isSignedPdf(file.bytes)) throw new FlowError("errors.pdf");
@@ -1551,6 +1551,8 @@ export async function uploadSignedLeasePdf(
       [leaseId, session.orgId],
     );
     if (!lease) throw new FlowError("errors.notFound");
+    const versions = await import("./paper-lease-versions");
+    const paperVersion = await versions.preparePaperLeaseVersion(client, session, leaseId, file.replaceReason);
     const imported = lease.esign === "imported";
     if (!imported && !(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
     const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
@@ -1560,11 +1562,21 @@ export async function uploadSignedLeasePdf(
        VALUES ($1,'lease-documents-private',$2,$3,'application/pdf',$4,$5,$6) RETURNING id`,
       [session.orgId, path, fileName, file.bytes.length, hash, session.userId],
     );
-    await client.query(
-      `INSERT INTO lease_signed_pdfs (org_id, lease_id, file_id, bucket, object_path, content)
+    if (paperVersion.enabled) {
+      await versions.insertPaperLeaseVersion(client, session, {
+        leaseId,
+        fileId: stored.id,
+        path,
+        content: file.bytes,
+        version: paperVersion,
+      });
+    } else {
+      await client.query(
+        `INSERT INTO lease_signed_pdfs (org_id, lease_id, file_id, bucket, object_path, content)
        VALUES ($1,$2,$3,'lease-documents-private',$4,$5)`,
-      [session.orgId, leaseId, stored.id, path, Buffer.from(file.bytes)],
-    );
+        [session.orgId, leaseId, stored.id, path, Buffer.from(file.bytes)],
+      );
+    }
     if (!imported) {
       await client.query(
         `UPDATE lease_signatures

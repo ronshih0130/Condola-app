@@ -303,6 +303,7 @@ export default async function LeasePage({
                 ) : null}
               </>
             )}
+            {(await (await import("@/server/paper-lease-versions-panel")).paperLeaseVersionPanel(session, id, actionUploadSignedPdf)) ?? (
             <div style={{ marginTop: 16 }} data-testid="paper-sign">
               <h3>{t("lease_paper_upload")}</h3>
               <p className="small muted">{t("lease_paper_hint")}</p>
@@ -322,6 +323,7 @@ export default async function LeasePage({
                 </form>
               ) : null}
             </div>
+            )}
           </div>
           {lease.esign === "imported" ? null : (
           <div className="card pad">

@@ -282,7 +282,11 @@ export async function actionUploadSignedPdf(formData: FormData) {
     const file = formData.get("signedPdf");
     if (!(file instanceof File) || file.size === 0) throw new FlowError("errors.pdf");
     const bytes = new Uint8Array(await file.arrayBuffer());
-    await uploadSignedLeasePdf(session, leaseId, { bytes, fileName: file.name || "signed.pdf" });
+    await uploadSignedLeasePdf(session, leaseId, {
+      bytes,
+      fileName: file.name || "signed.pdf",
+      replaceReason: formData.get("replaceReason"),
+    });
     redirect(`/m/leases/${leaseId}?tab=sign`);
   } catch (error) {
     bounce(back, error);
