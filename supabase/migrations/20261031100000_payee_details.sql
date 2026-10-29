@@ -29,14 +29,11 @@ CREATE TABLE public.payee_account_numbers (
 
 ALTER TABLE public.payee_account_numbers ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE ON public.payee_account_numbers TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.payee_account_numbers TO service_role;
 
 CREATE POLICY payee_numbers_read ON public.payee_account_numbers
   FOR SELECT TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM public.bank_accounts b
-    WHERE b.org_id = payee_account_numbers.org_id
-      AND b.id = payee_account_numbers.bank_account_id
-  ));
+  USING (app.has_role(org_id, '{admin}'));
 
 CREATE POLICY payee_numbers_admin_insert ON public.payee_account_numbers
   FOR INSERT TO authenticated

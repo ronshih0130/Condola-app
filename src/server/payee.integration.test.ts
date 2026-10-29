@@ -31,7 +31,7 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
       )).rows[0];
       const members = (await client.query(
         `SELECT user_id, role FROM org_members
-         WHERE org_id=$1 AND role IN ('admin','manager')`,
+         WHERE org_id=$1 AND role IN ('admin','manager','accountant','maintenance')`,
         [org.id],
       )).rows;
       const admin = members.find((member) => member.role === "admin");
@@ -39,6 +39,26 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
       assert.ok(tenant, "integration database needs a tenant");
       assert.ok(admin, "integration database needs an admin");
       assert.ok(manager, "integration database needs a manager");
+
+      let otherAdmin = (await client.query(
+        `SELECT m.user_id FROM org_members m
+         WHERE m.org_id=$1 AND m.role='admin'
+           AND NOT EXISTS (
+             SELECT 1 FROM org_members own
+             WHERE own.org_id=$2 AND own.user_id=m.user_id AND own.role='admin'
+           )
+         LIMIT 1`,
+        [other.id, org.id],
+      )).rows[0];
+      if (!otherAdmin) {
+        const userId = randomUUID();
+        await client.query("INSERT INTO auth.users (id) VALUES ($1)", [userId]);
+        await client.query(
+          "INSERT INTO org_members (org_id,user_id,role) VALUES ($1,$2,'admin')",
+          [other.id, userId],
+        );
+        otherAdmin = { user_id: userId };
+      }
 
       const id = randomUUID();
       await client.query(
@@ -57,6 +77,8 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
 
       const previousNumber = "876543210998765";
       const fullNumber = "987654321012345";
+      const previousLast5 = previousNumber.slice(-5);
+      const currentLast5 = fullNumber.slice(-5);
       await client.query("SET LOCAL ROLE authenticated");
       await client.query(
         "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
@@ -79,45 +101,56 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
          WHERE payee_account_numbers.org_id=EXCLUDED.org_id`,
         [id, org.id, fullNumber],
       );
+      assert.deepEqual((await client.query(
+        `SELECT bank_account_id,account_number FROM payee_account_numbers
+         WHERE bank_account_id=$1`,
+        [id],
+      )).rows, [{ bank_account_id: id, account_number: fullNumber }]);
       await client.query("RESET ROLE");
 
       assert.equal((await client.query(
         "SELECT account_last5 FROM bank_accounts WHERE id=$1",
         [id],
-      )).rows[0].account_last5, "12345");
+      )).rows[0].account_last5, currentLast5);
 
-      const audit = (await client.query(
-        `SELECT * FROM audit_log
-         WHERE row_id=$1
-           AND table_name IN ('bank_accounts','payee_account_numbers')
-         ORDER BY id`,
-        [id],
-      )).rows;
-      assert.ok(audit.some((row) => row.action === "insert"));
-      assert.ok(audit.some((row) => row.action === "update"));
-      assert.equal(JSON.stringify(audit).includes(fullNumber), false);
-      assert.equal(JSON.stringify(audit).includes(previousNumber), false);
-      for (const table of ["bank_accounts", "payee_account_numbers"]) {
-        assert.ok(audit.some((row) =>
-          row.table_name === table && row.new_row?.account_last5 === "12345"
-        ));
-      }
+      const assertAuditSafety = async () => {
+        const audit = (await client.query(
+          `SELECT * FROM audit_log WHERE row_id=$1 ORDER BY id`,
+          [id],
+        )).rows;
+        assert.ok(audit.some((row) => row.action === "insert"));
+        assert.ok(audit.some((row) => row.action === "update"));
+        const auditJson = JSON.stringify(audit);
+        assert.equal(auditJson.includes(fullNumber), false);
+        assert.equal(auditJson.includes(previousNumber), false);
+        for (const table of ["bank_accounts", "payee_account_numbers"]) {
+          assert.ok(audit.some((row) =>
+            row.table_name === table && row.new_row?.account_last5 === currentLast5
+          ));
+        }
 
-      const numberAudit = audit.filter((row) => row.table_name === "payee_account_numbers");
-      assert.equal(numberAudit.length, 2);
-      assert.deepEqual(
-        numberAudit.find((row) => row.action === "insert")?.new_row,
-        { account_last5: "98765" },
-      );
-      assert.deepEqual(
-        numberAudit.find((row) => row.action === "update")?.old_row,
-        { account_last5: "98765" },
-      );
-      for (const row of numberAudit) {
-        assert.deepEqual(Object.keys(row.new_row), ["account_last5"]);
-        assert.deepEqual(row.changed_cols, ["account_number"]);
-        assert.equal(row.actor_user_id, admin.user_id);
-      }
+        const numberAudit = audit.filter((row) => row.table_name === "payee_account_numbers");
+        assert.equal(numberAudit.length, 2);
+        const insertAudit = numberAudit.find((row) => row.action === "insert");
+        const updateAudit = numberAudit.find((row) => row.action === "update");
+        assert.ok(insertAudit);
+        assert.ok(updateAudit);
+        assert.equal(insertAudit.old_row, null);
+        assert.deepEqual(insertAudit.new_row, { account_last5: previousLast5 });
+        assert.deepEqual(updateAudit.old_row, { account_last5: previousLast5 });
+        assert.deepEqual(updateAudit.new_row, { account_last5: currentLast5 });
+        for (const row of numberAudit) {
+          for (const snapshot of [row.old_row, row.new_row]) {
+            if (snapshot !== null) {
+              assert.deepEqual(Object.keys(snapshot), ["account_last5"]);
+            }
+          }
+          assert.deepEqual(row.changed_cols, ["account_number"]);
+          assert.equal(row.actor_user_id, admin.user_id);
+        }
+      };
+      await assertAuditSafety();
+
       const storedNumber = (await client.query(
         `SELECT account_number, updated_by FROM payee_account_numbers
          WHERE bank_account_id=$1`,
@@ -138,6 +171,7 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
         [org.id, org.default_currency],
       ), (error: unknown) => (error as { code: string }).code === "23505");
       await client.query("ROLLBACK TO SAVEPOINT duplicate_default");
+      await client.query("RELEASE SAVEPOINT duplicate_default");
 
       const foreignId = randomUUID();
       await client.query(
@@ -172,23 +206,104 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
          WHERE bank_account_id = ANY($1::uuid[])`,
         [[id, hiddenId, foreignId]],
       )).rows;
-      assert.deepEqual(visible, [{ bank_account_id: id, account_number: fullNumber }]);
+      assert.deepEqual(visible, []);
 
-      for (const userId of [tenant.user_id, manager.user_id]) {
+      const deniedUsers = [
+        { user_id: tenant.user_id, role: "tenant" },
+        manager,
+        ...["accountant", "maintenance"].flatMap((role) => {
+          const member = members.find((candidate) => candidate.role === role);
+          return member ? [member] : [];
+        }),
+      ];
+      for (const member of deniedUsers) {
         await client.query(
           "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
-          [userId],
+          [member.user_id],
         );
-        await client.query("SAVEPOINT denied_number");
+        assert.deepEqual((await client.query(
+          `SELECT bank_account_id,account_number FROM payee_account_numbers
+           WHERE bank_account_id = ANY($1::uuid[])`,
+          [[id, hiddenId, foreignId]],
+        )).rows, [], `${member.role} must not read account numbers`);
+
+        await client.query("SAVEPOINT denied_number_insert");
         await assert.rejects(client.query(
           `INSERT INTO payee_account_numbers (bank_account_id,org_id,account_number)
            VALUES ($1,$2,'5555566666')`,
           [deniedId, org.id],
         ), (error: unknown) => (error as { code: string }).code === "42501");
-        await client.query("ROLLBACK TO SAVEPOINT denied_number");
-        await client.query("RELEASE SAVEPOINT denied_number");
+        await client.query("ROLLBACK TO SAVEPOINT denied_number_insert");
+        await client.query("RELEASE SAVEPOINT denied_number_insert");
+
+        await client.query("SAVEPOINT denied_number_update");
+        const updated = await client.query(
+          `UPDATE payee_account_numbers SET account_number='5555566666'
+           WHERE bank_account_id=$1 AND org_id=$2
+           RETURNING bank_account_id`,
+          [id, org.id],
+        );
+        assert.equal(updated.rowCount, 0, `${member.role} must not update account numbers`);
+        await client.query("ROLLBACK TO SAVEPOINT denied_number_update");
+        await client.query("RELEASE SAVEPOINT denied_number_update");
       }
+
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [otherAdmin.user_id],
+      );
+      assert.deepEqual((await client.query(
+        "SELECT bank_account_id,account_number FROM payee_account_numbers WHERE org_id=$1",
+        [org.id],
+      )).rows, []);
+      assert.deepEqual((await client.query(
+        `SELECT bank_account_id,account_number FROM payee_account_numbers
+         WHERE bank_account_id=$1`,
+        [foreignId],
+      )).rows, [{ bank_account_id: foreignId, account_number: "3333344444" }]);
+
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [admin.user_id],
+      );
+      assert.deepEqual((await client.query(
+        `SELECT bank_account_id,account_number FROM payee_account_numbers
+         WHERE bank_account_id=$1`,
+        [id],
+      )).rows, [{ bank_account_id: id, account_number: fullNumber }]);
       await client.query("RESET ROLE");
+
+      await client.query("SET LOCAL ROLE service_role");
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', '', true), set_config('request.jwt.claim.role', 'service_role', true)",
+      );
+      assert.equal(
+        (await client.query("SELECT current_user AS name")).rows[0].name,
+        "service_role",
+      );
+      assert.deepEqual((await client.query(
+        `SELECT bank_account_id,account_number FROM payee_account_numbers
+         WHERE bank_account_id=$1`,
+        [id],
+      )).rows, [{ bank_account_id: id, account_number: fullNumber }]);
+      await client.query("RESET ROLE");
+      await client.query(
+        "SELECT set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', 'authenticated', true)",
+        [admin.user_id],
+      );
+
+      assert.equal((await client.query(
+        "SELECT account_number FROM payee_account_numbers WHERE bank_account_id=$1",
+        [id],
+      )).rows[0].account_number, fullNumber);
+      assert.equal((await client.query(
+        "SELECT account_last5 FROM bank_accounts WHERE id=$1",
+        [id],
+      )).rows[0].account_last5, currentLast5);
+      assert.equal((await client.query(
+        "SELECT bank_account_id FROM payee_account_numbers WHERE bank_account_id=$1",
+        [deniedId],
+      )).rows.length, 0);
 
       const nonAdmin = {
         userId: manager.user_id, orgId: org.id, role: "manager",
@@ -210,6 +325,7 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
         [lease.id, foreignId],
       ), (error: unknown) => (error as { code: string }).code === "23503");
       await client.query("ROLLBACK TO SAVEPOINT foreign_payee");
+      await client.query("RELEASE SAVEPOINT foreign_payee");
       await client.query(
         "UPDATE leases SET payee_bank_account_id=$2 WHERE id=$1",
         [lease.id, id],
@@ -219,6 +335,7 @@ test("payee migration preserves legacy writes, audit safety, constraints and ten
          AND new_row->>'payee_bank_account_id'=$2`,
         [lease.id, id],
       )).rows.length);
+      await assertAuditSafety();
     } finally {
       await client.query("ROLLBACK");
     }
