@@ -7,6 +7,7 @@ import { ActualMoveOut } from "@/components/actual-moveout";
 import { PayDialog } from "@/components/dialogs";
 import { IdvCard } from "@/components/idv-card";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
+import { FirstPeriodSummary } from "@/components/first-period-summary";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
@@ -25,6 +26,8 @@ import { isUuid } from "@/server/repair-rules";
 import { leaseDetail, threadMessages } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
+import { tx } from "@/server/db";
+import { billingPreviewsEnabled } from "@/server/billing-preview-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +50,7 @@ export default async function LeasePage({
   if (!detail) notFound();
   const { lease, signatures } = detail;
   const canInvite = session.role === "admin" || session.role === "manager";
+  const billingEnabled = canInvite && lease.rent_frequency === "monthly" ? await tx(session.userId, (client) => billingPreviewsEnabled(client, session.orgId), { orgId: session.orgId, environment: session.environment }, { readOnly: true }) : false;
   const tenantActivated = canInvite ? await portalLoginReady(lease.tenant_user_id) : false;
   const reviewer = canReviewId(session);
   const idCheck = reviewer ? await loadLeaseIdCheck(session, id) : null;
@@ -90,6 +94,7 @@ export default async function LeasePage({
         }
       />
       <ErrorBanner t={t} error={query.error} />
+      <FirstPeriodSummary basis={lease.first_period_basis} locale={session.locale} />
       {query.created === "1" ? (
         <div className="alert ok" data-testid="lease-created">
           {t("i_lease_created")}
@@ -204,6 +209,10 @@ export default async function LeasePage({
             rent={majorField(lease.rent, lease.currency)}
             depositMonths={lease.deposit_months ?? ""}
             depositReason={lease.deposit_override_reason ?? ""}
+            billingEnabled={billingEnabled}
+            startDate={lease.start_date}
+            endDate={lease.end_date}
+            currency={lease.currency}
             updatedAt={lease.updated_at}
           />
         ) : (

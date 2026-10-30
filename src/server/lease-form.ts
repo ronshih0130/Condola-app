@@ -31,6 +31,8 @@ export function leaseInputFromForm(formData: FormData): LeaseInput {
   const end = addCalendarMonths(start, Number.isFinite(months) && months > 0 ? months : 12);
   const bounds = monthBounds(/^\d{4}-\d{2}/.test(start) ? start.slice(0, 7) : taipeiToday().slice(0, 7));
   const split = text(formData.get("splitMethod"));
+  const firstPeriodChoice = formData.get("firstPeriodProrate");
+  if (firstPeriodChoice !== null && firstPeriodChoice !== "true" && firstPeriodChoice !== "false") throw new TypeError("Invalid first-period choice");
   return {
     roomId: text(formData.get("roomId")),
     tenantName: text(formData.get("tenantName")),
@@ -59,6 +61,7 @@ export function leaseInputFromForm(formData: FormData): LeaseInput {
     overrideReason: text(formData.get("overrideReason")),
     subUsages: [],
     idempotencyKey: text(formData.get("idempotencyKey")),
+    ...(firstPeriodChoice === null ? {} : { firstPeriodProrate: firstPeriodChoice === "true" }),
   };
 }
 

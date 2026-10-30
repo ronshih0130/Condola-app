@@ -6,7 +6,10 @@ import { errorText } from "@/i18n/errors";
 import { actionUpdateLease, type ActionState } from "@/server/actions";
 import { actionDepositPolicy } from "@/server/deposit-rules-actions";
 import { depositPolicyCap, depositPolicyState, type DepositPolicy } from "@/server/deposit-rules";
-import { useT } from "./locale";
+import { useLocale, useT } from "./locale";
+import { firstPeriodCopy } from "@/i18n/first-period";
+import { calculateFirstPeriod } from "@/server/first-period-calculation";
+import { formatMajor } from "@/lease-confirm";
 import { callSubmitAction, claimFormSubmit, releaseFormSubmit } from "./submit-once";
 
 function monthsInput(value: string) {
@@ -21,14 +24,24 @@ export function LeaseTermsForm({
   depositMonths,
   depositReason,
   updatedAt,
+  billingEnabled = false,
+  startDate,
+  endDate,
+  currency,
 }: {
   leaseId: string;
   rent: string;
   depositMonths: string;
   depositReason: string;
   updatedAt: string;
+  billingEnabled?: boolean;
+  startDate: string;
+  endDate: string | null;
+  currency: string;
 }) {
   const t = useT();
+  const locale = useLocale();
+  const firstCopy = firstPeriodCopy(locale);
   const router = useRouter();
   const guard = useRef(false);
   const [state, formAction, pending] = useActionState(
@@ -41,6 +54,11 @@ export function LeaseTermsForm({
     { error: "" },
   );
   const [rentValue, setRentValue] = useState(rent);
+  const [firstChoice, setFirstChoice] = useState<"" | "true" | "false">("");
+  let firstPeriod: ReturnType<typeof calculateFirstPeriod> | null = null;
+  if (billingEnabled && firstChoice && rentValue.trim()) {
+    try { firstPeriod = calculateFirstPeriod({ startDate, endDate, monthlyRentMinor: Math.round(Number(rentValue)*100), currency, rentFrequency: "monthly", prorateFirstPeriod: firstChoice === "true" }); } catch { /* Invalid inputs are handled by the normal form validation. */ }
+  }
   const [months, setMonths] = useState(monthsInput(depositMonths));
   const [reason, setReason] = useState("");
   const [policy, setPolicy] = useState<DepositPolicy | null>(null);
@@ -108,6 +126,13 @@ export function LeaseTermsForm({
           />
         </div>
       </div>
+      {billingEnabled ? <div className="fg"><label className="f" htmlFor="first-period-choice">{firstCopy.summary}</label>
+        <select id="first-period-choice" className="inp" value={firstChoice} onChange={(event) => setFirstChoice(event.currentTarget.value as "" | "true" | "false")}>
+          <option value="">{firstCopy.keep}</option><option value="true">{firstCopy.choice}</option><option value="false">{firstCopy.full}</option>
+        </select>
+        {firstChoice ? <input type="hidden" name="firstPeriodProrate" value={firstChoice} /> : null}
+        {firstPeriod ? <p data-testid="edit-first-period-preview">{firstCopy.period}: {firstPeriod.periodStart} – {firstPeriod.periodEnd} · {firstPeriod.prorated ? `${firstCopy.formula} (${firstPeriod.days} ${firstCopy.days})` : firstCopy.full}: {formatMajor(firstPeriod.rentMinor / 100, firstPeriod.currency, locale)}</p> : null}
+      </div> : null}
       {!policy ? <p className="hint">{t("deposit_policy_checking")}</p> : null}
       {policy?.regionalEnabled && policy.maxMonths === null ? <p className="hint">{t("deposit_policy_missing")}</p> : null}
       {policyState === "warn" || policyState === "block" ? <p className="alert warn">{t(policyState === "warn" ? "deposit_policy_warn" : "deposit_policy_block", { cap: cap ?? 0 })}</p> : null}
