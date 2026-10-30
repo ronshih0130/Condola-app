@@ -46,3 +46,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Protected encrypted bundles and local identities never belong in Git
+*.age
+*.key
