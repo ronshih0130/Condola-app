@@ -6,8 +6,30 @@ CREATE TABLE app.b019_byte_probe_op(
  amount bigint NOT NULL,paid_on date NOT NULL,last5_digest text NOT NULL,reference_digest text NOT NULL,raw_lease_digest text NOT NULL,phase text NOT NULL CHECK(phase IN ('begun','ready','stored'))
 );
 REVOKE ALL ON app.b019_byte_probe_op FROM PUBLIC,anon,authenticated,service_role;
-CREATE TABLE app.b019_byte_probe_permit(xid xid8 PRIMARY KEY,purpose text NOT NULL CHECK(purpose IN ('begin','capture','store')));
+CREATE TABLE app.b019_byte_probe_permit(xid xid8 PRIMARY KEY,purpose text NOT NULL CHECK(purpose IN ('begin','capture','store','principal')));
 REVOKE ALL ON app.b019_byte_probe_permit FROM PUBLIC,anon,authenticated,service_role;
+-- Owner-only research snapshot; no caller supplies identity or eligibility.
+CREATE TABLE app.b019_principal_probe_snapshot(
+ xid xid8 PRIMARY KEY, org uuid NOT NULL, lease uuid NOT NULL, payment uuid NOT NULL,
+ actor uuid NOT NULL, session_id uuid NOT NULL, contact uuid NOT NULL,
+ principal uuid, is_tenant boolean NOT NULL, archived boolean NOT NULL,
+ party uuid, party_role text, eligible boolean NOT NULL
+);
+CREATE TABLE app.b019_principal_probe_transition(
+ xid xid8 PRIMARY KEY, org uuid NOT NULL, lease uuid NOT NULL, payment uuid NOT NULL,
+ actor uuid NOT NULL, contact uuid NOT NULL, principal uuid, eligible boolean NOT NULL,
+ observed_at timestamptz NOT NULL
+);
+REVOKE ALL ON app.b019_principal_probe_snapshot,app.b019_principal_probe_transition FROM PUBLIC,anon,authenticated,service_role;
+CREATE FUNCTION app.b019_principal_probe_seal() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.b019_byte_probe_permit IN ACCESS SHARE MODE NOWAIT;
+ IF TG_OP='INSERT' AND NEW.xid=pg_current_xact_id() AND EXISTS(SELECT 1 FROM app.b019_byte_probe_permit WHERE xid=NEW.xid AND purpose='principal') THEN RETURN NEW; END IF;
+ RAISE EXCEPTION 'principal proof sealed' USING ERRCODE='23514';
+END $$;
+REVOKE ALL ON FUNCTION app.b019_principal_probe_seal() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_principal_probe_seal BEFORE INSERT OR UPDATE OR DELETE ON app.b019_principal_probe_snapshot FOR EACH ROW EXECUTE FUNCTION app.b019_principal_probe_seal();
+CREATE TRIGGER b019_principal_probe_seal BEFORE INSERT OR UPDATE OR DELETE ON app.b019_principal_probe_transition FOR EACH ROW EXECUTE FUNCTION app.b019_principal_probe_seal();
 CREATE FUNCTION app.b019_byte_probe_private_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE p text;
 BEGIN
@@ -120,8 +142,8 @@ REVOKE ALL ON FUNCTION app.b019_byte_probe_lease_guard() FROM PUBLIC,anon,authen
 CREATE TRIGGER b019_byte_probe_lease_guard BEFORE INSERT OR UPDATE OR DELETE ON public.leases FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_lease_guard();
 CREATE FUNCTION app.b019_byte_probe_contact_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
- LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
- IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND o.payer=OLD.id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND o.payer=NEW.id)) THEN RAISE EXCEPTION 'byte payer contact sealed' USING ERRCODE='23514';END IF;
+ LOCK TABLE app.b019_byte_probe_op,app.b019_principal_probe_snapshot IN ACCESS SHARE MODE NOWAIT;
+ IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND (o.phase='stored' OR EXISTS(SELECT 1 FROM app.b019_principal_probe_snapshot s WHERE s.xid=o.xid)) AND o.org=OLD.org_id AND o.payer=OLD.id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND (o.phase='stored' OR EXISTS(SELECT 1 FROM app.b019_principal_probe_snapshot s WHERE s.xid=o.xid)) AND o.org=NEW.org_id AND o.payer=NEW.id)) THEN RAISE EXCEPTION 'byte payer contact sealed' USING ERRCODE='23514';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
 END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_contact_guard() FROM PUBLIC,anon,authenticated,service_role;
@@ -129,8 +151,8 @@ CREATE TRIGGER b019_byte_probe_contact_guard BEFORE INSERT OR UPDATE OR DELETE O
 -- Clone-only whole-lease party absence guard.
 CREATE FUNCTION app.b019_byte_probe_party_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
- LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
- IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND o.lease=OLD.lease_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND o.lease=NEW.lease_id)) THEN RAISE EXCEPTION 'byte lease party scope sealed' USING ERRCODE='23514';END IF;
+ LOCK TABLE app.b019_byte_probe_op,app.b019_principal_probe_snapshot IN ACCESS SHARE MODE NOWAIT;
+ IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND (o.phase='stored' OR EXISTS(SELECT 1 FROM app.b019_principal_probe_snapshot s WHERE s.xid=o.xid)) AND o.org=OLD.org_id AND o.lease=OLD.lease_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND (o.phase='stored' OR EXISTS(SELECT 1 FROM app.b019_principal_probe_snapshot s WHERE s.xid=o.xid)) AND o.org=NEW.org_id AND o.lease=NEW.lease_id)) THEN RAISE EXCEPTION 'byte lease party scope sealed' USING ERRCODE='23514';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
 END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_party_guard() FROM PUBLIC,anon,authenticated,service_role;
@@ -161,6 +183,50 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_property_guard() FROM PUBLIC,anon,authenticated,service_role;
 CREATE TRIGGER b019_byte_probe_property_guard BEFORE INSERT OR UPDATE OR DELETE ON public.properties FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_property_guard();
+-- Explicit fixed, zero-argument capture; existing prototype restrictions remain.
+CREATE FUNCTION app.b019_principal_probe_capture() RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
+DECLARE o record; c record; p record; e boolean; v_email boolean;v_center boolean;
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op,app.b019_principal_probe_snapshot,app.b019_byte_probe_permit IN ROW EXCLUSIVE MODE NOWAIT;
+ SELECT * INTO o FROM app.b019_byte_probe_op WHERE xid=pg_current_xact_id();
+ IF NOT FOUND OR o.actor IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'principal capture unavailable' USING ERRCODE='42501'; END IF;
+ SELECT a.email_on,a.center_on INTO v_email,v_center FROM app.b019_payment_admit(o.org,o.live_org,o.env,o.session_id,o.lease,o.role) a;
+ IF v_email OR NOT v_center THEN RAISE EXCEPTION 'principal capture unavailable' USING ERRCODE='42501';END IF;
+ IF EXISTS(SELECT 1 FROM app.b019_principal_probe_snapshot WHERE xid=o.xid) THEN
+  IF NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=o.session_id AND user_id=o.actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'principal capture unavailable' USING ERRCODE='42501';END IF;
+  RETURN 'same_snapshot';
+ END IF;
+ LOCK TABLE public.lease_parties IN SHARE MODE NOWAIT;
+ SELECT * INTO c FROM public.contacts WHERE org_id=o.org AND id=o.payer FOR SHARE NOWAIT;
+ IF NOT FOUND THEN RAISE EXCEPTION 'principal capture unavailable' USING ERRCODE='42501'; END IF;
+ SELECT * INTO p FROM public.lease_parties WHERE org_id=o.org AND lease_id=o.lease AND contact_id=o.payer AND role IN ('primary','co_tenant') ORDER BY id LIMIT 1 FOR SHARE NOWAIT;
+ IF c.user_id IS NOT NULL THEN PERFORM 1 FROM auth.users WHERE id=c.user_id FOR KEY SHARE NOWAIT;IF NOT FOUND THEN RAISE EXCEPTION 'principal capture unavailable' USING ERRCODE='42501'; END IF;END IF;
+ e:=c.user_id IS NOT NULL AND c.is_tenant AND c.archived_at IS NULL AND p.id IS NOT NULL;
+ INSERT INTO app.b019_byte_probe_permit VALUES(o.xid,'principal');
+ INSERT INTO app.b019_principal_probe_snapshot VALUES(o.xid,o.org,o.lease,o.payment,o.actor,o.session_id,o.payer,c.user_id,c.is_tenant,c.archived_at IS NOT NULL,p.id,p.role::text,e);
+ DELETE FROM app.b019_byte_probe_permit WHERE xid=o.xid AND purpose='principal';
+ SELECT a.email_on,a.center_on INTO v_email,v_center FROM app.b019_payment_admit(o.org,o.live_org,o.env,o.session_id,o.lease,o.role) a;
+ IF v_email OR NOT v_center OR NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=o.session_id AND user_id=o.actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'principal capture unavailable' USING ERRCODE='42501';END IF;
+ RETURN 'captured';
+END $$;
+REVOKE ALL ON FUNCTION app.b019_principal_probe_capture() FROM PUBLIC,anon,authenticated,service_role;
+CREATE FUNCTION app.b019_principal_probe_transition() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
+DECLARE o record; s record;
+BEGIN
+ IF NEW.status<>'confirmed' OR NEW.source<>'manager_entry' THEN RETURN NEW;END IF;
+ LOCK TABLE app.b019_byte_probe_op,app.b019_principal_probe_snapshot,app.b019_payment_requirements IN ACCESS SHARE MODE NOWAIT;
+ SELECT * INTO o FROM app.b019_byte_probe_op WHERE xid=pg_current_xact_id();IF NOT FOUND THEN RETURN NEW;END IF;
+ LOCK TABLE app.b019_principal_probe_transition,app.b019_byte_probe_permit IN ROW EXCLUSIVE MODE NOWAIT;
+ SELECT * INTO s FROM app.b019_principal_probe_snapshot WHERE xid=o.xid;
+ IF NOT FOUND OR ROW(NEW.id,NEW.org_id,NEW.lease_id,NEW.payer_contact_id,NEW.submitted_by,NEW.confirmed_by,auth.uid()) IS DISTINCT FROM ROW(o.payment,o.org,o.lease,o.payer,o.actor,o.actor,o.actor)
+ OR ROW(s.org,s.lease,s.payment,s.actor,s.session_id,s.contact) IS DISTINCT FROM ROW(o.org,o.lease,o.payment,o.actor,o.session_id,o.payer)
+ OR NOT EXISTS(SELECT 1 FROM app.b019_payment_requirements r WHERE r.tx_id=txid_current() AND r.org_id=o.org AND r.lease_id=o.lease AND r.payment_id=o.payment AND r.actor_id=o.actor AND r.kind='payment_confirmed') THEN RAISE EXCEPTION 'principal transition unavailable' USING ERRCODE='23514'; END IF;
+ INSERT INTO app.b019_byte_probe_permit VALUES(o.xid,'principal');
+ INSERT INTO app.b019_principal_probe_transition VALUES(o.xid,o.org,o.lease,o.payment,o.actor,o.payer,s.principal,s.eligible,clock_timestamp());
+ DELETE FROM app.b019_byte_probe_permit WHERE xid=o.xid AND purpose='principal';RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_principal_probe_transition() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER z_b019_principal_transition_probe AFTER INSERT ON public.payments FOR EACH ROW EXECUTE FUNCTION app.b019_principal_probe_transition();
 CREATE FUNCTION app.b019_byte_probe_begin(p_org uuid,p_live uuid,p_env text,p_session uuid,p_lease_text text,p_role text,p_request uuid,p_bytes bytea)
 RETURNS TABLE(disposition text,payment_id uuid) LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
 DECLARE actor uuid:=auth.uid(); j jsonb; lease uuid; amount bigint; paid date; dg text; rawdg text; l5dg text; refdg text; old app.b019_byte_probe_op%ROWTYPE; p uuid; v_lease uuid; st text; email boolean; center boolean; property uuid; currency text; payer uuid; aliases integer;v_prop_id uuid;v_prop_currency text;v_last5 public.payments.payer_account_last5%TYPE;
@@ -176,7 +242,7 @@ BEGIN
  PERFORM 1 FROM public.organizations WHERE id IN(p_org,p_live) ORDER BY id FOR SHARE NOWAIT;
  LOCK TABLE app.b010_source_events,app.b017_occurrences IN ACCESS SHARE MODE NOWAIT;
  LOCK TABLE app.b010_payment_commands IN SHARE ROW EXCLUSIVE MODE NOWAIT;
- LOCK TABLE app.b019_byte_probe_op,app.b019_byte_probe_permit,app.b019_payment_contexts,app.b019_payment_requirements,app.b019_post_probe_op,app.b019_post_probe_invoice,app.b019_post_probe_line,app.b019_post_probe_old_alloc,public.audit_log IN ROW EXCLUSIVE MODE NOWAIT;
+ LOCK TABLE app.b019_principal_probe_snapshot,app.b019_principal_probe_transition,app.b019_byte_probe_op,app.b019_byte_probe_permit,app.b019_payment_contexts,app.b019_payment_requirements,app.b019_post_probe_op,app.b019_post_probe_invoice,app.b019_post_probe_line,app.b019_post_probe_old_alloc,public.audit_log IN ROW EXCLUSIVE MODE NOWAIT;
  SELECT a.email_on,a.center_on INTO email,center FROM app.b019_payment_admit(p_org,p_live,p_env,p_session,lease,p_role) a;
  IF NOT pg_try_advisory_xact_lock(hashtextextended('b010:payment:'||p_org::text||':'||actor::text||':'||p_request::text,0)) THEN RAISE EXCEPTION 'prototype busy' USING ERRCODE='55P03'; END IF;
  SELECT * INTO old FROM app.b019_byte_probe_op WHERE xid=pg_current_xact_id();
