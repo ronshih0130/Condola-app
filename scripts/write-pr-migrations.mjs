@@ -170,6 +170,10 @@ const added = {
     addOnly: false,
     reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
   },
+  "supabase/migrations/20261031100206_b002_legacy_open_moveout.sql": {
+    addOnly: false,
+    reason: "Replaces only the database-owned provenance trigger function to recognize a newly observed move-out on an older active open lease. Preserves unknown closed cases, ACLs and published SQL; no data/date backfill or columns removed.",
+  },
   "supabase/migrations/20261031100205_b007_deposit_rules.sql": {
     addOnly: false,
     reason: "Ron authorized replacing only leases_deposit_over_cap_requires_override for local/staging. Replaces write enforcement with regional resolution and flag locks, adds metadata guards/functions/privileges and default-OFF rollout setting; no historical SQL, stored data or columns removed.",

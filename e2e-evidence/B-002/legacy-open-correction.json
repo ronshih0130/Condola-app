@@ -1,0 +1,14 @@
+{
+  "time_pt": "2026-10-29T20:46:40.803623-07:00",
+  "before": "actual pre-migration active-open fixture and real move-out helper reproduced NULL provenance/9999 despite successful save",
+  "correction_migration_blob": "ce908a3350034b8d03776cada7c79ca362a8831d",
+  "regression_blob": "846aa0104f076761fd48baba6222eaaabefae2d8",
+  "published_100203_blob_unchanged": "5306d4bae78739e0b121556eef81906429e323ae",
+  "actual_regression_passed": 1,
+  "failed": 0,
+  "typecheck": "PASS",
+  "lint": "PASS",
+  "native_independent_static_review": "scoped PASS",
+  "scope": "prospective newly observed active/open move-out only; no historical data/date rewrite",
+  "combined_candidate": "PENDING"
+}
