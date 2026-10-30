@@ -6,7 +6,7 @@ import { settlementUuid } from "./settlement-access";
 /** Diagnostic prototype only: this is not an authorization gateway and is not
  * wired to settlement commits. Preparation must authorize and acquire all
  * earlier locks. The bounded facade must perform every operation after fencing. */
-export async function withSettlementFencePrototype<T>(actorId:string,prepare:(client:Client)=>Promise<void>,fenced:(query:<R extends QueryResultRow = QueryResultRow>(sql:string,params?:unknown[])=>Promise<QueryResult<R>>)=>Promise<T>):Promise<T> {
+export async function withSettlementFencePrototype<T>(actorId:string,prepare:(client:Client)=>Promise<void>,fenced:(query:<R extends QueryResultRow = QueryResultRow>(sql:string,params?:unknown[])=>Promise<QueryResult<R>>)=>Promise<T>,finalCheck?:(query:<R extends QueryResultRow = QueryResultRow>(sql:string,params?:unknown[])=>Promise<QueryResult<R>>)=>Promise<void>):Promise<T> {
   settlementUuid(actorId);
   return withClient(async client=>{
     try {
@@ -21,11 +21,17 @@ export async function withSettlementFencePrototype<T>(actorId:string,prepare:(cl
         if(remaining<=0)throw new FlowError("errors.generic");
         await client.query(`SELECT set_config('statement_timeout',$1,true),set_config('lock_timeout',$2,true),set_config('idle_in_transaction_session_timeout',$1,true)`,[`${remaining}ms`,`${Math.min(25,remaining)}ms`]);
       }
-      async function boundedQuery<R extends QueryResultRow = QueryResultRow>(sql:string,params?:unknown[]):Promise<QueryResult<R>> {await refresh();const result=await client.query<R>(sql,params);await refresh();return result;}
+      async function boundedQuery<R extends QueryResultRow = QueryResultRow>(sql:string,params?:unknown[]):Promise<QueryResult<R>> {
+        // A failed statement aborts the subtransaction. Only this fixed recovery
+        // command may run before refresh, so callers cannot escape the budget.
+        if(sql==="ROLLBACK TO SAVEPOINT v2_fenced_freshness" && !params?.length){const result=await client.query<R>(sql);await refresh();return result;}
+        await refresh();const result=await client.query<R>(sql,params);await refresh();return result;
+      }
       const result=await fenced(boundedQuery);
       // Fire pending deferred constraints while statement timeout still applies;
       // no data writes are permitted between this statement and COMMIT.
       await refresh();await client.query("SET CONSTRAINTS ALL IMMEDIATE");
+      if(finalCheck) await finalCheck(boundedQuery);
       await refresh();await client.query("COMMIT");return result;
     } catch(error) {
       try {await client.query("ROLLBACK");} catch(rollbackError){logServerError("rollback",rollbackError);}

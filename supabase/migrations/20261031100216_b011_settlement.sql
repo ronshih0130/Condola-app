@@ -217,3 +217,68 @@ CREATE TRIGGER settlement_source_immutable BEFORE UPDATE ON app.settlement_sourc
 CREATE TRIGGER settlement_line_root_immutable BEFORE UPDATE ON app.settlement_line_roots FOR EACH ROW EXECUTE FUNCTION app.settlement_parent_immutable();
 CREATE TRIGGER settlement_record_immutable BEFORE UPDATE ON app.settlement_records FOR EACH ROW EXECUTE FUNCTION app.settlement_parent_immutable();
 REVOKE ALL ON FUNCTION app.settlement_parent_immutable() FROM PUBLIC,anon,authenticated;
+
+-- Staff-only bounded source-parent pin. The service API must still require
+-- consent and independently derive complete current source revisions.
+CREATE FUNCTION app.settlement_pin_source_parents(p_org uuid,p_live uuid,p_env text,p_lease uuid,p_session uuid,p_evidence uuid[],p_attributions uuid[])
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE v_actor uuid; v_ids uuid[]; v_id uuid; v_count integer; v_evidence uuid;
+BEGIN
+  BEGIN v_actor:=nullif(current_setting('request.jwt.claim.sub',true),'')::uuid;
+  EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END;
+  IF v_actor IS NULL OR p_org IS NULL OR p_live IS NULL OR p_lease IS NULL OR p_session IS NULL OR p_env NOT IN ('live','sandbox') OR p_env IS NULL OR p_evidence IS NULL OR p_attributions IS NULL OR coalesce(array_ndims(p_evidence),1)<>1 OR coalesce(array_ndims(p_attributions),1)<>1 OR cardinality(p_evidence)>100 OR cardinality(p_attributions)>100 OR array_position(p_evidence,NULL) IS NOT NULL OR array_position(p_attributions,NULL) IS NOT NULL THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  SELECT array_agg(x ORDER BY x) INTO v_ids FROM (SELECT DISTINCT unnest(p_evidence) AS x) s;
+  IF coalesce(cardinality(v_ids),0)<>cardinality(p_evidence) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  SELECT array_agg(x ORDER BY x) INTO v_ids FROM (SELECT DISTINCT unnest(p_attributions) AS x) s;
+  IF coalesce(cardinality(v_ids),0)<>cardinality(p_attributions) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  -- Reject an invalid caller before taking any privileged lock. The subsequent
+  -- NOWAIT pins and recheck prevent the read-only precheck from authorizing.
+  IF NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=p_session AND user_id=v_actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  PERFORM 1 FROM public.organizations o JOIN public.organizations live ON live.id=p_live AND live.environment='live' AND live.live_org_id IS NULL JOIN public.org_members m ON m.org_id=live.id AND m.user_id=v_actor AND m.status='active' AND m.role IN ('admin','accountant') JOIN public.auth_sessions a ON a.id=p_session AND a.user_id=v_actor AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp() JOIN public.leases l ON l.org_id=o.id AND l.id=p_lease JOIN public.platform_settings f ON f.key='deposit_settlements' WHERE o.id=p_org AND o.environment::text=p_env AND ((p_env='live' AND o.id=live.id AND o.live_org_id IS NULL) OR (p_env='sandbox' AND o.live_org_id=live.id)) AND o.feature_flags->'deposit_settlements'='true'::jsonb AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array' AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text);
+  IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  LOCK TABLE public.platform_settings IN SHARE MODE NOWAIT;
+  FOR v_id IN SELECT DISTINCT x FROM unnest(ARRAY[p_org,p_live]) AS x ORDER BY x LOOP
+    PERFORM id FROM public.organizations WHERE id=v_id FOR SHARE NOWAIT;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  END LOOP;
+  PERFORM id FROM public.auth_sessions WHERE id=p_session AND user_id=v_actor AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE NOWAIT;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  PERFORM id FROM public.org_members WHERE org_id=p_live AND user_id=v_actor AND status='active' AND role IN ('admin','accountant') FOR SHARE NOWAIT;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  PERFORM id FROM public.leases WHERE org_id=p_org AND id=p_lease FOR SHARE NOWAIT;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  PERFORM 1 FROM public.organizations o JOIN public.organizations live ON live.id=p_live AND live.environment='live' AND live.live_org_id IS NULL JOIN public.org_members m ON m.org_id=live.id AND m.user_id=v_actor AND m.status='active' AND m.role IN ('admin','accountant') JOIN public.auth_sessions a ON a.id=p_session AND a.user_id=v_actor AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp() JOIN public.leases l ON l.org_id=o.id AND l.id=p_lease JOIN public.platform_settings f ON f.key='deposit_settlements' WHERE o.id=p_org AND o.environment::text=p_env AND ((p_env='live' AND o.id=live.id AND o.live_org_id IS NULL) OR (p_env='sandbox' AND o.live_org_id=live.id)) AND o.feature_flags->'deposit_settlements'='true'::jsonb AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array' AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text);
+  IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  v_count:=0;
+  FOR v_id IN SELECT unnest(p_evidence) ORDER BY 1 LOOP
+    PERFORM id FROM app.settlement_evidence WHERE org_id=p_org AND lease_id=p_lease AND id=v_id FOR SHARE NOWAIT;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF; v_count:=v_count+1;
+  END LOOP;
+  IF v_count<>cardinality(p_evidence) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  v_count:=0;
+  FOR v_id IN SELECT unnest(p_attributions) ORDER BY 1 LOOP
+    SELECT evidence_id INTO v_evidence FROM app.settlement_attributions WHERE org_id=p_org AND lease_id=p_lease AND id=v_id FOR SHARE NOWAIT;
+    IF NOT FOUND OR NOT (v_evidence=ANY(p_evidence)) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF; v_count:=v_count+1;
+  END LOOP;
+  IF v_count<>cardinality(p_attributions) OR NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=p_session AND user_id=v_actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.settlement_pin_source_parents(uuid,uuid,text,uuid,uuid,uuid[],uuid[]) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION app.settlement_pin_source_parents(uuid,uuid,text,uuid,uuid,uuid[],uuid[]) TO service_role;
+
+-- Scoped, service-only pin for prior item parents in v2 draft corrections.
+CREATE FUNCTION app.settlement_pin_prior_items(p_org uuid,p_live uuid,p_env text,p_lease uuid,p_session uuid,p_items uuid[])
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE v_id uuid; v_distinct integer;
+BEGIN
+  IF p_items IS NULL OR coalesce(array_ndims(p_items),1)<>1 OR cardinality(p_items)>50 OR array_position(p_items,NULL) IS NOT NULL THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  SELECT count(DISTINCT x) INTO v_distinct FROM unnest(p_items) x;
+  IF v_distinct<>cardinality(p_items) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  PERFORM app.settlement_pin_source_parents(p_org,p_live,p_env,p_lease,p_session,'{}'::uuid[],'{}'::uuid[]);
+  FOR v_id IN SELECT unnest(p_items) ORDER BY 1 LOOP
+    PERFORM id FROM app.settlement_items WHERE org_id=p_org AND lease_id=p_lease AND id=v_id FOR SHARE NOWAIT;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=p_session AND user_id=nullif(current_setting('request.jwt.claim.sub',true),'')::uuid AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.settlement_pin_prior_items(uuid,uuid,text,uuid,uuid,uuid[]) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION app.settlement_pin_prior_items(uuid,uuid,text,uuid,uuid,uuid[]) TO service_role;
