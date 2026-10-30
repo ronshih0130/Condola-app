@@ -35,7 +35,8 @@ test('typed sources enforce scope, payer snapshot, immutability and application-
       JOIN lease_parties lp ON lp.org_id=i.org_id AND lp.lease_id=i.lease_id AND lp.role='primary'
       JOIN contacts c ON c.id=lp.contact_id AND c.org_id=lp.org_id AND c.user_id IS NOT NULL
       JOIN org_members m ON m.org_id=i.org_id AND m.status='active'
-      ORDER BY i.id,lp.contact_id,m.id LIMIT 1`)).rows[0];
+      WHERE EXISTS (SELECT 1 FROM invoices other WHERE other.org_id=i.org_id AND other.id<>i.id AND other.lease_id<>i.lease_id)
+      ORDER BY i.org_id,i.id,lp.contact_id,m.id LIMIT 1`)).rows[0];
     assert.ok(source);
     const tenant={contact:source.contact,principal:source.principal};
     assert.ok(tenant);
@@ -233,7 +234,7 @@ test('typed sources enforce scope, payer snapshot, immutability and application-
         (error:unknown)=>(error as {code?:string}).code==='23514');
       await assert.rejects(c.query(`SELECT * FROM app.b017_resolve_key($1,$2,'rent_manual',$3,NULL,$4,$5)`,[source.org,source.lease,source.invoice,tenant.principal,newFirstKey]),
         (error:unknown)=>(error as {code?:string}).code==='23514');
-      const otherInvoice=(await c.query<{invoice:string;lease:string}>(`SELECT id::text invoice,lease_id::text lease FROM invoices WHERE org_id=$1 AND id<>$2 AND lease_id<>$3 LIMIT 1`,[source.org,source.invoice,source.lease])).rows[0];
+      const otherInvoice=(await c.query<{invoice:string;lease:string}>(`SELECT id::text invoice,lease_id::text lease FROM invoices WHERE org_id=$1 AND id<>$2 AND lease_id<>$3 ORDER BY id LIMIT 1`,[source.org,source.invoice,source.lease])).rows[0];
       assert.ok(otherInvoice);
       const crossingKey=`manual:${randomUUID()}`;
       await c.query(`INSERT INTO app.b010_source_events(org_id,lease_id,invoice_id,kind,occurrence_key,actor_id,local_date)

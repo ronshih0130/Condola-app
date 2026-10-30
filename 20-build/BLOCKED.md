@@ -99,3 +99,5 @@ Direct chat decisions supersede the pending requests above:
 | CLOSE-PRODUCER / DEPENDENCY | B-010／B-028 | b4a014a 僅 synthetic retained-copy 研究，完整 flush 仍拒絕。需真實固定 wrapper、連續權限／來源保護、可證明的 final check／COMMIT 及組合 schema；不會發送訊息 | Codex／獨立 QA；OPEN |
 | CLOSE-STAGING-QA / EXTERNAL_PENDING | 所有需正式驗收的 B | PE／Ron box 計畫與結果未通知；Mac 禁 migration，等待原已指定流程。還缺確切候選 staging 與獨立 Claude Class B | PE／Ron／QA；PENDING；不主動聯絡或輪詢 |
 | CLOSE-LOCK / OWNERSHIP | 乾淨釋放 repo claim | 契約要求 clean main＋HANDOFF，目前 main2bedb89 缺 HANDOFF。Ron 本次禁止 main merge，故保留 claim，收尾後 phase STOPPED；下次執行先重查，不偷取／繞過 | Ron／Codex；STOPPED claim retained |
+
+CLOSE-QA-93 follow-up 2026-10-30T10:51:14.328732-07:00: PE deterministicboundtenant patch applied as23f9193. Firstactualtarget progressed pasttenantassert butfailed otherInvoiceassert237: chosenorg mayhavesingleinvoice. Testfixture mustalsohavea distinctleaseinvoice in sameorg for existingcollisionassertions; narrowtest-onlypredicate correctionunderway. StillOPEN untiltarget+fullnewSHA gate finish; no assertionwaiver orproduct/schema edit.
