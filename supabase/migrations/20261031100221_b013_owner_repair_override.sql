@@ -25,7 +25,7 @@ BEGIN
  SELECT * INTO ctx FROM app.b013_owner_context(p_org,p_live,p_env,p_session,p_property);
  LOCK TABLE app.b013_policy_commands IN ROW EXCLUSIVE MODE NOWAIT;
  PERFORM app.b013_default_request_lock(p_org,p_request);
- v_hash:=encode(public.digest(jsonb_build_array('override',p_property,p_expected,p_action,p_value)::text,'sha256'),'hex');
+ v_hash:=encode(pg_catalog.sha256(convert_to(jsonb_build_array('override',p_property,p_expected,p_action,p_value)::text,'UTF8')),'hex');
  SELECT * INTO cmd FROM app.b013_policy_commands x WHERE x.org_id=p_org AND x.actor_id=ctx.principal_id AND x.request_id=p_request;
  IF FOUND THEN
   PERFORM app.b013_override_result(p_org,p_live,p_env,p_property,p_request);

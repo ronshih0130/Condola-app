@@ -40,9 +40,9 @@ REVOKE ALL ON FUNCTION app.b015_command_immutable() FROM PUBLIC,anon,authenticat
 
 CREATE FUNCTION app.b015_contact_snapshot(p_org uuid,p_contact uuid) RETURNS text
 LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,app,pg_temp AS $$
- SELECT encode(public.digest(jsonb_build_array(c.id,c.org_id,c.user_id,
+ SELECT encode(pg_catalog.sha256(convert_to(jsonb_build_array(c.id,c.org_id,c.user_id,
    c.is_tenant,c.is_owner,c.is_vendor,extract(epoch FROM c.archived_at),c.display_name,c.email::text,c.phone_e164,
-   extract(epoch FROM c.updated_at))::text,'sha256'),'hex')
+   extract(epoch FROM c.updated_at))::text,'UTF8')),'hex')
  FROM public.contacts c WHERE c.org_id=p_org AND c.id=p_contact
 $$;
 REVOKE ALL ON FUNCTION app.b015_contact_snapshot(uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
@@ -132,7 +132,7 @@ BEGIN
  v_name:=btrim(coalesce(p_name,''),E' \t\r\n');
  v_email:=nullif(lower(btrim(coalesce(p_email,''),E' \t\r\n')),'');
  v_phone:=nullif(btrim(coalesce(p_phone,''),E' \t\r\n'),'');
- v_hash:=encode(public.digest(jsonb_build_array(p_contact,p_env,lower(coalesce(p_expected,'')),v_name,v_email,v_phone)::text,'sha256'),'hex');
+ v_hash:=encode(pg_catalog.sha256(convert_to(jsonb_build_array(p_contact,p_env,lower(coalesce(p_expected,'')),v_name,v_email,v_phone)::text,'UTF8')),'hex');
  IF NOT pg_try_advisory_xact_lock(hashtextextended('b015-edit:'||p_org::text||':'||v_actor::text||':'||p_request::text,0)) THEN
   RAISE EXCEPTION 'Directory operation busy' USING ERRCODE='55P03';
  END IF;

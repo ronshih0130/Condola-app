@@ -179,8 +179,8 @@ BEGIN
  v_audit:=coalesce(v_audit,0);
  SELECT cu.minor_unit INTO v_scale FROM public.currencies cu WHERE cu.code=p.currency FOR SHARE NOWAIT;
  IF NOT FOUND THEN RAISE EXCEPTION 'Repair currency unavailable' USING ERRCODE='42501';END IF;
- v_hash:=encode(public.digest(jsonb_build_array(chosen.id,chosen.org_id,chosen.property_id,chosen.owner_contact_id,chosen.repair_approval_threshold_minor::text,
-  chosen.effective_from,chosen.effective_to,v_audit,c.user_id,c.is_owner,extract(epoch FROM c.archived_at),extract(epoch FROM p.archived_at),trim(p.currency),v_scale,o.country_code,o.timezone)::text,'sha256'),'hex');
+ v_hash:=encode(pg_catalog.sha256(convert_to(jsonb_build_array(chosen.id,chosen.org_id,chosen.property_id,chosen.owner_contact_id,chosen.repair_approval_threshold_minor::text,
+  chosen.effective_from,chosen.effective_to,v_audit,c.user_id,c.is_owner,extract(epoch FROM c.archived_at),extract(epoch FROM p.archived_at),trim(p.currency),v_scale,o.country_code,o.timezone)::text,'UTF8')),'hex');
  SELECT coalesce(o.feature_flags->'repair_approvals'='true'::jsonb AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array'
   AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text),false) INTO v_enabled FROM public.platform_settings f WHERE f.key='repair_approvals';
  IF NOT EXISTS(SELECT 1 FROM public.auth_sessions s WHERE s.id=p_session AND s.user_id=actor AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp())
@@ -225,7 +225,7 @@ BEGIN
   ELSE effective_source:='legacy_confirmation_required';END IF;
  ELSE effective_value:=default_value;effective_source:=default_source;verified:=default_value IS NOT NULL;
  END IF;
- snapshot:=encode(public.digest(jsonb_build_array(ctx.source_row_hash,ctx.source_row_version,root.id,root.version,rev.id,region.revision,default_value,default_source,ov.id,effective_value,effective_source)::text,'sha256'),'hex');
+ snapshot:=encode(pg_catalog.sha256(convert_to(jsonb_build_array(ctx.source_row_hash,ctx.source_row_version,root.id,root.version,rev.id,region.revision,default_value,default_source,ov.id,effective_value,effective_source)::text,'UTF8')),'hex');
  result:=jsonb_build_object('state','enabled','propertyId',p_property,'ownershipId',ctx.ownership_id,'currency',ctx.currency,'minorUnit',ctx.minor_unit,
   'defaultMinor',default_value,'defaultSource',default_source,'overrideMinor',ctx.legacy_override,'effectiveMinor',effective_value,'effectiveSource',effective_source,'verified',verified,'snapshot',snapshot);
  SELECT * INTO final_ctx FROM app.b013_owner_context(p_org,p_live,p_env,p_session,p_property);
@@ -271,7 +271,7 @@ BEGIN
  SELECT * INTO ctx FROM app.b013_owner_context(p_org,p_live,p_env,p_session,p_property);
  LOCK TABLE app.b013_policy_commands IN ROW EXCLUSIVE MODE NOWAIT;
  PERFORM app.b013_default_request_lock(p_org,p_request);
- v_hash:=encode(public.digest(jsonb_build_array(p_property,p_expected,p_action,p_value)::text,'sha256'),'hex');
+ v_hash:=encode(pg_catalog.sha256(convert_to(jsonb_build_array(p_property,p_expected,p_action,p_value)::text,'UTF8')),'hex');
  SELECT * INTO cmd FROM app.b013_policy_commands x WHERE x.org_id=p_org AND x.actor_id=ctx.principal_id AND x.request_id=p_request;
  IF FOUND THEN
   PERFORM app.b013_default_result(p_org,p_live,p_env,p_property,p_request);
