@@ -66,6 +66,8 @@ test("synthetic notifications are independently read in four actual portals",asy
    await page.reload(); await expect(page.getByTestId('notification-item')).toHaveCount(1); await expect(page.getByTestId('notification-read-state')).toHaveText(/^(已讀|Read)$/);
    await page.screenshot({path:info.outputPath(`${path.split('/')[1]}-${width}.png`),fullPage:true});
   }
+  await page.context().clearCookies();
+  expect((await page.context().cookies()).some(cookie=>cookie.name==="condola_session")).toBe(false);
   try {await page.goto(`/v/${encodeURIComponent(fixture.token)}/notifications`);} catch {throw new Error("Vendor page unavailable");}
   await expect(page.getByTestId('notification-item')).toHaveCount(1);
   const vendorBox=await page.getByTestId('notification-mark').boundingBox(); expect(vendorBox && vendorBox.height>=44).toBe(true);
@@ -73,6 +75,7 @@ test("synthetic notifications are independently read in four actual portals",asy
   await page.getByTestId('notification-mark').click();
   await expect(page.getByTestId('notification-item')).toHaveCount(1); await expect(page.getByTestId('notification-read-state')).toHaveText(/^(已讀|Read)$/);
   await page.reload(); await expect(page.getByTestId('notification-item')).toHaveCount(1); await expect(page.getByTestId('notification-read-state')).toHaveText(/^(已讀|Read)$/);
+  expect((await page.context().cookies()).some(cookie=>cookie.name==="condola_session")).toBe(false);
   await page.screenshot({path:info.outputPath(`vendor-${width}.png`),fullPage:true});
   const counts=await db(async c=>(await c.query<{n:string}>(`SELECT count(*)::text n FROM app.b028_center_reads WHERE org_id=$1`,[ORG_ID])).rows[0].n);
   expect(counts).toBe('4');
