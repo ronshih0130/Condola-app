@@ -166,7 +166,7 @@ export function PayDialog({
           <input type="hidden" name="leaseId" value={leaseId} />
           <input type="hidden" name="requestId" value={paymentRequestId.current} />
           <input type="hidden" name="returnTo" value={returnTo === "tenant" ? "tenant" : "staff"} />
-          {requestScope ? <div className="alert" data-testid="payment-request-status">{requestScope.copy[requestStatus]} {requestStatus === "recorded" ? <button type="button" data-testid="payment-new-intent" onClick={newPayment}>{requestScope.copy.newPayment}</button> : null} {requestStatus === "unavailable" && paymentRequestId.current ? <button type="button" onClick={() => setRequestCheck(n=>n+1)}>{requestScope.copy.checking}</button> : null}</div> : null}
+          {requestScope ? <div className="alert" data-testid="payment-request-status">{requestScope.copy[requestStatus]} {requestStatus === "recorded" ? <button className="btn sm" type="button" data-testid="payment-new-intent" onClick={newPayment}>{requestScope.copy.newPayment}</button> : null} {requestStatus === "unavailable" && paymentRequestId.current ? <button className="btn sm" type="button" onClick={() => setRequestCheck(n=>n+1)}>{requestScope.copy.checking}</button> : null}</div> : null}
           {status ? (
             <div className="alert" data-testid="pay-status">
               {status}
