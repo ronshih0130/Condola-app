@@ -114,3 +114,15 @@ Integratedruntime4e43104 remainsfixed; core89gate/build/default52batch135PASS+lo
 ## Source90 freeze preparation 2026-10-30T05:00:46.755233-07:00
 
 Reviewed17SQL1351 and notification mark API/strictorigin/stickyunknown/hydration fixes6d0ee9e composed with rootexplicitresetcleanup. Rootregistered90sourceinventory/classification/unit/RLS and scopeddefault4centerfilelocalhostconfig; global127/explicitCLIunchanged. Genuinepublished4e89sourcefixture hasheschecked, uniqueownedDB upgrade preservesexistingentitlement, no90downgrade/table-droppingfiction. Precheck585unit/8focusedDBPASS,type/lintPASS aftertypedNODE_ENVfix; fullcombinedimmutablegate/build/browsernext. No16/18/19 inthiscandidate, no realproducer/stage/proxy/ClassB/releaseacceptance. See core90-pre-gate.json. STOP POINT: WORKING; next: cleanpinnedsource90gate andlocalfresh/71+19catalog/ACL, thenNext/CFpreflight/Worker/full55browser; owner: Ron/Codexsharedsession.
+
+
+## Decision continuation 2026-10-30T05:37:10.014105-07:00
+
+Ron resolved B013/B021 designated-owner/threshold-version policy, B012 deposit carryforward and B010 defaultON separate result-email preference; exact decisions in BLOCKED. No runtime completion inferred. PE on Ron box owns staging schema changes; Ron will notify when hub/20-build/staging-db-plan.md is ready. Local work continues. Source90b runtime5647cde is under a fresh pinned gate; f1ad fixture failure preserved and corrected with scoped highest review.16/18/19 remain unpublished evolving SQL; full39/staging/ClaudeClassB remain incomplete. STOP POINT: WORKING; next: finish exact source90b gate/build/browser, B015 edit reset/composition and16/19 source proofs; owner: Ron/Codex sharedsession.
+
+
+## Local continuation 2026-10-30T06:10:41.320593-07:00
+
+Source90b immutable5647cde passed pinned gate585unit/263RLSPASS+1approvedhistoricalSKIP, Next/CFbuild/originalPREFLIGHT/localWorker1/1 and isolatedfunctionACLanon0/allowlist7/sentinel7. Full55batchbrowser remainsRUNNING_WITH_FAILURE: design-review second case timed out in signin/envsetup; rawtrace preserved, no wholebrowserPASS or failurewaiver. Last fully browserGREEN runtime remains4e43104. Root18 evolvinglocal core90+18 composition28/28PASS including actualwireloss/rollbackuncertainty/readexpiry; UI scopedbothwidthbusinesscasePASS butfullB015browsernotPASS pendingknownRSCstreamtransportdisposition andfinalexactreview.16isolated unpublishedsave/19trustedproducerprototypes remainunintegrated; noauthoritativenet/financialcommitGO. See local-continuation-20261030-0612.json.
+
+Ron policydecisions d4d63a2 remaincanonical. PE/Ronbox stagingplan awaitRonnotice, noMacDDL/prod/realoutbound/legalcopy. Only inactive rebuildabledependencies/cache were removed afterprocesscheck toaddressENOSPC; source/evidence preserved. STOP POINT: WORKING; next: finish55batches, targetedsigninrecheck, finalB015CASbrowserreview andcoherent91integration,16/19sourceproofs thennexteligible39queue; owner: Ron/Codexsharedsession.

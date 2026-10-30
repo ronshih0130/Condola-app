@@ -1,0 +1,72 @@
+{
+  "recorded_at": "2026-10-30T06:10:41.320593-07:00",
+  "runtime": "5647cdeb08a2b846efece9f8a4c2c0afbd6c4e4d",
+  "last_full_browser_green_runtime": "4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6",
+  "local_gate": {
+    "unit_pass": 585,
+    "rls_pass": 263,
+    "rls_skip": 1,
+    "skip_reason": "historical commit lost",
+    "result": "PASS"
+  },
+  "build": {
+    "next": "PASS",
+    "cloudflare_staging_bundle": "PASS",
+    "original_preflight": "PASS",
+    "local_worker": "1/1 PASS"
+  },
+  "function_acl": {
+    "anon_public_execute": 0,
+    "authenticated_allowlist": 7,
+    "isolated_cluster_sentinel": 7
+  },
+  "full_browser": {
+    "state": "RUNNING_WITH_FAILURE",
+    "candidate_pinned": true,
+    "known_failure": "design-review second case timed out during signIn /api/env setup; preserved raw log/trace; not waived"
+  },
+  "b015": {
+    "state": "unpublished evolving local draft",
+    "core_composed90_plus18": "28/28 PASS",
+    "wire_recovery": "actual before/after COMMIT and failed rollback acknowledgement cases covered",
+    "ui": "business two-width edit/conflict/busy-cancel/lostreply/archived OFF recovery passed scoped case; whole browser not PASS; exact CAS RSC regression transport disposition pending final run",
+    "archive_feature": "NOT_IMPLEMENTED"
+  },
+  "staging": {
+    "operator": "Product Engineering on Ron box",
+    "pending_notice": "Ron will notify plan/results at condola-hub/20-build/staging-db-plan.md",
+    "mac_hosted_schema_changes": false
+  },
+  "full_queue": "INCOMPLETE",
+  "native_review": "scoped highest model only; not Claude Class B",
+  "evidence": {
+    "core90b-seed-gate.log": {
+      "sha256": "b58d3f1377800904613ce29622c663f353367eb2344b3d2b44f291a3c93041b1",
+      "bytes": 456
+    },
+    "core90b-next-build.log": {
+      "sha256": "1ae268cc65d914530e04b7334e0da632cb6302f0fb76166729c3007b9eb35e53",
+      "bytes": 12032
+    },
+    "core90b-cf-build.log": {
+      "sha256": "69e390860f8e361dffb109062a23ff0a0a534c60151ca0ead2be1543d3e4e5cc",
+      "bytes": 13609
+    },
+    "core90b-preflight.log": {
+      "sha256": "1653ebc47674b1ed18a5045719b5332eed6b98f89bba85a13cdf01b483e9256c",
+      "bytes": 23
+    },
+    "core90b-worker.log": {
+      "sha256": "923b25eb5d1f3e66990ef5d168cb2c5832d5174fdea1256e0287868f14ed183d",
+      "bytes": 449
+    },
+    "core90b-function-privileges.log": {
+      "sha256": "66023e686fe9dad0b66fbe4468ddac835e33d6df42e32d26a0d80cb07e660667",
+      "bytes": 3135
+    },
+    "b015-edit-core-tests-v14.log": {
+      "sha256": "18010df78bb48c9919ff96ef1954f9f1992cc35db5eef85abcd9d59b52bc9d51",
+      "bytes": 7515
+    }
+  }
+}
