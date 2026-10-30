@@ -1808,7 +1808,7 @@ async function issueMoveInInvoice(client: Client, leaseId: string) {
   return invoice.id;
 }
 
-async function openBalance(client: Client, leaseId: string) {
+export async function openBalance(client: Client, leaseId: string) {
   const row = await one<{ balance: string }>(
     client,
     `SELECT coalesce(sum(balance_minor), 0)::text AS balance
@@ -1818,19 +1818,20 @@ async function openBalance(client: Client, leaseId: string) {
   return Number(row.balance);
 }
 
-async function allocateAndLedger(
+type LockedInvoice = { id: string; balance_minor: string };
+export async function lockAllocationInvoices(client: Client, orgId: string, leaseId: string): Promise<LockedInvoice[]> {
+  const locked = await many<{id:string}>(client, `SELECT id::text FROM invoices WHERE org_id=$1 AND lease_id=$2 AND status IN ('open','partially_paid') ORDER BY id FOR UPDATE`, [orgId,leaseId]);
+  if (!locked.length) return [];
+  return many<LockedInvoice>(client, `SELECT id::text,balance_minor::text FROM invoices WHERE org_id=$1 AND lease_id=$2 AND id=ANY($3::uuid[]) AND status IN ('open','partially_paid') AND balance_minor>0 ORDER BY due_date,created_at,id`, [orgId,leaseId,locked.map((row) => row.id)]);
+}
+
+export async function allocateAndLedger(
   client: Client,
   payment: { id: string; org_id: string; property_id: string; lease_id: string; currency: string; amount_minor: string; payer_contact_id: string | null },
   userId: string,
+  invoices: LockedInvoice[],
 ) {
   let left = Number(payment.amount_minor);
-  const invoices = await many<{ id: string; balance_minor: string }>(
-    client,
-    `SELECT id, balance_minor::text FROM invoices
-      WHERE lease_id = $1 AND status IN ('open','partially_paid') AND balance_minor > 0
-      ORDER BY due_date, created_at`,
-    [payment.lease_id],
-  );
   if (invoices.length === 0) throw new FlowError("errors.noInvoice");
   for (const invoice of invoices) {
     if (left <= 0) break;
@@ -1844,6 +1845,7 @@ async function allocateAndLedger(
   }
   const applied = Number(payment.amount_minor) - left;
   if (applied <= 0) throw new FlowError("errors.noInvoice");
+  if (left !== 0) throw new FlowError("errors.amountTooHigh");
   const txn = await one<{ id: string }>(
     client,
     `INSERT INTO ledger_transactions (org_id, property_id, lease_id, kind, currency, effective_date, description, source_table, source_id, created_by)
@@ -1927,7 +1929,8 @@ export async function recordPayment(
       [input.leaseId, session.orgId],
     );
     if (lease.currency === "TWD" && !/^\d{5}$/.test(input.last5)) throw new FlowError("errors.last5");
-    const balance = await openBalance(client, input.leaseId);
+    const invoices = await lockAllocationInvoices(client,session.orgId,input.leaseId);
+    const balance = invoices.reduce((sum, invoice) => sum + Number(invoice.balance_minor), 0);
     if (amount > balance) throw new FlowError("errors.amountTooHigh");
     const party = await one<{ contact_id: string }>(
       client,
@@ -1964,7 +1967,7 @@ export async function recordPayment(
         session.userId,
       ],
     );
-    await allocateAndLedger(client, payment, session.userId);
+    await allocateAndLedger(client, payment, session.userId, invoices);
     return payment.id;
   });
   await svc(session.userId, async (client) => queueDemoNotice(client, input.leaseId, "payment_confirmed"));
@@ -1986,19 +1989,20 @@ export async function confirmPayment(session: Session, paymentId: string) {
     }>(
       client,
       `SELECT id, org_id::text, property_id::text, lease_id::text, currency, amount_minor::text, payer_contact_id::text, status::text
-         FROM payments WHERE id = $1 AND org_id = $2`,
+         FROM payments WHERE id = $1 AND org_id = $2 FOR UPDATE`,
       [paymentId, session.orgId],
     );
     if (!payment) throw new FlowError("errors.notFound");
     if (payment.status === "confirmed") return payment.lease_id;
     if (payment.status !== "submitted") throw new FlowError("errors.paymentState");
-    const balance = await openBalance(client, payment.lease_id);
+    const invoices = await lockAllocationInvoices(client,session.orgId,payment.lease_id);
+    const balance = invoices.reduce((sum, invoice) => sum + Number(invoice.balance_minor), 0);
     if (Number(payment.amount_minor) > balance) throw new FlowError("errors.amountTooHigh");
     await client.query(
       `UPDATE payments SET status = 'confirmed', confirmed_by = $2, confirmed_at = now() WHERE id = $1`,
       [payment.id, session.userId],
     );
-    await allocateAndLedger(client, payment, session.userId);
+    await allocateAndLedger(client, payment, session.userId, invoices);
     return payment.lease_id;
   });
   await svc(session.userId, async (client) => queueDemoNotice(client, leaseId, "payment_confirmed"));
@@ -2193,6 +2197,22 @@ export async function approveMatch(session: Session, suggestionId: string) {
     if (!suggestion || suggestion.status !== "suggested" || !suggestion.payment_id) {
       throw new FlowError("errors.matchState");
     }
+    const line = await maybe<{ status: string }>(client,
+      `SELECT status::text FROM bank_transactions WHERE id=$1 AND org_id=$2 FOR UPDATE`,
+      [suggestion.bank_transaction_id, session.orgId]);
+    const lockedSuggestion = await maybe<{ status: string }>(client,
+      `SELECT status::text FROM bank_match_suggestions WHERE id=$1 AND org_id=$2 FOR UPDATE`,
+      [suggestion.id, session.orgId]);
+    if (!line || !["unmatched", "suggested"].includes(line.status) || lockedSuggestion?.status !== "suggested") throw new FlowError("errors.matchState");
+    const lockedPayment = await maybe<{ status: string; bank_transaction_id: string | null; lease_id: string; amount_minor: string }>(client,
+      `SELECT status::text,bank_transaction_id::text,lease_id::text,amount_minor::text FROM payments WHERE id=$1 AND org_id=$2 FOR UPDATE`,
+      [suggestion.payment_id, session.orgId]);
+    if (!lockedPayment || lockedPayment.bank_transaction_id || !["submitted", "confirmed"].includes(lockedPayment.status)) throw new FlowError("errors.matchState");
+    let invoices: LockedInvoice[] = [];
+    if (lockedPayment.status === "submitted") {
+      invoices = await lockAllocationInvoices(client,session.orgId,lockedPayment.lease_id);
+      if (Number(lockedPayment.amount_minor) > invoices.reduce((sum, invoice) => sum + Number(invoice.balance_minor),0)) throw new FlowError("errors.amountTooHigh");
+    }
     await client.query(
       `UPDATE bank_match_suggestions SET status = 'approved', decided_by = $2, decided_at = now() WHERE id = $1`,
       [suggestion.id, session.userId],
@@ -2224,7 +2244,7 @@ export async function approveMatch(session: Session, suggestionId: string) {
         `UPDATE payments SET status = 'confirmed', confirmed_by = $2, confirmed_at = now(), bank_transaction_id = $3 WHERE id = $1`,
         [payment.id, session.userId, suggestion.bank_transaction_id],
       );
-      await allocateAndLedger(client, payment, session.userId);
+      await allocateAndLedger(client, payment, session.userId, invoices);
     } else if (payment.status === "confirmed") {
       await client.query(`UPDATE payments SET bank_transaction_id = $2 WHERE id = $1`, [payment.id, suggestion.bank_transaction_id]);
     } else {
