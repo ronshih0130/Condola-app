@@ -1,23 +1,38 @@
 import assert from 'node:assert/strict';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { Client } from 'pg';
-import { cloneTestDatabase } from './test-database-clone';
-import { disposableDbUrl } from './test-disposable-db';
+import { disposableDbUrl, withDatabase } from './test-disposable-db';
 import { resetAndSeed } from './seed';
 import { centerSessionItems } from './notification-center';
 import type { Session } from './types';
 
-disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
-let clone:Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
+const source=disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
+const previousUrl=process.env.DATABASE_URL;
+const fixtureName=`condola_b017_upgrade_${randomUUID().replaceAll('-','')}`;
+let owned=false;
+async function admin(sql:string){const c=new Client({connectionString:withDatabase(source,'postgres')});try{await c.connect();await c.query(sql);}finally{await c.end();}}
+async function cleanup(){if(previousUrl===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=previousUrl;if(owned){await admin(`DROP DATABASE "${fixtureName}"`);owned=false;}}
 test.before(async()=>{
- clone=await cloneTestDatabase(); const demo=process.env.DEMO_MODE,key=process.env.ID_DOC_ENCRYPTION_KEY;
- try {process.env.DEMO_MODE='true';process.env.ID_DOC_ENCRYPTION_KEY=randomBytes(32).toString('hex');await resetAndSeed();}
- catch(error){await clone.cleanup();throw error;}
- finally {if(demo===undefined) delete process.env.DEMO_MODE;else process.env.DEMO_MODE=demo;if(key===undefined) delete process.env.ID_DOC_ENCRYPTION_KEY;else process.env.ID_DOC_ENCRYPTION_KEY=key;}
+ const demo=process.env.DEMO_MODE,key=process.env.ID_DOC_ENCRYPTION_KEY;
+ try {
+  const manifest=JSON.parse(await readFile(new URL('./fixtures/b017-pre17-source.json',import.meta.url),'utf8')) as {source_commit:string;stub:{file:string;sha256:string};migrations:{file:string;sha256:string}[]};
+  assert.equal(manifest.source_commit,'4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6');assert.equal(manifest.migrations.length,89);
+  const root=fileURLToPath(new URL('../..',import.meta.url));
+  const files=[manifest.stub,...manifest.migrations];
+  for(const file of files){assert.match(file.file,/^supabase\/(?:stub|migrations)\/[a-zA-Z0-9_.-]+\.sql$/);const bytes=await readFile(new URL(`../../${file.file}`,import.meta.url));assert.equal(createHash('sha256').update(bytes).digest('hex'),file.sha256,'published fixture source drift');}
+  await admin(`CREATE DATABASE "${fixtureName}"`);owned=true;
+  const env:NodeJS.ProcessEnv={PATH:process.env.PATH,NODE_ENV:process.env.NODE_ENV??'test',PGHOST:source.hostname.replace(/^\[|\]$/g,''),PGPORT:source.port,PGDATABASE:fixtureName,...(source.username?{PGUSER:decodeURIComponent(source.username)}:{}),...(source.password?{PGPASSWORD:decodeURIComponent(source.password)}:{})};
+  for(const file of files){const result=spawnSync('psql',['-X','-q','-v','ON_ERROR_STOP=1','-f',file.file],{cwd:root,env,stdio:'pipe'});if(result.status!==0)throw new Error(`Published pre17 replay failed: ${file.file.split('/').at(-1)}`);}
+  process.env.DATABASE_URL=withDatabase(source,fixtureName);
+  process.env.DEMO_MODE='true';process.env.ID_DOC_ENCRYPTION_KEY=randomBytes(32).toString('hex');await resetAndSeed();
+ } catch(error){await cleanup();throw error;}
+ finally{if(demo===undefined)delete process.env.DEMO_MODE;else process.env.DEMO_MODE=demo;if(key===undefined)delete process.env.ID_DOC_ENCRYPTION_KEY;else process.env.ID_DOC_ENCRYPTION_KEY=key;}
 });
-test.after(async()=>{await clone?.cleanup();});
+test.after(cleanup);
 
 test('additive draft preserves a center event and entitlement that existed before migration',async()=>{
  const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();
