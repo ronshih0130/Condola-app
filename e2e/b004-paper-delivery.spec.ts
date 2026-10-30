@@ -24,7 +24,7 @@ test.afterEach(async () => {
   });
 });
 
-test("paper replacement and private tenant delivery", async ({ page }) => {
+test("paper replacement and private tenant delivery", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
@@ -65,6 +65,7 @@ test("paper replacement and private tenant delivery", async ({ page }) => {
   const old = versions.find((v) => !v.current)!;
   expect(current.reason).toBe("Corrected paper copy");
   expect(current.supersedes).toBe(old.id);
+  await page.screenshot({ path: testInfo.outputPath("manager-paper-history.png"), fullPage: true });
   const url = `/t/lease/signed/${current.id}`;
   const count = () => db(async (client) => Number((await client.query(`SELECT count(*) FROM audit_log WHERE event_type='signed_pdf_downloaded' AND row_id=$1`, [current.id])).rows[0].count));
   const initial = await count();
@@ -94,6 +95,7 @@ test("paper replacement and private tenant delivery", async ({ page }) => {
   await page.goto("/t/lease");
   await expect(page.getByText("目前版本")).toBeVisible();
   await expect(page.getByText("歷史版本")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("tenant-paper-history.png"), fullPage: true });
   const success = await page.request.get(url);
   expect(success.status()).toBe(200);
   expect(success.headers()["cache-control"]).toBe("private, no-store");

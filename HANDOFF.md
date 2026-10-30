@@ -80,3 +80,13 @@ Default E2E runner now starts fresh server per spec to bound compiler lifetime, 
 B008090c1e2 and B002moveoutUI5b0a92c prepared on recoverybranches with scopedAstrareview/localDB/browser evidence; integrate serially afterthis checkpoint. B009finalreview/browser inprogress; unresolved utility lock-order and staging actualDBowner boundary are explicit. NewcombinedSHA requires allgates/build/browser anew.
 
 STOP POINT: repoACTIVE B/Ron, stage/prodRELEASED; next: integrate reviewed scoped candidates, register source/test/flags, run exact combined gates and full batched browser; owner: Ron/Codex. No prod, realmessages or protectedcopy changes.
+
+## Core83 integrated checkpoint preparation 2026-10-29T22:08:16.906907-07:00
+
+B008reviewed090c1e2→5899c96, B002UIreviewed5b0a92c→77e1127 and B009reviewedea2b138→2dea901 integrated serially, no cherry-pick conflicts. Current registration/classification/strictdefaultOFF controls added. Native scopedsource PASS; exact combined gate/build/browser still pending. Fresh83 equals untouched71+12 upgrade across11 catalog categories/counts2/4/5/1; anonymous publicexecute0 and authenticatedallowlist7 on isolatedfunction-privilegecluster.
+
+Bank-first utility race actually reproduced and fixed: locked captured target's fresh eligibility now checked before utility posting; state change causes whole utility rollback rather than reopening paid invoice. Actual4/4crosswriter and10/10 priorutility regressionPASS, highest native staticdeltaPASS. Initialfailure note is reconstructed from transcript, not raw. Widerphased/statement/reversal lockorders not universally proven.
+
+Ron's direct first-period decision「一樣月租/30按日計費」resolves B008denominator; billingprep planning explicit choice/sharedcalc/basis capture with no added approval step, preserving immutable legaltext and legacyOFF behavior. No shared-path wiring yet.
+
+STOP POINT: repoACTIVE B/Ron; next: publish named checkpoints/mirror, run clean core83 gate and two-width paper/browser acceptance, continue first-period planning and B006 source QA around recorded gaps; owner: Ron/Codex. All39items remainin scope; no stage/prod deploy or DBmigrations fromMac.

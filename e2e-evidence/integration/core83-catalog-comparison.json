@@ -1,0 +1,364 @@
+{
+  "scope": "fresh83 versus untouched71 plus12 source files",
+  "catalog_equal": true,
+  "categories": [
+    "columns",
+    "constraints",
+    "default_privileges",
+    "enums",
+    "functions",
+    "indexes",
+    "policies",
+    "relations",
+    "schema_privileges",
+    "triggers",
+    "views"
+  ],
+  "different_categories": [],
+  "synthetic_counts_before": {
+    "orgs": 2,
+    "properties": 4,
+    "leases": 5,
+    "payments": 1
+  },
+  "synthetic_counts_after": {
+    "orgs": 2,
+    "properties": 4,
+    "leases": 5,
+    "payments": 1
+  },
+  "source_files": [
+    {
+      "file": "20261018120000_schema.sql",
+      "sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615"
+    },
+    {
+      "file": "20261020120000_auth.sql",
+      "sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81"
+    },
+    {
+      "file": "20261020140000_audit_access.sql",
+      "sha256": "6f9909c6e9a4fbea6a8c3c58485b7d1336a93d61af485dd0766b033add43f5b6"
+    },
+    {
+      "file": "20261020180000_sandbox.sql",
+      "sha256": "d6bc8d10d75064f567c7d960387e1875f06119a71c7a98e94c084be16719b44f"
+    },
+    {
+      "file": "20261021120000_portfolio.sql",
+      "sha256": "1c8f88874cd3b992dfd950f75137af7754609609ac09e3bf613031db74465679"
+    },
+    {
+      "file": "20261021140000_basic_leases.sql",
+      "sha256": "b1722e7396e0c434fe9f98e8253dd87702841f6a0f62f516a6a7641e94af5078"
+    },
+    {
+      "file": "20261021145000_exec_hotfix_rpc_functions.sql",
+      "sha256": "f2fe0af60b9bd012b51a00a3af1c1421dbd4032377c77b4a73eefb0720d1a940"
+    },
+    {
+      "file": "20261021150000_revoke_purge_execute.sql",
+      "sha256": "3abb177117805572b9e786562e65c8d55ef2a6731de47b0ebb0a76fb7cb6fb8c"
+    },
+    {
+      "file": "20261021170000_live_enabled.sql",
+      "sha256": "2bce25e7244055f6e4abbcf69958c761f38cb1b01cac6b6aac1a30577172fb2a"
+    },
+    {
+      "file": "20261022120000_self_serve_signup.sql",
+      "sha256": "54621978adc7a13cff25ea813118c363bae15125526abd2864b080dc0e458cb4"
+    },
+    {
+      "file": "20261022140000_portal_user_provision.sql",
+      "sha256": "37aef5ee1e56401128ea2263f9884adbda4ae271363fce8f95bcf1c6bd7b1683"
+    },
+    {
+      "file": "20261022150000_portal_user_gotrue_row.sql",
+      "sha256": "3bf92cac508556487475f87cc9c255dadeb9105dbe924d0fe52c002e32db94c3"
+    },
+    {
+      "file": "20261022160000_end_auth_sessions.sql",
+      "sha256": "f912845b253e4babf981c2748830486d55abc8353749240a4dcf94b753f6b1b9"
+    },
+    {
+      "file": "20261022170000_archive_whole_unit_rooms.sql",
+      "sha256": "2fd1e6506a5e8926d24f8428bbf4c835edd619b71ee704ce04af51328a11b7db"
+    },
+    {
+      "file": "20261022180000_tenant_id_check.sql",
+      "sha256": "eabd6c26bb9fa785e255343a73bb316d665b3b3584bedc78f514e4bc95dffd19"
+    },
+    {
+      "file": "20261022200000_tenant_id_check_upgrade.sql",
+      "sha256": "7ac3dde46cf9eddca87533f94baca12081ce78f25d691c04b74fe0a664f16e42"
+    },
+    {
+      "file": "20261023090000_lease_deposit_override_check.sql",
+      "sha256": "af529793b447948c43cfe6f7296dd8148a92cb26bebdf6083bbd4322513bc7ea"
+    },
+    {
+      "file": "20261023140000_audit_log_keyset.sql",
+      "sha256": "48b17712bfe8a4fffec470e0b8b150fffc2e56e7dc9105528e6f45f1aed52d0e"
+    },
+    {
+      "file": "20261023150000_repair_records.sql",
+      "sha256": "da735e1674d4b2c3c5998e80b12d0d9b9abf54a52b75d5a70da8b33beb620b17"
+    },
+    {
+      "file": "20261023160000_expense_statement_index.sql",
+      "sha256": "fbf5cbee3febec5082a8d90040035ea673ee4451371ef55bb5228e9810112b13"
+    },
+    {
+      "file": "20261023170000_income_expense_report.sql",
+      "sha256": "52603ba50d460d77a78f4a15caeeb76333a87b4f4916d12c6218726ac0887e42"
+    },
+    {
+      "file": "20261023180000_tenant_contact_email_uniq.sql",
+      "sha256": "c68643490957196ae9c8622fef3e0b870238e08b530bda25ab028ddba5049c66"
+    },
+    {
+      "file": "20261024100000_revoke_truncate.sql",
+      "sha256": "4612f8a4f6b6c8413f2b90e2ea19a63c3d40a7c09dd8289a0bc1fe032a607da6"
+    },
+    {
+      "file": "20261024180000_portal_email_ci.sql",
+      "sha256": "30972f38124a3dae60f0fe84b40815fb90b029df90b20bca17303f46b7bee9cd"
+    },
+    {
+      "file": "20261025120000_id_consent_notice.sql",
+      "sha256": "ecc942e6e845c9d3a60c6a60a9d3e707b8f333a20b02f775c4b3f90b84baa5a7"
+    },
+    {
+      "file": "20261025130000_portal_invites.sql",
+      "sha256": "80458f0733d199703e952107b8a0a3be1e7a290822ab93e5e0fe4c41cd015735"
+    },
+    {
+      "file": "20261025140000_contact_role_user.sql",
+      "sha256": "e49b7208d821fe63e7f84357b618f781945d39c8acebd99a0acb4bdf804d395f"
+    },
+    {
+      "file": "20261025140000_id_upload_slots.sql",
+      "sha256": "8d8a3cfffcb4869e3b1e69d12fa8159296a5b378be111984fe857f679e82efc5"
+    },
+    {
+      "file": "20261026100000_country_room_door.sql",
+      "sha256": "35ebc52b104203bcb3bf97b6fc0b6943d3d1f1206b412d6f2f70c39234154131"
+    },
+    {
+      "file": "20261026120000_email_log.sql",
+      "sha256": "3f26af3afa1303b94b9036ce8879c8b93c3766947f9009b459659cef5b49b7f8"
+    },
+    {
+      "file": "20261026130000_bulk_import.sql",
+      "sha256": "c1963f79ea9a4be08720d8cb833ee008a30c70bf2f850fae691468dfb9c365fc"
+    },
+    {
+      "file": "20261026150000_id_upload_slots_revoke_anon.sql",
+      "sha256": "7ea341e73a6ef0bd545a8dc4b975c7de02b9c502b4d70082f266f4ecf50bc842"
+    },
+    {
+      "file": "20261026160000_id_consent_display_sha.sql",
+      "sha256": "4cc18869ff47fdc3d3367b75699efd4610eb02ab9e777f34f7a3013c1d7e8b25"
+    },
+    {
+      "file": "20261026190000_portal_invite_token.sql",
+      "sha256": "57dd5a9d3acdb7b607d358743eafc4acdbfc361c6be798e71ea78f1ee78dafd9"
+    },
+    {
+      "file": "20261027120000_id_consent_shown_sha.sql",
+      "sha256": "1f16c2ce6dadd9b9712ff4566ab4b7e2ece1ff2961f486cbf8ff9e59220455e8"
+    },
+    {
+      "file": "20261027130000_lease_idempotency_key.sql",
+      "sha256": "5a546461b904f104665631f7e2b812294ca1a33c8fd4c531cc5125ddf080cbf9"
+    },
+    {
+      "file": "20261027140000_id_anon_revoke.sql",
+      "sha256": "43b9025e1499c6f490caac72ef83817abdbeb0392e70bdd6fc8bc8f4c09b2a9e"
+    },
+    {
+      "file": "20261028120000_id_delete_after_consent.sql",
+      "sha256": "2a20b9cbf788e1cae8c4084fa4fd435ec4e3d05e6c038f6c5ec4bfc76b414b48"
+    },
+    {
+      "file": "20261028130000_utility_charge_posting.sql",
+      "sha256": "74ef22c84bcdef6f5531d28bf7663febf39b94e0e30f266d7605a80d75ff4e96"
+    },
+    {
+      "file": "20261028140000_utility_runs_unit_id_default.sql",
+      "sha256": "e14af71f0eaa37a7ac4f0d3e054be7b989e8eb016d605659bcaa397a761af49c"
+    },
+    {
+      "file": "20261028150000_utility_vacant_expense.sql",
+      "sha256": "0ffcd377728cdbf2e5bbe2bac84aa0ffc0bb64f98207bdb825234ac19a67cde9"
+    },
+    {
+      "file": "20261028160000_utility_run_draft_reuse.sql",
+      "sha256": "cae0391ae42e189d72b8ab5d9b8204383e1d92cb62a65a224034d7748852d4b5"
+    },
+    {
+      "file": "20261028180000_utility_owner_lines.sql",
+      "sha256": "6db3e8e06cf28b306793c5f85b1fa39b3cdc95dfbcc8511a7677a7b36101ccd9"
+    },
+    {
+      "file": "20261029130000_id_no_direct_mutate.sql",
+      "sha256": "549e5b7c8ae5cbb14cfde455118e73c2cb9ceb84bcfd8a3f7b95aaab96ca99fa"
+    },
+    {
+      "file": "20261029140000_id_consent_shown_version.sql",
+      "sha256": "19876b143d0efb54eeffb17d0b53c9d0a2aea2963aff64264d093ef3774330eb"
+    },
+    {
+      "file": "20261029150000_id_watermark_copy.sql",
+      "sha256": "cbed52150f63d8f24e650ba441279246e372307e4cb20aa7ea3e5417d28068b3"
+    },
+    {
+      "file": "20261029160000_lease_close_end_date.sql",
+      "sha256": "3dae1ffa3024b04f8341e7119472ee59934f48a640da2aaa58bffcf23deb2b9d"
+    },
+    {
+      "file": "20261030100000_lock_public_function_execute.sql",
+      "sha256": "c4887dc521407146e54111f73712aa00581b03074f955f0663aab15f427764f5"
+    },
+    {
+      "file": "20261030110000_gotrue_confirm_single_use.sql",
+      "sha256": "ade24727b7356dcfbebb709645312dc85191522fe4a5d80f44f04d5560a71789"
+    },
+    {
+      "file": "20261030120000_org_scoped_reversal_audit.sql",
+      "sha256": "38b48136b26f18a16a1cbb4ff1508ad339b63c89d8f6e6bd4e3850e6fae1f00a"
+    },
+    {
+      "file": "20261030130000_default_function_privileges.sql",
+      "sha256": "57ac0d6ecf8c5300612a143e7739d9fb96804050966541b95a3ceef7ad26886d"
+    },
+    {
+      "file": "20261030140500_revoke_app_is_member_execute.sql",
+      "sha256": "df542437b7c859cfbc5da927507cf480c9ce8ed0fd9fc7bfdcbfc6248e4a3fa6"
+    },
+    {
+      "file": "20261030150000_revoke_id_photo_lease_close_execute.sql",
+      "sha256": "400db3d641f625dadf338ef5dc887dccd0939c1f94be6cf96fe745af930af3e4"
+    },
+    {
+      "file": "20261030150200_vendor_repair.sql",
+      "sha256": "cd3a324a64dd8d401b1a7bcaaa42b4e68154e7fc7188e14d8ff83a8972fdb7e5"
+    },
+    {
+      "file": "20261030150300_repair_owner_visibility.sql",
+      "sha256": "daa530894acd443000dc37ee7b7c5f52542b2664aaf49a95271a3d47c633cb0e"
+    },
+    {
+      "file": "20261030150400_ticket_job_type_reserve.sql",
+      "sha256": "0aed9acc39ff1dbacc761552127c85209d3b272bfd0908338ade889d66389a11"
+    },
+    {
+      "file": "20261030150500_revoke_public_function_execute.sql",
+      "sha256": "6e301a863ac8da9600eac5b082ea34766e6f2a5d4644ee00e1c78848a69f26a6"
+    },
+    {
+      "file": "20261030150600_consents.sql",
+      "sha256": "946e246649e989eeaff3e70f9ea4950f3eed89159e17e2917bca62b5d0fd8e2a"
+    },
+    {
+      "file": "20261030150700_vendor_link_sharing_approval.sql",
+      "sha256": "cdd64597a75bf2693541de3bde38577f083487d7e3c01f21e984e6fcf1505b40"
+    },
+    {
+      "file": "20261030150800_vendor_onboarding_job_types_receipts.sql",
+      "sha256": "0bd65bf5f7ed44022b69d2f153eb5a9372c5a3d20ac6752abf80112f8c451102"
+    },
+    {
+      "file": "20261030150801_vendor_document_service.sql",
+      "sha256": "094fd732d7535deeb03b07f941258987af484ac6ccaaebec2f2c0284f9a91f51"
+    },
+    {
+      "file": "20261030150802_vendor_job_assignment.sql",
+      "sha256": "4ea3cf93dd6a5cf532e0cc71b7cc089ca3c73b26e2bfd723353490024389b3f5"
+    },
+    {
+      "file": "20261030150900_esign_core.sql",
+      "sha256": "8d3d17ceb052f717afe63f95673a8a8c1ad88952e9c1ef7128383018e7bf1cb4"
+    },
+    {
+      "file": "20261030151100_end_auth_sessions_varchar_fix.sql",
+      "sha256": "ac4cfdaed77acfb4639afddf77bce1671aac0028b7e699987e59156202460c01"
+    },
+    {
+      "file": "20261030151200_id_purge_dry_run_guard.sql",
+      "sha256": "932ffdc36d0f950eb31e5406608300f83aa68cae61aa65095587eb30b14070b4"
+    },
+    {
+      "file": "20261030151300_partner_agreement_consents.sql",
+      "sha256": "3ceebb270c689b30af7e8ba02b865f8a1c43eaac693400f606c691c842b40e4f"
+    },
+    {
+      "file": "20261030151301_partner_consent_attestation.sql",
+      "sha256": "2f416caa1167bf665a0f261844189cea7e87ea154bb2af7785da3dd7b17ca617"
+    },
+    {
+      "file": "20261030151400_tenant_signed_pdf_read.sql",
+      "sha256": "3c72963324101b620e816d00f580f2abc41b32ee039be25436cddeaff41a4b62"
+    },
+    {
+      "file": "20261030151500_paper_lease_versions.sql",
+      "sha256": "eaf3cf7f5804706f92e3043d62a6aeb06ff6024f0a911cec4435cae36a1d735e"
+    },
+    {
+      "file": "20261030151600_esign_retention_lifecycle.sql",
+      "sha256": "deee7dd21d6ef18d9aa7da8ec62b54cb501049384b9c1b0a7b3aba8006e116e3"
+    },
+    {
+      "file": "20261031090000_id_delete_after_move_out.sql",
+      "sha256": "853af511a719007afc25637b2b6dce8c765cba69f891d82103dc77722846026e"
+    },
+    {
+      "file": "20261031100000_payee_details.sql",
+      "sha256": "bd5ddf8d52f915e97c806036fef2f9dd3eecd8cb65019de6d875447bbb9ccd02"
+    },
+    {
+      "file": "20261031100100_audit_action_select.sql",
+      "sha256": "02495ed727ba8153b39e390499828f878c465c602b05c0278de3426ca9c8e402"
+    },
+    {
+      "file": "20261031100200_tenant_payee_read.sql",
+      "sha256": "f43a5262bee22c0ff881e13c14bbc6a78f3dffd9b4edc2233ae8581f17dfe23d"
+    },
+    {
+      "file": "20261031100201_b001_esign_internal_helpers.sql",
+      "sha256": "633655e322a67f0652f0b27e9610df9d89f113a1c1fe041888417b9d8792e103"
+    },
+    {
+      "file": "20261031100202_b003_payee_gateway.sql",
+      "sha256": "1f929fe9c71e317ce044127c6cd6b25daa28f591a754ab297e0d7a7fe60be856"
+    },
+    {
+      "file": "20261031100203_b002_retention_boundary.sql",
+      "sha256": "0079b2362c051e1467f0755b17bf359bc372c603bc61dd38cf0636250d6e3a5e"
+    },
+    {
+      "file": "20261031100204_b004_paper_delivery_boundary.sql",
+      "sha256": "aa3ed79c074a3640672fd9e0383e45d48dfc4c30e399b761e262ca906447837d"
+    },
+    {
+      "file": "20261031100205_b007_deposit_rules.sql",
+      "sha256": "52e7d5af4abfd3800bf78bb4d8a67f3b7ea183f5f39f0138dbc57c34521b45cb"
+    },
+    {
+      "file": "20261031100206_b002_legacy_open_moveout.sql",
+      "sha256": "4447a926eb282ceaa2c907177644c6b10e45da305360a902ac837744dc1de664"
+    },
+    {
+      "file": "20261031100207_b005_onboarding_progress.sql",
+      "sha256": "0c71e5afbb4e7971b40c4f4bbcac22e46b49402b009431b70a6c51d3e676aaa2"
+    },
+    {
+      "file": "20261031100208_b008_billing_previews.sql",
+      "sha256": "311a480f680cc14a46cb738072437af3496c602df00d30b5361cd11d127440e4"
+    },
+    {
+      "file": "20261031100209_b009_bank_match_decisions.sql",
+      "sha256": "a529ea9bc0d103eeea7665d9a2fc8730e5c834caed6cc8a1d2adfec787a57ec5"
+    }
+  ]
+}

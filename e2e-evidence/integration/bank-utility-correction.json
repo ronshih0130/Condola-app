@@ -1,0 +1,46 @@
+{
+  "time_pt": "2026-10-29T22:08:16.906907-07:00",
+  "scope": "B009 bank and actual utility confirmation cross-writer correction",
+  "original_failure": "Conversation-captured1/2 failure; initial raw file unavailable. Explicit reconstructed note retained, never called raw. Bank-first utility appended4000 after paid10000, reopened invoice14000/10000.",
+  "fix": "UUID order at4 acquisition sites and fresh new-statement eligibility validation of only captured locked IDs; stale/missing/unsupported isolation fails whole utility tx before posting, no rediscovery.",
+  "crosswriter_tests": {
+    "passed": 4,
+    "failed": 0,
+    "cases": [
+      "bank-first bank persists; all utility effects rollback, paid invoice unchanged",
+      "utility-first then full single bank allocation/ledger against updated total",
+      "serializable snapshot fails closed without utility effects",
+      "mixed paid/unpaid correction keeps paid source unchanged and uses existing credit path"
+    ]
+  },
+  "previous_utility_regression": "10/10 PASS separately owned seeded core83 clone",
+  "review": "Highest native scoped static PASS blobs4bc322f and39a0ab9; reviewer did not execute tests",
+  "limits": [
+    "no universal deadlock-free claim",
+    "reverse-old/new phase, linkStatementInvoices and reversePayment SQL-loop acquisition orders not proven",
+    "staging schema/DB owner identity and independent Claude ClassB remain pending"
+  ],
+  "artifacts": [
+    {
+      "path": "work/b009-utility-initial-failure-note.md",
+      "sha256": "e1464cb3661d348bf7d7225f2da8cf4bfa8a651a2035f337fe1f27fa1ce992d3",
+      "bytes": 870,
+      "kind": "reconstructed note, not raw",
+      "retention": "TODO Ron confirm"
+    },
+    {
+      "path": "work/b009-utility-crosswriter-final.log",
+      "sha256": "45c7bcf27ea7b156e695017add25cae961f25069c8803b39f86341a7c784eaa2",
+      "bytes": 851,
+      "kind": "actual raw output",
+      "retention": "TODO Ron confirm"
+    },
+    {
+      "path": "work/b009-utility-regression-final.log",
+      "sha256": "08e19e2efba7795430cde0466803195d8cc85ca70e718d0e06025eb3b81e26d9",
+      "bytes": 2504,
+      "kind": "actual raw output",
+      "retention": "TODO Ron confirm"
+    }
+  ]
+}

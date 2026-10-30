@@ -1245,7 +1245,7 @@ async function reversePostedLines(client: Client, session: Session, jobs: Revers
       `SELECT i.id::text, ${FROZEN_INVOICE_SQL}
          FROM invoices i
         WHERE i.id = ANY($1::uuid[])
-        FOR UPDATE`,
+        ORDER BY i.id FOR UPDATE`,
       [invoiceIds],
     );
     for (const row of rows) frozenById.set(row.id, frozenRow(row));
@@ -1322,7 +1322,7 @@ async function creditAndReverse(
        )
      ),
      locked AS (
-       SELECT i.id FROM invoices i WHERE i.id IN (SELECT invoice_id FROM input) FOR UPDATE
+       SELECT i.id FROM invoices i WHERE i.id IN (SELECT invoice_id FROM input) ORDER BY i.id FOR UPDATE
      ),
      numbered AS (
        SELECT s.*,
@@ -1457,7 +1457,7 @@ async function postChargeLines(client: Client, session: Session, posts: PostJob[
        )
      ),
      locked AS (
-       SELECT i.id FROM invoices i WHERE i.id IN (SELECT invoice_id FROM input) FOR UPDATE
+       SELECT i.id FROM invoices i WHERE i.id IN (SELECT invoice_id FROM input) ORDER BY i.id FOR UPDATE
      ),
      numbered AS (
        SELECT s.*,
@@ -1585,9 +1585,26 @@ async function findOpenInvoices(client: Client, orgId: string, posts: PostJob[])
      SELECT c.lease_id::text, i.id::text
        FROM chosen c
        JOIN invoices i ON i.id = c.id
-      FOR UPDATE OF i`,
+      ORDER BY i.id FOR UPDATE OF i`,
     [orgId, payload],
   );
+  // The chosen CTE uses the statement's snapshot. A payment can commit while
+  // FOR UPDATE waits, so recheck the locked IDs in a new READ COMMITTED
+  // statement before the caller can append any utility lines.
+  if (rows.length > 0) {
+    const checked = await many<{ id: string; status: string; paid_minor: string; einvoice_status: string; on_statement: boolean; isolation: string }>(
+      client,
+      `SELECT i.id::text, current_setting('transaction_isolation') AS isolation, ${FROZEN_INVOICE_SQL}
+         FROM invoices i
+         JOIN jsonb_to_recordset($2::jsonb) AS selected(lease_id uuid,id uuid)
+           ON selected.id=i.id AND selected.lease_id=i.lease_id
+        WHERE i.org_id=$1 AND i.source IN ('recurring','utility')
+          AND EXISTS (SELECT 1 FROM jsonb_to_recordset($3::jsonb) AS requested(lease_id uuid,period_start date,period_end date)
+            WHERE requested.lease_id=i.lease_id AND i.period_start<=requested.period_end AND i.period_end>=requested.period_start)`,
+      [orgId, JSON.stringify(rows), payload],
+    );
+    if (checked.length !== rows.length || checked.some((row) => row.isolation !== "read committed" || frozenRow(row))) throw new FlowError("errors.generic");
+  }
   for (const row of rows) found.set(row.lease_id, row.id);
   return found;
 }

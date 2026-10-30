@@ -170,6 +170,14 @@ const added = {
     addOnly: false,
     reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
   },
+  "supabase/migrations/20261031100209_b009_bank_match_decisions.sql": {
+    addOnly: false,
+    reason: "Adds exact-file source registry and immutable decision tables/constraints plus owner-only gated bank-link write guards, permissions and default-OFF setting. No historical rewrite or duplicate-data backfill.",
+  },
+  "supabase/migrations/20261031100208_b008_billing_previews.sql": {
+    addOnly: false,
+    reason: "Seeds a default-OFF guarded billing-preview rollout setting without changing stored invoice amounts or regional formulas.",
+  },
   "supabase/migrations/20261031100207_b005_onboarding_progress.sql": {
     addOnly: false,
     reason: "Adds default-OFF rollout setting and server-owned onboarding metadata guard/trigger with privilege restrictions; changes authorization for a settings subtree without deleting data or columns.",
