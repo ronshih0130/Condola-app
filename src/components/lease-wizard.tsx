@@ -16,6 +16,8 @@ import { Stepper } from "./ui";
 import { PhoneField } from "./phone-field";
 import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
 import { callSubmitAction, claimFormSubmit, ensureIdempotencyKey, releaseFormSubmit } from "./submit-once";
+import { calculateFirstPeriod } from "@/server/first-period-calculation";
+import { firstPeriodCopy } from "@/i18n/first-period";
 
 function amountOk(raw: string) {
   const trimmed = raw.trim();
@@ -34,12 +36,14 @@ export function LeaseWizard({
   firmLocale,
   showLine = false,
   callingCode = "+886",
+  billingEnabled = false,
 }: {
   rooms: RoomOption[];
   tenants: TenantOption[];
   firmLocale: "zh-TW" | "en";
   showLine?: boolean;
   callingCode?: string;
+  billingEnabled?: boolean;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -81,6 +85,7 @@ export function LeaseWizard({
   const [phone, setPhone] = useState("");
   const [lineId, setLineId] = useState("");
   const [rent, setRent] = useState("");
+  const [prorateFirst, setProrateFirst] = useState(false);
   const [months, setMonths] = useState("");
   const [start, setStart] = useState("");
   const [depositMonths, setDepositMonths] = useState("2");
@@ -108,6 +113,13 @@ export function LeaseWizard({
   const depositOver = depositState === "reason";
   const depositBlocked = depositState === "block" || (depositOver && depositReason.trim() === "") || (step >= 4 && (!depositPolicy || policyLoading));
   const termEnd = leaseTermEnd(start, months);
+  const firstCopy = firstPeriodCopy(locale);
+  const firstPeriod = useMemo(() => {
+    if (!billingEnabled || !amountOk(rent) || !termEnd) return null;
+    try {
+      return calculateFirstPeriod({ startDate: start, endDate: termEnd, monthlyRentMinor: Math.round(Number(rent) * 100), currency, rentFrequency: "monthly", prorateFirstPeriod: prorateFirst });
+    } catch { return null; }
+  }, [billingEnabled, rent, termEnd, start, currency, prorateFirst]);
   const overlap = overlappingLease(room?.leases, start, termEnd);
   const blocked = depositBlocked || (Boolean(overlap) && step >= 3);
   const creating = pending || Boolean(state.leaseHref);
@@ -335,6 +347,7 @@ export function LeaseWizard({
       <input type="hidden" name="lineUserId" value={showLine ? lineId : ""} />
       <input type="hidden" name="tenantMode" value={tenantMode === "existing" ? pickedId : "new"} />
       <input type="hidden" name="rent" value={rent} />
+      {billingEnabled ? <input type="hidden" name="firstPeriodProrate" value={String(prorateFirst)} /> : null}
       <input type="hidden" name="months" value={months} />
       <input type="hidden" name="startDate" value={start} />
       <input type="hidden" name="depositMonths" value={depositMonths} />
@@ -488,6 +501,8 @@ export function LeaseWizard({
               {room ? <div className="hint">{t("i_base_hint", { amount: money(room.baseRentMinor / 100, currency, locale) })}</div> : null}
             </div>
           </div>
+          {billingEnabled ? <label className="radio"><input type="checkbox" checked={prorateFirst} onChange={(event) => setProrateFirst(event.currentTarget.checked)} /><span>{firstCopy.choice}</span></label> : null}
+          {firstPeriod ? <p data-testid="first-period-preview">{firstCopy.summary}: {money(firstPeriod.rentMinor / 100, firstPeriod.currency, locale)} · {firstCopy.period}: {firstPeriod.periodStart} – {firstPeriod.periodEnd} · {firstPeriod.prorated ? `${firstCopy.formula} (${firstPeriod.days} ${firstCopy.days})` : firstCopy.full}</p> : null}
         </div>
       </div>
       <div hidden={step !== 4}>

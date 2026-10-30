@@ -665,13 +665,15 @@ export async function leaseDetail(session: Session, id: string) {
       deposit_override_reason: string | null;
       updated_at: string;
       signed_at: string | null;
+      first_period_basis: unknown;
+      rent_frequency: string;
     }>(
       client,
       `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, l.currency,
               l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit, l.due_day,
               l.deposit_months::text AS deposit_months, l.deposit_override_reason,
               l.updated_at::text AS updated_at, l.signed_at::text AS signed_at,
-              l.start_date::text, l.end_date::text,
+              l.start_date::text, l.end_date::text, l.first_period_basis, l.rent_frequency::text,
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
               c.id::text AS tenant_contact_id,
               c.user_id::text AS tenant_user_id,
@@ -1346,10 +1348,11 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
       status: string;
       place: string;
       firm: string;
+      first_period_basis: unknown;
     }>(
       client,
       `SELECT l.id::text, l.currency, l.rent_amount_minor::text AS rent, l.deposit_amount_minor::text AS deposit,
-              l.due_day, l.start_date::text, l.end_date::text, l.status::text,
+              l.due_day, l.start_date::text, l.end_date::text, l.status::text, l.first_period_basis,
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place, o.name AS firm
          FROM leases l
          JOIN properties p ON p.id = l.property_id
