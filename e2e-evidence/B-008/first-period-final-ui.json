@@ -1,0 +1,37 @@
+{
+  "time_pt": "2026-10-29T23:21:50.041094-07:00",
+  "immutable_source_candidate": "5d787551622b98c2255bdffa32ecac24226d6326",
+  "test": "e2e/b008-first-period.spec.ts",
+  "result": "PASS 2/2 at390/1280",
+  "conditions": "Exactsource with100210; owncore83fresh+100210clone; Node20; isolatedsyntheticdata/providersabsent",
+  "observed": "OFF no preview, ON monthly/30x16days=USD160.00, savedbasis, presignedchangefullrent=USD300.00 persisted; zero5xx/console/pageerrors/nooverflow asserted. Root viewed390edit and1280wizard.",
+  "prior_failure": "Earlier1280interruption remains preserved; causeUNKNOWN, no app/DB/infra diagnosis claimed by current passing rerun.",
+  "limits": "No signedPDFbillingcoverage, no staging/Claude/fullB008PASS.",
+  "artifacts": [
+    {
+      "path": "work/firstperiod-ui-final-artifacts/b008-first-period-first-pe-9b5cb-ew-and-saved-edit-at-1280px-chromium/first-period-edit-1280.png",
+      "sha256": "db2c4faaa7c211e8eae36154b9a1c6ed35bf87e1ed67318bcf77a5debaa11e45",
+      "bytes": 178323
+    },
+    {
+      "path": "work/firstperiod-ui-final-artifacts/b008-first-period-first-pe-9b5cb-ew-and-saved-edit-at-1280px-chromium/first-period-wizard-1280.png",
+      "sha256": "f4f2a90578ad1811a019c2890dd3960dd4c50524df1decef407bdb74469bd934",
+      "bytes": 99166
+    },
+    {
+      "path": "work/firstperiod-ui-final-artifacts/b008-first-period-first-pe-3181e-iew-and-saved-edit-at-390px-chromium/first-period-wizard-390.png",
+      "sha256": "d38bedd9a95c1746e1b227e5d6940148c6e7d776dc3c790f7328b0799fa5c38d",
+      "bytes": 60210
+    },
+    {
+      "path": "work/firstperiod-ui-final-artifacts/b008-first-period-first-pe-3181e-iew-and-saved-edit-at-390px-chromium/first-period-edit-390.png",
+      "sha256": "2deb96b363f9acbcf2e66042b5eda599ca972c56a966cf3cbe1d6d4d1415586c",
+      "bytes": 138559
+    },
+    {
+      "path": "work/firstperiod-ui-final.log",
+      "sha256": "76036153d97fac3633abd2ec81b985d101cd3c001797d528f6edb33cbeb22f74",
+      "bytes": 2306
+    }
+  ]
+}
