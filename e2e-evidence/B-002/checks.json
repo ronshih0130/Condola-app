@@ -1,0 +1,30 @@
+{
+  "time_pt": "2026-10-29T20:11:48.623343-07:00",
+  "scope": "local synthetic only; native highest-tier static review",
+  "migration_blob": "5306d4bae78739e0b121556eef81906429e323ae",
+  "retention_integration": {
+    "passed": 4,
+    "failed": 0,
+    "database": "owned private PostgreSQL16 v4 clone"
+  },
+  "historical_upgrade": {
+    "passed": 1,
+    "failed": 0,
+    "method": "own empty scratch + checked-in pre-B002 migrations + synthetic legacy fixture + current migration"
+  },
+  "notice_unit_reported": {
+    "passed": 10,
+    "failed": 0
+  },
+  "review": "scoped static PASS; prior provenance, actor audit, correction/purge concurrency and policy date findings closed",
+  "timezone_cases": [
+    "Pacific/Kiritimati",
+    "Etc/GMT+12"
+  ],
+  "http": "PENDING",
+  "actual_approved_rollback_candidate": "UNKNOWN/not tested",
+  "staging_deployed": false,
+  "claude_classb_signoff": false,
+  "feature_activated": false,
+  "whole_item_done": false
+}

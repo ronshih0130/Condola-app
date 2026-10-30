@@ -6,7 +6,6 @@ import { SESSION_COOKIE } from "@/server/auth";
 import { FlowError } from "@/server/errors";
 import { serveSignedPhoto, storeIdPhoto } from "@/server/id-docs";
 import { readPhotoToken } from "@/server/id-crypto";
-import { ENV_COOKIE, ORG_COOKIE } from "@/server/org-scope";
 import { readSession, readSessionOn, sessionTokenHash } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -55,20 +54,22 @@ export async function GET(request: Request) {
   if (!sessionCookie) return new NextResponse(null, { status: 404 });
   const parsed = readPhotoToken(token);
   if (!parsed) return new NextResponse(null, { status: 404 });
-  const rawEnv = jar.get(ENV_COOKIE)?.value;
+  const input = {
+    tokenHash: sessionTokenHash(sessionCookie),
+    userId: parsed.u,
+    documentId: parsed.d,
+    slot: parsed.s,
+    preferredOrg: "",
+    env: "",
+  };
   let photo;
   try {
-    photo = await serveSignedPhoto({
-      tokenHash: sessionTokenHash(sessionCookie),
-      userId: parsed.u,
-      documentId: parsed.d,
-      slot: parsed.s,
-      preferredOrg: jar.get(ORG_COOKIE)?.value ?? null,
-      env: rawEnv === "sandbox" || rawEnv === "live" ? rawEnv : null,
-    }, async (client) => {
+    photo = await serveSignedPhoto(input, async (client) => {
       const { session } = await readSessionOn(client, { touch: false });
       if (!session || session.userId !== parsed.u) throw new Error("Invalid photo session");
       if (await requireCurrentConsent(session, "api")) throw new ConsentRequiredError();
+      input.preferredOrg = session.liveOrgId;
+      input.env = session.environment;
     });
   } catch (error) {
     if (error instanceof ConsentRequiredError) return consentRequiredResponse();

@@ -30,7 +30,6 @@ import { createOwner, createSpace, updateOwner, updateProperty, updateSpace, typ
 import { SESSION_COOKIE } from "./auth";
 import { FlowError, logServerError } from "./errors";
 import { finalizeTenantId, issuePhotoUrlsForToken, reviewIdCheck } from "./id-docs";
-import { ENV_COOKIE, ORG_COOKIE } from "./org-scope";
 import { normalizePhone } from "./lease-rules";
 import { typedStreet } from "@/property-address";
 import { loadOrgCountry } from "./org-country";
@@ -723,13 +722,13 @@ export async function actionViewIdPhotos(documentId: string) {
     const jar = await cookies();
     const token = jar.get(SESSION_COOKIE)?.value;
     if (!token) redirect("/login");
-    const rawEnv = jar.get(ENV_COOKIE)?.value;
+    const session = await getSession();
     return await issuePhotoUrlsForToken(
       {
         tokenHash: sessionTokenHash(token),
-        userId: null,
-        preferredOrg: jar.get(ORG_COOKIE)?.value ?? null,
-        env: rawEnv === "sandbox" || rawEnv === "live" ? rawEnv : null,
+        userId: session.userId,
+        preferredOrg: session.liveOrgId,
+        env: session.environment,
       },
       documentId,
     );

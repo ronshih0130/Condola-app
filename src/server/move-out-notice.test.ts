@@ -23,7 +23,7 @@ class FakeClient {
       throw this.failure;
     }
     return {
-      rows: sql.includes("UPDATE leases") && this.found ? [{ id: input.leaseId }] : [],
+      rows: sql.includes("FROM organizations o JOIN organizations live") ? [{}] : sql.includes("UPDATE leases") && this.found ? [{ id: input.leaseId }] : [],
     };
   }
 }
@@ -33,6 +33,8 @@ const input = {
   leaseId: "22222222-2222-4222-8222-222222222222",
   movedOutOn: "2026-06-10",
   actorUserId: "33333333-3333-4333-8333-333333333333",
+  liveOrgId: "11111111-1111-4111-8111-111111111111",
+  environment: "live" as const,
 };
 
 test("move-out notice", { concurrency: false }, async (t) => {
@@ -95,7 +97,7 @@ test("move-out notice", { concurrency: false }, async (t) => {
     process.env.MOVE_OUT_NOTICE_ENABLED = "true";
     const client = new FakeClient();
     assert.deepEqual(await recordMoveOutNotice(client, input), { ok: true });
-    assert.equal(client.calls.length, 4);
+    assert.equal(client.calls.length, 6);
     assert.equal(client.calls[0]!.sql, "BEGIN");
     assert.match(
       client.calls[1]!.sql,
@@ -104,8 +106,12 @@ test("move-out notice", { concurrency: false }, async (t) => {
     assert.deepEqual(client.calls[1]!.params, [
       "move-out notice (CAP-M-13)",
       input.actorUserId,
+      input.orgId,
+      input.environment,
     ]);
-    const update = client.calls[2]!;
+    assert.match(client.calls[1]!.sql, /request\.jwt\.claim\.sub/);
+    assert.equal(client.calls[3]!.sql, "SET LOCAL ROLE authenticated");
+    const update = client.calls[4]!;
     assert.match(
       update.sql.replace(/\s+/g, " ").trim(),
       /^UPDATE leases SET moved_out_on = \$1::date WHERE id = \$2 AND org_id = \$3 RETURNING id$/,
@@ -115,7 +121,7 @@ test("move-out notice", { concurrency: false }, async (t) => {
       input.leaseId,
       input.orgId,
     ]);
-    assert.equal(client.calls[3]!.sql, "COMMIT");
+    assert.equal(client.calls[5]!.sql, "COMMIT");
   });
 
   await t.test("accepts leap day and preserves an explicit reason", async () => {
@@ -130,8 +136,8 @@ test("move-out notice", { concurrency: false }, async (t) => {
       }),
       { ok: true },
     );
-    assert.deepEqual(client.calls[1]!.params, [reason, input.actorUserId]);
-    assert.equal(client.calls[2]!.params![0], "2028-02-29");
+    assert.deepEqual(client.calls[1]!.params, [reason, input.actorUserId, input.orgId, input.environment]);
+    assert.equal(client.calls[4]!.params![0], "2028-02-29");
   });
 
   await t.test("returns not_found and rolls back when no lease matches", async () => {

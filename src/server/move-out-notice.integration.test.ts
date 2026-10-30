@@ -2,12 +2,12 @@ import { disposableDbUrl } from "./test-disposable-db";
 import { cloneTestDatabase } from "./test-database-clone";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { recordMoveOutNotice } from "./move-out-notice";
+import { USERS } from "./ids";
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 let DATABASE_URL: string;
@@ -55,6 +55,7 @@ async function withLease(fn: (fixture: Fixture) => Promise<void>) {
         `INSERT INTO organizations (name, country_code, default_currency)
          VALUES ('Other move-out notice org', 'TW', 'TWD') RETURNING id::text`,
       );
+      await client.query(`INSERT INTO org_members(org_id,user_id,role,status) VALUES ($1,$2,'admin','active'),($3,$2,'admin','active')`, [orgId, USERS.admin, otherOrg.rows[0]!.id]);
       const contact = await client.query<{ id: string }>(
         `INSERT INTO contacts (org_id, is_tenant, display_name)
          VALUES ($1, true, 'Move-out notice tenant') RETURNING id::text`,
@@ -109,6 +110,7 @@ async function withLease(fn: (fixture: Fixture) => Promise<void>) {
             return client.query("SAVEPOINT move_out_notice");
           }
           if (sql === "COMMIT") {
+            await client.query("RESET ROLE");
             return client.query("RELEASE SAVEPOINT move_out_notice");
           }
           if (sql === "ROLLBACK") {
@@ -156,7 +158,9 @@ test("move-out notice integration", { concurrency: false }, async (t) => {
           orgId,
           leaseId,
           movedOutOn: "2026-06-10",
-          actorUserId: randomUUID(),
+          actorUserId: USERS.admin,
+          liveOrgId: orgId,
+          environment: "live",
         }),
         { ok: true },
       );
@@ -179,6 +183,18 @@ test("move-out notice integration", { concurrency: false }, async (t) => {
         ends: null,
         status: "active",
       });
+      assert.deepEqual(await recordMoveOutNotice(noticeClient, {
+        orgId, liveOrgId: orgId, environment: "live", leaseId,
+        movedOutOn: "2026-06-11", actorUserId: USERS.admin, reason: "Synthetic correction",
+      }), { ok: true });
+      const audits = await client.query<{ actor: string; reason: string; old_date: string | null; new_date: string }>(
+        `SELECT actor_user_id::text AS actor,reason,old_row->>'moved_out_on' AS old_date,new_row->>'moved_out_on' AS new_date
+           FROM audit_log WHERE org_id=$1 AND table_name='leases' AND row_id=$2 AND action='update'
+            AND changed_cols @> ARRAY['moved_out_on']::text[] ORDER BY id`, [orgId, leaseId]);
+      assert.deepEqual(audits.rows, [
+        { actor: USERS.admin, reason: "move-out notice (CAP-M-13)", old_date: null, new_date: "2026-06-10" },
+        { actor: USERS.admin, reason: "Synthetic correction", old_date: "2026-06-10", new_date: "2026-06-11" },
+      ]);
 
       const document = await client.query<{
         due: string;
@@ -186,7 +202,7 @@ test("move-out notice integration", { concurrency: false }, async (t) => {
         deleted: boolean;
       }>(
         `SELECT delete_after::text AS due,
-                (DATE '2026-06-10' + id_document_keep_days())::text AS expected,
+                (DATE '2026-06-11' + id_document_keep_days())::text AS expected,
                 deleted_at IS NOT NULL AS deleted
            FROM identity_documents WHERE id = $1`,
         [documentId],
@@ -210,7 +226,9 @@ test("move-out notice integration", { concurrency: false }, async (t) => {
           orgId: otherOrgId,
           leaseId,
           movedOutOn: "2026-06-10",
-          actorUserId: randomUUID(),
+          actorUserId: USERS.admin,
+          liveOrgId: otherOrgId,
+          environment: "live",
         }),
         { ok: false, reason: "not_found" },
       );

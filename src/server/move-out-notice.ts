@@ -9,12 +9,14 @@ export type MoveOutNoticeInput = {
   leaseId: string;
   movedOutOn: string;
   actorUserId: string;
+  liveOrgId: string;
+  environment: "live" | "sandbox";
   reason?: string;
 };
 
 export type MoveOutNoticeResult =
   | { ok: true }
-  | { ok: false; reason: "disabled" | "not_found" };
+  | { ok: false; reason: "disabled" | "not_found" | "forbidden" };
 
 export function isMoveOutNoticeEnabled(
   env: Environment = process.env,
@@ -58,9 +60,27 @@ export async function recordMoveOutNotice(
   try {
     await client.query(
       `SELECT set_config('app.change_reason', $1, true),
-              set_config('app.actor_user_id', $2, true)`,
-      [input.reason ?? "move-out notice (CAP-M-13)", input.actorUserId],
+              set_config('request.jwt.claim.sub', $2, true),
+              set_config('request.jwt.claim.role', 'authenticated', true),
+              set_config('app.active_org_id', $3, true),
+              set_config('app.env', $4, true)`,
+      [input.reason ?? "move-out notice (CAP-M-13)", input.actorUserId, input.orgId, input.environment],
     );
+
+    const authorized = await client.query(
+      `SELECT 1 FROM organizations o JOIN organizations live ON live.id=$2 AND live.environment='live'
+       JOIN org_members m ON m.org_id=live.id AND m.user_id=$3 AND m.status='active'
+         AND m.role IN ('admin','manager')
+       WHERE o.id=$1 AND o.environment::text=$4
+         AND (o.id=live.id AND o.environment='live' OR o.live_org_id=live.id AND o.environment='sandbox')
+       FOR SHARE OF o, live, m`,
+      [input.orgId, input.liveOrgId, input.actorUserId, input.environment],
+    );
+    if (!authorized.rows.length) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "forbidden" };
+    }
+    await client.query("SET LOCAL ROLE authenticated");
 
     const result = await client.query(
       `UPDATE leases

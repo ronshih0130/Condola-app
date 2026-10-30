@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { tx } from "./db";
 import { FlowError } from "./errors";
+import { resetAndSeed } from "./seed";
 import { ORG_ID, USERS } from "./ids";
 import { runIdPurge } from "../../id-purge-cron.mjs";
 
@@ -19,6 +20,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 test.before(async () => {
   clone = await cloneTestDatabase();
   DATABASE_URL = clone.url;
+  // This file owns its fixtures; earlier suites may legitimately remove leases.
+  await resetAndSeed();
   for (const file of [
     "20261029150000_id_watermark_copy.sql",
     "20261029160000_lease_close_end_date.sql",
