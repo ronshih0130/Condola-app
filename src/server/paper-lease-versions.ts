@@ -107,7 +107,8 @@ export type PaperLeaseVersion = {
   file_name: string;
   size_bytes: string;
   created_at: string;
-  uploaded_by: string | null;
+  uploader_name: string | null;
+  timezone: string;
   replace_reason: string | null;
   supersedes_id: string | null;
   current: boolean;
@@ -127,7 +128,7 @@ export async function listPaperLeaseVersions(
       `WITH ranked AS (
          SELECT p.id::text, f.id::text AS file_id, f.file_name,
                 f.size_bytes::text, p.created_at,
-                coalesce(p.uploaded_by, f.uploaded_by)::text AS uploaded_by,
+                nullif(btrim(profile.display_name), '') AS uploader_name, o.timezone,
                 p.replace_reason, p.supersedes_id::text,
                 coalesce(p.file_id = l.document_file_id, false) AS matches_pointer,
                 bool_or(coalesce(p.file_id = l.document_file_id, false)) OVER () AS has_current,
@@ -135,10 +136,15 @@ export async function listPaperLeaseVersions(
            FROM lease_signed_pdfs p
            JOIN files f ON f.org_id = p.org_id AND f.id = p.file_id
            JOIN leases l ON l.org_id = p.org_id AND l.id = p.lease_id
+           JOIN organizations o ON o.id = p.org_id
+           LEFT JOIN profiles profile ON profile.id = coalesce(p.uploaded_by, f.uploaded_by)
+             AND EXISTS (SELECT 1 FROM org_members member
+                          WHERE member.org_id = p.org_id AND member.user_id = profile.id AND member.status = 'active')
           WHERE p.org_id = $1 AND p.lease_id = $2
        )
-       SELECT id, file_id, file_name, size_bytes, created_at::text,
-              uploaded_by, replace_reason, supersedes_id,
+       SELECT id, file_id, file_name, size_bytes,
+              to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+              uploader_name, timezone, replace_reason, supersedes_id,
               (matches_pointer OR (NOT has_current AND newest = 1)) AS current,
               (NOT has_current AND newest = 1) AS "legacyFallback"
          FROM ranked

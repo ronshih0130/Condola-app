@@ -1,5 +1,6 @@
 import { paperLeaseCopy } from "@/i18n/paper-lease-versions";
 import { listPaperLeaseVersions, REASON_MAX } from "./paper-lease-versions";
+import { paperHistoryTime } from "./paper-lease-history-time";
 import type { Session } from "./types";
 
 export async function paperLeaseVersionPanel(
@@ -17,7 +18,9 @@ export async function paperLeaseVersionPanel(
       <h3>{copy.title}</h3>
       <p className="small muted">{copy.hint}</p>
       <ul data-testid="paper-version-history">
-        {versions.map((version) => (
+        {versions.map((version) => {
+          const uploaded = paperHistoryTime(version.created_at, version.timezone, session.locale, session.calendar);
+          return (
           <li key={version.id} data-current={version.current ? "true" : "false"}>
             <strong>
               {version.legacyFallback
@@ -27,14 +30,15 @@ export async function paperLeaseVersionPanel(
             <a href={`/m/leases/${leaseId}/signed/${version.id}`}>{version.file_name || copy.pdf}</a>
             <dl>
               <dt>{copy.uploadedAt}</dt>
-              <dd><time dateTime={new Date(version.created_at).toISOString()}>{version.created_at}</time></dd>
+              <dd>{uploaded ? <time dateTime={uploaded.iso}>{uploaded.label}</time> : copy.unavailable}</dd>
               <dt>{copy.uploader}</dt>
-              <dd>{version.uploaded_by ?? copy.unknownUploader}</dd>
+              <dd>{version.uploader_name ?? copy.unavailable}</dd>
               <dt>{copy.reason}</dt>
               <dd style={{ whiteSpace: "pre-wrap" }}>{version.replace_reason ?? copy.noReason}</dd>
             </dl>
           </li>
-        ))}
+          );
+        })}
       </ul>
       {canUpload ? (
         <form action={action}>
