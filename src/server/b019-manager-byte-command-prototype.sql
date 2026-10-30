@@ -6,7 +6,7 @@ CREATE TABLE app.b019_byte_probe_op(
  amount bigint NOT NULL,paid_on date NOT NULL,last5_digest text NOT NULL,reference_digest text NOT NULL,raw_lease_digest text NOT NULL,phase text NOT NULL CHECK(phase IN ('begun','ready','stored'))
 );
 REVOKE ALL ON app.b019_byte_probe_op FROM PUBLIC,anon,authenticated,service_role;
-CREATE TABLE app.b019_byte_probe_permit(xid xid8 PRIMARY KEY,purpose text NOT NULL CHECK(purpose IN ('begin','capture','store','principal')));
+CREATE TABLE app.b019_byte_probe_permit(xid xid8 PRIMARY KEY,purpose text NOT NULL CHECK(purpose IN ('begin','capture','store','principal','issuer_prepare','issuer')));
 REVOKE ALL ON app.b019_byte_probe_permit FROM PUBLIC,anon,authenticated,service_role;
 -- Owner-only research snapshot; no caller supplies identity or eligibility.
 CREATE TABLE app.b019_principal_probe_snapshot(
@@ -21,13 +21,18 @@ CREATE TABLE app.b019_principal_probe_transition(
  observed_at timestamptz NOT NULL
 );
 REVOKE ALL ON app.b019_principal_probe_snapshot,app.b019_principal_probe_transition FROM PUBLIC,anon,authenticated,service_role;
+CREATE TABLE app.b019_issuer_probe_preparation(xid xid8 PRIMARY KEY,org uuid NOT NULL,lease uuid NOT NULL,payment uuid NOT NULL,actor uuid NOT NULL,session_id uuid NOT NULL,timezone text NOT NULL,decision text NOT NULL CHECK(decision='new'));
+CREATE TABLE app.b019_issuer_probe_result(xid xid8 PRIMARY KEY,org uuid NOT NULL,source uuid NOT NULL,event uuid,recipient uuid,outcome text NOT NULL CHECK(outcome IN ('issued','recipient_unavailable')),occurred_at timestamptz NOT NULL,local_date date NOT NULL,CHECK ((outcome='issued' AND event IS NOT NULL AND recipient IS NOT NULL) OR (outcome='recipient_unavailable' AND event IS NULL AND recipient IS NULL)));
+REVOKE ALL ON app.b019_issuer_probe_preparation,app.b019_issuer_probe_result FROM PUBLIC,anon,authenticated,service_role;
 CREATE FUNCTION app.b019_principal_probe_seal() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  LOCK TABLE app.b019_byte_probe_permit IN ACCESS SHARE MODE NOWAIT;
- IF TG_OP='INSERT' AND NEW.xid=pg_current_xact_id() AND EXISTS(SELECT 1 FROM app.b019_byte_probe_permit WHERE xid=NEW.xid AND purpose='principal') THEN RETURN NEW; END IF;
+ IF TG_OP='INSERT' AND NEW.xid=pg_current_xact_id() AND EXISTS(SELECT 1 FROM app.b019_byte_probe_permit WHERE xid=NEW.xid AND purpose=CASE TG_TABLE_NAME WHEN 'b019_issuer_probe_preparation' THEN 'issuer_prepare' WHEN 'b019_issuer_probe_result' THEN 'issuer' ELSE 'principal' END) THEN RETURN NEW; END IF;
  RAISE EXCEPTION 'principal proof sealed' USING ERRCODE='23514';
 END $$;
 REVOKE ALL ON FUNCTION app.b019_principal_probe_seal() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_principal_probe_seal BEFORE INSERT OR UPDATE OR DELETE ON app.b019_issuer_probe_preparation FOR EACH ROW EXECUTE FUNCTION app.b019_principal_probe_seal();
+CREATE TRIGGER b019_principal_probe_seal BEFORE INSERT OR UPDATE OR DELETE ON app.b019_issuer_probe_result FOR EACH ROW EXECUTE FUNCTION app.b019_principal_probe_seal();
 CREATE TRIGGER b019_principal_probe_seal BEFORE INSERT OR UPDATE OR DELETE ON app.b019_principal_probe_snapshot FOR EACH ROW EXECUTE FUNCTION app.b019_principal_probe_seal();
 CREATE TRIGGER b019_principal_probe_seal BEFORE INSERT OR UPDATE OR DELETE ON app.b019_principal_probe_transition FOR EACH ROW EXECUTE FUNCTION app.b019_principal_probe_seal();
 CREATE FUNCTION app.b019_byte_probe_private_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
@@ -227,6 +232,55 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.b019_principal_probe_transition() FROM PUBLIC,anon,authenticated,service_role;
 CREATE TRIGGER z_b019_principal_transition_probe AFTER INSERT ON public.payments FOR EACH ROW EXECUTE FUNCTION app.b019_principal_probe_transition();
+-- Clone-only issuer: fixed identities and pre-source decision; no application grant.
+CREATE FUNCTION app.b019_issuer_probe_prepare() RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
+DECLARE o record; s record; v_outcome text;v_center uuid;v_zone text;v_email boolean;v_enabled boolean;
+BEGIN
+ LOCK TABLE app.b010_source_events,app.b017_old_source_transactions IN ACCESS SHARE MODE NOWAIT;
+ LOCK TABLE app.b017_occurrences,app.b017_center_resolutions,app.b028_center_events,app.b028_center_recipients,app.b019_channel_outcomes,app.b019_issuer_probe_preparation,app.b019_issuer_probe_result,app.b019_byte_probe_op,app.b019_principal_probe_snapshot,app.b019_principal_probe_transition,app.b019_byte_probe_permit,app.b019_payment_contexts,app.b019_payment_preparations,app.b019_payment_requirements IN ROW EXCLUSIVE MODE NOWAIT;
+ SELECT * INTO o FROM app.b019_byte_probe_op WHERE xid=pg_current_xact_id();IF NOT FOUND OR o.actor IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ SELECT * INTO s FROM app.b019_principal_probe_snapshot WHERE xid=o.xid AND org=o.org AND lease=o.lease AND payment=o.payment AND actor=o.actor AND session_id=o.session_id AND contact=o.payer;IF NOT FOUND THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ SELECT a.email_on,a.center_on INTO v_email,v_enabled FROM app.b019_payment_admit(o.org,o.live_org,o.env,o.session_id,o.lease,o.role) a;
+ IF v_email OR NOT v_enabled THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ SELECT timezone INTO v_zone FROM public.organizations WHERE id=o.org AND EXISTS(SELECT 1 FROM pg_timezone_names z WHERE z.name=organizations.timezone);IF NOT FOUND THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ IF EXISTS(SELECT 1 FROM app.b019_issuer_probe_preparation WHERE xid=o.xid) THEN
+  IF NOT EXISTS(SELECT 1 FROM app.b019_issuer_probe_preparation WHERE xid=o.xid AND org=o.org AND lease=o.lease AND payment=o.payment AND actor=o.actor AND session_id=o.session_id AND timezone=v_zone AND decision='new') OR NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=o.session_id AND user_id=o.actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;RETURN 'same_preparation';
+ END IF;
+ IF EXISTS(SELECT 1 FROM app.b019_payment_preparations p WHERE p.tx_id=txid_current() AND p.org_id=o.org AND p.payment_id=o.payment AND p.kind='payment_confirmed') THEN RAISE EXCEPTION 'issuer preparation provenance unavailable' USING ERRCODE='23514';END IF;
+ SELECT outcome,center_event_id INTO v_outcome,v_center FROM app.b019_prepare_payment(o.org,o.lease,o.payment,'payment_confirmed');
+ IF v_outcome IS DISTINCT FROM 'new' OR v_center IS NOT NULL THEN RAISE EXCEPTION 'issuer historical result' USING ERRCODE='23514';END IF;
+ INSERT INTO app.b019_byte_probe_permit VALUES(o.xid,'issuer_prepare');INSERT INTO app.b019_issuer_probe_preparation VALUES(o.xid,o.org,o.lease,o.payment,o.actor,o.session_id,v_zone,'new');DELETE FROM app.b019_byte_probe_permit WHERE xid=o.xid AND purpose='issuer_prepare';
+ SELECT a.email_on,a.center_on INTO v_email,v_enabled FROM app.b019_payment_admit(o.org,o.live_org,o.env,o.session_id,o.lease,o.role) a;
+ IF v_email OR NOT v_enabled OR NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=o.session_id AND user_id=o.actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;RETURN 'prepared';
+END $$;
+REVOKE ALL ON FUNCTION app.b019_issuer_probe_prepare() FROM PUBLIC,anon,authenticated,service_role;
+CREATE FUNCTION app.b019_issuer_probe_issue() RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
+DECLARE o record;s record;t record;prep record;res record;v_email boolean;v_enabled boolean;v_source uuid;v_event uuid;v_recipient uuid;v_day date;v_outcome text;
+BEGIN
+ LOCK TABLE app.b010_source_events,app.b017_old_source_transactions IN ACCESS SHARE MODE NOWAIT;
+ LOCK TABLE app.b017_occurrences,app.b017_center_resolutions,app.b028_center_events,app.b028_center_recipients,app.b019_channel_outcomes,app.b019_issuer_probe_preparation,app.b019_issuer_probe_result,app.b019_byte_probe_op,app.b019_principal_probe_snapshot,app.b019_principal_probe_transition,app.b019_byte_probe_permit,app.b019_payment_contexts,app.b019_payment_preparations,app.b019_payment_requirements IN ROW EXCLUSIVE MODE NOWAIT;
+ SELECT * INTO o FROM app.b019_byte_probe_op WHERE xid=pg_current_xact_id();IF NOT FOUND OR o.actor IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ SELECT * INTO s FROM app.b019_principal_probe_snapshot WHERE xid=o.xid AND org=o.org AND lease=o.lease AND payment=o.payment AND actor=o.actor AND session_id=o.session_id AND contact=o.payer;IF NOT FOUND THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ SELECT * INTO t FROM app.b019_principal_probe_transition WHERE xid=o.xid AND org=o.org AND lease=o.lease AND payment=o.payment AND actor=o.actor AND contact=o.payer AND principal IS NOT DISTINCT FROM s.principal AND eligible=s.eligible;IF NOT FOUND THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ SELECT * INTO prep FROM app.b019_issuer_probe_preparation WHERE xid=o.xid AND org=o.org AND lease=o.lease AND payment=o.payment AND actor=o.actor AND session_id=o.session_id AND decision='new';IF NOT FOUND THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ SELECT a.email_on,a.center_on INTO v_email,v_enabled FROM app.b019_payment_admit(o.org,o.live_org,o.env,o.session_id,o.lease,o.role) a;
+ IF v_email OR NOT v_enabled OR NOT EXISTS(SELECT 1 FROM public.organizations x JOIN pg_timezone_names z ON z.name=x.timezone WHERE x.id=o.org AND x.timezone=prep.timezone) OR NOT EXISTS(SELECT 1 FROM app.b019_payment_preparations p WHERE p.tx_id=txid_current() AND p.org_id=o.org AND p.lease_id=o.lease AND p.payment_id=o.payment AND p.actor_id=o.actor AND p.session_id=o.session_id AND p.kind='payment_confirmed') OR NOT EXISTS(SELECT 1 FROM public.payments p WHERE p.id=o.payment AND p.org_id=o.org AND p.lease_id=o.lease AND p.payer_contact_id=o.payer AND p.status='confirmed' AND p.source='manager_entry' AND p.submitted_by=o.actor AND p.confirmed_by=o.actor) THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ v_day:=(t.observed_at AT TIME ZONE prep.timezone)::date;v_outcome:=CASE WHEN s.eligible THEN 'issued' ELSE 'recipient_unavailable' END;
+ SELECT * INTO res FROM app.b019_issuer_probe_result WHERE xid=o.xid;
+ IF FOUND THEN
+  IF res.org IS DISTINCT FROM o.org OR res.outcome IS DISTINCT FROM v_outcome OR res.occurred_at IS DISTINCT FROM t.observed_at OR res.local_date IS DISTINCT FROM v_day OR NOT EXISTS(SELECT 1 FROM app.b017_occurrences n JOIN app.b019_channel_outcomes co ON co.org_id=n.org_id AND co.neutral_source_id=n.id JOIN app.b019_payment_requirements q ON q.tx_id=txid_current() AND q.org_id=n.org_id AND q.occurrence_id=n.id WHERE n.org_id=o.org AND n.id=res.source AND n.lease_id=o.lease AND n.payment_id=o.payment AND n.actor_id=o.actor AND n.kind='payment_confirmed' AND n.payer_contact_id=o.payer AND n.payer_principal_user_id IS NOT DISTINCT FROM s.principal AND n.occurred_at=t.observed_at AND n.local_date=v_day AND co.channel='in_app' AND co.outcome=res.outcome AND co.center_event_id IS NOT DISTINCT FROM res.event AND q.payment_id=o.payment AND q.actor_id=o.actor AND q.kind='payment_confirmed') OR (s.eligible AND NOT EXISTS(SELECT 1 FROM app.b028_center_events e JOIN app.b028_center_recipients r ON r.org_id=e.org_id AND r.event_id=e.id WHERE e.org_id=o.org AND e.id=res.event AND e.neutral_source_id=res.source AND e.kind='payment_confirmed' AND e.occurred_at=t.observed_at AND r.id=res.recipient AND r.persona='tenant' AND r.contact_id=o.payer AND r.principal_user_id=s.principal)) OR (s.eligible AND (SELECT count(*) FROM app.b028_center_recipients ent WHERE ent.org_id=o.org AND ent.event_id=res.event)<>1) OR (NOT s.eligible AND (res.event IS NOT NULL OR res.recipient IS NOT NULL OR EXISTS(SELECT 1 FROM app.b028_center_events ev WHERE ev.org_id=o.org AND ev.neutral_source_id=res.source))) THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ ELSE
+  IF NOT EXISTS(SELECT 1 FROM app.b019_payment_requirements q WHERE q.tx_id=txid_current() AND q.org_id=o.org AND q.lease_id=o.lease AND q.payment_id=o.payment AND q.actor_id=o.actor AND q.kind='payment_confirmed' AND q.occurrence_id IS NULL) THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+  INSERT INTO app.b017_occurrences(org_id,lease_id,payment_id,kind,occurrence_key,actor_id,payer_contact_id,payer_principal_user_id,local_date,occurred_at) VALUES(o.org,o.lease,o.payment,'payment_confirmed','payment_confirmed',o.actor,o.payer,s.principal,v_day,t.observed_at) RETURNING id INTO v_source;
+  IF s.eligible THEN INSERT INTO app.b028_center_events(org_id,kind,neutral_source_id,occurred_at) VALUES(o.org,'payment_confirmed',v_source,t.observed_at) RETURNING id INTO v_event;INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,contact_id) VALUES(o.org,v_event,'tenant',s.principal,o.payer) RETURNING id INTO v_recipient;END IF;
+  INSERT INTO app.b019_channel_outcomes(org_id,neutral_source_id,channel,outcome,center_event_id) VALUES(o.org,v_source,'in_app',v_outcome,v_event);
+  UPDATE app.b019_payment_requirements SET occurrence_id=v_source WHERE tx_id=txid_current() AND org_id=o.org AND payment_id=o.payment AND kind='payment_confirmed' AND actor_id=o.actor AND occurrence_id IS NULL;IF NOT FOUND THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+  INSERT INTO app.b019_byte_probe_permit VALUES(o.xid,'issuer');INSERT INTO app.b019_issuer_probe_result VALUES(o.xid,o.org,v_source,v_event,v_recipient,v_outcome,t.observed_at,v_day);DELETE FROM app.b019_byte_probe_permit WHERE xid=o.xid AND purpose='issuer';
+ END IF;
+ SELECT a.email_on,a.center_on INTO v_email,v_enabled FROM app.b019_payment_admit(o.org,o.live_org,o.env,o.session_id,o.lease,o.role) a;IF v_email OR NOT v_enabled OR NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=o.session_id AND user_id=o.actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'issuer unavailable' USING ERRCODE='42501';END IF;
+ RETURN v_outcome;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_issuer_probe_issue() FROM PUBLIC,anon,authenticated,service_role;
 CREATE FUNCTION app.b019_byte_probe_begin(p_org uuid,p_live uuid,p_env text,p_session uuid,p_lease_text text,p_role text,p_request uuid,p_bytes bytea)
 RETURNS TABLE(disposition text,payment_id uuid) LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
 DECLARE actor uuid:=auth.uid(); j jsonb; lease uuid; amount bigint; paid date; dg text; rawdg text; l5dg text; refdg text; old app.b019_byte_probe_op%ROWTYPE; p uuid; v_lease uuid; st text; email boolean; center boolean; property uuid; currency text; payer uuid; aliases integer;v_prop_id uuid;v_prop_currency text;v_last5 public.payments.payer_account_last5%TYPE;
@@ -240,9 +294,10 @@ BEGIN
  l5dg:=encode(public.digest(convert_to(CASE WHEN v_last5 IS NULL THEN 'N' ELSE 'V'||v_last5::text END,'UTF8'),'sha256'),'hex');refdg:=encode(public.digest(convert_to(CASE WHEN j->>'reference'='' THEN 'N' ELSE 'V'||(j->>'reference') END,'UTF8'),'sha256'),'hex');
  LOCK TABLE public.platform_settings IN SHARE MODE NOWAIT;
  PERFORM 1 FROM public.organizations WHERE id IN(p_org,p_live) ORDER BY id FOR SHARE NOWAIT;
- LOCK TABLE app.b010_source_events,app.b017_occurrences IN ACCESS SHARE MODE NOWAIT;
+ LOCK TABLE app.b010_source_events,app.b017_old_source_transactions IN ACCESS SHARE MODE NOWAIT;
+ LOCK TABLE app.b017_occurrences,app.b017_center_resolutions,app.b028_center_events,app.b028_center_recipients,app.b019_channel_outcomes IN ROW EXCLUSIVE MODE NOWAIT;
  LOCK TABLE app.b010_payment_commands IN SHARE ROW EXCLUSIVE MODE NOWAIT;
- LOCK TABLE app.b019_principal_probe_snapshot,app.b019_principal_probe_transition,app.b019_byte_probe_op,app.b019_byte_probe_permit,app.b019_payment_contexts,app.b019_payment_requirements,app.b019_post_probe_op,app.b019_post_probe_invoice,app.b019_post_probe_line,app.b019_post_probe_old_alloc,public.audit_log IN ROW EXCLUSIVE MODE NOWAIT;
+ LOCK TABLE app.b019_issuer_probe_preparation,app.b019_issuer_probe_result,app.b019_principal_probe_snapshot,app.b019_principal_probe_transition,app.b019_byte_probe_op,app.b019_byte_probe_permit,app.b019_payment_contexts,app.b019_payment_preparations,app.b019_payment_requirements,app.b019_post_probe_op,app.b019_post_probe_invoice,app.b019_post_probe_line,app.b019_post_probe_old_alloc,public.audit_log IN ROW EXCLUSIVE MODE NOWAIT;
  SELECT a.email_on,a.center_on INTO email,center FROM app.b019_payment_admit(p_org,p_live,p_env,p_session,lease,p_role) a;
  IF NOT pg_try_advisory_xact_lock(hashtextextended('b010:payment:'||p_org::text||':'||actor::text||':'||p_request::text,0)) THEN RAISE EXCEPTION 'prototype busy' USING ERRCODE='55P03'; END IF;
  SELECT * INTO old FROM app.b019_byte_probe_op WHERE xid=pg_current_xact_id();
