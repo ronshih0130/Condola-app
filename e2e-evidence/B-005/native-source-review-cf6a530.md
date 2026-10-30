@@ -1,0 +1,11 @@
+# PASS_SCOPED_B005_SOURCE
+
+Recorded 2026-10-30T16:04:32.661640-07:00. Highest requested reviewer Astra/xhigh, actual model/effort unknown. Independent source review only; no reviewer DB/runtime/tests/writes. Scoped plan and exact implementation GO, not runtime or whole-feature approval.
+
+Exact blobs: onboarding `2ab1c4bdd178fb10601287225076f207204e6043`; report `fcfa6033c5faf2b5bd6f4e67309bb561df6dd139`; private config `8191da188fe8669759c448139979614ddb1cd486`; runner `b59b9a815cd5f26113b2f0aeb0e19dc346192449`. Outside launcher SHA-256 `9139a59cf2c70fc47794181e72e2ca36a36a9eae9500e8465f48db30c08a6d69`: earlier reviewed prepared-schema helper with B005 DB/log prefixes and exclusive log creation; provider/debug stripping and fresh in-memory local keys retained.
+
+Pre-runtime source findings resolved: expired fixture explicitly uses expired status to respect one-pending-contact index, with expired1/pending0 guidance; report uses serialized HTML exclusion, exact ordered numeric cells, actual CSV attachment/content-type and exact ordered currency/income/expense/net suffix. Financial fixture is a single normal-trigger transaction with balanced invoice/payment ledgers, qualifying approved null-ticket owner expense and explicit dates covering both live events and current-day sandbox events. No product/schema change.
+
+Onboarding retains exact accepted invitation actor/current-contact binding and password-boolean check, resume/none-audit/manager/sample checks. Genuine owned sandbox created before live opt-in, two captured org objects and full original setting presence/value/description/timestamp restored without disabling triggers. Both browser contexts are fenced before token navigation; direct API requests use fixed origin/maxRedirects0. Screenshots only synthetic non-token pages; traces/video/automatic snapshots disabled.
+
+Limits: global/org OFF checked together, not an isolated guard matrix; expired display proof is not expired-token HTTP rejection; current browser does not establish teamON/two-entrypoint behavior or provider delivery; final aggregate readback may claim only retained state after resets. Stage/Claude/ClassB/activation remain pending. Proceed to guarded onboarding2+report2 execution, preserve any failure.

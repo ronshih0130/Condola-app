@@ -1,28 +1,79 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 import { Client } from "pg";
 import { disposableDbUrl } from "../src/server/test-disposable-db";
 import { ORG_ID, USERS } from "../src/server/ids";
-import { ACCOUNTS, resetDemo, signIn, waitPastConsent } from "./session";
+import { ACCOUNTS, signIn, waitPastConsent } from "./session";
 
 const db = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
-if (process.env.DEMO_MODE !== "true") throw new Error("Local synthetic demo mode required");
+if (process.env.DEMO_MODE !== "true" || process.env.B005_PRIVATE_HTTP_CONFIG !== "1" || process.env.PLAYWRIGHT_NO_COPY_PROMPT !== "1") throw new Error("Local synthetic demo mode required");
 
-for (const width of [390, 1280]) test(`live onboarding resumes and respects real acceptance at ${width}px`, async ({ page, browser }) => {
-  await page.setViewportSize({ width, height: 844 });
-  const errors: string[] = [];
-  const watch = (target: typeof page) => {
-    target.on("pageerror", (e) => errors.push(`pageerror ${e.message}`));
-    target.on("console", (m) => { if (m.type() === "error") errors.push(`console ${m.text()}`); });
-    target.on("response", (r) => { if (r.status() >= 500) errors.push(`HTTP ${r.status()} ${new URL(r.url()).pathname}`); });
-  };
-  watch(page);
-  await resetDemo(page);
-  const client = new Client({ connectionString: db.href }); await client.connect();
-  const originalRollout = (await client.query(`SELECT value FROM platform_settings WHERE key='onboarding_progress'`)).rows[0]?.value;
-  const originalOrg = (await client.query(`SELECT feature_flags,settings FROM organizations WHERE id=$1`, [ORG_ID])).rows[0];
+const origin = "http://127.0.0.1:43136";
+type Control = { value: unknown; description: string | null; updated_at: string };
+type Org = { id: string; feature_flags: unknown; settings: unknown };
+function guard(info: TestInfo) {
+  if (!info.config.configFile?.endsWith("/e2e/b005-onboarding-private-playwright.config.ts") || info.project.use.trace !== "off" || info.project.use.video !== "off" || info.project.use.screenshot !== "off" || info.config.reporter.length !== 1 || info.config.reporter[0][0] !== "line" || process.env.PLAYWRIGHT_NO_COPY_PROMPT !== "1") throw new Error("B005 private configuration required");
+}
+async function fence(context: BrowserContext, errors: string[]) {
+  await context.route("**/*", async route => {
+    try { if (new URL(route.request().url()).origin === origin) { await route.continue(); return; } } catch { /* reject invalid URLs */ }
+    errors.push("off-origin request"); await route.abort();
+  });
+}
+function watch(page: Page, errors: string[]) {
+  page.on("pageerror", () => errors.push("page error"));
+  page.on("console", message => { if (message.type() === "error") errors.push("console error"); });
+  page.on("response", response => { if (response.status() >= 500) errors.push("server error"); });
+}
+async function reset(page: Page) {
+  await signIn(page, ACCOUNTS.admin);
+  let status: number;
+  try { status = (await page.request.post(`${origin}/api/demo/reset`, { maxRedirects: 0 })).status(); }
+  catch { throw new Error("B005 local reset request failed"); }
+  expect(status).toBe(200);
+  await signIn(page, ACCOUNTS.admin);
+}
+function safeFailure(phase: string, error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: unknown }).code : null;
+  return `${phase}${typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? ` (${code})` : ""}`;
+}
+async function restore(client: Client, control: Control | undefined, orgs: Org[]) {
+  await client.query("BEGIN");
   try {
+    await client.query(`DELETE FROM platform_settings WHERE key='onboarding_progress'`);
+    if (control) await client.query(`INSERT INTO platform_settings(key,value,description,updated_at) VALUES ('onboarding_progress',$1::jsonb,$2,$3::timestamptz)`, [JSON.stringify(control.value),control.description,control.updated_at]);
+    for (const org of orgs) await client.query(`UPDATE organizations SET feature_flags=$2::jsonb,settings=$3::jsonb WHERE id=$1`, [org.id,JSON.stringify(org.feature_flags),JSON.stringify(org.settings)]);
+    const actual = (await client.query<Control>(`SELECT value,description,updated_at::text AS updated_at FROM platform_settings WHERE key='onboarding_progress'`)).rows;
+    const actualOrgs = (await client.query<Org>(`SELECT id::text,feature_flags,settings FROM organizations WHERE id=ANY($1::uuid[]) ORDER BY id`, [orgs.map(o=>o.id)])).rows;
+    expect(JSON.stringify(actual) === JSON.stringify(control ? [control] : []) && JSON.stringify(actualOrgs) === JSON.stringify(orgs)).toBe(true);
+    await client.query("COMMIT");
+  } catch (error) { try { await client.query("ROLLBACK"); } catch { /* retain primary */ } throw error; }
+}
+
+test("live onboarding resumes and respects real acceptance", async ({ page, browser }, info) => {
+  guard(info);
+  const width = info.project.use.viewport?.width;
+  if (width !== 390 && width !== 1280) throw new Error("B005 invalid viewport");
+  const errors: string[] = [];
+  await fence(page.context(), errors); watch(page, errors);
+  let client: Client | undefined, control: Control | undefined, orgs: Org[] = [], captured = false;
+  let primary: string | undefined, restoration: string | undefined;
+  try {
+    await reset(page);
+    await page.goto("/api/env?set=sandbox&next=/m"); await expect(page.getByTestId("env-banner")).toBeVisible();
+    await page.goto("/api/env?set=live&next=/m");
+    client = new Client({ connectionString: db.href }); await client.connect();
+    const sandbox = (await client.query<{id:string}>(`SELECT id::text FROM organizations WHERE environment='sandbox' AND live_org_id=$1`,[ORG_ID])).rows;
+    expect(sandbox.length === 1).toBe(true);
+    control = (await client.query<Control>(`SELECT value,description,updated_at::text AS updated_at FROM platform_settings WHERE key='onboarding_progress'`)).rows[0];
+    orgs = (await client.query<Org>(`SELECT id::text,feature_flags,settings FROM organizations WHERE id=ANY($1::uuid[]) ORDER BY id`,[[ORG_ID,sandbox[0].id]])).rows;
+    const value = control?.value as { enabled?: unknown; allowed_org_ids?: unknown } | undefined;
+    expect((control === undefined || (!!value && typeof value === "object" && !Array.isArray(value) && value.enabled === false && Array.isArray(value.allowed_org_ids))) && orgs.length === 2).toBe(true);
+    expect(orgs.every(org => (org.feature_flags as Record<string, unknown>).onboarding_progress !== true)).toBe(true);
+    const inbound = (await client.query<{n:number}>(`SELECT count(*)::int AS n FROM pg_constraint WHERE contype='f' AND confrelid='public.platform_settings'::regclass`)).rows[0].n;
+    expect(inbound === 0).toBe(true);
+    captured = true;
+    await client.query(`INSERT INTO platform_settings(key,value) VALUES ('onboarding_progress','{"enabled":false,"allowed_org_ids":[]}'::jsonb) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value`);
     await client.query(`UPDATE platform_settings SET value='{"enabled":false,"allowed_org_ids":[]}' WHERE key='onboarding_progress'`);
     await page.goto("/m"); await expect(page.getByTestId("live-onboarding")).toHaveCount(0);
     for (const table of ["properties","units","rooms","leases","lease_parties","contacts","invoices","property_owners","org_members","invitations"]) {
@@ -42,32 +93,35 @@ for (const width of [390, 1280]) test(`live onboarding resumes and respects real
     const contact = (await client.query<{id:string}>(`INSERT INTO contacts(org_id,is_tenant,display_name,email) VALUES ($1,true,'B005 browser','b005-tenant@example.test') RETURNING id::text`,[ORG_ID])).rows[0].id;
     await client.query(`INSERT INTO lease_parties(org_id,lease_id,contact_id,role) VALUES ($1,$2,$3,'primary')`,[ORG_ID,lease,contact]);
     await client.query(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,status,total_minor) VALUES ($1,$2,$3,'B005-BROWSER','TWD',current_date,'open',0)`,[ORG_ID,property,lease]);
-    const token = randomBytes(32).toString("base64url"); const hash = createHash("sha256").update(token).digest("hex");
-    await client.query(`INSERT INTO invitations(org_id,kind,contact_id,lease_id,email,code_hash,expires_at,invited_by) VALUES ($1,'tenant',$2,$3,'b005-tenant@example.test',$4,now()+interval '1 day',$5)`,[ORG_ID,contact,lease,hash,USERS.admin]);
-    await page.reload(); await expect(row("租約")).toContainText("已完成"); await expect(row("首張帳單")).toContainText("已完成");
+    const expiredHash = createHash("sha256").update(randomBytes(32)).digest("hex");
+    await client.query(`INSERT INTO invitations(org_id,kind,contact_id,lease_id,email,code_hash,expires_at,invited_by,status) VALUES ($1,'tenant',$2,$3,'b005-tenant@example.test',$4,now()-interval '1 day',$5,'expired')`,[ORG_ID,contact,lease,expiredHash,USERS.admin]);
     await card.locator('input[name="tenant"]').check(); await card.getByRole("button",{ name:"儲存邀請選擇" }).click();
+    await page.reload(); await expect(row("租客")).toContainText("進行中");
+    await expect(row("租客")).toContainText("已過期邀請: 1"); await expect(row("租客")).toContainText("待接受邀請: 0");
+    expect((await client.query<{unbound:boolean}>(`SELECT user_id IS NULL AS unbound FROM contacts WHERE id=$1 AND org_id=$2`,[contact,ORG_ID])).rows[0].unbound).toBe(true);
+    const token = randomBytes(32).toString("base64url"); const hash = createHash("sha256").update(token).digest("hex");
+    const invitation = (await client.query<{id:string}>(`INSERT INTO invitations(org_id,kind,contact_id,lease_id,email,code_hash,expires_at,invited_by) VALUES ($1,'tenant',$2,$3,'b005-tenant@example.test',$4,now()+interval '1 day',$5) RETURNING id::text`,[ORG_ID,contact,lease,hash,USERS.admin])).rows[0].id;
+    await page.reload(); await expect(row("租約")).toContainText("已完成"); await expect(row("首張帳單")).toContainText("已完成");
     await expect(row("租客")).toContainText("進行中"); await expect(row("租客")).toContainText("待接受邀請: 1");
-    const guest = await browser.newContext({ viewport: { width, height: 844 } }); const guestPage = await guest.newPage(); watch(guestPage);
+    const guest = await browser.newContext({ baseURL: origin, viewport: { width, height: 844 } }); await fence(guest, errors); const guestPage = await guest.newPage(); watch(guestPage, errors);
     try {
       await guestPage.goto(`/accept/${token}`); await expect(guestPage.getByTestId("portal-invite-title")).toBeVisible();
       await guestPage.getByTestId("new-password").fill("Synthetic1234"); await guestPage.getByTestId("portal-submit").click();
       await waitPastConsent(guestPage,"liff-frame");
     } finally { await guest.close(); }
+    const accepted = (await client.query<{valid:boolean}>(`SELECT (i.status='accepted' AND i.accepted_at IS NOT NULL AND i.accepted_by IS NOT NULL AND i.accepted_by=c.user_id AND u.encrypted_password IS NOT NULL AND btrim(u.encrypted_password)<>'') AS valid FROM invitations i JOIN contacts c ON c.id=i.contact_id AND c.org_id=i.org_id LEFT JOIN auth.users u ON u.id=c.user_id WHERE i.id=$1 AND i.org_id=$2 AND c.id=$3`,[invitation,ORG_ID,contact])).rows;
+    expect(accepted.length === 1 && accepted[0].valid === true).toBe(true);
     await page.reload(); await expect(row("租客")).toContainText("已完成");
     if (width === 390) await page.getByTestId("nav-toggle").click();
     await page.getByTestId(width === 390 ? "sign-out-drawer" : "sign-out").click(); await expect(page).toHaveURL(/\/login/);
     await signIn(page,ACCOUNTS.admin); await expect(card).toBeVisible(); await expect(row("租客")).toContainText("已完成");
     await card.locator('input[name="tenant"]').uncheck(); await card.getByRole("button",{name:"儲存邀請選擇"}).click(); await expect(row("租客")).toContainText("不需要");
     expect((await client.query(`SELECT 1 FROM audit_log WHERE org_id=$1 AND actor_user_id=$2 AND event_type='onboarding_invitation_policy_changed' AND new_row->'not_needed' @> '["tenant"]'::jsonb`,[ORG_ID,USERS.admin])).rowCount).toBeGreaterThan(0);
-    mkdirSync("../B005-onboarding-evidence",{recursive:true}); await page.screenshot({path:`../B005-onboarding-evidence/onboarding-${width}.png`,fullPage:true});
+    await page.screenshot({path:info.outputPath("onboarding.png"),fullPage:true});
     await signIn(page,ACCOUNTS.manager); await expect(page.getByTestId("live-onboarding")).toHaveCount(0);
     expect(errors).toEqual([]);
-    writeFileSync(`../B005-onboarding-evidence/onboarding-${width}.json`,JSON.stringify({width,http5xx:0,consoleErrors:0,pageErrors:0,screenshot:`onboarding-${width}.png`},null,2));
-  } finally {
-    try {
-      if (originalRollout === undefined) await client.query(`DELETE FROM platform_settings WHERE key='onboarding_progress'`);
-      else await client.query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='onboarding_progress'`, [JSON.stringify(originalRollout)]);
-      if (originalOrg) await client.query(`UPDATE organizations SET feature_flags=$2::jsonb,settings=$3::jsonb WHERE id=$1`, [ORG_ID,JSON.stringify(originalOrg.feature_flags),JSON.stringify(originalOrg.settings)]);
-    } finally { await client.end(); }
-  }
+  } catch (error) { primary = safeFailure("onboarding flow", error); }
+  if (client && captured) try { await restore(client, control, orgs); } catch (error) { restoration = safeFailure("control restoration", error); }
+  if (client) try { await client.end(); } catch { restoration ??= "connection cleanup"; }
+  if (primary || restoration) throw new Error([primary, restoration].filter(Boolean).join("; "));
 });

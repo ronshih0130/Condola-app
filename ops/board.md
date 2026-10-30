@@ -227,3 +227,7 @@ B001utility scoped validation 2026-10-30T15:47:19.185841-07:00: highest exactsou
 ## B001 heading final local checkpoint — 2026-10-30T15:56:54.814861-07:00
 
 Candidate `41c5b7ff3c3a730308d4e31f3b4508df7a650055` verified with599unit/358RLS+1approvedhistoricalSKIP, builds/originalpreflight/Worker1/paperbrowser4/affectedutility1 PASS. Scoped app/test blobs as [checkpoint](../e2e-evidence/B-001/heading-checkpoint-41c5b7f.md); signed390/1280 visualchecked. Root serializes evidence/verdict/endlog/commit/push/mirror; no concurrent source writer. WholeB001external and B004rollback/stage/Claude remainders remain pending. After publication/mirror, B005 is next; read-only reconnaissance only until then.
+
+## B005 private proof reservation — 2026-10-30T15:59:18.732340-07:00
+
+Published/mirrored baselinecf6a530. Root reserves existing `e2e/onboarding-progress.spec.ts`, new `e2e/b005-onboarding-private-playwright.config.ts`, optional bounded new `e2e/b005-report-isolation.spec.ts`, narrow `scripts/run-e2e.ts` dispatch and serialized evidence/board/queue/HANDOFF. No app/schema/seed/package/legal edit. Highest-requested source-first plan pending; read-only reconnaissance confirms existingbindings must be preserved, not reclassified from ambiguous historical invitations. Reuse actualaccepted/bound/resume/none flow and add expired-unbound plus actuallive/ownedSBreport proof; private source plan in outside work/B005-private-proof-plan.md. Root assigns one sourcewriter only after scoped plan review.

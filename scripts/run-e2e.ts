@@ -61,6 +61,7 @@ for (const file of files) {
     : file === "e2e/b002-retention-http.spec.ts" ? ["--config", "e2e/b002-retention-http-playwright.config.ts"]
     : file === "e2e/payee-access.spec.ts" ? ["--config", "e2e/b003-payee-private-playwright.config.ts"]
     : file === "e2e/b004-paper-delivery.spec.ts" ? ["--config", "e2e/b004-paper-private-playwright.config.ts"]
+    : ["e2e/onboarding-progress.spec.ts", "e2e/b005-report-isolation.spec.ts"].includes(file) ? ["--config", "e2e/b005-onboarding-private-playwright.config.ts"]
     : file === "e2e/b015-edit-local.spec.ts" ? ["--config", "e2e/tenant-directory-edit-playwright.config.ts"]
     : file === "e2e/b015-directory-local.spec.ts" ? ["--config", "e2e/tenant-directory-compat-playwright.config.ts"]
     : centerSpecs.has(file) ? ["--config", "playwright.b017-localhost.config.ts"] : [];
