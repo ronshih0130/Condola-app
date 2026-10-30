@@ -1,0 +1,107 @@
+{
+  "scope": "local synthetic only",
+  "storage": "private local work/B007; not uploaded",
+  "retention": "repository retention decision pending",
+  "files": [
+    {
+      "path": "browser-layout/edit-on-tw-1280.png",
+      "bytes": 152432,
+      "sha256": "07297942d8b843d4de912acdd5f49be8e981602501c37930057ca25de82fc506"
+    },
+    {
+      "path": "browser-layout/edit-on-tw-390.png",
+      "bytes": 112511,
+      "sha256": "47e4ac2b1b8084cbbcebe5ccb5c86fd69f5fe8dfcafa73238cca1150cf78f9ea"
+    },
+    {
+      "path": "browser-layout/wizard-on-tw-1280.png",
+      "bytes": 88494,
+      "sha256": "ceb43f1cd83bd47d91492df1ce144d182969602e604ba38d2fd13752ae61bee9"
+    },
+    {
+      "path": "browser-layout/wizard-on-tw-390.png",
+      "bytes": 53266,
+      "sha256": "0d6a068ab265656c973b3dfe6aee2bd110e6ad6b0caa3909995121f50745b4bf"
+    },
+    {
+      "path": "browser-matrix/edit-off-us-1280.png",
+      "bytes": 157120,
+      "sha256": "256bb845aeacca50b2ccf04ed7b86a6ba650a006f25003f8e2ca1b34df649001"
+    },
+    {
+      "path": "browser-matrix/edit-off-us-390.png",
+      "bytes": 111634,
+      "sha256": "ca2cae936ca129224f98deb504b2cb12a23befbef513eff586b5f403f8a6c77e"
+    },
+    {
+      "path": "browser-matrix/edit-on-ca-1280.png",
+      "bytes": 141658,
+      "sha256": "9d5b1f7eb5532c174bbd6224a98df20e6de482ecbd381e4a9c10d724af0c31a6"
+    },
+    {
+      "path": "browser-matrix/edit-on-ca-390.png",
+      "bytes": 96468,
+      "sha256": "cced08aaebee75e73bdbfa78c4f4c9fcee8fc438f8f690e8ed1a094cb3fa9254"
+    },
+    {
+      "path": "browser-matrix/edit-on-tw-1280.png",
+      "bytes": 157634,
+      "sha256": "eec37fcdb03a4b1f7707cd3ebb533629c35df64ed154aa27c618b5f42a7d1ea2"
+    },
+    {
+      "path": "browser-matrix/edit-on-tw-390.png",
+      "bytes": 107146,
+      "sha256": "6c34986ce43e3b9d6e0b6420c39b0d1112580e93b4b2e0a7e51b692a16ab6389"
+    },
+    {
+      "path": "browser-matrix/edit-on-us-missing-1280.png",
+      "bytes": 140024,
+      "sha256": "112ab36e1c2600e31fafbdc623d67f2a17d65387614e5b892b36f7254951051d"
+    },
+    {
+      "path": "browser-matrix/edit-on-us-missing-390.png",
+      "bytes": 100919,
+      "sha256": "99594664544e4970e0d61a44806e62ad8317202305fe75053ee100751921ea1f"
+    },
+    {
+      "path": "browser-matrix/wizard-off-us-1280.png",
+      "bytes": 88859,
+      "sha256": "2a7e37b5c662e06631fdb27ac0cd69700e26eac215c02734eb964d8c6eaf0cda"
+    },
+    {
+      "path": "browser-matrix/wizard-off-us-390.png",
+      "bytes": 54016,
+      "sha256": "6fc7077995f5da3d83d17ae3e30fc98c9ce70a2e598a038c26085f217cb42fb1"
+    },
+    {
+      "path": "browser-matrix/wizard-on-ca-1280.png",
+      "bytes": 80744,
+      "sha256": "9ae83f236cd836c7d548280a5ed0564f34d781ac344b81d768c0287b36b05448"
+    },
+    {
+      "path": "browser-matrix/wizard-on-ca-390.png",
+      "bytes": 45397,
+      "sha256": "43c23e28f9fcb00e4e6f53d7aaca99518d7c5f0de24d32cd7396a1adf433f19a"
+    },
+    {
+      "path": "browser-matrix/wizard-on-tw-1280.png",
+      "bytes": 88833,
+      "sha256": "0e6fcd28b8d8c1f9db89bf63723144b9c5f1ef8ece73cbcc82eac153d248c73d"
+    },
+    {
+      "path": "browser-matrix/wizard-on-tw-390.png",
+      "bytes": 53872,
+      "sha256": "1c93330aa58c7f6872d0a3066c2d1c77d6dc6c1da7d7362a8ea931185852a6bc"
+    },
+    {
+      "path": "browser-matrix/wizard-on-us-missing-1280.png",
+      "bytes": 77928,
+      "sha256": "f176a1f87a6cfcdc826a3c4343a171f4974a11ce625d5c04066e08b1252a50be"
+    },
+    {
+      "path": "browser-matrix/wizard-on-us-missing-390.png",
+      "bytes": 42710,
+      "sha256": "73e349119f60d99a830f08028d919ea304db885acaad08def6d040a9e744ce6d"
+    }
+  ]
+}

@@ -505,7 +505,7 @@ export function LeaseWizard({
           {depositPolicy?.regionalEnabled && depositPolicy.maxMonths === null ? <p className="hint">{t("deposit_policy_missing")}</p> : null}
           {depositState === "warn" || depositState === "block" ? <p className="alert warn">{t(depositState === "warn" ? "deposit_policy_warn" : "deposit_policy_block", { cap: depositCap ?? 0 })}</p> : null}
           {depositOver ? (
-            <div className="alert warn" data-testid="deposit-alert">
+            <div className="alert warn" data-testid="deposit-alert" style={{ display: "block" }}>
               <div>{t("lease_deposit_over", { months: depositMonths, cap: depositCap ?? 0 })}</div>
               <label className="f" style={{ marginTop: 8 }}>{t("deposit_policy_reason")}</label>
               <textarea

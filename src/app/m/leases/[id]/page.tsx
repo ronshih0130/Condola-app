@@ -129,7 +129,7 @@ export default async function LeasePage({
                 </tr>
                 {lease.deposit_override_reason ? (
                   <tr data-testid="deposit-override-reason">
-                    <td>{t("lease_deposit_reason")}</td>
+                    <td>{t("deposit_policy_reason")}</td>
                     <td>{lease.deposit_override_reason}</td>
                   </tr>
                 ) : null}
