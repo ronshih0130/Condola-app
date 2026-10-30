@@ -1,4 +1,6 @@
 {
+  "im_source_line": "Source row",
+  "im_date_format_help": "Use YYYY-MM-DD or a Taiwan ROC date such as 115/01/05.",
  "i_legal_consent_required": "Please agree to the Terms of Service and Privacy Policy first.",
  "im_again": "Import another file",
  "im_already": "These rows already exist. Nothing new was added.",

@@ -1,4 +1,6 @@
 {
+  "im_source_line": "原始列號",
+  "im_date_format_help": "請使用 YYYY-MM-DD 或民國日期，例如 115/01/05。",
  "i_legal_consent_required": "請先同意服務條款與隱私權政策",
  "im_again": "再匯入一個檔案",
  "im_already": "這些資料已經存在，沒有再新增。",

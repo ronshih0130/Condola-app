@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { claimFormSubmit, releaseFormSubmit } from "./submit-once";
-import { useT } from "./locale";
+import { useLocale, useT } from "./locale";
 import { csvDocument, buildXlsx, readSpreadsheet, SpreadsheetError } from "@/lib/spreadsheet";
 import {
   IMPORT_FIELDS,
   IMPORT_MAX_ROWS,
   IMPORT_PREVIEW_BATCH,
   issuePreviewColumns,
+  issueFields,
+  fieldLabel,
+  mergeImportErrors,
+  importProblemRows,
   ignoredNationalIdHeaders,
   matchColumns,
   missingRequired,
@@ -38,8 +42,9 @@ const EMPTY: ImportResult = {
   warnings: [],
 };
 
-export function ImportWizard() {
+export function ImportWizard({ detailsEnabled = false }: { detailsEnabled?: boolean }) {
   const t = useT();
+  const locale = useLocale();
   const steps = [t("im_s1"), t("im_s2"), t("im_s3")];
   const [step, setStep] = useState(0);
   const [fileName, setFileName] = useState("");
@@ -47,6 +52,7 @@ export function ImportWizard() {
   const [encodingChoice, setEncodingChoice] = useState<"auto" | "utf-8" | "big5">("auto");
   const [detected, setDetected] = useState("");
   const [table, setTable] = useState<string[][]>([]);
+  const [rowNumbers, setRowNumbers] = useState<number[]>([]);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -63,17 +69,17 @@ export function ImportWizard() {
 
   const mapping = useMemo(() => (table[0] ? matchColumns(table[0]) : null), [table]);
   const ignoredIds = useMemo(() => ignoredNationalIdHeaders(table[0] ?? []), [table]);
-  const parsed = useMemo(() => (mapping ? validateImportRows(tableToRows(table, mapping)) : []), [mapping, table]);
+  const parsed = useMemo(() => (mapping ? validateImportRows(tableToRows(table, mapping, detailsEnabled ? rowNumbers : undefined)) : []), [mapping, table, rowNumbers, detailsEnabled]);
   const missing = mapping ? missingRequired(mapping) : [];
   const serverByLine = useMemo(() => {
     const map = new Map<number, ImportIssue[]>();
-    for (const issue of serverIssues) {
+    for (const issue of [...serverIssues, ...(detailsEnabled ? serverErrors : [])]) {
       const list = map.get(issue.line) ?? [];
       list.push(issue);
       map.set(issue.line, list);
     }
     return map;
-  }, [serverIssues]);
+  }, [serverIssues, serverErrors, detailsEnabled]);
   const viewed = useMemo(
     () =>
       parsed.map((row) => {
@@ -97,7 +103,7 @@ export function ImportWizard() {
     if (!headers) return;
     const matched = matchColumns(headers);
     if (missingRequired(matched).length) return;
-    const rows = validateImportRows(tableToRows(table, matched)).filter((row) => !rowHasError(row));
+    const rows = validateImportRows(tableToRows(table, matched, detailsEnabled ? rowNumbers : undefined)).filter((row) => !rowHasError(row));
     let cancelled = false;
     setPreviewing(true);
     setPreviewDone(false);
@@ -130,7 +136,7 @@ export function ImportWizard() {
     return () => {
       cancelled = true;
     };
-  }, [step, table, fileName]);
+  }, [step, table, rowNumbers, fileName, detailsEnabled]);
 
   async function loadFile(file: File, choice: "auto" | "utf-8" | "big5") {
     setNotice("");
@@ -160,6 +166,7 @@ export function ImportWizard() {
       const matched = matchColumns(read.rows[0] ?? []);
       const absent = missingRequired(matched);
       setDetected(read.encoding);
+      setRowNumbers(read.rowNumbers);
       setTable(read.rows);
       if (absent.length) {
         setNotice(t("im_map_miss", { n: absent.length }));
@@ -234,7 +241,23 @@ export function ImportWizard() {
     }
   }
 
+  function describeIssue(issue: ImportIssue) {
+    const fields = issueFields(issue).map((field) => {
+      const index = mapping?.[field];
+      return index === null || index === undefined ? fieldLabel(field, locale) : table[0]?.[index] || fieldLabel(field, locale);
+    });
+    const reason = t(issue.key, issue.vars);
+    const guidance = issue.key === "im_e_date" ? ` ${t("im_date_format_help")}` : "";
+    return `${fields.length ? `${fields.join(" / ")}: ` : ""}${reason}${guidance}`;
+  }
+
   function downloadProblems() {
+    if (detailsEnabled) {
+      const issues = mergeImportErrors(parsed.flatMap((row) => row.issues), serverIssues, serverErrors);
+      const lines = importProblemRows(table, issues, t("im_source_line"), t("im_problem_col"), describeIssue, rowNumbers);
+      downloadBlob("condola-import-errors.csv", new Blob([csvDocument(lines)], { type: "text/csv;charset=utf-8" }));
+      return;
+    }
     const extra = new Map<number, string>();
     for (const issue of [...serverIssues, ...serverErrors]) {
       if (issue.severity !== "error") continue;
@@ -418,6 +441,7 @@ export function ImportWizard() {
             <table className="t" data-testid="import-preview-table">
               <thead>
                 <tr>
+                  {detailsEnabled ? <th>{t("im_source_line")}</th> : null}
                   <th>{t("im_col_status")}</th>
                   <th>{t("im_col_property")}</th>
                   <th>{t("im_col_space")}</th>
@@ -431,26 +455,32 @@ export function ImportWizard() {
                   const status = rowStatus(row, t, previewDone);
                   return (
                     <tr key={row.line} data-testid="import-issue-row" data-line={row.line}>
-                      <td className={status.ok ? "import-ok" : "import-warn"}>{status.text}</td>
+                      {detailsEnabled ? <td>{row.line}</td> : null}
+                      <td className={status.ok ? "import-ok" : "import-warn"} style={detailsEnabled ? { whiteSpace: "normal", minWidth: 180, maxWidth: 440, overflowWrap: "anywhere" } : undefined}>
+                        {status.text}
+                        {detailsEnabled ? mergeImportErrors(row.issues).map((issue, index) => (
+                          <div key={`${issue.key}-${index}`}>{describeIssue(issue)}</div>
+                        )) : null}
+                      </td>
                       <PreviewCell
                         bad={bad.has("property")}
                         title={cellTitle(row, "property", t)}
-                        text={shownCell(cellText(table, mapping, row.line, "propertyName"), bad.has("property"), t("im_blank"))}
+                        text={shownCell(cellText(table, mapping, row.line, "propertyName", detailsEnabled ? rowNumbers : undefined), bad.has("property"), t("im_blank"))}
                       />
                       <PreviewCell
                         bad={bad.has("space")}
                         title={cellTitle(row, "space", t)}
-                        text={shownCell(spaceText(table, mapping, row), bad.has("space"), t("im_blank"))}
+                        text={shownCell(spaceText(table, mapping, row, detailsEnabled ? rowNumbers : undefined), bad.has("space"), t("im_blank"))}
                       />
                       <PreviewCell
                         bad={bad.has("tenant")}
                         title={cellTitle(row, "tenant", t)}
-                        text={shownCell(cellText(table, mapping, row.line, "tenantName"), bad.has("tenant"), t("im_blank"))}
+                        text={shownCell(cellText(table, mapping, row.line, "tenantName", detailsEnabled ? rowNumbers : undefined), bad.has("tenant"), t("im_blank"))}
                       />
                       <PreviewCell
                         bad={bad.has("rent")}
                         title={cellTitle(row, "rent", t)}
-                        text={shownCell(cellText(table, mapping, row.line, "rent"), bad.has("rent"), t("im_blank"))}
+                        text={shownCell(cellText(table, mapping, row.line, "rent", detailsEnabled ? rowNumbers : undefined), bad.has("rent"), t("im_blank"))}
                       />
                     </tr>
                   );
@@ -464,7 +494,7 @@ export function ImportWizard() {
             </p>
           ) : null}
           <div className="import-foot">
-            <button className="btn" type="button" data-testid="import-errors-csv" disabled={problemRows.length === 0} onClick={downloadProblems}>
+            <button className="btn" type="button" data-testid="import-errors-csv" disabled={problemRows.length === 0 && (!detailsEnabled || serverErrors.length === 0)} onClick={downloadProblems}>
               {t("im_dl_problems")}
             </button>
             <button className="btn pri" type="button" data-testid="import-run" disabled={busy || !canRun} onClick={() => void runCommit()}>
@@ -583,15 +613,16 @@ function cellText(
   mapping: ReturnType<typeof matchColumns> | null,
   line: number,
   field: (typeof IMPORT_FIELDS)[number],
+  rowNumbers?: number[],
 ) {
   if (!mapping) return "";
   const index = mapping[field];
   if (index === null || index === undefined) return "";
-  return String(table[line - 1]?.[index] ?? "").trim();
+  return String(table[rowNumbers ? rowNumbers.indexOf(line) : line - 1]?.[index] ?? "").trim();
 }
 
-function spaceText(table: string[][], mapping: ReturnType<typeof matchColumns> | null, row: ParsedImportRow) {
-  return [cellText(table, mapping, row.line, "unitLabel"), cellText(table, mapping, row.line, "roomLabel")].filter(Boolean).join(" ");
+function spaceText(table: string[][], mapping: ReturnType<typeof matchColumns> | null, row: ParsedImportRow, rowNumbers?: number[]) {
+  return [cellText(table, mapping, row.line, "unitLabel", rowNumbers), cellText(table, mapping, row.line, "roomLabel", rowNumbers)].filter(Boolean).join(" ");
 }
 
 function shownCell(value: string, bad: boolean, blankLabel: string) {

@@ -43,8 +43,14 @@ function stripBom(text: string) {
 
 /** RFC-style CSV. Newlines inside quotes are kept. */
 export function parseCsv(text: string): string[][] {
+  return parseCsvRecords(text).rows;
+}
+
+function parseCsvRecords(text: string): { rows: string[][]; rowNumbers: number[] } {
   const src = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const rows: string[][] = [];
+  const rowNumbers: number[] = [];
+  let record = 1;
   let row: string[] = [];
   let cell = "";
   let quoted = false;
@@ -70,7 +76,8 @@ export function parseCsv(text: string): string[][] {
     }
     if (ch === "\n") {
       row.push(cell);
-      if (row.some((value) => value.trim() !== "")) rows.push(row);
+      if (row.some((value) => value.trim() !== "")) { rows.push(row); rowNumbers.push(record); }
+      record += 1;
       row = [];
       cell = "";
       continue;
@@ -79,9 +86,9 @@ export function parseCsv(text: string): string[][] {
   }
   if (cell.length > 0 || row.length > 0) {
     row.push(cell);
-    if (row.some((value) => value.trim() !== "")) rows.push(row);
+    if (row.some((value) => value.trim() !== "")) { rows.push(row); rowNumbers.push(record); }
   }
-  return rows;
+  return { rows, rowNumbers };
 }
 
 export function csvDocument(rows: string[][]): string {
@@ -99,22 +106,18 @@ export async function readSpreadsheet(
   fileName: string,
   bytes: Uint8Array,
   encoding: "auto" | "utf-8" | "big5" = "auto",
-): Promise<{ rows: string[][]; encoding: SheetEncoding }> {
+): Promise<{ rows: string[][]; rowNumbers: number[]; encoding: SheetEncoding }> {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".xls") && !lower.endsWith(".xlsx")) throw new SpreadsheetError("xls");
   if (lower.endsWith(".xlsx")) {
-    const rows = trimBlank(await readXlsx(bytes));
-    if (rows.length === 0) throw new SpreadsheetError("empty");
-    return { rows, encoding: "xlsx" };
+    const sheet = await readXlsx(bytes);
+    if (sheet.rows.length === 0) throw new SpreadsheetError("empty");
+    return { ...sheet, encoding: "xlsx" };
   }
   const decoded = decodeBytes(bytes, encoding);
-  const rows = trimBlank(parseCsv(decoded.text));
-  if (rows.length === 0) throw new SpreadsheetError("empty");
-  return { rows, encoding: decoded.encoding };
-}
-
-function trimBlank(rows: string[][]) {
-  return rows.filter((row) => row.some((cell) => cell.trim() !== ""));
+  const sheet = parseCsvRecords(decoded.text);
+  if (sheet.rows.length === 0) throw new SpreadsheetError("empty");
+  return { ...sheet, encoding: decoded.encoding };
 }
 
 export async function buildXlsx(rows: string[][]): Promise<Uint8Array> {
@@ -185,7 +188,7 @@ function columnIndex(letters: string) {
   return n - 1;
 }
 
-async function readXlsx(bytes: Uint8Array): Promise<string[][]> {
+async function readXlsx(bytes: Uint8Array): Promise<{ rows: string[][]; rowNumbers: number[] }> {
   let entries: Map<string, Uint8Array>;
   try {
     entries = await unzip(bytes);
@@ -211,21 +214,30 @@ function sharedStrings(xml: string) {
 
 function sheetRows(xml: string, strings: string[]) {
   const rows: string[][] = [];
-  for (const row of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+  const rowNumbers: number[] = [];
+  let previous = 0;
+  for (const row of xml.matchAll(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+    const hasRowAttribute = /(?:^|\s)r(?=\s|=|$)/.test(row[1]);
+    const declared = /(?:^|\s)r\s*=\s*(["'])(.*?)\1/.exec(row[1]);
+    if (hasRowAttribute && (!declared || !/^\d+$/.test(declared[2]))) throw new SpreadsheetError("xlsx");
+    const number = declared ? Number(declared[2]) : previous + 1;
+    if (!Number.isSafeInteger(number) || number <= previous || number > 1048576) throw new SpreadsheetError("xlsx");
+    previous = number;
     const cells: string[] = [];
     let cursor = 0;
-    for (const cell of row[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+    for (const cell of (row[2] ?? "").matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
       const attrs = cell[1] ?? "";
       const body = cell[2] ?? "";
       const letters = /r="([A-Z]+)/i.exec(attrs)?.[1];
       const column = letters ? columnIndex(letters.toUpperCase()) : cursor;
+      if (!Number.isSafeInteger(column) || column < 0 || column >= 16384) throw new SpreadsheetError("xlsx");
       while (cells.length < column) cells.push("");
       cells[column] = cellText(attrs, body, strings);
       cursor = column + 1;
     }
-    rows.push(cells);
+    if (cells.some((cell) => cell.trim() !== "")) { rows.push(cells); rowNumbers.push(number); }
   }
-  return rows;
+  return { rows, rowNumbers };
 }
 
 function cellText(attrs: string, body: string, strings: string[]) {

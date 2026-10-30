@@ -1,0 +1,30 @@
+[
+  {
+    "width": 390,
+    "enabled": false,
+    "local_path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B006/diagnostics-false-390.png",
+    "sha256": "be647327709ad3ab26b865d5c82ade0a1c623e806d29164b91f312a2bd561247",
+    "bytes": 54474
+  },
+  {
+    "width": 390,
+    "enabled": true,
+    "local_path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B006/diagnostics-true-390.png",
+    "sha256": "2c37ead2f597ef2e5b1131b2599085c5d10e4e81435c28c3e4f8af06380a009d",
+    "bytes": 74697
+  },
+  {
+    "width": 1280,
+    "enabled": false,
+    "local_path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B006/diagnostics-false-1280.png",
+    "sha256": "5da146e930d48b33bab4f300118e80bd18320405e83942fa2306c563df0dfad4",
+    "bytes": 93209
+  },
+  {
+    "width": 1280,
+    "enabled": true,
+    "local_path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B006/diagnostics-true-1280.png",
+    "sha256": "978d701ccda40e88241196e9689afcc4d7f3faa03c045d97ca8edbcb81df5b16",
+    "bytes": 132269
+  }
+]
