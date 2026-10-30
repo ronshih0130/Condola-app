@@ -109,11 +109,14 @@ test("tenant due preference defaults on, is separately owned, and is rechecked b
     assert.equal(await captureScheduledReminders(ORG_ID,event,new Date(invoice.instant)),1);
     const dueInstant=(await c.query<{instant:string}>(`SELECT ((i.due_date::timestamp+interval '12 hours') AT TIME ZONE o.timezone)::text AS instant FROM invoices i JOIN leases l ON l.id=i.lease_id JOIN organizations o ON o.id=l.org_id WHERE i.id=$1`,[invoice.id])).rows[0].instant;
     const dueEvent=(await c.query<{id:string}>(`SELECT app.b010_schedule_rent($1,$2,$3)::text AS id`,[ORG_ID,invoice.id,dueInstant])).rows[0].id;
-    const excluded=(await c.query<{id:string}>(`SELECT id::text FROM app.b028_recipient_claims WHERE event_id=$1 AND principal_user_id IS NULL`,[dueEvent])).rows.map(r=>r.id);
+    // This race is specifically the primary tenant's preference. Other bound
+    // co-tenants have independent preferences and must not win this claim.
+    const excluded=(await c.query<{id:string}>(`SELECT id::text FROM app.b028_recipient_claims WHERE event_id=$1 AND principal_user_id IS DISTINCT FROM $2::uuid`,[dueEvent,invoice.user_id])).rows.map(r=>r.id);
     const changer=new Client({connectionString:process.env.DATABASE_URL}); await changer.connect();
     try {
       await c.query("BEGIN");
       const claim=(await c.query<{claim_id:string;claim_token:string}>(`SELECT * FROM app.b028_claim_scheduled($1,$2,$3::uuid[],$4)`,[ORG_ID,dueEvent,excluded,dueInstant])).rows[0]; assert.ok(claim);
+      assert.equal((await c.query<{principal_user_id:string}>(`SELECT principal_user_id::text FROM app.b028_recipient_claims WHERE id=$1`,[claim.claim_id])).rows[0].principal_user_id,invoice.user_id);
       const holderPid=(await c.query<{pid:number}>(`SELECT pg_backend_pid() AS pid`)).rows[0].pid;
       await changer.query(`SELECT set_config('request.jwt.claim.sub',$1,false)`,[invoice.user_id]);
       const update=changer.query(`SELECT app.b010_tenant_due_preference($1,$1,'live',$2,$3,false)`,[ORG_ID,sid,invoice.lease_id]);
