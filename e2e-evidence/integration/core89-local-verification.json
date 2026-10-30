@@ -1,6 +1,6 @@
 {
   "candidate": "4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6",
-  "time_pt": "2026-10-30T03:05:16.071480-07:00",
+  "time_pt": "2026-10-30T03:33:10.157500-07:00",
   "scope": "local integration checkpoint, not whole feature/staging/release acceptance",
   "gate": {
     "unit": {
@@ -21,8 +21,20 @@
     "preflight": "PREFLIGHT PASS",
     "local_worker": "1/1PASS"
   },
-  "scoped_browser": "actual M/T/O home\u2192center entry including actual tenant lease picker and anonymous exact-job vendor at390/1280,1scenarioPASS; synthetic source only",
-  "full_default_browser": "RUNNING immutableverify-core89; log not frozen, no overallPASS",
+  "scoped_browser": "actual M/T/O home→center entry including actual tenant lease picker and anonymous exact-job vendor at390/1280,1scenarioPASS; synthetic source only",
+  "full_default_browser": {
+    "spec_batches": 52,
+    "pass": 135,
+    "fail": 0,
+    "skip": 3,
+    "exit": 0,
+    "skip_reason": "TEAM_INVITES_ORG_ALLOWLIST default-OFF; separate local-org ON rerun passed all three",
+    "skipped_tests": [
+      "consent-followups.spec.ts:250 accepting a team invite ignores a user id submitted in the form or the query",
+      "consent-followups.spec.ts:452 a team invite requires the signup checkbox and records source invite",
+      "team-invite-link.spec.ts:40 admin hands over a masked fragment link; join is private, account-bound and single use"
+    ]
+  },
   "schema": "source89 fresh versus untouched71+18 all11logicalcategoriesequal;syntheticcounts2/4/5/1preserved",
   "staging": {
     "readonly_metadata": "PASS,zero customerrows",
@@ -76,6 +88,29 @@
     "staging-schema-inventory-probe.log": {
       "bytes": 431,
       "sha256": "773a26c72ceb9e85974244ddc47ec005c53341f293fec38e9ee4a3400680ec02"
+    },
+    "core89-full-batched-browser.log": {
+      "bytes": 104094,
+      "sha256": "ea44164d0ce72ab773183c5e018142e64345199ce7ddedcb8263b3753cd436a9"
+    },
+    "core89-team-allowlist-on.log": {
+      "bytes": 2336,
+      "sha256": "9b8e8302b391b148a8cb88f794d7e66fb9657c29b16457eff80f5334a62cee5f"
+    },
+    "run-core89-full-batched-browser.py": {
+      "bytes": 1120,
+      "sha256": "e79ab748073673134f0b17b2e69c9fe05816501b1f9b08a97697a948161c4d10"
+    },
+    "run-core89-team-on.py": {
+      "bytes": 1422,
+      "sha256": "c0d84516b90c9e9101eacd559035540b33d22daa965438041e641a92a59f06b4"
     }
+  },
+  "team_invites_local_org_on_browser": {
+    "pass": 3,
+    "fail": 0,
+    "skip": 0,
+    "exit": 0,
+    "scope": "same immutable candidate, fresh owned local clone, explicit local fixture org allowlist only; no provider messages or global setting change"
   }
 }
