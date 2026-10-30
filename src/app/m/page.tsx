@@ -1,3 +1,4 @@
+import { NotificationCenterEntry } from "@/components/notification-center-entry";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { dictionary, makeT } from "@/i18n";
@@ -43,6 +44,7 @@ export default async function DashboardPage({
         }
       />
       <OnboardingProgress session={session} />
+      <NotificationCenterEntry session={session} />
       {query.dupFirm === "1" ? (
         <p className="alert warn" data-testid="dup-firm">
           {t("i_signup_dup_firm")}

@@ -1,3 +1,4 @@
+import { NotificationCenterEntry } from "@/components/notification-center-entry";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ownerPrivacy } from "@/server/auth";
@@ -18,6 +19,7 @@ export default async function OwnerHomePage() {
   return (
     <div data-v2-page={v2 ? "o-home" : undefined}>
       <h2>{t("i_hello", { name: session.name })}</h2>
+      <NotificationCenterEntry session={session} />
       <p className="small" data-testid="managed-by">{t("i_managed_by", { firm: privacy.name, brand: t("i_brand") })}</p>
       <table className="t">
         <tbody>

@@ -1,0 +1,62 @@
+{
+  "time_pt": "2026-10-30T02:27:42.963678-07:00",
+  "source_before_registration": "a21caad9bc415589b7ddb50488cc481ce36c4b77",
+  "B028_source_recovery": "519b629",
+  "sql15_blob": "33ba2a512832629ed6f0ef21b302ea580f65a301",
+  "source_sql_count": 89,
+  "schema": "fresh89 versus untouched71+18 all11logicalcategoriesequal,synthetic2/4/5/1preserved",
+  "function_privileges": "PASS isolatedPG16cluster,anon0publicEXECUTE,authenticated7allowlist",
+  "native_review": "Astra scopedstaticPASS exact15foundation/UI/vendor/anonymousfixture,rootseed/resettest/nav/registry; notClaudeClassB",
+  "root_scoped_checks": "typecheckPASS,lint0errors7warnings,11unitchecksPASS,11DBintegrationchecksPASS",
+  "core88_exact_0fb_gate": "PASS 572unit,256RLStotal=255PASS+1RonapprovedhistoricalSKIP; nopass transferredtonew89",
+  "actual_e3_browsers": "handover390/1280each1/1PASS;B010requestrecovery+2widthreminders3/3PASS;new89navbrowserpending",
+  "B028_browser": "authorsynthetic4persona*2width1scenarioPASSwithanonymousvendor+8screens,scopedstaticreview;earlierlogged-invendor/overwidestyleimagespreserved,correctedcompaniond174;NOTactualproducercoverage",
+  "reset": "unconditionaladmissionbeforeprobes,explicit5centerprivatechildrenbeforeB010;actualnewrecordscleared2realresets,sourceunchanged,unrelatedprobe+14GCpreserved,bothobservedplatformlockorders,transientcleanup;synthabsenceisNOTlegacyupgrade",
+  "new89_gate_build_preflight_worker_fullbrowser": "PENDING newimmutableSHA",
+  "full_B028": "PARTIAL: no realproducergrants/wiring; full8families/neutraladapter/sourceidentity/retention/provider scope remains",
+  "B011_settlement": "inprogress unintegrated16; source/outcome/evidenceupload underhighestreview, nofullPASS",
+  "staging": "READONLYmetadataAPIcapabilitiesverified,newrequiredschemaABSENT;noMacmigration,noprodkeys/noexternalmessages",
+  "queue": "full39goalACTIVE;RonB012deposit+B0133policiespending",
+  "private_logs": {
+    "core89-registration-typecheck.log": {
+      "bytes": 43,
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e"
+    },
+    "core89-registration-lint.log": {
+      "bytes": 2347,
+      "sha256": "ab8acbe3faa3a4304aa2c892080323c2b574eafc9a62ec9ee5a1fd8c61c1830a"
+    },
+    "core89-registration-unit.log": {
+      "bytes": 2070,
+      "sha256": "785b844a1a3a9161ffbf3ae615b13d2372c91a5209bf5283f7172550bbe3a099"
+    },
+    "core89-scoped-integration.log": {
+      "bytes": 3932,
+      "sha256": "a2674c805d0164655e4a0d8cbcc470b03de2a267c237f0233c810ada8198c8d9"
+    },
+    "core89-catalog-comparison.json": {
+      "bytes": 14217,
+      "sha256": "062e582d88170485311d78e92005dde53421fc178ad24cbeffb5e6b9c568c7fb"
+    },
+    "core89-function-privileges.log": {
+      "bytes": 3135,
+      "sha256": "66023e686fe9dad0b66fbe4468ddac835e33d6df42e32d26a0d80cb07e660667"
+    },
+    "b028-combined-reset-final-v2.log": {
+      "bytes": 842,
+      "sha256": "64a2f7566d99523618e957fabcab3d10d621279a7a50d891ab0318ef5d7bcb81"
+    },
+    "core88-b010-browser.log": {
+      "bytes": 2192,
+      "sha256": "4324326889701deccaacd4b14e971fbbac4ad786cf23905a7864a10ed76cc853"
+    },
+    "core88-handover-revised-390.log": {
+      "bytes": 1922,
+      "sha256": "4ccb0aac8457e60657f1413e89a48de8597670cc42511c4b0cbbd805f0d34840"
+    },
+    "core88-handover-revised-1280.log": {
+      "bytes": 1923,
+      "sha256": "4054cc7af2a62b08ddda5db38c22e5d6fc29bca2b19d16afb0961de349241ccc"
+    }
+  }
+}

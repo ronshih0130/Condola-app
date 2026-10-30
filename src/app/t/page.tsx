@@ -1,3 +1,4 @@
+import { NotificationCenterEntry } from "@/components/notification-center-entry";
 import { HandoverEntry } from "@/components/handover-entry";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
@@ -88,6 +89,7 @@ export default async function TenantHome() {
       )}
       {reminderPreference !== null ? <p><Link href={`/t/reminders/${lease.lease_id}`} data-testid="tenant-reminder-settings">{reminderCopy(session.locale).tenantTitle}</Link></p> : null}
       <HandoverEntry session={session} leaseId={lease.lease_id} />
+      <NotificationCenterEntry session={session} />
       <p className="small">{t("i_addr_managed", { address: displaySampleName(lease.address_display ?? lease.property_name), firm: lease.firm_name })}</p>
       <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
     </div>

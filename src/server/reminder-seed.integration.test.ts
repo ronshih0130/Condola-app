@@ -56,12 +56,15 @@ test("repeated guarded demo reset clears only these private event references",as
 });
 
 
-test("older schema without the private tables still resets",async()=>{
+test("a synthetic schema-absence probe without event tables still resets",async()=>{
   const beforeDemo=process.env.DEMO_MODE, beforeKey=process.env.ID_DOC_ENCRYPTION_KEY;
   process.env.DEMO_MODE="true"; process.env.ID_DOC_ENCRYPTION_KEY=randomBytes(32).toString("hex");
   const c=new Client({connectionString:process.env.DATABASE_URL}); await c.connect();
   try {
-    // This database is the uniquely owned disposable clone, never a shared template.
+    // Capability-absence compatibility, not a historical-upgrade claim. This
+    // is the uniquely owned clone, never its shared source. New center children
+    // must be absent before removing their referenced B010 event table.
+    await c.query(`DROP TABLE IF EXISTS app.b028_center_mark_contexts,app.b028_center_cursors,app.b028_center_reads,app.b028_center_recipients,app.b028_center_events`);
     await c.query(`DROP TABLE app.b028_read_markers,app.b028_recipient_claims,app.b010_payment_commands,app.b010_source_events,app.b010_tenant_due_preferences`);
     await c.end();
     await resetAndSeed();

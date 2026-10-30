@@ -1,3 +1,4 @@
+import { VendorNotificationCenterEntry } from "@/components/notification-center-entry";
 import { makeT } from "@/i18n";
 import { VendorLinkDetails } from "@/components/vendor-link-details";
 import { TicketPhotoUpload } from "@/components/ticket-photos";
@@ -94,6 +95,7 @@ export default async function VendorJobPage({
         locale={prefs.locale}
       >
         <ErrorBanner t={t} error={query.error} />
+        <VendorNotificationCenterEntry token={token} locale={prefs.locale} />
         {job.vendorLink.sharingApproved && job.vendorLink.capability === "write" ? renderReportControls(true) : null}
       </VendorLinkDetails>
     );
@@ -101,6 +103,7 @@ export default async function VendorJobPage({
   return (
     <div className="card pad" data-testid="vendor-job" data-v2-page={v2 ? "v-job" : undefined} style={{ maxWidth: 560, margin: "24px auto" }}>
       <h1>{t("i_vendor_page_title")}</h1>
+      <VendorNotificationCenterEntry token={token} locale={prefs.locale} />
       <ErrorBanner t={t} error={query.error} />
       <p className="f">{t("i_vendor_address")}</p>
       <p data-testid="vendor-address">{job.address}</p>

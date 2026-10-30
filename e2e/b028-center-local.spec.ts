@@ -28,6 +28,8 @@ test("synthetic notifications are independently read in four actual portals",asy
  });
  await resetDemo(page);
  await signIn(page,ACCOUNTS.manager);
+ await page.goto("/m");
+ await expect(page.getByTestId("notification-center-entry")).toHaveCount(0);
  expectedOff=true;
  expect((await page.goto('/m/notifications'))?.status()).toBe(404);
  expectedOff=false;
@@ -56,7 +58,8 @@ test("synthetic notifications are independently read in four actual portals",asy
   await db(async c=>{await c.query(`DELETE FROM app.b028_center_reads WHERE org_id=$1`,[ORG_ID]);});
   await page.setViewportSize({width,height:850});
   for(const [account,path] of [[ACCOUNTS.manager,'/m/notifications'],[ACCOUNTS.tenant,'/t/notifications'],[ACCOUNTS.owner,'/o/notifications']] as const) {
-   await signIn(page,account); await page.goto(path);
+   await signIn(page,account); await page.goto(path.split("/notifications")[0]);
+   await page.getByTestId("notification-center-entry").click();
    await expect(page.getByTestId('notification-item')).toHaveCount(1);
    await expect(page.getByTestId('notification-mark')).toBeVisible();
    const box=await page.getByTestId('notification-mark').boundingBox(); expect(box && box.height>=44).toBe(true);
@@ -68,7 +71,10 @@ test("synthetic notifications are independently read in four actual portals",asy
   }
   await page.context().clearCookies();
   expect((await page.context().cookies()).some(cookie=>cookie.name==="condola_session")).toBe(false);
-  try {await page.goto(`/v/${encodeURIComponent(fixture.token)}/notifications`);} catch {throw new Error("Vendor page unavailable");}
+  try {
+   await page.goto(`/v/${encodeURIComponent(fixture.token)}`);
+   await page.getByTestId("notification-center-entry").click();
+  } catch {throw new Error("Vendor page unavailable");}
   await expect(page.getByTestId('notification-item')).toHaveCount(1);
   const vendorBox=await page.getByTestId('notification-mark').boundingBox(); expect(vendorBox && vendorBox.height>=44).toBe(true);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);

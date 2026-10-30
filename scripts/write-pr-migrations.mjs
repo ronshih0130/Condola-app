@@ -174,6 +174,10 @@ const added = {
     addOnly: false,
     reason: "Adds default-OFF private local notification and payment-transition tables with constraints, restricted gateways, deferred financial/event guards and legacy-writer fences; due-email personal preference alone defaults ON. No external delivery or historical backfill.",
   },
+  "supabase/migrations/20261031100215_b028_center_foundation.sql": {
+    addOnly: false,
+    reason: "Adds independent default-OFF private typed notification center events/entitlements/read markers/cursors and restricted authorization gateways, immutable/source guards and deferred expiry checks; no producer grant or historical backfill.",
+  },
   "supabase/migrations/20261031100214_b011_handover_records.sql": {
     addOnly: false,
     reason: "Adds default-OFF private versioned handover/evidence/reply/upload-intent and durable cleanup tables with composite constraints, restricted privileges and immutable guards. No historical migration or financial/retention date rewritten.",
