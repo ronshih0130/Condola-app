@@ -36,10 +36,10 @@ for (const width of [390,1280]) test(`manager local reminder at ${width}px`,asyn
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
   await signIn(page,invoice.user_id===USERS.tenant ? ACCOUNTS.tenant : ACCOUNTS.tenant2);
   await page.goto(`/t/reminders/${invoice.lease}`);
-  await expect(page.getByTestId("tenant-due-preference")).toContainText("on");
+  await expect(page.getByTestId("tenant-due-preference")).toContainText("開啟");
   await page.getByTestId("tenant-due-toggle").click();
-  await expect(page.getByTestId("tenant-due-preference")).toContainText("off");
-  await page.reload(); await expect(page.getByTestId("tenant-due-preference")).toContainText("off");
+  await expect(page.getByTestId("tenant-due-preference")).toContainText("關閉");
+  await page.reload(); await expect(page.getByTestId("tenant-due-preference")).toContainText("關閉");
   await page.screenshot({path:info.outputPath(`tenant-preference-${width}.png`),fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
   expect(errors).toEqual([]);
