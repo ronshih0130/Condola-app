@@ -1,0 +1,53 @@
+{
+  "time_pt": "2026-10-30T03:57:44.849617-07:00",
+  "scope": "READ_ONLY_PARTIAL; not B015 completion",
+  "base": "b94277db78bca1dfc7482880e135572f6b293ee2",
+  "blobs": {
+    "src/server/tenant-directory.ts": "d5673da799f903b9a04f8914a1cb387079010672",
+    "src/server/tenant-directory.integration.test.ts": "f8f6729833710c5300b7a2c46792d61445e24f59",
+    "src/components/tenant-directory.tsx": "99e07029454ea28babab995faba370dae5fbcc04",
+    "src/i18n/lanes/tenant-directory.ts": "e056cac010af4c31f472c9a5e52c7ae62b7fd38f",
+    "src/app/m/tenants/page.tsx": "1ac9c1e4b83c5112a9c660684a29c4de5a45b0a7",
+    "src/app/m/tenants/[id]/page.tsx": "79ef399040b59256763f17b388581be03ffe49eb",
+    "e2e/b015-directory-local.spec.ts": "f8369afb9cdf6a4b3f2a3d8e4c611dbaf7b4a93e",
+    "e2e/tenant-directory-playwright.config.ts": "5e3d376548ead985c0ed6e5beb087a0d6d0d6ebc"
+  },
+  "local_db": "owned core89 clone6/6PASS; before sandboxprivacyfix5PASS/1FAILpreserved",
+  "type_lint_copy": "PASS",
+  "consent": "36/36PASS",
+  "browser": "NOT_RUN pending frozen checkpoint and shared port handoff",
+  "independent_review": "Astra scopednative staticPASS sixruntime/testfiles; browserfixture reviewed, final OFFassertion strengthened asrequested; no execution byreviewer",
+  "limits": [
+    "No contact edits/archive/auth/profile/ID/source mutations",
+    "No newmigration or flagregistry; global/orgsettingabsent remainsOFF; ONonlyisolatedfixtures",
+    "UIlive-manager/accountant scope; sandboxDB privacyproof separate",
+    "Originaltenantidentityreuse end-to-end and currentfullgate/staging/ClaudeClassB remain separate",
+    "No productionkeys/deploy/realmessages/legalcopy changes"
+  ],
+  "private_artifacts": {
+    "b015-directory-sandbox-before-fix.log": {
+      "bytes": 2494,
+      "sha256": "81ee01f4b7c39dd0a0830c22bf1f57f80aa6d5504f4b862e449f37eb5f7f3653"
+    },
+    "b015-directory-read-final.log": {
+      "bytes": 1684,
+      "sha256": "db5933e7dcb7d0df2fe42b154a9a78cfcd8ee7e06f87d975f87a7ec8b5ac3665"
+    },
+    "b015-read-final-typecheck.log": {
+      "bytes": 43,
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e"
+    },
+    "b015-read-final-lint.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "b015-read-copy.log": {
+      "bytes": 1431,
+      "sha256": "3f1fb56d9e341778156945dab0c37dba6fc41dfefbcd09170de3ebbae9ccf029"
+    },
+    "b015-read-consent.log": {
+      "bytes": 7440,
+      "sha256": "d0a84fcd07ca9b5d6b694ad6ca528f9b1957ff25fd6709aa3ff8c1e8e6063198"
+    }
+  }
+}
