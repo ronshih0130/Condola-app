@@ -75,7 +75,11 @@ export async function markTryout(orgId: string, key: "property" | "lease" | "sta
     await svc(null, async (client) => {
       await client.query(
         `UPDATE organizations
-            SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), ARRAY['tryout', $2]::text[], 'true'::jsonb, true)
+            SET settings = jsonb_set(
+              coalesce(settings, '{}'::jsonb), '{tryout}',
+              (CASE WHEN jsonb_typeof(settings->'tryout') = 'object'
+                    THEN settings->'tryout' ELSE '{}'::jsonb END)
+                || jsonb_build_object($2::text, true), true)
           WHERE id = $1`,
         [orgId, key],
       );
