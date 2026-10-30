@@ -1,0 +1,26 @@
+{
+  "time_pt": "2026-10-30T04:09:30.185223-07:00",
+  "integrated_runtime": "4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6",
+  "main_branch_scope": "operationaldocs only after runtime, terminal local core89 evidence preserved",
+  "partial_origin_refs": {
+    "mode-b-center-source-integration-prep": "af3303bc55d0f98e961d6f3ef03701ab5119b97c",
+    "mode-b-notification-producer-prep": "65280e0948ac4909c0dadfed43baf0e009e76a6e",
+    "mode-b-tenant-directory-prep": "5bfc0fdd7d69d7cc362222c9c349a34db0b36968"
+  },
+  "directory_runtime_candidate": "2746fcd3dc1feaee6b439e38586284ae87c07d85",
+  "directory_evidence": "6/6ownedDB,36/36consent,type/lint/copyPASS;actual390/1280directory1/1 andlegacyexistingtenantOFF4/4PASS; earlier2browserfailurespreserved; read-onlypartial,noedit/archive/migration",
+  "source17": "beforefixresolver/reset3PASS1FAIL;after4/4PASS exactSQL1351; privatefoundation, no realproducerwiring",
+  "unintegrated_local_drafts": {
+    "center_busy": "7eea5d2normalfourportal1/1PASS;forcedbusyFAILmarkRSCstate; boundedJSONroutes+stickyunknownresponse-faultfollowupunderreview, notyetexecuted",
+    "settlement": "c34adf4unknownstaffworkflow390/1280 reported1/1each; serverteardownaborteddiagnosticunderinvestigation; oldbroadpublicationexpectationsuiteFAILstillopen, noauthoritativefence/net/publicationacceptance"
+  },
+  "staging": "protectedreadonlymetadatausable;newobjectsandactualmigrationledgerabsent;reviewpack57filesNOTexecutionlist;nonMacoperator/flowrequested, noMacDDL/stageclaim/deploy",
+  "limits": [
+    "All39scopeactive; nofullitem/staging/releaseGO",
+    "NativeAstra scopedreviews notClaudeClassB orindependentexecution",
+    "RonB012deposit/B013policies/B010paymentEmail pending; onlydependentscopewaits",
+    "No prodkeys/access/deploy, actualmessages orlegalcopychanges"
+  ],
+  "quota": "unknown",
+  "next": "finishsource17markendpoint exactreview/browser; complete16reachableunknownflow thenauthoritative-source/fence; B015editprotocolplanreview; continueeligiblequeue"
+}
