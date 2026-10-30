@@ -3,7 +3,7 @@ import { PDFDocument } from "pdf-lib";
 import { svc } from "../db";
 import { sendMail, type MailMessage, type MailResult } from "../mail";
 import type { Session } from "../types";
-import { EsignDenied, management, requireEsign, requireManagement } from "./access";
+import { EsignDenied, esignEnabled, management, requireEsign, requireEsignOrganization, requireManagement } from "./access";
 import { contractVersionDigest } from "./document";
 import { emailCode, matchesEmailCode } from "./email";
 import { signaturePng } from "./evidence";
@@ -103,7 +103,7 @@ export class EsignFlow {
     return rows.rows.filter((r) => r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email));
   }
   private async load(c: Connection, session: Session, caseId: string, versionId: string) {
-    const leaseId = await lockSigningCase(c, session, uuid(caseId), uuid(versionId));
+    const leaseId = await lockSigningCase(c, session, uuid(caseId), uuid(versionId), this.deps.enabled?.() ?? esignEnabled());
     const versions = await c.query<{ state: Version; pdf_bytes: Buffer; final_pdf_bytes: Buffer | null }>(
       "SELECT state,pdf_bytes,final_pdf_bytes FROM esign_versions WHERE case_id=$1 AND id=$2",
       [caseId, uuid(versionId)],
@@ -155,12 +155,12 @@ export class EsignFlow {
           }, this.deps.secret);
           return matchesEmailCode(expected, input.response);
         },
-      }, async (_actorId, work) => work(c));
+      }, async (_actorId, work) => work(c), this.deps.enabled ?? esignEnabled);
 
       if (command.type === "create") {
         await this.company(c, session);
         const leaseId = uuid(command.leaseId);
-        await lockSigningLeaseForCreate(c, session, leaseId);
+        await lockSigningLeaseForCreate(c, session, leaseId, this.deps.enabled?.() ?? esignEnabled());
         ensure((await c.query("SELECT id FROM esign_cases WHERE lease_id=$1", [leaseId])).rowCount === 0, "Use a replacement version");
         ensure(command.order === "parallel" || command.order === "sequential");
         ensure(command.pdf.length > 0 && command.pdf.length <= 7 * 1024 * 1024, "PDF size");
@@ -309,6 +309,7 @@ export class EsignFlow {
   async list(session: Session, leaseId: string): Promise<LeaseView> {
     this.entry(session);
     return this.run(session.userId, async (c) => {
+      await requireEsignOrganization(c, session, false, this.deps.enabled?.() ?? esignEnabled());
       uuid(leaseId);
       if (management(session)) {
         await this.company(c, session);

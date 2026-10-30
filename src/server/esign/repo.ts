@@ -4,6 +4,7 @@ import { leaseIdentityReady } from "../id-docs";
 import { FlowError } from "../errors";
 import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type FirstPeriodLeaseSource } from "../move-in-invoice";
 import { lockSigningCase, lockSigningLeaseForCreate, type SigningActor } from "./lock";
+import { esignEnabled } from "./access";
 import {
   createCase as createDomainCase,
   transition,
@@ -85,10 +86,11 @@ export class EsignRepo {
   constructor(
     private readonly emailVerifier: EmailVerifier,
     private readonly run: TransactionRunner = svc,
+    private readonly enabled: () => boolean = esignEnabled,
   ) {}
 
   private async lock(client: Connection, actor: Actor, caseId: string, versionId?: string) {
-    await lockSigningCase(client, actor, caseId, versionId);
+    await lockSigningCase(client, actor, caseId, versionId, this.enabled());
   }
 
   private async role(
@@ -234,7 +236,7 @@ export class EsignRepo {
     order?: "parallel" | "sequential";
   }): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
-      await lockSigningLeaseForCreate(client,actor,input.leaseId);
+      await lockSigningLeaseForCreate(client,actor,input.leaseId,this.enabled());
       await this.company(client, actor);
       const state = createDomainCase({
         versionId: input.versionId,
@@ -372,9 +374,15 @@ export class EsignRepo {
           await client.query(`UPDATE leases SET status='active', esign_status='fully_signed', signed_at=now() WHERE id=$1 AND org_id=$2`, [lease.id, actor.orgId]);
           await ensureThread(client as Client, lease.id);
           const invoiceId = await issueMoveInInvoice(client as Client, lease.id, actor.userId);
+          const invoice = await client.query<{ total_minor: string; balance_minor: string }>(
+            "SELECT total_minor::text, balance_minor::text FROM invoices WHERE id=$1 AND org_id=$2",
+            [invoiceId, actor.orgId],
+          );
+          requireValue(invoice.rows[0], "First invoice unavailable");
           await client.query(`INSERT INTO audit_log (org_id,actor_user_id,actor_role,table_name,row_id,action,event_type,new_row)
             VALUES ($1,$2,$3,'leases',$4,'update','esign_lease_activated',$5::jsonb)`,
-            [actor.orgId,actor.userId,actor.kind,lease.id,JSON.stringify({case_id:caseId,version_id:input.versionId,case_creator_id:lease.created_by,invoice_id:invoiceId})]);
+            [actor.orgId,actor.userId,actor.kind,lease.id,JSON.stringify({case_id:caseId,version_id:input.versionId,case_creator_id:lease.created_by,invoice_id:invoiceId,
+              no_amount_due: invoice.rows[0].total_minor === "0" && invoice.rows[0].balance_minor === "0"})]);
         }
       }
       return after;

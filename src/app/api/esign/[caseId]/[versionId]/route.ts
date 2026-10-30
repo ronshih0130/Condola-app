@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
-import { esignEnabled } from "@/server/esign/access";
+import { esignAvailableFor, esignEnabled } from "@/server/esign/access";
 import { esignFlow } from "@/server/esign/flow";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +10,13 @@ export async function GET(request: Request, context: { params: Promise<{ caseId:
   const denied = await requireCurrentConsent(undefined, "api");
   if (denied) return denied;
   if (!esignEnabled()) notFound();
+  const session = await getSession();
+  if (!(await esignAvailableFor(session))) notFound();
   const { caseId, versionId } = await context.params;
   const url = new URL(request.url);
   try {
     const page = url.searchParams.has("page") ? Number(url.searchParams.get("page")) : undefined;
-    const result = await esignFlow.pdf(await getSession(), caseId, versionId, url.searchParams.get("final") === "1", page);
+    const result = await esignFlow.pdf(session, caseId, versionId, url.searchParams.get("final") === "1", page);
     return new Response(new Uint8Array(result.bytes).buffer, {
       headers: {
         "Content-Type": "application/pdf",

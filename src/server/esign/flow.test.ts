@@ -7,6 +7,7 @@ import { PDFDocument } from "pdf-lib";
 import { buildStoredConsent } from "../consent";
 import type { Session } from "../types";
 import { EsignDenied, EsignUnavailable, esignEnabled, management, requireManagement } from "./access";
+import { mapDbError } from "../errors";
 import { EsignFlow, type Command } from "./flow";
 import { emailCode, matchesEmailCode } from "./email";
 import { signaturePng } from "./evidence";
@@ -22,6 +23,7 @@ const session: Session = {
   leaseId: null, email: "admin@example.com", name: "Synthetic", consent: buildStoredConsent("reconsent"),
 };
 const id = "30000000-0000-4000-8000-000000000001";
+const deniedFor = (reason: string) => (error: unknown) => error instanceof EsignDenied && error.reason === reason && error.key === "errors.forbidden";
 const commands: Command[] = [
   { type: "create", leaseId: id, pdf: new Uint8Array(), ownerId: id, tenantId: id,
     ownerDocument: false, tenantDocument: false, order: "parallel", deadline: "" },
@@ -46,7 +48,7 @@ test("default flag is false; every action operation and read stops before SQL/ma
     await assert.rejects(flow.list(session, id), EsignUnavailable);
     await assert.rejects(flow.pdf(session, id, id, false), EsignUnavailable);
     assert.equal(calls, 0);
-    await assert.rejects(flow.execute({ ...session, consent: null }, commands[0]), (e: unknown) => e instanceof EsignDenied && e.message === "consent");
+    await assert.rejects(flow.execute({ ...session, consent: null }, commands[0]), deniedFor("consent"));
   } finally {
     if (before === undefined) delete process.env.ESIGN_ENABLED;
     else process.env.ESIGN_ENABLED = before;
@@ -65,9 +67,20 @@ test("management matrix and stale membership cannot create a case", async () => 
   const flow = new EsignFlow({ enabled: () => true, run: async (_id, work) => work({
     query: (async () => ({ rows: [], rowCount: 0 })) as never,
   }) });
-  await assert.rejects(flow.execute(session, commands[0]), /Membership changed/);
+  await assert.rejects(flow.execute(session, commands[0]), deniedFor("Membership changed"));
   await assert.rejects(flow.execute({ ...session, role: "accountant" }, commands[0]), EsignDenied);
   await assert.rejects(flow.execute({ ...session, kind: "tenant", role: null }, commands[0]), EsignDenied);
+});
+
+test("typed e-sign denials survive transaction mapping with safe public keys", () => {
+  const unavailable = new EsignUnavailable("internal fixture detail");
+  const denied = new EsignDenied("internal fixture detail");
+  assert.equal(mapDbError(unavailable), unavailable);
+  assert.equal(mapDbError(denied), denied);
+  assert.equal(unavailable.key, "errors.notFound");
+  assert.equal(denied.key, "errors.forbidden");
+  assert.equal(unavailable.message, "errors.notFound");
+  assert.equal(denied.message, "errors.forbidden");
 });
 
 test("Email codes bind every challenge dimension and do not contain the secret", async () => {
@@ -152,6 +165,11 @@ test("direct review submission requires complete, signer/version/digest-bound de
   let authorizedLoads = 0;
   const c: Connection = {
     query: (async (sql: string, params: unknown[] = []) => {
+      if (sql.startsWith("SELECT id FROM organizations")) {
+        assert.match(sql, /FOR SHARE/);
+        assert.deepEqual(params, [signer.orgId, signer.environment, signer.liveOrgId]);
+        return { rows: [{ id: signer.orgId }], rowCount: 1 };
+      }
       if (sql.startsWith("SELECT ec.lease_id::text FROM organizations")) {
         assert.ok(lockPhase === 0 || lockPhase === 4, "authorize before locks and reauthorize after them");
         assert.deepEqual(params, [signer.orgId, signer.environment, signer.liveOrgId, signer.kind, signer.role, id, signer.userId, id]);
@@ -205,24 +223,24 @@ test("direct review submission requires complete, signer/version/digest-bound de
   const flow = new EsignFlow({ enabled: () => true, run: async (_actor, work) => work(c) });
   const review: Command = { type: "review", caseId: id, versionId: id };
 
-  await assert.rejects(flow.execute(signer, review), /Document delivery required/);
+  await assert.rejects(flow.execute(signer, review), deniedFor("Document delivery required before acknowledgement"));
   assert.equal(deliveries.length, 0);
   await assert.rejects(flow.pdf(signer, id, id, false, 3));
   assert.equal(deliveries.length, 0);
 
   await flow.pdf(signer, id, id, false, 1);
   await flow.pdf(signer, id, id, false, 1);
-  await assert.rejects(flow.execute(signer, review), /Document delivery required/);
+  await assert.rejects(flow.execute(signer, review), deniedFor("Document delivery required before acknowledgement"));
   await flow.pdf(signer, id, id, false, 2);
   await requireReviewDelivery(c, binding, 2);
 
   for (const key of Object.keys(binding) as (keyof ReviewBinding)[]) {
-    await assert.rejects(requireReviewDelivery(c, { ...binding, [key]: binding[key] + "-other" }, 2), /Document delivery required/);
+    await assert.rejects(requireReviewDelivery(c, { ...binding, [key]: binding[key] + "-other" }, 2), deniedFor("Document delivery required before acknowledgement"));
   }
   stateDigest = "0".repeat(64);
-  await assert.rejects(flow.execute(signer, review), /Document delivery required/);
+  await assert.rejects(flow.execute(signer, review), deniedFor("Document delivery required before acknowledgement"));
   const count = deliveries.length;
-  await assert.rejects(flow.pdf(signer, id, id, false), /Document digest mismatch/);
+  await assert.rejects(flow.pdf(signer, id, id, false), deniedFor("Document digest mismatch"));
   assert.equal(deliveries.length, count);
 
   stateDigest = digest;
