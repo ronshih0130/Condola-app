@@ -1,15 +1,17 @@
 import { svc } from "./db";
 import { settlementAccess, settlementDeadline, settlementUuid } from "./settlement-access";
 import type { Session } from "./types";
-export type SettlementCommandKind="statement"|"attribution"|"reply"|"outcome"|"outcome_reply"|"upload"|"observation";
+export type SettlementCommandKind="statement"|"attribution"|"reply"|"outcome"|"outcome_reply"|"upload"|"observation"|"cycle"|"line_binding";
 /** Only the signed-in actor may recover their own operation result. */
 export async function settlementCommandStatus(session:Session,leaseId:string,versionId:string|null,kind:SettlementCommandKind,requestId:string) {
   settlementUuid(leaseId);settlementUuid(requestId);if(versionId)settlementUuid(versionId);
   return svc(session.userId,async client=>{
-    await settlementAccess(client,session,leaseId,["attribution","observation"].includes(kind)?"prepare":"read");
+    await settlementAccess(client,session,leaseId,kind==="cycle"?"publish":["attribution","observation","line_binding"].includes(kind)?"prepare":"read");
     let sql:string;
     switch(kind) {
       case "statement": sql=`SELECT id FROM app.settlement_versions WHERE org_id=$1 AND lease_id=$2 AND created_by=$3 AND request_id=$4 AND (published OR $5::boolean)`;break;
+      case "cycle": sql=`SELECT id FROM app.settlement_rent_cycles WHERE org_id=$1 AND lease_id=$2 AND asserted_by=$3 AND request_id=$4`;break;
+      case "line_binding": sql=`SELECT id FROM app.settlement_line_bindings WHERE org_id=$1 AND lease_id=$2 AND created_by=$3 AND request_id=$4`;break;
       case "attribution": sql=`SELECT id FROM app.settlement_attributions WHERE org_id=$1 AND lease_id=$2 AND created_by=$3 AND request_id=$4`;break;
       case "reply": sql=`SELECT id FROM app.settlement_replies WHERE org_id=$1 AND lease_id=$2 AND actor_id=$3 AND request_id=$4 AND version_id=$5`;break;
       case "outcome": sql=`SELECT id FROM app.settlement_outcomes WHERE org_id=$1 AND lease_id=$2 AND reporter_id=$3 AND request_id=$4 AND version_id=$5`;break;
@@ -18,8 +20,8 @@ export async function settlementCommandStatus(session:Session,leaseId:string,ver
       case "outcome_reply": sql=`SELECT e.id FROM app.settlement_outcome_events e JOIN app.settlement_outcomes o ON o.id=e.outcome_id AND o.org_id=e.org_id AND o.lease_id=e.lease_id WHERE e.org_id=$1 AND e.lease_id=$2 AND e.actor_id=$3 AND e.request_id=$4 AND o.version_id=$5`;break;
       default: throw new Error("Invalid operation");
     }
-    if(!["statement","attribution"].includes(kind) && !versionId) throw new Error("Missing version");
-    const params=[session.orgId,leaseId,session.userId,requestId,...(kind==="statement"?[session.kind==="staff"]:kind==="attribution"?[]:[versionId])];
+    if(!["statement","attribution","cycle","line_binding"].includes(kind) && !versionId) throw new Error("Missing version");
+    const params=[session.orgId,leaseId,session.userId,requestId,...(kind==="statement"?[session.kind==="staff"]:["attribution","cycle","line_binding"].includes(kind)?[]:[versionId])];
     const row=(await client.query<{id:string;upload_state?:string}>(sql,params)).rows[0];await settlementDeadline(client,session,leaseId);
     if(!row) return {status:"unknown" as const};
     if(kind==="upload" && row.upload_state==="pending") return {status:"pending" as const,id:row.id};

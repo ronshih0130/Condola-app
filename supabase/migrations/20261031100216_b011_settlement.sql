@@ -74,9 +74,9 @@ CREATE UNIQUE INDEX settlement_payment_lease_source ON app.settlement_sources(or
 CREATE TABLE app.settlement_rent_cycles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), org_id uuid NOT NULL, lease_id uuid NOT NULL,
   currency char(3) NOT NULL REFERENCES public.currencies(code), period_start date NOT NULL, period_end date NOT NULL,
-  agreed_monthly_minor bigint NOT NULL CHECK(agreed_monthly_minor>=0), evidence_id uuid NOT NULL,
-  asserted_by uuid NOT NULL, asserted_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  UNIQUE(org_id,lease_id,id), FOREIGN KEY(org_id,lease_id) REFERENCES public.leases(org_id,id),
+  agreed_monthly_minor bigint NOT NULL CHECK(agreed_monthly_minor>=0), source_lease_start date NOT NULL, source_move_out date NOT NULL, source_country text NOT NULL, evidence_id uuid NOT NULL,
+  asserted_by uuid NOT NULL, request_id uuid NOT NULL, asserted_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  UNIQUE(asserted_by,request_id), UNIQUE(org_id,lease_id,id), FOREIGN KEY(org_id,lease_id) REFERENCES public.leases(org_id,id),
   FOREIGN KEY(org_id,lease_id,evidence_id) REFERENCES app.settlement_evidence(org_id,lease_id,id),
   CHECK(period_end>=period_start),
   EXCLUDE USING gist(org_id WITH =,lease_id WITH =,daterange(period_start,period_end,'[]') WITH &&)
@@ -92,6 +92,36 @@ CREATE TABLE app.settlement_allocation_roots (
 );
 CREATE UNIQUE INDEX settlement_deposit_root ON app.settlement_allocation_roots(source_id) WHERE category='deposit';
 CREATE UNIQUE INDEX settlement_rent_root ON app.settlement_allocation_roots(source_id,cycle_id) WHERE category='rent';
+-- One immutable root per original whole line; revisions preserve scope history.
+CREATE TABLE app.settlement_line_roots (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), org_id uuid NOT NULL, lease_id uuid NOT NULL,
+  invoice_line_id uuid NOT NULL REFERENCES public.invoice_lines(id), created_by uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  UNIQUE(org_id,lease_id,id), UNIQUE(org_id,invoice_line_id),
+  FOREIGN KEY(org_id,lease_id) REFERENCES public.leases(org_id,id)
+);
+CREATE FUNCTION app.settlement_line_root_scope() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+  PERFORM 1 FROM public.invoice_lines l JOIN public.invoices i ON i.org_id=l.org_id AND i.id=l.invoice_id
+    WHERE l.id=NEW.invoice_line_id AND l.org_id=NEW.org_id AND i.lease_id=NEW.lease_id FOR SHARE OF i,l NOWAIT;
+  IF NOT FOUND THEN RAISE EXCEPTION 'invalid settlement line scope' USING ERRCODE='23503'; END IF;
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION app.settlement_line_root_scope() FROM PUBLIC,anon,authenticated;
+CREATE TRIGGER settlement_line_scope BEFORE INSERT ON app.settlement_line_roots FOR EACH ROW EXECUTE FUNCTION app.settlement_line_root_scope();
+CREATE TABLE app.settlement_line_bindings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), org_id uuid NOT NULL, lease_id uuid NOT NULL, root_id uuid NOT NULL,
+  revision integer NOT NULL CHECK(revision>0), classification text NOT NULL CHECK(classification IN ('rent','related_adjustment','unrelated')),
+  cycle_id uuid, evidence_id uuid NOT NULL, reason text NOT NULL CHECK(length(btrim(reason)) BETWEEN 1 AND 1000),
+  source_invoice_version text NOT NULL, source_line_version text NOT NULL,
+  expected_prior_id uuid REFERENCES app.settlement_line_bindings(id), created_by uuid NOT NULL, request_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  UNIQUE(root_id,revision), UNIQUE(created_by,request_id), UNIQUE(org_id,lease_id,id),
+  FOREIGN KEY(org_id,lease_id,root_id) REFERENCES app.settlement_line_roots(org_id,lease_id,id),
+  FOREIGN KEY(org_id,lease_id,cycle_id) REFERENCES app.settlement_rent_cycles(org_id,lease_id,id),
+  FOREIGN KEY(org_id,lease_id,evidence_id) REFERENCES app.settlement_evidence(org_id,lease_id,id),
+  CHECK((classification='unrelated' AND cycle_id IS NULL) OR (classification<>'unrelated' AND cycle_id IS NOT NULL))
+);
 CREATE TABLE app.settlement_attributions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), org_id uuid NOT NULL, lease_id uuid NOT NULL, source_id uuid NOT NULL, root_id uuid NOT NULL,
   revision integer NOT NULL CHECK (revision>0), amount_minor bigint NOT NULL CHECK (amount_minor>=0),
@@ -173,16 +203,17 @@ CREATE TABLE app.settlement_outcome_events (
   CHECK(event <> 'external_reviewed' OR evidence_id IS NOT NULL)
 );
 DO $$ DECLARE n text; BEGIN
-  FOREACH n IN ARRAY ARRAY['settlement_sources','settlement_rent_cycles','settlement_allocation_roots','settlement_attributions','settlement_records','settlement_versions','settlement_upload_intents','settlement_evidence','settlement_evidence_links','settlement_gc_tombstones','settlement_gc_attempts','settlement_version_attributions','settlement_items','settlement_replies','settlement_outcomes','settlement_external_observations','settlement_outcome_reconciliations','settlement_outcome_events'] LOOP
+  FOREACH n IN ARRAY ARRAY['settlement_sources','settlement_rent_cycles','settlement_allocation_roots','settlement_line_roots','settlement_line_bindings','settlement_attributions','settlement_records','settlement_versions','settlement_upload_intents','settlement_evidence','settlement_evidence_links','settlement_gc_tombstones','settlement_gc_attempts','settlement_version_attributions','settlement_items','settlement_replies','settlement_outcomes','settlement_external_observations','settlement_outcome_reconciliations','settlement_outcome_events'] LOOP
     EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
     EXECUTE format('REVOKE ALL ON app.%I FROM PUBLIC,anon,authenticated',n);
     EXECUTE format('GRANT SELECT,INSERT ON app.%I TO service_role',n);
   END LOOP;
 END $$;
-GRANT UPDATE(created_at) ON app.settlement_sources,app.settlement_records TO service_role;
+GRANT UPDATE(created_at) ON app.settlement_sources,app.settlement_records,app.settlement_line_roots TO service_role;
 GRANT UPDATE(status) ON app.settlement_upload_intents TO service_role;
 CREATE FUNCTION app.settlement_parent_immutable() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN RAISE EXCEPTION 'settlement parent is immutable' USING ERRCODE='42501'; END $$;
 CREATE TRIGGER settlement_source_immutable BEFORE UPDATE ON app.settlement_sources FOR EACH ROW EXECUTE FUNCTION app.settlement_parent_immutable();
+CREATE TRIGGER settlement_line_root_immutable BEFORE UPDATE ON app.settlement_line_roots FOR EACH ROW EXECUTE FUNCTION app.settlement_parent_immutable();
 CREATE TRIGGER settlement_record_immutable BEFORE UPDATE ON app.settlement_records FOR EACH ROW EXECUTE FUNCTION app.settlement_parent_immutable();
 REVOKE ALL ON FUNCTION app.settlement_parent_immutable() FROM PUBLIC,anon,authenticated;

@@ -11,7 +11,9 @@ import { captureHandoverBeforeDemoReset } from "./handover-demo-reset";
 import { captureSettlementBeforeDemoReset, reconcileSettlementDemoObjects } from "./settlement-demo-reset";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { publishHandover, prepareHandoverUpload, uploadHandoverBytes, finalizeHandoverUpload } from "./handover";
-import { setDepositAttribution } from "./settlement-attribution";
+import { bindSettlementLine } from "./settlement-line-bindings";
+import { assertSettlementRentCycle } from "./settlement-cycle";
+import { setDepositAttribution,setRentAttribution } from "./settlement-attribution";
 import { recordPayment, reversePayment } from "./domain";
 import { svc } from "./db";
 import { recoverEmptySettlementDraft, settlementCommandStatus } from "./settlement-command-status";
@@ -84,16 +86,6 @@ test("source attribution is bounded, replayable, isolated and invalid after reve
     const externalCorrection={...externalInput,source:{kind:"external" as const,identity:"bankref",declaredMinor:20000},amountMinor:1200,expectedAttributionId:externalFirst,requestId:randomUUID()};
     const correctedExternal=await setDepositAttribution(staff,externalCorrection);
     assert.equal((await setDepositAttribution(staff,externalCorrection)).id,correctedExternal.id);
-    // Seed a rent root as a scoped fixture to exercise the existing deposit gateway's shared cap.
-    // Rent-root creation is not yet implemented and this does not claim that API is tested.
-    const externalSource=(await db.query<{id:string}>(`SELECT source_id AS id FROM app.settlement_attributions WHERE id=$1`,[correctedExternal.id])).rows[0].id;
-    const cycle=(await db.query<{id:string}>(`INSERT INTO app.settlement_rent_cycles(org_id,lease_id,currency,period_start,period_end,agreed_monthly_minor,evidence_id,asserted_by) VALUES($1,$2,'TWD','2026-10-01','2026-10-31',100000,$3,$4) RETURNING id`,[ORG_ID,lease,evidenceId,staff.userId])).rows[0].id;
-    const root=(await db.query<{id:string}>(`INSERT INTO app.settlement_allocation_roots(org_id,lease_id,source_id,category,cycle_id,created_by) VALUES($1,$2,$3,'rent',$4,$5) RETURNING id`,[ORG_ID,lease,externalSource,cycle,staff.userId])).rows[0].id;
-    await db.query(`INSERT INTO app.settlement_attributions(org_id,lease_id,source_id,root_id,revision,amount_minor,reason,evidence_id,request_id,created_by) VALUES($1,$2,$3,$4,1,18000,'Synthetic rent attribution',$5,$6,$7)`,[ORG_ID,lease,externalSource,root,evidenceId,randomUUID(),staff.userId]);
-    await assert.rejects(setDepositAttribution(staff,{...externalCorrection,requestId:randomUUID(),expectedAttributionId:correctedExternal.id,amountMinor:3000}));
-    assert.equal((await db.query<{n:string}>(`SELECT count(*)::text n FROM app.settlement_attributions WHERE root_id=$1`,[root])).rows[0].n,'1');
-    await assert.rejects(db.query(`INSERT INTO app.settlement_rent_cycles(org_id,lease_id,currency,period_start,period_end,agreed_monthly_minor,evidence_id,asserted_by) VALUES($1,$2,'TWD','2026-10-15','2026-11-14',100000,$3,$4)`,[ORG_ID,lease,evidenceId,staff.userId]));
-
     const first=(await setDepositAttribution(staff,input)).id;assert.equal((await setDepositAttribution(staff,input)).id,first);
     await assert.rejects(setDepositAttribution(staff,{...input,amountMinor:7001}));
     const outcomes=await Promise.allSettled([setDepositAttribution(staff,{...input,requestId:randomUUID(),expectedAttributionId:first,amountMinor:8000}),setDepositAttribution(staff,{...input,requestId:randomUUID(),expectedAttributionId:first,amountMinor:9000})]);
@@ -121,6 +113,13 @@ test("source attribution is bounded, replayable, isolated and invalid after reve
     assert.deepEqual(await counts(),financialBefore);
     const freshPreview=await previewSettlement(staff,previewInput); assert.equal(freshPreview.fingerprint,preview.fingerprint);
     const reviewedView=await readSettlement(staff,lease,saved); assert.equal(reviewedView.stale,false); assert.equal(reviewedView.sourceReview?.evidenceId,evidenceId); assert.ok(reviewedView.sourceReview?.createdAt);
+    const admissionHolder=new Client({connectionString:withDatabase(source,name)});await admissionHolder.connect();await admissionHolder.query("BEGIN");
+    try {
+      await admissionHolder.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,[`b011:rent-cycle:${ORG_ID}:${lease}`]);
+      const busyView=await readSettlement(staff,lease,saved);assert.equal(busyView.freshnessUnavailable,true);assert.equal(busyView.stale,false);assert.deepEqual(busyView.calculation,reviewedView.calculation);
+      const busyReplay=await saveSettlement(staff,previewInput,preview.fingerprint,draft,saveId,true);assert.equal(busyReplay.id,saved);assert.equal(busyReplay.freshnessUnavailable,true);assert.equal(busyReplay.stale,false);
+    } finally {await admissionHolder.query("ROLLBACK");await admissionHolder.end();}
+
     const tenantSid=randomUUID(); await db.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,now()+interval '1 hour')`,[tenantSid,USERS.tenant,randomUUID()]);
     const tenant={...staff,userId:USERS.tenant,sessionId:tenantSid,kind:"tenant" as const,role:null,leaseId:lease};
     assert.equal((await readSettlement(tenant,lease,saved)).stale,false);
@@ -317,10 +316,90 @@ test("source attribution is bounded, replayable, isolated and invalid after reve
     const quote=await previewFinalRent(staff,{leaseId:lease,agreedPeriodStart:dates.start,agreedPeriodEnd:dates.end,evidenceId,fullPeriodAsserted:true});
     assert.equal(quote.quote.days,16);assert.equal(quote.reconciliationRequired,true);assert.ok(quote.priorCharges.some(c=>c.service_period===null));assert.deepEqual(await counts(),beforeQuote);
     await assert.rejects(previewFinalRent(staff,{leaseId:lease,agreedPeriodStart:dates.start,agreedPeriodEnd:dates.end,evidenceId,fullPeriodAsserted:false}));
+    // The cycle is a scoped fixture; both category writers below use their real gateways.
+    const externalSource=(await db.query<{id:string}>(`SELECT source_id AS id FROM app.settlement_attributions WHERE id=$1`,[correctedExternal.id])).rows[0].id;
+    const cycleDates=(await db.query<{start:string;end:string}>(`UPDATE leases SET moved_out_on=(date_trunc('month',current_date)+interval '15 days')::date WHERE id=$1 RETURNING date_trunc('month',current_date)::date::text AS start,(date_trunc('month',current_date)+interval '1 month - 1 day')::date::text AS end`,[lease])).rows[0];
+    const cycleRequest={leaseId:lease,periodStart:cycleDates.start,periodEnd:cycleDates.end,evidenceId,requestId:randomUUID(),fullPeriodAsserted:true as const};
+    await assert.rejects(assertSettlementRentCycle(ownerIdentity,cycleRequest));
+    const cyclePair=await Promise.all([assertSettlementRentCycle(staff,cycleRequest),assertSettlementRentCycle(staff,cycleRequest)]);
+    const cycle=cyclePair[0].id;assert.equal(cyclePair[1].id,cycle);assert.equal(cyclePair.filter(x=>x.recovered).length,1);
+    assert.equal((await assertSettlementRentCycle(staff,cycleRequest)).id,cycle);
+    await db.query(`UPDATE leases SET moved_out_on=moved_out_on+1 WHERE id=$1`,[lease]);
+    const staleCycle=await assertSettlementRentCycle(staff,cycleRequest);assert.equal(staleCycle.id,cycle);assert.equal(staleCycle.stale,true);
+    await db.query(`UPDATE leases SET moved_out_on=moved_out_on-1 WHERE id=$1`,[lease]);
+    await assert.rejects(assertSettlementRentCycle(staff,{...cycleRequest,evidenceId:randomUUID()}));
+    const lineId=(await db.query<{id:string}>(`SELECT id FROM invoice_lines WHERE invoice_id=$1`,[invoice])).rows[0].id;
+    const lineInput={leaseId:lease,lineId,classification:"rent" as const,cycleId:cycle,evidenceId,reason:"Synthetic line scope",expectedPriorId:null,requestId:randomUUID()};
+    const rootLockHolder=new Client({connectionString:withDatabase(source,name)});await rootLockHolder.connect();await rootLockHolder.query("BEGIN");
+    try {await rootLockHolder.query(`SELECT id FROM invoices WHERE id=$1 FOR UPDATE`,[invoice]);await db.query("BEGIN");await db.query("SET LOCAL ROLE service_role");
+      await assert.rejects(db.query(`INSERT INTO app.settlement_line_roots(org_id,lease_id,invoice_line_id,created_by) VALUES($1,$2,$3,$4)`,[ORG_ID,lease,lineId,USERS.admin]),(error:unknown)=>(error as {code?:string}).code==="55P03");await db.query("ROLLBACK");
+    } finally {await rootLockHolder.query("ROLLBACK");await rootLockHolder.end();}
+    const otherLease=(await db.query<{id:string}>(`SELECT id FROM leases WHERE org_id=$1 LIMIT 1`,[ORG2_ID])).rows[0].id;
+    await db.query("BEGIN");await db.query("SET LOCAL ROLE service_role");
+    await assert.rejects(db.query(`INSERT INTO app.settlement_line_roots(org_id,lease_id,invoice_line_id,created_by) VALUES($1,$2,$3,$4)`,[ORG2_ID,otherLease,lineId,USERS.admin]),(error:unknown)=>(error as {code?:string}).code==="23503");
+    await db.query("ROLLBACK");
+
+    const sameOrgOther=(await db.query<{id:string}>(`SELECT id FROM leases WHERE org_id=$1 AND id<>$2 LIMIT 1`,[ORG_ID,lease])).rows[0].id;
+    await db.query("BEGIN");await db.query("SET LOCAL ROLE service_role");
+    await assert.rejects(db.query(`INSERT INTO app.settlement_line_roots(org_id,lease_id,invoice_line_id,created_by) VALUES($1,$2,$3,$4)`,[ORG_ID,sameOrgOther,lineId,USERS.admin]),(error:unknown)=>(error as {code?:string}).code==="23503");await db.query("ROLLBACK");
+    await assert.rejects(bindSettlementLine(ownerIdentity,lineInput));
+    const fingerprintBefore=(await previewSettlement(staff,{leaseId:lease,attributionIds:[],items:[]})).fingerprint;
+    const binding=await bindSettlementLine(staff,lineInput);assert.equal((await bindSettlementLine(staff,lineInput)).id,binding.id);
+    const bindingHolder=new Client({connectionString:withDatabase(source,name)});await bindingHolder.connect();await bindingHolder.query("BEGIN");
+    try {await bindingHolder.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,[`b011:rent-cycle:${ORG_ID}:${lease}`]);
+      const busyBinding=await bindSettlementLine(staff,lineInput);assert.equal(busyBinding.id,binding.id);assert.equal(busyBinding.freshnessUnavailable,true);assert.equal(busyBinding.current,null);
+    } finally {await bindingHolder.query("ROLLBACK");await bindingHolder.end();}
+
+    const fingerprintAfter=(await previewSettlement(staff,{leaseId:lease,attributionIds:[],items:[]})).fingerprint;assert.notEqual(fingerprintAfter,fingerprintBefore);
+    const latestVersion=(await db.query<{id:string}>(`SELECT v.id FROM app.settlement_versions v JOIN app.settlement_records r ON r.id=v.record_id WHERE r.org_id=$1 AND r.lease_id=$2 ORDER BY v.revision DESC LIMIT 1`,[ORG_ID,lease])).rows[0].id;
+    const lineDraft=(await saveSettlement(staff,empty,fingerprintAfter,latestVersion,randomUUID(),false)).id;assert.equal((await readSettlement(staff,lease,lineDraft)).stale,false);
+    const invoiceHolder=new Client({connectionString:withDatabase(source,name)});await invoiceHolder.connect();await invoiceHolder.query("BEGIN");
+    try {await invoiceHolder.query(`SELECT id FROM invoices WHERE id=$1 FOR UPDATE`,[invoice]);
+      const lockedView=await readSettlement(staff,lease,lineDraft);assert.equal(lockedView.freshnessUnavailable,true);assert.equal(lockedView.stale,false);assert.equal((lockedView.calculation as {authoritative:boolean}).authoritative,false);
+    } finally {await invoiceHolder.query("ROLLBACK");await invoiceHolder.end();}
+
+
+    const bindingRace=await Promise.allSettled([
+      bindSettlementLine(staff,{...lineInput,classification:"unrelated",cycleId:null,expectedPriorId:binding.id,requestId:randomUUID()}),
+      bindSettlementLine(staff,{...lineInput,expectedPriorId:binding.id,requestId:randomUUID()}),
+    ]);assert.equal(bindingRace.filter(x=>x.status==="fulfilled").length,1);
+    assert.notEqual((await previewSettlement(staff,{leaseId:lease,attributionIds:[],items:[]})).fingerprint,fingerprintAfter);assert.equal((await readSettlement(staff,lease,lineDraft)).stale,true);
+    await assert.rejects(bindSettlementLine({...staff,orgId:ORG2_ID,liveOrgId:ORG2_ID},{...lineInput,requestId:randomUUID()}));
+    const rentInput={...externalInput,cycleId:cycle,requestId:randomUUID(),amountMinor:18000,reason:"Synthetic rent attribution"};
+    const rent=await setRentAttribution(staff,rentInput);assert.equal((await setRentAttribution(staff,rentInput)).id,rent.id);
+    await db.query(`UPDATE leases SET moved_out_on=moved_out_on+1 WHERE id=$1`,[lease]);
+    const staleRent=await setRentAttribution(staff,rentInput);assert.equal(staleRent.id,rent.id);assert.equal(staleRent.stale,true);
+    await assert.rejects(setRentAttribution(staff,{...rentInput,requestId:randomUUID(),expectedAttributionId:rent.id,amountMinor:17000}));
+    await db.query(`UPDATE leases SET moved_out_on=moved_out_on-1 WHERE id=$1`,[lease]);
+    await assert.rejects(setDepositAttribution(staff,{...rentInput}));
+    await assert.rejects(setDepositAttribution(staff,{...externalCorrection,requestId:randomUUID(),expectedAttributionId:correctedExternal.id,amountMinor:3000}));
+    const concurrent=await Promise.allSettled([
+      setDepositAttribution(staff,{...externalCorrection,requestId:randomUUID(),expectedAttributionId:correctedExternal.id,amountMinor:1800}),
+      setRentAttribution(staff,{...rentInput,requestId:randomUUID(),expectedAttributionId:rent.id,amountMinor:18600}),
+    ]);
+    assert.equal(concurrent.filter(x=>x.status==="fulfilled").length,1);
+    const usage=(await db.query<{total:string}>(`SELECT sum(a.amount_minor)::text total FROM app.settlement_allocation_roots r JOIN LATERAL (SELECT amount_minor FROM app.settlement_attributions WHERE root_id=r.id ORDER BY revision DESC LIMIT 1) a ON true WHERE r.source_id=$1`,[externalSource])).rows[0].total;
+    assert.ok(Number(usage)<=20000);
+    const sharedPayment=await recordPayment(staff,{leaseId:lease,amountMajor:100,paidOn:"2026-10-01",last5:"67890",reference:"Synthetic shared cap"});
+    const sharedInput={leaseId:lease,evidenceId,expectedAttributionId:null,amountMinor:7000,reason:"Synthetic shared payment",source:{kind:"payment" as const,paymentId:sharedPayment.paymentId}};
+    const internalRace=await Promise.allSettled([setDepositAttribution(staff,{...sharedInput,requestId:randomUUID()}),setRentAttribution(staff,{...sharedInput,cycleId:cycle,requestId:randomUUID()})]);
+    assert.equal(internalRace.filter(x=>x.status==="fulfilled").length,1);
+    const internalUsage=(await db.query<{total:string}>(`SELECT coalesce(sum(a.amount_minor),0)::text total FROM app.settlement_sources s JOIN app.settlement_allocation_roots r ON r.source_id=s.id JOIN LATERAL (SELECT amount_minor FROM app.settlement_attributions WHERE root_id=r.id ORDER BY revision DESC LIMIT 1) a ON true WHERE s.payment_id=$1`,[sharedPayment.paymentId])).rows[0].total;
+    assert.ok(Number(internalUsage)<=10000);
+
+    await assert.rejects(assertSettlementRentCycle(staff,{...cycleRequest,requestId:randomUUID()}));
+    const rentSnapshotInput={leaseId:lease,attributionIds:[],items:[]};const financialBeforeRentDraft=await counts();
+    const rentPreview=await previewSettlement(staff,rentSnapshotInput);assert.equal(rentPreview.calculation.authoritative,false);assert.equal(rentPreview.rentSourceCoverage,"unverified");assert.ok(rentPreview.candidateLines.some(l=>l.id===lineId));assert.ok(rentPreview.rentAttrs.some(a=>a.cycle_id===cycle));
+    await assert.rejects(saveSettlement(staff,rentSnapshotInput,rentPreview.fingerprint,lineDraft,randomUUID(),true));
+    const rentDraft=(await saveSettlement(staff,rentSnapshotInput,rentPreview.fingerprint,lineDraft,randomUUID(),false)).id;
+    const rentView=await readSettlement(staff,lease,rentDraft);assert.equal(rentView.rentSources?.coverage,"unverified");assert.ok(rentView.rentSources?.lines.some(l=>l.description==="Synthetic rent"));assert.ok(rentView.rentSources?.cash.length);assert.equal(rentView.stale,false);assert.deepEqual(await counts(),financialBeforeRentDraft);
+
+
+
     // Exercise the complete foreign-key reset order using actual new private
     // table rows; these synthetic rows are only a reset fixture, not business evidence.
     const record=(await db.query<{id:string}>(`SELECT id FROM app.settlement_records WHERE org_id=$1 AND lease_id=$2`,[ORG_ID,lease])).rows[0].id;
-    const snapshot=(await db.query<{id:string}>(`INSERT INTO app.settlement_versions(org_id,lease_id,record_id,revision,published,snapshot,source_fingerprint,created_by,request_id) VALUES($1,$2,$3,5,true,'{}',$4,$5,$6) RETURNING id`,[ORG_ID,lease,record,"a".repeat(64),USERS.admin,randomUUID()])).rows[0].id;
+    const snapshot=(await db.query<{id:string}>(`INSERT INTO app.settlement_versions(org_id,lease_id,record_id,revision,published,snapshot,source_fingerprint,created_by,request_id) VALUES($1,$2,$3,(SELECT coalesce(max(revision),0)+1 FROM app.settlement_versions WHERE record_id=$3),true,'{}',$4,$5,$6) RETURNING id`,[ORG_ID,lease,record,"a".repeat(64),USERS.admin,randomUUID()])).rows[0].id;
     await db.query(`INSERT INTO app.settlement_version_attributions(org_id,lease_id,version_id,attribution_id) VALUES($1,$2,$3,$4)`,[ORG_ID,lease,snapshot,first]);
     await db.query(`INSERT INTO app.settlement_evidence_links(org_id,lease_id,version_id,evidence_id,linked_by) VALUES($1,$2,$3,$4,$5)`,[ORG_ID,lease,snapshot,evidenceId,USERS.admin]);
     const item=(await db.query<{id:string}>(`INSERT INTO app.settlement_items(org_id,lease_id,version_id,item_key,label,original_minor,amount_minor,reason,evidence_id,created_by) VALUES($1,$2,$3,$4,'Synthetic',100,100,'Synthetic',$5,$6) RETURNING id`,[ORG_ID,lease,snapshot,randomUUID(),evidenceId,USERS.admin])).rows[0].id;
@@ -330,7 +409,7 @@ test("source attribution is bounded, replayable, isolated and invalid after reve
     await db.query(`INSERT INTO app.settlement_outcome_events(org_id,lease_id,outcome_id,actor_id,revision,event,note,request_id) VALUES($1,$2,$3,$4,1,'disputed','',$5)`,[ORG_ID,lease,outcome,USERS.tenant,randomUUID()]);
     const path=(await db.query<{storage_path:string}>(`SELECT storage_path FROM app.handover_upload_intents WHERE id=$1`,[intent.intentId])).rows[0].storage_path;
     await db.query("BEGIN"); await captureSettlementBeforeDemoReset(db); await captureHandoverBeforeDemoReset(db); await db.query("COMMIT");
-    for(const table of ["settlement_outcome_events","settlement_outcome_reconciliations","settlement_external_observations","settlement_outcomes","settlement_replies","settlement_items","settlement_version_attributions","settlement_versions","settlement_attributions","settlement_allocation_roots","settlement_rent_cycles","settlement_sources","settlement_records"]) assert.equal(Number((await db.query(`SELECT count(*) AS n FROM app.${table}`)).rows[0].n),0);
+    for(const table of ["settlement_outcome_events","settlement_outcome_reconciliations","settlement_external_observations","settlement_outcomes","settlement_replies","settlement_items","settlement_version_attributions","settlement_versions","settlement_attributions","settlement_allocation_roots","settlement_line_bindings","settlement_line_roots","settlement_rent_cycles","settlement_sources","settlement_records"]) assert.equal(Number((await db.query(`SELECT count(*) AS n FROM app.${table}`)).rows[0].n),0);
     assert.equal((await db.query(`SELECT count(*)::int AS n FROM app.handover_gc_tombstones WHERE storage_path IN ($1,$2)`,[path,`${path}/sealed`])).rows[0].n,2);
     assert.equal((await db.query(`SELECT count(*)::int AS n FROM app.settlement_gc_tombstones WHERE storage_path IN ($1,$2)`,[settlementPath,`${settlementPath}/sealed`])).rows[0].n,2);
     assert.equal(objects.has(sealedKey),true); await reconcileSettlementDemoObjects(db,100); assert.equal(objects.has(sealedKey),false);

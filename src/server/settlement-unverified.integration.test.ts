@@ -1,0 +1,44 @@
+import assert from "node:assert/strict";
+import { randomUUID,createHash } from "node:crypto";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import { Client } from "pg";
+import { disposableDbUrl,withDatabase } from "./test-disposable-db";
+import { ORG_ID,USERS } from "./ids";
+import { resetAndSeed } from "./seed";
+import { publishHandover,prepareHandoverUpload,uploadHandoverBytes,finalizeHandoverUpload } from "./handover";
+import { shareHandoverEvidence } from "./settlement-attachments";
+import { setDepositAttribution } from "./settlement-attribution";
+import { previewSettlement } from "./settlement-preview";
+import { saveSettlement,readSettlement } from "./settlement-statement";
+import type { Session } from "./types";
+const source=disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
+let admin:Client,db:Client,name:string,owned=false,previous:string|undefined;
+test.before(async()=>{const template=decodeURIComponent(source.pathname.slice(1));if(!/^[a-z][a-z0-9_]{0,62}$/.test(template))throw new Error("Invalid template");name=`condola_b011_${randomUUID().replaceAll("-","")}`;admin=new Client({connectionString:withDatabase(source,"postgres")});await admin.connect();await admin.query(`CREATE DATABASE "${name}" TEMPLATE "${template}"`);owned=true;db=new Client({connectionString:withDatabase(source,name)});await db.connect();for(const file of ["20261031100214_b011_handover_records.sql","20261031100216_b011_settlement.sql"])await db.query(await readFile(new URL(`../../supabase/migrations/${file}`,import.meta.url),"utf8"));previous=process.env.DATABASE_URL;process.env.DATABASE_URL=withDatabase(source,name);await resetAndSeed();});
+test.after(async()=>{if(previous===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=previous;await db?.end();if(owned)await admin.query(`DROP DATABASE "${name}"`);await admin?.end();});
+test("no cycle never makes unpaid rent or adjustments publishable",async()=>{
+  const lease=(await db.query<{id:string;property_id:string}>(`SELECT l.id,l.property_id FROM leases l JOIN lease_parties p ON p.lease_id=l.id JOIN contacts c ON c.id=p.contact_id WHERE l.org_id=$1 AND c.user_id=$2 AND p.role='primary' AND l.status<>'draft' LIMIT 1`,[ORG_ID,USERS.tenant])).rows[0];assert.ok(lease);
+  const sid=randomUUID();await db.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,now()+interval '1 hour')`,[sid,USERS.admin,randomUUID()]);
+  const staff={userId:USERS.admin,sessionId:sid,orgId:ORG_ID,liveOrgId:ORG_ID,kind:"staff",role:"admin",environment:"live",locale:"en",calendar:"gregorian",leaseId:null,name:"Synthetic",email:""} as Session;
+  await db.query(`UPDATE organizations SET feature_flags=feature_flags || '{"handover_records":true,"deposit_settlements":true}'::jsonb WHERE id=$1`,[ORG_ID]);await db.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key IN ('handover_records','deposit_settlements')`,[ORG_ID]);
+  const objects=new Map<string,Buffer>();const server=createServer(async(req,res)=>{const path=req.url??"";if(req.method==="POST"){const chunks:Buffer[]=[];for await(const c of req)chunks.push(Buffer.from(c));objects.set(path,Buffer.concat(chunks));return res.writeHead(200).end();}if(req.method==="GET"){const value=objects.get(path);return value?res.writeHead(200).end(value):res.writeHead(404).end();}return res.writeHead(200).end();});server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();assert.ok(address&&typeof address!=="string");
+  const oldUrl=process.env.SUPABASE_URL,oldKey=process.env.SUPABASE_SERVICE_ROLE_KEY;process.env.SUPABASE_URL=`http://127.0.0.1:${address.port}`;process.env.SUPABASE_SERVICE_ROLE_KEY="synthetic-only";
+  try {
+    const version=await publishHandover(staff,lease.id,"move_in","Synthetic",null),bytes=Uint8Array.from([0xff,0xd8,0xff,1]),sha256=createHash("sha256").update(bytes).digest("hex");
+    const intent=await prepareHandoverUpload(staff,lease.id,version.id,{fileName:"synthetic.jpg",mime:"image/jpeg",size:bytes.length});await uploadHandoverBytes(staff,lease.id,intent.intentId,bytes);const photo=await finalizeHandoverUpload(staff,lease.id,intent.intentId);
+    const empty={leaseId:lease.id,attributionIds:[],items:[]},firstPreview=await previewSettlement(staff,empty),first=(await saveSettlement(staff,empty,firstPreview.fingerprint,null,randomUUID(),false)).id;
+    const evidenceId=await shareHandoverEvidence(staff,lease.id,first,photo.id);
+    const deposit=await setDepositAttribution(staff,{leaseId:lease.id,evidenceId,requestId:randomUUID(),expectedAttributionId:null,amountMinor:10000,reason:"Synthetic declaration",source:{kind:"external",identity:"Synthetic-source",declaredMinor:10000}});
+    const invoice=(await db.query<{id:string}>(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,status) VALUES($1,$2,$3,$4,'TWD',current_date,'draft') RETURNING id`,[ORG_ID,lease.property_id,lease.id,`B011-UNVERIFIED-${randomUUID()}`])).rows[0].id;
+    const rent=(await db.query<{id:string}>(`INSERT INTO invoice_lines(org_id,invoice_id,line_no,charge_type,description,quantity,unit_amount_minor,amount_minor) VALUES($1,$2,1,'rent','Synthetic unpaid rent',1,1000,1000) RETURNING id`,[ORG_ID,invoice])).rows[0].id;await db.query(`UPDATE invoices SET status='open' WHERE id=$1`,[invoice]);
+    const input={leaseId:lease.id,attributionIds:[deposit.id],items:[]},preview=await previewSettlement(staff,input);
+    assert.equal(preview.cycles.length,0);assert.equal(preview.calculation.authoritative,false);assert.ok(preview.candidateLines.some(line=>line.id===rent));
+    await assert.rejects(saveSettlement(staff,input,preview.fingerprint,first,randomUUID(),true));
+    const draft=(await saveSettlement(staff,input,preview.fingerprint,first,randomUUID(),false)).id;assert.equal((await readSettlement(staff,lease.id,draft)).stale,false);
+    const adjustment=(await db.query<{id:string}>(`INSERT INTO invoice_lines(org_id,invoice_id,line_no,charge_type,description,quantity,unit_amount_minor,amount_minor) VALUES($1,$2,2,'adjustment','Synthetic unbound adjustment',1,-100,-100) RETURNING id`,[ORG_ID,invoice])).rows[0].id;
+    const changed=await previewSettlement(staff,input);assert.equal(changed.calculation.authoritative,false);assert.ok(changed.candidateLines.some(line=>line.id===adjustment));assert.equal((await readSettlement(staff,lease.id,draft)).stale,true);await assert.rejects(saveSettlement(staff,input,changed.fingerprint,draft,randomUUID(),true));
+    assert.equal(sha256.length,64);
+  } finally {server.close();await once(server,"close");if(oldUrl===undefined)delete process.env.SUPABASE_URL;else process.env.SUPABASE_URL=oldUrl;if(oldKey===undefined)delete process.env.SUPABASE_SERVICE_ROLE_KEY;else process.env.SUPABASE_SERVICE_ROLE_KEY=oldKey;}
+});

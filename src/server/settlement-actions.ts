@@ -2,7 +2,9 @@
 import { revalidatePath } from "next/cache";
 import { requireCurrentConsent } from "./consent-gate";
 import { recoverEmptySettlementDraft, settlementCommandStatus, type SettlementCommandKind } from "./settlement-command-status";
-import { setDepositAttribution } from "./settlement-attribution";
+import { assertSettlementRentCycle } from "./settlement-cycle";
+import { bindSettlementLine } from "./settlement-line-bindings";
+import { setDepositAttribution,setRentAttribution } from "./settlement-attribution";
 import { shareHandoverEvidence } from "./settlement-attachments";
 import { observeExternalOutcome, reportSettlementOutcome, replySettlementOutcome } from "./settlement-outcomes";
 import { previewSettlement, type SettlementPreviewInput } from "./settlement-preview";
@@ -27,10 +29,19 @@ export async function shareSettlementHandoverAction(leaseId:string,versionId:str
 export async function attributeSettlementAction(leaseId:string,form:FormData) {
   await requireCurrentConsent();const session=await getSession();
   try {
-    const kind=String(form.get("kind"));const source=kind==="payment" ? {kind:"payment" as const,paymentId:String(form.get("paymentId")??"")} : {kind:"external" as const,identity:String(form.get("identity")??""),declaredMinor:amount(form.get("declared"))};
-    await setDepositAttribution(session,{leaseId,evidenceId:String(form.get("evidenceId")??""),requestId:String(form.get("requestId")??""),expectedAttributionId:String(form.get("expectedId")??"")||null,amountMinor:amount(form.get("amount")),reason:String(form.get("reason")??""),source});
+    const kind=String(form.get("kind")),category=String(form.get("category"));if(!["payment","external"].includes(kind)||!["deposit","rent"].includes(category))throw new Error("Invalid source");const source=kind==="payment" ? {kind:"payment" as const,paymentId:String(form.get("paymentId")??"")} : {kind:"external" as const,identity:String(form.get("identity")??""),declaredMinor:amount(form.get("declared"))};
+    const input={leaseId,evidenceId:String(form.get("evidenceId")??""),requestId:String(form.get("requestId")??""),expectedAttributionId:String(form.get("expectedId")??"")||null,amountMinor:amount(form.get("amount")),reason:String(form.get("reason")??""),source};
+    if(category==="rent")await setRentAttribution(session,{...input,cycleId:String(form.get("cycleId")??"")});else await setDepositAttribution(session,input);
     refresh(leaseId);return {ok:true as const};
   }catch{return {ok:false as const};}
+}
+export async function assertSettlementCycleAction(leaseId:string,form:FormData) {
+  await requireCurrentConsent();const session=await getSession();
+  try {if(form.get("asserted")!=="on")throw new Error("Missing assertion");await assertSettlementRentCycle(session,{leaseId,periodStart:String(form.get("periodStart")??""),periodEnd:String(form.get("periodEnd")??""),evidenceId:String(form.get("evidenceId")??""),requestId:String(form.get("requestId")??""),fullPeriodAsserted:true});refresh(leaseId);return {ok:true as const};}catch{return {ok:false as const};}
+}
+export async function bindSettlementLineAction(leaseId:string,form:FormData) {
+  await requireCurrentConsent();const session=await getSession();
+  try {const classification=String(form.get("classification"));if(classification!=="rent"&&classification!=="related_adjustment"&&classification!=="unrelated")throw new Error("Invalid classification");await bindSettlementLine(session,{leaseId,lineId:String(form.get("lineId")??""),classification,cycleId:classification==="unrelated"?null:String(form.get("cycleId")??""),evidenceId:String(form.get("evidenceId")??""),reason:String(form.get("reason")??""),expectedPriorId:String(form.get("expectedId")??"")||null,requestId:String(form.get("requestId")??"")});refresh(leaseId);return {ok:true as const};}catch{return {ok:false as const};}
 }
 export async function previewSettlementAction(input:SettlementPreviewInput) {
   await requireCurrentConsent();const session=await getSession();

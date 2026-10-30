@@ -6,6 +6,7 @@ import { settlementAccess, settlementDeadline, settlementUuid } from "./settleme
 import { calculateSettlement } from "./settlement-calculation";
 import type { Session } from "./types";
 
+export class SettlementFreshnessBusy extends FlowError { constructor(){super("errors.generic");} }
 export type SettlementItemInput = { key:string; label:string; amountMinor:number; reason:string; evidenceId:string; invoiceLineId:string|null };
 export type SettlementPreviewInput = { leaseId:string; attributionIds:string[]; items:SettlementItemInput[]; sourceReview?:{attested:true;evidenceId:string}|null };
 export function normalizeSettlementInput(input:SettlementPreviewInput) {
@@ -28,8 +29,11 @@ export function normalizeSettlementInput(input:SettlementPreviewInput) {
  * payment → ledger → invoice → attribution order before producing a snapshot. */
 export async function settlementPreviewOn(client:Client,session:Session,raw:SettlementPreviewInput, options?:{lockParent?:boolean;publish?:boolean;partyRead?:boolean;excludeOutcomeVersion?:string}) {
   const input=normalizeSettlementInput(raw); const {lease}=await settlementAccess(client,session,input.leaseId,options?.partyRead ? "read" : options?.publish ? "publish" : "prepare");
-  const initial=(await client.query<{id:string;source_id:string;payment_id:string|null}>(`SELECT a.id,a.source_id,s.payment_id FROM app.settlement_attributions a JOIN app.settlement_sources s ON s.id=a.source_id WHERE a.org_id=$1 AND a.lease_id=$2 AND a.id=ANY($3::uuid[]) ORDER BY a.id`,[session.orgId,input.leaseId,input.attributionIds])).rows;
-  if(initial.length!==input.attributionIds.length) throw new FlowError("errors.notFound");
+  // Serialize the mutable set of scope assertions before financial row locks.
+  const admission=(await client.query<{ok:boolean}>(`SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS ok`,[`b011:rent-cycle:${session.orgId}:${input.leaseId}`])).rows[0].ok;
+  if(!admission)throw new SettlementFreshnessBusy();await settlementDeadline(client,session,input.leaseId);
+  const initial=(await client.query<{id:string;source_id:string;payment_id:string|null}>(`SELECT a.id,a.source_id,s.payment_id FROM app.settlement_attributions a JOIN app.settlement_allocation_roots r ON r.id=a.root_id JOIN app.settlement_sources s ON s.id=a.source_id WHERE a.org_id=$1 AND a.lease_id=$2 AND (a.id=ANY($3::uuid[]) OR (r.category='rent' AND a.id=(SELECT id FROM app.settlement_attributions WHERE root_id=r.id ORDER BY revision DESC LIMIT 1))) ORDER BY a.id LIMIT 1001`,[session.orgId,input.leaseId,input.attributionIds])).rows;
+  if(initial.length>1000 || input.attributionIds.some(id=>!initial.some(row=>row.id===id))) throw new FlowError("errors.notFound");
   const payments=[...new Set(initial.flatMap(a=>a.payment_id?[a.payment_id]:[]))].sort();
   const lockedPayments=(await client.query<{id:string;ledger_transaction_id:string|null}>(`SELECT id,ledger_transaction_id FROM public.payments WHERE org_id=$1 AND lease_id=$2 AND id=ANY($3::uuid[]) AND property_id=$4 AND currency=$5 ORDER BY id FOR UPDATE`,[session.orgId,input.leaseId,payments,lease.property_id,lease.currency])).rows;
   if(lockedPayments.length!==payments.length || lockedPayments.some(p=>!p.ledger_transaction_id)) throw new FlowError("errors.generic");
@@ -37,10 +41,14 @@ export async function settlementPreviewOn(client:Client,session:Session,raw:Sett
   const ledger=(await client.query(`SELECT id FROM public.ledger_transactions WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE NOWAIT`,[ledgerIds])).rowCount;
   if(ledger!==ledgerIds.length) throw new FlowError("errors.generic");
   const lineIds=input.items.flatMap(i=>i.invoiceLineId?[i.invoiceLineId]:[]).sort();
-  const initialLines=(await client.query<{id:string;invoice_id:string}>(`SELECT il.id,il.invoice_id FROM public.invoice_lines il JOIN public.invoices i ON i.id=il.invoice_id AND i.org_id=il.org_id WHERE il.org_id=$1 AND i.lease_id=$2 AND il.id=ANY($3::uuid[]) ORDER BY il.id`,[session.orgId,input.leaseId,lineIds])).rows;
-  if(initialLines.length!==lineIds.length) throw new FlowError("errors.notFound");
+  const bound=(await client.query<{invoice_line_id:string}>(`SELECT invoice_line_id FROM app.settlement_line_roots WHERE org_id=$1 AND lease_id=$2 ORDER BY invoice_line_id LIMIT 1001`,[session.orgId,input.leaseId])).rows;
+  if(bound.length>1000)throw new FlowError("errors.generic");
+  const allLineIds=[...new Set([...lineIds,...bound.map(row=>row.invoice_line_id)])].sort();
+  const initialLines=(await client.query<{id:string;invoice_id:string}>(`SELECT il.id,il.invoice_id FROM public.invoice_lines il JOIN public.invoices i ON i.id=il.invoice_id AND i.org_id=il.org_id WHERE il.org_id=$1 AND i.lease_id=$2 AND il.id=ANY($3::uuid[]) ORDER BY il.id`,[session.orgId,input.leaseId,allLineIds])).rows;
+  if(initialLines.length!==allLineIds.length) throw new FlowError("errors.notFound");
   const invoiceIds=[...new Set(initialLines.map(l=>l.invoice_id))].sort();
-  if ((await client.query(`SELECT id FROM public.invoices WHERE org_id=$1 AND lease_id=$2 AND id=ANY($3::uuid[]) ORDER BY id FOR SHARE`,[session.orgId,input.leaseId,invoiceIds])).rowCount!==invoiceIds.length) throw new FlowError("errors.generic");
+  if ((await client.query(`SELECT id FROM public.invoices WHERE org_id=$1 AND lease_id=$2 AND id=ANY($3::uuid[]) ORDER BY id FOR SHARE NOWAIT`,[session.orgId,input.leaseId,invoiceIds])).rowCount!==invoiceIds.length) throw new FlowError("errors.generic");
+  if ((await client.query(`SELECT id FROM public.invoice_lines WHERE org_id=$1 AND id=ANY($2::uuid[]) ORDER BY id FOR SHARE NOWAIT`,[session.orgId,allLineIds])).rowCount!==allLineIds.length)throw new FlowError("errors.generic");
   const sourceIds=[...new Set(initial.map(a=>a.source_id))].sort();
   if ((await client.query(`SELECT id FROM app.settlement_sources WHERE org_id=$1 AND lease_id=$2 AND id=ANY($3::uuid[]) ORDER BY id FOR UPDATE`,[session.orgId,input.leaseId,sourceIds])).rowCount!==sourceIds.length) throw new FlowError("errors.generic");
   await settlementDeadline(client,session,input.leaseId);
@@ -50,7 +58,11 @@ export async function settlementPreviewOn(client:Client,session:Session,raw:Sett
   if(attrs.length!==input.attributionIds.length) throw new FlowError("errors.generic");
   if (attrs.some(a=>a.source_currency!==lease.currency)) throw new FlowError("errors.generic");
   for(const a of attrs) if(a.kind==="payment" && (a.payment_status!=="confirmed" || a.reversed || a.payment_currency!==lease.currency || a.ledger_org!==session.orgId || a.ledger_lease!==input.leaseId || a.ledger_property!==lease.property_id || a.ledger_currency!==lease.currency || a.ledger_kind!=="payment" || a.source_table!=="payments" || a.ledger_source_id!==a.payment_id)) throw new FlowError("errors.generic");
+  const usage=(await client.query<{source_id:string;total:string}>(`SELECT r.source_id,coalesce(sum(a.amount_minor),0)::text AS total FROM app.settlement_allocation_roots r JOIN LATERAL (SELECT amount_minor FROM app.settlement_attributions WHERE root_id=r.id ORDER BY revision DESC LIMIT 1) a ON true WHERE r.source_id=ANY($1::uuid[]) GROUP BY r.source_id`,[sourceIds])).rows;
+  const totalsBySource=new Map(usage.map(row=>[row.source_id,BigInt(row.total)]));
   for (const a of attrs) {
+    const cap=BigInt(a.kind === "payment" ? a.payment_amount : a.declared_minor);
+    if ((totalsBySource.get(a.attribution_source_id) ?? BigInt(0))>cap) throw new FlowError("errors.generic");
     const amount=BigInt(a.amount_minor);
     if (amount<0 || amount>BigInt(a.kind === "payment" ? a.payment_amount : a.declared_minor)) throw new FlowError("errors.generic");
   }
@@ -64,7 +76,17 @@ export async function settlementPreviewOn(client:Client,session:Session,raw:Sett
   const deposit=totals.reduce((sum,n)=>sum+n,0);
   if(!Number.isSafeInteger(deposit)) throw new FlowError("errors.generic");
   // Invoice-linked items need separate evidence of partial-payment reconciliation.
-  const reconciliationRequired=lines.length>0 || (input.items.some(i=>!i.invoiceLineId) && !input.sourceReview);
+  // This bounded read records what is observed, but without the separately
+  // reviewed phantom fence it never certifies complete rent source coverage.
+  const cycles=(await client.query(`SELECT id,period_start::text,period_end::text,agreed_monthly_minor::text,source_lease_start::text,source_move_out::text,source_country,evidence_id,asserted_by,asserted_at FROM app.settlement_rent_cycles WHERE org_id=$1 AND lease_id=$2 ORDER BY id LIMIT 1001`,[session.orgId,input.leaseId])).rows;
+  const rentAttrs=(await client.query(`SELECT a.id,a.root_id,a.amount_minor::text,a.revision,a.evidence_id,r.cycle_id,s.id AS source_id,s.kind,s.payment_id,s.external_identity,s.declared_minor::text,s.currency::text AS source_currency,p.status::text AS payment_status,p.amount_minor::text AS payment_amount,p.currency::text AS payment_currency,p.xmin::text AS payment_version,p.ledger_transaction_id,t.xmin::text AS ledger_version,t.org_id AS ledger_org,t.lease_id AS ledger_lease,t.property_id AS ledger_property,t.currency::text AS ledger_currency,t.kind::text AS ledger_kind,t.source_table,t.source_id AS ledger_source_id,EXISTS(SELECT 1 FROM public.ledger_transactions rev WHERE rev.reverses_transaction_id=p.ledger_transaction_id) AS reversed FROM app.settlement_attributions a JOIN app.settlement_allocation_roots r ON r.id=a.root_id AND r.category='rent' JOIN app.settlement_sources s ON s.id=a.source_id LEFT JOIN public.payments p ON p.id=s.payment_id LEFT JOIN public.ledger_transactions t ON t.id=p.ledger_transaction_id WHERE a.org_id=$1 AND a.lease_id=$2 AND a.id=(SELECT id FROM app.settlement_attributions WHERE root_id=r.id ORDER BY revision DESC LIMIT 1) ORDER BY a.id LIMIT 1001`,[session.orgId,input.leaseId])).rows;
+  const candidateLines=(await client.query(`SELECT l.id,l.invoice_id,l.description,l.charge_type::text,l.amount_minor::text,l.service_period::text,l.xmin::text AS line_version,i.invoice_number,i.status::text,i.voided_at,i.balance_minor::text,i.xmin::text AS invoice_version FROM public.invoice_lines l JOIN public.invoices i ON i.id=l.invoice_id AND i.org_id=l.org_id WHERE i.org_id=$1 AND i.lease_id=$2 AND l.charge_type IN ('rent','credit','adjustment','deposit_refund') ORDER BY l.id LIMIT 1001`,[session.orgId,input.leaseId])).rows;
+  if(cycles.length>1000||rentAttrs.length>1000||candidateLines.length>1000)throw new FlowError("errors.generic");
+  const rentSourceCoverage="unverified" as const;
+  const rentSourceIssues=rentAttrs.map(a=>({id:a.id,invalid:a.source_currency!==lease.currency || (a.kind==="payment" && (a.payment_status!=="confirmed" || a.reversed || a.payment_currency!==lease.currency || a.ledger_org!==session.orgId || a.ledger_lease!==input.leaseId || a.ledger_property!==lease.property_id || a.ledger_currency!==lease.currency || a.ledger_kind!=="payment" || a.source_table!=="payments" || a.ledger_source_id!==a.payment_id)) || (totalsBySource.get(a.source_id)??BigInt(0))>BigInt(a.kind==="payment" ? a.payment_amount??0 : a.declared_minor??0)}));
+  // Full settlement cannot become authoritative until complete source admission
+  // is verified; an absent asserted cycle does not prove absent rent/credits.
+  const reconciliationRequired=true;
   const calculation=calculateSettlement(attrs.length && !reconciliationRequired ? deposit : null,input.items.map(i=>i.amountMinor));
   let recordId:string|null=null;
   if (options?.lockParent) {
@@ -75,7 +97,12 @@ export async function settlementPreviewOn(client:Client,session:Session,raw:Sett
   }
   const outcomes=(await client.query(`SELECT o.id,o.version_id,o.direction,o.amount_minor::text,o.currency::text,o.occurred_on::text,o.payer_id,o.payee_id,o.created_at,coalesce((SELECT jsonb_agg(jsonb_build_object('id',e.id,'event',e.event,'actor_id',e.actor_id,'revision',e.revision,'created_at',e.created_at) ORDER BY e.revision) FROM app.settlement_outcome_events e WHERE e.outcome_id=o.id),'[]'::jsonb) AS events FROM app.settlement_outcomes o WHERE o.org_id=$1 AND o.lease_id=$2 AND ($3::uuid IS NULL OR EXISTS(SELECT 1 FROM app.settlement_versions prior JOIN app.settlement_versions anchor ON anchor.id=$3 WHERE prior.id=o.version_id AND prior.record_id=anchor.record_id AND prior.revision<anchor.revision)) ORDER BY o.id`,[session.orgId,input.leaseId,options?.excludeOutcomeVersion ?? null])).rows;
   const observations=(await client.query(`SELECT id,version_id,direction,amount_minor::text,currency::text,occurred_on::text,payer_id,payer_kind,payee_id,payee_kind,reporter_id,evidence_id,reason,created_at FROM app.settlement_external_observations WHERE org_id=$1 AND lease_id=$2 AND ($3::uuid IS NULL OR EXISTS(SELECT 1 FROM app.settlement_versions prior JOIN app.settlement_versions anchor ON anchor.id=$3 WHERE prior.id=settlement_external_observations.version_id AND prior.record_id=anchor.record_id AND prior.revision<anchor.revision)) ORDER BY id`,[session.orgId,input.leaseId,options?.excludeOutcomeVersion ?? null])).rows;
-  const facts={lease,attrs,evidence,lines,outcomes,observations,input,calculation,reconciliationRequired};
+  // Any binding revision or bound source change stales every existing lease
+  // snapshot, including both sides of a reassignment. This is not a complete
+  // unbound-line scan or authorization for automatic rent net.
+  const bindings=(await client.query(`SELECT r.id AS root_id,r.invoice_line_id,b.id AS binding_id,b.revision,b.classification,b.cycle_id,b.evidence_id,b.reason,b.source_invoice_version,b.source_line_version,i.xmin::text AS current_invoice_version,l.xmin::text AS current_line_version,i.status::text,i.voided_at,l.charge_type::text,l.amount_minor::text,l.service_period::text FROM app.settlement_line_roots r JOIN LATERAL (SELECT * FROM app.settlement_line_bindings WHERE root_id=r.id ORDER BY revision DESC LIMIT 1) b ON true JOIN public.invoice_lines l ON l.id=r.invoice_line_id AND l.org_id=r.org_id JOIN public.invoices i ON i.id=l.invoice_id AND i.org_id=l.org_id AND i.lease_id=r.lease_id WHERE r.org_id=$1 AND r.lease_id=$2 ORDER BY r.id LIMIT 1001`,[session.orgId,input.leaseId])).rows;
+  if(bindings.length>1000)throw new FlowError("errors.generic");
+  const facts={lease,attrs,evidence,lines,bindings,cycles,rentAttrs,candidateLines,rentSourceCoverage,rentSourceIssues,outcomes,observations,input,calculation,reconciliationRequired};
   const fingerprint=createHash("sha256").update(JSON.stringify(facts)).digest("hex");
   await settlementDeadline(client,session,input.leaseId);
   return { ...facts,fingerprint,recordId };

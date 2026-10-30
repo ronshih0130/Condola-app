@@ -7,7 +7,7 @@ export async function captureSettlementBeforeDemoReset(client:Client) {
   if (!demoModeEnabled()) throw new Error("Settlement reset requires local demo mode");
   await client.query("LOCK TABLE public.platform_settings IN SHARE ROW EXCLUSIVE MODE");
   await client.query(`LOCK TABLE app.settlement_records,app.settlement_versions,app.settlement_upload_intents,
-    app.settlement_evidence,app.settlement_evidence_links,app.settlement_sources,app.settlement_rent_cycles,app.settlement_allocation_roots,app.settlement_attributions,
+    app.settlement_evidence,app.settlement_evidence_links,app.settlement_sources,app.settlement_rent_cycles,app.settlement_allocation_roots,app.settlement_line_roots,app.settlement_line_bindings,app.settlement_attributions,
     app.settlement_version_attributions,app.settlement_items,app.settlement_replies,app.settlement_outcomes,
     app.settlement_outcome_events,app.settlement_external_observations,app.settlement_outcome_reconciliations IN ACCESS EXCLUSIVE MODE`);
   await client.query(`INSERT INTO app.settlement_gc_tombstones(storage_path,reason)
@@ -15,7 +15,7 @@ export async function captureSettlementBeforeDemoReset(client:Client) {
       UNION SELECT storage_path || '/sealed' FROM app.settlement_upload_intents
       UNION SELECT storage_path FROM app.settlement_evidence WHERE intent_id IS NOT NULL) paths
     ON CONFLICT(storage_path) DO NOTHING`);
-  for (const name of ["settlement_outcome_events","settlement_outcome_reconciliations","settlement_external_observations","settlement_outcomes","settlement_replies","settlement_items","settlement_version_attributions","settlement_attributions","settlement_allocation_roots","settlement_rent_cycles","settlement_sources","settlement_evidence_links","settlement_evidence","settlement_upload_intents","settlement_versions","settlement_records"]) await client.query(`DELETE FROM app.${name}`);
+  for (const name of ["settlement_outcome_events","settlement_outcome_reconciliations","settlement_external_observations","settlement_outcomes","settlement_replies","settlement_items","settlement_version_attributions","settlement_attributions","settlement_allocation_roots","settlement_line_bindings","settlement_line_roots","settlement_rent_cycles","settlement_sources","settlement_evidence_links","settlement_evidence","settlement_upload_intents","settlement_versions","settlement_records"]) await client.query(`DELETE FROM app.${name}`);
 }
 /** Local/operator retries retain tombstones even after an accepted deletion. */
 export async function reconcileSettlementDemoObjects(client:Client,limit:number) {

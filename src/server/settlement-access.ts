@@ -42,7 +42,7 @@ export async function settlementAccess(client:Client,session:Session,leaseId:str
   return { lease:lease.rows[0], role };
 }
 /** Serialize retries for one verified actor/operation before financial locks. */
-export async function settlementRequestLock(client:Client,session:Session,leaseId:string,lane:"statement"|"outcome"|"observation"|"reply"|"attribution",requestId:string) {
+export async function settlementRequestLock(client:Client,session:Session,leaseId:string,lane:"statement"|"outcome"|"observation"|"reply"|"attribution"|"cycle"|"line_binding",requestId:string) {
   await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,[`b011:${lane}:${session.userId}:${requestId}`]);
   await settlementDeadline(client,session,leaseId);
 }
