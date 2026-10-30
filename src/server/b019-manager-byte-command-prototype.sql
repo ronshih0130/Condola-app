@@ -135,6 +135,23 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_party_guard() FROM PUBLIC,anon,authenticated,service_role;
 CREATE TRIGGER b019_byte_probe_party_guard BEFORE INSERT OR UPDATE OR DELETE ON public.lease_parties FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_party_guard();
+-- Clone-only selected/live organization and exact rollout-control guards.
+CREATE FUNCTION app.b019_byte_probe_org_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
+ IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND OLD.id IN(o.org,o.live_org))) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND NEW.id IN(o.org,o.live_org))) THEN RAISE EXCEPTION 'byte organization sealed' USING ERRCODE='23514';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_byte_probe_org_guard() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_byte_probe_org_guard BEFORE INSERT OR UPDATE OR DELETE ON public.organizations FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_org_guard();
+CREATE FUNCTION app.b019_byte_probe_settings_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
+ IF EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored') AND ((TG_OP<>'INSERT' AND OLD.key IN('notification_center_v2','payment_results_v2')) OR (TG_OP<>'DELETE' AND NEW.key IN('notification_center_v2','payment_results_v2'))) THEN RAISE EXCEPTION 'byte rollout control sealed' USING ERRCODE='23514';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_byte_probe_settings_guard() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_byte_probe_settings_guard BEFORE INSERT OR UPDATE OR DELETE ON public.platform_settings FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_settings_guard();
 CREATE FUNCTION app.b019_byte_probe_begin(p_org uuid,p_live uuid,p_env text,p_session uuid,p_lease_text text,p_role text,p_request uuid,p_bytes bytea)
 RETURNS TABLE(disposition text,payment_id uuid) LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
 DECLARE actor uuid:=auth.uid(); j jsonb; lease uuid; amount bigint; paid date; dg text; rawdg text; l5dg text; refdg text; old app.b019_byte_probe_op%ROWTYPE; p uuid; v_lease uuid; st text; email boolean; center boolean; property uuid; currency text; payer uuid; aliases integer;v_last5 public.payments.payer_account_last5%TYPE;
