@@ -41,7 +41,7 @@ test('directory shows original zero-lease and co-tenant contacts while accountan
    await search(page,'directory-zero@example.test');await expect(page.getByTestId('directory-contact')).toHaveCount(1);
    await signIn(page,ACCOUNTS.accountant);await search(page,'directory-zero@example.test');await expect(page.getByTestId('directory-contact')).toHaveCount(0);
    await search(page,'Directory Zero');await expect(page.getByTestId('directory-contact')).toHaveCount(1);await expect(page.getByTestId('tenant-directory')).not.toContainText('directory-zero@example.test');await expect(page.getByTestId('tenant-directory')).not.toContainText('+19995550101');
-   await page.getByRole('link',{name:'Directory Zero',exact:true}).click();await expect(page.getByTestId('directory-history')).toBeVisible();await expect(page.locator('main')).not.toContainText('directory-zero@example.test');await expect(page.locator('main')).not.toContainText('+19995550101');
+   await page.getByRole('link',{name:'Directory Zero',exact:true}).click();await expect(page.getByTestId('directory-history')).toBeVisible();await expect(page.locator('body')).not.toContainText('directory-zero@example.test');await expect(page.locator('body')).not.toContainText('+19995550101');
    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
    await page.screenshot({path:info.outputPath(`accountant-detail-${width}.png`),fullPage:true});
   }
