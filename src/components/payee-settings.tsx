@@ -23,7 +23,7 @@ export async function PayeeSettings({ session }: { session: Session }) {
     ] as const;
     return (
       <form action={actionSavePayee} key={account?.id ?? "new"}>
-        <h4>{account?.holder_name || s.create}</h4>
+        <h4>{account ? account.holder_name || account.bank_name || s.company : s.create}</h4>
         {account ? <input type="hidden" name="id" value={account.id} /> : null}
         {(fields as unknown as ReadonlyArray<readonly [string, string, string | null | undefined, boolean]>).map(([name, label, value, required]) => (
           <label className="fg" key={name}>
@@ -53,7 +53,7 @@ export async function PayeeSettings({ session }: { session: Session }) {
       {accountForm(null)}
       {data.leases.map((lease) => (
         <form action={actionSetLeasePayee} key={lease.id}>
-          <label>{s.lease}: {lease.id}</label>
+          <label>{s.lease}: {lease.label || s.lease}</label>
           <input name="leaseId" type="hidden" value={lease.id} />
           <select name="accountId" defaultValue={lease.payee_bank_account_id ?? ""}>
             <option value="">{s.inherit}</option>

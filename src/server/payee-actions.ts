@@ -2,10 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireCurrentConsent } from "./consent-gate";
-import { readSession } from "./session";
-import { logPayeeIngress, readPayeeContext, savePayee, setLeasePayee } from "./payee";
-import { authorizePayeeAction } from "./payee-action-context";
+import { savePayee, setLeasePayee } from "./payee";
+import { authorizePayeeActionEntry } from "./payee-consent";
 
 function text(form: FormData, key: string) {
   const value = form.get(key);
@@ -16,17 +14,11 @@ function rethrowRedirect(error: unknown) {
   if (typeof error === "object" && error !== null && "digest" in error && String(error.digest).startsWith("NEXT_REDIRECT")) throw error;
 }
 
-async function context() {
-  return authorizePayeeAction({
-    readSession, readContext: readPayeeContext, audit: logPayeeIngress,
-    requireConsent: (session) => requireCurrentConsent(session),
-  });
-}
-
 export async function actionSavePayee(form: FormData) {
+  const session = await authorizePayeeActionEntry();
   let failed = false;
   try {
-    await savePayee(await context(), {
+    await savePayee(session, {
       id: text(form, "id") || undefined, holderName: text(form, "holderName"),
       bankName: text(form, "bankName"), bankCode: text(form, "bankCode"),
       branchCode: text(form, "branchCode"), accountNumber: text(form, "accountNumber"),
@@ -41,9 +33,10 @@ export async function actionSavePayee(form: FormData) {
 }
 
 export async function actionSetLeasePayee(form: FormData) {
+  const session = await authorizePayeeActionEntry();
   let failed = false;
   try {
-    await setLeasePayee(await context(), text(form, "leaseId") || null, text(form, "accountId") || null);
+    await setLeasePayee(session, text(form, "leaseId") || null, text(form, "accountId") || null);
   } catch (error) { rethrowRedirect(error); failed = true; }
   if (failed) redirect("/m/settings?error=invalid_payee");
   revalidatePath("/m/settings");
