@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "./db";
+import { captureSettlementBeforeDemoReset } from "./settlement-demo-reset";
 import { captureHandoverBeforeDemoReset } from "./handover-demo-reset";
 import { buildStoredConsent, writeConsentSql } from "./consent";
 import { DEMO_PASSWORD } from "./demo-password";
@@ -28,7 +29,7 @@ async function wipe(client: Client) {
   await client.query("SET session_replication_role = replica");
   // These specific private tables refer to demo rows wiped below. Older schemas
   // may not have them yet; leave unrelated private application data alone.
-  for (const name of ["b028_read_markers", "b028_recipient_claims", "b010_payment_commands", "b010_source_events", "b010_tenant_due_preferences"]) {
+  for (const name of ["b013_policy_commands", "b013_override_revisions", "b013_default_revisions", "b013_default_roots", "b015_edit_commands", "b017_center_resolutions", "b028_center_mark_contexts", "b028_center_cursors", "b028_center_reads", "b028_center_recipients", "b028_center_events", "b017_occurrences", "b017_old_source_transactions", "b028_read_markers", "b028_recipient_claims", "b010_payment_commands", "b010_source_events", "b010_tenant_due_preferences"]) {
     const exists = await client.query<{ present: boolean }>(`SELECT to_regclass($1) IS NOT NULL AS present`, [`app.${name}`]);
     if (exists.rows[0].present) await client.query(`DELETE FROM app.${quoteIdent(name)}`);
   }
@@ -64,8 +65,13 @@ export async function resetAndSeed() {
   await withClient(async (client) => {
   try {
     await client.query("BEGIN");
+    // All feature writers take SHARE admission before mutable parents. This
+    // must also fence center-only schemas that predate the handover hook.
+    await client.query("LOCK TABLE public.platform_settings IN SHARE ROW EXCLUSIVE MODE");
     // Older disposable schemas may predate B011. On newer schemas, capture
     // object tombstones before any public-parent mutation in this transaction.
+    const settlement = await client.query<{present:boolean}>(`SELECT to_regclass('app.settlement_records') IS NOT NULL AS present`);
+    if (settlement.rows[0].present) await captureSettlementBeforeDemoReset(client);
     const handover = await client.query<{present:boolean}>(`SELECT to_regclass('app.handover_records') IS NOT NULL AS present`);
     if (handover.rows[0].present) await captureHandoverBeforeDemoReset(client);
     await wipe(client);

@@ -282,3 +282,77 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.settlement_pin_prior_items(uuid,uuid,text,uuid,uuid,uuid[]) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION app.settlement_pin_prior_items(uuid,uuid,text,uuid,uuid,uuid[]) TO service_role;
+
+-- Durable deny-only statement command closure; deliberately no FK/cascade or
+-- direct application DML. Retained across demo reset to fence late writers.
+CREATE TABLE app.settlement_statement_closures (
+  actor_id uuid NOT NULL, request_id uuid NOT NULL, org_id uuid NOT NULL, live_org_id uuid NOT NULL,
+  environment text NOT NULL CHECK(environment IN ('live','sandbox')), lease_id uuid NOT NULL,
+  lane text NOT NULL CHECK(lane='statement'), created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY(actor_id,request_id)
+);
+ALTER TABLE app.settlement_statement_closures ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON app.settlement_statement_closures FROM PUBLIC,anon,authenticated,service_role;
+CREATE FUNCTION app.settlement_statement_closure_immutable() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN RAISE EXCEPTION 'Statement closure is immutable' USING ERRCODE='42501'; END $$;
+CREATE TRIGGER settlement_statement_closure_immutable BEFORE UPDATE OR DELETE ON app.settlement_statement_closures FOR EACH ROW EXECUTE FUNCTION app.settlement_statement_closure_immutable();
+REVOKE ALL ON FUNCTION app.settlement_statement_closure_immutable() FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE FUNCTION app.settlement_statement_insert_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+  IF NOT pg_try_advisory_xact_lock(hashtextextended('b011:statement:'||NEW.created_by::text||':'||NEW.request_id::text,0)) THEN RAISE EXCEPTION 'Statement request busy' USING ERRCODE='55P03'; END IF;
+  LOCK TABLE app.settlement_statement_closures IN ACCESS SHARE MODE NOWAIT;
+  IF EXISTS(SELECT 1 FROM app.settlement_statement_closures WHERE actor_id=NEW.created_by AND request_id=NEW.request_id) THEN RAISE EXCEPTION 'Statement request closed' USING ERRCODE='23514'; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER settlement_statement_insert_guard BEFORE INSERT ON app.settlement_versions FOR EACH ROW EXECUTE FUNCTION app.settlement_statement_insert_guard();
+REVOKE ALL ON FUNCTION app.settlement_statement_insert_guard() FROM PUBLIC,anon,authenticated,service_role;
+
+-- The result is metadata only. Client code validates the saved snapshot schema
+-- before exposing a recorded version; no payload or private source is returned.
+CREATE FUNCTION app.settlement_statement_terminal(p_org uuid,p_live uuid,p_env text,p_lease uuid,p_session uuid,p_request uuid,p_close boolean)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE v_actor uuid; v_id uuid; v_version_org uuid; v_version_lease uuid; v_closed record; v_scope jsonb; v_snapshot jsonb; v_has_version boolean; v_has_closed boolean;
+BEGIN
+  BEGIN v_actor:=nullif(current_setting('request.jwt.claim.sub',true),'')::uuid;
+  EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END;
+  IF v_actor IS NULL OR p_org IS NULL OR p_live IS NULL OR p_lease IS NULL OR p_session IS NULL OR p_request IS NULL OR p_close IS NULL OR p_env IS NULL OR p_env NOT IN ('live','sandbox') THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=p_session AND user_id=v_actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  PERFORM 1 FROM public.organizations o JOIN public.organizations live ON live.id=p_live AND live.environment='live' AND live.live_org_id IS NULL JOIN public.org_members m ON m.org_id=live.id AND m.user_id=v_actor AND m.status='active' AND m.role IN ('admin','accountant') JOIN public.auth_sessions a ON a.id=p_session AND a.user_id=v_actor AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp() JOIN public.leases l ON l.org_id=o.id AND l.id=p_lease WHERE o.id=p_org AND o.environment::text=p_env AND ((p_env='live' AND o.id=live.id AND o.live_org_id IS NULL) OR (p_env='sandbox' AND o.live_org_id=live.id));
+  IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  LOCK TABLE public.platform_settings IN SHARE MODE NOWAIT;
+  FOR v_id IN SELECT DISTINCT x FROM unnest(ARRAY[p_org,p_live]) AS x ORDER BY x LOOP PERFORM id FROM public.organizations WHERE id=v_id FOR SHARE NOWAIT; IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF; END LOOP;
+  PERFORM id FROM public.auth_sessions WHERE id=p_session AND user_id=v_actor AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE NOWAIT; IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  PERFORM id FROM public.org_members WHERE org_id=p_live AND user_id=v_actor AND status='active' AND role IN ('admin','accountant') FOR SHARE NOWAIT; IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  PERFORM id FROM public.leases WHERE org_id=p_org AND id=p_lease FOR SHARE NOWAIT; IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  PERFORM 1 FROM public.organizations o JOIN public.organizations live ON live.id=p_live AND live.environment='live' AND live.live_org_id IS NULL JOIN public.org_members m ON m.org_id=live.id AND m.user_id=v_actor AND m.status='active' AND m.role IN ('admin','accountant') JOIN public.auth_sessions a ON a.id=p_session AND a.user_id=v_actor AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp() JOIN public.leases l ON l.org_id=o.id AND l.id=p_lease WHERE o.id=p_org AND o.environment::text=p_env AND ((p_env='live' AND o.id=live.id AND o.live_org_id IS NULL) OR (p_env='sandbox' AND o.live_org_id=live.id));
+  IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  IF NOT pg_try_advisory_xact_lock(hashtextextended('b011:statement:'||v_actor::text||':'||p_request::text,0)) THEN
+    IF NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=p_session AND user_id=v_actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+    RETURN jsonb_build_object('state','busy');
+  END IF;
+  LOCK TABLE app.settlement_versions IN ROW SHARE MODE NOWAIT;
+  LOCK TABLE app.settlement_statement_closures IN ROW EXCLUSIVE MODE NOWAIT;
+  SELECT id,org_id,lease_id,snapshot,snapshot->'commandScope' INTO v_id,v_version_org,v_version_lease,v_snapshot,v_scope FROM app.settlement_versions WHERE created_by=v_actor AND request_id=p_request FOR SHARE NOWAIT; v_has_version:=FOUND;
+  SELECT * INTO v_closed FROM app.settlement_statement_closures WHERE actor_id=v_actor AND request_id=p_request FOR SHARE NOWAIT; v_has_closed:=FOUND;
+  IF v_has_version AND v_has_closed THEN RAISE EXCEPTION 'Statement terminal conflict' USING ERRCODE='23514'; END IF;
+  IF v_has_version THEN
+    IF v_version_org<>p_org OR v_version_lease<>p_lease OR v_snapshot->>'schema' IS DISTINCT FROM 'settlement-v2' OR v_scope->'expectedVersion' IS DISTINCT FROM v_snapshot->'requestExpectedVersion' OR jsonb_typeof(v_scope->'expectedVersion') NOT IN ('null','string') OR (jsonb_typeof(v_scope->'expectedVersion')='string' AND (v_scope->>'expectedVersion') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') OR v_scope IS DISTINCT FROM jsonb_build_object('actorId',v_actor::text,'orgId',p_org::text,'liveOrgId',p_live::text,'environment',p_env,'leaseId',p_lease::text,'lane','statement','requestId',p_request::text,'expectedVersion',v_scope->'expectedVersion') OR NOT (v_scope ? 'expectedVersion') THEN RAISE EXCEPTION 'Statement terminal conflict' USING ERRCODE='23514'; END IF;
+    IF NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=p_session AND user_id=v_actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+    RETURN jsonb_build_object('state','recorded','id',v_id);
+  END IF;
+  IF v_has_closed THEN
+    IF v_closed.org_id<>p_org OR v_closed.live_org_id<>p_live OR v_closed.environment<>p_env OR v_closed.lease_id<>p_lease OR v_closed.lane<>'statement' THEN RAISE EXCEPTION 'Statement terminal conflict' USING ERRCODE='23514'; END IF;
+    IF NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=p_session AND user_id=v_actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+    RETURN jsonb_build_object('state','closed');
+  END IF;
+  IF p_close THEN
+    LOCK TABLE public.audit_log IN ROW EXCLUSIVE MODE NOWAIT;
+    INSERT INTO app.settlement_statement_closures(actor_id,request_id,org_id,live_org_id,environment,lease_id,lane) VALUES(v_actor,p_request,p_org,p_live,p_env,p_lease,'statement');
+    INSERT INTO public.audit_log(org_id,actor_user_id,actor_role,table_name,row_id,action,event_type,new_row,reason) VALUES(p_org,v_actor,'app','auth_events','settlement_statement_closed','insert','settlement_statement_closed',jsonb_build_object('event','settlement_statement_closed','lease_id',p_lease,'request_id',p_request),'settlement_statement_closed');
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=p_session AND user_id=v_actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
+  RETURN jsonb_build_object('state',CASE WHEN p_close THEN 'closed' ELSE 'unresolved' END);
+END $$;
+REVOKE ALL ON FUNCTION app.settlement_statement_terminal(uuid,uuid,text,uuid,uuid,uuid,boolean) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION app.settlement_statement_terminal(uuid,uuid,text,uuid,uuid,uuid,boolean) TO service_role;

@@ -1,0 +1,14 @@
+import type { SettlementPreviewInput } from "@/server/settlement-preview";
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function id(value:unknown):string {if(typeof value!=="string"||!UUID.test(value))throw new TypeError("Invalid request");return value;}
+/** Client-only integrity guard: this digest is not authorization and is never
+ * a substitute for the server's exact request/payload validation. */
+export async function v2PayloadDigest(requestId:string,scope:{actorId:string;orgId:string;liveOrgId:string;environment:"live"|"sandbox";leaseId:string},input:SettlementPreviewInput,fingerprint:string,expectedVersion:string|null) {
+ id(requestId);id(scope.actorId);id(scope.orgId);id(scope.liveOrgId);id(scope.leaseId);id(input.leaseId);if(scope.leaseId!==input.leaseId||!["live","sandbox"].includes(scope.environment))throw new TypeError("Invalid request");if(expectedVersion!==null)id(expectedVersion);if(typeof fingerprint!=="string"||!/^[a-f0-9]{64}$/.test(fingerprint)||!Array.isArray(input.attributionIds)||!Array.isArray(input.items)||input.attributionIds.length>50||input.items.length>50)throw new TypeError("Invalid request");
+ const attrs=input.attributionIds.map(id).sort();if(new Set(attrs).size!==attrs.length)throw new TypeError("Invalid request");
+ const items=input.items.map(item=>{const key=id(item.key),evidenceId=id(item.evidenceId);if(typeof item.label!=="string"||typeof item.reason!=="string"||!Number.isSafeInteger(item.amountMinor)||item.amountMinor<0||!(item.invoiceLineId===null||typeof item.invoiceLineId==="string"))throw new TypeError("Invalid request");const label=item.label.trim(),reason=item.reason.trim();if(!label||label.length>200||!reason||reason.length>1000)throw new TypeError("Invalid request");const invoiceLineId=item.invoiceLineId===null?null:id(item.invoiceLineId);return {key,label,amountMinor:item.amountMinor,reason,evidenceId,invoiceLineId};}).sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:0);
+ if(new Set(items.map(item=>item.key)).size!==items.length||new Set(items.flatMap(item=>item.invoiceLineId?[item.invoiceLineId]:[])).size!==items.filter(item=>item.invoiceLineId).length)throw new TypeError("Invalid request");
+ const sourceReview=input.sourceReview==null?null:input.sourceReview.attested===true?{attested:true as const,evidenceId:id(input.sourceReview.evidenceId)}:(()=>{throw new TypeError("Invalid request");})();
+ const bytes=new TextEncoder().encode(JSON.stringify({version:"v2-save-1",operation:"save-draft",publish:false,requestId,scope:{actorId:scope.actorId,orgId:scope.orgId,liveOrgId:scope.liveOrgId,environment:scope.environment,leaseId:scope.leaseId},leaseId:input.leaseId,attributionIds:attrs,items,sourceReview,fingerprint,expectedVersion}));
+ if(!globalThis.crypto?.subtle)throw new Error("Request verification unavailable");return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),b=>b.toString(16).padStart(2,"0")).join("");
+}

@@ -13,12 +13,12 @@ function canonical(value:Json):string {
   if(Object.getPrototypeOf(value)!==Object.prototype||Object.getOwnPropertySymbols(value).length||Object.getOwnPropertyNames(value).length!==Object.keys(value).length)throw new TypeError("Invalid canonical object");
   return `{${Object.keys(value).sort().map(key=>`${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
 }
-export function encodeUnknownV2(input:SettlementPreviewInput,source:CompleteSource,priorOutcomes:Json) {
+export function encodeUnknownV2(input:SettlementPreviewInput,source:CompleteSource,priorOutcomes:Json,scope:{orgId:string;liveOrgId:string;environment:"live"|"sandbox";leaseId:string}) {
   // An incomplete scan has no digest; never synthesize a "current" hash.
   if((!source.verifiedCandidate && ["capacity","source_changed","unavailable"].includes(source.reason??""))||!("fingerprint" in source)||!/^[a-f0-9]{64}$/.test(source.fingerprint))return {state:"unavailable" as const};
   if(!Array.isArray(input.items)||input.items.some(item=>item.invoiceLineId===undefined))throw new TypeError("Missing invoice line");
   const normalized=normalizeSettlementInput(input);
-  const envelope={schema:"settlement-v2",algorithm:"b011-source-v2-unknown-1",input:normalized,sourceFingerprint:source.fingerprint,sourceStatus:source.verifiedCandidate?"candidate":source.reason??"unsupported",priorOutcomes} as Json;
+  const envelope={schema:"settlement-v2",algorithm:"b011-source-v2-unknown-1",input:normalized,scope,sourceFingerprint:source.fingerprint,sourceStatus:source.verifiedCandidate?"candidate":source.reason??"unsupported",priorOutcomes} as Json;
   const fingerprint=createHash("sha256").update(canonical(envelope)).digest("hex");
-  return {state:"unknown" as const,schema:"settlement-v2" as const,fingerprint,envelope,calculation:{authoritative:false as const,netMinor:null}};
+  return {state:"unknown" as const,schema:"settlement-v2" as const,fingerprint,envelope,calculation:{authoritative:false as const,netMinor:null,refundMinor:null,topUpMinor:null}};
 }

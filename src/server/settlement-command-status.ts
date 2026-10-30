@@ -9,7 +9,7 @@ export async function settlementCommandStatus(session:Session,leaseId:string,ver
     await settlementAccess(client,session,leaseId,kind==="cycle"?"publish":["attribution","observation","line_binding"].includes(kind)?"prepare":"read");
     let sql:string;
     switch(kind) {
-      case "statement": sql=`SELECT id FROM app.settlement_versions WHERE org_id=$1 AND lease_id=$2 AND created_by=$3 AND request_id=$4 AND (published OR $5::boolean)`;break;
+      case "statement": sql=`SELECT id FROM app.settlement_versions WHERE org_id=$1 AND lease_id=$2 AND created_by=$3 AND request_id=$4 AND NOT (snapshot ? 'schema') AND (published OR $5::boolean)`;break;
       case "cycle": sql=`SELECT id FROM app.settlement_rent_cycles WHERE org_id=$1 AND lease_id=$2 AND asserted_by=$3 AND request_id=$4`;break;
       case "line_binding": sql=`SELECT id FROM app.settlement_line_bindings WHERE org_id=$1 AND lease_id=$2 AND created_by=$3 AND request_id=$4`;break;
       case "attribution": sql=`SELECT id FROM app.settlement_attributions WHERE org_id=$1 AND lease_id=$2 AND created_by=$3 AND request_id=$4`;break;
@@ -34,10 +34,10 @@ export async function recoverEmptySettlementDraft(session:Session,leaseId:string
   settlementUuid(leaseId);settlementUuid(requestId);if(expectedVersion)settlementUuid(expectedVersion);
   return svc(session.userId,async client=>{
     await settlementAccess(client,session,leaseId,"prepare");
-    const row=(await client.query<{id:string;published:boolean;snapshot:{input:{leaseId:string;attributionIds:string[];items:unknown[]};requestExpectedVersion:string|null}}>(`SELECT id,published,snapshot FROM app.settlement_versions WHERE org_id=$1 AND lease_id=$2 AND created_by=$3 AND request_id=$4`,[session.orgId,leaseId,session.userId,requestId])).rows[0];
+    const row=(await client.query<{id:string;published:boolean;snapshot:{schema?:unknown;input:{leaseId:string;attributionIds:string[];items:unknown[]};requestExpectedVersion:string|null}}>(`SELECT id,published,snapshot FROM app.settlement_versions WHERE org_id=$1 AND lease_id=$2 AND created_by=$3 AND request_id=$4`,[session.orgId,leaseId,session.userId,requestId])).rows[0];
     if(!row) {await settlementDeadline(client,session,leaseId);return null;}
     const input=row.snapshot?.input;
-    if(row.published || row.snapshot.requestExpectedVersion!==expectedVersion || !input || input.leaseId!==leaseId || !Array.isArray(input.attributionIds) || input.attributionIds.length || !Array.isArray(input.items) || input.items.length) throw new Error("Request does not match");
+    if(row.published || row.snapshot.schema!==undefined || row.snapshot.requestExpectedVersion!==expectedVersion || !input || input.leaseId!==leaseId || !Array.isArray(input.attributionIds) || input.attributionIds.length || !Array.isArray(input.items) || input.items.length) throw new Error("Request does not match");
     await settlementDeadline(client,session,leaseId);return row.id;
   });
 }

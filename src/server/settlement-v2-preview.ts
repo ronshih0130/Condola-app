@@ -44,7 +44,9 @@ export async function evaluateV2Unknown(query:BoundedQuery,session:Session,prepa
   const lineIds=input.items.flatMap(item=>item.invoiceLineId?[item.invoiceLineId]:[]).sort();
   const scoped=await query(`SELECT l.id FROM public.invoice_lines l JOIN public.invoices i ON i.id=l.invoice_id AND i.org_id=l.org_id WHERE l.org_id=$1 AND i.lease_id=$2 AND l.id=ANY($3::uuid[]) ORDER BY l.id`,[session.orgId,input.leaseId,lineIds]);
   if(scoped.rowCount!==lineIds.length){if(anchorVersionId)throw new V2SourceStale();throw new FlowError("errors.notFound");}
-  return encodeUnknownV2(input,source,{anchor,prior:prior as never});
+  const result=encodeUnknownV2(input,source,{anchor,prior:prior as never},{orgId:session.orgId.toLowerCase(),liveOrgId:session.liveOrgId.toLowerCase(),environment:session.environment,leaseId:input.leaseId.toLowerCase()});
+  if(result.state!=="unknown"||!("projection" in source))return {state:"unavailable" as const};
+  return {...result,projection:source.projection};
 }
 export async function v2FinalDeadline(query:BoundedQuery,session:Session) {if(!(await query(`SELECT 1 FROM public.auth_sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>clock_timestamp()`,[session.sessionId,session.userId])).rowCount)throw new FlowError("errors.notFound");}
 /** Staff-only UNKNOWN preview; no write, publication or financial mutation. */
