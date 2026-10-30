@@ -1,5 +1,7 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
+import { tenantDirectoryHistory } from "@/server/tenant-directory";
+import { TenantDirectoryDetail, DirectoryUnavailable } from "@/components/tenant-directory";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { AuditHistory } from "@/components/audit-log";
@@ -15,13 +17,16 @@ export default async function TenantPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ audit?: string }>;
+  searchParams: Promise<{ audit?: string; page?:string }>;
 }) {
   await requireCurrentConsent(undefined, "page");
   const { id } = await params;
   const query = await searchParams;
   const session = await getSession();
   const t = makeT(session.locale);
+  const directory=await tenantDirectoryHistory(session,id,query);
+  if(directory.state==="enabled") {if(!directory.contact) notFound();return <TenantDirectoryDetail locale={session.locale} result={directory} audit={query.audit}/>;}
+  if(directory.state==="unavailable") return <DirectoryUnavailable locale={session.locale} path="/m/tenants"/>;
   const detail = await tenantDetail(session, id);
   if (!detail) notFound();
   return (
