@@ -1,0 +1,4 @@
+# Gate (b) — durable correlated evidence for Worker releases (QA decision 2026-10-27 11:27 PT; applies to ALL Worker lanes, fail-closed)
+- Spec (Codex DRAFT, NOT yet QA-approved, NOT frozen): /workspace/e2e/results/errors-redact/prod/gate-b-spec.md (open items: gate-b/spec-notes.txt).
+- Until QA approves the spec and Codex freezes the implementing harness, no Worker lane may run a prod step under gate (b). Tail = supplemental only; one tail per window.
+- 10-27 11:58 PT still DRAFT, not frozen: gate-b lane STOPPED at read-only step B — migration ledger table absent in prod (QA ruling 6 STOP) and Workers Observability telemetry API returns 403 for the wrangler OAuth token (no observability scope). Sampling check PASS (head_sampling_rate=1, script-level). See errors-redact/status.md 11:56–11:58.

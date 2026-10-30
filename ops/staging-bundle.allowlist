@@ -1,0 +1,7 @@
+# Explicit STAGING variable names (2026-10-27 PT). Names only; no values.
+# Verified: Supabase JWT ref == staging project ref; DB URLs reference staging ref; none equal prod.
+SUPABASE_URL
+SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+DATABASE_URL
+DATABASE_URL_SESSION

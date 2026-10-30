@@ -1,0 +1,33 @@
+<!-- DRAFT for Ron + CEO approval (2026-10-27 PT). Not committed. -->
+# Switch A → B
+
+- [ ] PE: Confirm one-time freeze/publication prerequisites were met; use `freeze-and-publish.md` for initial rollout.
+- [ ] PE: Check `llm-route --quota`; record trigger, execution/QA reserve and reset times in PT.
+- [ ] PE: Stop new Grok dispatch and automation; maintain supervision and lock renewal.
+- [ ] QA: Complete active release through T+15 PASS or complete incident resolution.
+- [ ] Ron: For incident takeover, confirm shutdown/fencing and outstanding deploy/DB checks; preserve `PROD_LOCK`, never reset it to FREE.
+- [ ] PE: Drain agents, terminal jobs, external calls, browser workers and remote jobs; record completion evidence.
+- [ ] PE: Preserve dirty/divergent/tarball-only work in sanitized checkpoints and recovery refs.
+- [ ] PE: Push every lane/checkpoint to Origin; verify remote SHAs without blind force-push.
+- [ ] PE: Upload private evidence; commit sanitized manifests, verdicts and usage summaries.
+- [ ] PE: Append PT STOP POINT with exact next command to each active lane status.
+- [ ] PE: Update board and HANDOFF with ranges, release order, prod SHA/version, rollback, flags, quotas and claims; push main.
+- [ ] PE: Run `scripts/mirror-github.sh` after Origin pushes while A holds ownership; verify mirrored refs.
+- [ ] Ron: Verify Origin access with `origin auth status` and `git ls-remote https://origin.cursor.com/ron-shih/condola-app.git`.
+- [ ] Ron: If Origin login fails, use GitHub read/`mac/<lane>` fallback only; do not claim Mode B.
+- [ ] Ron: Verify Git, pinned Node/npm, PostgreSQL 16, age and Origin CLI; Codex/Claude model CLIs are not required.
+- [ ] Ron: Verify encrypted staging bundle checksum and `scripts/secrets-run.sh staging -- true`; no production or backup identity transfer.
+- [ ] Ron: Confirm independent desktop QA is available; Class A requires fresh Codex verdict.
+- [ ] PE: Release completed resource claims; after all jobs drain, record repository STOPPED → RELEASED via `scripts/claim.sh`.
+- [ ] Ron: Fetch Origin and acquire B with `scripts/claim.sh acquire repo B`; rejected CAS requires reassessment, never blind retry.
+- [ ] Ron: Run `scripts/install-prompts.sh` to generate `.agents/skills/` and `.claude/skills/` from canonical roles.
+- [ ] Ron: Open repo as a Local project in Codex app and via Claude desktop Code tab → Local → Open folder.
+- [ ] Ron: Verify AGENTS/CLAUDE loading; invoke `$start` in Codex or the Claude skill; if slash autocomplete fails, name the SKILL.md path.
+- [ ] Ron: Run `scripts/session-log.sh` start recording; include Model/Role/Session commit trailers and unknown token counts.
+- [ ] Ron: Read policies, HANDOFF, board, lane statuses and verdicts; fetch lanes and inspect explicit ranges plus date-based history.
+- [ ] QA: Reconcile live `/api/version` x3, Worker version, rollback, flags, evidence access and quotas.
+- [ ] Ron: Record acceptance/new generation, push Origin, then run `scripts/mirror-github.sh` while B owns.
+- [ ] Ron: Run gates in Terminal or an app terminal tool; continue exact next command with staging-only credentials.
+- [ ] CEO: Normal B stops at staging (approved by Ron 2026-10-27); production waits for A Class B, except the documented Ron-only emergency path.
+- [ ] Ron: Confirm `~/.config/condola/age/mac.key` is chmod 600, outside the repo, and its offline encrypted backup exists.
+- [ ] CEO: Through 2026-11-10, next production release requires previous T+15 PASS.
