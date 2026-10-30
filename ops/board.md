@@ -255,3 +255,7 @@ After published/mirrored6eea415, highest source-first plan GO. Root reserves exi
 ## B006 ClassA local proof verified — 2026-10-30T16:49:08.418530-07:00
 
 Candidate `9bbf04a300f073256bc9a7c887f3c6025b84c5ee`:607unit/358RLS+1priorhistoricalSKIP, builds/preflight/Worker1/browser2 PASS. Independent frozen source/manifest/log/image verdict passed; root serializes latest bookkeeping/log/commit/push/mirror. Customer fixture/current stage remain pending. Source readback comparison errors preserved, no product failure or extra skip. Next B007 is ClassB and starts after publication; no new app/schema/flag activation.
+
+## B007 private deposit proof reservation — 2026-10-30T16:50:51.618865-07:00
+
+After published/mirroredda4b13d, highest plan GO. Reserve existing e2e/b007-deposit.spec.ts + new e2e/b007-deposit-private-playwright.config.ts for one writer; root owns helpers/runner/evidence/docs. Preserve8-case actual wizard/edit/audit/geometry matrix, harden fences and exact global/org restoration under normal triggers. Existing exception approved; no app/rule/schema/legal change. B007 ClassB; stage/compatibility/Claude remain dependent. No execution before exact source review.

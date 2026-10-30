@@ -1,0 +1,11 @@
+# PASS_SCOPED_B007_PREFLIGHT_SOURCE
+
+Recorded 2026-10-30T16:54:31.600728-07:00; baseline da4b13d8156fc35d6ac6ad67c2b932f333a670d6. Highest requested reviewer Astra/xhigh; actual model/effort unknown. Read-only source review, no reviewer DB/tests/HTTP/writes. B007 ClassB; Ron's limited named-CHECK exception is already approved and100205 implemented. Prior core91c/92b8/8 remains dated evidence, no new app/rule/schema/legal repair.
+
+Reviewed testf06e70b147af0ecc4917c71a4d9a2b6c991ce263, config28723db6f0903ded0e23759cce4432bb356b9d59 and runner984d5fa1a0b088a6ad92c0a7930a1b5b2cf33b59 preserve four scenarios×two projects, actual wizard/create/edit actor/reason/time-present/currency/property/date/cap/rule-source/outcome/amount/rent assertions and synchronous positive alert geometry. No app/seed/package change.
+
+Capture accepts original absent/explicitOFF control and no org opt-in, reads full value/description/microsecond timestamp and flags, checks inboundFK0 before changes. Explicit UPSERT handles missing row. Restore uses one normal-trigger transaction: exact-key delete, exact captured row insert if present, full flags/equality and COMMIT. Setup/cleanup separate primary and restoration failures, always close client. No advisory/global-setting/timestamp trigger is disabled; ordinary timestamps/audits/synthetic leases advance.
+
+Exact43138 context fence precedes real sign-in/reset, direct reset fixed-origin/maxRedirects0, static errors/validatedSQLSTATE, private config/line/noCopy/no trace-video-auto-ARIA/debug, explicit unique screenshots and ignored server streams. Root helper/build driver are reviewed B006→B007 prefix substitutions; runner adds one private clause. Original absent/present restoration runtime claims must follow actual fixtures, not assume both branches ran.
+
+Root pinned type/lint PASS; guarded draft8/8PASS1.0m. Frozen exact candidate fullgate/build/preflight/Worker/fresh8browser/readback and independent evidence review remain required. Stage/current catalog/app/roles, approved old-code/new-schema/OFF/rollback and independent ClaudeClassB remain pending. No new legal interpretation or universal TW default, prod/mainmerge/operational migration/activation/external messages.
