@@ -1,0 +1,82 @@
+{
+  "recordedAt": "2026-10-30T10:04:19.187175-07:00",
+  "state": "PAUSED_BY_USER; NO_FEATURE_WORK; NO_GO",
+  "candidate": "2822b413938cd68c0d91e8b2423d8f319ed0c671",
+  "branches": {
+    "mode-b-repair-override-prep": "2822b413938cd68c0d91e8b2423d8f319ed0c671",
+    "mode-b-real-producer-prep": "b4a014a72a924b15a10b4b69ccd915f3cbee8173",
+    "mode-b-settlement-prep": "b13c82b0c10545e4611494cff2fe9f2464b47c31"
+  },
+  "origin": "three checkpoints pushed; mirror wrapper invoked; no main promotion",
+  "root_checks": {
+    "source93_catalog": "all93SQLexactbytes match fresh93/untouched71+22 catalog11equal, counts2/4/5/1preserved",
+    "owner_core": "53/53 PASS before fixture-only changes",
+    "origin_UI": "frozen prior11/11 PASS, corrected ownerHostcase1/1, new center+directoryHostcase1/1; not full12case exact2822 browser",
+    "public_function_privileges": "isolated55436 PASS; no anon EXECUTE, authenticated allowlist7",
+    "gates": {
+      "af9a4e1": "FAIL reminder reset fixture nonNULLprincipal; corrected to real unpaidlinkedtenant2; focused2/2PASS",
+      "b58e91d": "FAIL old constructed vendorRequest omittedHost; corrected onlyfixtureHost; focused1/1PASS",
+      "2822b4": "FAIL notification-producer-source.integration.test.ts:37 missing expected fixture; NOT_DIAGNOSED at userpause; RLS260PASS/1FAIL/1historicalSKIP before chain stopped; exactunitPASS"
+    },
+    "build_CF_preflight_Worker_fullbrowser": "NOT_RUN for2822 because gate failed"
+  },
+  "settlement": "WIP UI, coldv1 2/4, warmedtargetv2 2/2, warmedfullv3 3/4 with real previewPOST200thenERR_ABORTED before save. Latest buffered diagnostic UNREVIEWED/UNRUN. No wholeUI/financial authority.",
+  "producer": "synthetic retainedcopy2/2/static scopedPASS; actual fullconstraintflush stillfails. Untracked19draft remains preserved/unstaged/excluded. Inventory80a3cf7a latestRLSparagraph notindependentlyreviewed; prior79a423d4 scopedplanningPASS.",
+  "staging": "PE/Ronbox migration plan notification pending. No Mac hostedDDL/prodkeys/outboundmessages/legalcopychanges.",
+  "ownership": "all childtest/serverjobs drained; root will record STOPPED retaining ACTIVE claim. Release blocked: cleanmain+committedHANDOFF required, actualmain2bedb89 hasnoHANDOFF; no bypass/mainpromotion onpause.",
+  "resume": "Explicit resume required. First reconcile exact claim/Origin; diagnose current producer-source fixture and sweep remaining RLS suites before another fullgate. B011 review buffered diagnostic then guardedclone test; B019 exactinventory amendment review then reserve isolatedcomposition. No automatic continuation.",
+  "private_logs": {
+    "core93-seed-gate.log": {
+      "sha256": "36476a5890c8e75b0028ac5ed1166c43d092d10af162fce3083c8209c66ead68",
+      "bytes": 470
+    },
+    "core93b-seed-gate.log": {
+      "sha256": "7bdb111034b85a3ae1a13896c2cfb7f7f2fcc28a80e9293ca1fbb1167759e9c8",
+      "bytes": 470
+    },
+    "core93c-seed-gate.log": {
+      "sha256": "ec8652f041bbc833fd24514c1ed56396c5b46fce9140d8d7dd102c510c59ae7e",
+      "bytes": 470
+    },
+    "b013-override-browser-v2.log": {
+      "sha256": "567278c6e11941e39e0d70331cdad745960ab0efc6386762fe6d1985d1e03c28",
+      "bytes": 3366
+    },
+    "b013-override-browser-v3-host.log": {
+      "sha256": "05c4d147a74963a7a8351d6536823fdf49cf0adceb45462c9474d73c05345b7c",
+      "bytes": 1797
+    },
+    "b013-override-browser-v4-shared-host.log": {
+      "sha256": "f47c2f26a3f088450549b2845a9db6e23b17442ff3419815c028d6d3d80dc4e5",
+      "bytes": 7581
+    },
+    "b013-override-browser-v5-shared-host.log": {
+      "sha256": "25ffd1ac68c9b07b41a01a45139ff07aa620aa88933cd91ba723da0628cd776d",
+      "bytes": 1805
+    },
+    "core93-reminder-reset-fixture-v2.log": {
+      "sha256": "a219f46083e0dd306da49e2accabcba83dcd5f0c1f19d1d21a8a7399410a439c",
+      "bytes": 1238
+    },
+    "core93-reminder-reset-fixture-v3.log": {
+      "sha256": "45499ec2ab64adc9b685c63eec27437861c37cb942bc2d2f8ec0071f7bd05238",
+      "bytes": 506
+    },
+    "core93-center-request-fixture-v2.log": {
+      "sha256": "d9894d01e3e8055f7b2af0a595fe2d687288f9400a02eb5d6d3277a697f653ef",
+      "bytes": 352
+    },
+    "b011-v2-ui-browser-v1.log": {
+      "sha256": "a374de430cb63aefa79b53ffcbad786fdd177df1d4e41009892401b5b12829f2",
+      "bytes": 12926
+    },
+    "b011-v2-ui-browser-v2.log": {
+      "sha256": "3120875cbfe608a4cbfe2da6f13e67608c2216c8ae9459158200085ef4965525",
+      "bytes": 1318
+    },
+    "b011-v2-ui-browser-v3.log": {
+      "sha256": "75e32787c143545937ee663407c1dbd0c7a1bb785eaa54ecb4ac385050785b9a",
+      "bytes": 11061
+    }
+  }
+}
