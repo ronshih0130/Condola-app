@@ -1,0 +1,23 @@
+{
+  "startedAt": "2026-10-30T10:06:31.593773-07:00",
+  "finishedAt": "2026-10-30T10:07:01.891579-07:00",
+  "command": "npm run test:unit",
+  "exitCode": 0,
+  "durationSeconds": 30.298,
+  "node": "v20.20.2",
+  "npm": "10.8.2",
+  "sourceSha": "2822b413938cd68c0d91e8b2423d8f319ed0c671",
+  "database": "No database credentials passed; no DB command or migration invoked",
+  "log": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b013-closeout-unit-20261030.log",
+  "tests": 599,
+  "pass": 599,
+  "fail": 0,
+  "skipped": 0,
+  "scope": "BOUNDED_CLOSEOUT_ONLY; B013/B021 settings subset, not whole feature acceptance",
+  "rawLogSha256": "305b928592bdca7d964949fcd14eda76159177d923d3c792183fc61e96a11d0c",
+  "runtimeChangesThisCloseout": false,
+  "priorGate": "FAIL on source2822; notification-producer-source.integration.test.ts:37; not rerun or waived",
+  "notRun": "DB/RLS, migration, new browser/build/CF/Worker/staging checks",
+  "review": "PASS_SCOPED_NATIVE_STATIC_CLOSEOUT; reviewer model/effort unknown; see closeout-review-20261030.md; not Claude ClassB",
+  "stop": "No new B items; no main merge; no prod or DB migration; unbounded goal remains paused"
+}

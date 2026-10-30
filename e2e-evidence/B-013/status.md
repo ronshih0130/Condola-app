@@ -1,9 +1,9 @@
-# B013 local partial
+# B-013 / B-021 settings closeout — LOCAL PARTIAL
 
-Recorded: 2026-10-30T08:15:05.712727-07:00
+Recorded: 2026-10-30T10:08:49.863586-07:00. Branch `mode-b-repair-override-prep`; runtime `2822b413938cd68c0d91e8b2423d8f319ed0c671` (already on Origin). New closeout changes documentation/evidence only.
 
-Branch: mode-b-repair-policy-prep. Source blobs and raw evidence: personal-default-local-partial.json. New20 is unpublished and applied only to owned disposable clones. Current owner personal company/currency default set/clear, hash-only UUID recovery/serialized close, explicit actual audit, exact money parsing and scoped owner page/API have local partial proof. Existing override values are preserved; unverified legacy currency is not relabeled. Archive permits current-owner metadata recovery only.
+Personal-default and property-override settings, exact amounts, audit, current-owner scope and original-UUID recovery are preserved. Existing public threshold column stays the value; legacy unverified currency is not reinterpreted. Owner decision/estimate/dispatch/emergency/reminder workflow is not implemented by these settings.
 
-Actual final browser7/7; command17/17, read16/16, parser6/6. Native Astra scoped static review; no independent Claude ClassB signoff. Not yet a clean combined92 candidate; no staging changes.
+Fresh closeout unit599/599PASS; no DB tests/migration. Historical local owner core53/53 and scoped11case browser plus corrected Host cases retain their own source/log binding, not final whole-candidate acceptance. Exact runtime gate2822 remainsFAIL at source fixture; no waiver. See [bounded handoff](../../20-build/handoff-20261030-closeout.md) and [unit evidence](closeout-20261030.json).
 
-STOP POINT: WORKING; next: git merge --no-ff origin/mode-b-tenant-directory-edit-prep; owner: Ron/Codex.
+STOP POINT: STOPPED_AFTER_BOUNDED_CLOSEOUT; next: await explicit resume, current ownership/Origin check, then fix/retest scoped source fixture and full RLS before builds/browser/staging; owner Ron/Codex.

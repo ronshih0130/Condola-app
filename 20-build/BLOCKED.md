@@ -85,3 +85,17 @@ Direct chat decisions supersede the pending requests above:
 - B012: source-linked, bilaterally confirmed original-deposit carryforward; handle only the difference. No fake paid/zero-deposit shortcut, duplicate source use or actual funds transfer. Depends on B011 source/accounting proof.
 - B010: payment confirmation/rejection/reversal Email is a separate personal preference, default ON with opt-out; rent reminder settings remain separate. Feature rollout controls remain OFF; local capture only. Implementation/review still required.
 - STAGING_DB_OPERATOR: Product Engineering on Ron's box (not Mac) owns staging DB changes. Their plan/results will be condola-hub/20-build/staging-db-plan.md, synced by their existing nightly GitHub/Drive process. Ron will notify when ready. Operator identity request resolved; actual catalog/history reconciliation, plan, backup/restore/counts/grants and staging application remain pending. Do not initiate hosted DDL, contact PE or infer approval from a future path. Continue independent local development and disposable local tests.
+
+<a id="closeout-20261030"></a>
+## 2026-10-30 收尾：仍未解除的卡點
+
+記錄時間：2026-10-30T10:08:49.863586-07:00。本次沒有新增 B 工作；詳細狀態與 next step 見 [收尾交接](handoff-20261030-closeout.md)。
+
+| ID / 類型 | 影響範圍 | 目前證據／下一步 | 負責人與狀態 |
+|---|---|---|---|
+| CLOSE-QA-93 / QA | B-010／B-028 來源整合及目前 B-013／B-021 候選的完整驗收 | `2822b413938cd68c0d91e8b2423d8f319ed0c671` gate FAIL，`notification-producer-source.integration.test.ts:37` 無預期綁定主租客。invoice LIMIT 1 未保證綁定條件；尚未修正或重驗。恢復後固定完整 fixture 條件，獲准 DB 測試時先 targeted 再掃完其餘 RLS；不能以本次599單元通過作 waiver | Codex／獨立 QA；OPEN |
+| CLOSE-REPAIR-SCOPE / DEPENDENCY | B-013／B-021，後續 B-024 | 門檻設定為 local partial，非版本估價／指定屋主核准／提醒／緊急／派工狀態完成。恢復後依已審計畫補齊依賴與證據；本次不開始新開發 | Codex；PARKED |
+| CLOSE-SETTLEMENT-UI / QA | B-011；B-012 依賴 | 分支 checkpoint b13c82b：冷載入未完成 status 與真實 preview stream abort 尚未解決。暖機 2/2 或 3/4 非整體 PASS；最新 buffering 診斷未審查／未跑。恢復後先獨立審查、在隔離環境重現 | Codex／獨立 QA；OPEN |
+| CLOSE-PRODUCER / DEPENDENCY | B-010／B-028 | b4a014a 僅 synthetic retained-copy 研究，完整 flush 仍拒絕。需真實固定 wrapper、連續權限／來源保護、可證明的 final check／COMMIT 及組合 schema；不會發送訊息 | Codex／獨立 QA；OPEN |
+| CLOSE-STAGING-QA / EXTERNAL_PENDING | 所有需正式驗收的 B | PE／Ron box 計畫與結果未通知；Mac 禁 migration，等待原已指定流程。還缺確切候選 staging 與獨立 Claude Class B | PE／Ron／QA；PENDING；不主動聯絡或輪詢 |
+| CLOSE-LOCK / OWNERSHIP | 乾淨釋放 repo claim | 契約要求 clean main＋HANDOFF，目前 main2bedb89 缺 HANDOFF。Ron 本次禁止 main merge，故保留 claim，收尾後 phase STOPPED；下次執行先重查，不偷取／繞過 | Ron／Codex；STOPPED claim retained |

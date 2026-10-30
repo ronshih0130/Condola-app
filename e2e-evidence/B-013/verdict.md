@@ -1,3 +1,5 @@
-# INCOMPLETE / NO-GO for whole B013
+# INCOMPLETE / NO-GO for whole B-013 / B-021
 
-Personal-default settings have scoped local evidence at the exact blobs in personal-default-local-partial.json. This is not repair approval/dispatch, publication or staging acceptance. All older failures remain recorded and separate from newer passes. Full integrated candidate gate/catalog/privileges/build/Worker/browser, independent Claude and PE staging evidence remain pending. Source20 not published.
+Runtime: `2822b413938cd68c0d91e8b2423d8f319ed0c671`. Closeout adds no runtime/schema changes and runs no migration. Fresh DB-free unit599PASS/0FAIL/0SKIP does not override the existing exact gate/RLS failure. Settings-only local evidence is preserved; estimate/owner approval/dispatch is still incomplete. No staging, ClaudeClassB or release acceptance.
+
+See [closeout handoff](../../20-build/handoff-20261030-closeout.md) for exact evidence and next steps. Native independent closeout review is separately scoped; it cannot satisfy independent Claude ClassB.
