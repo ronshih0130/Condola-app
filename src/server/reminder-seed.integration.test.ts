@@ -8,9 +8,15 @@ import { resetAndSeed } from "./seed";
 import { ORG_ID, USERS } from "./ids";
 
 disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
-let clone: Awaited<ReturnType<typeof cloneTestDatabase>>;
-test.before(async()=>{clone=await cloneTestDatabase();});
-test.after(async()=>{await clone.cleanup();});
+let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
+test.before(async()=>{
+  clone=await cloneTestDatabase();
+  const demo=process.env.DEMO_MODE,key=process.env.ID_DOC_ENCRYPTION_KEY;
+  try {process.env.DEMO_MODE="true";process.env.ID_DOC_ENCRYPTION_KEY=randomBytes(32).toString("hex");await resetAndSeed();}
+  catch(error){await clone.cleanup();throw error;}
+  finally {if(demo===undefined)delete process.env.DEMO_MODE;else process.env.DEMO_MODE=demo;if(key===undefined)delete process.env.ID_DOC_ENCRYPTION_KEY;else process.env.ID_DOC_ENCRYPTION_KEY=key;}
+});
+test.after(async()=>{await clone?.cleanup();});
 
 test("repeated guarded demo reset clears only these private event references",async()=>{
   const beforeDemo=process.env.DEMO_MODE, beforeKey=process.env.ID_DOC_ENCRYPTION_KEY;
@@ -64,7 +70,9 @@ test("a synthetic schema-absence probe without event tables still resets",async(
     // Capability-absence compatibility, not a historical-upgrade claim. This
     // is the uniquely owned clone, never its shared source. New center children
     // must be absent before removing their referenced B010 event table.
+    await c.query(`DROP TABLE IF EXISTS app.b017_center_resolutions`);
     await c.query(`DROP TABLE IF EXISTS app.b028_center_mark_contexts,app.b028_center_cursors,app.b028_center_reads,app.b028_center_recipients,app.b028_center_events`);
+    await c.query(`DROP TABLE IF EXISTS app.b017_old_source_transactions,app.b017_occurrences`);
     await c.query(`DROP TABLE app.b028_read_markers,app.b028_recipient_claims,app.b010_payment_commands,app.b010_source_events,app.b010_tenant_due_preferences`);
     await c.end();
     await resetAndSeed();

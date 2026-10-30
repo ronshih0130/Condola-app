@@ -33,11 +33,22 @@ async function configure(scenario: typeof scenarios[number]) {
 
 async function expectStackedAlert(page: Page) {
   const alert = page.getByTestId("deposit-alert");
-  const description = await alert.locator(":scope > div").boundingBox();
-  const label = await alert.locator("label").boundingBox();
-  const textarea = await alert.locator("textarea").boundingBox();
-  const container = await alert.boundingBox();
+  // Navigation/scroll can move the whole form between separate browser calls.
+  // Compare one synchronous layout snapshot rather than mixing coordinates.
+  const { description, label, textarea, container } = await alert.evaluate((node) => {
+    const box = (element: Element | null) => element?.getBoundingClientRect().toJSON() ?? null;
+    return {
+      description: box(node.querySelector(":scope > div")),
+      label: box(node.querySelector("label")),
+      textarea: box(node.querySelector("textarea")),
+      container: box(node),
+    };
+  });
   expect(description && label && textarea && container).toBeTruthy();
+  for (const rectangle of [description, label, textarea, container]) {
+    expect(rectangle!.width).toBeGreaterThan(0);
+    expect(rectangle!.height).toBeGreaterThan(0);
+  }
   expect(description!.y + description!.height).toBeLessThanOrEqual(label!.y + 1);
   expect(label!.y + label!.height).toBeLessThanOrEqual(textarea!.y + 1);
   expect(textarea!.width).toBeGreaterThan(container!.width * 0.8);
@@ -92,6 +103,7 @@ for (const width of [390, 1280]) for (const scenario of scenarios) {
       await page.waitForURL(/\/m\/leases\/[0-9a-f-]{36}\?created=1$/);
       const leaseId = new URL(page.url()).pathname.split("/").at(-1)!;
       await page.getByRole("link", { name: "摘要" }).click();
+      await page.waitForURL(/\/m\/leases\/[0-9a-f-]{36}\?tab=summary$/);
       await expect(page.getByTestId("lease-terms")).toBeVisible();
       await page.getByTestId("deposit-months").fill("4");
       if (scenario.state === "reason") {

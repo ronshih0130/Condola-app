@@ -1,0 +1,130 @@
+{
+  "time_pt": "2026-10-30T04:05:57.382820-07:00",
+  "scope": "READ_ONLY_PARTIAL; not B015 completion",
+  "base": "b94277db78bca1dfc7482880e135572f6b293ee2",
+  "blobs": {
+    "src/server/tenant-directory.ts": "d5673da799f903b9a04f8914a1cb387079010672",
+    "src/server/tenant-directory.integration.test.ts": "f8f6729833710c5300b7a2c46792d61445e24f59",
+    "src/components/tenant-directory.tsx": "99e07029454ea28babab995faba370dae5fbcc04",
+    "src/i18n/lanes/tenant-directory.ts": "e056cac010af4c31f472c9a5e52c7ae62b7fd38f",
+    "src/app/m/tenants/page.tsx": "1ac9c1e4b83c5112a9c660684a29c4de5a45b0a7",
+    "src/app/m/tenants/[id]/page.tsx": "79ef399040b59256763f17b388581be03ffe49eb",
+    "e2e/b015-directory-local.spec.ts": "81d0a6f67b243ff67dd614327eb6bb28e7d49cbd",
+    "e2e/tenant-directory-playwright.config.ts": "5e3d376548ead985c0ed6e5beb087a0d6d0d6ebc"
+  },
+  "local_db": "owned core89 clone6/6PASS; before sandboxprivacyfix5PASS/1FAILpreserved",
+  "type_lint_copy": "PASS",
+  "consent": "36/36PASS",
+  "browser": {
+    "directory": {
+      "pass": 1,
+      "fail": 0,
+      "widths": [
+        390,
+        1280
+      ],
+      "scope": "actual live manager/accountant originalcontactzero/co/history/emailsearch/privacy, strict diagnostics",
+      "exit": 0
+    },
+    "legacy_existing_tenant_off": {
+      "pass": 4,
+      "fail": 0,
+      "exit": 0
+    },
+    "prior_attempts": [
+      "82d6 fixture nonexistentmain selector failure, not product acceptance",
+      "7b214 completed functional assertions but failed2hydrationconsolewarnings; retained NO-PASS"
+    ],
+    "capture_change": "fixture-only networkidle plus caret:initial avoided screenshot tool input-style mutation; success does not prove prior form-warning cause",
+    "visual_sample": "root inspected actual390managerlist/1280accountantdetail; remaining screenshots retained"
+  },
+  "independent_review": "Astra scopednative staticPASS sixruntime/testfiles; browserfixture reviewed, final OFFassertion strengthened asrequested; no execution byreviewer",
+  "limits": [
+    "No contact edits/archive/auth/profile/ID/source mutations",
+    "No newmigration or flagregistry; global/orgsettingabsent remainsOFF; ONonlyisolatedfixtures",
+    "UIlive-manager/accountant scope; sandboxDB privacyproof separate",
+    "Originaltenantidentityreuse end-to-end and currentfullgate/staging/ClaudeClassB remain separate",
+    "No productionkeys/deploy/realmessages/legalcopy changes"
+  ],
+  "private_artifacts": {
+    "b015-directory-sandbox-before-fix.log": {
+      "bytes": 2494,
+      "sha256": "81ee01f4b7c39dd0a0830c22bf1f57f80aa6d5504f4b862e449f37eb5f7f3653"
+    },
+    "b015-directory-read-final.log": {
+      "bytes": 1684,
+      "sha256": "db5933e7dcb7d0df2fe42b154a9a78cfcd8ee7e06f87d975f87a7ec8b5ac3665"
+    },
+    "b015-read-final-typecheck.log": {
+      "bytes": 43,
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e"
+    },
+    "b015-read-final-lint.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "b015-read-copy.log": {
+      "bytes": 1431,
+      "sha256": "3f1fb56d9e341778156945dab0c37dba6fc41dfefbcd09170de3ebbae9ccf029"
+    },
+    "b015-read-consent.log": {
+      "bytes": 7440,
+      "sha256": "d0a84fcd07ca9b5d6b694ad6ca528f9b1957ff25fd6709aa3ff8c1e8e6063198"
+    },
+    "b015-directory-browser.log": {
+      "bytes": 4848,
+      "sha256": "3121d2de5acce33b822d0544bc653b61a38930c2f9634e6a61146c28621cda48"
+    },
+    "b015-directory-browser-v2.log": {
+      "bytes": 4249,
+      "sha256": "160ec1bddfb86399311c6ac41779a51d8105bc63c8d6823fa8ba5c38497c6107"
+    },
+    "b015-directory-browser-v3.log": {
+      "bytes": 1833,
+      "sha256": "955900ab190844a7e05135dc1a47c947a74575eddfa66084267075d8ab212e9d"
+    },
+    "b015-existing-tenant-compat-browser-v3.log": {
+      "bytes": 2258,
+      "sha256": "89ea0338d6e1b8f2af9f87f464cd25f55c07ef591aa42902c24c9c4079ad5edd"
+    },
+    "run-b015-directory-browser-v3.py": {
+      "bytes": 1811,
+      "sha256": "0024318854ed344cd34f55ed55c389aeaaf028759970bfc7b437fb0deaba2ffa"
+    }
+  },
+  "candidate": "2746fcd3dc1feaee6b439e38586284ae87c07d85",
+  "screenshots": {
+    "b015-directory-browser-v3-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/accountant-detail-1280.png": {
+      "bytes": 58180,
+      "sha256": "573ed91582b8ff8b68ca49086ba9a674a31344352a3c8c0471503c8b0f2ada8d"
+    },
+    "b015-directory-browser-v3-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/accountant-detail-390.png": {
+      "bytes": 27218,
+      "sha256": "89a5fe764c456cdff2df6957c174fdb359737d7f12f4c5169f709b4e2434d3eb"
+    },
+    "b015-directory-browser-v3-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/co-detail-1280.png": {
+      "bytes": 71126,
+      "sha256": "2b00231e36ddfe33874b719076767d38c87e075c784216d57df4cdf15e96caf4"
+    },
+    "b015-directory-browser-v3-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/co-detail-390.png": {
+      "bytes": 36521,
+      "sha256": "b6e2380b10ea4d213571ffb4e130f0f87eeb784ab97e5b9d968595a76a8e54f0"
+    },
+    "b015-directory-browser-v3-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/manager-list-1280.png": {
+      "bytes": 80612,
+      "sha256": "f7c947f2423f124be07d06c9cc42a4cfa84e35b8ef59e76976c0512bed0aed39"
+    },
+    "b015-directory-browser-v3-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/manager-list-390.png": {
+      "bytes": 50825,
+      "sha256": "f26624e4a98aa68b268957c87fedae6f576ba3c13f5c8c80007d6243ce088ac1"
+    },
+    "b015-directory-browser-v3-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/zero-detail-1280.png": {
+      "bytes": 67882,
+      "sha256": "9a1d9bfa198729cd5a11cb406158fa5a4e34952755e3669f04004bc83fc4e327"
+    },
+    "b015-directory-browser-v3-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/zero-detail-390.png": {
+      "bytes": 34812,
+      "sha256": "9c3de1a638fd9ba02fdb15fd317488a4738e3bc7e2610741c4cc31752c441ec7"
+    }
+  }
+}

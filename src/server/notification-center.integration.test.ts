@@ -52,6 +52,7 @@ test("synthetic events isolate four personas, first-read markers, gates and exac
   const ticket=(await c.query<{id:string}>(`INSERT INTO maintenance_tickets(org_id,ticket_number,property_id,lease_id,title,status,reported_by_user,reported_by_contact_id,assigned_vendor_contact_id) VALUES($1,987654,$2,$3,'Synthetic','open',$4,$5,$6) RETURNING id::text`,[ORG_ID,lease.property_id,lease.lease_id,lease.tenant_user,lease.tenant_id,vendorContact])).rows[0].id;
   const token=newVendorToken();
   const job=(await c.query<{id:string;created_at:string}>(`INSERT INTO repair_vendor_jobs(org_id,ticket_id,vendor_name,vendor_phone,contact_window,token_hash,expires_at,vendor_contact_id) VALUES($1,$2,'Synthetic','+886900111222','day',$3,clock_timestamp()+interval '1 hour',$4) RETURNING id::text,created_at::text`,[ORG_ID,ticket,hashVendorToken(token),vendorContact])).rows[0];
+  await c.query('BEGIN');
   const b010=(await c.query<{id:string;created_at:string}>(`INSERT INTO app.b010_source_events(org_id,lease_id,invoice_id,kind,occurrence_key,local_date) VALUES($1,$2,$3,'rent_due',$4,current_date) RETURNING id::text,created_at::text`,[ORG_ID,lease.lease_id,lease.invoice_id,randomUUID()])).rows[0];
   const bill=(await c.query<{id:string}>(`INSERT INTO app.b028_center_events(org_id,kind,b010_event_id,occurred_at) VALUES($1,'rent_due',$2,$3) RETURNING id::text`,[ORG_ID,b010.id,b010.created_at])).rows[0].id;
   const event=(await c.query<{id:string}>(`INSERT INTO app.b028_center_events(org_id,kind,ticket_id,job_id,occurred_at) VALUES($1,'vendor_job_assigned',$2,$3,$4) RETURNING id::text`,[ORG_ID,ticket,job.id,job.created_at])).rows[0].id;
@@ -59,6 +60,12 @@ test("synthetic events isolate four personas, first-read markers, gates and exac
    ($1,$2,'staff',$3,$4,NULL,NULL,NULL),($1,$2,'tenant',$5,NULL,$6,NULL,NULL),
    ($1,$7,'staff',$3,$4,NULL,NULL,NULL),($1,$7,'tenant',$5,NULL,$6,NULL,NULL),
    ($1,$7,'owner',$8,NULL,$9,NULL,NULL),($1,$7,'vendor_job',NULL,NULL,NULL,$10,$11)`,[ORG_ID,bill,USERS.manager,member,lease.tenant_user,lease.tenant_id,event,lease.owner_user,lease.owner_id,ticket,job.id]);
+  await c.query('SAVEPOINT invalid_source');
+  const malformedSource=(await c.query<{id:string;created_at:string}>(`INSERT INTO app.b010_source_events(org_id,lease_id,invoice_id,kind,occurrence_key,local_date) VALUES($1,$2,$3,'rent_due',$4,current_date) RETURNING id::text,created_at::text`,[ORG_ID,lease.lease_id,lease.invoice_id,randomUUID()])).rows[0];
+  await c.query(`INSERT INTO app.b028_center_events(org_id,kind,b010_event_id,occurred_at) VALUES($1,'payment_confirmed',$2,$3)`,[ORG_ID,malformedSource.id,malformedSource.created_at]);
+  await assert.rejects(c.query('SET CONSTRAINTS app.b028_center_source_valid IMMEDIATE'),(e:unknown)=>(e as {code?:string}).code==='23514');
+  await c.query('ROLLBACK TO SAVEPOINT invalid_source');
+  await c.query('COMMIT');
   const acl=(await c.query<{denied:boolean;trusted:boolean}>(`SELECT bool_and(NOT has_table_privilege(r.rolname,cl.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')) AS denied,
     bool_and(owner.rolname NOT IN ('anon','authenticated','service_role')) AS trusted FROM pg_class cl JOIN pg_namespace n ON n.oid=cl.relnamespace
     JOIN pg_roles owner ON owner.oid=cl.relowner CROSS JOIN pg_roles r WHERE n.nspname='app' AND cl.relname IN ('b028_center_events','b028_center_recipients','b028_center_reads','b028_center_mark_contexts','b028_center_cursors') AND r.rolname IN ('anon','authenticated','service_role')`)).rows[0];
@@ -183,9 +190,11 @@ test("synthetic events isolate four personas, first-read markers, gates and exac
   await c.query(`UPDATE repair_vendor_jobs SET expires_at=clock_timestamp()+interval '1 hour' WHERE id=$1`,[job.id]);
   assert.equal(await centerVendorEnabled(newVendorToken()),false);
   await c.query('BEGIN');
-  await c.query(`WITH made AS (INSERT INTO app.b010_source_events(org_id,lease_id,invoice_id,kind,occurrence_key,local_date)
-    SELECT $1,$2,$3,'rent_due',gen_random_uuid()::text,current_date FROM generate_series(1,400) RETURNING id,created_at)
-    INSERT INTO app.b028_center_events(org_id,kind,b010_event_id,occurred_at) SELECT $1,'rent_due',id,created_at FROM made`,[ORG_ID,lease.lease_id,lease.invoice_id]);
+  await c.query(`INSERT INTO app.b010_source_events(org_id,lease_id,invoice_id,kind,occurrence_key,local_date)
+    SELECT $1,$2,$3,'rent_due',gen_random_uuid()::text,current_date FROM generate_series(1,400)`,[ORG_ID,lease.lease_id,lease.invoice_id]);
+  await c.query(`INSERT INTO app.b028_center_events(org_id,kind,b010_event_id,occurred_at)
+    SELECT b.org_id,b.kind,b.id,b.created_at FROM app.b010_source_events b JOIN app.b017_old_source_transactions t ON t.org_id=b.org_id AND t.source_id=b.id
+    WHERE b.org_id=$1 AND t.tx_id=txid_current()`,[ORG_ID]);
   await c.query(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,contact_id)
     SELECT $1,e.id,'tenant',$2,$3 FROM app.b028_center_events e LEFT JOIN app.b028_center_recipients r ON r.event_id=e.id AND r.persona='tenant'
     WHERE e.org_id=$1 AND e.kind='rent_due' AND r.id IS NULL`,[ORG_ID,lease.tenant_user,lease.tenant_id]);
@@ -193,9 +202,11 @@ test("synthetic events isolate four personas, first-read markers, gates and exac
   await c.query(`UPDATE contacts SET user_id=NULL WHERE id=$1`,[lease.tenant_id]);
   const replacement=(await c.query<{id:string}>(`INSERT INTO contacts(org_id,user_id,is_tenant,display_name) VALUES($1,$2,true,'Synthetic replacement') RETURNING id::text`,[ORG_ID,lease.tenant_user])).rows[0].id;
   await c.query(`INSERT INTO lease_parties(org_id,lease_id,contact_id,role) VALUES($1,$2,$3,'co_tenant')`,[ORG_ID,lease.lease_id,replacement]);
+  await c.query('BEGIN');
   const replacementSource=(await c.query<{id:string;created_at:string}>(`INSERT INTO app.b010_source_events(org_id,lease_id,invoice_id,kind,occurrence_key,local_date) VALUES($1,$2,$3,'rent_due',$4,current_date) RETURNING id::text,created_at::text`,[ORG_ID,lease.lease_id,lease.invoice_id,randomUUID()])).rows[0];
   const replacementEvent=(await c.query<{id:string}>(`INSERT INTO app.b028_center_events(org_id,kind,b010_event_id,occurred_at) VALUES($1,'rent_due',$2,$3) RETURNING id::text`,[ORG_ID,replacementSource.id,replacementSource.created_at])).rows[0].id;
   await c.query(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,contact_id) VALUES($1,$2,'tenant',$3,$4)`,[ORG_ID,replacementEvent,lease.tenant_user,replacement]);
+  await c.query('COMMIT');
   const skipped=await centerSessionItems(tenant); assert.equal(skipped.items.length,0); assert.ok(skipped.continuation);
   const afterSkipped=await centerSessionItems(tenant,null,skipped.continuation); assert.equal(afterSkipped.items.length,1);
   await assert.rejects(centerSessionItems(owner,null,skipped.continuation));
