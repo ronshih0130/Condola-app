@@ -1,0 +1,50 @@
+{
+  "time_pt": "2026-10-29T23:10:41.831877-07:00",
+  "immutable_candidate": "ced9ebe87c8d801c049ebb72b3351f231dc7b40d",
+  "gate": "PASS (exact clean candidate; copied summary)",
+  "next_build": "PASS (terminal build output present)",
+  "cf_staging_build": "PASS (OpenNext build complete)",
+  "preflight": "PREFLIGHT PASS; candidate ced9ebe",
+  "worker_local": {
+    "result": "1/1 PASS",
+    "database": "own disposable clone core83 fresh, loopback55435",
+    "runtime": "pinned Node20; wrangler JS API local only, no deployment"
+  },
+  "browser": {
+    "result": "INCOMPLETE / failures retained",
+    "observed_passes": 89,
+    "observed_failures": 5,
+    "terminal_batch_summary": false,
+    "observation": "Previous exec handle95947 missing and no matching OS process at continuation audit. Log stops after signup-consent case. No terminal exit established; cause UNKNOWN. Preserve all failure artifacts and run remaining cases.",
+    "known_failures": "ID notice stale assertion; imported paper UI identity gate; two wizard stale split selector cases; tenant bill stale heading. Separate reviewed preparation pending actual browsers."
+  },
+  "staging": "schema/application/DB-owner proof and independent Claude QA pending; no DB migrations from Mac",
+  "production": "no access/keys/deploy/messages",
+  "evidence": {
+    "core83-next-build.log": {
+      "sha256": "56bc99d4917dda4d5a57fcd35f38457e93dfc55605c9751ecc13fdae0fa49112",
+      "bytes": 10884,
+      "local_path": "../core83-next-build.log"
+    },
+    "core83-cf-build.log": {
+      "sha256": "ddd1ef417f312350c259dfb2e4faf414482c9f02db00425bbf507628343806a6",
+      "bytes": 12461,
+      "local_path": "../core83-cf-build.log"
+    },
+    "core83-preflight.log": {
+      "sha256": "6121d29e3220ee2b5eeac721d257fd83fd616c619182713ea54dc3a875f0a25a",
+      "bytes": 23,
+      "local_path": "../core83-preflight.log"
+    },
+    "core83-worker.log": {
+      "sha256": "97088b54826ce29dfc734e9ad743a12c6cf88bdbeed6d75a70cc7846464960b9",
+      "bytes": 449,
+      "local_path": "../core83-worker.log"
+    },
+    "core83-full-batched-browser.log": {
+      "sha256": "ad8b4564bd16fe1842468fb110393686bfe45ed6c0588e59b2f57a48a091babd",
+      "bytes": 82505,
+      "local_path": "../core83-full-batched-browser.log"
+    }
+  }
+}
