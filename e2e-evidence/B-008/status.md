@@ -1,3 +1,5 @@
+> Latest local integration checkpoint (2026-10-30T03:05:16.071480-07:00): candidate `4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6`; see [core89 local verification](../integration/core89-local-verification.md). Whole-feature verdict remains INCOMPLETE/NO-GO; dated records below retain their original scope. This link supplies no staging/Claude/release waiver.
+
 # B-008 statement and utility checkpoint
 
 Updated: 2026-10-29T21:37:33-07:00. Branch `mode-b-billing-prep`, based on `2c3bff5eca75b83100fab8a4117c36b5562d384c`.

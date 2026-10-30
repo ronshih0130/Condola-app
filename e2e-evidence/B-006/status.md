@@ -1,3 +1,5 @@
+> Latest local integration checkpoint (2026-10-30T03:05:16.071480-07:00): candidate `4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6`; see [core89 local verification](../integration/core89-local-verification.md). Whole-feature verdict remains INCOMPLETE/NO-GO; dated records below retain their original scope. This link supplies no staging/Claude/release waiver.
+
 # B-006 diagnostic slice
 
 Updated 2026-10-29T17:35:49.004414-07:00. State: in_progress / PARTIAL; not done.

@@ -1,0 +1,81 @@
+{
+  "candidate": "4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6",
+  "time_pt": "2026-10-30T03:05:16.071480-07:00",
+  "scope": "local integration checkpoint, not whole feature/staging/release acceptance",
+  "gate": {
+    "unit": {
+      "pass": 572,
+      "fail": 0
+    },
+    "rls": {
+      "total": 260,
+      "pass": 259,
+      "fail": 0,
+      "skip": 1,
+      "skip_reason": "Ron-approved historical commit lost only"
+    }
+  },
+  "build": {
+    "next_exit": 0,
+    "cloudflare_staging_build_exit": 0,
+    "preflight": "PREFLIGHT PASS",
+    "local_worker": "1/1PASS"
+  },
+  "scoped_browser": "actual M/T/O home\u2192center entry including actual tenant lease picker and anonymous exact-job vendor at390/1280,1scenarioPASS; synthetic source only",
+  "full_default_browser": "RUNNING immutableverify-core89; log not frozen, no overallPASS",
+  "schema": "source89 fresh versus untouched71+18 all11logicalcategoriesequal;syntheticcounts2/4/5/1preserved",
+  "staging": {
+    "readonly_metadata": "PASS,zero customerrows",
+    "required_b001_b010_b011_b028_objects": "ABSENT",
+    "migration_ledger": "ABSENT,not invented",
+    "schema_mutation": "NONE",
+    "app_acceptance": "NOT_RUN"
+  },
+  "independent_review": "Astra exact scoped source/deltaPASS, root executions separatelyattributed;ClaudeClassB/othermachine/DepotNOT_RUN",
+  "flags": "defaultOFF;onlyexplicitownedlocaltestorg optins;no stage/prodactivation",
+  "limits": [
+    "B010paymentEmailpolicyRonpending,source/producer17draftnotintegrated",
+    "B011settlement16draftnotintegrated;handover14only",
+    "B028onlysyntheticcenterfoundation,allrealproducerfamiliesremainopen",
+    "B012depositandB013threepolicyquestionspending",
+    "full39queueACTIVE,noitempromotedtodonefromthischeckpoint"
+  ],
+  "private_artifacts": {
+    "core89-corrected-seed-gate.log": {
+      "bytes": 456,
+      "sha256": "9e9883f69fe3cb45195566d7c33d3694f5220ec4e5cf44f90ea6c289309fdecc"
+    },
+    "core89-next-build.log": {
+      "bytes": 11891,
+      "sha256": "5683439d9d0e5bdc490362a780ffb472b0a157f00078d0bf81fe2fb3130c1159"
+    },
+    "core89-cf-build.log": {
+      "bytes": 13469,
+      "sha256": "6ea0af39cecbb9962672dbbe719e4e0268351bfbd8ce8769a097188033ce5708"
+    },
+    "core89-preflight.log": {
+      "bytes": 23,
+      "sha256": "3e0c2536f0ab8716f17ade70c029f3bee08b3252d8bed2c0b5cea7f6ad467a86"
+    },
+    "core89-worker.log": {
+      "bytes": 449,
+      "sha256": "cd680b2893830f0530951277bb7aa15731d30c50b7df10776c8b6b9f00e8ce0d"
+    },
+    "core89-center-entry-corrected.log": {
+      "bytes": 1927,
+      "sha256": "e6a8d096e7736d1679f58705cc1f27762a793a029e4dd85683ebfa4721400950"
+    },
+    "core89-catalog-comparison.json": {
+      "bytes": 14217,
+      "sha256": "062e582d88170485311d78e92005dde53421fc178ad24cbeffb5e6b9c568c7fb"
+    },
+    "core89-function-privileges.log": {
+      "bytes": 3135,
+      "sha256": "66023e686fe9dad0b66fbe4468ddac835e33d6df42e32d26a0d80cb07e660667"
+    },
+    "staging-schema-inventory-probe.log": {
+      "bytes": 431,
+      "sha256": "773a26c72ceb9e85974244ddc47ec005c53341f293fec38e9ee4a3400680ec02"
+    }
+  }
+}
