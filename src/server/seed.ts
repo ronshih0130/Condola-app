@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "./db";
+import { captureHandoverBeforeDemoReset } from "./handover-demo-reset";
 import { buildStoredConsent, writeConsentSql } from "./consent";
 import { DEMO_PASSWORD } from "./demo-password";
 import { seedSampleCheck } from "./id-docs";
@@ -25,6 +26,12 @@ async function wipe(client: Client) {
     `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
   );
   await client.query("SET session_replication_role = replica");
+  // These specific private tables refer to demo rows wiped below. Older schemas
+  // may not have them yet; leave unrelated private application data alone.
+  for (const name of ["b028_read_markers", "b028_recipient_claims", "b010_payment_commands", "b010_source_events", "b010_tenant_due_preferences"]) {
+    const exists = await client.query<{ present: boolean }>(`SELECT to_regclass($1) IS NOT NULL AS present`, [`app.${name}`]);
+    if (exists.rows[0].present) await client.query(`DELETE FROM app.${quoteIdent(name)}`);
+  }
   for (const { tablename } of tables.rows) {
     if (KEEP.has(tablename)) continue;
     await client.query(`DELETE FROM public.${quoteIdent(tablename)}`);
@@ -57,6 +64,10 @@ export async function resetAndSeed() {
   await withClient(async (client) => {
   try {
     await client.query("BEGIN");
+    // Older disposable schemas may predate B011. On newer schemas, capture
+    // object tombstones before any public-parent mutation in this transaction.
+    const handover = await client.query<{present:boolean}>(`SELECT to_regclass('app.handover_records') IS NOT NULL AS present`);
+    if (handover.rows[0].present) await captureHandoverBeforeDemoReset(client);
     await wipe(client);
 
     for (const person of PEOPLE) {
