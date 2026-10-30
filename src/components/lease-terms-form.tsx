@@ -4,7 +4,8 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorText } from "@/i18n/errors";
 import { actionUpdateLease, type ActionState } from "@/server/actions";
-import { depositReasonEditorOpen } from "@/server/lease-rules";
+import { actionDepositPolicy } from "@/server/deposit-rules-actions";
+import { depositPolicyCap, depositPolicyState, type DepositPolicy } from "@/server/deposit-rules";
 import { useT } from "./locale";
 import { callSubmitAction, claimFormSubmit, releaseFormSubmit } from "./submit-once";
 
@@ -42,9 +43,20 @@ export function LeaseTermsForm({
   const [rentValue, setRentValue] = useState(rent);
   const [months, setMonths] = useState(monthsInput(depositMonths));
   const [reason, setReason] = useState("");
+  const [policy, setPolicy] = useState<DepositPolicy | null>(null);
   const wasPending = useRef(false);
-  const showReason = depositReasonEditorOpen(months, depositMonths);
-  const blocked = showReason && reason.trim() === "";
+  const policyState = policy ? depositPolicyState(policy, Number(months)) : "none";
+  const cap = policy ? depositPolicyCap(policy, Number(months)) : null;
+  const showReason = policyState === "reason" && (Number(months) !== Number(depositMonths) || Number(rentValue) !== Number(rent) || !depositReason.trim());
+  const blocked = !policy || policyState === "block" || (showReason && reason.trim() === "");
+
+  useEffect(() => {
+    let cancelled = false;
+    setPolicy(null);
+    void actionDepositPolicy({ leaseId }).then((value) => { if (!cancelled) setPolicy(value); })
+      .catch(() => { if (!cancelled) setPolicy(null); });
+    return () => { cancelled = true; };
+  }, [leaseId]);
 
   useEffect(() => {
     if (!pending && state.error) releaseFormSubmit(guard);
@@ -96,10 +108,13 @@ export function LeaseTermsForm({
           />
         </div>
       </div>
+      {!policy ? <p className="hint">{t("deposit_policy_checking")}</p> : null}
+      {policy?.regionalEnabled && policy.maxMonths === null ? <p className="hint">{t("deposit_policy_missing")}</p> : null}
+      {policyState === "warn" || policyState === "block" ? <p className="alert warn">{t(policyState === "warn" ? "deposit_policy_warn" : "deposit_policy_block", { cap: cap ?? 0 })}</p> : null}
       {showReason ? (
         <div className="alert warn" data-testid="deposit-alert">
-          <div>{t("lease_deposit_over", { months, cap: 2 })}</div>
-          <label className="f" style={{ marginTop: 8 }}>{t("lease_deposit_reason")}</label>
+          <div>{t("lease_deposit_over", { months, cap: cap ?? 0 })}</div>
+          <label className="f" style={{ marginTop: 8 }}>{t("deposit_policy_reason")}</label>
           <textarea
             className="inp"
             name="depositReason"
@@ -109,7 +124,7 @@ export function LeaseTermsForm({
             onChange={(event) => setReason(event.target.value)}
           />
         </div>
-      ) : Number(months) > 2 ? (
+      ) : policyState === "reason" ? (
         <input type="hidden" name="depositReason" value={depositReason} />
       ) : (
         <>

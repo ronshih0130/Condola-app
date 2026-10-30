@@ -1117,17 +1117,18 @@ test("every lease save path rejects a deposit over two months without a reason",
     });
     assert.equal(noised.depositWarn, false);
 
-    // CHECK leases_deposit_over_cap_requires_override (20261023090000) and the
-    // earlier trigger trg_lease_deposit_check / fn_lease_deposit_check
-    // (20261021140000_basic_leases.sql). query() does not map to FlowError.
-    const guard = await query<{ trigger_name: string; constraint_name: string }>(
-      `SELECT t.tgname AS trigger_name, c.conname AS constraint_name
+    // B-007 replaces the named global cap CHECK with the regional trigger;
+    // the original reason/actor pair CHECK remains. query() does not map errors.
+    const guard = await query<{ trigger_name: string; constraint_name: string; removed: boolean }>(
+      `SELECT t.tgname AS trigger_name, c.conname AS constraint_name,
+              NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='leases'::regclass AND conname='leases_deposit_over_cap_requires_override') AS removed
          FROM pg_trigger t
-         JOIN pg_constraint c ON c.conname = 'leases_deposit_over_cap_requires_override'
+         JOIN pg_constraint c ON c.conrelid='leases'::regclass AND c.conname = 'leases_deposit_override_pair'
         WHERE t.tgname = 'trg_lease_deposit_check' AND NOT t.tgisinternal`,
     );
     assert.equal(guard.rows[0]?.trigger_name, "trg_lease_deposit_check");
-    assert.equal(guard.rows[0]?.constraint_name, "leases_deposit_over_cap_requires_override");
+    assert.equal(guard.rows[0]?.constraint_name, "leases_deposit_override_pair");
+    assert.equal(guard.rows[0]?.removed, true);
 
     await assert.rejects(
       () =>
@@ -1149,7 +1150,7 @@ test("every lease save path rejects a deposit over two months without a reason",
             WHERE id = $1`,
           [created.leaseId, USERS.admin],
         ),
-      (error: unknown) => isPgDepositGuard(error, "leases_deposit_over_cap_requires_override"),
+      (error: unknown) => isPgDepositGuard(error),
     );
     await assert.rejects(
       () =>

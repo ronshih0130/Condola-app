@@ -170,6 +170,10 @@ const added = {
     addOnly: false,
     reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
   },
+  "supabase/migrations/20261031100205_b007_deposit_rules.sql": {
+    addOnly: false,
+    reason: "Ron authorized replacing only leases_deposit_over_cap_requires_override for local/staging. Replaces write enforcement with regional resolution and flag locks, adds metadata guards/functions/privileges and default-OFF rollout setting; no historical SQL, stored data or columns removed.",
+  },
   "supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql": {
     addOnly: false,
     reason: "Replaces tenant PDF visibility helper and adds immutable-version mutation guards with controlled parent-cascade exceptions and privilege changes. No historical migration or contract text is changed.",

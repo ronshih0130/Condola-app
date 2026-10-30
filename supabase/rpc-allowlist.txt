@@ -58,3 +58,8 @@ app.audit_event(p_org uuid, p_event text, p_detail jsonb)
 # and caller tenancy of the lease.
 # @mode authenticated
 app.tenant_signed_pdf_readable(p_org uuid, p_lease uuid)
+
+# Read-only regional deposit hint resolver. SECURITY INVOKER uses caller RLS.
+# The mutating trigger separately acquires policy locks through its app helper.
+# @mode authenticated
+public.resolve_deposit_rule(p_org uuid, p_property uuid, p_on date)

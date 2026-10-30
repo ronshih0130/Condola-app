@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { errorText } from "@/i18n/errors";
 import { confirmDeposit, confirmSpace, confirmSpaceFromSnapshot, depositMonthsOnHalfStep, formatMajor, nextSpaceSnapshot, twdRentIsWhole } from "@/lease-confirm";
 import { actionCreateLease, type ActionState } from "@/server/actions";
+import { actionDepositPolicy } from "@/server/deposit-rules-actions";
+import { depositPolicyCap, depositPolicyState, type DepositPolicy } from "@/server/deposit-rules";
 import { leaseTermEnd, overlappingLease } from "@/server/lease-rules";
 import type { RoomOption } from "@/server/queries";
 import { activeTenantPick, filterTenants, tenantByEmail, type TenantOption } from "@/tenant-pick";
@@ -83,6 +85,8 @@ export function LeaseWizard({
   const [start, setStart] = useState("");
   const [depositMonths, setDepositMonths] = useState("2");
   const [depositReason, setDepositReason] = useState("");
+  const [depositPolicy, setDepositPolicy] = useState<DepositPolicy | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
   const [dueDay, setDueDay] = useState("5");
   const [templateLang, setTemplateLang] = useState<"zh-TW" | "en">(firmLocale === "en" ? "en" : "zh-TW");
   const [bilingual, setBilingual] = useState(false);
@@ -99,12 +103,26 @@ export function LeaseWizard({
   const pickedId = activeTenantPick(tenantContactId, tenantMatches);
   const pickedTenant = tenants.find((item) => item.id === pickedId) ?? null;
   const currency = room?.currency ?? "TWD";
-  const depositOver = Number(depositMonths) > 2;
-  const depositBlocked = depositOver && depositReason.trim() === "";
+  const depositState = depositPolicy ? depositPolicyState(depositPolicy, Number(depositMonths)) : "none";
+  const depositCap = depositPolicy ? depositPolicyCap(depositPolicy, Number(depositMonths)) : null;
+  const depositOver = depositState === "reason";
+  const depositBlocked = depositState === "block" || (depositOver && depositReason.trim() === "") || (step >= 4 && (!depositPolicy || policyLoading));
   const termEnd = leaseTermEnd(start, months);
   const overlap = overlappingLease(room?.leases, start, termEnd);
   const blocked = depositBlocked || (Boolean(overlap) && step >= 3);
   const creating = pending || Boolean(state.leaseHref);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDepositPolicy(null);
+    if (!roomId || !start) { setPolicyLoading(false); return; }
+    setPolicyLoading(true);
+    void actionDepositPolicy({ spaceId: roomId, startDate: start })
+      .then((policy) => { if (!cancelled) setDepositPolicy(policy); })
+      .catch(() => { if (!cancelled) setDepositPolicy(null); })
+      .finally(() => { if (!cancelled) setPolicyLoading(false); });
+    return () => { cancelled = true; };
+  }, [roomId, start]);
 
   useEffect(() => {
     if (!pending && state.error) {
@@ -483,10 +501,13 @@ export function LeaseWizard({
               </p>
             ) : null}
           </div>
+          {policyLoading || !depositPolicy ? <p className="hint">{t("deposit_policy_checking")}</p> : null}
+          {depositPolicy?.regionalEnabled && depositPolicy.maxMonths === null ? <p className="hint">{t("deposit_policy_missing")}</p> : null}
+          {depositState === "warn" || depositState === "block" ? <p className="alert warn">{t(depositState === "warn" ? "deposit_policy_warn" : "deposit_policy_block", { cap: depositCap ?? 0 })}</p> : null}
           {depositOver ? (
             <div className="alert warn" data-testid="deposit-alert">
-              <div>{t("lease_deposit_over", { months: depositMonths, cap: 2 })}</div>
-              <label className="f" style={{ marginTop: 8 }}>{t("lease_deposit_reason")}</label>
+              <div>{t("lease_deposit_over", { months: depositMonths, cap: depositCap ?? 0 })}</div>
+              <label className="f" style={{ marginTop: 8 }}>{t("deposit_policy_reason")}</label>
               <textarea
                 className="inp"
                 data-testid="deposit-reason"

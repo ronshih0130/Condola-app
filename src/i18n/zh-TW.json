@@ -1,4 +1,9 @@
 {
+ "deposit_policy_checking": "正在確認押金規則…",
+ "deposit_policy_missing": "這個地區尚未設定押金上限。",
+ "deposit_policy_warn": "押金超過設定的 {cap} 個月門檻，請核對金額。",
+ "deposit_policy_block": "押金超過設定的 {cap} 個月上限，無法儲存。",
+ "deposit_policy_reason": "超過設定上限的原因",
   "im_source_line": "原始列號",
   "im_date_format_help": "請使用 YYYY-MM-DD 或民國日期，例如 115/01/05。",
  "i_legal_consent_required": "請先同意服務條款與隱私權政策",

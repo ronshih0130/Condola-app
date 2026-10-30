@@ -1,4 +1,9 @@
 {
+ "deposit_policy_checking": "Checking the deposit rule…",
+ "deposit_policy_missing": "No deposit limit is configured for this location.",
+ "deposit_policy_warn": "Deposit exceeds the configured {cap}-month threshold. Review the amount.",
+ "deposit_policy_block": "Deposit exceeds the configured {cap}-month limit and cannot be saved.",
+ "deposit_policy_reason": "Reason for exceeding the configured limit",
   "im_source_line": "Source row",
   "im_date_format_help": "Use YYYY-MM-DD or a Taiwan ROC date such as 115/01/05.",
  "i_legal_consent_required": "Please agree to the Terms of Service and Privacy Policy first.",

@@ -1,0 +1,18 @@
+{
+  "time_pt": "2026-10-29T20:18:15.779671-07:00",
+  "authorization": "Ron direct approval of named CHECK replacement for local/staging only; BLOCKED register",
+  "migration_blob": "616af821a0c41681258c2b0d6ab47004ed8d91f1",
+  "migration_sha256": "52e7d5af4abfd3800bf78bb4d8a67f3b7ea183f5f39f0138dbc57c34521b45cb",
+  "integration_blob": "baaf5dfc4ec9612b214625973f305c0ebd44b3e6",
+  "focused_DB_passed": 3,
+  "existing_deposit_path_selected_passed": 1,
+  "prior_policy_consent_copy_checks_reported_passed": 14,
+  "typecheck": "PASS",
+  "targeted_lint": "PASS",
+  "native_review": "scoped static PASS; parser, consent, concurrency and tenant-final-signing findings closed",
+  "shared_RPC_manifest_registration": "coordinator updated; final checks pending",
+  "browser": "PENDING",
+  "empty_schema_and_upgrade_catalog": "PENDING",
+  "staging": "PENDING",
+  "whole_item_done": false
+}
