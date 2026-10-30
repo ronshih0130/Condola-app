@@ -1,0 +1,79 @@
+{
+  "time_pt": "2026-10-30T00:05:03.249747-07:00",
+  "immutable_gated_candidate": "0e49bd0169557eec51e96a449db5a873a4b19e5b",
+  "scope": "Local checkpoint; no staging/release/fullqueue completion",
+  "gate": {
+    "result": "PASS",
+    "unit": {
+      "tests": 565,
+      "pass": 565,
+      "fail": 0
+    },
+    "rls": {
+      "tests": 230,
+      "pass": 229,
+      "fail": 0,
+      "skipped": 1,
+      "skip_reason": "Ron-approved historical commit lost test only"
+    }
+  },
+  "build": {
+    "next": 0,
+    "cf_staging_build": 0,
+    "preflight": "PREFLIGHT PASS",
+    "local_worker": "1/1 PASS"
+  },
+  "browser": {
+    "old_ced_remaining_run": "19PASS/6FAIL/1flagOFFskip; exact terminal failure preserved, no fullbrowserPASS",
+    "updated_tryout": "6/6PASS current8b129c7 fixture, runtime0e49",
+    "updated_utility": "3/4PASS at120705d; removedwizardpreviewexpectation failed; 38b8406 updatedfixture focusedcase2 then1/1PASS. Prior nav timeout freshcase1 nowPASS, causeUNKNOWN, no runtimefix attributed.",
+    "regional_current": "2/2PASS390/1280 on9665627 mobilewrap runtime delta and8d6bf3 test; original6491 2/2PASS screenshots exposed clippedactions; newboxcontainmentassertandrootvisualrecheckbeforeacceptance",
+    "all_evidence": "Scopedruns, never transfer oldclean-gate result to newruntime delta/newB001source."
+  },
+  "preparing_B001": "Ronapprovedzero-totalA;5643fc6recoveryreviewedsource/apporggate+new100213; core86combinedchecksnext, oldworkerSQL/finalbrowser/stage/Claude remainpending",
+  "test_fixture_alignment": "Three B008/B001 directRepo races/disposal now explicitly optin within OWNcloned ORG_ID; globalswitch+exactorgbitrestored; actualcrosscheckfailure preserved, actual86rerunpending",
+  "logs": {
+    "core85-seed-gate.log": {
+      "sha256": "09ae635c49b9f14805ec62df37af7789b8a986e315bcd0d3361cee256b44ae60",
+      "bytes": 456
+    },
+    "core85-next-build.log": {
+      "sha256": "e7ea226863ec74cff020981f697ee37ec91c153c8a7e1f81fc12509009e5ed52",
+      "bytes": 10884
+    },
+    "core85-cf-build.log": {
+      "sha256": "2d5cdf8b4f43e5f8f86accdda326db49424fc47efbbca78d49484d3f60b2889f",
+      "bytes": 12461
+    },
+    "core85-preflight.log": {
+      "sha256": "c8bf77863690c7eeb75aa3b8e32bdc7046b37f2ab570b1789885875b75db24ce",
+      "bytes": 23
+    },
+    "core85-worker.log": {
+      "sha256": "b0c140cc97865b3583a82113be70871c9b9358e6468f4c0313246958dd58b562",
+      "bytes": 449
+    },
+    "core83-tail-resume.log": {
+      "sha256": "cf00b94ef6fd096d1560e7b0cbc97e4c0588c7e66469880dc1462f80cf553ce4",
+      "bytes": 17213
+    },
+    "core85-browser-fixes.log": {
+      "sha256": "37660c3e91d78e6e5320eb28c78aa4684322f75b68398fb2af74ec472143f7ca",
+      "bytes": 8715
+    },
+    "core85-browser-ui-delta.log": {
+      "sha256": "c5ce14d9be9769ee7402a8cd514d7adc5305bea4faf28ebfa32c17d044b3eadc",
+      "bytes": 5084
+    },
+    "b006-region-browser-first.log": {
+      "sha256": "ecf963747b1db550f0d7d5597aedf6279d56fdd24a9b40db6c093aa6d4e3f9ab",
+      "bytes": 1522
+    }
+  },
+  "current_browser_blobs": {
+    "e2e/tryout.spec.ts": "8b129c7bc0fcffbf7de5847ff7f03a385473cbb1",
+    "e2e/utility-posting.spec.ts": "38b84062e061f64b7639ebd82437481bef2929c3",
+    "e2e/import-region.spec.ts": "8d6bf3df982d8e2e639722fe551f40919e890d38",
+    "src/components/import-wizard.tsx": "96656270cb0cddb012ef99993b8c6b0a3f26b854"
+  }
+}

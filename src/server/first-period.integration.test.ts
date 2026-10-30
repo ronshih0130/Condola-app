@@ -13,8 +13,24 @@ import type { Session } from "./types";
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
-test.before(async () => { clone = await cloneTestDatabase(); });
+let priorOrgEsign: { present: boolean; value: unknown } | undefined;
+test.before(async () => {
+  clone = await cloneTestDatabase();
+  const row = (await query<{ present: boolean; value: unknown }>(`SELECT feature_flags ? 'esign' AS present, feature_flags->'esign' AS value FROM organizations WHERE id=$1`, [ORG_ID])).rows[0];
+  priorOrgEsign = row;
+});
 test.after(async () => { await clone?.cleanup(); });
+const priorEsignSwitch = process.env.ESIGN_ENABLED;
+async function enableSigningFixture() {
+  process.env.ESIGN_ENABLED = "true";
+  await query(`UPDATE organizations SET feature_flags=feature_flags || '{"esign":true}'::jsonb WHERE id=$1`, [ORG_ID]);
+}
+test.afterEach(async () => {
+  if (priorEsignSwitch === undefined) delete process.env.ESIGN_ENABLED;
+  else process.env.ESIGN_ENABLED = priorEsignSwitch;
+  if (!priorOrgEsign) return;
+  await query(`UPDATE organizations SET feature_flags=CASE WHEN $2 THEN jsonb_set(feature_flags,'{esign}',$3::jsonb) ELSE feature_flags - 'esign' END WHERE id=$1`, [ORG_ID, priorOrgEsign.present, JSON.stringify(priorOrgEsign.value)]);
+});
 const staff: Session = { userId: USERS.admin, sessionId: "b008-fixture", email: "staff@example.com", name: "Staff", kind: "staff", role: "admin", orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", locale: "en", calendar: "gregorian", leaseId: null };
 
 async function waitForBlockingEdge(waiter: number, blocker: number) {
@@ -130,6 +146,7 @@ test("captured first period survives flag off and is used by tenant-final signin
 });
 
 test("a concurrent B001 signature wins before a waiting basis capture", async () => {
+  await enableSigningFixture();
   await query(`UPDATE organizations SET feature_flags=feature_flags || '{"billing_previews":true}'::jsonb WHERE id=$1`, [ORG_ID]);
   await query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='billing_previews'`, [ORG_ID]);
   const property = (await query<{id:string}>(`INSERT INTO properties(org_id,name,country_code,currency,timezone,default_rental_mode) VALUES ($1,'B008 race','US','USD','America/Los_Angeles','whole_unit') RETURNING id::text`,[ORG_ID])).rows[0].id;
@@ -172,6 +189,7 @@ test("a concurrent B001 signature wins before a waiting basis capture", async ()
 });
 
 test("capturing first fences B001 signing and concurrent case creation", async () => {
+  await enableSigningFixture();
   await query(`UPDATE organizations SET feature_flags=feature_flags || '{"billing_previews":true}'::jsonb WHERE id=$1`, [ORG_ID]);
   await query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='billing_previews'`, [ORG_ID]);
   const property = (await query<{id:string}>(`INSERT INTO properties(org_id,name,country_code,currency,timezone,default_rental_mode) VALUES ($1,'B008 capture first','US','USD','America/Los_Angeles','whole_unit') RETURNING id::text`,[ORG_ID])).rows[0].id;
@@ -267,6 +285,7 @@ test("basis adoption requires the exact rollout, firm, environment and staff rol
 });
 
 test("actual disposal of an expired partially signed case keeps basis capture locked", async () => {
+  await enableSigningFixture();
   const client=new Client({connectionString:process.env.DATABASE_URL}); await client.connect();
   try {
     await client.query("BEGIN");

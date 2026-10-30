@@ -236,7 +236,8 @@ test("rent due notice shows rent only", async ({ page }) => {
   await signIn(page, ACCOUNTS.tenant2);
   await page.goto("/api/demo/locale?set=zh-TW&next=/t");
   const notice = page.getByTestId("rent-due-notice");
-  await expect(notice).toContainText("租金即將到期");
+  await expect(notice).toContainText("應繳合計");
+  await expect(notice.getByRole("link", { name: "我的帳單", exact: true })).toHaveAttribute("href", "/t/pay");
   const amount = page.getByTestId("rent-due-amount");
   const deposit = page.getByTestId("rent-due-deposit");
   await expect(amount).toHaveAttribute("data-minor", "1200000");
@@ -246,7 +247,8 @@ test("rent due notice shows rent only", async ({ page }) => {
   await expect(deposit).toContainText("NT$24,000");
   await expect(deposit).toContainText("押金");
   await page.goto("/t/pay");
-  await expect(page.locator("p.b")).toHaveText("NT$12,000");
+  await expect(page.getByTestId("tenant-bill")).toHaveText("應繳合計 NT$12,000");
+  await expect(page.getByTestId("tenant-bill")).not.toContainText("36,000");
   await page.goto("/t/lease");
   await expect(page.getByText("月租 NT$12,000")).toBeVisible();
   await expect(page.getByText("押金 NT$24,000")).toBeVisible();

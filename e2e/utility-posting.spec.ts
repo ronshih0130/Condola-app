@@ -73,13 +73,14 @@ test("平均分攤 saves from the property wizard and splits the bill with no ro
   await page.getByTestId("wizard-next").click();
   await page.getByText("分房出租", { exact: true }).click();
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("unit-label").fill("3F");
-  await page.locator("input[name=floor]").fill("3");
+  await page.getByTestId("unit-floor").fill("3F");
+  await expect(page.getByTestId("unit-label")).toHaveValue("3F");
   await page.getByTestId("add-room").click();
   await page.getByTestId("add-room").click();
   for (const [index, label] of ["A", "B", "C"].entries()) {
     await page.getByTestId(`room-${index}-label`).fill(label);
     await page.getByTestId(`room-${index}-rent`).fill("12000");
+    await page.getByTestId(`room-${index}-type`).selectOption("suite");
   }
   await page.getByTestId("wizard-next").click();
   await expect(page.locator('input[name="bill"]')).toHaveCount(0);
@@ -89,7 +90,9 @@ test("平均分攤 saves from the property wizard and splits the bill with no ro
   await expect(page.getByTestId("property-electricity-preview")).toHaveCount(0);
   await page.getByTestId("property-split").selectOption("even");
   await page.getByTestId("property-rate").fill("5");
-  await expect(page.getByTestId("property-electricity-preview")).toContainText("NT$");
+  await expect(page.getByTestId("property-split")).toHaveValue("even");
+  await expect(page.getByTestId("property-electricity-preview")).toHaveCount(0);
+  await expect(page.getByText("台電帳單金額和各房度數每月在『電費已登記』填寫", { exact: true })).toBeVisible();
   await page.getByTestId("submit-property").click();
   await expect(page.getByRole("heading", { name: "松德電費" })).toBeVisible();
 
@@ -207,6 +210,13 @@ test("countersign of a pending lease does not bill the electricity posted while 
   await expect(page.getByTestId("utility-status")).toContainText("電費已登記");
 
   await page.goto(`${leaseUrl}?tab=sign`);
+  await expect(page.getByTestId("idv-sign-wait")).toBeVisible();
+  await expect(page.getByTestId("simulate-tenant-sign")).toHaveCount(0);
+  const leaseId = new URL(leaseUrl).pathname.split("/").at(-1);
+  const identity = await page.request.post("/api/demo/id-sample", { data: { leaseId } });
+  expect(identity.ok()).toBe(true);
+  await page.reload();
+  await expect(page.getByTestId("simulate-tenant-sign")).toBeVisible();
   await page.getByTestId("simulate-tenant-sign").click();
   await expect(page.getByText("租客已簽署")).toBeVisible();
   await expect(page.getByTestId("error-banner")).toHaveCount(0);

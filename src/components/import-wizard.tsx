@@ -524,7 +524,7 @@ export function ImportWizard({ detailsEnabled = false, region = null }: { detail
           <Summary result={done} />
           <p>{t("im_next_fee")}</p>
           {serverErrors.length ? <p data-testid="import-server-errors">{t("im_err_n", { n: new Set(serverErrors.map((issue) => issue.line)).size })}</p> : null}
-          <div className="row" style={{ marginTop: 12 }}>
+          <div className="row wrap" data-testid="import-result-actions" style={{ marginTop: 12 }}>
             <Link className="btn" href="/m/properties" data-testid="import-go-props">
               {t("im_go_props")}
             </Link>
