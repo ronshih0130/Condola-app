@@ -46,11 +46,13 @@ test("synthetic notifications are independently read in four actual portals",asy
   const ticket=(await c.query<{id:string}>(`INSERT INTO maintenance_tickets(org_id,ticket_number,property_id,lease_id,title,status,reported_by_user,reported_by_contact_id,assigned_vendor_contact_id) VALUES($1,987654,$2,$3,'Synthetic','open',$4,$5,$6) RETURNING id::text`,[ORG_ID,l.property,l.lease,USERS.tenant,l.tenant,vendor])).rows[0].id;
   const token=newVendorToken();
   const job=(await c.query<{id:string;created_at:string}>(`INSERT INTO repair_vendor_jobs(org_id,ticket_id,vendor_name,vendor_phone,contact_window,token_hash,expires_at,vendor_contact_id) VALUES($1,$2,'Synthetic','+886900111222','day',$3,clock_timestamp()+interval '1 hour',$4) RETURNING id::text,created_at::text`,[ORG_ID,ticket,hashVendorToken(token),vendor])).rows[0];
+  await c.query('BEGIN');
   const source=(await c.query<{id:string;created_at:string}>(`INSERT INTO app.b010_source_events(org_id,lease_id,invoice_id,kind,occurrence_key,local_date) VALUES($1,$2,$3,'rent_due',$4,current_date) RETURNING id::text,created_at::text`,[ORG_ID,l.lease,l.invoice,randomUUID()])).rows[0];
   const bill=(await c.query<{id:string}>(`INSERT INTO app.b028_center_events(org_id,kind,b010_event_id,occurred_at) VALUES($1,'rent_due',$2,$3) RETURNING id::text`,[ORG_ID,source.id,source.created_at])).rows[0].id;
   const jobEvent=(await c.query<{id:string}>(`INSERT INTO app.b028_center_events(org_id,kind,ticket_id,job_id,occurred_at) VALUES($1,'vendor_job_assigned',$2,$3,$4) RETURNING id::text`,[ORG_ID,ticket,job.id,job.created_at])).rows[0].id;
   await c.query(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,member_id,contact_id,ticket_id,job_id) VALUES
     ($1,$2,'staff',$3,$4,NULL,NULL,NULL),($1,$2,'tenant',$5,NULL,$6,NULL,NULL),($1,$7,'owner',$8,NULL,$9,NULL,NULL),($1,$7,'vendor_job',NULL,NULL,NULL,$10,$11)`,[ORG_ID,bill,USERS.manager,member,USERS.tenant,l.tenant,jobEvent,USERS.owner,l.owner,ticket,job.id]);
+  await c.query('COMMIT');
   return {token,jobId:job.id,leaseId:l.lease};
  });
  try {

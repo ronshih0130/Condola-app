@@ -1,0 +1,24 @@
+{
+  "time_pt": "2026-10-30T05:24:34.493601-07:00",
+  "failed_candidate": "f1ad0bafa48aab320355566c185705d69919ef46",
+  "gate": "FAIL: RLSsyntheticabsence2BP01;otherchecksPASS,unit585/585; no waiver",
+  "fix": "test-onlyreminder-seed drops17resolutions before15children and17sources/provenancebefore12; initializesONLYownedclone independentofparentseed",
+  "corrected_test_blob": "56b140ae26ccc9d09b9cbd554144c47267d9c9ee",
+  "targeted": "2/2PASS +lint; firsttargetedattemptunseededfixture1FAIL retained, absencecasealreadyPASS",
+  "independent_review": "Astra scopedstaticPASS exacttest, rootexecutions attributed; newwholeSHA gate required",
+  "runtime_sql_change": "NONE",
+  "private_artifacts": {
+    "core90-seed-gate.log": {
+      "bytes": 456,
+      "sha256": "1a10016d541d87f8d2e4c32244045b3e028af6a36a48dee744dee4ceb5b4e700"
+    },
+    "core90-absence-fix.log": {
+      "bytes": 1261,
+      "sha256": "f2623d69f97ca16ff47d98192d9e3324a17059413f5580a21bda33b0ba30600f"
+    },
+    "core90-absence-fix-seeded.log": {
+      "bytes": 508,
+      "sha256": "9c669394bcb5ae2ecafe6bde530a8fbdbcf92ad15e26084a4bcb83bc31974ab7"
+    }
+  }
+}

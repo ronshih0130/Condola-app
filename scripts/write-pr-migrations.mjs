@@ -174,6 +174,10 @@ const added = {
     addOnly: false,
     reason: "Adds default-OFF private local notification and payment-transition tables with constraints, restricted gateways, deferred financial/event guards and legacy-writer fences; due-email personal preference alone defaults ON. No external delivery or historical backfill.",
   },
+  "supabase/migrations/20261031100217_b010_b028_source_foundation.sql": {
+    addOnly: false,
+    reason: "Adds private typed-source/provenance/resolution tables, extends the exact center source constraint and replaces guards/read predicates with backward-compatible typed branches; changes owner-only functions and grants no new application source authority. Existing source bytes unchanged; no backfill or production activation.",
+  },
   "supabase/migrations/20261031100215_b028_center_foundation.sql": {
     addOnly: false,
     reason: "Adds independent default-OFF private typed notification center events/entitlements/read markers/cursors and restricted authorization gateways, immutable/source guards and deferred expiry checks; no producer grant or historical backfill.",
