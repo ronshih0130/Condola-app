@@ -1,9 +1,11 @@
 # B-004 paper delivery checkpoint
 
-Updated: 2026-10-29T20:13:09.845466-07:00; branch mode-b-build; Ron/Codex.
+Updated: 2026-10-29T21:17:19.972187-07:00; branch mode-b-build; Ron/Codex.
 
-New100204 scopes direct tenant PDF reads to organization/environment pins, preserving unpinned live compatibility. Current/history labels follow the authoritative lease document pointer with the existing fallback. A new guard denies direct ordinary-role version updates/deletions, allowing genuine parent cascades after checking parent disappearance. Existing upload code appends versions and remains compatible. Download audit commits before delivery; audit failure returns private503 without bytes or attachment header and logs only a fixed sanitized error. No contract wording changed.
+New100204 scopes direct tenant PDF reads to organization/environment pins, preserving unpinned live compatibility. Current/history labels follow the authoritative document pointer. Direct ordinary-role version updates/deletions are denied; genuine parent cascades remain. Download audit commits before delivery; failure returns private503 without PDF bytes or attachment. No legal wording changed.
 
-Focused synthetic DB test1/1, download units6/6, type/lint PASS. Highest independent native static scope PASS on blobs in checks.json. No new feature activation: paper constantOFF; tenant app gate retains existing value while database global/org rollout stays controlled.
+Existing paper-version global control now reads exact runtime string true, with absent/malformed values OFF and the existing strict org opt-in still required. Local browser test process explicitly enables the global controls after validating an opted-in disposable target; product defaults remain OFF. Runtime units4/4 passed both OFF/ON environments, type/lint passed. Native highest-tier scoped runtime review PASS, with two assertion improvements applied.
 
-STOP POINT: local implementation prepared; next: actual protected-route browser/HTTP checks, combined candidate gate and staging; owner: Ron/Codex.
+Actual local core80 HTTP/browser1/1 passed upload/replacement/history/pointer, protected successful download/audit, unauthenticated/wrong-user/cross-org/sandbox denials, global/orgOFF and audit-failure503. Final immutable rerun is pending after stronger anonymous redirect assertion.
+
+STOP POINT: local candidate prepared; next: clean exact-candidate gate and actual HTTP/browser rerun, then authorized staging-side schema handoff; owner: Ron/Codex. Staging and independent Claude ClassB acceptance remain pending.

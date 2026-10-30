@@ -23,7 +23,7 @@
     "cf:build": "opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion",
     "test:worker": "tsx --test --test-timeout=180000 src/server/id-worker.integration.test.ts",
     "cf:deploy:staging": "bash scripts/cf-deploy-staging.sh",
-    "test:e2e": "playwright test",
+    "test:e2e": "node --import tsx scripts/run-e2e.ts",
     "licenses:generate": "node scripts/third-party-licenses.mjs",
     "licenses:check": "node scripts/third-party-licenses.mjs --check",
     "licenses:vendor": "node scripts/third-party-licenses.mjs --vendor",

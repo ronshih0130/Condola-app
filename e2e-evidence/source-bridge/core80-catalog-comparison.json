@@ -1,0 +1,27 @@
+{
+  "scope": "public/app logical catalog; same private PostgreSQL16 cluster",
+  "migrations": 80,
+  "fresh_vs_supported_upgrade_equal": false,
+  "equal_categories": [
+    "enums",
+    "views",
+    "columns",
+    "indexes",
+    "policies",
+    "functions",
+    "relations",
+    "constraints",
+    "schema_privileges",
+    "default_privileges"
+  ],
+  "different_categories": [
+    "triggers"
+  ],
+  "exclusions": [
+    "provider-owned auth schema",
+    "physical column order",
+    "sequence counter values",
+    "cluster-global role state"
+  ],
+  "logical_sha256": "36ebc1cf9c0ab9c80ad055a679c09328ddae5c5b004362f48c36a18e0502d5fa"
+}

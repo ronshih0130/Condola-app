@@ -50,3 +50,13 @@ Local prerequisite checkpoint: gate2e37631 unit524/524 PASS; RLS stopped at obso
 2026-10-29T19:22:52.822831-07:00: Ron approved B007 named CHECK replacement for local/staging only per outputs/B007-schema-decision.txt, preserving OFF behavior and original data/history; record in BLOCKED. B007 now eligible after preceding integrated fixes; no production scope.
 
 2026-10-29T20:11:48.623343-07:00 B002 backend native scopedPASS, local4+1testsPASS; fixes date provenance, actor audit, lease/purge race and explicitTaipei policy clock. Historicalunknown held, no backfill. Currentmirror sync of Origin main/bootstrap/build readbackPASS atf34ff9b; mainunchanged. Newcombinedgate stillPENDING.
+
+## Active core80 checkpoint 2026-10-29T21:17:19.972187-07:00
+
+Integration branch mode-b-build includes B001 security, B002 provenance/retention/race and prospective legacy-open correction, B003 audited gateway/consent/UI, B004 delivery boundary and runtime default-OFF configuration, B007 regional CHECK exception. Main/bootstrap refs unchanged. Highest native scoped reviews do not replace independent Claude ClassB QA. B005 invitation completion decision resolved by Ron: accepted/current binding; audited explicit no-invitations skip. Its isolated candidate is under independent review. B008 preparation is isolated and unreviewed.
+
+Fresh80 versus untouched71+9 upgrade logical catalog PASS across11categories and counts2/4/5/1 preserved. Earlier contaminated-template comparison FAIL retained; not waived. Staging read-only catalog reports required new schema absent, so no deployment/migration attempted. Mac DB migrations remain forbidden. Staging REST200 service-role connectivity is valid; no new key bundle needed.
+
+Private GitHub mirror wrapper completed at2026-10-29T21:00:29-0700 after Origin pushes, including core2c3bff5, payee20e305f and ops-lockb3ede2a. Stage/prod claims remain RELEASED. App quota/reset unknown. No real outbound messages, prod access or legal-copy edits.
+
+STOP POINT: repo ACTIVE B/Ron; next: immutable core80 candidate gate on a new owned local clone, build/HTTP acceptance, while independent onboarding review and isolated B008 preparation continue; owner: Ron/Codex. Full39-item goal remains active and incomplete.

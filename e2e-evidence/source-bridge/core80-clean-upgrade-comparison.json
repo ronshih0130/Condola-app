@@ -1,0 +1,31 @@
+{
+  "scope": "fresh80 versus untouched old32+39 upgrade +9 source files",
+  "catalog_equal": true,
+  "categories": [
+    "columns",
+    "constraints",
+    "default_privileges",
+    "enums",
+    "functions",
+    "indexes",
+    "policies",
+    "relations",
+    "schema_privileges",
+    "triggers",
+    "views"
+  ],
+  "different_categories": [],
+  "synthetic_counts_before": {
+    "orgs": 2,
+    "properties": 4,
+    "leases": 5,
+    "payments": 1
+  },
+  "synthetic_counts_after": {
+    "orgs": 2,
+    "properties": 4,
+    "leases": 5,
+    "payments": 1
+  },
+  "superseded_fixture": "earlier upgrade_pristine template was contaminated by historical test trigger replay; original71 baseline retains moved_out refresh trigger"
+}

@@ -1,0 +1,12 @@
+{
+  "scope": "staging read-only catalog presence; no application/customer rows read",
+  "objects": {
+    "b002_provenance_column": false,
+    "b003_audited_gateway": false,
+    "b003_assignment_guard": false,
+    "b004_version_guard": false,
+    "b007_resolver": false,
+    "old_universal_deposit_check": true
+  },
+  "candidate_compatibility": "NOT_PROVEN_BY_PRESENCE_CHECK"
+}

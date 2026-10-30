@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  PAPER_LEASE_VERSIONS_ENABLED,
+  paperLeaseVersionsGlobalEnabled,
   paperLeaseVersionsOn,
   validatePaperLeaseReason,
 } from "./paper-lease-versions-rules";
 
+test("the global switch accepts only the exact configured true string", () => {
+  assert.equal(paperLeaseVersionsGlobalEnabled("true"), true);
+  for (const value of [undefined, null, false, true, 1, "", "false", "TRUE", " true ", "1"]) {
+    assert.equal(paperLeaseVersionsGlobalEnabled(value), false);
+  }
+});
+
 test("paper versions require the global switch and strict boolean org opt-in", () => {
-  assert.equal(PAPER_LEASE_VERSIONS_ENABLED, false);
+  assert.equal(paperLeaseVersionsGlobalEnabled(undefined), false);
   assert.equal(paperLeaseVersionsOn(false, { paper_lease_versions: true }), false);
   assert.equal(paperLeaseVersionsOn(true, { paper_lease_versions: true }), true);
   for (const flags of [
@@ -29,7 +36,7 @@ test("the default switch keeps the legacy panel path regardless of org opt-in", 
     { paper_lease_versions: "true" },
     { paper_lease_versions: 1 },
   ]) {
-    assert.equal(paperLeaseVersionsOn(PAPER_LEASE_VERSIONS_ENABLED, flags), false);
+    assert.equal(paperLeaseVersionsOn(paperLeaseVersionsGlobalEnabled(undefined), flags), false);
   }
 });
 

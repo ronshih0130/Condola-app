@@ -16,3 +16,5 @@ Updated: 2026-10-29T20:46:40.803623-07:00. Coordinator: Ron/Codex. Repo ownershi
 Source refs preserved on Origin; mode-b-payee-prep is recovery work in the same train. Historical SQL files remain byte-exact. B007 named CHECK exception is Ron-approved for local/staging only. No production, real outbound messages or legal-copy edits.
 
 B008 calculator/utility/discrepancy plan reconciled; implementation will use a separate preparation worktree while this candidate is verified, with shared-file changes integrated serially.
+
+B008 preparation reservation: mode-b-billing-prep starts from pushed core80 checkpoint2c3bff5. Reserve new statement-calculation/read-preview modules, narrow generateStatement extraction in domain.ts, statement preview/form/action paths, dedicated bilingual lane strings and tests. Utility conservation/partial-month/discrepancy scope remains in B008; no invented monetary threshold. No concurrent agent owns these source sections. Root serializes shared registrations and final merge.

@@ -1,5 +1,9 @@
 /** Global kill switch. Org opt-in alone never enables this feature. */
-export const PAPER_LEASE_VERSIONS_ENABLED = false;
+export function paperLeaseVersionsGlobalEnabled(value: unknown): boolean {
+  return value === "true";
+}
+
+export const PAPER_LEASE_VERSIONS_ENABLED = paperLeaseVersionsGlobalEnabled(process.env.PAPER_LEASE_VERSIONS_ENABLED);
 
 export function paperLeaseVersionsOn(killSwitch: boolean, featureFlags: unknown): boolean {
   if (killSwitch !== true || !featureFlags || typeof featureFlags !== "object" || Array.isArray(featureFlags)) {
