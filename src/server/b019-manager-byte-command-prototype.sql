@@ -109,6 +109,32 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_member_guard() FROM PUBLIC,anon,authenticated,service_role;
 CREATE TRIGGER b019_byte_probe_member_guard BEFORE INSERT OR UPDATE OR DELETE ON public.org_members FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_member_guard();
+-- Clone-only lease/contact identity guards; payer principal issuance remains separate.
+CREATE FUNCTION app.b019_byte_probe_lease_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
+ IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND o.lease=OLD.id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND o.lease=NEW.id)) THEN RAISE EXCEPTION 'byte lease sealed' USING ERRCODE='23514';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_byte_probe_lease_guard() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_byte_probe_lease_guard BEFORE INSERT OR UPDATE OR DELETE ON public.leases FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_lease_guard();
+CREATE FUNCTION app.b019_byte_probe_contact_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
+ IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND o.payer=OLD.id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND o.payer=NEW.id)) THEN RAISE EXCEPTION 'byte payer contact sealed' USING ERRCODE='23514';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_byte_probe_contact_guard() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_byte_probe_contact_guard BEFORE INSERT OR UPDATE OR DELETE ON public.contacts FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_contact_guard();
+-- Clone-only whole-lease party absence guard.
+CREATE FUNCTION app.b019_byte_probe_party_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
+ IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND o.lease=OLD.lease_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND o.lease=NEW.lease_id)) THEN RAISE EXCEPTION 'byte lease party scope sealed' USING ERRCODE='23514';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_byte_probe_party_guard() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_byte_probe_party_guard BEFORE INSERT OR UPDATE OR DELETE ON public.lease_parties FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_party_guard();
 CREATE FUNCTION app.b019_byte_probe_begin(p_org uuid,p_live uuid,p_env text,p_session uuid,p_lease_text text,p_role text,p_request uuid,p_bytes bytea)
 RETURNS TABLE(disposition text,payment_id uuid) LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
 DECLARE actor uuid:=auth.uid(); j jsonb; lease uuid; amount bigint; paid date; dg text; rawdg text; l5dg text; refdg text; old app.b019_byte_probe_op%ROWTYPE; p uuid; v_lease uuid; st text; email boolean; center boolean; property uuid; currency text; payer uuid; aliases integer;v_last5 public.payments.payer_account_last5%TYPE;
