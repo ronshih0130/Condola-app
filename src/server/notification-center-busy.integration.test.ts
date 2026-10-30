@@ -102,7 +102,7 @@ test("session touch contention returns busy, preserves unread, and reauthorizes 
     const vendorRecipient=(await c.query<{id:string}>(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,ticket_id,job_id)
       VALUES($1,$2,'vendor_job',$3,$4) RETURNING id::text`,[ORG_ID,vendorEvent.id,ticket,job.id])).rows[0];
     const vendorRequest=(id:string,rawToken:string,origin="http://127.0.0.1:43123")=>new Request("http://127.0.0.1:43123/api/notification-center/vendor-mark",{
-      method:"POST",headers:{origin,"content-type":"application/json"},body:JSON.stringify({recipientId:id,token:rawToken}),
+      method:"POST",headers:{origin,host:"127.0.0.1:43123","content-type":"application/json"},body:JSON.stringify({recipientId:id,token:rawToken}),
     });
     assert.equal((await vendorMarkPost(vendorRequest(vendorRecipient.id,token,"http://other.example.test"))).status,403);
     assert.equal((await vendorMarkPost(vendorRequest(vendorRecipient.id,newVendorToken()))).status,404);
