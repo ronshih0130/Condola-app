@@ -11,6 +11,7 @@ REVOKE ALL ON app.b019_byte_probe_permit FROM PUBLIC,anon,authenticated,service_
 CREATE FUNCTION app.b019_byte_probe_private_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE p text;
 BEGIN
+ LOCK TABLE app.b019_byte_probe_op,app.b019_byte_probe_permit IN ACCESS SHARE MODE NOWAIT;
  SELECT purpose INTO p FROM app.b019_byte_probe_permit WHERE xid=pg_current_xact_id();
  IF TG_TABLE_NAME='b019_byte_probe_op' THEN
   IF TG_OP='INSERT' AND p='begin' AND NEW.xid=pg_current_xact_id() AND NEW.phase='begun' THEN RETURN NEW; END IF;
@@ -31,6 +32,7 @@ REVOKE ALL ON FUNCTION app.b019_byte_probe_never_commit() FROM PUBLIC,anon,authe
 CREATE CONSTRAINT TRIGGER b019_byte_probe_never_commit AFTER INSERT ON app.b019_byte_probe_op DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_never_commit();
 CREATE FUNCTION app.b019_byte_probe_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
+ LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
  IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op x WHERE x.xid=pg_current_xact_id() AND x.phase='stored' AND x.org=OLD.org_id AND ((x.actor=OLD.actor_id AND x.request=OLD.request_id) OR x.payment=OLD.payment_id)))
  OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op x WHERE x.xid=pg_current_xact_id() AND x.phase='stored' AND x.org=NEW.org_id AND ((x.actor=NEW.actor_id AND x.request=NEW.request_id) OR x.payment=NEW.payment_id))) THEN RAISE EXCEPTION 'byte command sealed' USING ERRCODE='23514'; END IF;
  IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
@@ -40,6 +42,7 @@ CREATE TRIGGER b019_byte_probe_guard BEFORE INSERT OR UPDATE OR DELETE ON app.b0
 -- Clone-only partial guard: current-XID stored operation and its captured invoice cohort.
 CREATE FUNCTION app.b019_byte_probe_allocation_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
+ LOCK TABLE app.b019_byte_probe_op,app.b019_post_probe_invoice IN ACCESS SHARE MODE NOWAIT;
  IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND (o.payment=OLD.payment_id OR EXISTS(SELECT 1 FROM app.b019_post_probe_invoice i WHERE i.xid=o.xid AND i.invoice=OLD.invoice_id))))
  OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND (o.payment=NEW.payment_id OR EXISTS(SELECT 1 FROM app.b019_post_probe_invoice i WHERE i.xid=o.xid AND i.invoice=NEW.invoice_id)))) THEN RAISE EXCEPTION 'byte allocation sealed' USING ERRCODE='23514'; END IF;
  IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
@@ -49,6 +52,7 @@ CREATE TRIGGER b019_byte_probe_allocation_guard BEFORE INSERT OR UPDATE OR DELET
 -- Clone-only partial OLD/NEW guards for captured lines and payment identities.
 CREATE FUNCTION app.b019_byte_probe_line_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
+ LOCK TABLE app.b019_byte_probe_op,app.b019_post_probe_invoice IN ACCESS SHARE MODE NOWAIT;
  IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN app.b019_post_probe_invoice i ON i.xid=o.xid WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND i.invoice=OLD.invoice_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN app.b019_post_probe_invoice i ON i.xid=o.xid WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND i.invoice=NEW.invoice_id)) THEN RAISE EXCEPTION 'byte invoice line sealed' USING ERRCODE='23514';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
 END $$;
@@ -56,6 +60,7 @@ REVOKE ALL ON FUNCTION app.b019_byte_probe_line_guard() FROM PUBLIC,anon,authent
 CREATE TRIGGER b019_byte_probe_line_guard BEFORE INSERT OR UPDATE OR DELETE ON public.invoice_lines FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_line_guard();
 CREATE FUNCTION app.b019_byte_probe_payment_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
+ LOCK TABLE app.b019_byte_probe_op,app.b019_post_probe_old_alloc IN ACCESS SHARE MODE NOWAIT;
  IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND (o.payment=OLD.id OR EXISTS(SELECT 1 FROM app.b019_post_probe_old_alloc a WHERE a.xid=o.xid AND a.payment=OLD.id)))) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND (o.payment=NEW.id OR EXISTS(SELECT 1 FROM app.b019_post_probe_old_alloc a WHERE a.xid=o.xid AND a.payment=NEW.id)))) THEN RAISE EXCEPTION 'byte payment sealed' USING ERRCODE='23514';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
 END $$;
@@ -64,6 +69,7 @@ CREATE TRIGGER b019_byte_probe_payment_guard BEFORE INSERT OR UPDATE OR DELETE O
 -- Clone-only post-store candidate scope; capture-to-store revalidation remains separate.
 CREATE FUNCTION app.b019_byte_probe_invoice_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
+ LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
  IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND o.lease=OLD.lease_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND o.lease=NEW.lease_id)) THEN RAISE EXCEPTION 'byte invoice scope sealed' USING ERRCODE='23514';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
 END $$;
@@ -72,6 +78,7 @@ CREATE TRIGGER b019_byte_probe_invoice_guard BEFORE INSERT OR UPDATE OR DELETE O
 -- Clone-only helper-ledger guards. Operation payment is already protected after stored.
 CREATE FUNCTION app.b019_byte_probe_ledger_tx_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
 BEGIN
+ LOCK TABLE app.b019_byte_probe_op,public.payments IN ACCESS SHARE MODE NOWAIT;
  IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN public.payments p ON p.org_id=o.org AND p.id=o.payment WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND (OLD.id=p.ledger_transaction_id OR (OLD.source_table='payments' AND OLD.source_id=o.payment) OR OLD.reverses_transaction_id=p.ledger_transaction_id))) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN public.payments p ON p.org_id=o.org AND p.id=o.payment WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND (NEW.id=p.ledger_transaction_id OR (NEW.source_table='payments' AND NEW.source_id=o.payment) OR NEW.reverses_transaction_id=p.ledger_transaction_id))) THEN RAISE EXCEPTION 'byte ledger header sealed' USING ERRCODE='23514';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
 END $$;
@@ -79,11 +86,29 @@ REVOKE ALL ON FUNCTION app.b019_byte_probe_ledger_tx_guard() FROM PUBLIC,anon,au
 CREATE TRIGGER b019_byte_probe_ledger_tx_guard BEFORE INSERT OR UPDATE OR DELETE ON public.ledger_transactions FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_ledger_tx_guard();
 CREATE FUNCTION app.b019_byte_probe_ledger_entry_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
 BEGIN
+ LOCK TABLE app.b019_byte_probe_op,public.payments IN ACCESS SHARE MODE NOWAIT;
  IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN public.payments p ON p.org_id=o.org AND p.id=o.payment WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=OLD.org_id AND p.ledger_transaction_id=OLD.transaction_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN public.payments p ON p.org_id=o.org AND p.id=o.payment WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.org=NEW.org_id AND p.ledger_transaction_id=NEW.transaction_id)) THEN RAISE EXCEPTION 'byte ledger entry sealed' USING ERRCODE='23514';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
 END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_ledger_entry_guard() FROM PUBLIC,anon,authenticated,service_role;
 CREATE TRIGGER b019_byte_probe_ledger_entry_guard BEFORE INSERT OR UPDATE OR DELETE ON public.ledger_entries FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_ledger_entry_guard();
+-- Clone-only session/member scope guards; every firing writer uses NOWAIT private admission.
+CREATE FUNCTION app.b019_byte_probe_session_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
+ IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.session_id=OLD.id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.session_id=NEW.id)) THEN RAISE EXCEPTION 'byte session sealed' USING ERRCODE='23514';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_byte_probe_session_guard() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_byte_probe_session_guard BEFORE INSERT OR UPDATE OR DELETE ON public.auth_sessions FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_session_guard();
+CREATE FUNCTION app.b019_byte_probe_member_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
+ IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.live_org=OLD.org_id AND o.actor=OLD.user_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.live_org=NEW.org_id AND o.actor=NEW.user_id)) THEN RAISE EXCEPTION 'byte member sealed' USING ERRCODE='23514';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_byte_probe_member_guard() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_byte_probe_member_guard BEFORE INSERT OR UPDATE OR DELETE ON public.org_members FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_member_guard();
 CREATE FUNCTION app.b019_byte_probe_begin(p_org uuid,p_live uuid,p_env text,p_session uuid,p_lease_text text,p_role text,p_request uuid,p_bytes bytea)
 RETURNS TABLE(disposition text,payment_id uuid) LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
 DECLARE actor uuid:=auth.uid(); j jsonb; lease uuid; amount bigint; paid date; dg text; rawdg text; l5dg text; refdg text; old app.b019_byte_probe_op%ROWTYPE; p uuid; v_lease uuid; st text; email boolean; center boolean; property uuid; currency text; payer uuid; aliases integer;v_last5 public.payments.payer_account_last5%TYPE;
