@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { RepairPhotos } from "@/components/repair-photos";
+import { makeT } from "@/i18n";
+import { can } from "@/server/perms";
 import { FlowError } from "./errors";
 import {
   EXPENSE_STATUSES,
@@ -18,21 +23,56 @@ import {
   ticketPhotoPaths,
   parseOptionalDate,
   parseOptionalMoney,
+  sniffHeic,
   sniffPhotoMime,
+  tenantCancelAllowed,
   ticketPhotoPath,
 } from "./repair-rules";
-import { confirmTicketPhoto, discardUploadAllowed, issueUploadGrant, uploadGrantMatches } from "./ticket-photos";
+import { confirmTicketPhoto, discardUploadAllowed, issueUploadGrant, ticketPhotoResponse, uploadGrantMatches } from "./ticket-photos";
 import type { Session } from "./types";
 
 const root = new URL("../../", import.meta.url);
+
+test("photo GET hides expected access failures and preserves redirects and server errors", async () => {
+  for (const key of ["errors.forbidden", "errors.notFound"]) {
+    const response = await ticketPhotoResponse(async () => {
+      throw new FlowError(key);
+    });
+    assert.equal(response.status, 404);
+    assert.equal(await response.text(), "Not found");
+  }
+
+  const missing = await ticketPhotoResponse(async () => null);
+  assert.equal(missing.status, 404);
+  assert.equal(await missing.text(), "Not found");
+
+  for (const error of [new Error("storage unavailable"), new FlowError("errors.photoStorage")]) {
+    await assert.rejects(
+      ticketPhotoResponse(async () => {
+        throw error;
+      }),
+      (caught: unknown) => caught === error,
+    );
+  }
+
+  const url = "https://storage.example/photo.jpg";
+  const response = await ticketPhotoResponse(async () => ({ url }));
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), url);
+});
 
 test("photo rules cap size and type and never describe a re-encode", () => {
   const ok = assertPhotoMeta({ fileName: "浴室.jpg", mime: "image/jpeg", size: 1200 });
   assert.equal(ok.mime, "image/jpeg");
   assert.equal(ok.size, 1200);
-  assert.throws(() => assertPhotoMeta({ fileName: "a.heic", mime: "image/heic", size: 100 }), (error: unknown) => {
-    return error instanceof FlowError && error.key === "errors.photoType";
-  });
+  for (const input of [
+    { fileName: "a.jpg", mime: "image/heic", size: 100 },
+    { fileName: "a.jpg", mime: "image/heif", size: 100 },
+    { fileName: "a.heic", mime: "image/jpeg", size: 100 },
+    { fileName: "a.HEIF", mime: "image/jpeg", size: 100 },
+  ]) {
+    assert.throws(() => assertPhotoMeta(input), (error: unknown) => error instanceof FlowError && error.key === "errors.photoHeic");
+  }
   assert.throws(() => assertPhotoMeta({ fileName: "a.jpg", mime: "image/jpeg", size: PHOTO_MAX_BYTES + 1 }), (error: unknown) => {
     return error instanceof FlowError && error.key === "errors.photoSize";
   });
@@ -44,6 +84,13 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   webp.set([0x52, 0x49, 0x46, 0x46], 0);
   webp.set([0x57, 0x45, 0x42, 0x50], 8);
   assert.equal(sniffPhotoMime(webp), "image/webp");
+  const png = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+  for (const [header, mime] of [[jpeg, "image/jpeg"], [png, "image/png"], [webp, "image/webp"]] as const) {
+    assert.deepEqual(
+      acceptPhotoObject({ size: 40, mime: "application/octet-stream", header }, mime),
+      { size: 40, mime },
+    );
+  }
   assert.equal(sniffPhotoMime(Uint8Array.of(0x47, 0x49, 0x46, 0x38, 0x39, 0x61)), null);
   assert.throws(
     () => acceptPhotoObject({ size: 40, mime: "image/jpeg", header: Uint8Array.of(0x25, 0x50, 0x44, 0x46) }, "image/jpeg"),
@@ -79,7 +126,7 @@ test("photo rules cap size and type and never describe a re-encode", () => {
 
   const server = readFileSync(new URL("./ticket-photos.ts", import.meta.url), "utf8");
   const client = readFileSync(new URL("../components/ticket-photos.tsx", import.meta.url), "utf8");
-  const view = readFileSync(new URL("../components/repair-thread.tsx", import.meta.url), "utf8");
+  const view = readFileSync(new URL("../components/repair-photos.tsx", import.meta.url), "utf8");
   for (const source of [server, client, view]) {
     assert.equal(source.includes("sharp"), false);
     assert.equal(source.includes("createImageBitmap"), false);
@@ -92,6 +139,21 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   assert.doesNotMatch(client, /FormData/);
   assert.doesNotMatch(client, /\/api\/tickets\/photos"/);
   assert.match(client, /sniffPhotoMime/);
+  assert.match(client, /sniffHeic/);
+  assert.match(client, /body: file/);
+  assert.doesNotMatch(client, /heicToJpeg/);
+  assert.match(server, /ensureJpegObject/);
+  assert.equal(tenantCancelAllowed("open"), true);
+  assert.equal(tenantCancelAllowed("assigned"), false);
+  assert.equal(tenantCancelAllowed("triaged"), false);
+  const heic = new Uint8Array(12);
+  heic.set([0, 0, 0, 12, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]);
+  assert.equal(sniffHeic(heic), true);
+  assert.equal(sniffHeic(Uint8Array.of(0xff, 0xd8, 0xff)), false);
+  assert.throws(
+    () => acceptPhotoObject({ size: 40, mime: "image/jpeg", header: heic }, "image/jpeg"),
+    (error: unknown) => error instanceof FlowError && error.key === "errors.photoHeic",
+  );
   assert.match(server, /bytes=0-/);
   assert.match(server, /AbortSignal\.timeout/);
   assert.match(server, /object\/info/);
@@ -105,6 +167,60 @@ test("photo rules cap size and type and never describe a re-encode", () => {
   assert.match(view, /\/api\/tickets\/photos\//);
   assert.match(view, /repair-photo-preview/);
   assert.doesNotMatch(view, /from "next\/image"/);
+});
+
+test("HEIC conversion failures and server rejections show the specific HEIC message", () => {
+  const client = readFileSync(new URL("../components/ticket-photos.tsx", import.meta.url), "utf8");
+  assert.match(client, /await heicFileToJpeg\(file\);[\s\S]*?\} catch \{\s*setError\(messages\.heic\);\s*return;\s*\}/);
+  assert.doesNotMatch(client, /photoFailed\(messages,\s*[^,]+,\s*messages\.heic\)/);
+  assert.match(client, /if \(key === "errors\.photoHeic"\) return messages\.heic;/);
+});
+
+test("HEIC decoding stays behind a browser event and is excluded from server bundles", () => {
+  const sources = (dir: URL): URL[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
+    return entry.isDirectory() ? sources(path) : /\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+  const decoderImport = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)["'](?:heic-convert(?:\/[^"']*)?|heic-decode(?:\/[^"']*)?|libheif-js(?:\/[^"']*)?|\.\/heic-jpeg)["']/;
+  for (const dir of ["src/server/", "src/app/"]) {
+    for (const path of sources(new URL(dir, root))) {
+      assert.doesNotMatch(readFileSync(path, "utf8"), decoderImport, path.pathname);
+    }
+  }
+  assert.equal(existsSync(new URL("./heic-jpeg.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("./heic-convert.d.ts", import.meta.url)), false);
+  for (const path of sources(new URL("src/", root))) {
+    assert.doesNotMatch(
+      readFileSync(path, "utf8"),
+      /(?:\bfrom\s*|\bimport\s*|\bimport\s+\w+\s*=\s*require\s*\(\s*)["']heic-convert(?:\/[^"']*)?["']/,
+      path.pathname,
+    );
+  }
+  const browser = readFileSync(new URL("src/lib/heic-browser.ts", root), "utf8");
+  assert.match(browser, /async function heicFileToJpeg\(file: File\): Promise<File>/);
+  assert.match(browser, /await import\(\s*\/\*\s*webpackIgnore:\s*true\s*\*\/\s*LIBHEIF_ASSET\.path\s*\)/);
+  assert.match(browser, /await import\("heic-decode\/lib\.js"\)/);
+  assert.match(browser, /await import\("heic-convert\/formats-browser\.js"\)/);
+  assert.match(browser, /await import\("heic-convert\/lib\.js"\)/);
+  assert.doesNotMatch(browser, /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)(?:\/\*[\s\S]*?\*\/\s*)*["'](?:heic-convert\/browser|heic-decode|libheif-js)["']/);
+  assert.match(browser, /sniffPhotoMime/);
+  assert.match(browser, /PHOTO_MAX_BYTES/);
+  const client = readFileSync(new URL("src/components/ticket-photos.tsx", root), "utf8");
+  assert.doesNotMatch(client, /heicToJpeg/);
+  assert.match(client, /sniffHeic/);
+  assert.match(client, /async function onChange[\s\S]*await heicFileToJpeg\(file\)/);
+  assert.doesNotMatch(client, /"content-type":\s*heic/);
+  const config = readFileSync(new URL("next.config.ts", root), "utf8");
+  assert.match(config, /webpack:\s*\(config,\s*\{\s*isServer\s*\}\)/);
+  for (const name of ["heic-convert", "heic-convert/browser", "heic-decode", "libheif-js"]) {
+    assert.ok(
+      config.includes(`"${name}": false`),
+      `${name} must be excluded from server bundles`,
+    );
+  }
+  assert.match(config, /if \(isServer\)\s*\{\s*config\.resolve\.alias\s*=\s*\{[^}]*"heic-convert": false[^}]*"heic-convert\/browser": false[^}]*"heic-decode": false[^}]*"libheif-js": false/);
+  const vendor = readFileSync(new URL("./vendor-repair.ts", import.meta.url), "utf8");
+  assert.match(vendor, /const DISCARD = new Set\(\[[^\]]*"errors\.photoHeic"/);
 });
 
 test("dates, money, vendor, and the expense link stay optional", () => {
@@ -196,7 +312,7 @@ test("the repair migration follows 20261023090000 and posts only a draft link", 
   assert.match(repairs, /does not write/);
   assert.doesNotMatch(repairs, /INSERT INTO ticket_attachments \([^)]*content/);
   const photoRoute = readFileSync(new URL("../app/api/tickets/photos/[id]/route.ts", import.meta.url), "utf8");
-  assert.match(photoRoute, /NextResponse\.redirect/);
+  assert.match(photoRoute, /return ticketPhotoResponse\(\(\) => openTicketPhoto\(session, id\)\)/);
   assert.doesNotMatch(photoRoute, /photo\.bytes/);
   assert.equal(existsSync(new URL("../app/api/tickets/photos/route.ts", import.meta.url)), false);
   const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
@@ -305,6 +421,23 @@ test("confirm returns an attached photo and deletes only an unattached upload is
           target,
           existing: async () => null,
           info: async () => ({ ok: true, size: 40, mime: "image/jpeg" }),
+          header: async () => Uint8Array.of(0, 0, 0, 12, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63),
+          remove,
+        },
+      ),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.photoHeic",
+    );
+    assert.deepEqual(removed, [path]);
+
+    removed.length = 0;
+    await assert.rejects(
+      confirmTicketPhoto(
+        session,
+        { ticketId, path, fileName: "a.jpg", mime: "image/jpeg", size: 40, internal: false, uploadToken: token },
+        {
+          target,
+          existing: async () => null,
+          info: async () => ({ ok: true, size: 40, mime: "image/jpeg" }),
           header: async () => {
             throw new FlowError("errors.photoStorage");
           },
@@ -342,4 +475,102 @@ test("confirm returns an attached photo and deletes only an unattached upload is
     if (previous === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = previous;
   }
+});
+
+test("RepairPhotos hides accountant photos behind one permission notice", () => {
+  const t = makeT("zh-TW");
+  const canView = can("accountant", "tickets.update");
+  assert.equal(canView, false);
+  const photos = [
+    { id: "photo-1", name: "one.jpg", internal: false },
+    { id: "photo-2", name: "two.jpg", internal: true },
+    { id: "photo-3", name: "three.jpg", internal: false },
+  ];
+  const html = renderToStaticMarkup(React.createElement(RepairPhotos, { photos, canView, t }));
+
+  assert.equal(html.split("無權限查看照片").length - 1, 1);
+  assert.equal((html.match(/data-testid="repair-photo-noperm"/g) ?? []).length, 1);
+  for (const forbidden of ["<img", "/api/tickets/photos", "<button", "<a "]) {
+    assert.equal(html.includes(forbidden), false, forbidden);
+  }
+});
+
+test("RepairPhotos renders two admin photo previews", () => {
+  const t = makeT("zh-TW");
+  const canView = can("admin", "tickets.update");
+  assert.equal(canView, true);
+  const photos = [
+    { id: "admin-photo-1", name: "one.jpg", internal: false },
+    { id: "admin-photo-2", name: "two.jpg", internal: true },
+  ];
+  const html = renderToStaticMarkup(React.createElement(RepairPhotos, { photos, canView, t }));
+  const images = html.match(/<img\b[^>]*>/g) ?? [];
+
+  assert.equal(images.length, 2);
+  for (const [index, photo] of photos.entries()) {
+    assert.ok(images[index].includes(`src="/api/tickets/photos/${photo.id}"`));
+    assert.ok(images[index].includes('data-testid="repair-photo-preview"'));
+  }
+  assert.equal(html.includes("無權限查看照片"), false);
+  assert.equal(html.includes("repair-photo-noperm"), false);
+});
+
+for (const role of ["manager", "maintenance"] as const) {
+  test(`RepairPhotos renders thumbnails for ${role}`, () => {
+    const t = makeT("zh-TW");
+    const canView = can(role, "tickets.update");
+    assert.equal(canView, true);
+    const photos = [
+      { id: `${role}-photo`, name: "repair.jpg", internal: false },
+    ];
+    const html = renderToStaticMarkup(React.createElement(RepairPhotos, { photos, canView, t }));
+    const images = html.match(/<img\b[^>]*>/g) ?? [];
+
+    assert.equal(images.length, 1);
+    assert.ok(images[0].includes(`src="/api/tickets/photos/${photos[0].id}"`));
+    assert.ok(images[0].includes('data-testid="repair-photo-preview"'));
+    assert.equal(html.includes("repair-photo-noperm"), false);
+  });
+}
+
+for (const canView of [true, false]) {
+  test(`RepairPhotos renders the empty state with canView=${canView}`, () => {
+    const t = makeT("zh-TW");
+    const html = renderToStaticMarkup(
+      React.createElement(RepairPhotos, { photos: [], canView, t }),
+    );
+
+    assert.notEqual(t("i_repair_none"), "i_repair_none");
+    assert.ok(html.includes(t("i_repair_none")));
+    assert.equal(html.includes("<img"), false);
+    assert.equal(html.includes("repair-photo-noperm"), false);
+    assert.equal(html.includes(t("i_repair_photo_noperm")), false);
+  });
+}
+
+test("RepairPhotos shows the English permission notice for accountants", () => {
+  const t = makeT("en");
+  const canView = can("accountant", "tickets.update");
+  assert.equal(canView, false);
+  const photos = [{ id: "english-photo", name: "repair.jpg", internal: false }];
+  const html = renderToStaticMarkup(React.createElement(RepairPhotos, { photos, canView, t }));
+
+  assert.ok(html.includes("No permission to view photos"));
+  assert.equal(html.includes("<img"), false);
+});
+
+test("repair page wires photo permissions and thread delegates photo rendering", () => {
+  const page = readFileSync(new URL("../app/m/tickets/[id]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /canViewPhotos=\{can\(session\.role, "tickets\.update"\)\}/);
+
+  const thread = readFileSync(new URL("../components/repair-thread.tsx", import.meta.url), "utf8");
+  assert.ok(thread.includes("<RepairPhotos"));
+  assert.equal(thread.includes("<img"), false);
+});
+
+test("Traditional Chinese photo permission notice has the expected translation", () => {
+  const dictionary = JSON.parse(
+    readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8"),
+  );
+  assert.equal(dictionary.i_repair_photo_noperm, "無權限查看照片");
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -110,13 +110,17 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
   assert.equal(zh.i_dash_sample, "先看看範例公司");
   assert.equal(zh.i_login_invite_lead, "還沒有帳號？");
   assert.equal(zh.i_login_signup, "免費註冊");
-  assert.equal(zh.i_login_invite_tail, "（前 4 戶永遠免費，可先看範例公司）");
-  assert.equal(`${zh.i_login_invite_lead}${zh.i_login_signup}${zh.i_login_invite_tail}`, "還沒有帳號？免費註冊（前 4 戶永遠免費，可先看範例公司）");
-  assert.equal(zh.i_nav_inbox, "繳款紀錄");
+  assert.equal(zh.i_login_invite_tail, undefined);
+  assert.equal(zh.i_login_invite, "還沒有帳號？免費註冊");
+  assert.equal(`${zh.i_login_invite_lead}${zh.i_login_signup}`, "還沒有帳號？免費註冊");
+  const en = JSON.parse(read(join(root, "src/i18n/en.json"))) as Record<string, string>;
+  assert.equal(en.i_login_invite_tail, undefined);
+  assert.equal(en.i_login_invite, "No account yet? Sign up free");
+  assert.equal(zh.i_nav_inbox, "待確認繳款");
   assert.equal(zh.i_audit_ev_line_sign_in, "租客登入");
   assert.equal(zh.i_audit_rec_line, "邀請連結");
   assert.equal(zh.i_sandbox_suffix, "（範例）");
-  assert.equal(zh.i_settings_plan, "方案：前 4 戶永遠免費");
+  assert.equal(zh.i_settings_plan, "方案：免費方案依官網公告・設計夥伴合作期間免費");
   assert.equal(zh.i_outstanding, "未繳清租客");
   assert.equal(zh.i_receipt, "收據（範例檔名）");
   assert.equal(zh.i_pick_room_type, "請選擇房型");
@@ -172,7 +176,6 @@ test("login, an empty live company, the sidebar, and audit use the live-company 
     "i_login_invite",
     "i_login_invite_lead",
     "i_login_signup",
-    "i_login_invite_tail",
     "i_sandbox_banner",
     "i_sandbox_suffix",
     "i_sandbox_plan",
@@ -207,6 +210,17 @@ test("tenant pages drop the LINE demo sentence and never say 示範, 測試模�
     const text = read(file);
     for (const word of banned) assert.equal(text.includes(word), false, `${file} ${word}`);
     assert.doesNotMatch(text, /i_line_stub|line-stub|showDemoLineCopy/);
+    assert.equal(text.includes("@644odqoe"), false, file);
+    assert.equal(text.includes("LINE_SUPPORT_CONTACT"), false, file);
+    for (const match of text.matchAll(/from\s+"(@\/[^"]+|\.\.?\/[^"]+)"/g)) {
+      const spec = match[1];
+      const base = spec.startsWith("@/") ? join(root, "src", spec.slice(2)) : join(dirname(file), spec);
+      const imported = [".tsx", ".ts", "/index.tsx", "/index.ts"].map((suffix) => base + suffix).find((path) => existsSync(path));
+      if (!imported) continue;
+      const source = read(imported);
+      assert.equal(source.includes("@644odqoe"), false, imported);
+      assert.equal(source.includes("LINE_SUPPORT_CONTACT"), false, imported);
+    }
     for (const match of text.matchAll(/\bt\(\s*"([^"]+)"/g)) keys.add(match[1]);
   }
   assert.ok(keys.has("i_rich_pay"));
@@ -216,6 +230,7 @@ test("tenant pages drop the LINE demo sentence and never say 示範, 測試模�
       const value = catalog[key];
       assert.equal(typeof value, "string", key);
       for (const word of banned) assert.equal(value.includes(word), false, `${key} ${word}`);
+      assert.equal(value.includes("@644odqoe"), false, key);
     }
   }
   for (const catalog of [zh, en]) {

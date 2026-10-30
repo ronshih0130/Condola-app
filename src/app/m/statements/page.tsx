@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { StatementForm } from "@/components/dialogs";
@@ -5,7 +6,8 @@ import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionAddExpense } from "@/server/auth-actions";
 import { actionStatement } from "@/server/actions";
-import { moneyLabel, ownerSettlement } from "@/server/format";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
+import { moneyLabel, ownerSettlement, signedMoney, statementPeriodNet } from "@/server/format";
 import { taipeiToday } from "@/server/money";
 import { can, rolesFor } from "@/server/perms";
 import { listOwners, listProperties, listStatements, statementRoster } from "@/server/queries";
@@ -14,7 +16,9 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function StatementsPage({ searchParams }: { searchParams: Promise<{ error?: string; month?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   const month = params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : taipeiToday().slice(0, 7);
@@ -120,6 +124,8 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                     })
                   : null;
                 const label = (minor: number) => moneyLabel(minor, row.currency, session.locale);
+                const signed = (minor: number) => signedMoney(minor, row.currency, session.locale, v2);
+                const periodNet = figures ? statementPeriodNet(figures) : 0;
                 const period = row.period_start.slice(0, 7);
                 return (
                   <tr key={`${row.owner_id}-${period}`}>
@@ -131,12 +137,12 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
                     <Cell label={t("i_fee_rule")}>{row.fee_rule || dash}</Cell>
                     <Cell label={t("i_rent_this_month")}>{figures ? label(figures.rent) : dash}</Cell>
                     <Cell label={t("i_net_owner")}>
-                      {figures && figures.owes > 0 ? (
+                      {figures && periodNet < 0 ? (
                         <span className="chip warn" data-testid="owner-owes">
-                          {t("owner_owes")} {label(figures.owes)}
+                          {t("owner_owes")} {v2 ? <span className="amount-neg">{signed(periodNet)}</span> : signed(periodNet)}
                         </span>
                       ) : figures ? (
-                        label(figures.payable)
+                        label(periodNet)
                       ) : (
                         dash
                       )}

@@ -3,16 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandImage } from "./brand";
-import { useT } from "./locale";
+import { useLocale, useT } from "./locale";
 
 export function OwnerNav({
   children,
   properties = [],
+  v2,
 }: {
   children: React.ReactNode;
   properties?: { id: string; name: string }[];
+  v2?: boolean;
 }) {
   const t = useT();
+  const locale = useLocale();
   const path = usePathname() || "/o";
   const items = [
     ["/o", "i_overview"],
@@ -28,7 +31,7 @@ export function OwnerNav({
           </div>
           <div className="liffb">
             <div className="portal-brand">
-              <BrandImage variant="horizontal" alt={t("i_brand")} />
+              <BrandImage variant="horizontal" alt={t("i_brand")} {...(v2 ? { v2: true, locale } : {})} />
             </div>
             {properties.length > 0 ? (
               <div data-testid="owner-properties">

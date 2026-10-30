@@ -78,9 +78,15 @@ export async function renderPdf(doc: PdfDocument, fontBytes: Uint8Array): Promis
     const missing: string[] = [];
     const seen = new Set<string>();
     let out = "";
+    // The statement page uses U+2212. Only owner-statement.pdf maps it to the ASCII hyphen Helvetica can draw.
+    const statementPdf = doc.filename === "owner-statement.pdf";
     for (const ch of text.replaceAll("\r", "")) {
       if (ch === "\n" || ch === "□" || ch === "■") {
         out += ch;
+        continue;
+      }
+      if (statementPdf && ch === "\u2212") {
+        out += "-";
         continue;
       }
       if (hasCjk(ch) || canLatin(ch)) {

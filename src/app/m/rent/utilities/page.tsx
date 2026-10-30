@@ -1,10 +1,13 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { connection } from "next/server";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionPrepareUtility, actionVoidUtility } from "@/server/actions";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { PendingSubmit, UtilityConfirmForm } from "@/components/utility-confirm";
-import { signedMoneyLabel } from "@/server/format";
+import { UtilityUnitSelect } from "@/components/utility-unit-select";
+import { electricityMonthLabel, signedMoney } from "@/server/format";
 import { monthBounds, taipeiToday } from "@/server/money";
 import { can } from "@/server/perms";
 import { listUtilityBoard, utilityRunDetail } from "@/server/utility-posting";
@@ -53,8 +56,10 @@ export default async function UtilityPostingPage({
 }: {
   searchParams: Promise<{ unit?: string; run?: string; error?: string; saved?: string; page?: string; month?: string; bill?: string; kwh?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   await connection();
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   const month = utilityMonth(params.month);
@@ -77,8 +82,19 @@ export default async function UtilityPostingPage({
     current.spaces.push(space);
     units.set(space.unit_id, current);
   }
-  const selected = params.unit ? units.get(params.unit) : [...units.values()][0];
-  const money = (minor: number, currency: string) => signedMoneyLabel(minor, currency, session.locale);
+  const resultUnit = detail?.run;
+  if (resultUnit && !units.has(resultUnit.unit_id)) {
+    units.set(resultUnit.unit_id, {
+      id: resultUnit.unit_id,
+      propertyId: resultUnit.property_id,
+      label: `${resultUnit.property_name} · ${resultUnit.unit_label}`,
+      currency: resultUnit.currency,
+      rate: "",
+      spaces: [],
+    });
+  }
+  const selected = (params.unit ? units.get(params.unit) : undefined) ?? (resultUnit ? units.get(resultUnit.unit_id) : undefined) ?? [...units.values()][0];
+  const money = (minor: number, currency: string) => signedMoney(minor, currency, session.locale, v2);
   const statusLabel = utilityStatusLabel(t, detail?.run.status);
   const formPeriod = detail
     ? { start: detail.run.period_start, end: detail.run.period_end }
@@ -95,15 +111,14 @@ export default async function UtilityPostingPage({
         <div className="grid2">
           <div className="fg">
             <label className="f" htmlFor="utility-unit">{t("i_property_name")}</label>
-            <select id="utility-unit" className="inp" name="unit" data-testid="utility-unit" defaultValue={selected?.id ?? ""}>
-              {[...units.values()].map((unit) => (
-                <option key={unit.id} value={unit.id}>{unit.label}</option>
-              ))}
-            </select>
+            <UtilityUnitSelect
+              units={[...units.values()].map((unit) => ({ id: unit.id, label: unit.label }))}
+              selectedId={selected?.id ?? ""}
+            />
           </div>
           <div className="fg">
             <label className="f" htmlFor="utility-month">{t("i_utility_month")}</label>
-            <input id="utility-month" className="inp" type="month" name="month" data-testid="utility-month" defaultValue={monthValue} />
+            <input id="utility-month" className="inp" type="month" name="month" data-testid="utility-month" key={monthValue} defaultValue={monthValue} />
           </div>
         </div>
         <p className="small" data-testid="utility-period">{formPeriod.start} – {formPeriod.end}</p>
@@ -213,7 +228,7 @@ export default async function UtilityPostingPage({
                 <tr key={line.id} data-testid="utility-share">
                   <td>
                     {line.bearer === "owner" ? t("i_utility_owner_vacant") : line.tenant || t("i_vacant")}
-                    <div className="small muted" data-testid="utility-share-desc">{line.description}</div>
+                    <div className="small muted" data-testid="utility-share-desc">{electricityMonthLabel(detail.run.period_start, line.description)}</div>
                   </td>
                   <td className="num">{money(Number(line.amount), detail.run.currency)}</td>
                 </tr>
@@ -271,7 +286,7 @@ export default async function UtilityPostingPage({
               {board.runs.map((run) => (
                 <tr key={run.id}>
                   <td>
-                    <Link href={utilityHref({ run: run.id, month: run.period_start.slice(0, 7) })}>
+                    <Link href={utilityHref({ run: run.id, unit: run.unit_id, month: run.period_start.slice(0, 7) })}>
                       {run.property_name} · {run.unit_label}
                     </Link>
                     <div className="small muted">

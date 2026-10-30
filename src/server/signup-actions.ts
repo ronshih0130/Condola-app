@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCurrentConsent } from "./consent-gate";
+
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { sessionCookie, type RequestMeta } from "./auth";
@@ -15,7 +17,8 @@ import {
 } from "./partners";
 import { isPlatformAdmin } from "./platform";
 import { appCookieOptions } from "./public-origin";
-import { getSession } from "./session";
+import { getSession, requestPrefs } from "./session";
+import { partnerRequestMeta } from "./partner-consent";
 import { sessionEntryPath } from "./sign-out";
 import { signupVerifyType } from "./signup-gotrue";
 import {
@@ -78,36 +81,42 @@ export async function actionStartSignup(formData: FormData) {
     partnerCode: text(formData.get("partnerCode")),
     origin: await origin(),
     meta: await meta(),
+    consent: formData.get("consent") === "on",
   });
   if (!result.ok) redirect(`/signup?error=${result.error}`);
   if (result.status === "firm") {
     await setSession(result.token);
     redirect(sessionEntryPath("/signup/firm"));
   }
-  const params = new URLSearchParams({ email: result.email });
-  if (result.devToken) params.set("dev", result.devToken);
-  redirect(`/signup/verify?${params.toString()}`);
+  redirect(verifyTarget(result.email, result, false));
+}
+
+function verifyTarget(email: string, result: { devToken: string | null; mail?: "failed" | "wait" }, resent: boolean) {
+  const params = new URLSearchParams({ email });
+  if (result.mail) params.set("mail", result.mail);
+  else if (resent) params.set("resent", "1");
+  if (!result.mail && result.devToken) params.set("dev", result.devToken);
+  return `/signup/verify?${params.toString()}`;
 }
 
 export async function actionResendSignup(formData: FormData) {
+  const request = await meta();
   const email = text(formData.get("email"));
-  const sent = await resendSignup(email, await origin());
-  const params = new URLSearchParams({ email, resent: "1" });
-  if (sent.devToken) params.set("dev", sent.devToken);
-  redirect(`/signup/verify?${params.toString()}`);
+  const sent = await resendSignup(email, await origin(), request.ip);
+  redirect(verifyTarget(email, sent, true));
 }
 
 export async function actionChangeSignupEmail(formData: FormData) {
+  const request = await meta();
   const result = await changeSignupEmail({
     currentEmail: text(formData.get("email")),
     password: String(formData.get("password") ?? ""),
     nextEmail: text(formData.get("nextEmail")),
     origin: await origin(),
+    ip: request.ip,
   });
   if (!result.ok) redirect(`/signup/verify?email=${encodeURIComponent(text(formData.get("email")))}&error=${result.error}`);
-  const params = new URLSearchParams({ email: result.email, resent: "1" });
-  if (result.devToken) params.set("dev", result.devToken);
-  redirect(`/signup/verify?${params.toString()}`);
+  redirect(verifyTarget(result.email, result, true));
 }
 
 export async function actionConfirmToken(formData: FormData) {
@@ -127,10 +136,17 @@ export async function actionConfirmSupabaseHash(formData: FormData) {
 }
 
 export async function actionConfirmSupabase(accessToken: string) {
-  const result = await confirmSupabaseAccessToken(accessToken, await meta());
-  if (!result.ok) redirect("/signup/confirm?expired=1");
-  await setSession(result.token);
-  redirect(sessionEntryPath("/signup/firm"));
+  try {
+    const result = await confirmSupabaseAccessToken(accessToken, await meta());
+    if (!result.ok) redirect("/signup/confirm?expired=1");
+    await setSession(result.token);
+    redirect(sessionEntryPath("/signup/firm"));
+  } catch (error) {
+    if (isRedirect(error)) throw error;
+    // Do not log error. A server-action failure can include the argument.
+    console.error("confirm access token failed");
+    redirect("/signup/confirm?expired=1");
+  }
 }
 
 export async function actionCreateFirm(formData: FormData) {
@@ -149,8 +165,13 @@ export async function actionCreateFirm(formData: FormData) {
       phoneCountry: text(formData.get("phoneCountry")),
       country: text(formData.get("country")),
       partnerCode: text(formData.get("partnerCode")) || identity.partner_code || "",
+      partnerConsent: formData.get("partnerConsent") === "on",
+      partnerAuthority: formData.get("partnerAuthority") === "on",
+      partnerLocale: (await requestPrefs()).locale,
+      partnerMeta: partnerRequestMeta(await headers()),
+      consent: formData.get("consent") === "on",
     });
-    if (!created.ok) redirect("/signup/firm?error=required");
+    if (!created.ok) redirect(`/signup/firm?error=${created.error === "consent" ? "consent" : "required"}`);
     const jar = await cookies();
     const persisted = appCookieOptions({ httpOnly: false, maxAge: ENV_COOKIE_MAX_AGE });
     clearStoredEnvChoice(jar);
@@ -165,6 +186,7 @@ export async function actionCreateFirm(formData: FormData) {
 }
 
 export async function actionRequestUpgrade(formData: FormData) {
+  await requireCurrentConsent();
   const session = await getSession();
   const tier = text(formData.get("tier")) === "pro" ? "pro" : "standard";
   try {
@@ -184,6 +206,7 @@ async function requirePlatformAdmin() {
 }
 
 export async function actionCreatePartnerCode(formData: FormData) {
+  await requireCurrentConsent();
   const session = await requirePlatformAdmin();
   const number = (name: string, fallback: number) => {
     const raw = text(formData.get(name));
@@ -210,6 +233,7 @@ export async function actionCreatePartnerCode(formData: FormData) {
 }
 
 export async function actionSetPriceOverride(formData: FormData) {
+  await requireCurrentConsent();
   const session = await requirePlatformAdmin();
   try {
     await setFirmOverride(session.userId, text(formData.get("orgId")), Number(text(formData.get("rate"))));
@@ -220,6 +244,7 @@ export async function actionSetPriceOverride(formData: FormData) {
 }
 
 export async function actionClearPriceOverride(formData: FormData) {
+  await requireCurrentConsent();
   const session = await requirePlatformAdmin();
   try {
     await clearFirmOverride(session.userId, text(formData.get("orgId")));

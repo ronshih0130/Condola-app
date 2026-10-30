@@ -1,5 +1,7 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ownerPrivacy } from "@/server/auth";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { moneyLabel } from "@/server/format";
 import { ownerHome } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -8,11 +10,13 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function OwnerHomePage() {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const [rows, privacy] = await Promise.all([ownerHome(session), ownerPrivacy(session.orgId)]);
   return (
-    <div>
+    <div data-v2-page={v2 ? "o-home" : undefined}>
       <h2>{t("i_hello", { name: session.name })}</h2>
       <p className="small" data-testid="managed-by">{t("i_managed_by", { firm: privacy.name, brand: t("i_brand") })}</p>
       <table className="t">
@@ -25,7 +29,7 @@ export default async function OwnerHomePage() {
                   {displaySampleName([row.property_name, row.unit_label, row.room_label].filter(Boolean).join(" "))}
                 </div>
               </td>
-              <td className="num">{moneyLabel(Number(row.rent), row.currency, session.locale)}</td>
+              <td className="num" data-v2-negative={v2 && Number(row.rent) < 0 ? "true" : undefined}>{moneyLabel(Number(row.rent), row.currency, session.locale)}</td>
               <td
                 data-testid="tenant-phone"
                 data-visible={privacy.showPhone && row.phone_visible ? "true" : "false"}

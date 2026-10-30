@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { SpaceForm } from "@/components/space-form";
@@ -17,6 +18,7 @@ export default async function EditWholeUnitPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const { id } = await params;
   const query = await searchParams;
   const session = await getSession();

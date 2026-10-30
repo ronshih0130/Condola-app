@@ -121,6 +121,13 @@ test("deposit reason and a private signed PDF", async ({ page }) => {
   await expect(page.getByTestId("lease-list").locator("tr", { hasText: "紙本房客" })).toHaveCount(1);
   await page.goto(createdUrl);
   await page.locator(".tabsx a[href*='tab=sign']").click();
+  await expect(page.getByTestId("idv-sign-wait")).toBeVisible();
+  await expect(page.getByTestId("paper-sign")).toHaveCount(0);
+  const blockedId = page.url().match(/leases\/([^/?]+)/)?.[1];
+  expect(blockedId).toBeTruthy();
+  const sample = await page.request.post("/api/demo/id-sample", { data: { leaseId: blockedId } });
+  expect(sample.ok()).toBeTruthy();
+  await page.reload();
   await expect(page.getByTestId("paper-sign")).toBeVisible();
   expect(crashes).toEqual([]);
 

@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionOwnerPrivacy } from "@/server/auth-actions";
@@ -8,6 +9,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function RolesPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const params = await searchParams;
   const t = makeT(session.locale);

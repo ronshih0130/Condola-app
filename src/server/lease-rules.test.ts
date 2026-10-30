@@ -140,13 +140,45 @@ test("the lease idempotency migration is additive and later than shared staging 
   const stamp = ours[0].slice(0, 14);
   assert.ok(stamp > "20261023180000");
   assert.ok(stamp > "20261026120000");
+  const previous = names.filter((name) => name < ours[0]).map((name) => name.slice(0, 14)).sort().at(-1);
+  assert.equal(previous, "20261027120000");
   const later = names.filter((name) => name.slice(0, 14) > stamp);
   assert.deepEqual(later, [
+    "20261027140000_id_anon_revoke.sql",
+    "20261028120000_id_delete_after_consent.sql",
     "20261028130000_utility_charge_posting.sql",
     "20261028140000_utility_runs_unit_id_default.sql",
     "20261028150000_utility_vacant_expense.sql",
     "20261028160000_utility_run_draft_reuse.sql",
     "20261028180000_utility_owner_lines.sql",
+    "20261029130000_id_no_direct_mutate.sql",
+    "20261029140000_id_consent_shown_version.sql",
+    "20261029150000_id_watermark_copy.sql",
+    "20261029160000_lease_close_end_date.sql",
+    "20261030100000_lock_public_function_execute.sql",
+    "20261030110000_gotrue_confirm_single_use.sql",
+    "20261030120000_org_scoped_reversal_audit.sql",
+    "20261030130000_default_function_privileges.sql",
+    "20261030140500_revoke_app_is_member_execute.sql",
+    "20261030150000_revoke_id_photo_lease_close_execute.sql",
+    "20261030150200_vendor_repair.sql",
+    "20261030150300_repair_owner_visibility.sql",
+    "20261030150400_ticket_job_type_reserve.sql",
+    "20261030150500_revoke_public_function_execute.sql",
+    "20261030150600_consents.sql",
+    "20261030150700_vendor_link_sharing_approval.sql",
+    "20261030150800_vendor_onboarding_job_types_receipts.sql",
+    "20261030150801_vendor_document_service.sql",
+    "20261030150802_vendor_job_assignment.sql",
+    "20261030150900_esign_core.sql",
+    "20261030151100_end_auth_sessions_varchar_fix.sql",
+    "20261030151200_id_purge_dry_run_guard.sql",
+    "20261030151300_partner_agreement_consents.sql",
+    "20261030151301_partner_consent_attestation.sql",
+    "20261030151400_tenant_signed_pdf_read.sql",
+    "20261030151500_paper_lease_versions.sql",
+    "20261030151600_esign_retention_lifecycle.sql",
+    "20261031090000_id_delete_after_move_out.sql",
   ]);
   const sql = readFileSync(new URL(ours[0], dir), "utf8");
   assert.match(sql, /Version 20261027130000/);

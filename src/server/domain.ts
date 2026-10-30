@@ -24,9 +24,11 @@ import { nextInvoiceNumber } from "./invoice-number";
 import { depositCapSaveAllowed, depositExceedsCap, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
+import { leaseIdentityReady } from "./id-docs";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
 import { assertTicketStatus } from "./repair-rules";
+import { assertTeamInvitesAllowed } from "./team-invites";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
 function sha256(value: string) {
@@ -73,11 +75,7 @@ export async function markTryout(orgId: string, key: "property" | "lease" | "sta
     await svc(null, async (client) => {
       await client.query(
         `UPDATE organizations
-            SET settings = jsonb_set(
-              coalesce(settings, '{}'::jsonb), '{tryout}',
-              (CASE WHEN jsonb_typeof(settings->'tryout') = 'object'
-                    THEN settings->'tryout' ELSE '{}'::jsonb END)
-                || jsonb_build_object($2::text, true), true)
+            SET settings = jsonb_set(coalesce(settings, '{}'::jsonb), ARRAY['tryout', $2]::text[], 'true'::jsonb, true)
           WHERE id = $1`,
         [orgId, key],
       );
@@ -1490,6 +1488,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
     const asTenant = Boolean(contact) && session.kind === "tenant";
     const asManager = Boolean(member) && (member?.role === "admin" || member?.role === "manager") && !asTenant;
     if (!asTenant && !asManager) throw new FlowError("errors.forbidden");
+    if (!(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
     const role = asTenant ? "tenant" : "manager";
     const signature = await maybe<{ id: string }>(
       client,
@@ -1539,7 +1538,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
 export async function uploadSignedLeasePdf(
   session: Session,
   leaseId: string,
-  file: { bytes: Uint8Array; fileName: string },
+  file: { bytes: Uint8Array; fileName: string; replaceReason?: unknown },
 ) {
   assertStaff(session, ["admin", "manager"]);
   if (!isSignedPdf(file.bytes)) throw new FlowError("errors.pdf");
@@ -1552,7 +1551,10 @@ export async function uploadSignedLeasePdf(
       [leaseId, session.orgId],
     );
     if (!lease) throw new FlowError("errors.notFound");
+    const versions = await import("./paper-lease-versions");
+    const paperVersion = await versions.preparePaperLeaseVersion(client, session, leaseId, file.replaceReason);
     const imported = lease.esign === "imported";
+    if (!imported && !(await leaseIdentityReady(client, leaseId))) throw new FlowError("errors.idDocRequired");
     const path = `${session.orgId}/${leaseId}/${randomUUID()}.pdf`;
     const stored = await one<{ id: string }>(
       client,
@@ -1560,11 +1562,21 @@ export async function uploadSignedLeasePdf(
        VALUES ($1,'lease-documents-private',$2,$3,'application/pdf',$4,$5,$6) RETURNING id`,
       [session.orgId, path, fileName, file.bytes.length, hash, session.userId],
     );
-    await client.query(
-      `INSERT INTO lease_signed_pdfs (org_id, lease_id, file_id, bucket, object_path, content)
+    if (paperVersion.enabled) {
+      await versions.insertPaperLeaseVersion(client, session, {
+        leaseId,
+        fileId: stored.id,
+        path,
+        content: file.bytes,
+        version: paperVersion,
+      });
+    } else {
+      await client.query(
+        `INSERT INTO lease_signed_pdfs (org_id, lease_id, file_id, bucket, object_path, content)
        VALUES ($1,$2,$3,'lease-documents-private',$4,$5)`,
-      [session.orgId, leaseId, stored.id, path, Buffer.from(file.bytes)],
-    );
+        [session.orgId, leaseId, stored.id, path, Buffer.from(file.bytes)],
+      );
+    }
     if (!imported) {
       await client.query(
         `UPDATE lease_signatures
@@ -2311,6 +2323,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
       client,
       `SELECT id, amount_minor::text, description, category, property_id::text FROM expenses
         WHERE org_id = $1 AND property_id = ANY($2::uuid[]) AND ${STATEMENT_EXPENSE_SQL}
+          AND app.repair_cost_on_statement(ticket_id, org_id)
           AND incurred_on BETWEEN $3 AND $4 AND currency = $5`,
       [session.orgId, propertyIds, bounds.start, bounds.end, currency],
     );
@@ -2589,6 +2602,7 @@ export async function postMessage(session: Session, threadId: string, body: stri
 
 export async function inviteTeammate(session: Session, input: { email: string; role: OrgRole }) {
   assertStaff(session, ["admin"]);
+  assertTeamInvitesAllowed(session.orgId);
   const email = cleanEmail(input.email);
   if (!email) throw new FlowError("errors.required");
   const code = `CND-${randomUUID().slice(0, 8).toUpperCase()}`;
@@ -2622,7 +2636,7 @@ export async function reversePayment(session: Session, paymentId: string, reason
     }
     await client.query(`SELECT post_reversal($1::uuid, $2)`, [payment.ledger_transaction_id, note]);
     await client.query(`UPDATE payments SET status = 'reversed' WHERE id = $1 AND org_id = $2`, [payment.id, session.orgId]);
-  });
+  }, { orgId: session.orgId, environment: session.environment });
 }
 
 export async function closeMonth(session: Session, month: string, note: string) {

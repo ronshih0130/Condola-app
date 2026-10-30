@@ -1,5 +1,6 @@
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { PasswordFields } from "@/components/password-field";
 import { actionReset } from "@/server/auth-actions";
 import { describeRecoveryHash } from "@/server/auth";
@@ -21,7 +22,7 @@ export default async function ResetLinkPage({
     params.error === "weak" ? t("i_pw_weak") : params.error === "mismatch" ? t("i_pw_mismatch") : "";
   return (
     <div className="auth-wrap">
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
       <div className="card pad">
         {ready ? (
           <form action={actionReset} className="col">

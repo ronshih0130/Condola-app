@@ -52,12 +52,14 @@ export function PayDialog({
   currency,
   label,
   returnTo,
+  status,
 }: {
   leaseId: string;
   dueMinor: number;
   currency: string;
   label: string;
   returnTo: "staff" | "tenant";
+  status?: string;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -122,6 +124,11 @@ export function PayDialog({
         <div className="bd">
           <input type="hidden" name="leaseId" value={leaseId} />
           <input type="hidden" name="returnTo" value={returnTo === "tenant" ? "tenant" : "staff"} />
+          {status ? (
+            <div className="alert" data-testid="pay-status">
+              {status}
+            </div>
+          ) : null}
           <div className="fg">
             <label className="f">{t("i_amount_label")}</label>
             <input

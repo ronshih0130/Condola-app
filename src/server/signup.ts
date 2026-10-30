@@ -11,11 +11,46 @@ import { countryByCode } from "@/countries";
 import { normalizePhone } from "./lease-rules";
 import { passwordAcceptable } from "./password";
 import { seedSandboxForNewFirm } from "./sandbox";
-import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl } from "./signup-gotrue";
+import { writeConsent, type ConsentRepository } from "./consent";
+import { passConsentGate } from "./consent-gate";
+import {
+  signupPartnerDocuments, insertSignupPartnerConsentOn,
+  type PartnerRequestMeta, type PartnerRuntime,
+} from "./partner-consent";
+import { signupConsentMetadata, signupRequestBody, type SignupConsentMetadata } from "./legal-versions";
+import { createSignupLink, deliverSignupMail, gateSignupMail } from "./signup-mail";
+import { gotrueEndpoint, gotrueVerifyBody, parseGotrueUserId, parseSupabaseSignup, signupConfirmUrl, signupMailVia } from "./signup-gotrue";
 
 const VERIFY_HOURS = 24;
 
-export type SignupError = "duplicate" | "weak" | "mismatch" | "email" | "required";
+/** GoTrue's default JWT lifetime. supabase/config.toml sets the same value for local Auth. */
+export const GOTRUE_JWT_EXPIRY_SECONDS = 3600;
+
+/**
+ * Implicit confirm links mint a user JWT. Reject one that is already expired
+ * or whose exp - iat is longer than the documented GoTrue JWT expiry.
+ * Returns a status only. Callers must not log the token.
+ */
+export function gotrueAccessTokenLifetime(
+  accessToken: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): "ok" | "expired" | "long" | "malformed" {
+  const parts = accessToken.split(".");
+  if (parts.length !== 3 || !parts[1]) return "malformed";
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as { exp?: unknown; iat?: unknown };
+    if (typeof payload.exp !== "number" || typeof payload.iat !== "number") return "malformed";
+    if (!Number.isFinite(payload.exp) || !Number.isFinite(payload.iat)) return "malformed";
+    if (payload.exp <= nowSeconds) return "expired";
+    if (payload.exp - payload.iat > GOTRUE_JWT_EXPIRY_SECONDS) return "long";
+    return "ok";
+  } catch {
+    return "malformed";
+  }
+}
+
+export type SignupError = "duplicate" | "weak" | "mismatch" | "email" | "required" | "consent";
+export type SignupMailFlag = "failed" | "wait";
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -103,7 +138,7 @@ async function rotateVerification(client: Client, userId: string, email: string)
 
 /**
  * Profile, funnel row, partner draft, and the confirm token. One statement.
- * Does not send mail. GoTrue already did that on the signup call.
+ * Does not send mail.
  */
 async function finishUnconfirmed(client: Client, userId: string, email: string, partnerCode: string | null) {
   const token = newToken();
@@ -139,14 +174,14 @@ async function finishUnconfirmed(client: Client, userId: string, email: string, 
   return token;
 }
 
-async function supabaseSignUp(email: string, password: string, requestOrigin: string) {
+async function supabaseSignUp(email: string, password: string, requestOrigin: string, metadata: SignupConsentMetadata) {
   const { url, anon } = supabaseAuth();
   if (!url || !anon) return null;
   const redirectTo = signupConfirmUrl(requestOrigin);
   const response = await fetch(gotrueEndpoint(url, "/auth/v1/signup", redirectTo), {
     method: "POST",
     headers: { apikey: anon, "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(signupRequestBody(email, password, metadata)),
   });
   const body = await response.json().catch(() => ({}));
   const parsed = parseSupabaseSignup(response.status, body);
@@ -192,11 +227,15 @@ export async function startSignup(input: {
   partnerCode: string;
   origin: string;
   meta: RequestMeta;
+  consent?: boolean;
 }): Promise<
-  | { ok: true; status: "verify"; email: string; devToken: string | null }
+  | { ok: true; status: "verify"; email: string; devToken: string | null; mail?: SignupMailFlag }
   | { ok: true; status: "firm"; token: string }
   | { ok: false; error: SignupError }
 > {
+  if (input.consent !== true) return { ok: false, error: "consent" };
+  const acceptedAt = new Date();
+  const metadata = signupConsentMetadata(acceptedAt);
   const email = normalizeEmail(input.email);
   const looked = await inTx(async (client) => {
     await client.query(`SELECT crypt($1, gen_salt('bf'))`, [input.password || "placeholder"]);
@@ -224,6 +263,7 @@ export async function startSignup(input: {
             [existing.id, code],
           ),
         );
+        await writeConsent(existing.id, "signup", acceptedAt);
         const token = await createSession(existing.id, true, input.meta);
         return { ok: true, status: "firm", token };
       }
@@ -231,22 +271,55 @@ export async function startSignup(input: {
     }
     // Leave auth.users alone. An admin password update clears confirmation_token and
     // confirmation_sent_at, which expires the link already in the inbox, and this path does not send a new email.
+    // Consent only after the password matches. A wrong password still returns the verify
+    // page, so knowing an unconfirmed email cannot stamp this account. That person's
+    // own first login hits the re-consent gate.
+    if (matches) await writeConsent(existing.id, "signup", acceptedAt);
     const token = await inTx((client) => finishUnconfirmed(client, existing.id, email, code));
     return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
   }
 
-  const remote = await supabaseSignUp(email, input.password, input.origin);
-  if (remote === "duplicate") return { ok: false, error: "duplicate" };
-  if (remote === "unavailable") return { ok: false, error: "required" };
+  const auth = supabaseAuth();
+  const appMail = Boolean(auth.url) && signupMailVia() !== "supabase";
+  let remote: { id: string; confirmed: boolean } | null = null;
+  let hashedToken: string | null = null;
+  let mail: SignupMailFlag | undefined;
+  if (!auth.url) {
+    remote = null;
+  } else if (!appMail) {
+    const legacy = await supabaseSignUp(email, input.password, input.origin, metadata);
+    if (legacy === "duplicate") return { ok: false, error: "duplicate" };
+    if (legacy === "unavailable") return { ok: false, error: "required" };
+    remote = legacy;
+  } else {
+    // Refuse before generate_link so a brake does not create a user or burn a confirmation token.
+    const gate = await gateSignupMail(null, email, input.meta.ip);
+    if (gate !== "ok") {
+      return { ok: true, status: "verify", email, devToken: null, mail: gate === "wait" ? "wait" : "failed" };
+    }
+    const issued = await createSignupLink({
+      email,
+      password: input.password,
+      data: metadata,
+      origin: input.origin,
+    });
+    if (!issued.ok) {
+      if (issued.error === "duplicate") return { ok: false, error: "duplicate" };
+      if (issued.error === "weak") return { ok: false, error: "weak" };
+      return { ok: false, error: "required" };
+    }
+    remote = { id: issued.userId, confirmed: issued.confirmed };
+    hashedToken = issued.hashedToken;
+  }
   let userId = remote?.id ?? "";
   const confirmed = remote?.confirmed ?? false;
   const saved = await inTx(async (client) => {
     if (!remote) {
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
-         VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), '{}'::jsonb, 'authenticated', 'authenticated')
+         VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), $3::jsonb, 'authenticated', 'authenticated')
          RETURNING id::text`,
-        [email, input.password],
+        [email, input.password, JSON.stringify(metadata)],
       );
       userId = inserted.rows[0].id;
     }
@@ -258,28 +331,56 @@ export async function startSignup(input: {
     throw error;
   });
   if (saved === "duplicate") return { ok: false, error: "duplicate" };
+  if (!userId) return { ok: false, error: "required" };
+  await writeConsent(userId, "signup", acceptedAt);
   if (confirmed) {
     await markConfirmed(userId, email);
     const token = await createSession(userId, true, input.meta);
     return { ok: true, status: "firm", token };
   }
-  return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null };
+  if (hashedToken) {
+    const delivered = await deliverSignupMail(email, hashedToken, input.origin);
+    if (!delivered) mail = "failed";
+  }
+  return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null, ...(mail ? { mail } : {}) };
 }
 
-export async function resendSignup(emailRaw: string, origin: string) {
+export async function resendSignup(emailRaw: string, origin: string, ip?: string | null) {
   const email = normalizeEmail(emailRaw);
   if (!email) return { devToken: null as string | null };
-  const sent = await inTx(async (client) => {
+  const userId = await inTx(async (client) => {
     const existing = await findUser(client, email);
     if (!existing || existing.email_confirmed_at || existing.has_firm) return null;
-    return rotateVerification(client, existing.id, email);
+    return existing.id;
   });
-  if (!sent) return { devToken: null as string | null };
-  await supabaseResend(email, origin);
-  return { devToken: signupLinksExposed() ? sent : null };
+  if (!userId) return { devToken: null as string | null };
+  const auth = supabaseAuth();
+  const appMail = Boolean(auth.url) && signupMailVia() !== "supabase";
+  if (appMail) {
+    // generate_link rotates the confirmation token. Do that only when a send is allowed.
+    const gate = await gateSignupMail(userId, email, ip);
+    if (gate !== "ok") return { devToken: null as string | null, mail: (gate === "wait" ? "wait" : "failed") as SignupMailFlag };
+    const issued = await createSignupLink({ email, origin });
+    if (!issued.ok) {
+      console.warn(`signup mail failed ${issued.error}`);
+      return { devToken: null as string | null, mail: "failed" as const };
+    }
+    const token = await inTx((client) => rotateVerification(client, userId, email));
+    const delivered = await deliverSignupMail(email, issued.hashedToken, origin);
+    return { devToken: signupLinksExposed() ? token : null, ...(delivered ? {} : { mail: "failed" as const }) };
+  }
+  const token = await inTx((client) => rotateVerification(client, userId, email));
+  if (auth.url) await supabaseResend(email, origin);
+  return { devToken: signupLinksExposed() ? token : null };
 }
 
-export async function changeSignupEmail(input: { currentEmail: string; password: string; nextEmail: string; origin: string }) {
+export async function changeSignupEmail(input: {
+  currentEmail: string;
+  password: string;
+  nextEmail: string;
+  origin: string;
+  ip?: string | null;
+}) {
   const current = normalizeEmail(input.currentEmail);
   const next = normalizeEmail(input.nextEmail);
   if (!current || !next) return { ok: false as const, error: "email" as const };
@@ -294,6 +395,14 @@ export async function changeSignupEmail(input: { currentEmail: string; password:
   });
   if (!checked.ok) return checked;
   const { url, service } = supabaseAuth();
+  const appMail = Boolean(url) && signupMailVia() !== "supabase";
+  if (appMail && !service) return { ok: false as const, error: "required" as const };
+  if (appMail) {
+    const gate = await gateSignupMail(checked.id, next, input.ip);
+    if (gate !== "ok") {
+      return { ok: true as const, email: current, devToken: null, mail: (gate === "wait" ? "wait" : "failed") as SignupMailFlag };
+    }
+  }
   if (url && service) {
     const response = await fetch(`${url}/auth/v1/admin/users/${checked.id}`, {
       method: "PUT",
@@ -302,6 +411,16 @@ export async function changeSignupEmail(input: { currentEmail: string; password:
     });
     if (!response.ok) return { ok: false as const, error: "required" as const };
   }
+  let hashedToken: string | null = null;
+  if (appMail) {
+    const issued = await createSignupLink({ email: next, origin: input.origin });
+    if (!issued.ok) {
+      console.warn(`signup mail failed ${issued.error}`);
+      await query(`UPDATE profiles SET email = $2 WHERE id = $1`, [checked.id, next]);
+      return { ok: true as const, email: next, devToken: null, mail: "failed" as const };
+    }
+    hashedToken = issued.hashedToken;
+  }
   const token = await inTx(async (client) => {
     if (!url || !service) {
       await client.query(`UPDATE auth.users SET email = $2, email_confirmed_at = NULL, updated_at = now() WHERE id = $1`, [checked.id, next]);
@@ -309,7 +428,16 @@ export async function changeSignupEmail(input: { currentEmail: string; password:
     await client.query(`UPDATE profiles SET email = $2 WHERE id = $1`, [checked.id, next]);
     return rotateVerification(client, checked.id, next);
   });
-  await supabaseResend(next, input.origin);
+  if (appMail && hashedToken) {
+    const delivered = await deliverSignupMail(next, hashedToken, input.origin);
+    return {
+      ok: true as const,
+      email: next,
+      devToken: signupLinksExposed() ? token : null,
+      ...(delivered ? {} : { mail: "failed" as const }),
+    };
+  }
+  if (url) await supabaseResend(next, input.origin);
   return { ok: true as const, email: next, devToken: signupLinksExposed() ? token : null };
 }
 
@@ -330,12 +458,46 @@ export async function confirmSignupToken(token: string, meta: RequestMeta) {
   return { ok: true as const, token: sessionToken };
 }
 
+/** Record a confirm JWT so a second presentation is rejected. The raw token is not stored. */
+export async function claimGotrueConfirmToken(accessToken: string) {
+  // A JWT cannot still be valid after GOTRUE_JWT_EXPIRY_SECONDS. Drop replay
+  // rows older than twice that, so a late clock skew cannot revive one.
+  await query(
+    `DELETE FROM gotrue_confirm_uses
+      WHERE used_at < now() - make_interval(secs => $1)`,
+    [GOTRUE_JWT_EXPIRY_SECONDS * 2],
+  );
+  const row = await query<{ token_hash: string }>(
+    `INSERT INTO gotrue_confirm_uses (token_hash) VALUES ($1)
+     ON CONFLICT (token_hash) DO NOTHING
+     RETURNING token_hash`,
+    [sha256(accessToken)],
+  );
+  return Boolean(row.rows[0]);
+}
+
+export async function releaseGotrueConfirmToken(accessToken: string) {
+  await query(`DELETE FROM gotrue_confirm_uses WHERE token_hash = $1`, [sha256(accessToken)]);
+}
+
 export async function confirmSupabaseAccessToken(accessToken: string, meta: RequestMeta) {
+  const raw = accessToken.trim();
+  // GoTrue GET /auth/v1/user does not consume the JWT. Lifetime is checked
+  // here against jwt_expiry (3600s). Reuse is rejected by gotrue_confirm_uses.
+  if (gotrueAccessTokenLifetime(raw) !== "ok") return { ok: false as const, error: "expired" as const };
   const { url, anon } = supabaseAuth();
-  if (!url || !anon || !accessToken.trim()) return { ok: false as const, error: "expired" as const };
-  const response = await fetch(`${url}/auth/v1/user`, {
-    headers: { apikey: anon, Authorization: `Bearer ${accessToken.trim()}` },
-  });
+  if (!url || !anon) return { ok: false as const, error: "expired" as const };
+  const claimed = await claimGotrueConfirmToken(raw);
+  if (!claimed) return { ok: false as const, error: "expired" as const };
+  let response: Response;
+  try {
+    response = await fetch(`${url}/auth/v1/user`, {
+      headers: { apikey: anon, Authorization: `Bearer ${raw}` },
+    });
+  } catch {
+    await releaseGotrueConfirmToken(raw);
+    return { ok: false as const, error: "expired" as const };
+  }
   if (!response.ok) return { ok: false as const, error: "expired" as const };
   const body = (await response.json()) as { id?: string; email?: string; email_confirmed_at?: string | null };
   if (!body.id || !body.email_confirmed_at) return { ok: false as const, error: "expired" as const };
@@ -401,7 +563,23 @@ export async function createFirm(input: {
   partnerCode: string;
   country?: string;
   phoneCountry?: string;
+  consent?: boolean;
+  consentRepo?: ConsentRepository;
+  partnerConsent?: boolean;
+  partnerAuthority?: boolean;
+  partnerLocale?: string;
+  partnerMeta?: PartnerRequestMeta;
+  partnerRuntime?: PartnerRuntime;
 }) {
+  const gate = await passConsentGate(input.userId, "reconsent", input.consent === true, input.consentRepo);
+  if (!gate.ok) return { ok: false as const, error: "consent" as const };
+  const partnerDocuments = await signupPartnerDocuments(
+    input.partnerLocale ?? countryByCode(input.country).locale, input.partnerRuntime,
+  );
+  if (partnerDocuments === null || (partnerDocuments.length
+      && (input.partnerConsent !== true || input.partnerAuthority !== true))) {
+    return { ok: false as const, error: "consent" as const };
+  }
   const kind = input.kind === "firm" || input.kind === "self" ? input.kind : null;
   const contactName = input.contactName.trim();
   if (!kind || !contactName) return { ok: false as const, error: "required" as const };
@@ -454,6 +632,7 @@ export async function createFirm(input: {
         [orgId, input.userId],
       );
       await client.query(`UPDATE profiles SET display_name = $2, email = $3 WHERE id = $1`, [input.userId, contactName, input.email]);
+      await insertSignupPartnerConsentOn(client, orgId, input.userId, partnerDocuments, input.partnerMeta ?? { ip: null, ua: null });
       let redeemed = null as Awaited<ReturnType<typeof redeemPartnerCode>>;
       if (usableCode) redeemed = await redeemPartnerCode(client, { orgId, code: usableCode, where: "signup" });
       await client.query(`DELETE FROM signup_drafts WHERE user_id = $1`, [input.userId]);

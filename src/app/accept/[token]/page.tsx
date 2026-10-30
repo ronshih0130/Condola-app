@@ -2,10 +2,10 @@ import { headers } from "next/headers";
 import { makeT } from "@/i18n";
 import { AcceptForm, AcceptSubmit } from "@/components/accept-form";
 import { AuthBrand } from "@/components/brand";
-import { PasswordFields } from "@/components/password-field";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { actionAccept } from "@/server/auth-actions";
 import { describeInvite } from "@/server/auth";
-import { lineLoginEnabled, showDemoLineCopy } from "@/server/demo";
+import { inviteStateMessageKey } from "@/server/team-invites";
 import { readSession, requestPrefs } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -25,36 +25,27 @@ export default async function AcceptPage({
   const invite = await describeInvite(token, {
     ip: headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip"),
   });
+  if (invite.kind === "team_member") {
+    return (
+      <div className="auth-wrap">
+        <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
+        <div className="card pad">
+          <h1>{t("i_team_join_title")}</h1>
+          <div className="alert bad" data-testid="invite-state">{t("i_team_invite_unavailable")}</div>
+        </div>
+      </div>
+    );
+  }
   const session = await readSession();
-  const portal = invite.kind !== "team_member";
   const otherAccount =
     invite.state === "ready" &&
     (invite.kind === "owner" || invite.kind === "tenant") &&
     invite.email !== "" &&
     (session?.email ?? "").trim() !== "" &&
     (session?.email ?? "").trim().toLowerCase() !== invite.email.trim().toLowerCase();
-  const roleKey: Record<string, string> = {
-    admin: "i_role_admin",
-    manager: "i_role_manager",
-    accountant: "i_role_accountant",
-    maintenance: "i_role_maintenance",
-  };
-  const stateMessage =
-    invite.state === "timeout"
-      ? t("i_portal_timeout")
-      : invite.state === "locked"
-      ? t("i_portal_invite_locked")
-      : portal
-      ? t("i_portal_invite_invalid")
-      : invite.state === "used"
-      ? t("i_invite_used")
-      : invite.state === "revoked"
-        ? t("i_invite_revoked")
-        : invite.state === "expired"
-          ? t("i_invite_expired")
-          : invite.state === "invalid"
-            ? t("i_invite_invalid")
-            : "";
+  const invitesOpen = false;
+  const stateKey = inviteStateMessageKey(invite.kind, invite.state, invitesOpen);
+  const stateMessage = stateKey ? t(stateKey) : "";
   const error =
     query.error === "weak"
       ? t("i_pw_weak")
@@ -70,12 +61,12 @@ export default async function AcceptPage({
                 ? t("i_portal_accept_failed")
                 : query.error === "email" || query.error === "emailTaken"
                   ? t("i_portal_email_unusable")
-                  : !portal && query.error === "used"
-              ? t("i_invite_used")
-              : "";
+                  : query.error === "consent"
+                    ? t("i_reconsent_error")
+                  : "";
   return (
     <div className="auth-wrap">
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
       {invite.state === "ready" && (invite.kind === "owner" || invite.kind === "tenant") && otherAccount ? (
         <div className="card pad">
           <h1 data-testid="portal-invite-title">{t("i_portal_invite_title", { firm: invite.firm })}</h1>
@@ -93,7 +84,7 @@ export default async function AcceptPage({
           </form>
         </div>
       ) : (
-      <AcceptForm action={actionAccept}>
+      <AcceptForm action={actionAccept} requireConsent={needsTeamConsent(invite.state, invite.kind)}>
         {invite.state === "ready" && (invite.kind === "owner" || invite.kind === "tenant") ? (
           <h1 data-testid="portal-invite-title">{t("i_portal_invite_title", { firm: invite.firm })}</h1>
         ) : (
@@ -128,30 +119,13 @@ export default async function AcceptPage({
             </p>
             <AcceptSubmit idle={t("i_continue")} pending={t("i_portal_working")} testId="portal-submit" />
           </>
-        ) : invite.kind === "team_member" ? (
-          <>
-            <p>
-              {invite.inviter} · {invite.firm} · {t(roleKey[invite.role] ?? "i_role_label")}
-            </p>
-            {error ? <div className="alert bad">{error}</div> : null}
-            <input type="hidden" name="token" value={token} />
-            <div className="fg">
-              <label className="f">{t("i_name")}</label>
-              <input className="inp" name="name" data-testid="accept-name" defaultValue="" />
-            </div>
-            <PasswordFields />
-            <AcceptSubmit idle={t("i_accept")} pending={t("i_portal_working")} testId="accept-submit" />
-            {showDemoLineCopy(null) && lineLoginEnabled() ? (
-              <div data-demo-line="true">
-                <button className="btn line block" type="button" data-testid="line-login">
-                  LINE Login
-                </button>
-              </div>
-            ) : null}
-          </>
         ) : null}
       </AcceptForm>
       )}
     </div>
   );
+}
+
+function needsTeamConsent(state: string, kind: string) {
+  return state === "ready" && kind === "team_member";
 }

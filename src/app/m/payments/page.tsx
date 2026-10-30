@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
 import { actionReversePayment } from "@/server/auth-actions";
@@ -11,6 +12,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;

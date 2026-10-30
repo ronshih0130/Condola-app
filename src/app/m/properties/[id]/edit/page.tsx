@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
@@ -16,6 +17,7 @@ export default async function EditPropertyPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const { id } = await params;
   const query = await searchParams;
   const session = await getSession();

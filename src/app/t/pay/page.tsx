@@ -1,7 +1,9 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { PayDialog } from "@/components/dialogs";
 import { ErrorBanner, chargeKey } from "@/components/ui";
-import { moneyLabel, signedMoneyLabel } from "@/server/format";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
+import { electricityMonthLabel, moneyLabel, signedMoney } from "@/server/format";
 import { unsignedRentNoteKey } from "@/server/pay-note";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -10,7 +12,9 @@ import { selectedLease } from "@/lib/tenant-lease";
 export const dynamic = "force-dynamic";
 
 export default async function TenantPayPage({ searchParams }: { searchParams: Promise<{ error?: string; done?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const { session, lease } = await selectedLease();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const params = await searchParams;
   if (!lease) return <p>{t("i_empty")}</p>;
@@ -46,20 +50,28 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
           ))}
           {money.utilityLines.map((line, index) => (
             <p key={`${line.description}-${index}`} data-testid="tenant-utility-line">
-              {line.description || t("i_charge_utility")} {moneyLabel(Number(line.amount), money.currency, session.locale)}
+              {electricityMonthLabel(line.periodStart, line.description && line.description !== "utility" ? line.description : t("i_charge_utility"))}{" "}
+              {moneyLabel(Number(line.amount), money.currency, session.locale)}
             </p>
           ))}
           {money.otherLines.map((line, index) => (
             <p key={`other-${line.chargeType}-${index}`} data-testid="tenant-other-line" data-charge-type={line.chargeType}>
-              {line.description || t(chargeKey(line.chargeType))} {signedMoneyLabel(Number(line.amount), money.currency, session.locale)}
+              {line.description || t(chargeKey(line.chargeType))} {signedMoney(Number(line.amount), money.currency, session.locale, v2)}
             </p>
           ))}
           <p className="b" data-testid="tenant-bill">{t("i_pay_total")} {moneyLabel(money.dueMinor, money.currency, session.locale)}</p>
           <p className="small">{t("i_account_last5", { last5: "88921" })}</p>
-          {money.dueMinor > 0 ? (
-            <PayDialog leaseId={lease.lease_id} dueMinor={money.dueMinor} currency={money.currency} label={t("i_report_pay")} returnTo="tenant" />
+          {money.dueMinor <= 0 ? (
+            <div className="alert ok" data-testid="pay-status">{t("i_pay_settled")}</div>
           ) : (
-            <div className="alert ok">{t("i_paid_up")}</div>
+            <PayDialog
+              leaseId={lease.lease_id}
+              dueMinor={money.dueMinor}
+              currency={money.currency}
+              label={t("i_report_pay")}
+              returnTo="tenant"
+              status={money.paidMinor > 0 ? t("i_pay_partial") : undefined}
+            />
           )}
         </>
       )}

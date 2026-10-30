@@ -128,12 +128,8 @@ test("房東 is absent outside import-header aliases", () => {
   assert.deepEqual(hits, []);
 });
 
-const OWNER_STATEMENT_REASON =
-  "本月代墊費用與代管費（{cost}）高於已繳租金（{rent}），差額請屋主補繳，或依委託約定從下期租金扣抵。";
-
 const STATEMENT_COPY_KEYS = [
   "owner_owes",
-  "owner_owes_reason",
   "i_opening",
   "i_rent_received",
   "i_other_income",
@@ -178,8 +174,14 @@ function statementSurfaceFiles() {
 test("owner statements say 已繳租金 and not 已收租金", () => {
   const zh = catalog("app", "zh-TW");
   const proto = catalog("prototype", "zh-TW");
-  assert.equal(zh.owner_owes_reason, OWNER_STATEMENT_REASON);
-  assert.equal(proto.owner_owes_reason, OWNER_STATEMENT_REASON);
+  assert.equal(zh.owner_owes, "本期淨額為負");
+  assert.equal(proto.owner_owes, "本期淨額為負");
+  assert.equal(zh.i_stmt_negative.includes("−NT$"), false);
+  assert.equal(zh.i_stmt_negative.includes("費用"), false);
+  assert.match(zh.i_stmt_negative, /本期支出與撥付高於已登記租金，屋主淨額為 \{amount\}/);
+  const en = catalog("app", "en");
+  assert.match(en.i_stmt_negative, /Expenses and payouts this period are higher than recorded rent, so the owner net is \{amount\}/);
+  assert.equal(en.i_payouts, "Payouts");
   assert.equal(zh.i_rent_received, "已繳租金");
 
   const oldPhrase = "已收" + "租金";
@@ -196,7 +198,7 @@ test("owner statements say 已繳租金 and not 已收租金", () => {
     if (proto[key]?.includes(oldPhrase)) hits.push(`design ${key}`);
   }
   assert.deepEqual(hits, []);
-  assert.match(read(join(root, "src/components/statement-document.tsx")), /owner_owes_reason/);
+  assert.match(read(join(root, "src/components/statement-document.tsx")), /i_stmt_negative/);
   assert.match(read(join(root, "src/app/m/statements/page.tsx")), /owner_owes/);
   assert.match(read(join(root, "src/app/o/statements/[id]/page.tsx")), /StatementDocument/);
 });

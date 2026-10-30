@@ -1,17 +1,21 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { StatementDocument } from "@/components/statement-document";
 import { PageHeader } from "@/components/ui";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { statementDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function StatementPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const { id } = await params;
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const detail = await statementDetail(session, id);
   if (!detail) notFound();
@@ -35,6 +39,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
         {row.period_start} – {row.period_end}
       </p>
       <StatementDocument
+        {...(v2 ? { v2: true } : {})}
         t={t}
         locale={session.locale}
         row={row}

@@ -6,16 +6,17 @@ import { can, visibleNav, type PermKey } from "@/server/perms";
 import type { OrgRole } from "@/server/types";
 import { appFooterText, footerHasProductLine } from "@/line-copy";
 import { BrandImage } from "./brand";
-import { useT } from "./locale";
+import { useLocale, useT } from "./locale";
 
-export function BrandLink() {
+export function BrandLink({ v2 }: { v2?: boolean } = {}) {
   const t = useT();
+  const locale = useLocale();
   const name = t("i_brand");
   return (
     <Link href="/" className="brand" data-testid="brand-name" aria-label={name}>
       <span className="brand-frame">
-        <BrandImage variant="horizontalDark" alt="" className="brand-lockup" />
-        <BrandImage variant="symbolSmall" alt="" className="brand-symbol" />
+        <BrandImage variant="horizontalDark" alt="" className="brand-lockup" {...(v2 ? { v2: true, locale } : {})} />
+        <BrandImage variant="symbolSmall" alt="" className="brand-symbol" {...(v2 ? { v2: true, locale } : {})} />
       </span>
     </Link>
   );

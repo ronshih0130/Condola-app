@@ -1,13 +1,17 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
-import { moneyLabel, ownerSettlement } from "@/server/format";
+import { brandV2EnabledForOrg } from "@/server/brand-v2";
+import { moneyLabel, ownerSettlement, signedMoney, statementPeriodNet } from "@/server/format";
 import { listStatements } from "@/server/queries";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function OwnerStatementsPage() {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  const v2 = await brandV2EnabledForOrg(session.orgId);
   const t = makeT(session.locale);
   const rows = await listStatements(session);
   return (
@@ -26,14 +30,17 @@ export default async function OwnerStatementsPage() {
             payouts: Number(row.payouts),
             closing: Number(row.closing),
           });
-          const amount = moneyLabel(figures.owes > 0 ? figures.owes : Math.max(0, figures.payable), row.currency, session.locale);
+          const periodNet = statementPeriodNet(figures);
+          const amount = periodNet < 0
+            ? signedMoney(periodNet, row.currency, session.locale, v2)
+            : moneyLabel(periodNet, row.currency, session.locale);
           return (
             <p key={row.id}>
               <Link href={`/o/statements/${row.id}`}>
                 {row.period_start.slice(0, 7)} ·{" "}
-                {figures.owes > 0 ? (
+                {periodNet < 0 ? (
                   <span className="chip warn" data-testid="owner-owes">
-                    {t("owner_owes")} {amount}
+                    {t("owner_owes")} {v2 ? <span className="amount-neg">{amount}</span> : amount}
                   </span>
                 ) : (
                   amount

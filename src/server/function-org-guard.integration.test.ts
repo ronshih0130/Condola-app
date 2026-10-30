@@ -1,0 +1,275 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { Client } from "pg";
+import { withClient } from "./db";
+import { ORG_ID, ORG2_ID, USERS } from "./ids";
+
+type Place = { leaseId: string; propertyId: string; currency: string };
+
+async function place(client: Client, orgId: string): Promise<Place> {
+  const found = await client.query<{ lease_id: string; property_id: string; currency: string }>(
+    `SELECT id::text AS lease_id, property_id::text, currency
+       FROM leases WHERE org_id = $1 LIMIT 1`,
+    [orgId],
+  );
+  const row = found.rows[0];
+  assert.ok(row, `seeded lease in ${orgId}`);
+  return { leaseId: row.lease_id, propertyId: row.property_id, currency: row.currency };
+}
+
+async function ledger(client: Client, orgId: string, stamp: string) {
+  const row = await place(client, orgId);
+  const txn = await client.query<{ id: string }>(
+    `INSERT INTO ledger_transactions (
+       org_id, property_id, lease_id, kind, currency, effective_date, description
+     ) VALUES ($1, $2, $3, 'invoice', $4, current_date, $5)
+     RETURNING id::text`,
+    [orgId, row.propertyId, row.leaseId, row.currency, stamp],
+  );
+  const id = txn.rows[0].id;
+  await client.query(
+    `INSERT INTO ledger_entries (org_id, transaction_id, account, amount_minor, currency, property_id, lease_id, memo)
+     VALUES ($1, $2, 'tenant_receivable', 100, $3, $4, $5, 'org-check'),
+            ($1, $2, 'rental_income', -100, $3, $4, $5, 'org-check')`,
+    [orgId, id, row.currency, row.propertyId, row.leaseId],
+  );
+  return id;
+}
+
+async function invoice(client: Client, orgId: string, stamp: string) {
+  const row = await place(client, orgId);
+  const created = await client.query<{ id: string }>(
+    `INSERT INTO invoices (
+       org_id, property_id, lease_id, invoice_number, currency, due_date, status, source
+     ) VALUES ($1, $2, $3, $4, $5, current_date, 'open', 'one_off')
+     RETURNING id::text`,
+    [orgId, row.propertyId, row.leaseId, stamp, row.currency],
+  );
+  const id = created.rows[0].id;
+  await client.query(
+    `INSERT INTO invoice_lines (
+       org_id, invoice_id, line_no, charge_type, description, quantity, unit_amount_minor, amount_minor
+     ) VALUES ($1, $2, 1, 'rent', 'rent', 1, 100, 100)`,
+    [orgId, id],
+  );
+  return id;
+}
+
+function asPg(error: unknown): { code?: string; message: string } {
+  assert.ok(error instanceof Error);
+  return error as Error & { code?: string };
+}
+
+async function expectOrgMismatch(client: Client, sql: string, params: unknown[]) {
+  await client.query("SAVEPOINT expect_org");
+  try {
+    await client.query(sql, params);
+    assert.fail("expected org mismatch");
+  } catch (error) {
+    const pg = asPg(error);
+    assert.equal(pg.code, "42501");
+    assert.match(pg.message, /org mismatch/);
+    await client.query("ROLLBACK TO SAVEPOINT expect_org");
+  }
+}
+
+test("repair statement costs enforce membership and the pinned org before allowing NULL tickets", async () => {
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const ownPlace = await place(client, ORG_ID);
+      const otherPlace = await place(client, ORG2_ID);
+      const tickets = await client.query<{ id: string; org_id: string }>(
+        `INSERT INTO maintenance_tickets (org_id, property_id, title, category, status, ticket_number)
+         VALUES ($1,$2,'repair guard A','other','closed',900001),
+                ($3,$4,'repair guard B','other','closed',900002)
+         RETURNING id::text, org_id::text`,
+        [ORG_ID, ownPlace.propertyId, ORG2_ID, otherPlace.propertyId],
+      );
+      const own = tickets.rows.find((row) => row.org_id === ORG_ID);
+      const other = tickets.rows.find((row) => row.org_id === ORG2_ID);
+      assert.ok(own);
+      assert.ok(other);
+      await client.query(`DELETE FROM org_members WHERE org_id = $1 AND user_id = $2`, [ORG2_ID, USERS.admin]);
+      await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.admin]);
+      await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+      const checked = await client.query<{ own: boolean; own_null: boolean; foreign: boolean; foreign_null: boolean }>(
+        `SELECT app.repair_cost_on_statement($1::uuid,$2::uuid) AS own,
+                app.repair_cost_on_statement(NULL,$2::uuid) AS own_null,
+                app.repair_cost_on_statement($3::uuid,$4::uuid) AS foreign,
+                app.repair_cost_on_statement(NULL,$4::uuid) AS foreign_null`,
+        [own.id, ORG_ID, other.id, ORG2_ID],
+      );
+      assert.deepEqual(checked.rows[0], { own: true, own_null: true, foreign: false, foreign_null: false });
+      await client.query("RESET ROLE");
+      await client.query(`SELECT set_config('app.active_org_id', '', true)`);
+      await client.query("SET LOCAL ROLE authenticated");
+      const unpinned = await client.query<{ ok: boolean }>(
+        `SELECT app.repair_cost_on_statement(NULL,$1::uuid) AS ok`, [ORG2_ID],
+      );
+      assert.equal(unpinned.rows[0].ok, false);
+      await client.query("RESET ROLE");
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, status)
+         VALUES ($1,$2,'admin','active')`,
+        [ORG2_ID, USERS.admin],
+      );
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+      const pinned = await client.query<{ ok: boolean }>(
+        `SELECT app.repair_cost_on_statement(NULL,$1::uuid) AS ok`, [ORG2_ID],
+      );
+      assert.equal(pinned.rows[0].ok, false);
+      await client.query("RESET ROLE");
+      await client.query(`SELECT set_config('request.jwt.claim.role', 'service_role', true)`);
+      await client.query("SET LOCAL ROLE service_role");
+      const bypass = await client.query<{ ok: boolean; no_ticket: boolean }>(
+        `SELECT app.repair_cost_on_statement($1::uuid,$2::uuid) AS ok,
+                app.repair_cost_on_statement(NULL,$2::uuid) AS no_ticket`,
+        [other.id, ORG2_ID],
+      );
+      assert.deepEqual(bypass.rows[0], { ok: true, no_ticket: true });
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  });
+});
+
+test("post_reversal allows the pinned org, rejects another org, and service_role bypasses", async () => {
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const stamp = `org-rev-${Date.now().toString(36)}`;
+      const own = await ledger(client, ORG_ID, `${stamp}-a`);
+      const other = await ledger(client, ORG2_ID, `${stamp}-b`);
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, status)
+         VALUES ($1, $2, 'admin', 'active')
+         ON CONFLICT (org_id, user_id) DO NOTHING`,
+        [ORG2_ID, USERS.admin],
+      );
+      await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.admin]);
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+      const reversed = await client.query<{ id: string }>(`SELECT post_reversal($1::uuid, 'same org') AS id`, [own]);
+      assert.match(reversed.rows[0].id, /^[0-9a-f-]{36}$/);
+      await client.query("RESET ROLE");
+
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+      await expectOrgMismatch(client, `SELECT post_reversal($1::uuid, 'cross org')`, [other]);
+      await client.query("RESET ROLE");
+
+      await client.query(`SELECT set_config('app.active_org_id', '', true)`);
+      await client.query("SET LOCAL ROLE authenticated");
+      await expectOrgMismatch(client, `SELECT post_reversal($1::uuid, 'unpinned')`, [other]);
+      await client.query("RESET ROLE");
+
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE service_role");
+      const bypass = await client.query<{ id: string }>(`SELECT post_reversal($1::uuid, 'service') AS id`, [other]);
+      assert.match(bypass.rows[0].id, /^[0-9a-f-]{36}$/);
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  });
+});
+
+test("the 3-arg post_reversal and app.audit_event return 42501 for another org", async () => {
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const stamp = `org-rev3-${Date.now().toString(36)}`;
+      const other = await ledger(client, ORG2_ID, `${stamp}-b`);
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, status)
+         VALUES ($1, $2, 'admin', 'active')
+         ON CONFLICT (org_id, user_id) DO NOTHING`,
+        [ORG2_ID, USERS.admin],
+      );
+      await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.admin]);
+      await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+
+      // 20261030120000 adds the org check this overload did not have.
+      // A row hidden by RLS is still 42501, not the old "not found" P0001.
+      await client.query("SAVEPOINT expect_42501");
+      try {
+        await client.query(`SELECT post_reversal($1::uuid, 'cross org', NULL::uuid)`, [other]);
+        assert.fail("expected 42501 org mismatch");
+      } catch (error) {
+        const pg = asPg(error);
+        assert.equal(pg.code, "42501");
+        assert.match(pg.message, /org mismatch/);
+        await client.query("ROLLBACK TO SAVEPOINT expect_42501");
+      }
+
+      await client.query("SAVEPOINT expect_audit");
+      try {
+        await client.query(
+          `SELECT app.audit_event($1::uuid, 'utility_charge_posted', $2::jsonb)`,
+          [ORG2_ID, JSON.stringify({ runId: "00000000-0000-4000-8000-000000000099" })],
+        );
+        assert.fail("expected 42501 from app.audit_event");
+      } catch (error) {
+        const pg = asPg(error);
+        assert.equal(pg.code, "42501");
+        assert.match(pg.message, /insufficient_privilege/);
+        await client.query("ROLLBACK TO SAVEPOINT expect_audit");
+      }
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  });
+});
+
+test("fn_invoice_recalc allows the pinned org, rejects another org, and service_role bypasses", async () => {
+  await withClient(async (client) => {
+    await client.query("BEGIN");
+    try {
+      const stamp = `org-inv-${Date.now().toString(36)}`;
+      const own = await invoice(client, ORG_ID, `${stamp}-a`);
+      const other = await invoice(client, ORG2_ID, `${stamp}-b`);
+      await client.query(
+        `INSERT INTO org_members (org_id, user_id, role, status)
+         VALUES ($1, $2, 'admin', 'active')
+         ON CONFLICT (org_id, user_id) DO NOTHING`,
+        [ORG2_ID, USERS.admin],
+      );
+      await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USERS.admin]);
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+      await client.query(`SELECT fn_invoice_recalc($1::uuid)`, [own]);
+      await client.query("RESET ROLE");
+      const total = await client.query<{ total: string }>(
+        `SELECT total_minor::text AS total FROM invoices WHERE id = $1`,
+        [own],
+      );
+      assert.equal(total.rows[0].total, "100");
+
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE authenticated");
+      await expectOrgMismatch(client, `SELECT fn_invoice_recalc($1::uuid)`, [other]);
+      await client.query("RESET ROLE");
+
+      await client.query(`SELECT set_config('app.active_org_id', '', true)`);
+      await client.query("SET LOCAL ROLE authenticated");
+      await expectOrgMismatch(client, `SELECT fn_invoice_recalc($1::uuid)`, [other]);
+      await client.query("RESET ROLE");
+
+      await client.query(`SELECT set_config('app.active_org_id', $1, true)`, [ORG_ID]);
+      await client.query("SET LOCAL ROLE service_role");
+      await client.query(`SELECT fn_invoice_recalc($1::uuid)`, [other]);
+      const otherTotal = await client.query<{ total: string }>(
+        `SELECT total_minor::text AS total FROM invoices WHERE id = $1`,
+        [other],
+      );
+      assert.equal(otherTotal.rows[0].total, "100");
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  });
+});

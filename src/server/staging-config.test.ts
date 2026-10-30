@@ -27,6 +27,20 @@ function parseJsonc(raw: string) {
   return JSON.parse(json) as { main?: string; env?: { staging?: WorkerEnv; production?: WorkerEnv } };
 }
 
+/** Replacing the purge function must not leave anon or authenticated able to run it. */
+function assertPurgeExecuteStaysClosed(sql: string) {
+  const created = sql.lastIndexOf("CREATE OR REPLACE FUNCTION purge_due_identity_documents");
+  const revoked = sql.lastIndexOf(
+    "REVOKE ALL ON FUNCTION purge_due_identity_documents(integer) FROM PUBLIC, anon, authenticated",
+  );
+  assert.ok(created >= 0 && revoked > created);
+  const grantAt = sql.indexOf("GRANT EXECUTE ON FUNCTION purge_due_identity_documents(integer)", revoked);
+  assert.ok(grantAt > revoked);
+  const grant = sql.slice(grantAt, sql.indexOf(";", grantAt));
+  assert.match(grant, /TO service_role/);
+  assert.doesNotMatch(grant, /\banon\b|\bauthenticated\b|\bPUBLIC\b/);
+}
+
 test("the staging wrangler env names secrets and keeps demo mode off", () => {
   const raw = read("wrangler.jsonc");
   const staging = parseJsonc(raw).env?.staging;
@@ -41,14 +55,18 @@ test("the staging wrangler env names secrets and keeps demo mode off", () => {
     "SUPABASE_URL",
     "SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
+    "ID_DOC_ENCRYPTION_KEY",
+    "ID_DOC_HMAC_KEY",
+    "ID_DOC_SIGNING_SECRET",
+    "CRON_SECRET",
   ]);
+  assert.deepEqual(staging.triggers?.crons, ["0 1 * * *", "0 19 * * *"]);
   assert.equal(staging.services?.[0]?.service, "condola-staging");
   assert.equal(staging.placement?.mode, "targeted");
   assert.equal(staging.placement?.region, "aws:ap-northeast-1");
   assert.equal(staging.observability?.enabled, true);
   assert.equal(staging.vars?.MAIL_PROVIDER, "cloudflare");
   assert.deepEqual(staging.send_email, [{ name: "EMAIL", remote: true }]);
-  assert.deepEqual(staging.triggers?.crons, ["0 1 * * *"]);
   assert.equal(staging.secrets?.required?.includes("RESEND_API_KEY"), false);
   assert.equal(staging.secrets?.required?.includes("BREVO_API_KEY"), false);
   assert.doesNotMatch(raw, /postgres:\/\//i);
@@ -73,8 +91,12 @@ test("the production wrangler env serves app.condola.app and keeps demo mode off
     "SUPABASE_URL",
     "SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
+    "ID_DOC_ENCRYPTION_KEY",
+    "ID_DOC_HMAC_KEY",
+    "ID_DOC_SIGNING_SECRET",
+    "CRON_SECRET",
   ]);
-  assert.equal(production.secrets?.required?.some((name) => name.startsWith("ID_DOC_")), false);
+  assert.deepEqual(production.triggers?.crons, ["0 1 * * *", "0 19 * * *"]);
   assert.equal(production.services?.[0]?.service, "condola-prod");
   assert.equal(production.placement?.mode, "targeted");
   assert.equal(production.placement?.region, "aws:ap-northeast-1");
@@ -86,7 +108,6 @@ test("the production wrangler env serves app.condola.app and keeps demo mode off
   assert.equal(production.observability?.enabled, true);
   assert.equal(production.vars?.MAIL_PROVIDER, "cloudflare");
   assert.deepEqual(production.send_email, [{ name: "EMAIL", remote: true }]);
-  assert.deepEqual(production.triggers?.crons, ["0 1 * * *"]);
 });
 
 test("the worker cron calls the protected reminder route", () => {
@@ -95,9 +116,31 @@ test("the worker cron calls the protected reminder route", () => {
   const worker = read("custom-worker.mjs");
   assert.match(worker, /scheduled/);
   assert.match(worker, /0 1 \* \* \*/);
+  assert.match(worker, /0 19 \* \* \*/);
   assert.match(worker, /\/api\/cron\/reminders/);
+  assert.match(worker, /\/api\/cron\/purge-id-documents/);
+  assert.match(worker, /from "\.\/\.open-next\/worker\.js"/);
+  assert.doesNotMatch(worker, /id-purge-cron/);
+  assert.doesNotMatch(worker, /from "pg"/);
   assert.match(worker, /CRON_SECRET/);
   assert.match(worker, /x-cron-secret/);
+  assert.match(worker, /id-purge failed/);
+  assert.doesNotMatch(worker, /SET LOCAL ROLE anon/);
+  const purge = read("id-purge-cron.mjs");
+  assert.match(purge, /0 19 \* \* \*/);
+  assert.match(purge, /purge_due_identity_documents/);
+  assert.match(purge, /SET LOCAL ROLE service_role/);
+  assert.match(purge, /DELETE FROM id_document_wm_objects/);
+  assert.match(purge, /DELETE FROM id_document_objects/);
+  assert.doesNotMatch(purge, /SET LOCAL ROLE anon/);
+  assert.match(purge, /status: "disabled"/);
+  const route = read("src/app/api/cron/purge-id-documents/route.ts");
+  assert.match(route, /runDueIdDocuments/);
+  assert.match(route, /getCloudflareContext/);
+  assert.match(route, /cronAuthorized/);
+  assert.match(route, /status: 404/);
+  assert.match(route, /x-cron-secret/);
+  assert.doesNotMatch(route, /CONDOLA_ENV/);
 });
 
 test("production redirects and cookies accept app.condola.app and condola.app", () => {
@@ -149,4 +192,93 @@ test("Depot deploys staging only after tests, behind a default-off variable", ()
   assert.match(migrate, /supabase\/migrations\/\*\.sql/);
   assert.match(migrate, /6543/);
   assert.doesNotMatch(migrate, /-f [^\n]*stub/);
+  assert.match(workflow, /CRON_SECRET/);
+  assert.match(deploy, /CRON_SECRET/);
+
+  const worker = read("custom-worker.mjs");
+  assert.match(worker, /scheduled/);
+  assert.match(worker, /\/api\/cron\/purge-id-documents/);
+  assert.doesNotMatch(worker, /id-purge-cron/);
+  assert.doesNotMatch(worker, /from "pg"/);
+  assert.match(worker, /\/api\/cron\/reminders/);
+  assert.match(worker, /CRON_SECRET/);
+  assert.match(read("wrangler.jsonc"), /"main": "\.\/custom-worker\.mjs"/);
+
+  const sql = read("supabase/migrations/20261022180000_tenant_id_check.sql");
+  assert.match(sql, /pg_temp\.id_purge_batch/);
+  assert.match(sql, /ON DELETE CASCADE/);
+  assert.match(sql, /row_number\(\)/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION purge_due_identity_documents\(integer\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /SET search_path = pg_catalog, public/);
+  for (const fn of [
+    "id_number_stored_mask\\(text\\)",
+    "dedupe_live_identity_documents\\(\\)",
+    "fn_id_access_log_guard\\(\\)",
+    "fn_id_document_allow_log_delete\\(\\)",
+    "fn_id_number_masked\\(\\)",
+    "id_document_keep_days\\(\\)",
+  ]) {
+    assert.match(sql, new RegExp(`REVOKE ALL ON FUNCTION ${fn} FROM PUBLIC, anon, authenticated`));
+  }
+  assert.match(sql, /WHEN n < 8 THEN 2 ELSE 3 END/);
+  assertPurgeExecuteStaysClosed(sql);
+  const upgrade = read("supabase/migrations/20261022200000_tenant_id_check_upgrade.sql");
+  assert.match(upgrade, /ADD COLUMN IF NOT EXISTS/);
+  assert.match(upgrade, /DROP FUNCTION IF EXISTS id_document_delete_after\(uuid\)/);
+  assert.match(upgrade, /DROP FUNCTION IF EXISTS fn_id_document_delete_after\(\)/);
+  assert.match(upgrade, /REVOKE ALL ON FUNCTION purge_due_identity_documents\(integer\) FROM PUBLIC, anon, authenticated/);
+  assert.match(upgrade, /SET search_path = pg_catalog, public/);
+  for (const fn of [
+    "id_number_stored_mask\\(text\\)",
+    "dedupe_live_identity_documents\\(\\)",
+    "fn_id_access_log_guard\\(\\)",
+    "fn_id_document_allow_log_delete\\(\\)",
+    "fn_id_number_masked\\(\\)",
+    "id_document_keep_days\\(\\)",
+  ]) {
+    assert.match(upgrade, new RegExp(`REVOKE ALL ON FUNCTION ${fn} FROM PUBLIC, anon, authenticated`));
+  }
+  assert.match(upgrade, /GRANT EXECUTE ON FUNCTION purge_due_identity_documents\(integer\)/);
+  assert.match(upgrade, /TO service_role/);
+  assertPurgeExecuteStaysClosed(upgrade);
+  const hotfix = read("supabase/migrations/20261021150000_revoke_purge_execute.sql");
+  assert.match(
+    hotfix,
+    /REVOKE EXECUTE ON FUNCTION public\.purge_due_identity_documents\(integer\) FROM PUBLIC, anon, authenticated/,
+  );
+  assert.match(read("scripts/pack-staging-bundle.sh"), /custom-worker\.mjs/);
+  assert.match(read("scripts/pack-staging-bundle.sh"), /\.open-next\/worker\.js/);
+  const exportUpdate = sql.indexOf("UPDATE export_jobs");
+  const exportCheck = sql.indexOf("export_jobs_no_identity_documents");
+  assert.ok(exportUpdate >= 0 && exportUpdate < exportCheck);
+  assert.match(sql, /delete_after/);
+  assert.match(sql, /819200/);
+  assert.match(sql, /819228/);
+  assert.match(sql, /FOR UPDATE OF d SKIP LOCKED/);
+  assert.match(sql, /deleted_at IS NOT NULL/);
+  assert.match(sql, /OLD\.id::text/);
+  assert.match(sql, /array_append/);
+  assert.match(sql, /NOT EXISTS \(SELECT 1 FROM public\.identity_documents d WHERE d\.id = OLD\.document_id\)/);
+  assert.match(upgrade, /array_append/);
+  assert.match(upgrade, /NOT EXISTS \(SELECT 1 FROM public\.identity_documents d WHERE d\.id = OLD\.document_id\)/);
+  const truncate = read("supabase/migrations/20261024100000_revoke_truncate.sql");
+  assert.match(truncate, /-- Version 20261024100000\./);
+  assert.match(truncate, /REVOKE TRUNCATE ON ALL TABLES IN SCHEMA public FROM anon, authenticated;/);
+  assert.match(truncate, /ALTER DEFAULT PRIVILEGES IN SCHEMA public/);
+  assert.match(truncate, /REVOKE TRUNCATE ON TABLES FROM anon, authenticated;/);
+  assert.match(upgrade, /FOR UPDATE OF d SKIP LOCKED/);
+  assert.match(upgrade, /size_bytes > 819200/);
+  assert.match(upgrade, /confdeltype IS DISTINCT FROM 'c'/);
+  assert.match(sql, /l\.status IN \('active', 'ended', 'terminated'\)/);
+  assert.match(upgrade, /l\.status IN \('active', 'ended', 'terminated'\)/);
+  assert.match(sql, /SELECT 90/);
+  assert.match(upgrade, /SELECT 90/);
+  assert.doesNotMatch(sql, /365/);
+  assert.doesNotMatch(upgrade, /365/);
+  assert.doesNotMatch(sql, /fn_id_photo_reject_back/);
+  assert.match(upgrade, /DROP TRIGGER IF EXISTS trg_id_photo_reject_back/);
+  assert.match(upgrade, /DROP FUNCTION IF EXISTS fn_id_photo_reject_back\(\)/);
+  assert.doesNotMatch(upgrade, /CREATE TRIGGER trg_id_photo_reject_back/);
+  assert.match(upgrade, /SET delete_after = id_document_delete_after\(lease_id, org_id, created_at\);/);
+  assert.match(upgrade, /number_masked !~ '\^\[\^\*\]\{0,1\}/);
 });

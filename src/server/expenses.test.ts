@@ -8,6 +8,7 @@ import {
   STATEMENT_EXPENSE_STATUSES,
   expenseCanBeApproved,
   expenseCountsOnStatement,
+  repairCostOnStatement,
   majorInput,
   monthIsClosed,
   normalizeExpense,
@@ -24,6 +25,15 @@ test("owner statements include only approved and posted expenses billed to the o
     assert.equal(expenseCountsOnStatement(status, "manager"), false);
   }
   assert.equal(STATEMENT_EXPENSE_SQL, "status IN ('approved','posted') AND bill_to = 'owner'");
+  assert.equal(
+    repairCostOnStatement({ status: "posted", billTo: "owner", ticketId: "t", ticketStatus: "resolved" }),
+    false,
+  );
+  assert.equal(
+    repairCostOnStatement({ status: "posted", billTo: "owner", ticketId: "t", ticketStatus: "closed" }),
+    true,
+  );
+  assert.equal(repairCostOnStatement({ status: "posted", billTo: "owner", ticketId: null, ticketStatus: null }), true);
 });
 
 test("the statement query uses the shared status predicate", () => {

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { makeT } from "@/i18n";
 import { AuthBrand } from "@/components/brand";
+import { brandV2Enabled } from "@/server/brand-v2";
 import { ClearResetFlash } from "@/components/clear-reset-flash";
 import { actionForgot } from "@/server/auth-actions";
 import { RESET_FLASH_COOKIE, resetFlashDisplay } from "@/server/reset-flash";
@@ -15,7 +16,7 @@ export default async function ForgotPage() {
   const flash = resetFlashDisplay(jar.get(RESET_FLASH_COOKIE)?.value);
   return (
     <div className="auth-wrap">
-      <AuthBrand name={t("i_brand")} />
+      <AuthBrand name={t("i_brand")} v2={brandV2Enabled()} />
       <form className="card pad" action={actionForgot}>
         <h1>{t("i_forgot")}</h1>
         {flash.sent ? (

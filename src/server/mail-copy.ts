@@ -4,6 +4,9 @@ import { SERVICE_EMAIL } from "./mail";
 
 export const FOOTER_ADDRESS = "403 台中市西區府後街38號";
 
+/** Shared footer for every transactional email. */
+export const MAIL_FOOTER = `租多啦 Condola｜營運者：艾隆科技 Airon Tech（負責人 施振榮）｜${FOOTER_ADDRESS}｜${SERVICE_EMAIL}｜0975-317-990`;
+
 const LEASE_ADMIN_SUBJECT = "【租約到期提醒】{物件名稱} {戶別房間} 將於 {到期日} 到期";
 const LEASE_ADMIN_BODY = `{管理員姓名} 您好：
 
@@ -21,8 +24,7 @@ const LEASE_ADMIN_BODY = `{管理員姓名} 您好：
 
 此信由租多啦依租約到期日自動寄出。如不想收到這類提醒，可在「帳號設定」關閉。
 
-租多啦 Condola｜幫你輕鬆管理租屋大小事
-403 台中市西區府後街38號｜service@condola.app`;
+${MAIL_FOOTER}`;
 
 const LEASE_TENANT_SUBJECT = "您的租約將於 {到期日} 到期";
 const LEASE_TENANT_BODY = `{租客姓名} 您好：
@@ -35,7 +37,7 @@ const LEASE_TENANT_BODY = `{租客姓名} 您好：
 
 此信由租多啦代 {管理公司名稱} 寄出。租多啦是管理公司使用的租賃管理軟體，不經手租金與押金；相關問題請洽 {管理公司名稱}。
 
-403 台中市西區府後街38號`;
+${MAIL_FOOTER}`;
 
 const OVERDUE_ADMIN_SUBJECT = "【繳款提醒】{物件名稱} {戶別房間} 本期租金尚未繳清";
 const OVERDUE_ADMIN_BODY = `{管理員姓名} 您好：
@@ -54,8 +56,7 @@ const OVERDUE_ADMIN_BODY = `{管理員姓名} 您好：
 
 此信由租多啦依帳單繳費日自動寄出。可在「帳號設定」關閉此類提醒。
 
-租多啦 Condola｜幫你輕鬆管理租屋大小事
-403 台中市西區府後街38號｜service@condola.app`;
+${MAIL_FOOTER}`;
 
 const OVERDUE_TENANT_SUBJECT = "{帳單月份} 租金繳費提醒";
 const OVERDUE_TENANT_BODY = `{租客姓名} 您好：
@@ -71,7 +72,23 @@ const OVERDUE_TENANT_BODY = `{租客姓名} 您好：
 
 此信由租多啦代 {管理公司名稱} 寄出。租多啦是管理公司使用的租賃管理軟體，不經手租金與押金。
 
-403 台中市西區府後街38號`;
+${MAIL_FOOTER}`;
+
+/** Shared by signup confirmation and password reset. */
+export const MAIL_DISCLAIMER = "租多啦 Condola 只提供管理軟體，不經手任何款項。";
+
+const SIGNUP_SUBJECT = "請確認您的租多啦 Condola 帳號";
+const SIGNUP_BODY = `您好：
+
+請在 60 分鐘內點下方按鈕確認您的電子郵件，完成租多啦帳號註冊。
+
+[確認電子郵件]({確認連結})
+
+如果不是您本人註冊，請忽略這封信。
+
+${MAIL_DISCLAIMER}
+
+${MAIL_FOOTER}`;
 
 const RESET_SUBJECT = "重設您的租多啦密碼";
 const RESET_BODY = `您好：
@@ -82,8 +99,9 @@ const RESET_BODY = `您好：
 
 如果不是您本人申請，請忽略此信，您的密碼不會改變。
 
-租多啦 Condola
-403 台中市西區府後街38號｜service@condola.app`;
+${MAIL_DISCLAIMER}
+
+${MAIL_FOOTER}`;
 
 export type RenderedMail = { subject: string; text: string; html: string };
 
@@ -259,4 +277,8 @@ export function overdueTenantMail(vars: {
 
 export function passwordResetMail(url: string) {
   return renderTemplate(RESET_SUBJECT, RESET_BODY, { 重設連結: url });
+}
+
+export function signupConfirmMail(url: string) {
+  return renderTemplate(SIGNUP_SUBJECT, SIGNUP_BODY, { 確認連結: url });
 }

@@ -2,6 +2,7 @@ import { dictionary, type T, type Locale } from "@/i18n";
 import { formatDate } from "@/server/format";
 import { statusKey } from "@/components/ui";
 import { TicketPhotoUpload } from "@/components/ticket-photos";
+import { RepairPhotos } from "@/components/repair-photos";
 import { actionTicketComment } from "@/server/actions";
 import type { CalendarMode } from "@/server/types";
 
@@ -26,6 +27,7 @@ export function RepairThread({
   calendar,
   canComment,
   canUpload,
+  canViewPhotos,
   allowInternal,
   returnTo,
 }: {
@@ -37,6 +39,7 @@ export function RepairThread({
   calendar: CalendarMode;
   canComment: boolean;
   canUpload: boolean;
+  canViewPhotos: boolean;
   allowInternal: boolean;
   returnTo: "tenant" | "staff";
 }) {
@@ -59,8 +62,11 @@ export function RepairThread({
               <li key={comment.id} data-testid={`repair-event-${comment.id}`}>
                 <div className="small muted">
                   {formatDate(comment.at, locale, calendar, dict)}
-                  {comment.author ? ` · ${comment.author}` : ""}
-                  {comment.internal ? ` · ${t("i_repair_internal")}` : ""}
+                  {comment.internal
+                    ? ` · ${comment.author ? t("i_repair_internal_by", { author: comment.author }) : t("i_repair_internal")}`
+                    : comment.author
+                      ? ` · ${comment.author}`
+                      : ""}
                 </div>
                 {status ? <div>{status}</div> : null}
                 {comment.body ? <div>{comment.body}</div> : null}
@@ -75,11 +81,12 @@ export function RepairThread({
           <input type="hidden" name="returnTo" value={returnTo} />
           <div className="fg">
             <label className="f">{t("i_repair_comment")}</label>
-            <textarea className="inp" name="body" data-testid="repair-comment" required />
+            <textarea className="inp" name="body" data-testid="repair-comment" placeholder={t("i_repair_comment_ph")} required />
           </div>
           {allowInternal ? (
             <label className="small">
               <input type="checkbox" name="internal" /> {t("i_repair_internal")}
+              <div className="tiny muted">{t("i_repair_internal_hint")}</div>
             </label>
           ) : null}
           <button className="btn sm" type="submit" data-testid="repair-comment-send">
@@ -88,39 +95,25 @@ export function RepairThread({
         </form>
       ) : null}
       <h3 style={{ marginTop: 16 }}>{t("i_repair_photos")}</h3>
-      {photos.length ? (
-        <div className="repair-photos" data-testid="repair-photos">
-          {photos.map((photo) => {
-            const href = `/api/tickets/photos/${photo.id}`;
-            return (
-              <a key={photo.id} href={href} target="_blank" rel="noreferrer">
-                {/* The browser follows a short-lived signed URL. The image optimizer would re-encode the file on the server. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={href} alt={photo.name} data-testid="repair-photo-preview" />
-                <span className="tiny">
-                  {photo.name}
-                  {photo.internal ? ` (${t("i_repair_internal")})` : ""}
-                </span>
-              </a>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="small muted">{t("i_repair_none")}</p>
-      )}
+      <RepairPhotos photos={photos} canView={canViewPhotos} t={t} />
       {canUpload ? (
         <TicketPhotoUpload
           ticketId={ticketId}
           label={t("i_repair_photo_add")}
+          chooseLabel={t("i_repair_photo_choose")}
           hint={t("i_repair_photo_hint")}
           allowInternal={allowInternal}
           messages={{
             size: t("i_photo_size"),
             type: t("i_photo_type"),
+            heic: t("i_photo_heic"),
             storage: t("i_photo_storage"),
             limit: t("i_photo_limit"),
             generic: t("i_generic"),
             internal: t("i_repair_internal"),
+            internalHint: t("i_repair_internal_hint"),
+            wait: t("i_repair_upload_wait"),
+            failed: t("i_repair_photo_failed"),
           }}
         />
       ) : null}

@@ -14,6 +14,10 @@ import {
 } from "./list-search";
 import { rentUtilityDueMinor, tenantBillLines } from "./money";
 import type { Session } from "./types";
+import {
+  TENANT_SIGNED_PDF_ENABLED,
+  tenantSignedPdfOn,
+} from "./tenant-signed-pdf-rules";
 
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
 
@@ -584,6 +588,17 @@ const LEASE_LIST_SQL = `SELECT l.id::text, l.status::text, l.esign_status::text 
                   WHERE line.lease_id = l.id
                     AND r.status <> 'void'
                   -- Latest non-void run for the period. A recalculation supersedes the original.
+                  ORDER BY r.period_start DESC, r.computed_at DESC, r.id DESC
+                  LIMIT 1),
+                -- A pending lease is not on the split yet. Show the unit's current run, not the meter method from the first save.
+                (SELECT r.split_method::text
+                   FROM utility_allocation_runs r
+                   JOIN meters m ON m.id = r.meter_id
+                  WHERE m.unit_id = l.unit_id
+                    AND m.utility = 'electricity'
+                    AND m.room_id IS NULL
+                    AND m.archived_at IS NULL
+                    AND r.status <> 'void'
                   ORDER BY r.period_start DESC, r.computed_at DESC, r.id DESC
                   LIMIT 1),
                 (SELECT m.split_method::text
@@ -1354,28 +1369,38 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
       [leaseId],
     );
     const lines = invoices.length
-      ? await many<{ invoice_id: string; charge_type: string; amount: string; description: string }>(
+      ? await many<{ invoice_id: string; charge_type: string; amount: string; description: string; period_start: string | null }>(
           client,
-          `SELECT invoice_id::text, charge_type::text, amount_minor::text AS amount, description
-             FROM invoice_lines WHERE invoice_id = ANY($1::uuid[])`,
+          `SELECT il.invoice_id::text, il.charge_type::text, il.amount_minor::text AS amount, il.description,
+                  i.period_start::text AS period_start
+             FROM invoice_lines il
+             JOIN invoices i ON i.id = il.invoice_id
+            WHERE il.invoice_id = ANY($1::uuid[])`,
           [invoices.map((invoice) => invoice.id)],
         )
       : [];
     const billLines = invoices.flatMap((invoice) => {
       const invoiceLines = lines
         .filter((line) => line.invoice_id === invoice.id)
-        .map((line) => ({ charge_type: line.charge_type, amount_minor: Number(line.amount), description: line.description }));
+        .map((line) => ({
+          charge_type: line.charge_type,
+          amount_minor: Number(line.amount),
+          description: line.description,
+          period_start: line.period_start,
+        }));
       return tenantBillLines(invoiceLines, Number(invoice.paid));
     });
     const dueMinor = billLines.reduce((sum, line) => sum + line.amountMinor, 0);
     const balance = invoices.reduce((sum, invoice) => sum + Number(invoice.balance), 0);
+    const paidMinor = invoices.reduce((sum, invoice) => sum + Number(invoice.paid), 0);
     // Rent and electricity are billed only after both parties sign. A pending_signature lease
     // is left out of the electricity split, so it has neither a rent row nor a new utility row.
     // Deposit and any other open charge stay on the bill so the rows match the invoice balance.
-    const asRow = (line: { chargeType: string; description: string; amountMinor: number }) => ({
+    const asRow = (line: { chargeType: string; description: string; amountMinor: number; periodStart?: string | null }) => ({
       chargeType: line.chargeType,
       description: line.description,
       amount: String(line.amountMinor),
+      periodStart: line.periodStart ?? null,
     });
     const rentLines = billLines.filter((line) => line.chargeType === "rent").map(asRow);
     const depositLines = billLines.filter((line) => line.chargeType === "deposit").map(asRow);
@@ -1383,7 +1408,7 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
     const otherLines = billLines
       .filter((line) => line.chargeType !== "rent" && line.chargeType !== "deposit" && line.chargeType !== "utility")
       .map(asRow);
-    return { lease, dueMinor, balance, currency: lease.currency, rentLines, depositLines, utilityLines, otherLines };
+    return { lease, dueMinor, balance, paidMinor, currency: lease.currency, rentLines, depositLines, utilityLines, otherLines };
   });
 }
 
@@ -1837,6 +1862,69 @@ export async function tenantDetail(session: Session, id: string) {
       );
       return { tenant, leases };
     },
+    { orgId: session.orgId, environment: session.environment },
+  );
+}
+
+export type TenantSignedLeasePdfSummary = {
+  id: string;
+  source_pdf_id: string;
+  created_at: Date | string;
+  size_bytes: number;
+};
+
+/**
+ * All reads use the tenant's authenticated database role. RLS independently
+ * checks lease-party ownership, lease organization, and the DB global/org flags.
+ * App routes additionally require TENANT_SIGNED_PDF_ENABLED.
+ * These queries only read; they never change signing state.
+ * The download route records signed_pdf_downloaded after an authorized read
+ * and successful PDF response construction. Listing PDFs does not write audit.
+ */
+export async function tenantSignedLeasePdfs(
+  session: Session,
+  leaseId: string,
+): Promise<TenantSignedLeasePdfSummary[]> {
+  if (session.kind !== "tenant" || !TENANT_SIGNED_PDF_ENABLED) return [];
+  return tx(session.userId, async (client) => {
+    const gate = await maybe<{ enabled: boolean }>(
+      client,
+      `SELECT app.tenant_signed_pdf_readable($1::uuid, $2::uuid) AS enabled`,
+      [session.orgId, leaseId],
+    );
+    if (!tenantSignedPdfOn(TENANT_SIGNED_PDF_ENABLED, {
+      tenant_signed_pdf: gate?.enabled,
+    })) return [];
+    return many<TenantSignedLeasePdfSummary>(
+      client,
+      `SELECT pdf.id, pdf.id AS source_pdf_id, pdf.created_at,
+              octet_length(pdf.content) AS size_bytes
+         FROM lease_signed_pdfs pdf
+        WHERE pdf.org_id = $1 AND pdf.lease_id = $2
+        ORDER BY pdf.created_at DESC, pdf.id DESC`,
+      [session.orgId, leaseId],
+    );
+  }, { orgId: session.orgId, environment: session.environment });
+}
+
+export async function tenantSignedLeasePdf(
+  session: Session,
+  leaseId: string,
+  pdfId: string,
+) {
+  if (session.kind !== "tenant" || !TENANT_SIGNED_PDF_ENABLED) return null;
+  return tx(session.userId, async (client) =>
+    maybe<TenantSignedLeasePdfSummary & { content: Buffer; file_name: string }>(
+      client,
+      `SELECT pdf.id, pdf.id AS source_pdf_id, pdf.created_at,
+              octet_length(pdf.content) AS size_bytes, pdf.content,
+              'signed-lease-' || pdf.id::text || '.pdf' AS file_name
+         FROM lease_signed_pdfs pdf
+        WHERE pdf.org_id = $1 AND pdf.lease_id = $2 AND pdf.id = $3
+          AND app.tenant_signed_pdf_readable(pdf.org_id, pdf.lease_id)
+          AND app.is_lease_tenant(pdf.lease_id)`,
+      [session.orgId, leaseId, pdfId],
+    ),
     { orgId: session.orgId, environment: session.environment },
   );
 }

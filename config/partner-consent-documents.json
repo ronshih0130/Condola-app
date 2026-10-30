@@ -1,0 +1,33 @@
+{
+  "default_locale": "zh-TW",
+  "documents": {
+    "privacy": [
+      {
+        "locale": "zh-TW",
+        "version": "v2.1",
+        "effective_date": "2026-10-29",
+        "full_text_url": "/privacy",
+        "source": "content/legal/privacy.md",
+        "min_privacy_version": "2026-10-29"
+      }
+    ],
+    "partner_agreement": [
+      {
+        "locale": "zh-TW",
+        "version": "v0.1",
+        "effective_date": "2026-10-27",
+        "full_text_url": "/partner-agreement?locale=zh-TW",
+        "source": "content/partner/partner-agreement.zh-TW.md",
+        "sha256": "466c1ea98c2161bee2e55035603f00999ded51364c7046e88ef586868a35aa4b"
+      },
+      {
+        "locale": "en",
+        "version": "v0.1",
+        "effective_date": "2026-10-27",
+        "full_text_url": "/partner-agreement?locale=en",
+        "source": "content/partner/partner-agreement.en.md",
+        "sha256": "b1a05c377de167f7101d2dfb1cc0554df4aab82fda4bc9e12f740d63dc1be0a2"
+      }
+    ]
+  }
+}

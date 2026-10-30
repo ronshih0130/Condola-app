@@ -1,5 +1,6 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
-import { FlowError } from "@/server/errors";
+import { FlowError, safeDbCode, safeDbIdentifier, safeErrorReason } from "@/server/errors";
 import { commitImportBatch, dryRunImport, previewImport, readImportBody } from "@/server/import-batch";
 import { readSession } from "@/server/session";
 import type { Session } from "@/server/types";
@@ -9,6 +10,8 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const session = await readSession();
   if (!session || session.kind !== "staff") return NextResponse.json({ error: "errors.forbidden" }, { status: 401 });
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   try {
     const body = await readImportBody(request);
     if (body.mode === "preview") {
@@ -62,21 +65,41 @@ function streamCommit(session: Session, body: { fileName: string; rows: unknown 
 }
 
 function importErrorResponse(error: unknown) {
+  logImportFailure(error);
   if (error instanceof FlowError) {
     const status = error.key === "errors.forbidden" ? 403 : 400;
     return NextResponse.json({ error: error.key, vars: error.vars ?? {} }, { status });
   }
-  logImportFailure(error);
   return NextResponse.json({ error: "errors.generic" }, { status: 500 });
 }
 
 function logImportFailure(error: unknown) {
-  const cause = error instanceof Error && error.cause !== undefined ? error.cause : error;
-  const reported = cause instanceof Error ? cause : error;
-  const code = reported && typeof reported === "object" && "code" in reported ? (reported as { code?: unknown }).code : undefined;
+  const cause = error instanceof Error ? error.cause : undefined;
+  const reported = cause && typeof cause === "object" ? cause : error;
+  const metadata = reported && typeof reported === "object"
+    ? reported as { code?: unknown; constraint?: unknown }
+    : undefined;
+  const reason = safeErrorReason(
+    cause && typeof cause === "object" && "reason" in cause ? cause.reason : undefined,
+  );
+  const safeToken = (value: unknown, pattern: RegExp) =>
+    typeof value === "string" && pattern.test(value) ? value : undefined;
+  const name = error instanceof FlowError
+    ? "FlowError"
+    : error instanceof Error
+      ? safeToken(error.name, /^(?:Error|TypeError|RangeError|SyntaxError|ReferenceError|URIError|EvalError|AggregateError)$/) ?? "Error"
+      : "Error";
+  const key = error instanceof FlowError
+    ? safeToken(error.key, /^errors\.[a-zA-Z][a-zA-Z0-9_]{0,63}$/)
+    : undefined;
+  const code = safeDbCode(metadata?.code);
+  const constraint = safeDbIdentifier(metadata?.constraint);
   console.error("import failed", {
-    message: reported instanceof Error ? reported.message : String(reported),
-    code,
-    stack: reported instanceof Error ? reported.stack : undefined,
+    name,
+    ...(key === undefined ? {} : { key }),
+    ...(code === undefined ? {} : { code }),
+    ...(constraint === undefined ? {} : { constraint }),
+    ...(reason === undefined ? {} : { reason }),
   });
 }
+

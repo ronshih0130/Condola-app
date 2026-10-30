@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -9,6 +10,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function PlatformAdminPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   if (!isPlatformAdmin(session.email)) notFound();
   const query = await searchParams;

@@ -38,6 +38,34 @@ const coast: Session = {
   liveOrgId: ORG2_ID,
 };
 
+async function markLeaseIdReady(leaseId: string) {
+  const party = await query<{ org_id: string; contact_id: string }>(
+    `SELECT l.org_id::text, lp.contact_id::text
+       FROM leases l
+       JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
+      WHERE l.id = $1`,
+    [leaseId],
+  );
+  const orgId = party.rows[0]?.org_id ?? "";
+  const contactId = party.rows[0]?.contact_id ?? "";
+  const doc = await query<{ id: string }>(
+    `INSERT INTO identity_documents (
+       org_id, contact_id, lease_id, doc_type, number_masked, storage_path, encryption_key_ref,
+       review_status, created_by
+     ) VALUES ($1,$2,$3,'passport','A**789',$4,'env:ID_DOC_ENCRYPTION_KEY','pending_review',$5)
+     RETURNING id::text`,
+    [orgId, contactId, leaseId, `${orgId}/${leaseId}/doc`, USERS.admin],
+  );
+  for (const slot of ["front", "selfie"]) {
+    await query(
+      `INSERT INTO identity_document_photos (
+         org_id, document_id, slot, storage_path, mime_type, size_bytes, sha256
+       ) VALUES ($1,$2,$3,$4,'image/jpeg',4,'abc')`,
+      [orgId, doc.rows[0]?.id, slot, `${orgId}/${leaseId}/${slot}`],
+    );
+  }
+}
+
 function form(fields: Record<string, string>) {
   const data = new FormData();
   for (const [key, value] of Object.entries(fields)) data.set(key, value);
@@ -1628,6 +1656,7 @@ test("electricity split bills signed tenants only and treats a pending lease as 
       form({ ...fields, roomId: roomB, tenantName: "待簽署租客", tenantEmail: `pending.${stamp}@example.com` }),
     );
     userIds.push(signed.tenantUserId, pending.tenantUserId);
+    await markLeaseIdReady(signed.leaseId);
     const tenantSigned = await simulateTenantSignature(admin, signed.leaseId);
     assert.equal(tenantSigned.esign, "partially_signed");
     const activated = await signLease(admin, { leaseId: signed.leaseId, signedName: "管理方", consent: true });
@@ -1783,6 +1812,7 @@ test("countersign leaves a pending room's electricity on the owner", async () =>
     );
     assert.equal(vacant.rows[0]?.amount, "40000");
 
+    await markLeaseIdReady(lease.leaseId);
     const tenantSigned = await simulateTenantSignature(admin, lease.leaseId);
     assert.equal(tenantSigned.esign, "partially_signed");
     const waiting = await query<{ status: string; move_in: string }>(

@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { LeaseWizard } from "@/components/lease-wizard";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -9,6 +10,7 @@ import { getSession } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function NewLeasePage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;

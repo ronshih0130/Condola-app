@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { cookies } from "next/headers";
 import { makeT } from "@/i18n";
 import { BackupCodes } from "@/components/backup-codes";
@@ -26,6 +27,7 @@ export default async function AccountPage({
 }: {
   searchParams: Promise<{ error?: string; saved?: string; enroll?: string; backup?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;

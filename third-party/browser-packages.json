@@ -1,0 +1,195 @@
+{
+  "roots": [
+    {
+      "name": "react",
+      "walk": true,
+      "exclude": [],
+      "why": "Browser UI runtime."
+    },
+    {
+      "name": "react-dom",
+      "walk": true,
+      "exclude": [],
+      "why": "Browser renderer and scheduler."
+    },
+    {
+      "name": "next",
+      "walk": false,
+      "exclude": [],
+      "why": "The Next client runtime is self-contained in next/dist; package dependencies are build or server dependencies."
+    },
+    {
+      "name": "tailwindcss",
+      "walk": false,
+      "exclude": [],
+      "why": "Generated Tailwind CSS (preflight and utilities) is shipped in the global stylesheet; its npm dependencies are build-time only."
+    },
+    {
+      "name": "@swc/helpers",
+      "walk": true,
+      "exclude": ["tslib"],
+      "why": "Explicit dependency of the Next client runtime. Its tslib dependency is not emitted in the client bundle (verified by --verify-bundle)."
+    },
+    {
+      "name": "pdf-lib",
+      "walk": true,
+      "exclude": [],
+      "why": "Dynamically loaded browser PDF generation."
+    },
+    {
+      "name": "@pdf-lib/fontkit",
+      "walk": true,
+      "exclude": [],
+      "why": "Browser PDF font embedding."
+    },
+    {
+      "name": "heic-convert",
+      "walk": true,
+      "exclude": ["jpeg-js", "pngjs"],
+      "why": "Browser conversion uses canvas encoders; jpeg-js and pngjs belong exclusively to formats-node.js."
+    }
+  ],
+  "embedded": [
+    {
+      "name": "libheif",
+      "parent": "libheif-js",
+      "license": "LGPL-3.0",
+      "probe": "libheif",
+      "homepage": "https://github.com/strukturag/libheif",
+      "sourceUrlTemplate": "https://github.com/strukturag/libheif/releases/tag/v{version}"
+    },
+    {
+      "name": "libde265",
+      "parent": "libheif-js",
+      "license": "LGPL-3.0",
+      "probe": "libde265",
+      "homepage": "https://github.com/strukturag/libde265",
+      "sourceUrlTemplate": "https://github.com/strukturag/libde265/releases/tag/v{version}"
+    }
+  ],
+  "vendored": [
+    {
+      "package": "libheif-js",
+      "file": "libheif-wasm/libheif-bundle.mjs",
+      "publicDir": "vendor/libheif-js/{version}"
+    }
+  ],
+  "selfHostedAssets": [
+    {
+      "package": "@fontsource-variable/inter",
+      "version": "5.3.0",
+      "license": "OFL-1.1",
+      "files": [
+        {
+          "path": "public/brand/v2/fonts/Inter-latin-wght.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ],
+      "licenseFile": {
+        "path": "public/brand/v2/fonts/LICENSE-Inter.txt",
+        "sha256": "3b0a5fca3d17942cde889069889dedbbbd075e9b599968c82a95f4d944e9b345"
+      },
+      "sourceArchive": {
+        "url": "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.3.0.tgz",
+        "integrity": "sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA=="
+      },
+      "repository": "https://github.com/fontsource/font-files/tree/main/fonts/variable/inter"
+    },
+    {
+      "package": "@fontsource-variable/plus-jakarta-sans",
+      "version": "5.3.0",
+      "license": "OFL-1.1",
+      "files": [
+        {
+          "path": "public/brand/v2/fonts/PlusJakartaSans-latin-wght.woff2",
+          "sha256": "153fc85b70298beeb1d61a5f723331649e7f23bb77302a66e61cb3e2fbdb5e79"
+        }
+      ],
+      "licenseFile": {
+        "path": "public/brand/v2/fonts/LICENSE-PlusJakartaSans.txt",
+        "sha256": "e07fd1167c2aaaa6fb965dd66e1e73b13c9c95b76b2d648b6e938780f30b37af"
+      },
+      "sourceArchive": {
+        "url": "https://registry.npmjs.org/@fontsource-variable/plus-jakarta-sans/-/plus-jakarta-sans-5.3.0.tgz",
+        "integrity": "sha512-/l/4r0yyWK9JzAlmA0LiYgGgmJe/Gswt4jTJEzr5QhJfwMbvJZDmYWyW0M4X7yCK69BajMVlV/Lx8g7WDc1+sw=="
+      },
+      "repository": "https://github.com/fontsource/font-files/tree/main/fonts/variable/plus-jakarta-sans"
+    }
+  ],
+  "copyrightHolders": {
+    "@pdf-lib/fontkit": "Devon Govett; Andrew Dillon"
+  },
+  "copyleftTexts": {
+    "LGPL-3.0": {
+      "from": "libheif-js/LICENSE",
+      "public": "third-party/LGPL-3.0.txt"
+    },
+    "GPL-3.0": {
+      "public": "third-party/GPL-3.0.txt",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    }
+  },
+  "extraNotices": [
+    {
+      "from": "libheif-js/libheif-wasm/LICENSE",
+      "public": "third-party/libheif-js/{version}/LICENSE"
+    }
+  ],
+  "upstreamSources": {
+    "libheif": {
+      "version": "1.23.5",
+      "url": "https://github.com/strukturag/libheif/releases/download/v1.23.5/libheif-1.23.5.tar.gz",
+      "sha256": "fd9036064c4432f0550d15072ddf34956a248279ee9aeaff0fba3fa0f77d8f1a",
+      "file": "libheif-1.23.5.tar.gz",
+      "kind": "release",
+      "topDir": "libheif-1.23.5",
+      "libraryDir": "libheif"
+    },
+    "libde265": {
+      "version": "1.0.15",
+      "url": "https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz",
+      "sha256": "00251986c29d34d3af7117ed05874950c875dd9292d016be29d3b3762666511d",
+      "file": "libde265-1.0.15.tar.gz",
+      "kind": "release",
+      "topDir": "libde265-1.0.15",
+      "libraryDir": "libde265"
+    },
+    "libheif-js": {
+      "version": "1.23.5",
+      "url": "https://github.com/catdad-experiments/libheif-js/archive/refs/tags/1.23.5.tar.gz",
+      "sha256": "b2bcc4d1e94a47eff30afa05671374170f2f9f5ad88dd2e3cb1196d2df4d6f76",
+      "file": "libheif-js-1.23.5-src.tar.gz",
+      "kind": "tag",
+      "topDir": "libheif-js-1.23.5"
+    },
+    "libheif-emscripten": {
+      "version": "1.23.5",
+      "url": "https://github.com/catdad-experiments/libheif-emscripten/archive/refs/tags/v1.23.5.tar.gz",
+      "sha256": "8e3395ca983e369448bea84d223c35f1117373953e00219588415f1bc37c86ea",
+      "file": "libheif-emscripten-v1.23.5-src.tar.gz",
+      "kind": "tag",
+      "topDir": "libheif-emscripten-1.23.5"
+    }
+  },
+  "sourceOfferEmail": "service@condola.app",
+  "buildProvenance": {
+    "prebuiltUrl": "https://github.com/catdad-experiments/libheif-emscripten/releases/download/v1.23.5/libheif.tar.gz",
+    "prebuiltSha256": "0fa8629a75344389f0da842f659cc952ecaa39cde400eed42b80e4a82a3af778",
+    "prebuiltWasmSha256": "184d3d20f8323877f13e9f5254f9c6a0ce272c9a3a2f823b0b2bcd2ee9f73f80",
+    "prebuiltWasmBytes": 1463506,
+    "shippedBundleSha256": "095194187be00d3e36335b8ad7f5552d70655e5e2159486d7d36cd4daa47bba9",
+    "reproducedWith": {
+      "node": "20",
+      "esbuild": "0.19.12",
+      "esbuild-plugins-node-modules-polyfill": "1.8.3"
+    },
+    "libheifCommit": "413e2a87e6a70b3eccc3a3adc5801179dd2d9e00",
+    "emscriptenVersion": "3.1.61"
+  },
+  "notInWebpackBundle": {
+    "libheif-js": "Delivered as a separate, unmodified file.",
+    "libheif": "Embedded in the libheif-js WebAssembly module.",
+    "libde265": "Embedded in the libheif-js WebAssembly module.",
+    "tailwindcss": "Delivered as generated CSS."
+  }
+}

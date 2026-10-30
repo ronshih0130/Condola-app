@@ -100,7 +100,64 @@ export function gotrueVerifyBody(type: "signup" | "email" | "recovery", tokenHas
   return { type, token_hash: tokenHash.trim() };
 }
 
-/** Admin generate_link does not send mail. hashed_token is the /reset token_hash. */
+/** Unset or "app" sends signup mail from the app. "supabase" restores GoTrue's own mail. */
+export function signupMailVia(env?: { SIGNUP_MAIL_VIA?: string }): "app" | "supabase" {
+  const value = env ? env.SIGNUP_MAIL_VIA : process.env.SIGNUP_MAIL_VIA;
+  return value?.trim().toLowerCase() === "supabase" ? "supabase" : "app";
+}
+
+/** Confirm link the signup mail carries. The confirm page already accepts this shape. */
+export function signupConfirmLink(requestOrigin: string, hashedToken: string) {
+  const url = new URL(signupConfirmUrl(requestOrigin));
+  url.searchParams.set("token_hash", hashedToken);
+  url.searchParams.set("type", "signup");
+  return url.toString();
+}
+
+export type SignupGenerateLink =
+  | { ok: true; hashedToken: string; userId: string; confirmed: boolean }
+  | { ok: false; error: "duplicate" | "weak" | "unavailable" };
+
+function generateLinkErrorText(body: unknown) {
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const text = [record.error_code, record.error, record.msg, record.message, record.error_description]
+    .filter((part): part is string => typeof part === "string")
+    .join(" ")
+    .toLowerCase();
+  const code = String(record.error_code || record.error || "").toLowerCase();
+  return { record, text, code };
+}
+
+/**
+ * Admin generate_link type=signup.
+ * Confirmed address → 422 email_exists. Weak password → 422 weak_password or 400.
+ * A 2xx body carries hashed_token and the user id. GoTrue does not send mail.
+ */
+export function classifySignupGenerateLink(status: number, body: unknown): SignupGenerateLink {
+  if (status >= 200 && status < 300) {
+    const parsed = parseGenerateLink(body);
+    if (!parsed?.hashedToken || !parsed.userId) return { ok: false, error: "unavailable" };
+    const { record } = generateLinkErrorText(body);
+    const nested = record.user && typeof record.user === "object" ? (record.user as Record<string, unknown>) : null;
+    const confirmedAt = nested ? nested.email_confirmed_at : record.email_confirmed_at;
+    return { ok: true, hashedToken: parsed.hashedToken, userId: parsed.userId, confirmed: Boolean(confirmedAt) };
+  }
+  const { text, code } = generateLinkErrorText(body);
+  if (
+    code === "email_exists" ||
+    code === "user_already_exists" ||
+    /already been registered|already registered|email_exists|user already exists/.test(text)
+  ) {
+    return { ok: false, error: "duplicate" };
+  }
+  const passwordProblem =
+    code === "weak_password" ||
+    /weak_password|password should be|password is known|signup requires a valid password|password/.test(text);
+  if ((status === 422 || status === 400) && passwordProblem) return { ok: false, error: "weak" };
+  return { ok: false, error: "unavailable" };
+}
+
+/** Admin generate_link does not send mail. hashed_token is the token_hash the confirm page posts. */
 export function parseGenerateLink(body: unknown): { hashedToken: string; userId: string } | null {
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const hashed = typeof record.hashed_token === "string" ? record.hashed_token.trim() : "";

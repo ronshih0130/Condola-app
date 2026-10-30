@@ -55,6 +55,7 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "ANJU2026",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     assert.equal(first.ok, true);
     if (!first.ok || first.status !== "verify" || !first.devToken) throw new Error("expected a local confirm link");
@@ -65,6 +66,7 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "NOPE",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     assert.equal(again.ok, true);
     if (!again.ok || again.status !== "verify" || !again.devToken) throw new Error("expected a rotated confirm link");
@@ -81,6 +83,7 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     assert.equal(wrong.ok, false);
     if (wrong.ok) throw new Error("duplicate");
@@ -152,19 +155,46 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     assert.equal(duplicate.ok, false);
 
-    await assert.rejects(
-      () => inviteMember(staff(users[0], created.orgId, "live", email), { email: `extra.${stamp}@example.com`, name: "多的人", role: "manager" }),
-      (error: unknown) => error instanceof FlowError && error.key === "errors.seatLimit",
-    );
-    const sandboxInvite = await inviteMember(staff(users[0], created.sandboxId, "sandbox", email), {
-      email: `sand.${stamp}@example.com`,
-      name: "測試邀請",
-      role: "manager",
-    });
-    assert.ok(sandboxInvite.token);
+    const previousTeamInvitesOrgAllowlist = process.env.TEAM_INVITES_ORG_ALLOWLIST;
+    try {
+      delete process.env.TEAM_INVITES_ORG_ALLOWLIST;
+      await assert.rejects(
+        () => inviteMember(staff(users[0], created.orgId, "live", email), { email: `extra.${stamp}@example.com`, name: "多的人", role: "manager" }),
+        (error: unknown) => error instanceof FlowError && error.key === "errors.teamInvitesSoon",
+      );
+      await assert.rejects(
+        () => inviteMember(staff(users[0], created.sandboxId, "sandbox", email), {
+          email: `sand.${stamp}@example.com`,
+          name: "測試邀請",
+          role: "manager",
+        }),
+        (error: unknown) => error instanceof FlowError && error.key === "errors.teamInvitesSoon",
+      );
+
+      process.env.TEAM_INVITES_ORG_ALLOWLIST = `${created.orgId},${created.sandboxId}`;
+      await assert.rejects(
+        () => inviteMember(staff(users[0], created.orgId, "live", email), { email: `extra.${stamp}@example.com`, name: "多的人", role: "manager" }),
+        (error: unknown) => error instanceof FlowError && error.key === "errors.seatLimit",
+      );
+      await assert.rejects(
+        () => inviteMember(staff(users[0], created.sandboxId, "sandbox", email), {
+          email: `sand.${stamp}@example.com`,
+          name: "測試邀請",
+          role: "manager",
+        }),
+        (error: unknown) => error instanceof FlowError && error.key === "errors.teamInvitesSoon",
+      );
+    } finally {
+      if (previousTeamInvitesOrgAllowlist === undefined) {
+        delete process.env.TEAM_INVITES_ORG_ALLOWLIST;
+      } else {
+        process.env.TEAM_INVITES_ORG_ALLOWLIST = previousTeamInvitesOrgAllowlist;
+      }
+    }
 
     const secondStart = await startSignup({
       email: other,
@@ -173,6 +203,7 @@ test("self-serve signup confirms email, seeds test mode, and prices ANJU2026", {
       partnerCode: "NOT-A-CODE",
       origin: "http://127.0.0.1:43123",
       meta,
+      consent: true,
     });
     if (!secondStart.ok || secondStart.status !== "verify" || !secondStart.devToken) throw new Error("second verify");
     await confirmSignupToken(secondStart.devToken, meta);

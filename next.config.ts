@@ -1,6 +1,12 @@
 import { execSync } from "node:child_process";
+import { createRequire } from "node:module";
 import type { NextConfig } from "next";
 import { PRODUCTION_HOSTS } from "./src/server/public-origin";
+
+const loadPlugin = createRequire(`${process.cwd()}/package.json`);
+const { ClientPackagesPlugin } = loadPlugin("./scripts/client-packages-plugin.cjs") as {
+  ClientPackagesPlugin: new () => { apply(compiler: unknown): void };
+};
 
 function buildSha() {
   const fromEnv = (process.env.CONDOLA_BUILD_SHA || process.env.CONDOLA_COMMIT || process.env.CF_PAGES_COMMIT_SHA || "").trim();
@@ -13,6 +19,7 @@ function buildSha() {
 }
 
 const NO_STORE = [{ key: "Cache-Control", value: "private, no-store" }];
+const INVITE_HEADERS = [...NO_STORE, { key: "Referrer-Policy", value: "no-referrer" }];
 const sha = buildSha();
 
 const nextConfig: NextConfig = {
@@ -26,6 +33,31 @@ const nextConfig: NextConfig = {
       allowedOrigins: [...PRODUCTION_HOSTS],
     },
   },
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        "heic-convert": false,
+        "heic-convert/browser": false,
+        "heic-decode": false,
+        "libheif-js": false,
+      };
+    } else {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        "libheif-js": false,
+        "libheif-js/wasm-bundle": false,
+      };
+      if (config.mode === "production") {
+        config.plugins.push(new ClientPackagesPlugin());
+      }
+    }
+    config.module.rules.push({
+      test: /\.md$/,
+      type: "asset/source",
+    });
+    return config;
+  },
   async headers() {
     return [
       { source: "/login", headers: NO_STORE },
@@ -34,7 +66,9 @@ const nextConfig: NextConfig = {
       { source: "/reset", headers: NO_STORE },
       { source: "/reset/:path*", headers: NO_STORE },
       { source: "/auth/:path*", headers: NO_STORE },
-      { source: "/accept/:path*", headers: NO_STORE },
+      { source: "/join", headers: INVITE_HEADERS },
+      { source: "/accept/:path*", headers: INVITE_HEADERS },
+      { source: "/m/team", headers: INVITE_HEADERS },
     ];
   },
 };

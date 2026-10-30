@@ -37,6 +37,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run copy:check
       - run: npm run test:unit
       - name: Apply schema and seed
         run: |
@@ -47,6 +48,10 @@ jobs:
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
           done
           npm run db:reset
+      - name: Check function execute privileges
+        run: bash scripts/check-function-privileges.sh
       - run: npm run test:rls
+      - run: npm run cf:build
+      - run: npm run test:worker
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

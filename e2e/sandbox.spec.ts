@@ -20,7 +20,7 @@ test("a live firm opens live with no env cookie, and sign-in drops a leftover te
   await page.getByTestId("login-email").fill(ACCOUNTS.admin);
   await page.getByTestId("login-password").fill(DEMO_PASSWORD);
   await page.getByTestId("login-submit").click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/login") && !url.pathname.startsWith("/api/auth/enter"));
+  await page.waitForURL((url) => !url.pathname.startsWith("/login") && url.pathname !== "/auth/enter" && !url.pathname.startsWith("/api/auth/enter"));
 
   await expect(page.getByTestId("env-banner")).toHaveCount(0);
   await expect(page.getByTestId("org-switch")).toContainText(FIRM_NAME);
@@ -47,7 +47,7 @@ test("a live firm opens live with no env cookie, and sign-in drops a leftover te
   await page.getByTestId("login-email").fill(ACCOUNTS.admin);
   await page.getByTestId("login-password").fill(DEMO_PASSWORD);
   await page.getByTestId("login-submit").click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/login") && !url.pathname.startsWith("/api/auth/enter"));
+  await page.waitForURL((url) => !url.pathname.startsWith("/login") && url.pathname !== "/auth/enter" && !url.pathname.startsWith("/api/auth/enter"));
   await expect(page.getByTestId("env-banner")).toHaveCount(0);
   await expect(page.getByTestId("org-switch")).toContainText(FIRM_NAME);
   await expect(page.getByTestId("org-switch")).not.toContainText("（範例）");

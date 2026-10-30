@@ -4,6 +4,7 @@
  * and the Worker only signs and confirms. Bytes are not written to Postgres.
  */
 import { createServer } from "node:http";
+import pg from "pg";
 
 const PORT = 4599;
 const KEY = "e2e-photo-key";
@@ -13,6 +14,176 @@ const BUCKET = "ticket-photos-private";
 const objects = new Map();
 /** @type {Map<string, string>} */
 const grants = new Map();
+/** Captured GoTrue signup bodies for the consent spec. Passwords stay in memory only. */
+const signups = [];
+/** Captured admin user updates. Passwords are stripped before they are stored. */
+const adminUpdates = [];
+
+function databaseUrl() {
+  return process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
+}
+
+function signupMetadata(body) {
+  return body.data && typeof body.data === "object" ? body.data : {};
+}
+
+async function insertSignupUser(body) {
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const metadata = signupMetadata(body);
+  const client = new pg.Client({ connectionString: databaseUrl() });
+  await client.connect();
+  try {
+    const existing = await client.query(`SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+    if (existing.rows[0]) {
+      return { status: 422, payload: { msg: "User already registered", error_code: "user_already_exists" } };
+    }
+    const inserted = await client.query(
+      `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
+       VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), $3::jsonb, 'authenticated', 'authenticated')
+       RETURNING id::text AS id`,
+      [email, password, JSON.stringify(metadata)],
+    );
+    return {
+      status: 200,
+      payload: { id: inserted.rows[0].id, aud: "authenticated", email, email_confirmed_at: null },
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+/** Mirrors GoTrue admin generate_link type=signup: create or rotate, never send mail. */
+async function generateSignupLink(body) {
+  const email = String(body.email || "").trim().toLowerCase();
+  if (String(body.type || "") !== "signup") {
+    return { status: 400, payload: { error_code: "validation_failed", msg: "Invalid email action link type" } };
+  }
+  const client = new pg.Client({ connectionString: databaseUrl() });
+  await client.connect();
+  try {
+    const existing = await client.query(
+      `SELECT id::text AS id, email_confirmed_at FROM auth.users WHERE lower(email) = lower($1)`,
+      [email],
+    );
+    const row = existing.rows[0];
+    if (row?.email_confirmed_at) {
+      return {
+        status: 422,
+        payload: { error_code: "email_exists", msg: "A user with this email address has already been registered" },
+      };
+    }
+    if (!row && !body.password) {
+      return { status: 400, payload: { error_code: "validation_failed", msg: "Signup requires a valid password" } };
+    }
+    const id = row
+      ? row.id
+      : (
+          await client.query(
+            `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
+             VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), $3::jsonb, 'authenticated', 'authenticated')
+             RETURNING id::text AS id`,
+            [email, String(body.password || ""), JSON.stringify(signupMetadata(body))],
+          )
+        ).rows[0].id;
+    return {
+      status: 200,
+      payload: {
+        id,
+        aud: "authenticated",
+        email,
+        email_confirmed_at: null,
+        hashed_token: `e2e-${id}`,
+        verification_type: "signup",
+      },
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+function withoutPassword(body) {
+  const copy = { ...body };
+  delete copy.password;
+  return copy;
+}
+
+async function updateAdminUser(userId, body) {
+  const app = body.app_metadata && typeof body.app_metadata === "object" ? JSON.stringify(body.app_metadata) : null;
+  const user = body.user_metadata && typeof body.user_metadata === "object" ? JSON.stringify(body.user_metadata) : null;
+  const password = typeof body.password === "string" ? body.password : null;
+  const email = typeof body.email === "string" && body.email.trim() ? body.email.trim().toLowerCase() : null;
+  const client = new pg.Client({ connectionString: databaseUrl() });
+  await client.connect();
+  try {
+    const updated = await client.query(
+      `UPDATE auth.users
+          SET raw_app_meta_data = CASE WHEN $2::jsonb IS NULL THEN raw_app_meta_data
+                                       ELSE coalesce(raw_app_meta_data, '{}'::jsonb) || $2::jsonb END,
+              raw_user_meta_data = CASE WHEN $3::jsonb IS NULL THEN raw_user_meta_data
+                                        ELSE coalesce(raw_user_meta_data, '{}'::jsonb) || $3::jsonb END,
+              encrypted_password = CASE WHEN $4::text IS NULL THEN encrypted_password ELSE crypt($4, gen_salt('bf')) END,
+              email = coalesce($5, email),
+              email_confirmed_at = CASE WHEN $5::text IS NULL THEN email_confirmed_at ELSE coalesce(email_confirmed_at, now()) END,
+              updated_at = now()
+        WHERE id = $1
+        RETURNING id::text AS id`,
+      [userId, app, user, password, email],
+    );
+    if (!updated.rows[0]) return { status: 404, payload: { message: "user not found" } };
+    return { status: 200, payload: { id: updated.rows[0].id } };
+  } finally {
+    await client.end();
+  }
+}
+
+/** Minimal GoTrue admin/password endpoints for the local Postgres stub. */
+async function inviteAuth(pathname, body, userId) {
+  const client = new pg.Client({ connectionString: databaseUrl() });
+  await client.connect();
+  try {
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    if (pathname.startsWith("/auth/v1/admin/users")) {
+      if (!email || !password || body.email_confirm !== true) {
+        return { status: 400, payload: { error_code: "validation_failed" } };
+      }
+      if (userId) {
+        const updated = await client.query(
+          `UPDATE auth.users SET email = $2, encrypted_password = crypt($3, gen_salt('bf')),
+                  email_confirmed_at = now(), updated_at = now()
+            WHERE id = $1 RETURNING id::text, email`,
+          [userId, email, password],
+        );
+        return updated.rows[0]
+          ? { status: 200, payload: updated.rows[0] }
+          : { status: 404, payload: { error_code: "user_not_found" } };
+      }
+      const existing = await client.query(`SELECT id FROM auth.users WHERE lower(email) = lower($1)`, [email]);
+      if (existing.rows[0]) return { status: 422, payload: { error_code: "email_exists" } };
+      const created = await client.query(
+        `INSERT INTO auth.users
+           (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud)
+         VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), now(), '{}'::jsonb,
+                 'authenticated', 'authenticated')
+         RETURNING id::text, email`,
+        [email, password],
+      );
+      return { status: 200, payload: created.rows[0] };
+    }
+    const account = await client.query(
+      `SELECT id::text, email, email_confirmed_at FROM auth.users
+        WHERE lower(email) = lower($1) AND encrypted_password = crypt($2, encrypted_password)`,
+      [email, password],
+    );
+    const user = account.rows[0];
+    if (!user) return { status: 400, payload: { error_code: "invalid_credentials" } };
+    if (!user.email_confirmed_at) return { status: 400, payload: { error_code: "email_not_confirmed" } };
+    return { status: 200, payload: { user } };
+  } finally {
+    await client.end();
+  }
+}
 
 function send(res, status, body, headers = {}) {
   res.writeHead(status, {
@@ -56,6 +227,78 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "GET" && url.pathname === "/health") {
     send(res, 200, "ok", { "content-type": "text/plain" });
+    return;
+  }
+  if (url.pathname === "/e2e/signups" && req.method === "GET") {
+    send(res, 200, JSON.stringify(signups), { "content-type": "application/json" });
+    return;
+  }
+  if (url.pathname === "/e2e/signups" && req.method === "DELETE") {
+    signups.length = 0;
+    send(res, 200, "[]", { "content-type": "application/json" });
+    return;
+  }
+  if (url.pathname === "/e2e/admin-users" && req.method === "GET") {
+    send(res, 200, JSON.stringify(adminUpdates), { "content-type": "application/json" });
+    return;
+  }
+  if (url.pathname === "/e2e/admin-users" && req.method === "DELETE") {
+    adminUpdates.length = 0;
+    send(res, 200, "[]", { "content-type": "application/json" });
+    return;
+  }
+  const adminUser = url.pathname.match(/^\/auth\/v1\/admin\/users\/([^/]+)$/);
+  if (adminUser && req.method === "PUT") {
+    if (!authorized(req)) return send(res, 401, "unauthorized");
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    adminUpdates.push({ id: decodeURIComponent(adminUser[1]), body: withoutPassword(body) });
+    try {
+      const result = await updateAdminUser(decodeURIComponent(adminUser[1]), body);
+      send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "admin update failed";
+      send(res, 500, JSON.stringify({ message }), { "content-type": "application/json" });
+    }
+    return;
+  }
+  if (url.pathname === "/auth/v1/signup" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    signups.push(body);
+    try {
+      const result = await insertSignupUser(body);
+      send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "signup failed";
+      send(res, 500, JSON.stringify({ message }), { "content-type": "application/json" });
+    }
+    return;
+  }
+  const inviteAdminUser = url.pathname.match(/^\/auth\/v1\/admin\/users\/([0-9a-f-]+)$/i);
+  const adminCreate = req.method === "POST" && url.pathname === "/auth/v1/admin/users";
+  const adminUpdate = req.method === "PUT" && inviteAdminUser;
+  const passwordGrant = req.method === "POST" && url.pathname === "/auth/v1/token" &&
+    url.searchParams.get("grant_type") === "password";
+  if (adminCreate || adminUpdate || passwordGrant) {
+    if ((adminCreate || adminUpdate) && !authorized(req)) return send(res, 401, "unauthorized");
+    try {
+      const body = JSON.parse((await readBody(req)).toString() || "{}");
+      const result = await inviteAuth(url.pathname, body, adminUpdate ? inviteAdminUser[1] : null);
+      send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
+    } catch {
+      send(res, 500, JSON.stringify({ message: "auth failed" }), { "content-type": "application/json" });
+    }
+    return;
+  }
+  if (url.pathname === "/auth/v1/admin/generate_link" && req.method === "POST") {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    if (body.type === "signup") signups.push(body);
+    try {
+      const result = await generateSignupLink(body);
+      send(res, result.status, JSON.stringify(result.payload), { "content-type": "application/json" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "generate_link failed";
+      send(res, 500, JSON.stringify({ message }), { "content-type": "application/json" });
+    }
     return;
   }
 

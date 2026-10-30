@@ -1,10 +1,11 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader, statusClass, statusKey } from "@/components/ui";
 import { REPAIR_CATS, REPAIR_CAT_KEY } from "@/lib/repair-labels";
 import { actionTicket, actionUpdateTicket } from "@/server/actions";
 import { moneyLabel } from "@/server/format";
-import { can, rolesFor } from "@/server/perms";
+import { can } from "@/server/perms";
 import { isUuid } from "@/server/repair-rules";
 import { listLeases, listTicketFilters, listTicketProperties, listTickets } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -17,6 +18,7 @@ export default async function TicketsPage({
 }: {
   searchParams: Promise<{ error?: string; property?: string; unit?: string; room?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
@@ -42,20 +44,10 @@ export default async function TicketsPage({
     roomId: roomId || null,
   });
   const canWrite = can(session.role, "tickets.update");
-  const roleLabel: Record<string, string> = {
-    admin: "i_role_admin",
-    manager: "i_role_manager",
-    accountant: "i_role_accountant",
-    maintenance: "i_role_maintenance",
-  };
-  const need = t("pm_need", {
-    roles: rolesFor("tickets.update")
-      .map((role) => t(roleLabel[role]))
-      .join(t("i_list_sep")),
-  });
+  const readonly = t("i_repair_readonly_role");
   return (
     <>
-      <PageHeader title={t("i_repair_history")} />
+      <PageHeader title={t("i_repair_page")} />
       <ErrorBanner t={t} error={params.error} />
       <form method="get" className="row" style={{ marginBottom: 12 }} data-testid="repair-property-filter">
         <select
@@ -127,7 +119,7 @@ export default async function TicketsPage({
                         type="submit"
                         disabled={!canWrite}
                         aria-disabled={!canWrite}
-                        title={canWrite ? undefined : need}
+                        title={canWrite ? undefined : readonly}
                         data-testid={canWrite ? "ticket-update" : "ticket-update-disabled"}
                       >
                         {t("i_update")}
@@ -141,7 +133,10 @@ export default async function TicketsPage({
               ))}
               {tickets.length === 0 ? (
                 <tr>
-                  <td className="muted">{t("i_repair_none")}</td>
+                  <td data-testid="repair-empty">
+                    <p>{t("i_repair_empty")}</p>
+                    <p className="small muted">{t("i_repair_empty_hint")}</p>
+                  </td>
                 </tr>
               ) : null}
             </tbody>
@@ -184,12 +179,12 @@ export default async function TicketsPage({
             type="submit"
             disabled={!canWrite}
             aria-disabled={!canWrite}
-            title={canWrite ? undefined : need}
+            title={canWrite ? undefined : readonly}
             data-testid={canWrite ? "ticket-create" : "ticket-create-disabled"}
           >
-            {t("i_submit_repair")}
+            {t("i_repair_file_for_tenant")}
           </button>
-          {canWrite ? null : <p className="tiny muted">{need}</p>}
+          {canWrite ? null : <p className="tiny muted">{readonly}</p>}
         </form>
       </div>
     </>

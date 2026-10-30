@@ -5,16 +5,26 @@ import { ImplicitSubmitSink, blockImplicitEnter } from "./form-enter";
 import { offeredCountries } from "@/countries";
 import { PendingSubmit } from "./pending-submit";
 import { PhoneField } from "./phone-field";
-import { useT } from "./locale";
+import { useLocale, useT } from "./locale";
+import { PartnerConsentFields } from "./partner-consent-form";
+import { partnerConsentCopy } from "@/i18n/lanes/partner-consent";
+import { partnerConsentReady } from "@/lib/partner-consent-ready";
+import type { SelectedPartnerDocument } from "@/server/partner-consent-rules";
 import { actionCreateFirm } from "@/server/signup-actions";
 
-export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?: string }) {
+export function FirmSteps({ partnerCode, error, partnerDocuments }: { partnerCode: string; error?: string; partnerDocuments?: SelectedPartnerDocument[] | null }) {
   const t = useT();
+  const locale = useLocale();
+  const [partnerChecked, setPartnerChecked] = useState(false);
+  const [partnerAuthority, setPartnerAuthority] = useState(false);
+  const partnerCopy = partnerConsentCopy(locale);
   const [step, setStep] = useState<3 | 4>(3);
   const [kind, setKind] = useState<"firm" | "self" | "">("");
   const [nameError, setNameError] = useState(false);
   const [contactError, setContactError] = useState(false);
-  const [submitReady, setSubmitReady] = useState(false);
+  const [submitArmed, setSubmitReady] = useState(false);
+  const submitReady = submitArmed && partnerDocuments !== null
+    && !(Boolean(partnerDocuments?.length) && !partnerConsentReady(partnerChecked, partnerAuthority));
   const armSubmit = useRef<number | null>(null);
 
   function goDetails() {
@@ -38,6 +48,11 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
           return;
         }
         const data = new FormData(event.currentTarget);
+        if (partnerDocuments === null || (partnerDocuments?.length
+            && (data.get("partnerConsent") !== "on" || data.get("partnerAuthority") !== "on"))) {
+          event.preventDefault();
+          return;
+        }
         const name = String(data.get("name") ?? "").trim();
         const contact = String(data.get("contactName") ?? "").trim();
         const needName = kind === "firm" && name === "";
@@ -56,7 +71,8 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
       </ol>
       <p className="small muted" data-testid="signup-step-label">{t("i_signup_step", { n: step })}</p>
       <h1>{step === 3 ? t("i_signup_kind_title") : t("i_signup_firm_details")}</h1>
-      {error ? <div className="alert bad">{t("i_required")}</div> : null}
+      {partnerDocuments === null ? <div className="alert bad" role="alert">{partnerCopy.unavailable}</div> : null}
+      {error ? <div className="alert bad">{error === "consent" && partnerDocuments?.length ? partnerCopy.required : t("i_required")}</div> : null}
       <input type="hidden" name="kind" value={kind} />
       {step === 3 ? (
         <fieldset key="signup-kind" className="col" data-testid="signup-kind">
@@ -77,9 +93,15 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
       ) : (
         <div key="signup-details" className="col" data-testid="signup-details">
           <div className="fg">
-            <label className="f">{kind === "self" ? t("i_signup_name_self") : t("i_signup_name_firm")}</label>
-            <input className="inp" name="name" data-testid="firm-name" onChange={() => setNameError(false)} />
-            {nameError ? <p className="hint" data-testid="firm-name-error">{t("i_step_incomplete", { field: t(kind === "self" ? "i_signup_name_self" : "i_signup_name_firm") })}</p> : null}
+            <label className="f">{t("i_signup_name_firm")}</label>
+            <input
+              className="inp"
+              name="name"
+              data-testid="firm-name"
+              onChange={() => setNameError(false)}
+            />
+            <p className="hint" data-testid="firm-name-hint">{t("i_signup_name_hint")}</p>
+            {nameError ? <p className="hint" data-testid="firm-name-error">{t("i_step_incomplete", { field: t("i_signup_name_firm") })}</p> : null}
           </div>
           <div className="fg">
             <label className="f">{t("i_country")}</label>
@@ -106,6 +128,9 @@ export function FirmSteps({ partnerCode, error }: { partnerCode: string; error?:
             <input className="inp" name="partnerCode" defaultValue={partnerCode} data-testid="firm-code" />
           </div>
           <p className="small" data-testid="signup-admin-note">{t("i_signup_admin_note")}</p>
+          {partnerDocuments?.length ? (
+            <PartnerConsentFields locale={locale} documents={partnerDocuments} checked={partnerChecked} authority={partnerAuthority} onChange={setPartnerChecked} onAuthorityChange={setPartnerAuthority} />
+          ) : null}
           <PendingSubmit className="btn pri" idle={t("i_signup_create")} pending={t("i_portal_working")} testId="firm-submit" disabled={!submitReady} />
         </div>
       )}

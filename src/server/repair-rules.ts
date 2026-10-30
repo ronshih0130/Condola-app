@@ -95,6 +95,9 @@ export function sniffPhotoMime(bytes: Uint8Array): PhotoMime | null {
 export function assertPhotoMeta(input: { fileName: string; mime: string; size: number }) {
   const fileName = input.fileName.trim().replace(/[/\\]/g, "_");
   if (!fileName || fileName.length > 180) throw new FlowError("errors.required");
+  if (/^image\/hei[cf]$/i.test(input.mime) || /\.(heic|heif)$/i.test(fileName)) {
+    throw new FlowError("errors.photoHeic");
+  }
   const mime = normalizePhotoMime(input.mime);
   if (!mime) throw new FlowError("errors.photoType");
   if (!Number.isInteger(input.size) || input.size <= 0 || input.size > PHOTO_MAX_BYTES) {
@@ -108,6 +111,7 @@ export function assertPhotoMeta(input: { fileName: string; mime: string; size: n
  * Storage may omit a type or echo application/octet-stream; a different image type does not pass.
  */
 export function acceptPhotoObject(info: { size: number; mime: string; header: Uint8Array }, declaredMime: string) {
+  if (sniffHeic(info.header)) throw new FlowError("errors.photoHeic");
   const sniffed = sniffPhotoMime(info.header);
   const declared = normalizePhotoMime(declaredMime);
   if (!sniffed || !declared || sniffed !== declared) throw new FlowError("errors.photoType");
@@ -186,6 +190,28 @@ export function cleanVendorName(raw: string) {
   if (!value) return null;
   if ([...value].length > 80) throw new FlowError("errors.required");
   return value;
+}
+
+/** Vendor master category. Required when adding a vendor. */
+export function cleanVendorTrade(raw: string) {
+  const value = raw.trim().replace(/\s+/g, " ");
+  if (!value || [...value].length > 40) throw new FlowError("errors.required");
+  return value;
+}
+
+/** A tenant may cancel only while the ticket is still 新進 (open). */
+export function tenantCancelAllowed(status: string) {
+  return status === "open";
+}
+
+const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "heif", "mif1", "msf1", "heim", "heis"]);
+
+/** ISO-BMFF ftyp brand used for browser conversion and server rejection. */
+export function sniffHeic(bytes: Uint8Array) {
+  if (bytes.length < 12) return false;
+  if (bytes[4] !== 0x66 || bytes[5] !== 0x74 || bytes[6] !== 0x79 || bytes[7] !== 0x70) return false;
+  const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]).toLowerCase();
+  return HEIC_BRANDS.has(brand);
 }
 
 export type ExpenseLink = "skip" | "keep" | "create";

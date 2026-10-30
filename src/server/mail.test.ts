@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   leaseAdminMail,
   leaseTenantMail,
+  MAIL_FOOTER,
   overdueAdminMail,
   overdueTenantMail,
+  MAIL_DISCLAIMER,
   passwordResetMail,
+  signupConfirmMail,
 } from "./mail-copy";
 import {
   BREVO_FROM_EMAIL,
@@ -195,8 +199,13 @@ test("overdue and reset copy matches the revised file and never says 收款", ()
   assert.match(tenant.text, /不經手租金與押金/);
   assert.equal(reset.subject, "重設您的租多啦密碼");
   assert.match(reset.text, /請在 60 分鐘內點下方連結設定新密碼/);
+  assert.match(reset.text, new RegExp(MAIL_DISCLAIMER));
   assert.match(reset.text, /\[設定新密碼\]\(https:\/\/app\.condola\.app\/reset\?token_hash=abc&type=recovery\)/);
   for (const text of [admin.text, admin.subject, tenant.text, tenant.subject, reset.text, reset.subject]) assertClean(text);
+  for (const mail of [admin, tenant, reset]) {
+    assert.equal(mail.text.endsWith(MAIL_FOOTER), true);
+    assert.equal(mail.html.includes(MAIL_FOOTER), true);
+  }
   assert.match(admin.html, /<a href="https:\/\/app\.condola\.app\/m\/rent">查看帳單<\/a>/);
 });
 
@@ -225,9 +234,44 @@ test("lease expiry copy keeps the footer, reply facts, and thousands separators"
   assert.equal(admin.subject, "【租約到期提醒】府後街 3F A 將於 2026年10月31日 到期");
   assert.match(admin.text, /以下租約將於 60 天後到期/);
   assert.match(admin.text, /月租：NT\$18,000/);
-  assert.match(admin.text, /403 台中市西區府後街38號｜service@condola\.app/);
   assert.match(tenant.text, /租多啦是管理公司使用的租賃管理軟體，不經手租金與押金；相關問題請洽 松信管理。/);
-  assert.match(tenant.text, /403 台中市西區府後街38號/);
+  for (const text of [admin.text, tenant.text]) {
+    assert.equal(text.endsWith(MAIL_FOOTER), true);
+    assert.equal(text.includes(MAIL_FOOTER), true);
+  }
   assert.equal(tenant.subject, "您的租約將於 2026年10月31日 到期");
   for (const text of [admin.text, tenant.text]) assertClean(text);
+});
+
+test("signup confirmation uses the shared disclaimer and the 60-minute copy", () => {
+  const url = "https://app.condola.app/signup/confirm?token_hash=X&type=signup";
+  const mail = signupConfirmMail(url);
+  const reset = passwordResetMail("https://app.condola.app/reset?token_hash=abc&type=recovery");
+  assert.equal(mail.subject, "請確認您的租多啦 Condola 帳號");
+  assert.match(mail.text, /您好：/);
+  assert.match(mail.text, /請在 60 分鐘內點下方按鈕確認您的電子郵件，完成租多啦帳號註冊。/);
+  assert.match(mail.text, /\[確認電子郵件\]\(https:\/\/app\.condola\.app\/signup\/confirm\?token_hash=X&type=signup\)/);
+  assert.match(mail.text, /如果不是您本人註冊，請忽略這封信。/);
+  assert.equal(mail.text.includes(MAIL_DISCLAIMER), true);
+  assert.equal(reset.text.includes(MAIL_DISCLAIMER), true);
+  assert.equal(mail.text.endsWith(MAIL_FOOTER), true);
+  assert.equal(reset.text.endsWith(MAIL_FOOTER), true);
+  assert.match(mail.html, /<a href="https:\/\/app\.condola\.app\/signup\/confirm\?token_hash=X&amp;type=signup">確認電子郵件<\/a>/);
+  for (const text of [mail.subject, mail.text, reset.text]) assertClean(text);
+});
+
+test("transactional templates share one operator footer", () => {
+  const exact =
+    "租多啦 Condola｜營運者：艾隆科技 Airon Tech（負責人 施振榮）｜403 台中市西區府後街38號｜service@condola.app｜0975-317-990";
+  assert.equal(MAIL_FOOTER, exact);
+  assert.equal(exact.includes("發票"), false);
+  assert.equal(exact.includes("統一編號"), false);
+  assert.equal(exact.includes("@644odqoe"), false);
+  const html = readFileSync(new URL("../../supabase/templates/confirmation.html", import.meta.url), "utf8");
+  const patch = readFileSync(new URL("../../supabase/templates/confirmation.patch.json", import.meta.url), "utf8");
+  for (const file of [html, patch]) {
+    assert.equal(file.includes(exact), true);
+    assert.equal(file.includes("統一編號"), false);
+    assert.equal(file.split("不開立統一發票").join("").includes("發票"), false);
+  }
 });

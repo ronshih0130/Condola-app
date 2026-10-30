@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -14,6 +15,7 @@ export default async function ThreadPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  await requireCurrentConsent(undefined, "page");
   const { id } = await params;
   const query = await searchParams;
   const session = await getSession();

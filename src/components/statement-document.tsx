@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import type { Locale, T } from "@/i18n";
 import { BrandImage } from "@/components/brand";
-import { moneyLabel, ownerSettlement, signedMoneyLabel } from "@/server/format";
+import { moneyLabel, ownerSettlement, statementPeriodNet, statementSignedMoney } from "@/server/format";
 
 export function StatementDocument({
   t,
@@ -9,6 +9,7 @@ export function StatementDocument({
   row,
   lines,
   note,
+  v2,
 }: {
   t: T;
   locale: Locale;
@@ -24,6 +25,7 @@ export function StatementDocument({
     closing: string;
   };
   note?: ReactNode;
+  v2?: boolean;
 }) {
   const figures = ownerSettlement({
     opening: Number(row.opening),
@@ -35,55 +37,63 @@ export function StatementDocument({
     closing: Number(row.closing),
   });
   const money = (minor: number) => moneyLabel(minor, row.currency, locale);
+  const signed = (minor: number) => statementSignedMoney(minor, row.currency, locale);
+  const amount = (value: string) => v2 && value.startsWith("\u2212") ? <span className="amount-neg">{value}</span> : value;
+  const periodNet = statementPeriodNet(figures);
+  const negative = periodNet < 0;
   const summary = [
-    ["i_opening", money(figures.opening), ""],
+    ["i_stmt_opening", signed(figures.opening), "statement-opening"],
     ["i_rent_received", money(figures.rent), "statement-rent"],
     ["i_other_income", money(figures.other), ""],
     ["i_fee", money(figures.fee), "statement-fee"],
-    ["i_expenses", signedMoneyLabel(figures.expenses, row.currency, locale), ""],
+    ["i_expenses", signed(figures.expenses), ""],
   ] as const;
   return (
     <div className="card" style={{ maxWidth: 640 }} data-testid="statement-document">
-      <BrandImage variant="horizontal" alt={t("i_brand")} className="statement-logo" />
+      <BrandImage variant="horizontal" alt={t("i_brand")} className="statement-logo" {...(v2 ? { v2: true, locale } : {})} />
       <table className="t">
         <tbody>
           {summary.map(([key, value, testid]) => (
             <tr key={key}>
               <td>{t(key)}</td>
               <td className="num" data-testid={testid || undefined}>
-                {value}
+                {amount(value)}
               </td>
             </tr>
           ))}
-          {figures.owes > 0 ? (
+          {figures.payouts !== 0 ? (
             <tr>
-              <td>{t("i_net_owner")}</td>
-              <td className="num">
-                <span className="chip warn" data-testid="owner-owes">
-                  {t("owner_owes")} {money(figures.owes)}
-                </span>
+              <td>{t("i_payouts")}</td>
+              <td className="num" data-testid="statement-payouts">
+                {amount(signed(figures.payouts))}
               </td>
             </tr>
-          ) : (
-            <>
-              <tr>
-                <td>{t("i_net_owner")}</td>
-                <td className="num">{money(figures.payable)}</td>
-              </tr>
-              <tr>
-                <td>{t("i_closing")}</td>
-                <td className="num" data-testid="statement-closing">
-                  {money(Math.max(0, figures.closing))}
-                </td>
-              </tr>
-            </>
-          )}
+          ) : null}
+          <tr data-testid={negative ? "owner-owes" : undefined}>
+            <td>{negative ? t("owner_owes") : t("i_net_owner")}</td>
+            <td className="num" data-testid="statement-net">
+              {negative ? <span className="chip warn">{amount(signed(periodNet))}</span> : money(periodNet)}
+            </td>
+          </tr>
+          <tr>
+            <td>{t("i_stmt_closing")}</td>
+            <td className="num" data-testid="statement-closing">
+              {amount(signed(figures.closing))}
+            </td>
+          </tr>
         </tbody>
       </table>
-      {figures.owes > 0 ? (
+      <p className="small" data-testid="statement-formula">
+        {t("i_stmt_formula", {
+          opening: signed(figures.opening),
+          net: signed(periodNet),
+          closing: signed(figures.closing),
+        })}
+      </p>
+      {negative ? (
         <div className="bd">
           <div className="alert warn small" data-testid="owner-owes-reason">
-            ⚠ {t("owner_owes_reason", { cost: money(figures.costs), rent: money(figures.rent + figures.other) })}
+            ⚠ {t("i_stmt_negative", { amount: signed(periodNet) })}
           </div>
         </div>
       ) : null}
@@ -93,7 +103,7 @@ export function StatementDocument({
             {lines.map((line, index) => (
               <tr key={`${line.line_type}-${index}`}>
                 <td data-testid="statement-line">{line.description || t("i_expenses")}</td>
-                <td className="num" data-testid="statement-line-amount">{signedMoneyLabel(Number(line.amount), row.currency, locale)}</td>
+                <td className="num" data-testid="statement-line-amount">{amount(signed(Number(line.amount)))}</td>
               </tr>
             ))}
           </tbody>

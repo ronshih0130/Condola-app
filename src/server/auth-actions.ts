@@ -1,10 +1,13 @@
 "use server";
 
+import { requireCurrentConsent } from "./consent-gate";
+
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   acceptInvite,
   beginMfa,
+  describeInvite,
   challengeCookie,
   changePassword,
   CHALLENGE_COOKIE,
@@ -38,12 +41,13 @@ import { closeMonth, reversePayment } from "./domain";
 import { addExpense, approveExpense, createExpense, updateExpense, voidExpense } from "./expenses";
 import { FlowError, isDbTimeout } from "./errors";
 import { portalPageTarget, sameId } from "@/lib/portal-page";
-import { issuePortalInvite } from "./portal-invite";
+import { issuePortalInvite, portalInviteOrigin } from "./portal-invite";
 import { clearStoredEnvChoice } from "./org-scope";
 import { PORTAL_ROLE_COOKIE } from "./portal-role";
 import { appCookieOptions, sameAppPath } from "./public-origin";
 import { clearAuthCookies, sessionEntryPath } from "./sign-out";
 import { getSession, readSession } from "./session";
+import { assertTeamInvitesAllowed, teamInvitesAllowedForOrg } from "./team-invites";
 import type { OrgRole } from "./types";
 
 function isRedirect(error: unknown) {
@@ -190,6 +194,7 @@ export async function actionReset(formData: FormData) {
 }
 
 export async function actionEmailPrefs(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await saveMemberEmailPrefs(session, {
@@ -203,6 +208,7 @@ export async function actionEmailPrefs(formData: FormData) {
 }
 
 export async function actionOrgMail(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await saveOrgMailSettings(session, {
@@ -219,6 +225,10 @@ export async function actionOrgMail(formData: FormData) {
 
 export async function actionAccept(formData: FormData) {
   const token = text(formData.get("token"));
+  const invite = await describeInvite(token, await meta());
+  if (invite.kind === "team_member") {
+    return { ok: false as const, error: "errors.teamInviteUnavailable" };
+  }
   const current = await readSession();
   const result = await acceptInvite(
     token,
@@ -228,12 +238,15 @@ export async function actionAccept(formData: FormData) {
     await meta(),
     text(formData.get("email")),
     current?.email ?? "",
+    formData.get("consent") === "on",
   );
   if (!result.ok) {
+    if (result.kind === "team_member") {
+      return { ok: false as const, error: "errors.teamInviteUnavailable" };
+    }
     const portal = result.kind === "owner" || result.kind === "tenant" || result.kind === "unknown";
     const fieldError =
       result.error === "weak" ||
-      result.error === "mismatch" ||
       result.error === "email" ||
       result.error === "auth" ||
       result.error === "timeout" ||
@@ -254,6 +267,138 @@ export async function actionAccept(formData: FormData) {
   redirect(sessionEntryPath("/auth/continue"));
 }
 
+function teamLinkFailure(error: unknown) {
+  return {
+    ok: false as const,
+    error: error instanceof FlowError ? error.key : "errors.generic",
+  };
+}
+
+export async function actionDescribeTeamJoin(token: string) {
+  try {
+    if (typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
+      return { ok: false as const, error: "errors.teamInviteUnavailable" };
+    }
+    const invite = await describeInvite(token, await meta());
+    if (invite.kind !== "team_member" || invite.state !== "ready") {
+      return { ok: false as const, error: "errors.teamInviteUnavailable" };
+    }
+    const current = await readSession();
+    if (current && normalizeEmail(current.email) !== normalizeEmail(invite.email)) {
+      return { ok: false as const, error: "account" };
+    }
+    return {
+      ok: true as const,
+      email: invite.email,
+      role: invite.role,
+      firm: invite.firm,
+      inviter: invite.inviter,
+    };
+  } catch {
+    return { ok: false as const, error: "errors.teamInviteUnavailable" };
+  }
+}
+
+export async function actionAcceptTeamJoin(input: {
+  token: string;
+  name: string;
+  password: string;
+  confirm: string;
+  consent: boolean;
+}) {
+  if (typeof input?.token !== "string") {
+    return { ok: false as const, error: "errors.teamInviteUnavailable" };
+  }
+  const description = await actionDescribeTeamJoin(input.token);
+  if (!description.ok) return description;
+  const current = await readSession();
+  let result: Awaited<ReturnType<typeof acceptInvite>>;
+  try {
+    result = await acceptInvite(
+      input.token,
+      typeof input.name === "string" ? input.name : "",
+      typeof input.password === "string" ? input.password : "",
+      typeof input.confirm === "string" ? input.confirm : "",
+      await meta(),
+      "",
+      current?.email ?? "",
+      input.consent === true,
+    );
+  } catch {
+    return { ok: false as const, error: "errors.generic" };
+  }
+  if (!result.ok) {
+    const fields: Record<string, string> = {
+      account: "account",
+      weak: "errors.weakPassword",
+      mismatch: "errors.mismatch",
+      required: "errors.required",
+      consent: "errors.consentRequired",
+      auth: "errors.authInvalid",
+      failed: "errors.generic",
+      "errors.seatLimit": "errors.seatLimit",
+    };
+    return {
+      ok: false as const,
+      error: fields[result.error] ?? "errors.teamInviteUnavailable",
+    };
+  }
+  const jar = await cookies();
+  const cookie = sessionCookie(result.token, true);
+  jar.set(cookie.name, cookie.value, cookie.options);
+  clearStoredEnvChoice(jar);
+  jar.delete(PORTAL_ROLE_COOKIE);
+  redirect(sessionEntryPath("/auth/continue"));
+}
+
+export async function actionIssueTeamInviteLink(input: { invitationId: string }) {
+  await requireCurrentConsent();
+  try {
+    const session = await readSession();
+    if (!session || session.kind !== "staff" || session.role !== "admin") {
+      return { ok: false as const, error: "errors.forbidden" };
+    }
+    if (session.environment !== "live" || !teamInvitesAllowedForOrg(session.orgId)) {
+      return { ok: false as const, error: "errors.teamInvitesSoon" };
+    }
+    const issued = await resendInvite(session, typeof input?.invitationId === "string" ? input.invitationId : "");
+    return {
+      ok: true as const,
+      url: `${portalInviteOrigin(await requestOrigin())}/join#t=${issued.token}`,
+      expiresAt: issued.expiresAt,
+      email: issued.email,
+    };
+  } catch (error) {
+    return teamLinkFailure(error);
+  }
+}
+
+export async function actionCreateTeamInviteLink(formData: FormData) {
+  await requireCurrentConsent();
+  try {
+    const session = await readSession();
+    if (!session || session.kind !== "staff" || session.role !== "admin") {
+      return { ok: false as const, error: "errors.forbidden" };
+    }
+    if (session.environment !== "live" || !teamInvitesAllowedForOrg(session.orgId)) {
+      return { ok: false as const, error: "errors.teamInvitesSoon" };
+    }
+    const issued = await inviteMember(session, {
+      email: text(formData.get("email")),
+      name: text(formData.get("name")),
+      role: text(formData.get("role")),
+    });
+    return {
+      ok: true as const,
+      url: `${portalInviteOrigin(await requestOrigin())}/join#t=${issued.token}`,
+      expiresAt: issued.expiresAt,
+      email: issued.email,
+    };
+  } catch (error) {
+    return teamLinkFailure(error);
+  }
+}
+
 export async function actionIssuePortalInvite(input: {
   kind: string;
   contactId: string;
@@ -261,6 +406,7 @@ export async function actionIssuePortalInvite(input: {
   leaseId?: string;
   rotate?: boolean;
 }) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const kind = input.kind === "owner" || input.kind === "tenant" ? input.kind : "";
@@ -305,9 +451,11 @@ export async function actionIssuePortalInvite(input: {
 }
 
 export async function actionInvite(formData: FormData) {
+  await requireCurrentConsent();
   const back = "/m/team";
   try {
     const session = await getSession();
+    assertTeamInvitesAllowed(session.orgId);
     const invited = await inviteMember(session, {
       email: text(formData.get("email")),
       name: text(formData.get("name")),
@@ -321,9 +469,11 @@ export async function actionInvite(formData: FormData) {
 }
 
 export async function actionResendInvite(formData: FormData) {
+  await requireCurrentConsent();
   const back = "/m/team";
   try {
     const session = await getSession();
+    assertTeamInvitesAllowed(session.orgId);
     const invited = await resendInvite(session, text(formData.get("invitationId")));
     redirect(demoModeEnabled() ? `${back}?invited=1&token=${encodeURIComponent(invited.token)}` : `${back}?invited=1`);
   } catch (error) {
@@ -332,6 +482,7 @@ export async function actionResendInvite(formData: FormData) {
 }
 
 export async function actionRevokeInvite(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await revokeInvite(session, text(formData.get("invitationId")));
@@ -342,6 +493,7 @@ export async function actionRevokeInvite(formData: FormData) {
 }
 
 export async function actionMemberRole(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await setMemberRole(session, text(formData.get("memberId")), text(formData.get("role")) as OrgRole);
@@ -352,6 +504,7 @@ export async function actionMemberRole(formData: FormData) {
 }
 
 export async function actionMemberActive(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const active = text(formData.get("active")) === "1";
@@ -363,6 +516,7 @@ export async function actionMemberActive(formData: FormData) {
 }
 
 export async function actionChangePassword(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await changePassword(session, text(formData.get("current")), text(formData.get("password")), text(formData.get("confirm")));
@@ -373,6 +527,7 @@ export async function actionChangePassword(formData: FormData) {
 }
 
 export async function actionBeginMfa() {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const started = await beginMfa(session);
@@ -386,6 +541,7 @@ export async function actionBeginMfa() {
 }
 
 export async function actionConfirmMfa(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const jar = await cookies();
@@ -399,6 +555,7 @@ export async function actionConfirmMfa(formData: FormData) {
 }
 
 export async function actionDisableMfa() {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await disableMfa(session);
@@ -409,6 +566,7 @@ export async function actionDisableMfa() {
 }
 
 export async function actionRequireMfa(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await setRequireMfa(session, formData.get("require") === "on");
@@ -419,6 +577,7 @@ export async function actionRequireMfa(formData: FormData) {
 }
 
 export async function actionOwnerPrivacy(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await setOwnerPrivacy(session, {
@@ -481,6 +640,7 @@ function expenseFields(formData: FormData) {
 }
 
 export async function actionAddExpense(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await addExpense(session, {
@@ -496,6 +656,7 @@ export async function actionAddExpense(formData: FormData) {
 }
 
 export async function actionCreateExpense(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     const created = await createExpense(session, expenseFields(formData));
@@ -506,6 +667,7 @@ export async function actionCreateExpense(formData: FormData) {
 }
 
 export async function actionUpdateExpense(formData: FormData) {
+  await requireCurrentConsent();
   const id = text(formData.get("expenseId"));
   try {
     const session = await getSession();
@@ -517,6 +679,7 @@ export async function actionUpdateExpense(formData: FormData) {
 }
 
 export async function actionApproveExpense(formData: FormData) {
+  await requireCurrentConsent();
   const id = text(formData.get("expenseId"));
   try {
     const session = await getSession();
@@ -528,6 +691,7 @@ export async function actionApproveExpense(formData: FormData) {
 }
 
 export async function actionVoidExpense(formData: FormData) {
+  await requireCurrentConsent();
   const id = text(formData.get("expenseId"));
   try {
     const session = await getSession();
@@ -539,6 +703,7 @@ export async function actionVoidExpense(formData: FormData) {
 }
 
 export async function actionReversePayment(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await reversePayment(session, text(formData.get("paymentId")), text(formData.get("reason")));
@@ -549,6 +714,7 @@ export async function actionReversePayment(formData: FormData) {
 }
 
 export async function actionCloseMonth(formData: FormData) {
+  await requireCurrentConsent();
   try {
     const session = await getSession();
     await closeMonth(session, text(formData.get("month")), text(formData.get("note")));

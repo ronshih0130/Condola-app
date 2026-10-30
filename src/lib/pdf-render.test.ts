@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { makeT } from "@/i18n";
 import { pdfContainsAscii } from "@/lib/pdf-text";
+import type { PdfDocument } from "@/lib/pdf-document";
 import { PdfFontError, renderPdf } from "@/lib/pdf-render";
 import { buildLeasePdf, buildStatementPdf, type LeasePdfSource, type StatementPdfSource } from "@/server/pdf-docs";
 
@@ -78,6 +79,44 @@ test("a statement PDF paints Traditional Chinese instead of blank glyphs", async
   const dark = darkPixels(readFileSync(join(dir, "page-1.ppm")), 40, 130, 40, 420);
   // A fontkit subset of this face leaves the title band nearly blank (~260 px).
   assert.ok(dark > 800, `title band has ${dark} dark pixels`);
+});
+
+test("U+2212 becomes an ASCII hyphen only on the statement PDF", async () => {
+  const font = readFileSync(new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url));
+  const other: PdfDocument = {
+    filename: "lease.pdf",
+    title: "Lease",
+    subtitle: "\u2212NT$1",
+    blocks: [],
+    footerLabel: "",
+    footerHash: "",
+  };
+  await assert.rejects(renderPdf(other, font), (err: unknown) => err instanceof PdfFontError);
+  const statement = buildStatementPdf(
+    {
+      id: "10000000-0000-4000-8000-000000000088",
+      orgId: "10000000-0000-4000-8000-000000000001",
+      ownerName: "陳建宏",
+      periodStart: "2026-10-01",
+      periodEnd: "2026-10-31",
+      currency: "TWD",
+      opening: -100_000,
+      rent: 0,
+      other: 0,
+      fee: 0,
+      expenses: 0,
+      payouts: 0,
+      closing: -100_000,
+      lines: [],
+      addresses: [],
+      audience: "owner",
+    },
+    "zh-TW",
+    "gregorian",
+    makeT("zh-TW"),
+  );
+  const bytes = await renderPdf(statement, font);
+  assert.equal(pdfContainsAscii(bytes, "-NT$1,000"), true);
 });
 
 function darkPixels(ppm: Buffer, y0: number, y1: number, x0: number, x1: number) {

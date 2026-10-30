@@ -1,0 +1,587 @@
+{
+  "generatedBy": "scripts/third-party-licenses.mjs",
+  "packages": [
+    {
+      "name": "@fontsource-variable/inter",
+      "version": "5.3.0",
+      "license": "OFL-1.1",
+      "licenseText": "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) Inter-Italic[opsz,wght].ttf: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\nSoftware, subject to the following conditions:\n\n1) Neither the Font Software nor any of its individual components,\nin Original or Modified Versions, may be sold by itself.\n\n2) Original or Modified Versions of the Font Software may be bundled,\nredistributed and/or sold with any software, provided that each copy\ncontains the above copyright notice and this license. These can be\nincluded either as stand-alone text files, human-readable headers or\nin the appropriate machine-readable metadata fields within text or\nbinary files as long as those fields can be easily viewed by the user.\n\n3) No Modified Version of the Font Software may use the Reserved Font\nName(s) unless explicit written permission is granted by the corresponding\nCopyright Holder. This restriction only applies to the primary font name as\npresented to the users.\n\n4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font\nSoftware shall not be used to promote, endorse or advertise any\nModified Version, except to acknowledge the contribution(s) of the\nCopyright Holder(s) and the Author(s) or with their explicit written\npermission.\n\n5) The Font Software, modified or unmodified, in part or in whole,\nmust be distributed entirely under this license, and must not be\ndistributed under any other license. The requirement for fonts to\nremain under this license does not apply to any document created\nusing the Font Software.\n\nTERMINATION\nThis license becomes null and void if any of the above conditions are\nnot met.\n\nDISCLAIMER\nTHE FONT SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\nOF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE\nCOPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nINCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL\nDAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM\nOTHER DEALINGS IN THE FONT SOFTWARE.\n",
+      "licenseTextSource": "public-file:public/brand/v2/fonts/LICENSE-Inter.txt",
+      "licenseUrl": "/brand/v2/fonts/LICENSE-Inter.txt",
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/fontsource/font-files/tree/main/fonts/variable/inter",
+      "sourceUrl": "https://www.npmjs.com/package/@fontsource-variable/inter/v/5.3.0",
+      "sourceArchives": [
+        {
+          "label": "@fontsource-variable/inter 5.3.0 (npm)",
+          "url": "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.3.0.tgz",
+          "integrity": "sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA=="
+        }
+      ],
+      "copyrightHolders": [
+        "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) Inter-Italic[opsz,wght].ttf: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)"
+      ],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "self-hosted-font",
+      "assetPath": "/brand/v2/fonts/Inter-latin-wght.woff2",
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "requiredBy": [
+        "brand-v2"
+      ]
+    },
+    {
+      "name": "@fontsource-variable/plus-jakarta-sans",
+      "version": "5.3.0",
+      "license": "OFL-1.1",
+      "licenseText": "Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans) PlusJakartaSans-Italic[wght].ttf: Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\nSoftware, subject to the following conditions:\n\n1) Neither the Font Software nor any of its individual components,\nin Original or Modified Versions, may be sold by itself.\n\n2) Original or Modified Versions of the Font Software may be bundled,\nredistributed and/or sold with any software, provided that each copy\ncontains the above copyright notice and this license. These can be\nincluded either as stand-alone text files, human-readable headers or\nin the appropriate machine-readable metadata fields within text or\nbinary files as long as those fields can be easily viewed by the user.\n\n3) No Modified Version of the Font Software may use the Reserved Font\nName(s) unless explicit written permission is granted by the corresponding\nCopyright Holder. This restriction only applies to the primary font name as\npresented to the users.\n\n4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font\nSoftware shall not be used to promote, endorse or advertise any\nModified Version, except to acknowledge the contribution(s) of the\nCopyright Holder(s) and the Author(s) or with their explicit written\npermission.\n\n5) The Font Software, modified or unmodified, in part or in whole,\nmust be distributed entirely under this license, and must not be\ndistributed under any other license. The requirement for fonts to\nremain under this license does not apply to any document created\nusing the Font Software.\n\nTERMINATION\nThis license becomes null and void if any of the above conditions are\nnot met.\n\nDISCLAIMER\nTHE FONT SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\nOF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE\nCOPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nINCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL\nDAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM\nOTHER DEALINGS IN THE FONT SOFTWARE.\n",
+      "licenseTextSource": "public-file:public/brand/v2/fonts/LICENSE-PlusJakartaSans.txt",
+      "licenseUrl": "/brand/v2/fonts/LICENSE-PlusJakartaSans.txt",
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/fontsource/font-files/tree/main/fonts/variable/plus-jakarta-sans",
+      "sourceUrl": "https://www.npmjs.com/package/@fontsource-variable/plus-jakarta-sans/v/5.3.0",
+      "sourceArchives": [
+        {
+          "label": "@fontsource-variable/plus-jakarta-sans 5.3.0 (npm)",
+          "url": "https://registry.npmjs.org/@fontsource-variable/plus-jakarta-sans/-/plus-jakarta-sans-5.3.0.tgz",
+          "integrity": "sha512-/l/4r0yyWK9JzAlmA0LiYgGgmJe/Gswt4jTJEzr5QhJfwMbvJZDmYWyW0M4X7yCK69BajMVlV/Lx8g7WDc1+sw=="
+        }
+      ],
+      "copyrightHolders": [
+        "Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans) PlusJakartaSans-Italic[wght].ttf: Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans)"
+      ],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "self-hosted-font",
+      "assetPath": "/brand/v2/fonts/PlusJakartaSans-latin-wght.woff2",
+      "sha256": "153fc85b70298beeb1d61a5f723331649e7f23bb77302a66e61cb3e2fbdb5e79",
+      "requiredBy": [
+        "brand-v2"
+      ]
+    },
+    {
+      "name": "@pdf-lib/fontkit",
+      "version": "1.1.1",
+      "license": "MIT",
+      "licenseText": "MIT License\n\nCopyright (c) Devon Govett; Andrew Dillon\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n",
+      "licenseTextSource": "spdx-template",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/Hopding/fontkit",
+      "sourceUrl": "https://registry.npmjs.org/@pdf-lib/fontkit/-/fontkit-1.1.1.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "@pdf-lib/fontkit"
+      ]
+    },
+    {
+      "name": "@pdf-lib/standard-fonts",
+      "version": "1.0.0",
+      "license": "MIT",
+      "licenseText": "MIT License\n\nCopyright (c) 2018 Andrew Dillon\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+      "licenseTextSource": "package-file:LICENSE.md",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/Hopding/standard-fonts",
+      "sourceUrl": "https://registry.npmjs.org/@pdf-lib/standard-fonts/-/standard-fonts-1.0.0.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "pdf-lib"
+      ]
+    },
+    {
+      "name": "@pdf-lib/upng",
+      "version": "1.0.1",
+      "license": "MIT",
+      "licenseText": "MIT License\n\nCopyright (c) 2017 Photopea\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+      "licenseTextSource": "package-file:LICENSE",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/Hopding/upng",
+      "sourceUrl": "https://registry.npmjs.org/@pdf-lib/upng/-/upng-1.0.1.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "pdf-lib"
+      ]
+    },
+    {
+      "name": "@swc/helpers",
+      "version": "0.5.15",
+      "license": "Apache-2.0",
+      "licenseText": "                              Apache License\n                        Version 2.0, January 2004\n                     http://www.apache.org/licenses/\n\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n1. Definitions.\n\n   \"License\" shall mean the terms and conditions for use, reproduction,\n   and distribution as defined by Sections 1 through 9 of this document.\n\n   \"Licensor\" shall mean the copyright owner or entity authorized by\n   the copyright owner that is granting the License.\n\n   \"Legal Entity\" shall mean the union of the acting entity and all\n   other entities that control, are controlled by, or are under common\n   control with that entity. For the purposes of this definition,\n   \"control\" means (i) the power, direct or indirect, to cause the\n   direction or management of such entity, whether by contract or\n   otherwise, or (ii) ownership of fifty percent (50%) or more of the\n   outstanding shares, or (iii) beneficial ownership of such entity.\n\n   \"You\" (or \"Your\") shall mean an individual or Legal Entity\n   exercising permissions granted by this License.\n\n   \"Source\" form shall mean the preferred form for making modifications,\n   including but not limited to software source code, documentation\n   source, and configuration files.\n\n   \"Object\" form shall mean any form resulting from mechanical\n   transformation or translation of a Source form, including but\n   not limited to compiled object code, generated documentation,\n   and conversions to other media types.\n\n   \"Work\" shall mean the work of authorship, whether in Source or\n   Object form, made available under the License, as indicated by a\n   copyright notice that is included in or attached to the work\n   (an example is provided in the Appendix below).\n\n   \"Derivative Works\" shall mean any work, whether in Source or Object\n   form, that is based on (or derived from) the Work and for which the\n   editorial revisions, annotations, elaborations, or other modifications\n   represent, as a whole, an original work of authorship. For the purposes\n   of this License, Derivative Works shall not include works that remain\n   separable from, or merely link (or bind by name) to the interfaces of,\n   the Work and Derivative Works thereof.\n\n   \"Contribution\" shall mean any work of authorship, including\n   the original version of the Work and any modifications or additions\n   to that Work or Derivative Works thereof, that is intentionally\n   submitted to Licensor for inclusion in the Work by the copyright owner\n   or by an individual or Legal Entity authorized to submit on behalf of\n   the copyright owner. For the purposes of this definition, \"submitted\"\n   means any form of electronic, verbal, or written communication sent\n   to the Licensor or its representatives, including but not limited to\n   communication on electronic mailing lists, source code control systems,\n   and issue tracking systems that are managed by, or on behalf of, the\n   Licensor for the purpose of discussing and improving the Work, but\n   excluding communication that is conspicuously marked or otherwise\n   designated in writing by the copyright owner as \"Not a Contribution.\"\n\n   \"Contributor\" shall mean Licensor and any individual or Legal Entity\n   on behalf of whom a Contribution has been received by Licensor and\n   subsequently incorporated within the Work.\n\n2. Grant of Copyright License. Subject to the terms and conditions of\n   this License, each Contributor hereby grants to You a perpetual,\n   worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n   copyright license to reproduce, prepare Derivative Works of,\n   publicly display, publicly perform, sublicense, and distribute the\n   Work and such Derivative Works in Source or Object form.\n\n3. Grant of Patent License. Subject to the terms and conditions of\n   this License, each Contributor hereby grants to You a perpetual,\n   worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n   (except as stated in this section) patent license to make, have made,\n   use, offer to sell, sell, import, and otherwise transfer the Work,\n   where such license applies only to those patent claims licensable\n   by such Contributor that are necessarily infringed by their\n   Contribution(s) alone or by combination of their Contribution(s)\n   with the Work to which such Contribution(s) was submitted. If You\n   institute patent litigation against any entity (including a\n   cross-claim or counterclaim in a lawsuit) alleging that the Work\n   or a Contribution incorporated within the Work constitutes direct\n   or contributory patent infringement, then any patent licenses\n   granted to You under this License for that Work shall terminate\n   as of the date such litigation is filed.\n\n4. Redistribution. You may reproduce and distribute copies of the\n   Work or Derivative Works thereof in any medium, with or without\n   modifications, and in Source or Object form, provided that You\n   meet the following conditions:\n\n   (a) You must give any other recipients of the Work or\n       Derivative Works a copy of this License; and\n\n   (b) You must cause any modified files to carry prominent notices\n       stating that You changed the files; and\n\n   (c) You must retain, in the Source form of any Derivative Works\n       that You distribute, all copyright, patent, trademark, and\n       attribution notices from the Source form of the Work,\n       excluding those notices that do not pertain to any part of\n       the Derivative Works; and\n\n   (d) If the Work includes a \"NOTICE\" text file as part of its\n       distribution, then any Derivative Works that You distribute must\n       include a readable copy of the attribution notices contained\n       within such NOTICE file, excluding those notices that do not\n       pertain to any part of the Derivative Works, in at least one\n       of the following places: within a NOTICE text file distributed\n       as part of the Derivative Works; within the Source form or\n       documentation, if provided along with the Derivative Works; or,\n       within a display generated by the Derivative Works, if and\n       wherever such third-party notices normally appear. The contents\n       of the NOTICE file are for informational purposes only and\n       do not modify the License. You may add Your own attribution\n       notices within Derivative Works that You distribute, alongside\n       or as an addendum to the NOTICE text from the Work, provided\n       that such additional attribution notices cannot be construed\n       as modifying the License.\n\n   You may add Your own copyright statement to Your modifications and\n   may provide additional or different license terms and conditions\n   for use, reproduction, or distribution of Your modifications, or\n   for any such Derivative Works as a whole, provided Your use,\n   reproduction, and distribution of the Work otherwise complies with\n   the conditions stated in this License.\n\n5. Submission of Contributions. Unless You explicitly state otherwise,\n   any Contribution intentionally submitted for inclusion in the Work\n   by You to the Licensor shall be under the terms and conditions of\n   this License, without any additional terms or conditions.\n   Notwithstanding the above, nothing herein shall supersede or modify\n   the terms of any separate license agreement you may have executed\n   with Licensor regarding such Contributions.\n\n6. Trademarks. This License does not grant permission to use the trade\n   names, trademarks, service marks, or product names of the Licensor,\n   except as required for reasonable and customary use in describing the\n   origin of the Work and reproducing the content of the NOTICE file.\n\n7. Disclaimer of Warranty. Unless required by applicable law or\n   agreed to in writing, Licensor provides the Work (and each\n   Contributor provides its Contributions) on an \"AS IS\" BASIS,\n   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\n   implied, including, without limitation, any warranties or conditions\n   of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A\n   PARTICULAR PURPOSE. You are solely responsible for determining the\n   appropriateness of using or redistributing the Work and assume any\n   risks associated with Your exercise of permissions under this License.\n\n8. Limitation of Liability. In no event and under no legal theory,\n   whether in tort (including negligence), contract, or otherwise,\n   unless required by applicable law (such as deliberate and grossly\n   negligent acts) or agreed to in writing, shall any Contributor be\n   liable to You for damages, including any direct, indirect, special,\n   incidental, or consequential damages of any character arising as a\n   result of this License or out of the use or inability to use the\n   Work (including but not limited to damages for loss of goodwill,\n   work stoppage, computer failure or malfunction, or any and all\n   other commercial damages or losses), even if such Contributor\n   has been advised of the possibility of such damages.\n\n9. Accepting Warranty or Additional Liability. While redistributing\n   the Work or Derivative Works thereof, You may choose to offer,\n   and charge a fee for, acceptance of support, warranty, indemnity,\n   or other liability obligations and/or rights consistent with this\n   License. However, in accepting such obligations, You may act only\n   on Your own behalf and on Your sole responsibility, not on behalf\n   of any other Contributor, and only if You agree to indemnify,\n   defend, and hold each Contributor harmless for any liability\n   incurred by, or claims asserted against, such Contributor by reason\n   of your accepting any such warranty or additional liability.\n\nEND OF TERMS AND CONDITIONS\n\nAPPENDIX: How to apply the Apache License to your work.\n\n   To apply the Apache License to your work, attach the following\n   boilerplate notice, with the fields enclosed by brackets \"[]\"\n   replaced with your own identifying information. (Don't include\n   the brackets!)  The text should be enclosed in the appropriate\n   comment syntax for the file format. We also recommend that a\n   file or class name and description of purpose be included on the\n   same \"printed page\" as the copyright notice for easier\n   identification within third-party archives.\n\nCopyright 2024 SWC contributors.\n\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n\thttp://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.",
+      "licenseTextSource": "package-file:LICENSE",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/swc-project/swc",
+      "sourceUrl": "https://registry.npmjs.org/@swc/helpers/-/helpers-0.5.15.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "@swc/helpers"
+      ]
+    },
+    {
+      "name": "heic-convert",
+      "version": "2.1.0",
+      "license": "ISC",
+      "licenseText": "ISC License\n\nCopyright (c) Kiril Vatev\n\nPermission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n",
+      "licenseTextSource": "spdx-template",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/catdad-experiments/heic-convert",
+      "sourceUrl": "https://registry.npmjs.org/heic-convert/-/heic-convert-2.1.0.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "heic-convert"
+      ]
+    },
+    {
+      "name": "heic-decode",
+      "version": "2.1.0",
+      "license": "ISC",
+      "licenseText": "ISC License\n\nCopyright (c) Kiril Vatev\n\nPermission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n",
+      "licenseTextSource": "spdx-template",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/catdad-experiments/heic-decode",
+      "sourceUrl": "https://registry.npmjs.org/heic-decode/-/heic-decode-2.1.0.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "heic-convert"
+      ]
+    },
+    {
+      "name": "libde265",
+      "version": "1.0.15",
+      "license": "LGPL-3.0",
+      "licenseText": null,
+      "licenseTextSource": "upstream-file:libde265-1.0.15/COPYING",
+      "licenseUrl": "/third-party/upstream/libde265-1.0.15/COPYING",
+      "gplUrl": "/third-party/GPL-3.0.txt",
+      "noticeUrl": "/third-party/libheif-js/1.23.5/NOTICE.txt",
+      "sourceNoticesUrl": "/third-party/upstream/libde265-1.0.15/SOURCE-NOTICES.txt",
+      "repository": "https://github.com/strukturag/libde265",
+      "sourceUrl": "https://github.com/strukturag/libde265/releases/tag/v1.0.15",
+      "sourceArchives": [
+        {
+          "label": "libde265 1.0.15 (release)",
+          "url": "https://github.com/strukturag/libde265/releases/download/v1.0.15/libde265-1.0.15.tar.gz",
+          "sha256": "00251986c29d34d3af7117ed05874950c875dd9292d016be29d3b3762666511d"
+        }
+      ],
+      "copyrightHolders": [
+        "Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>",
+        "Copyright (c) 2001 Alexander Peslyak and it is hereby released to the",
+        "Copyright (c) 2008 Mans Rullgard <mans@mansr.com>",
+        "Copyright (c) 2013 openHEVC contributors",
+        "Copyright (c) 2013-2014 struktur AG, Dirk Farin <farin@struktur.de>",
+        "Copyright (c) 2013-2015 struktur AG, Joachim Bauch <bauch@struktur.de>",
+        "Copyright (c) 2014 - 2015 Seppo Tomperi <seppo.tomperi@vtt.fi>",
+        "Copyright (c) 2014 struktur AG, Dirk Farin <farin@struktur.de>"
+      ],
+      "buildInputsUrl": "/third-party/upstream/libheif-js-1.23.5/build/BUILD.md",
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "inside:libheif-js",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "heic-convert"
+      ]
+    },
+    {
+      "name": "libheif",
+      "version": "1.23.5",
+      "license": "LGPL-3.0",
+      "licenseText": null,
+      "licenseTextSource": "upstream-file:libheif-1.23.5/COPYING",
+      "licenseUrl": "/third-party/upstream/libheif-1.23.5/COPYING",
+      "gplUrl": "/third-party/GPL-3.0.txt",
+      "noticeUrl": "/third-party/libheif-js/1.23.5/NOTICE.txt",
+      "sourceNoticesUrl": "/third-party/upstream/libheif-1.23.5/SOURCE-NOTICES.txt",
+      "repository": "https://github.com/strukturag/libheif",
+      "sourceUrl": "https://github.com/strukturag/libheif/releases/tag/v1.23.5",
+      "sourceArchives": [
+        {
+          "label": "libheif 1.23.5 (release)",
+          "url": "https://github.com/strukturag/libheif/releases/download/v1.23.5/libheif-1.23.5.tar.gz",
+          "sha256": "fd9036064c4432f0550d15072ddf34956a248279ee9aeaff0fba3fa0f77d8f1a"
+        }
+      ],
+      "copyrightHolders": [
+        "Copyright (C) 2024 Brad Hards",
+        "Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2017 Dirk Farin <dirk.farin@gmail.com>x",
+        "Copyright (c) 2017-2023 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2017-2025 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2017-2026 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2018 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2019 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2019, Aous Naman",
+        "Copyright (c) 2019, Kakadu Software Pty Ltd, Australia",
+        "Copyright (c) 2019, The University of New South Wales, Australia",
+        "Copyright (c) 2020 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2022 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2023 Brad Hards <bradh@frogmouth.net>",
+        "Copyright (c) 2023 Devon Sookhoo",
+        "Copyright (c) 2023 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2024 Brad Hards <bradh@frogmouth.net>",
+        "Copyright (c) 2024 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2024-2025 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2025 Brad Hards <bradh@frogmouth.net>",
+        "Copyright (c) 2025 Dirk Farin <dirk.farin@gmail.com>",
+        "Copyright (c) 2026 Brad Hards <bradh@frogmouth.net>",
+        "Copyright (c) 2026 Dirk Farin <dirk.farin@gmail.com>"
+      ],
+      "buildInputsUrl": "/third-party/upstream/libheif-js-1.23.5/build/BUILD.md",
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "inside:libheif-js",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "heic-convert"
+      ]
+    },
+    {
+      "name": "libheif-js",
+      "version": "1.23.5",
+      "license": "LGPL-3.0",
+      "licenseText": null,
+      "licenseTextSource": "package-file:LICENSE",
+      "licenseUrl": "/third-party/LGPL-3.0.txt",
+      "gplUrl": "/third-party/GPL-3.0.txt",
+      "noticeUrl": "/third-party/libheif-js/1.23.5/NOTICE.txt",
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/catdad-experiments/libheif-js",
+      "sourceUrl": "https://registry.npmjs.org/libheif-js/-/libheif-js-1.23.5.tgz",
+      "sourceArchives": [
+        {
+          "label": "libheif-js 1.23.5 (npm)",
+          "url": "https://registry.npmjs.org/libheif-js/-/libheif-js-1.23.5.tgz",
+          "integrity": "sha512-umXZPthnWZtF3iG/5mQG+AZ2V6i0UeYpo3z2CkggTEgL8dKmIIwJT6TDuAMuabXa1yTW8uJ1ZAgR+CxNTklYYw=="
+        },
+        {
+          "label": "libheif-js 1.23.5 (tag)",
+          "url": "https://github.com/catdad-experiments/libheif-js/archive/refs/tags/1.23.5.tar.gz",
+          "sha256": "b2bcc4d1e94a47eff30afa05671374170f2f9f5ad88dd2e3cb1196d2df4d6f76"
+        },
+        {
+          "label": "libheif-emscripten 1.23.5 (tag)",
+          "url": "https://github.com/catdad-experiments/libheif-emscripten/archive/refs/tags/v1.23.5.tar.gz",
+          "sha256": "8e3395ca983e369448bea84d223c35f1117373953e00219588415f1bc37c86ea"
+        }
+      ],
+      "copyrightHolders": [],
+      "buildInputsUrl": "/third-party/upstream/libheif-js-1.23.5/build/BUILD.md",
+      "buildInputFiles": [
+        {
+          "label": "libheif-js/scripts/install.js",
+          "url": "/third-party/upstream/libheif-js-1.23.5/build/libheif-js/scripts/install.js"
+        },
+        {
+          "label": "libheif-js/scripts/bundle.js",
+          "url": "/third-party/upstream/libheif-js-1.23.5/build/libheif-js/scripts/bundle.js"
+        },
+        {
+          "label": "libheif-js/package.json",
+          "url": "/third-party/upstream/libheif-js-1.23.5/build/libheif-js/package.json"
+        },
+        {
+          "label": "libheif-emscripten/.github/workflows/emscripten.yml",
+          "url": "/third-party/upstream/libheif-js-1.23.5/build/libheif-emscripten/.github/workflows/emscripten.yml"
+        },
+        {
+          "label": "libheif-emscripten/dist-prep.sh",
+          "url": "/third-party/upstream/libheif-js-1.23.5/build/libheif-emscripten/dist-prep.sh"
+        },
+        {
+          "label": "libheif-emscripten/.gitmodules",
+          "url": "/third-party/upstream/libheif-js-1.23.5/build/libheif-emscripten/.gitmodules"
+        },
+        {
+          "label": "libheif/build-emscripten.sh",
+          "url": "/third-party/upstream/libheif-js-1.23.5/build/libheif/build-emscripten.sh"
+        },
+        {
+          "label": "libheif/scripts/run-ci.sh",
+          "url": "/third-party/upstream/libheif-js-1.23.5/build/libheif/scripts/run-ci.sh"
+        }
+      ],
+      "buildProvenance": {
+        "prebuiltUrl": "https://github.com/catdad-experiments/libheif-emscripten/releases/download/v1.23.5/libheif.tar.gz",
+        "prebuiltSha256": "0fa8629a75344389f0da842f659cc952ecaa39cde400eed42b80e4a82a3af778",
+        "prebuiltWasmSha256": "184d3d20f8323877f13e9f5254f9c6a0ce272c9a3a2f823b0b2bcd2ee9f73f80",
+        "prebuiltWasmBytes": 1463506,
+        "shippedBundleSha256": "095194187be00d3e36335b8ad7f5552d70655e5e2159486d7d36cd4daa47bba9",
+        "reproducedWith": {
+          "node": "20",
+          "esbuild": "0.19.12",
+          "esbuild-plugins-node-modules-polyfill": "1.8.3"
+        },
+        "libheifCommit": "413e2a87e6a70b3eccc3a3adc5801179dd2d9e00",
+        "emscriptenVersion": "3.1.61",
+        "embeddedWasmSha256": "184d3d20f8323877f13e9f5254f9c6a0ce272c9a3a2f823b0b2bcd2ee9f73f80",
+        "embeddedWasmBytes": 1463506
+      },
+      "delivery": "separate-unmodified-file",
+      "assetPath": "/vendor/libheif-js/1.23.5/libheif-bundle.mjs",
+      "sha256": "095194187be00d3e36335b8ad7f5552d70655e5e2159486d7d36cd4daa47bba9",
+      "requiredBy": [
+        "heic-convert"
+      ]
+    },
+    {
+      "name": "next",
+      "version": "15.5.28",
+      "license": "MIT",
+      "licenseText": "The MIT License (MIT)\n\nCopyright (c) 2025 Vercel, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+      "licenseTextSource": "package-file:license.md",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/vercel/next.js",
+      "sourceUrl": "https://registry.npmjs.org/next/-/next-15.5.28.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "next"
+      ]
+    },
+    {
+      "name": "pako",
+      "version": "1.0.11",
+      "license": "(MIT AND Zlib)",
+      "licenseText": "(The MIT License)\n\nCopyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.\n",
+      "licenseTextSource": "package-file:LICENSE",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/nodeca/pako",
+      "sourceUrl": "https://registry.npmjs.org/pako/-/pako-1.0.11.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "@pdf-lib/fontkit",
+        "pdf-lib"
+      ]
+    },
+    {
+      "name": "pdf-lib",
+      "version": "1.17.1",
+      "license": "MIT",
+      "licenseText": "MIT License\n\nCopyright (c) 2019 Andrew Dillon\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+      "licenseTextSource": "package-file:LICENSE.md",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/Hopding/pdf-lib",
+      "sourceUrl": "https://registry.npmjs.org/pdf-lib/-/pdf-lib-1.17.1.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "pdf-lib"
+      ]
+    },
+    {
+      "name": "react",
+      "version": "19.1.0",
+      "license": "MIT",
+      "licenseText": "MIT License\n\nCopyright (c) Meta Platforms, Inc. and affiliates.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+      "licenseTextSource": "package-file:LICENSE",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/facebook/react",
+      "sourceUrl": "https://registry.npmjs.org/react/-/react-19.1.0.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "react"
+      ]
+    },
+    {
+      "name": "react-dom",
+      "version": "19.1.0",
+      "license": "MIT",
+      "licenseText": "MIT License\n\nCopyright (c) Meta Platforms, Inc. and affiliates.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+      "licenseTextSource": "package-file:LICENSE",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/facebook/react",
+      "sourceUrl": "https://registry.npmjs.org/react-dom/-/react-dom-19.1.0.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "react-dom"
+      ]
+    },
+    {
+      "name": "scheduler",
+      "version": "0.26.0",
+      "license": "MIT",
+      "licenseText": "MIT License\n\nCopyright (c) Meta Platforms, Inc. and affiliates.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+      "licenseTextSource": "package-file:LICENSE",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/facebook/react",
+      "sourceUrl": "https://registry.npmjs.org/scheduler/-/scheduler-0.26.0.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "react-dom"
+      ]
+    },
+    {
+      "name": "tailwindcss",
+      "version": "4.3.3",
+      "license": "MIT",
+      "licenseText": "MIT License\n\nCopyright (c) Tailwind Labs, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+      "licenseTextSource": "package-file:LICENSE",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/tailwindlabs/tailwindcss",
+      "sourceUrl": "https://registry.npmjs.org/tailwindcss/-/tailwindcss-4.3.3.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "tailwindcss"
+      ]
+    },
+    {
+      "name": "tslib",
+      "version": "1.14.1",
+      "license": "0BSD",
+      "licenseText": "Copyright (c) Microsoft Corporation.\r\n\r\nPermission to use, copy, modify, and/or distribute this software for any\r\npurpose with or without fee is hereby granted.\r\n\r\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH\r\nREGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY\r\nAND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,\r\nINDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM\r\nLOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR\r\nOTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR\r\nPERFORMANCE OF THIS SOFTWARE.",
+      "licenseTextSource": "package-file:LICENSE.txt",
+      "licenseUrl": null,
+      "gplUrl": null,
+      "noticeUrl": null,
+      "sourceNoticesUrl": null,
+      "repository": "https://github.com/Microsoft/tslib",
+      "sourceUrl": "https://registry.npmjs.org/tslib/-/tslib-1.14.1.tgz",
+      "sourceArchives": [],
+      "copyrightHolders": [],
+      "buildInputsUrl": null,
+      "buildInputFiles": [],
+      "buildProvenance": null,
+      "delivery": "bundled",
+      "assetPath": null,
+      "sha256": null,
+      "requiredBy": [
+        "pdf-lib"
+      ]
+    }
+  ]
+}

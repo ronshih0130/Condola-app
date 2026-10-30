@@ -1,0 +1,10 @@
+{
+  "email": "consent.mvoszxl1@example.com",
+  "type": "signup",
+  "redirect_to": "http://127.0.0.1:43123/signup/confirm",
+  "data": {
+    "terms_accepted_at": "2026-10-26T05:16:00.586Z",
+    "terms_version": "2026-10-22",
+    "privacy_version": "2026-10-22"
+  }
+}

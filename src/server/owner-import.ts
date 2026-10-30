@@ -217,9 +217,9 @@ export function missingRequired(mapping: ColumnMapping) {
 
 export type ImportRequestRow = { line: number } & Record<ImportField, string>;
 
-export function tableToRows(table: string[][], mapping: ColumnMapping, rowNumbers?: number[]): ImportRequestRow[] {
+export function tableToRows(table: string[][], mapping: ColumnMapping): ImportRequestRow[] {
   return table.slice(1).map((cells, index) => {
-    const row = { line: rowNumbers?.[index + 1] ?? index + 2 } as ImportRequestRow;
+    const row = { line: index + 2 } as ImportRequestRow;
     for (const field of IMPORT_FIELDS) {
       const at = mapping[field];
       row[field] = at === null || at === undefined ? "" : String(cells[at] ?? "").trim();
@@ -251,62 +251,7 @@ export type ImportIssue = {
   severity: "error" | "warn";
   key: string;
   vars?: Record<string, string | number>;
-  fields?: ImportField[];
 };
-
-/** Source fields relevant to an issue, including issues returned by the server planner. */
-export function issueFields(issue: ImportIssue): ImportField[] {
-  if (issue.fields?.length) return issue.fields;
-  const label = String(issue.vars?.f ?? "");
-  const field = IMPORT_FIELDS.find((name) => label === ZH_HEADERS[name] || label === EN_HEADERS[name]);
-  if (field) return [field];
-  const byKey: Record<string, ImportField[]> = {
-    im_e_type: ["rentalMode"], im_e_whole_room: ["rentalMode", "roomLabel"],
-    im_e_due: ["dueDay"], im_e_elec: ["electricity"], im_e_order: ["startDate", "endDate"],
-    im_e_ended: ["endDate"], im_e_phone: ["tenantPhone"], im_e_phone_dup: ["tenantPhone"],
-    im_e_phone_name: ["tenantPhone", "tenantName"], im_e_dep: ["deposit", "depositReason"],
-    im_e_cap: ["rate", "billKwh", "billAmount", "rateReason"],
-    im_e_dup: ["unitLabel", "roomLabel"], im_e_mode: ["rentalMode", "unitLabel"],
-    im_e_exists: ["propertyName", "address"], im_e_occupied: ["unitLabel", "roomLabel", "startDate", "endDate"],
-    im_e_terms: ["rent", "deposit", "dueDay", "startDate", "endDate"],
-    im_e_tenant: ["tenantPhone"],
-  };
-  return byKey[issue.key] ?? [];
-}
-
-/** Merge all diagnostic sources once, without collapsing distinct field errors. */
-export function mergeImportErrors(...sources: ImportIssue[][]): ImportIssue[] {
-  const seen = new Set<string>();
-  const merged: ImportIssue[] = [];
-  for (const issue of sources.flat()) {
-    if (issue.severity !== "error") continue;
-    const vars = Object.entries(issue.vars ?? {}).sort(([a], [b]) => a.localeCompare(b));
-    const identity = JSON.stringify([issue.line, issue.key, issueFields(issue), vars]);
-    if (!seen.has(identity)) { seen.add(identity); merged.push(issue); }
-  }
-  return merged;
-}
-
-/** Retain source columns while adding diagnostic-only row IDs and descriptions. */
-export function importProblemRows(
-  table: string[][], issues: ImportIssue[], rowLabel: string, problemLabel: string,
-  describe: (issue: ImportIssue) => string, rowNumbers?: number[],
-): string[][] {
-  const grouped = new Map<number, string[]>();
-  for (const issue of mergeImportErrors(issues)) {
-    const index = rowNumbers ? rowNumbers.indexOf(issue.line) : issue.line - 1;
-    if (index < 1 || index >= table.length) continue;
-    const reasons = grouped.get(issue.line) ?? [];
-    reasons.push(describe(issue));
-    grouped.set(issue.line, reasons);
-  }
-  const width = Math.max(0, ...table.map((row) => row.length));
-  return [[...Array.from({ length: width }, (_, index) => table[0]?.[index] ?? ""), rowLabel, problemLabel],
-    ...[...grouped].sort(([a], [b]) => a - b).map(([line, reasons]) => [
-      ...Array.from({ length: width }, (_, index) => table[rowNumbers ? rowNumbers.indexOf(line) : line - 1]?.[index] ?? ""),
-      String(line), reasons.join("；"),
-    ])];
-}
 
 export type SpaceKind = "room" | "whole_unit";
 export type RoomType = "suite" | "shared_bath" | "studio" | "other";
@@ -389,12 +334,12 @@ export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday
     const billAmount = numberField(raw.line, ZH_HEADERS.billAmount, raw.billAmount, issues, true, IMPORT_MONEY_MAX);
     const opening = numberField(raw.line, ZH_HEADERS.opening, raw.opening, issues, true, IMPORT_MONEY_MAX);
     const deposit = numberField(raw.line, ZH_HEADERS.deposit, raw.deposit, issues, true, IMPORT_MONEY_MAX);
-    const ownerEmail = emailField(raw.line, "ownerEmail", raw.ownerEmail, issues);
-    const tenantEmail = emailField(raw.line, "tenantEmail", raw.tenantEmail, issues);
+    const ownerEmail = emailField(raw.line, raw.ownerEmail, issues);
+    const tenantEmail = emailField(raw.line, raw.tenantEmail, issues);
     const tenantName = blank(boundedText(raw.line, ZH_HEADERS.tenantName, raw.tenantName, issues));
     const tenantPhone = blank(boundedText(raw.line, ZH_HEADERS.tenantPhone, importPhone(raw.tenantPhone), issues));
-    const startDate = dateField(raw.line, "startDate", raw.startDate, issues);
-    const endDate = dateField(raw.line, "endDate", raw.endDate, issues);
+    const startDate = dateField(raw.line, raw.startDate, issues);
+    const endDate = dateField(raw.line, raw.endDate, issues);
     const electricity = electricityField(raw.line, raw.electricity, issues);
     const lease = Boolean(tenantName || tenantPhone || tenantEmail || raw.startDate.trim() || raw.endDate.trim() || raw.deposit.trim());
     let dueDay: number | null = null;
@@ -940,22 +885,20 @@ function shown(value: string) {
   return text.length > 40 ? `${text.slice(0, 40)}…` : text;
 }
 
-function emailField(line: number, field: "ownerEmail" | "tenantEmail", raw: string, issues: ImportIssue[]) {
-  const before = issues.length;
+function emailField(line: number, raw: string, issues: ImportIssue[]) {
   const text = boundedText(line, "Email", raw, issues).toLowerCase();
-  if (issues.length > before) issues[issues.length - 1].fields = [field];
   if (!text) return null;
   if (!text.includes("@") || /\s/.test(text)) {
-    issues.push({ line, severity: "error", key: "i_email", fields: [field] });
+    issues.push({ line, severity: "error", key: "i_email" });
     return null;
   }
   return text;
 }
 
-function dateField(line: number, field: "startDate" | "endDate", raw: string, issues: ImportIssue[]) {
+function dateField(line: number, raw: string, issues: ImportIssue[]) {
   const text = raw.normalize("NFKC").trim().replace(/\s+/g, "");
   if (text.length > IMPORT_FIELD_MAX) {
-    issues.push({ line, severity: "error", key: "im_e_len", vars: { f: "date", max: IMPORT_FIELD_MAX }, fields: [field] });
+    issues.push({ line, severity: "error", key: "im_e_len", vars: { f: "date", max: IMPORT_FIELD_MAX } });
     return null;
   }
   if (!text) return null;
@@ -963,13 +906,13 @@ function dateField(line: number, field: "startDate" | "endDate", raw: string, is
   if (serial) return serial;
   const roc = rocDate(text);
   if (roc) {
-    if (roc === "invalid") issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) }, fields: [field] });
+    if (roc === "invalid") issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) } });
     return roc === "invalid" ? null : roc;
   }
   const western = /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/.exec(text);
   const iso = western ? calendarDate(Number(western[1]), Number(western[2]), Number(western[3])) : null;
   if (!iso || iso === "invalid") {
-    issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) }, fields: [field] });
+    issues.push({ line, severity: "error", key: "im_e_date", vars: { v: shown(text) } });
     return null;
   }
   return iso;

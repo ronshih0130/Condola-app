@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { LegalConsentCheckbox } from "./consent-check";
 import { PendingSubmit } from "./pending-submit";
 import { useT } from "./locale";
 import { actionPreviewCode, actionStartSignup } from "@/server/signup-actions";
@@ -10,8 +11,18 @@ export function SignupForm({ error }: { error?: string }) {
   const [code, setCode] = useState("");
   const [note, setNote] = useState("");
   const [bad, setBad] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const [consentError, setConsentError] = useState(error === "consent");
   return (
-    <form action={actionStartSignup} className="col">
+    <form
+      action={actionStartSignup}
+      className="col"
+      onSubmit={(event) => {
+        if (agreed) return;
+        event.preventDefault();
+        setConsentError(true);
+      }}
+    >
       {error === "duplicate" ? (
         <div className="alert bad" data-testid="signup-duplicate">
           <p>{t("i_signup_dup")}</p>
@@ -27,6 +38,8 @@ export function SignupForm({ error }: { error?: string }) {
         <div className="alert bad">{t("i_pw_mismatch")}</div>
       ) : error === "email" ? (
         <div className="alert bad">{t("i_email")}</div>
+      ) : error === "consent" ? (
+        <div className="alert bad" data-testid="signup-consent-error">{t("i_signup_consent_error")}</div>
       ) : error ? (
         <div className="alert bad">{t("i_required")}</div>
       ) : null}
@@ -90,7 +103,21 @@ export function SignupForm({ error }: { error?: string }) {
           </p>
         ) : null}
       </div>
-      <PendingSubmit className="btn pri block" idle={t("i_signup_submit")} pending={t("i_signup_submitting")} testId="signup-submit" />
+      <LegalConsentCheckbox
+        variant="service"
+        checked={agreed}
+        onChange={(value) => {
+          setAgreed(value);
+          if (value) setConsentError(false);
+        }}
+        showError={consentError && error !== "consent"}
+        labelTestId="signup-consent-label"
+        inputTestId="signup-consent"
+        termsTestId="signup-terms"
+        privacyTestId="signup-privacy"
+        errorTestId="signup-consent-error"
+      />
+      <PendingSubmit className="btn pri block" idle={t("i_signup_submit")} pending={t("i_signup_submitting")} testId="signup-submit" disabled={!agreed} />
       <p className="small">
         <a href="/forgot">{t("i_forgot")}</a>
         {" · "}

@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { Fragment } from "react";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -18,6 +19,7 @@ function daysBetween(due: string, today: string) {
 }
 
 export default async function RentPage() {
+  await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
   const rows = await rentRoll(session);

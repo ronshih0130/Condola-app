@@ -5,7 +5,9 @@ export type OrgRole = "admin" | "manager" | "accountant" | "maintenance";
 export type CalendarMode = "gregorian" | "roc";
 
 export type Session = {
+  partnerConsent?: import("./partner-consent").PartnerConsentState;
   userId: string;
+  consent?: import("./consent").StoredConsent | null;
   sessionId: string;
   email: string;
   name: string;

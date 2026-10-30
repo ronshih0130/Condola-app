@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { makeT } from "@/i18n";
 import { FlowError } from "@/server/errors";
@@ -12,6 +13,8 @@ export async function GET(request: Request) {
   if (!session || session.kind !== "staff" || !can(session.role, "reports.export")) {
     return NextResponse.json({ error: "errors.forbidden" }, { status: 403 });
   }
+  const blocked = await requireCurrentConsent(session, "api");
+  if (blocked) return blocked;
   const url = new URL(request.url);
   try {
     const period = reportPeriod({

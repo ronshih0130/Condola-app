@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionOrgMail } from "@/server/auth-actions";
@@ -5,17 +6,20 @@ import { orgMailSettings } from "@/server/mail-settings";
 import { can } from "@/server/perms";
 import { isPlatformAdmin } from "@/server/platform";
 import { getSession } from "@/server/session";
+import { PartnerConsentHistory } from "@/components/partner-consent-history";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
-  const session = await getSession();
+  await requireCurrentConsent(undefined, "page");
   const query = await searchParams;
+  const session = await getSession();
   const t = makeT(session.locale);
   const mail = can(session.role, "settings.edit") ? await orgMailSettings(session.orgId) : null;
   return (
     <>
       <PageHeader title={t("i_nav_settings")} />
+      <PartnerConsentHistory session={session} />
       <ErrorBanner t={t} error={query.error} />
       {query.saved === "1" ? <div className="alert ok">{t("i_saved")}</div> : null}
       {mail ? (
@@ -61,6 +65,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p className="small">{t("s_c6a6031")}</p>
         <p className="small muted">{t("s_ff6ff46")}</p>
       </div>
+      {session.role === "admin" ? (
+        <div className="card pad" style={{ maxWidth: 720, marginTop: 16 }}>
+          <h3>{t("idv_ret_h")}</h3>
+          <p id="idvRetainDays" data-testid="idv-retain-days">
+            {t("i_id_retain")}
+          </p>
+        </div>
+      ) : null}
     </>
   );
 }

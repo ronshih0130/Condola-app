@@ -1,3 +1,4 @@
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { FlowError } from "@/server/errors";
 import { readSession } from "@/server/session";
@@ -15,6 +16,8 @@ export async function POST(request: Request) {
   try {
     const session = await readSession();
     if (!session) return NextResponse.json({ ok: false, error: "errors.forbidden" }, { status: 401 });
+    const blocked = await requireCurrentConsent(session, "api");
+    if (blocked) return blocked;
     const body = (await request.json()) as {
       ticketId?: string;
       path?: string;

@@ -8,6 +8,11 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Watermark faces are Data modules so Workers can import the bytes. A base64
+  // string in the script is large enough that workerd will not start.
+  "rules": [
+    { "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }
+  ],
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
@@ -34,13 +39,16 @@
         "MAIL_PROVIDER": "cloudflare"
       },
       "send_email": [{ "name": "EMAIL", "remote": true }],
-      "triggers": { "crons": ["0 1 * * *"] },
       "secrets": {
         "required": [
           "DATABASE_URL",
           "SUPABASE_URL",
           "SUPABASE_ANON_KEY",
-          "SUPABASE_SERVICE_ROLE_KEY"
+          "SUPABASE_SERVICE_ROLE_KEY",
+          "ID_DOC_ENCRYPTION_KEY",
+          "ID_DOC_HMAC_KEY",
+          "ID_DOC_SIGNING_SECRET",
+          "CRON_SECRET"
         ]
       },
       "services": [
@@ -49,12 +57,17 @@
           "service": "condola-staging"
         }
       ],
+      // 09:00 Asia/Taipei reminders, 03:00 Asia/Taipei ID-photo purge. Both are Workers Free cron triggers.
+      "triggers": {
+        "crons": ["0 1 * * *", "0 19 * * *"]
+      },
       "observability": {
         "enabled": true
       }
     },
     "production": {
       "name": "condola-prod",
+      "logpush": true,
       "compatibility_flags": ["nodejs_compat"],
       "workers_dev": false,
       "placement": {
@@ -63,6 +76,7 @@
       },
       "vars": {
         "CONDOLA_ENV": "production",
+        "BRAND_V2": "true",
         "CONDOLA_SITE_URL": "https://app.condola.app",
         "DEMO_MODE": "false",
         "LINE_LOGIN_ENABLED": "false",
@@ -70,13 +84,16 @@
         "MAIL_PROVIDER": "cloudflare"
       },
       "send_email": [{ "name": "EMAIL", "remote": true }],
-      "triggers": { "crons": ["0 1 * * *"] },
       "secrets": {
         "required": [
           "DATABASE_URL",
           "SUPABASE_URL",
           "SUPABASE_ANON_KEY",
-          "SUPABASE_SERVICE_ROLE_KEY"
+          "SUPABASE_SERVICE_ROLE_KEY",
+          "ID_DOC_ENCRYPTION_KEY",
+          "ID_DOC_HMAC_KEY",
+          "ID_DOC_SIGNING_SECRET",
+          "CRON_SECRET"
         ]
       },
       "services": [
@@ -85,6 +102,9 @@
           "service": "condola-prod"
         }
       ],
+      "triggers": {
+        "crons": ["0 1 * * *", "0 19 * * *"]
+      },
       "routes": [
         { "pattern": "app.condola.app", "custom_domain": true }
       ],

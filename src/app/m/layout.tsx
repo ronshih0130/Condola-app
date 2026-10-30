@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { BUILD_SHA } from "@/build-info";
 import { Sidebar, TaskPanel } from "@/components/chrome";
+import { requireCurrentConsent } from "@/server/consent-gate";
 import { demoModeEnabled } from "@/server/demo";
 import { noPermHref } from "@/server/perms";
 import { loadManagerChrome } from "@/server/queries";
@@ -14,6 +15,7 @@ export default async function ManagerLayout({ children }: { children: React.Reac
   if (session.kind === "tenant") redirect("/t");
   if (session.kind === "owner") redirect("/o");
   const path = (await headers()).get("x-pathname") || "";
+  await requireCurrentConsent(session, "page", path || "/m");
   const denied = noPermHref(path, session.role);
   if (denied) redirect(denied);
   const jar = await cookies();
