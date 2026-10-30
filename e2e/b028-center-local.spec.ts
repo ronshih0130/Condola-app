@@ -11,7 +11,7 @@ const url=disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPO
 if(process.env.DEMO_MODE!=="true") throw new Error("Disposable demo mode required");
 async function db<T>(fn:(c:Client)=>Promise<T>) {const c=new Client({connectionString:url});await c.connect();try{return await fn(c);}finally{await c.end();}}
 
-test("synthetic notifications are independently read in four actual portals",async({page})=>{
+test("synthetic notifications are independently read in four actual portals",async({page},info)=>{
  const errors:string[]=[];
  let expectedOff=false;
  page.on("pageerror",()=>errors.push("page error"));
@@ -64,6 +64,7 @@ test("synthetic notifications are independently read in four actual portals",asy
    await page.getByTestId('notification-mark').click();
    await expect(page.getByTestId('notification-item')).toHaveCount(1); await expect(page.getByTestId('notification-read-state')).toHaveText(/^(已讀|Read)$/);
    await page.reload(); await expect(page.getByTestId('notification-item')).toHaveCount(1); await expect(page.getByTestId('notification-read-state')).toHaveText(/^(已讀|Read)$/);
+   await page.screenshot({path:info.outputPath(`${path.split('/')[1]}-${width}.png`),fullPage:true});
   }
   try {await page.goto(`/v/${encodeURIComponent(fixture.token)}/notifications`);} catch {throw new Error("Vendor page unavailable");}
   await expect(page.getByTestId('notification-item')).toHaveCount(1);
@@ -72,6 +73,7 @@ test("synthetic notifications are independently read in four actual portals",asy
   await page.getByTestId('notification-mark').click();
   await expect(page.getByTestId('notification-item')).toHaveCount(1); await expect(page.getByTestId('notification-read-state')).toHaveText(/^(已讀|Read)$/);
   await page.reload(); await expect(page.getByTestId('notification-item')).toHaveCount(1); await expect(page.getByTestId('notification-read-state')).toHaveText(/^(已讀|Read)$/);
+  await page.screenshot({path:info.outputPath(`vendor-${width}.png`),fullPage:true});
   const counts=await db(async c=>(await c.query<{n:string}>(`SELECT count(*)::text n FROM app.b028_center_reads WHERE org_id=$1`,[ORG_ID])).rows[0].n);
   expect(counts).toBe('4');
  }
