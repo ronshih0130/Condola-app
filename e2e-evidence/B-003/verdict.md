@@ -1,5 +1,9 @@
 # B-003 verdict
 
-INCOMPLETE / NO-GO for release or activation.
+**PASS_SCOPED_LOCAL / wholeB003 INCOMPLETE / NO-GO for release or activation.** Candidate `0fb7c15a3679d5338eafdab906571b5dc1814d1d`.
 
-Native focused static code review PASS at gatewayblob1938d1d8a65fb6fe8ace288a3e7a3f133a573552; local synthetic checks reported in status.md. This does not establish whole B003 acceptance. Browser, exact combined gates, staging, independent Claude ClassB sign-off and CEO exact-SHA acceptance remain missing. Flags defaultOFF; no production authority. Direct ACL-denied SQL attempts and trusted database-owner actions are outside the app gateway audit boundary.
+Clean full gate599unit/358RLS PASS0FAIL1prior-approved lost-historySKIP; Next/Cloudflare builds, unchanged originalpreflight, Worker1 and current fresh protected UI/HTTP3PASS. [Manifest](http-boundary-0fb7c15.json) binds12source blobs, raw artifacts,10screens and preservedfailures. No app/schema/migration/legalcopy change. Existing company/owner gateway reused; new proof covers actual assignment, missing/legacy distinction, own/other tenant, selected sandbox->live denial and metadata-only ingress/audits.
+
+Exact global setting metadata and orgfeature_flags restored; normal orgtimestamps/audithistory advance. Root aggregate found globaldisabled,0payee-enabledorgs, no full fixture numbers in private/public audits. Initial setup failures remain preserved. HTTP reverse direction and audit-failure injection NOT_RUN; actual gateway fault integration is separate. Earlier core89 final-adapter3/3 is recognized as historical evidence, not newly executed.
+
+Highest-requested native scoped source review PASS; actual model/effort unknown, no reviewer execution; final evidence review separate. Independent Claude/ClassB NOT_RUN. Exact staging app/schema/grants and actual approved old-code/rollback compatibility remain pending, as do Ron's acceptance/activation decisions. Native PASS does not waive them. Local isolated temporary ON is restored; operational flags remain OFF. Existing RLS synthetic purge is disposable-only; no production access, operational purge/backup, mainmerge, Mac operationalmigration or external message.

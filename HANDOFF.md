@@ -1,5 +1,12 @@
 # Mode B bootstrap acceptance
 
+## Latest continuous-queue checkpoint — 2026-10-30T14:56:25.343433-07:00
+
+B003 local payee-selection/isolation proof is verified at `0fb7c15a3679d5338eafdab906571b5dc1814d1d`: clean gate599unit/358RLS PASS0FAIL1exact prior-approved historicalSKIP; Next/Cloudflare/originalpreflight/Worker1 and fresh protected browser/HTTP3 PASS53.5s,10screens390/1280. Existing gateway/UI reused. Actual owner assignment, missing-vs-legacy state, other-tenant and selectedsandbox own200->live403, liveUI switchback, ingress metadata-only audits pass. Exact setting metadata/orgflags restored; normalorgtimestamps/audits advance. No app/schema/legal change. [Evidence](e2e-evidence/B-003/http-boundary-0fb7c15.json). WholeB003 pending approvedold-code/rollback/staging/Claude/ClassB, notdone.
+
+B002 verified71acf06/notesb178732; B001 verified9fe0e4a/notes3d6b524; B013/B021 settings/hash checkpoints remainpending their separate remaining DBhandoff. No wholeB newlydone or production/operationalflagactivation. Current owning branch/session persists; no mainmerge/Macoperationalmigration/externalmessage. Next: publish/mirrorcheckpoint thenB004reconciliation. STOP POINT: WORKING; owner: Ron/Codex. Previousrecordsbelow retain datedscopes.
+
+
 ## Latest continuous-queue checkpoint — 2026-10-30T14:28:52.121390-07:00
 
 B002 local HTTP/scheduler proof is verified at `71acf06d7675e99ef83cf20c545a2c56d775ccf3`: clean gate599unit/358RLS PASS0FAIL1exact Ron-approved historicalSKIP; Next/Cloudflare builds, unchanged originalpreflight, Worker1/1 and fresh HTTP/browser1/1 PASS. Positive JPEG and independent expiry/auth/sandbox/consent denials, same validlink after policydate expiry, actual OFF/missing/invalid/dry_run preserve2documents+1expiredslot; original missing mode restored. Settings390/1280 inspected with candidatefooter. No product/schema/legal changes. [Evidence](e2e-evidence/B-002/http-boundary-71acf06.json), [remaining](20-build/BLOCKED.md). WholeB002 pending approvedrollback/staging/Claude/ClassB; existing later-date rule retained and prospective workflow remainsB012.

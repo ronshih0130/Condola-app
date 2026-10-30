@@ -1,3 +1,21 @@
+# B-003 current payee selection and isolation checkpoint
+
+Updated 2026-10-30T14:56:25.343433-07:00; exact candidate `0fb7c15a3679d5338eafdab906571b5dc1814d1d`, branch`mode-b-repair-override-prep`, ModeB Ron/Codex. **Local scoped PASS; whole item pending/INCOMPLETE, no release or activation GO.** Changes are test/privateconfig/runner only; app, schema, migration and protected copy unchanged.
+
+Current clean pinned gate599unit PASS;359RLS total/358PASS/0FAIL/1exact prior Ron-approved lost-history SKIP. Next build17.917s, Cloudflare26.636s, unchanged originalpreflight3.276s PASS, Worker1/1; final fresh protected browser/HTTP3/3 PASS53.5s with10screens at390/1280. [Manifest](http-boundary-0fb7c15.json), [acceptance](acceptance.md), [source reconciliation](source-reconciliation-b178732.md). Highest-requested native source review PASS, requestedgpt-6-astra/xhigh actualmodel/effort unknown; exact final evidence verdict separate, no Claude substitute.
+
+Real existing manager UI saves company default and assigns a distinct same-org active-owner account to the exact lease. Own tenant receives correct holder/bank/full synthetic number. OFF legacy suffix and ON truly unassigned/no-default missing guidance/disclaimer are distinct. Tenant2 own positive and other-tenant/nonexistent403, selected actual sandbox own200 then live403, live UI switchback, anonymous/no-org401 and exact metadata-only audits pass. Forbidden visible/serialized HTML and denial payloads contain no full fixture numbers. Reverse live-to-sandbox HTTP and HTTP audit-failure fault injection NOT_RUN; existing actual gateway audit-failure/role/direct-writer/concurrency tests ran separately in full RLS.
+
+Exact setting presence/value/description/microsecond timestamp and two org feature_flags restored with normal triggers active. Root independent readback matches original template setting; globaldisabledtrue,0payee-enabledorgs,3synthetic protected numbers and0matches of those numbers in private or public audit rows. Orgupdated_at and audit history legitimately advance; no wholeDB rollback claim. Root viewed representative missing390/owner1280/sandbox390/settings1280; all10screens bound to candidate withfooter0fb7c15.
+
+Initial attempt had2setup failures plus1ingressPASS: DISTINCT/ORDER BY42P10 and UPDATE timestamp trigger thwarting exact restore. Logs/two sanitized error-context files are preserved; corrected clone-only transactional exact-key DELETE/plainINSERT uses no DDL/triggerbypass. Earlier failed contexts have no automaticARIA snapshot or cookiepattern in bounded scan. Existing core89 post-final-adapter3/3 alreadypassed, superseding the older pending note for those exact cases.
+
+Remaining: old-code/new-schema and actual approved rollback compatibility; exact staging schema/app/version/grants and independent Claude/ClassB/cross-tenant QA/Ron acceptance. Current owner semantics and property-scoped account guard retained, no invented owner-property rule. Local tests temporarily opt in only synthetic cloneorgs; no operational activation. Existing full RLS purge tests use ON/synthetic deletion only in disposable fixtures; no operational/production purge/backup, Mac operational migration, mainmerge or external message.
+
+STOP POINT: local checkpoint verified; next: publish/mirror checkpoint, then B-004 reconciliation; owner: Ron/Codex. Earlier records below retain their dated scopes.
+
+---
+
 > Latest local integration checkpoint (2026-10-30T03:05:16.071480-07:00): candidate `4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6`; see [core89 local verification](../integration/core89-local-verification.md). Whole-feature verdict remains INCOMPLETE/NO-GO; dated records below retain their original scope. This link supplies no staging/Claude/release waiver.
 
 # B-003 local preparation

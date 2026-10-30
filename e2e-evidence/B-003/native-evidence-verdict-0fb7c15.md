@@ -1,0 +1,9 @@
+# PASS_SCOPED_B003_CHECKPOINT_EVIDENCE
+
+Recorded 2026-10-30T14:58:51.157948-07:00. Candidate`0fb7c15a3679d5338eafdab906571b5dc1814d1d`; manifestSHA256`fc86c997102b6bae8a7ab3607e1b6e08740fe1459f40446793964a6335f80406`. Reviewer requestedgpt-6-astra/xhigh; actualmodel/effort unknown. Independent source/evidence/visual inspection only, no reviewer DB/HTTP/tests/writes/external send.
+
+Verified all41bindings (28artifacts+10PNGs+3preservedfailurefiles), zero hash/byte mismatch;12worktree+candidate source blobs and unchanged originalpreflight hash. Candidate delta is tests/config/runner plus board/log only. Recomputed599unit PASS and359RLS total/358PASS/0FAIL/1exact prior-approved lost-history SKIP. Raw Next/Cloudflare exits0, originalpreflight PASS3.276s/no internalerror, Worker1 and final fresh browser3PASS53.5s match. Readback matchesmanifest; source performs exact original-template setting comparison and bounded synthetic-number audit aggregates. Restored OFF/globalrow/orgflags; normal orgtimestamps/audits advance. Initial2setupfail+1ingresspass and their source corrections are retained honestly.
+
+Reviewer viewed missing1280, owner390, sandbox1280, settings390 and off390: expected states/copy, no visible horizontal clipping; all10PNGwidths390/1280. Root separately viewed missing390, owner1280, sandbox390 and settings1280. Bounded text scan found no full fixture numbers, bearer/JWT/signed-token values or real cookie headers; one cookie prose falsepositive in approvedplan was not a credential. Failed contexts have no automaticpage snapshot. This scan is not a universal guarantee.
+
+No actionable source/evidence/doc finding. WholeB003 remainsINCOMPLETE/NO-GO pending approvedold-code/rollback compatibility, staging and independentClaude/ClassB acceptance. ReverseHTTP and HTTPauditfault remainNOT_RUN; actual gateway fault integration is separate. This verdict supplies no rollout/release approval.
