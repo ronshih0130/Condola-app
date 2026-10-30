@@ -8,6 +8,7 @@ import { unsignedRentNoteKey } from "@/server/pay-note";
 import { tenantLeaseMoney } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { selectedLease } from "@/lib/tenant-lease";
+import { TenantPayee } from "@/components/tenant-payee";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function TenantPayPage({ searchParams }: { searchParams: Pr
             </p>
           ))}
           <p className="b" data-testid="tenant-bill">{t("i_pay_total")} {moneyLabel(money.dueMinor, money.currency, session.locale)}</p>
-          <p className="small">{t("i_account_last5", { last5: "88921" })}</p>
+          <TenantPayee session={session} leaseId={lease.lease_id} />
           {money.dueMinor <= 0 ? (
             <div className="alert ok" data-testid="pay-status">{t("i_pay_settled")}</div>
           ) : (

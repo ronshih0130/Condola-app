@@ -7,6 +7,7 @@ import { can } from "@/server/perms";
 import { isPlatformAdmin } from "@/server/platform";
 import { getSession } from "@/server/session";
 import { PartnerConsentHistory } from "@/components/partner-consent-history";
+import { PayeeSettings } from "@/components/payee-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title={t("i_nav_settings")} />
       <PartnerConsentHistory session={session} />
+      <PayeeSettings session={session} />
       <ErrorBanner t={t} error={query.error} />
       {query.saved === "1" ? <div className="alert ok">{t("i_saved")}</div> : null}
       {mail ? (
