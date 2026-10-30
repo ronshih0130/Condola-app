@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { dictionary, makeT } from "@/i18n";
 import { AuditHistory } from "@/components/audit-log";
+import { ActualMoveOut } from "@/components/actual-moveout";
 import { PayDialog } from "@/components/dialogs";
 import { IdvCard } from "@/components/idv-card";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
@@ -11,11 +12,14 @@ import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
 import { actionMessage, actionSign, actionSimulateSign, actionUploadSignedPdf } from "@/server/actions";
 import { showDemoLineCopy } from "@/server/demo";
+import { maybe, tx } from "@/server/db";
 import { formatDate, moneyLabel } from "@/server/format";
 import { taipeiStamp } from "@/server/id-crypto";
 import { canReviewId, loadLeaseIdCheck } from "@/server/id-docs";
 import { leaseTermsEditable } from "@/server/lease-rules";
 import { portalLoginReady } from "@/server/portal-invite";
+import { isMoveOutNoticeEnabled } from "@/server/move-out-notice";
+import { can } from "@/server/perms";
 import { majorField } from "@/server/portfolio";
 import { isUuid } from "@/server/repair-rules";
 import { leaseDetail, threadMessages } from "@/server/queries";
@@ -61,6 +65,11 @@ export default async function LeasePage({
     ["msg", "s_b95abdb"],
   ] as const;
   const messages = tab === "msg" && lease.thread_id ? await threadMessages(session, lease.thread_id) : [];
+  const moveOut = tab === "summary" && session.kind === "staff" && can(session.role, "leases.edit") && !session.needsSandbox && isMoveOutNoticeEnabled()
+    ? await tx(session.userId, (client) => maybe<{ moved_out_on: string | null }>(client,
+      `SELECT moved_out_on::text FROM leases WHERE id=$1 AND org_id=$2`, [id, session.orgId]),
+      { orgId: session.orgId, environment: session.environment })
+    : null;
   return (
     <>
       <PageHeader
@@ -182,6 +191,7 @@ export default async function LeasePage({
           ) : null}
         </div>
       ) : null}
+      {moveOut ? <ActualMoveOut leaseId={id} currentDate={moveOut.moved_out_on} locale={session.locale} /> : null}
       {tab === "summary" && (session.role === "admin" || session.role === "manager") ? (
         leaseTermsEditable({
           status: lease.status,
