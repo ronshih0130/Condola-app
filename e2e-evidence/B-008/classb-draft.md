@@ -1,0 +1,3 @@
+# B-008 Class B draft
+
+**UNSIGNED / NOT GO.** Reviewed local scope is statement calculation and read-only preview, guarded issuance, and saved-utility reconciliation. This is not completion of the B-008 billing/partial-month requirements. Before any release: resolve the missing authoritative first-period basis, integrate and classify the migration, pass exact-candidate gates and browser tests, obtain independent Claude QA, and meet the applicable Ron/CEO release and activation conditions. Serializable issuance is an as-of contract; it does not guarantee inclusion of changes that serialize afterward.
