@@ -25,7 +25,7 @@ test("an org admin can filter 操作紀錄 and open a record history", async ({ 
   await expect(page.getByTestId("audit-history")).toBeVisible();
   await expect(page.getByTestId("audit-history")).toContainText("這筆的操作紀錄");
   await expect(page.locator(".main")).not.toContainText("房東");
-  await page.screenshot({ path: "/opt/cursor/artifacts/audit-property-history.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/audit-property-history.png", fullPage: true });
 
   await page.goto("/m/tenants");
   await page.locator(".main table").getByRole("link").first().click();
@@ -35,9 +35,9 @@ test("an org admin can filter 操作紀錄 and open a record history", async ({ 
   await page.goto("/m/leases");
   await page.locator(".main table").getByRole("link").first().click();
   await expect(page.getByTestId("audit-history")).toBeVisible();
-  await page.screenshot({ path: "/opt/cursor/artifacts/audit-lease-history.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/audit-lease-history.png", fullPage: true });
   await page.goto("/m/audit");
-  await page.screenshot({ path: "/opt/cursor/artifacts/audit-log.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/audit-log.png", fullPage: true });
 });
 
 test("managers and accountants cannot open 操作紀錄", async ({ page }) => {

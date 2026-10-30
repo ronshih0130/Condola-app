@@ -70,13 +70,13 @@ test("admin and manager keep buildings, spaces, and 屋主 inside the firm", asy
   await page.getByTestId("save-property").click();
   await expect(page.getByRole("heading", { name: "信義松仁改" })).toBeVisible();
   await expect(page.locator(".main")).not.toContainText("房東");
-  await page.screenshot({ path: "/opt/cursor/artifacts/portfolio-property.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/portfolio-property.png", fullPage: true });
   await page.goto("/m/units");
   await expect(page.getByTestId("space-row-6F-A")).toBeVisible();
-  await page.screenshot({ path: "/opt/cursor/artifacts/portfolio-spaces.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/portfolio-spaces.png", fullPage: true });
   await page.goto("/m/owners");
   await expect(page.getByTestId("owner-row-owner4.demo@example.com")).toBeVisible();
-  await page.screenshot({ path: "/opt/cursor/artifacts/portfolio-owners.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/portfolio-owners.png", fullPage: true });
 
   await signIn(page, ACCOUNTS.manager);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/units/new");

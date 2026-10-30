@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { expect, test } from "@playwright/test";
+import { disposableDbUrl } from "../src/server/test-disposable-db";
 
-const DATABASE_URL = process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
+const DATABASE_URL = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE).href;
 
 function db() {
   return new Client({ connectionString: DATABASE_URL });
@@ -157,7 +158,17 @@ test("preview purge drops expired lease-end and upload-date QA-PR9 photos and ke
     return { leaseExpired, leaseKept, uploadExpired, uploadKept, leases: [expiredLease, keptLease] };
   });
 
+  const originalMode = await withClient(async (client) => (await client.query(`SELECT value FROM platform_settings WHERE key='ID_PURGE_ENABLED'`)).rows[0]?.value);
   try {
+    await withClient((client) => client.query(`INSERT INTO platform_settings(key,value) VALUES ('ID_PURGE_ENABLED','"off"'::jsonb) ON CONFLICT(key) DO UPDATE SET value=excluded.value`));
+    const disabled = await request.post("/api/cron/purge-id-documents", { headers: { "x-cron-secret": "demo-cron" } });
+    expect(disabled.status()).toBe(200);
+    expect(((await disabled.json()) as {removed?:number}).removed ?? 0).toBe(0);
+    for (const item of [seeded.leaseExpired,seeded.uploadExpired]) {
+      const held = await readDoc(item.documentId,item.path);
+      expect({gone:held.gone,photos:held.photos,objects:held.objects}).toEqual({gone:false,photos:"1",objects:"1"});
+    }
+    await withClient((client) => client.query(`UPDATE platform_settings SET value='"on"'::jsonb WHERE key='ID_PURGE_ENABLED'`));
     const response = await request.post("/api/cron/purge-id-documents", {
       headers: { "x-cron-secret": "demo-cron" },
     });
@@ -181,6 +192,8 @@ test("preview purge drops expired lease-end and upload-date QA-PR9 photos and ke
     }
   } finally {
     await withClient(async (client) => {
+      if (originalMode === undefined) await client.query(`DELETE FROM platform_settings WHERE key='ID_PURGE_ENABLED'`);
+      else await client.query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='ID_PURGE_ENABLED'`, [JSON.stringify(originalMode)]);
       const contacts = [
         seeded.leaseExpired.contactId,
         seeded.leaseKept.contactId,

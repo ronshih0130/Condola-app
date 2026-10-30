@@ -37,7 +37,7 @@ for (const locale of locales) {
     await expect(page.getByTestId("property-name")).toHaveAttribute("placeholder", /.+/);
     await expect(page.getByTestId("room-0-rent")).toHaveAttribute("placeholder", /.+/);
     if (locale.code === "zh-TW") {
-      await page.screenshot({ path: "/opt/cursor/artifacts/property-wizard-empty.png", fullPage: true });
+      await page.screenshot({ path: "../e2e-artifacts/property-wizard-empty.png", fullPage: true });
     }
 
     await page.getByTestId("property-name").fill("松德試用");
@@ -145,7 +145,7 @@ for (const locale of locales) {
     expect(due).toBeLessThan(rent + utility + deposit);
     await expect(page.getByTestId("pay-last5")).toHaveValue("");
     if (locale.code === "zh-TW") {
-      await page.screenshot({ path: "/opt/cursor/artifacts/record-payment.png", fullPage: true });
+      await page.screenshot({ path: "../e2e-artifacts/record-payment.png", fullPage: true });
     }
     await page.getByTestId("pay-last5").fill("54321");
     await page.getByTestId("submit-payment").click();
@@ -155,7 +155,7 @@ for (const locale of locales) {
     await page.getByTestId("submit-import").click();
     await page.getByTestId("approve-match").first().click();
     if (locale.code === "zh-TW") {
-      await page.screenshot({ path: "/opt/cursor/artifacts/bank-match.png", fullPage: true });
+      await page.screenshot({ path: "../e2e-artifacts/bank-match.png", fullPage: true });
     }
 
     await page.goto("/m/statements");
@@ -166,7 +166,7 @@ for (const locale of locales) {
     await expect(page.getByTestId("statement-rent")).not.toContainText("NT$0");
     await expect(page.getByTestId("tryout-panel")).toHaveCount(0);
     if (locale.code === "zh-TW") {
-      await page.screenshot({ path: "/opt/cursor/artifacts/owner-statement.png", fullPage: true });
+      await page.screenshot({ path: "../e2e-artifacts/owner-statement.png", fullPage: true });
     }
 
     await page.goto("/m/statements");
@@ -196,7 +196,7 @@ test("reset toast follows the locale", async ({ page }) => {
 
 test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {
   await page.goto("/api/demo/locale?set=zh-TW&next=/m");
-  await page.screenshot({ path: "/opt/cursor/artifacts/dashboard.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/dashboard.png", fullPage: true });
   await signIn(page, ACCOUNTS.tenant);
   await expect(page.getByTestId("liff-frame")).toBeVisible();
   await expect(page.getByTestId("lease-picker")).toBeVisible();
@@ -211,14 +211,14 @@ test("tenant picker, owner phone, and maintenance gate", async ({ page }) => {
   await page.getByTestId("repair-title").fill("試用報修");
   await page.getByTestId("submit-repair").click();
   await expect(page.locator(".alert.ok")).toContainText("已送出");
-  await page.screenshot({ path: "/opt/cursor/artifacts/tenant-liff.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/tenant-liff.png", fullPage: true });
 
   await signIn(page, ACCOUNTS.owner);
   await page.goto("/o");
   const phone = page.getByRole("row", { name: /王小美/ }).getByTestId("tenant-phone");
   await expect(phone).toHaveAttribute("data-visible", "false");
   await expect(phone).not.toContainText("912111002");
-  await page.screenshot({ path: "/opt/cursor/artifacts/owner-portal.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/owner-portal.png", fullPage: true });
 
   await signIn(page, ACCOUNTS.maintenance);
   await page.goto("/m/properties/new");
@@ -268,7 +268,7 @@ test("manager phone width keeps a menu, contained tables, and the locale toggle"
     const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     expect(fits).toBeTruthy();
     if (width === 390) {
-      await page.screenshot({ path: "/opt/cursor/artifacts/manager-phone.png", fullPage: true });
+      await page.screenshot({ path: "../e2e-artifacts/manager-phone.png", fullPage: true });
     }
     await nav.click();
     await expect(page).toHaveURL(/\/m\/properties/);

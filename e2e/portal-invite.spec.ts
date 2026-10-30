@@ -70,7 +70,7 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
   await expect(expiredPage.getByTestId("portal-submit")).toHaveCount(0);
   await expect(expiredPage.locator("body")).not.toContainText("LINE");
   await expect(expiredPage.locator("body")).not.toContainText("error");
-  await expiredPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-expired.png", fullPage: true });
+  await expiredPage.screenshot({ path: "../e2e-artifacts/portal-invite-expired.png", fullPage: true });
   await expiredContext.close();
 
   page.once("dialog", async (dialog) => {
@@ -81,7 +81,7 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
   await expect(copied).not.toHaveAttribute("data-url", firstUrl || "");
   const liveUrl = await copied.getAttribute("data-url");
   expect(liveUrl).toMatch(/\/accept\//);
-  await page.screenshot({ path: "/opt/cursor/artifacts/portal-invite-copied.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/portal-invite-copied.png", fullPage: true });
 
   const guest = await browser.newContext();
   const guestPage = await guest.newPage();
@@ -98,27 +98,27 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
   await expect(guestPage.getByTestId("portal-forgot")).toHaveText("忘記密碼？");
   await expect(guestPage.getByTestId("portal-forgot")).toHaveAttribute("href", "/forgot");
   await expect(guestPage.getByTestId("password-confirm")).toHaveCount(0);
-  await guestPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-password.png", fullPage: true });
+  await guestPage.screenshot({ path: "../e2e-artifacts/portal-invite-password.png", fullPage: true });
   await guestPage.getByTestId("new-password").fill("Fresh1234");
   await guestPage.getByTestId("portal-submit").click();
   await waitPastConsent(guestPage, "liff-frame");
   await expect(guestPage.getByTestId("liff-frame")).toBeVisible();
-  await guestPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-tenant-home.png", fullPage: true });
+  await guestPage.screenshot({ path: "../e2e-artifacts/portal-invite-tenant-home.png", fullPage: true });
   await guestPage.goto(liveUrl || "/");
   await expect(guestPage.getByTestId("invite-state")).toHaveText(INVALID);
   await expect(guestPage.getByTestId("portal-submit")).toHaveCount(0);
-  await guestPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-used.png", fullPage: true });
+  await guestPage.screenshot({ path: "../e2e-artifacts/portal-invite-used.png", fullPage: true });
   await guest.close();
 
   await page.reload();
   await expect(page.getByTestId("portal-invite-activated")).toHaveText("已啟用");
-  await page.screenshot({ path: "/opt/cursor/artifacts/portal-invite-activated.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/portal-invite-activated.png", fullPage: true });
 
   await page.goto("/m/owners");
   await page.locator("[data-testid='owner-row-morgan.lee@owner.demo'] a").click();
   await expect(page.getByTestId("portal-invite-handoff")).toHaveText("傳給屋主");
   await expect(page.getByTestId("portal-invite-copy")).toBeVisible();
-  await page.screenshot({ path: "/opt/cursor/artifacts/portal-invite-owner.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/portal-invite-owner.png", fullPage: true });
   await page.goto("/m/owners");
   await page.locator("[data-testid='owner-row-chen.owner@demo.mail'] a").click();
   await expect(page.getByTestId("portal-invite-activated")).toHaveText("已啟用");
@@ -142,7 +142,7 @@ test("manager copies a tenant invite, the tenant sets a password, and used or ex
     "第一次使用請設定新密碼；已經有 Condola 帳號，請輸入原本的密碼。",
   );
   await expect(ownerPage.getByTestId("portal-forgot")).toHaveAttribute("href", "/forgot");
-  await ownerPage.screenshot({ path: "/opt/cursor/artifacts/portal-invite-choose-email.png", fullPage: true });
+  await ownerPage.screenshot({ path: "../e2e-artifacts/portal-invite-choose-email.png", fullPage: true });
   await ownerEmail.fill("nobody.taken@example.com");
   await ownerPage.getByTestId("new-password").fill("short");
   await ownerPage.getByTestId("portal-submit").click();

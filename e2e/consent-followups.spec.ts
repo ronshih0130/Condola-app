@@ -6,7 +6,7 @@ import { parseAppConsent } from "../src/server/consent";
 import { PRIVACY_VERSION, TERMS_VERSION } from "../src/server/legal-versions";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
-const EVIDENCE = "e2e-evidence/consent-followups";
+const EVIDENCE = "../e2e-artifacts/consent-followups";
 const SERVICE = "我已閱讀並同意《服務條款》與《隱私權政策》";
 const PORTAL = "我已閱讀並同意《服務條款》與《隱私權政策》";
 const PASSWORD = "Fresh1234";

@@ -3,6 +3,10 @@ import { ACCOUNTS, resetDemo, signIn } from "./session";
 
 test("staff record, edit, and void an expense in zh-TW", async ({ page }) => {
   await resetDemo(page);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => { if(message.type()==="error") errors.push(message.text()); });
+  page.on("response", (response) => { if(response.status()>=500) errors.push(`HTTP ${response.status()} ${new URL(response.url()).pathname}`); });
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/expenses");
   await expect(page.getByRole("heading", { name: "支出紀錄" })).toBeVisible();
   await expect(page.locator(".main")).not.toContainText("房東");
@@ -28,7 +32,7 @@ test("staff record, edit, and void an expense in zh-TW", async ({ page }) => {
   await expect(page.getByTestId("expense-summary")).toContainText("e2e 水管檢修");
   await expect(page.getByTestId("expense-summary")).toContainText("3F");
   await expect(page.getByTestId("expense-receipt")).toHaveCount(0);
-  await page.screenshot({ path: "/opt/cursor/artifacts/expense-detail.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/expense-detail.png", fullPage: true });
 
   await page.getByTestId("expense-note").fill("e2e 水管檢修改");
   await page.getByTestId("expense-save").click();
@@ -50,11 +54,12 @@ test("staff record, edit, and void an expense in zh-TW", async ({ page }) => {
   await page.getByTestId("expense-filter-property").selectOption({ label: "信義松仁" });
   await page.getByTestId("expense-filter-apply").click();
   await expect(page.getByTestId("expense-row").filter({ hasText: "冷氣維修" })).toBeVisible();
-  await page.screenshot({ path: "/opt/cursor/artifacts/expense-list.png", fullPage: true });
+  await page.screenshot({ path: "../e2e-artifacts/expense-list.png", fullPage: true });
 
   await signIn(page, ACCOUNTS.maintenance);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/expenses");
   await expect(page.getByTestId("forbidden")).toBeVisible();
+  await expect(page).toHaveURL(/\/m\/noperm/);
 
   await signIn(page, ACCOUNTS.manager);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/expenses/new");
@@ -63,5 +68,6 @@ test("staff record, edit, and void an expense in zh-TW", async ({ page }) => {
   await signIn(page, ACCOUNTS.accountant);
   await page.goto("/m/expenses");
   await expect(page.getByTestId("expense-list")).toBeVisible();
+  expect(errors).toEqual([]);
   await expect(page.locator(".main")).not.toContainText("房東");
 });

@@ -85,23 +85,23 @@ for (const locale of locales) {
       const cellWidth = await page.getByTestId("statement-list").locator("td.r").first().evaluate((node) => node.getBoundingClientRect().width);
       expect(buttonWidth).toBeGreaterThan(cellWidth - 4);
       await assertCards(page, "statement-list", locale.labels);
-      await page.screenshot({ path: `/opt/cursor/artifacts/cards-statements-${locale.code}-${width}.png`, fullPage: true });
+      await page.screenshot({ path: `../e2e-artifacts/cards-statements-${locale.code}-${width}.png`, fullPage: true });
 
       await page.goto("/m/rent");
       await expect(page.getByTestId("rent-roll").locator("tr.grp").first()).toBeVisible();
       await expect(page.getByText(locale.code === "zh-TW" ? "空房" : "Vacant").first()).toBeVisible();
       await expect(page.getByTestId("send-reminder").first()).toBeVisible();
       await assertCards(page, "rent-roll", locale.rentLabels);
-      await page.screenshot({ path: `/opt/cursor/artifacts/cards-rent-${locale.code}-${width}.png`, fullPage: true });
+      await page.screenshot({ path: `../e2e-artifacts/cards-rent-${locale.code}-${width}.png`, fullPage: true });
 
       await page.goto("/m/leases");
       await assertCards(page, "lease-list", locale.leaseLabels);
-      await page.screenshot({ path: `/opt/cursor/artifacts/cards-leases-${locale.code}-${width}.png`, fullPage: true });
+      await page.screenshot({ path: `../e2e-artifacts/cards-leases-${locale.code}-${width}.png`, fullPage: true });
 
       await page.goto("/m");
       await assertCards(page, "outstanding-list", locale.dashLabels);
       await assertCards(page, "expiring-list", [locale.dashLabels[0], locale.code === "zh-TW" ? "到期日" : "Ends"]);
-      await page.screenshot({ path: `/opt/cursor/artifacts/cards-dashboard-${locale.code}-${width}.png`, fullPage: true });
+      await page.screenshot({ path: `../e2e-artifacts/cards-dashboard-${locale.code}-${width}.png`, fullPage: true });
     });
   }
 
@@ -123,13 +123,13 @@ for (const locale of locales) {
     await expect(reason).toHaveClass(/warn/);
     await expect(reason).toContainText("⚠");
     await expect(reason).toContainText("NT$2,800");
-    await page.screenshot({ path: `/opt/cursor/artifacts/owner-owes-${locale.code}.png`, fullPage: true });
+    await page.screenshot({ path: `../e2e-artifacts/owner-owes-${locale.code}.png`, fullPage: true });
 
     await signIn(page, ACCOUNTS.owner);
     await page.goto(`/api/demo/locale?set=${locale.code}&next=/o/statements`);
     await expect(page.getByTestId("owner-owes")).toContainText(locale.owes);
     await expect(page.getByTestId("owner-owes")).toContainText("2,800");
-    await page.screenshot({ path: `/opt/cursor/artifacts/owner-owes-portal-${locale.code}.png`, fullPage: true });
+    await page.screenshot({ path: `../e2e-artifacts/owner-owes-portal-${locale.code}.png`, fullPage: true });
   });
 }
 

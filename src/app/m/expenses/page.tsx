@@ -1,5 +1,7 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { noPermHref } from "@/server/perms";
 import { makeT } from "@/i18n";
 import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader, expenseCategoryKey, expenseStatusClass, expenseStatusKey } from "@/components/ui";
@@ -17,6 +19,8 @@ export default async function ExpensesPage({
 }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
+  const denied = noPermHref("/m/expenses", session.role);
+  if (denied) redirect(denied);
   const t = makeT(session.locale);
   const params = await searchParams;
   const [rows, choices] = await Promise.all([

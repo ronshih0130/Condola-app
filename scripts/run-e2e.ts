@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { disposableDbUrl } from "../src/server/test-disposable-db";
 
 // Validate before Playwright can start a server or reset any demo fixtures.
@@ -8,19 +8,46 @@ const target = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS
 if (process.env.DEMO_MODE !== "true") throw new Error("Browser checks require explicit local demo mode");
 const cli = resolve("node_modules/@playwright/test/cli.js");
 if (!existsSync(cli)) throw new Error("Install the pinned browser-test dependencies first");
+mkdirSync(resolve("../e2e-artifacts"), { recursive: true, mode: 0o700 });
 
 // Only the opted-in local test process enables these global controls. Each
 // journey still controls its own org opt-in and verifies the OFF branch.
-const result = spawnSync(process.execPath, [cli, "test", ...process.argv.slice(2)], {
-  stdio: "inherit",
-  env: {
-    ...process.env,
-    DATABASE_URL: target.href,
-    IMPORT_ERROR_DETAILS_ENABLED: "true",
-    PAPER_LEASE_VERSIONS_ENABLED: "true",
-    WRANGLER_SEND_METRICS: "false",
-    NEXT_TELEMETRY_DISABLED: "1",
-  },
-});
-if (result.error) throw new Error("Browser checks could not start");
-process.exit(result.status ?? 1);
+const childEnv = {
+  ...process.env,
+  DATABASE_URL: target.href,
+  IMPORT_ERROR_DETAILS_ENABLED: "true",
+  PAPER_LEASE_VERSIONS_ENABLED: "true",
+  WRANGLER_SEND_METRICS: "false",
+  NEXT_TELEMETRY_DISABLED: "1",
+};
+function run(args: string[]): number {
+  const result = spawnSync(process.execPath, [cli, "test", ...args], { stdio: "inherit", env: childEnv });
+  if (result.error) throw new Error("Browser checks could not start");
+  if (result.signal === "SIGINT") return 130;
+  if (result.signal === "SIGTERM") return 143;
+  return result.status ?? 1;
+}
+const requested = process.argv.slice(2);
+if (requested.length) process.exit(run(requested));
+
+// A long-lived Next dev server restarts at 80% heap usage. That interrupted
+// the full journey run on Mac. Fresh servers per spec keep the same tests,
+// database and flags while bounding each compiler's lifetime. Preserve each
+// spec's traces in its own output folder; never drop a failed batch's evidence.
+function specs(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const file = join(directory, entry.name);
+    return entry.isDirectory() ? specs(file) : entry.isFile() && /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(entry.name) ? [file] : [];
+  }).sort();
+}
+const files = specs("e2e");
+if (!files.length) throw new Error("No browser specifications found");
+let failed = 0;
+for (const file of files) {
+  const output = join("test-results", file.replace(/[^a-zA-Z0-9_-]/g, "_"));
+  const status = run([file, "--output", output]);
+  if (status === 130 || status === 143) process.exit(status);
+  if (status !== 0) failed++;
+}
+process.stdout.write(`Browser batches completed: ${files.length}; failed: ${failed}\n`);
+process.exit(failed ? 1 : 0);

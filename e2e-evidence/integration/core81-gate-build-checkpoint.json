@@ -1,0 +1,31 @@
+{
+  "time_pt": "2026-10-29T21:53:27.021585-07:00",
+  "immutable_candidate": "71db66e8c95561087d10e071827a3a0d2fff8d5a",
+  "gate": "PASS",
+  "unit": {
+    "tests": 553,
+    "pass": 553,
+    "fail": 0,
+    "skipped": 0
+  },
+  "rls": {
+    "tests": 209,
+    "pass": 208,
+    "fail": 0,
+    "skipped": 1
+  },
+  "build": {
+    "next": 0,
+    "cf_staging_build": 0,
+    "preflight": 0,
+    "preflight_marker": "PREFLIGHT PASS",
+    "worker_local": "1/1 PASS"
+  },
+  "runtime_engine_note": "Pinned Node20.20.2/npm10.8.2 gate/build/local Worker pass. Installed Wrangler4.151.2 CLI declares Node>=22; version-only check used existing Node25; no CLI deploy or toolchain-pin change.",
+  "browser": "Initial run interrupted on Linux screenshot path. Portable run reached46: two stale assumptions failed; development heap restart stalled, intentionally interrupted130. Failures privately retained; no full115 PASS.",
+  "targeted_current_deltas": "4/4 PASS after current repair copy, explicit purgeOFF/ON with retained photo/object counts, and pre-query expenses permission redirect/no5xx.",
+  "new_runner": "Default per-spec fresh-server batches cover exact41specs/115 discovered tests; custom CLI normal. Highest native static scope PASS; full batch pending.",
+  "independent_native": "Scoped production/test deltas PASS; not Claude ClassB or release approval.",
+  "staging": "schema application and exact candidate app acceptance pending; Mac DB migrations forbidden",
+  "whole_queue": "ACTIVE; no item DONE based solely on local results"
+}

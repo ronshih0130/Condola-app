@@ -12,7 +12,7 @@ test("an accountant can open tickets and cannot change them", async ({ page }) =
   await expect(page.locator('a[href="/m/tickets"]')).toBeVisible();
   await expect(page.getByTestId("ticket-update-disabled").first()).toBeDisabled();
   await expect(page.getByTestId("ticket-create-disabled")).toBeDisabled();
-  await expect(page.getByText(/需要以下角色|Needs one of these roles/)).toBeVisible();
+  await expect(page.getByText(/你的角色只能查看報修。|Your role can only view repairs\./)).toBeVisible();
 });
 
 test("deactivating a member asks for confirmation and sign-in times use Taipei", async ({ page }) => {

@@ -70,3 +70,13 @@ Gate00644ca failed (unit549/551; ID-docs14/15), preserved. New scope review iden
 Fresh81 and untouched71+10 upgrade match all11 logical catalog categories; counts2/4/5/1 preserved. Function-privilege checker now uses create-only unique ownedDB, no FORCE, startupfilesdisabled, unique temp scan, explicit disposable target. Isolated PG55436 full replay confirms anon0/allowlist7, fixed-name sentinel retained. Stub cluster roles are isolated local test material only.
 
 STOP POINT: repo ACTIVE B/Ron; next: freeze exact core81 SHA and run clean pinned gate/build/browser, while B008 independent review and B009 preparation proceed; owner: Ron/Codex. Staging schema, first-period rule, Claude QA remain dependent blockers; full39-item queue active.
+
+## Core81 local gate/build checkpoint 2026-10-29T21:53:27.021585-07:00
+
+Exact71db66e clean pinned gatePASS; Nextbuild0, Cloudflare stagingbuild0, original preflight0/PREFLIGHT PASS, real local bundledWorker IDupload/finalize1/1PASS. Full115browsernotPASS: Linuxartifactpathfailure and oldpermission/purgefixture assumptions retained; portable run then stalled afterNextheap80%restart and was intentionally interrupted130. Four targeted fixes nowPASS, including no5xxonexpensepermissiondenial and explicitOFF/ON/no-photoloss purge. Originaltracked screenshots restored afterprivatecopy; generatedscreens nowoutsidegit.
+
+Default E2E runner now starts fresh server per spec to bound compiler lifetime, preserves per-file traces and fails on any batch. Independent exact discovery confirms41files/115tests unchanged, customCLI unaffected. Nativehighest staticreviewPASS. This is test orchestration, not a full-run result.
+
+B008090c1e2 and B002moveoutUI5b0a92c prepared on recoverybranches with scopedAstrareview/localDB/browser evidence; integrate serially afterthis checkpoint. B009finalreview/browser inprogress; unresolved utility lock-order and staging actualDBowner boundary are explicit. NewcombinedSHA requires allgates/build/browser anew.
+
+STOP POINT: repoACTIVE B/Ron, stage/prodRELEASED; next: integrate reviewed scoped candidates, register source/test/flags, run exact combined gates and full batched browser; owner: Ron/Codex. No prod, realmessages or protectedcopy changes.

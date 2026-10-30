@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 import { PRIVACY_VERSION, TERMS_VERSION } from "../src/server/legal-versions";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
-const EVIDENCE = "e2e-evidence/signup-consent";
+const EVIDENCE = "../e2e-artifacts/signup-consent";
 const CONSENT = "我已閱讀並同意《服務條款》與《隱私權政策》";
 
 test("signup requires consent, then signUp stores the legal versions", async ({ page }) => {
