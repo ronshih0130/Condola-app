@@ -1,4 +1,5 @@
 import { expect, test, type Request as BrowserRequest } from "@playwright/test";
+import { B017_LOCAL_ORIGIN } from "../playwright.b017-localhost.config";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { ORG_ID, USERS } from "../src/server/ids";
@@ -40,7 +41,7 @@ test("lost response after committed mark stays unknown until reload",async({page
    if(aborted){await route.continue();return;}
    aborted=true;expectedRequest=route.request();
    const requested=new URL(expectedRequest.url());
-   expect(expectedRequest.method()).toBe('POST');expect(requested.origin).toBe('http://127.0.0.1:43123');expect(requested.pathname).toBe('/api/notification-center/mark');
+   expect(expectedRequest.method()).toBe('POST');expect(requested.origin).toBe(B017_LOCAL_ORIGIN);expect(requested.pathname).toBe('/api/notification-center/mark');
    expect(expectedRequest.postDataJSON()).toEqual({recipientId:recipient.id});
    const response=await route.fetch();expect(response.status()).toBe(200);expect(await response.json()).toEqual({status:'marked'});
    expect((await c.query<{n:number}>(`SELECT count(*)::int n FROM app.b028_center_reads WHERE org_id=$1 AND recipient_id=$2`,[ORG_ID,recipient.id])).rows[0].n).toBe(1);
