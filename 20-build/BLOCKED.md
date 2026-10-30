@@ -13,3 +13,7 @@ Types: `RON`, `CEO`, `EXTERNAL_PENDING`, `DEPENDENCY`, `OWNERSHIP`, `QA`.
 Record exact affected scope; continue other eligible work. External temporary retries must be hours apart, maximum two deferred retries. Two failures on the same problem require a changed approach.
 
 Never place secret values, invite/session tokens, raw webhook bodies or customer identifiers here. Use protected paths and sanitized evidence.
+
+## Bootstrap source-recovery dependency
+
+B-001–B-004 verification/integration is pending recovery of hub-cited lane commits (028ab9a, 389ff74, dcc104d; related move-out/purge and paper-version migrations/evidence). Current Origin baseline lacks them. Owner: Ron/Mode A source maintainer. Supply sanitized lane/recovery refs or code archive; no production credentials. Independent B-005 trial work proceeds. TRAIN remains absent; no production release attempted.
