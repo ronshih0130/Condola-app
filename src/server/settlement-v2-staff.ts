@@ -65,7 +65,7 @@ export async function loadV2Unknown(session:Session,leaseId:string,versionId:str
   const items=(await client.query(`SELECT i.item_key,i.label,i.amount_minor::text,i.original_minor::text,prior.amount_minor::text AS prior_minor,i.reason,i.evidence_id,i.created_at,nullif(btrim(p.display_name),'') AS author_name FROM app.settlement_items i LEFT JOIN app.settlement_items prior ON prior.id=i.prior_item_id LEFT JOIN public.profiles p ON p.id=i.created_by WHERE i.org_id=$1 AND i.lease_id=$2 AND i.version_id=$3 ORDER BY i.item_key`,[session.orgId,leaseId,versionId])).rows;
   return {input:validated.input,createdAt:row.created_at,items};
  });
- const result=await readV2Unknown(session,stored.input,versionId),snapshot=result.snapshot as {calculation:{authoritative:false;netMinor:null;refundMinor:null;topUpMinor:null};provenance:{kind:string;amountMinor:string;revision:number;currency:string}[];sourceProjection:unknown};
+ const result=await readV2Unknown(session,stored.input,versionId),snapshot=result.snapshot as {calculation:{authoritative:false;netMinor:null;refundMinor:null;topUpMinor:null};provenance:{kind:string;amountMinor:string;revision:number;currency:string}[];sourceProjection:ReturnType<typeof validateV2UnknownSnapshot>["projection"]};
  if(!snapshot||!Array.isArray(snapshot.provenance)||!snapshot.sourceProjection)throw new FlowError("errors.generic");
  return {published:false as const,createdAt:stored.createdAt,freshness:result.freshness,calculation:snapshot.calculation,editorInput:stored.input,provenance:snapshot.provenance,sourceProjection:snapshot.sourceProjection,items:stored.items.map(i=>({...i,adjustment_minor:(BigInt(i.amount_minor)-BigInt(i.prior_minor??i.original_minor)).toString()}))};
 }

@@ -1,0 +1,10 @@
+"use client";
+import { useRouter } from "next/navigation";
+import { settlementV2CommandCopy } from "@/i18n/settlement-v2";
+import { useV2SettlementCommand } from "./settlement-v2-command";
+import type { V2Scope } from "./settlement-v2-storage";
+type Command=ReturnType<typeof useV2SettlementCommand>;
+export function SettlementV2Recovery({command,locale,allowOpen}:{command:Command;locale:string;allowOpen:boolean}) {
+ const c=settlementV2CommandCopy(locale),router=useRouter();return <section className="card pad"><h2>{c.recovery}</h2>{command.state==="checking"&&<p role="status">{c.checking}</p>}{command.state==="unavailable"&&<p className="alert warn" role="alert">{c.unavailable}</p>}{command.state==="ready"&&command.entries.length===0&&<p>{c.none}</p>}{command.entries.map(entry=><div className="card pad" key={entry.record.requestId}><p>{entry.terminal?.state==="recorded"?c.recorded:entry.terminal?.state==="closed"?c.closed:c.pending}</p>{entry.terminal?.state==="recorded"&&allowOpen&&<button type="button" className="btn" disabled={command.state!=="ready"} onClick={()=>{try{const id=command.open(entry);router.push(`/m/settlement/${entry.record.scope.leaseId}?version=${encodeURIComponent(id)}`);}catch{}}}>{c.open}</button>}{(entry.terminal?.state==="recorded"||entry.terminal?.state==="closed")?<button type="button" className="btn" disabled={command.state!=="ready"} onClick={()=>{try{command.archive(entry);}catch{}}}>{c.archive}</button>:<button type="button" className="btn" onClick={()=>{void command.close(entry.record).catch(()=>undefined);}} disabled={command.state!=="ready"}>{c.close}</button>}</div>)}<button type="button" className="btn" onClick={()=>void command.refresh()} disabled={command.state==="checking"}>{c.check}</button></section>;
+}
+export function SettlementV2RecoveryShell({scope,locale,unavailable}:{scope:V2Scope;locale:string;unavailable:boolean}) {const command=useV2SettlementCommand(scope),c=settlementV2CommandCopy(locale);return <div><h1>{c.recovery}</h1><p className="alert warn">{unavailable?c.policy:c.off}</p><SettlementV2Recovery command={command} locale={locale} allowOpen={false}/></div>;}

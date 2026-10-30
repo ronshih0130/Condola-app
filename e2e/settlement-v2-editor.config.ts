@@ -1,0 +1,2 @@
+import { defineConfig,devices } from "@playwright/test";
+export default defineConfig({testDir:".",testMatch:"settlement-v2-editor.spec.ts",workers:1,timeout:180_000,expect:{timeout:20_000},use:{baseURL:"http://localhost:43129",trace:"retain-on-failure"},webServer:{command:"npx next dev -p 43129 -H 127.0.0.1",cwd:process.cwd(),url:"http://127.0.0.1:43129",reuseExistingServer:false,timeout:180000},projects:[{name:"chromium",use:{...devices["Desktop Chrome"]}}]});
