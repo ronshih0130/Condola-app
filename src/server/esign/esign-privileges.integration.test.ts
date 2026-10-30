@@ -8,6 +8,7 @@ import { insertSandboxOrg } from "../sandbox";
 import { EsignRepo, type TransactionRunner } from "./repo";
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
+process.env.ESIGN_ENABLED = "true";
 
 test("e-sign RLS helpers preserve intended access and honor environment pins", async () => {
   await withClient(async (client) => {
@@ -15,6 +16,7 @@ test("e-sign RLS helpers preserve intended access and honor environment pins", a
     const caseId = randomUUID(), version = randomUUID();
     let sequence = 0;
     await client.query("BEGIN");
+    await client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"esign":true}'::jsonb WHERE id=$1`, [ORG_ID]);
     await client.query(`SELECT set_config('request.jwt.claim.sub',$1,true), set_config('app.active_org_id',$2,true), set_config('app.env','live',true)`,[USERS.admin,ORG_ID]);
     async function scoped<T>(role: "authenticated" | "service_role" | "anon", actor: string, pin: string, env: string, fn: () => Promise<T>): Promise<T> {
       const savepoint = `priv_${++sequence}`;

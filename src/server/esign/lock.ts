@@ -1,5 +1,6 @@
 import type { Connection } from "./repo";
 import type { OrgRole } from "../types";
+import { esignEnabled, requireEsignOrganization } from "./access";
 
 /** Trusted request context; never populate it from a command payload. */
 export type SigningActor = {
@@ -31,7 +32,8 @@ async function authorized(c: Connection, actor: SigningActor, caseId?: string, v
 }
 
 /** Authorize before locking, acquire lease then case, and reauthorize after waits. */
-export async function lockSigningCase(c: Connection, actor: SigningActor, caseId: string, versionId?: string) {
+export async function lockSigningCase(c: Connection, actor: SigningActor, caseId: string, versionId?: string, enabled = esignEnabled()) {
+  await requireEsignOrganization(c, actor, true, enabled);
   const leaseId = await authorized(c, actor, caseId, versionId);
   if (!leaseId) throw new Error("Signing context unavailable");
   const lease = await c.query("SELECT id FROM leases WHERE id=$1 AND org_id=$2 FOR UPDATE", [leaseId,actor.orgId]);
@@ -46,8 +48,9 @@ export async function lockSigningCase(c: Connection, actor: SigningActor, caseId
   return leaseId;
 }
 
-export async function lockSigningLeaseForCreate(c: Connection, actor: SigningActor, leaseId: string) {
+export async function lockSigningLeaseForCreate(c: Connection, actor: SigningActor, leaseId: string, enabled = esignEnabled()) {
   if (actor.kind !== "staff") throw new Error("Signing context unavailable");
+  await requireEsignOrganization(c, actor, true, enabled);
   await authorized(c,actor);
   const lease = await c.query("SELECT id FROM leases WHERE id=$1 AND org_id=$2 FOR UPDATE",[leaseId,actor.orgId]);
   if (lease.rowCount !== 1) throw new Error("Signing context unavailable");

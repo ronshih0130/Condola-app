@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireCurrentConsent } from "../consent-gate";
 import { getSession } from "../session";
-import { esignEnabled } from "./access";
+import { EsignUnavailable, esignAvailableFor, esignEnabled } from "./access";
 import { esignFlow, type Command } from "./flow";
 import type { Stroke } from "./rules";
 
@@ -24,6 +24,7 @@ export async function actionEsignCreate(form: FormData) {
   await requireCurrentConsent();
   if (!esignEnabled()) notFound();
   const session = await getSession();
+  if (!(await esignAvailableFor(session))) notFound();
   const leaseId = text(form, "leaseId");
   let failed = false;
   try {
@@ -36,7 +37,7 @@ export async function actionEsignCreate(form: FormData) {
       order: text(form, "order") as "parallel" | "sequential", deadline: text(form, "deadline"),
     });
     refresh(leaseId);
-  } catch { failed = true; }
+  } catch (error) { if (error instanceof EsignUnavailable) notFound(); failed = true; }
   if (!/^[0-9a-f-]{36}$/i.test(leaseId)) notFound();
   redirect("/m/leases/" + leaseId + (failed ? "?esignError=1" : ""));
 }
@@ -45,6 +46,7 @@ export async function actionEsignStep(form: FormData) {
   await requireCurrentConsent();
   if (!esignEnabled()) notFound();
   const session = await getSession();
+  if (!(await esignAvailableFor(session))) notFound();
   let leaseId = "";
   let failed = false;
   try {
@@ -67,7 +69,7 @@ export async function actionEsignStep(form: FormData) {
     }
     leaseId = (await esignFlow.execute(session, command)).leaseId;
     refresh(leaseId);
-  } catch { failed = true; }
+  } catch (error) { if (error instanceof EsignUnavailable) notFound(); failed = true; }
   // Never accept an arbitrary return URL or a caller-supplied lease association.
   const path = session.kind === "staff" ? (leaseId ? "/m/leases/" + leaseId : "/m/leases")
     : session.kind === "owner" ? (leaseId ? "/o/leases/" + leaseId + "/esign" : "/o") : "/t/lease";
@@ -77,7 +79,10 @@ export async function actionEsignStep(form: FormData) {
 export async function actionEsignProgress(leaseId: string) {
   await requireCurrentConsent();
   if (!esignEnabled()) notFound();
-  return esignFlow.list(await getSession(), leaseId);
+  const session = await getSession();
+  if (!(await esignAvailableFor(session))) notFound();
+  try { return await esignFlow.list(session, leaseId); }
+  catch (error) { if (error instanceof EsignUnavailable) notFound(); throw error; }
 }
 
 export async function actionEsignSign(input: {
@@ -86,14 +91,16 @@ export async function actionEsignSign(input: {
   await requireCurrentConsent();
   if (!esignEnabled()) notFound();
   const session = await getSession();
+  if (!(await esignAvailableFor(session))) notFound();
   const h = await headers();
   // Cloudflare overwrites cf-connecting-ip. Local development accepts loopback.
   // Do not trust a client supplied X-Forwarded-For value.
   const ip = h.get("cf-connecting-ip") ??
     (process.env.NODE_ENV !== "production" ? "127.0.0.1" : "");
-  const result = await esignFlow.execute(session, {
+  let result;
+  try { result = await esignFlow.execute(session, {
     type: "sign", caseId: input.caseId, versionId: input.versionId,
     digest: input.digest, strokes: input.strokes, ip, userAgent: h.get("user-agent") ?? "",
-  });
+  }); } catch (error) { if (error instanceof EsignUnavailable) notFound(); throw error; }
   refresh(result.leaseId);
 }

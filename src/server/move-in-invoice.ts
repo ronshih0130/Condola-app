@@ -113,7 +113,6 @@ export async function issueMoveInInvoice(client: Client, leaseId: string, actual
   const plan = firstInvoicePlan({ rentMinor: Number(lease.rent_amount_minor), depositMinor: Number(lease.deposit_amount_minor),
     utility: allocation ? { id: allocation.id, amountMinor: Number(allocation.amount_minor) } : null,
     basis: lease.first_period_basis });
-  if (plan.totalMinor === 0) throw new FlowError("errors.generic");
   const number = await nextInvoiceNumber(client, lease.org_id);
   const invoice = await one<{ id: string }>(
     client,
@@ -135,6 +134,8 @@ export async function issueMoveInInvoice(client: Client, leaseId: string, actual
     );
   }
   const total = plan.totalMinor;
+  // A zero first invoice remains an explicit source record; it has no posting.
+  if (total === 0) return invoice.id;
   const txn = await one<{ id: string }>(
     client,
     `INSERT INTO ledger_transactions (org_id, property_id, lease_id, kind, currency, effective_date, description, source_table, source_id, created_by)

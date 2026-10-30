@@ -17,6 +17,7 @@ import { contractVersionDigest } from "./document";
 import { EsignDenied } from "./access";
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
+process.env.ESIGN_ENABLED = "true";
 
 test("e-sign schema, service adapter, permissions and retained evidence", async () => {
   const org = ORG_ID;
@@ -126,6 +127,7 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
 
     try {
       await svcOn(client, adminId, async () => {
+        await client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"esign":true}'::jsonb WHERE id=ANY($1::uuid[])`, [[org,otherOrg]]);
         // The lane harness has already applied migrations and seed.ts.
         // Reuse its users, organizations and active admin memberships.
         // Only the property, unit, lease and e-sign evidence are test fixtures;
@@ -141,8 +143,8 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
         );
         await client.query(
           `INSERT INTO leases
-           (id,org_id,property_id,unit_id,target_unit_id,start_date,end_date,currency,rent_amount_minor)
-           VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',10000)`,
+           (id,org_id,property_id,unit_id,target_unit_id,start_date,end_date,currency,rent_amount_minor,deposit_amount_minor)
+           VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',10000,5000)`,
           [leaseId, org, propertyId, unitId],
         );
 
@@ -275,6 +277,9 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
         await client.query("SET CONSTRAINTS app.b001_completion_financials DEFERRED");
         const activated = await client.query(`SELECT l.status::text, l.esign_status::text, i.created_by::text, a.actor_user_id::text, a.new_row->>'case_creator_id' AS creator FROM leases l JOIN invoices i ON i.lease_id=l.id AND i.source='move_in' JOIN audit_log a ON a.row_id=l.id::text AND a.event_type='esign_lease_activated' WHERE l.id=$1`,[leaseId]);
         assert.deepEqual(activated.rows[0],{status:"active",esign_status:"fully_signed",created_by:ownerId,actor_user_id:ownerId,creator:adminId});
+        const positiveCredits=await client.query<{account:string;amount:string}>(`SELECT e.account::text,e.amount_minor::text AS amount
+          FROM ledger_entries e JOIN invoices i ON i.id=e.invoice_id WHERE i.lease_id=$1 ORDER BY e.account`,[leaseId]);
+        assert.deepEqual(positiveCredits.rows,[{account:"tenant_receivable",amount:"15000"},{account:"deposits_held",amount:"-5000"},{account:"rental_income",amount:"-10000"}]);
         assert.equal(await sqlStatus(firstId), "fully_signed");
         assert.deepEqual((await repo.finalize(owner, caseId, firstId)).bytes, finalPdf);
         await assert.rejects(repo.voidUnsigned(admin, caseId, firstId, "Cannot void", time));
@@ -345,18 +350,80 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
         await prepare(retryVersion,owner,unsignedCase);
         await prepare(retryVersion,tenant,unsignedCase);
         retry=await sign(retryVersion,owner,retry,false,repo,unsignedCase);
-        await assert.rejects(sign(retryVersion,tenant,retry,true,repo,unsignedCase), (error:unknown) => (error as {key?:string}).key === "errors.generic");
+        await assert.rejects(sign(retryVersion,tenant,retry,true,failing,unsignedCase), /synthetic invoice fault/);
         assert.equal(await sqlStatus(retryVersion),"partially_signed");
         assert.equal((await client.query(`SELECT 1 FROM invoices WHERE lease_id=$1`,[retryLease])).rowCount,0);
         const retryMeter=randomUUID(), retryRun=randomUUID();
         await client.query(`INSERT INTO meters(id,org_id,property_id,unit_id,utility,rate_minor_per_unit) VALUES ($1,$2,$3,$4,'water',10000)`,[retryMeter,org,propertyId,retryUnit]);
         await client.query(`INSERT INTO utility_allocation_runs(id,org_id,meter_id,period_start,period_end,split_method,rate_source,currency,total_usage,rate_minor_per_unit,total_amount_minor) VALUES ($1,$2,$3,'2026-01-01','2026-01-31','none','fixed_rate','TWD',1,10000,10000)`,[retryRun,org,retryMeter]);
         await client.query(`INSERT INTO utility_allocation_lines(org_id,run_id,lease_id,share_ratio,allocated_usage,amount_minor) VALUES ($1,$2,$3,1,1,10000)`,[org,retryRun,retryLease]);
+        await assert.rejects(asService(() => client.query(`UPDATE leases SET deposit_amount_minor=5000 WHERE id=$1`,[retryLease])),
+          (error:unknown)=>(error as {code?:string}).code==="23514");
         await sign(retryVersion,tenant,retry,true,repo,unsignedCase);
         await client.query("SET CONSTRAINTS app.b001_completion_financials IMMEDIATE");
         assert.equal((await client.query(`SELECT 1 FROM leases l JOIN invoices i ON i.lease_id=l.id AND i.source='move_in' WHERE l.id=$1 AND l.status='active'`,[retryLease])).rowCount,1);
         const credits=await client.query<{account:string;amount:string}>(`SELECT e.account::text,e.amount_minor::text AS amount FROM ledger_entries e JOIN invoices i ON i.id=e.invoice_id WHERE i.lease_id=$1 ORDER BY e.account`,[retryLease]);
         assert.deepEqual(credits.rows,[{account:"tenant_receivable",amount:"10000"},{account:"other_income",amount:"-10000"}]);
+
+        const zeroUnit=randomUUID(), zeroLease=randomUUID(), zeroCase=randomUUID(), zeroVersion=randomUUID();
+        await client.query("SET CONSTRAINTS app.b001_completion_financials DEFERRED");
+        await client.query(`INSERT INTO units(id,org_id,property_id,label) VALUES ($1,$2,$3,'Zero unit')`,[zeroUnit,org,propertyId]);
+        await client.query(`INSERT INTO leases(id,org_id,property_id,unit_id,target_unit_id,start_date,end_date,currency,rent_amount_minor,deposit_amount_minor)
+          VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',0,0)`,[zeroLease,org,propertyId,zeroUnit]);
+        await client.query(`INSERT INTO lease_parties(org_id,lease_id,contact_id,role) VALUES ($1,$2,$3,'primary')`,[org,zeroLease,contact]);
+        const zeroDoc=(await client.query<{id:string}>(`INSERT INTO identity_documents(org_id,contact_id,lease_id,doc_type,number_masked,storage_path,encryption_key_ref,review_status,created_by)
+          VALUES ($1,$2,$3,'passport','A**789',$4,'fixture-key','pending_review',$5) RETURNING id::text`,[org,contact,zeroLease,`${org}/${zeroLease}/doc`,adminId])).rows[0].id;
+        for (const slot of ["front","selfie"]) await client.query(`INSERT INTO identity_document_photos(org_id,document_id,slot,storage_path,mime_type,size_bytes,sha256) VALUES ($1,$2,$3,$4,'image/jpeg',4,'abc')`,[org,zeroDoc,slot,`${org}/${zeroLease}/${slot}`]);
+        let zero=await repo.createCase(admin,{caseId:zeroCase,leaseId:zeroLease,versionId:zeroVersion,body:"Zero contract",pdfBytes:document,
+          signers:[{id:ownerId,role:"owner",email:"owner@example.com"},{id:tenantId,role:"tenant",email:"tenant@example.com"}]});
+        await repo.apply(admin,zeroCase,{type:"send",versionId:zeroVersion,at:time,presumedConsentDeadline:expiry,termsVersion:"synthetic-v1"});
+        await prepare(zeroVersion,owner,zeroCase); await prepare(zeroVersion,tenant,zeroCase);
+        zero=await sign(zeroVersion,owner,zero,false,repo,zeroCase);
+        for (const fault of ["missing-line","missing-audit-marker","fake-ledger","fake-allocation"] as const) {
+          const tampered = new EsignRepo({check:async()=>true},(actorId,work)=>scoped("service_role",actorId,async()=>{
+            const result=await work(new Proxy(client,{get(target,key){
+              if(key==="query") return (...args:unknown[])=>{
+                if(typeof args[0]==="string" && args[0].includes("INSERT INTO invoice_lines") && fault==="missing-line")
+                  return Promise.resolve({rows:[],rowCount:1});
+                if(typeof args[0]==="string" && args[0].includes("INSERT INTO audit_log") && fault==="missing-audit-marker") {
+                  const values=[...(args[1] as unknown[])], payload=JSON.parse(values[4] as string);
+                  delete payload.no_amount_due; values[4]=JSON.stringify(payload);
+                  return Reflect.apply(target.query,target,[args[0],values]);
+                }
+                return Reflect.apply(target.query,target,args);
+              };
+              return Reflect.get(target,key,target);
+            }}));
+            if (fault==="fake-ledger") await client.query(`INSERT INTO ledger_transactions
+              (org_id,property_id,lease_id,kind,currency,effective_date,source_table,source_id,created_by)
+              SELECT org_id,property_id,lease_id,'invoice',currency,current_date,'invoices',id,$2 FROM invoices WHERE lease_id=$1`,[zeroLease,tenantId]);
+            if (fault==="fake-allocation") {
+              const payment=(await client.query<{id:string}>(`INSERT INTO payments(org_id,property_id,lease_id,currency,amount_minor,paid_on,method,source)
+                VALUES ($1,$2,$3,'TWD',1,current_date,'cash','manager_entry') RETURNING id::text`,[org,propertyId,zeroLease])).rows[0].id;
+              await client.query(`INSERT INTO payment_allocations(org_id,payment_id,invoice_id,amount_minor)
+                SELECT $1,$2,id,1 FROM invoices WHERE lease_id=$3`,[org,payment,zeroLease]);
+            }
+            await client.query("SET CONSTRAINTS app.b001_completion_financials IMMEDIATE");
+            return result;
+          }));
+          await assert.rejects(sign(zeroVersion,tenant,zero,true,tampered,zeroCase),(error:unknown)=>(error as {code?:string}).code==="23514");
+          assert.equal(await sqlStatus(zeroVersion),"partially_signed");
+          assert.equal((await client.query("SELECT 1 FROM invoices WHERE lease_id=$1",[zeroLease])).rowCount,0);
+        }
+        await sign(zeroVersion,tenant,zero,true,repo,zeroCase);
+        await client.query("SET CONSTRAINTS app.b001_completion_financials IMMEDIATE");
+        const zeroResult=await client.query<{status:string;total:string;balance:string;ledger:string|null;lines:string;allocations:string;entries:string;audit:boolean;actor:string}>(`
+          SELECT l.status::text,i.total_minor::text AS total,i.balance_minor::text AS balance,i.ledger_transaction_id::text AS ledger,i.created_by::text AS actor,
+            (SELECT count(*)::text FROM invoice_lines il WHERE il.invoice_id=i.id AND il.amount_minor=0) AS lines,
+            (SELECT count(*)::text FROM payment_allocations pa WHERE pa.invoice_id=i.id) AS allocations,
+            (SELECT count(*)::text FROM ledger_entries e WHERE e.invoice_id=i.id) AS entries,
+            EXISTS(SELECT 1 FROM audit_log a WHERE a.org_id=i.org_id AND a.row_id=l.id::text AND a.actor_user_id=$2
+              AND a.event_type='esign_lease_activated' AND a.new_row->'no_amount_due'='true'::jsonb
+              AND a.new_row->>'invoice_id'=i.id::text) AS audit
+          FROM leases l JOIN invoices i ON i.lease_id=l.id AND i.source='move_in' WHERE l.id=$1`,[zeroLease,tenantId]);
+        assert.deepEqual(zeroResult.rows,[{status:"active",total:"0",balance:"0",ledger:null,actor:tenantId,lines:"1",allocations:"0",entries:"0",audit:true}]);
+        await assert.rejects(sign(zeroVersion,tenant,zero,true,repo,zeroCase));
+        assert.equal((await client.query("SELECT count(*)::int AS n FROM invoices WHERE lease_id=$1 AND source='move_in'",[zeroLease])).rows[0].n,1);
         await assert.rejects(asService(() => client.query(
           `UPDATE esign_versions SET status='draft' WHERE id=$1`, [unsignedVersion],
         )));
@@ -442,6 +509,7 @@ test("mounted action service on PG: Email replay, permissions, atomic replacemen
     const rollback = new FlowError("Rollback mounted e-sign fixtures");
     try {
       await svcOn(client, USERS.admin, async () => {
+        await client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"esign":true}'::jsonb WHERE id=ANY($1::uuid[])`, [[ORG_ID,ORG2_ID]]);
         let index = 0;
         const run: TransactionRunner = async (actorId, work) => {
           const save = "mounted_esign_" + (++index);
@@ -520,7 +588,7 @@ test("mounted action service on PG: Email replay, permissions, atomic replacemen
           await assert.rejects(
             flow.execute(actor, { ...target, type: "review" }),
             (error: unknown) => error instanceof EsignDenied
-              && error.message === "Document delivery required before acknowledgement",
+              && error.reason === "Document delivery required before acknowledgement" && error.key === "errors.forbidden",
           );
           assert.equal((await flow.list(actor, leaseId)).versions.find((v) => v.id === version.id)!.own!.status, "pending_review");
 
