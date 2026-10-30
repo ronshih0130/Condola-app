@@ -20,14 +20,16 @@ test("manager and tenant preserve independently replied handover evidence",async
     await client.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='handover_records'`,[ORG_ID]);
     return (await client.query<{id:string}>(`SELECT l.id FROM leases l JOIN lease_parties lp ON lp.lease_id=l.id JOIN contacts c ON c.id=lp.contact_id WHERE l.org_id=$1 AND c.user_id=$2 AND lp.role='primary' AND l.status<>'draft' LIMIT 1`,[ORG_ID,USERS.tenant])).rows[0].id;
   });
-  await page.goto(`/api/demo/locale?set=en&next=/m/handover/${lease}`);
+  await page.goto(`/api/demo/locale?set=en&next=/m/leases/${lease}`);
+  await page.getByTestId("handover-entry").click();
   const moveIn = page.getByRole("region").filter({has:page.getByRole("heading",{name:"Move-in"})});
   await moveIn.getByLabel("Condition and notes").fill("Original move-in condition");
   await moveIn.getByRole("button",{name:"Publish version"}).click();
   await expect(moveIn.getByText("Version 1")).toBeVisible();
   await signIn(page,ACCOUNTS.tenant);
   await page.context().addCookies([{name:"condola_lease",value:lease,url:"http://127.0.0.1:43123"}]);
-  await page.goto(`/api/demo/locale?set=en&next=/t/handover/${lease}`);
+  await page.goto(`/api/demo/locale?set=en&next=/t`);
+  await page.getByTestId("handover-entry").click();
   const tenantIn = page.getByRole("region").filter({has:page.getByRole("heading",{name:"Move-in"})});
   await tenantIn.getByLabel("Choose file").setInputFiles({name:"synthetic-condition.png",mimeType:"image/png",buffer:png});
   await tenantIn.getByRole("button",{name:"Add photo or PDF"}).click();

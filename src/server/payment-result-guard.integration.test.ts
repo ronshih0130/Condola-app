@@ -1,15 +1,29 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
+import { resetAndSeed } from "./seed";
 
 disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>>;
-test.before(async()=>{clone=await cloneTestDatabase();});
-test.after(async()=>{await clone.cleanup();});
+test.before(async()=>{
+  clone=await cloneTestDatabase();
+  // Earlier RLS suites may reverse the parent's seeded payment. Build this
+  // guard suite's confirmed-payment fixture only in its unique owned clone.
+  const demo=process.env.DEMO_MODE,key=process.env.ID_DOC_ENCRYPTION_KEY;
+  try {
+    process.env.DEMO_MODE="true";
+    process.env.ID_DOC_ENCRYPTION_KEY=randomBytes(32).toString("hex");
+    await resetAndSeed();
+  } finally {
+    if (demo === undefined) delete process.env.DEMO_MODE; else process.env.DEMO_MODE=demo;
+    if (key === undefined) delete process.env.ID_DOC_ENCRYPTION_KEY; else process.env.ID_DOC_ENCRYPTION_KEY=key;
+  }
+});
+test.after(async()=>{if(clone) await clone.cleanup();});
 
 test("enabled payment transitions require a same-transaction event and leave no guard record",async()=>{
   const c=new Client({connectionString:process.env.DATABASE_URL}); await c.connect();

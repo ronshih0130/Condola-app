@@ -1,3 +1,4 @@
+import { HandoverEntry } from "@/components/handover-entry";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -97,6 +98,7 @@ export default async function LeasePage({
       />
       <ErrorBanner t={t} error={query.error} />
       <FirstPeriodSummary basis={lease.first_period_basis} locale={session.locale} />
+      {tab === "summary" ? <HandoverEntry session={session} leaseId={id} /> : null}
       {query.created === "1" ? (
         <div className="alert ok" data-testid="lease-created">
           {t("i_lease_created")}

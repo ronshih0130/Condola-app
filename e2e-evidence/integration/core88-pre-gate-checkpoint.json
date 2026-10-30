@@ -1,0 +1,76 @@
+{
+  "time_pt": "2026-10-30T02:04:09.109965-07:00",
+  "source_before_registration": "f82a3a69d6f342240ab2559236861464bbf12a3e",
+  "handover_recovery": "a8a6abf",
+  "source_sql_files": 88,
+  "schema": "fresh88 versus untouched71+17,11logicalcategoriesequal,synthetic2/4/5/1preserved",
+  "function_privileges": "PASS isolatedPG16cluster,anon0/public authenticated7allowlist",
+  "native_review": "Astra scoped static PASS exact registration/nav/fixture/config; sourcehandover+seedreviewseparate; notClaudeClassB",
+  "core86_exact_a305_browser": {
+    "batch_terminal": "48batches,128PASS,1FAIL,3featureOFFSKIP;exit1",
+    "failure": "B001zero1280reset failed ENOSPC; originalfailure+tracepreserved",
+    "recheck": "samefrozena305source,solefailedcase1/1PASS after~7GBinactivecachecleanup;originalrunnotrelabeledPASS",
+    "scope": "separatepriorcode;notproofnew88candidate"
+  },
+  "core87_exact_edacd_gate": "570unitPASS;RLSfailed2guardfixturecasesmissingconfirmedpaymentafterlegacytests;remaininglaterchecksnotrun,noexception",
+  "guard_fixture_fix": "d49d7a51 seedsONLYownedvalidatedclone usingguardedreset;envrestored;allassertionspreserved;mutatedparent3/3PASSandparentstill0targetconfirmed",
+  "setup_failures": "two cleanness-precheck failures preserved; generatedsummarywasuntracked,thenrootaccidentallymoved2trackedhistoricalreports;exactrestoreandcleanstatusverifiedbeforeactualgate;nofailurewaiver",
+  "registration_checks": "typecheckPASS,lint0errors7warnings,scoped13/13PASS",
+  "new_exact_gate_build_browser": "PENDING",
+  "staging": "newrequiredschemaabsent;readonlymetadataowner/rolecapabilitiesonly;noMacmigrations/noStageorProdclaim",
+  "queue": "ACTIVEfull39;B011settlement/B028centerunderdevelopment;B013threeRondecisionspending",
+  "private_logs": {
+    "core86-full-batched-browser.log": {
+      "bytes": 100358,
+      "sha256": "8e26930a90043c8687bd580bdfb3733ef0050ae0f4159ae928ab736485c793f1"
+    },
+    "core86-b001-space-recheck.log": {
+      "bytes": 1904,
+      "sha256": "737b4112c9b607ef1f7b67440d499b8073510dbfe2ab28c3caa066126a43707a"
+    },
+    "core88-registration-typecheck.log": {
+      "bytes": 43,
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e"
+    },
+    "core88-registration-lint.log": {
+      "bytes": 2347,
+      "sha256": "ab8acbe3faa3a4304aa2c892080323c2b574eafc9a62ec9ee5a1fd8c61c1830a"
+    },
+    "core88-registration-unit.log": {
+      "bytes": 2455,
+      "sha256": "9172ff3f152d3d1159453a2dab3516459d344fa20ead901ef21b86401f2988ae"
+    },
+    "core88-fixture-typecheck.log": {
+      "bytes": 43,
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e"
+    },
+    "core88-fixture-lint.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "core88-guard-mutated-parent.log": {
+      "bytes": 756,
+      "sha256": "6f7b1e302b944cbf560b0aeee303e85b302d169c4a3eb8df94a5e12dc902842a"
+    },
+    "core88-guard-parent-counts.json": {
+      "bytes": 95,
+      "sha256": "9f45a7f7209446f5512f09771bbdd8db5d2b07b095b2b74a6d844b9729161c39"
+    },
+    "core88-catalog-comparison.json": {
+      "bytes": 14062,
+      "sha256": "a4859aaaac47f1cc78a6a0b3b59013eb9df5c532fed184a4f218d46ffb6dc572"
+    },
+    "core88-function-privileges.log": {
+      "bytes": 3135,
+      "sha256": "66023e686fe9dad0b66fbe4468ddac835e33d6df42e32d26a0d80cb07e660667"
+    },
+    "core87-final-clean-check-failure.log": {
+      "bytes": 291,
+      "sha256": "7253a61780c84d98b102c8fb8b49369d182b9e26db7586f96606175952e1608e"
+    },
+    "core87-second-clean-check-failure.log": {
+      "bytes": 291,
+      "sha256": "7253a61780c84d98b102c8fb8b49369d182b9e26db7586f96606175952e1608e"
+    }
+  }
+}

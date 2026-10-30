@@ -51,7 +51,11 @@ for (const file of files) {
   const scopedEnv: Record<string, string> = file === "e2e/b001-activation.spec.ts"
     ? { ESIGN_ENABLED: "true", ESIGN_ASSET_ORIGIN: "http://127.0.0.1:43123" }
     : { ESIGN_ENABLED: "false" };
-  const status = run([file, "--output", output], scopedEnv);
+  // Handover uses its own bounded private object-service fixture; select its
+  // exact checked-in config only for that file, keeping other batches isolated.
+  const config = file === "e2e/handover.spec.ts"
+    ? ["--config", "e2e/handover-playwright.config.ts"] : [];
+  const status = run([...config, file, "--output", output], scopedEnv);
   if (status === 130 || status === 143) process.exit(status);
   if (status !== 0) failed++;
 }

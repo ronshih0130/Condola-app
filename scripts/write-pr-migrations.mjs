@@ -174,6 +174,10 @@ const added = {
     addOnly: false,
     reason: "Adds default-OFF private local notification and payment-transition tables with constraints, restricted gateways, deferred financial/event guards and legacy-writer fences; due-email personal preference alone defaults ON. No external delivery or historical backfill.",
   },
+  "supabase/migrations/20261031100214_b011_handover_records.sql": {
+    addOnly: false,
+    reason: "Adds default-OFF private versioned handover/evidence/reply/upload-intent and durable cleanup tables with composite constraints, restricted privileges and immutable guards. No historical migration or financial/retention date rewritten.",
+  },
   "supabase/migrations/20261031100213_b001_zero_first_invoice.sql": {
     addOnly: false,
     reason: "Replaces only the deferred completion financial postcondition to support Ron-approved explicit zero-total first invoice with no ledger transaction, entries or payment allocations and actual-actor no_amount_due audit; preserves positive branch and published100211.",
