@@ -12,6 +12,12 @@ async function search(page:import('@playwright/test').Page,q:string){await page.
 
 test('directory shows original zero-lease and co-tenant contacts while accountant contact fields remain private at both widths',async({page},info)=>{
  const errors:string[]=[];
+ async function capture(name:string) {
+  // Avoid screenshot caret styling during streamed page hydration. This is not
+  // an error waiver: every console/page/5xx diagnostic remains a test failure.
+  await page.waitForLoadState('networkidle');
+  await page.screenshot({path:info.outputPath(name),fullPage:true,caret:'initial'});
+ }
  page.on('pageerror',()=>errors.push('page error'));
  page.on('console',m=>{if(m.type()==='error') errors.push('console error');});
  page.on('response',r=>{if(r.status()>=500) errors.push('server error');});
@@ -33,17 +39,17 @@ test('directory shows original zero-lease and co-tenant contacts while accountan
    await page.setViewportSize({width,height:850});await signIn(page,ACCOUNTS.manager);await search(page,'Directory ');
    await expect(page.getByTestId('directory-contact')).toHaveCount(2);await expect(page.getByTestId('tenant-directory')).toContainText('directory-zero@example.test');
    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
-   await page.screenshot({path:info.outputPath(`manager-list-${width}.png`),fullPage:true});
+   await capture(`manager-list-${width}.png`);
    await page.getByRole('link',{name:'Directory Zero',exact:true}).click();await expect(page.getByTestId('directory-history')).toBeVisible();await expect(page.getByTestId('directory-history').locator('tbody tr')).toHaveCount(0);expect(new URL(page.url()).pathname).toBe(`/m/tenants/${zero}`);
-   await page.screenshot({path:info.outputPath(`zero-detail-${width}.png`),fullPage:true});
+   await capture(`zero-detail-${width}.png`);
    await search(page,'Directory Co');await page.getByRole('link',{name:'Directory Co',exact:true}).click();await expect(page.getByTestId('directory-history').locator('tbody tr')).toHaveCount(1);await page.reload();await expect(page.getByTestId('directory-history').locator('tbody tr')).toHaveCount(1);expect(new URL(page.url()).pathname).toBe(`/m/tenants/${co}`);
-   await page.screenshot({path:info.outputPath(`co-detail-${width}.png`),fullPage:true});
+   await capture(`co-detail-${width}.png`);
    await search(page,'directory-zero@example.test');await expect(page.getByTestId('directory-contact')).toHaveCount(1);
    await signIn(page,ACCOUNTS.accountant);await search(page,'directory-zero@example.test');await expect(page.getByTestId('directory-contact')).toHaveCount(0);
    await search(page,'Directory Zero');await expect(page.getByTestId('directory-contact')).toHaveCount(1);await expect(page.getByTestId('tenant-directory')).not.toContainText('directory-zero@example.test');await expect(page.getByTestId('tenant-directory')).not.toContainText('+19995550101');
    await page.getByRole('link',{name:'Directory Zero',exact:true}).click();await expect(page.getByTestId('directory-history')).toBeVisible();await expect(page.locator('body')).not.toContainText('directory-zero@example.test');await expect(page.locator('body')).not.toContainText('+19995550101');
    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
-   await page.screenshot({path:info.outputPath(`accountant-detail-${width}.png`),fullPage:true});
+   await capture(`accountant-detail-${width}.png`);
   }
   const identities=await db(async c=>(await c.query(`SELECT id::text,user_id::text FROM contacts WHERE id IN ($1,$2) ORDER BY id`,[zero,co])).rows);
   expect(identities).toHaveLength(2);expect(identities.every(r=>r.user_id===null)).toBe(true);
