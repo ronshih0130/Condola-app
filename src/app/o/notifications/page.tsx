@@ -7,8 +7,8 @@ import { getSession } from "@/server/session";
 
 export const dynamic="force-dynamic";
 export default async function Page({searchParams}:{searchParams:Promise<{cursor?:string}>}) {
+  await requireCurrentConsent(undefined,"page");
   const session=await getSession();
-  await requireCurrentConsent(session,"page");
   if (session.kind!=="owner" || !await centerSessionEnabled(session)) notFound();
   const query=await searchParams;
   let items;

@@ -37,12 +37,16 @@ const openActions: Record<string, Record<string, string>> = {
   "server/actions.ts": {
     actionVendorReport: "Vendor link token, no user session",
   },
+  "server/notification-center-actions.ts": {
+    markVendorCenterRead: "Exact vendor job token gateway, no human user session",
+  },
   "server/consent-actions.ts": {
     actionAcceptReconsent: "Record acceptance", actionAcceptPortalConsent: "Record acceptance",
   },
 };
 const openPages: Record<string, Record<string, string>> = {
   "app/v/[token]/page.tsx": { default: "Vendor link token authentication, no user session" },
+  "app/v/[token]/notifications/page.tsx": { default: "Exact vendor job token gateway, no human user session" },
 };
 const openRoutes: Record<string, Record<string, string>> = {
   "api/auth/enter/route.ts": { GET: "Authentication continuation checks consent" },

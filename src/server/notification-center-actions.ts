@@ -5,8 +5,8 @@ import { centerSessionItems, centerVendorItems } from "./notification-center";
 import { getSession } from "./session";
 
 export async function markCenterRead(form:FormData) {
+  await requireCurrentConsent();
   const session=await getSession();
-  await requireCurrentConsent(session,"page");
   const id=form.get("recipientId");
   if (typeof id!=="string") throw new Error("Notification unavailable");
   const rows=await centerSessionItems(session,id);

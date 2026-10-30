@@ -51,7 +51,7 @@ test("synthetic notifications are independently read in four actual portals",asy
   const jobEvent=(await c.query<{id:string}>(`INSERT INTO app.b028_center_events(org_id,kind,ticket_id,job_id,occurred_at) VALUES($1,'vendor_job_assigned',$2,$3,$4) RETURNING id::text`,[ORG_ID,ticket,job.id,job.created_at])).rows[0].id;
   await c.query(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,member_id,contact_id,ticket_id,job_id) VALUES
     ($1,$2,'staff',$3,$4,NULL,NULL,NULL),($1,$2,'tenant',$5,NULL,$6,NULL,NULL),($1,$7,'owner',$8,NULL,$9,NULL,NULL),($1,$7,'vendor_job',NULL,NULL,NULL,$10,$11)`,[ORG_ID,bill,USERS.manager,member,USERS.tenant,l.tenant,jobEvent,USERS.owner,l.owner,ticket,job.id]);
-  return {token,jobId:job.id};
+  return {token,jobId:job.id,leaseId:l.lease};
  });
  try {
  for(const width of [390,1280]) {
@@ -59,6 +59,13 @@ test("synthetic notifications are independently read in four actual portals",asy
   await page.setViewportSize({width,height:850});
   for(const [account,path] of [[ACCOUNTS.manager,'/m/notifications'],[ACCOUNTS.tenant,'/t/notifications'],[ACCOUNTS.owner,'/o/notifications']] as const) {
    await signIn(page,account); await page.goto(path.split("/notifications")[0]);
+   if (path === "/t/notifications") {
+    const picker=page.getByTestId("lease-picker");
+    await expect(picker).toBeVisible();
+    const leaseForm=picker.locator("form").filter({has:page.locator(`input[name="leaseId"][value="${fixture.leaseId}"]`)});
+    await leaseForm.getByRole("button").click();
+    await expect(picker).toHaveCount(0);
+   }
    await page.getByTestId("notification-center-entry").click();
    await expect(page.getByTestId('notification-item')).toHaveCount(1);
    await expect(page.getByTestId('notification-mark')).toBeVisible();
