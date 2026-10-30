@@ -1,0 +1,13 @@
+# PASS_SCOPED_B006_PREFLIGHT_SOURCE
+
+Recorded 2026-10-30T16:41:05.100044-07:00; baseline6eea41522b05832d58d7d414984075c4391eb706. Requested highest reviewer Astra/xhigh; actual model/effort unknown. Independent source-only review, no reviewer DB/tests/HTTP/writes. B006 is ClassA; generic older Claude/ClassB notes do not create a new ClassB gate.
+
+Exact reviewed test12d04efe9ab94429fc3e5850e9449a09c59408a8 and private configcd4ebc94552188d4411a297911c7f4894b55ba3b preserve original workbook bytes, real CSV initial/corrected commits, original IDs, counts, metadata, source lines3/5→7 and observed action bounds. Preview400/im_region_unavailable retained; commit NDJSON deliberately remains generic im_none, now checked as structured error with no result. Current source already wraps result actions, and historical core89/91/91c/92b regional390/1280 passes are retained; no new parser or clipping defect is claimed.
+
+Exact origin/context fence before login/reset, fixed-origin directAPI/maxRedirects0, static diagnostics/safeSQLSTATE and private artifact/debug controls reviewed. Connection/setup/capture is inside cleanup coverage; exact country/jurisdiction/currency/timezone/full-flags transactional restore/equality under normal triggers, separate primary/restoration error, always close. No full-row/audit/import-data restoration claim. Bounds cover the rendered action set; no explicit action cardinality assertion. XLSX fixture proves1904 rejection only; successful sparse-XLSX proof is separate historical evidence.
+
+Launcher SHAaa9b54771dfab20309d588517144bd1696833cc2d328afb7fffb0f5710da46e4 and build driver SHA89c7d8056f04779197984663296e25e4de5c86969aa0c9b3a45190a23a7bb28a are reviewed B005→B006 prefix substitutions. Runner adds only the correct private clause. No app/parser/schema/seed/package/legal edit or provider. Child import control is isolated to the synthetic browser process; org flags restored.
+
+Root draft2browser PASS18.3s and pinned type/lint PASS. Independent aggregate initially compared against the raw template instead of the post-seed/reset baseline and failed; original/diagnostic probes and readers preserved privately. Changing to a fresh same-source seeded comparison clone passes exact restored fields and retained3properties/3units/1room/3leases,0metadata mismatch/blocked rows/opt-ins. No browser or application failure was waived. Final exact candidate checks/readback and evidence review remain required.
+
+Authorized de-identified customer fixture/disposition and exact stagedapp/version/auth/browser remain pending. No customer-data acquisition or invented worldwide-format backlog; unsupported profiles reject. No prod, main merge, operational migration/activation or external message.

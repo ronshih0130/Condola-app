@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { Client } from "pg";
 import { ORG_ID } from "../src/server/ids";
 import { disposableDbUrl } from "../src/server/test-disposable-db";
-import { ACCOUNTS, resetDemo, signIn } from "./session";
+import { ACCOUNTS, signIn } from "./session";
 
 const databaseUrl = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE).href;
-if (process.env.DEMO_MODE !== "true" || process.env.IMPORT_ERROR_DETAILS_ENABLED !== "true") throw new Error("Disposable regional import mode required");
+if (process.env.DEMO_MODE !== "true" || process.env.IMPORT_ERROR_DETAILS_ENABLED !== "true" || process.env.B006_PRIVATE_HTTP_CONFIG !== "1" || process.env.PLAYWRIGHT_NO_COPY_PROMPT !== "1") throw new Error("Disposable regional import mode required");
 
 function epochWorkbook(): Buffer {
   const files = [
@@ -33,17 +33,66 @@ function epochWorkbook(): Buffer {
   return Buffer.concat([...local,index,end]);
 }
 
-for (const width of [390,1280]) test(`regional import through manager UI and API at ${width}px`,async({page},testInfo)=>{
-  await page.setViewportSize({width,height:844});
+const origin = "http://127.0.0.1:43137";
+type Org = { country_code: string; jurisdiction_id: string | null; default_currency: string; timezone: string; feature_flags: unknown };
+function guard(info: TestInfo) {
+  if (!info.config.configFile?.endsWith("/e2e/b006-import-private-playwright.config.ts") || info.project.use.trace !== "off" || info.project.use.video !== "off" || info.project.use.screenshot !== "off" || info.config.reporter.length !== 1 || info.config.reporter[0][0] !== "line" || process.env.PLAYWRIGHT_NO_COPY_PROMPT !== "1") throw new Error("B006 private configuration required");
+}
+async function post(page: Page, path: string, data: object) {
+  let target: URL;
+  try { target = new URL(path, origin); } catch { throw new Error("B006 request rejected"); }
+  if (!path.startsWith("/") || path.startsWith("//") || target.origin !== origin) throw new Error("B006 request rejected");
+  try {
+    const response = await page.request.post(target.href, { data, maxRedirects: 0 });
+    if (new URL(response.url()).origin !== origin) throw new Error("invalid origin");
+    return response;
+  } catch { throw new Error("B006 local HTTP request failed"); }
+}
+function safeFailure(phase: string, error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error ? (error as {code?:unknown}).code : null;
+  return `${phase}${typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? ` (${code})` : ""}`;
+}
+async function restore(db: Client, original: Org) {
+  await db.query("BEGIN");
+  try {
+    await db.query(`UPDATE organizations SET country_code=$2,jurisdiction_id=$3,default_currency=$4,timezone=$5,feature_flags=$6::jsonb WHERE id=$1`,[ORG_ID,original.country_code,original.jurisdiction_id,original.default_currency,original.timezone,JSON.stringify(original.feature_flags)]);
+    const rows=(await db.query<Org>(`SELECT country_code,jurisdiction_id::text,default_currency,timezone,feature_flags FROM organizations WHERE id=$1`,[ORG_ID])).rows;
+    expect(rows.length === 1 && JSON.stringify(rows[0]) === JSON.stringify(original)).toBe(true);
+    await db.query("COMMIT");
+  } catch (error) { try { await db.query("ROLLBACK"); } catch { /* retain failure */ } throw error; }
+}
+test("regional import through manager UI and API",async({page},testInfo)=>{
+  guard(testInfo);
+  const width = testInfo.project.use.viewport?.width;
+  if (width !== 390 && width !== 1280) throw new Error("B006 invalid viewport");
   const errors: string[] = []; const commits: number[][] = [];
-  page.on("pageerror",e=>errors.push(`pageerror ${e.message}`));
-  page.on("console",m=>{if(m.type()==="error") errors.push(`console ${m.text()}`);});
-  page.on("response",r=>{if(r.status()>=500) errors.push(`HTTP ${r.status()} ${new URL(r.url()).pathname}`);});
-  page.on("request",r=>{if(new URL(r.url()).pathname==="/api/import" && r.method()==="POST") {const body=r.postDataJSON();if(body.mode==="commit") commits.push(body.rows.map((row:{line:number})=>row.line));}});
-  await page.route("**/*",async route=>{const host=new URL(route.request().url()).hostname;if(host==="127.0.0.1"||host==="localhost") await route.continue();else {errors.push("unexpected external request");await route.abort();}});
-  await resetDemo(page); await signIn(page,ACCOUNTS.manager);
-  const db=new Client({connectionString:databaseUrl}); await db.connect();
-  const original=(await db.query(`SELECT country_code,jurisdiction_id,default_currency,timezone,feature_flags FROM organizations WHERE id=$1`,[ORG_ID])).rows[0];
+  page.on("pageerror",()=>errors.push("page error"));
+  page.on("console",m=>{if(m.type()==="error") errors.push("console error");});
+  page.on("response",r=>{if(r.status()>=500) errors.push("server error");});
+  page.on("request",r=>{
+    try {
+      const target = new URL(r.url());
+      if (target.origin === origin && target.pathname === "/api/import" && r.method() === "POST") {
+        const body = r.postDataJSON();
+        if (body.mode === "commit") {
+          if (!Array.isArray(body.rows) || !body.rows.every((row: {line: unknown}) => Number.isInteger(row.line))) { errors.push("invalid commit metadata"); return; }
+          commits.push(body.rows.map((row: {line:number})=>row.line));
+        }
+      }
+    } catch { errors.push("invalid request metadata"); }
+  });
+  await page.context().route("**/*",async route=>{
+    try { if(new URL(route.request().url()).origin === origin) { await route.continue(); return; } } catch { /* reject invalid URL */ }
+    errors.push("off-origin request"); await route.abort();
+  });
+  let db: Client | undefined, original: Org | undefined;
+  let primary: string | undefined, restoration: string | undefined;
+  try {
+    await signIn(page,ACCOUNTS.admin); expect((await post(page,"/api/demo/reset",{})).status()).toBe(200);
+    await signIn(page,ACCOUNTS.admin); await signIn(page,ACCOUNTS.manager);
+    db=new Client({connectionString:databaseUrl}); await db.connect();
+    const originals=(await db.query<Org>(`SELECT country_code,jurisdiction_id::text,default_currency,timezone,feature_flags FROM organizations WHERE id=$1`,[ORG_ID])).rows;
+    expect(originals.length === 1).toBe(true); original=originals[0];
   const tw=(await db.query<{id:string}>(`SELECT id::text FROM jurisdictions WHERE code='TW'`)).rows[0].id;
   const ca=(await db.query<{id:string}>(`SELECT id::text FROM jurisdictions WHERE code='US-CA'`)).rows[0].id;
   const id=randomUUID().slice(0,8), names=[`Region whole ${id}`,`Region room ${id}`,`Region fixed ${id}`];
@@ -51,9 +100,8 @@ for (const width of [390,1280]) test(`regional import through manager UI and API
   const header="物件名稱,地址,屋主姓名,出租型態,戶別／樓層,房號,房型,月租,租客姓名,租客電話,起租日,到期日,押金,繳租日";
   const row=(name:string,mode:string,unit:string,room:string,type:string,rent:string,tenant:string,n:number,start:string)=>[name,`新北市測試街${id}${n}號`,`Owner ${id} ${n}`,mode,unit,room,type,rent,tenant,phone(n),start,"2028-01-01","12000","5"].join(",");
   const csv=(fixed:boolean)=>[header,"",row(names[0],"整層","1F","","","6000","Tenant A",1,"2027-01-01"),"",row(names[1],"分租","2F","A","套房","6000","Tenant B",2,"2027-01-01"),"",row(names[2],"整層","3F","","","6000","Tenant C",3,fixed?"2027-01-01":"bad-date")].join("\n");
-  const counts=async()=> (await db.query(`WITH p AS (SELECT id FROM properties WHERE org_id=$1 AND name=ANY($2::text[])), u AS (SELECT id FROM units WHERE org_id=$1 AND property_id IN (SELECT id FROM p)) SELECT (SELECT count(*)::int FROM p) properties,(SELECT count(*)::int FROM u) units,(SELECT count(*)::int FROM rooms WHERE org_id=$1 AND unit_id IN (SELECT id FROM u)) rooms,(SELECT count(*)::int FROM leases WHERE org_id=$1 AND property_id IN (SELECT id FROM p)) leases`,[ORG_ID,names])).rows[0];
+  const counts=async()=> (await db!.query(`WITH p AS (SELECT id FROM properties WHERE org_id=$1 AND name=ANY($2::text[])), u AS (SELECT id FROM units WHERE org_id=$1 AND property_id IN (SELECT id FROM p)) SELECT (SELECT count(*)::int FROM p) properties,(SELECT count(*)::int FROM u) units,(SELECT count(*)::int FROM rooms WHERE org_id=$1 AND unit_id IN (SELECT id FROM u)) rooms,(SELECT count(*)::int FROM leases WHERE org_id=$1 AND property_id IN (SELECT id FROM p)) leases`,[ORG_ID,names])).rows[0];
   const upload=async(data:Buffer,name:string,mime:string)=>{await page.getByTestId("import-to-upload").click();await page.getByTestId("import-file").setInputFiles({name,mimeType:mime,buffer:data});};
-  try {
     await db.query(`UPDATE organizations SET country_code='TW',jurisdiction_id=$2,default_currency='TWD',timezone='America/Los_Angeles',feature_flags=feature_flags || '{"import_error_details":true}'::jsonb WHERE id=$1`,[ORG_ID,tw]);
     await page.goto("/api/demo/locale?set=zh-TW&next=/m/import");
     await upload(epochWorkbook(),"epoch1904.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -93,13 +141,14 @@ for (const width of [390,1280]) test(`regional import through manager UI and API
       tenantName:"Synthetic tenant",tenantPhone:phone(4),tenantEmail:"",startDate:"2027-01-01",endDate:"2028-01-01",
       deposit:"12000",dueDay:"5",electricity:"",rate:"",billKwh:"",billAmount:"",opening:"",depositReason:"",rateReason:"",notes:""}],
       region:{country:"TW",currency:"TWD"}};
-    const response=await page.request.post("/api/import",{data:blocked}); expect(response.status()).toBe(400); expect((await response.json()).error).toBe("im_region_unavailable");
-    const commit=await page.request.post("/api/import",{data:{...blocked,mode:"commit"}}); expect(commit.status()).toBe(200); expect(await commit.text()).toContain('"type":"error"');
+    const response=await post(page,"/api/import",blocked); expect(response.status()).toBe(400); expect((await response.json()).error).toBe("im_region_unavailable");
+    const commit=await post(page,"/api/import",{...blocked,mode:"commit"}); expect(commit.status()).toBe(200); const stream=(await commit.text()).trim().split("\n").map(line=>JSON.parse(line) as {type?:unknown;error?:unknown});
+    expect(stream.some(event=>event.type === "error" && event.error === "im_none") && !stream.some(event=>event.type === "result")).toBe(true);
     expect(await counts()).toEqual({properties:3,units:3,rooms:1,leases:3});
     expect((await db.query(`SELECT count(*)::int AS n FROM properties WHERE org_id=$1 AND name=$2`,[ORG_ID,`Blocked ${id}`])).rows[0].n).toBe(0);
     expect(errors).toEqual([]);
-  } finally {
-    await db.query(`UPDATE organizations SET country_code=$2,jurisdiction_id=$3,default_currency=$4,timezone=$5,feature_flags=$6 WHERE id=$1`,[ORG_ID,original.country_code,original.jurisdiction_id,original.default_currency,original.timezone,original.feature_flags]);
-    await db.end();
-  }
+  } catch (error) { primary = safeFailure("regional import", error); }
+  if (db && original) try { await restore(db,original); } catch (error) { restoration = safeFailure("organization restoration", error); }
+  if (db) try { await db.end(); } catch { restoration ??= "connection cleanup"; }
+  if (primary || restoration) throw new Error([primary,restoration].filter(Boolean).join("; "));
 });

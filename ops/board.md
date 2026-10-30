@@ -247,3 +247,7 @@ Highest narrower plan GO; current parent/copy/rotate/mail code remains byte-unch
 ## B005 simulation checkpoint verified — 2026-10-30T16:32:51.873431-07:00
 
 Candidate `a95c7e1c86788d60b2eab2cb9405f494816fb75d` has final607unit/358RLS+1priorapprovedhistoricalSKIP, builds/preflight/Worker1/preview4 PASS. Root serializes final evidence verdict/log/commit/push/mirror. Closed DB handoff is delivered identically, unapplied/non-executable; B005 whole pending PE/stage/Claude. Single canonical flagOFF/unprovisioned; operational invitation parents unchanged. Next B006 only after publication.
+
+## B006 private real-import proof reservation — 2026-10-30T16:35:30.470025-07:00
+
+After published/mirrored6eea415, highest source-first plan GO. Root reserves existing e2e/import-region.spec.ts and new e2e/b006-import-private-playwright.config.ts for one writer; root owns narrow runner dispatch/private launcher/docs. No application/parser/schema/seed/package/legal edit. Reuse existing source/current wrap fix; preserve real CSV/resubmission/counts/unsupported/1904 checks, harden exact-origin/privacy and verified region/flag restoration. ClassA; customer fixture and current staging remain separate dependent scope. No source execution before exact review.
