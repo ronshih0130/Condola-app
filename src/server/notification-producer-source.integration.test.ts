@@ -437,6 +437,21 @@ test('typed sources enforce scope, payer snapshot, immutability and application-
       await other.query('ROLLBACK');
       assert.deepEqual((await c.query(`SELECT * FROM app.b017_resolve_history($1,$2)`,[source.org,legacy.id])).rows,[{outcome:'existing_center',center_event_id:existing.id}]);
       assert.deepEqual((await c.query(`SELECT * FROM app.b017_resolve_history($1,$2)`,[source.org,legacy.id])).rows,[{outcome:'existing_center',center_event_id:existing.id}]);
+      await other.query('BEGIN'); await other.query(`LOCK TABLE public.platform_settings IN SHARE ROW EXCLUSIVE MODE`);
+      await assert.rejects(c.query(`SELECT * FROM app.b017_resolve_history($1,$2)`,[source.org,legacy.id]),(error:unknown)=>(error as {code?:string}).code==='55P03');
+      await assert.rejects(c.query(`SELECT * FROM app.b017_resolve_neutral($1,$2)`,[source.org,neutralOnly.id]),(error:unknown)=>(error as {code?:string}).code==='55P03');
+      await assert.rejects(c.query(`SELECT * FROM app.b017_resolve_key($1,$2,'rent_due',$3,NULL,NULL,$4)`,[source.org,source.lease,source.invoice,randomUUID()]),(error:unknown)=>(error as {code?:string}).code==='55P03');
+      await assert.rejects(c.query(`INSERT INTO app.b017_center_resolutions(org_id,kind,lease_id,invoice_id,payment_id,actor_id,occurrence_key,local_date,occurred_at,old_source_id,center_event_id,outcome)
+        SELECT org_id,kind,lease_id,invoice_id,payment_id,actor_id,occurrence_key,local_date,created_at,id,$2,'existing_center' FROM app.b010_source_events WHERE id=$1`,[legacy.id,existing.id]),
+        (error:unknown)=>(error as {code?:string}).code==='55P03');
+      await other.query('ROLLBACK');
+      await c.query('BEGIN'); await c.query(`SELECT * FROM app.b017_resolve_key($1,$2,'rent_due',$3,NULL,NULL,$4)`,[source.org,source.lease,source.invoice,randomUUID()]);
+      await other.query('BEGIN'); await other.query(`SET LOCAL lock_timeout='100ms'`);
+      await assert.rejects(other.query(`LOCK TABLE public.platform_settings IN SHARE ROW EXCLUSIVE MODE`),(error:unknown)=>(error as {code?:string}).code==='55P03');
+      await other.query('ROLLBACK'); await c.query('ROLLBACK');
+      await other.query('BEGIN'); await other.query(`SELECT 1 FROM organizations WHERE id=$1 FOR UPDATE`,[source.org]);
+      await assert.rejects(c.query(`SELECT * FROM app.b017_resolve_history($1,$2)`,[source.org,legacy.id]),(error:unknown)=>(error as {code?:string}).code==='55P03');
+      await other.query('ROLLBACK');
       const legacyKey=(await c.query<{key:string}>(`SELECT occurrence_key key FROM app.b010_source_events WHERE id=$1`,[legacy.id])).rows[0].key;
       await assert.rejects(c.query(`INSERT INTO app.b017_occurrences(org_id,lease_id,invoice_id,kind,occurrence_key,local_date,occurred_at)
         VALUES($1,$2,$3,'rent_due',$4,current_date,clock_timestamp())`,[source.org,source.lease,source.invoice,legacyKey]),
