@@ -1,5 +1,12 @@
 # Mode B bootstrap acceptance
 
+## Latest continuous-queue checkpoint — 2026-10-30T14:28:52.121390-07:00
+
+B002 local HTTP/scheduler proof is verified at `71acf06d7675e99ef83cf20c545a2c56d775ccf3`: clean gate599unit/358RLS PASS0FAIL1exact Ron-approved historicalSKIP; Next/Cloudflare builds, unchanged originalpreflight, Worker1/1 and fresh HTTP/browser1/1 PASS. Positive JPEG and independent expiry/auth/sandbox/consent denials, same validlink after policydate expiry, actual OFF/missing/invalid/dry_run preserve2documents+1expiredslot; original missing mode restored. Settings390/1280 inspected with candidatefooter. No product/schema/legal changes. [Evidence](e2e-evidence/B-002/http-boundary-71acf06.json), [remaining](20-build/BLOCKED.md). WholeB002 pending approvedrollback/staging/Claude/ClassB; existing later-date rule retained and prospective workflow remainsB012.
+
+B001 verified local delta remains9fe0e4a with notes3d6b524; B013/B021 settings/hash checkpoint remainsb6ec65c and remaining DBhandoff in Downloads. No whole B newlydone. Same active owning branch/session; no staging/prod deployment or activation, no mainmerge/Mac operationalmigration/externalmessages. Next: publish/mirror checkpoint then B003 reconciliation. Previous records below retain dated scopes. STOP POINT: WORKING; owner: Ron/Codex.
+
+
 ## Current continuous-queue checkpoint — 2026-10-30T13:34:59-07:00
 
 B-001 local formal/sandbox simulation delta is verified at `9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f`: full gate599unit/358RLS PASS0FAIL1approvedhistoricalSKIP; Next/CF builds, original preflight, Worker1/1 and12browserPASS. No whole B item is newly done; full B-001 G0–G5/staging/cold-start/receipt/independent Claude acceptance remains pending. [Evidence](e2e-evidence/B-001/simulation-boundary-9fe0e4a.json). Test-method and ENOSPC failures are preserved; recovered environment is documented.
