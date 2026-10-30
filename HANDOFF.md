@@ -1,5 +1,12 @@
 # Mode B bootstrap acceptance
 
+## Latest continuous-queue checkpoint — 2026-10-30T15:22:12.689041-07:00
+
+B004 local paper-delivery proof verifiedat`ee734857cf04f75d84c5a01eb89d433b9e89bfae`: gate599unit/358RLS PASS0FAIL1prior-approved historicalSKIP; Next/Cloudflare/originalpreflight/Worker1 and fresh4browsercasesPASS49.8s,8screens390/1280. Existing app reused; version/reason/history/staffscope/tenantprivateaudit/fault/OFF/fake-ID checks pass, no app/schema/legaledit. Globaloriginalmissing restored; orgflagsrestored/faultobjectsremoved; normalmetadata/audits/uploads remain. [Evidence](e2e-evidence/B-004/http-boundary-ee73485.json). WholeB004 pendingold-code/rollback/stage/Claude.
+
+Visualcheckalsofoundpre-existingB001 unconditionalpendingheadingabovesignedtimeline. [Localfollowup](e2e-evidence/B-001/signing-heading-followup-ee73485.md) is nextafterpublishingB004; no blanketparentvisualPASS. B0030fb7c15/notesc3138fa, B00271acf06/notesb178732 and B0019fe0e4a/notes3d6b524 remain scopedcheckpoints; B013/B021remainingDBhandoffunchanged. No wholeBnewdone/prod/mainmerge/Macoperationalmigration/activation/externalmessage. Currentowningbranch/sessioncontinues. STOP POINT: WORKING; next: publish/mirrorthenB001headingplanbeforeB005; owner: Ron/Codex. Previousrecordsretain datedscopes.
+
+
 ## Latest continuous-queue checkpoint — 2026-10-30T14:56:25.343433-07:00
 
 B003 local payee-selection/isolation proof is verified at `0fb7c15a3679d5338eafdab906571b5dc1814d1d`: clean gate599unit/358RLS PASS0FAIL1exact prior-approved historicalSKIP; Next/Cloudflare/originalpreflight/Worker1 and fresh protected browser/HTTP3 PASS53.5s,10screens390/1280. Existing gateway/UI reused. Actual owner assignment, missing-vs-legacy state, other-tenant and selectedsandbox own200->live403, liveUI switchback, ingress metadata-only audits pass. Exact setting metadata/orgflags restored; normalorgtimestamps/audits advance. No app/schema/legal change. [Evidence](e2e-evidence/B-003/http-boundary-0fb7c15.json). WholeB003 pending approvedold-code/rollback/staging/Claude/ClassB, notdone.

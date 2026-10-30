@@ -1,0 +1,305 @@
+{
+  "recordedAt": "2026-10-30T15:21:08.985530-07:00",
+  "candidate": "ee734857cf04f75d84c5a01eb89d433b9e89bfae",
+  "branch": "mode-b-repair-override-prep",
+  "scope": "B004 LOCAL existing paper version/delivery verification and private harness; whole item pending",
+  "environment": {
+    "Node": "20.20.2",
+    "npm": "10.8.2",
+    "PostgreSQL": "16 guarded loopback disposable prepared-schema clones",
+    "preflight": "unchanged script, command-local GNU awk5.4.1",
+    "preflightScriptSha256": "7c4a336fc33172efc8e0b736ac4930923801b776b3bd5d79240613b3b2f195cb"
+  },
+  "commands": {
+    "gate": "python3 ../run-b004-prepared-check.py condola_b004_gate_ee73485 b004-full-gate-ee73485.log bash scripts/gate.sh ee73485",
+    "buildWorker": "python3 ../run-b004-prepared-check.py condola_b004_build_ee73485 b004-build-worker-driver-ee73485.log python3 ../b004-build-worker-final-commands.py",
+    "browser": "python3 ../run-b004-prepared-check.py condola_b004_http_ee73485 b004-http-ee73485.log node node_modules/@playwright/test/cli.js test --config e2e/b004-paper-private-playwright.config.ts --reporter=line --output ../b004-http-ee73485-artifacts"
+  },
+  "sourceBlobs": {
+    "e2e/b004-paper-delivery.spec.ts": "2f7b75d647ede457320f3a2abdf5a50c41a9942e",
+    "e2e/b004-paper-private-playwright.config.ts": "9458ceb2a56657a7d2832ca0b50c62f499002b6c",
+    "scripts/run-e2e.ts": "24c4cf601ac86d27d1a53c5aa642396e75de0970",
+    "src/server/paper-lease-versions.ts": "8f7b05da8f78b5cfb2e099138fdc0081adea7250",
+    "src/server/paper-lease-versions-panel.tsx": "96d4a4c75a31eaca748e1b7429f4900f297ec355",
+    "src/server/paper-lease-versions-rules.ts": "2ff6fae0778b91c3c3f11efd9df2b2d20f646bc9",
+    "src/server/tenant-signed-pdf-download.ts": "7744dacafd84f9d123e8706ff7f81177a97f73be",
+    "src/server/audit.ts": "beec5aa7a76f3f075970087242526e2c696a6381",
+    "src/app/t/lease/signed/[pdfId]/route.ts": "e726fd0dcc286540c2d5f52bdb4ddbc4e23ce36a",
+    "src/app/m/leases/[id]/signed/[pdfId]/route.ts": "46dd19a023dece9f4b5a20c5a5ccc335966fe4b7",
+    "src/server/queries.ts": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+    "src/app/m/leases/[id]/page.tsx": "166d6196c61fa40e0260812c730787d9fbaf46c9",
+    "supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql": "968ff476247a310a3570be1a4328c0a1b7c56859"
+  },
+  "gate": {
+    "result": "PASS",
+    "unit": {
+      "tests": 599,
+      "pass": 599,
+      "fail": 0,
+      "skipped": 0
+    },
+    "rls": {
+      "tests": 359,
+      "pass": 358,
+      "fail": 0,
+      "skipped": 1
+    },
+    "skip": "exactly one prior Ron-approved lost historical fixture"
+  },
+  "builds": {
+    "Next": "PASS",
+    "Cloudflare": "PASS",
+    "originalPreflight": "PASS; no bypass/internal error",
+    "Worker": "1 PASS"
+  },
+  "browser": {
+    "result": "PASS",
+    "tests": 4,
+    "widths": [
+      390,
+      1280
+    ],
+    "screenshots": 8,
+    "scope": "two existing journeys in each fixed-width private project; fresh clone/server"
+  },
+  "proof": {
+    "history": "reason-required/no added version via browser; current pointer/history, supersedes link, uploader/time, private staff read and both live/sandbox directions",
+    "tenant": "own-lease private/no-store/nosniff PDF attachment and expected synthetic bytes, exactly one attributable committed audit before response",
+    "denials": "same-origin anonymous login redirect/no PDF, real wrong tenant/org and bound sandbox, global/org OFF; successful download count unchanged",
+    "fakeIds": "new malformed and valid-format unknown PDF ID probes after own200, private404/no PDF/attachment, both target-specific and total download-event counts unchanged",
+    "auditFault": "owned disposable-only temporary function/trigger, tenant503/no attachment/Unavailable/no added event, owned objects removed; no staff audit promise",
+    "restoration": "runtime originally absent tenant_signed_pdf restored to absence and both org flags restored; present-row exact metadata/timestamp branch source-reviewed only in this fixture; normal triggers active during restore; org timestamps/audits/uploads not restored",
+    "privacy": "fixed-origin page/API/no redirects, no trace/HAR/video/automatic screenshot or ARIA, generic safe errors, server stdout/stderr deliberately omitted; explicit synthetic-only screenshots"
+  },
+  "syntheticReadback": {
+    "versions": 2,
+    "downloadEvents": 1,
+    "paperOrgOptIns": 0,
+    "currentVersions": 1,
+    "tenantOrgOptIns": 0,
+    "replacementLinks": 1,
+    "downloadGlobalOff": true,
+    "faultTriggerRemains": false,
+    "faultFunctionRemains": false,
+    "downloadEventsAttributed": 1,
+    "scope": "read-only aggregate from final disposable synthetic clone; no IDs or PDF bytes emitted",
+    "settingRestoredToTemplate": true,
+    "settingPresence": false,
+    "settingRowSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+  },
+  "nativeReview": {
+    "requested": "gpt-6-astra/xhigh",
+    "actualModelEffort": "unknown",
+    "source": "PASS_SCOPED_B004_SOURCE_REVIEW",
+    "reviewerExecution": "none; source/evidence only",
+    "ClaudeClassB": "NOT_RUN"
+  },
+  "boundaries": {
+    "appCodeChanged": false,
+    "newProductSchema": false,
+    "testFaultInjectionTemporaryDDL": true,
+    "operationalMigrationApplied": false,
+    "operationalPersistentFlagsChanged": false,
+    "prodAccess": false,
+    "mainMerged": false,
+    "externalMessages": false
+  },
+  "limitations": [
+    "Prior core89/91/92b two-case passes are historical, not a missing final-adapter gap",
+    "Browser empty-reason attempt uses HTML required; server rejection/ordinary row immutability/concurrency are separate full-RLS cases",
+    "Trusted owners and genuine parent cascades are outside bounded ordinary-version immutability; no lifetime retention inferred",
+    "Tenant event counts successful response construction, not signature or confirmed real-client receipt; staff route not claimed audited",
+    "Bound sandbox tenant negative is selected owned sandbox lease requesting live PDF; no sandbox-own tenant HTTP200 or both-flags-ON independent guard matrix claimed; separate RLS integration covers those lower-level cases",
+    "Existing full RLS ON/synthetic purge and focused fault DDL run only on disposable fixtures; no operational/production purge, backup or migration",
+    "PAPER runtime string true is private test-child-only; operational controls remain OFF",
+    "Pre-existing B001 parent signing heading remains unconditional pending despite signed timeline; visual PASS limited to B004 history/delivery, tracked for next local fix",
+    "Old-code/new-schema/approved rollback target, actual staged app/version/schema and independent Claude/ClassB/Ron acceptance remain pending"
+  ],
+  "artifacts": {
+    "copy-check.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/ee734857cf04f75d84c5a01eb89d433b9e89bfae.i9qSZC/copy-check.log",
+      "sha256": "0c084f2fb877de7c7e15fb248ed61f18c4ff923e850d8d4ebfb02934eeb2c3e6",
+      "bytes": 1433
+    },
+    "flag-expiry.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/ee734857cf04f75d84c5a01eb89d433b9e89bfae.i9qSZC/flag-expiry.log",
+      "sha256": "790631bd05d781613c716fe04f1a26d814975ac149a3a6d265800ec6e5fffad5",
+      "bytes": 27
+    },
+    "lint.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/ee734857cf04f75d84c5a01eb89d433b9e89bfae.i9qSZC/lint.log",
+      "sha256": "da819f980b5df58f94df10cee617099a4a6539df6d5f02510c80645449817c1d",
+      "bytes": 2422
+    },
+    "npm-ci.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/ee734857cf04f75d84c5a01eb89d433b9e89bfae.i9qSZC/npm-ci.log",
+      "sha256": "cf0cd67af9f1c430f9585791d4e9f6c2a925b819c0fc8366fde5e64a622575a2",
+      "bytes": 1584
+    },
+    "postgres-16.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/ee734857cf04f75d84c5a01eb89d433b9e89bfae.i9qSZC/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "test-rls.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/ee734857cf04f75d84c5a01eb89d433b9e89bfae.i9qSZC/test-rls.log",
+      "sha256": "a010ea7b36ff59df9bacaa52d0fa67118acb4961e1e1c150bedecb08c77e324e",
+      "bytes": 100212
+    },
+    "test-unit.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/ee734857cf04f75d84c5a01eb89d433b9e89bfae.i9qSZC/test-unit.log",
+      "sha256": "e9b088f7dd8fd0351f489c8d6ef78f52a37d8c0e6aa4c9f72271dbb4a66cd868",
+      "bytes": 123727
+    },
+    "toolchain.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/ee734857cf04f75d84c5a01eb89d433b9e89bfae.i9qSZC/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    "typecheck.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/ee734857cf04f75d84c5a01eb89d433b9e89bfae.i9qSZC/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "gate-summary": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-ee734857cf04f75d84c5a01eb89d433b9e89bfae.md",
+      "sha256": "23fa7e0250eab0ad7819701d03e9b4b205a86960b7b977a8ff050fcfd3f9e02f",
+      "bytes": 971
+    },
+    "b004-full-gate-ee73485.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-full-gate-ee73485.log",
+      "sha256": "0b45300568f23104c32a986ad66d530285c959145dc93c9974374841a9d76dfe",
+      "bytes": 470
+    },
+    "b004-build-worker-driver-ee73485.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-build-worker-driver-ee73485.log",
+      "sha256": "055e3bb97cd25ff9354c32e21ececf8ec1960a09add131c9eeaebbde7aeafd00",
+      "bytes": 358
+    },
+    "b004-next-build-ee73485.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-next-build-ee73485.log",
+      "sha256": "1ad53fe0bd3d40874ae61058889c97d2f928c77c92ff6c215a12d6edc1f2ab74",
+      "bytes": 12250
+    },
+    "b004-cf-build-ee73485.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-cf-build-ee73485.log",
+      "sha256": "39d255b6e0ca58e2fd7f3eb881194a19ca7c9cb066f328e0f92f09c0988c4b3b",
+      "bytes": 13959
+    },
+    "b004-preflight-ee73485.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-preflight-ee73485.log",
+      "sha256": "400896dcbabc60024bc6f3492daab871d2bb3401519215e74fe1855c7310ae8c",
+      "bytes": 23
+    },
+    "b004-worker-ee73485.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-worker-ee73485.log",
+      "sha256": "07f9c9eabfa3b7a0997a6c03d7fccc3700058065cb884a86fd4e66a2c7f8c8e6",
+      "bytes": 423
+    },
+    "b004-http-ee73485.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-ee73485.log",
+      "sha256": "d4a8757d8f0245aabe1927955f39f041606d6900807cc0e6eec6d5d15263e2cf",
+      "bytes": 566
+    },
+    "b004-synthetic-readback-ee73485.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-synthetic-readback-ee73485.json",
+      "sha256": "295265511689ab473b198cf8447ba5d0ca68b5b65ba160df834ed2ca5d13fb59",
+      "bytes": 522
+    },
+    "b004-http-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-draft-a.log",
+      "sha256": "ae5a65c4ad79949871301b5c8d196e82fe8e6ae7bed73bd6ba22191001dc229e",
+      "bytes": 566
+    },
+    "b004-typecheck-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-typecheck-draft-a.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "b004-lint-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-lint-draft-a.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "run-b004-prepared-check.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b004-prepared-check.py",
+      "sha256": "1cdb86a912b15aa1ca034c9a53ad4386aa068262472c162af81c8f003858197e",
+      "bytes": 2026
+    },
+    "b004-build-worker-final-commands.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-build-worker-final-commands.py",
+      "sha256": "168c0e533653c68f1adf878766719e52bfd712abe3b69092778814230e2af672",
+      "bytes": 1264
+    },
+    "make-b004-final-proof.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/make-b004-final-proof.py",
+      "sha256": "25009d6532107037e835b218dbea34d5e249161d7696fd0794ebe106fd92e351",
+      "bytes": 8925
+    },
+    "make-b004-readback.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/make-b004-readback.py",
+      "sha256": "f496c728bb2f64f3d27a827c62f0f7f8ee6b523c65b1998fe0a9257f4db6e360",
+      "bytes": 2561
+    },
+    "B004-acceptance-reconciliation-c3138fa.md": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B004-acceptance-reconciliation-c3138fa.md",
+      "sha256": "6245080c5522bcdd2384cd3575a3e156537dffc3492ad2fce6659338f131617b",
+      "bytes": 6060
+    },
+    "B004-private-proof-plan.md": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B004-private-proof-plan.md",
+      "sha256": "887970c033cf947862e9a451681dc7d192ecb4b10f4302a60df5b1df9744a618",
+      "bytes": 7345
+    }
+  },
+  "screenshots": {
+    "b004-http-ee73485-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-1280/manager-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-ee73485-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-1280/manager-paper-history.png",
+      "sha256": "4fe2f034b9585c044ba6eeacbb9ab43b14b388e9d0de76aabaa654a0ec1d70aa",
+      "bytes": 186664
+    },
+    "b004-http-ee73485-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-1280/tenant-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-ee73485-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-1280/tenant-paper-history.png",
+      "sha256": "52634ff18593a020c4db7f57784af3979403cf45b25f5073c34db50da5004211",
+      "bytes": 100486
+    },
+    "b004-http-ee73485-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-390/manager-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-ee73485-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-390/manager-paper-history.png",
+      "sha256": "bee88b46ded613ccc5f81df2fe4338ea053c4084ceec53e33331e7235ec3171b",
+      "bytes": 144947
+    },
+    "b004-http-ee73485-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-390/tenant-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-ee73485-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-390/tenant-paper-history.png",
+      "sha256": "50663c95b704d7721eaa26dcf5e6686777e73066e57bb7b54da9407cad17820b",
+      "bytes": 76231
+    },
+    "b004-http-ee73485-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-1280/live-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-ee73485-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-1280/live-paper-history.png",
+      "sha256": "8b4bc7e9c10820c1a35dcf7a6040dbda802966045b20464401e52cef997dabe7",
+      "bytes": 156788
+    },
+    "b004-http-ee73485-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-1280/sandbox-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-ee73485-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-1280/sandbox-paper-history.png",
+      "sha256": "75b8c581bd6c4357171f98ed80f530b9426fd9ab37f5e5650e07d8ac9d6ba637",
+      "bytes": 235109
+    },
+    "b004-http-ee73485-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-390/live-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-ee73485-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-390/live-paper-history.png",
+      "sha256": "0bcd9d9ca99548c88d1a019bd74bd2b5df9b9bb91da684de6c9a4b2c1a2e6e2a",
+      "bytes": 117154
+    },
+    "b004-http-ee73485-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-390/sandbox-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b004-http-ee73485-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-390/sandbox-paper-history.png",
+      "sha256": "c28264debec607c9d3b374f9de170174be32178a290d5276b1a3335f81187e72",
+      "bytes": 201629
+    }
+  },
+  "preservedFailedAttempts": {},
+  "failureHistory": "No actual failed runtime attempt in this B004 delta; source-review findings fixed before execution",
+  "retention": {
+    "storage": "local private artifacts; sanitized manifest in git",
+    "privateR2ObjectKey": null,
+    "retentionDate": "unknown"
+  },
+  "next": "publish/mirror checkpoint, park dependent acceptance, revisit now-actionable B001 signing-heading presentation before B005"
+}

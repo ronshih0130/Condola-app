@@ -1,3 +1,21 @@
+# B-004 private paper-delivery verification checkpoint
+
+Updated 2026-10-30T15:22:12.689041-07:00; candidate`ee734857cf04f75d84c5a01eb89d433b9e89bfae`, branch`mode-b-repair-override-prep`, ModeB Ron/Codex. **Scoped local PASS; wholeB004 pending/INCOMPLETE; no release/activation GO.** Test/privateconfig/runner only; no application, migration, product schema or legal/contract text change.
+
+Clean pinned gate599unitPASS;359RLS total/358PASS/0FAIL/1exact prior-approved lost-historySKIP. Next17.821s/Cloudflare26.975s, unchanged originalpreflight3.288sPASS, Worker1/1; final fresh browser4/4PASS49.8s with8screens390/1280. [Manifest](http-boundary-ee73485.json), [acceptance](acceptance.md), [source reconciliation](source-reconciliation-c3138fa.md). Existing two named core89/91/92b cases alreadypassed, superseding the old pending note; no app rebuild was needed. No actual runtime failure in this B004 delta; source-review findings were resolved before execution.
+
+Actual manager uploads/replacements preserve current/history/supersedes, required reason, uploader/time and both staff live/sandbox directions. Existing server reason rejection, ordinary-role immutability/concurrency and genuine parent-cascade boundaries are separately covered by executed full-RLS suites; browser empty-reason check is HTML required, not a direct server-bypass attempt. Tenant own download gives private/no-store/nosniff attachment/synthetic bytes and one attributable committed event. Anonymous same-origin login redirect, wrong tenant/org, bound sandbox selection, global/orgOFF deny; new malformed/unknown version404 has no PDF/attachment or current/total download audit increment. Injected owned disposable fault yields503/no attachment/Unavailable/no extra event; fixture function/trigger removed. Staff route is not claimed to write a download audit.
+
+Independent aggregate readback:2versions/1current/1replacementlink/1attributabletenantdownload;0paper/tenantorgoptins, effective globalOFF, faultobjectsabsent. Original globalsetting was **absent** and is restored to absence, matching template. Present-row exact value/description/microsecond restoration is source-reviewed only in this fixture; both captured org flag objects are runtime-restored, while timestamps/audit history/uploads legitimately remain changed. Normal triggers are active during restoration. Local PAPERruntime true is private test-child-only; no operational activation. Temporary fault DDL is test fixture, not product/operational migration. Existing fullRLS ON/synthetic purge is disposable-only; no prod/mainmerge/Mac operationalmigration/backup/externalmessage.
+
+Root viewed manager390/tenant1280/sandbox390/live1280; B004 history/delivery state is consistent, but a **pre-existing B001 heading defect** is visible: unconditional pending h3 above signed timeline. [Recorded follow-up](../B-001/signing-heading-followup-ee73485.md); no blanket parent-page visual PASS. The tenant bound-sandbox negative is live PDF requested under selected own sandbox lease; no sandbox-own tenant HTTP200/both-flags-ON independent guard proof claimed by this browser case. Lower-level integration separately tests such contexts.
+
+Highest-requested source review PASS, requestedAstra/xhigh actualmodel/effortunknown; final native evidence verdict separate, no Claude substitute. Old-code/new-schema/actual approved rollback target, exact staging app/schema/roles/headers and independent Claude/ClassB remain pending. No download-as-signature, confirmed real receipt or indefinite-retention claim.
+
+STOP POINT: local B004 checkpoint verified; next: publish/mirror then revisit now-actionable B001 heading before B005; owner: Ron/Codex. Earlier records below retain dated scopes.
+
+---
+
 > Latest local integration checkpoint (2026-10-30T03:05:16.071480-07:00): candidate `4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6`; see [core89 local verification](../integration/core89-local-verification.md). Whole-feature verdict remains INCOMPLETE/NO-GO; dated records below retain their original scope. This link supplies no staging/Claude/release waiver.
 
 # B-004 paper delivery checkpoint
