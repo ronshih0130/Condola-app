@@ -118,3 +118,12 @@ flags:
     global_kill: "platform_settings.tenant_directory_edit enabled must be boolean true and allowed_org_ids must include this organization"
     org_override: "organizations.feature_flags.tenant_directory_edit must be boolean true; actual canonical live membership and selected environment apply"
     activation: "local synthetic directory and company-contact edits only; original-request metadata recovery remains current-auth even OFF; staging/archive/Claude acceptance pending"
+
+  repair_approvals:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.repair_approvals enabled must be boolean true and allowed_org_ids must include this organization"
+    org_override: "organizations.feature_flags.repair_approvals must be boolean true; current exact owner relationship and selected environment apply"
+    activation: "local personal default settings only; existing request metadata recovery remains current-owner even OFF/archive; no estimate approval, dispatch, staging activation or provider delivery"
