@@ -10,3 +10,9 @@ Native highest-tier independent code review: scopedPASS after sandbox/property/c
 Local reported checks: four separate migration transactions on owned syntheticv4 clone PASS; focused gateway integration PASS including denial/audit-failure/default-write concurrency/property revalidation; payee/action/rule units, typecheck, focusedlint, copy and migration manifest PASS. Exact combined clean gate, fresh/upgrade catalogs, old-code compatibility, browser390/1280, regionalgateway cases and staging acceptance remainPENDING. No real messages, prod access, deployment or activation.
 
 STOP POINT: local implementation prepared; next: integrate with current test/retention train, run UI/HTTP and combined exact-candidate checks; owner: Ron/Codex.
+
+## Audited authorization and UI checkpoint 2026-10-29T20:35:27.883304-07:00
+
+Fixed production-owned adapters in payee-consent.ts keep canonical consent-gate.ts unchanged. Actions/API authorize before form or route-parameter parsing. Required denied/no-org/consent audits remain; infrastructure failure gives generic private503 without approved session/data. Entrypoint checker recognizes only exact three audited payee contracts, verifies sole canonical helper return and production dependencies, and rejects fake wrappers, ignored denials, earlier side effects and bare guard substitutions. Highest native focused scopePASS on helper1870d1b6c6efb71d4a05b0c9ee6f9a3f05dd2ee4, checker5795c126799ec5596d815992211abc931ea15164 and adapter21faa3a7ab54913196e8e0959b74a15dc5dd3fc3. Semantic/negative tests11/11, full typecheck and targetedlintPASS.
+
+UI labels show same-org property/unit/start date instead of UUIDs; no protected numbers read outside gateway. Local UI2/2 at390/1280 and separate actual unauth/no-org HTTP1/1 passed before final adapter refactor; final HTTP rerun remains pending. Synthetic screenshots hashed in browser-artifacts.json. No real messages or activation.

@@ -8,7 +8,7 @@ import type { PayeeAccount, PayeeInput, TenantPayeeView } from "./payee-rules";
 import { tenantPayeeDecision, validUuid } from "./payee-rules";
 
 type Result<T> = { ok: boolean; reason: string; data: T | null };
-type Settings = { country: string; accounts: PayeeAccount[]; owners: { id: string; display_name: string }[]; leases: { id: string; payee_bank_account_id: string | null }[] };
+type Settings = { country: string; accounts: PayeeAccount[]; owners: { id: string; display_name: string }[]; leases: { id: string; payee_bank_account_id: string | null; label?: string }[] };
 type PayeeContext = Pick<Session, "sessionId" | "userId"> & { orgId: string | null; environment: "live" | "sandbox" | null };
 
 /** Preserve a verified identity even when no organization can be resolved. */
@@ -50,7 +50,19 @@ async function gateway<T>(session: PayeeContext | null, op: "settings" | "tenant
 
 export async function payeeSettings(session: Session): Promise<Settings | null> {
   const result = await gateway<Settings>(session, "settings");
-  return result.ok ? result.data : null;
+  const data = result.data;
+  if (!result.ok || !data) return null;
+  // Full details were authorized and audited by the gateway. Resolve only
+  // same-org display labels here so the settings form does not expose UUIDs.
+  const labels = await withClient(client => client.query<{ id: string; label: string }>(
+    `SELECT l.id::text, concat_ws(' · ', p.name, u.label, l.start_date::text) AS label
+       FROM leases l JOIN properties p ON p.id=l.property_id AND p.org_id=l.org_id
+       LEFT JOIN units u ON u.id=l.unit_id AND u.org_id=l.org_id
+      WHERE l.org_id=$1 AND l.id=ANY($2::uuid[])`,
+    [session.orgId, data.leases.map(lease => lease.id)],
+  ));
+  const byId = new Map(labels.rows.map(lease => [lease.id, lease.label]));
+  return { ...data, leases: data.leases.map(lease => ({...lease, label: byId.get(lease.id)})) };
 }
 
 export async function tenantPayee(session: Session, leaseId: string, unavailableOnDenied = false): Promise<TenantPayeeView> {

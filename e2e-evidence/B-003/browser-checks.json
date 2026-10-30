@@ -1,0 +1,20 @@
+{
+  "time_pt": "2026-10-29T20:35:27.883304-07:00",
+  "ui_cases_passed": 2,
+  "widths": [
+    390,
+    1280
+  ],
+  "observed": "real admin save, selected own-lease tenant full account, default-OFF no full account, private API200 and one new audit row, invalid lease403 without full number",
+  "http_unauth_no_org_passed": 1,
+  "body_spoof_ignored": true,
+  "unexpected_ui_5xx": 0,
+  "console_errors": 0,
+  "page_errors": 0,
+  "final_audited_adapter_unit_checks_passed": 11,
+  "typecheck": "PASS",
+  "targeted_lint": "PASS",
+  "native_review": "scoped static PASS after fixed adapter and narrow entrypoint classification",
+  "final_http_after_adapter": "PENDING",
+  "whole_B003_done": false
+}

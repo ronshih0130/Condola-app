@@ -1,0 +1,37 @@
+{
+  "scope": "local synthetic",
+  "storage": "private local work/B003; not uploaded",
+  "retention": "repository retention decision pending",
+  "files": [
+    {
+      "file": "off-1280.png",
+      "bytes": 71867,
+      "sha256": "309ebc6023a51bf3d8e7bfc66998802e16153e1edba4576ac1f2176372647b77"
+    },
+    {
+      "file": "off-390.png",
+      "bytes": 53011,
+      "sha256": "851b81ea0d77394f96ada4a11b9fce9036e8cbc798035a5840832f1e6405ab9c"
+    },
+    {
+      "file": "on-1280.png",
+      "bytes": 81621,
+      "sha256": "d28ee72fad03207486d859a6702247ee8a5f51a35c700244baaab0192fdeb1ef"
+    },
+    {
+      "file": "on-390.png",
+      "bytes": 60658,
+      "sha256": "16ca94ea36706fe5c6fb07b84ad23c420cd74d1e542a446228fc865063138f1a"
+    },
+    {
+      "file": "settings-1280.png",
+      "bytes": 288166,
+      "sha256": "a40b385bf1e5d0cefe3b06d4446a544ff2601dd855adfbb4332b38bd8c00c0fd"
+    },
+    {
+      "file": "settings-390.png",
+      "bytes": 236239,
+      "sha256": "4adb5cf184c4232ce7ce9afa712366a428c0ccaa02174a352b14574563dd6d73"
+    }
+  ]
+}

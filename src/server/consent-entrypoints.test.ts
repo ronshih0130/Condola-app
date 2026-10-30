@@ -72,13 +72,13 @@ function nodes(node: ts.Node): ts.Node[] {
   visit(node);
   return result;
 }
-function unalias(symbol: ts.Symbol): ts.Symbol {
-  return symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+function unalias(symbol: ts.Symbol, typeChecker = checker): ts.Symbol {
+  return symbol.flags & ts.SymbolFlags.Alias ? typeChecker.getAliasedSymbol(symbol) : symbol;
 }
-function isGuard(call: ts.CallExpression) {
-  const symbol = checker.getSymbolAtLocation(call.expression);
+function isGuard(call: ts.CallExpression, typeChecker = checker) {
+  const symbol = typeChecker.getSymbolAtLocation(call.expression);
   if (!symbol) return false;
-  const target = unalias(symbol);
+  const target = unalias(symbol, typeChecker);
   return target.name === "requireCurrentConsent"
     && target.declarations?.some((d) => d.getSourceFile().fileName.endsWith("/server/consent-gate.ts"));
 }
@@ -91,9 +91,46 @@ function bodyOf(symbol: ts.Symbol) {
   }
   assert.fail("Unclassified runtime export: " + symbol.name);
 }
-function guarded(body: ts.Node, route: boolean, label: string) {
+function assertPayeeAdapter(body: ts.Node, route: boolean, label: string, typeChecker = checker) {
+  assert.ok(ts.isBlock(body), label);
+  const first = body.statements[0];
+  assert.ok(first && ts.isVariableStatement(first) && (first.declarationList.flags & ts.NodeFlags.Const) !== 0 && first.declarationList.declarations.length === 1, label + ": adapter must be the first const statement");
+  const declaration = first.declarationList.declarations[0];
+  assert.ok(ts.isIdentifier(declaration.name) && declaration.initializer && ts.isAwaitExpression(declaration.initializer), label + ": adapter must be awaited");
+  const call = declaration.initializer.expression;
+  const name = route ? "authorizePayeeApiEntry" : "authorizePayeeActionEntry";
+  assert.ok(ts.isCallExpression(call) && ts.isIdentifier(call.expression) && call.expression.text === name && call.arguments.length === 0, label + ": invalid adapter call");
+  const symbol = typeChecker.getSymbolAtLocation(call.expression);
+  assert.ok(symbol, label + ": unknown adapter");
+  const target = unalias(symbol, typeChecker);
+  assert.equal(target.name, name, label + ": renamed adapter");
+  assert.ok(target.declarations?.some((d) => d.getSourceFile().fileName.endsWith("/server/payee-consent.ts")), label + ": untrusted adapter");
+  if (route) {
+    const second = body.statements[1];
+    assert.ok(second && ts.isIfStatement(second) && !second.elseStatement, label + ": missing denial return");
+    const condition = second.expression;
+    assert.ok(ts.isPrefixUnaryExpression(condition) && condition.operator === ts.SyntaxKind.ExclamationToken
+      && ts.isPropertyAccessExpression(condition.operand) && ts.isIdentifier(condition.operand.expression)
+      && condition.operand.expression.text === declaration.name.text && condition.operand.name.text === "ok", label + ": invalid denial guard");
+    const branch = ts.isBlock(second.thenStatement) && second.thenStatement.statements.length === 1
+      ? second.thenStatement.statements[0] : second.thenStatement;
+    assert.ok(ts.isReturnStatement(branch) && branch.expression && ts.isPropertyAccessExpression(branch.expression)
+      && ts.isIdentifier(branch.expression.expression) && branch.expression.expression.text === declaration.name.text
+      && branch.expression.name.text === "response", label + ": denial response must return");
+  }
+}
+
+function guarded(body: ts.Node, route: boolean, label: string, typeChecker = checker) {
   const all = nodes(body);
-  const guard = all.find((node): node is ts.CallExpression => ts.isCallExpression(node) && !!isGuard(node));
+  const payee = route ? label === "app/api/payee/[leaseId]/route.ts#POST"
+    : ["server/payee-actions.ts#actionSavePayee", "server/payee-actions.ts#actionSetLeasePayee"].includes(label);
+  if (payee) {
+    assertPayeeAdapter(body, route, label, typeChecker);
+    return;
+  }
+  assert.ok(!all.some((node) => ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+    && ["authorizePayeeApiEntry", "authorizePayeeActionEntry"].includes(node.expression.text)), label + ": payee adapter not permitted here");
+  const guard = all.find((node): node is ts.CallExpression => ts.isCallExpression(node) && !!isGuard(node, typeChecker));
   assert.ok(guard, label + ": missing guard");
   assert.ok(ts.isAwaitExpression(guard.parent), label + ": guard must be awaited");
   // A guard hidden in a branch, callback or catch cannot dominate the handler.
@@ -126,6 +163,117 @@ function guarded(body: ts.Node, route: boolean, label: string) {
     }
   }
 }
+
+function assertAdapterDefinition(fn: ts.FunctionDeclaration | undefined, helper: string, mode: "action" | "api", typeChecker = checker) {
+    const name = fn?.name?.text ?? "adapter";
+    assert.ok(fn?.body && fn.parameters.length === 0, name);
+    assert.equal(fn.body.statements.length, 1, name + ": adapter must only return helper");
+    const statement = fn.body.statements[0];
+    assert.ok(ts.isReturnStatement(statement) && statement.expression && ts.isCallExpression(statement.expression), name);
+    const helperCall = statement.expression;
+    assert.ok(ts.isIdentifier(helperCall.expression) && helperCall.expression.text === helper, name + ": exact helper name required");
+    assert.ok(helperCall && helperCall.arguments.length === 1 && ts.isObjectLiteralExpression(helperCall.arguments[0]), name);
+    const helperSymbol = typeChecker.getSymbolAtLocation(helperCall.expression);
+    assert.ok(helperSymbol && unalias(helperSymbol, typeChecker).name === helper && unalias(helperSymbol, typeChecker).declarations?.some((d) => d.getSourceFile().fileName.endsWith("/server/payee-action-context.ts")), name);
+    const properties: ts.NodeArray<ts.ObjectLiteralElementLike> = helperCall.arguments[0].properties;
+    assert.deepEqual(properties.map((p) => (ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) ? p.name.getText() : "").sort(), ["audit", "readContext", "readSession", "requireConsent"]);
+    for (const [property, symbolName, fileName] of [
+      ["readSession", "readSession", "/server/session.ts"],
+      ["readContext", "readPayeeContext", "/server/payee.ts"],
+      ["audit", "logPayeeIngress", "/server/payee.ts"],
+    ] as const) {
+      const prop = properties.find((p) => (ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) && p.name.getText() === property);
+      assert.ok(prop && (ts.isShorthandPropertyAssignment(prop) || ts.isPropertyAssignment(prop)), name);
+      const value = ts.isShorthandPropertyAssignment(prop) ? prop.name : prop.initializer;
+      const s = ts.isShorthandPropertyAssignment(prop) ? typeChecker.getShorthandAssignmentValueSymbol(prop) : typeChecker.getSymbolAtLocation(value);
+      assert.ok(s && unalias(s, typeChecker).name === symbolName && unalias(s, typeChecker).declarations?.some((d) => d.getSourceFile().fileName.endsWith(fileName)), name + ": " + property);
+    }
+    const consent = properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === "requireConsent");
+    assert.ok(consent && ts.isPropertyAssignment(consent) && ts.isArrowFunction(consent.initializer));
+    const callback = consent.initializer;
+    assert.ok(callback.parameters.length === 1 && ts.isIdentifier(callback.parameters[0].name));
+    const guard = callback.body;
+    assert.ok(ts.isCallExpression(guard) && isGuard(guard, typeChecker) && guard.arguments.length === (mode === "api" ? 2 : 1), name);
+    assert.equal(guard.arguments[0].getText(), callback.parameters[0].name.text);
+    assert.ok(ts.isReturnStatement(helperCall.parent) && helperCall.parent.parent === fn.body, name + ": must return helper result");
+    if (mode === "api") assert.equal(guard.arguments[1].getText(), '"api"');
+}
+
+test("payee entry adapters bind fixed real authorization dependencies", () => {
+  const file = program.getSourceFile(resolve("src/server/payee-consent.ts"));
+  assert.ok(file);
+  for (const [name, helper, mode] of [["authorizePayeeActionEntry", "authorizePayeeAction", "action"], ["authorizePayeeApiEntry", "authorizePayeeApi", "api"]] as const) {
+    const fn = file.statements.find((s): s is ts.FunctionDeclaration => ts.isFunctionDeclaration(s) && s.name?.text === name);
+    assertAdapterDefinition(fn, helper, mode);
+  }
+});
+
+test("payee adapter classification rejects impostors and non-dominating guards", () => {
+  const virtual = resolve("src/server/__payee_consent_fixture.ts");
+  const code = `
+    import { authorizePayeeActionEntry, authorizePayeeApiEntry, authorizePayeeActionEntry as renamed } from './payee-consent';
+    import { requireCurrentConsent } from './consent-gate';
+    async function good() { const auth = await authorizePayeeApiEntry(); if (!auth.ok) return auth.response; return auth.session; }
+    async function renamedGuard() { const session = await renamed(); return session; }
+    async function impostor() { const authorizePayeeActionEntry = async () => ({}); const session = await authorizePayeeActionEntry(); return session; }
+    async function noAwait() { const session = authorizePayeeActionEntry(); return session; }
+    async function noReturn() { const auth = await authorizePayeeApiEntry(); if (!auth.ok) console.log(auth.response); return auth; }
+    async function businessFirst() { await Promise.resolve(); const auth = await authorizePayeeApiEntry(); if (!auth.ok) return auth.response; return auth.session; }
+    async function bareGuard() { await requireCurrentConsent(null); }
+  `;
+  const options: ts.CompilerOptions = { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler, baseUrl: resolve("."), paths: { "@/*": ["src/*"] } };
+  const host = ts.createCompilerHost(options);
+  const original = host.getSourceFile.bind(host);
+  host.getSourceFile = (file, language, onError, fresh) => resolve(file) === virtual
+    ? ts.createSourceFile(virtual, code, language, true) : original(file, language, onError, fresh);
+  const fixtureProgram = ts.createProgram([virtual], options, host);
+  const file = fixtureProgram.getSourceFile(virtual);
+  assert.ok(file);
+  const fixtureChecker = fixtureProgram.getTypeChecker();
+  function body(name: string) {
+    const fn = file!.statements.find((s): s is ts.FunctionDeclaration => ts.isFunctionDeclaration(s) && s.name?.text === name);
+    assert.ok(fn?.body);
+    return fn.body;
+  }
+  assert.doesNotThrow(() => assertPayeeAdapter(body("good"), true, "good", fixtureChecker));
+  for (const name of ["renamedGuard", "impostor", "noAwait"]) {
+    assert.throws(() => assertPayeeAdapter(body(name), false, name, fixtureChecker));
+  }
+  for (const name of ["noReturn", "businessFirst"]) {
+    assert.throws(() => assertPayeeAdapter(body(name), true, name, fixtureChecker));
+  }
+  assert.doesNotThrow(() => guarded(body("bareGuard"), false, "server/other-actions.ts#example", fixtureChecker));
+  assert.throws(() => guarded(body("bareGuard"), false, "server/payee-actions.ts#actionSavePayee", fixtureChecker));
+});
+
+test("adapter definitions reject early bypasses and wrong helpers", () => {
+  const source = program.getSourceFile(resolve("src/server/payee-consent.ts"));
+  assert.ok(source);
+  const original = source.getFullText();
+  const variants: Record<string, string> = {
+    good: original,
+    earlyReturn: original.replace("return authorizePayeeAction(", "return {} as never; return authorizePayeeAction("),
+    earlyBusiness: original.replace("return authorizePayeeAction(", "console.log('business'); return authorizePayeeAction("),
+    renamed: original.replace("authorizePayeeAction, authorizePayeeApi", "authorizePayeeAction as wrongHelper, authorizePayeeApi").replace("return authorizePayeeAction(", "return wrongHelper("),
+    wrongSymbol: original.replace("authorizePayeeAction, authorizePayeeApi", "authorizePayeeApi as authorizePayeeAction, authorizePayeeApi"),
+  };
+  const options: ts.CompilerOptions = { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler, baseUrl: resolve("."), paths: { "@/*": ["src/*"] } };
+  const host = ts.createCompilerHost(options);
+  const originals = host.getSourceFile.bind(host);
+  const virtual = Object.fromEntries(Object.entries(variants).map(([name, code]) => [resolve(`src/server/__payee_${name}.ts`), code]));
+  host.getSourceFile = (file, language, onError, fresh) => virtual[resolve(file)] !== undefined
+    ? ts.createSourceFile(file, virtual[resolve(file)], language, true) : originals(file, language, onError, fresh);
+  const fixtures = ts.createProgram(Object.keys(virtual), options, host);
+  for (const name of Object.keys(variants)) {
+    const file = fixtures.getSourceFile(resolve(`src/server/__payee_${name}.ts`));
+    assert.ok(file);
+    const fn = file.statements.find((s): s is ts.FunctionDeclaration => ts.isFunctionDeclaration(s) && s.name?.text === "authorizePayeeActionEntry");
+    const check = () => assertAdapterDefinition(fn, "authorizePayeeAction", "action", fixtures.getTypeChecker());
+    if (name === "good") assert.doesNotThrow(check); else assert.throws(check, name);
+  }
+});
 test("all runtime server exports, routes and protected pages are classified", () => {
   for (const path of paths) {
     const file = program.getSourceFile(path)!;
