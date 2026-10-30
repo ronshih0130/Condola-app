@@ -32,8 +32,11 @@ async function reachLeaseSubmit(page: Page, opts: { propertyName: string; label:
   await page.getByTestId("wizard-next").click();
   await page.getByTestId("due-day").fill("5");
   await page.getByTestId("wizard-next").click();
-  await page.getByTestId("split-method").selectOption("even");
+  await expect(page.getByTestId("utility-monthly-note")).toBeVisible();
+  await expect(page.getByTestId("utility-monthly-note")).toContainText("建立租約時不用填");
+  await expect(page.getByTestId("utility-monthly-note").getByRole("link", { name: "電費登記" })).toHaveAttribute("href", "/m/rent/utilities");
   await page.getByTestId("wizard-next").click();
+  await expect(page.getByTestId("lease-template")).toBeVisible();
   await page.getByTestId("wizard-next").click();
   const submit = page.getByTestId("submit-lease");
   await expect(submit).toBeEnabled();

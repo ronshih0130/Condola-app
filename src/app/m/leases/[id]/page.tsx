@@ -57,7 +57,7 @@ export default async function LeasePage({
   const tenantSig = signatures.find((row) => row.role === "tenant");
   const managerSig = signatures.find((row) => row.role === "manager");
   const signingOpen = tenantSig?.status !== "signed" || managerSig?.status !== "signed";
-  const idBlocked = Boolean(reviewer && idCheck && !idCheck.ready && signingOpen);
+  const idBlocked = Boolean(lease.esign !== "imported" && reviewer && idCheck && !idCheck.ready && signingOpen);
   const tabs = [
     ["summary", "s_6b6fe14"],
     ["ledger", "s_6ef99a0"],
