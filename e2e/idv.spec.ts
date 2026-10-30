@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { createHash } from "node:crypto";
+import zhTW from "../src/i18n/zh-TW.json";
 import { SAMPLE_JPEG_BASE64 } from "../src/lib/idv";
 import { checkboxLabel, displayedShortNotice, fullNoticeText, ID_NOTICE_PATH } from "../src/lib/id-notice";
 import { ID_COMPRESS_LONG_EDGE } from "../src/lib/id-compress";
@@ -102,9 +104,9 @@ test("tenant ID check follows the consent, mask, review, and retention rules", a
 
   await signIn(page, ACCOUNTS.admin);
   await zh(page, "/m/settings");
-  await expect(page.locator("#idvRetainDays")).toHaveText(
-    "身分證件照片：已生效之租約，於租約結束（期滿或提前終止）後滿90日自動刪除（系統每日執行，最遲次日完成）；租約為草稿、未簽署、取消或作廢者，自上傳日起滿90日自動刪除（系統每日執行，最遲次日完成），不另行通知。刪除後，備份中之副本於14日內一併清除。",
-  );
+  expect(createHash("sha256").update(zhTW.i_id_retain).digest("hex"))
+    .toBe("cb424d14a7104e48043f5c42cee190c9ae2345be23a25f3a350fe77eacbb3688");
+  await expect(page.locator("#idvRetainDays")).toHaveText(zhTW.i_id_retain);
   await expect(page.locator("#idvRetainDays input")).toHaveCount(0);
 
   await signIn(page, ACCOUNTS.manager);

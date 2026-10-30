@@ -83,10 +83,10 @@ test("live pages do not mention LINE except the support contact", async ({ page 
   await expect(page.locator("body")).not.toContainText("@644odqoe");
 
   await page.goto("/t/pay");
-  await expect(page.getByRole("heading", { name: "繳租" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "我的帳單", exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText("@644odqoe");
 
   await page.goto("/t/repair");
-  await expect(page.getByRole("heading", { name: "報修" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "報修", exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText("@644odqoe");
 });
