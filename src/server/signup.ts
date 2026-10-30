@@ -189,15 +189,20 @@ async function supabaseSignUp(email: string, password: string, requestOrigin: st
   return parsed;
 }
 
-async function supabaseResend(email: string, requestOrigin: string) {
-  const { url, anon } = supabaseAuth();
-  if (!url || !anon) return;
+export async function supabaseResend(email: string, requestOrigin: string, send: typeof fetch = fetch, auth = supabaseAuth()): Promise<boolean> {
+  const { url, anon } = auth;
+  if (!url || !anon) return false;
   const redirectTo = signupConfirmUrl(requestOrigin);
-  await fetch(gotrueEndpoint(url, "/auth/v1/resend", redirectTo), {
-    method: "POST",
-    headers: { apikey: anon, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "signup", email }),
-  });
+  try {
+    const response = await send(gotrueEndpoint(url, "/auth/v1/resend", redirectTo), {
+      method: "POST",
+      headers: { apikey: anon, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "signup", email }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function markConfirmed(userId: string, email: string) {
@@ -369,9 +374,22 @@ export async function resendSignup(emailRaw: string, origin: string, ip?: string
     const delivered = await deliverSignupMail(email, issued.hashedToken, origin);
     return { devToken: signupLinksExposed() ? token : null, ...(delivered ? {} : { mail: "failed" as const }) };
   }
+  // A rejected or ambiguous remote request must not invalidate the local token.
+  // The provider controls its own token and may already have rotated it on a timeout.
+  if (auth.url && !(await supabaseResend(email, origin))) {
+    return { devToken: null as string | null, mail: "failed" as const };
+  }
   const token = await inTx((client) => rotateVerification(client, userId, email));
-  if (auth.url) await supabaseResend(email, origin);
   return { devToken: signupLinksExposed() ? token : null };
+}
+
+/** An unauthenticated resend response must not reveal account or provider state. */
+export async function signupResendAcknowledgement(
+  email: string, origin: string, ip: string | null | undefined,
+  perform: typeof resendSignup = resendSignup,
+) {
+  try { await perform(email, origin, ip); } catch { /* Uniform response; no provider details. */ }
+  return `/signup/verify?${new URLSearchParams({ email, ack: "1" }).toString()}`;
 }
 
 export async function changeSignupEmail(input: {
@@ -437,7 +455,9 @@ export async function changeSignupEmail(input: {
       ...(delivered ? {} : { mail: "failed" as const }),
     };
   }
-  if (url) await supabaseResend(next, input.origin);
+  if (url && !(await supabaseResend(next, input.origin))) {
+    return { ok: true as const, email: next, devToken: null, mail: "failed" as const };
+  }
   return { ok: true as const, email: next, devToken: signupLinksExposed() ? token : null };
 }
 

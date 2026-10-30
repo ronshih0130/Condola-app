@@ -28,7 +28,7 @@ import {
   confirmSupabaseTokenHash,
   createFirm,
   readSignupIdentity,
-  resendSignup,
+  signupResendAcknowledgement,
   startSignup,
 } from "./signup";
 
@@ -102,8 +102,7 @@ function verifyTarget(email: string, result: { devToken: string | null; mail?: "
 export async function actionResendSignup(formData: FormData) {
   const request = await meta();
   const email = text(formData.get("email"));
-  const sent = await resendSignup(email, await origin(), request.ip);
-  redirect(verifyTarget(email, sent, true));
+  redirect(await signupResendAcknowledgement(email, await origin(), request.ip));
 }
 
 export async function actionChangeSignupEmail(formData: FormData) {

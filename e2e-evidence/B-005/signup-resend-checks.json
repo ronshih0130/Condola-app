@@ -1,0 +1,19 @@
+{
+  "time_pt": "2026-10-29T20:13:09.910561-07:00",
+  "mocked_signup_checks_passed": 22,
+  "failed": 0,
+  "copy_checks_passed": 6,
+  "typecheck": "PASS",
+  "targeted_lint": "PASS",
+  "native_independent_review": "scoped static PASS",
+  "signup_blob": "13fc37221aae807238a642e5033544b789c81fe8",
+  "actions_blob": "33a2eb4b67e8d18ca3432dadb3c0320d4e7ef6cf",
+  "test_blob": "e572b11896a199aee0b3cfe8a8116e8d932f3c84",
+  "page_blob": "162a73b3f043db7715a7389473b5fc7c03bc9201",
+  "copy_blob": "a56d59aff4ed750522e364029b337527d5487088",
+  "actual_messages_sent": false,
+  "actual_provider_calls": false,
+  "timing_indistinguishability": "NOT_PROVEN",
+  "remote_token_state_after_timeout": "UNKNOWN",
+  "whole_B005_done": false
+}

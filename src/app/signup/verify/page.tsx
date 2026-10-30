@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import React from "react";
 import { makeT } from "@/i18n";
+import { signupResendAcknowledgementText } from "@/i18n/signup-resend";
 import { AuthBrand } from "@/components/brand";
 import { brandV2Enabled } from "@/server/brand-v2";
 import { PendingSubmit } from "@/components/pending-submit";
@@ -16,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function VerifyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string; dev?: string; resent?: string; error?: string; mail?: string }>;
+  searchParams: Promise<{ email?: string; dev?: string; resent?: string; error?: string; mail?: string; ack?: string }>;
 }) {
   const params = await searchParams;
   const prefs = await requestPrefs();
@@ -34,14 +36,14 @@ export default async function VerifyPage({
         </ol>
         <p className="small muted" data-testid="signup-step-label">{t("i_signup_step", { n: 2 })}</p>
         <h1>{t("i_signup_verify_title")}</h1>
-        <p data-testid="verify-body">{t("i_signup_verify_body", { email })}</p>
-        {params.mail === "failed" ? (
+        <p data-testid="verify-body">{params.ack === "1" ? signupResendAcknowledgementText(prefs.locale) : t("i_signup_verify_body", { email })}</p>
+        {params.ack !== "1" && params.mail === "failed" ? (
           <div className="alert bad" data-testid="signup-mail-failed">{t("i_signup_mail_failed")}</div>
         ) : null}
-        {params.mail === "wait" ? (
+        {params.ack !== "1" && params.mail === "wait" ? (
           <div className="alert warn" data-testid="signup-mail-wait">{t("i_signup_mail_wait")}</div>
         ) : null}
-        {params.resent === "1" && !params.mail ? <div className="alert ok">{t("i_signup_resent")}</div> : null}
+        {params.ack !== "1" && params.resent === "1" && !params.mail ? <div className="alert ok">{t("i_signup_resent")}</div> : null}
         {params.error === "duplicate" ? (
           <div className="alert bad" data-testid="signup-duplicate">
             <p>{t("i_signup_dup")}</p>
