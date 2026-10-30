@@ -15,11 +15,11 @@ export default async function TenantReminderPage({params,searchParams}:{params:P
   const enabled=await tenantDuePreference(session,id);
   if (enabled === null) notFound();
   const copy=reminderCopy(session.locale);
-  return <div><h1>{copy.tenantTitle}</h1><p>{copy.tenantDescription}</p><p>{copy.scope}</p>
-    {query.saved ? <p role="status">{copy.saved}</p> : null}{query.error ? <p role="alert">{copy.unavailable}</p> : null}
+  return <div className="card pad"><h1>{copy.tenantTitle}</h1><p>{copy.tenantDescription}</p><p className="muted small">{copy.scope}</p>
+    {query.saved ? <p className="alert ok" role="status">{copy.saved}</p> : null}{query.error ? <p className="alert" role="alert">{copy.unavailable}</p> : null}
     <p data-testid="tenant-due-preference">{enabled ? copy.tenantOn : copy.tenantOff}</p>
     <form action={actionTenantDuePreference}><input type="hidden" name="leaseId" value={id}/><input type="hidden" name="enabled" value={enabled ? "false" : "true"}/>
-      <button type="submit" data-testid="tenant-due-toggle">{enabled ? copy.turnOff : copy.turnOn}</button></form>
+      <button className="btn pri" type="submit" data-testid="tenant-due-toggle">{enabled ? copy.turnOff : copy.turnOn}</button></form>
     <p><Link href="/t">{copy.tenantBack}</Link></p>
   </div>;
 }
