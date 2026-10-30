@@ -15,7 +15,11 @@ test("synthetic notifications are independently read in four actual portals",asy
  const errors:string[]=[];
  let expectedOff=false;
  page.on("pageerror",()=>errors.push("page error"));
- page.on("console",message=>{if(message.type()==="error" && !expectedOff) errors.push("console error");});
+ page.on("console",message=>{
+  if(message.type()!=="error") return;
+  let path=""; try {path=new URL(message.location().url).pathname;} catch { /* no source URL */ }
+  if(!(expectedOff && path==="/m/notifications" && /\b404\b/.test(message.text()))) errors.push("console error");
+ });
  page.on("response",response=>{if(response.status()>=500) errors.push("server error");});
  await page.route("**/*",async route=>{
   const target=new URL(route.request().url());
