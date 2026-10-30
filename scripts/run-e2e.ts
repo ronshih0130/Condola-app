@@ -20,8 +20,8 @@ const childEnv = {
   WRANGLER_SEND_METRICS: "false",
   NEXT_TELEMETRY_DISABLED: "1",
 };
-function run(args: string[]): number {
-  const result = spawnSync(process.execPath, [cli, "test", ...args], { stdio: "inherit", env: childEnv });
+function run(args: string[], scopedEnv: Record<string, string> = {}): number {
+  const result = spawnSync(process.execPath, [cli, "test", ...args], { stdio: "inherit", env: { ...childEnv, ...scopedEnv } });
   if (result.error) throw new Error("Browser checks could not start");
   if (result.signal === "SIGINT") return 130;
   if (result.signal === "SIGTERM") return 143;
@@ -45,7 +45,13 @@ if (!files.length) throw new Error("No browser specifications found");
 let failed = 0;
 for (const file of files) {
   const output = join("test-results", file.replace(/[^a-zA-Z0-9_-]/g, "_"));
-  const status = run([file, "--output", output]);
+  // Only this isolated synthetic signing batch opts into the global control;
+  // the test separately opts in its own organization. Do not leak it to the
+  // next compatibility batch or use an ambient asset server.
+  const scopedEnv: Record<string, string> = file === "e2e/b001-activation.spec.ts"
+    ? { ESIGN_ENABLED: "true", ESIGN_ASSET_ORIGIN: "http://127.0.0.1:43123" }
+    : { ESIGN_ENABLED: "false" };
+  const status = run([file, "--output", output], scopedEnv);
   if (status === 130 || status === 143) process.exit(status);
   if (status !== 0) failed++;
 }

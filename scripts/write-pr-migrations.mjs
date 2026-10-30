@@ -170,6 +170,10 @@ const added = {
     addOnly: false,
     reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
   },
+  "supabase/migrations/20261031100213_b001_zero_first_invoice.sql": {
+    addOnly: false,
+    reason: "Replaces only the deferred completion financial postcondition to support Ron-approved explicit zero-total first invoice with no ledger transaction, entries or payment allocations and actual-actor no_amount_due audit; preserves positive branch and published100211.",
+  },
   "supabase/migrations/20261031100211_b001_esign_activation.sql": {
     addOnly: false,
     reason: "Adds private transaction-only completion requirements, early parent-lock guard triggers and deferred financial/actor postcondition; restricts helper/table privileges and adds a partial unique first-invoice index with duplicate preflight. No history rewritten or legal copy changed.",

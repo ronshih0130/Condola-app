@@ -1,0 +1,44 @@
+{
+  "time_pt": "2026-10-30T01:01:28.613172-07:00",
+  "integration_before_registry": "7d1de4b2a1d26cb9a17e0ed419f5efc0b0550c94",
+  "scoped_source_recovery": "5643fc6d775575ecf906122be284a4a2d1460338",
+  "browser_test_recovery": "ee45d0e",
+  "local_validation": {
+    "B001_native_source": "PASS gpt-6-astra high on exactfrozenB001blobs, notClassBClaude",
+    "B001_actual_browser": "4/4PASS fullChromiumat390/1280 positive+zero/oppositesigners; syntheticFlowidentitycapturedinmemory then realPDFreview/canvas/actions",
+    "B001_old_attempts": "3FAIL+1interrupted oldheadless; diagnosticnewheadlessfixture/guardfailurespreserved; no falsecompletebeforefinal4/4",
+    "B008_shared_firstperiod": "oldfixture2PASS/3FAIL afterstrictorggate; explicitownedcloneoptins/restorationtestfixture2f6d reviewed; actualmain86rerun5/5PASS",
+    "schema": "fresh86/71+15 all11catalogcategoriesequal,synthcounts2/4/5/1unchanged",
+    "function_privileges": "PASS anon0/authenticatedallowlist7 isolatedPG16cluster",
+    "registrations": "independentnativePASS,currenttests/classifier/ESIGNstrictorgOFFregistry/runnerper-specenv; source-list86exact",
+    "complete_candidate_gate_build_browser": "PENDING newimmutableSHA;0e49priorPASSnottransferred",
+    "staging": "pendingauthorizednonMacschemaapplication/DBownerproof/exactappacceptance;nostage/prodwrite",
+    "queue": "B001-B010/B028inprogress; full39goalACTIVE"
+  },
+  "private_logs": {
+    "core86-firstperiod-crosscheck.log": {
+      "sha256": "74bf9fd7ccf3ef9ff385e83e87f63dd0cfd71c30a4c4f2ee06ebb74838ab9e0d",
+      "bytes": 5455
+    },
+    "core86-firstperiod-final.log": {
+      "sha256": "2ac0ab7fbe39fccd67173aa67ad655cf722f0a38e86e61e8f550c91ec391546c",
+      "bytes": 1144
+    },
+    "core86-registration-tests.log": {
+      "sha256": "5cc0a1f3264783d1b7544a8c25be65dc96087feac09a322709d6a7e3d0d55921",
+      "bytes": 3888
+    },
+    "core86-function-privileges.log": {
+      "sha256": "66023e686fe9dad0b66fbe4468ddac835e33d6df42e32d26a0d80cb07e660667",
+      "bytes": 3135
+    },
+    "b001-activation-chromium-four.log": {
+      "sha256": "e72f500df6eed681b827be2335ee041f694f35b239f6f07955b0919d710d78ed",
+      "bytes": 1500
+    },
+    "core86-runner-typecheck-first-failure.log": {
+      "sha256": "2d0ee3fc59d5efea99c6f7b4c4fcd5996553b1d384c10ddef07ae8734a3a23ed",
+      "bytes": 504
+    }
+  }
+}

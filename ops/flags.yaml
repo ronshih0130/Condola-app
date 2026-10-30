@@ -1,5 +1,13 @@
 # Scope: explicit new Mode B controls; older source registry reconciliation remains incomplete.
 flags:
+  ESIGN_ENABLED:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "existing ESIGN_ENABLED unset or not exactly true"
+    org_override: "organizations.feature_flags.esign must be strict boolean true; actual selected organization/environment revalidated and locked before signing writes"
+    activation: "local synthetic org only; no mixed-old-worker rollout guarantee; staging/Claude/G0-G5 gates and Ron acceptance remain pending"
   IMPORT_ERROR_DETAILS_ENABLED:
     owner: Ron
     expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
