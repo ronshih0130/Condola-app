@@ -1,5 +1,11 @@
 # Mode B bootstrap acceptance
 
+## Latest continuous-queue checkpoint — 2026-10-30T16:11:51.580068-07:00
+
+B005 local proof candidate `591564f232adc4e8e192c5dc3f8e52463bbd83a8` verified:599unit/358RLS PASS0FAIL1priorapprovedhistoricalSKIP, Next18.160s/Cloudflare26.926s/originalpreflight3.265s/Worker1; fresh privatebrowser4PASS36.5s with6synthetic390/1280screens. Actual unboundexpired/accepted-and-bound/resume/noneaudit and nonempty live↔ownedSBreport HTML+CSV isolation pass. Existing app/schema reused. Globalpresent-row metadata restored exactly/OFF,0orgoptins; finalretainedstate1acceptedbinding/1ownedSB/1noneaudit. Reportfixturesremovedbylaterreset, no retainedreportclaim. [Checkpoint](e2e-evidence/B-005/checkpoint-591564f.md), [manifest](e2e-evidence/B-005/http-boundary-591564f.json).
+
+B005 remains in_progress because separate owner/tenant mock resend-result contract/UI is still eligible. Highest review supports defaultOFF/explicit injected memorymock/no real sender; durable attempt/claim/UNKNOWN schema needs a reviewed PEhandoff, no Macapply. Do not invent B028 prerequisite or alter copy-only team actions. Stage/Claude/oldunmarkeddemo remain pending. B001heading41c5b7f published withnotescf6a530, previous B002–B004 and B013/B021 dependent remainders retained. No wholeBdone/prod/mainmerge/operationalmigration/activation/externalmessage/legaledit. STOP POINT: WORKING; next: publish/mirror this local checkpoint, then B005 resend contract/UI/mock and durablehandoff preparation; owner: Ron/Codex.
+
 ## Latest continuous-queue checkpoint — 2026-10-30T15:56:54.814861-07:00
 
 B001 signed-heading follow-up is locally verified at `41c5b7ff3c3a730308d4e31f3b4508df7a650055`. One application line uses the same signed-status/key expression as the timeline; existing affected utility case is scoped and privacy hardened with financial assertions retained. Full clean pinned gate599unit/358RLS PASS0FAIL1prior-approved historicalSKIP; Next/Cloudflare/originalpreflight/Worker1, fresh private paper-browser4 PASS49.7s and affected utility1 PASS27.8s. Signed-heading screenshots at390/1280 are correct. [Checkpoint](e2e-evidence/B-001/heading-checkpoint-41c5b7f.md), [manifest](e2e-evidence/B-001/heading-boundary-41c5b7f.json). Initial zero-test selection and earlier64c checks preserved; no fake failure/approval.

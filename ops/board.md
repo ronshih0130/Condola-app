@@ -231,3 +231,7 @@ Candidate `41c5b7ff3c3a730308d4e31f3b4508df7a650055` verified with599unit/358RLS
 ## B005 private proof reservation — 2026-10-30T15:59:18.732340-07:00
 
 Published/mirrored baselinecf6a530. Root reserves existing `e2e/onboarding-progress.spec.ts`, new `e2e/b005-onboarding-private-playwright.config.ts`, optional bounded new `e2e/b005-report-isolation.spec.ts`, narrow `scripts/run-e2e.ts` dispatch and serialized evidence/board/queue/HANDOFF. No app/schema/seed/package/legal edit. Highest-requested source-first plan pending; read-only reconnaissance confirms existingbindings must be preserved, not reclassified from ambiguous historical invitations. Reuse actualaccepted/bound/resume/none flow and add expired-unbound plus actuallive/ownedSBreport proof; private source plan in outside work/B005-private-proof-plan.md. Root assigns one sourcewriter only after scoped plan review.
+
+## B005 frozen local proof verified — 2026-10-30T16:11:51.580068-07:00
+
+Candidate `591564f232adc4e8e192c5dc3f8e52463bbd83a8`:599unit/358RLS+1priorapprovedhistoricalSKIP; builds/originalpreflight/Worker1/privatebrowser4PASS36.5s. Sixscreens, controlsrestored/OFF, no app/schema/legalchange. [Checkpoint](../e2e-evidence/B-005/checkpoint-591564f.md). Root final evidence review/bookkeeping/push/mirror serialized. Next sameB005 separate resendcontract/UI/mock; durable DBhandoff only. No new sourcewriter until this checkpoint is published.

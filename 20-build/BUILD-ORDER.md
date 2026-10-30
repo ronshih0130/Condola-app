@@ -104,3 +104,7 @@ Candidate`ee734857cf04f75d84c5a01eb89d433b9e89bfae` locally verified: gate599uni
 ## B-001 heading follow-up locally verified — 2026-10-30T15:56:54.814861-07:00
 
 Candidate `41c5b7ff3c3a730308d4e31f3b4508df7a650055` fixes the signed-state heading using the existing tenant status/key; no signing/financial/legal/schema change. Final full gate599unit/358RLS PASS0FAIL1prior-approved historicalSKIP, builds/originalpreflight/Worker1, private paper-browser4 and affected utility1 PASS. [Proof](../e2e-evidence/B-001/heading-checkpoint-41c5b7f.md). B004's local parent finding is resolved, while whole B001 remains `pending` for its separate external acceptance. No whole item newly done/activated. Publish/mirror, then resume B005 (`in_progress`); no waiting on the dependent staging/Claude scopes.
+
+## B005 onboarding/report local checkpoint — 2026-10-30T16:11:51.580068-07:00
+
+Candidate `591564f232adc4e8e192c5dc3f8e52463bbd83a8` passes final gate599unit/358RLS+1priorhistoricalSKIP, builds/originalpreflight/Worker1 and4privatebrowsercases36.5s,6screens390/1280. Existing actualaccepted/bound/resume/noneaudited flow and nonempty live/ownedSBreport HTML+CSV isolation verified; full controls restored/OFF. [Evidence](../e2e-evidence/B-005/checkpoint-591564f.md). B005 stays `in_progress`: independent default-OFF owner/tenant resend-result contract/UI/mock is still eligible and is next after publication/mirror. Durable attempts/gateway are PE-handoff-only; stage/Claude/unmarkedlegacydemo remain pending. No wholeB newlydone/activation.

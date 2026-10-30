@@ -1,3 +1,5 @@
+> Latest local checkpoint 2026-10-30T16:11:51.580068-07:00: `591564f232adc4e8e192c5dc3f8e52463bbd83a8`. Gate599unit/358RLS+1priorhistoricalSKIP, builds/originalpreflight/Worker1 and fresh private browser4 PASS. [Checks/scope](checkpoint-591564f.md), [manifest](http-boundary-591564f.json). Existing onboarding/report app reused; wholeB005 remains incomplete. Next after publish/mirror: separate default-OFF owner/tenant resend contract/UI/mock; durable schema handoff only, no apply. Earlier entries retain dated scopes.
+
 # B-005 live onboarding checkpoint
 
 The formal live checklist is implemented behind default-OFF global and organization controls. It derives property, lease, first bill, and necessary-invitation progress from current qualified live records. Administrators explicitly choose necessary groups; unselected groups are recorded as not needed with actor and time, and audited in the same transaction. Sandbox tryout progress remains separate. No real invitation or other external message was sent.

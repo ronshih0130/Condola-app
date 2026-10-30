@@ -1,0 +1,297 @@
+{
+  "recordedAt": "2026-10-30T16:12:05.832262-07:00",
+  "candidate": "591564f232adc4e8e192c5dc3f8e52463bbd83a8",
+  "sourceBaseline": "cf6a53006b4aef3e80859608f04b876df3ce1876",
+  "branch": "mode-b-repair-override-prep",
+  "scope": "B005 local existing onboarding acceptance/resumption and positive live/sandbox report isolation; test-only delta, whole B005 pending",
+  "environment": {
+    "Node": "20.20.2",
+    "npm": "10.8.2",
+    "PostgreSQL": "16 guarded loopback disposable prepared-schema clones",
+    "preflight": "unchanged original script; command-local GNU awk5.4.1",
+    "preflightScriptSha256": "7c4a336fc33172efc8e0b736ac4930923801b776b3bd5d79240613b3b2f195cb"
+  },
+  "commands": {
+    "gate": "python3 ../run-b005-prepared-check.py condola_b005_gate_591564f b005-full-gate-591564f.log bash scripts/gate.sh 591564f",
+    "buildWorker": "python3 ../run-b005-prepared-check.py condola_b005_build_591564f b005-build-worker-driver-591564f.log python3 ../b005-build-worker-final-commands.py",
+    "browser": "python3 ../run-b005-prepared-check.py condola_b005_http_591564f b005-http-591564f.log node node_modules/@playwright/test/cli.js test --config e2e/b005-onboarding-private-playwright.config.ts --output ../b005-http-591564f-artifacts"
+  },
+  "sourceBlobs": {
+    "e2e/onboarding-progress.spec.ts": "2ab1c4bdd178fb10601287225076f207204e6043",
+    "e2e/b005-report-isolation.spec.ts": "fcfa6033c5faf2b5bd6f4e67309bb561df6dd139",
+    "e2e/b005-onboarding-private-playwright.config.ts": "8191da188fe8669759c448139979614ddb1cd486",
+    "scripts/run-e2e.ts": "b59b9a815cd5f26113b2f0aeb0e19dc346192449",
+    "src/server/onboarding-progress.ts": "860773012464351da6c1f5ade9a90bcc3771d426",
+    "src/server/onboarding-progress-actions.ts": "1abc866d09498f325501d99b84628d208a1eb62d",
+    "src/server/onboarding-progress-rules.ts": "49b345f5264e3dd6968b62ccc28d34c29ee72615",
+    "src/components/onboarding-progress.tsx": "1cd298bb8468006e077ecc4b0ebf2b3f2c9eb1b1",
+    "src/server/auth.ts": "9a2f2a3a08a215b4e503350c5a3ede0fa1ac081e",
+    "src/server/auth-actions.ts": "fe57d75396628b85d7e718cabe8c47f80def07ac",
+    "src/server/income-expense.ts": "e33706bbce4c4c53485f11b5d4b02eb6f133528d",
+    "src/app/m/reports/page.tsx": "9e85e1270e9f272160fed58dcd7c67c3a9650c8b",
+    "src/app/m/reports/export/route.ts": "bdc2521cd5fa60cb4a008b1d774b18981ab6de01",
+    "src/server/org-scope.ts": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+    "src/server/db.ts": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+    "src/server/sandbox.ts": "d6925304e83f7c38f1cddea6849d86defb5d4739",
+    "supabase/migrations/20261031100207_b005_onboarding_progress.sql": "18ea070dac311d82a1a5ced429f2fcf1dc310253",
+    "supabase/migrations/20261030150300_repair_owner_visibility.sql": "1d41a7de31956269be2ba2a7ba05ba94b00f20fa"
+  },
+  "gate": {
+    "result": "PASS",
+    "unit": {
+      "tests": 599,
+      "pass": 599,
+      "fail": 0,
+      "skipped": 0
+    },
+    "rls": {
+      "tests": 359,
+      "pass": 358,
+      "fail": 0,
+      "skipped": 1
+    },
+    "skip": "exactly one prior Ron-approved lost historical fixture"
+  },
+  "builds": {
+    "Next": "PASS",
+    "Cloudflare": "PASS",
+    "originalPreflight": "PASS without bypass/internal errors",
+    "Worker": "1 PASS"
+  },
+  "browser": {
+    "result": "PASS",
+    "tests": 4,
+    "widths": [
+      390,
+      1280
+    ],
+    "screenshots": 6,
+    "scope": "onboarding1+report1 in each fixed-width project, private fresh clone/server"
+  },
+  "proof": {
+    "onboarding": "actual unbound expired target incomplete/expired1/pending0; fresh real local tenant acceptance with exact invitation accepted_by=current contact.user_id, accepted_at present, and password readiness boolean; real reload/signout/signin resumption; explicit none with actor audit; managerhidden/sample/live/sandbox controls",
+    "controls": "genuine owned sandbox created before live opt-in; exact full global presence/value/description/timestamp and two org flag/settings objects restored with normal triggers; source no inbound platform-setting FK runtime asserted; normal org timestamps/audit/fixture rows advance",
+    "report": "actual nonempty own live and sandbox HTML+CSV exact ordered TWD/income/expense/net, reciprocal foreign-marker exclusion in serialized HTML/filter options and actual attachment CSV; real live\u2192sandbox\u2192live selection; qualifying live seed and balanced synthetic sandbox fixtures",
+    "reportAmountsMinor": {
+      "live": [
+        1000000,
+        280000,
+        720000
+      ],
+      "sandbox": [
+        432100,
+        123400,
+        308700
+      ]
+    },
+    "privacy": "fixed-origin browser/context and directAPI/maxRedirects0; static safe errors; no trace/HAR/video/automatic screenshots/ARIA; explicit synthetic non-token screens only; server streams intentionally omitted"
+  },
+  "syntheticReadback": {
+    "globalRestoredToTemplate": true,
+    "globalPresent": true,
+    "globalOff": true,
+    "globalRowSha256": "a282bb1ee513df273a88b68b962e55a6b23c31a5043639bd6603b4b3d25dfa92",
+    "orgOptIns": 0,
+    "acceptedBound": 1,
+    "ownedSandboxCount": 1,
+    "explicitNoneAudits": 1,
+    "scope": "retained onboarding/control state only; report fixtures removed by later reset, not persisted proof"
+  },
+  "nativeReview": {
+    "requested": "Astra/xhigh",
+    "actualModelEffort": "unknown",
+    "source": "PASS_SCOPED_B005_SOURCE",
+    "reviewerExecution": "none; source/evidence only",
+    "ClaudeClassB": "NOT_RUN"
+  },
+  "boundaries": {
+    "appCodeChanged": false,
+    "schemaChanged": false,
+    "migrationAppliedOperational": false,
+    "operationalFlagsActivated": false,
+    "legalTextChanged": false,
+    "mainMerged": false,
+    "prodAccess": false,
+    "externalMessages": false
+  },
+  "limitations": [
+    "Existing established bindings are preserved; historical invitation absence/expiry does not establish binding origin and no readiness behavior changed",
+    "Global/org OFF checked together, not isolated control guard matrix; expired display is not expired-token HTTP rejection",
+    "No new browser teamON/two-entrypoint or forged-manager-action proof; existing full-RLS invitation/role/race tests are separate",
+    "Provider invitation resend-result workflow, not signup/copy-link success, remains separate; no real provider receipt",
+    "Report fixture is trusted local synthetic setup, not a user-flow financial-write proof; final DB resets mean report-fixture persistence is not claimed",
+    "Final readback covers retained onboarding/control state only; no rollback or exact stagedapp/Claude/ClassB acceptance",
+    "Unmarked legacy demo data cannot be reliably classified; exclude uncertain rollout organizations",
+    "Private artifact R2 retention date/object key unknown"
+  ],
+  "artifacts": {
+    "copy-check.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/591564f232adc4e8e192c5dc3f8e52463bbd83a8.PhBarR/copy-check.log",
+      "sha256": "bde08516b5ff842fd9048e22463ac82fd03480e01a164a523f788df9937dfb8e",
+      "bytes": 1434
+    },
+    "flag-expiry.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/591564f232adc4e8e192c5dc3f8e52463bbd83a8.PhBarR/flag-expiry.log",
+      "sha256": "790631bd05d781613c716fe04f1a26d814975ac149a3a6d265800ec6e5fffad5",
+      "bytes": 27
+    },
+    "lint.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/591564f232adc4e8e192c5dc3f8e52463bbd83a8.PhBarR/lint.log",
+      "sha256": "da819f980b5df58f94df10cee617099a4a6539df6d5f02510c80645449817c1d",
+      "bytes": 2422
+    },
+    "npm-ci.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/591564f232adc4e8e192c5dc3f8e52463bbd83a8.PhBarR/npm-ci.log",
+      "sha256": "cf0cd67af9f1c430f9585791d4e9f6c2a925b819c0fc8366fde5e64a622575a2",
+      "bytes": 1584
+    },
+    "postgres-16.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/591564f232adc4e8e192c5dc3f8e52463bbd83a8.PhBarR/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "test-rls.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/591564f232adc4e8e192c5dc3f8e52463bbd83a8.PhBarR/test-rls.log",
+      "sha256": "a6ac1475c93032de59c334a1a44be4fceac74a09930d329e46e273c7ffe6261f",
+      "bytes": 100218
+    },
+    "test-unit.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/591564f232adc4e8e192c5dc3f8e52463bbd83a8.PhBarR/test-unit.log",
+      "sha256": "46716b7acc4ef3ced264d12d4a690ca47d68ed1fc3e37759a2cea9196286a7b2",
+      "bytes": 123677
+    },
+    "toolchain.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/591564f232adc4e8e192c5dc3f8e52463bbd83a8.PhBarR/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    "typecheck.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/591564f232adc4e8e192c5dc3f8e52463bbd83a8.PhBarR/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "gate-summary": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-591564f232adc4e8e192c5dc3f8e52463bbd83a8.md",
+      "sha256": "fc6aee8bceaefa14c01a566c4d16929e4fe92f86e288d3a60b86b7fe42dec1bc",
+      "bytes": 971
+    },
+    "b005-full-gate-591564f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-full-gate-591564f.log",
+      "sha256": "1830a12f2282fbb4dca5ea9c5e86468fe0fa6e2a8f911a8b57d6d279a6ab8412",
+      "bytes": 470
+    },
+    "b005-build-worker-driver-591564f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-build-worker-driver-591564f.log",
+      "sha256": "a0ee900b06a9ba8c6a5b30bc2b25b39d72a306bad5947c5dd2201726d37f50f0",
+      "bytes": 357
+    },
+    "b005-next-build-591564f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-next-build-591564f.log",
+      "sha256": "c10d92232c9b874db54a333e36250ba4027b00668422034398ac8f039e9612c3",
+      "bytes": 12250
+    },
+    "b005-cf-build-591564f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-cf-build-591564f.log",
+      "sha256": "7d4f0705ca3f38f7188a209d764005bd628f864364db3e5c3097735652383495",
+      "bytes": 13959
+    },
+    "b005-preflight-591564f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-preflight-591564f.log",
+      "sha256": "445b2fa2ce2c46ea6b4a959deddf55f7d348afb8b66f5d7cd5edb09f73e9380c",
+      "bytes": 23
+    },
+    "b005-worker-591564f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-worker-591564f.log",
+      "sha256": "cd0e25c8fd1b96767bc3893e66c292df31a0daf7708f82afc7bdb9f1874452e0",
+      "bytes": 423
+    },
+    "b005-http-591564f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-http-591564f.log",
+      "sha256": "4ceef15cc73832fba58f362f49b9c9900ca98c314e63d14d8d0bc5efbc684a35",
+      "bytes": 600
+    },
+    "b005-synthetic-readback-591564f.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-synthetic-readback-591564f.json",
+      "sha256": "9f89bebf0f87ed4f3b60147b8f015a487b0cef47923e2b5b437aaf7bd08141dd",
+      "bytes": 381
+    },
+    "run-b005-prepared-check.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b005-prepared-check.py",
+      "sha256": "9139a59cf2c70fc47794181e72e2ca36a36a9eae9500e8465f48db30c08a6d69",
+      "bytes": 2026
+    },
+    "b005-build-worker-final-commands.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-build-worker-final-commands.py",
+      "sha256": "c8c509159fbedb118722f573bfc460bd2e35450b03b7ebabc32776e3d403fa9b",
+      "bytes": 1264
+    },
+    "make-b005-final-proof.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/make-b005-final-proof.py",
+      "sha256": "f5ac3768e696f085ca98779aae096da56d60a135e67aa334f19de0b45695bc78",
+      "bytes": 8333
+    },
+    "b005-readback.cjs": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-readback.cjs",
+      "sha256": "01335ed6963f7fd8da0c6fb456264c2b70470955aa685856563a0c4385be1643",
+      "bytes": 2841
+    },
+    "B005-private-proof-plan.md": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B005-private-proof-plan.md",
+      "sha256": "ce51c64fe8c78775220c4fc8418ee52fef95af611c3eaf7cb7eb133ff6a9e599",
+      "bytes": 3691
+    },
+    "b005-typecheck-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-typecheck-draft-a.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "b005-lint-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-lint-draft-a.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "b005-http-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-http-draft-a.log",
+      "sha256": "06b7ca5e4d5cdba2f54def644118beac76f33537c75f227ad7c41c6889361589",
+      "bytes": 600
+    }
+  },
+  "screenshots": {
+    "b005-http-591564f-artifacts/b005-report-isolation-live-dfb97-income-and-expense-isolated-chromium-1280/b005-live-report.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-http-591564f-artifacts/b005-report-isolation-live-dfb97-income-and-expense-isolated-chromium-1280/b005-live-report.png",
+      "sha256": "01ed517ab896273ef923df5f2b89d1d2f4f3674f36912b6f04d790c7ceafea14",
+      "bytes": 119621
+    },
+    "b005-http-591564f-artifacts/b005-report-isolation-live-dfb97-income-and-expense-isolated-chromium-1280/b005-sandbox-report.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-http-591564f-artifacts/b005-report-isolation-live-dfb97-income-and-expense-isolated-chromium-1280/b005-sandbox-report.png",
+      "sha256": "b7fec167420649335493c60a92a284b8781864b1720e57ce8867bb29984ee4e9",
+      "bytes": 165190
+    },
+    "b005-http-591564f-artifacts/b005-report-isolation-live-dfb97-income-and-expense-isolated-chromium-390/b005-live-report.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-http-591564f-artifacts/b005-report-isolation-live-dfb97-income-and-expense-isolated-chromium-390/b005-live-report.png",
+      "sha256": "a3451303ee35d39649b04772299aaa41b7184238785d812a3bb68b582b30b233",
+      "bytes": 104014
+    },
+    "b005-http-591564f-artifacts/b005-report-isolation-live-dfb97-income-and-expense-isolated-chromium-390/b005-sandbox-report.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-http-591564f-artifacts/b005-report-isolation-live-dfb97-income-and-expense-isolated-chromium-390/b005-sandbox-report.png",
+      "sha256": "e984e56fb6bf3048921f6ef78794aacb58070e836f64ea3cbd3e4603ce870779",
+      "bytes": 159254
+    },
+    "b005-http-591564f-artifacts/onboarding-progress-live-o-cc436-nd-respects-real-acceptance-chromium-1280/onboarding.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-http-591564f-artifacts/onboarding-progress-live-o-cc436-nd-respects-real-acceptance-chromium-1280/onboarding.png",
+      "sha256": "0e889f2fb505894e5f8014760637b494c49f86e813d525248aa6c2969b84e266",
+      "bytes": 216219
+    },
+    "b005-http-591564f-artifacts/onboarding-progress-live-o-cc436-nd-respects-real-acceptance-chromium-390/onboarding.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b005-http-591564f-artifacts/onboarding-progress-live-o-cc436-nd-respects-real-acceptance-chromium-390/onboarding.png",
+      "sha256": "e161203a2131541c00351c6bacc2faba65663064c77849bc37b2894ad1fcc0d7",
+      "bytes": 192190
+    }
+  },
+  "retention": {
+    "storage": "local private artifacts; sanitized manifest in git",
+    "privateR2ObjectKey": null,
+    "retentionDate": "unknown"
+  },
+  "next": "publish/mirror checkpoint, park dependent acceptance and select next eligible queue work"
+}

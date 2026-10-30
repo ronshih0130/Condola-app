@@ -1,3 +1,5 @@
+> Latest local checkpoint 2026-10-30T16:11:51.580068-07:00: `591564f232adc4e8e192c5dc3f8e52463bbd83a8`. Gate599unit/358RLS+1priorhistoricalSKIP, builds/originalpreflight/Worker1 and fresh private browser4 PASS. [Checks/scope](checkpoint-591564f.md), [manifest](http-boundary-591564f.json). Existing onboarding/report app reused; wholeB005 remains incomplete. Next after publish/mirror: separate default-OFF owner/tenant resend contract/UI/mock; durable schema handoff only, no apply. Earlier entries retain dated scopes.
+
 > Latest local integration checkpoint (2026-10-30T03:05:16.071480-07:00): candidate `4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6`; see [core89 local verification](../integration/core89-local-verification.md). Whole-feature verdict remains INCOMPLETE/NO-GO; dated records below retain their original scope. This link supplies no staging/Claude/release waiver.
 
 
