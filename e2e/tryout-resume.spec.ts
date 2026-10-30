@@ -1,3 +1,4 @@
+import { disposableDbUrl } from "../src/server/test-disposable-db";
 import { expect, test } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { Client } from "pg";
@@ -6,13 +7,8 @@ import { ORG_ID } from "../src/server/ids";
 import { ACCOUNTS, resetDemo, signIn } from "./session";
 
 function requireDisposableDatabase() {
-  const url = new URL(process.env.DATABASE_URL || "http://invalid");
-  if (process.env.CONDOLA_RLS_DISPOSABLE !== "YES" || process.env.DEMO_MODE !== "true" ||
-      !["postgres:", "postgresql:"].includes(url.protocol) ||
-      !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) ||
-      url.pathname.length <= 1 || url.search || url.hash) {
-    throw new Error("Requires explicit disposable loopback PostgreSQL and local demo mode");
-  }
+  disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
+  if (process.env.DEMO_MODE !== "true") throw new Error("Local demo mode required");
 }
 
 for (const width of [390, 1280]) {

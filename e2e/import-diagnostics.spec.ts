@@ -1,3 +1,4 @@
+import { disposableDbUrl } from "../src/server/test-disposable-db";
 import { expect, test } from "@playwright/test";
 import { mkdirSync, readFileSync } from "node:fs";
 import { Client } from "pg";
@@ -16,13 +17,9 @@ const csv = [
 for (const width of [390, 1280]) {
   for (const enabled of [false, true]) {
     test(`import diagnostics ${enabled ? "ON" : "OFF"} at ${width}px`, async ({ page }) => {
-      const db = new URL(process.env.DATABASE_URL || "http://invalid");
-      expect(process.env.CONDOLA_RLS_DISPOSABLE).toBe("YES");
+      disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
       expect(process.env.DEMO_MODE).toBe("true");
       expect(process.env.IMPORT_ERROR_DETAILS_ENABLED).toBe("true");
-      expect(["localhost", "127.0.0.1", "[::1]"]).toContain(db.hostname);
-      expect(db.search + db.hash).toBe("");
-      expect(db.pathname.length).toBeGreaterThan(1);
       await page.setViewportSize({ width, height: 844 });
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));

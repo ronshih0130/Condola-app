@@ -1,3 +1,4 @@
+import { disposableDbUrl } from "./test-disposable-db";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { query } from "./db";
@@ -5,8 +6,7 @@ import { markTryout } from "./domain";
 
 test("tryout progress persists and merges safely within its organization", async () => {
   // This test writes only to the explicitly provisioned disposable local database.
-  const url = new URL(process.env.DATABASE_URL || "http://invalid");
-  assert.ok(process.env.CONDOLA_RLS_DISPOSABLE === "YES" && ["postgres:", "postgresql:"].includes(url.protocol) && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.pathname.length > 1 && !url.search && !url.hash, "requires an explicitly disposable loopback PostgreSQL URL without query parameters");
+  disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
   const ids: string[] = [];
   const initial: Record<string, unknown>[] = [];
   try {
