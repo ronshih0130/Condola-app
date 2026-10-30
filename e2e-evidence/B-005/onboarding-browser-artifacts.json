@@ -1,0 +1,8 @@
+{
+  "scope": "synthetic local browser evidence; no customer records",
+  "retention": "TODO: Ron to confirm private evidence retention",
+  "artifacts": [
+    {"width":390,"path":"/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B005-onboarding-evidence/onboarding-390.png","sha256":"b5243d2fd7281c8cdf8a1c5eb3b7d8c2bae564b821f0a7abc77683885b18e101","bytes":192362},
+    {"width":1280,"path":"/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B005-onboarding-evidence/onboarding-1280.png","sha256":"e3e7bcd8da7350d770be415b7f1bf8d5bccf41e9ecc56f398063bd0973a045ed","bytes":214889}
+  ]
+}

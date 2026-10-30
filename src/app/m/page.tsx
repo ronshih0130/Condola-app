@@ -1,6 +1,7 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { dictionary, makeT } from "@/i18n";
+import { OnboardingProgress } from "@/components/onboarding-progress";
 import { FooterNote } from "@/components/chrome";
 import { Cell, RfTable } from "@/components/rf";
 import { PageHeader } from "@/components/ui";
@@ -41,6 +42,7 @@ export default async function DashboardPage({
           </>
         }
       />
+      <OnboardingProgress session={session} />
       {query.dupFirm === "1" ? (
         <p className="alert warn" data-testid="dup-firm">
           {t("i_signup_dup_firm")}
