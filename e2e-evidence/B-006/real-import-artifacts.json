@@ -1,0 +1,14 @@
+{
+  "scope":"private synthetic local import evidence; no real customer files",
+  "retention":"TODO: Ron to confirm private evidence retention",
+  "source_commit":"ced9ebe87c8d801c049ebb72b3351f231dc7b40d",
+  "reviewed_test_blob":"2f969ce85c88f89d3f580babcf2eea75f3444517",
+  "reviewed_xlsx_blob":"4dd47df8e26805da708b09a835e21e83919155cb",
+  "xlsx_sha256":"01a09c9a29dd1b305558ed300690b993fd300ee5792004d85e4b7a0c94539a33",
+  "xlsx_bytes":4045,
+  "artifacts":[
+    {"path":"/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B006-real-evidence/import-390.png","sha256":"48cc7b90d1a94e21aad9e8709bf305d2242fdf6c8e5231d9803954e72a92d173","bytes":56385},
+    {"path":"/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B006-real-evidence/import-1280.png","sha256":"578c69c39e27ca27ccbc9018f3d89e431cd9af535fdae66d86d20f006efdba6a","bytes":99944},
+    {"path":"/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B006-real-evidence/initial-1280-failure.md","sha256":"8d65cd57e29e63ce3522498e9ba1de012cca21b7fb60560b0595b1ada47d0f69","bytes":707,"kind":"sanitized reconstructed note; not raw trace"}
+  ]
+}
