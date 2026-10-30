@@ -29,11 +29,15 @@ test('typed sources enforce scope, payer snapshot, immutability and application-
   const c = new Client({ connectionString: process.env.DATABASE_URL });
   await c.connect();
   try {
-    const source = (await c.query<{org:string; lease:string; invoice:string; actor:string}>(`SELECT i.org_id::text org,i.lease_id::text lease,i.id::text invoice,m.user_id::text actor
-      FROM invoices i JOIN org_members m ON m.org_id=i.org_id AND m.status='active' LIMIT 1`)).rows[0];
+    const source = (await c.query<{org:string; lease:string; invoice:string; actor:string; contact:string; principal:string}>(`SELECT i.org_id::text org,i.lease_id::text lease,i.id::text invoice,m.user_id::text actor,
+      c.id::text contact,c.user_id::text principal
+      FROM invoices i
+      JOIN lease_parties lp ON lp.org_id=i.org_id AND lp.lease_id=i.lease_id AND lp.role='primary'
+      JOIN contacts c ON c.id=lp.contact_id AND c.org_id=lp.org_id AND c.user_id IS NOT NULL
+      JOIN org_members m ON m.org_id=i.org_id AND m.status='active'
+      ORDER BY i.id,lp.contact_id,m.id LIMIT 1`)).rows[0];
     assert.ok(source);
-    const tenant=(await c.query<{contact:string;principal:string}>(`SELECT c.id::text contact,c.user_id::text principal FROM lease_parties lp
-      JOIN contacts c ON c.id=lp.contact_id AND c.org_id=lp.org_id WHERE lp.org_id=$1 AND lp.lease_id=$2 AND lp.role='primary' AND c.user_id IS NOT NULL`,[source.org,source.lease])).rows[0];
+    const tenant={contact:source.contact,principal:source.principal};
     assert.ok(tenant);
     await c.query('BEGIN');
     const event = (await c.query<{id:string}>(`INSERT INTO app.b017_occurrences(org_id,lease_id,invoice_id,kind,occurrence_key,local_date,occurred_at)
