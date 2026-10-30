@@ -1,0 +1,21 @@
+{
+  "recordedAt": "2026-10-30T08:31:52.794044-07:00",
+  "supersedesLocalUnpublishedCandidate": "5c76ea201f868b4715670d93265d1e47a9996caf",
+  "why": "cold private-composite compilation acquired relation before authorization; observed500ms timeout; original failure retained",
+  "sourceBlobs": {
+    "supabase/migrations/20261031100220_b013_owner_repair_policy.sql": "91d2179ff624ffe4be88396446785171e43632a0",
+    "src/server/repair-owner-default.integration.test.ts": "e5ac180256ed89f7757acdb27bd440bf20411538"
+  },
+  "change": "RECORD and initialized optional scalar shapes; fresh session before broadauthreads; public/private/audit explicitrelationNOWAIT admission after propercurrentauth; auditROWEXCLbeforemutation; finishlastcurrentauth retained",
+  "focused": "34/34combinedDBPASS, coldvalidactualNOWAITvs expired42501, bothorders/noresidualstate",
+  "catalog": "fresh92b vs71+21all11categoriesequal, counts2/4/5/1preserved",
+  "functionACL": "isolatedclusterPASS anon0/authallowlist7; sentinel7",
+  "typeAndLint": "PASS; existing7warnings",
+  "review": "highest native Astra exact91d2179/e5ac180 scopedstaticPASS authorresultsattributednotrerun",
+  "limits": [
+    "No universalNOWAIT forsequence/catalog/FK implicitdependencies",
+    "No arbitraryserviceSQL/durablewallclock guarantee",
+    "No wholefeature/staging/ClaudeClassB/releaseGO"
+  ],
+  "pending": "NEWcleanexactgate/build/CF/originalpreflight/Worker/full58browser; rootmode92worktreefrozen"
+}

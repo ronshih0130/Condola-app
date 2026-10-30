@@ -187,3 +187,20 @@ test('archived property closes new settings but current owner can recover exact 
 test('navigation entry IDs are only an informational current-owner scoped rollout hint',async()=>{
  assert.deepEqual(await ownerRepairPolicyEntryIds(s,[property]),[property]);await controls(false);assert.deepEqual(await ownerRepairPolicyEntryIds(s,[property]),[]);await controls();assert.deepEqual(await ownerRepairPolicyEntryIds({...s,kind:'staff',role:'admin'},[property]),[]);assert.deepEqual(await ownerRepairPolicyEntryIds({...s,liveOrgId:ORG2_ID},[property]),[]);await db.query(`UPDATE properties SET archived_at=clock_timestamp() WHERE id=$1`,[property]);assert.deepEqual(await ownerRepairPolicyEntryIds(s,[property]),[]);
 });
+
+test('cold calls authenticate before private DDL admission and reject actual relation contention with NOWAIT in both orders',async()=>{
+ const i=await intent(),expired=randomUUID();await db.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()-interval '1 second')`,[expired,s.userId,randomUUID()]);
+ const probes=[
+  {table:'app.b013_default_roots',mode:'view'},{table:'app.b013_default_revisions',mode:'view'},{table:'app.b013_override_revisions',mode:'view'},{table:'app.b013_regional_defaults',mode:'view'},
+  {table:'app.b013_policy_commands',mode:'change'},{table:'app.b013_policy_commands',mode:'status'},{table:'app.b013_policy_commands',mode:'close'},{table:'app.b013_policy_commands',mode:'finish'},
+  {table:'public.audit_log',mode:'view'},{table:'public.organizations',mode:'view'},{table:'public.contacts',mode:'view'},{table:'public.properties',mode:'view'},{table:'public.property_owners',mode:'view'},
+ ];
+ function invocation(mode:string,sid:string){const scope=[ORG_ID,ORG_ID,'live',sid,property];return mode==='view'?{text:`SELECT app.b013_owner_view($1,$2,$3,$4,$5)`,values:scope}:mode==='change'?{text:`SELECT app.b013_change_default($1,$2,$3,$4,$5,$6,$7,'set',$8)`,values:[...scope,i.requestId,i.expected,i.value]}:mode==='status'?{text:`SELECT app.b013_default_status($1,$2,$3,$4,$5,$6)`,values:[...scope,i.requestId]}:mode==='close'?{text:`SELECT app.b013_close_default($1,$2,$3,$4,$5,$6)`,values:[...scope,i.requestId]}:{text:`SELECT app.b013_finish_default($1,$2,$3,$4,$5,$6,'status')`,values:[...scope,i.requestId]};}
+ for(const probe of probes){const held=await client();try{await held.query('BEGIN');await held.query(`LOCK TABLE ${probe.table} IN ACCESS EXCLUSIVE MODE NOWAIT`);
+   for(const [sid,expected] of [[s.sessionId,'55P03'],[expired,'42501']]){const cold=await client();try{await heldBegin(cold);await assert.rejects(cold.query(invocation(probe.mode,sid)),(error:unknown)=>{const e=error as {code?:string;message?:string};assert.equal(e.code,expected,probe.table+':'+probe.mode);if(expected==='55P03'){assert.match(e.message??'',/could not obtain lock on relation/);assert.doesNotMatch(e.message??'',/timeout/);}return true;});}finally{await cold.query('ROLLBACK');await cold.end();}}
+  }finally{await held.query('ROLLBACK');await held.end();}}
+ // Reverse order: an actual authorized read or change retains the real
+ // relation lock, so the other connection's DDL NOWAIT must fail as well.
+ for(const table of ['app.b013_default_roots','app.b013_default_revisions','app.b013_override_revisions','app.b013_regional_defaults','app.b013_policy_commands','public.audit_log']){const reader=await client(),ddl=await client();try{await heldBegin(reader);await reader.query(invocation(table==='app.b013_policy_commands'?'change':'view',s.sessionId));await ddl.query('BEGIN');await assert.rejects(ddl.query(`LOCK TABLE ${table} IN ACCESS EXCLUSIVE MODE NOWAIT`),(error:unknown)=>{const e=error as {code?:string;message?:string};assert.equal(e.code,'55P03');assert.match(e.message??'',/could not obtain lock on relation/);return true;});}finally{await ddl.query('ROLLBACK');await reader.query('ROLLBACK');await reader.end();await ddl.end();}}
+ assert.deepEqual(await counts(),{roots:0,revisions:0,commands:0,audits:0,override:null});
+});

@@ -123,11 +123,19 @@ REVOKE ALL ON FUNCTION app.b013_local_day(text) FROM PUBLIC,anon,authenticated,s
 CREATE FUNCTION app.b013_owner_context(p_org uuid,p_live uuid,p_env text,p_session uuid,p_property uuid)
 RETURNS TABLE(principal_id uuid,contact_id uuid,ownership_id uuid,currency text,minor_unit integer,org_country text,org_zone text,enabled boolean,active_property boolean,legacy_override text,source_row_version bigint,source_row_hash text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app,pg_temp SET lock_timeout='500ms' AS $$
-DECLARE actor uuid:=auth.uid();o public.organizations;c public.contacts;p public.properties;po public.property_owners;chosen public.property_owners;
+DECLARE actor uuid:=auth.uid();o record;c record;p record;po record;chosen record;
  v_day date;v_count integer:=0;v_active integer:=0;v_rows integer;v_audit bigint;v_hash text;v_enabled boolean;v_scale integer;
 BEGIN
- -- Reject unauthorized callers before any privileged admission or row lock.
- IF actor IS NULL OR p_env IS NULL OR p_env NOT IN('live','sandbox') OR NOT EXISTS(
+ -- Session relation admission is needed to authenticate, but no business-row
+ -- pins or private relation access precede this fresh session check. RECORD
+ -- declarations avoid table-type resolution before these runtime admissions.
+ IF actor IS NULL OR p_env IS NULL OR p_env NOT IN('live','sandbox') THEN
+  RAISE EXCEPTION 'Repair policy unavailable' USING ERRCODE='42501';END IF;
+ LOCK TABLE public.auth_sessions IN ACCESS SHARE MODE NOWAIT;
+ IF NOT EXISTS(SELECT 1 FROM public.auth_sessions s WHERE s.id=p_session AND s.user_id=actor AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()) THEN
+  RAISE EXCEPTION 'Repair policy unavailable' USING ERRCODE='42501';END IF;
+ LOCK TABLE public.organizations,public.contacts,public.properties,public.property_owners IN ACCESS SHARE MODE NOWAIT;
+ IF NOT EXISTS(
   SELECT 1 FROM public.organizations selected JOIN public.organizations live ON live.id=p_live AND live.environment='live' AND live.live_org_id IS NULL
   JOIN public.auth_sessions s ON s.id=p_session AND s.user_id=actor AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
   JOIN public.contacts ct ON ct.org_id=selected.id AND ct.user_id=actor AND ct.is_owner AND ct.archived_at IS NULL
@@ -166,6 +174,7 @@ BEGIN
  IF v_active<>1 THEN RAISE EXCEPTION 'Repair ownership unavailable' USING ERRCODE='42501';END IF;
  SELECT * INTO chosen FROM public.property_owners x WHERE x.org_id=p_org AND x.property_id=p_property AND x.owner_contact_id=c.id
   AND x.effective_from<=v_day AND(x.effective_to IS NULL OR x.effective_to>v_day);
+ LOCK TABLE public.audit_log IN ACCESS SHARE MODE NOWAIT;
  SELECT max(a.id) INTO v_audit FROM public.audit_log a WHERE a.org_id=p_org AND a.table_name='property_owners' AND a.row_id=chosen.id::text;
  v_audit:=coalesce(v_audit,0);
  SELECT cu.minor_unit INTO v_scale FROM public.currencies cu WHERE cu.code=p.currency FOR SHARE NOWAIT;
@@ -184,12 +193,16 @@ REVOKE ALL ON FUNCTION app.b013_owner_context(uuid,uuid,text,uuid,uuid) FROM PUB
 -- Owner read gateway. Staff/override/estimate/approval/dispatch remain absent.
 CREATE FUNCTION app.b013_owner_view(p_org uuid,p_live uuid,p_env text,p_session uuid,p_property uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app,pg_temp SET lock_timeout='500ms' AS $$
-DECLARE ctx record;final_ctx record;root app.b013_default_roots;rev app.b013_default_revisions;ov app.b013_override_revisions;region app.b013_regional_defaults;
+DECLARE ctx record;final_ctx record;root record;rev record;ov record;region record;
  default_value text;default_source text;effective_value text;effective_source text;verified boolean:=false;snapshot text;result jsonb;
 BEGIN
  SELECT * INTO ctx FROM app.b013_owner_context(p_org,p_live,p_env,p_session,p_property);
  IF NOT ctx.active_property THEN RETURN jsonb_build_object('state','recovery_only');END IF;
  IF NOT ctx.enabled THEN RETURN jsonb_build_object('state','disabled');END IF;
+ LOCK TABLE app.b013_default_roots,app.b013_default_revisions,app.b013_override_revisions IN ACCESS SHARE MODE NOWAIT;
+ SELECT NULL::uuid AS id,NULL::text AS mode,NULL::smallint AS minor_unit,NULL::bigint AS threshold_minor INTO rev;
+ SELECT NULL::uuid AS id INTO ov;
+ SELECT NULL::uuid AS revision INTO region;
  IF NOT pg_try_advisory_xact_lock_shared(hashtextextended('b013/default/'||p_org::text||'/'||ctx.principal_id::text||'/'||ctx.currency,0)) THEN
   RAISE EXCEPTION 'Repair policy busy' USING ERRCODE='55P03';END IF;
  LOCK TABLE app.b013_regional_defaults IN SHARE MODE NOWAIT;
@@ -236,8 +249,9 @@ REVOKE ALL ON FUNCTION app.b013_default_request_lock(uuid,uuid) FROM PUBLIC,anon
 
 CREATE FUNCTION app.b013_default_result(p_org uuid,p_live uuid,p_env text,p_property uuid,p_request uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app,pg_temp AS $$
-DECLARE cmd app.b013_policy_commands;
+DECLARE cmd record;
 BEGIN
+ LOCK TABLE app.b013_policy_commands IN ACCESS SHARE MODE NOWAIT;
  SELECT * INTO cmd FROM app.b013_policy_commands x WHERE x.org_id=p_org AND x.actor_id=auth.uid() AND x.request_id=p_request;
  IF NOT FOUND THEN RETURN jsonb_build_object('status','unknown');END IF;
  IF cmd.scope_kind<>'default' OR cmd.requested_property_id IS DISTINCT FROM p_property OR cmd.environment IS DISTINCT FROM p_env OR cmd.live_org_id IS DISTINCT FROM p_live THEN
@@ -248,13 +262,14 @@ REVOKE ALL ON FUNCTION app.b013_default_result(uuid,uuid,text,uuid,uuid) FROM PU
 
 CREATE FUNCTION app.b013_change_default(p_org uuid,p_live uuid,p_env text,p_session uuid,p_property uuid,p_request uuid,p_expected text,p_action text,p_value text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app,pg_temp SET lock_timeout='500ms' AS $$
-DECLARE ctx record;cmd app.b013_policy_commands;root app.b013_default_roots;rev app.b013_default_revisions;
+DECLARE ctx record;cmd record;root record;rev record;
  v_hash text;v_outcome text;v_value bigint;v_revision uuid;v_audit bigint;v_view jsonb;
 BEGIN
  -- Malformed envelopes are not a different recorded command kind.
  IF p_request IS NULL OR p_expected IS NULL OR p_expected !~ '^[0-9a-f]{64}$' OR p_action IS NULL OR p_action NOT IN('set','clear') OR p_value IS NULL OR length(p_value)>64 THEN
   RAISE EXCEPTION 'Invalid repair policy command' USING ERRCODE='22023';END IF;
  SELECT * INTO ctx FROM app.b013_owner_context(p_org,p_live,p_env,p_session,p_property);
+ LOCK TABLE app.b013_policy_commands IN ROW EXCLUSIVE MODE NOWAIT;
  PERFORM app.b013_default_request_lock(p_org,p_request);
  v_hash:=encode(public.digest(jsonb_build_array(p_property,p_expected,p_action,p_value)::text,'sha256'),'hex');
  SELECT * INTO cmd FROM app.b013_policy_commands x WHERE x.org_id=p_org AND x.actor_id=ctx.principal_id AND x.request_id=p_request;
@@ -267,6 +282,8 @@ BEGIN
  IF NOT ctx.active_property THEN v_outcome:='rejected_unavailable';
  ELSIF NOT ctx.enabled THEN v_outcome:='rejected_disabled';
  ELSE
+  LOCK TABLE app.b013_default_roots,app.b013_default_revisions IN ROW EXCLUSIVE MODE NOWAIT;
+  SELECT NULL::text AS mode,NULL::bigint AS threshold_minor,NULL::smallint AS minor_unit INTO rev;
   IF NOT pg_try_advisory_xact_lock(hashtextextended('b013/default/'||p_org::text||'/'||ctx.principal_id::text||'/'||ctx.currency,0)) THEN
    RAISE EXCEPTION 'Repair policy busy' USING ERRCODE='55P03';END IF;
   v_view:=app.b013_owner_view(p_org,p_live,p_env,p_session,p_property);
@@ -280,6 +297,7 @@ BEGIN
    IF(p_action='clear' AND(root.id IS NULL OR root.version=0 OR rev.mode='clear')) OR(p_action='set' AND rev.mode='set' AND rev.threshold_minor=v_value AND rev.minor_unit=ctx.minor_unit) THEN
     v_outcome:='no_change';
    ELSE
+    LOCK TABLE public.audit_log IN ROW EXCLUSIVE MODE NOWAIT;
     IF root.id IS NULL THEN INSERT INTO app.b013_default_roots(org_id,principal_id,currency) VALUES(p_org,ctx.principal_id,ctx.currency::char(3)) RETURNING * INTO root;END IF;
     v_revision:=gen_random_uuid();
     INSERT INTO app.b013_default_revisions(id,org_id,root_id,principal_id,currency,minor_unit,revision_no,mode,threshold_minor,actor_id,session_id,request_id)
@@ -304,6 +322,7 @@ CREATE FUNCTION app.b013_default_status(p_org uuid,p_live uuid,p_env text,p_sess
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app,pg_temp SET lock_timeout='500ms' AS $$
 BEGIN
  PERFORM app.b013_owner_context(p_org,p_live,p_env,p_session,p_property);
+ LOCK TABLE app.b013_policy_commands IN ACCESS SHARE MODE NOWAIT;
  PERFORM app.b013_default_request_lock(p_org,p_request);
  RETURN app.b013_default_result(p_org,p_live,p_env,p_property,p_request);
 END $$;
@@ -315,6 +334,7 @@ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,publi
 DECLARE ctx record;result jsonb;
 BEGIN
  SELECT * INTO ctx FROM app.b013_owner_context(p_org,p_live,p_env,p_session,p_property);
+ LOCK TABLE app.b013_policy_commands IN ROW EXCLUSIVE MODE NOWAIT;
  PERFORM app.b013_default_request_lock(p_org,p_request);
  result:=app.b013_default_result(p_org,p_live,p_env,p_property,p_request);
  IF result->>'status'='recorded' THEN RETURN result;END IF;
@@ -327,16 +347,19 @@ GRANT EXECUTE ON FUNCTION app.b013_close_default(uuid,uuid,text,uuid,uuid,uuid) 
 
 CREATE FUNCTION app.b013_finish_default(p_org uuid,p_live uuid,p_env text,p_session uuid,p_property uuid,p_request uuid,p_mode text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app,pg_temp SET lock_timeout='500ms' AS $$
-DECLARE ctx record;final_ctx record;cmd app.b013_policy_commands;v_fresh boolean:=false;result jsonb;
+DECLARE ctx record;final_ctx record;cmd record;v_fresh boolean:=false;result jsonb;
 BEGIN
  IF p_mode IS NULL OR p_mode NOT IN('change','status','close') THEN RAISE EXCEPTION 'Invalid repair command mode' USING ERRCODE='22023';END IF;
  SELECT * INTO ctx FROM app.b013_owner_context(p_org,p_live,p_env,p_session,p_property);
+ LOCK TABLE app.b013_policy_commands IN ACCESS SHARE MODE NOWAIT;
+ SELECT NULL::text AS outcome INTO cmd;
  PERFORM app.b013_default_request_lock(p_org,p_request);
  result:=app.b013_default_result(p_org,p_live,p_env,p_property,p_request);
  IF result->>'status'='recorded' THEN
  SELECT * INTO cmd FROM app.b013_policy_commands x WHERE x.org_id=p_org AND x.actor_id=ctx.principal_id AND x.request_id=p_request;
  SELECT x.xmin::text::bigint=(pg_current_xact_id()::text::numeric%4294967296)::bigint INTO v_fresh FROM app.b013_policy_commands x WHERE x.id=cmd.id;
  IF v_fresh AND cmd.outcome='changed' THEN
+  LOCK TABLE app.b013_default_roots,app.b013_default_revisions,public.audit_log IN ACCESS SHARE MODE NOWAIT;
   IF p_mode<>'change' OR NOT ctx.enabled OR NOT ctx.active_property OR cmd.session_id IS DISTINCT FROM p_session OR cmd.currency::text IS DISTINCT FROM ctx.currency OR NOT EXISTS(
    SELECT 1 FROM app.b013_default_roots r JOIN app.b013_default_revisions v ON v.org_id=r.org_id AND v.root_id=r.id AND v.id=r.current_revision AND v.revision_no=r.version
     WHERE r.org_id=p_org AND r.principal_id=ctx.principal_id AND r.currency=cmd.currency AND v.id=cmd.result_revision AND v.principal_id=ctx.principal_id
