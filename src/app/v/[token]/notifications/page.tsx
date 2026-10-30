@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { NotificationCenter, NotificationCenterBusy } from "@/components/notification-center";
-import { markVendorCenterRead } from "@/server/notification-center-actions";
 import { CenterBusyError, CenterDeniedError, centerVendorAdmission, centerVendorItems } from "@/server/notification-center";
 import { requestPrefs } from "@/server/session";
 import { isUuid } from "@/server/repair-rules";
@@ -21,5 +20,5 @@ export default async function Page({params,searchParams}:{params:Promise<{token:
     if(error instanceof CenterBusyError) return <div style={{maxWidth:560,margin:"24px auto"}}><NotificationCenterBusy locale={prefs.locale} retryHref={retryHref}/></div>;
     if(error instanceof CenterDeniedError) notFound(); throw error;
   }
-  return <div style={{maxWidth:560,margin:"24px auto"}}><NotificationCenter page={items} locale={prefs.locale} mark={markVendorCenterRead.bind(null,token)}/></div>;
+  return <div style={{maxWidth:560,margin:"24px auto"}}><NotificationCenter page={items} locale={prefs.locale} kind="vendor"/></div>;
 }

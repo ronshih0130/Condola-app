@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { NotificationCenter, NotificationCenterBusy } from "@/components/notification-center";
 import { requireCurrentConsent } from "@/server/consent-gate";
-import { markCenterRead } from "@/server/notification-center-actions";
 import { CenterBusyError, CenterDeniedError, centerSessionAdmission, centerSessionItems } from "@/server/notification-center";
 import { getSession } from "@/server/session";
 import { isUuid } from "@/server/repair-rules";
@@ -22,5 +21,5 @@ export default async function Page({searchParams}:{searchParams:Promise<{cursor?
     if(error instanceof CenterBusyError) return <NotificationCenterBusy locale={session.locale} retryHref={retryHref}/>;
     if(error instanceof CenterDeniedError) notFound(); throw error;
   }
-  return <NotificationCenter page={items} locale={session.locale} mark={markCenterRead}/>;
+  return <NotificationCenter page={items} locale={session.locale} kind="human"/>;
 }

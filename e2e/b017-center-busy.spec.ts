@@ -31,6 +31,13 @@ test("busy admission and mark retry preserve unread state at both widths",async(
   const event=(await c.query<{id:string}>(`INSERT INTO app.b028_center_events(org_id,kind,b010_event_id,occurred_at) VALUES($1,'rent_due',$2,$3) RETURNING id::text`,[ORG_ID,old.id,old.at])).rows[0];
   const recipient=(await c.query<{id:string}>(`INSERT INTO app.b028_center_recipients(org_id,event_id,persona,principal_user_id,member_id)
    VALUES($1,$2,'staff',$3,$4) RETURNING id::text`,[ORG_ID,event.id,USERS.manager,src.member])).rows[0];await c.query('COMMIT');
+  const markPath='/api/notification-center/mark';
+  for(const [origin,site] of [['http://other.example.test','cross-site'],['null','same-origin']] as const) {
+   const response=await page.request.post(markPath,{headers:{origin,'sec-fetch-site':site},data:{recipientId:recipient.id}});expect(response.status()).toBe(403);
+  }
+  const extra=await page.request.post(markPath,{headers:{origin:'http://127.0.0.1:43123','sec-fetch-site':'same-origin'},data:{recipientId:recipient.id,actorId:USERS.manager}});
+  expect(extra.status()).toBe(400);
+  expect((await c.query(`SELECT 1 FROM app.b028_center_reads WHERE org_id=$1 AND recipient_id=$2`,[ORG_ID,recipient.id])).rowCount).toBe(0);
   for(const width of [390,1280]) {
    await page.setViewportSize({width,height:850});await c.query(`DELETE FROM app.b028_center_reads WHERE org_id=$1 AND recipient_id=$2`,[ORG_ID,recipient.id]);
    await lock.query('BEGIN');await lock.query(`SELECT 1 FROM organizations WHERE id=$1 FOR UPDATE`,[ORG_ID]);

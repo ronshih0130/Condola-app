@@ -60,6 +60,7 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/vendor-jobs/[token]/photos/[id]/route.ts": { GET: "Vendor link token authentication, no user session" },
   "api/vendor-jobs/photos/sign/route.ts": { POST: "Vendor link token authentication, no user session" },
   "api/vendor-jobs/photos/confirm/route.ts": { POST: "Vendor link token authentication, no user session" },
+  "api/notification-center/vendor-mark/route.ts": { POST: "Exact vendor job token gateway, no human user session" },
   "api/reset-flash/route.ts": { POST: "Recovery feedback cookie" },
   "api/version/route.ts": { GET: "Public version" },
 };
