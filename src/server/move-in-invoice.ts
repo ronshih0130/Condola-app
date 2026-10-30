@@ -128,9 +128,11 @@ export async function issueMoveInInvoice(client: Client, leaseId: string, actual
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     await client.query(
-      `INSERT INTO invoice_lines (org_id, invoice_id, line_no, charge_type, description, quantity, unit_amount_minor, amount_minor, allocation_line_id)
-       VALUES ($1,$2,$3,$4::charge_type,$5,1,$6,$7,$8)`,
-      [lease.org_id, invoice.id, index + 1, line.type, line.type, line.amount, line.amount, line.allocationId],
+      `INSERT INTO invoice_lines (org_id, invoice_id, line_no, charge_type, description, quantity, unit_amount_minor, amount_minor, allocation_line_id, service_period)
+       VALUES ($1,$2,$3,$4::charge_type,$5,1,$6,$7,$8,CASE WHEN $9::date IS NULL THEN NULL ELSE daterange($9::date,$10::date,'[]') END)`,
+      [lease.org_id, invoice.id, index + 1, line.type, line.type, line.amount, line.amount, line.allocationId,
+        line.type === "rent" ? plan.calculation?.periodStart ?? null : null,
+        line.type === "rent" ? plan.calculation?.periodEnd ?? null : null],
     );
   }
   const total = plan.totalMinor;
