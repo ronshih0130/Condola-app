@@ -29,6 +29,8 @@ import {
   type PreviewColumn,
 } from "@/server/owner-import";
 
+import type { ImportRegion } from "@/server/import-region";
+
 const PREVIEW_ROWS = 5;
 
 const EMPTY: ImportResult = {
@@ -42,7 +44,7 @@ const EMPTY: ImportResult = {
   warnings: [],
 };
 
-export function ImportWizard({ detailsEnabled = false }: { detailsEnabled?: boolean }) {
+export function ImportWizard({ detailsEnabled = false, region = null }: { detailsEnabled?: boolean; region?: ImportRegion | null }) {
   const t = useT();
   const locale = useLocale();
   const steps = [t("im_s1"), t("im_s2"), t("im_s3")];
@@ -69,7 +71,7 @@ export function ImportWizard({ detailsEnabled = false }: { detailsEnabled?: bool
 
   const mapping = useMemo(() => (table[0] ? matchColumns(table[0]) : null), [table]);
   const ignoredIds = useMemo(() => ignoredNationalIdHeaders(table[0] ?? []), [table]);
-  const parsed = useMemo(() => (mapping ? validateImportRows(tableToRows(table, mapping, detailsEnabled ? rowNumbers : undefined)) : []), [mapping, table, rowNumbers, detailsEnabled]);
+  const parsed = useMemo(() => (mapping ? validateImportRows(tableToRows(table, mapping, detailsEnabled ? rowNumbers : undefined), undefined, region) : []), [mapping, table, rowNumbers, detailsEnabled, region]);
   const missing = mapping ? missingRequired(mapping) : [];
   const serverByLine = useMemo(() => {
     const map = new Map<number, ImportIssue[]>();
@@ -103,7 +105,7 @@ export function ImportWizard({ detailsEnabled = false }: { detailsEnabled?: bool
     if (!headers) return;
     const matched = matchColumns(headers);
     if (missingRequired(matched).length) return;
-    const rows = validateImportRows(tableToRows(table, matched, detailsEnabled ? rowNumbers : undefined)).filter((row) => !rowHasError(row));
+    const rows = validateImportRows(tableToRows(table, matched, detailsEnabled ? rowNumbers : undefined), undefined, region).filter((row) => !rowHasError(row));
     let cancelled = false;
     setPreviewing(true);
     setPreviewDone(false);
@@ -136,7 +138,7 @@ export function ImportWizard({ detailsEnabled = false }: { detailsEnabled?: bool
     return () => {
       cancelled = true;
     };
-  }, [step, table, rowNumbers, fileName, detailsEnabled]);
+  }, [step, table, rowNumbers, fileName, detailsEnabled, region]);
 
   async function loadFile(file: File, choice: "auto" | "utf-8" | "big5") {
     setNotice("");
@@ -150,7 +152,7 @@ export function ImportWizard({ detailsEnabled = false }: { detailsEnabled?: bool
     setBytes(buffer);
     setFileName(file.name);
     try {
-      const read = await readSpreadsheet(file.name, buffer, file.name.toLowerCase().endsWith(".xlsx") ? "auto" : choice);
+      const read = await readSpreadsheet(file.name, buffer, file.name.toLowerCase().endsWith(".xlsx") ? "auto" : choice, { reject1904: detailsEnabled });
       if (read.rows.length < 2) {
         setNotice(t("im_empty"));
         setTable([]);
@@ -178,7 +180,7 @@ export function ImportWizard({ detailsEnabled = false }: { detailsEnabled?: bool
       setStep(2);
     } catch (error) {
       const code = error instanceof SpreadsheetError ? error.code : "xlsx";
-      setNotice(code === "xls" ? t("im_xls_note") : code === "empty" ? t("im_empty") : t("im_xlsx_bad"));
+      setNotice(code === "epoch" ? t("im_xlsx_epoch") : code === "xls" ? t("im_xls_note") : code === "empty" ? t("im_empty") : t("im_xlsx_bad"));
       setTable([]);
       setStep(1);
     }

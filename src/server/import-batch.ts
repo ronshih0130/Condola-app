@@ -16,6 +16,7 @@ import {
   planRows,
   totalsFromPlans,
   validateImportRows,
+  unitKey,
   type ImportIssue,
   type ImportResult,
   type ParsedImportRow,
@@ -23,6 +24,8 @@ import {
   type SpaceKind,
 } from "./owner-import";
 import { assertPerm } from "./perms";
+import { loadImportRegion } from "./import-region-context";
+import type { ImportRegion } from "./import-region";
 import type { Session } from "./types";
 
 export type { ImportResult };
@@ -79,12 +82,14 @@ export async function dryRunImport(session: Session, input: { fileName: string; 
     assertImport(session);
     const rows = coerceImportRows(input.rows, IMPORT_DRY_BATCH);
     counted = rows.length;
-    const parsed = validateImportRows(rows);
     const fileName = cleanName(input.fileName);
-    if (parsed.length === 0) return totalsFromPlans([], fileName, true);
+    if (!rows.length) return totalsFromPlans([], fileName, true);
     return await tx(session.userId, async (client) => {
+      const region = await loadImportRegion(client, session.orgId);
+      const parsed = validateImportRows(rows, undefined, region);
       await relaxStatementTimeout(client);
       const index = await loadIndex(client, session.orgId, parsed);
+      await checkTargetRegions(client, session.orgId, parsed, index, region);
       return totalsFromPlans(planRows(parsed, index), fileName, true);
     }, scope(session));
   } finally {
@@ -103,11 +108,13 @@ export async function previewImport(session: Session, input: { fileName: string;
     assertImport(session);
     const rows = coerceImportRows(input.rows, IMPORT_PREVIEW_BATCH);
     counted = rows.length;
-    const parsed = validateImportRows(rows);
-    if (parsed.length === 0) return [];
+    if (!rows.length) return [];
     return await tx(session.userId, async (client) => {
+      const region = await loadImportRegion(client, session.orgId);
+      const parsed = validateImportRows(rows, undefined, region);
       await relaxStatementTimeout(client);
       const index = await loadIndex(client, session.orgId, parsed);
+      await checkTargetRegions(client, session.orgId, parsed, index, region);
       return previewIssues(planRows(parsed, index));
     }, scope(session));
   } finally {
@@ -141,9 +148,8 @@ export async function commitImportBatch(
     assertImport(session);
     const rows = coerceImportRows(input.rows, IMPORT_MAX_ROWS);
     counted = rows.length;
-    const parsed = validateImportRows(rows);
     const fileName = cleanName(input.fileName);
-    if (parsed.length === 0) return totalsFromPlans([], fileName, false);
+    if (!rows.length) return totalsFromPlans([], fileName, false);
     let reported = 0;
     const progress: ImportProgress = (done, total) => {
       if (done <= reported) return;
@@ -151,12 +157,16 @@ export async function commitImportBatch(
       onProgress?.(done, total);
     };
     const result = await tx(session.userId, async (client) => {
+      const region = await loadImportRegion(client, session.orgId);
+      const parsed = validateImportRows(rows, undefined, region);
+      if (!parsed.length) return { totals: totalsFromPlans([], fileName, false), saved: false };
       if (parsed.length > 0) progress(1, parsed.length);
       await relaxStatementTimeout(client);
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`import:${session.orgId}`]);
       const index = await loadIndex(client, session.orgId, parsed, progress);
-      const jurisdiction = await one<{ id: string }>(client, `SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
-      const plans = await persistPlans(client, session, parsed, index, jurisdiction.id, progress);
+      await checkTargetRegions(client, session.orgId, parsed, index, region);
+      const jurisdiction = region ? { id: region.jurisdictionId } : await one<{ id: string }>(client, `SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
+      const plans = await persistPlans(client, session, parsed, index, jurisdiction.id, progress, region);
       const totals = totalsFromPlans(plans, fileName, false);
       const rejected = plans.some((plan) => plan.blocked);
       if (!rejected) {
@@ -173,7 +183,7 @@ export async function commitImportBatch(
       try {
         await writeAudit(session.orgId, session.userId, "import_batch", {
           fileName,
-          rows: parsed.length,
+          rows: rows.length,
           created: result.totals.created,
           reused: result.totals.reused,
           errors: result.totals.errors.length,
@@ -357,6 +367,27 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[],
   return index;
 }
 
+async function checkTargetRegions(
+  client: Client, orgId: string, rows: ParsedImportRow[], index: ReturnType<typeof emptyIndex>, region: ImportRegion | null,
+) {
+  if (!region) return;
+  const ids = [...new Set([...index.properties.values()].map(property => property.id)
+    .concat([...index.units.values()].map(unit => unit.propertyId)))];
+  if (!ids.length) return;
+  const properties = await client.query<{ id: string; country_code: string; jurisdiction_id: string | null; currency: string; timezone: string }>(
+    `SELECT id::text, country_code, jurisdiction_id::text, currency, timezone FROM properties
+      WHERE org_id = $1 AND id = ANY($2::uuid[]) FOR SHARE`, [orgId, ids]);
+  const compatible = new Set(properties.rows.filter(property => property.country_code === region.country
+    && property.jurisdiction_id === region.jurisdictionId && property.currency === region.currency
+    && property.timezone === region.timezone).map(property => property.id));
+  for (const row of rows) {
+    const propertyId = index.units.get(unitKey(row.address, row.unitLabel))?.propertyId
+      ?? index.properties.get(row.propertyName)?.id;
+    if (propertyId && !compatible.has(propertyId)) row.issues.push({ line: row.line, severity: "error",
+      key: "im_region_conflict", fields: ["propertyName", "address"] });
+  }
+}
+
 function isoDate(value: string) {
   const match = /^(\d{4}-\d{2}-\d{2})/.exec(value);
   return match ? match[1] : value;
@@ -406,10 +437,11 @@ async function persistPlans(
   index: ReturnType<typeof emptyIndex>,
   jurisdictionId: string,
   onProgress?: ImportProgress,
+  region?: ImportRegion | null,
 ) {
   const planned = planRows(parsed, index);
   if (planned.length === 0 || planned.some((plan) => plan.blocked)) return planned;
-  await bulkWrite(client, session, planned, jurisdictionId, onProgress);
+  await bulkWrite(client, session, planned, jurisdictionId, onProgress, region);
   return planned;
 }
 
@@ -433,7 +465,7 @@ function materializeIds(plans: RowPlan[]) {
   }
 }
 
-async function bulkWrite(client: Client, session: Session, plans: RowPlan[], jurisdictionId: string, onProgress?: ImportProgress) {
+async function bulkWrite(client: Client, session: Session, plans: RowPlan[], jurisdictionId: string, onProgress?: ImportProgress, region?: ImportRegion | null) {
   const live = plans.filter((plan) => !plan.blocked);
   materializeIds(live);
   const total = live.length;
@@ -446,26 +478,26 @@ async function bulkWrite(client: Client, session: Session, plans: RowPlan[], jur
       step += 1;
       onProgress?.(offset + Math.ceil((chunk.length * step) / steps), total);
     };
-    await tick(insertProperties(client, session, chunk, jurisdictionId));
+    await tick(insertProperties(client, session, chunk, jurisdictionId, region));
     await tick(insertPeople(client, session, chunk));
     await tick(insertPropertyOwners(client, session, chunk));
     await tick(insertUnits(client, session, chunk));
     await tick(insertRooms(client, session, chunk));
     const leaseIds = new Map<RowPlan, string>();
-    await tick(insertLeases(client, session, chunk, leaseIds));
+    await tick(insertLeases(client, session, chunk, leaseIds, region));
     await tick(insertParties(client, session, chunk, leaseIds));
     await tick(upsertListingsBulk(client, session.orgId, chunk));
   }
 }
 
-async function insertProperties(client: Client, session: Session, plans: RowPlan[], jurisdictionId: string) {
+async function insertProperties(client: Client, session: Session, plans: RowPlan[], jurisdictionId: string, region?: ImportRegion | null) {
   const rows = uniquePlans(plans.filter((plan) => plan.createProperty && plan.propertyId), (plan) => plan.propertyId ?? "");
   if (rows.length === 0) return;
   await client.query(
     `INSERT INTO properties (
        id, org_id, name, address, address_display, address_key, country_code, jurisdiction_id, currency, timezone, default_rental_mode
      )
-     SELECT t.id, $1, t.name, t.address::jsonb, t.address_display, t.address_key, 'TW', $2, 'TWD', 'Asia/Taipei', t.mode::rental_mode
+     SELECT t.id, $1, t.name, t.address::jsonb, t.address_display, t.address_key, $9, $2, $10, $11, t.mode::rental_mode
        FROM unnest($3::uuid[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[])
          AS t(id, name, address, address_display, address_key, mode)`,
     [
@@ -473,10 +505,11 @@ async function insertProperties(client: Client, session: Session, plans: RowPlan
       jurisdictionId,
       rows.map((plan) => plan.propertyId),
       rows.map((plan) => plan.row.propertyName),
-      rows.map((plan) => JSON.stringify({ country: "TW", line: plan.row.address })),
+      rows.map((plan) => JSON.stringify({ country: region?.country ?? "TW", line: plan.row.address })),
       rows.map((plan) => plan.row.address),
       rows.map((plan) => plan.row.addressKey),
       rows.map((plan) => dbMode(plan.row.kind)),
+      region?.country ?? "TW", region?.currency ?? "TWD", region?.timezone ?? "Asia/Taipei",
     ],
   );
 }
@@ -637,7 +670,7 @@ function leaseRows(plans: RowPlan[]) {
   );
 }
 
-async function insertLeases(client: Client, session: Session, plans: RowPlan[], leaseIds: Map<RowPlan, string>) {
+async function insertLeases(client: Client, session: Session, plans: RowPlan[], leaseIds: Map<RowPlan, string>, region?: ImportRegion | null) {
   const rows = leaseRows(plans);
   if (rows.length === 0) return;
   for (const plan of rows) if (!leaseIds.has(plan)) leaseIds.set(plan, randomUUID());
@@ -652,7 +685,7 @@ async function insertLeases(client: Client, session: Session, plans: RowPlan[], 
          notes, created_by
        )
        SELECT t.id, $1, t.property_id, t.unit_id, NULLIF(t.target_unit, '')::uuid, NULLIF(t.target_room, '')::uuid,
-              'active', 'imported', t.start_date::date, t.end_date::date, 'TWD', t.rent, t.due_day::smallint, false,
+              'active', 'imported', t.start_date::date, t.end_date::date, coalesce($18::char(3), 'TWD'::char(3)), t.rent, t.due_day::smallint, false,
               t.deposit, t.months, NULLIF(t.reason, ''), NULLIF(t.by_user, '')::uuid, NULLIF(t.at, '')::timestamptz,
               NULLIF(t.notes, ''), $2
          FROM unnest(
@@ -678,6 +711,7 @@ async function insertLeases(client: Client, session: Session, plans: RowPlan[], 
         rows.map((plan) => (depositExceedsCap(plan.row.depositMonths) && plan.row.depositReason ? session.userId : "")),
         rows.map((plan) => (depositExceedsCap(plan.row.depositMonths) && plan.row.depositReason ? new Date().toISOString() : "")),
         rows.map((plan) => plan.row.notes ?? ""),
+        region?.currency ?? null,
       ],
     );
   } finally {

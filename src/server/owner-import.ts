@@ -2,6 +2,7 @@ import type { Locale } from "@/i18n";
 import { FlowError } from "./errors";
 import { DEPOSIT_CAP_MONTHS, depositExceedsCap, depositReasonOk, normalizePhone } from "./lease-rules";
 import { taipeiToday, toMinor } from "./money";
+import type { ImportRegion } from "./import-region";
 
 /**
  * Column header map for the property / unit / tenant / lease spreadsheet.
@@ -356,7 +357,8 @@ export function unitKey(address: string, label: string) {
   return `${addressKey(address)}\n${label.normalize("NFKC").trim()}`;
 }
 
-export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday()): ParsedImportRow[] {
+export function validateImportRows(rows: ImportRequestRow[], today = taipeiToday(), region?: ImportRegion | null): ParsedImportRow[] {
+  if (region) today = region.today;
   const parsed: ParsedImportRow[] = [];
   const seenSpace = new Map<string, number>();
   const seenName = new Map<string, string>();

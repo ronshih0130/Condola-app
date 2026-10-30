@@ -2248,5 +2248,8 @@
  "i_lic_bundle_hash": "Shipped bundle SHA-256",
  "i_lic_wasm_hash": "Embedded wasm SHA-256",
  "i_lic_source_notices": "Verbatim source notice blocks",
- "i_repair_photo_choose": "Choose photos"
+ "i_repair_photo_choose": "Choose photos",
+  "im_region_unavailable": "This organization’s import region is unavailable or unsupported. Ask an administrator to check country, jurisdiction, currency and timezone settings; no rows were imported.",
+  "im_region_conflict": "This property’s region settings differ from the organization’s supported import profile. Check the property settings before importing.",
+  "im_xlsx_epoch": "This workbook uses an unsupported date system. Save a copy using the 1900 date system, or use CSV with YYYY-MM-DD dates, then preview again."
 }
