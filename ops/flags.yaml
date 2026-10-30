@@ -1,0 +1,10 @@
+# Scope: new local Mode B B-006 flag only; historical registry remains unreconciled.
+flags:
+  IMPORT_ERROR_DETAILS_ENABLED:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "IMPORT_ERROR_DETAILS_ENABLED unset or not exactly true"
+    org_override: "organizations.feature_flags.import_error_details must be boolean true"
+    activation: "local synthetic tests only; staging not activated"

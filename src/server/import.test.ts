@@ -1,3 +1,4 @@
+import { importErrorDetailsEnabled } from "./import-feature";
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import test from "node:test";
@@ -10,6 +11,9 @@ import { IMPORT_BODY_MAX_BYTES, IMPORT_WRITE_CHUNK, commitImportBatch, dryRunImp
 import {
   IMPORT_DRY_BATCH,
   IMPORT_FIELDS,
+  importProblemRows,
+  issueFields,
+  mergeImportErrors,
   IMPORT_FIELD_MAX,
   IMPORT_MAX_ROWS,
   IMPORT_MONEY_MAX,
@@ -643,4 +647,80 @@ test("zh-TW import copy uses 屋主 and 租客", () => {
   assert.match(zh.im_title, /匯入/);
   assert.match(zh.im_e_dep, /押金/);
   assert.match(zh.im_dry_h, /尚未寫入/);
+});
+
+
+test("import diagnostics preserve source lines, distinct date fields and all error sources", () => {
+  const invalid = lease({ line: 7, startDate: "bad", endDate: "bad", unitLabel: "7F" });
+  const parsed = validateImportRows([invalid], "2026-10-21")[0];
+  const dates = parsed.issues.filter((issue) => issue.key === "im_e_date");
+  assert.deepEqual(dates.map(issueFields), [["startDate"], ["endDate"]]);
+  const server = { line: 7, severity: "error" as const, key: "im_e_mode" };
+  const later = { line: 9, severity: "error" as const, key: "im_e_due" };
+  const combined = mergeImportErrors(dates, [dates[0], server], [server, later]);
+  assert.equal(combined.length, 4);
+  assert.deepEqual(issueFields(server), ["rentalMode", "unitLabel"]);
+  const table = [["Start", "End", "Other"], ["valid", "valid", "v"], [], [], [], [], ["bad", "bad", "kept"], [], ["source"]];
+  const result = importProblemRows(table, combined, "Source row", "Problem", (issue) => `${issueFields(issue).join("/")}:${issue.key}`);
+  assert.deepEqual(result[0], ["Start", "End", "Other", "Source row", "Problem"]);
+  assert.deepEqual(result[1], ["bad", "bad", "kept", "7", "startDate:im_e_date；endDate:im_e_date；rentalMode/unitLabel:im_e_mode"]);
+  assert.deepEqual(result[2], ["source", "", "", "9", "dueDay:im_e_due"]);
+  const remapped = matchColumns([...templateHeaders("en"), "Source row", "Problem"]);
+  assert.equal(remapped.startDate, IMPORT_FIELDS.indexOf("startDate"));
+});
+
+
+test("import detail flag requires explicit global and organization opt-ins", () => {
+  assert.equal(importErrorDetailsEnabled(undefined, { import_error_details: true }), false);
+  assert.equal(importErrorDetailsEnabled("false", { import_error_details: true }), false);
+  assert.equal(importErrorDetailsEnabled(true, { import_error_details: true }), false);
+  assert.equal(importErrorDetailsEnabled("true", undefined), false);
+  assert.equal(importErrorDetailsEnabled("true", {}), false);
+  assert.equal(importErrorDetailsEnabled("true", { import_error_details: false }), false);
+  assert.equal(importErrorDetailsEnabled("true", { import_error_details: "true" }), false);
+  assert.equal(importErrorDetailsEnabled("true", { import_error_details: true }), true);
+});
+
+// A minimal stored ZIP lets the actual XLSX reader inspect row metadata.
+function testXlsx(sheet: string): Uint8Array {
+  const name = Buffer.from("xl/worksheets/sheet1.xml");
+  const data = Buffer.from(sheet);
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(name.length, 26);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0); central.writeUInt32LE(data.length, 20); central.writeUInt32LE(data.length, 24); central.writeUInt16LE(name.length, 28);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(1, 8); end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(central.length + name.length, 12); end.writeUInt32LE(local.length + name.length + data.length, 16);
+  return Buffer.concat([local, name, data, central, name, end]);
+}
+
+test("real CSV and XLSX readers preserve source records through validation and error export", async () => {
+  const headers = templateHeaders("en");
+  const source = lease({ startDate: "bad", endDate: "bad" });
+  const values = IMPORT_FIELDS.map((field) => source[field]);
+  const csv = `${csvDocument([headers])}\n${csvDocument([values]).replace(/^\uFEFF/, "")}`;
+  const sheet = await readSpreadsheet("input.csv", new TextEncoder().encode(csv));
+  assert.deepEqual(sheet.rowNumbers, [1, 3]);
+  assert.equal(tableToRows(sheet.rows, matchColumns(sheet.rows[0]))[0].line, 2);
+  const parsed = validateImportRows(tableToRows(sheet.rows, matchColumns(sheet.rows[0]), sheet.rowNumbers), "2026-10-21");
+  assert.equal(parsed[0].line, 3);
+  const result = importProblemRows(sheet.rows, parsed[0].issues, "source", "problem", (issue) => issueFields(issue).join("/"), sheet.rowNumbers);
+  assert.equal(result[1][headers.length], "3");
+  assert.equal(result[1][0], values[0]);
+  assert.match(result[1].at(-1)!, /startDate.*endDate/);
+  const multiline = await readSpreadsheet("quoted.csv", new TextEncoder().encode('header\n"a\nb"\n\nvalue\n'));
+  assert.deepEqual(multiline.rowNumbers, [1, 2, 4]); // Logical records, not physical text lines.
+  const xlsx = await buildXlsx([headers, [], [], [], [], [], values]);
+  const x = await readSpreadsheet("sparse.xlsx", xlsx);
+  assert.deepEqual(x.rowNumbers, [1, 7]);
+  const xParsed = validateImportRows(tableToRows(x.rows, matchColumns(x.rows[0]), x.rowNumbers), "2026-10-21");
+  assert.equal(xParsed[0].line, 7);
+  assert.equal(importProblemRows(x.rows, xParsed[0].issues, "source", "problem", (i) => i.key, x.rowNumbers)[1][headers.length], "7");
+  await assert.rejects(readSpreadsheet("hostile.xlsx", testXlsx('<worksheet><row r="999999999"><c r="A999999999" t="inlineStr"><is><t>x</t></is></c></row></worksheet>')), (error: unknown) => error instanceof SpreadsheetError && error.code === "xlsx");
+  const spaced = await readSpreadsheet("spaced.xlsx", testXlsx('<worksheet><row r = "7"><c r="A7" t="inlineStr"><is><t>x</t></is></c></row></worksheet>'));
+  assert.deepEqual(spaced.rowNumbers, [7]);
+  for (const row of ['r="-1"', 'r="bad"', 'r = ""']) {
+    await assert.rejects(readSpreadsheet("invalid.xlsx", testXlsx(`<worksheet><row ${row}><c r="A1" t="inlineStr"><is><t>x</t></is></c></row></worksheet>`)), (error: unknown) => error instanceof SpreadsheetError && error.code === "xlsx");
+  }
 });
