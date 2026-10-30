@@ -1,0 +1,17 @@
+# B-001 e-sign reconciliation
+
+Updated 2026-10-29T18:03:33.428084-07:00. State: in_progress / PARTIAL, Class B. Recovered028ab9a is ancestor of suppliedc011e91; e-sign, retention and paper fallback code reused rather than rebuilt. Source bridge53391dd plus replays preserve oldOrigin history and migration bytes.
+
+Local function-privilege gate found3 unlisted authenticated public helpers. New proposal migration20261031100201 adds app-schema context/case/version/filtered-summary helpers, repoints read policies, revokes unauthenticated/authenticated public-helper calls and preserves service signatures. Admin/manager or assigned signer visibility follows source server flow; sandbox needs explicit pins, malformed pins deny, replacement signer cannot read earlier unassigned version body/PDF or others' summary. No new consent/flag semantics. No data/table/column removal; permissions changes explicitly classified NOT add-only. Filename is unused ordering slot after recoveredrefs, not claimed wallclock event time.
+
+Focused guarded synthetic PostgreSQL16 test PASS1/1, using actual void→supersede→addSigner lifecycle on isolated freshclone with proposal applied. Typecheck and targeted lint PASS under Node20. Highest-tier native static SQL scope PASS; final fixture/lifecycle delta review pending. Source config exposes public/graphql only; actual staging schema config remains UNKNOWN after401.
+
+No whole-item PASS. Remaining: detailed G0–G5/§11.1 evidence, React418 prerequisite/24coldstarts, browser full signing with mocks, full candidate gates, frozen artifact/migration compatibility, staging exactversion and independent Claude ClassB QA. Real receipt remains Ron/QA activation evidence; no messages sent.
+
+## Verification checkpoint
+
+Full e-sign local suites: 4 tests passed (schema/service adapter, retained evidence, mounted action replay/permissions/atomic replacement/purge isolation, scoped authorization). Focused shared-guard + privilege test: 2 passed after guard unification. ID migration file: 7 passed, exactly1 CEO-authorized historical skip. PR9e exact fixture upgrade preserves ordinary records and closes six helper grants. Public-function scan: PASS, anonymous executable public functions0 and6 explicit authenticated allowlist matches.
+
+Manifest metadata now classifies recovered files and new permission migration truthfully; +/-diff guard rejects semantic historical modification/deletion and unknown additions. Pureguard and actualgeneratedpack smoke passed. All523 unit tests passed before final portableguard/CI metadata deltas; immutable next-candidate checks still required. Lint0errors/7existing warnings. BothCI YAMLs and actualephemeral-fixture steps validated without printing values.
+
+Service-role staging zero-rowread HTTP200 and app-profile406/PGRST106 verified. No customerdata returned. This resolves API credential concern, not stagedcandidate acceptance.

@@ -5,6 +5,7 @@
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { classifyMigration } from "./migration-classification.mjs";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -97,6 +98,82 @@ const added = {
     addOnly: false,
     reason: "REVOKE EXECUTE on fn_id_photo_drop_wm and fn_lease_close_end_date from PUBLIC, anon, and authenticated when those trigger functions exist. Privilege change. Trigger firing is unchanged.",
   },
+  "supabase/migrations/20261030150200_vendor_repair.sql": {
+    addOnly: false,
+    reason: "Creates vendor job and secret tables with constraints and RLS, adds an attachment foreign key, and changes table and function privileges.",
+  },
+  "supabase/migrations/20261030150300_repair_owner_visibility.sql": {
+    addOnly: false,
+    reason: "Replaces ticket visibility and income-expense report functions and changes helper execution privileges.",
+  },
+  "supabase/migrations/20261030150400_ticket_job_type_reserve.sql": {
+    addOnly: false,
+    reason: "Adds nullable job_type_code and NOT NULL type_fields with a default to maintenance tickets.",
+  },
+  "supabase/migrations/20261030150500_revoke_public_function_execute.sql": {
+    addOnly: false,
+    reason: "Revokes PUBLIC execution and grants execution to authenticated and service_role on app helpers.",
+  },
+  "supabase/migrations/20261030150600_consents.sql": {
+    addOnly: false,
+    reason: "Creates a constrained consent table with RLS and restricted privileges, append-only triggers, and a consent backfill.",
+  },
+  "supabase/migrations/20261030150700_vendor_link_sharing_approval.sql": {
+    addOnly: false,
+    reason: "Adds a check constraint, unique indexes and a constrained shared-photo table with RLS and privilege changes.",
+  },
+  "supabase/migrations/20261030150800_vendor_onboarding_job_types_receipts.sql": {
+    addOnly: false,
+    reason: "Creates constrained vendor and job-type tables, seeds catalog data, adds and validates foreign-key and check constraints, and changes privileges.",
+  },
+  "supabase/migrations/20261030150801_vendor_document_service.sql": {
+    addOnly: false,
+    reason: "Creates constrained vendor-document grant and PDF tables, changes privileges, and installs immutability triggers.",
+  },
+  "supabase/migrations/20261030150802_vendor_job_assignment.sql": {
+    addOnly: false,
+    reason: "Creates a constrained sharing-history table and privileges, and adds triggers that revoke assignments and delete shared-photo projections.",
+  },
+  "supabase/migrations/20261030150900_esign_core.sql": {
+    addOnly: false,
+    reason: "Creates constrained e-sign tables with RLS and privilege changes, and adds guards including a lease retention trigger.",
+  },
+  "supabase/migrations/20261030151100_end_auth_sessions_varchar_fix.sql": {
+    addOnly: false,
+    reason: "Replaces the auth-session termination function and restricts its execution privileges.",
+  },
+  "supabase/migrations/20261030151200_id_purge_dry_run_guard.sql": {
+    addOnly: false,
+    reason: "Changes retention defaults and functions, updates existing document retention dates, and changes purge function privileges.",
+  },
+  "supabase/migrations/20261030151300_partner_agreement_consents.sql": {
+    addOnly: false,
+    reason: "Creates a constrained partner-consent table with RLS, restricted privileges and append-only triggers.",
+  },
+  "supabase/migrations/20261030151301_partner_consent_attestation.sql": {
+    addOnly: false,
+    reason: "Adds attestation columns and NOT VALID check constraints enforced on new writes.",
+  },
+  "supabase/migrations/20261030151400_tenant_signed_pdf_read.sql": {
+    addOnly: false,
+    reason: "Adds a tenant read policy and a gated helper with execution privileges restricted to selected roles.",
+  },
+  "supabase/migrations/20261030151500_paper_lease_versions.sql": {
+    addOnly: false,
+    reason: "Adds unique, check and foreign-key constraints to signed PDFs and restricts execution of the audit trigger helper.",
+  },
+  "supabase/migrations/20261030151600_esign_retention_lifecycle.sql": {
+    addOnly: false,
+    reason: "Creates constrained retention tables and privilege rules, replaces a retention guard and adds a gated disposal function.",
+  },
+  "supabase/migrations/20261031090000_id_delete_after_move_out.sql": {
+    addOnly: false,
+    reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
+  },
+  "supabase/migrations/20261031100201_b001_esign_internal_helpers.sql": {
+    addOnly: false,
+    reason: "Creates app-schema context, case, version and audit helpers with organization and environment scoping, repoints SELECT policies, and revokes public-helper execution from PUBLIC, anon, and authenticated.",
+  },
 };
 
 const functions = [
@@ -119,14 +196,6 @@ function hasCommit(sha) {
   } catch {
     return false;
   }
-}
-
-function commentOnly(diff) {
-  const lines = diff.split("\n").filter((line) => line.startsWith("+") && !line.startsWith("+++"));
-  return lines.length > 0 && lines.every((line) => {
-    const body = line.slice(1).trim();
-    return body === "" || body.startsWith("--");
-  });
 }
 
 function livePrivileges() {
@@ -220,23 +289,20 @@ const rows = [];
 for (const entry of entries) {
   const baseName = path.basename(entry.file);
   if (entry.status !== "D") copyFileSync(path.join(root, entry.file), path.join(outDir, baseName));
-  if (entry.status === "M" || entry.status === "R") {
-    const diff = git(["diff", "--unified=0", base, "HEAD", "--", entry.file]);
-    if (commentOnly(diff)) {
-      rows.push({ file: baseName, change: entry.status, addOnly: "yes", reason: "Version comment only. No column, default, trigger, function, NOT NULL, or constraint. An already applied filename is not run again." });
-      continue;
-    }
-  }
-  const known = added[entry.file];
-  if (!known) {
-    console.error(`no add-only classification for ${entry.file}`);
+  const diff = entry.status === "M" || entry.status === "R"
+    ? git(["diff", "--unified=0", base, "HEAD", "--", entry.file]) : "";
+  let classification;
+  try {
+    classification = classifyMigration(entry.status, diff, added[entry.file]);
+  } catch (error) {
+    console.error(`${error.message} for ${entry.file}`);
     process.exit(1);
   }
   rows.push({
     file: baseName,
     change: entry.status,
-    addOnly: known.addOnly ? "yes" : "no",
-    reason: known.reason,
+    addOnly: classification.addOnly ? "yes" : "no",
+    reason: classification.reason,
   });
 }
 

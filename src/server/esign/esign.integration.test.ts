@@ -1,3 +1,4 @@
+import { disposableDbUrl } from "../test-disposable-db";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -15,21 +16,7 @@ import { EsignFlow } from "./flow";
 import { contractVersionDigest } from "./document";
 import { EsignDenied } from "./access";
 
-const databaseUrl = process.env.DATABASE_URL;
-assert.ok(databaseUrl, "DATABASE_URL is required");
-const target = new URL(databaseUrl);
-assert.ok(
-  target.protocol === "postgres:" || target.protocol === "postgresql:",
-  "Use a postgres or postgresql URL",
-);
-assert.equal(target.hostname, "127.0.0.1", "Only lane-local PostgreSQL is allowed");
-assert.equal(target.port, "54371", "Only port 54371 is allowed");
-for (const key of target.searchParams.keys()) {
-  assert.ok(
-    !["host", "hostaddr", "port", "service", "options"].includes(key.toLowerCase()),
-    "Connection overrides are forbidden",
-  );
-}
+disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 
 test("e-sign schema, service adapter, permissions and retained evidence", async () => {
   const org = ORG_ID;
@@ -299,7 +286,7 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
         });
         await asUser(ownerId, async () => {
           const summary = await client.query(
-            `SELECT * FROM esign_audit_summary($1)`, [caseId],
+            `SELECT * FROM app.esign_audit_summary($1)`, [caseId],
           );
           assert.ok(summary.rowCount);
           assert.ok(summary.rows.every((r) => r.signer_id === ownerId));

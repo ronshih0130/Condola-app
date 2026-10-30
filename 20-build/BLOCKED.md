@@ -17,3 +17,20 @@ Never place secret values, invite/session tokens, raw webhook bodies or customer
 ## Bootstrap source-recovery dependency
 
 B-001–B-004 verification/integration is pending recovery of hub-cited lane commits (028ab9a, 389ff74, dcc104d; related move-out/purge and paper-version migrations/evidence). Current Origin baseline lacks them. Owner: Ron/Mode A source maintainer. Supply sanitized lane/recovery refs or code archive; no production credentials. Independent B-005 trial work proceeds. TRAIN remains absent; no production release attempted.
+
+## Source recovery update
+
+The previous B-001–B-004 code-ref dependency is resolved by the verified lanes.bundle (acc47b0cd60a34cec613ca17934e5bcc4616f8a36c3c352a2fdec9ed1fa77e7f); all7 refs saved on Origin. Source bridge and narrow replays are on mode-b-build; production state remains unqueried.
+
+- HISTORICAL_FIXTURE / B-002 shared RLS: b888ccd:supabase/migrations/20261022180000_tenant_id_check.sql is absent even from recovered history. Full gate8cbb fails this test. Ron has been asked for exact SQL+hash or recovery ref; no fixture fabricated or test skipped. Other local checks proceed.
+- STAGING_AUTH / staging acceptance: database read-only SELECT1 passed; REST metadata probe returned401. JWT format/roles/expiry checked without printing values. Deployed API-schema exposure and app acceptance remain UNKNOWN. Ron/maintainer asked for refreshed staging-only API credentials if required; no plaintext requested.
+- B-001 grant scope: local RPC/RLS correction is being verified; full G0–G5, detailed §11.1 source, React418 prerequisite and24cold-start/browser/staging evidence remain incomplete. Native review is not Claude Class B sign-off.
+- B-007 SCHEMA_POLICY: full regional ON enforcement conflicts with existing universal leases_deposit_over_cap_requires_override CHECK. Highest-tier plan says a concrete Ron exception is required to replace that fixed CHECK under strict additive-only policy; no bypass/nulling of stored months and no such DDL performed. Read-only guidance/planning/other items can proceed.
+
+Staging auth resolution: service_role with apikey + Authorization verified zero-row organizations REST read HTTP200; app-profile metadata returned406/PGRST106 (app schema not exposed). Earlier anonymous401 did not prove invalid keys; existing bundle retained. No customer rows returned, no schema mutation.
+
+Provided historical SQL comparison: eabd6c26bb9fa785e255343a73bb316d665b3b3584bedc78f514e4bc95dffd19 equals current1820 migration; PR9e9b2295f0140e3b06e3f585ccf564816d98f7e00efbf0bea7f02d3147b69363b9 differs only in helper permissions/comment. Both alreadyenforce nonnull deletion clock and819200-bytephoto cap. Neither proves original b888 nullable/2MBoldstate. PR9e adopted only as explicitly labeled privilege-upgrade fixture; original legacy data-state coverage remainsUNKNOWN andfailclosed. No synthetic historical schema or missingcommit identity fabricated. Portable tests now stay on explicitly opted-in localtarget anduniqueowned scratch DBs.
+
+## CEO historical-fixture disposition 2026-10-29T18:23:41.724477-07:00
+
+Source: Ron's direct chat relaying CEO decision, 2026-10-29. b888ccd is irretrievable; stop chasing. Neither supplied exact-hash variant matches the old nullable/oversized data state, so ONLY the test "a database with the older 20261022180000 upgrades forward, then accepts the same file again" is SKIPPED with reason "historical commit lost". Its body is retained; no substitute historical schema fabricated. The separately labeled exact-hash PR9e privilege-upgrade test passed and remains active. All other checks continue. This is not proof of the untested legacy state or a waiver for other failures, staging checks, independent QA or production activation.

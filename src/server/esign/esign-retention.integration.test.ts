@@ -1,27 +1,11 @@
+import { disposableDbUrl } from "../test-disposable-db";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { withClient } from "../db";
 import { ORG_ID, USERS } from "../ids";
 
-// Run against the migrated, seeded lane database with:
-// DATABASE_URL=postgresql://...@127.0.0.1:54371/... \
-//   npx tsx --test src/server/esign/esign-retention.integration.test.ts
-const databaseUrl = process.env.DATABASE_URL;
-assert.ok(databaseUrl, "DATABASE_URL is required");
-const target = new URL(databaseUrl);
-assert.ok(
-  target.protocol === "postgres:" || target.protocol === "postgresql:",
-  "Use a postgres or postgresql URL",
-);
-assert.equal(target.hostname, "127.0.0.1", "Only lane-local PostgreSQL is allowed");
-assert.equal(target.port, "54371", "Only port 54371 is allowed");
-for (const key of target.searchParams.keys()) {
-  assert.ok(
-    !["host", "hostaddr", "port", "service", "options"].includes(key.toLowerCase()),
-    "Connection overrides are forbidden",
-  );
-}
+disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 
 test("e-sign retention extensions and gated post-retention disposal", async () => {
   await withClient(async (client) => {

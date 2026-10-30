@@ -31,12 +31,26 @@ jobs:
     env:
       DATABASE_URL: postgres://condola:condola@127.0.0.1:5432/condola
       DEMO_MODE: "true"
+      CONDOLA_RLS_DISPOSABLE: "YES"
+      WRANGLER_SEND_METRICS: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: ".nvmrc"
           cache: npm
+      - name: Generate ephemeral synthetic test material
+        # This check job owns disposable fixture data. No maintenance/prod keys.
+        # GITHUB_ENV is an ephemeral runner file outside the checkout; print no values.
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { randomBytes } = require('node:crypto');
+          if (!process.env.GITHUB_ENV || process.env.CONDOLA_RLS_DISPOSABLE !== 'YES') throw new Error('Disposable CI environment required');
+          const names = ['ID_DOC_ENCRYPTION_KEY', 'ID_DOC_HMAC_KEY', 'ID_DOC_SIGNING_SECRET'];
+          fs.appendFileSync(process.env.GITHUB_ENV, names.map(name => name + '=' + randomBytes(32).toString('hex')).join('\n') + '\n');
+          fs.chmodSync(process.env.GITHUB_ENV, 0o600);
+          NODE
       - run: npm ci
       - name: Install PDF raster tools
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
@@ -72,7 +86,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: ".nvmrc"
           cache: npm
       - run: npm ci
       - name: Require the Cloudflare API token

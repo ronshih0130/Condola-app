@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { disposableDbUrl, withDatabase } from "./test-disposable-db";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,9 +9,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 
-const ADMIN_URL = "postgres://condola:condola@127.0.0.1:5432/postgres";
-const FRESH_URL = process.env.DATABASE_URL ?? "postgres://condola:condola@127.0.0.1:5432/condola";
-const UPGRADE_DB = "condola_id_upgrade";
+const target = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
+const FRESH_URL = target.href;
+const ADMIN_URL = withDatabase(target, "postgres");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MIGRATIONS = path.join(ROOT, "supabase/migrations");
 const STUB = path.join(ROOT, "supabase/stub/supabase_stub.sql");
@@ -33,6 +35,21 @@ const DEFINER = [
   "fn_id_document_delete_after",
   "fn_lease_refresh_id_delete_after",
 ] as const;
+
+async function createScratchDb() {
+  const name = `condola_id_${randomUUID().replaceAll("-", "")}`;
+  const url = withDatabase(target, name);
+  await withDb(ADMIN_URL, (client) => client.query(`CREATE DATABASE ${name}`));
+  let created = true;
+  return {
+    url,
+    async cleanup() {
+      if (!created) return;
+      await withDb(ADMIN_URL, (client) => client.query(`DROP DATABASE ${name}`));
+      created = false;
+    },
+  };
+}
 
 function psql(databaseUrl: string, file: string) {
   execFileSync("psql", [databaseUrl, "-v", "ON_ERROR_STOP=1", "-f", file], {
@@ -598,19 +615,72 @@ test("a fresh database that already ran the current ID migration accepts the upg
   });
 });
 
-test("a database with the older 20261022180000 upgrades forward, then accepts the same file again", async () => {
+test("provided PR9e privilege variant upgrades and preserves ordinary records", async () => {
+  const fixture = path.join(ROOT, "src/server/fixtures/id-migration/20261022180000_tenant_id_check.pr9e-variant.sql");
+  assert.equal(createHash("sha256").update(readFileSync(fixture)).digest("hex"), "9b2295f0140e3b06e3f585ccf564816d98f7e00efbf0bea7f02d3147b69363b9");
+  const database = await createScratchDb();
+  try {
+    psql(database.url, STUB);
+    for (const file of readdirSync(MIGRATIONS).filter((name) => name.endsWith(".sql") && name < OLD_FILE).sort()) {
+      psql(database.url, path.join(MIGRATIONS, file));
+    }
+    psql(database.url, fixture);
+    const inspect = async () => withDb(database.url, async (client) => {
+      const result = await client.query<{ proname: string; pub: boolean; anon: boolean; authn: boolean; svc: boolean }>(
+        `SELECT p.proname,
+                has_function_privilege('public', p.oid, 'execute') AS pub,
+                has_function_privilege('anon', p.oid, 'execute') AS anon,
+                has_function_privilege('authenticated', p.oid, 'execute') AS authn,
+                has_function_privilege('service_role', p.oid, 'execute') AS svc
+           FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname = 'public' AND p.proname = ANY($1::text[]) ORDER BY p.proname`,
+        [[...CLOSED_EXECUTE]],
+      );
+      assert.deepEqual(result.rows.map((row) => row.proname), [...CLOSED_EXECUTE].sort());
+      return result.rows;
+    });
+    const before = await inspect();
+    assert.ok(before.some((row) => row.pub || row.anon || row.authn), "PR9e must expose at least one prior helper grant");
+    const saved = await withDb(database.url, async (client) => {
+      const org = await client.query<{ id: string }>(`INSERT INTO organizations (name, country_code, default_currency) VALUES ('PR9e fixture', 'TW', 'TWD') RETURNING id::text`);
+      const contact = await client.query<{ id: string }>(`INSERT INTO contacts (org_id, is_tenant, display_name) VALUES ($1, true, 'Fixture') RETURNING id::text`, [org.rows[0].id]);
+      const doc = await client.query<{ id: string; delete_after: string }>(
+        `INSERT INTO identity_documents (org_id, contact_id, doc_type, number_masked, storage_path, encryption_key_ref)
+         VALUES ($1, $2, 'passport', 'A***CD', $3, 'fixture-key-ref') RETURNING id::text, delete_after::text`,
+        [org.rows[0].id, contact.rows[0].id, `${org.rows[0].id}/fixture/front`],
+      );
+      await client.query(`INSERT INTO identity_document_photos (org_id, document_id, slot, storage_bucket, storage_path, mime_type, size_bytes, sha256)
+        VALUES ($1, $2, 'front', 'id-documents-private', $3, 'image/jpeg', 1200, $4)`,
+        [org.rows[0].id, doc.rows[0].id, `${org.rows[0].id}/fixture/photo`, "a".repeat(64)]);
+      return doc.rows[0];
+    });
+    for (let replay = 0; replay < 2; replay += 1) {
+      psql(database.url, path.join(MIGRATIONS, UPGRADE_FILE));
+      const after = await inspect();
+      for (const row of after) {
+        assert.equal(row.pub, false, row.proname);
+        assert.equal(row.anon, false, row.proname);
+        assert.equal(row.authn, false, row.proname);
+        assert.equal(row.svc, true, row.proname);
+      }
+      await withDb(database.url, async (client) => {
+        const record = await client.query<{ delete_after: string; photos: string }>(
+          `SELECT d.delete_after::text, (SELECT count(*)::text FROM identity_document_photos p WHERE p.document_id = d.id) AS photos FROM identity_documents d WHERE d.id = $1`, [saved.id]);
+        assert.equal(record.rows[0]?.delete_after, saved.delete_after);
+        assert.equal(record.rows[0]?.photos, "1");
+      });
+    }
+  } finally {
+    await database.cleanup();
+  }
+});
+
+test("a database with the older 20261022180000 upgrades forward, then accepts the same file again", { skip: "Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29" }, async () => {
   const scratch = mkdtempSync(path.join(tmpdir(), "condola-id-upgrade-"));
   const oldSql = path.join(scratch, OLD_FILE);
   writeFileSync(oldSql, execFileSync("git", ["show", `b888ccd:${path.join("supabase/migrations", OLD_FILE)}`], { cwd: ROOT }));
-  const upgradeUrl = `postgres://condola:condola@127.0.0.1:5432/${UPGRADE_DB}`;
-  await withDb(ADMIN_URL, async (client) => {
-    await client.query(
-      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-      [UPGRADE_DB],
-    );
-    await client.query(`DROP DATABASE IF EXISTS ${UPGRADE_DB}`);
-    await client.query(`CREATE DATABASE ${UPGRADE_DB} OWNER condola`);
-  });
+  const database = await createScratchDb();
+  const upgradeUrl = database.url;
   try {
     psql(upgradeUrl, STUB);
     for (const file of readdirSync(MIGRATIONS).filter((name) => name.endsWith(".sql")).sort()) {
@@ -727,13 +797,7 @@ test("a database with the older 20261022180000 upgrades forward, then accepts th
     await assertCurrentSchema(upgradeUrl);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
-    await withDb(ADMIN_URL, async (client) => {
-      await client.query(
-        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-        [UPGRADE_DB],
-      );
-      await client.query(`DROP DATABASE IF EXISTS ${UPGRADE_DB}`);
-    });
+    await database.cleanup();
   }
 });
 

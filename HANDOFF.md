@@ -22,3 +22,23 @@ B-005 independent verification proceeds: resumable trial state has a concrete em
 Native independent review supports bootstrap prerequisites only; Class B independent Claude desktop QA remains required and unperformed. No production authority, no external messages, no legal-copy edits. Mirror authentication/state: unknown; no GitHub writes made.
 
 STOP POINT: repo ownership ACTIVE, context reconciled, staging DB read-only verification PASS; next: focused B-005 local PostgreSQL verification; owner: Ron/Codex. Full queue remains active and incomplete.
+
+## Active source-reconciliation checkpoint 2026-10-29T18:03:33.428084-07:00
+
+Integration worktree is work/mode-b-build, branch mode-b-build. User-supplied c011e91 code source is preserved through explicit two-parent bridge53391dd; both oldOrigin2bedb89 and source5d8b002 are reachable. No live production verification claimed. All7 incoming refs were atomically pushed and exact remote SHAs read back.
+
+32 shared migration files keep exact oldOrigin bytes;39 additional source files preserve exact supplied bytes (12 Version-comment differences documented). Source-integrity independent review PASS at8cbb9e5; no supplied path loss, legal implementation and all2243 existing locale values preserved. Local B005/B006 replay evidence awaits fresh combined acceptance.
+
+Fresh71-file migration replay executed. Independently old32 schema with synthetic seed upgraded through39 additional files; organization/property/lease/payment counts unchanged. Catalog and previous-code compatibility still pending; no shared staging schema change. Combined gate8cbb: pinned install/type/lint/copy/PostgreSQL/flag checks PASS; unit FAIL (missing historical migration classification, now being corrected), RLS FAIL (missing b888ccd fixture, requested from Ron). No baseline failure waived.
+
+Staging DB connectivity PASS; REST metadata401, actual API configuration UNKNOWN. Updated staging bundle requested only by protected path+hash. Local test-only encryption material generated in memory where required for synthetic seed; never obtained from maintenance/production, never printed or stored in Git.
+
+STOP POINT: repo claim remains ACTIVE B/Ron, child staging/prod claims not acquired; next: commit and verify B001 RPC/RLS security and packaging corrections on exact candidate, then continue B002–B004 using recovered lanes; owner: Ron/Codex. Full39-item goal remains active and incomplete.
+
+Staging auth resolution: service_role with apikey + Authorization verified zero-row organizations REST read HTTP200; app-profile metadata returned406/PGRST106 (app schema not exposed). Earlier anonymous401 did not prove invalid keys; existing bundle retained. No customer rows returned, no schema mutation.
+
+Provided historical SQL comparison: eabd6c26bb9fa785e255343a73bb316d665b3b3584bedc78f514e4bc95dffd19 equals current1820 migration; PR9e9b2295f0140e3b06e3f585ccf564816d98f7e00efbf0bea7f02d3147b69363b9 differs only in helper permissions/comment. Both alreadyenforce nonnull deletion clock and819200-bytephoto cap. Neither proves original b888 nullable/2MBoldstate. PR9e adopted only as explicitly labeled privilege-upgrade fixture; original legacy data-state coverage remainsUNKNOWN andfailclosed. No synthetic historical schema or missingcommit identity fabricated. Portable tests now stay on explicitly opted-in localtarget anduniqueowned scratch DBs.
+
+## CEO historical-fixture disposition 2026-10-29T18:23:41.724477-07:00
+
+Source: Ron's direct chat relaying CEO decision, 2026-10-29. b888ccd is irretrievable; stop chasing. Neither supplied exact-hash variant matches the old nullable/oversized data state, so ONLY the test "a database with the older 20261022180000 upgrades forward, then accepts the same file again" is SKIPPED with reason "historical commit lost". Its body is retained; no substitute historical schema fabricated. The separately labeled exact-hash PR9e privilege-upgrade test passed and remains active. All other checks continue. This is not proof of the untested legacy state or a waiver for other failures, staging checks, independent QA or production activation.

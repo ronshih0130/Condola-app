@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-10-29T18:35:27.666472-07:00",
+  "scope": "precommit local working-tree verification only",
+  "runtime": {
+    "node": "20.20.2",
+    "npm": "10.8.2",
+    "postgres": "16.15"
+  },
+  "esign_integration": {
+    "passed": 4,
+    "failed": 0
+  },
+  "id_migration": {
+    "passed": 7,
+    "failed": 0,
+    "skipped": 1,
+    "skip_authority": "CEO decision via Ron direct chat 2026-10-29; historicalb888lost"
+  },
+  "pr9e_fixture_sha256": "9b2295f0140e3b06e3f585ccf564816d98f7e00efbf0bea7f02d3147b69363b9",
+  "function_privileges": {
+    "result": "PASS",
+    "anon_execute_public": 0,
+    "authenticated_allowlist_matches": 6
+  },
+  "staging": {
+    "zero_row_read_http": 200,
+    "app_schema_profile_http": 406,
+    "code": "PGRST106",
+    "deployed_candidate_verified": false
+  },
+  "production_access": false,
+  "real_messages_sent": false,
+  "whole_B001_done": false
+}
