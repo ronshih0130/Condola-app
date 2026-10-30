@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "./db";
+import { captureHandoverBeforeDemoReset } from "./handover-demo-reset";
 import { buildStoredConsent, writeConsentSql } from "./consent";
 import { DEMO_PASSWORD } from "./demo-password";
 import { seedSampleCheck } from "./id-docs";
@@ -63,6 +64,10 @@ export async function resetAndSeed() {
   await withClient(async (client) => {
   try {
     await client.query("BEGIN");
+    // Older disposable schemas may predate B011. On newer schemas, capture
+    // object tombstones before any public-parent mutation in this transaction.
+    const handover = await client.query<{present:boolean}>(`SELECT to_regclass('app.handover_records') IS NOT NULL AS present`);
+    if (handover.rows[0].present) await captureHandoverBeforeDemoReset(client);
     await wipe(client);
 
     for (const person of PEOPLE) {
