@@ -1,0 +1,76 @@
+{
+  "recordedAt": "2026-10-30T07:50:50.648394-07:00",
+  "mode": "B",
+  "state": "WORKING_INCOMPLETE",
+  "ownershipSession": "3099AC86-6AF0-4681-9944-304E930BFDC2",
+  "core91c": {
+    "candidate": "3f8505e87736c5ca422172d992bf33d9615ab390",
+    "originBranch": "mode-b-tenant-directory-edit-prep",
+    "pushed": true,
+    "mirrorReceipt": "2026-10-30T07:49:49-0700",
+    "gate": "PASS",
+    "counts": {
+      "unit": {
+        "tests": [
+          "588"
+        ],
+        "pass": [
+          "588"
+        ],
+        "fail": [
+          "0"
+        ],
+        "skipped": [
+          "0"
+        ]
+      },
+      "rls": {
+        "tests": [
+          "7"
+        ],
+        "pass": [
+          "7"
+        ],
+        "fail": [
+          "0"
+        ],
+        "skipped": [
+          "0"
+        ]
+      }
+    },
+    "nextBuild": "PASS",
+    "cfStagingBundle": "PASS",
+    "originalPreflight": "PASS",
+    "localWorker": "1/1 PASS",
+    "full57Browser": "RUNNING; no whole-run verdict yet",
+    "prior1f5WholeBrowser": {
+      "passed": 141,
+      "failed": 1,
+      "offSkipped": 3,
+      "verdict": "FAIL_PRESERVED"
+    },
+    "B007coherentMeasurementRecheck": "8/8 PASS; no CSS/runtime defect proved; no prior failure relabel",
+    "source18": "Published in this branch and now immutable; no hosted DB apply"
+  },
+  "B013": {
+    "source20": "unpublished isolated draft, not in core91c",
+    "scope": "read foundation16/16; actual personaldefault fixedmodule13/13; extra sandbox/reset2 tests running",
+    "source": "2b950e1e8012f6e56cfb5e5c3394e31bc740f535",
+    "module": "8a50fe214e5383acf5a193e6895f87d2a651240e",
+    "review": "native highest scoped static only; no public API/UI/override/approval/dispatch"
+  },
+  "B019": {
+    "localPartialCheckpoint": "ab22555",
+    "scope": "clone-only guarded operation prototype; no trusted finalizer/integrated commit",
+    "source19": "untracked unpublished unconditional fail guard excluded; do not apply",
+    "next": "reserved org/platform local guards"
+  },
+  "B011": {
+    "scope": "unpublished16 staff-only v2 UNKNOWN preview/context/recovery; save/read and full proof remain pending",
+    "sharedRentPeriodFix": "Origin ce7ce65; source91ca6c integration; new rent lines with approved calculation only"
+  },
+  "staging": "await Ron notification of Product Engineering box plan; no Mac hosted DDL/no polling/no messages",
+  "acceptance": "native static review is not independent Claude Class B; whole queue/staging/release remain incomplete NO-GO",
+  "next": "finish exact3f850 browser; continue isolated B013 commands/UI protocol/B019/B011; no prod or external delivery"
+}
