@@ -24,9 +24,11 @@ test("repeated guarded demo reset clears only these private event references",as
   process.env.ID_DOC_ENCRYPTION_KEY=randomBytes(32).toString("hex");
   const c=new Client({connectionString:process.env.DATABASE_URL}); await c.connect();
   try {
-    const invoice=(await c.query<{id:string;lease_id:string}>(`SELECT i.id::text,i.lease_id::text FROM invoices i JOIN leases l ON l.id=i.lease_id WHERE i.org_id=$1 AND l.status='active' AND l.terminated_on IS NULL AND i.status IN ('open','partially_paid') AND i.balance_minor>0 AND EXISTS (SELECT 1 FROM invoice_lines il WHERE il.invoice_id=i.id AND il.charge_type='rent' AND il.amount_minor>0) AND EXISTS (SELECT 1 FROM lease_parties lp JOIN contacts ct ON ct.id=lp.contact_id WHERE lp.lease_id=l.id AND ct.email IS NOT NULL) LIMIT 1`,[ORG_ID])).rows[0];
+    // The seeded tenant2 has an unpaid invoice; tenant1 is fully paid.
+    // Unlinked email-only contacts cannot supply a principal read marker.
+    const invoice=(await c.query<{id:string;lease_id:string}>(`SELECT i.id::text,i.lease_id::text FROM invoices i JOIN leases l ON l.org_id=i.org_id AND l.id=i.lease_id WHERE i.org_id=$1 AND l.status='active' AND l.terminated_on IS NULL AND i.status IN ('open','partially_paid') AND i.balance_minor>0 AND EXISTS (SELECT 1 FROM invoice_lines il WHERE il.org_id=i.org_id AND il.invoice_id=i.id AND il.charge_type='rent' AND il.amount_minor>0) AND EXISTS (SELECT 1 FROM lease_parties lp JOIN contacts ct ON ct.org_id=lp.org_id AND ct.id=lp.contact_id WHERE lp.org_id=l.org_id AND lp.lease_id=l.id AND lp.role IN ('primary','co_tenant') AND ct.user_id=$2 AND ct.archived_at IS NULL AND ct.email IS NOT NULL AND btrim(ct.email::text)<>'') ORDER BY i.id LIMIT 1`,[ORG_ID,USERS.tenant2])).rows[0];
     const payment=(await c.query<{id:string}>(`SELECT id::text FROM payments WHERE org_id=$1 LIMIT 1`,[ORG_ID])).rows[0];
-    const contact=(await c.query<{id:string}>(`SELECT id::text FROM contacts WHERE org_id=$1 AND user_id=$2`,[ORG_ID,USERS.tenant])).rows[0];
+    const contact=(await c.query<{id:string}>(`SELECT id::text FROM contacts WHERE org_id=$1 AND user_id=$2`,[ORG_ID,USERS.tenant2])).rows[0];
     assert.ok(invoice && payment && contact);
     const session=randomUUID();
     await c.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES ($1,$2,$3,now()+interval '1 hour')`,[session,USERS.admin,randomUUID()]);
@@ -35,10 +37,11 @@ test("repeated guarded demo reset clears only these private event references",as
     await c.query(`SELECT set_config('request.jwt.claim.sub',$1,false)`,[USERS.admin]);
     const event=(await c.query<{id:string}>(`SELECT app.b010_manual_reminder($1,$1,'live',$2,$3,$4,$5)::text AS id`,[ORG_ID,session,invoice.lease_id,invoice.id,randomUUID()])).rows[0].id;
     const claim=(await c.query<{id:string;principal_user_id:string|null}>(`SELECT id::text,principal_user_id::text FROM app.b028_recipient_claims WHERE event_id=$1 AND principal_user_id IS NOT NULL LIMIT 1`,[event])).rows[0];
-    assert.ok(claim && claim.principal_user_id);
+    assert.ok(claim);
+    assert.equal(claim.principal_user_id,USERS.tenant2);
     await c.query(`INSERT INTO app.b028_read_markers(org_id,claim_id,principal_user_id) VALUES ($1,$2,$3)`,[ORG_ID,claim.id,claim.principal_user_id]);
     await c.query(`INSERT INTO app.b010_payment_commands(org_id,actor_id,request_id,payload_digest,payment_id) VALUES ($1,$2,$3,$4,$5)`,[ORG_ID,USERS.admin,randomUUID(),"a".repeat(64),payment.id]);
-    await c.query(`INSERT INTO app.b010_tenant_due_preferences(org_id,user_id,due_enabled) VALUES ($1,$2,false)`,[ORG_ID,USERS.tenant]);
+    await c.query(`INSERT INTO app.b010_tenant_due_preferences(org_id,user_id,due_enabled) VALUES ($1,$2,false)`,[ORG_ID,USERS.tenant2]);
     await c.query(`CREATE TABLE app.b010_reset_unrelated_probe (value integer NOT NULL)`);
     await c.query(`INSERT INTO app.b010_reset_unrelated_probe VALUES (7)`);
     await c.end();
