@@ -325,6 +325,7 @@ export async function actionRecordPayment(formData: FormData) {
       paidOn: text(formData.get("paidOn")) || taipeiToday(),
       last5: text(formData.get("last5")).trim(),
       reference: text(formData.get("reference")),
+      requestId: text(formData.get("requestId")) || undefined,
     });
     redirect(staff ? `/m/leases/${leaseId}?tab=ledger` : "/t/pay?done=1");
   } catch (error) {

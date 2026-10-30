@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { withClient } from "./db";
 import { allocateAndLedger, lockAllocationInvoices } from "./domain";
+import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
 import { scoreMatch } from "./money";
 import { parseBankCsv } from "./bank-matching-rules";
 import type { Session } from "./types";
@@ -87,6 +88,19 @@ export async function decideBankMatch(session: Session, input: {bankId:string;pa
   const reason = typeof input.reason === "string" ? input.reason.trim() : "";
   if (!reason || reason.length > 500 || !["match","reject"].includes(input.decision)) throw fail();
   return operation(session,true,async (client) => {
+    let initialPayment: {id:string;lease_id:string} | null=null;
+    let resultEnabled=false;
+    if (input.decision === "match") {
+      const flag=(await client.query<{enabled:boolean}>(`SELECT EXISTS (SELECT 1 FROM organizations o JOIN platform_settings f ON f.key='payment_results_v2'
+        WHERE o.id=$1 AND o.feature_flags->'payment_results_v2'='true'::jsonb AND f.value->'enabled'='true'::jsonb
+          AND jsonb_typeof(f.value->'allowed_org_ids')='array' AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)) AS enabled`,[session.orgId])).rows[0].enabled;
+      if (flag) await client.query(`SELECT set_config('request.jwt.claim.sub',$1,true)`,[session.userId]);
+      const discovered=input.suggestionId ? (await client.query<{id:string}>(`SELECT payment_id::text AS id FROM bank_match_suggestions WHERE org_id=$1 AND bank_transaction_id=$2 AND id=$3`,[session.orgId,input.bankId,input.suggestionId])).rows[0]?.id : input.paymentId;
+      if (!discovered || (input.paymentId && input.paymentId !== discovered)) throw fail();
+      initialPayment=(await client.query<{id:string;lease_id:string}>(`SELECT id::text,lease_id::text FROM payments WHERE org_id=$1 AND id=$2`,[session.orgId,discovered])).rows[0] ?? null;
+      if (!initialPayment) throw fail();
+      resultEnabled=flag && await lockPaymentResultContext(client,session,initialPayment.lease_id);
+    }
     const bank = (await client.query<{status:string;amount:string;currency:string;property_id:string|null}>(`SELECT b.status::text,b.amount_minor::text AS amount,b.currency,a.property_id::text FROM bank_transactions b JOIN bank_accounts a ON a.org_id=b.org_id AND a.id=b.bank_account_id WHERE b.org_id=$1 AND b.id=$2 AND a.archived_at IS NULL FOR UPDATE OF b FOR SHARE OF a`,[session.orgId,input.bankId])).rows[0];
     if (!bank || !["unmatched","suggested"].includes(bank.status)) throw fail();
     const suggestion = input.suggestionId ? (await client.query<{id:string;payment_id:string;status:string}>(`SELECT id::text,payment_id::text,status::text FROM bank_match_suggestions WHERE org_id=$1 AND bank_transaction_id=$2 AND id=$3 FOR UPDATE`,[session.orgId,input.bankId,input.suggestionId])).rows[0] : null;
@@ -102,12 +116,14 @@ export async function decideBankMatch(session: Session, input: {bankId:string;pa
     const paymentId = suggestion?.payment_id ?? input.paymentId;
     if (!paymentId || (suggestion && input.paymentId && input.paymentId !== paymentId)) throw fail();
     const payment = (await client.query<{id:string;org_id:string;property_id:string;lease_id:string;currency:string;amount_minor:string;payer_contact_id:string|null;status:string;bank_transaction_id:string|null}>(`SELECT id::text,org_id::text,property_id::text,lease_id::text,currency,amount_minor::text,payer_contact_id::text,status::text,bank_transaction_id::text FROM payments WHERE org_id=$1 AND id=$2 FOR UPDATE`,[session.orgId,paymentId])).rows[0];
-    if (!payment || payment.bank_transaction_id || !["submitted","confirmed"].includes(payment.status) || (bank.property_id !== null && bank.property_id !== payment.property_id) || bank.currency !== payment.currency || bank.amount !== payment.amount_minor || BigInt(bank.amount) <= BigInt(0) || BigInt(bank.amount) > BigInt(Number.MAX_SAFE_INTEGER)) throw fail();
+    if (!payment || !initialPayment || payment.id !== initialPayment.id || payment.lease_id !== initialPayment.lease_id || payment.bank_transaction_id || !["submitted","confirmed"].includes(payment.status) || (bank.property_id !== null && bank.property_id !== payment.property_id) || bank.currency !== payment.currency || bank.amount !== payment.amount_minor || BigInt(bank.amount) <= BigInt(0) || BigInt(bank.amount) > BigInt(Number.MAX_SAFE_INTEGER)) throw fail();
     if (payment.status === "submitted") {
       const invoices = await lockAllocationInvoices(client,session.orgId,payment.lease_id);
       if (Number(payment.amount_minor) > invoices.reduce((sum, invoice) => sum + Number(invoice.balance_minor),0)) throw fail();
+      if (resultEnabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw fail();
       await client.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now(),bank_transaction_id=$3 WHERE org_id=$4 AND id=$1`,[payment.id,session.userId,input.bankId,session.orgId]);
       await allocateAndLedger(client,payment,session.userId,invoices);
+      if (resultEnabled) await emitPaymentResult(client,payment.id,"payment_confirmed");
     } else await client.query(`UPDATE payments SET bank_transaction_id=$2 WHERE id=$1 AND org_id=$3`,[payment.id,input.bankId,session.orgId]);
     if (suggestion) await client.query(`UPDATE bank_match_suggestions SET status='approved',decided_by=$2,decided_at=now() WHERE id=$1`,[suggestion.id,session.userId]);
     await client.query(`UPDATE bank_match_suggestions SET status='superseded',decided_by=$3,decided_at=now() WHERE org_id=$1 AND bank_transaction_id=$2 AND status='suggested'`,[session.orgId,input.bankId,session.userId]);

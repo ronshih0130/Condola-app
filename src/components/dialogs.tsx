@@ -53,6 +53,7 @@ export function PayDialog({
   label,
   returnTo,
   status,
+  requestScope,
 }: {
   leaseId: string;
   dueMinor: number;
@@ -60,9 +61,14 @@ export function PayDialog({
   label: string;
   returnTo: "staff" | "tenant";
   status?: string;
+  requestScope?: { actorId:string; orgId:string; copy:{checking:string; recorded:string; unknown:string; unavailable:string; newPayment:string} };
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const paymentRequestId = useRef("");
+  const [requestStatus, setRequestStatus] = useState<"checking" | "recorded" | "unknown" | "unavailable">("checking");
+  const [requestCheck, setRequestCheck] = useState(0);
+  const storageKey = requestScope ? `condola:payment-request:${requestScope.actorId}:${requestScope.orgId}:${leaseId}` : null;
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -92,13 +98,48 @@ export function PayDialog({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !storageKey || !paymentRequestId.current) return;
+    let current = true;
+    setRequestStatus("checking");
+    fetch("/api/payments/request-status", { method:"POST", headers:{"Content-Type":"application/json"}, cache:"no-store", body:JSON.stringify({leaseId,requestId:paymentRequestId.current}) })
+      .then(async response => response.ok ? response.json() as Promise<{status:unknown}> : Promise.reject(new Error("unavailable")))
+      .then(result => { if (current) setRequestStatus(result.status === "recorded" || result.status === "unknown" ? result.status : "unavailable"); })
+      .catch(() => { if (current) setRequestStatus("unavailable"); });
+    return () => { current = false; };
+  }, [open, storageKey, leaseId, requestCheck]);
+
   function rememberScroll() {
     scrollMarks.current = captureScroll(triggerRef.current);
   }
 
   function openDialog() {
+    if (storageKey) {
+      try {
+        let id = sessionStorage.getItem(storageKey);
+        if (!id) {
+          const count = Array.from({length:sessionStorage.length}, (_,i) => sessionStorage.key(i)).filter(key => key?.startsWith("condola:payment-request:")).length;
+          if (count >= 40) throw new Error("storage full");
+          id = crypto.randomUUID();
+          sessionStorage.setItem(storageKey,id);
+        }
+        if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id)) throw new Error("invalid request");
+        paymentRequestId.current = id;
+        setRequestStatus("checking");
+      } catch { paymentRequestId.current = ""; setRequestStatus("unavailable"); }
+    } else if (!paymentRequestId.current) paymentRequestId.current = crypto.randomUUID();
     if (scrollMarks.current.length === 0) rememberScroll();
     setOpen(true);
+  }
+
+  function newPayment() {
+    if (!storageKey || requestStatus !== "recorded") return;
+    try {
+      const id=crypto.randomUUID();
+      sessionStorage.setItem(storageKey,id);
+      paymentRequestId.current=id;
+      setRequestStatus("unknown");
+    } catch { setRequestStatus("unavailable"); }
   }
 
   const dialog = open ? (
@@ -123,7 +164,9 @@ export function PayDialog({
         </div>
         <div className="bd">
           <input type="hidden" name="leaseId" value={leaseId} />
+          <input type="hidden" name="requestId" value={paymentRequestId.current} />
           <input type="hidden" name="returnTo" value={returnTo === "tenant" ? "tenant" : "staff"} />
+          {requestScope ? <div className="alert" data-testid="payment-request-status">{requestScope.copy[requestStatus]} {requestStatus === "recorded" ? <button type="button" data-testid="payment-new-intent" onClick={newPayment}>{requestScope.copy.newPayment}</button> : null} {requestStatus === "unavailable" && paymentRequestId.current ? <button type="button" onClick={() => setRequestCheck(n=>n+1)}>{requestScope.copy.checking}</button> : null}</div> : null}
           {status ? (
             <div className="alert" data-testid="pay-status">
               {status}
@@ -157,7 +200,7 @@ export function PayDialog({
           <p className="small muted">{t("i_pay_direct", { brand: t("i_brand") })}</p>
         </div>
         <div className="ft">
-          <button className="btn pri" type="submit" data-testid="submit-payment">
+          <button className="btn pri" type="submit" data-testid="submit-payment" disabled={Boolean(requestScope && requestStatus !== "unknown")}>
             {label}
           </button>
         </div>

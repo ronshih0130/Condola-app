@@ -394,18 +394,30 @@ async function loadInvoices() {
   return rows.rows;
 }
 
+export function isLegacyReminderClaimFenced(error: unknown): boolean {
+  const e=error as {code?:string;message?:string} | null;
+  return Boolean(e && ((e.code === "42501" && e.message === "Legacy reminder claim unavailable") || e.code === "55P03"));
+}
+
 function dbStore(): ClaimStore {
   return {
     async claim(plan) {
-      const row = await query<{ id: string }>(
-        `INSERT INTO email_log (org_id, kind, target_id, threshold)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (org_id, kind, target_id, threshold) WHERE kind <> 'password_reset'
-         DO NOTHING
-         RETURNING id::text AS id`,
-        [plan.orgId, plan.kind, plan.targetId, plan.threshold],
-      );
-      return row.rows[0]?.id ?? null;
+      try {
+        const row = await query<{ id: string }>(
+          `INSERT INTO email_log (org_id, kind, target_id, threshold)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (org_id, kind, target_id, threshold) WHERE kind <> 'password_reset'
+           DO NOTHING
+           RETURNING id::text AS id`,
+          [plan.orgId, plan.kind, plan.targetId, plan.threshold],
+        );
+        return row.rows[0]?.id ?? null;
+      } catch (error) {
+        // A new owner or concurrent switch suppresses this occurrence without
+        // stopping other organizations in the legacy cron. No send was attempted.
+        if (isLegacyReminderClaimFenced(error)) return null;
+        throw error;
+      }
     },
     async complete(id, messageId) {
       await query(`UPDATE email_log SET message_id = $2, sent_at = now() WHERE id = $1`, [id, messageId]);

@@ -1,5 +1,6 @@
 import { cronAuthorized } from "@/server/cron-auth";
 import { runDueReminders } from "@/server/reminders";
+import { runLocalRentReminders } from "@/server/local-rent-reminders";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,9 @@ export async function POST(request: Request) {
     return new Response("unauthorized", { status: 401 });
   }
   try {
+    const local = await runLocalRentReminders();
     const result = await runDueReminders();
-    return Response.json(result);
+    return Response.json({ ...result, local });
   } catch (error) {
     console.error("reminders", error instanceof Error ? error.message : "failed");
     return new Response("failed", { status: 500 });

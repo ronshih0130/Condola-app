@@ -8,6 +8,8 @@ import { loadLeaseIdCheck } from "@/server/id-docs";
 import { tenantLeaseMoney, tenantLeases } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
+import { tenantDuePreference } from "@/server/tenant-reminder-preferences";
+import { reminderCopy } from "@/i18n/lanes/reminders";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +40,10 @@ export default async function TenantHome() {
   }
   const lease = leases.find((item) => item.lease_id === session.leaseId) ?? leases[0];
   if (!lease) return <p data-v2-page={v2 ? "t-home" : undefined}>{t("i_empty")}</p>;
-  const [money, idCheck] = await Promise.all([
+  const [money, idCheck, reminderPreference] = await Promise.all([
     tenantLeaseMoney(session, lease.lease_id),
     loadLeaseIdCheck(session, lease.lease_id),
+    tenantDuePreference(session,lease.lease_id),
   ]);
   const rentMinor = money?.lease.rent ?? "0";
   const depositMinor = money?.lease.deposit ?? "0";
@@ -82,6 +85,7 @@ export default async function TenantHome() {
           </Link>
         </div>
       )}
+      {reminderPreference !== null ? <p><Link href={`/t/reminders/${lease.lease_id}`} data-testid="tenant-reminder-settings">{reminderCopy(session.locale).tenantTitle}</Link></p> : null}
       <p className="small">{t("i_addr_managed", { address: displaySampleName(lease.address_display ?? lease.property_name), firm: lease.firm_name })}</p>
       <p className="fn">{t("i_pay_direct", { brand: t("i_brand") })}</p>
     </div>
