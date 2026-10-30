@@ -1,0 +1,9 @@
+{
+  "scope": "private synthetic local artifacts; no customer data",
+  "retention": "TODO: Ron to confirm private evidence retention",
+  "artifacts": [
+    {"path":"/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B009-bank-evidence/bank-390.png","sha256":"848813095577dc54a66b28370237a36c66fea554b06631467620c0feba363491","bytes":59274},
+    {"path":"/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B009-bank-evidence/bank-1280.png","sha256":"62daa81830bd6f8600803f54c9a38b7a0e7c2890fc8f88277dd07e949297d5d6","bytes":95566},
+    {"path":"/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B009-bank-evidence/early-checks.md","sha256":"cd92463b7668a8a7f14e075caa9a5b7c157e90659d2d2a93abcda34b6dcb112b","bytes":1332}
+  ]
+}

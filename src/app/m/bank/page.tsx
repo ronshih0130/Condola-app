@@ -1,5 +1,7 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
+import { BankMatching } from "@/components/bank-matching";
+import { bankBoard, bankMatchingEnabled } from "@/server/bank-matching";
 import { ApproveForm, BankImport } from "@/components/dialogs";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { sampleCsv } from "@/server/domain";
@@ -15,6 +17,11 @@ export default async function BankPage({ searchParams }: { searchParams: Promise
   const session = await getSession();
   const t = makeT(session.locale);
   const params = await searchParams;
+  if (await bankMatchingEnabled(session)) {
+    const board = await bankBoard(session);
+    if (!board) throw new Error("Bank matching unavailable");
+    return <><PageHeader title={t("i_nav_bank")} crumb={t("s_01cca89")} /><ErrorBanner t={t} error={params.error} /><BankMatching data={board} locale={session.locale} /></>;
+  }
   const [payment, matches] = await Promise.all([latestUnmatchedPayment(session), listMatches(session)]);
   const sample = payment
     ? sampleCsv({

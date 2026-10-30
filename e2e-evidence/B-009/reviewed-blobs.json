@@ -1,0 +1,18 @@
+{
+  "scope":"final local source review; integration test received EOF whitespace-only cleanup after review; exact combined commit and release approval pending",
+  "reviewed_integration_test_before_whitespace_cleanup":"4bb9ca027b0d8319064a02867e71c22c969c734c",
+  "blobs": {
+    "supabase/migrations/20261031100209_b009_bank_match_decisions.sql":"3a14d96ef8241c0ee318991c3495262eb35e802a",
+    "src/server/domain.ts":"9a03461eee1058641625b2dff854bbc8ab29697a",
+    "src/server/bank-matching.ts":"c9dd4783c0f4cc707539f77701c0b51853810dba",
+    "src/server/bank-matching-rules.ts":"de7e5c6242c37d82b7953b8e8e6a622c88910ec0",
+    "src/server/bank-matching-actions.ts":"e5467f3397dc4f57f3bfb2157ca8f902aebcbeea",
+    "src/server/bank-matching-rules.test.ts":"1915a542882d27d4497ee8b681e31a9858048a36",
+    "src/server/bank-matching.integration.test.ts":"ef27b4e01fc94bf9c26bbe6adf176604dc38a1ac",
+    "src/components/bank-matching.tsx":"07e80d98beeae5b5c4d51d18a3f086fae680d0fe",
+    "src/i18n/bank-matching.ts":"5a5d6900b97495657ba1860e04f81159c6468237",
+    "src/app/m/bank/page.tsx":"76c34c194c7d4dd4fddc118c767713f5d86d58c6",
+    "src/app/api/bank/matching/route.ts":"8104c79ae6a212b9599f0fb78d92ecc130c6c98c",
+    "e2e/bank-matching.spec.ts":"2aceefb9978d4ea77794ed78736953e69489ee71"
+  }
+}
