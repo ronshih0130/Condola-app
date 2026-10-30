@@ -1,3 +1,5 @@
+import { disposableDbUrl } from "./test-disposable-db";
+import { cloneTestDatabase } from "./test-database-clone";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -9,10 +11,14 @@ import { FlowError } from "./errors";
 import { ORG_ID, USERS } from "./ids";
 import { runIdPurge } from "../../id-purge-cron.mjs";
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://condola:condola@127.0.0.1:5432/condola";
+disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
+let DATABASE_URL: string;
+let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test.before(() => {
+test.before(async () => {
+  clone = await cloneTestDatabase();
+  DATABASE_URL = clone.url;
   for (const file of [
     "20261029150000_id_watermark_copy.sql",
     "20261029160000_lease_close_end_date.sql",
@@ -25,29 +31,34 @@ test.before(() => {
   }
 });
 
+test.after(async () => { await clone?.cleanup(); });
+
 async function withDb<T>(fn: (client: Client) => Promise<T>) {
   const client = new Client({ connectionString: DATABASE_URL });
   await client.connect();
-  const saved = await client.query(
-    "SELECT * FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'",
-  );
   try {
-    await client.query(
-      `INSERT INTO platform_settings (key, value) VALUES ('ID_PURGE_ENABLED', '"on"')
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    const saved = await client.query(
+      "SELECT * FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'",
     );
-    return await fn(client);
-  } finally {
-    if (saved.rows.length) {
-      const row = saved.rows[0];
+    try {
       await client.query(
-        `UPDATE platform_settings SET value = $1, description = $2, updated_at = $3
-          WHERE key = 'ID_PURGE_ENABLED'`,
-        [JSON.stringify(row.value), row.description, row.updated_at],
+        `INSERT INTO platform_settings (key, value) VALUES ('ID_PURGE_ENABLED', '"on"')
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
       );
-    } else {
-      await client.query("DELETE FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'");
+      return await fn(client);
+    } finally {
+      if (saved.rows.length) {
+        const row = saved.rows[0];
+        await client.query(
+          `UPDATE platform_settings SET value = $1, description = $2, updated_at = $3
+            WHERE key = 'ID_PURGE_ENABLED'`,
+          [JSON.stringify(row.value), row.description, row.updated_at],
+        );
+      } else {
+        await client.query("DELETE FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'");
+      }
     }
+  } finally {
     await client.end();
   }
 }

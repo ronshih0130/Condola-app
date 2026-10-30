@@ -1,3 +1,5 @@
+import { disposableDbUrl } from "./test-disposable-db";
+import { cloneTestDatabase } from "./test-database-clone";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -7,21 +9,25 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { recordMoveOutNotice } from "./move-out-notice";
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ??
-  "postgres://condola:condola@127.0.0.1:5432/condola";
+disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
+let DATABASE_URL: string;
+let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MIGRATION = path.join(
   ROOT,
   "supabase/migrations/20261031090000_id_delete_after_move_out.sql",
 );
 
-test.before(() => {
+test.before(async () => {
+  clone = await cloneTestDatabase();
+  DATABASE_URL = clone.url;
   execFileSync("psql", [DATABASE_URL, "-v", "ON_ERROR_STOP=1", "-f", MIGRATION], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
 });
+
+test.after(async () => { await clone?.cleanup(); });
 
 type Fixture = {
   client: Client;

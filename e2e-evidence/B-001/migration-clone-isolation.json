@@ -1,0 +1,28 @@
+{
+  "scope": "private seeded loopback PostgreSQL16 source remains unchanged after per-file historical replay clones",
+  "source_unchanged": true,
+  "catalog_equal": true,
+  "all_table_fingerprints_equal": true,
+  "tests": [
+    {
+      "file": "id-docs.integration.test.ts",
+      "exit": 0
+    },
+    {
+      "file": "id-migration.integration.test.ts",
+      "exit": 0
+    },
+    {
+      "file": "id-purge.integration.test.ts",
+      "exit": 0
+    },
+    {
+      "file": "id-move-out.integration.test.ts",
+      "exit": 0
+    },
+    {
+      "file": "move-out-notice.integration.test.ts",
+      "exit": 0
+    }
+  ]
+}

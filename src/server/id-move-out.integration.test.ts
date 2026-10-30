@@ -1,3 +1,5 @@
+import { disposableDbUrl } from "./test-disposable-db";
+import { cloneTestDatabase } from "./test-database-clone";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -5,7 +7,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 
-const FRESH_URL = process.env.DATABASE_URL ?? "postgres://condola:condola@127.0.0.1:5432/condola";
+disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
+let FRESH_URL: string;
+let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MIGRATION = path.join(
   ROOT,
@@ -19,10 +23,14 @@ function psql(databaseUrl: string, file: string) {
   });
 }
 
-test.before(() => {
+test.before(async () => {
+  clone = await cloneTestDatabase();
+  FRESH_URL = clone.url;
   psql(FRESH_URL, MIGRATION);
   psql(FRESH_URL, MIGRATION);
 });
+
+test.after(async () => { await clone?.cleanup(); });
 
 async function withDb<T>(databaseUrl: string, fn: (client: Client) => Promise<T>) {
   const client = new Client({ connectionString: databaseUrl });

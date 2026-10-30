@@ -40,9 +40,20 @@ test("consents enforce RLS, append-only evidence, cascading user deletion and id
       ]) await user({ consent: bad });
       // Run both actual files twice, including migration DDL and privilege resets.
       for (let attempt = 0; attempt < 2; attempt++) {
+        // The migration bounds its work, then RESETs session timeouts so it
+        // cannot leak those limits into subsequent migrations. Start away from
+        // the connection defaults to make the real-file cleanup observable.
+        await client.query("SET LOCAL lock_timeout = '17s'");
+        await client.query("SET LOCAL statement_timeout = '19s'");
         await client.query(migration);
-        assert.equal((await client.query("SHOW lock_timeout")).rows[0].lock_timeout, "5s");
-        assert.equal((await client.query("SHOW statement_timeout")).rows[0].statement_timeout, "30s");
+        const timeouts = await client.query<{ name: string; setting: string; reset_val: string }>(
+          "SELECT name, setting, reset_val FROM pg_settings WHERE name = ANY($1::text[]) ORDER BY name",
+          [["lock_timeout", "statement_timeout"]],
+        );
+        assert.equal(timeouts.rowCount, 2);
+        for (const timeout of timeouts.rows) {
+          assert.equal(timeout.setting, timeout.reset_val, `${timeout.name} must reset to the connection default`);
+        }
         await client.query(backfill);
         const rows = await client.query<{ user_id: string; terms_version: string }>(
           "SELECT user_id::text, terms_version FROM public.consents WHERE user_id = ANY($1::uuid[]) ORDER BY user_id", [ids]);

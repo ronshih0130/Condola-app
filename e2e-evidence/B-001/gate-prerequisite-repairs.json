@@ -1,0 +1,40 @@
+{
+  "recorded_at": "2026-10-29T19:10:59.011199-07:00",
+  "immutable_gate_2e37631": "FAIL: stale post-migration timeout expectation; preserved summary",
+  "unit_passed": 524,
+  "fixed_consent_checks": {
+    "passed": 5,
+    "failed": 0
+  },
+  "remaining_rls_chain_exit": 0,
+  "historical_replay_clone_isolation": {
+    "scope": "private seeded loopback PostgreSQL16 source remains unchanged after per-file historical replay clones",
+    "source_unchanged": true,
+    "catalog_equal": true,
+    "all_table_fingerprints_equal": true,
+    "tests": [
+      {
+        "file": "id-docs.integration.test.ts",
+        "exit": 0
+      },
+      {
+        "file": "id-migration.integration.test.ts",
+        "exit": 0
+      },
+      {
+        "file": "id-purge.integration.test.ts",
+        "exit": 0
+      },
+      {
+        "file": "id-move-out.integration.test.ts",
+        "exit": 0
+      },
+      {
+        "file": "move-out-notice.integration.test.ts",
+        "exit": 0
+      }
+    ]
+  },
+  "new_combined_clean_gate": "PENDING",
+  "scope": "local synthetic PostgreSQL16; native review not ClassB approval"
+}

@@ -61,37 +61,10 @@ trap 'exit 143' TERM
 check_lock() {
   if [ -f "$root/scripts/claim.sh" ] &&
      CLAIM_RESOURCE=repo bash "$root/scripts/claim.sh" status >"$tmp/status" 2>/dev/null; then
-    # Fail closed on unfamiliar formats. Adapt this parser only after reviewing
-    # claim.sh's actual status contract; a host mention alone is not ownership.
-    python3 - "$tmp/status" "$(hostname)" <<'PY'
-import json, re, sys
-text = open(sys.argv[1], encoding="utf-8").read()
-host = sys.argv[2]
-owned = False
-try:
-    obj = json.loads(text)
-    records = obj if isinstance(obj, list) else [obj]
-    for r in records:
-        if not isinstance(r, dict):
-            continue
-        resource = r.get("resource")
-        owner = r.get("owner")
-        owner_host = owner.get("host") if isinstance(owner, dict) else None
-        owner_host = r.get("host", owner_host)
-        state = str(r.get("status", r.get("state", ""))).upper()
-        if resource == "repo" and owner_host == host and state in ("HELD", "ACTIVE", "OWNED"):
-            owned = True
-except (ValueError, TypeError):
-    # Supported text contract: one repo record with explicit state and host.
-    for line in text.splitlines():
-        if re.search(r"(^|\s)resource=repo(\s|$)", line):
-            fields = dict(re.findall(r"(resource|host|status|state)=([^\s]+)", line))
-            if fields.get("host") == host and fields.get("status", fields.get("state")) in ("HELD", "ACTIVE", "OWNED"):
-                owned = True
-if not owned:
-    print("mirror-github: Cannot verify active repo ownership by this host; inspect claim.sh status.", file=sys.stderr)
-    sys.exit(1)
-PY
+    # claim.sh reports freshness as effective=ACTIVE/SUSPECT in its header.
+    # Require both this host and the exact supervising ownership session.
+    python3 "$root/scripts/check-mirror-ownership.py" \
+      "$tmp/status" "$(hostname)" "${CONDOLA_SESSION_ID:-}"
   else
     [ "$assert_lock" = yes ] ||
       die "claim.sh status unavailable; --i-hold-the-lock is required."

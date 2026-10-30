@@ -1,3 +1,4 @@
+import { cloneTestDatabase } from "./test-database-clone";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { disposableDbUrl, withDatabase } from "./test-disposable-db";
@@ -10,7 +11,8 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 
 const target = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
-const FRESH_URL = target.href;
+let FRESH_URL = target.href;
+let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
 const ADMIN_URL = withDatabase(target, "postgres");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MIGRATIONS = path.join(ROOT, "supabase/migrations");
@@ -63,48 +65,18 @@ function applyWatermarkMigrations() {
   psql(FRESH_URL, path.join(MIGRATIONS, "20261029160000_lease_close_end_date.sql"));
 }
 
-// Replays in this file replace these existing bodies. Capture the exact current
-// catalog definitions before any replay so cleanup returns the database to its
-// prior state without running migrations that update data.
-const RESTORED_FUNCTIONS = [
-  "public.id_document_delete_after(uuid,uuid,timestamptz)",
-  "public.id_document_keep_days()",
-  "public.purge_due_identity_documents(integer)",
-];
-let originalDefinitions: string[] | null = null;
-
 test.before(async () => {
-  originalDefinitions = await withDb(FRESH_URL, async (client) => {
-    const definitions: string[] = [];
-    for (const signature of RESTORED_FUNCTIONS) {
-      const result = await client.query<{ definition: string | null }>(
-        `SELECT pg_get_functiondef(to_regprocedure($1)) AS definition`, [signature],
-      );
-      const definition = result.rows[0]?.definition;
-      assert.ok(definition, `Missing function ${signature}`);
-      definitions.push(definition);
-    }
-    return definitions;
-  });
+  clone = await cloneTestDatabase();
+  FRESH_URL = clone.url;
   applyWatermarkMigrations();
 });
 
 test.after(async () => {
-  const definitions = originalDefinitions;
-  if (!definitions) return;
+  if (!clone) return;
   try {
     applyWatermarkMigrations();
   } finally {
-    await withDb(FRESH_URL, async (client) => {
-      await client.query("BEGIN");
-      try {
-        for (const definition of definitions) await client.query(definition);
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      }
-    });
+    await clone.cleanup();
   }
 });
 

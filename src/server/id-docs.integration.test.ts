@@ -1,4 +1,5 @@
-import "./load-local-env";
+import { disposableDbUrl } from "./test-disposable-db";
+import { cloneTestDatabase } from "./test-database-clone";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -43,9 +44,13 @@ function session(userId: string, role: Session["role"], kind: Session["kind"] = 
   };
 }
 
+disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
+let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
+
 test.before(async () => {
+  clone = await cloneTestDatabase();
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-  const databaseUrl = process.env.DATABASE_URL ?? "postgres://condola:condola@127.0.0.1:5432/condola";
+  const databaseUrl = clone.url;
   for (const file of [
     "20261029130000_id_no_direct_mutate.sql",
     "20261029140000_id_consent_shown_version.sql",
@@ -64,7 +69,12 @@ test.before(async () => {
 });
 
 test.after(async () => {
-  await query("DELETE FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'");
+  if (!clone) return;
+  try {
+    await query("DELETE FROM platform_settings WHERE key = 'ID_PURGE_ENABLED'");
+  } finally {
+    await clone.cleanup();
+  }
 });
 
 test("identity photos stay private, masked, audited, and are purged only after the clock", async () => {
