@@ -152,7 +152,34 @@ for (const locale of locales) {
       await page.screenshot({ path: "../e2e-artifacts/record-payment.png", fullPage: true });
     }
     await page.getByTestId("pay-last5").fill("54321");
+    const paymentForm = page.locator("form").filter({ has: page.getByTestId("submit-payment") });
+    await expect(paymentForm).toHaveCount(1);
+    const paymentRequestId = await paymentForm.locator('input[name="requestId"]').inputValue();
+    expect(paymentRequestId).toMatch(/^[0-9a-f-]{36}$/i);
+    const leasePath = new URL(page.url()).pathname;
+    const paymentResponse = page.waitForResponse(response => {
+      const request = response.request();
+      const body = request.postData() ?? "";
+      return request.method() === "POST" && new URL(request.url()).pathname === leasePath && body.includes(paymentRequestId) && body.includes(leaseId!);
+    });
     await page.getByTestId("submit-payment").click();
+    const response = await paymentResponse;
+    expect(response.status()).toBeLessThan(400);
+    for (const name of ["location", "x-action-redirect"]) {
+      const destination = response.headers()[name];
+      if (destination) {
+        expect(destination).not.toContain("error=");
+        expect(destination).toContain(`${leasePath}?tab=ledger`);
+      }
+    }
+    expect(await response.finished()).toBeNull();
+    await page.goto("/m/payments");
+    const paymentRow = page.getByRole("row").filter({ hasText: "試用房客" }).filter({ hasText: "松德試用" });
+    await expect(paymentRow).toHaveCount(1);
+    await expect(paymentRow).toContainText("54321");
+    await expect(paymentRow.locator("td.num")).toHaveText(`NT$${new Intl.NumberFormat(locale.code).format(due / 100)}`);
+    await expect(paymentRow).toContainText(locale.code === "en" ? "Confirmed" : "已確認繳款");
+    await expect(page.getByTestId("error-banner")).toHaveCount(0);
 
     await page.goto("/m/bank");
     await page.getByTestId("fill-sample").click();
@@ -168,7 +195,14 @@ for (const locale of locales) {
     await expect(page.getByTestId("statement-rent")).toContainText("12,000");
     await expect(page.getByTestId("statement-fee")).toContainText("960");
     await expect(page.getByTestId("statement-rent")).not.toContainText("NT$0");
+    const taskPanel = page.getByTestId("tryout-panel");
+    for (const task of ["property", "lease", "statement"]) {
+      await expect(page.getByTestId(`tryout-task-${task}`)).toHaveAttribute("data-complete", "true");
+    }
+    await expect(taskPanel.locator(".chip")).toHaveText("3/3");
+    await page.getByTestId("tryout-dismiss").click();
     await expect(page.getByTestId("tryout-panel")).toHaveCount(0);
+    await expect(page.getByTestId("show-guide")).toBeVisible();
     if (locale.code === "zh-TW") {
       await page.screenshot({ path: "../e2e-artifacts/owner-statement.png", fullPage: true });
     }
