@@ -1,10 +1,7 @@
 import { disposableDbUrl } from "./test-disposable-db";
 import { cloneTestDatabase } from "./test-database-clone";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { tx } from "./db";
 import { FlowError } from "./errors";
@@ -15,23 +12,12 @@ import { runIdPurge } from "../../id-purge-cron.mjs";
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 let DATABASE_URL: string;
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 test.before(async () => {
   clone = await cloneTestDatabase();
   DATABASE_URL = clone.url;
   // This file owns its fixtures; earlier suites may legitimately remove leases.
   await resetAndSeed();
-  for (const file of [
-    "20261029150000_id_watermark_copy.sql",
-    "20261029160000_lease_close_end_date.sql",
-    "20261030151200_id_purge_dry_run_guard.sql",
-    "20261030151200_id_purge_dry_run_guard.sql",
-  ]) {
-    execFileSync("psql", [DATABASE_URL, "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", path.join(ROOT, "supabase/migrations", file)], {
-      stdio: "pipe",
-    });
-  }
 });
 
 test.after(async () => { await clone?.cleanup(); });
@@ -669,6 +655,15 @@ test("ID purge dry-run, protected rows, bucket guard, missing objects, and rerun
       );
       assert.equal(afterDryAudit.at(-1)?.new_row.upload_slots_would_delete, expiredSlots);
 
+      // The SQL entry point must reject direct purge when the mode is not on.
+      for (const mode of ["off", "dry_run"]) {
+        await client.query(`UPDATE platform_settings SET value=to_jsonb($1::text) WHERE key='ID_PURGE_ENABLED'`, [mode]);
+        await assert.rejects(serviceQuery(client, `SELECT * FROM public.purge_due_identity_documents(1000)`),
+          (error: unknown) => (error as { code?: string }).code === "42501");
+        for (const table of idTables) assert.deepEqual(await snapshot(table), beforeIds.get(table), table);
+      }
+      await client.query(`UPDATE platform_settings SET value='"on"' WHERE key='ID_PURGE_ENABLED'`);
+
       // Force a corrupt due parent as the harness's postgres superuser.
       await client.query(
         `UPDATE identity_documents SET storage_bucket = 'lease-documents-private' WHERE id = $1`,
@@ -855,7 +850,6 @@ test("ID purge dry-run, protected rows, bucket guard, missing objects, and rerun
       if (ticketId) {
         await client.query(`DELETE FROM maintenance_tickets WHERE id = $1`, [ticketId]);
       }
-      await client.query(`DELETE FROM lease_signed_pdfs WHERE lease_id = $1`, [leaseId]);
       await client.query(`DELETE FROM leases WHERE id = $1`, [leaseId]);
       await client.query(`DELETE FROM files WHERE id = ANY($1::uuid[])`, [fileIds]);
       await client.query(`DELETE FROM contacts WHERE id = ANY($1::uuid[])`, [[contactId, ...extraContactIds]]);
@@ -1073,99 +1067,33 @@ test("locked retention rejects non-cap writes through server tx and FlowError", 
   }, { orgId: ORG_ID });
 });
 
-test("missing lock, unlocked guard, config replay, and legacy clocks", async () => {
+test("fixed 90-day clock ignores legacy organization and platform retention settings", async () => {
   await withDb(async (client) => {
     await client.query("BEGIN");
     try {
-      const { readFileSync } = await import("node:fs");
-      const migration = readFileSync(path.join(ROOT,
-        "supabase/migrations/20261030151200_id_purge_dry_run_guard.sql"), "utf8");
-      await client.query(`UPDATE platform_settings SET value = 'false'
-        WHERE key = 'id_documents.org_retention_locked'`);
-      await client.query(migration);
-      await client.query(migration);
-      assert.equal((await client.query(`SELECT value FROM platform_settings
-        WHERE key = 'id_documents.org_retention_locked'`)).rows[0].value, false);
-      await client.query(`DELETE FROM platform_settings WHERE key = 'id_documents.org_retention_locked'`);
-      for (const sql of [
-        `INSERT INTO organizations (name, country_code, default_currency, id_doc_retention_days)
-         VALUES ('retention rejected', 'TW', 'TWD', 30)`,
-        `UPDATE organizations SET id_doc_retention_days = 30 WHERE id = '${ORG_ID}'`,
-      ]) {
-        await client.query("SAVEPOINT rejected");
-        await assert.rejects(client.query(sql), (error: unknown) =>
-          (error as { code?: string }).code === "23514");
-        await client.query("ROLLBACK TO SAVEPOINT rejected");
-      }
-      await client.query(`INSERT INTO platform_settings (key, value)
-        VALUES ('id_documents.org_retention_locked', 'false')`);
-      await client.query(`UPDATE organizations SET id_doc_retention_days = 30 WHERE id = $1`, [ORG_ID]);
-      await client.query("SAVEPOINT above_cap");
-      await assert.rejects(client.query(
-        `UPDATE organizations SET id_doc_retention_days = 91 WHERE id = $1`, [ORG_ID]),
-        (error: unknown) => (error as { code?: string }).code === "23514");
-      await client.query("ROLLBACK TO SAVEPOINT above_cap");
-      await client.query(`UPDATE platform_settings SET value = '20'
-        WHERE key = 'id_documents.max_retention_days_after_close'`);
-      assert.equal((await client.query(`SELECT id_doc_retention_days AS days
-        FROM organizations WHERE id = $1`, [ORG_ID])).rows[0].days, 20);
-      await client.query(`UPDATE platform_settings SET value = '90'
-        WHERE key = 'id_documents.max_retention_days_after_close'`);
-      await client.query(`UPDATE platform_settings SET value = 'true'
-        WHERE key = 'id_documents.org_retention_locked'`);
-      for (const legacyDays of [30, 120]) {
-        // Superuser fixture only: model legacy data without weakening the guard.
+      const lease = (await client.query<{id:string}>(`INSERT INTO leases(org_id,property_id,unit_id,target_unit_id,target_room_id,status,esign_status,start_date,end_date,terminated_on,currency,rent_amount_minor,deposit_amount_minor,created_by)
+        SELECT org_id,property_id,unit_id,target_unit_id,target_room_id,'terminated','fully_signed',current_date-500,current_date-150,current_date-200,currency,rent_amount_minor,0,created_by
+        FROM leases WHERE org_id=$1 LIMIT 1 RETURNING id::text`,[ORG_ID])).rows[0].id;
+      const contacts = (await client.query<{id:string}>(`INSERT INTO contacts(org_id,is_tenant,display_name) VALUES ($1,true,'fixed formed'),($1,true,'fixed upload') RETURNING id::text`,[ORG_ID])).rows;
+      const docs = (await client.query<{id:string}>(`INSERT INTO identity_documents(org_id,contact_id,lease_id,doc_type,storage_path,encryption_key_ref,created_at) VALUES
+        ($1,$2,$4,'passport','fixed-formed','fixture','2020-06-01 23:30:00+00'),
+        ($1,$3,NULL,'passport','fixed-upload','fixture','2020-06-01 23:30:00+00') RETURNING id::text`,[ORG_ID,contacts[0].id,contacts[1].id,lease])).rows;
+      for (const legacy of [30,120]) {
         await client.query("SET LOCAL session_replication_role = replica");
-        await client.query(`UPDATE organizations SET id_doc_retention_days = $2 WHERE id = $1`, [ORG_ID, legacyDays]);
+        await client.query(`UPDATE organizations SET id_doc_retention_days=$2 WHERE id=$1`,[ORG_ID,legacy]);
         await client.query("SET LOCAL session_replication_role = origin");
-        const contact = await client.query<{ id: string }>(
-          `INSERT INTO contacts (org_id, is_tenant, display_name)
-           VALUES ($1, true, 'legacy retention clock') RETURNING id`, [ORG_ID]);
-        const lease = await client.query<{ id: string }>(
-          `INSERT INTO leases (
-             org_id, property_id, unit_id, target_unit_id, target_room_id, status, esign_status,
-             start_date, end_date, terminated_on, currency, rent_amount_minor, deposit_amount_minor, created_by
-           ) SELECT org_id, property_id, unit_id, target_unit_id, target_room_id, 'terminated', 'fully_signed',
-                    current_date - 500, current_date - 150, current_date - 200,
-                    currency, rent_amount_minor, 0, created_by
-               FROM leases WHERE org_id = $1 LIMIT 1 RETURNING id`, [ORG_ID]);
-        assert.ok(lease.rows[0]?.id);
-        for (const leaseId of [lease.rows[0].id, null]) {
-          const document = await client.query<{ id: string }>(
-            `INSERT INTO identity_documents (
-               org_id, contact_id, lease_id, doc_type, number_masked, storage_path,
-               encryption_key_ref, created_at
-             ) VALUES ($1, $2, $3, 'passport', 'A******789', $4,
-                       'env:ID_DOC_ENCRYPTION_KEY', '2020-06-01 23:30:00+00') RETURNING id`,
-            [ORG_ID, contact.rows[0].id, leaseId, `${ORG_ID}/legacy-${legacyDays}-${leaseId ?? "upload"}`]);
-          const due = await client.query(
-            `SELECT v.retention_days, d.delete_after::text AS actual,
-                    CASE WHEN d.lease_id IS NULL THEN DATE '2020-06-02' + 90
-                         ELSE current_date - 200 + 90 END::text AS expected
-               FROM identity_documents d JOIN id_documents_due_for_purge v ON v.document_id = d.id
-              WHERE d.id = $1`, [document.rows[0].id]);
-          assert.equal(due.rowCount, 1);
-          assert.equal(due.rows[0].retention_days, 90);
-          assert.equal(due.rows[0].actual, due.rows[0].expected);
-          for (const cap of [60, 100, 90]) {
-            await client.query(`UPDATE platform_settings SET value = to_jsonb($1::int)
-              WHERE key = 'id_documents.max_retention_days_after_close'`, [cap]);
-            const changed = await client.query(
-              `SELECT o.id_doc_retention_days AS stored, id_document_keep_days() AS effective,
-                      d.delete_after = CASE WHEN d.lease_id IS NULL THEN DATE '2020-06-02' + $2::int
-                        ELSE current_date - 200 + $2::int END AS correct
-                 FROM identity_documents d JOIN organizations o ON o.id = d.org_id WHERE d.id = $1`,
-              [document.rows[0].id, cap]);
-            assert.deepEqual(changed.rows[0], { stored: legacyDays, effective: cap, correct: true });
-          }
-          await client.query(`DELETE FROM identity_documents WHERE id = $1`, [document.rows[0].id]);
+        for (const cap of [60,100,90]) {
+          await client.query(`UPDATE platform_settings SET value=to_jsonb($1::int) WHERE key='id_documents.max_retention_days_after_close'`,[cap]);
+          const clocks = (await client.query(`SELECT public.id_document_keep_days() AS keep,
+            public.id_document_delete_after(NULL,$1,'2020-06-01 23:30:00+00'::timestamptz)::text AS upload,
+            public.id_document_delete_after($2,$1,now()) = current_date-200+90 AS formed`,[ORG_ID,lease])).rows[0];
+          assert.deepEqual(clocks,{keep:90,upload:"2020-08-31",formed:true});
+          const cached = (await client.query(`SELECT id::text,delete_after::text FROM identity_documents WHERE id=ANY($1::uuid[])`,[docs.map((d) => d.id)])).rows;
+          const expected = (await client.query(`SELECT (current_date-200+90)::text AS due`)).rows[0].due;
+          assert.equal(cached.find((d) => d.id === docs[0].id)?.delete_after,expected);
+          assert.equal(cached.find((d) => d.id === docs[1].id)?.delete_after,"2020-08-31");
         }
       }
-      const defaultOrg = await client.query(`INSERT INTO organizations (name, country_code, default_currency)
-        VALUES ('retention default', 'TW', 'TWD') RETURNING id_doc_retention_days`);
-      assert.equal(defaultOrg.rows[0].id_doc_retention_days, 90);
-    } finally {
-      await client.query("ROLLBACK");
-    }
+    } finally { await client.query("ROLLBACK"); }
   });
 });

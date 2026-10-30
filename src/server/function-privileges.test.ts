@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
@@ -199,4 +201,34 @@ test("PUBLIC loses EXECUTE on app helper functions; authenticated and service_ro
   assert.match(otherCheck[0], /IF offending IS NOT NULL THEN/);
   assert.doesNotMatch(otherCheck[0], /RAISE EXCEPTION/);
   assert.match(sql, /global PUBLIC scan is the ops pre\/post check/);
+});
+
+
+test("privilege checks reject implicit or redirected targets before any database command", () => {
+  const folder = mkdtempSync(path.join(tmpdir(), "condola-priv-refusal-"));
+  const marker = path.join(folder, "called");
+  try {
+    writeFileSync(path.join(folder, "psql"), '#!/bin/sh\nprintf called > "$CONDOLA_TEST_PSQL_MARKER"\nexit 99\n', { mode: 0o700 });
+    const cases: [string | undefined, string | undefined][] = [
+      [undefined, "YES"],
+      ["postgres://local@127.0.0.1:55436/disposable", undefined],
+      ["postgres://local@127.0.0.1/disposable", "YES"],
+      ["postgres://local@example.test:55436/disposable", "YES"],
+      ["postgres://local@127.0.0.1:55436/disposable?host=example.test", "YES"],
+      ["postgres://local@127.0.0.1:55436/disposable?options=anything", "YES"],
+      ["postgres://local@127.0.0.1:55436/", "YES"],
+      ["postgres://local@127.0.0.1:55436/nested/database", "YES"],
+      ["https://127.0.0.1:55436/disposable", "YES"],
+    ];
+    for (const [url, consent] of cases) {
+      const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${folder}:${process.env.PATH ?? ""}`, CONDOLA_TEST_PSQL_MARKER: marker };
+      if (url === undefined) delete env.DATABASE_URL; else env.DATABASE_URL = url;
+      if (consent === undefined) delete env.CONDOLA_RLS_DISPOSABLE; else env.CONDOLA_RLS_DISPOSABLE = consent;
+      const result = spawnSync("bash", ["scripts/check-function-privileges.sh"], { env, encoding: "utf8" });
+      assert.equal(result.status, 2, "invalid target must fail before any DB call");
+      assert.equal(existsSync(marker), false, "database command must not be invoked");
+    }
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
 });

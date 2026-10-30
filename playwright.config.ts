@@ -22,7 +22,7 @@ export default defineConfig({
       },
     },
     {
-      command: "npm run dev",
+      command: "npm run dev:e2e",
       url: "http://127.0.0.1:43123",
       reuseExistingServer: false,
       timeout: 180_000,

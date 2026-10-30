@@ -7,7 +7,9 @@
 # CI runs this after npm ci, with the workflow's Postgres service:
 #   DATABASE_URL=postgres://condola:condola@127.0.0.1:5432/condola
 #   bash scripts/check-function-privileges.sh
-# The script refuses any non-local host, creates a scratch database, and
+# Use an isolated local/CI PostgreSQL cluster: the Supabase stub may create
+# missing cluster-wide API/test-owner roles, which DB cleanup does not remove.
+# The script refuses any non-local host, creates a unique owned scratch database, and
 # drops it on exit. It does not use the application database and it does not
 # read .env.local.
 #
@@ -18,40 +20,54 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-if [[ -z "${DATABASE_URL:-}" ]]; then
-  DATABASE_URL="postgres://condola:condola@127.0.0.1:5432/condola"
-fi
-export DATABASE_URL
-
-python3 - <<'PY'
+# Do not use ambient defaults or replace a shared fixed-name database.
+python3 - <<'VALIDATE'
 import os, sys
-from urllib.parse import urlparse
-host = (urlparse(os.environ["DATABASE_URL"]).hostname or "").lower()
-if host not in {"localhost", "127.0.0.1", "::1"}:
-    sys.stderr.write("Refusing to check function privileges on a non-local database.\n")
+from urllib.parse import urlsplit
+try:
+    target = urlsplit(os.environ.get("DATABASE_URL", ""))
+    valid = (os.environ.get("CONDOLA_RLS_DISPOSABLE") == "YES"
+             and target.scheme in {"postgres", "postgresql"}
+             and target.hostname in {"localhost", "127.0.0.1", "::1"}
+             and target.port is not None and target.port > 0
+             and len(target.path) > 1 and "/" not in target.path[1:]
+             and not target.query and not target.fragment)
+except ValueError:
+    valid = False
+if not valid:
+    sys.stderr.write("Refusing a non-local or non-explicit disposable database.\n")
     sys.exit(2)
-PY
-
-scratch_url="$(python3 - <<'PY'
+VALIDATE
+export DATABASE_URL
+scratch_name="condola_fn_priv_$(python3 -c 'import uuid; print(uuid.uuid4().hex)')"
+export CONDOLA_FN_PRIV_DB="$scratch_name"
+scratch_url="$(python3 - <<'URL'
 import os
-from urllib.parse import urlparse, urlunparse
-url = urlparse(os.environ["DATABASE_URL"])
-print(urlunparse(url._replace(path="/condola_fn_priv")))
-PY
+from urllib.parse import urlsplit, urlunsplit
+url = urlsplit(os.environ["DATABASE_URL"])
+print(urlunsplit(url._replace(path="/" + os.environ["CONDOLA_FN_PRIV_DB"])))
+URL
 )"
-
+scan_path=$(mktemp "${TMPDIR:-/tmp}/condola-fn-priv.XXXXXX")
+owned=no
 cleanup() {
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
-    "DROP DATABASE IF EXISTS condola_fn_priv WITH (FORCE);" >/dev/null 2>&1 || true
+  saved_status=$?
+  if [[ "$owned" = yes ]]; then
+    if ! psql -X "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
+      "DROP DATABASE \"$scratch_name\";" >/dev/null 2>&1; then
+      echo "Function privilege scratch cleanup failed; owned database retained." >&2
+      saved_status=1
+    fi
+  fi
+  rm -f "$scan_path"
+  exit "$saved_status"
 }
 trap cleanup EXIT
+psql -X "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
+  "CREATE DATABASE \"$scratch_name\";"
+owned=yes
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
-  "DROP DATABASE IF EXISTS condola_fn_priv WITH (FORCE);"
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
-  "CREATE DATABASE condola_fn_priv;"
-
-psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
 DO $body$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
@@ -88,11 +104,11 @@ SQL
     fi
     printf '\\i %s\n' "$migration"
   done
-} | psql "$scratch_url" -v ON_ERROR_STOP=1 -q
+} | psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q
 
 default_file="supabase/migrations/20261030130000_default_function_privileges.sql"
 if [[ -f "$default_file" ]]; then
-  psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+  psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
 SET ROLE postgres;
 CREATE FUNCTION public.rpc_default_priv_probe() RETURNS integer
 LANGUAGE sql AS $$ SELECT 1 $$;
@@ -103,7 +119,7 @@ LANGUAGE sql AS $$ SELECT 1 $$;
 RESET ROLE;
 SQL
 
-  probe="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+  probe="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
 SELECT proname || ' anon=' || has_function_privilege('anon', oid, 'EXECUTE')
     || ' authenticated=' || has_function_privilege('authenticated', oid, 'EXECUTE')
     || ' public=' || has_function_privilege('public', oid, 'EXECUTE')
@@ -114,7 +130,7 @@ SQL
 )"
   echo "$probe"
 
-  probe_ok="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+  probe_ok="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
 SELECT bool_and(
   NOT has_function_privilege('anon', oid, 'EXECUTE')
   AND NOT has_function_privilege('authenticated', oid, 'EXECUTE')
@@ -129,14 +145,14 @@ SQL
     exit 1
   fi
 
-  psql "$scratch_url" -v ON_ERROR_STOP=1 -q -c \
+  psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q -c \
     "DROP FUNCTION public.rpc_default_priv_probe(); DROP FUNCTION public.rpc_default_priv_probe_admin();"
   echo "default-privilege probe: enforced"
 else
   echo "default-privilege probe: skipped (migration not in tree)"
 fi
 
-table_state="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+table_state="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
 SELECT CASE
   WHEN to_regclass('public.gotrue_confirm_uses') IS NULL THEN 'missing'
   WHEN EXISTS (
@@ -159,7 +175,7 @@ fi
 # broadly, re-apply the lock migration, require the intended EXECUTE, then
 # drop only the stand-ins so the public scan below stays the real schema.
 if [[ -f supabase/migrations/20261030100000_lock_public_function_execute.sql ]]; then
-real_utility="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+real_utility="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
 SELECT (
   to_regprocedure('public.post_reversal(uuid, text, uuid)') IS NOT NULL
   AND to_regprocedure('public.utility_runs_fill_unit_id()') IS NOT NULL
@@ -170,14 +186,14 @@ SQL
 )"
 if [[ "$real_utility" == "t" ]]; then
   echo "utility function revoke probe: real functions"
-  lock_notices="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -f supabase/migrations/20261030100000_lock_public_function_execute.sql 2>&1)"
+  lock_notices="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -f supabase/migrations/20261030100000_lock_public_function_execute.sql 2>&1)"
   if printf '%s\n' "$lock_notices" | grep -E "skip missing function (public\.post_reversal\(uuid, text, uuid\)|public\.utility_runs_fill_unit_id|public\.utility_runs_reuse_open_period|app\.audit_event)"; then
     echo "lock migration NOTICE-skipped a #18 function" >&2
     exit 1
   fi
   echo "utility NOTICE skip: none"
   echo "permission table (anon / authenticated / public EXECUTE):"
-  psql "$scratch_url" -v ON_ERROR_STOP=1 <<'SQL'
+  psql -X "$scratch_url" -v ON_ERROR_STOP=1 <<'SQL'
 SELECT sig,
        has_function_privilege('anon', sig::regprocedure, 'EXECUTE') AS anon,
        has_function_privilege('authenticated', sig::regprocedure, 'EXECUTE') AS authenticated,
@@ -191,7 +207,7 @@ FROM (VALUES
 ) AS f(sig)
 ORDER BY 1;
 SQL
-  utility_ok="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+  utility_ok="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
 SELECT
   NOT has_function_privilege('anon', 'public.post_reversal(uuid, text)', 'EXECUTE')
   AND NOT has_function_privilege('public', 'public.post_reversal(uuid, text)', 'EXECUTE')
@@ -218,7 +234,7 @@ SQL
   echo "utility function revoke probe: enforced"
 else
 echo "utility function revoke probe"
-psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
 CREATE TABLE IF NOT EXISTS public.fn_priv_probe_created (sig text PRIMARY KEY);
 TRUNCATE public.fn_priv_probe_created;
 DO $body$
@@ -261,9 +277,9 @@ SQL
 {
   echo "SET client_min_messages TO warning;"
   echo "\\i supabase/migrations/20261030100000_lock_public_function_execute.sql"
-} | psql "$scratch_url" -v ON_ERROR_STOP=1 -q
+} | psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q
 
-utility_priv="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+utility_priv="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
 SELECT 'public.post_reversal(uuid, text, uuid)'
     || ' anon=' || has_function_privilege('anon', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
     || ' authenticated=' || has_function_privilege('authenticated', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
@@ -288,7 +304,7 @@ SELECT 'stand-ins=' || count(*)::text FROM public.fn_priv_probe_created;
 SQL
 )"
 echo "$utility_priv"
-utility_ok="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+utility_ok="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
 SELECT
   NOT has_function_privilege('anon', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
   AND NOT has_function_privilege('public', 'public.post_reversal(uuid, text, uuid)', 'EXECUTE')
@@ -308,7 +324,7 @@ if [[ "$utility_ok" != "t" ]]; then
   echo "utility function revoke probe failed" >&2
   exit 1
 fi
-psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
 DO $drop$
 DECLARE sig text;
 BEGIN
@@ -328,7 +344,7 @@ fi
 if [[ -f "$is_member_file" ]]; then
   echo "is_member revoke probe"
   echo "permission table before/after (anon / authenticated / service_role / public EXECUTE):"
-  member_report="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<SQL
+  member_report="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<SQL
 CREATE TEMP TABLE is_member_priv (
   phase text PRIMARY KEY,
   anon boolean NOT NULL,
@@ -383,7 +399,7 @@ fi
 trigger_revoke_file="supabase/migrations/20261030150000_revoke_id_photo_lease_close_execute.sql"
 if [[ -f "$trigger_revoke_file" ]]; then
   echo "merged trigger revoke probe"
-  psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+  psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
 SET ROLE postgres;
 CREATE TABLE IF NOT EXISTS public.fn_priv_trigger_created (sig text PRIMARY KEY);
 TRUNCATE public.fn_priv_trigger_created;
@@ -414,9 +430,9 @@ SQL
     printf '\\i %s\n' "$trigger_revoke_file"
     printf '\\i %s\n' "$trigger_revoke_file"
     echo "RESET ROLE;"
-  } | psql "$scratch_url" -v ON_ERROR_STOP=1 -q
+  } | psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q
   echo "permission table (anon / authenticated / public EXECUTE):"
-  psql "$scratch_url" -v ON_ERROR_STOP=1 <<'SQL'
+  psql -X "$scratch_url" -v ON_ERROR_STOP=1 <<'SQL'
 SELECT sig,
        has_function_privilege('anon', sig::regprocedure, 'EXECUTE') AS anon,
        has_function_privilege('authenticated', sig::regprocedure, 'EXECUTE') AS authenticated,
@@ -427,7 +443,7 @@ FROM (VALUES
 ) AS f(sig)
 ORDER BY 1;
 SQL
-  trigger_ok="$(psql "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
+  trigger_ok="$(psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA <<'SQL'
 SELECT
   NOT has_function_privilege('anon', 'public.fn_id_photo_drop_wm()', 'EXECUTE')
   AND NOT has_function_privilege('authenticated', 'public.fn_id_photo_drop_wm()', 'EXECUTE')
@@ -441,7 +457,7 @@ SQL
     echo "merged trigger revoke probe failed" >&2
     exit 1
   fi
-  psql "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
+  psql -X "$scratch_url" -v ON_ERROR_STOP=1 -q <<'SQL'
 SET ROLE postgres;
 DO $drop$
 DECLARE sig text;
@@ -459,7 +475,7 @@ else
   echo "merged trigger revoke probe: skipped (migration not in tree)"
 fi
 
-psql "$scratch_url" -v ON_ERROR_STOP=1 -tA -F $'\t' <<'SQL' > /tmp/condola-fn-priv.tsv
+psql -X "$scratch_url" -v ON_ERROR_STOP=1 -tA -F $'\t' <<'SQL' > "$scan_path"
 SELECT n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',
        has_function_privilege('anon', p.oid, 'EXECUTE'),
        has_function_privilege('authenticated', p.oid, 'EXECUTE')
@@ -484,7 +500,7 @@ else
 fi
 echo "privilege gate: ${mode}"
 
-python3 - "$mode" supabase/rpc-allowlist.txt /tmp/condola-fn-priv.tsv <<'PY'
+python3 - "$mode" supabase/rpc-allowlist.txt "$scan_path" <<'PY'
 import pathlib, sys
 mode, allow_path, scan_path = sys.argv[1:]
 

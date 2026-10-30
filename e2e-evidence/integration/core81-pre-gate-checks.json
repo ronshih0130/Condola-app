@@ -1,0 +1,28 @@
+{
+  "time_pt": "2026-10-29T21:30:45.761148-07:00",
+  "gate_00644ca": "FAIL retained; obsolete ID context assertions and mixed historical/current test catalog found, no waiver",
+  "idv_units": "14/14 PASS after pinned-context assertions",
+  "harness_units": "17/17 PASS including no-DB-call invalid target cases",
+  "typecheck_lint": "PASS after explicit process-env test typing",
+  "function_privileges": {
+    "scope": "isolated local PostgreSQL16 cluster55436; current81 source replay",
+    "anonymous_execute": 0,
+    "authenticated_allowlisted": 7,
+    "fixed_name_sentinel_preserved": 7,
+    "no_shared_database_dropped": true,
+    "psql_startup_files": "disabled with -X",
+    "cluster_roles": "stub may create missing local test roles; isolated cluster required"
+  },
+  "id_purge_current_and_historical": "7/7 PASS; historical schema built from published sources only through30151200; no current-policy historical overwrites",
+  "manual_tail_after_esign": {
+    "core81-rls-tail3.log": {
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "whole_combined_gate": "PENDING",
+  "staging": "PENDING schema application on authorized side; Mac migrations forbidden",
+  "independent_Claude_ClassB": false
+}

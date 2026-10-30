@@ -500,6 +500,10 @@ test("mounted action service on PG: Email replay, permissions, atomic replacemen
         const retained = await client.query<{ row: unknown }>(
           "SELECT to_jsonb(v) AS row FROM esign_versions v WHERE case_id=$1 ORDER BY id", [first.caseId],
         );
+        // Purge isolation is meaningful only with the current explicit ON guard.
+        // svcOn rolls this fixture setting back with the rest of the test.
+        await client.query(`INSERT INTO platform_settings(key,value) VALUES ('ID_PURGE_ENABLED','"on"'::jsonb)
+          ON CONFLICT(key) DO UPDATE SET value=excluded.value`);
         await client.query("SELECT purge_due_identity_documents(1)");
         assert.deepEqual((await client.query(
           "SELECT to_jsonb(v) AS row FROM esign_versions v WHERE case_id=$1 ORDER BY id", [first.caseId],

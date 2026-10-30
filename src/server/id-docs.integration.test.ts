@@ -1503,8 +1503,15 @@ test("terminating or cancelling a lease fills a null end date and leaves one tha
   assert.equal(closed.rows[0].end_date, today);
   assert.equal(closed.rows[0].terminated_on, null);
   const afterClose = await due(openDoc);
-  assert.equal(afterClose.delete_after, closed.rows[0].delete_after);
-  assert.notEqual(afterClose.delete_after, "9999-12-31");
+  // The legacy normalizer still fills end_date, but an automatic date is not
+  // evidence of actual termination/move-out under the current retention policy.
+  assert.equal(afterClose.delete_after, "9999-12-31");
+  const origin = await query<{ id_retention_auto_end: boolean }>(
+    `SELECT id_retention_auto_end FROM leases WHERE id=$1`, [openDraft.id],
+  );
+  assert.equal(origin.rows[0].id_retention_auto_end, true);
+  await query(`UPDATE leases SET terminated_on=$2::date WHERE id=$1`, [openDraft.id, today]);
+  assert.equal((await due(openDoc)).delete_after, closed.rows[0].delete_after);
 
   const keptEnd = "2027-04-01";
   const preset = await insertLease("draft", "not_sent", "2026-01-01", keptEnd);

@@ -7,7 +7,6 @@ import { ORG_ID, USERS } from "../src/server/ids";
 import { ACCOUNTS, resetDemo, signIn, waitPastConsent } from "./session";
 
 const db = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
-if (!decodeURIComponent(db.pathname.slice(1)).startsWith("condola_b005_browser_")) throw new Error("B005-owned local database required");
 if (process.env.DEMO_MODE !== "true") throw new Error("Local synthetic demo mode required");
 
 for (const width of [390, 1280]) test(`live onboarding resumes and respects real acceptance at ${width}px`, async ({ page, browser }) => {
@@ -21,6 +20,8 @@ for (const width of [390, 1280]) test(`live onboarding resumes and respects real
   watch(page);
   await resetDemo(page);
   const client = new Client({ connectionString: db.href }); await client.connect();
+  const originalRollout = (await client.query(`SELECT value FROM platform_settings WHERE key='onboarding_progress'`)).rows[0]?.value;
+  const originalOrg = (await client.query(`SELECT feature_flags,settings FROM organizations WHERE id=$1`, [ORG_ID])).rows[0];
   try {
     await client.query(`UPDATE platform_settings SET value='{"enabled":false,"allowed_org_ids":[]}' WHERE key='onboarding_progress'`);
     await page.goto("/m"); await expect(page.getByTestId("live-onboarding")).toHaveCount(0);
@@ -62,5 +63,11 @@ for (const width of [390, 1280]) test(`live onboarding resumes and respects real
     await signIn(page,ACCOUNTS.manager); await expect(page.getByTestId("live-onboarding")).toHaveCount(0);
     expect(errors).toEqual([]);
     writeFileSync(`../B005-onboarding-evidence/onboarding-${width}.json`,JSON.stringify({width,http5xx:0,consoleErrors:0,pageErrors:0,screenshot:`onboarding-${width}.png`},null,2));
-  } finally { await client.end(); }
+  } finally {
+    try {
+      if (originalRollout === undefined) await client.query(`DELETE FROM platform_settings WHERE key='onboarding_progress'`);
+      else await client.query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='onboarding_progress'`, [JSON.stringify(originalRollout)]);
+      if (originalOrg) await client.query(`UPDATE organizations SET feature_flags=$2::jsonb,settings=$3::jsonb WHERE id=$1`, [ORG_ID,JSON.stringify(originalOrg.feature_flags),JSON.stringify(originalOrg.settings)]);
+    } finally { await client.end(); }
+  }
 });

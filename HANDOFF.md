@@ -60,3 +60,13 @@ Fresh80 versus untouched71+9 upgrade logical catalog PASS across11categories and
 Private GitHub mirror wrapper completed at2026-10-29T21:00:29-0700 after Origin pushes, including core2c3bff5, payee20e305f and ops-lockb3ede2a. Stage/prod claims remain RELEASED. App quota/reset unknown. No real outbound messages, prod access or legal-copy edits.
 
 STOP POINT: repo ACTIVE B/Ron; next: immutable core80 candidate gate on a new owned local clone, build/HTTP acceptance, while independent onboarding review and isolated B008 preparation continue; owner: Ron/Codex. Full39-item goal remains active and incomplete.
+
+## Core81 verification preparation 2026-10-29T21:30:45.761148-07:00
+
+Onboarding7fc25e1 integrated as56460d5, highest native production/test delta scopedPASS. Browser2/2 local passed390/1280 with accepted binding and resume, manager role/forged-admin/cross-org/suspended-save denials DBtested. Root registration/defaultOFF flags added, test-prefix portability and rollout cleanup awaiting exact combined rerun. Origin build56460d5 and onboardingprep7fc25e1 published; private mirror completed2026-10-29T21:29:20-0700, ops-lockc7b99ea generation8.
+
+Gate00644ca failed (unit549/551; ID-docs14/15), preserved. New scope review identified historical-replay mixed catalog; current purge suite now keeps new policies, historical configurable-cap assertions run in a separate published-source scratch schema. Fixed90 and directOFF/dry-run/no-mutation, genuine PDF parent cascade remain protected. Seven focused checks passed; new independent delta review pending. E-sign purge-isolation fixture explicitly opts ON in rollback transaction. Manual remaining RLS tail passes; full immutable gate not yet run.
+
+Fresh81 and untouched71+10 upgrade match all11 logical catalog categories; counts2/4/5/1 preserved. Function-privilege checker now uses create-only unique ownedDB, no FORCE, startupfilesdisabled, unique temp scan, explicit disposable target. Isolated PG55436 full replay confirms anon0/allowlist7, fixed-name sentinel retained. Stub cluster roles are isolated local test material only.
+
+STOP POINT: repo ACTIVE B/Ron; next: freeze exact core81 SHA and run clean pinned gate/build/browser, while B008 independent review and B009 preparation proceed; owner: Ron/Codex. Staging schema, first-period rule, Claude QA remain dependent blockers; full39-item queue active.

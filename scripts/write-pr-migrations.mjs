@@ -170,6 +170,10 @@ const added = {
     addOnly: false,
     reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
   },
+  "supabase/migrations/20261031100207_b005_onboarding_progress.sql": {
+    addOnly: false,
+    reason: "Adds default-OFF rollout setting and server-owned onboarding metadata guard/trigger with privilege restrictions; changes authorization for a settings subtree without deleting data or columns.",
+  },
   "supabase/migrations/20261031100206_b002_legacy_open_moveout.sql": {
     addOnly: false,
     reason: "Replaces only the database-owned provenance trigger function to recognize a newly observed move-out on an older active open lease. Preserves unknown closed cases, ACLs and published SQL; no data/date backfill or columns removed.",
@@ -243,8 +247,9 @@ function livePrivileges() {
    AND p.proname = ANY (ARRAY['dedupe_live_identity_documents','fn_id_access_log_guard','fn_id_document_allow_log_delete','fn_id_number_masked','id_document_keep_days','id_number_stored_mask'])
  ORDER BY 1`;
   try {
-    const url = process.env.DATABASE_URL || "postgres://condola:condola@127.0.0.1:5432/condola";
-    return execFileSync("psql", [url, "-v", "ON_ERROR_STOP=1", "-At", "-c", sql], { encoding: "utf8" }).trim();
+    const url = process.env.DATABASE_URL;
+    if (!url) return "";
+    return execFileSync("psql", ["-X", url, "-v", "ON_ERROR_STOP=1", "-At", "-c", sql], { encoding: "utf8" }).trim();
   } catch {
     return "";
   }

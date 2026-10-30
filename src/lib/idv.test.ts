@@ -186,7 +186,11 @@ test("a failed photo view is translated, and a bounced send keeps the selected p
   const viewFn = view.slice(0, view.indexOf("export async function actionMarkIdChecked"));
   assert.match(viewFn, /issuePhotoUrlsForToken/);
   assert.match(viewFn, /sessionTokenHash/);
-  assert.doesNotMatch(viewFn, /getSession\(/);
+  assert.match(viewFn, /const session = await getSession\(\)/);
+  assert.match(viewFn, /userId: session\.userId/);
+  assert.match(viewFn, /preferredOrg: session\.liveOrgId/);
+  assert.match(viewFn, /env: session\.environment/);
+  assert.ok(viewFn.indexOf("await requireCurrentConsent()") < viewFn.indexOf("issuePhotoUrlsForToken("));
 });
 
 test("the upload wait note appears only when the estimate is over 10 seconds", () => {
@@ -277,10 +281,13 @@ test("the photo modal keeps a fixed frame per slot and reloads with a new link",
   assert.match(get, /total;dur=/);
   assert.match(get, /private, no-store/);
   // The consent lookup reuses the photo connection, after fast token rejection.
-  assert.ok(get.indexOf("readPhotoToken(token)") < get.indexOf("serveSignedPhoto({"));
-  assert.ok(get.indexOf("if (!sessionCookie)") < get.indexOf("serveSignedPhoto({"));
+  assert.ok(get.indexOf("readPhotoToken(token)") < get.indexOf("serveSignedPhoto(input,"));
+  assert.ok(get.indexOf("if (!sessionCookie)") < get.indexOf("serveSignedPhoto(input,"));
   assert.match(get, /async \(client\) => \{\s*const \{ session \} = await readSessionOn\(client, \{ touch: false \}\)/);
   assert.match(get, /await requireCurrentConsent\(session, "api"\)/);
+  assert.match(get, /session\.userId !== parsed\.u/);
+  assert.match(get, /input\.preferredOrg = session\.liveOrgId/);
+  assert.match(get, /input\.env = session\.environment/);
   assert.doesNotMatch(get, /withClient|withDeferredClient/);
   const docs = readFileSync(new URL("../server/id-docs.ts", import.meta.url), "utf8");
   const serve = docs.slice(docs.indexOf("export async function serveSignedPhoto"));

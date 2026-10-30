@@ -16,7 +16,7 @@
   "queries_blob": "2d9f01965eda2adca32f006fd8607ceaa6dbc9e1",
   "tenant_page_blob": "615fe3e739af04925f4f170b7ef5b3fda098450f",
   "history_boundary": "direct ordinary-role changes denied; genuine parent cascades retained; trusted owner bypass excluded",
-  "http_browser": "Local core80 HTTP/browser 1/1 passed before two assertion-only improvements; final immutable rerun pending",
+  "http_browser": "00644ca exact-source local browser1/1 PASS including explicit307/login/no-PDF; final combined candidate rerun pending",
   "staging": "PENDING",
   "classb_signoff": false,
   "whole_item_done": false,

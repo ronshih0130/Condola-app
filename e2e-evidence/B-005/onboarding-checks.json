@@ -1,10 +1,51 @@
 {
   "scope": "live onboarding candidate against synthetic local data",
   "status": "SCOPED_LOCAL_PASS; WHOLE_B005_INCOMPLETE",
-  "review": "Highest-tier independent scoped review passed production read model blob 860773012464351da6c1f5ade9a90bcc3771d426; independent review of subsequent test-only delta pending",
-  "browser": {"widths": [390, 1280], "passed": 2, "http_5xx": 0, "console_errors": 0, "page_errors": 0},
-  "browser_coverage": ["OFF", "sandbox hidden", "sample-marked rows excluded", "live property, lease and first bill", "tenant invite pending", "local invite acceptance and binding", "sign-out/sign-in persistence", "explicit not-needed choice with actor audit", "manager UI hidden"],
-  "database_checks": ["rollout and active role/session boundaries", "manager and forged-admin direct save denial", "cross-org and suspended-admin save denial", "sample and inactive targets", "pending and expired invites", "binding readiness", "audit failure rollback", "concurrent settings preservation", "read-only repeated progress"],
-  "checks": {"focused_tests": "6/6", "typecheck": "pass", "targeted_lint": "pass", "copy_check": "pass"},
-  "limits": ["manager forged server-action HTTP request not separately tested", "further invitation matrix and final combined candidate gates remain", "staging and independent Claude Class B QA not run", "unmarked live demo data cannot be reliably identified; exclude uncertain organizations from rollout", "no provider delivery or real email tested"]
+  "review": "Highest-tier independent scoped review PASS for production read model8607730 and direct-save denial test2920698; no DB/browser rerun by reviewer",
+  "browser": {
+    "widths": [
+      390,
+      1280
+    ],
+    "passed": 2,
+    "http_5xx": 0,
+    "console_errors": 0,
+    "page_errors": 0
+  },
+  "browser_coverage": [
+    "OFF",
+    "sandbox hidden",
+    "sample-marked rows excluded",
+    "live property, lease and first bill",
+    "tenant invite pending",
+    "local invite acceptance and binding",
+    "sign-out/sign-in persistence",
+    "explicit not-needed choice with actor audit",
+    "manager UI hidden"
+  ],
+  "database_checks": [
+    "rollout and active role/session boundaries",
+    "manager and forged-admin direct save denial",
+    "cross-org and suspended-admin save denial",
+    "sample and inactive targets",
+    "pending and expired invites",
+    "binding readiness",
+    "audit failure rollback",
+    "concurrent settings preservation",
+    "read-only repeated progress"
+  ],
+  "checks": {
+    "focused_tests": "6/6",
+    "typecheck": "pass",
+    "targeted_lint": "pass",
+    "copy_check": "pass"
+  },
+  "limits": [
+    "manager forged server-action HTTP request not separately tested",
+    "further invitation matrix and final combined candidate gates remain",
+    "staging and independent Claude Class B QA not run",
+    "unmarked live demo data cannot be reliably identified; exclude uncertain organizations from rollout",
+    "no provider delivery or real email tested"
+  ],
+  "integration_delta": "Root replaces hardcoded per-test DB name with shared explicit disposable-target guard and restores rollout/org settings after browser; final immutable rerun pending"
 }
