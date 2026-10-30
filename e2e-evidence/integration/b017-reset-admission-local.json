@@ -1,0 +1,55 @@
+{
+  "time_pt": "2026-10-30T03:49:48.158243-07:00",
+  "scope": "root-owned local reset integration preparation, no complete producer/financial/staging/release GO",
+  "parent": "aa35e1f",
+  "sql17_blob": "1351ee49985987744e0fbe0c6f9ee29b220eb972",
+  "seed_blob": "0ad7f5221745068b1039bf5f53ac90da1b2054fd",
+  "seed_test_blob": "ffaaa496b653d6f358a895c7ab2e36b68cdad900",
+  "before_fix": {
+    "pass": 3,
+    "fail": 1,
+    "finding": "standalone resolver did not share reset admission; actual regression fails resolver-first platform wait assertion"
+  },
+  "after_fix": {
+    "pass": 4,
+    "fail": 0,
+    "skip": 0,
+    "exit": 0,
+    "schema": "owned clean89 plus exact new17; no16"
+  },
+  "old_schema_compat": "Earlier3cases pass on unchanged89; later fourth specifically requires17 and is not included in that prior3/3 scope",
+  "independent_review": "Astra scoped native static PASS at exact blobs; root execution separately attributed",
+  "limits": [
+    "Owner-only synthetic source foundation; no real application producer wiring",
+    "Current0ff17 browser seeded run FAILS due55P03; separate busy follow-up under review, not integrated",
+    "Final16then17 compatibility NOT_RUN",
+    "Production retention and full8event families remain open",
+    "No remoteDDL/migration/deploy/claim, prodkeys or external messages"
+  ],
+  "private_artifacts": {
+    "b017-root-reset-tests-v2.log": {
+      "bytes": 875,
+      "sha256": "97db61cc22c3296c70c5950a5c37088433c7826fade5584544dc7ad1e2ddc244"
+    },
+    "b017-root-reset-core89-compat.log": {
+      "bytes": 873,
+      "sha256": "ce0dc44736976bf604b5b43e72ac82432ddb71795876b044af846fc045f715b3"
+    },
+    "b017-root-resolver-reset-before-fix.log": {
+      "bytes": 2077,
+      "sha256": "089a631d7d57f2085dbc22692ad7c99c259668c88bced4be10ba184a5c97798b"
+    },
+    "b017-root-reset-admission-tests.log": {
+      "bytes": 1098,
+      "sha256": "b73a9bf3584ff1fa52993a20d8b23597d50c1d58443b7cd3ab12d9f247fad400"
+    },
+    "b017-root-reset-final-typecheck.log": {
+      "bytes": 43,
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e"
+    },
+    "b017-root-reset-final-lint.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}
