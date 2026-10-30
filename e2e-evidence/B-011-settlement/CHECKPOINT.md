@@ -1,0 +1,16 @@
+# B-011 settlement local draft checkpoint
+
+Status: INCOMPLETE / NO-GO for staging or release. This is an unpublished local source checkpoint, not a whole-lane acceptance or an immutable deployed migration. The global and organization controls remain default OFF. No actual money movement or financial ledger writes are introduced by this draft.
+
+Coder-run synthetic PostgreSQL integration and calculation suite passed 3/3, including one fixture-seeded rent root versus the deposit gateway's shared source cap and overlapping-cycle database rejection. Actual rent attribution creation, both-order concurrency and source-fence proofs are not yet implemented. TypeScript and focused lint passed. Independent reviewer gave scoped source feedback on earlier pieces; final whole-settlement independent review has not run.
+
+Coder-run local browser test passed 1/1 at 390 and 1/1 at 1280 on separate disposable cloned databases, with only synthetic accounts and an environment cleared of provider credentials. It exercises one empty draft committed by the real action, an intentionally lost response, authoritative request-status recovery, and reload; it does not cover abrupt reload while the status request is in flight, altered payload, delayed old-scope responses, outcomes, full role journeys, or storage UI. Browser exact fixture blob 4a528f5cbbc9394504e0e2d97d492a4f3c0b3c3c; full before/after source manifest SHA256 c414436e4fc199033ab3c9a1eeb66ddfc8c87feea899c9e82556d9a9b66a27eb. The 43124 listener exited. Failed earlier runs remain private: unseeded login; expected injected-console diagnostic mismatch; navigation/status cancellation diagnostic mismatch. They are not reported as passing.
+
+Open: complete rent source enumeration and admission, shared-cap concurrency for real rent gateway, current-source freshness and outcome races, durable UI pending payload/recovery and broader role/upload browser tests, combined seed hook on main, PDF approved wording, staging controls/ACL/operations and full independent final review. The 100216 draft is not applied to staging or production. Complete-source fence proposal awaits prototype and contention tests; unknown is a safe interim state, not final acceptance of the required rent branch.
+
+Private artifacts (synthetic only; retention decision pending):
+- `work/b011-settlement-recovery-390-v4/.../settlement-recovery.png`, 160603 bytes, SHA256 cd0116ebbcf1c61c65d6adef01cd69b066df5d84fd5e03f307f52ba143ef9e3b.
+- `work/b011-settlement-recovery-1280-v4/.../settlement-recovery.png`, 200638 bytes, SHA256 b1ebc9e811f6c105ae33f37e568bff0aeee9301355699dc1be1c99ace414a7ad.
+- Corresponding private logs `work/b011-settlement-recovery-390-v4.log` and `work/b011-settlement-recovery-1280-v4.log`; earlier failure logs and traces retained separately. Screenshots and raw logs are not included in Git.
+
+Decision/contract source SHA256: Ron settlement decisions 59c827626c4b9a9bf59c193d442397b79566243ead6f94e637abeec21ebb2381; settlement A–F contract 1b1a44c7777c813d2f0ad64d90533c4bcc6719406f813007e5502e9189b00926; upload contract dc73776e55c61185ec4eca4415d9f36de5f8f946ec1d53dd24aa0b35eb0f7018; rent fence proposal f653cb6366c16be7ec7086b7c826004e5269a82d36221ef2696abf980f41aaf7. These identify local review inputs, not approvals for deployment.

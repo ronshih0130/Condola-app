@@ -1,0 +1,2 @@
+import { defineConfig, devices } from "@playwright/test";
+export default defineConfig({testDir:".",testMatch:"settlement-recovery.spec.ts",workers:1,timeout:180_000,expect:{timeout:20_000},use:{baseURL:"http://127.0.0.1:43124",trace:"retain-on-failure"},webServer:{command:"npx next dev -p 43124 -H 127.0.0.1",cwd:process.cwd(),url:"http://127.0.0.1:43124",reuseExistingServer:false,timeout:180000},projects:[{name:"chromium",use:{...devices["Desktop Chrome"]}}]});
