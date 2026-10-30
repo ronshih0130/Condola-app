@@ -1,0 +1,27 @@
+{
+  "recordedAt": "2026-10-30T08:29:19.391015-07:00",
+  "candidate": "3f8505e87736c5ca422172d992bf33d9615ab390",
+  "origin": "mode-b-tenant-directory-edit-prep",
+  "state": "LOCAL_COMBINED_CHECKS_PASS_WITH_DECLARED_OFF_SKIPS; wholefeatures/staging/queue/releaseINCOMPLETE",
+  "gate": "clean exactSHA PASS (594 not applicable here: source91 588unit/304RLS+1approved historicalskip)",
+  "builds": "Next0/CFstagingbundle0/originalPREFLIGHTPASS/localWorker1of1PASS",
+  "browser": {
+    "batches": 57,
+    "passed": 142,
+    "failed": 0,
+    "skipped": 3,
+    "skips": [
+      "-  3 [chromium] \u203a e2e/consent-followups.spec.ts:250:5 \u203a accepting a team invite ignores a user id submitted in the form or the query",
+      "-  8 [chromium] \u203a e2e/consent-followups.spec.ts:452:5 \u203a a team invite requires the signup checkbox and records source invite",
+      "-  1 [chromium] \u203a e2e/team-invite-link.spec.ts:40:5 \u203a admin hands over a masked fragment link; join is private, account-bound and single use"
+    ],
+    "rawPath": "work/core91c-full-batched-browser.log",
+    "sha256": "96fe6f2ed1e31ee9891c1ae79e589fe1784ec92c80857ee7544b7438c8ad5de9"
+  },
+  "priorFailure": "1f5f947 full141PASS1FAIL3OFFSKIP preserved; B007 coherent snapshot8/8 separate; not relabeled",
+  "catalog": "all91DDL exactsame bytes as1f5 reviewedfresh-vs71+20 all11equal; separate92draft is NOT in this candidate",
+  "review": "native highest exact scoped source/static review; execution root-attributed; no independent ClaudeClassB",
+  "flags": "defaultOFF; three TEAM_INVITES globalOFF browser skips remainnotexecutedONatthisexactSHA",
+  "staging": "PEbox plan notification awaited; no MacDBmigration/prod/access/messages",
+  "next": "rootisolated92bcandidate corrects observedprivateDDL/preauthordering; complete exactgate/build/Worker/browser/catalog beforepublish20"
+}
