@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { expect,test } from "@playwright/test";
+import { expect,test,type Request } from "@playwright/test";
 import { Client } from "pg";
 import { ORG_ID,USERS } from "../src/server/ids";
 import { disposableDbUrl } from "../src/server/test-disposable-db";
@@ -23,6 +23,9 @@ const png=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42
 test("staff records evidenced sources and saves an unknown settlement draft",async({page},info)=>{
   const errors:string[]=[];page.on("pageerror",e=>errors.push(e.message));page.on("console",e=>{if(e.type()==="error")errors.push(e.text());});page.on("response",r=>{if(r.status()>=500)errors.push(`HTTP ${r.status()} ${new URL(r.url()).pathname}`);});
   await page.route("**/*",async route=>{const u=new URL(route.request().url());if(["localhost","127.0.0.1"].includes(u.hostname))await route.continue();else{errors.push("External request blocked");await route.abort();}});
+  const pending=new Set<Request>();
+  page.on("request",request=>{const url=new URL(request.url());if(url.origin==="http://127.0.0.1:43124"&&url.pathname.startsWith("/m/settlement/")&&request.method()==="POST")pending.add(request);});
+  page.on("requestfinished",request=>pending.delete(request));page.on("requestfailed",request=>{if(pending.delete(request))errors.push(`Failed settlement request ${request.method()} ${new URL(request.url()).pathname}`);});
   await resetDemo(page);
   const fixture=await db(async c=>{
     await c.query(`UPDATE organizations SET feature_flags=feature_flags || '{"deposit_settlements":true}'::jsonb WHERE id=$1`,[ORG_ID]);await c.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='deposit_settlements'`,[ORG_ID]);
@@ -42,5 +45,7 @@ test("staff records evidenced sources and saves an unknown settlement draft",asy
   expect(await db(async c=>(await c.query(`SELECT r.invoice_line_id,b.classification,b.cycle_id FROM app.settlement_line_roots r JOIN app.settlement_line_bindings b ON b.root_id=r.id WHERE r.org_id=$1 AND r.lease_id=$2`,[ORG_ID,fixture.id])).rows[0])).toMatchObject({invoice_line_id:fixture.lineId,classification:"rent",cycle_id:cycle.id});
   const editor=page.locator("form").filter({has:page.getByRole("heading",{name:"Prepare statement"})});await editor.getByRole("button",{name:"Review amounts"}).click();await expect(editor.getByText("The net amount is not yet known.").first()).toBeVisible();await expect(editor.getByRole("button",{name:"Publish statement"})).toBeDisabled();await editor.getByRole("button",{name:"Draft",exact:true}).click();await expect(page.getByRole("heading",{name:/Version 2/})).toBeVisible();await page.reload();await expect(page.getByText("Source list is provisional.",{exact:false}).first()).toBeVisible();await expect(page.getByText("Supported rent cash",{exact:true}).first()).toBeVisible();
   expect(await db(async c=>(await c.query(`SELECT published,snapshot->'calculation'->>'authoritative' AS authoritative,snapshot->'calculation'->'netMinor'='null'::jsonb AS net_unknown FROM app.settlement_versions WHERE org_id=$1 AND lease_id=$2 ORDER BY revision DESC LIMIT 1`,[ORG_ID,fixture.id])).rows[0])).toEqual({published:false,authoritative:"false",net_unknown:true});
-  expect(await db(c=>financial(c,fixture.id))).toEqual(fixture.facts);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath("settlement-workflow.png"),fullPage:true});expect(errors).toEqual([]);
+  expect(await db(c=>financial(c,fixture.id))).toEqual(fixture.facts);
+  try {await expect(page.getByText("Checking request…")).toHaveCount(0);await expect.poll(()=>pending.size).toBe(0);await page.waitForLoadState("networkidle");await expect.poll(()=>pending.size).toBe(0);}catch(error){throw new Error(`Settlement requests still pending at capture: ${[...pending].map(r=>`${r.method()} ${new URL(r.url()).pathname}`).join(", ")}`,{cause:error});}
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath("settlement-workflow.png"),fullPage:true,caret:"initial"});expect(errors).toEqual([]);
 });
