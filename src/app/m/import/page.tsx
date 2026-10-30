@@ -4,8 +4,9 @@ import { ImportWizard } from "@/components/import-wizard";
 import { PageHeader } from "@/components/ui";
 import { can } from "@/server/perms";
 import { getSession } from "@/server/session";
-import { maybe, tx } from "@/server/db";
-import { importErrorDetailsEnabled } from "@/server/import-feature";
+import { tx } from "@/server/db";
+import { loadImportRegion } from "@/server/import-region-context";
+import type { ImportRegion } from "@/server/import-region";
 
 export const dynamic = "force-dynamic";
 
@@ -20,21 +21,21 @@ export default async function ImportPage() {
       </div>
     );
   }
-  let detailsEnabled = false;
+  let region: ImportRegion | null = null;
+  let regionUnavailable = false;
   if (process.env.IMPORT_ERROR_DETAILS_ENABLED === "true") {
     try {
-      const org = await tx(session.userId, (client) => maybe<{ feature_flags: unknown }>(
-        client, `SELECT feature_flags FROM organizations WHERE id = $1`, [session.orgId],
-      ), { orgId: session.orgId, environment: session.environment });
-      detailsEnabled = importErrorDetailsEnabled(process.env.IMPORT_ERROR_DETAILS_ENABLED, org?.feature_flags);
+      region = await tx(session.userId, client => loadImportRegion(client, session.orgId),
+        { orgId: session.orgId, environment: session.environment });
     } catch {
-      // Missing or unavailable configuration must not enable the feature.
+      regionUnavailable = true;
     }
   }
   return (
     <>
       <PageHeader title={t("im_title")} crumb={t("s_e03a6ec")} />
-      <ImportWizard detailsEnabled={detailsEnabled} />
+      {regionUnavailable ? <div className="alert bad" data-testid="import-region-unavailable">{t("im_region_unavailable")}</div>
+        : <ImportWizard detailsEnabled={Boolean(region)} region={region} />}
     </>
   );
 }

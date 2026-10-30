@@ -1,0 +1,56 @@
+{
+  "time_pt": "2026-10-29T23:23:52.918733-07:00",
+  "baseline": "7a1ba1a2e5a687e2b9f96affb428d941868e6b55",
+  "scope": "TW/TWD current offered import profile, canonical organization timezone and exact jurisdiction; unsupported/mismatched profiles reject ON. Not worldwide import-format support.",
+  "rollout": "Existing IMPORT_ERROR_DETAILS_ENABLED exacttrue + selected org import_error_details stricttrue; OFF legacy behavior preserved. No newflag/migration.",
+  "canonical_context": "Read within scoped API transaction all3modes, reloaded at commit. As-of SELECT does not lock organization configuration; manager obtains no organization UPDATE rights. Existingtargetproperty metadata locked/checkscoped; conflictsreturnoriginalrowerrors, no metadatarewrite.",
+  "xlsx": "Browser checks workbookdateepoch; true/1/unknown/malformedreject ON, false/0/default supported; server sees text rows, does not attest original workbook epoch. No newly supported format.",
+  "tests": {
+    "root_pure_and_existing_import": "22/22 PASS",
+    "separate_test_agent_DB_and_epoch": "2/2 PASS, meaningful manyassertions",
+    "independent_Astra_profile_epoch": "3/3 PASS; staticexactblobsPASS",
+    "typecheck_lint_copy": "PASS",
+    "browser_HTTP_staging": "NOT_RUN",
+    "whole_item": "INCOMPLETE"
+  },
+  "blobs": {
+    "src/app/m/import/page.tsx": "1de60104b37c46a3a40994fc3a0f16ee232a8979",
+    "src/components/import-wizard.tsx": "65e833fb8b7d5839024cca4cd6f4c8b8fefdf385",
+    "src/i18n/en.json": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+    "src/i18n/zh-TW.json": "6270729f648586a7443c15e6bb7f174c3ef61563",
+    "src/lib/spreadsheet.ts": "380a8de03b46874281150e61414916a11f6deb50",
+    "src/server/import-region-xlsx.test.ts": "b7d23a1ca62dbe2202da3a21daa69a8d57dd99e1",
+    "src/server/import-region.test.ts": "5dcba01badaf2d959ac7bc8b07a5990ac0ad92a6",
+    "src/server/import-region-context.ts": "030296915926630e41ee601894507bef597604f4",
+    "src/server/import-region.integration.test.ts": "8d5d41ab17f88ca6ce6035df52fa05cd89f46beb",
+    "src/server/import-region.ts": "e5f32d1b007cdeb0ce82b168c791b4ea341e77da",
+    "src/server/owner-import.ts": "cb71b3ccaa8acbfe46fe10b54babd115e27e3c4c",
+    "src/server/import-batch.ts": "3cbcf60bd21c6066c802b6139130983b50261081"
+  },
+  "private_logs": {
+    "import-region-units.log": {
+      "sha256": "f0cafbb23b08d8826ebc6bb881200e1015d4b4472465fdebd278ea59d658acdf",
+      "bytes": 4305
+    },
+    "import-region-typecheck.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "import-region-lint.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "import-region-copy.log": {
+      "sha256": "c1c7f0fde7ceb13f02fdfeefab3c4eca79a67bc61bbd522fcacea2d6c01276a0",
+      "bytes": 1433
+    },
+    "b006-region-quoted-final-tests.log": {
+      "sha256": "71e49ffcfaf45a5e4cee1583b98a78c61d5a538515ea92a495245c814e1f5d56",
+      "bytes": 646
+    },
+    "b006-region-epoch-regression.log": {
+      "sha256": "62bbf4fd39aa326da84c1f6822f8c06bce2ed91e35a3249e7e58059e097304e2",
+      "bytes": 962
+    }
+  }
+}

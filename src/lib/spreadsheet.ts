@@ -1,7 +1,7 @@
 /** Browser-side spreadsheet reader. The Worker never unzips or decodes uploads. */
 
 export class SpreadsheetError extends Error {
-  constructor(public code: "xls" | "xlsx" | "empty" | "encoding") {
+  constructor(public code: "xls" | "xlsx" | "empty" | "encoding" | "epoch") {
     super(code);
   }
 }
@@ -106,11 +106,12 @@ export async function readSpreadsheet(
   fileName: string,
   bytes: Uint8Array,
   encoding: "auto" | "utf-8" | "big5" = "auto",
+  options: { reject1904?: boolean } = {},
 ): Promise<{ rows: string[][]; rowNumbers: number[]; encoding: SheetEncoding }> {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".xls") && !lower.endsWith(".xlsx")) throw new SpreadsheetError("xls");
   if (lower.endsWith(".xlsx")) {
-    const sheet = await readXlsx(bytes);
+    const sheet = await readXlsx(bytes, options.reject1904 === true);
     if (sheet.rows.length === 0) throw new SpreadsheetError("empty");
     return { ...sheet, encoding: "xlsx" };
   }
@@ -188,7 +189,7 @@ function columnIndex(letters: string) {
   return n - 1;
 }
 
-async function readXlsx(bytes: Uint8Array): Promise<{ rows: string[][]; rowNumbers: number[] }> {
+async function readXlsx(bytes: Uint8Array, reject1904 = false): Promise<{ rows: string[][]; rowNumbers: number[] }> {
   let entries: Map<string, Uint8Array>;
   try {
     entries = await unzip(bytes);
@@ -196,6 +197,21 @@ async function readXlsx(bytes: Uint8Array): Promise<{ rows: string[][]; rowNumbe
     throw new SpreadsheetError("xlsx");
   }
   const byName = new Map([...entries.entries()].map(([name, value]) => [name.toLowerCase(), value]));
+  if (reject1904) {
+    const workbook = byName.get("xl/workbook.xml");
+    const xml = workbook ? textDecoder.decode(workbook) : "";
+    const tags = xml.replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "").replace(/<\?[\s\S]*?\?>/g, "");
+    const properties = [...tags.matchAll(/<(?:[A-Za-z_][\w.-]*:)?workbookPr(?=\s|\/|>)((?:[^"'<>]|"[^"]*"|'[^']*')*)\/?>/g)];
+    const starts = [...tags.matchAll(/<(?:[A-Za-z_][\w.-]*:)?workbookPr(?=\s|\/|>)/g)].length;
+    if (properties.length > 1 || starts !== properties.length || tags.includes("<!--")) throw new SpreadsheetError("epoch");
+    const attributes = properties[0]?.[1] ?? "";
+    if (/(?:^|\s)date1904(?=\s|=|$)/.test(attributes)) {
+      const epochs = [...attributes.matchAll(/(?:^|\s)date1904\s*=\s*(["'])([^"']*)\1/g)];
+      const epoch = epochs[0]?.[2].trim();
+      if (epochs.length !== 1 || (epoch !== "false" && epoch !== "0")) throw new SpreadsheetError("epoch");
+    }
+  }
   const sheet = byName.get("xl/worksheets/sheet1.xml") ?? [...byName.entries()].find(([name]) => name.startsWith("xl/worksheets/sheet") && name.endsWith(".xml"))?.[1];
   if (!sheet) throw new SpreadsheetError("xlsx");
   const sharedXml = byName.get("xl/sharedstrings.xml");
