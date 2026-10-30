@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui";
 import { moneyLabel } from "@/server/format";
 import { taipeiToday } from "@/server/money";
 import { rentRoll } from "@/server/queries";
+import { manualRemindersEnabled } from "@/server/manual-reminders";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 
@@ -22,7 +23,7 @@ export default async function RentPage() {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
-  const rows = await rentRoll(session);
+  const [rows, remindersEnabled] = await Promise.all([rentRoll(session), manualRemindersEnabled(session)]);
   const today = taipeiToday();
   let lastProperty = "";
   return (
@@ -110,7 +111,7 @@ export default async function RentPage() {
                     </Cell>
                     <Cell action>
                       {balance > 0 ? (
-                        <Link className="btn" href="/m/notify" data-testid="send-reminder">
+                        <Link className="btn" href={remindersEnabled && row.lease_id ? `/m/rent/remind/${row.lease_id}` : "/m/notify"} data-testid="send-reminder">
                           {t("i_send_reminder")}
                         </Link>
                       ) : null}

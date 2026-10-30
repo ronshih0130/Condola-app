@@ -27,6 +27,8 @@ import { leaseDetail, threadMessages } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 import { billingPreviewsEnabled } from "@/server/billing-preview-rules";
+import { paymentRequestEnabled } from "@/server/payment-request-status";
+import { paymentRequestCopy } from "@/i18n/lanes/reminders";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,7 @@ export default async function LeasePage({
   const detail = await leaseDetail(session, id);
   if (!detail) notFound();
   const { lease, signatures } = detail;
+  const paymentRequestScoped = tab === "ledger" && detail.dueMinor > 0 && await paymentRequestEnabled(session);
   const canInvite = session.role === "admin" || session.role === "manager";
   const billingEnabled = canInvite && lease.rent_frequency === "monthly" ? await tx(session.userId, (client) => billingPreviewsEnabled(client, session.orgId), { orgId: session.orgId, environment: session.environment }, { readOnly: true }) : false;
   const tenantActivated = canInvite ? await portalLoginReady(lease.tenant_user_id) : false;
@@ -226,7 +229,7 @@ export default async function LeasePage({
             <h3>{t("i_invoice")}</h3>
             <span className="sp" />
             {detail.dueMinor > 0 ? (
-              <PayDialog leaseId={id} dueMinor={detail.dueMinor} currency={lease.currency} label={t("s_a924c4c")} returnTo="staff" />
+              <PayDialog key={`${session.userId}:${session.orgId}:${id}:${paymentRequestScoped}`} leaseId={id} dueMinor={detail.dueMinor} currency={lease.currency} label={t("s_a924c4c")} returnTo="staff" requestScope={paymentRequestScoped ? { actorId:session.userId, orgId:session.orgId, copy:paymentRequestCopy[session.locale] } : undefined} />
             ) : null}
           </div>
           {detail.invoices.length === 0 ? (

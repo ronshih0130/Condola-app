@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { cronAuthorized, REMINDER_CRON } from "./cron-auth";
-import { deliverReminders, planLeaseReminders, planOverdueReminders, taipeiToday, type ReminderPlan } from "./reminders";
+import { deliverReminders, isLegacyReminderClaimFenced, planLeaseReminders, planOverdueReminders, taipeiToday, type ReminderPlan } from "./reminders";
 import type { MailResult } from "./mail";
 
 const origin = "https://app.condola.app";
@@ -164,4 +164,12 @@ test("the cron secret check rejects a missing or wrong secret", () => {
   assert.equal(cronAuthorized("secret", ""), false);
   assert.equal(cronAuthorized("nope", "secret"), false);
   assert.equal(cronAuthorized("secret", "secret"), true);
+});
+
+
+test("legacy fence suppression does not hide unrelated database permissions failures", () => {
+  assert.equal(isLegacyReminderClaimFenced({code:"42501",message:"Legacy reminder claim unavailable"}),true);
+  assert.equal(isLegacyReminderClaimFenced({code:"55P03"}),true);
+  assert.equal(isLegacyReminderClaimFenced({code:"42501",message:"permission denied"}),false);
+  assert.equal(isLegacyReminderClaimFenced(null),false);
 });
