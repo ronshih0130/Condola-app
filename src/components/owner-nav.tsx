@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ownerRepairCopy } from "@/i18n/lanes/repair-owner-policy";
 import { usePathname } from "next/navigation";
 import { BrandImage } from "./brand";
 import { useLocale, useT } from "./locale";
@@ -9,10 +10,12 @@ export function OwnerNav({
   children,
   properties = [],
   v2,
+  repairPolicyIds = [],
 }: {
   children: React.ReactNode;
   properties?: { id: string; name: string }[];
   v2?: boolean;
+  repairPolicyIds?: string[];
 }) {
   const t = useT();
   const locale = useLocale();
@@ -39,6 +42,7 @@ export function OwnerNav({
                 {properties.map((property) => (
                   <div key={property.id} data-testid="owner-property">
                     {property.name}
+                    {repairPolicyIds.includes(property.id) ? <div><Link data-testid="owner-repair-policy-entry" href={`/o/repair-policy/${property.id}`}>{ownerRepairCopy(locale).entry}</Link></div> : null}
                   </div>
                 ))}
               </div>

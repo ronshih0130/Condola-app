@@ -1,0 +1,46 @@
+[
+  {
+    "mode": "view",
+    "heldTable": "app.b013_default_roots",
+    "seconds": 0.518,
+    "exit": 1,
+    "error": [
+      "ERROR:  55P03: canceling statement due to lock timeout",
+      "CONTEXT:  compilation of PL/pgSQL function \"b013_owner_view\" near line 2",
+      "LOCATION:  ProcessInterrupts, postgres.c:3389"
+    ]
+  },
+  {
+    "mode": "change",
+    "heldTable": "app.b013_policy_commands",
+    "seconds": 0.518,
+    "exit": 1,
+    "error": [
+      "ERROR:  55P03: canceling statement due to lock timeout",
+      "CONTEXT:  compilation of PL/pgSQL function \"b013_change_default\" near line 2",
+      "LOCATION:  ProcessInterrupts, postgres.c:3389"
+    ]
+  },
+  {
+    "mode": "status",
+    "heldTable": "app.b013_policy_commands",
+    "seconds": 0.042,
+    "exit": 1,
+    "error": [
+      "ERROR:  42501: Repair policy unavailable",
+      "CONTEXT:  PL/pgSQL function b013_owner_context(uuid,uuid,text,uuid,uuid) line 15 at RAISE",
+      "SQL statement \"SELECT app.b013_owner_context(p_org,p_live,p_env,p_session,p_property)\""
+    ]
+  },
+  {
+    "mode": "finish",
+    "heldTable": "app.b013_policy_commands",
+    "seconds": 0.516,
+    "exit": 1,
+    "error": [
+      "ERROR:  55P03: canceling statement due to lock timeout",
+      "CONTEXT:  compilation of PL/pgSQL function \"b013_finish_default\" near line 2",
+      "LOCATION:  ProcessInterrupts, postgres.c:3389"
+    ]
+  }
+]

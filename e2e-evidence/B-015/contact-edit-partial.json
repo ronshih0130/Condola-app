@@ -1,0 +1,181 @@
+{
+  "recorded_at": "2026-10-30T06:26:54.161646-07:00",
+  "branch": "mode-b-tenant-directory-edit-prep",
+  "source_parent": "7074812803ed7ba3cfab793e5ee89f5a0ac2fd3f",
+  "source": {
+    "supabase/migrations/20261031100218_b015_tenant_directory_edit.sql": "fbcf368a37862327a988f2d3a868a7378ad3dfe4",
+    "src/server/tenant-directory-edit.ts": "1b8b1fb655d87778711d9e71e9b3974fec61cec1",
+    "src/server/tenant-directory-edit.integration.test.ts": "f4904378e1d79ea33617395d014c78b658c06f2b",
+    "src/server/tenant-directory-edit-request.ts": "76bb2a8e29ba6a7ad144f75c3439b22d3c9685dd",
+    "src/server/tenant-directory-edit-request.test.ts": "5eb97c5efe6bd2124e31a87b804d78224d3408b3",
+    "src/app/api/tenant-directory/edit/route.ts": "c5911080e385603b803b89ad908ca5e02746c1e5",
+    "src/components/tenant-directory-edit.tsx": "20d7b8c9fb4618ebef9bb7253ba7243a38d411de",
+    "src/i18n/lanes/tenant-directory-edit.ts": "32aacb5e437ea9382600289466d2babd09678d57",
+    "src/app/m/tenants/[id]/page.tsx": "ff9a85fc65198f94b2df8b7769246c96a65ff4aa",
+    "src/components/tenant-directory.tsx": "a078687fb225c14649114cbfceb13ae2476f76e8",
+    "src/server/seed.ts": "13d4670761773d5b7c0939a6a1b888c95220919f",
+    "e2e/b015-edit-local.spec.ts": "3137b303adebe9569c7c4c4cc9ddee58a8bf7ba2",
+    "e2e/tenant-directory-edit-playwright.config.ts": "7f9fb5cca7d7a3a6418fb1c4bec98b3520e7ade7",
+    "e2e/tenant-directory-compat-playwright.config.ts": "2448e1510242f5a8da83c279e86af5bfb9e2b9ac"
+  },
+  "schema_test": "fresh owned core90 + unpublished18, then unique owned test clone; excludes16/19",
+  "results": {
+    "edit_core": "28/28 PASS including observed valid-session snapshot-entry expiry",
+    "request_parser": "3/3 PASS",
+    "edit_browser": "3/3 PASS v5; 390/1280 edit/conflict/busy-cancel/lost HTTP reply/archive OFF recovery/storage failure, actual same-key RSC CAS regression",
+    "compat_browser": "5/5 PASS directory privacy+legacy identity reuse OFF",
+    "final_cas_artifact_run": "1/1 PASS after explicit emitted-file attachment",
+    "type": "PASS",
+    "lint": "PASS",
+    "copy": "PASS",
+    "consent": "PASS"
+  },
+  "transport_observation": {
+    "knownCancelledRscStreams": 1,
+    "scope": "same-contact expected-audit-cursor GET RSC HTTP200 ERR_ABORTED before edit POST only",
+    "allRequestsCompleted": false,
+    "cancellationCause": "UNKNOWN"
+  },
+  "failure_history": {
+    "v1": "selector collided with Next route announcer; scoped selector corrected",
+    "v2": "setup navigation cancellation diagnostics and response body evicted by automatic reload; preserved",
+    "v3": "CAS business checks passed, exact audit RSC cancellation failed extra transport assertion; preserved",
+    "v4": "attempting full RSC Response.finished hung and timed out; preserved; no body-completion claim"
+  },
+  "limits": [
+    "whole B015/archive and final original-identity reuse matrix incomplete",
+    "new source18 not yet published/final combined gate/catalog/build/Worker pending",
+    "legacy direct contacts RLS broad permissions not reconciled by this new gateway",
+    "native source review not independent Claude Class B",
+    "staging PE schema plan/application pending; no Mac hosted DDL",
+    "no all-requests-completed/cancellation-cause/general durable-I/O deadline claim"
+  ],
+  "logs": {
+    "b015-edit-core-tests-v15.log": {
+      "sha256": "b680de747ef895d1b353df13557a75435633a5e371ce5ba9d77bbff2613c94d0",
+      "bytes": 7518
+    },
+    "b015-edit-type-final.log": {
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "b015-edit-lint-final.log": {
+      "sha256": "f50041edd2677057c1cafd26dfb150ca76654891f9543e9e51a70b88a4323453",
+      "bytes": 149
+    },
+    "b015-edit-request-unit-v1.log": {
+      "sha256": "ce2e4abaed46c0a7e938a6674a3e2c4a768cb7b1e0be86bd1df5345dd9b4ed50",
+      "bytes": 755
+    },
+    "b015-edit-browser-v5.log": {
+      "sha256": "4a206ca176682f5f6739958d88059517a309872f1806fe99553a95942d589c8c",
+      "bytes": 2145
+    },
+    "b015-edit-compat-browser.log": {
+      "sha256": "ebb9a0446748858049afbd8d1d20f83598967e2024c6b05b58294eead7e941f9",
+      "bytes": 2330
+    },
+    "b015-edit-cas-final-browser.log": {
+      "sha256": "4780a1e6eeafeb283d7c518360ebddcf3d79d556cecf5a39c03c1c130b24f27d",
+      "bytes": 1813
+    },
+    "b015-edit-consent-final.log": {
+      "sha256": "c71101c4903320806e0abed7dac9393339e97f7ab46fad4eac8b5a5caff7ff8e",
+      "bytes": 7444
+    },
+    "b015-edit-copy-final.log": {
+      "sha256": "1a0566a60694c64123572c7922ed71e5ad6fa4ff05915db2a053f12f3899718c",
+      "bytes": 1429
+    },
+    "b015-edit-browser-v1.log": {
+      "sha256": "8e951c42cd86fa08c06325b66f13322faea082474207eaa23fa7ec115aef5dd5",
+      "bytes": 7084
+    },
+    "b015-edit-browser-v2.log": {
+      "sha256": "dd1ce46405acf55ef364931c692db7662a94a1e71f62db8cdee3a0b69a30a554",
+      "bytes": 8990
+    },
+    "b015-edit-browser-v3.log": {
+      "sha256": "17f0969bc85b9575e706e0283a1412ea3e2944c2b786838cb1deb78eff0f8d65",
+      "bytes": 6640
+    },
+    "b015-edit-browser-v4.log": {
+      "sha256": "558d2ad9cb9b4d8ca193d2d9f9af753b15d1633eff60cc577cb09ba24e81fa58",
+      "bytes": 7066
+    }
+  },
+  "screens": {
+    "b015-edit-browser-artifacts-v5/b015-edit-local-storage-fa-33476-y-and-cross-origin-requests-chromium/storage-failure-390.png": {
+      "sha256": "6f521713a76f572dd5b4d80fa2f3daa61b85e87bec72acfa5d2aa0291650e889",
+      "bytes": 60515
+    },
+    "b015-edit-browser-artifacts-v5/b015-edit-local-storage-fa-33476-y-and-cross-origin-requests-chromium/storage-failure-1280.png": {
+      "sha256": "c92c27962ba966be7c609b2332e10492a527fecf56728513b0a33ce68b6b17d2",
+      "bytes": 95521
+    },
+    "b015-edit-browser-artifacts-v5/b015-edit-local-actual-com-19f1c-se-recovery-at-390-and-1280-chromium/edit-390.png": {
+      "sha256": "5c9be9cdf7c2ea8fd8185d5641bea56cc2548909d16703f4343914143af0f781",
+      "bytes": 73568
+    },
+    "b015-edit-browser-artifacts-v5/b015-edit-local-actual-com-19f1c-se-recovery-at-390-and-1280-chromium/archived-off-recovery-1280.png": {
+      "sha256": "5df794e7541a030817894634ddb28b21d4af19cc541a2e49a8d8b39212fc553c",
+      "bytes": 77537
+    },
+    "b015-edit-browser-artifacts-v5/b015-edit-local-actual-com-19f1c-se-recovery-at-390-and-1280-chromium/recovered-390.png": {
+      "sha256": "e08b3fc9461216bdb4d157d771ce3b3c3625823d0d2dbd37e4805f2997300fc5",
+      "bytes": 66113
+    },
+    "b015-edit-browser-artifacts-v5/b015-edit-local-actual-com-19f1c-se-recovery-at-390-and-1280-chromium/unknown-1280.png": {
+      "sha256": "6ea06bef3197d429fbca96410459449cf8cbd4f85f1609df414e2efcfd088402",
+      "bytes": 110094
+    },
+    "b015-edit-browser-artifacts-v5/b015-edit-local-actual-com-19f1c-se-recovery-at-390-and-1280-chromium/recovered-1280.png": {
+      "sha256": "7380a95f72be12ac1139273f060232a29a6f142fe556e3fb7ad8632823879aff",
+      "bytes": 101634
+    },
+    "b015-edit-browser-artifacts-v5/b015-edit-local-actual-com-19f1c-se-recovery-at-390-and-1280-chromium/archived-off-recovery-390.png": {
+      "sha256": "3aaa427ae9c8bcc0ede37896af1d08b8d2a2eb9e6e9f3fdfcca2560e2399a1ee",
+      "bytes": 45130
+    },
+    "b015-edit-browser-artifacts-v5/b015-edit-local-actual-com-19f1c-se-recovery-at-390-and-1280-chromium/edit-1280.png": {
+      "sha256": "b02c7f76f37297a70e846f05e42f460c290248c1e2a399bd2c5b164c499f18bc",
+      "bytes": 112225
+    },
+    "b015-edit-browser-artifacts-v5/b015-edit-local-actual-com-19f1c-se-recovery-at-390-and-1280-chromium/unknown-390.png": {
+      "sha256": "b103293734a5d8b6ffbb5b6caa326b6e71eaed3412a2f6a355a02c513ee0bbce",
+      "bytes": 74662
+    },
+    "b015-edit-compat-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/accountant-detail-390.png": {
+      "sha256": "e4a60be1748bd32d0c7c616d376a1c2ae5da19969f559c180102b43ebf8d1276",
+      "bytes": 27188
+    },
+    "b015-edit-compat-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/zero-detail-390.png": {
+      "sha256": "babdf65d6aa2c2b8483e26a9b9d3ad914a14fdbe2a4324625c39b7ab6fa99a51",
+      "bytes": 47783
+    },
+    "b015-edit-compat-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/manager-list-1280.png": {
+      "sha256": "3fb7c66f71947fec6fab893fbd9d87c17133af0050211474e14c326d6947d4eb",
+      "bytes": 80757
+    },
+    "b015-edit-compat-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/zero-detail-1280.png": {
+      "sha256": "407e67b494ce5cf0ab97b7eed31dfe3cf720208a0b97940a8e298954f40bc862",
+      "bytes": 81655
+    },
+    "b015-edit-compat-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/accountant-detail-1280.png": {
+      "sha256": "87dbab6f137c024057ce8290b66b0ab7e557a22212654aef0da29ecd62405ed2",
+      "bytes": 58132
+    },
+    "b015-edit-compat-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/manager-list-390.png": {
+      "sha256": "f2cbea659736cb7f679dff809886ad66e88fdd1f19b44d89ebb2568077d203d9",
+      "bytes": 51161
+    },
+    "b015-edit-compat-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/co-detail-1280.png": {
+      "sha256": "53124ca6e09ecd8969c48f326e71f9961911f5195cfa2980a0dad4e0bddc22dd",
+      "bytes": 85280
+    },
+    "b015-edit-compat-artifacts/b015-directory-local-direc-4ba5d-main-private-at-both-widths-chromium/co-detail-390.png": {
+      "sha256": "69856c27bc154fb1586a09d21bdcc9de01a6301d014fb02fdc9f7ea8f6e74c84",
+      "bytes": 50147
+    }
+  }
+}

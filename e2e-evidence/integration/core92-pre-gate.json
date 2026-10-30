@@ -1,0 +1,45 @@
+{
+  "recordedAt": "2026-10-30T08:20:14.239080-07:00",
+  "scope": "combined source92 personal-default settings candidate before exact clean gate",
+  "parents": [
+    "e64dd0a799a95a08d4571f131c5d3c13e16b529a",
+    "3f8505e87736c5ca422172d992bf33d9615ab390",
+    "da15e470f33ffa637c2c365f7bc9e6027b3c1803"
+  ],
+  "migrations": 92,
+  "excludedDrafts": [
+    "20261031100216 settlement draft",
+    "20261031100219 realproducer fail-guard draft"
+  ],
+  "sourceBlobs": {
+    "package.json": "ca18e002dcb8cac10fd013384d92e2e9564dbc21",
+    "scripts/run-e2e.ts": "3649aa5af7641b613eb85ac2acd2c558f83c8ea2",
+    "scripts/write-pr-migrations.mjs": "22e2104b78429a90726050d69edeab2b82325425",
+    "src/server/lease-rules.test.ts": "dfa80860015a3306401ae4e203aa548408dd699d",
+    "ops/flags.yaml": "a245858704c6de7ab50fd341d3adda87ed617cb7",
+    "src/server/seed.ts": "bbc6ef0de297b16879ec4d516ea55b848c342863",
+    "supabase/migrations/20261031100220_b013_owner_repair_policy.sql": "f984ced40a0e40a182073d2459f51065711d2c0a",
+    "src/server/repair-owner-policy.ts": "144c87021893e6791cfc2e126a2091aeb2001bb9",
+    "src/components/owner-repair-policy.tsx": "b58f3e25b8b5840efe601470cf73172b1326393b",
+    "e2e/b013-owner-policy-local.spec.ts": "bb9c978f3980aa2c6be3a61e771e6daff4a85e3a"
+  },
+  "prechecks": {
+    "unit": "594/594PASS",
+    "type": "PASS",
+    "B013browser": "v6tightened7/7PASS; sameblobs exceptnonruntime registration",
+    "B013read": "16/16PASS",
+    "B013commands": "17/17PASS",
+    "freshVs71Upgrade": "all11catalogcategories equal; synthetic2/4/5/1 preserved",
+    "functionPrivileges": "isolated55436 PASS anonpublicexecute0/authenticatedallowlist7; originalsentinel7 retained"
+  },
+  "nativeHighestReview": "exactmerge/5registries/seed and B013runtime/test scoped static PASS; author execution attributed; no Claude ClassB",
+  "pending": [
+    "clean exact-candidate gate",
+    "Next/CF/originalpreflight/localWorker",
+    "combined58batchbrowser",
+    "previousgreen-code against92",
+    "stagingPEplan/apply/acceptance",
+    "independentClaude/ClassB"
+  ],
+  "verdict": "INCOMPLETE_NO_GO_WHOLE_FEATURE"
+}

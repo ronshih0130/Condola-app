@@ -1,0 +1,84 @@
+{
+  "recorded_at": "2026-10-30T06:36:23.629362-07:00",
+  "branch": "mode-b-tenant-directory-edit-prep",
+  "pre_registration_head": "a6c3bd16f2d77a5983ab8aabdace74ad13038dbd",
+  "parents_composed": {
+    "directory": "6ad0455",
+    "notification": "5647cde",
+    "authorized_operating_baseline": "70527ca",
+    "rent_period_original": "ce7ce65",
+    "rent_period_replay": "a6c3bd1"
+  },
+  "sources": {
+    "scripts/run-e2e.ts": "5b4df1f2e1bfabf17455824c9cfad3be79bb5002",
+    "scripts/write-pr-migrations.mjs": "e980b556d0a6bcd53317f83494d8b049e6026268",
+    "src/server/lease-rules.test.ts": "c2c587de0e7d2e8979b3f6d7e7b6e56f15be6c95",
+    "src/server/tenant-directory.integration.test.ts": "2cac3c7e576121a8c722827c9e94a6e0ae597bb2",
+    "src/server/move-in-service-period.integration.test.ts": "e4e72978bd8f2f12d0d9eec4ce8babc9a972f68d",
+    "package.json": "bfe2b17259f4885d348bb2d90e9e842e456d997e",
+    "ops/flags.yaml": "d9719b58b299cc8a87bc2dc2a4d33b8155c2c37c",
+    "src/server/seed.ts": "13d4670761773d5b7c0939a6a1b888c95220919f",
+    "src/server/move-in-invoice.ts": "1b547e0cea7732f01e05955d437071952fc5fb36",
+    "supabase/migrations/20261031100217_b010_b028_source_foundation.sql": "1351ee49985987744e0fbe0c6f9ee29b220eb972",
+    "supabase/migrations/20261031100218_b015_tenant_directory_edit.sql": "fbcf368a37862327a988f2d3a868a7378ad3dfe4"
+  },
+  "prechecks": {
+    "unit": "588/588 PASS",
+    "focused_db": "41/41 PASS",
+    "type": "PASS",
+    "lint": "PASS",
+    "catalog": "fresh91 vs untouched71+20 all11 categories equal, counts2/4/5/1 preserved",
+    "function_acl": "anon0/auth allowlist7, isolated sentinel7 preserved"
+  },
+  "full_exact91_gate_build_browser": "PENDING",
+  "old90_terminal_browser": {
+    "candidate": "5647cdeb08a2b846efece9f8a4c2c0afbd6c4e4d",
+    "default_batches": 55,
+    "passed": 137,
+    "failed": 1,
+    "off_skips": 3,
+    "failure": "design-review signIn/env setup timeout",
+    "separate_owned_same_candidate_recheck": "2/2 PASS",
+    "whole_default_result": "FAIL preserved; retry does not relabel original"
+  },
+  "excluded": [
+    "unpublished16 settlement",
+    "unpublished19 real producers",
+    "archive acceptance",
+    "staging schema/application",
+    "production",
+    "real messages",
+    "legal copy changes",
+    "Claude ClassB/release GO"
+  ],
+  "logs": {
+    "core91-precheck-unit.log": {
+      "sha256": "eeb9e2d59aaac4a578c7d3a30b62e1fd2aa7be9470c511d6572bf61522376e74",
+      "bytes": 121022
+    },
+    "core91-precheck-focused.log": {
+      "sha256": "b8a0597dc8308f808fa7c8b6335c87a62bc75f1cd15227abd1f3bd9183825d4a",
+      "bytes": 10693
+    },
+    "core91-registration-type.log": {
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "core91-registration-lint.log": {
+      "sha256": "bd52887466beb0b29bc745a5ea9bd981a4bc6b03da3426df10d9eebe34c9aa01",
+      "bytes": 153
+    },
+    "core91-function-privileges.log": {
+      "sha256": "66023e686fe9dad0b66fbe4468ddac835e33d6df42e32d26a0d80cb07e660667",
+      "bytes": 3135
+    },
+    "core90b-full-batched-browser.log": {
+      "sha256": "2904cb7fcfd11f181baacf7424c14a237f12ec4da6f50200a7882ef096f20623",
+      "bytes": 111498
+    },
+    "core90b-design-recheck.log": {
+      "sha256": "c87776a3e1e7e4bcd7e243fc723549646b64d5fd36681130680e05a0261126e0",
+      "bytes": 2035
+    }
+  }
+}

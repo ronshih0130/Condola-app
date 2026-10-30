@@ -1,0 +1,23 @@
+{
+  "priorCandidate": "1f5f947bb8ebf389b9143325d4b20138fb5abb11",
+  "priorWholeBrowser": {
+    "batches": 57,
+    "passed": 141,
+    "failed": 1,
+    "offSkipped": 3,
+    "verdict": "FAIL"
+  },
+  "failedCase": "B007 off-us at1280px edit geometry",
+  "rawLog": "work/core91-full-batched-browser.log",
+  "failureCause": "UNKNOWN; four separate geometry calls crossed summary navigation; final screenshot correctly stacked. No runtime defect established.",
+  "change": "one synchronous geometry snapshot, positive dimensions, explicit clicked summary URL; unchanged original stacking/width/overflow/error assertions; no retries",
+  "testBlob": "a566d6a66d174fc1f6524e227ec88adecc9a4002",
+  "scopedReview": "highest native Astra static PASS; did not rerun; not Claude Class B",
+  "targetedRecheck": {
+    "passed": 8,
+    "failed": 0,
+    "log": "work/core91-b007-recheck.log",
+    "scope": "fresh owned synthetic local DB;390/1280 OFF-US,ON-TW,ON-CA,ON-US-missing"
+  },
+  "newCandidateGate": "PENDING; does not relabel prior failure or transfer old exact-SHA acceptance"
+}

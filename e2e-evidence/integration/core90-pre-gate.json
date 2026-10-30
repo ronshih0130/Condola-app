@@ -1,0 +1,49 @@
+{
+  "time_pt": "2026-10-30T05:00:46.755233-07:00",
+  "scope": "source90 pre-gate integration preparation, not full acceptance",
+  "parent": "1491d09",
+  "runtime_sources": "reviewed17 foundation1351 plus reviewed6d0ee9e API/hydration code and rootreset; no16/18/19",
+  "blobs": {
+    "package.json": "c9f7d17e9c5da8c938a8d2afb78ee2df0019d2a7",
+    "scripts/run-e2e.ts": "1884519e96c6f155e6bf39968245ce537977a2b5",
+    "scripts/write-pr-migrations.mjs": "d584f5b07c14f363716e11805b9225a1be1c2004",
+    "src/server/lease-rules.test.ts": "704ac2480866e4fe9e12d4a84ee735c5e8d992d6",
+    "src/server/notification-producer-upgrade.integration.test.ts": "3452b2d4ef6e4421c3952591c2d3ff70166975ab",
+    "src/server/fixtures/b017-pre17-source.json": "95507581b79703ccd0347c4565689a66ebf035bc"
+  },
+  "unit": "585/585PASS,0FAIL",
+  "focused_db": "8/8PASS onowned89+17; pre17 helper uses exactpublished4e/stub+89hashmanifest. Follow-up adds only required NODE_ENV env typing; fullimmutablegate will rerun finalexactsource",
+  "type_lint": "PASS (initialNODE_ENVtypingfailurepreserved)",
+  "independent_review": "Astra exactsixblob scopedstaticPASS, stub+89hashes independentlymatchpublished4e; author/root executions attributed",
+  "gate_build_browser": "NOT_RUN oncombinedimmutablecandidate",
+  "limits": [
+    "16/18/19finalcompatibilityNOT_RUN",
+    "Realproducerfamilies/financialwiringnotimplemented",
+    "Localcanonicalorigin only; deployedproxyoriginUNVERIFIED",
+    "Priorwrongorigin/nativeGET/uncertaintyfailurespreserved; no waiver",
+    "Stagingnewobjects/ledgerabsent; noMacDDL/deploy/prodkeys/externalmessages/legalchanges",
+    "NativeAstra is notClaudeClassB/Depot/othermachine/CEOreleaseGO"
+  ],
+  "private_artifacts": {
+    "core90-focused-db.log": {
+      "bytes": 2017,
+      "sha256": "b107540ec108a66f5459c96d3cd3b00806f2df4c37222d6ada1db565d056c451"
+    },
+    "core90-unit-precheck.log": {
+      "bytes": 120322,
+      "sha256": "bcf4a43bd838528e3568974c7a57faf231599989c315ac0438f71e5bf9cd1eb6"
+    },
+    "core90-registration-typecheck.log": {
+      "bytes": 345,
+      "sha256": "b18bd7f31cc767369806e52bc5d2008109e9dfc061622cdf591477f32c4484b6"
+    },
+    "core90-registration-typecheck-v2.log": {
+      "bytes": 43,
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e"
+    },
+    "core90-registration-lint-v2.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

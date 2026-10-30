@@ -1,0 +1,128 @@
+{
+  "recordedAt": "2026-10-30T08:15:05.712727-07:00",
+  "scope": "B013/B021 PERSONAL_DEFAULT_SETTINGS_LOCAL_PARTIAL only",
+  "baseline": "70527ca4ce8b217e379b512b10201767a9aa4f2f",
+  "source20": "UNPUBLISHED draft; only owned disposable schema92 clones; no hosted DDL",
+  "verdict": "INCOMPLETE_NO_GO_WHOLE_FEATURE",
+  "sourceBlobs": {
+    "supabase/migrations/20261031100220_b013_owner_repair_policy.sql": "f984ced40a0e40a182073d2459f51065711d2c0a",
+    "src/server/repair-owner-policy.ts": "144c87021893e6791cfc2e126a2091aeb2001bb9",
+    "src/server/repair-owner-policy.integration.test.ts": "2bf58fee887b2e57346694d00bbbb09cff7fa17c",
+    "src/server/repair-owner-default.integration.test.ts": "2d582d4bb005a3c7b94cdbab5fcb3cce972ffb1d",
+    "src/server/repair-owner-policy-input.ts": "7b7ed816bec89cd5b5cc33227f0846f76bb6d671",
+    "src/server/repair-owner-policy-input.test.ts": "a866bff605583c93f52bcf1f53c390c314dbe23b",
+    "src/server/repair-owner-policy-request.ts": "cb7a38dbe32a1d4740cdeb8b52cb22ef942b84b1",
+    "src/components/owner-repair-policy.tsx": "b58f3e25b8b5840efe601470cf73172b1326393b",
+    "src/app/api/owner-repair-policy/route.ts": "380a8e4eee76a943d20bb05bc582b1816e7e9106",
+    "src/app/o/repair-policy/[id]/page.tsx": "c6c41e5c62bb4d1e279dc4a02ad1525cb3fb9c75",
+    "src/app/o/layout.tsx": "418ea6a0b8e9e781f78276591dc544393b230921",
+    "src/components/owner-nav.tsx": "d04f3e7af9d7598c41c20289ab5df6b4948194bd",
+    "src/i18n/lanes/repair-owner-policy.ts": "0b9015ce6151f679b53b8e346c73554bc9b9a796",
+    "src/server/seed.ts": "bbc6ef0de297b16879ec4d516ea55b848c342863",
+    "e2e/b013-owner-policy-local.spec.ts": "bb9c978f3980aa2c6be3a61e771e6daff4a85e3a",
+    "e2e/repair-owner-policy-playwright.config.ts": "6c74f18fe2d13e4a967dcf9f7c8c8cf6317f12e7"
+  },
+  "checks": {
+    "readAndCommands": "32/32 at prior command16/read16, archive split included",
+    "finalCommandWithEntry": "17/17 actual fixed module, same SQL20 incl archive + entry hint",
+    "amountAndParser": "6/6",
+    "browserV6": "7/7 actual390/1280; exact real HTTP upstream committed Request then abort; late oldscope and completed actual RSC+DOM+oldCAS conflict",
+    "type": "PASS",
+    "copy": "PASS",
+    "lint": "PASS with existing warnings only; verify final log",
+    "nativeIndependentReview": "highest Astra static exact-source/tests scoped PASS, author execution attributed not rerun; not Claude Class B"
+  },
+  "evidenceLimits": [
+    "No all-requests-completed claim outside explicit single HTTP fault; other browser cases assert console/pageerror/5xx only",
+    "Marker data attributes prove current server view applied, not estimate approval",
+    "No whole feature, full integrated92 gate/catalog/build/Worker/staging verdict yet",
+    "No property override mutations, staff effective reader, estimates, designated-owner decisions/dispatch/emergency/appointments/expenses/reminder actual workflow",
+    "Original global legacy ownership/repair writers are not comprehensively fenced by this slice"
+  ],
+  "preservedFailures": {
+    "schemaV1": "CASE syntax; v2 fixed; raw log retained",
+    "readV4": "sandbox cleanup FK order, fixed fixture explicit child first",
+    "commandV3": "reset fixture reused stale property UUID; v4 reloads actual seed IDs",
+    "browserV1": "2PASS2FAIL selector collided with Next route announcer",
+    "browserV2": "6PASS1FAIL redundant recorded-status refresh canceled RSC",
+    "browserV5": "6PASS1FAIL Chrome response-body resource eviction; changed evidence method to actual upstream route.fetch/fulfill, no identical retry or error suppression",
+    "typeV1": "ES target bigint literal corrected",
+    "typeV6": "Playwright assertion message argument corrected"
+  },
+  "logs": [
+    {
+      "path": "work/b013-default-and-read-v5.log",
+      "sha256": "4d0857fe0e061c347318ffd3cd1d1913a9c2929382d2a68b1987144988a5f02b",
+      "bytes": 8093
+    },
+    {
+      "path": "work/b013-default-commands-v6.log",
+      "sha256": "95e4a6fca9718c79d2e1b7f12a93621a4e3c03ab3e43cd93c915ae19075d72d6",
+      "bytes": 4369
+    },
+    {
+      "path": "work/b013-input-parser-v1.log",
+      "sha256": "41b4a7d2c29e24f90faa7ec12d7b27e789d5cd45998b48dd73a8244600aafbf3",
+      "bytes": 1536
+    },
+    {
+      "path": "work/b013-ui-browser-v6.log",
+      "sha256": "f92cb43709d24759f5be67dc1448cfda4edb51ee04a693ab6f433fca7e0aa2fc",
+      "bytes": 2774
+    },
+    {
+      "path": "work/b013-ui-type-v7.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    {
+      "path": "work/b013-ui-copy-final.log",
+      "sha256": "a902feb22b9f3ef75966ac59a6f1494a6bc9abbe749ea385ad105c1c93041983",
+      "bytes": 1433
+    },
+    {
+      "path": "work/b013-ui-lint-final.log",
+      "sha256": "e139399d3e2b5c7ec2d14d4bebd87a25bce693627a4a5ab365cb9448a0479064",
+      "bytes": 2412
+    }
+  ],
+  "privateArtifacts": [
+    {
+      "path": "../b013-ui-browser-v6-artifacts/.last-run.json",
+      "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+      "bytes": 45
+    },
+    {
+      "path": "../b013-ui-browser-v6-artifacts/b013-owner-policy-local-ac-0ea9a-overs-OFF-and-after-archive-chromium/http-loss-390.png",
+      "sha256": "f5964394c90518f806c6b1b3e2804b06196044ec3c60c7c622af402dca363e86",
+      "bytes": 69006
+    },
+    {
+      "path": "../b013-ui-browser-v6-artifacts/b013-owner-policy-local-ma-5d8fb--recovers-original-decision-chromium/unknown.png",
+      "sha256": "2a7d042124408f9c7b58147b898ed77be1648d004dd3e0891659c5c650ccc975",
+      "bytes": 79690
+    },
+    {
+      "path": "../b013-ui-browser-v6-artifacts/b013-owner-policy-local-pe-be87b-wner-set-and-clear-at-390px-chromium/edit-390.png",
+      "sha256": "f48ea45d24807e4110cebaa3568a0375608830e179889c2d31a7cda86bf8c360",
+      "bytes": 75611
+    },
+    {
+      "path": "../b013-ui-browser-v6-artifacts/b013-owner-policy-local-pe-be87b-wner-set-and-clear-at-390px-chromium/result-390.png",
+      "sha256": "085a40247d6fa5e9d64728880d090a929411fe5d92647c0fccf7135f10e630f7",
+      "bytes": 62147
+    },
+    {
+      "path": "../b013-ui-browser-v6-artifacts/b013-owner-policy-local-pe-caaf5-ner-set-and-clear-at-1280px-chromium/edit-1280.png",
+      "sha256": "5eff6ef952b6c27f0f67d84a5944f1da322f988240374927722f24e84135dc10",
+      "bytes": 88347
+    },
+    {
+      "path": "../b013-ui-browser-v6-artifacts/b013-owner-policy-local-pe-caaf5-ner-set-and-clear-at-1280px-chromium/result-1280.png",
+      "sha256": "2d27f6b0aea3481004754ec9b207e07c1866aac0fb18e2ab3fe98034b042b86a",
+      "bytes": 73439
+    }
+  ],
+  "flags": "repair_approvals strict global+allowedorg+org defaultOFF; personal default values are not rollout flags",
+  "next": "integrate current Origin3f850 source91; root registry/canonical gate/catalog/build/Worker and full browser on new immutable candidate; continue override/approval scope separately"
+}
