@@ -351,4 +351,28 @@ BEGIN
  INSERT INTO app.b019_byte_probe_permit VALUES(pg_current_xact_id(),'store');UPDATE app.b019_byte_probe_op SET phase='stored' WHERE xid=x.xid;DELETE FROM app.b019_byte_probe_permit WHERE xid=x.xid AND purpose='store';SELECT a.email_on,a.center_on INTO v_email,v_center FROM app.b019_payment_admit(x.org,x.live_org,x.env,x.session_id,x.lease,x.role) a;IF v_email OR NOT v_center OR NOT EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=x.session_id AND user_id=x.actor AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'prototype unavailable' USING ERRCODE='42501'; END IF;RETURN 'stored_rollback_only';
 END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_store() FROM PUBLIC,anon,authenticated,service_role;
+-- Owner-only, pre-flush diagnostic conjunction. It grants no final authorization.
+CREATE FUNCTION app.b019_issuer_command_probe_join() RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
+DECLARE v_ok boolean;
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op,app.b019_principal_probe_snapshot,app.b019_principal_probe_transition,app.b019_issuer_probe_preparation,app.b019_issuer_probe_result,app.b019_payment_requirements,app.b010_payment_commands,app.b017_occurrences,app.b028_center_events,app.b028_center_recipients,app.b019_channel_outcomes,app.b019_post_probe_op,app.b019_post_probe_invoice,app.b019_post_probe_line,app.b019_post_probe_old_alloc,public.payments,public.invoices,public.invoice_lines,public.payment_allocations,public.ledger_transactions,public.ledger_entries IN ACCESS SHARE MODE NOWAIT;
+ SELECT EXISTS(SELECT 1 FROM app.b019_byte_probe_op o
+ JOIN app.b019_principal_probe_snapshot s ON s.xid=o.xid AND s.org=o.org AND s.lease=o.lease AND s.payment=o.payment AND s.actor=o.actor AND s.session_id=o.session_id AND s.contact=o.payer
+ JOIN app.b019_principal_probe_transition t ON t.xid=o.xid AND t.org=o.org AND t.lease=o.lease AND t.payment=o.payment AND t.actor=o.actor AND t.contact=o.payer AND t.principal IS NOT DISTINCT FROM s.principal AND t.eligible=s.eligible
+ JOIN app.b019_issuer_probe_preparation prep ON prep.xid=o.xid AND prep.org=o.org AND prep.lease=o.lease AND prep.payment=o.payment AND prep.actor=o.actor AND prep.session_id=o.session_id AND prep.decision='new'
+ JOIN app.b019_issuer_probe_result r ON r.xid=o.xid AND r.org=o.org AND r.occurred_at=t.observed_at AND r.local_date=(t.observed_at AT TIME ZONE prep.timezone)::date
+ JOIN app.b017_occurrences n ON n.org_id=o.org AND n.id=r.source AND n.lease_id=o.lease AND n.payment_id=o.payment AND n.kind='payment_confirmed' AND n.occurrence_key='payment_confirmed' AND n.created_tx_id=txid_current() AND n.actor_id=o.actor AND n.payer_contact_id=o.payer AND n.payer_principal_user_id IS NOT DISTINCT FROM s.principal AND n.occurred_at=r.occurred_at AND n.local_date=r.local_date
+ JOIN app.b019_payment_requirements q ON q.tx_id=txid_current() AND q.org_id=o.org AND q.lease_id=o.lease AND q.payment_id=o.payment AND q.actor_id=o.actor AND q.kind='payment_confirmed' AND q.occurrence_id=n.id
+ JOIN app.b019_channel_outcomes co ON co.org_id=o.org AND co.neutral_source_id=n.id AND co.channel='in_app' AND co.outcome=r.outcome AND co.center_event_id IS NOT DISTINCT FROM r.event
+ JOIN app.b010_payment_commands cmd ON cmd.org_id=o.org AND cmd.actor_id=o.actor AND cmd.request_id=o.request AND cmd.payload_digest=o.digest AND cmd.payment_id=o.payment
+ JOIN app.b019_post_probe_op po ON po.xid=o.xid AND ROW(po.org,po.lease,po.payment,po.actor,po.property,po.currency,po.payer,po.amount) IS NOT DISTINCT FROM ROW(o.org,o.lease,o.payment,o.actor,o.property,o.currency,o.payer,o.amount)
+ JOIN public.payments p ON p.org_id=o.org AND p.id=o.payment AND p.lease_id=o.lease AND p.property_id=o.property AND p.currency=o.currency AND p.payer_contact_id=o.payer AND p.amount_minor=o.amount AND p.paid_on=o.paid_on AND p.status='confirmed' AND p.source='manager_entry' AND p.submitted_by=o.actor AND p.confirmed_by=o.actor AND p.confirmed_at IS NOT NULL AND p.method::text=CASE WHEN o.currency='USD' THEN 'zelle' ELSE 'bank_transfer' END AND encode(public.digest(convert_to(CASE WHEN p.payer_account_last5 IS NULL THEN 'N' ELSE 'V'||p.payer_account_last5 END,'UTF8'),'sha256'),'hex')=o.last5_digest AND encode(public.digest(convert_to(CASE WHEN p.reference IS NULL THEN 'N' ELSE 'V'||p.reference END,'UTF8'),'sha256'),'hex')=o.reference_digest
+ WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND auth.uid()=o.actor AND (SELECT count(*) FROM app.b010_payment_commands c WHERE c.org_id=o.org AND c.payment_id=o.payment)=1
+ AND ((s.eligible AND r.outcome='issued' AND EXISTS(SELECT 1 FROM app.b028_center_events e JOIN app.b028_center_recipients ent ON ent.org_id=e.org_id AND ent.event_id=e.id WHERE e.org_id=o.org AND e.id=r.event AND e.neutral_source_id=n.id AND e.kind=n.kind AND e.occurred_at=n.occurred_at AND ent.id=r.recipient AND ent.persona='tenant' AND ent.contact_id=o.payer AND ent.principal_user_id=s.principal) AND (SELECT count(*) FROM app.b028_center_recipients ent WHERE ent.org_id=o.org AND ent.event_id=r.event)=1)
+ OR (NOT s.eligible AND r.outcome='recipient_unavailable' AND r.event IS NULL AND r.recipient IS NULL AND NOT EXISTS(SELECT 1 FROM app.b028_center_events e WHERE e.org_id=o.org AND e.neutral_source_id=n.id)))
+ ) INTO v_ok;
+ IF v_ok IS NOT TRUE OR app.b019_post_probe_compare() IS NOT TRUE OR app.b019_post_probe_ledger_compare() IS NOT TRUE THEN RETURN 'incomplete';END IF;
+ RETURN 'diagnostic_consistent';
+END $$;
+REVOKE ALL ON FUNCTION app.b019_issuer_command_probe_join() FROM PUBLIC,anon,authenticated,service_role;
 COMMIT;
