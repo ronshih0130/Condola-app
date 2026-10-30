@@ -4,6 +4,10 @@ import { ORG_ID, USERS } from "../src/server/ids";
 import { disposableDbUrl } from "../src/server/test-disposable-db";
 import { ACCOUNTS, resetDemo, signIn } from "./session";
 
+if (process.env.B004_VIEWPORT_WIDTH === "390" || process.env.B004_VIEWPORT_WIDTH === "1280") {
+  test.use({ viewport: { width: Number(process.env.B004_VIEWPORT_WIDTH), height: 900 } });
+}
+
 const databaseUrl = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE).href;
 if (process.env.DEMO_MODE !== "true" || process.env.PAPER_LEASE_VERSIONS_ENABLED !== "true") {
   throw new Error("B004 requires disposable demo mode and the paper-version switch");
@@ -65,6 +69,17 @@ test("paper replacement and private tenant delivery", async ({ page }, testInfo)
   const old = versions.find((v) => !v.current)!;
   expect(current.reason).toBe("Corrected paper copy");
   expect(current.supersedes).toBe(old.id);
+  const metadata = await db(async (client) => (await client.query<{ uploaded_at: Date; timezone: string; name: string }>(
+    `SELECT p.created_at AS uploaded_at, o.timezone, profile.display_name AS name
+       FROM lease_signed_pdfs p JOIN organizations o ON o.id=p.org_id
+       JOIN profiles profile ON profile.id=p.uploaded_by WHERE p.id=$1`, [current.id])).rows[0]);
+  const currentRow = page.getByTestId("paper-version-history").locator('[data-current="true"]');
+  await expect(currentRow).toContainText(metadata.name);
+  await expect(currentRow).not.toContainText(USERS.admin);
+  const display = new Intl.DateTimeFormat("zh-TW", { calendar: "gregory", timeZone: metadata.timezone,
+    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(metadata.uploaded_at);
+  await expect(currentRow.locator("time")).toHaveAttribute("datetime", metadata.uploaded_at.toISOString());
+  await expect(currentRow.locator("time")).toHaveText(`${display} (${metadata.timezone})`);
   await page.screenshot({ path: testInfo.outputPath("manager-paper-history.png"), fullPage: true });
   const url = `/t/lease/signed/${current.id}`;
   const count = () => db(async (client) => Number((await client.query(`SELECT count(*) FROM audit_log WHERE event_type='signed_pdf_downloaded' AND row_id=$1`, [current.id])).rows[0].count));
