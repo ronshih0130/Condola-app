@@ -19,13 +19,100 @@ async function db<T>(fn: (client: Client) => Promise<T>) {
 }
 const pdf = (name: string, text: string) => ({ name, mimeType: "application/pdf", buffer: Buffer.from(`%PDF-1.4\n${text}\n%%EOF\n`) });
 
-test.afterEach(async () => {
+test.afterEach(async ({}, testInfo) => {
+  if (testInfo.title === "paper history follows the selected live or sandbox organization") return;
   await db(async (client) => {
     await client.query(`DROP TRIGGER IF EXISTS b004_test_audit_failure ON audit_log`);
     await client.query(`DROP FUNCTION IF EXISTS public.b004_test_audit_failure()`);
     await client.query(`UPDATE platform_settings SET value='false'::jsonb WHERE key='tenant_signed_pdf'`);
     await client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"paper_lease_versions":false,"tenant_signed_pdf":false}'::jsonb WHERE id=$1`, [ORG_ID]);
   });
+});
+
+test("paper history follows the selected live or sandbox organization", async ({ page }, testInfo) => {
+  const errors:string[]=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  page.on("console",message=>{if(message.type()==="error") errors.push(message.text());});
+  page.on("response",response=>{if(response.status()>=500) errors.push(`HTTP ${response.status()} ${new URL(response.url()).pathname}`);});
+  await page.route("**/*",async route=>{
+    const parsed=new URL(route.request().url());
+    if((parsed.protocol==="http:" || parsed.protocol==="https:") && ["127.0.0.1","localhost"].includes(parsed.hostname)) await route.continue();
+    else {errors.push("unexpected external request");await route.abort();}
+  });
+  await resetDemo(page);
+  const liveFlags=(await db(client=>client.query<{feature_flags:unknown}>(`SELECT feature_flags FROM organizations WHERE id=$1`,[ORG_ID]))).rows[0].feature_flags;
+  let sandboxId="", sandboxFlags:unknown;
+  try {
+    await db(client=>client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"paper_lease_versions":true}'::jsonb WHERE id=$1`,[ORG_ID]));
+    const liveLease=(await db(client=>client.query<{id:string}>(`SELECT l.id::text FROM leases l
+      JOIN lease_parties lp ON lp.lease_id=l.id AND lp.role='primary'
+      JOIN contacts c ON c.id=lp.contact_id WHERE l.org_id=$1 AND c.user_id=$2 LIMIT 1`,[ORG_ID,USERS.tenant]))).rows[0].id;
+    expect((await page.request.post("/api/demo/id-sample",{data:{leaseId:liveLease}})).ok()).toBe(true);
+    await page.goto(`/m/leases/${liveLease}?tab=sign`);
+    await page.getByTestId("signed-pdf").setInputFiles(pdf("b004-live-only.pdf","LIVE-ONLY"));
+    await page.getByTestId("upload-signed-pdf").click();
+    await expect(page.getByTestId("paper-version-history")).toContainText("b004-live-only.pdf");
+    const liveVersion=(await db(client=>client.query<{id:string}>(`SELECT p.id::text FROM lease_signed_pdfs p
+      JOIN files f ON f.id=p.file_id WHERE p.org_id=$1 AND p.lease_id=$2 AND f.file_name='b004-live-only.pdf'`,[ORG_ID,liveLease]))).rows[0].id;
+    const liveUrl=`/m/leases/${liveLease}/signed/${liveVersion}`;
+    const livePdf=await page.request.get(liveUrl);expect(livePdf.status()).toBe(200);
+    expect(livePdf.headers()["cache-control"]).toBe("private, no-store");
+    expect((await livePdf.body()).toString()).toContain("LIVE-ONLY");
+
+    await page.goto("/api/env?set=sandbox&next=/m/properties");
+    await expect(page.getByTestId("env-banner")).toBeVisible();
+    const sandbox=(await db(client=>client.query<{id:string;feature_flags:unknown}>(`SELECT id::text,feature_flags FROM organizations WHERE environment='sandbox' AND live_org_id=$1`,[ORG_ID]))).rows[0];
+    sandboxId=sandbox.id;sandboxFlags=sandbox.feature_flags;
+    await db(client=>client.query(`UPDATE organizations SET feature_flags=feature_flags || jsonb_build_object('paper_lease_versions',id=$2::uuid) WHERE id=ANY($1::uuid[])`,[[ORG_ID,sandboxId],sandboxId]));
+    const sandboxLease=(await db(client=>client.query<{id:string}>(`SELECT l.id::text FROM leases l
+      JOIN lease_parties lp ON lp.org_id=l.org_id AND lp.lease_id=l.id AND lp.role='primary'
+      WHERE l.org_id=$1 AND l.status IN ('active','pending_signature') ORDER BY l.id LIMIT 1`,[sandboxId]))).rows[0].id;
+    expect((await page.request.post("/api/demo/id-sample",{data:{leaseId:sandboxLease}})).ok()).toBe(true);
+    await page.goto(`/m/leases/${sandboxLease}?tab=sign`);
+    const history=page.getByTestId("paper-version-history");await expect(history).toHaveCount(1);
+    await expect(history.locator("li")).toHaveCount(0);
+    await page.getByTestId("signed-pdf").setInputFiles(pdf("b004-sandbox-first.pdf","SANDBOX-FIRST"));
+    await page.getByTestId("upload-signed-pdf").click();
+    await expect(history.locator("li")).toHaveCount(1);
+    await expect(history).toBeVisible();
+    await expect(history).toContainText("b004-sandbox-first.pdf");
+    await page.getByTestId("signed-pdf").setInputFiles(pdf("b004-sandbox-current.pdf","SANDBOX-CURRENT"));
+    await page.getByTestId("paper-replace-reason").fill("Synthetic correction");
+    await page.getByTestId("upload-signed-pdf").click();
+    await expect(history.locator("li")).toHaveCount(2);
+    await expect(history.locator('[data-current="true"]')).toContainText("b004-sandbox-current.pdf");
+    await expect(history).toContainText("b004-sandbox-first.pdf");await expect(history).not.toContainText("b004-live-only.pdf");
+    const metadata=(await db(client=>client.query<{id:string;name:string;timezone:string;uploaded_at:Date;pointer:boolean}>(`SELECT p.id::text,profile.display_name AS name,o.timezone,p.created_at AS uploaded_at,
+      p.file_id=l.document_file_id AS pointer FROM lease_signed_pdfs p JOIN leases l ON l.id=p.lease_id
+      JOIN organizations o ON o.id=p.org_id JOIN profiles profile ON profile.id=p.uploaded_by
+      JOIN files f ON f.id=p.file_id WHERE p.org_id=$1 AND p.lease_id=$2 AND f.file_name='b004-sandbox-current.pdf'`,[sandboxId,sandboxLease]))).rows[0];
+    expect(metadata.pointer).toBe(true);
+    const current=history.locator('[data-current="true"]');
+    await expect(current).toContainText(metadata.name);await expect(current).not.toContainText(USERS.admin);
+    const time=new Intl.DateTimeFormat("zh-TW",{calendar:"gregory",timeZone:metadata.timezone,year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(metadata.uploaded_at);
+    await expect(current.locator("time")).toHaveAttribute("datetime",metadata.uploaded_at.toISOString());
+    await expect(current.locator("time")).toHaveText(`${time} (${metadata.timezone})`);
+    const sandboxUrl=`/m/leases/${sandboxLease}/signed/${metadata.id}`;
+    const sandboxPdf=await page.request.get(sandboxUrl);expect(sandboxPdf.status()).toBe(200);
+    expect(sandboxPdf.headers()["cache-control"]).toBe("private, no-store");expect((await sandboxPdf.body()).toString()).toContain("SANDBOX-CURRENT");
+    expect((await page.request.get(liveUrl)).status()).toBe(404);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    await page.screenshot({path:testInfo.outputPath("sandbox-paper-history.png"),fullPage:true});
+
+    await page.goto("/api/env?set=live&next=/m");
+    await db(client=>client.query(`UPDATE organizations SET feature_flags=feature_flags || jsonb_build_object('paper_lease_versions',id=$2::uuid) WHERE id=ANY($1::uuid[])`,[[ORG_ID,sandboxId],ORG_ID]));
+    await page.goto(`/m/leases/${liveLease}?tab=sign`);
+    await expect(page.getByTestId("paper-version-history")).toContainText("b004-live-only.pdf");
+    await expect(page.getByTestId("paper-version-history")).not.toContainText("b004-sandbox-current.pdf");
+    expect((await page.request.get(sandboxUrl)).status()).toBe(404);
+    expect((await page.request.get(liveUrl)).status()).toBe(200);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    await page.screenshot({path:testInfo.outputPath("live-paper-history.png"),fullPage:true});
+    expect(errors).toEqual([]);
+  } finally {
+    if(sandboxId) await db(client=>client.query("UPDATE organizations SET feature_flags=$2 WHERE id=$1",[sandboxId,sandboxFlags]));
+    await db(client=>client.query("UPDATE organizations SET feature_flags=$2 WHERE id=$1",[ORG_ID,liveFlags]));
+  }
 });
 
 test("paper replacement and private tenant delivery", async ({ page }, testInfo) => {
