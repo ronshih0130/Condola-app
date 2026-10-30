@@ -66,6 +66,18 @@ BEGIN
  END IF;
 END $$;
 REVOKE ALL ON FUNCTION app.b017_occurrence_key_lock(uuid,text,uuid,uuid,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+
+-- Serialize even private resolution writes with the guarded demo reset. This
+-- runs before source/key locks and never waits on a late admission edge.
+CREATE FUNCTION app.b017_resolution_admit(p_org uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+BEGIN
+ LOCK TABLE public.platform_settings IN SHARE MODE NOWAIT;
+ PERFORM 1 FROM public.organizations o WHERE o.id=p_org FOR SHARE NOWAIT;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Occurrence unavailable' USING ERRCODE='23514'; END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.b017_resolution_admit(uuid) FROM PUBLIC,anon,authenticated,service_role;
+
 CREATE FUNCTION app.b017_old_source_insert() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
 DECLARE v_new app.b017_occurrences;
@@ -247,6 +259,7 @@ CREATE FUNCTION app.b017_resolution_valid() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE b app.b010_source_events; n app.b017_occurrences; v_count integer; v_center uuid;
 BEGIN
+ PERFORM app.b017_resolution_admit(NEW.org_id);
  PERFORM app.b017_occurrence_key_lock(NEW.org_id,NEW.kind,NEW.invoice_id,NEW.payment_id,NEW.actor_id,NEW.occurrence_key);
  IF NEW.old_source_id IS NOT NULL THEN
   SELECT * INTO b FROM app.b010_source_events WHERE org_id=NEW.org_id AND id=NEW.old_source_id FOR SHARE NOWAIT;
@@ -317,6 +330,7 @@ DECLARE b app.b010_source_events; n app.b017_occurrences; r app.b017_center_reso
  v_kind text; v_lease uuid; v_invoice uuid; v_payment uuid; v_actor uuid; v_key text; v_date date; v_at timestamptz;
  v_count integer; v_center uuid;
 BEGIN
+ PERFORM app.b017_resolution_admit(p_org);
  IF (p_old IS NULL)=(p_neutral IS NULL) THEN RAISE EXCEPTION 'Historical occurrence unavailable' USING ERRCODE='23514'; END IF;
  IF p_old IS NOT NULL THEN
   SELECT * INTO b FROM app.b010_source_events WHERE org_id=p_org AND id=p_old FOR SHARE NOWAIT;
@@ -375,6 +389,7 @@ BEGIN
   OR (p_kind='rent_manual' AND p_invoice IS NOT NULL AND p_payment IS NULL AND p_actor IS NOT NULL)
   OR (p_kind IN ('payment_confirmed','payment_rejected','payment_reversed') AND p_invoice IS NULL AND p_payment IS NOT NULL AND p_actor IS NOT NULL)
  ) THEN RAISE EXCEPTION 'Invalid occurrence key' USING ERRCODE='23514'; END IF;
+ PERFORM app.b017_resolution_admit(p_org);
  PERFORM app.b017_occurrence_key_lock(p_org,p_kind,p_invoice,p_payment,p_actor,p_key);
  SELECT * INTO v_old FROM app.b010_source_events x WHERE x.org_id=p_org AND x.kind=p_kind AND (
   (p_kind='rent_manual' AND (x.actor_id=p_actor OR x.invoice_id=p_invoice) AND x.occurrence_key=p_key)
