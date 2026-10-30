@@ -1,3 +1,4 @@
+import {sameOriginMutation} from './request-origin';
 import { isUuid } from './repair-rules';
 import type { DirectoryEditIntent } from './tenant-directory-edit';
 type Input = ({mode:'edit'} & DirectoryEditIntent) | {mode:'status'|'close';contactId:string;requestId:string};
@@ -6,8 +7,7 @@ const MAX_BODY=4096;
 
 /** Exact same-origin, bounded JSON. Actor, company and role are never input. */
 export async function readDirectoryEditRequest(request:Request):Promise<Parsed>{
- const origin=request.headers.get('origin'),site=request.headers.get('sec-fetch-site');
- try{if(!origin || (site!==null&&site!=='same-origin'))return {ok:false,status:403};const supplied=new URL(origin),target=new URL(request.url);if(!['http:','https:'].includes(supplied.protocol)||supplied.origin!==origin||supplied.username||supplied.password||supplied.origin!==target.origin)return {ok:false,status:403};}catch{return {ok:false,status:403};}
+ if(!sameOriginMutation(request))return {ok:false,status:403};
  if((request.headers.get('content-type')??'').split(';')[0].trim().toLowerCase()!=='application/json')return {ok:false,status:400};
  const length=request.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)>MAX_BODY))return {ok:false,status:413};
  if(!request.body)return {ok:false,status:400};const reader=request.body.getReader(),chunks:Uint8Array[]=[];let size=0;

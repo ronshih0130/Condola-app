@@ -1,11 +1,11 @@
+import {sameOriginMutation} from './request-origin';
 import {isUuid} from './repair-rules';
 import type {RepairDefaultIntent} from './repair-owner-policy';
 type Input=({mode:'change'}&RepairDefaultIntent)|{mode:'status'|'close';propertyId:string;requestId:string}|{mode:'view';propertyId:string};
 type Parsed={ok:true;input:Input}|{ok:false;status:400|403|413};
 const max=4096;
 export async function readOwnerRepairRequest(request:Request):Promise<Parsed>{
- const origin=request.headers.get('origin'),site=request.headers.get('sec-fetch-site');
- try{if(!origin||(site!==null&&site!=='same-origin'))return{ok:false,status:403};const supplied=new URL(origin),target=new URL(request.url);if(!['http:','https:'].includes(supplied.protocol)||supplied.origin!==origin||supplied.username||supplied.password||supplied.origin!==target.origin)return{ok:false,status:403};}catch{return{ok:false,status:403};}
+ if(!sameOriginMutation(request))return {ok:false,status:403};
  if((request.headers.get('content-type')??'').split(';')[0].trim().toLowerCase()!=='application/json')return{ok:false,status:400};
  const length=request.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)>max))return{ok:false,status:413};
  if(!request.body)return{ok:false,status:400};const reader=request.body.getReader(),chunks:Uint8Array[]=[];let size=0;

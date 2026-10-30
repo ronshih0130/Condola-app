@@ -1,3 +1,4 @@
+import {sameOriginMutation} from './request-origin';
 import { isUuid } from "./repair-rules";
 import { vendorTokenAcceptable } from "./vendor-repair-rules";
 
@@ -7,12 +8,7 @@ export type MarkRequestResult={ok:true;input:MarkInput}|{ok:false;status:400|403
 
 /** Fixed same-origin JSON contract; never logs or returns input on failure. */
 export async function readMarkRequest(request:Request,vendor:boolean):Promise<MarkRequestResult> {
-  const origin=request.headers.get("origin"),site=request.headers.get("sec-fetch-site");
-  try {
-    if(!origin || (site!==null && site!=="same-origin")) return {ok:false,status:403};
-    const supplied=new URL(origin),target=new URL(request.url);
-    if(!["http:","https:"].includes(supplied.protocol) || supplied.origin!==origin || supplied.username || supplied.password || supplied.origin!==target.origin) return {ok:false,status:403};
-  } catch {return {ok:false,status:403};}
+  if(!sameOriginMutation(request))return {ok:false,status:403};
   const type=(request.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
   if(type!=="application/json") return {ok:false,status:400};
   const length=request.headers.get("content-length");

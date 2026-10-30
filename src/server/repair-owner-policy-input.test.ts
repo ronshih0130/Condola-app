@@ -18,7 +18,7 @@ test('response schemas require exact scope/request, canonical integer strings an
  const result={status:'recorded',request_id:requestId,outcome:'changed',recorded_at:'2026-10-30T07:00:00Z'};assert.equal(isOwnerRepairResult(result,requestId),true);assert.equal(isOwnerRepairResult(result,randomUUID()),false);assert.equal(isOwnerRepairResult({...result,outcome:'delivered'},requestId),false);assert.equal(isOwnerRepairResult({...result,raw:'bad'},requestId),false);assert.equal(isOwnerRepairResult({status:'busy'},requestId),true);
 });
 const propertyId=randomUUID(),requestId=randomUUID();
-function request(body:unknown,headers:Record<string,string>={}){return new Request('http://localhost:43127/api/owner-repair-policy',{method:'POST',headers:{origin:'http://localhost:43127','content-type':'application/json',...headers},body:typeof body==='string'?body:JSON.stringify(body)});}
+function request(body:unknown,headers:Record<string,string>={}){return new Request('http://localhost:43127/api/owner-repair-policy',{method:'POST',headers:{host:'localhost:43127',origin:'http://localhost:43127','content-type':'application/json',...headers},body:typeof body==='string'?body:JSON.stringify(body)});}
 test('strict same-origin parser accepts only exact view/change/status/close envelopes',async()=>{
  for(const body of [{mode:'view',propertyId},{mode:'status',propertyId,requestId},{mode:'close',propertyId,requestId},{mode:'change',propertyId,requestId,expected:'a'.repeat(64),action:'set',value:'500000'}])assert.equal((await readOwnerRepairRequest(request(body))).ok,true);
  for(const extra of [{actorId:randomUUID()},{orgId:randomUUID()},{sessionId:randomUUID()},{currency:'USD'},{value:'1'}])assert.equal((await readOwnerRepairRequest(request({mode:'status',propertyId,requestId,...extra}))).ok,false);
@@ -29,5 +29,5 @@ test('cross-origin and missing origin are denied before reading body',async()=>{
 });
 test('content length and actual UTF-8 bytes are bounded independently, with malformed bytes denied',async()=>{
  assert.deepEqual(await readOwnerRepairRequest(request({mode:'view',propertyId},{'content-length':'4097'})),{ok:false,status:413});assert.deepEqual(await readOwnerRepairRequest(request('中'.repeat(1500))),{ok:false,status:413});assert.deepEqual(await readOwnerRepairRequest(request('{')), {ok:false,status:400});assert.deepEqual(await readOwnerRepairRequest(request({mode:'view',propertyId},{'content-type':'text/plain'})),{ok:false,status:400});
- const invalid=new Request('http://localhost:43127/api/owner-repair-policy',{method:'POST',headers:{origin:'http://localhost:43127','content-type':'application/json'},body:new Uint8Array([0xff])});assert.deepEqual(await readOwnerRepairRequest(invalid),{ok:false,status:400});
+ const invalid=new Request('http://localhost:43127/api/owner-repair-policy',{method:'POST',headers:{host:'localhost:43127',origin:'http://localhost:43127','content-type':'application/json'},body:new Uint8Array([0xff])});assert.deepEqual(await readOwnerRepairRequest(invalid),{ok:false,status:400});
 });

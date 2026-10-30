@@ -6,7 +6,7 @@ import { newVendorToken } from "./vendor-repair-rules";
 
 const base="https://app.example.test/api/notification-center/mark";
 function request(body:string,options?:{origin?:string|null;site?:string|null;type?:string;length?:string}) {
-  const headers=new Headers({"content-type":options?.type??"application/json"});
+  const headers=new Headers({host:"app.example.test","content-type":options?.type??"application/json"});
   if(options?.origin!==null) headers.set("origin",options?.origin??"https://app.example.test");
   if(options?.site) headers.set("sec-fetch-site",options.site);
   if(options?.length) headers.set("content-length",options.length);
@@ -27,9 +27,9 @@ test("mark request accepts only exact scoped JSON and a canonical same origin",a
  assert.deepEqual(await readMarkRequest(request(JSON.stringify({recipientId:id}),{length:"2049"}),false),{ok:false,status:413});
  assert.deepEqual(await readMarkRequest(request(JSON.stringify({recipientId:id,extra:"x".repeat(3000)})),false),{ok:false,status:413});
  const stream=new ReadableStream<Uint8Array>({start(controller){controller.enqueue(new TextEncoder().encode("x".repeat(3000)));controller.close();}});
- const streamed=new Request(base,{method:"POST",headers:{origin:"https://app.example.test","content-type":"application/json"},body:stream,duplex:"half"} as RequestInit & {duplex:"half"});
+ const streamed=new Request(base,{method:"POST",headers:{host:"app.example.test",origin:"https://app.example.test","content-type":"application/json"},body:stream,duplex:"half"} as RequestInit & {duplex:"half"});
  assert.deepEqual(await readMarkRequest(streamed,false),{ok:false,status:413});
- const spoof=new Request(base,{method:"POST",headers:{origin:"https://evil.example.test","x-forwarded-host":"evil.example.test","content-type":"application/json"},body:JSON.stringify({recipientId:id})});
+ const spoof=new Request(base,{method:"POST",headers:{host:"app.example.test",origin:"https://evil.example.test","x-forwarded-host":"evil.example.test","content-type":"application/json"},body:JSON.stringify({recipientId:id})});
  assert.deepEqual(await readMarkRequest(spoof,false),{ok:false,status:403});
  assert.deepEqual(await readMarkRequest(request(JSON.stringify({recipientId:id,token:` ${token}`})),true),{ok:false,status:400});
 });
