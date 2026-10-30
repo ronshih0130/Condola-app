@@ -1,0 +1,29 @@
+import { makeT } from "@/i18n";
+import { payeeStrings } from "@/i18n/payee";
+import { tenantPayee } from "@/server/payee";
+import { tenantPayeeDisplay } from "@/server/payee-rules";
+import type { Session } from "@/server/types";
+
+export async function TenantPayee({ session, leaseId }: { session: Session; leaseId: string }) {
+  const view = tenantPayeeDisplay(await tenantPayee(session, leaseId, true));
+  const t = makeT(session.locale);
+  const s = payeeStrings(session.locale);
+  if (view.kind === "legacy") {
+    return <p className="small">{t("i_account_last5", { last5: view.last5 })}</p>;
+  }
+  if (view.kind === "none") return <p className="small">{s.notSet}</p>;
+  const { account, number } = view;
+
+  return (
+    <div className="small" data-testid="tenant-payee">
+      <p className="b">{account.owner_contact_id ? s.owner : s.company}</p>
+      {account.holder_name ? <p>{s.holder}: {account.holder_name}</p> : null}
+      {account.bank_name ? <p>{s.bank}: {account.bank_name}</p> : null}
+      {account.bank_code ? <p>{s.bankCode}: {account.bank_code}</p> : null}
+      {account.branch_code ? <p>{s.branch}: {account.branch_code}</p> : null}
+      <p>{s.number}: {number}</p>
+      {typeof account.details.swift === "string" ? <p>{s.swift}: {account.details.swift}</p> : null}
+      {typeof account.details.routing === "string" ? <p>{s.routing}: {account.details.routing}</p> : null}
+    </div>
+  );
+}

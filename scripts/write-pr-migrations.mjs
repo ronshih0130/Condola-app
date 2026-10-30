@@ -186,6 +186,22 @@ const added = {
     addOnly: false,
     reason: "Creates app-schema context, case, version and audit helpers with organization and environment scoping, repoints SELECT policies, and revokes public-helper execution from PUBLIC, anon, and authenticated.",
   },
+  "supabase/migrations/20261031100000_payee_details.sql": {
+    addOnly: false,
+    reason: "Adds payee columns, a protected account table, RLS policies, grants and triggers; requires catalog and compatibility review.",
+  },
+  "supabase/migrations/20261031100100_audit_action_select.sql": {
+    addOnly: false,
+    reason: "Extends an existing audit enum; requires a committed transaction before dependent migration and compatibility review.",
+  },
+  "supabase/migrations/20261031100200_tenant_payee_read.sql": {
+    addOnly: false,
+    reason: "Creates a security-definer function and grants execution; the following hardening migration revokes direct access.",
+  },
+  "supabase/migrations/20261031100202_b003_payee_gateway.sql": {
+    addOnly: false,
+    reason: "Revokes direct table and function privileges, adds assignment guard and service-only audited gateway; requires access and compatibility review.",
+  },
 };
 
 const functions = [
