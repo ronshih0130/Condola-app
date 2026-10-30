@@ -93,11 +93,20 @@ Direct chat decisions supersede the pending requests above:
 
 | ID / 類型 | 影響範圍 | 目前證據／下一步 | 負責人與狀態 |
 |---|---|---|---|
-| CLOSE-QA-93 / QA | B-010／B-028 來源整合及目前 B-013／B-021 候選的完整驗收 | `2822b413938cd68c0d91e8b2423d8f319ed0c671` gate FAIL，`notification-producer-source.integration.test.ts:37` 無預期綁定主租客。invoice LIMIT 1 未保證綁定條件；尚未修正或重驗。恢復後固定完整 fixture 條件，獲准 DB 測試時先 targeted 再掃完其餘 RLS；不能以本次599單元通過作 waiver | Codex／獨立 QA；OPEN |
+| CLOSE-QA-93 / QA — CLOSED on f419aa6 | B-010／B-028 來源 fixture；本候選完整 gate | PE bound-tenant patch＋same-org distinct-lease invoice precondition，保留全部斷言。f419aa6 targeted1PASS、full gatePASS：599unit／357RLSPASS0FAIL1approvedhistoricalSKIP。舊失敗紀錄保留，不作waiver | Codex／獨立QA；CLOSED |
 | CLOSE-REPAIR-SCOPE / DEPENDENCY | B-013／B-021，後續 B-024 | 門檻設定為 local partial，非版本估價／指定屋主核准／提醒／緊急／派工狀態完成。恢復後依已審計畫補齊依賴與證據；本次不開始新開發 | Codex；PARKED |
 | CLOSE-SETTLEMENT-UI / QA | B-011；B-012 依賴 | 分支 checkpoint b13c82b：冷載入未完成 status 與真實 preview stream abort 尚未解決。暖機 2/2 或 3/4 非整體 PASS；最新 buffering 診斷未審查／未跑。恢復後先獨立審查、在隔離環境重現 | Codex／獨立 QA；OPEN |
 | CLOSE-PRODUCER / DEPENDENCY | B-010／B-028 | b4a014a 僅 synthetic retained-copy 研究，完整 flush 仍拒絕。需真實固定 wrapper、連續權限／來源保護、可證明的 final check／COMMIT 及組合 schema；不會發送訊息 | Codex／獨立 QA；OPEN |
-| CLOSE-STAGING-QA / EXTERNAL_PENDING | 所有需正式驗收的 B | PE／Ron box 計畫與結果未通知；Mac 禁 migration，等待原已指定流程。還缺確切候選 staging 與獨立 Claude Class B | PE／Ron／QA；PENDING；不主動聯絡或輪詢 |
+| CLOSE-STAGING-QA / EXTERNAL_PENDING | 目前候選與 B013／B021 新結構的正式驗收 | 已收到 core89 staging plan／結果，並保留其9個基礎檔UNKNOWN等限制；尚缺 f419 後續100217/218/220/221與新foundation的PE entry／核對／套用、確切候選staging及獨立Claude QA。Mac不套用，等待Ron通知 | PE／Ron／QA；PENDING for current scope；不主動聯絡或輪詢 |
 | CLOSE-LOCK / OWNERSHIP | 乾淨釋放 repo claim | 契約要求 clean main＋HANDOFF，目前 main2bedb89 缺 HANDOFF。Ron 本次禁止 main merge，故保留 claim，收尾後 phase STOPPED；下次執行先重查，不偷取／繞過 | Ron／Codex；STOPPED claim retained |
 
 CLOSE-QA-93 follow-up 2026-10-30T10:51:14.328732-07:00: PE deterministicboundtenant patch applied as23f9193. Firstactualtarget progressed pasttenantassert butfailed otherInvoiceassert237: chosenorg mayhavesingleinvoice. Testfixture mustalsohavea distinctleaseinvoice in sameorg for existingcollisionassertions; narrowtest-onlypredicate correctionunderway. StillOPEN untiltarget+fullnewSHA gate finish; no assertionwaiver orproduct/schema edit.
+
+## PE gate fix resolution — 2026-10-30
+
+- **CLOSE-QA-93 CLOSED** on exact `f419aa6e454162b9bf48ebdfbe6a0b8c903441b9`: targeted1PASS, full gatePASS / unit599PASS / RLS357PASS0FAIL1approvedhistoricalSKIP. PE patch23f9193 corrected bound-tenant selection; actual run then revealed existing later collision test also requires same-org different-lease invoice. The narrow followup supplies that precondition and sorting, with every assertion retained. Old2822 gateFAIL and first targeted237 failure remain preserved. No product/schema change or waiver.
+- **CLOSE-STAGING-QA clarified, still PENDING for current B013/B021**: supplied Downloads/staging-db-plan.md records PE core89/29 applications and staging-dev GO with listed unknowns. This resolves the missing-local-plan input, not later100217/218/220/221 or new-structure acceptance. Do not transfer core89 approval to f419.
+- **B013/B021 NEW_SCHEMA_PE_ENTRY — OPEN / DEPENDENCY**: Ron now explicitly requests proposed migration/reasons only, no apply. Requested file `~/Downloads/condola-bootstrap/b013-db-handoff.md` is ready; identical copy `e2e-evidence/B-013/b013-db-handoff.md`. This is a closed six-table foundation proposal with no executable application gateway/adoption or flag activation, not a finished approval/dispatch implementation. PE must accept the phase/entry, verify syntax/keys/roles/grants/reset/retention, and apply staging as approved; Ron will notify. Codex does not apply it locally or hosted. Phase2 fixed gateways/public guards/immutable photo provenance and full feature tests remain necessary before any operational use. Owner PE/Ron/Codex; next: PE review and notice, then only the authorized B013/B021 continuation.
+- B011 preview-stream and B010/B028 real-producer issues remain OPEN; this fixture/gate repair does not implement those features or resume those lanes. B019 queue still not started.
+
+Evidence: [gate fix](../e2e-evidence/B-013/gate-fix-f419aa6.json), [candidate gate](../e2e/results/gate-f419aa6e454162b9bf48ebdfbe6a0b8c903441b9.md), [PE proposal](../e2e-evidence/B-013/b013-db-handoff.md). No production, external messages or legal-copy changes.

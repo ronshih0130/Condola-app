@@ -1,9 +1,9 @@
-# B-013 / B-021 settings closeout — LOCAL PARTIAL
+# B-013 / B-021 — settings LOCAL_PASS; whole scope PENDING
 
-Recorded: 2026-10-30T10:08:49.863586-07:00. Branch `mode-b-repair-override-prep`; runtime `2822b413938cd68c0d91e8b2423d8f319ed0c671` (already on Origin). New closeout changes documentation/evidence only.
+Recorded 2026-10-30T11:09:33.683592-07:00. Candidate `f419aa6e454162b9bf48ebdfbe6a0b8c903441b9` on `mode-b-repair-override-prep`.
 
-Personal-default and property-override settings, exact amounts, audit, current-owner scope and original-UUID recovery are preserved. Existing public threshold column stays the value; legacy unverified currency is not reinterpreted. Owner decision/estimate/dispatch/emergency/reminder workflow is not implemented by these settings.
+PE deterministicboundtenant fixture + narrow same-company distinctleaseinvoice prerequisite fix are committed, with unchanged assertions/product/schema. Targeted1PASS; **clean fullgatePASS**, unit599PASS / RLS357PASS0FAIL1approvedhistoricalSKIP. Existing settings browser12+7=19PASS at390/1280 and localWorker1PASS. Next/CF buildsPASS; originalpreflight PASS exit0. No new proposal SQL applied.
 
-Fresh closeout unit599/599PASS; no DB tests/migration. Historical local owner core53/53 and scoped11case browser plus corrected Host cases retain their own source/log binding, not final whole-candidate acceptance. Exact runtime gate2822 remainsFAIL at source fixture; no waiver. See [bounded handoff](../../20-build/handoff-20261030-closeout.md) and [unit evidence](closeout-20261030.json).
+Current implemented scope is personal/default + property override, exact money/source/currentowner, actual audit, originalUUID/OFF/archive recovery and strict sameOrigin+Host. Versioned estimate/designated-owner decision, emergency/reminder/dispatch guards are not provided by these settings. Ron requested PE proposal and no apply; [b013-db-handoff.md](b013-db-handoff.md) is a closedfoundation PE-review draft. Await PE plan/validation/staging notice before data-structure work; later gateways/publicguards/evidence/retention tests remain required. [Evidence](gate-fix-f419aa6.json), [candidate gate](../../e2e/results/gate-f419aa6e454162b9bf48ebdfbe6a0b8c903441b9.md), [QA handoff](qa-handoff-f419aa6.md).
 
-STOP POINT: STOPPED_AFTER_BOUNDED_CLOSEOUT; next: await explicit resume, current ownership/Origin check, then fix/retest scoped source fixture and full RLS before builds/browser/staging; owner Ron/Codex.
+STOP POINT: WAIT_PE; next: preserve checkpoint, await Ron PE notice; owner Ron/Codex. No whole-feature/staging/ClaudeClassB/release GO.

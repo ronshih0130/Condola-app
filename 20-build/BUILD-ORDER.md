@@ -75,3 +75,9 @@ No new B item was started. `pending` for B-010/011/013/021/028 means an existing
 - This closeout ran `npm run test:unit` once on unchanged runtime source `2822b413938cd68c0d91e8b2423d8f319ed0c671`: **599 PASS / 0 FAIL / 0 SKIP**. No DB migration, DB test, main merge or deployment was run.
 
 Details and next actions: [handoff](handoff-20261030-closeout.md), [blockers](BLOCKED.md#closeout-20261030), [test evidence](../e2e-evidence/B-013/closeout-20261030.json). Remain stopped after checkpoint push; no automatic next-item execution.
+
+## PE fixture repair / B013-B021 continuation — 2026-10-30
+
+Latest candidate `f419aa6e454162b9bf48ebdfbe6a0b8c903441b9` full gate is **PASS**, unit599PASS and RLS357PASS0FAIL1approvedhistoricalSKIP. This supersedes the earlier closeout's gate-failure blocker only; old failures remain historical. Existing settings browser19PASS and Worker1PASS; Next/CF buildsPASS; originalpreflight PASS exit0. Whole B013/B021 remains **pending**, awaiting PE's requested new-structure proposal review/plan entry/application and Ron notice, plus future fixed gateways/guards/feature tests and independent QA. Settings alone do not complete estimate version/decision/dispatch requirements.
+
+Only B013/B021 and their existing gate repair were resumed by Ron. B010/B028 producer and B011 UI remain pending, B024 and other queue items are not started. No full B item newly `done`. See [current evidence](../e2e-evidence/B-013/gate-fix-f419aa6.json), [PE proposal](../e2e-evidence/B-013/b013-db-handoff.md), [blockers](BLOCKED.md#pe-gate-fix-resolution--2026-10-30).

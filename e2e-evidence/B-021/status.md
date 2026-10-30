@@ -1,5 +1,5 @@
-# B-021 — pending / settings only
+# B-021 — pending PE structure / settings locally verified
 
-Existing shared B-013 owner personal/default and property-override settings have scoped local evidence; this is no new B-021 implementation in the closeout. Versioned decisions, changed-estimate reapproval, pending list and emergency visibility remain incomplete.
+Shared B013 candidate `f419aa6e454162b9bf48ebdfbe6a0b8c903441b9` fullgatePASS599unit/357RLS+1approvedhistoricalskip; existingowner settings browser19PASS/Worker1PASS/NextCFbuildsPASS. [Evidence](../B-013/gate-fix-f419aa6.json), [QA packet](../B-013/qa-handoff-f419aa6.md).
 
-See [B-013 status](../B-013/status.md), [closeout handoff](../../20-build/handoff-20261030-closeout.md) and [blockers](../../20-build/BLOCKED.md#closeout-20261030). No whole-item done/staging/release claim. STOP POINT: STOPPED; next: explicit resume only; owner Ron/Codex.
+New versioned estimate/decision/pendinglist/emergency flow remains unfinished. Ron requested unapplied [PE foundation proposal](../B-013/b013-db-handoff.md); wait for PE review/staging notice. No full-item done, migration application, flagON or release claim. No B024/newqueue work. STOP POINT: finish existing artifactchecks, then WAIT_PE; owner Ron/Codex.

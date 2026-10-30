@@ -1,0 +1,177 @@
+{
+  "recordedAt": "2026-10-30T11:09:33.683592-07:00",
+  "candidateSha": "f419aa6e454162b9bf48ebdfbe6a0b8c903441b9",
+  "branch": "mode-b-repair-override-prep",
+  "scope": "PE fixture repair + existing owner settings verification; no whole B013/B021 acceptance",
+  "sourceChange": "Only notification-producer-source.integration.test.ts fixture, product and all93 migration bytes unchanged",
+  "patchSha256": "e78dbdcb984d12f6185392a748240bf3e971842d0baeb63697772ef194888eef",
+  "patchCommit": "23f91938bb7a5170fdf670225e836f27a8dffef9",
+  "followupCommit": "f419aa6e454162b9bf48ebdfbe6a0b8c903441b9",
+  "fixtureBlob": "e6a04dd40ae227d7502a0565f3b1d202ee139df1",
+  "targeted": {
+    "initialPEPatch": "FAIL later otherInvoice237; original tenant precondition fixed",
+    "followup": "PASS 1/1; added sameorg distinctleaseinvoice precondition; assertionsunchanged"
+  },
+  "gate": {
+    "result": "PASS",
+    "summary": "e2e/results/gate-f419aa6e454162b9bf48ebdfbe6a0b8c903441b9.md",
+    "unit": {
+      "tests": 599,
+      "pass": 599,
+      "fail": 0,
+      "skipped": 0
+    },
+    "rls": {
+      "tests": 358,
+      "pass": 357,
+      "fail": 0,
+      "skipped": 1
+    },
+    "otherChecks": "pinned clean checkout/toolchain/npmci/type/lint/copy/PG16/expiry/finalclean ALLPASS",
+    "skip": "Only previously approved historical commit lost; no additional skip"
+  },
+  "build": {
+    "next": "PASS exit0",
+    "cloudflareStagingBundle": "PASS exit0; no deploy",
+    "originalPreflight": "PASS exit0; unchanged original script"
+  },
+  "worker": "PASS 1/1 local",
+  "browser": {
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0,
+    "groups": [
+      "override12",
+      "personal-default7"
+    ],
+    "scope": "Existing settings390/1280, actual HTTP aliases/current scope/storage/cancel/response-loss/OFF/archive/RSC capture; no estimate decision/dispatch flow",
+    "errorEvidence": "Fault-case exact failed Request/audit; other collectors retain per-spec scope, no blanket all-request-completion claim",
+    "screenshots": "work/pe-fixture-repair-browser-artifacts; root visually inspected390edit/1280result, no horizontaloverflow in suite",
+    "screenshotsManifest": [
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/default/b013-owner-policy-local-ac-0ea9a-overs-OFF-and-after-archive-chromium/http-loss-390.png",
+        "sha256": "7f5c9b8ddb2b854267a4e3ef80d46a44cf3fbb242aef4de2e3bff771c89f1578",
+        "bytes": 72720
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/default/b013-owner-policy-local-ma-5d8fb--recovers-original-decision-chromium/unknown.png",
+        "sha256": "fd2931f4c22309e06c6018f89da0075a164d469aee3d3f1cdf3fae7b85aed521",
+        "bytes": 83186
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/default/b013-owner-policy-local-pe-be87b-wner-set-and-clear-at-390px-chromium/edit-390.png",
+        "sha256": "ec0dd049fedee1b3198dd27e5a37d464df8fb6645803b03a708431adc8a3d081",
+        "bytes": 76397
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/default/b013-owner-policy-local-pe-be87b-wner-set-and-clear-at-390px-chromium/result-390.png",
+        "sha256": "700ace1e4826fbbd6cd1e46f6b1330c1c28c66a1288fd8240820962813ef655b",
+        "bytes": 65634
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/default/b013-owner-policy-local-pe-caaf5-ner-set-and-clear-at-1280px-chromium/edit-1280.png",
+        "sha256": "9c1490e33ab0f363b03aa374bd4e5d8d5efa08aec19c5661cc0767ffa478d9b9",
+        "bytes": 89272
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/default/b013-owner-policy-local-pe-caaf5-ner-set-and-clear-at-1280px-chromium/result-1280.png",
+        "sha256": "1a440cf736c2054d19380307d60fd7a38db12bc8722efc4f5590b324cc9ae79d",
+        "bytes": 76888
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/override/b013-owner-override-local--27914-overs-OFF-and-after-archive-chromium/http-loss-390.png",
+        "sha256": "568f25fd720aa08bad7665bb791a6f611127178848dd9868993494d1a360cd11",
+        "bytes": 70445
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/override/b013-owner-override-local--6b837-ner-set-and-clear-at-1280px-chromium/edit-1280.png",
+        "sha256": "66555a3330c407db591a230a1aca6cc498753f8e6cdbc20459c03304f81e651c",
+        "bytes": 89776
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/override/b013-owner-override-local--6b837-ner-set-and-clear-at-1280px-chromium/result-1280.png",
+        "sha256": "3f2d4149feb1675b95de8bb63eb6f844dfb475928fd2d2496fc8f000ec1cb08c",
+        "bytes": 74669
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/override/b013-owner-override-local--8d25d--recovers-original-decision-chromium/unknown.png",
+        "sha256": "c3d15db8fa90d4074a21e8357712d07656a7b8c76a6f620a8e4610439cf24d09",
+        "bytes": 80797
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/override/b013-owner-override-local--9697e-wner-set-and-clear-at-390px-chromium/edit-390.png",
+        "sha256": "87b0f66b2f020ec20380031b83f9fe7ef1ecc95d82bb4391c5d88b334742b02f",
+        "bytes": 77592
+      },
+      {
+        "path": "../pe-fixture-repair-browser-artifacts/override/b013-owner-override-local--9697e-wner-set-and-clear-at-390px-chromium/result-390.png",
+        "sha256": "f142a8870d12ed0ae7a052393bd1bb1fe69720d9e99d3c13ee53468f2ac8e84d",
+        "bytes": 63699
+      }
+    ]
+  },
+  "proposal": {
+    "requestedLocalPath": "/Users/ron/Downloads/condola-bootstrap/b013-db-handoff.md",
+    "repoCopy": "e2e-evidence/B-013/b013-db-handoff.md",
+    "sha256": "0bf4ad532b51a92567b434301471b85b6eaefbf9443bf1a4db33d4bb5359b382",
+    "state": "CLOSED_FOUNDATION_PE_REVIEW_PROPOSAL; NOT_PARSED/NOT_EXECUTED/NOT_APPLIED; no new repo SQL file",
+    "nativeReview": "Scoped staticPASS at reviewed6d247... document; finalmetadataonlyupdate, noSQLblockchange; reviewer model/effortunknown",
+    "notAcceptance": "No gateways/adoption/approval/dispatch authority; PE phasechoice/planentry/localvalidation/stagingapply needed"
+  },
+  "stagingPlan": {
+    "localPath": "/Users/ron/Downloads/condola-bootstrap/staging-db-plan.md",
+    "sha256": "6f0964056ea9f9eb129ed31dbc9b0eadaf65510802570e8e243a87aec613c85a",
+    "scope": "PE core89+29 applied/staging devGO reported in supplied plan, unknown9base equivalence/no ledger retained; no currentsource93/newproposal acceptance",
+    "newB013Entry": "ABSENT; Ron will notify after PE review/apply; no Mac hostedDDL"
+  },
+  "notRun": [
+    "whole repository59batch browser at f419",
+    "new proposal syntax/application/feature tests",
+    "staging deploy or new schema verification",
+    "independent ClaudeClassB for f419/B013"
+  ],
+  "review": "Native exactfixture staticPASS; root executes checks. Independent QA packet prepared, not sent externally; no wholefeature/staging/release GO",
+  "rawLogs": {
+    "pe-fixture-targeted-23f9193.log": {
+      "sha256": "e283e48c9b72b3d97e906b308a7f89641cf515ad43b96e71316c7d24f7ab9fd3",
+      "bytes": 1247,
+      "state": "retained"
+    },
+    "pe-fixture-targeted-v2.log": {
+      "sha256": "a41264852768dafc04d4615b0727e4cc97cffe96f91c2cf3222703a5f21de8df",
+      "bytes": 347,
+      "state": "retained"
+    },
+    "pe-fixture-full-gate.log": {
+      "sha256": "2374e79b9b98f05bf1e7e4c65b333194b3ca1eef4d8ef938397fb51f7b3cbf6a",
+      "bytes": 470,
+      "state": "retained"
+    },
+    "pe-fixture-next-build.log": {
+      "sha256": "c290a57ee54419a5e1e1b6c879492009e1679b841f8c9a8d4c1037685e4d7301",
+      "bytes": 12251,
+      "state": "retained"
+    },
+    "pe-fixture-cf-build.log": {
+      "sha256": "3659d7ed1e8434ccdeccd6c1150f00d5b251bfd043d4dec48639a0a1c4e96af0",
+      "bytes": 13973,
+      "state": "retained"
+    },
+    "pe-fixture-preflight.log": {
+      "sha256": "570e70cd944fd9622f271f8c7cfcd183c567a0f465eba533191b40e5041d9f6d",
+      "bytes": 23,
+      "state": "retained"
+    },
+    "pe-fixture-worker.log": {
+      "sha256": "e402109f247eb4faf4eb15e73e2ea991c7db108c44e3dbcd75636b2ed9baa01a",
+      "bytes": 449,
+      "state": "retained"
+    },
+    "pe-fixture-repair-browser.log": {
+      "sha256": "982f7e6a3c04bec8464d7c5a1f3d4220f38a179273f3e75d3a070cf305fc23ef",
+      "bytes": 6282,
+      "state": "retained"
+    }
+  },
+  "finalizedAt": "2026-10-30T11:11:05.302452-07:00"
+}
