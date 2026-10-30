@@ -245,12 +245,15 @@ export async function actionUpdateLease(prev: ActionState = EMPTY_ACTION, formDa
   const leaseId = text(formData.get("leaseId"));
   try {
     const session = await getSession();
+    const firstPeriodChoice = formData.get("firstPeriodProrate");
+    if (firstPeriodChoice !== null && firstPeriodChoice !== "true" && firstPeriodChoice !== "false") throw new FlowError("errors.required");
     await updateLease(session, {
       leaseId,
       rentMajor: optionalNum(formData.get("rent")),
       depositMonths: optionalNum(formData.get("depositMonths")),
       depositReason: text(formData.get("depositReason")),
       updatedAt: text(formData.get("updatedAt")),
+      ...(firstPeriodChoice === null ? {} : { firstPeriodProrate: firstPeriodChoice === "true" }),
     });
     revalidatePath(`/m/leases/${leaseId}`);
     redirect(`/m/leases/${leaseId}?saved=rent`);

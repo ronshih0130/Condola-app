@@ -18,6 +18,7 @@ import { claimIdempotentSubmit, idempotencyLockKey, stableStringify } from "@/id
 import { typedAddressDisplay } from "@/property-address";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
 import { calculateStatement } from "./statement-calculation";
+import { firstInvoicePlan } from "./first-invoice-plan";
 import { billingPreviewsEnabled } from "./billing-preview-rules";
 import { syncVacantOwnerExpense } from "./utility-expense";
 import { nextInvoiceNumber } from "./invoice-number";
@@ -34,6 +35,18 @@ import { assertStaff, type OrgRole, type Session } from "./types";
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+type FirstPeriodLeaseSource = { first_period_basis: unknown; rent_amount_minor: string; currency: string; start_date: string; end_date: string | null; rent_frequency: string; prorate_first_period: boolean };
+function validateFirstPeriodSource(lease: FirstPeriodLeaseSource, checkEnd: boolean) {
+  if (lease.first_period_basis === null) return;
+  if (!lease.first_period_basis || typeof lease.first_period_basis !== "object" || Array.isArray(lease.first_period_basis)) throw new FlowError("errors.staleLease");
+  const basis = lease.first_period_basis as Record<string, unknown>;
+  if (basis.monthlyRentMinor !== Number(lease.rent_amount_minor) || basis.currency !== lease.currency.trim() ||
+      basis.startDate !== lease.start_date || basis.rentFrequency !== lease.rent_frequency ||
+      basis.prorateFirstPeriod !== lease.prorate_first_period || (checkEnd && basis.endDate !== lease.end_date)) throw new FlowError("errors.staleLease");
+  try { firstInvoicePlan({ rentMinor: 0, depositMinor: 0, utility: null, basis }); }
+  catch { throw new FlowError("errors.staleLease"); }
 }
 
 function cleanPhone(phone: string, where?: { field: string; step: number }) {
@@ -583,7 +596,18 @@ export type LeaseInput = {
   subUsages: { roomId: string; kwh: number }[];
   /** Client UUID for this create attempt. A retry with the same key returns the first lease. */
   idempotencyKey?: string | null;
+  /** Absent for legacy clients; an explicit choice opts into the captured basis. */
+  firstPeriodProrate?: boolean;
 };
+
+async function captureFirstPeriod(client: Client, leaseId: string, choice: boolean) {
+  // Only the trusted server login can invoke the private capture function.
+  // The enclosing action has already required current consent; the database
+  // rechecks membership, scope, flags and signature evidence under locks.
+  await client.query("RESET ROLE");
+  await client.query("SELECT app.b008_capture_first_period($1, $2)", [leaseId, choice]);
+  await client.query("SET LOCAL ROLE authenticated");
+}
 
 function finiteNumber(value: number | null): value is number {
   return value != null && Number.isFinite(value);
@@ -826,6 +850,7 @@ async function insertPortalUserUnlessEmailTaken(
 
 export async function createLease(session: Session, input: LeaseInput) {
   assertStaff(session, ["admin", "manager"]);
+  if (input.firstPeriodProrate !== undefined && typeof input.firstPeriodProrate !== "boolean") throw new FlowError("errors.required");
   if (!input.roomId || !input.startDate || !input.endDate) throw new FlowError("errors.required", { field: "s_8569bc8" });
   const tenantContactId = existingTenantId(input.tenantContactId);
   if (!tenantContactId && !input.tenantName.trim()) throw new FlowError("errors.required", { field: "s_0c5acea" });
@@ -1024,6 +1049,7 @@ export async function createLease(session: Session, input: LeaseInput) {
         reused: true,
       };
     }
+    if (input.firstPeriodProrate !== undefined) await captureFirstPeriod(client, lease.id, input.firstPeriodProrate);
     await client.query(
       `INSERT INTO lease_parties (org_id, lease_id, contact_id, role) VALUES ($1,$2,$3,'primary')`,
       [session.orgId, lease.id, contact.id],
@@ -1329,9 +1355,11 @@ export async function updateLease(
     depositMonths: number | string | null;
     depositReason: string;
     updatedAt: string;
+    firstPeriodProrate?: boolean;
   },
 ) {
   assertStaff(session, ["admin", "manager"]);
+  if (input.firstPeriodProrate !== undefined && typeof input.firstPeriodProrate !== "boolean") throw new FlowError("errors.required");
   if (!input.leaseId) throw new FlowError("errors.required");
   const rentMajor = coerceNumber(input.rentMajor);
   const depositMonths = coerceNumber(input.depositMonths);
@@ -1360,11 +1388,14 @@ export async function updateLease(
         at: string | null;
         same_version: boolean;
         party_signed: boolean;
+        first_period_basis: unknown;
+        prorate_first_period: boolean;
       }>(
         client,
         `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, l.signed_at::text,
                 l.target_room_id::text, l.target_unit_id::text, l.start_date::text, l.end_date::text, l.currency,
                 l.property_id::text, l.deposit_months::text AS months, l.rent_amount_minor::text AS rent_minor, l.rent_frequency::text,
+                l.first_period_basis, l.prorate_first_period,
                 l.deposit_override_reason AS reason, l.deposit_overridden_by::text AS by, l.deposit_overridden_at::text AS at,
                 (l.updated_at = $3::timestamptz) AS same_version,
                 EXISTS (
@@ -1395,6 +1426,9 @@ export async function updateLease(
           end: existing.end_date,
         }),
       );
+      // A captured basis protects its source columns from ordinary SQL writes.
+      // The trusted gateway rechecks all signature fences before commit below.
+      if (existing.first_period_basis !== null) await client.query("RESET ROLE");
       const updated = await client.query(
         `UPDATE leases
             SET rent_amount_minor = $2,
@@ -1419,7 +1453,10 @@ export async function updateLease(
           input.updatedAt,
         ],
       );
+      if (existing.first_period_basis !== null) await client.query("SET LOCAL ROLE authenticated");
       if (updated.rowCount !== 1) throw new FlowError("errors.staleLease");
+      const choice = input.firstPeriodProrate ?? (existing.first_period_basis !== null ? existing.prorate_first_period : undefined);
+      if (choice !== undefined) await captureFirstPeriod(client, input.leaseId, choice);
       return {
         leaseId: input.leaseId,
         depositWarn: await savedDepositWarn(
@@ -1485,9 +1522,10 @@ export async function signLease(session: Session, input: { leaseId: string; sign
   if (!input.signedName.trim()) throw new FlowError("errors.required");
 
   const result = await svc(session.userId, async (client) => {
-    const lease = await maybe<{ id: string; document_sha256: string; org_id: string; esign: string }>(
+    const lease = await maybe<{ id: string; document_sha256: string; org_id: string; esign: string } & FirstPeriodLeaseSource>(
       client,
-      `SELECT id, document_sha256, org_id, esign_status::text AS esign FROM leases WHERE id = $1`,
+      `SELECT id, document_sha256, org_id, esign_status::text AS esign, first_period_basis, rent_amount_minor::text, currency,
+              start_date::text, end_date::text, rent_frequency::text, prorate_first_period FROM leases WHERE id = $1 FOR UPDATE`,
       [input.leaseId],
     );
     if (!lease || lease.org_id !== session.orgId) throw new FlowError("errors.notFound");
@@ -1506,6 +1544,7 @@ export async function signLease(session: Session, input: { leaseId: string; sign
     const asTenant = Boolean(contact) && session.kind === "tenant";
     const asManager = Boolean(member) && (member?.role === "admin" || member?.role === "manager") && !asTenant;
     if (!asTenant && !asManager) throw new FlowError("errors.forbidden");
+    validateFirstPeriodSource(lease, true);
     if (!(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
     const role = asTenant ? "tenant" : "manager";
     const signature = await maybe<{ id: string }>(
@@ -1563,12 +1602,14 @@ export async function uploadSignedLeasePdf(
   const fileName = signedPdfName(file.fileName);
   const hash = createHash("sha256").update(file.bytes).digest("hex");
   const result = await tx(session.userId, async (client) => {
-    const lease = await maybe<{ id: string; status: string; esign: string }>(
+    const lease = await maybe<{ id: string; status: string; esign: string } & FirstPeriodLeaseSource>(
       client,
-      `SELECT id::text, status::text, esign_status::text AS esign FROM leases WHERE id = $1 AND org_id = $2`,
+      `SELECT id::text, status::text, esign_status::text AS esign, first_period_basis, rent_amount_minor::text, currency,
+              start_date::text, end_date::text, rent_frequency::text, prorate_first_period FROM leases WHERE id = $1 AND org_id = $2 FOR UPDATE`,
       [leaseId, session.orgId],
     );
     if (!lease) throw new FlowError("errors.notFound");
+    if (lease.status === "draft" || lease.status === "pending_signature") validateFirstPeriodSource(lease, true);
     const versions = await import("./paper-lease-versions");
     const paperVersion = await versions.preparePaperLeaseVersion(client, session, leaseId, file.replaceReason);
     const imported = lease.esign === "imported";
@@ -1714,9 +1755,13 @@ async function issueMoveInInvoice(client: Client, leaseId: string) {
     deposit_amount_minor: string;
     start_date: string;
     end_date: string;
+    rent_frequency: string;
+    prorate_first_period: boolean;
+    first_period_basis: unknown;
   }>(
     client,
-    `SELECT property_id::text, org_id::text, currency, rent_amount_minor::text, deposit_amount_minor::text, start_date::text, end_date::text
+    `SELECT property_id::text, org_id::text, currency, rent_amount_minor::text, deposit_amount_minor::text, start_date::text, end_date::text,
+            rent_frequency::text, prorate_first_period, first_period_basis
        FROM leases WHERE id = $1`,
     [leaseId],
   );
@@ -1749,6 +1794,10 @@ async function issueMoveInInvoice(client: Client, leaseId: string) {
   const actor =
     approver?.user_id ??
     (await one<{ id: string }>(client, `SELECT auth.uid() AS id`)).id;
+  validateFirstPeriodSource(lease, false);
+  const plan = firstInvoicePlan({ rentMinor: Number(lease.rent_amount_minor), depositMinor: Number(lease.deposit_amount_minor),
+    utility: allocation ? { id: allocation.id, amountMinor: Number(allocation.amount_minor) } : null,
+    basis: lease.first_period_basis });
   const number = await nextInvoiceNumber(client, lease.org_id);
   const invoice = await one<{ id: string }>(
     client,
@@ -1757,17 +1806,10 @@ async function issueMoveInInvoice(client: Client, leaseId: string) {
        period_start, period_end, status, source, created_by, einvoice_status
      ) VALUES ($1,$2,$3,$4,$5,$6,current_date, current_date + 7, $7, $8, 'open', 'move_in', $9, 'not_applicable')
      RETURNING id`,
-    [lease.org_id, lease.property_id, leaseId, party.contact_id, number, lease.currency, lease.start_date, lease.end_date, actor],
+    [lease.org_id, lease.property_id, leaseId, party.contact_id, number, lease.currency,
+      plan.calculation?.periodStart ?? lease.start_date, plan.calculation?.periodEnd ?? lease.end_date, actor],
   );
-  const lines = [
-    { type: "rent", amount: Number(lease.rent_amount_minor), allocationId: null as string | null },
-    ...(Number(lease.deposit_amount_minor) > 0
-      ? [{ type: "deposit", amount: Number(lease.deposit_amount_minor), allocationId: null as string | null }]
-      : []),
-    ...(allocation && Number(allocation.amount_minor) > 0
-      ? [{ type: "utility", amount: Number(allocation.amount_minor), allocationId: allocation.id }]
-      : []),
-  ];
+  const lines = plan.lines;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     await client.query(
@@ -1776,7 +1818,7 @@ async function issueMoveInInvoice(client: Client, leaseId: string) {
       [lease.org_id, invoice.id, index + 1, line.type, line.type, line.amount, line.amount, line.allocationId],
     );
   }
-  const total = lines.reduce((sum, line) => sum + line.amount, 0);
+  const total = plan.totalMinor;
   const txn = await one<{ id: string }>(
     client,
     `INSERT INTO ledger_transactions (org_id, property_id, lease_id, kind, currency, effective_date, description, source_table, source_id, created_by)

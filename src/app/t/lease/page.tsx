@@ -2,6 +2,7 @@ import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { dictionary, makeT } from "@/i18n";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
+import { FirstPeriodSummary } from "@/components/first-period-summary";
 import { selectedLease } from "@/lib/tenant-lease";
 import { formatDate, moneyLabel } from "@/server/format";
 import { loadLeaseIdCheck } from "@/server/id-docs";
@@ -27,6 +28,7 @@ export default async function TenantLeasePage() {
   return (
     <div>
       <h2>{t("i_rich_lease")}</h2>
+      <FirstPeriodSummary basis={money.lease.first_period_basis} locale={session.locale} />
       {idCheck && !idCheck.ready ? (
         <div className="card pad" id="idvGate" data-testid="idv-gate">
           <h3>{t("idv_gate_h")}</h3>
