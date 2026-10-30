@@ -120,18 +120,26 @@ END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_ledger_entry_guard() FROM PUBLIC,anon,authenticated,service_role;
 CREATE TRIGGER b019_byte_probe_ledger_entry_guard BEFORE INSERT OR UPDATE OR DELETE ON public.ledger_entries FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_ledger_entry_guard();
 -- Clone-only session/member scope guards; every firing writer uses NOWAIT private admission.
+CREATE FUNCTION app.b019_byte_probe_user_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+BEGIN
+ LOCK TABLE app.b019_byte_probe_op,app.b019_principal_probe_snapshot IN ACCESS SHARE MODE NOWAIT;
+ IF (TG_OP='DELETE' OR OLD.id IS DISTINCT FROM NEW.id) AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN app.b019_principal_probe_snapshot s ON s.xid=o.xid WHERE o.xid=pg_current_xact_id() AND (OLD.id=o.actor OR OLD.id=s.principal OR (TG_OP='UPDATE' AND (NEW.id=o.actor OR NEW.id=s.principal)))) THEN RAISE EXCEPTION 'byte user identity sealed' USING ERRCODE='23514';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END $$;
+REVOKE ALL ON FUNCTION app.b019_byte_probe_user_guard() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER b019_byte_probe_user_guard BEFORE DELETE OR UPDATE OF id ON auth.users FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_user_guard();
 CREATE FUNCTION app.b019_byte_probe_session_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
- LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
- IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.session_id=OLD.id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.session_id=NEW.id)) THEN RAISE EXCEPTION 'byte session sealed' USING ERRCODE='23514';END IF;
+ LOCK TABLE app.b019_byte_probe_op,app.b019_principal_probe_snapshot IN ACCESS SHARE MODE NOWAIT;
+ IF ((TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.session_id=OLD.id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.session_id=NEW.id))) OR ((TG_OP<>'UPDATE' OR ROW(OLD.id,OLD.user_id,OLD.token_hash,OLD.revoked_at,OLD.expires_at) IS DISTINCT FROM ROW(NEW.id,NEW.user_id,NEW.token_hash,NEW.revoked_at,NEW.expires_at)) AND ((TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN app.b019_principal_probe_snapshot s ON s.xid=o.xid WHERE o.xid=pg_current_xact_id() AND o.session_id=OLD.id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN app.b019_principal_probe_snapshot s ON s.xid=o.xid WHERE o.xid=pg_current_xact_id() AND o.session_id=NEW.id)))) THEN RAISE EXCEPTION 'byte session sealed' USING ERRCODE='23514';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
 END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_session_guard() FROM PUBLIC,anon,authenticated,service_role;
 CREATE TRIGGER b019_byte_probe_session_guard BEFORE INSERT OR UPDATE OR DELETE ON public.auth_sessions FOR EACH ROW EXECUTE FUNCTION app.b019_byte_probe_session_guard();
 CREATE FUNCTION app.b019_byte_probe_member_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
- LOCK TABLE app.b019_byte_probe_op IN ACCESS SHARE MODE NOWAIT;
- IF (TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.live_org=OLD.org_id AND o.actor=OLD.user_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.live_org=NEW.org_id AND o.actor=NEW.user_id)) THEN RAISE EXCEPTION 'byte member sealed' USING ERRCODE='23514';END IF;
+ LOCK TABLE app.b019_byte_probe_op,app.b019_principal_probe_snapshot IN ACCESS SHARE MODE NOWAIT;
+ IF ((TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.live_org=OLD.org_id AND o.actor=OLD.user_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o WHERE o.xid=pg_current_xact_id() AND o.phase='stored' AND o.live_org=NEW.org_id AND o.actor=NEW.user_id))) OR ((TG_OP<>'UPDATE' OR ROW(OLD.id,OLD.org_id,OLD.user_id,OLD.status,OLD.role) IS DISTINCT FROM ROW(NEW.id,NEW.org_id,NEW.user_id,NEW.status,NEW.role)) AND ((TG_OP<>'INSERT' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN app.b019_principal_probe_snapshot s ON s.xid=o.xid WHERE o.xid=pg_current_xact_id() AND o.live_org=OLD.org_id AND o.actor=OLD.user_id)) OR (TG_OP<>'DELETE' AND EXISTS(SELECT 1 FROM app.b019_byte_probe_op o JOIN app.b019_principal_probe_snapshot s ON s.xid=o.xid WHERE o.xid=pg_current_xact_id() AND o.live_org=NEW.org_id AND o.actor=NEW.user_id)))) THEN RAISE EXCEPTION 'byte member sealed' USING ERRCODE='23514';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
 END $$;
 REVOKE ALL ON FUNCTION app.b019_byte_probe_member_guard() FROM PUBLIC,anon,authenticated,service_role;
