@@ -305,7 +305,7 @@ export default async function LeasePage({
               <p data-testid="lease-imported-sign">{t("i_esign_imported")}</p>
             ) : (
               <>
-                <h3>{t("i_tenant_pending")}</h3>
+                <h3>{tenantSig?.status === "signed" ? t("i_tenant_signed") : t("i_tenant_pending")}</h3>
                 <ul className="tl">
                   <li className={tenantSig?.status === "signed" ? "on" : ""}>
                     <b>{tenantSig?.status === "signed" ? t("i_tenant_signed") : t("i_tenant_pending")}</b>
