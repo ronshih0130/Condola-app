@@ -382,12 +382,17 @@ export async function actionStatement(formData: FormData) {
     const result = await generateStatement(session, {
       ownerContactId: text(formData.get("ownerContactId")),
       month: text(formData.get("month")),
+      previewFingerprint: text(formData.get("previewFingerprint")),
     });
     revalidatePath("/m/statements");
     revalidatePath("/m/statements/preview");
     revalidatePath(`/m/statements/${result.statementId}`);
     redirect(`/m/statements/${result.statementId}`);
   } catch (error) {
+    if (error instanceof FlowError && error.key === "errors.statementPreviewChanged") {
+      const params = new URLSearchParams({ owner: text(formData.get("ownerContactId")), month: text(formData.get("month")), changed: "1" });
+      redirect(`/m/statements/preview?${params.toString()}`);
+    }
     bounce("/m/statements", error);
   }
 }

@@ -1,0 +1,13 @@
+# B-008 statement and utility checkpoint
+
+Updated: 2026-10-29T21:37:33-07:00. Branch `mode-b-billing-prep`, based on `2c3bff5eca75b83100fab8a4117c36b5562d384c`.
+
+B-008 is **PARTIAL**. A single read-only statement calculator now supplies the amount preview and issuance, with source identifiers and versions, per-property amounts, deposit exclusions and unattributed amounts. The global `billing_previews` allowlist plus exact org opt-in default OFF; OFF preview stays metadata-only and issuance without a preview fingerprint retains read-committed isolation. An enabled issuance requires a matching fingerprint. Fingerprinted issuance uses a serializable snapshot; sources committing afterward may serialize after issuance. Existing issued statements are not recomputed. The scoped close screen reads saved utility runs, shows the recorded bill and components, and surfaces an unexplained difference or unknown source data; it does not create a utility draft or change close policy.
+
+Native independent highest-tier review PASS on the final reviewed source hashes, as reported by the repository coordinator. Focused Node 20 checks: 9/9 serial local database tests, 29/29 unit tests, targeted typecheck/lint and 6/6 copy tests passed. Two browser tests at 390/1280 passed before the subsequent isolation-only fix; they must be repeated for the final combined candidate. Private synthetic screenshot paths, sizes, hashes and unconfirmed retention are in `browser-artifacts.json`.
+
+The broader `npm run test:unit` run failed 5 of 550 tests: unregistered 100208 migration classification and migration-list expectation, two existing ID-photo source assertions, and the staging-bundle smoke (missing migration classification and a refused default local 5432 connection). This is recorded as a failure, with no baseline waiver. The test bundle's attempted default database connection was unintended and refused. Registrations and final integration are coordinator-owned.
+
+The current move-in invoice generator records full rent and no initial partial-period formula. The canonical journey requires a regional calculation basis but does not establish an initial-period rule; the separately specified Taiwan move-out formula is not authority to infer one. Full billing-generation preview and initial partial-month formula therefore remain pending Ron's decision/source. Historical stored utility bills may be calculated rather than manually entered; the source does not distinguish all cases.
+
+STOP POINT: reviewed partial local candidate; next: coordinator serial integration, exact-candidate gates and browser rerun, independent Claude QA and Ron decision on the missing first-period basis; owner: Ron/Codex.

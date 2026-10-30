@@ -185,10 +185,11 @@ async function pinOrg(client: Client, orgId: string, environment: OrgEnvironment
 }
 
 /** Run as the signed-in persona so Postgres RLS applies. */
-export async function tx<T>(userId: string, fn: (client: Client) => Promise<T>, scope?: TxScope): Promise<T> {
+export async function tx<T>(userId: string, fn: (client: Client) => Promise<T>, scope?: TxScope, options?: { isolation?: "repeatable read" | "serializable"; readOnly?: boolean }): Promise<T> {
   return withClient(async (client) => {
     try {
-      await client.query("BEGIN");
+      const isolation = options?.isolation === "serializable" ? " ISOLATION LEVEL SERIALIZABLE" : options?.isolation === "repeatable read" ? " ISOLATION LEVEL REPEATABLE READ" : "";
+      await client.query(`BEGIN${isolation}${options?.readOnly ? " READ ONLY" : ""}`);
       await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [userId]);
       await client.query(`SELECT set_config('request.jwt.claim.role', 'authenticated', true)`);
       if (scope && "pin" in scope) {

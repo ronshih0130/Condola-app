@@ -5,9 +5,7 @@ import { maybe, many, one, svc, tx } from "./db";
 import { FlowError } from "./errors";
 import { deliveryPlan, outboundNote, SANDBOX_NOT_SENT } from "./outbound";
 import {
-  attributePayment,
   inclusiveDays,
-  managementFeeMinor,
   monthBounds,
   round3,
   scoreMatch,
@@ -19,6 +17,8 @@ import { depositAmountMinor, depositMonthsOnHalfStep, twdRentIsWhole } from "@/l
 import { claimIdempotentSubmit, idempotencyLockKey, stableStringify } from "@/idempotency";
 import { typedAddressDisplay } from "@/property-address";
 import { STATEMENT_EXPENSE_SQL } from "./expenses";
+import { calculateStatement } from "./statement-calculation";
+import { billingPreviewsEnabled } from "./billing-preview-rules";
 import { syncVacantOwnerExpense } from "./utility-expense";
 import { nextInvoiceNumber } from "./invoice-number";
 import { depositMinorForFrequency, depositPolicyState, resolveDepositPolicy, type DepositPolicy } from "./deposit-rules";
@@ -2263,11 +2263,13 @@ async function linkStatementInvoices(client: Client, orgId: string, propertyIds:
   );
 }
 
-export async function generateStatement(session: Session, input: { ownerContactId: string; month: string }) {
+export async function generateStatement(session: Session, input: { ownerContactId: string; month: string; previewFingerprint?: string }) {
   assertPerm(session, "stmt.generate");
   if (!/^\d{4}-\d{2}$/.test(input.month)) throw new FlowError("errors.required");
   const bounds = monthBounds(input.month);
   const statementId = await tx(session.userId, async (client) => {
+    const previewEnabled = await billingPreviewsEnabled(client, session.orgId);
+    if (previewEnabled && !input.previewFingerprint) throw new FlowError("errors.statementPreviewChanged");
     const properties = await many<{ property_id: string; currency: string; name: string }>(
       client,
       `SELECT po.property_id::text, p.currency, p.name
@@ -2297,83 +2299,16 @@ export async function generateStatement(session: Session, input: { ownerContactI
       return { id: existing.id, earned: Number(row.rent) + Number(row.other) > 0 };
     }
 
-    const payments = await many<{ id: string; property_id: string; property_name: string }>(
-      client,
-      `SELECT p.id, l.property_id::text, pr.name AS property_name
-         FROM payments p
-         JOIN leases l ON l.id = p.lease_id
-         JOIN properties pr ON pr.id = l.property_id
-        WHERE p.org_id = $1 AND p.status = 'confirmed' AND p.currency = $2
-          AND p.paid_on BETWEEN $3 AND $4 AND l.property_id = ANY($5::uuid[])`,
-      [session.orgId, currency, bounds.start, bounds.end, propertyIds],
-    );
-    const rentByProperty = new Map<string, { name: string; rent: number; utility: number; other: number }>();
-    for (const property of properties) rentByProperty.set(property.property_id, { name: property.name, rent: 0, utility: 0, other: 0 });
-    for (const payment of payments) {
-      const allocations = await many<{ amount_minor: string; invoice_id: string }>(
-        client,
-        `SELECT amount_minor::text, invoice_id::text FROM payment_allocations WHERE payment_id = $1`,
-        [payment.id],
-      );
-      for (const allocation of allocations) {
-        const lines = await many<{ charge_type: string; amount_minor: string; description: string }>(
-          client,
-          `SELECT charge_type::text, amount_minor::text, description FROM invoice_lines WHERE invoice_id = $1`,
-          [allocation.invoice_id],
-        );
-        const buckets = attributePayment(
-          lines.map((line) => ({
-            charge_type: line.charge_type,
-            amount_minor: Number(line.amount_minor),
-            description: line.description,
-          })),
-          Number(allocation.amount_minor),
-        );
-        const bucket = rentByProperty.get(payment.property_id)!;
-        bucket.rent += buckets.rent;
-        bucket.utility += buckets.utility;
-        bucket.other += buckets.other;
-      }
+    const calculation = await calculateStatement(client, session.orgId, input.ownerContactId, input.month, `${STATEMENT_EXPENSE_SQL}`);
+    if ((previewEnabled || input.previewFingerprint) && (!input.previewFingerprint || input.previewFingerprint !== calculation.fingerprint)) {
+      throw new FlowError("errors.statementPreviewChanged");
     }
-    const rent = [...rentByProperty.values()].reduce((sum, row) => sum + row.rent, 0);
-    const other = [...rentByProperty.values()].reduce((sum, row) => sum + row.utility + row.other, 0);
-    const expenses = await many<{ id: string; amount_minor: string; description: string | null; category: string; property_id: string }>(
-      client,
-      `SELECT id, amount_minor::text, description, category, property_id::text FROM expenses
-        WHERE org_id = $1 AND property_id = ANY($2::uuid[]) AND ${STATEMENT_EXPENSE_SQL}
-          AND app.repair_cost_on_statement(ticket_id, org_id)
-          AND incurred_on BETWEEN $3 AND $4 AND currency = $5`,
-      [session.orgId, propertyIds, bounds.start, bounds.end, currency],
-    );
-    const expenseTotal = expenses.reduce((sum, expense) => sum + Number(expense.amount_minor), 0);
-    const rule = await maybe<{
-      kind: string;
-      hybrid_mode: string | null;
-      percent_bp: number | null;
-      fixed_amount_minor: string | null;
-      minimum_minor: string | null;
-      name: string;
-    }>(
-      client,
-      `SELECT fr.kind::text, fr.hybrid_mode::text, fr.percent_bp, fr.fixed_amount_minor::text, fr.minimum_minor::text, fr.name
-         FROM management_agreements ma JOIN fee_rules fr ON fr.id = ma.fee_rule_id
-        WHERE ma.org_id = $1 AND ma.owner_contact_id = $2
-          AND (ma.property_id IS NULL OR ma.property_id = ANY($3::uuid[]))
-          AND ma.effective_from <= $4 AND (ma.effective_to IS NULL OR ma.effective_to > $4)
-        ORDER BY ma.property_id NULLS LAST
-        LIMIT 1`,
-      [session.orgId, input.ownerContactId, propertyIds, bounds.end],
-    );
-    const fee = rule ? managementFeeMinor(rule, rent) : 0;
-    const previous = await maybe<{ closing_balance_minor: string }>(
-      client,
-      `SELECT closing_balance_minor::text FROM owner_statements
-        WHERE owner_contact_id = $1 AND currency = $2 AND status = 'issued' AND period_end < $3::date
-        ORDER BY period_end DESC LIMIT 1`,
-      [input.ownerContactId, currency, bounds.start],
-    );
-    const opening = Number(previous?.closing_balance_minor ?? 0);
-    const closing = opening + rent + other - fee - expenseTotal;
+    const { rent, other, expenses, fee, expenseTotal, opening, closing } = calculation;
+    const rule = calculation.rule ? {
+      kind: calculation.rule.kind, hybrid_mode: calculation.rule.hybrid_mode,
+      percent_bp: calculation.rule.percent_bp, fixed_amount_minor: calculation.rule.fixed_amount_minor,
+      minimum_minor: calculation.rule.minimum_minor, name: calculation.rule.name,
+    } : null;
     const statement = await one<{ id: string }>(
       client,
       `INSERT INTO owner_statements (
@@ -2401,7 +2336,8 @@ export async function generateStatement(session: Session, input: { ownerContactI
         session.userId,
       ],
     );
-    for (const [propertyId, bucket] of rentByProperty) {
+    for (const bucket of calculation.propertyAmounts) {
+      const propertyId = bucket.propertyId;
       if (bucket.rent) {
         await client.query(
           `INSERT INTO owner_statement_lines (org_id, statement_id, property_id, line_type, description, amount_minor)
@@ -2440,6 +2376,11 @@ export async function generateStatement(session: Session, input: { ownerContactI
     }
     await linkStatementInvoices(client, session.orgId, propertyIds);
     return { id: statement.id, earned: rent + other > 0 };
+  }, { orgId: session.orgId, environment: session.environment }, input.previewFingerprint ? { isolation: "serializable" } : undefined).catch((error: unknown) => {
+    if (input.previewFingerprint && error instanceof Error && (error.cause as { code?: string } | undefined)?.code === "40001") {
+      throw new FlowError("errors.statementPreviewChanged");
+    }
+    throw error;
   });
   if (statementId.earned) await markTryout(session.orgId, "statement");
   return { statementId: statementId.id };

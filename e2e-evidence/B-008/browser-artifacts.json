@@ -1,0 +1,10 @@
+{
+  "scope": "synthetic local browser evidence before final isolation-only fix; private working files, not release evidence",
+  "retention": "TODO: Ron confirm retention",
+  "files": [
+    {"path":"work/B008/browser/close-1280.png","bytes":114692,"sha256":"753a471c2940bc7b362c4a22c2c6e5c1e0105b291e100641c273bce5ed12f1a4"},
+    {"path":"work/B008/browser/close-390.png","bytes":72258,"sha256":"db198ddc082de0d58a21d1d0dda7f6fcaa8d1f118e73ae26b26f05d5c2018fd2"},
+    {"path":"work/B008/browser/statement-1280.png","bytes":106344,"sha256":"1924803681648fdeae6f5a6936cf0cf5d8997a94c6a4af5485173466f6df9e5d"},
+    {"path":"work/B008/browser/statement-390.png","bytes":63018,"sha256":"7de715d6f34e3ed79143aa71470500f3d8833b7973b46c4ddb9dcec9417c043b"}
+  ]
+}
