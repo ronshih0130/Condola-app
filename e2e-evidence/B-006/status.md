@@ -13,3 +13,9 @@ Remaining: jurisdiction-specific formats; authorized real sample; posted DB coun
 ## Recovered source replay
 
 Narrow diagnostic patch replayed on bridge53391dd and trial-repair4a61269. Supplied import-page requireCurrentConsent gate retained. Added only two nonlegal dictionary keys and verified every existing value unchanged. Expanded source dependencies/tests retained. Prior browser/source evidence is historical; fresh combined-source gate and acceptance pending.
+
+## Actual import resubmission supplement
+
+Source under test: unchanged application commit `ced9ebe87c8d801c049ebb72b3351f231dc7b40d`; test harness and synthetic XLSX fixture are separate. Native highest-tier independent reviewer gave a scoped PASS on test blob `2f969ce85c88f89d3f580babcf2eea75f3444517` and XLSX blob `4dd47df8e26805da708b09a835e21e83919155cb`. Actual browser-to-reader, mapping, preview, commit API and database checks passed 3/3 on an owned local synthetic clone. See `real-import-acceptance.md` and `real-import-artifacts.json`.
+
+Whole B-006 remains PARTIAL. US and other regional formats, Excel 1904 dates, ambiguous decimal/date inputs, authorized real customer files, final combined-candidate QA and staging remain unverified. The fixture lease dates are 2027/2028 and cannot be assumed valid indefinitely.
