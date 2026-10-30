@@ -1,0 +1,378 @@
+{
+  "recordedAt": "2026-10-30T15:55:59.601507-07:00",
+  "candidate": "41c5b7ff3c3a730308d4e31f3b4508df7a650055",
+  "sourceBaseline": "3b927581d43602b91a4a87bc571f1cdb0709c6b6",
+  "baselinePageBlob": "166d6196c61fa40e0260812c730787d9fbaf46c9",
+  "branch": "mode-b-repair-override-prep",
+  "scope": "B001 tenant signing heading one-line presentation fix; reused B004 compatibility proof; whole B001 pending",
+  "environment": {
+    "Node": "20.20.2",
+    "npm": "10.8.2",
+    "PostgreSQL": "16 guarded loopback disposable prepared-schema clones",
+    "preflight": "unchanged script, command-local GNU awk5.4.1",
+    "preflightScriptSha256": "7c4a336fc33172efc8e0b736ac4930923801b776b3bd5d79240613b3b2f195cb"
+  },
+  "commands": {
+    "gate": "python3 ../run-b001-heading-prepared-check.py condola_b001_heading_gate_41c5b7f b001-heading-full-gate-41c5b7f.log bash scripts/gate.sh 41c5b7f",
+    "buildWorker": "python3 ../run-b001-heading-prepared-check.py condola_b001_heading_build_41c5b7f b001-heading-build-worker-driver-41c5b7f.log python3 ../b001-heading-build-worker-final-commands.py",
+    "browser": "python3 ../run-b001-heading-prepared-check.py condola_b001_heading_http_41c5b7f b001-heading-http-41c5b7f.log node node_modules/@playwright/test/cli.js test --config e2e/b004-paper-private-playwright.config.ts --reporter=line --output ../b001-heading-http-41c5b7f-artifacts",
+    "utility": "python3 ../run-b001-heading-prepared-check.py condola_b001_heading_utility_41c5b7f b001-heading-utility-41c5b7f.log node node_modules/@playwright/test/cli.js test --config ../b001-heading-utility-private.config.cjs --grep 'countersign of a pending lease does not bill the electricity posted while it was unsigned$' --output ../b001-heading-utility-41c5b7f-artifacts"
+  },
+  "sourceBlobs": {
+    "e2e/b004-paper-delivery.spec.ts": "2f7b75d647ede457320f3a2abdf5a50c41a9942e",
+    "e2e/b004-paper-private-playwright.config.ts": "9458ceb2a56657a7d2832ca0b50c62f499002b6c",
+    "scripts/run-e2e.ts": "24c4cf601ac86d27d1a53c5aa642396e75de0970",
+    "src/server/paper-lease-versions.ts": "8f7b05da8f78b5cfb2e099138fdc0081adea7250",
+    "src/server/paper-lease-versions-panel.tsx": "96d4a4c75a31eaca748e1b7429f4900f297ec355",
+    "src/server/paper-lease-versions-rules.ts": "2ff6fae0778b91c3c3f11efd9df2b2d20f646bc9",
+    "src/server/tenant-signed-pdf-download.ts": "7744dacafd84f9d123e8706ff7f81177a97f73be",
+    "src/server/audit.ts": "beec5aa7a76f3f075970087242526e2c696a6381",
+    "src/app/t/lease/signed/[pdfId]/route.ts": "e726fd0dcc286540c2d5f52bdb4ddbc4e23ce36a",
+    "src/app/m/leases/[id]/signed/[pdfId]/route.ts": "46dd19a023dece9f4b5a20c5a5ccc335966fe4b7",
+    "e2e/utility-posting.spec.ts": "5d170ae37b12b8da01e2f88b1c2d4981dd1fb09b",
+    "src/server/queries.ts": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+    "src/app/m/leases/[id]/page.tsx": "1e39c4ff208bf72c549caf31a3c81a0b45ce3dee",
+    "supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql": "968ff476247a310a3570be1a4328c0a1b7c56859"
+  },
+  "gate": {
+    "result": "PASS",
+    "unit": {
+      "tests": 599,
+      "pass": 599,
+      "fail": 0,
+      "skipped": 0
+    },
+    "rls": {
+      "tests": 359,
+      "pass": 358,
+      "fail": 0,
+      "skipped": 1
+    },
+    "skip": "exactly one prior Ron-approved lost historical fixture"
+  },
+  "builds": {
+    "Next": "PASS",
+    "Cloudflare": "PASS",
+    "originalPreflight": "PASS; no bypass/internal error",
+    "Worker": "1 PASS"
+  },
+  "utilityCompatibility": {
+    "result": "PASS",
+    "tests": 1,
+    "case": "countersign of a pending lease does not bill the electricity posted while it was unsigned",
+    "scope": "unchanged real tenant legacy signing/countersign and financial assertions, timeline-scoped locator; no provider/handwriting proof"
+  },
+  "browser": {
+    "result": "PASS",
+    "tests": 4,
+    "widths": [
+      390,
+      1280
+    ],
+    "screenshots": 8,
+    "scope": "two existing journeys in each fixed-width private project; fresh clone/server"
+  },
+  "proof": {
+    "heading": "signed-state heading visually checked at390/1280; exact tenant timeline condition and existing keys reused; no actual signature/auth/financial state change",
+    "history": "unchanged B004 private compatibility harness: reason/history/metadata/staff isolation",
+    "tenant": "own-lease private/no-store/nosniff PDF attachment and expected synthetic bytes, exactly one attributable committed audit before response",
+    "denials": "same-origin anonymous login redirect/no PDF, real wrong tenant/org and bound sandbox, global/org OFF; successful download count unchanged",
+    "fakeIds": "reused B004 malformed and valid-format unknown PDF ID probes after own200, private404/no PDF/attachment, both target-specific and total download-event counts unchanged",
+    "auditFault": "owned disposable-only temporary function/trigger, tenant503/no attachment/Unavailable/no added event, owned objects removed; no staff audit promise",
+    "restoration": "runtime originally absent tenant_signed_pdf restored to absence and both org flags restored; present-row exact metadata/timestamp branch source-reviewed only in this fixture; normal triggers active during restore; org timestamps/audits/uploads not restored",
+    "privacy": "fixed-origin page/API/no redirects, no trace/HAR/video/automatic screenshot or ARIA, generic safe errors, server stdout/stderr deliberately omitted; explicit synthetic-only screenshots"
+  },
+  "syntheticReadback": {
+    "versions": 2,
+    "downloadEvents": 1,
+    "paperOrgOptIns": 0,
+    "currentVersions": 1,
+    "tenantOrgOptIns": 0,
+    "replacementLinks": 1,
+    "downloadGlobalOff": true,
+    "faultTriggerRemains": false,
+    "faultFunctionRemains": false,
+    "downloadEventsAttributed": 1,
+    "scope": "read-only aggregate from final disposable synthetic clone; no IDs or PDF bytes emitted",
+    "settingRestoredToTemplate": true,
+    "settingPresence": false,
+    "settingRowSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+  },
+  "nativeReview": {
+    "requested": "gpt-6-astra/xhigh",
+    "actualModelEffort": "unknown",
+    "source": "PASS_SCOPED_B001_HEADING_SOURCE",
+    "reviewerExecution": "none; source/evidence only",
+    "ClaudeClassB": "NOT_RUN"
+  },
+  "boundaries": {
+    "appCodeChanged": true,
+    "appDelta": "one heading line, existing tenant-status and approved key expression only",
+    "testDelta": "only affected existing utility case locator/fence/staticerror/POST redirect controls; all financial assertions and other three cases unchanged",
+    "legalI18nChanged": false,
+    "newProductSchema": false,
+    "testFaultInjectionTemporaryDDL": true,
+    "operationalMigrationApplied": false,
+    "operationalPersistentFlagsChanged": false,
+    "prodAccess": false,
+    "mainMerged": false,
+    "externalMessages": false
+  },
+  "limitations": [
+    "Prior core89/91/92b two-case passes are historical, not a missing final-adapter gap",
+    "Browser empty-reason attempt uses HTML required; server rejection/ordinary row immutability/concurrency are separate full-RLS cases",
+    "Trusted owners and genuine parent cascades are outside bounded ordinary-version immutability; no lifetime retention inferred",
+    "Tenant event counts successful response construction, not signature or confirmed real-client receipt; staff route not claimed audited",
+    "Bound sandbox tenant negative is selected owned sandbox lease requesting live PDF; no sandbox-own tenant HTTP200 or both-flags-ON independent guard matrix claimed; separate RLS integration covers those lower-level cases",
+    "Existing full RLS ON/synthetic purge and focused fault DDL run only on disposable fixtures; no operational/production purge, backup or migration",
+    "PAPER runtime string true is private test-child-only; operational controls remain OFF",
+    "Runtime heading evidence covers signed state at390/1280 only; pending/null fallback and imported branch are source-reviewed, no signing transition proof",
+    "Full B001 original G0-G5/11.1, staging exact app/24coldstarts/React418/realreceipt and independent Claude/ClassB remain pending; no activation",
+    "B004 old-code/rollback/stage acceptance remains separately pending"
+  ],
+  "artifacts": {
+    "copy-check.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/41c5b7ff3c3a730308d4e31f3b4508df7a650055.2EVE1C/copy-check.log",
+      "sha256": "8d49e964f85d3017cab9ec5f5f4e3c0089a228f7270b6d4d66fc62ecce9a3d4f",
+      "bytes": 1433
+    },
+    "flag-expiry.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/41c5b7ff3c3a730308d4e31f3b4508df7a650055.2EVE1C/flag-expiry.log",
+      "sha256": "790631bd05d781613c716fe04f1a26d814975ac149a3a6d265800ec6e5fffad5",
+      "bytes": 27
+    },
+    "lint.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/41c5b7ff3c3a730308d4e31f3b4508df7a650055.2EVE1C/lint.log",
+      "sha256": "da819f980b5df58f94df10cee617099a4a6539df6d5f02510c80645449817c1d",
+      "bytes": 2422
+    },
+    "npm-ci.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/41c5b7ff3c3a730308d4e31f3b4508df7a650055.2EVE1C/npm-ci.log",
+      "sha256": "cf0cd67af9f1c430f9585791d4e9f6c2a925b819c0fc8366fde5e64a622575a2",
+      "bytes": 1584
+    },
+    "postgres-16.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/41c5b7ff3c3a730308d4e31f3b4508df7a650055.2EVE1C/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "test-rls.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/41c5b7ff3c3a730308d4e31f3b4508df7a650055.2EVE1C/test-rls.log",
+      "sha256": "4e9ee9cdafda178f1fbff46304f6586f2a92b50119daf60d02064b36ad875a5c",
+      "bytes": 100210
+    },
+    "test-unit.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/41c5b7ff3c3a730308d4e31f3b4508df7a650055.2EVE1C/test-unit.log",
+      "sha256": "8a1a5b6417eabf0cb9d4f833014fd2fcefda79618fadaeba6982f46c274e7595",
+      "bytes": 123675
+    },
+    "toolchain.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/41c5b7ff3c3a730308d4e31f3b4508df7a650055.2EVE1C/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    "typecheck.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/41c5b7ff3c3a730308d4e31f3b4508df7a650055.2EVE1C/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "gate-summary": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-41c5b7ff3c3a730308d4e31f3b4508df7a650055.md",
+      "sha256": "60f311079a68e9dbea576ac5770899c434ce37fcb7e2bc49e47db28ff1fc9235",
+      "bytes": 971
+    },
+    "b001-heading-full-gate-41c5b7f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-full-gate-41c5b7f.log",
+      "sha256": "ce6d9f41a95cc2fe4be1ad95df680d53b0723420e21648cafe9f4266d8994d70",
+      "bytes": 470
+    },
+    "b001-heading-build-worker-driver-41c5b7f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-build-worker-driver-41c5b7f.log",
+      "sha256": "36a83f5b6036f2f732ae85063871fed13774a9066a67c826d589ba1fa4c2257e",
+      "bytes": 422
+    },
+    "b001-heading-next-build-41c5b7f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-next-build-41c5b7f.log",
+      "sha256": "5b1ef78e8d9774cd7838d9c417ee8f7a8022daec45c70410ede534d42e24cd46",
+      "bytes": 12250
+    },
+    "b001-heading-cf-build-41c5b7f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-cf-build-41c5b7f.log",
+      "sha256": "3e4af56ee0fd965dd15571d12cc3b2d1aec802417dd330c05291f99a82b12b6c",
+      "bytes": 13959
+    },
+    "b001-heading-preflight-41c5b7f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-preflight-41c5b7f.log",
+      "sha256": "752a65342f1643ad83de6f1877d0e9ce9a9365659e5e8c2b3d9355c77cff6d89",
+      "bytes": 23
+    },
+    "b001-heading-worker-41c5b7f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-worker-41c5b7f.log",
+      "sha256": "52a7c68ba7baf108d6c648d09e122f7a8d920cfb06a7c424d9465657eabcf33c",
+      "bytes": 423
+    },
+    "b001-heading-http-41c5b7f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-http-41c5b7f.log",
+      "sha256": "fbbd6b494acb96ca15e69525bbe7b7c6dd011401758b31c409acc518429819bf",
+      "bytes": 566
+    },
+    "b001-heading-synthetic-readback-41c5b7f.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-synthetic-readback-41c5b7f.json",
+      "sha256": "295265511689ab473b198cf8447ba5d0ca68b5b65ba160df834ed2ca5d13fb59",
+      "bytes": 522
+    },
+    "run-b001-heading-prepared-check.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b001-heading-prepared-check.py",
+      "sha256": "4fa1f53747e42088df046ee95cf0bdc0d735a31b4cb4c28d485edda734619f31",
+      "bytes": 2042
+    },
+    "b001-heading-build-worker-final-commands.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-build-worker-final-commands.py",
+      "sha256": "c9d11b2a6b43740011e4379ea3b2671b853c8e1eef988b1c7645fbdd3db47251",
+      "bytes": 1272
+    },
+    "make-b001-heading-final-proof.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/make-b001-heading-final-proof.py",
+      "sha256": "65a00a954c1d0c3cf9b3e32dc6601faa74694d2c079cf9647ea6b29b4105a9cb",
+      "bytes": 11202
+    },
+    "make-b001-heading-readback.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/make-b001-heading-readback.py",
+      "sha256": "e7f8b767ba58a0813824af632d8611cd4e628411e66c41d1e54509dba80ade8e",
+      "bytes": 2577
+    },
+    "B004-acceptance-reconciliation-c3138fa.md": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B004-acceptance-reconciliation-c3138fa.md",
+      "sha256": "6245080c5522bcdd2384cd3575a3e156537dffc3492ad2fce6659338f131617b",
+      "bytes": 6060
+    },
+    "B004-private-proof-plan.md": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B004-private-proof-plan.md",
+      "sha256": "887970c033cf947862e9a451681dc7d192ecb4b10f4302a60df5b1df9744a618",
+      "bytes": 7345
+    },
+    "b001-heading-utility-private.config.cjs": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-utility-private.config.cjs",
+      "sha256": "f204b33ccf5351b208950e376899067aa0293caa6abf60624f7031ec3e89f522",
+      "bytes": 967
+    },
+    "b001-heading-utility-draft-b.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-utility-draft-b.log",
+      "sha256": "bbc57eb4413353c2223cc701f6e81a03599e217cae1be74a7770834850b584bc",
+      "bytes": 226
+    },
+    "b001-heading-selector-typecheck-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-selector-typecheck-a.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "b001-heading-selector-lint-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-selector-lint-a.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "b001-heading-utility-list.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-utility-list.log",
+      "sha256": "e7e9f4972c438d91cf3cc3793bd456bbe8a15e0b9767da4bba96c8ab43b90353",
+      "bytes": 557
+    },
+    "b001-heading-utility-selected-list.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-utility-selected-list.log",
+      "sha256": "429b691c611667763616745e153baff3559765768c222e9be6b19a7fc2922532",
+      "bytes": 180
+    },
+    "b001-heading-utility-41c5b7f.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-utility-41c5b7f.log",
+      "sha256": "ab9075a1a6c87197563263b38975bcd3247d4257f3bda2813c6af1df20e8cbc8",
+      "bytes": 226
+    }
+  },
+  "screenshots": {
+    "b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-1280/manager-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-1280/manager-paper-history.png",
+      "sha256": "01f2a23a4c93152ad6886597c38beb82a355cd8e0f641f04d2d07487f1b7c765",
+      "bytes": 186350
+    },
+    "b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-1280/tenant-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-1280/tenant-paper-history.png",
+      "sha256": "0e7ae4bd9fbb5c46540fb77977f6da9d3ae02117fd3b1d93b2d3e31bd2078f71",
+      "bytes": 100951
+    },
+    "b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-390/manager-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-390/manager-paper-history.png",
+      "sha256": "08d3fdc174398fafec9f400043b0a5ad5ac0cf86e046e936bcbb67843f3e0891",
+      "bytes": 145069
+    },
+    "b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-390/tenant-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--a6429-and-private-tenant-delivery-chromium-390/tenant-paper-history.png",
+      "sha256": "43b157d1ea362c8beeb4efeffa2d334956013935802b36096c32ff2746973216",
+      "bytes": 76051
+    },
+    "b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-1280/live-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-1280/live-paper-history.png",
+      "sha256": "50420f8269df5564ef144e029c86a0be33a01f3f870fc2eec6740d911f315583",
+      "bytes": 157392
+    },
+    "b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-1280/sandbox-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-1280/sandbox-paper-history.png",
+      "sha256": "328ab895a74d42575d5424857e306e5308b4c5c068a8f1a84fd86f11cdbedda2",
+      "bytes": 235218
+    },
+    "b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-390/live-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-390/live-paper-history.png",
+      "sha256": "ac8a9f399d8bc05cb5e97d5e73e3563467371fe89b58c62456d375caf18da638",
+      "bytes": 116290
+    },
+    "b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-390/sandbox-paper-history.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-http-41c5b7f-artifacts/b004-paper-delivery-paper--bc15b-ive-or-sandbox-organization-chromium-390/sandbox-paper-history.png",
+      "sha256": "d226a1800a4f168cce918ef0b13d191141abb94936079395c5bedd35ab23a04e",
+      "bytes": 201898
+    }
+  },
+  "preservedFailedAttempts": {
+    "preBodySelection": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-utility-draft-a.log",
+      "sha256": "a03706be5b7a965c7ecf28ee5cf98030bd33af96826994e703fc87e462cfcb2b",
+      "bytes": 49
+    }
+  },
+  "failureHistory": "Initial leading-anchor grep selected zero tests before any body ran; preserved and corrected using DB-free listing. No test-body failure; prior source-only64c core/build/Worker passes remain historical, not final approvals",
+  "retention": {
+    "storage": "local private artifacts; sanitized manifest in git",
+    "privateR2ObjectKey": null,
+    "retentionDate": "unknown"
+  },
+  "next": "publish/mirror B001 heading checkpoint, park external acceptance, continue B005",
+  "preCorrectionChecks": {
+    "b001-heading-full-gate-64c53c3.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-full-gate-64c53c3.log",
+      "sha256": "980568c3a50ad15fc8adc95eb4abee797c4816205a73a6776b76dbfb614cbe83",
+      "bytes": 470
+    },
+    "b001-heading-build-worker-driver-64c53c3.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-build-worker-driver-64c53c3.log",
+      "sha256": "95f8c59635e7455c33faedbea7d4ae0ebcb34e6947db7b9daed89baaaa05f8cc",
+      "bytes": 422
+    },
+    "b001-heading-next-build-64c53c3.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-next-build-64c53c3.log",
+      "sha256": "b23782c32bff300c0dd6ccd72e16b52adf46bfc5d08f1d78d6260fa163e03a7c",
+      "bytes": 12250
+    },
+    "b001-heading-cf-build-64c53c3.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-cf-build-64c53c3.log",
+      "sha256": "a32c6a00aed1fdcfc7921ee1c7ead8af0218bcc65dfd25674b101118d704da8f",
+      "bytes": 13959
+    },
+    "b001-heading-preflight-64c53c3.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-preflight-64c53c3.log",
+      "sha256": "ca0646b4298c2fddcbf3d85801a24b4993c49611bbd589c68c040096a5c690c9",
+      "bytes": 23
+    },
+    "b001-heading-worker-64c53c3.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-heading-worker-64c53c3.log",
+      "sha256": "dd34d0c794eb1eefbafccedd9fb722fde65b73b25723e9cb5b4d9f734c274d7a",
+      "bytes": 423
+    }
+  }
+}

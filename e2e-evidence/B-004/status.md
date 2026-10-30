@@ -1,3 +1,5 @@
+> Follow-up 2026-10-30T15:56:54.814861-07:00: the pre-existing parent heading finding below is locally resolved by B001 `41c5b7ff3c3a730308d4e31f3b4508df7a650055`; [proof](../B-001/heading-checkpoint-41c5b7f.md). The original B004 scoped checkpoint and its pending external acceptance are unchanged.
+
 # B-004 private paper-delivery verification checkpoint
 
 Updated 2026-10-30T15:22:12.689041-07:00; candidate`ee734857cf04f75d84c5a01eb89d433b9e89bfae`, branch`mode-b-repair-override-prep`, ModeB Ron/Codex. **Scoped local PASS; wholeB004 pending/INCOMPLETE; no release/activation GO.** Test/privateconfig/runner only; no application, migration, product schema or legal/contract text change.

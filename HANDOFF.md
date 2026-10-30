@@ -1,5 +1,11 @@
 # Mode B bootstrap acceptance
 
+## Latest continuous-queue checkpoint — 2026-10-30T15:56:54.814861-07:00
+
+B001 signed-heading follow-up is locally verified at `41c5b7ff3c3a730308d4e31f3b4508df7a650055`. One application line uses the same signed-status/key expression as the timeline; existing affected utility case is scoped and privacy hardened with financial assertions retained. Full clean pinned gate599unit/358RLS PASS0FAIL1prior-approved historicalSKIP; Next/Cloudflare/originalpreflight/Worker1, fresh private paper-browser4 PASS49.7s and affected utility1 PASS27.8s. Signed-heading screenshots at390/1280 are correct. [Checkpoint](e2e-evidence/B-001/heading-checkpoint-41c5b7f.md), [manifest](e2e-evidence/B-001/heading-boundary-41c5b7f.json). Initial zero-test selection and earlier64c checks preserved; no fake failure/approval.
+
+The actionable B004 parent-heading finding is resolved locally. WholeB001 remains pending originalG0–G5/§11.1, stagedversion/24coldstarts/React418/receipt/independentClaude acceptance; B002–B004 and B013/B021 dependent remainders are unchanged. No wholeB newlydone, prod/mainmerge/operationalmigration/activation/externalmessage. Same owning branch/session remains active. STOP POINT: WORKING; next: publish/mirror heading checkpoint, then B005 source/evidence reconciliation; owner: Ron/Codex. Previous entries retain dated scopes.
+
 ## Latest continuous-queue checkpoint — 2026-10-30T15:22:12.689041-07:00
 
 B004 local paper-delivery proof verifiedat`ee734857cf04f75d84c5a01eb89d433b9e89bfae`: gate599unit/358RLS PASS0FAIL1prior-approved historicalSKIP; Next/Cloudflare/originalpreflight/Worker1 and fresh4browsercasesPASS49.8s,8screens390/1280. Existing app reused; version/reason/history/staffscope/tenantprivateaudit/fault/OFF/fake-ID checks pass, no app/schema/legaledit. Globaloriginalmissing restored; orgflagsrestored/faultobjectsremoved; normalmetadata/audits/uploads remain. [Evidence](e2e-evidence/B-004/http-boundary-ee73485.json). WholeB004 pendingold-code/rollback/stage/Claude.
