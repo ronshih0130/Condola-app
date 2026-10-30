@@ -1,0 +1,12 @@
+{
+  "scope": "private synthetic local browser evidence",
+  "retention": "TODO: Ron confirm retention",
+  "files": [
+    {"path":"work/B002-ui/browser/off/moveout-off-1280.png","bytes":118924,"sha256":"32761fd07dfcbc74b68beec39a0ddb55453dbb5260938699bf3613fddfdabb64"},
+    {"path":"work/B002-ui/browser/off/moveout-off-390.png","bytes":78803,"sha256":"1e8a59879b0700c12284ad32596261b3f3b3f6888999368ab7ec59eeb7735366"},
+    {"path":"work/B002-ui/browser/on/moveout-before-1280.png","bytes":152711,"sha256":"7b728a139c5a9f5d804939118f92494c039b7744e21572ae3abac3d4634c2ddb"},
+    {"path":"work/B002-ui/browser/on/moveout-before-390.png","bytes":107604,"sha256":"fbb7ea16981507400db35476ba094272bbcb44e10b6d5ea74e4869716bb1a86d"},
+    {"path":"work/B002-ui/browser/on/moveout-corrected-1280.png","bytes":137418,"sha256":"0164123efa89b91647a7bacabb7c00c6dc3a749ebc5627bf9155a0cb0b9a9d6f"},
+    {"path":"work/B002-ui/browser/on/moveout-corrected-390.png","bytes":95406,"sha256":"c2ce7acbfadb4cccb0b5c0398e59de22cb222f093cbb48b6f3de231bae9e8902"}
+  ]
+}
