@@ -165,6 +165,16 @@ test("公共用電 and 帳單差額 show as separate owner lines with a rate war
 });
 
 test("countersign of a pending lease does not bill the electricity posted while it was unsigned", async ({ page }) => {
+  let outsideOrigin = false;
+  await page.route("**/*", async route => {
+    try {
+      if (["http://127.0.0.1:43123", "http://127.0.0.1:4599"].includes(new URL(route.request().url()).origin)) {
+        await route.continue(); return;
+      }
+    } catch { /* reject malformed or unavailable request without logging it */ }
+    outsideOrigin = true; await route.abort();
+  });
+  try {
   await resetDemo(page);
   await page.goto("/api/demo/locale?set=zh-TW&next=/m/units");
   for (const room of ["A", "B", "C"]) {
@@ -218,7 +228,7 @@ test("countersign of a pending lease does not bill the electricity posted while 
   await expect(page.getByTestId("idv-sign-wait")).toBeVisible();
   await expect(page.getByTestId("simulate-tenant-sign")).toHaveCount(0);
   const leaseId = new URL(leaseUrl).pathname.split("/").at(-1);
-  const identity = await page.request.post("/api/demo/id-sample", { data: { leaseId } });
+  const identity = await page.request.post("/api/demo/id-sample", { data: { leaseId }, maxRedirects: 0 });
   expect(identity.ok()).toBe(true);
   await page.reload();
   await expect(page.getByTestId("simulate-tenant-sign")).toHaveCount(0);
@@ -238,7 +248,7 @@ test("countersign of a pending lease does not bill the electricity posted while 
     await page.context().addCookies([{ name: SESSION_COOKIE, value: token, url: new URL(leaseUrl).origin, httpOnly: true }]);
     await page.goto("/t");
     await finishConsentGate(page);
-    const signed = await page.request.post("/api/flows/signLease", { data: { leaseId, signedName: "待副署租客", consent: true } });
+    const signed = await page.request.post("/api/flows/signLease", { data: { leaseId, signedName: "待副署租客", consent: true }, maxRedirects: 0 });
     expect(signed.ok()).toBe(true);
     expect(await signed.json()).toMatchObject({ ok: true, result: { esign: "partially_signed" } });
     const events = (await db.query<{ actor: string; event: string }>(`SELECT e.actor_user_id::text AS actor,e.event FROM lease_signature_events e JOIN lease_signatures s ON s.id=e.signature_id WHERE s.lease_id=$1 AND s.signer_role='tenant' AND e.event IN ('viewed_document','consented','signed') ORDER BY e.id`, [leaseId])).rows;
@@ -249,7 +259,7 @@ test("countersign of a pending lease does not bill the electricity posted while 
   }
   await signIn(page, ACCOUNTS.admin);
   await page.goto(`${leaseUrl}?tab=sign`);
-  await expect(page.getByText("租客已簽署")).toBeVisible();
+  await expect(page.locator(".tl").getByText("租客已簽署", { exact: true })).toBeVisible();
   await expect(page.getByTestId("error-banner")).toHaveCount(0);
   await page.getByTestId("sign-name").fill("管理方");
   await page.getByTestId("sign-consent").check();
@@ -262,4 +272,6 @@ test("countersign of a pending lease does not bill the electricity posted while 
   await expect(page.getByTestId("invoice-deposit")).toBeVisible();
   await page.getByRole("link", { name: "摘要" }).click();
   await expect(page.getByText("生效中")).toBeVisible();
+  expect(outsideOrigin).toBe(false);
+  } catch { throw new Error("B001 heading utility compatibility failed"); }
 });
