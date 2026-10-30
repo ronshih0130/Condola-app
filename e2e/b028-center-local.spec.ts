@@ -13,7 +13,7 @@ async function db<T>(fn:(c:Client)=>Promise<T>) {const c=new Client({connectionS
 
 test("synthetic notifications are independently read in four actual portals",async({page})=>{
  const errors:string[]=[];
- let expectedOff=true;
+ let expectedOff=false;
  page.on("pageerror",()=>errors.push("page error"));
  page.on("console",message=>{if(message.type()==="error" && !expectedOff) errors.push("console error");});
  page.on("response",response=>{if(response.status()>=500) errors.push("server error");});
@@ -24,6 +24,7 @@ test("synthetic notifications are independently read in four actual portals",asy
  });
  await resetDemo(page);
  await signIn(page,ACCOUNTS.manager);
+ expectedOff=true;
  expect((await page.goto('/m/notifications'))?.status()).toBe(404);
  expectedOff=false;
  const fixture=await db(async c=>{
