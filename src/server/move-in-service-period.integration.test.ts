@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import { Client } from "pg";
 import { disposableDbUrl,withDatabase } from "./test-disposable-db";
@@ -9,7 +9,7 @@ import { issueMoveInInvoice } from "./move-in-invoice";
 
 const source=disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE),previous=process.env.DATABASE_URL;
 let admin:Client,db:Client,name:string,owned=false;
-test.before(async()=>{const template=decodeURIComponent(source.pathname.slice(1));if(!/^[a-z][a-z0-9_]{0,62}$/.test(template))throw new Error("Invalid template");name=`condola_b011_${randomUUID().replaceAll("-","")}`;admin=new Client({connectionString:withDatabase(source,"postgres")});await admin.connect();await admin.query(`CREATE DATABASE "${name}" TEMPLATE "${template}"`);owned=true;db=new Client({connectionString:withDatabase(source,name)});await db.connect();process.env.DATABASE_URL=withDatabase(source,name);await resetAndSeed();await db.query(`UPDATE organizations SET feature_flags=feature_flags || '{"billing_previews":true}'::jsonb WHERE id=$1`,[ORG_ID]);await db.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='billing_previews'`,[ORG_ID]);});
+test.before(async()=>{const template=decodeURIComponent(source.pathname.slice(1));if(!/^[a-z][a-z0-9_]{0,62}$/.test(template))throw new Error("Invalid template");name=`condola_b011_${randomUUID().replaceAll("-","")}`;admin=new Client({connectionString:withDatabase(source,"postgres")});await admin.connect();await admin.query(`CREATE DATABASE "${name}" TEMPLATE "${template}"`);owned=true;db=new Client({connectionString:withDatabase(source,name)});await db.connect();process.env.DATABASE_URL=withDatabase(source,name);const demo=process.env.DEMO_MODE,key=process.env.ID_DOC_ENCRYPTION_KEY;try{process.env.DEMO_MODE="true";process.env.ID_DOC_ENCRYPTION_KEY=randomBytes(32).toString("hex");await resetAndSeed();}finally{if(demo===undefined)delete process.env.DEMO_MODE;else process.env.DEMO_MODE=demo;if(key===undefined)delete process.env.ID_DOC_ENCRYPTION_KEY;else process.env.ID_DOC_ENCRYPTION_KEY=key;}await db.query(`UPDATE organizations SET feature_flags=feature_flags || '{"billing_previews":true}'::jsonb WHERE id=$1`,[ORG_ID]);await db.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='billing_previews'`,[ORG_ID]);});
 test.after(async()=>{if(previous===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=previous;await db?.end();if(owned)await admin.query(`DROP DATABASE "${name}"`);await admin?.end();});
 async function createFixture(start:string,rent:number,deposit:number,capture:boolean,prorate:boolean,end:string|null=null){
  const label=`Synthetic period ${randomUUID()}`,property=(await db.query<{id:string}>(`INSERT INTO properties(org_id,name,country_code,currency,timezone) VALUES($1,$2,'TW','TWD','Asia/Taipei') RETURNING id`,[ORG_ID,label])).rows[0].id;

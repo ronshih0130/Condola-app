@@ -178,6 +178,10 @@ const added = {
     addOnly: false,
     reason: "Adds private typed-source/provenance/resolution tables, extends the exact center source constraint and replaces guards/read predicates with backward-compatible typed branches; changes owner-only functions and grants no new application source authority. Existing source bytes unchanged; no backfill or production activation.",
   },
+  "supabase/migrations/20261031100218_b015_tenant_directory_edit.sql": {
+    addOnly: false,
+    reason: "Adds a default-OFF private hash-only contact-edit command table, scoped cascade constraints, immutable and deferred authorization guards, and fixed service-only edit/view/status/close/final-check gateways with restricted grants. No legacy contact, login identity, historical source or financial rows are rewritten.",
+  },
   "supabase/migrations/20261031100215_b028_center_foundation.sql": {
     addOnly: false,
     reason: "Adds independent default-OFF private typed notification center events/entitlements/read markers/cursors and restricted authorization gateways, immutable/source guards and deferred expiry checks; no producer grant or historical backfill.",

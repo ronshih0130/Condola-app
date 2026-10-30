@@ -29,7 +29,7 @@ test.before(async()=>{
   try {
     process.env.DEMO_MODE="true";process.env.ID_DOC_ENCRYPTION_KEY=randomBytes(32).toString("hex");await resetAndSeed();
     db=new Client({connectionString:process.env.DATABASE_URL});await db.connect();
-    await db.query(`INSERT INTO platform_settings(key,value,description) VALUES('tenant_directory_edit','{}','isolated directory acceptance')`);
+    await db.query(`INSERT INTO platform_settings(key,value,description) VALUES('tenant_directory_edit','{}','isolated directory acceptance') ON CONFLICT(key) DO UPDATE SET value=excluded.value`);
     await db.query(`UPDATE organizations SET feature_flags=feature_flags || '{"tenant_directory_edit":true}'::jsonb WHERE id=$1`,[ORG_ID]);
     for(const [key,name,email,phone,tenant,archived] of [
       ["zero","Directory Zero","directory-zero@example.test","+19995550101",true,false],
