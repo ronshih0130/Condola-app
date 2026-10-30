@@ -12,5 +12,5 @@ export default async function Page({params,searchParams}:{params:Promise<{token:
   let items;
   try {items=await centerVendorItems(token,null,query.cursor);} catch {notFound();}
   const prefs=await requestPrefs();
-  return <NotificationCenter page={items} locale={prefs.locale} mark={markVendorCenterRead.bind(null,token)}/>;
+  return <div style={{maxWidth:560,margin:"24px auto"}}><NotificationCenter page={items} locale={prefs.locale} mark={markVendorCenterRead.bind(null,token)}/></div>;
 }
