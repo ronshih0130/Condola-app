@@ -8,6 +8,7 @@ import { contractVersionDigest } from "./document";
 import { emailCode, matchesEmailCode } from "./email";
 import { signaturePng } from "./evidence";
 import { EsignRepo, type Connection, type TransactionRunner } from "./repo";
+import { lockSigningCase, lockSigningLeaseForCreate } from "./lock";
 import { recordReviewDelivery, requireReviewDelivery } from "./review";
 import { auditView, replacementLine, type Version, type Stroke, type AuditEvent } from "./rules";
 import { generateContractPdf, stampSignature } from "./stamp";
@@ -102,11 +103,7 @@ export class EsignFlow {
     return rows.rows.filter((r) => r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email));
   }
   private async load(c: Connection, session: Session, caseId: string, versionId: string) {
-    const row = await c.query<{ lease_id: string }>(
-      "SELECT lease_id::text FROM esign_cases WHERE id=$1 AND org_id=$2 FOR UPDATE",
-      [uuid(caseId), session.orgId],
-    );
-    ensure(row.rows[0]);
+    const leaseId = await lockSigningCase(c, session, uuid(caseId), uuid(versionId));
     const versions = await c.query<{ state: Version; pdf_bytes: Buffer; final_pdf_bytes: Buffer | null }>(
       "SELECT state,pdf_bytes,final_pdf_bytes FROM esign_versions WHERE case_id=$1 AND id=$2",
       [caseId, uuid(versionId)],
@@ -122,7 +119,7 @@ export class EsignFlow {
       const member = await c.query("SELECT 1 FROM org_members WHERE org_id=$1 AND user_id=$2 AND status='active' AND role IN ('admin','manager')", [session.orgId, session.userId]);
       ensure(!member.rowCount, "Use a separate signer account");
     }
-    return { ...v, leaseId: row.rows[0].lease_id };
+    return { ...v, leaseId };
   }
   private deadline(raw: string, at: string) {
     const date = new Date(raw);
@@ -146,7 +143,7 @@ export class EsignFlow {
     this.entry(session);
     return this.run(session.userId, async (c) => {
       const at = (this.deps.now?.() ?? new Date()).toISOString();
-      const actor = { userId: session.userId, orgId: session.orgId };
+      const actor = session;
       const repo = new EsignRepo({
         check: async (input) => {
           const row = await c.query<{ state: Version }>("SELECT state FROM esign_versions WHERE id=$1", [input.versionId]);
@@ -163,8 +160,7 @@ export class EsignFlow {
       if (command.type === "create") {
         await this.company(c, session);
         const leaseId = uuid(command.leaseId);
-        const lease = await c.query("SELECT id FROM leases WHERE id=$1 AND org_id=$2 FOR UPDATE", [leaseId, session.orgId]);
-        ensure(lease.rowCount === 1);
+        await lockSigningLeaseForCreate(c, session, leaseId);
         ensure((await c.query("SELECT id FROM esign_cases WHERE lease_id=$1", [leaseId])).rowCount === 0, "Use a replacement version");
         ensure(command.order === "parallel" || command.order === "sequential");
         ensure(command.pdf.length > 0 && command.pdf.length <= 7 * 1024 * 1024, "PDF size");

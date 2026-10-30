@@ -1,5 +1,9 @@
 import type { Client } from "pg";
 import { svc } from "../db";
+import { leaseIdentityReady } from "../id-docs";
+import { FlowError } from "../errors";
+import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type FirstPeriodLeaseSource } from "../move-in-invoice";
+import { lockSigningCase, lockSigningLeaseForCreate, type SigningActor } from "./lock";
 import {
   createCase as createDomainCase,
   transition,
@@ -32,7 +36,7 @@ export interface EmailVerifier {
   }): Promise<boolean>;
 }
 
-export type Actor = { userId: string; orgId: string };
+export type Actor = SigningActor;
 export type SignerInput = {
   id: string;
   role: "owner" | "tenant";
@@ -83,12 +87,8 @@ export class EsignRepo {
     private readonly run: TransactionRunner = svc,
   ) {}
 
-  private async lock(client: Connection, actor: Actor, caseId: string) {
-    const result = await client.query(
-      `SELECT id FROM esign_cases WHERE id = $1 AND org_id = $2 FOR UPDATE`,
-      [caseId, actor.orgId],
-    );
-    requireValue(result.rowCount === 1, "Unknown signing case");
+  private async lock(client: Connection, actor: Actor, caseId: string, versionId?: string) {
+    await lockSigningCase(client, actor, caseId, versionId);
   }
 
   private async role(
@@ -234,6 +234,7 @@ export class EsignRepo {
     order?: "parallel" | "sequential";
   }): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
+      await lockSigningLeaseForCreate(client,actor,input.leaseId);
       await this.company(client, actor);
       const state = createDomainCase({
         versionId: input.versionId,
@@ -257,7 +258,7 @@ export class EsignRepo {
 
   async addSigner(actor: Actor, caseId: string, versionId: string, input: SignerInput) {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId);
+      await this.lock(client, actor, caseId, versionId);
       await this.company(client, actor);
       const loaded = await this.load(client, caseId);
       const v = loaded.state.versions.find((x) => x.id === versionId);
@@ -280,7 +281,7 @@ export class EsignRepo {
 
   async apply(actor: Actor, caseId: string, event: WorkflowEvent): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId);
+      await this.lock(client, actor, caseId, event.versionId);
       const { state } = await this.load(client, caseId);
       const v = state.versions.find((x) => x.id === event.versionId);
       const role = await this.role(client, actor, v);
@@ -303,7 +304,7 @@ export class EsignRepo {
     versionId: string; signerId: string; at: string; response: string;
   }): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId);
+      await this.lock(client, actor, caseId, input.versionId);
       const { state } = await this.load(client, caseId);
       const v = state.versions.find((x) => x.id === input.versionId);
       const role = await this.role(client, actor, v);
@@ -329,7 +330,7 @@ export class EsignRepo {
 
   async recordSignature(actor: Actor, caseId: string, input: SignatureInput) {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId);
+      await this.lock(client, actor, caseId, input.versionId);
       const { state } = await this.load(client, caseId);
       const v = state.versions.find((x) => x.id === input.versionId);
       const role = await this.role(client, actor, v);
@@ -355,6 +356,27 @@ export class EsignRepo {
         ],
       );
       await this.save(client, caseId, state, after, input.finalPdfBytes);
+      const completed = after.versions.find((item) => item.id === input.versionId);
+      if (v?.status !== "completed" && completed?.status === "completed") {
+        const result = await client.query<FirstPeriodLeaseSource & { id: string; status: string; esign_status: string; created_by: string }>(
+          `SELECT l.id::text, l.status::text, l.esign_status::text, l.first_period_basis,
+                  l.rent_amount_minor::text, l.currency, l.start_date::text, l.end_date::text,
+                  l.rent_frequency::text, l.prorate_first_period, ec.created_by::text
+             FROM esign_cases ec JOIN leases l ON l.id=ec.lease_id AND l.org_id=ec.org_id
+            WHERE ec.id=$1 AND ec.org_id=$2`, [caseId, actor.orgId]);
+        const lease = result.rows[0];
+        requireValue(lease, "Signing lease unavailable");
+        if (["draft", "pending_signature"].includes(lease.status) && lease.esign_status !== "imported") {
+          validateFirstPeriodSource(lease, true);
+          if (!(await leaseIdentityReady(client as Client, lease.id))) throw new FlowError("errors.idDocRequired");
+          await client.query(`UPDATE leases SET status='active', esign_status='fully_signed', signed_at=now() WHERE id=$1 AND org_id=$2`, [lease.id, actor.orgId]);
+          await ensureThread(client as Client, lease.id);
+          const invoiceId = await issueMoveInInvoice(client as Client, lease.id, actor.userId);
+          await client.query(`INSERT INTO audit_log (org_id,actor_user_id,actor_role,table_name,row_id,action,event_type,new_row)
+            VALUES ($1,$2,$3,'leases',$4,'update','esign_lease_activated',$5::jsonb)`,
+            [actor.orgId,actor.userId,actor.kind,lease.id,JSON.stringify({case_id:caseId,version_id:input.versionId,case_creator_id:lease.created_by,invoice_id:invoiceId})]);
+        }
+      }
       return after;
     });
   }
@@ -364,7 +386,7 @@ export class EsignRepo {
    */
   async finalize(actor: Actor, caseId: string, versionId: string) {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId);
+      await this.lock(client, actor, caseId, versionId);
       const loaded = await this.load(client, caseId);
       const row = loaded.rows.find((x) => x.id === versionId);
       requireValue(row, "Unknown version");
@@ -388,7 +410,7 @@ export class EsignRepo {
     at: string;
   }): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId);
+      await this.lock(client, actor, caseId, input.previousVersionId);
       await this.company(client, actor);
       const { state } = await this.load(client, caseId);
       const after = transition(state, {
