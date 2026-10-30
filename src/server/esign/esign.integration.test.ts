@@ -31,9 +31,9 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
   const leaseId = randomUUID();
   const caseId = randomUUID();
   const firstId = randomUUID();
-  const admin: Actor = { userId: adminId, orgId: org };
-  const owner: Actor = { userId: ownerId, orgId: org };
-  const tenant: Actor = { userId: tenantId, orgId: org };
+  const admin: Actor = { userId: adminId, orgId: org, liveOrgId: org, environment: "live", kind: "staff", role: "admin" };
+  const owner: Actor = { userId: ownerId, orgId: org, liveOrgId: org, environment: "live", kind: "owner", role: null };
+  const tenant: Actor = { userId: tenantId, orgId: org, liveOrgId: org, environment: "live", kind: "tenant", role: null };
   const time = "2026-10-26T12:00:00.000Z";
   const expiry = "2026-10-27T12:00:00.000Z";
   const document = new TextEncoder().encode("%PDF-1.7 synthetic unsigned contract");
@@ -97,24 +97,24 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
       )).rows[0].status);
     }
 
-    async function prepare(versionId: string, actor: Actor) {
-      await repo.apply(actor, caseId, {
+    async function prepare(versionId: string, actor: Actor, targetCase = caseId) {
+      await repo.apply(actor, targetCase, {
         type: "consent", versionId, signerId: actor.userId, kind: "explicit", at: time,
       });
-      await repo.apply(actor, caseId, {
+      await repo.apply(actor, targetCase, {
         type: "issue_identity", versionId, signerId: actor.userId,
         method: "email", expiresAt: expiry, attemptCap: 3, at: time,
       });
-      await repo.recordEmailStep(actor, caseId, {
+      await repo.recordEmailStep(actor, targetCase, {
         versionId, signerId: actor.userId, response: "synthetic-response", at: time,
       });
-      await repo.apply(actor, caseId, {
+      await repo.apply(actor, targetCase, {
         type: "review", versionId, signerId: actor.userId, scrolledToEnd: true, at: time,
       });
     }
 
-    async function sign(versionId: string, actor: Actor, state: SigningCase, last: boolean) {
-      return repo.recordSignature(actor, caseId, {
+    async function sign(versionId: string, actor: Actor, state: SigningCase, last: boolean, targetRepo = repo, targetCase = caseId) {
+      return targetRepo.recordSignature(actor, targetCase, {
         versionId, signerId: actor.userId, at: time,
         strokes: [[{ x: 0, y: 0 }, { x: 8, y: 12 }, { x: 20, y: 4 }]],
         imageBytes: image,
@@ -142,9 +142,12 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
         await client.query(
           `INSERT INTO leases
            (id,org_id,property_id,unit_id,target_unit_id,start_date,end_date,currency,rent_amount_minor)
-           VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',0)`,
+           VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',10000)`,
           [leaseId, org, propertyId, unitId],
         );
+
+        const contact = (await client.query<{id:string}>(`SELECT id::text FROM contacts WHERE org_id=$1 AND user_id=$2`, [org, tenantId])).rows[0].id;
+        await client.query(`INSERT INTO lease_parties(org_id,lease_id,contact_id,role) VALUES ($1,$2,$3,'primary')`, [org,leaseId,contact]);
 
         let state = await repo.createCase(admin, {
           caseId, leaseId, versionId: firstId, body: "Synthetic contract",
@@ -172,6 +175,19 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
            AND NOT has_table_privilege('service_role','esign_audit_events','DELETE') AS ok`,
         );
         assert.equal(grants.rows[0].ok, true);
+        const privateBoundary=await client.query<{ok:boolean}>(`SELECT
+          pg_get_userbyid(c.relowner) NOT IN ('anon','authenticated','service_role')
+          AND NOT EXISTS (SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role']) r
+            CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p
+            WHERE has_table_privilege(r,c.oid,p))
+          AND (SELECT count(*)=3 AND bool_and(pg_get_userbyid(f.proowner) NOT IN ('anon','authenticated','service_role')
+            AND NOT has_function_privilege('anon',f.oid,'EXECUTE')
+            AND NOT has_function_privilege('authenticated',f.oid,'EXECUTE')
+            AND NOT has_function_privilege('service_role',f.oid,'EXECUTE'))
+            FROM pg_proc f JOIN pg_namespace n ON n.oid=f.pronamespace
+            WHERE n.nspname='app' AND f.proname IN ('b001_lock_parent_before_case','b001_record_completion_requirement','b001_require_completion_financials')) AS ok
+          FROM pg_class c WHERE c.oid='app.b001_completion_requirements'::regclass`);
+        assert.equal(privateBoundary.rows[0].ok,true);
 
         for (const id of [adminId, ownerId, tenantId]) {
           await asUser(id, async () => {
@@ -191,7 +207,7 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
           });
         }
         await assert.rejects(repo.voidUnsigned(
-          { userId: otherAdminId, orgId: otherOrg }, caseId, firstId, "Synthetic reason", time,
+          { userId: otherAdminId, orgId: otherOrg, liveOrgId: otherOrg, environment: "live", kind: "staff", role: "admin" }, caseId, firstId, "Synthetic reason", time,
         ));
         await assert.rejects(asUser(ownerId, () => client.query(
           `UPDATE esign_versions SET status = 'voided' WHERE id = $1`, [firstId],
@@ -214,9 +230,51 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
         });
         await prepare(firstId, owner);
         await prepare(firstId, tenant);
-        state = await sign(firstId, owner, state, false);
+        state = await sign(firstId, tenant, state, false);
         await assert.rejects(repo.finalize(admin, caseId, firstId));
-        state = await sign(firstId, tenant, state, true);
+        await assert.rejects(sign(firstId, owner, state, true), (error: unknown) => (error as {key?:string}).key === "errors.idDocRequired");
+        assert.equal(await sqlStatus(firstId), "partially_signed");
+        const doc = (await client.query<{id:string}>(`INSERT INTO identity_documents(org_id,contact_id,lease_id,doc_type,number_masked,storage_path,encryption_key_ref,review_status,created_by) VALUES ($1,$2,$3,'passport','A**789',$4,'fixture-key','pending_review',$5) RETURNING id::text`,[org,contact,leaseId,`${org}/${leaseId}/doc`,adminId])).rows[0].id;
+        for (const slot of ["front", "selfie"]) await client.query(`INSERT INTO identity_document_photos(org_id,document_id,slot,storage_path,mime_type,size_bytes,sha256) VALUES ($1,$2,$3,$4,'image/jpeg',4,'abc')`,[org,doc,slot,`${org}/${leaseId}/${slot}`]);
+        const failing = new EsignRepo({check: async () => true}, (actorId, work) => scoped("service_role", actorId, () => work(new Proxy(client, {
+          get(target, key) {
+            if (key === "query") return (...args: unknown[]) => {
+              if (typeof args[0] === "string" && args[0].includes("INSERT INTO invoices")) throw new Error("synthetic invoice fault");
+              return Reflect.apply(target.query, target, args);
+            };
+            return Reflect.get(target, key, target);
+          },
+        }))));
+        const beforeFailure = (await client.query<{n:string}>(`SELECT count(*)::text AS n FROM esign_audit_events WHERE case_id=$1`,[caseId])).rows[0].n;
+        await assert.rejects(sign(firstId, owner, state, true, failing), /synthetic invoice fault/);
+        assert.equal(await sqlStatus(firstId), "partially_signed");
+        assert.equal((await client.query(`SELECT 1 FROM esign_signature_images WHERE version_id=$1 AND signer_id=$2`,[firstId,ownerId])).rowCount,0);
+        assert.equal((await client.query<{n:string}>(`SELECT count(*)::text AS n FROM esign_audit_events WHERE case_id=$1`,[caseId])).rows[0].n,beforeFailure);
+        assert.equal((await client.query(`SELECT 1 FROM invoices WHERE lease_id=$1`,[leaseId])).rowCount,0);
+        // Simulate a pre-hook writer that persists the final signature but does no activation.
+        const oldWriter = new EsignRepo({check: async () => true}, (actorId, work) => scoped("service_role", actorId, async () => {
+          const result = await work(new Proxy(client, { get(target, key) {
+            if (key === "query") return (...args: unknown[]) => {
+              if (typeof args[0] === "string" && args[0].includes("SELECT l.id::text, l.status::text")) return Promise.resolve({rows:[{status:"active",esign_status:"not_sent"}],rowCount:1});
+              return Reflect.apply(target.query,target,args);
+            };
+            return Reflect.get(target,key,target);
+          }}));
+          await client.query("SET CONSTRAINTS app.b001_completion_financials IMMEDIATE");
+          return result;
+        }));
+        await assert.rejects(sign(firstId, owner, state, true, oldWriter), (error: unknown) => (error as {code?:string}).code === "23514");
+        assert.equal(await sqlStatus(firstId), "partially_signed");
+        assert.equal((await client.query(`SELECT 1 FROM esign_signature_images WHERE version_id=$1 AND signer_id=$2`,[firstId,ownerId])).rowCount,0);
+        assert.equal((await client.query<{n:string}>(`SELECT count(*)::text AS n FROM esign_audit_events WHERE case_id=$1`,[caseId])).rows[0].n,beforeFailure);
+        state = await sign(firstId, owner, state, true);
+        await client.query("SET CONSTRAINTS app.b001_completion_financials IMMEDIATE");
+        await client.query("RESET ROLE");
+        assert.equal((await client.query(`SELECT 1 FROM app.b001_completion_requirements WHERE version_id=$1`,[firstId])).rowCount,0);
+        await client.query("SET LOCAL ROLE service_role");
+        await client.query("SET CONSTRAINTS app.b001_completion_financials DEFERRED");
+        const activated = await client.query(`SELECT l.status::text, l.esign_status::text, i.created_by::text, a.actor_user_id::text, a.new_row->>'case_creator_id' AS creator FROM leases l JOIN invoices i ON i.lease_id=l.id AND i.source='move_in' JOIN audit_log a ON a.row_id=l.id::text AND a.event_type='esign_lease_activated' WHERE l.id=$1`,[leaseId]);
+        assert.deepEqual(activated.rows[0],{status:"active",esign_status:"fully_signed",created_by:ownerId,actor_user_id:ownerId,creator:adminId});
         assert.equal(await sqlStatus(firstId), "fully_signed");
         assert.deepEqual((await repo.finalize(owner, caseId, firstId)).bytes, finalPdf);
         await assert.rejects(repo.voidUnsigned(admin, caseId, firstId, "Cannot void", time));
@@ -262,10 +320,16 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
           )));
         }
 
+        const retryUnit=randomUUID(), retryLease=randomUUID();
+        await client.query(`INSERT INTO units(id,org_id,property_id,label) VALUES ($1,$2,$3,'Retry unit')`,[retryUnit,org,propertyId]);
+        await client.query(`INSERT INTO leases(id,org_id,property_id,unit_id,target_unit_id,start_date,end_date,currency,rent_amount_minor,deposit_amount_minor) VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',0,0)`,[retryLease,org,propertyId,retryUnit]);
+        await client.query(`INSERT INTO lease_parties(org_id,lease_id,contact_id,role) VALUES ($1,$2,$3,'primary')`,[org,retryLease,contact]);
+        const retryDoc=(await client.query<{id:string}>(`INSERT INTO identity_documents(org_id,contact_id,lease_id,doc_type,number_masked,storage_path,encryption_key_ref,review_status,created_by) VALUES ($1,$2,$3,'passport','A**789',$4,'fixture-key','pending_review',$5) RETURNING id::text`,[org,contact,retryLease,`${org}/${retryLease}/doc`,adminId])).rows[0].id;
+        for (const slot of ["front","selfie"]) await client.query(`INSERT INTO identity_document_photos(org_id,document_id,slot,storage_path,mime_type,size_bytes,sha256) VALUES ($1,$2,$3,$4,'image/jpeg',4,'abc')`,[org,retryDoc,slot,`${org}/${retryLease}/${slot}`]);
         const unsignedCase = randomUUID();
         const unsignedVersion = randomUUID();
         await repo.createCase(admin, {
-          caseId: unsignedCase, leaseId, versionId: unsignedVersion,
+          caseId: unsignedCase, leaseId: retryLease, versionId: unsignedVersion,
           body: "Synthetic unsigned case", pdfBytes: document,
           signers: [
             { id: ownerId, role: "owner", email: "jianhong.chen@owner.demo" },
@@ -275,6 +339,24 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
         await assert.rejects(repo.voidUnsigned(owner, unsignedCase, unsignedVersion, "No permission", time));
         await repo.voidUnsigned(admin, unsignedCase, unsignedVersion, "Synthetic admin cancellation", time);
         assert.equal(await sqlStatus(unsignedVersion), "voided");
+        const retryVersion=randomUUID();
+        let retry=await repo.supersede(admin,unsignedCase,{previousVersionId:unsignedVersion,newVersionId:retryVersion,body:"Retry contract",pdfBytes:document,at:time});
+        await repo.apply(admin,unsignedCase,{type:"send",versionId:retryVersion,at:time,presumedConsentDeadline:expiry,termsVersion:"synthetic-v1"});
+        await prepare(retryVersion,owner,unsignedCase);
+        await prepare(retryVersion,tenant,unsignedCase);
+        retry=await sign(retryVersion,owner,retry,false,repo,unsignedCase);
+        await assert.rejects(sign(retryVersion,tenant,retry,true,repo,unsignedCase), (error:unknown) => (error as {key?:string}).key === "errors.generic");
+        assert.equal(await sqlStatus(retryVersion),"partially_signed");
+        assert.equal((await client.query(`SELECT 1 FROM invoices WHERE lease_id=$1`,[retryLease])).rowCount,0);
+        const retryMeter=randomUUID(), retryRun=randomUUID();
+        await client.query(`INSERT INTO meters(id,org_id,property_id,unit_id,utility,rate_minor_per_unit) VALUES ($1,$2,$3,$4,'water',10000)`,[retryMeter,org,propertyId,retryUnit]);
+        await client.query(`INSERT INTO utility_allocation_runs(id,org_id,meter_id,period_start,period_end,split_method,rate_source,currency,total_usage,rate_minor_per_unit,total_amount_minor) VALUES ($1,$2,$3,'2026-01-01','2026-01-31','none','fixed_rate','TWD',1,10000,10000)`,[retryRun,org,retryMeter]);
+        await client.query(`INSERT INTO utility_allocation_lines(org_id,run_id,lease_id,share_ratio,allocated_usage,amount_minor) VALUES ($1,$2,$3,1,1,10000)`,[org,retryRun,retryLease]);
+        await sign(retryVersion,tenant,retry,true,repo,unsignedCase);
+        await client.query("SET CONSTRAINTS app.b001_completion_financials IMMEDIATE");
+        assert.equal((await client.query(`SELECT 1 FROM leases l JOIN invoices i ON i.lease_id=l.id AND i.source='move_in' WHERE l.id=$1 AND l.status='active'`,[retryLease])).rowCount,1);
+        const credits=await client.query<{account:string;amount:string}>(`SELECT e.account::text,e.amount_minor::text AS amount FROM ledger_entries e JOIN invoices i ON i.id=e.invoice_id WHERE i.lease_id=$1 ORDER BY e.account`,[retryLease]);
+        assert.deepEqual(credits.rows,[{account:"tenant_receivable",amount:"10000"},{account:"other_income",amount:"-10000"}]);
         await assert.rejects(asService(() => client.query(
           `UPDATE esign_versions SET status='draft' WHERE id=$1`, [unsignedVersion],
         )));
@@ -387,7 +469,7 @@ test("mounted action service on PG: Email replay, permissions, atomic replacemen
         );
         await client.query("INSERT INTO units(id,org_id,property_id,label) VALUES ($1,$2,$3,'Synthetic mounted unit')", [unitId, ORG_ID, propertyId]);
         await client.query(
-          "INSERT INTO leases(id,org_id,property_id,unit_id,target_unit_id,start_date,end_date,currency,rent_amount_minor) VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',0)",
+          "INSERT INTO leases(id,org_id,property_id,unit_id,target_unit_id,start_date,end_date,currency,rent_amount_minor) VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',10000)",
           [leaseId, ORG_ID, propertyId, unitId],
         );
         const contacts = await client.query<{ id: string; user_id: string }>(
@@ -398,6 +480,8 @@ test("mounted action service on PG: Email replay, permissions, atomic replacemen
         const tenantContact = contacts.rows.find((r) => r.user_id === USERS.tenant)!.id;
         await client.query("INSERT INTO property_owners(org_id,property_id,owner_contact_id) VALUES ($1,$2,$3)", [ORG_ID, propertyId, ownerContact]);
         await client.query("INSERT INTO lease_parties(org_id,lease_id,contact_id) VALUES ($1,$2,$3)", [ORG_ID, leaseId, tenantContact]);
+        const doc = (await client.query<{id:string}>(`INSERT INTO identity_documents(org_id,contact_id,lease_id,doc_type,number_masked,storage_path,encryption_key_ref,review_status,created_by) VALUES ($1,$2,$3,'passport','A**789',$4,'fixture-key','pending_review',$5) RETURNING id::text`,[ORG_ID,tenantContact,leaseId,`${ORG_ID}/${leaseId}/doc`,USERS.admin])).rows[0].id;
+        for (const slot of ["front", "selfie"]) await client.query(`INSERT INTO identity_document_photos(org_id,document_id,slot,storage_path,mime_type,size_bytes,sha256) VALUES ($1,$2,$3,$4,'image/jpeg',4,'abc')`,[ORG_ID,doc,slot,`${ORG_ID}/${leaseId}/${slot}`]);
         const create = {
           type: "create" as const, leaseId, pdf: initial.bytes, ownerId: USERS.owner, tenantId: USERS.tenant,
           ownerDocument: true, tenantDocument: false, order: "parallel" as const, deadline: "2026-11-01T12:00:00Z",

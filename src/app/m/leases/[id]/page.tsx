@@ -26,7 +26,6 @@ import { isUuid } from "@/server/repair-rules";
 import { leaseDetail, threadMessages } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
-import { tx } from "@/server/db";
 import { billingPreviewsEnabled } from "@/server/billing-preview-rules";
 
 export const dynamic = "force-dynamic";
