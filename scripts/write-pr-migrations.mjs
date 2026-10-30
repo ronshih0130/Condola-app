@@ -170,6 +170,10 @@ const added = {
     addOnly: false,
     reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
   },
+  "supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql": {
+    addOnly: false,
+    reason: "Replaces tenant PDF visibility helper and adds immutable-version mutation guards with controlled parent-cascade exceptions and privilege changes. No historical migration or contract text is changed.",
+  },
   "supabase/migrations/20261031100203_b002_retention_boundary.sql": {
     addOnly: false,
     reason: "Adds nullable database-owned lease provenance and guards; replaces retention, protected photo access, preview and purge functions, and restricts privileges. Enforces fixed policy, transaction ordering and destructive mode boundary. No historical file, original dates, table, column or data is deleted.",

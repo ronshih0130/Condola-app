@@ -55,8 +55,9 @@ export async function tenantSignedPdfDownload(
   try {
     // Explicit identifiers only: never forward the PDF object or its bytes.
     await dependencies.audit({ ...event, pdfId: file.id });
-  } catch (error) {
-    dependencies.logError("signed_pdf_download_audit", error);
+  } catch {
+    dependencies.logError("signed_pdf_download_audit", new Error("Signed PDF audit unavailable"));
+    return new Response("Unavailable", { status: 503, headers: signedPdfPrivateHeaders });
   }
   return response;
 }

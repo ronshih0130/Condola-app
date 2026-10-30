@@ -1873,6 +1873,21 @@ export type TenantSignedLeasePdfSummary = {
   size_bytes: number;
 };
 
+export const TENANT_SIGNED_PDFS_QUERY = `WITH ranked AS (
+         SELECT pdf.id, pdf.id AS source_pdf_id, pdf.created_at,
+                octet_length(pdf.content) AS size_bytes,
+                coalesce(pdf.file_id = l.document_file_id, false) AS matches_pointer,
+                bool_or(coalesce(pdf.file_id = l.document_file_id, false)) OVER () AS has_current,
+                row_number() OVER (ORDER BY pdf.created_at DESC, pdf.id DESC) AS newest
+           FROM lease_signed_pdfs pdf
+           JOIN leases l ON l.org_id = pdf.org_id AND l.id = pdf.lease_id
+          WHERE pdf.org_id = $1 AND pdf.lease_id = $2
+       )
+       SELECT id, source_pdf_id, created_at, size_bytes,
+              (matches_pointer OR (NOT has_current AND newest = 1)) AS current
+         FROM ranked
+        ORDER BY current DESC, created_at DESC, id DESC`;
+
 /**
  * All reads use the tenant's authenticated database role. RLS independently
  * checks lease-party ownership, lease organization, and the DB global/org flags.
@@ -1884,7 +1899,7 @@ export type TenantSignedLeasePdfSummary = {
 export async function tenantSignedLeasePdfs(
   session: Session,
   leaseId: string,
-): Promise<TenantSignedLeasePdfSummary[]> {
+): Promise<(TenantSignedLeasePdfSummary & { current: boolean })[]> {
   if (session.kind !== "tenant" || !TENANT_SIGNED_PDF_ENABLED) return [];
   return tx(session.userId, async (client) => {
     const gate = await maybe<{ enabled: boolean }>(
@@ -1895,13 +1910,9 @@ export async function tenantSignedLeasePdfs(
     if (!tenantSignedPdfOn(TENANT_SIGNED_PDF_ENABLED, {
       tenant_signed_pdf: gate?.enabled,
     })) return [];
-    return many<TenantSignedLeasePdfSummary>(
+    return many<TenantSignedLeasePdfSummary & { current: boolean }>(
       client,
-      `SELECT pdf.id, pdf.id AS source_pdf_id, pdf.created_at,
-              octet_length(pdf.content) AS size_bytes
-         FROM lease_signed_pdfs pdf
-        WHERE pdf.org_id = $1 AND pdf.lease_id = $2
-        ORDER BY pdf.created_at DESC, pdf.id DESC`,
+      TENANT_SIGNED_PDFS_QUERY,
       [session.orgId, leaseId],
     );
   }, { orgId: session.orgId, environment: session.environment });

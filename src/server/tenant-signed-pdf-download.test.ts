@@ -74,7 +74,7 @@ test("response construction must succeed before auditing", async () => {
   }), URIError);
 });
 
-test("audit failure is logged once and PDF download still succeeds", async () => {
+test("audit failure returns a private error without the PDF or sensitive log details", async () => {
   const error = new Error("audit unavailable");
   const logged: unknown[][] = [];
   let attempts = 0;
@@ -87,9 +87,15 @@ test("audit failure is logged once and PDF download still succeeds", async () =>
     logError: (tag, caught) => { logged.push([tag, caught]); },
   });
   assert.equal(attempts, 1);
-  assert.deepEqual(logged, [["signed_pdf_download_audit", error]]);
-  assert.equal(response.status, 200);
-  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), content);
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0][0], "signed_pdf_download_audit");
+  assert.notEqual(logged[0][1], error);
+  assert.equal((logged[0][1] as Error).message, "Signed PDF audit unavailable");
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff");
+  assert.equal(response.headers.get("Content-Disposition"), null);
+  assert.equal(await response.text(), "Unavailable");
 });
 
 test("each successful request gets one event with its own request ID", async () => {

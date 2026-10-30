@@ -1,0 +1,23 @@
+{
+  "time_pt": "2026-10-29T20:13:09.845466-07:00",
+  "scope": "local synthetic PostgreSQL16 and native static review",
+  "database_integration": {
+    "passed": 1,
+    "failed": 0
+  },
+  "download_units": {
+    "passed": 6,
+    "failed": 0
+  },
+  "native_review": "scoped PASS",
+  "migration_blob": "968ff476247a310a3570be1a4328c0a1b7c56859",
+  "integration_blob": "71a12bd526db3468f24c36a5447f8b592dfa65d9",
+  "download_blob": "7744dacafd84f9d123e8706ff7f81177a97f73be",
+  "queries_blob": "2d9f01965eda2adca32f006fd8607ceaa6dbc9e1",
+  "tenant_page_blob": "615fe3e739af04925f4f170b7ef5b3fda098450f",
+  "history_boundary": "direct ordinary-role changes denied; genuine parent cascades retained; trusted owner bypass excluded",
+  "http_browser": "PENDING",
+  "staging": "PENDING",
+  "classb_signoff": false,
+  "whole_item_done": false
+}

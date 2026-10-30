@@ -50,9 +50,9 @@ export default async function TenantLeasePage() {
           <h3>{signedCopy.title}</h3>
           <p>{signedCopy.notice}</p>
           <ul>
-            {signedPdfs.map((pdf, index) => (
+            {signedPdfs.map((pdf) => (
               <li key={pdf.id}>
-                <span>{index === 0 ? signedCopy.current : signedCopy.historical}</span>
+                <span>{pdf.current ? signedCopy.current : signedCopy.historical}</span>
                 {" · "}
                 <span>
                   {signedCopy.uploaded}: {new Date(pdf.created_at).toLocaleString(session.locale)}
