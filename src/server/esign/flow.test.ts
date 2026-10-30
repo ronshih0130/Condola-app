@@ -148,9 +148,35 @@ test("direct review submission requires complete, signer/version/digest-bound de
   const binding: ReviewBinding = { caseId: id, versionId: id, signerId: signer.userId, digest };
   const deliveries: { actorId: string; payload: ReviewBinding & { page: number | null } }[] = [];
   let stateDigest = digest;
+  let lockPhase = 0;
+  let authorizedLoads = 0;
   const c: Connection = {
     query: (async (sql: string, params: unknown[] = []) => {
-      if (sql.startsWith("SELECT lease_id::text")) return { rows: [{ lease_id: id }], rowCount: 1 };
+      if (sql.startsWith("SELECT ec.lease_id::text FROM organizations")) {
+        assert.ok(lockPhase === 0 || lockPhase === 4, "authorize before locks and reauthorize after them");
+        assert.deepEqual(params, [signer.orgId, signer.environment, signer.liveOrgId, signer.kind, signer.role, id, signer.userId, id]);
+        if (lockPhase === 0) lockPhase = 1;
+        else { lockPhase = 0; authorizedLoads++; }
+        return { rows: [{ lease_id: id }], rowCount: 1 };
+      }
+      if (sql.startsWith("SELECT id FROM leases")) {
+        assert.equal(lockPhase, 1);
+        assert.deepEqual(params, [id, signer.orgId]);
+        lockPhase = 2;
+        return { rows: [{ id }], rowCount: 1 };
+      }
+      if (sql.startsWith("SELECT id FROM esign_cases")) {
+        assert.equal(lockPhase, 2);
+        assert.deepEqual(params, [id, signer.orgId, id]);
+        lockPhase = 3;
+        return { rows: [{ id }], rowCount: 1 };
+      }
+      if (sql.startsWith("SELECT id FROM esign_versions")) {
+        assert.equal(lockPhase, 3);
+        assert.deepEqual(params, [id, id]);
+        lockPhase = 4;
+        return { rows: [{ id }], rowCount: 1 };
+      }
       if (sql.startsWith("SELECT state,pdf_bytes,final_pdf_bytes")) {
         return { rows: [{
           state: { documentDigest: stateDigest, signers: [{ id: signer.userId, role: "tenant", status: "pending_review" }] },
@@ -204,4 +230,6 @@ test("direct review submission requires complete, signer/version/digest-bound de
   await flow.pdf(signer, id, id, false);
   assert.equal(deliveries[0].payload.page, null);
   await requireReviewDelivery(c, binding, 2);
+  assert.equal(lockPhase, 0);
+  assert.equal(authorizedLoads, 9);
 });

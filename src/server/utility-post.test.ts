@@ -450,7 +450,9 @@ test("the electricity migration fails closed on posted duplicates and unknown me
   assert.equal(sql.includes("osl.ledger_transaction_id = i.ledger_transaction_id"), false);
   assert.match(sql, /k\.key NOT IN \('runId', 'lines', 'reversed'\)/);
   const posting = readFileSync(new URL("./utility-posting.ts", import.meta.url), "utf8");
-  const moveIn = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
+  const moveIn = readFileSync(new URL("./move-in-invoice.ts", import.meta.url), "utf8");
+  const domain = readFileSync(new URL("./domain.ts", import.meta.url), "utf8");
+  assert.match(domain, /import \{[^}]*issueMoveInInvoice[^}]*\} from "\.\/move-in-invoice"/);
   const numbers = readFileSync(new URL("./invoice-number.ts", import.meta.url), "utf8");
   assert.match(posting, /reserveInvoiceNumbers/);
   assert.match(moveIn, /nextInvoiceNumber/);
@@ -460,7 +462,7 @@ test("the electricity migration fails closed on posted duplicates and unknown me
   assert.equal(posting.includes("readingBySpace.get(space.space_id) ?? 0"), false);
   assert.equal(posting.includes("osl.ledger_transaction_id"), false);
   assertAllocationRunWritesUnitId(posting);
-  assertAllocationRunWritesUnitId(moveIn);
+  assertAllocationRunWritesUnitId(domain);
 });
 
 test("a missing allocation unit is filled from the meter before the rate-cap trigger", () => {

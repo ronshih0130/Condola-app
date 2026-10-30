@@ -56,6 +56,7 @@ for (const locale of locales) {
     await page.getByTestId("add-room").click();
     for (const [index, label] of ["A", "B", "C"].entries()) {
       await page.getByTestId(`room-${index}-label`).fill(label);
+      await page.getByTestId(`room-${index}-type`).selectOption("suite");
       await page.getByTestId(`room-${index}-rent`).fill("12000");
     }
     await page.getByTestId("wizard-next").click();
@@ -63,6 +64,7 @@ for (const locale of locales) {
     await expect(page.getByTestId("room-0-rent")).toHaveValue("12000");
     await expect(page.getByTestId("room-1-rent")).toHaveValue("12000");
     await expect(page.getByTestId("room-2-rent")).toHaveValue("12000");
+    for (const index of [0, 1, 2]) await expect(page.getByTestId(`room-${index}-type`)).toHaveValue("suite");
     await expect(page.locator(".steps")).not.toContainText("✓.");
     await page.getByTestId("wizard-next").click();
     await page.getByTestId("submit-property").click();

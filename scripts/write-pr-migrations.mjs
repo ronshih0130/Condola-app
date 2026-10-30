@@ -170,6 +170,14 @@ const added = {
     addOnly: false,
     reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
   },
+  "supabase/migrations/20261031100211_b001_esign_activation.sql": {
+    addOnly: false,
+    reason: "Adds private transaction-only completion requirements, early parent-lock guard triggers and deferred financial/actor postcondition; restricts helper/table privileges and adds a partial unique first-invoice index with duplicate preflight. No history rewritten or legal copy changed.",
+  },
+  "supabase/migrations/20261031100210_b008_first_period_basis.sql": {
+    addOnly: false,
+    reason: "Adds nullable versioned first-period source with trusted capture and signing/actor guards, restricted execution and no historical backfill. Existing unknown sources remain legacy full-rent; no data or columns removed.",
+  },
   "supabase/migrations/20261031100209_b009_bank_match_decisions.sql": {
     addOnly: false,
     reason: "Adds exact-file source registry and immutable decision tables/constraints plus owner-only gated bank-link write guards, permissions and default-OFF setting. No historical rewrite or duplicate-data backfill.",

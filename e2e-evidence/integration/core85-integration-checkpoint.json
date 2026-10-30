@@ -1,0 +1,41 @@
+{
+  "time_pt": "2026-10-29T23:28:50.637912-07:00",
+  "runtime_source_commit": "66c6c7453fa5155f3e0c97f3b6f2320664a9af2a",
+  "scope": "core85 local integration checkpoint, not acceptance/release",
+  "source_recoveries": [
+    "5d787551622b98c2255bdffa32ecac24226d6326",
+    "8895e8b228145f1baff8b97b6ad574222ab268b1",
+    "8bc6eb2c3cd9a433a1252c6928b91dceda0ff09c",
+    "f4fb5b1a9b126993b00f8d56fcb0a8311efa9c8a",
+    "191eb6ae2e0cd60efc3d15e576d85cf320850e23",
+    "ef416b1"
+  ],
+  "integration_native_review": "gpt-6-astra high: exactprep/combinedpage/runtime/registration/3testadjustments staticPASS. Independent flow8/8, migration2/2, lease9/9, importprofile+XLSX3/3. NotClaudeClassB.",
+  "validation": {
+    "fresh_supported_upgrade": "85SQL vs71+14; 11logicalcatalogcategoriesequal;2org/4property/5lease/1paymentcountsunchanged",
+    "function_privileges": "PASS isolatedlocalPG16cluster55436;anonexecute0,authenticatedallowlist7; unique scratchcleaned",
+    "initial_combined_unit": "563/565; two fixture references needed alignment after trusted-lock protocol and invoicehelper extraction, failures preserved",
+    "fixed_scoped": "e-sign35/35 and utilities+classifier+lease38/38 pass; fullcombinedgatepending",
+    "browser": "B008exact5d2/2 at390/1280; B004metadata8bc2/2; fourfollowups8/9 pluscorrected1/1. Oldcore83remainingbatchlivewith2stale roomtypeselectionfailures; newtestsetupreviewed, actualrerunpending"
+  },
+  "zero_total": "RONdecisionpending; explicitfailclosed, nofakeledger/emptytransaction; notwholeB001complete",
+  "staging": "NO-GO pendingauthorizednonMacschemaapplication+DBownerproof+exactcandidatechecks/ClaudeQA",
+  "logs": {
+    "core85-first-units.log": {
+      "sha256": "11e39bdb353e3eb5db37c3d83fddb0deffc7383de5759022f5e42a46df7dc739",
+      "bytes": 255137
+    },
+    "core85-registration-utilities-final.log": {
+      "sha256": "bc583a857f5b3b9bda5883eb3c17be21c63dccddbbe806e5c279b517545f2467",
+      "bytes": 7122
+    },
+    "core85-function-privileges.log": {
+      "sha256": "66023e686fe9dad0b66fbe4468ddac835e33d6df42e32d26a0d80cb07e660667",
+      "bytes": 3135
+    },
+    "core85-first-typecheck.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  }
+}
