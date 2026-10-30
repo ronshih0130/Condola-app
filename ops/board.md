@@ -21,3 +21,7 @@ B-001 Class B in_progress: reserve new20261031100201 internal-helper migration, 
 Packaging prerequisite: reserve write-pr-migrations.mjs, migration-classification.mjs and manifest regression test. Truthful classification of recovered historical files and deletion-aware guard; no historical SQL edited.
 
 Staging API401, missing historical b888ccd fixture and remaining acceptance evidence are scoped blockers, not done states. No deployments, scheduler activation, production reads or external messages.
+
+## Next integrated scope 2026-10-29T18:58:23.481493-07:00
+
+B-003 ClassB in_progress in the same single integration train, not a separate overlapping PR. Reserve the16 recovered payee-delta paths (settings/pay UI, payee components/rules/actions/service/tests/catalog,3 historical migrations, package registration, RPC allowlist), one new B003 audit gateway migration, payee integration/browser tests and B003 evidence. Preserve historical SQL bytes and existing B001/B005/B006 changes. A separate local preparation worktree may be used while an immutable candidate gate runs; shared changes integrate serially. Full-number display stays defaultOFF and cannot bypass audited authorization.

@@ -1,0 +1,16 @@
+{
+  "candidate": "697970bac90b3406a43252c406b7782854a4ff01",
+  "fresh_path": "72 files from empty schema",
+  "upgrade_path": "old32+39 recovered+1 authored",
+  "logical_catalog_equal": true,
+  "equal_categories": [
+    "columns",
+    "indexes",
+    "functions",
+    "relations",
+    "constraints"
+  ],
+  "different_categories": [],
+  "scope": "public/app logical columns/defaults, constraints, indexes, function bodies/effective execute ACLs, relation RLS/effective ACLs; physical column order and provider-owned auth schema excluded",
+  "sha256": "fd4d3c63ad16601ab5facaf2dee642c17b62c6e233224069f01996fa6b35322e"
+}

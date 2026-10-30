@@ -15,3 +15,7 @@ Full e-sign local suites: 4 tests passed (schema/service adapter, retained evide
 Manifest metadata now classifies recovered files and new permission migration truthfully; +/-diff guard rejects semantic historical modification/deletion and unknown additions. Pureguard and actualgeneratedpack smoke passed. All523 unit tests passed before final portableguard/CI metadata deltas; immutable next-candidate checks still required. Lint0errors/7existing warnings. BothCI YAMLs and actualephemeral-fixture steps validated without printing values.
 
 Service-role staging zero-rowread HTTP200 and app-profile406/PGRST106 verified. No customerdata returned. This resolves API credential concern, not stagedcandidate acceptance.
+
+## Local catalog and test isolation checkpoint 2026-10-29T18:58:23.481493-07:00
+
+Fresh72 and old32+39+1 upgrade paths have equal public/app logical catalogs (columns/defaults, constraints, indexes, function definitions/effective execute ACLs, relation RLS/effective ACLs). Provider-owned auth and physical column order are excluded. The full ID migration file passes7, fails0, skips1 solely per CEO historical-commit decision. Its cleanup now restores the3 captured function definitions; before/after catalog comparison has no drift. Evidence: pristine-catalog-comparison.json and id-test-catalog-isolation.json. This is local synthetic evidence, not staging or ClassB acceptance.
