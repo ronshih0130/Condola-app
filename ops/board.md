@@ -235,3 +235,11 @@ Published/mirrored baselinecf6a530. Root reserves existing `e2e/onboarding-progr
 ## B005 frozen local proof verified — 2026-10-30T16:11:51.580068-07:00
 
 Candidate `591564f232adc4e8e192c5dc3f8e52463bbd83a8`:599unit/358RLS+1priorapprovedhistoricalSKIP; builds/originalpreflight/Worker1/privatebrowser4PASS36.5s. Sixscreens, controlsrestored/OFF, no app/schema/legalchange. [Checkpoint](../e2e-evidence/B-005/checkpoint-591564f.md). Root final evidence review/bookkeeping/push/mirror serialized. Next sameB005 separate resendcontract/UI/mock; durable DBhandoff only. No new sourcewriter until this checkpoint is published.
+
+## B005 resend contract/UI/mock plan reservation — 2026-10-30T16:17:18.486284-07:00
+
+Published/mirrored baseline2b57eb3. Root reserves new pure resend rules/reference/result component/i18n/tests and private presentation spec/config, canonical proposed OFF flag entry, unit-test registration and serialized DB-handoff/evidence/queue/HANDOFF. Exact file assignments follow concrete highest plan review; no current parent/copy/rotate edit or real sender. Role sessioncfb7904b. Source plan outside work/B005-resend-contract-plan.md. Existing invitation generic audit captures whole row; no new invitation mutation or generic private-table audit in this scope. No operational migration/activation.
+
+## B005 resend pure partition exact ownership — 2026-10-30T16:20:03.033035-07:00
+
+Highest narrower plan GO; current parent/copy/rotate/mail code remains byte-unchanged. `initial_queue_reconciliation` owns new lib/portal-resend-state, server/test-portal-resend-memory + portal-resend-contract.test, components/portal-resend-result, i18n/portal-resend and e2e/b005-resend-result. Root owns unit registration, one unprovisioned OFF INVITE_RESEND_RESULTS registry entry, private presentation config/runner dispatch and serialized docs. `esign_activation_resume` drafts unapplied closed schema handoff outside repo only; highest reviewer is independent. No DB/provider/operational control writes.
