@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { afterBusyMark, notificationMarkResult, vendorTokenFromNotificationPath, type MarkDisplayState } from "./notification-mark-rules";
 
@@ -8,8 +8,10 @@ export function NotificationMarkForm({id,kind,mark,unread,busy,unknown}:{id:stri
   const router=useRouter(),inFlight=useRef(false);
   const [state,setState]=useState<MarkDisplayState>("idle");
   const [pending,setPending]=useState(false);
-  async function submit(event:FormEvent<HTMLFormElement>) {
-    event.preventDefault();if(inFlight.current) return;inFlight.current=true;setPending(true);
+  const [ready,setReady]=useState(false);
+  useEffect(()=>{setReady(true);},[]);
+  async function submit() {
+    if(inFlight.current) return;inFlight.current=true;setPending(true);
     try {
       const token=kind==="vendor"?vendorTokenFromNotificationPath(window.location.pathname):null;
       if(kind==="vendor" && !token) {setState("unknown");return;}
@@ -24,8 +26,8 @@ export function NotificationMarkForm({id,kind,mark,unread,busy,unknown}:{id:stri
       setState("unknown");
     } catch {setState("unknown");} finally {inFlight.current=false;setPending(false);}
   }
-  return <form onSubmit={submit}><p className="small" data-testid="notification-read-state" role={state==="unknown" || state==="unknownBusy"?"alert":undefined}>{state==="unknown" || state==="unknownBusy"?unknown:unread}</p>
-    <button className="btn" style={{minHeight:44}} data-testid="notification-mark" type="submit" disabled={pending}>{mark}</button>
+  return <div><p className="small" data-testid="notification-read-state" role={state==="unknown" || state==="unknownBusy"?"alert":undefined}>{state==="unknown" || state==="unknownBusy"?unknown:unread}</p>
+    <button className="btn" style={{minHeight:44}} data-testid="notification-mark" type="button" onClick={submit} disabled={!ready || pending}>{mark}</button>
     {(state==="busy" || state==="unknownBusy") ? <p role="status" data-testid="notification-mark-busy">{busy}</p> : null}
-  </form>;
+  </div>;
 }
