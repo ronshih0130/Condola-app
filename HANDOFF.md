@@ -150,3 +150,7 @@ Ron provided Downloads/staging-db-plan.md and explicitly ordered newstructurepro
 ## Autonomous resume 2026-10-30T12:12:46.728926-07:00
 
 Ronstates PEB013/B021stagingDBapplied and authorizes exact3-filedigestpatch historicalsourceexception; rootrechecks actualcatalogread-only and UTF8/bytecompatibility. No migration applied byMac. Following B013/B021, select lowesteligible BUILD-ORDER item; DBdependentparts goDownloads handoff/BLOCKED then skip, no waitingforgeneralpermission/no newprod/main/flagON. Nativeaudits are read-only untilpathreservation. Runtimecandidatewillbepinnedafterpatch.
+
+## Digest checkpoint / queue continuation 2026-10-30T12:28:36.879071-07:00
+
+Candidate `fbda2a0cc9ce592907632410e0eeea343dbdb5d2` exact fullgatePASS599unit/357RLS0FAIL1approvedhistoricalskip. Ron's3filehistoricaldigestpatch applied,6expressionsonly, noapp/ACL/flagchange; localUTF8parity10/10 and readonlystageUTF8/PG17/newhashhelpers/ownerEXEC/globalOFF verified. Stagehas5thresholdtables, notproposedestimate6/gateways. B13/B21DB-dependentremainder recordedBLOCKED and Downloads/b013-b021-remaining-db-handoff.md (repo copyB013evidence), no newSQLapplied. WholeB13/B21pending, settings/digestcheckpoint readyforpush. STOP POINT: WORKING_CONTINUOUS_QUEUE; next: reserve B001application-only formal-simulation boundary, rootcontrolsfullgate/push; ownerRon/Codex. No production/mainmerge/outwardmessages.

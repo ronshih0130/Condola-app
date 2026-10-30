@@ -1,0 +1,68 @@
+{
+  "scope": "LOCAL_READ_ONLY_HASH_VECTORS_NO_MIGRATION",
+  "encoding": "UTF8",
+  "pgcrypto_namespace": "public",
+  "vectors": [
+    {
+      "index": 0,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    },
+    {
+      "index": 1,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    },
+    {
+      "index": 2,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    },
+    {
+      "index": 3,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    },
+    {
+      "index": 4,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    },
+    {
+      "index": 5,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    },
+    {
+      "index": 6,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    },
+    {
+      "index": 7,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    },
+    {
+      "index": 8,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    },
+    {
+      "index": 9,
+      "equal": true,
+      "bytes32": true,
+      "hex64": true
+    }
+  ],
+  "nullAndEmptyDistinct": true
+}

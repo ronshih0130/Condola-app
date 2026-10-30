@@ -1,0 +1,70 @@
+{
+  "recordedAt": "2026-10-30T12:28:36.879071-07:00",
+  "candidate": "fbda2a0cc9ce592907632410e0eeea343dbdb5d2",
+  "state": "DIGEST_PATCH_FULL_LOCAL_GATE_PASS; B013_B021_WORKFLOW_DB_BLOCKED",
+  "userAuthorizedPatchSha256": "d9c092bce50b3dcac3a6f29c5595f1c9875dd030894e0e1e3822b691f5921745",
+  "scope": "6 hash expressions, 3 named historical source files; explicit Ron exception only; app/ACL/flags unchanged",
+  "gate": {
+    "result": "PASS",
+    "summary": "e2e/results/gate-fbda2a0cc9ce592907632410e0eeea343dbdb5d2.md",
+    "counts": {
+      "test-unit.log": {
+        "tests": 599,
+        "pass": 599,
+        "fail": 0,
+        "skipped": 0
+      },
+      "test-rls.log": {
+        "tests": 358,
+        "pass": 357,
+        "fail": 0,
+        "skipped": 1
+      }
+    },
+    "skip": "one prior approved historical commit lost only"
+  },
+  "localParity": {
+    "encoding": "UTF8",
+    "vectors": 10,
+    "allEqualOldNewAndNodeCrypto": true,
+    "nullEmptyDistinct": true,
+    "scope": "READ ONLY; actual local pgcrypto namespace used"
+  },
+  "staging": {
+    "scope": "READ ONLY schema/function/role metadata, not functional ON or deployed app acceptance",
+    "encoding": "UTF8",
+    "version_num": "170011",
+    "patchedFunctionSitesObserved": 6,
+    "ownersCanExecuteBuiltins": true,
+    "globalFlagsOff": true,
+    "thresholdTables": [
+      "b013_default_revisions",
+      "b013_default_roots",
+      "b013_override_revisions",
+      "b013_policy_commands",
+      "b013_regional_defaults"
+    ],
+    "estimateFoundationAndGateways": "absent from relevant catalog; DB-dependent remainder handed off"
+  },
+  "boundaries": "No operational migration or new proposal SQL applied by Mac; standard gate on guarded synthetic existing prepared local harness; no fresh current-patch catalog replay claimed; no prod/main merge/realmessages",
+  "nativeReview": "exact patch staticPASS, conditionalUTF8 parity/catalog requirements now supplied; reviewer actualmodel/effortunknown; notClaudeClassB",
+  "next": "Publishsettings/digestcheckpoint; B013/B021 DBdependency BLOCKED; select lowest eligible B001 simulation boundary perqueue",
+  "artifacts": {
+    "b013-digest-full-gate.log": {
+      "sha256": "dea4df3e7967f2a8bcf9aa09b183922f727cd59f328849b9a23b6e7bcfe1ffb4",
+      "bytes": 470
+    },
+    "b013-digest-vectors.json": {
+      "sha256": "0060748617ad0c407e4cd127efa62e98fec8ba58446eec8ec9791b261094a867",
+      "bytes": 1116
+    },
+    "b013-staging-readonly-expanded-20261030.json": {
+      "sha256": "86b37a01c7d980e67831116a6cec6fbc3a45471d70f4ebdf77ca6c6388552fc2",
+      "bytes": 9215
+    },
+    "b013-b021-remaining-db-handoff.md": {
+      "sha256": "00707cd8acd3e9d3e9b817795523f5da06ae95bae264fb5dca27ac86b5410cc3",
+      "bytes": 5477
+    }
+  }
+}

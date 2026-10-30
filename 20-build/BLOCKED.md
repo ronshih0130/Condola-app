@@ -110,3 +110,11 @@ CLOSE-QA-93 follow-up 2026-10-30T10:51:14.328732-07:00: PE deterministicboundten
 - B011 preview-stream and B010/B028 real-producer issues remain OPEN; this fixture/gate repair does not implement those features or resume those lanes. B019 queue still not started.
 
 Evidence: [gate fix](../e2e-evidence/B-013/gate-fix-f419aa6.json), [candidate gate](../e2e/results/gate-f419aa6e454162b9bf48ebdfbe6a0b8c903441b9.md), [PE proposal](../e2e-evidence/B-013/b013-db-handoff.md). No production, external messages or legal-copy changes.
+
+## Autonomous resume: B013/B021 remaining dependency 2026-10-30T12:28:36.879071-07:00
+
+**B013-DIGEST — RESOLVED**: explicit Ron patch applied on `fbda2a0cc9ce592907632410e0eeea343dbdb5d2`, six hash sites in18/20/21 only. Full clean localgatePASS599unit/357RLS0FAIL1priorhistoricalSKIP. LocalUTF8 old/new/nodecrypto parity10/10, stagingUTF8/PG17 installednewhashhelpers+ownerbuiltinEXEC+globalflagsOFF read-only metadata verified. No manual migration or new proposal applied.
+
+**B013/B021 ESTIMATE_WORKFLOW_DB — OPEN / DEPENDENCY, skip only this scope**: actual staging has five owner threshold tables and their gateways; proposed six version/decision/emergency/command/intent tables and operative new gateways/public-writer guards are absent. This does not dispute PE's deployed settings slice. `~/Downloads/condola-bootstrap/b013-b021-remaining-db-handoff.md` consolidates exact missing structure/contract and references the already written concrete foundation DDL; no apply-ready gateway bodies or authority are claimed. Repo copy: e2e-evidence/B-013/b013-b021-remaining-db-handoff.md. Owner PE/Ron/Codex; next: approvednonMac DBentry/validation/application/notice. FlagsOFF; wholeB013/B021 notdone. Whilepending, userdirects lowest eligible nonDB item rather thanwait.
+
+**B001 FORMAL_SIMULATION_BOUNDARY — next eligible nonDB source gap**: current `simulateTenantSignature` lacks actualsandbox boundary, managerpage showscontrol forformalorg, CAP-M-01 requires formalhide+auditedserverdeny and sandboxpreservation. Source-firstapplication-onlyplan reviewed; no newDBschema/grantproposed. Reserve one sourcewriter beforeimplementation; existing autoactivation/zero invoice notrebuilt. OtherB lanes unchanged.
