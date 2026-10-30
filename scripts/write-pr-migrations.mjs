@@ -170,6 +170,10 @@ const added = {
     addOnly: false,
     reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
   },
+  "supabase/migrations/20261031100212_b010_b028_local_events.sql": {
+    addOnly: false,
+    reason: "Adds default-OFF private local notification and payment-transition tables with constraints, restricted gateways, deferred financial/event guards and legacy-writer fences; due-email personal preference alone defaults ON. No external delivery or historical backfill.",
+  },
   "supabase/migrations/20261031100213_b001_zero_first_invoice.sql": {
     addOnly: false,
     reason: "Replaces only the deferred completion financial postcondition to support Ron-approved explicit zero-total first invoice with no ledger transaction, entries or payment allocations and actual-actor no_amount_due audit; preserves positive branch and published100211.",

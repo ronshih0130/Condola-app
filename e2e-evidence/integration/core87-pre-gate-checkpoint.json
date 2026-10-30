@@ -1,0 +1,48 @@
+{
+  "time_pt": "2026-10-30T01:44:40.209217-07:00",
+  "integration_before_registry": "7a35a603991fadb5c954ce0ea638fb9dfc402b6d",
+  "source_recovery": "7e8a3ee0b7153955d051b03ed86883b0c253d2b2",
+  "schema_sources": 87,
+  "local_validation": {
+    "B010_native": "Astra scoped source integration PASS89a5ffa runtime+7e8a3ee classes; notClassBClaude",
+    "B010_prior_runtime": "40/40 targeted fresh-seeded and3actualbrowsercases attributed to earlier reviewed source; stylingrerunpending",
+    "registrations": "14/14PASS,typecheckPASS,lint0errors7warnings;Astra scopedstaticPASS;registrywordingclarified",
+    "catalog": "fresh87 versus untouched71+16 all11categoriesequal;synthetic2/4/5/1preserved",
+    "function_privileges": "PASS isolatedPG16cluster;anon0publicEXECUTE;authenticated7allowlist",
+    "complete_candidate_gate_build_browser": "PENDING newimmutableSHA;earlierexacta305gate/build/preflight/WorkerPASS nottransferred",
+    "core86_full_browser": "RUNNING isolateda305;earlyENOSPCB001zero1280failed,rawfailurepreserved,reclaimed~7GBinactivecache;notfullPASS",
+    "staging": "READONLYmetadataowner-membership+rolecapabilityPASS,newcompletion/remindersschemaABSENT;noMacmigration;NO-GO",
+    "B011": "all3Ronpoliciesresolved;handover+settlementcontractunderindependentreview;new14unintegrated",
+    "queue": "full39goalACTIVE incomplete"
+  },
+  "private_logs": {
+    "core87-registration-typecheck.log": {
+      "bytes": 43,
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e"
+    },
+    "core87-registration-lint.log": {
+      "bytes": 2347,
+      "sha256": "ab8acbe3faa3a4304aa2c892080323c2b574eafc9a62ec9ee5a1fd8c61c1830a"
+    },
+    "core87-registration-unit.log": {
+      "bytes": 2687,
+      "sha256": "a9e08eaa08cf0f19356997d701311762757d4d96c6fefd23991b673d3956511d"
+    },
+    "core87-catalog-replay.log": {
+      "bytes": 43833,
+      "sha256": "a9f725c8086f4523102619e53fb6da3fe18e07cfe0e9bf6ddc905a5774820e50"
+    },
+    "core87-catalog-comparison.json": {
+      "bytes": 13908,
+      "sha256": "f019e0b651084de3886ef31c16be897adbf3d0ca4993bf9d26bc7487a070e18d"
+    },
+    "core87-function-privileges.log": {
+      "bytes": 3135,
+      "sha256": "66023e686fe9dad0b66fbe4468ddac835e33d6df42e32d26a0d80cb07e660667"
+    },
+    "staging-role-metadata-probe.log": {
+      "bytes": 277,
+      "sha256": "34da0a0f2f23c6d625ea2bb9a03d04d02c203a95918385f0324975216dcc07a1"
+    }
+  }
+}
