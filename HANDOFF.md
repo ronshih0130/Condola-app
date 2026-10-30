@@ -1,5 +1,11 @@
 # Mode B bootstrap acceptance
 
+## Latest continuous-queue checkpoint — 2026-10-30T16:49:08.418530-07:00
+
+B006 ClassA candidate `9bbf04a300f073256bc9a7c887f3c6025b84c5ee` locally verified:607unit/358RLS PASS0FAIL1priorhistoricalSKIP, Next19.422s/CF28.690s/originalpreflight3.366s/Worker1 and fresh actualregionalbrowser2PASS18.1s,4screens390/1280. CSV initial+corrected commits preserve IDs/lines3、5→7 source lines and produce3properties/3units/1room/3leases; unsupported profile and1904 reject without rows. Exact org region/flags restored against same-source seeded build;0optins/metadata mismatch/blocked properties. Two wrong-template readback probes preserved and corrected; no importer failure waived. [Checkpoint](e2e-evidence/B-006/checkpoint-9bbf04a.md), [manifest](e2e-evidence/B-006/http-boundary-9bbf04a.json).
+
+Whole B006 pending authorized customer fixture/disposition and exact staging; no new ClassB gate. B005 simulationa95/notes6ee and its closed unapplied PE handoff remain pending durable/operational acceptance; earlier B001–B004/B013/B021 remainders unchanged. No wholeB newlydone, prod/mainmerge/Macoperationalmigration/activation/externalmessage/legaledit. STOP POINT: WORKING; next: publish/mirror then B007 ClassB deposit matrix with exact control restoration; owner: Ron/Codex.
+
 ## Latest continuous-queue checkpoint — 2026-10-30T16:32:51.873431-07:00
 
 B005 preparatory resend candidate `a95c7e1c86788d60b2eab2cb9405f494816fb75d` locally verified:607unit/358RLS PASS0FAIL1priorapprovedhistoricalSKIP, Next24.421s/Cloudflare30.344s/originalpreflight3.338s/Worker1 and four bilingual390/1280 presentation previews PASS3.0s. Shared result renderer and explicit memory reference always identify simulation; operational parents/copy/rotate/mail unchanged. No durable authorization, real send or authenticated-route claim. [Checkpoint](e2e-evidence/B-005/resend-checkpoint-a95c7e1.md), [manifest](e2e-evidence/B-005/resend-boundary-a95c7e1.json).

@@ -251,3 +251,7 @@ Candidate `a95c7e1c86788d60b2eab2cb9405f494816fb75d` has final607unit/358RLS+1pr
 ## B006 private real-import proof reservation — 2026-10-30T16:35:30.470025-07:00
 
 After published/mirrored6eea415, highest source-first plan GO. Root reserves existing e2e/import-region.spec.ts and new e2e/b006-import-private-playwright.config.ts for one writer; root owns narrow runner dispatch/private launcher/docs. No application/parser/schema/seed/package/legal edit. Reuse existing source/current wrap fix; preserve real CSV/resubmission/counts/unsupported/1904 checks, harden exact-origin/privacy and verified region/flag restoration. ClassA; customer fixture and current staging remain separate dependent scope. No source execution before exact review.
+
+## B006 ClassA local proof verified — 2026-10-30T16:49:08.418530-07:00
+
+Candidate `9bbf04a300f073256bc9a7c887f3c6025b84c5ee`:607unit/358RLS+1priorhistoricalSKIP, builds/preflight/Worker1/browser2 PASS. Independent frozen source/manifest/log/image verdict passed; root serializes latest bookkeeping/log/commit/push/mirror. Customer fixture/current stage remain pending. Source readback comparison errors preserved, no product failure or extra skip. Next B007 is ClassB and starts after publication; no new app/schema/flag activation.

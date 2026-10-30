@@ -13,7 +13,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-003 | Finish payee details and full access audit; activation: **Ron decides** | MGT-04, TEN-06; J3.3; CAP-M-03, CAP-T-03; T-08 | Existing payee lane | PAYEE_DETAILS_ENABLED | B | M / 16–24 | pending |
 | B-004 | Verify paper lease versions, tenant downloads and audit | MGT-10, TEN-03; J2.6/7; CAP-M-02, CAP-T-02 | — | PAPER_LEASE_VERSIONS_ENABLED; TENANT_SIGNED_PDF_ENABLED | B | S / 6–10 | pending |
 | B-005 | Onboarding, invitations and resumable trial | MGT-01/02/03/28; J1; CAP-M-04/05/28; P-10 | — | TEAM_INVITES_ENABLED; ONBOARDING_PROGRESS* | B | M / 16–24 | pending |
-| B-006 | Import error detail and regional source formats | MGT-05; J2.1; CAP-M-06 | — | IMPORT_ERROR_DETAILS* | A | S / 6–10 | in_progress |
+| B-006 | Import error detail and regional source formats | MGT-05; J2.1; CAP-M-06 | — | IMPORT_ERROR_DETAILS* | A | S / 6–10 | pending |
 | B-007 | Deposit rule hints and excess-reason audit | MGT-08; J2.3; CAP-M-07 | — | DEPOSIT_RULE_HINTS* | B | M / 12–20 | in_progress |
 | B-008 | Billing, utility and statement amount previews | MGT-12/26; J3.1/J7; CAP-M-08/22; M-40 | — | BILLING_PREVIEWS* | B | M / 20–32 | in_progress |
 | B-009 | Bank CSV dedupe and manual matching | MGT-14; J3.5; CAP-M-10/23 | — | BANK_MATCHING* | B | M / 16–24 | in_progress |
@@ -112,3 +112,7 @@ Candidate `591564f232adc4e8e192c5dc3f8e52463bbd83a8` passes final gate599unit/35
 ## B005 preparatory resend checkpoint — 2026-10-30T16:32:51.873431-07:00
 
 Candidate `a95c7e1c86788d60b2eab2cb9405f494816fb75d` locally verifies pure simulation contract/shared renderer:607unit/358RLS+1priorhistoricalSKIP, builds/preflight/Worker1/preview4 PASS. [Evidence](../e2e-evidence/B-005/resend-checkpoint-a95c7e1.md). Actual onboarding/report checkpoint remains591564f. B005 now `pending` for the PE-dependent durable gateways/schema/audit/UNKNOWN recovery and exact stage/Claude acceptance; closed source-reviewed handoff is in Downloads/condola-bootstrap/b005-db-handoff.md, unapplied and not executable. No real sender or activation. After publish/mirror, choose B006; its old mobile-wrap finding is already fixed, so reconcile and harden current real-import evidence rather than rewrite the parser. B006 remains ClassA.
+
+## B006 ClassA local import checkpoint — 2026-10-30T16:49:08.418530-07:00
+
+Candidate `9bbf04a300f073256bc9a7c887f3c6025b84c5ee` locally verified:607unit/358RLS+1priorhistoricalSKIP, builds/originalpreflight/Worker1 and actual regional browser2PASS18.1s with4screens390/1280. [Proof](../e2e-evidence/B-006/checkpoint-9bbf04a.md). Existing CSV/resubmission and rejection paths reused; no app/parser/schema change. Exact seeded-baseline restore/readback passes; two prior wrong-template probes retained. Whole B006 now `pending` for authorized customer sample/disposition and exact staging. ClassA independent Codex review applies, not a new ClassB gate. Publish/mirror, then B007 (ClassB) existing deposit matrix/control-restoration proof.
