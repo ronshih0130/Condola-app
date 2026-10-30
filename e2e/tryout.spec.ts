@@ -1,5 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
+import { Client } from "pg";
+import { disposableDbUrl } from "../src/server/test-disposable-db";
+import { ORG_ID, USERS } from "../src/server/ids";
 import { ACCOUNTS, resetDemo, signIn } from "./session";
+
+const databaseUrl = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE).href;
+async function db<T>(run: (client: Client) => Promise<T>) {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try { return await run(client); } finally { await client.end(); }
+}
 
 const locales = [
   {
@@ -155,6 +165,10 @@ for (const locale of locales) {
     const paymentForm = page.locator("form").filter({ has: page.getByTestId("submit-payment") });
     await expect(paymentForm).toHaveCount(1);
     const paymentRequestId = await paymentForm.locator('input[name="requestId"]').inputValue();
+    const paidOn = await paymentForm.locator('input[name="paidOn"]').inputValue();
+    const scope = await db(async client => (await client.query<{ org: string; payer: string; property: string; currency: string }>(`SELECT l.org_id::text AS org,p.contact_id::text AS payer,l.property_id::text AS property,l.currency::text AS currency FROM leases l JOIN organizations o ON o.id=l.org_id AND o.environment='sandbox' AND o.live_org_id=$2 JOIN lease_parties p ON p.org_id=l.org_id AND p.lease_id=l.id AND p.role='primary' WHERE l.id=$1`, [leaseId, ORG_ID])).rows);
+    expect(scope).toHaveLength(1);
+    expect(await db(async client => (await client.query(`SELECT id FROM payments WHERE lease_id=$1 AND org_id=$2`, [leaseId, scope[0].org])).rows)).toHaveLength(0);
     expect(paymentRequestId).toMatch(/^[0-9a-f-]{36}$/i);
     const leasePath = new URL(page.url()).pathname;
     const paymentResponse = page.waitForResponse(response => {
@@ -165,14 +179,14 @@ for (const locale of locales) {
     await page.getByTestId("submit-payment").click();
     const response = await paymentResponse;
     expect(response.status()).toBeLessThan(400);
-    for (const name of ["location", "x-action-redirect"]) {
-      const destination = response.headers()[name];
-      if (destination) {
-        expect(destination).not.toContain("error=");
-        expect(destination).toContain(`${leasePath}?tab=ledger`);
-      }
-    }
-    expect(await response.finished()).toBeNull();
+    const destination = response.headers()["x-action-redirect"] ?? response.headers().location;
+    expect(destination).toBeTruthy();
+    expect(destination).not.toContain("error=");
+    expect(destination).toContain(`${leasePath}?tab=ledger`);
+    // The OFF path does not persist requestId. The exact new lease and its
+    // zero-before/one-after cohort correlate this DB row with the form POST.
+    const payments = await db(async client => (await client.query<{ org: string; payer: string; property: string; currency: string; amount: string; paid_on: string; last5: string; status: string; source: string; submitted: string; confirmed: string }>(`SELECT org_id::text AS org,payer_contact_id::text AS payer,property_id::text AS property,currency::text AS currency,amount_minor::text AS amount,paid_on::text,payer_account_last5::text AS last5,status::text,source::text,submitted_by::text AS submitted,confirmed_by::text AS confirmed FROM payments WHERE lease_id=$1 AND org_id=$2`, [leaseId, scope[0].org])).rows);
+    expect(payments).toEqual([{ org: scope[0].org, payer: scope[0].payer, property: scope[0].property, currency: scope[0].currency, amount: String(due), paid_on: paidOn, last5: "54321", status: "confirmed", source: "manager_entry", submitted: USERS.admin, confirmed: USERS.admin }]);
     await page.goto("/m/payments");
     const paymentRow = page.getByRole("row").filter({ hasText: "試用房客" }).filter({ hasText: "松德試用" });
     await expect(paymentRow).toHaveCount(1);
