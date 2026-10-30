@@ -150,12 +150,12 @@ test('current owner contact pins also serialize otherwise distinct property witn
 
 test('only fixed gateways are executable by service; policy tables and internal helpers remain private',async()=>{
  const functions=(await db.query(`SELECT p.oid::regprocedure::text signature,p.proname name FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname LIKE 'b013_%'`)).rows;
- const allowed=new Set(['b013_owner_view','b013_change_default','b013_default_status','b013_close_default','b013_finish_default']);
+ const allowed=new Set(['b013_owner_view','b013_change_default','b013_default_status','b013_close_default','b013_finish_default','b013_change_override','b013_override_status','b013_close_override','b013_finish_override']);
  for(const role of ['anon','authenticated','service_role']){
   for(const fn of functions)assert.equal((await db.query(`SELECT has_function_privilege($1,$2,'EXECUTE') ok`,[role,fn.signature])).rows[0].ok,role==='service_role'&&allowed.has(fn.name),`${role}:${fn.name}`);
   for(const table of ['b013_regional_defaults','b013_default_roots','b013_default_revisions','b013_override_revisions','b013_policy_commands'])for(const privilege of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE'])assert.equal((await db.query(`SELECT has_table_privilege($1,$2,$3) ok`,[role,'app.'+table,privilege])).rows[0].ok,false);
  }
- assert.equal(functions.filter(f=>allowed.has(f.name)).length,5);
+ assert.equal(functions.filter(f=>allowed.has(f.name)).length,9);
 });
 
 test('actual sandbox default write is isolated and a recorded request cannot adopt a new live organization',async()=>{

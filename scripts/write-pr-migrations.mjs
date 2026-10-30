@@ -182,6 +182,10 @@ const added = {
     addOnly: false,
     reason: "Adds a default-OFF private hash-only contact-edit command table, scoped cascade constraints, immutable and deferred authorization guards, and fixed service-only edit/view/status/close/final-check gateways with restricted grants. No legacy contact, login identity, historical source or financial rows are rewritten.",
   },
+  "supabase/migrations/20261031100221_b013_owner_repair_override.sql": {
+    addOnly: false,
+    reason: "Adds restricted service-only property-override change/status/close/final-check functions using the existing public column and private immutable revision/command tables. Changes restricted privileges and the explicit authorized write path; no historical values rewritten, new tables, public workflow triggers or estimate approval/dispatch authority."
+  },
   "supabase/migrations/20261031100220_b013_owner_repair_policy.sql": {
     addOnly: false,
     reason: "New private owner-policy roots, immutable revisions and command tables with NOT NULL/CHECK/FK constraints and restricted service-only functions. Existing property override values are retained unchanged; no public repair workflow trigger or estimate/dispatch authority. Default-OFF platform control and explicit authorized default-change audit only."

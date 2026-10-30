@@ -15,7 +15,9 @@ export function OwnerRepairPolicyEditor({locale,scope,propertyId,view}:{locale:L
  function remember(id:string|null){request.current=id;setRequestId(id);}
  async function post(body:Record<string,string>){const response=await fetch('/api/owner-repair-policy',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify(body)});if(!response.ok)throw new Error('Unconfirmed operation');return await response.json() as unknown;}
  async function send(mode:'change'|'status'|'close',id:string,payload:Record<string,string>={}){
-  if(working.current)return;const epoch=generation.current;working.current=true;setPhase('pending');
+  if(working.current||!active.current)return;
+  try{if(sessionStorage.getItem(key)!==id){setPhase('storage');return;}}catch{setPhase('storage');return;}
+  const epoch=generation.current;working.current=true;setPhase('pending');
   try{const value=await post({mode,propertyId,requestId:id,...payload});if(!active.current||epoch!==generation.current||request.current!==id)return;
    if(sessionStorage.getItem(key)!==id){setResult({status:'unknown'});setPhase('storage');return;}
    if(!isOwnerRepairResult(value,id)){setResult({status:'unknown'});setPhase('unknown');return;}
@@ -60,7 +62,7 @@ export function OwnerRepairPolicyEditor({locale,scope,propertyId,view}:{locale:L
   {phase==='editing'&&capture&&view.state==='enabled'?<form onSubmit={save} style={{display:'grid',gap:16,marginTop:16}} data-testid="repair-default-form">
    <label style={{display:'grid',gap:6}}><span>{copy.action}</span><select className="inp" style={{minHeight:44}} value={action} onChange={e=>setAction(e.target.value as 'set'|'clear')}><option value="set">{copy.set}</option><option value="clear">{copy.clear}</option></select></label>
    {action==='set'?<label style={{display:'grid',gap:6}}><span>{copy.amount} ({capture.currency})</span><input className="inp" style={{minHeight:44}} name="threshold" inputMode="decimal" autoComplete="off" maxLength={64} value={amount} onChange={e=>{setAmount(e.target.value);setInvalid(false);}} required/></label>:<p>{copy.clearNote}</p>}
-   {invalid?<p role="alert">{copy.invalid}</p>:null}<div style={{display:'flex',flexWrap:'wrap',gap:8}}><button className="btn pri" style={{minHeight:44}} type="submit">{copy.save}</button><button className="btn" style={{minHeight:44}} type="button" onClick={()=>{setCapture(null);setPhase('idle');}}>{copy.cancel}</button></div>
+   {invalid?<p role="alert">{copy.invalid}</p>:null}<div style={{display:'flex',flexWrap:'wrap',gap:8}}><button className="btn pri" style={{minHeight:44}} type="submit">{copy.save}</button><button className="btn" style={{minHeight:44}} type="button" onClick={()=>{setCapture(null);setPhase('unavailable');}}>{copy.cancel}</button></div>
   </form>:null}
   {(phase==='idle'||phase==='loading')&&view.state==='enabled'?<button className="btn" type="button" style={{minHeight:44,marginTop:12}} disabled={phase==='loading'} onClick={()=>void start()}>{copy.edit}</button>:null}
   {phase==='unavailable'?<p role="alert">{copy.unavailable}</p>:null}
