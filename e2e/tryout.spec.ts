@@ -28,6 +28,8 @@ test.beforeEach(async ({ page }) => {
 
 for (const locale of locales) {
   test(`try-out tasks ${locale.code}`, async ({ page }) => {
+    await page.goto("/api/env?set=sandbox&next=/m");
+    await expect(page.getByTestId("env-banner")).toBeVisible();
     await page.goto(`/api/demo/locale?set=${locale.code}&next=/m/properties/new`);
     await expect(page.getByTestId("property-name")).toHaveValue("");
     await expect(page.getByTestId("owner-name")).toHaveValue("");

@@ -316,7 +316,7 @@ export default async function LeasePage({
                     <div className="small muted">{managerSig?.signed_at ? t("i_signed_at", { time: managerSig.signed_at }) : t("i_sign_pending")}</div>
                   </li>
                 </ul>
-                {tenantSig?.status !== "signed" ? (
+                {session.environment === "sandbox" && !session.needsSandbox && tenantSig?.status !== "signed" ? (
                   <form action={actionSimulateSign}>
                     <input type="hidden" name="leaseId" value={id} />
                     <button className="btn pri lg block" type="submit" data-testid="simulate-tenant-sign">

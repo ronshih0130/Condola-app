@@ -29,7 +29,7 @@ import { assertPerm } from "./perms";
 import { leaseIdentityReady } from "./id-docs";
 import { authEmailTaken, portalLoginEmail } from "./portal-login";
 import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSecret } from "./portal-invite";
-import { assertTicketStatus } from "./repair-rules";
+import { assertTicketStatus, isUuid } from "./repair-rules";
 import { assertTeamInvitesAllowed } from "./team-invites";
 import { assertStaff, type OrgRole, type Session } from "./types";
 
@@ -1498,7 +1498,7 @@ async function queueDemoNotice(client: Client, leaseId: string, eventType: strin
       channel: "line",
       leaseId,
       note: plan.error,
-    });
+    }, client);
   }
 }
 
@@ -1506,11 +1506,9 @@ export async function recordLeaseNotice(leaseId: string, eventType: string) {
   await svc(null, (client) => queueDemoNotice(client, leaseId, eventType));
 }
 
-export async function signLease(session: Session, input: { leaseId: string; signedName: string; consent: boolean }) {
-  if (!input.consent) throw new FlowError("errors.consentRequired");
-  if (!input.signedName.trim()) throw new FlowError("errors.required");
+type SignLeaseInput = { leaseId: string; signedName: string; consent: boolean };
 
-  const result = await svc(session.userId, async (client) => {
+async function signLeaseOn(client: Client, session: Session, input: SignLeaseInput, simulation?: { contactId: string; signatureId: string }) {
     const lease = await maybe<{ id: string; document_sha256: string; org_id: string; esign: string } & FirstPeriodLeaseSource>(
       client,
       `SELECT id, document_sha256, org_id, esign_status::text AS esign, first_period_basis, rent_amount_minor::text, currency,
@@ -1530,34 +1528,45 @@ export async function signLease(session: Session, input: { leaseId: string; sign
       `SELECT id, role::text FROM org_members WHERE org_id = $1 AND user_id = $2 AND status = 'active'`,
       [session.orgId, session.userId],
     );
-    const asTenant = Boolean(contact) && session.kind === "tenant";
+    const asTenant = simulation ? true : Boolean(contact) && session.kind === "tenant";
     const asManager = Boolean(member) && (member?.role === "admin" || member?.role === "manager") && !asTenant;
     if (!asTenant && !asManager) throw new FlowError("errors.forbidden");
     validateFirstPeriodSource(lease, true);
-    if (!(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
+    if (!simulation && !(await leaseIdentityReady(client, input.leaseId))) throw new FlowError("errors.idDocRequired");
     const role = asTenant ? "tenant" : "manager";
     const signature = await maybe<{ id: string }>(
       client,
       `SELECT id FROM lease_signatures
         WHERE lease_id = $1 AND signer_role = $2::signer_role AND status <> 'signed'
+          AND ($3::uuid IS NULL OR (contact_id = $3::uuid AND id = $4::uuid AND status IN ('pending','viewed')))
         ORDER BY signing_order LIMIT 1`,
-      [input.leaseId, role],
+      [input.leaseId, role, simulation?.contactId ?? null, simulation?.signatureId ?? null],
     );
     if (!signature) throw new FlowError("errors.alreadySigned");
     await client.query(
       `UPDATE lease_signatures
-          SET status = 'signed', signed_name = $2, document_sha256 = $3, consent_text_key = 'lease.consent',
-              signed_at = now(), ip_address = '127.0.0.1', user_agent = 'condola-demo'
+          SET status = 'signed', signed_name = $2, document_sha256 = $3, consent_text_key = CASE WHEN $4::boolean THEN NULL ELSE 'lease.consent' END,
+              signed_at = now(), ip_address = '127.0.0.1', user_agent = CASE WHEN $4::boolean THEN 'condola-sandbox-simulation' ELSE 'condola-demo' END
         WHERE id = $1`,
-      [signature.id, input.signedName.trim(), lease.document_sha256],
+      [signature.id, input.signedName.trim(), lease.document_sha256, Boolean(simulation)],
     );
-    await client.query(
-      `INSERT INTO lease_signature_events (org_id, signature_id, event, actor_user_id, ip_address, user_agent, document_sha256)
-       VALUES ($1,$2,'viewed_document',$3,'127.0.0.1','condola-demo',$4),
-              ($1,$2,'consented',$3,'127.0.0.1','condola-demo',$4),
-              ($1,$2,'signed',$3,'127.0.0.1','condola-demo',$4)`,
-      [session.orgId, signature.id, session.userId, lease.document_sha256],
-    );
+    if (simulation) {
+      await client.query(
+        `INSERT INTO lease_signature_events (org_id, signature_id, event, actor_user_id, user_agent, document_sha256, details)
+         VALUES ($1,$2,'signed',$3,'condola-sandbox-simulation',$4,
+                 jsonb_build_object('origin','sandbox_simulation','subject_contact_id',$5::text))`,
+        [session.orgId, signature.id, session.userId, lease.document_sha256, simulation.contactId],
+      );
+      await writeAudit(session.orgId, session.userId, "tenant_signature_simulated", { origin: "sandbox_simulation", leaseId: input.leaseId }, client);
+    } else {
+      await client.query(
+        `INSERT INTO lease_signature_events (org_id, signature_id, event, actor_user_id, ip_address, user_agent, document_sha256)
+         VALUES ($1,$2,'viewed_document',$3,'127.0.0.1','condola-demo',$4),
+                ($1,$2,'consented',$3,'127.0.0.1','condola-demo',$4),
+                ($1,$2,'signed',$3,'127.0.0.1','condola-demo',$4)`,
+        [session.orgId, signature.id, session.userId, lease.document_sha256],
+      );
+    }
     const remaining = await one<{ n: string }>(
       client,
       `SELECT count(*)::text AS n FROM lease_signatures WHERE lease_id = $1 AND status <> 'signed'`,
@@ -1575,7 +1584,12 @@ export async function signLease(session: Session, input: { leaseId: string; sign
     const invoiceId = await issueMoveInInvoice(client, input.leaseId);
     await queueDemoNotice(client, input.leaseId, "rent_due");
     return { esign: "fully_signed" as const, invoiceId };
-  });
+}
+
+export async function signLease(session: Session, input: SignLeaseInput) {
+  if (!input.consent) throw new FlowError("errors.consentRequired");
+  if (!input.signedName.trim()) throw new FlowError("errors.required");
+  const result = await svc(session.userId, (client) => signLeaseOn(client, session, input));
   if (result.esign === "fully_signed") await markTryout(session.orgId, "lease");
   return result;
 }
@@ -1669,26 +1683,121 @@ export async function uploadSignedLeasePdf(
   return result;
 }
 
-/** Demo shortcut: sign the tenant side without switching personas. Both languages use the same action. */
+// The sandbox shortcut uses bounded cohorts; exceeding a cap is a denial,
+// never permission to select an arbitrary first party or signature.
+const SIMULATION_COHORT_CAP = 50;
+
+async function simulationContextValid(client: Client, session: Session) {
+  const row = await maybe<{ ok: boolean }>(client, `SELECT EXISTS (
+    SELECT 1 FROM organizations selected
+    JOIN organizations live ON live.id=$3::uuid AND live.environment='live' AND live.live_org_id IS NULL
+    JOIN org_members m ON m.org_id=live.id AND m.user_id=$1::uuid AND m.status='active'
+      AND m.role::text=$6 AND m.role IN ('admin','manager')
+    JOIN auth_sessions a ON a.id=$2::uuid AND a.user_id=$1::uuid AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()
+    WHERE selected.id=$4::uuid AND selected.environment::text=$5
+      AND (($5='live' AND selected.id=live.id) OR ($5='sandbox' AND selected.live_org_id=live.id))
+  ) AS ok`, [session.userId, session.sessionId, session.liveOrgId, session.orgId, session.environment, session.role]);
+  return row?.ok === true && !session.needsSandbox;
+}
+
+async function pinSimulationContext(client: Client, session: Session) {
+  await client.query(`SET LOCAL lock_timeout = '2s'`);
+  await client.query(`SET LOCAL statement_timeout = '10s'`);
+  if (!(await simulationContextValid(client, session))) throw new FlowError("errors.notFound");
+  await client.query(`LOCK TABLE platform_settings IN SHARE MODE`);
+  await client.query(`SELECT id FROM organizations WHERE id=ANY($1::uuid[]) ORDER BY id FOR SHARE NOWAIT`, [[session.orgId, session.liveOrgId]]);
+  await client.query(`SELECT id FROM auth_sessions WHERE id=$1::uuid FOR SHARE NOWAIT`, [session.sessionId]);
+  await client.query(`SELECT id FROM org_members WHERE org_id=$1::uuid AND user_id=$2::uuid FOR SHARE NOWAIT`, [session.liveOrgId, session.userId]);
+  if (!(await simulationContextValid(client, session))) throw new FlowError("errors.notFound");
+}
+
+async function pinSimulationSubject(client: Client, session: Session, leaseId: string) {
+  const lease = await maybe<{ id: string; document_sha256: string }>(client, `SELECT id, document_sha256 FROM leases WHERE id=$1 AND org_id=$2 FOR UPDATE NOWAIT`, [leaseId, session.orgId]);
+  if (!lease) throw new FlowError("errors.notFound");
+  const parties = await many<{ id: string; contact_id: string; role: string }>(client,
+    `SELECT id::text, contact_id::text, role::text FROM lease_parties WHERE org_id=$1 AND lease_id=$2 ORDER BY id LIMIT 51 FOR SHARE NOWAIT`, [session.orgId, leaseId]);
+  const signatures = await many<{ id: string; contact_id: string | null; signer_role: string; status: string }>(client,
+    `SELECT id::text, contact_id::text, signer_role::text, status::text FROM lease_signatures WHERE org_id=$1 AND lease_id=$2 ORDER BY id LIMIT 51 FOR SHARE NOWAIT`, [session.orgId, leaseId]);
+  if (parties.length > SIMULATION_COHORT_CAP || signatures.length > SIMULATION_COHORT_CAP) throw new FlowError("errors.forbidden");
+  const primary = parties.filter(p => p.role === "primary");
+  if (primary.length !== 1) throw new FlowError("errors.forbidden");
+  const tenantSignatures = signatures.filter(v => v.signer_role === "tenant" && (v.status === "pending" || v.status === "viewed"));
+  if (tenantSignatures.length !== 1 || tenantSignatures[0].contact_id !== primary[0].contact_id) throw new FlowError("errors.forbidden");
+  const contact = await maybe<{ id: string; display_name: string; user_id: string | null }>(client,
+    `SELECT id::text, display_name, user_id::text FROM contacts WHERE id=$1 AND org_id=$2 FOR SHARE NOWAIT`, [primary[0].contact_id, session.orgId]);
+  if (!contact?.user_id || !contact.display_name.trim()) throw new FlowError("errors.notFound");
+  const documents = await many<{ id: string; doc_type: string }>(client,
+    `SELECT id::text, doc_type::text FROM identity_documents WHERE org_id=$1 AND contact_id=$2
+      AND deleted_at IS NULL AND review_status IN ('pending_review','checked') AND (lease_id=$3 OR lease_id IS NULL)
+      ORDER BY id LIMIT 51 FOR SHARE NOWAIT`, [session.orgId, contact.id, leaseId]);
+  if (documents.length > SIMULATION_COHORT_CAP) throw new FlowError("errors.idDocRequired");
+  let witness: { documentId: string; docType: string; photoIds: string[] } | null = null;
+  for (const doc of documents) {
+    const photos = await many<{ id: string; slot: string }>(client,
+      `SELECT id::text, slot FROM identity_document_photos WHERE org_id=$1 AND document_id=$2 ORDER BY id LIMIT 4 FOR SHARE NOWAIT`, [session.orgId, doc.id]);
+    const slots = new Set(photos.map(p => p.slot));
+    if (!witness && slots.has("front") && slots.has("selfie") && (doc.doc_type === "passport" || slots.has("back"))) witness = { documentId: doc.id, docType: doc.doc_type, photoIds: photos.map(p => p.id) };
+  }
+  if (!witness) throw new FlowError("errors.idDocRequired");
+  return { contact, partyId: primary[0].id, signatureId: tenantSignatures[0].id, documentHash: lease.document_sha256, ...witness };
+}
+
+async function checkSimulationWitness(client: Client, session: Session, leaseId: string,
+  witness: { contact: { id: string; user_id: string | null; display_name: string }; partyId: string; signatureId: string; documentId: string; docType: string; documentHash: string; photoIds: string[] }, expectedEsign: string) {
+  const valid = await maybe<{ ok: boolean }>(client, `SELECT EXISTS (
+    SELECT 1 FROM leases l
+    JOIN lease_parties lp ON lp.id=$8 AND lp.org_id=l.org_id AND lp.lease_id=l.id AND lp.role='primary' AND lp.contact_id=$3
+    JOIN contacts c ON c.id=lp.contact_id AND c.org_id=l.org_id AND c.user_id=$9 AND c.display_name=$10
+    JOIN lease_signatures sig ON sig.id=$4 AND sig.org_id=l.org_id AND sig.lease_id=l.id
+      AND sig.contact_id=c.id AND sig.signer_role='tenant' AND sig.status='signed' AND sig.user_agent='condola-sandbox-simulation'
+      AND sig.signed_name=$13 AND sig.document_sha256=$11 AND sig.consent_text_key IS NULL
+    JOIN identity_documents d ON d.id=$5 AND d.org_id=l.org_id AND d.contact_id=c.id
+      AND d.deleted_at IS NULL AND d.review_status IN ('pending_review','checked') AND d.doc_type::text=$12 AND (d.lease_id=l.id OR d.lease_id IS NULL)
+    WHERE l.id=$1 AND l.org_id=$2 AND l.esign_status::text=$7 AND l.document_sha256=$11
+      AND ($7 <> 'fully_signed' OR (l.status='active' AND NOT EXISTS (SELECT 1 FROM lease_signatures pending WHERE pending.lease_id=l.id AND pending.status <> 'signed')))
+      AND (SELECT count(*) FROM lease_parties p WHERE p.org_id=l.org_id AND p.lease_id=l.id AND p.role='primary')=1
+      AND (SELECT count(*) FROM identity_document_photos p WHERE p.org_id=l.org_id AND p.document_id=d.id AND p.id=ANY($6::uuid[]))=cardinality($6::uuid[])
+      AND EXISTS (SELECT 1 FROM identity_document_photos p WHERE p.document_id=d.id AND p.id=ANY($6::uuid[]) AND p.slot='front')
+      AND EXISTS (SELECT 1 FROM identity_document_photos p WHERE p.document_id=d.id AND p.id=ANY($6::uuid[]) AND p.slot='selfie')
+      AND (d.doc_type='passport' OR EXISTS (SELECT 1 FROM identity_document_photos p WHERE p.document_id=d.id AND p.id=ANY($6::uuid[]) AND p.slot='back'))
+  ) AS ok`, [leaseId, session.orgId, witness.contact.id, witness.signatureId, witness.documentId, witness.photoIds, expectedEsign, witness.partyId, witness.contact.user_id, witness.contact.display_name, witness.documentHash, witness.docType, witness.contact.display_name.trim()]);
+  if (!valid?.ok) throw new FlowError("errors.notFound");
+}
+
+async function finalSimulationClock(client: Client, session: Session) {
+  const valid = await maybe<{ ok: boolean }>(client,
+    `SELECT EXISTS(SELECT 1 FROM auth_sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>clock_timestamp()) AS ok`,
+    [session.sessionId, session.userId]);
+  if (!valid?.ok) throw new FlowError("errors.notFound");
+}
+
+/** Sandbox-only shortcut. The authenticated staff member remains the actor. */
 export async function simulateTenantSignature(session: Session, leaseId: string) {
   assertStaff(session, ["admin", "manager"]);
-  const tenant = await svc(session.userId, async (client) => {
-    const row = await maybe<{ user_id: string | null; display_name: string; org_id: string }>(
-      client,
-      `SELECT c.user_id, c.display_name, l.org_id::text
-         FROM leases l
-         JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
-         JOIN contacts c ON c.id = lp.contact_id
-        WHERE l.id = $1`,
-      [leaseId],
-    );
-    if (!row?.user_id || row.org_id !== session.orgId) throw new FlowError("errors.notFound");
-    return row;
+  if (!isUuid(leaseId)) throw new FlowError("errors.notFound");
+  const outcome = await svc(session.userId, async client => {
+    await pinSimulationContext(client, session);
+    if (session.environment !== "sandbox") {
+      const lease = await maybe<{ id: string }>(client, `SELECT id FROM leases WHERE id=$1 AND org_id=$2 FOR SHARE NOWAIT`, [leaseId, session.orgId]);
+      if (!lease) throw new FlowError("errors.notFound");
+      await writeAudit(session.orgId, session.userId, "tenant_signature_simulation_denied", { reason: "formal_organization" }, client);
+      await client.query(`SET CONSTRAINTS ALL IMMEDIATE`);
+      if (!(await simulationContextValid(client, session))) throw new FlowError("errors.notFound");
+      await finalSimulationClock(client, session);
+      return { denied: true as const };
+    }
+    const witness = await pinSimulationSubject(client, session, leaseId);
+    if (!(await simulationContextValid(client, session))) throw new FlowError("errors.notFound");
+    const result = await signLeaseOn(client, session, { leaseId, signedName: witness.contact.display_name, consent: true }, { contactId: witness.contact.id, signatureId: witness.signatureId });
+    await client.query(`SET CONSTRAINTS ALL IMMEDIATE`);
+    await checkSimulationWitness(client, session, leaseId, witness, result.esign);
+    if (!(await simulationContextValid(client, session))) throw new FlowError("errors.notFound");
+    await finalSimulationClock(client, session);
+    return { denied: false as const, result };
   });
-  return signLease(
-    { ...session, userId: tenant.user_id!, kind: "tenant", role: null, name: tenant.display_name },
-    { leaseId, signedName: tenant.display_name, consent: true },
-  );
+  if (outcome.denied) throw new FlowError("errors.forbidden");
+  if (outcome.result.esign === "fully_signed") await markTryout(session.orgId, "lease");
+  return outcome.result;
 }
 
 

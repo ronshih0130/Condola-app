@@ -160,7 +160,7 @@ B013 gate evidence/PE handoff reservation 2026-10-30T11:07:40.543876-07:00: root
 
 Autonomous resume/digest patch 2026-10-30T12:12:46.728926-07:00: Ronexplicitlyrequests named b013-digest-fix.patch SHA256d9c092bce50b3dcac3a6f29c5595f1c9875dd030894e0e1e3822b691f5921745 oncurrentbranch. Rootreserves exactthreeSQLsource18/20/21 digestexpressions ONLY; userauthorizedspecificpublished-source exception, no generalhistoricaleditpermission andno DBapply. Nativeexactreview+UTF8/hash-equivalence/read-onlystagecatalog+fullgate required. Queueaudits/B013audits read-only; no concurrentimplementation. Any otherDBchange getsDownloads handoff anddependentworkskipped. flagsOFF/prod/main untouched.
 
-## B-001 simulation boundary reservation — 2026-10-30T12:35:00-07:00
+## B-001 simulation boundary reservation — 2026-10-30T12:33:51-07:00
 
 Ron resumed the full queue; the B-013/B-021 DB-dependent remainder is parked with a Downloads handoff. The next eligible scope is canonical CAP-M-01. Continue on the current combined owning train `mode-b-repair-override-prep`, baseline `b6ec65cc033b14faa2f3c3bb000a389cda5cfa45`; no competing PR or branch switch. Source-first plan SHA-256 `3492436162b16cd4970ab2b6c4936454c5f055b0060c481076c0df95d1966ee0` has a scoped native independent plan review (actual reviewer model/effort unknown).
 
@@ -168,4 +168,4 @@ Ron resumed the full queue; the B-013/B-021 DB-dependent remainder is parked wit
 
 Draft source first; independently review exact source before freezing and executing meaningful prepared-schema tests. No new database object or grant is proposed. Standard guarded synthetic tests on the existing schema remain authorized; no Mac migration application. Keep flags unchanged/OFF, no prod, external messages or main merge. Whole B-001 and Class B/staging completion remain pending.
 
-B-001 fixture addendum, 2026-10-30T12:39:00-07:00: reserve narrow `src/server/utility-posting.integration.test.ts` edits for the same owner. Its two formal-organization utility fixtures already have their actual linked tenant user; replace simulation calls with ordinary `signLease` by that tenant, preserving all partial/activation/invoice/utility assertions. Remove only the unused simulation import. This tests real-tenant domain behavior; it does not claim session/API proof. No DEMO_MODE exception, weakened guard or deleted assertion is authorized.
+B-001 fixture addendum, 2026-10-30T12:35:28-07:00: reserve narrow `src/server/utility-posting.integration.test.ts` edits for the same owner. Its two formal-organization utility fixtures already have their actual linked tenant user; replace simulation calls with ordinary `signLease` by that tenant, preserving all partial/activation/invoice/utility assertions. Remove only the unused simulation import. This tests real-tenant domain behavior; it does not claim session/API proof. No DEMO_MODE exception, weakened guard or deleted assertion is authorized.

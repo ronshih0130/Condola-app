@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { query, tx, withClient } from "./db";
-import { createProperty, generateStatement, importBankCsv, recordPayment, signLease, simulateTenantSignature } from "./domain";
+import { createProperty, generateStatement, importBankCsv, recordPayment, signLease } from "./domain";
 import { FlowError } from "./errors";
 import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { createLeaseFromForm } from "./lease-form";
@@ -1657,7 +1657,7 @@ test("electricity split bills signed tenants only and treats a pending lease as 
     );
     userIds.push(signed.tenantUserId, pending.tenantUserId);
     await markLeaseIdReady(signed.leaseId);
-    const tenantSigned = await simulateTenantSignature(admin, signed.leaseId);
+    const tenantSigned = await signLease({ ...admin, userId: signed.tenantUserId, kind: "tenant", role: null }, { leaseId: signed.leaseId, signedName: "已簽署租客", consent: true });
     assert.equal(tenantSigned.esign, "partially_signed");
     const activated = await signLease(admin, { leaseId: signed.leaseId, signedName: "管理方", consent: true });
     assert.equal(activated.esign, "fully_signed");
@@ -1813,7 +1813,7 @@ test("countersign leaves a pending room's electricity on the owner", async () =>
     assert.equal(vacant.rows[0]?.amount, "40000");
 
     await markLeaseIdReady(lease.leaseId);
-    const tenantSigned = await simulateTenantSignature(admin, lease.leaseId);
+    const tenantSigned = await signLease({ ...admin, userId: lease.tenantUserId, kind: "tenant", role: null }, { leaseId: lease.leaseId, signedName: "待簽署租客", consent: true });
     assert.equal(tenantSigned.esign, "partially_signed");
     const waiting = await query<{ status: string; move_in: string }>(
       `SELECT l.status::text,

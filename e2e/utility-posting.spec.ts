@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { ACCOUNTS, resetDemo, signIn } from "./session";
+import { createHash, randomBytes } from "node:crypto";
+import { Client } from "pg";
+import { disposableDbUrl } from "../src/server/test-disposable-db";
+import { SESSION_COOKIE } from "../src/server/auth";
+import { ORG_ID } from "../src/server/ids";
+import { ACCOUNTS, finishConsentGate, resetDemo, signIn } from "./session";
 
 test("a manager confirms 電費 and the tenant sees it on the bill", async ({ page }) => {
   await resetDemo(page);
@@ -216,8 +221,34 @@ test("countersign of a pending lease does not bill the electricity posted while 
   const identity = await page.request.post("/api/demo/id-sample", { data: { leaseId } });
   expect(identity.ok()).toBe(true);
   await page.reload();
-  await expect(page.getByTestId("simulate-tenant-sign")).toBeVisible();
-  await page.getByTestId("simulate-tenant-sign").click();
+  await expect(page.getByTestId("simulate-tenant-sign")).toHaveCount(0);
+  // Authenticate the actual newly created primary tenant, with an ephemeral
+  // local test session. This exercises readSession/consent, not password login.
+  const db = new Client({ connectionString: disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE).href });
+  await db.connect();
+  let tenantSessionId: string | undefined;
+  try {
+    const subject = (await db.query<{ user_id: string; org_id: string }>(`SELECT c.user_id::text,l.org_id::text FROM leases l JOIN lease_parties p ON p.lease_id=l.id AND p.org_id=l.org_id AND p.role='primary' JOIN contacts c ON c.id=p.contact_id AND c.org_id=l.org_id WHERE l.id=$1`, [leaseId])).rows;
+    expect(subject).toHaveLength(1);
+    expect(subject[0].user_id).toBeTruthy();
+    expect(subject[0].org_id).toBe(ORG_ID);
+    const token = randomBytes(32).toString("hex");
+    tenantSessionId = (await db.query<{ id: string }>(`INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES($1,$2,clock_timestamp()+interval '15 minutes') RETURNING id::text`, [subject[0].user_id, createHash("sha256").update(token).digest("hex")])).rows[0].id;
+    await page.context().clearCookies();
+    await page.context().addCookies([{ name: SESSION_COOKIE, value: token, url: new URL(leaseUrl).origin, httpOnly: true }]);
+    await page.goto("/t");
+    await finishConsentGate(page);
+    const signed = await page.request.post("/api/flows/signLease", { data: { leaseId, signedName: "待副署租客", consent: true } });
+    expect(signed.ok()).toBe(true);
+    expect(await signed.json()).toMatchObject({ ok: true, result: { esign: "partially_signed" } });
+    const events = (await db.query<{ actor: string; event: string }>(`SELECT e.actor_user_id::text AS actor,e.event FROM lease_signature_events e JOIN lease_signatures s ON s.id=e.signature_id WHERE s.lease_id=$1 AND s.signer_role='tenant' AND e.event IN ('viewed_document','consented','signed') ORDER BY e.id`, [leaseId])).rows;
+    expect(events).toEqual(["viewed_document", "consented", "signed"].map(event => ({ actor: subject[0].user_id, event })));
+  } finally {
+    if (tenantSessionId) await db.query(`DELETE FROM auth_sessions WHERE id=$1`, [tenantSessionId]);
+    await db.end();
+  }
+  await signIn(page, ACCOUNTS.admin);
+  await page.goto(`${leaseUrl}?tab=sign`);
   await expect(page.getByText("租客已簽署")).toBeVisible();
   await expect(page.getByTestId("error-banner")).toHaveCount(0);
   await page.getByTestId("sign-name").fill("管理方");
