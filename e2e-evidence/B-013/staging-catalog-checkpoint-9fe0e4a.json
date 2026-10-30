@@ -1,0 +1,302 @@
+{
+  "observedAt": "2026-10-30T20:22:14.709Z",
+  "scope": "STAGING_SCHEMA_METADATA_READ_ONLY_ONLY",
+  "config": {
+    "encoding": "UTF8",
+    "read_only": "on",
+    "version_num": "170011"
+  },
+  "tables": [
+    "b013_default_revisions",
+    "b013_default_roots",
+    "b013_override_revisions",
+    "b013_policy_commands",
+    "b013_regional_defaults"
+  ],
+  "functions": [
+    {
+      "proname": "b013_change_default",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid, p_request uuid, p_expected text, p_action text, p_value text",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "bd840c03b32392b94232f9446288195262dcd6b635081a434b84514965dad18c",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": true
+    },
+    {
+      "proname": "b013_change_override",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid, p_request uuid, p_expected text, p_action text, p_value text",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "d4a2088d4a73f1d72bea9a8976145496b780cbe016bf01c83e6a560825e97c76",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": true
+    },
+    {
+      "proname": "b013_close_default",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid, p_request uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "5cf748e02693c949fc4095d95d510ea3d75ade31b1cd19dc29f6f54c33376de0",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_close_override",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid, p_request uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "4e5e5e2ba348126b6a255eb5f554719938c5888d2b25626751d0088d20c84eeb",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_default_request_lock",
+      "args": "p_org uuid, p_request uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "1c1e7fb240ac1192b0ee70fa536b354657922b0d211a06d7cab092d9aa5633c7",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_default_result",
+      "args": "p_org uuid, p_live uuid, p_env text, p_property uuid, p_request uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "f32f51190fdbfc5e4d9f7dea1717ad3411eefc01031a352957ab4c8a343381c6",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_default_status",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid, p_request uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "97e939db77760530b2a7e88a0c0ed26d145be614030a3178cf0840e0d0a5a2bb",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_finish_default",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid, p_request uuid, p_mode text",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "7000f05e1834f833030ea3558ccedc313bba9906f7670fed2d1ced9883e763e3",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_finish_override",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid, p_request uuid, p_mode text",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "4f8b3a6eddbf12f0c2a629ef5bf2ad03e07575827d75d5f46e511a74111f79ae",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_local_day",
+      "args": "p_zone text",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "0835bddb01add6f2bce51814fcd2d8b0e9a0a03aa7f33e9b9e67dfff56b39044",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_override_result",
+      "args": "p_org uuid, p_live uuid, p_env text, p_property uuid, p_request uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "11bd567d252b9c6aaf6878a165bf270f7073ab630738b035a82fe43e232c1fc1",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_override_status",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid, p_request uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "7f898e44ccb89b6841ece20f00ff6a42cde371d2bf5572ee9348d07b0ef6e9fa",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b013_owner_context",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "ea5b75b2ad35e51c78f3ca3269fcb5d13ecb43b92c358b661b7c9b0afdb3278c",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": true
+    },
+    {
+      "proname": "b013_owner_view",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_property uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "ca2538d951c54c0f17b4ec1ac1cd644d72de88ee2ba880c8420beddbd7eb9641",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": true
+    },
+    {
+      "proname": "b013_revision_immutable",
+      "args": "",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "15db075be1895f393370113de1eb1ef789b23b91714ff2953b7ae53536540df9",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": false
+    },
+    {
+      "proname": "b015_contact_snapshot",
+      "args": "p_org uuid, p_contact uuid",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "ab7fbb51f6808a53bd7eeafe5817bf46b059be1d05f02a999df9196de6b1a56f",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": true
+    },
+    {
+      "proname": "b015_edit_contact",
+      "args": "p_org uuid, p_live uuid, p_env text, p_session uuid, p_contact uuid, p_request uuid, p_expected text, p_name text, p_email text, p_phone text",
+      "owner": "postgres",
+      "sha256_execute": true,
+      "convert_execute": true,
+      "definition_sha256": "98df1b14a8a59a31ec6a2da1e75406c963212a8835847ae6264a7f3406c4276b",
+      "uses_public_digest": false,
+      "uses_catalog_sha256": true
+    }
+  ],
+  "relatedTables": [
+    {
+      "schema": "app",
+      "name": "b013_default_revisions"
+    },
+    {
+      "schema": "app",
+      "name": "b013_default_roots"
+    },
+    {
+      "schema": "app",
+      "name": "b013_override_revisions"
+    },
+    {
+      "schema": "app",
+      "name": "b013_policy_commands"
+    },
+    {
+      "schema": "app",
+      "name": "b013_regional_defaults"
+    },
+    {
+      "schema": "public",
+      "name": "repair_vendor_job_shared_photos"
+    },
+    {
+      "schema": "public",
+      "name": "repair_vendor_jobs"
+    },
+    {
+      "schema": "public",
+      "name": "repair_vendor_secrets"
+    },
+    {
+      "schema": "public",
+      "name": "repair_vendor_sharing_history"
+    }
+  ],
+  "relatedFunctions": [
+    {
+      "schema": "app",
+      "name": "b013_change_default"
+    },
+    {
+      "schema": "app",
+      "name": "b013_change_override"
+    },
+    {
+      "schema": "app",
+      "name": "b013_close_default"
+    },
+    {
+      "schema": "app",
+      "name": "b013_close_override"
+    },
+    {
+      "schema": "app",
+      "name": "b013_default_request_lock"
+    },
+    {
+      "schema": "app",
+      "name": "b013_default_result"
+    },
+    {
+      "schema": "app",
+      "name": "b013_default_status"
+    },
+    {
+      "schema": "app",
+      "name": "b013_finish_default"
+    },
+    {
+      "schema": "app",
+      "name": "b013_finish_override"
+    },
+    {
+      "schema": "app",
+      "name": "b013_local_day"
+    },
+    {
+      "schema": "app",
+      "name": "b013_override_result"
+    },
+    {
+      "schema": "app",
+      "name": "b013_override_status"
+    },
+    {
+      "schema": "app",
+      "name": "b013_owner_context"
+    },
+    {
+      "schema": "app",
+      "name": "b013_owner_view"
+    },
+    {
+      "schema": "app",
+      "name": "b013_revision_immutable"
+    },
+    {
+      "schema": "app",
+      "name": "repair_cost_on_statement"
+    }
+  ],
+  "flags": [
+    {
+      "key": "repair_approvals",
+      "enabled": false
+    },
+    {
+      "key": "tenant_directory_edit",
+      "enabled": false
+    }
+  ]
+}

@@ -1,0 +1,306 @@
+{
+  "scriptSha256": "7c4a336fc33172efc8e0b736ac4930923801b776b3bd5d79240613b3b2f195cb",
+  "candidate": "a0f6828e979083717120a802c1973f59c1a7d414",
+  "commandLocalAwk": "/opt/homebrew/opt/gawk/libexec/gnubin/awk",
+  "resolvedBinary": "/opt/homebrew/Cellar/gawk/5.4.1/bin/gawk",
+  "binarySha256": "bdb0c4d4b9592f4b5f99cf3b3abce96baed7bbbcced4af3d16f2822b8962f558",
+  "version": "GNU Awk 5.4.1, API 4.1, PMA Avon 8-g1, (GNU MPFR 4.2.2, GNU MP 6.3.0)",
+  "locale": "C",
+  "cases": [
+    {
+      "case": "valid",
+      "expectedExit": 0,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 0,
+          "stdout": "unknown\nPREFLIGHT PASS\n",
+          "stderr": "",
+          "seconds": 0.013961375000000002
+        },
+        "gnu": {
+          "exit": 0,
+          "stdout": "unknown\nPREFLIGHT PASS\n",
+          "stderr": "",
+          "seconds": 0.268461291
+        }
+      }
+    },
+    {
+      "case": "valid with space",
+      "expectedExit": 0,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 0,
+          "stdout": "unknown\nPREFLIGHT PASS\n",
+          "stderr": "",
+          "seconds": 0.01716058399999998
+        },
+        "gnu": {
+          "exit": 0,
+          "stdout": "unknown\nPREFLIGHT PASS\n",
+          "stderr": "",
+          "seconds": 0.018004167000000015
+        }
+      }
+    },
+    {
+      "case": "missing-patch",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs is missing the OpenNext middleware-manifest patch marker\n",
+          "stderr": "",
+          "seconds": 0.012290957999999963
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs is missing the OpenNext middleware-manifest patch marker\n",
+          "stderr": "",
+          "seconds": 0.015087709000000005
+        }
+      }
+    },
+    {
+      "case": "foreign-double",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.011549291999999989
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.014046000000000003
+        }
+      }
+    },
+    {
+      "case": "foreign-single",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.011124458000000004
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.013908124999999993
+        }
+      }
+    },
+    {
+      "case": "foreign-backtick",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.012353166999999998
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.01593170899999996
+        }
+      }
+    },
+    {
+      "case": "foreign-unquoted",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign/fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.012442583000000007
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign/fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.014049499999999993
+        }
+      }
+    },
+    {
+      "case": "escaped-quote",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.011032417000000017
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.013517457999999927
+        }
+      }
+    },
+    {
+      "case": "unterminated-quote",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.011222041000000016
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs references foreign node_modules: /foreign fixture/node_modules\n",
+          "stderr": "",
+          "seconds": 0.013662207999999954
+        }
+      }
+    },
+    {
+      "case": "relative",
+      "expectedExit": 0,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 0,
+          "stdout": "unknown\nPREFLIGHT PASS\n",
+          "stderr": "",
+          "seconds": 0.01101145800000003
+        },
+        "gnu": {
+          "exit": 0,
+          "stdout": "unknown\nPREFLIGHT PASS\n",
+          "stderr": "",
+          "seconds": 0.013470582999999925
+        }
+      }
+    },
+    {
+      "case": "conflicting-markers",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs is unpatched\n",
+          "stderr": "",
+          "seconds": 0.011316541999999985
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs is unpatched\n",
+          "stderr": "",
+          "seconds": 0.01411450000000003
+        }
+      }
+    },
+    {
+      "case": "modules-symlink",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: node_modules is a symlink: /Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-preflight-fixtures/modules-symlink/node_modules\n",
+          "stderr": "",
+          "seconds": 0.011096042000000028
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: node_modules is a symlink: /Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-preflight-fixtures/modules-symlink/node_modules\n",
+          "stderr": "",
+          "seconds": 0.013746374999999977
+        }
+      }
+    },
+    {
+      "case": "missing-worker",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: .open-next/worker.js is missing or is not a regular file: /Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-preflight-fixtures/missing-worker/.open-next/worker.js\n",
+          "stderr": "",
+          "seconds": 0.01140604199999995
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: .open-next/worker.js is missing or is not a regular file: /Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-preflight-fixtures/missing-worker/.open-next/worker.js\n",
+          "stderr": "",
+          "seconds": 0.013757542000000011
+        }
+      }
+    },
+    {
+      "case": "missing-handler",
+      "expectedExit": 1,
+      "sameExitStdoutStderr": true,
+      "pass": true,
+      "runs": {
+        "system": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs is missing or is not a regular file: /Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-preflight-fixtures/missing-handler/.open-next/server-functions/default/handler.mjs\n",
+          "stderr": "",
+          "seconds": 0.00710591599999999
+        },
+        "gnu": {
+          "exit": 1,
+          "stdout": "unknown\nPREFLIGHT FAIL: handler.mjs is missing or is not a regular file: /Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-preflight-fixtures/missing-handler/.open-next/server-functions/default/handler.mjs\n",
+          "stderr": "",
+          "seconds": 0.006987833000000054
+        }
+      }
+    }
+  ],
+  "allPass": true,
+  "resolution": {
+    "system": {
+      "kind": "file",
+      "invokedPath": "/usr/bin/awk",
+      "resolvedBinary": "/usr/bin/awk",
+      "sha256": "fef7ca502e81dd2a5a3097506cea07b0d4901c0a98415765ab23cfb1d466535a"
+    },
+    "gnu": {
+      "kind": "file",
+      "invokedPath": "/opt/homebrew/opt/gawk/libexec/gnubin/awk",
+      "resolvedBinary": "/opt/homebrew/Cellar/gawk/5.4.1/bin/gawk",
+      "sha256": "bdb0c4d4b9592f4b5f99cf3b3abce96baed7bbbcced4af3d16f2822b8962f558"
+    }
+  }
+}

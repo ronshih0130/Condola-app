@@ -1,0 +1,21 @@
+# B-001 formal/sandbox simulation boundary
+
+Candidate `9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f`, branch `mode-b-repair-override-prep`. This is the CAP-M-01 application boundary slice, not a whole e-sign or release verdict. No migration, grant, persistent flag or legal text changed.
+
+| Acceptance | Evidence and scope |
+| --- | --- |
+| Formal company | Valid authenticated same-org requests commit one metadata-only denial audit, then return forbidden; no signature, event, invoice, ledger, thread or notice changes. Actual prepared integration passed; final two-width browser result is recorded separately in the manifest. Source rejects malformed/foreign scope before denial audit; actual integration covers foreign lease scope. |
+| Sandbox authority | Current server-selected linked sandbox, active canonical live-org membership/role and nonexpired/nonrevoked actual session required. Forged role/environment/session, missing ID, mismatched signature contact and declined signature deny. DEMO_MODE alone never authorizes. |
+| Simulated evidence | Actual staff actor, explicit sandbox origin/user agent, one signed event and no tenant-consent event/key; prior event history preserved. Marked samples are not required for a newly created sandbox lease. |
+| Completion and money | Manager-first/simulation-last positive and zero invoices exercised. Positive invoice/ledger entries, original actor default and service period behavior preserved; zero invoice creates no ledger, payment or allocation. Replay does not add an invoice. |
+| Atomic failure | Real SQL signature-audit failure after signature write; notice-audit failure after invoice and rent-due notice creation; natural session expiry after actual deferred flush. Full business snapshots and audit baseline restored. These are client-injected faults on a real local transaction, not failed-COMMIT or inside-trigger expiry tests. |
+| Bounded waits | Lease and audit holder-first tests return actual 55P03 with unchanged business facts; source uses finite timeouts. This is not universal deadlock freedom or proof of every competing writer order. |
+| Normal behavior | Existing utility integration 10/10 passed with legitimate actual-tenant signing; all original assertions retained. Browser utility fixture uses a short-lived session for that newly created tenant, not password-login proof, then normal admin UI. Sandbox notice audit now uses the caller transaction. |
+
+Final candidate full gate passed: 599 unit and 358 RLS passes, with one approved historical skip. Next/Cloudflare builds, original preflight and Worker 1/1 passed. Final browser batches passed 12/12: simulation 2, tryout 6, utility 4. See [manifest](simulation-boundary-9fe0e4a.json). Broader cap boundary, both-order membership/reparent races and COMMIT-response fault coverage remain outside this slice's proof.
+
+Whole B-001 remains INCOMPLETE. Detailed original G0–G5 and §11.1 source is absent from the supplied repository/lane pack; do not infer gate closure from adjacent tests. Staging exact-version/schema acceptance, required 24 cold starts/React #418, real mailbox receipt where required, independent Claude Class B QA and applicable CEO release/activation GO remain separate. The current allowlisted staging bundle supplies database/Supabase access only; no Cloudflare deploy credential is present in this process. No deployment, message or prod action was attempted. Keep flags OFF.
+
+Reviewer requested `gpt-6-astra / xhigh`; actual model/effort unknown. Scoped source and test reviews PASS; reviewer ran no tests or DB commands and did not supply Claude Class B sign-off. Root's executed results must be tied to raw log hashes and the immutable candidate separately.
+
+The trial regression checks use the actual selected sandbox. They verify the exact form/UUID HTTP response and successful ledger redirect, then zero-before/one-after committed-payment readback on the unique lease, before checking the actual payments page, bank match, owner statement, all three completed tasks, and real guide dismissal. The OFF path does not persist a request UUID, so no DB request-key lineage is claimed. Waiting for response EOF was removed after its observed timeout despite a committed confirmed payment; no general transport diagnosis is inferred. Every earlier failure and cancellation remains in the manifest.

@@ -8,7 +8,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 
 | ID | Title | Story / journey / capability; inventory | Depends on | Flag, default OFF | Class | Size / hours | Status |
 |---|---|---|---|---|---|---|---|---|
-| B-001 | Finish e-sign integration and gates; activation: **Ron decides** | MGT-09/10, TEN-03; J2; CAP-P-09/10, CAP-T-01/08, CAP-M-01/19; T-04 | Existing paper fallback evidence | ESIGN_ENABLED | B | L / 24–40 | in_progress |
+| B-001 | Finish e-sign integration and gates; activation: **Ron decides** | MGT-09/10, TEN-03; J2; CAP-P-09/10, CAP-T-01/08, CAP-M-01/19; T-04 | Existing paper fallback evidence | ESIGN_ENABLED | B | L / 24–40 | pending |
 | B-002 | Finish MOVE_OUT and ID_PURGE; activation: **Ron decides** | MGT-20, TEN-02, PLT-04; J1.7/J6; CAP-M-13, CAP-P-02, CAP-T-06; M-67 | Existing errredact/privacy release evidence | MOVE_OUT_ENABLED; ID_PURGE_ENABLED | B | M / 16–24 | in_progress |
 | B-003 | Finish payee details and full access audit; activation: **Ron decides** | MGT-04, TEN-06; J3.3; CAP-M-03, CAP-T-03; T-08 | Existing payee lane | PAYEE_DETAILS_ENABLED | B | M / 16–24 | in_progress |
 | B-004 | Verify paper lease versions, tenant downloads and audit | MGT-10, TEN-03; J2.6/7; CAP-M-02, CAP-T-02 | — | PAPER_LEASE_VERSIONS_ENABLED; TENANT_SIGNED_PDF_ENABLED | B | S / 6–10 | in_progress |
@@ -85,3 +85,6 @@ Only B013/B021 and their existing gate repair were resumed by Ron. B010/B028 pro
 ## Autonomous resume 2026-10-30T12:28:36.879071-07:00
 
 Ron activated continuous BUILD-ORDER execution: DBchanges are handed off in Downloads and onlydependentparts skipped; no prod/mainmerge/Macoperationalmigration/flagON. B013/B021 digest/settings candidate `fbda2a0cc9ce592907632410e0eeea343dbdb5d2` fullgatePASS599unit/357RLS0FAIL1historicalSKIP and read-only staging metadata verified. Full estimate/decision/enforcement scope remains pending DBhandoff, notdone. Nexteligible is B001 formal-org simulation boundary fromcanonicalCAP-M-01; implementation will preserve sandbox and existing normal signing. [Digest proof](../e2e-evidence/B-013/digest-fix-fbda2a0.json), [DB handoff](../e2e-evidence/B-013/b013-b021-remaining-db-handoff.md). No otherB began during audits.
+## B-001 bounded local delta — 2026-10-30T13:34:59-07:00
+
+Candidate `9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f` closes the formal/sandbox simulation application gap with local evidence: full gate599unit/358RLS PASS0FAIL1approvedhistoricalSKIP, Next/CF/preflight/Worker and12browserPASS. Tests preserve actual tenant/manager signing, positive/zero invoices and rollback; no schema or persistent flag change. Whole B-001 is `pending` because original G0–G5/§11.1, staging app/cold starts/receipt and independent Claude Class B acceptance remain incomplete. This is not whole-item done. Next eligible is B-002 reconciliation after publishing this checkpoint. B-013/B-021 read-only catalog recheck at13:22PT still shows settings only and flagsOFF; remaining DB handoff is unchanged. [B-001 evidence](../e2e-evidence/B-001/simulation-boundary-9fe0e4a.json).

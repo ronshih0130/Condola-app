@@ -1,3 +1,7 @@
+> Current local checkpoint 2026-10-30T13:34:59-07:00: `9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f` on `mode-b-repair-override-prep`. Formal/sandbox simulation delta LOCAL_VERIFIED: gate599 unit/358 RLS PASS0FAIL1 approved historical SKIP; Next/CF builds, original preflight, Worker1/1 and browser12/12 PASS. Whole B-001 remains pending acceptance. [Manifest](simulation-boundary-9fe0e4a.json), [acceptance](acceptance.md), [scoped review](native-review-simulation-9fe0e4a.md).
+>
+> STOP POINT: local delta verified; dependent G0–G5/staging/Claude acceptance pending; next: publish this checkpoint and continue B-002 evidence reconciliation; owner: Ron/Codex. Earlier entries below are historical.
+
 > Latest local integration checkpoint (2026-10-30T03:05:16.071480-07:00): candidate `4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6`; see [core89 local verification](../integration/core89-local-verification.md). Whole-feature verdict remains INCOMPLETE/NO-GO; dated records below retain their original scope. This link supplies no staging/Claude/release waiver.
 
 # B-001 e-sign reconciliation

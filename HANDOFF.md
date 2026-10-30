@@ -1,5 +1,14 @@
 # Mode B bootstrap acceptance
 
+## Current continuous-queue checkpoint — 2026-10-30T13:34:59-07:00
+
+B-001 local formal/sandbox simulation delta is verified at `9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f`: full gate599unit/358RLS PASS0FAIL1approvedhistoricalSKIP; Next/CF builds, original preflight, Worker1/1 and12browserPASS. No whole B item is newly done; full B-001 G0–G5/staging/cold-start/receipt/independent Claude acceptance remains pending. [Evidence](e2e-evidence/B-001/simulation-boundary-9fe0e4a.json). Test-method and ENOSPC failures are preserved; recovered environment is documented.
+
+B-013/B-021 threshold/hash settings checkpoint was published at b6ec65c; current13:22PT read-only stage recheck still lacks estimate/decision foundation/gateways. Downloads `b013-b021-remaining-db-handoff.md` remains the PE handoff. No Mac migration or flag activation.
+
+Mode B repo claim remains active under shared session3099AC86; no staging/prod deployment claim or operation. Same current branch; Code candidate9fe0e4a is published on Origin; its mirror receipt is recorded in the coordinator mirror log. Operational evidence follows on the same branch before the next item. STOP POINT: WORKING; next: B-002 source/evidence reconciliation and lowest unblocked local gap; owner: Ron/Codex. Previous checkpoints below retain their original dates/scopes.
+
+
 Recorded: 2026-10-29T17:13:29.182087-07:00
 Receiving coordinator: Ron / Codex desktop; model and quota: unknown.
 Ownership-session UUID: `3099AC86-6AF0-4681-9944-304E930BFDC2`.

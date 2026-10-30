@@ -13,3 +13,5 @@ Current implemented scope is personal/default + property override, exact money/s
 STOP POINT: WAIT_PE; next: preserve checkpoint, await Ron PE notice; owner Ron/Codex. No whole-feature/staging/ClaudeClassB/release GO.
 
 Latestresume: `fbda2a0cc9ce592907632410e0eeea343dbdb5d2` digest-only fullgatePASS599unit/357RLS+1approvedhistoricalskip. Actualreadonlystaging confirmsPEthresholdsettings/hashdeployment/globalOFF, not missingversiondecisionworkflow. RemainingDBhandoffnowinDownloads/b013-b021-remaining-db-handoff.md; skipdependentpart andcontinuequeueB001 perRon. Wholeitemnotdone; no proposalapplied.
+
+Rechecked 2026-10-30T13:34:59-07:00: read-only staging snapshot20:22:14Z still has five threshold/settings tables, no proposed estimate/decision foundation/gateways, and queried controlsOFF. DB-dependent remainder remains parked with the existing Downloads handoff; no stage write or new SQL applied. B-001 local verification is a separate delta; next queue item is B-002.

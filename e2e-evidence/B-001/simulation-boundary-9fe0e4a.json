@@ -1,0 +1,309 @@
+{
+  "recordedAt": "2026-10-30T13:33:02.208109-07:00",
+  "candidate": "9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f",
+  "branch": "mode-b-repair-override-prep",
+  "scope": "B001 CAP-M-01 formal/sandbox simulation boundary LOCAL_VERIFIED; whole e-sign INCOMPLETE",
+  "sourceBlobs": {
+    "src/server/domain.ts": "b9277c03ef7acece60710fd5c23098fbb4c528a9",
+    "src/app/m/leases/[id]/page.tsx": "166d6196c61fa40e0260812c730787d9fbaf46c9",
+    "src/server/utility-posting.integration.test.ts": "7cd2cd42068d93bcd39da8468a634c8405f6d243",
+    "src/server/simulate-tenant-signature.integration.test.ts": "8c67c215f747e51755499e8bb6986aa573ee359e",
+    "e2e/tryout.spec.ts": "38a9ebb2459eae41ecaa9b76671ff4ed87099c9a",
+    "e2e/utility-posting.spec.ts": "7c9f24730981f36bddd50c91f0a22325793bc2df",
+    "e2e/simulate-tenant-signature.spec.ts": "27c4b939074787d56c4dbf76e63c932b3ec7a0a5",
+    "package.json": "7f29ff0dd574deb44b12f47304768d6512104cf2"
+  },
+  "gate": {
+    "result": "PASS",
+    "unit": {
+      "tests": 599,
+      "pass": 599,
+      "fail": 0,
+      "skipped": 0
+    },
+    "rls": {
+      "tests": 359,
+      "pass": 358,
+      "fail": 0,
+      "skipped": 1
+    },
+    "skip": "exactly one prior Ron-approved historical commit lost fixture"
+  },
+  "builds": {
+    "Next": "PASS",
+    "Cloudflare": "PASS",
+    "originalPreflight": "PASS; unchanged script, real GNU awk command-local only, no internal error",
+    "Worker": "1 PASS"
+  },
+  "browser": {
+    "result": "PASS",
+    "counts": {
+      "simulation": 2,
+      "tryout": 6,
+      "utility": 4
+    },
+    "total": 12,
+    "scope": "three separate fresh local-server batches; final same candidate; no staging claim"
+  },
+  "nativeReview": {
+    "requested": "gpt-6-astra/xhigh",
+    "actualModelEffort": "unknown",
+    "source": "PASS_SCOPED_SOURCE_REVIEW",
+    "tests": "PASS_SCOPED_TEST_REVIEW",
+    "environment": "PASS_SCOPED_ENVIRONMENT_EVIDENCE",
+    "reviewerExecution": "none; source/evidence review only",
+    "ClaudeClassB": "NOT_RUN"
+  },
+  "staging": "read-only schema/privilege metadata only; no app deployment/functional ON acceptance",
+  "boundaries": {
+    "newDatabaseObjectsOrGrants": false,
+    "operationalMigrationApplied": false,
+    "persistentFlagsChanged": false,
+    "prodAccess": false,
+    "mainMerged": false,
+    "externalMessages": false
+  },
+  "limitations": [
+    "Detailed original G0-G5/11.1 unavailable in supplied repo/lane pack",
+    "Staging exact app/version, 24 cold starts/React418, actual receipt and independent Claude ClassB remain unverified",
+    "Cap boundaries, broader both-order races, COMMIT failure and expiry inside deferred trigger are outside this slice proof",
+    "UUID correlates HTTP submit only when B010 OFF; no persisted request lineage claim"
+  ],
+  "artifacts": {
+    "copy-check.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH/copy-check.log",
+      "sha256": "c707c9883761bffbff205b05db34248ae75431e251085baa19f9cb18903243b5",
+      "bytes": 1437
+    },
+    "flag-expiry.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH/flag-expiry.log",
+      "sha256": "790631bd05d781613c716fe04f1a26d814975ac149a3a6d265800ec6e5fffad5",
+      "bytes": 27
+    },
+    "lint.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH/lint.log",
+      "sha256": "da819f980b5df58f94df10cee617099a4a6539df6d5f02510c80645449817c1d",
+      "bytes": 2422
+    },
+    "npm-ci.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH/npm-ci.log",
+      "sha256": "cf0cd67af9f1c430f9585791d4e9f6c2a925b819c0fc8366fde5e64a622575a2",
+      "bytes": 1584
+    },
+    "postgres-16.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "test-rls.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH/test-rls.log",
+      "sha256": "5125aa7ccd705c5013c01272fa56eef3fcbbacd256e9b536459524b25b91919d",
+      "bytes": 100217
+    },
+    "test-unit.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH/test-unit.log",
+      "sha256": "ddec75c87c778ee997650c430b30596b66023907f7c96bc62f2556832ec2c1fe",
+      "bytes": 123694
+    },
+    "toolchain.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    "typecheck.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "b001-full-gate-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-full-gate-9fe0e4a.log",
+      "sha256": "7b8edb8a1ffee838c6f01692116354812423e5b4546d85e04d77ddd68455d3d2",
+      "bytes": 470
+    },
+    "b001-build-worker-driver-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-build-worker-driver-9fe0e4a.log",
+      "sha256": "65cadcb502b3c3567471256b887de29f39a8649b575e9e7d3ecde1dfd28fb0e9",
+      "bytes": 358
+    },
+    "b001-next-build-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-next-build-9fe0e4a.log",
+      "sha256": "5cac6a9c59fef10a67895d7922807ebe19721f6578f87eebd518921b6d084f2f",
+      "bytes": 12250
+    },
+    "b001-cf-build-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-cf-build-9fe0e4a.log",
+      "sha256": "58c90fecbd2f15462cc6b0cc665cc34871e6c464008cec22c56be6445f88030c",
+      "bytes": 13959
+    },
+    "b001-preflight-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-preflight-9fe0e4a.log",
+      "sha256": "bf54a096fb2682cf899f16a1808687c69fcc7508d57697e7d1b3ce3936f189d0",
+      "bytes": 23
+    },
+    "b001-worker-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-worker-9fe0e4a.log",
+      "sha256": "e5c4861989b25ea9c054d0dbd6ba3a931dc3a6cba5e254fe15da35e644841ae4",
+      "bytes": 421
+    },
+    "b001-browser-driver-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-driver-9fe0e4a.log",
+      "sha256": "3fa1101a9008d869682f330daae84c241a9e3174133edd1369619b8019e169ff",
+      "bytes": 276
+    },
+    "b001-browser-simulation-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-simulation-9fe0e4a.log",
+      "sha256": "bb00eb3d73f7f6094901f83ff76321e2f836eb7d9326649a4973f4d1237b34b0",
+      "bytes": 1868
+    },
+    "b001-browser-tryout-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-tryout-9fe0e4a.log",
+      "sha256": "2728301317604a89c3d03ae98a6c7853cf590828046e8733b772cf1723f8692a",
+      "bytes": 3749
+    },
+    "b001-browser-utility-9fe0e4a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-utility-9fe0e4a.log",
+      "sha256": "3279e85bebd4a003cf973133ffa83bad72e8d85488601695495a6f7c6baf6751",
+      "bytes": 2972
+    },
+    "b001-preflight-awk-comparison.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-preflight-awk-comparison.json",
+      "sha256": "4c77c363746de0ca67e560e6e053a8dd9ca0c4ade257af1593e3f96f20709512",
+      "bytes": 9942
+    },
+    "b001-staging-readonly-20261030.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-staging-readonly-20261030.json",
+      "sha256": "a6d44fd21629978c3a0adc7d396abd1bdda68eda98fb5950e69a2b4cc4e0dd60",
+      "bytes": 6385
+    },
+    "b013-staging-readonly-checkpoint-9fe0e4a.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b013-staging-readonly-checkpoint-9fe0e4a.json",
+      "sha256": "6cb282885281d2021d11a39a7a390765d2c81c8377158de44d8a1f36eef07749",
+      "bytes": 9215
+    },
+    "b001-additional-inactive-cache-cleanup.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-additional-inactive-cache-cleanup.json",
+      "sha256": "2b803e2077fcae38272fcfbefb460f1bd3e3f8df9b56dcf39d9d2e42d7b67e04",
+      "bytes": 536
+    }
+  },
+  "screenshots": {
+    "b001-browser-simulation-9fe0e4a-artifacts/simulate-tenant-signature--784e2--selected-sandbox-at-1280px-chromium/formal-sign.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-simulation-9fe0e4a-artifacts/simulate-tenant-signature--784e2--selected-sandbox-at-1280px-chromium/formal-sign.png",
+      "sha256": "207d9fcab1548a89e8d90851a8add4d1903b03ed37f4bc390cd99e4e8c589f1c",
+      "bytes": 127135
+    },
+    "b001-browser-simulation-9fe0e4a-artifacts/simulate-tenant-signature--784e2--selected-sandbox-at-1280px-chromium/sandbox-sign.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-simulation-9fe0e4a-artifacts/simulate-tenant-signature--784e2--selected-sandbox-at-1280px-chromium/sandbox-sign.png",
+      "sha256": "740d6c503d14469041b357782a0278bdfa5139e8cf47e7cb236ff4cdb0b0a8ec",
+      "bytes": 177875
+    },
+    "b001-browser-simulation-9fe0e4a-artifacts/simulate-tenant-signature--ea95d-e-selected-sandbox-at-390px-chromium/formal-sign.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-simulation-9fe0e4a-artifacts/simulate-tenant-signature--ea95d-e-selected-sandbox-at-390px-chromium/formal-sign.png",
+      "sha256": "82ddc21c847696011668978ab11cd2e6ec6815668a61232c5b50a05e1ec23128",
+      "bytes": 90031
+    },
+    "b001-browser-simulation-9fe0e4a-artifacts/simulate-tenant-signature--ea95d-e-selected-sandbox-at-390px-chromium/sandbox-sign.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-simulation-9fe0e4a-artifacts/simulate-tenant-signature--ea95d-e-selected-sandbox-at-390px-chromium/sandbox-sign.png",
+      "sha256": "83c0eec2bb82d3712a11959ba437bb3fb65fa2f839356a6942b040af2b189619",
+      "bytes": 144517
+    },
+    "b001-final-9fe0e4a-screenshots/property-wizard-empty.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-final-9fe0e4a-screenshots/property-wizard-empty.png",
+      "sha256": "3ea3b6f733d8a699d4d4ebcd8397a8406941cf73b79a731c5fcf1a62ba0184e9",
+      "bytes": 138212
+    },
+    "b001-final-9fe0e4a-screenshots/record-payment.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-final-9fe0e4a-screenshots/record-payment.png",
+      "sha256": "2b9d5774ae54c3fd8c94914b213daf7f15332009aedf0e5034d7c494e73795cf",
+      "bytes": 170894
+    },
+    "b001-final-9fe0e4a-screenshots/bank-match.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-final-9fe0e4a-screenshots/bank-match.png",
+      "sha256": "0fb390bfb4038ab3fd740f8933c08a5524a69e78933f7cd03e557f0e98706b0c",
+      "bytes": 123648
+    },
+    "b001-final-9fe0e4a-screenshots/owner-statement.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-final-9fe0e4a-screenshots/owner-statement.png",
+      "sha256": "05fcd3f889233c95c04907c0381d77d3444ab233b1ecbb285cc8af4d45aa618d",
+      "bytes": 107632
+    },
+    "b001-final-9fe0e4a-screenshots/dashboard.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-final-9fe0e4a-screenshots/dashboard.png",
+      "sha256": "d8f436ab55349ab9e91ab7469ceb2e2c9bfb448fc41c375abdc29758e61736ec",
+      "bytes": 135140
+    },
+    "b001-final-9fe0e4a-screenshots/tenant-liff.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-final-9fe0e4a-screenshots/tenant-liff.png",
+      "sha256": "d15964486f22737e6fc03fe5a194c370ac2d2b050864ada85de50d1dc98e975a",
+      "bytes": 88720
+    },
+    "b001-final-9fe0e4a-screenshots/owner-portal.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-final-9fe0e4a-screenshots/owner-portal.png",
+      "sha256": "321ac99f2970747d8bc871cd1feba7092dc223dce71b5c6eb828aa0f880ccda8",
+      "bytes": 63673
+    },
+    "b001-final-9fe0e4a-screenshots/manager-phone.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-final-9fe0e4a-screenshots/manager-phone.png",
+      "sha256": "eda2a6ba638907fd2bb073fbeb46468eec5533adf9cb56b0f42641324abdc074",
+      "bytes": 64656
+    }
+  },
+  "preservedFailedOrCancelledAttempts": {
+    "b001-boundary-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-boundary-draft-a.log",
+      "sha256": "c06282c1e64f2a51ceb83e66beeb46f11e4f18ec3facf8e6770956c34fff6b61",
+      "bytes": 1533
+    },
+    "b001-boundary-draft-b.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-boundary-draft-b.log",
+      "sha256": "aee53d81baa492cdd0873ce7dad04d2c107eef4114f2606aca12d8839f5c296d",
+      "bytes": 2054
+    },
+    "b001-boundary-draft-e.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-boundary-draft-e.log",
+      "sha256": "a3c5155aa0b89eaadd33e51ec8299895781ca519e959922d394b0d360fcc96bd",
+      "bytes": 1384
+    },
+    "b001-build-worker-driver-a30bcc1.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-build-worker-driver-a30bcc1.log",
+      "sha256": "7cd26685ac886996f7c36ed5b6ce2a5e2fb95ea9f978c8697c5258c31862a0c2",
+      "bytes": 1070
+    },
+    "b001-preflight-a30bcc1.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-preflight-a30bcc1.log",
+      "sha256": "68575e0501fbc59089dfe209514d148aaebda66588e1700b9a01b9615cc0cb8e",
+      "bytes": 129
+    },
+    "b001-browser-driver-a30bcc1.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-driver-a30bcc1.log",
+      "sha256": "614b5f8ed9d8420525a15e241a79f57c875c3a39ea55ce007704eff592895973",
+      "bytes": 196
+    },
+    "b001-browser-tryout-a30bcc1.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-tryout-a30bcc1.log",
+      "sha256": "af8e46771424491ba72ace5ed1900616f027a5efb3813c91783a3c22850d6a16",
+      "bytes": 16065
+    },
+    "b001-full-gate-a0f6828.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-full-gate-a0f6828.log",
+      "sha256": "c681203dd86e08221784826d4edef3e11662516016372bf2ddeb70804c01b5b3",
+      "bytes": 162
+    },
+    "b001-browser-driver-a0f6828.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-driver-a0f6828.log",
+      "sha256": "210816b08ab48f46b51a1f10b38fe7edcf77a4247ce1929ba02be710e3032425",
+      "bytes": 196
+    },
+    "b001-browser-tryout-a0f6828.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b001-browser-tryout-a0f6828.log",
+      "sha256": "739a8320124ce3ee78292f8f48061254b35642fd8135126f269dac309def01f3",
+      "bytes": 6976
+    }
+  },
+  "retention": {
+    "storage": "local private artifacts; sanitized manifests in git",
+    "privateR2ObjectKey": null,
+    "retentionDate": "unknown; no retention policy invented"
+  },
+  "next": "publish checkpoint, keep B001 dependent acceptance pending, continue lowest eligible B002"
+}

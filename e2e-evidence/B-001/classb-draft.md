@@ -1,5 +1,5 @@
-# Class B draft — e-sign authorization
+# Class B draft — e-sign integration and simulation boundary
 
-Problem: authenticated public helpers were unlisted and case-wide membership/signer rules could reveal unauthorized contract versions/signer summaries. Local correction aligns internal RLS with current app roles, version assignment and environment pins; old service-role signatures retained.
+Formal organizations could invoke the tenant-signature simulation shortcut; its former implementation substituted the tenant as actor. Current delta on `9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f` hides and denies formal use with committed scoped audit, permits only actual linked sandbox authority, retains staff actor and explicit simulated evidence without tenant consent, and keeps sandbox notice audit in the signing transaction. Earlier RPC/RLS and automatic positive/zero invoice work remains part of the combined train.
 
-Synthetic scoped test and native static review cover the correction only. Independent Claude QA, exact-candidate combined gates, schema/catalog compatibility, staged browser flow/version and final QA disposition remain unperformed. No CEO release/activation approval requested or implied.
+Local exact-candidate gate, builds/preflight/Worker and12 relevant browser tests pass; see manifest and acceptance. Highest-requested native scoped review has actual model/effort unknown and supplies no independent Claude sign-off. Detailed original G0–G5, staged exact-version/cold-start evidence, applicable compatibility/release conditions and independent QA remain unverified. No CEO release/activation GO is requested or inferred; flags remain unchanged/OFF.

@@ -1,0 +1,31 @@
+# Gate 9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f
+
+Result: PASS
+
+Candidate: `9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f`
+
+Release checks requested: no
+
+Started: 2026-10-30T13:21:33-0700 PT (America/Los_Angeles)
+
+Finished: 2026-10-30T13:25:16-0700 PT (America/Los_Angeles)
+
+| Check | Result | Exit |
+|---|---|---|
+| pinned-clean-checkout | PASS | 0 |
+| toolchain | PASS | 0 |
+| npm-ci | PASS | 0 |
+| typecheck | PASS | 0 |
+| lint | PASS | 0 |
+| test-unit | PASS | 0 |
+| copy-check | PASS | 0 |
+| postgres-16 | PASS | 0 |
+| test-rls | PASS | 0 |
+| flag-expiry | PASS | 0 |
+| final-pinned-clean-checkout | PASS | 0 |
+
+Private raw-log directory: `/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9fe0e4a9f29956a4de49b7c2e6ce6392eeaf9f5f.7RThBH`
+
+Logs are local and unreviewed; publish only sanitized evidence/manifests.
+
+This summary does not supply independent QA, Class B conditions, CEO GO, or production monitoring.

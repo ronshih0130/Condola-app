@@ -1,0 +1,264 @@
+{
+  "observedAt": "2026-10-30T19:51:34.040Z",
+  "candidate": "a30bcc1015450ef8234b247f64f63a0784252e50",
+  "scope": "STAGING_SCHEMA_PRIVILEGE_METADATA_READ_ONLY_ONLY; NO_CUSTOMER_ROWS_OR_RPC",
+  "config": {
+    "encoding": "UTF8",
+    "read_only": "on",
+    "version_num": "170011",
+    "can_set_service_role": true
+  },
+  "tables": [
+    {
+      "name": "audit_log",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "auth_sessions",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "contacts",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "deliveries",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "identity_document_photos",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "identity_documents",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "invoices",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "lease_parties",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "lease_signature_events",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "lease_signatures",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "leases",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "notifications",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "org_members",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "organizations",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    },
+    {
+      "name": "platform_settings",
+      "rls": true,
+      "service_bypass_rls": true,
+      "service_select": true,
+      "service_insert": true,
+      "service_update": true,
+      "service_delete": true
+    }
+  ],
+  "columns": [
+    {
+      "table_name": "auth_sessions",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "auth_sessions",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "auth_sessions",
+      "column_name": "expires_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "auth_sessions",
+      "column_name": "revoked_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "identity_document_photos",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "identity_document_photos",
+      "column_name": "org_id",
+      "data_type": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "identity_document_photos",
+      "column_name": "document_id",
+      "data_type": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "identity_document_photos",
+      "column_name": "slot",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "identity_documents",
+      "column_name": "contact_id",
+      "data_type": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "identity_documents",
+      "column_name": "doc_type",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "identity_documents",
+      "column_name": "deleted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "identity_documents",
+      "column_name": "review_status",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "identity_documents",
+      "column_name": "lease_id",
+      "data_type": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "lease_signatures",
+      "column_name": "contact_id",
+      "data_type": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "lease_signatures",
+      "column_name": "status",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "lease_signatures",
+      "column_name": "signed_name",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "lease_signatures",
+      "column_name": "document_sha256",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "lease_signatures",
+      "column_name": "consent_text_key",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "lease_signatures",
+      "column_name": "user_agent",
+      "data_type": "text",
+      "is_nullable": "YES"
+    }
+  ]
+}
