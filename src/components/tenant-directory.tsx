@@ -33,7 +33,7 @@ export function TenantDirectoryDetail({locale,result,audit}:{locale:Locale;resul
  const c=result.contact;if(!c) return null;
  const t=makeT(locale),copy=directoryCopy(locale),path=`/m/tenants/${c.contact_id}`;
  return <><PageHeader title={displaySampleName(c.name)} crumb={<Link href="/m/tenants">{t("i_tenants_title")}</Link>}/>
- {result.canViewContact?<div className="card"><div className="hd"><h3>{copy.contact}</h3></div><p><ContactText email={c.email} phone={c.phone} locale={locale}/></p></div>:null}
+ {result.canViewContact?<div className="card"><div className="hd"><h3>{copy.contact}</h3></div><div style={{padding:16}}><ContactText email={c.email} phone={c.phone} locale={locale}/></div></div>:null}
  <div className="card" data-testid="directory-history"><div className="hd"><h3>{t("i_nav_leases")}</h3></div>
  {result.rows.length===0?<div className="empty">{copy.noLease}</div>:<table className="t rf"><thead><tr><th>{t("i_space")}</th><th>{t("i_status")}</th></tr></thead><tbody>{result.rows.map(row=><tr key={row.id}><td><Link href={`/m/leases/${row.id}`}>{displaySampleName(row.place)}</Link></td><td data-label={t("i_status")}><span className={`chip ${statusClass(row.status)}`}>{t(statusKey(row.status))}</span></td></tr>)}</tbody></table>}
  </div><ListPager path={path} q="" page={result.page} hasNext={result.hasNext} prevLabel={t("i_search_prev")} nextLabel={t("i_search_next")} summary={listSummary(t,result)} total={result.total} from={result.from} to={result.to}/>

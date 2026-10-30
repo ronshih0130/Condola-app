@@ -1,5 +1,5 @@
-# B015 — Class B draft
+# B015 Class B draft — NOT APPROVED
 
-2026-10-30T04:05:57.382820-07:00; candidate`2746fcd3dc1feaee6b439e38586284ae87c07d85`. **Whole feature/staging/release: NO-GO.** Scopedread-onlydirectory source nativeAstraPASS, rootownedlocalDB6/6 andactualdirectorybrowser1/1at390/1280 +existingtenantOFF4/4PASS, type/lint/copy/consent36/36PASS. Executionattributedtoroot, notindependentlyrerun. Existing source contacts/portal identity preserved. Earlierfailedbrowserattempts retained with honest scopes and nofailurewaiver.
+Scope: default-OFF directory/read/privacy plus three-field company-contact edit and request recovery. No authentication identity/linkage change; no archive feature acceptance. Exact blobs, execution evidence and limits: contact-edit-partial.json and verdict.md.
 
-Contact edits, archive/dependencyraces/historyfiles, completeoriginalidentityreuse matrix, fullcurrentcombinedgates/build/Worker/catalogasapplicable, stagedexactSHAverification, independentClaudeClassB, othermachine/Depot andapplicablegovernanceconditions remainopen. No migration/newapplicationgrants/production/provider/legalcopy authority. See status.md anddirectory-read-partial.json.
+Local DB/wire/browser evidence is supplemental. Native Astra review is not Claude independent QA. Final combined candidate, fresh/upgrade/catalog/privilege evidence and repository gates remain pending. Staging schema application belongs to PE on Ron box; await Ron notice/plan. No hosted Mac migrations. Backup restore, before/after counts, rollback ID, T+0/T+15 and Ron exact-SHA GO remain unsupplied. Production activation and real messaging are unauthorized.
