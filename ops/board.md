@@ -243,3 +243,7 @@ Published/mirrored baseline2b57eb3. Root reserves new pure resend rules/referenc
 ## B005 resend pure partition exact ownership — 2026-10-30T16:20:03.033035-07:00
 
 Highest narrower plan GO; current parent/copy/rotate/mail code remains byte-unchanged. `initial_queue_reconciliation` owns new lib/portal-resend-state, server/test-portal-resend-memory + portal-resend-contract.test, components/portal-resend-result, i18n/portal-resend and e2e/b005-resend-result. Root owns unit registration, one unprovisioned OFF INVITE_RESEND_RESULTS registry entry, private presentation config/runner dispatch and serialized docs. `esign_activation_resume` drafts unapplied closed schema handoff outside repo only; highest reviewer is independent. No DB/provider/operational control writes.
+
+## B005 simulation checkpoint verified — 2026-10-30T16:32:51.873431-07:00
+
+Candidate `a95c7e1c86788d60b2eab2cb9405f494816fb75d` has final607unit/358RLS+1priorapprovedhistoricalSKIP, builds/preflight/Worker1/preview4 PASS. Root serializes final evidence verdict/log/commit/push/mirror. Closed DB handoff is delivered identically, unapplied/non-executable; B005 whole pending PE/stage/Claude. Single canonical flagOFF/unprovisioned; operational invitation parents unchanged. Next B006 only after publication.

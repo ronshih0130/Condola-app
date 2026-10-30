@@ -1,5 +1,11 @@
 # Mode B bootstrap acceptance
 
+## Latest continuous-queue checkpoint — 2026-10-30T16:32:51.873431-07:00
+
+B005 preparatory resend candidate `a95c7e1c86788d60b2eab2cb9405f494816fb75d` locally verified:607unit/358RLS PASS0FAIL1priorapprovedhistoricalSKIP, Next24.421s/Cloudflare30.344s/originalpreflight3.338s/Worker1 and four bilingual390/1280 presentation previews PASS3.0s. Shared result renderer and explicit memory reference always identify simulation; operational parents/copy/rotate/mail unchanged. No durable authorization, real send or authenticated-route claim. [Checkpoint](e2e-evidence/B-005/resend-checkpoint-a95c7e1.md), [manifest](e2e-evidence/B-005/resend-boundary-a95c7e1.json).
+
+Unapplied closed DB handoff is in Downloads/condola-bootstrap/b005-db-handoff.md and repo evidence, SHA47d55e9e...600e25. It lacks executable gateways/active-source reservation/commitment custody and requires PE source/audit/privacy/lock/reset/UNKNOWN validation. B005 pending for that dependent scope plus exact stage/Claude; earlier actual onboarding/report proof591564f retained. FlagINVITE_RESEND_RESULTS reservedOFF/unprovisioned. No wholeB newlydone, prod/mainmerge/operationalmigration/activation/externalmessage/legaledit. STOP POINT: WORKING; next: publish/mirror, then B006 source/evidence reconciliation and private real-import verification; owner: Ron/Codex.
+
 ## Latest continuous-queue checkpoint — 2026-10-30T16:11:51.580068-07:00
 
 B005 local proof candidate `591564f232adc4e8e192c5dc3f8e52463bbd83a8` verified:599unit/358RLS PASS0FAIL1priorapprovedhistoricalSKIP, Next18.160s/Cloudflare26.926s/originalpreflight3.265s/Worker1; fresh privatebrowser4PASS36.5s with6synthetic390/1280screens. Actual unboundexpired/accepted-and-bound/resume/noneaudit and nonempty live↔ownedSBreport HTML+CSV isolation pass. Existing app/schema reused. Globalpresent-row metadata restored exactly/OFF,0orgoptins; finalretainedstate1acceptedbinding/1ownedSB/1noneaudit. Reportfixturesremovedbylaterreset, no retainedreportclaim. [Checkpoint](e2e-evidence/B-005/checkpoint-591564f.md), [manifest](e2e-evidence/B-005/http-boundary-591564f.json).
