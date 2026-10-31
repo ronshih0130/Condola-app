@@ -1,0 +1,11 @@
+# PASS_SCOPED_B007_CHECKPOINT_EVIDENCE
+
+Recorded 2026-10-30T17:06:59.040091-07:00; candidate05369e484a353fad0364d6b435fdbda3590521e7. Requested Astra/xhigh; actual model/effort unknown. Independent source/hash/log/image review only; no reviewer DB/tests/HTTP/writes. Not independent ClaudeClassB acceptance.
+
+Manifest SHAfde2fe11a1e2fae23fb61b4441862bc15cd908f950e879e3b8212ee44b7b945d; all42bindings(26artifacts+16PNG),15source refs verified. All12app/migration/seed/reset refs unchanged fromda4b13d. Bound reader7fa3a692... and builderc00a9328... match reviewed sources; originalpreflight SHA7c4a... unchanged. Candidate diff only reserved test/config/runner and bookkeeping, no app/migration/seed/package change.
+
+Raw evidence supports607unitPASS;359RLS total/358PASS/0FAIL/0cancelled/1exact prior approved historicalSKIP; Next21.765s/CF29.611s/preflight3.315s cleanPASS/Worker1; final8namedbrowsercasesPASS1.1m. Actual target/short/build baseline agree, original PRESENT global fullmetadata and orgflags restored/OFF/0optins; final retained missing-US fixture/evidence1 matches. Absent-original restoration is source-only; one retained fixture does not establish the whole matrix.
+
+Reviewer inspected12complementaryPNG plus missing-USedit390; root4 representative images. Deposit states, reasons/warnings/information and save controls readable. Edit screenshots precede save; persistence4months checked afterward while top summary can still show3 at capture. Mobile fullPage fixed-header overlaps on parent headings/IDV and development badge on small label/footer areas are recorded; no blanket parent/no-overlapvisualPASS or inferred new app regression. Scoped deposit geometry remains independently asserted. Updated current prose no longer claims completed exact local checks are missing.
+
+No cookie/token/JWT/private-key patterns found in bounded reviewed log/JSON scan; onlyPNGs+.last-run in browser output. No universal privacy guarantee. No remaining scoped findings. WholeB007 INCOMPLETE for exact staging/catalog/app/roles, approved compatibility/OFF/rollback and independent ClaudeClassB/Ron acceptance. No production release, activation or new schema approval. Publish/mirror thenB008.

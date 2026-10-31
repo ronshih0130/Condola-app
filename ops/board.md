@@ -259,3 +259,7 @@ Candidate `9bbf04a300f073256bc9a7c887f3c6025b84c5ee`:607unit/358RLS+1priorhistor
 ## B007 private deposit proof reservation — 2026-10-30T16:50:51.618865-07:00
 
 After published/mirroredda4b13d, highest plan GO. Reserve existing e2e/b007-deposit.spec.ts + new e2e/b007-deposit-private-playwright.config.ts for one writer; root owns helpers/runner/evidence/docs. Preserve8-case actual wizard/edit/audit/geometry matrix, harden fences and exact global/org restoration under normal triggers. Existing exception approved; no app/rule/schema/legal change. B007 ClassB; stage/compatibility/Claude remain dependent. No execution before exact source review.
+
+## B007 local checkpoint verified — 2026-10-30T17:05:07.679937-07:00
+
+Candidate `05369e484a353fad0364d6b435fdbda3590521e7`:607unit/358RLS+1priorhistoricalSKIP, builds/preflight/Worker1/browser8 PASS. Exact present-row global/orgrestore/OFF,16images; parent fullPage capture limit separate from scoped deposit geometry. Root serializes final verdict/log/commit/push/mirror. WholeClassB remainder pending; no new app/schema/legalchange. B008 starts only after publication.

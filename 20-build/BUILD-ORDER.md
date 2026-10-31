@@ -14,7 +14,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-004 | Verify paper lease versions, tenant downloads and audit | MGT-10, TEN-03; J2.6/7; CAP-M-02, CAP-T-02 | — | PAPER_LEASE_VERSIONS_ENABLED; TENANT_SIGNED_PDF_ENABLED | B | S / 6–10 | pending |
 | B-005 | Onboarding, invitations and resumable trial | MGT-01/02/03/28; J1; CAP-M-04/05/28; P-10 | — | TEAM_INVITES_ENABLED; ONBOARDING_PROGRESS* | B | M / 16–24 | pending |
 | B-006 | Import error detail and regional source formats | MGT-05; J2.1; CAP-M-06 | — | IMPORT_ERROR_DETAILS* | A | S / 6–10 | pending |
-| B-007 | Deposit rule hints and excess-reason audit | MGT-08; J2.3; CAP-M-07 | — | DEPOSIT_RULE_HINTS* | B | M / 12–20 | in_progress |
+| B-007 | Deposit rule hints and excess-reason audit | MGT-08; J2.3; CAP-M-07 | — | DEPOSIT_RULE_HINTS* | B | M / 12–20 | pending |
 | B-008 | Billing, utility and statement amount previews | MGT-12/26; J3.1/J7; CAP-M-08/22; M-40 | — | BILLING_PREVIEWS* | B | M / 20–32 | in_progress |
 | B-009 | Bank CSV dedupe and manual matching | MGT-14; J3.5; CAP-M-10/23 | — | BANK_MATCHING* | B | M / 16–24 | in_progress |
 | B-010 | Rent reminders and payment review results | MGT-13/15, TEN-07; J3.2/6/7; CAP-M-09/11; M-70 reminder | —; delivery adapter contract in B-028 | RENT_EMAIL_REMINDERS*; PAYMENT_REVIEW_RESULTS* | B | M / 20–32 | pending |
@@ -116,3 +116,7 @@ Candidate `a95c7e1c86788d60b2eab2cb9405f494816fb75d` locally verifies pure simul
 ## B006 ClassA local import checkpoint — 2026-10-30T16:49:08.418530-07:00
 
 Candidate `9bbf04a300f073256bc9a7c887f3c6025b84c5ee` locally verified:607unit/358RLS+1priorhistoricalSKIP, builds/originalpreflight/Worker1 and actual regional browser2PASS18.1s with4screens390/1280. [Proof](../e2e-evidence/B-006/checkpoint-9bbf04a.md). Existing CSV/resubmission and rejection paths reused; no app/parser/schema change. Exact seeded-baseline restore/readback passes; two prior wrong-template probes retained. Whole B006 now `pending` for authorized customer sample/disposition and exact staging. ClassA independent Codex review applies, not a new ClassB gate. Publish/mirror, then B007 (ClassB) existing deposit matrix/control-restoration proof.
+
+## B007 ClassB local deposit checkpoint — 2026-10-30T17:05:07.679937-07:00
+
+Candidate `05369e484a353fad0364d6b435fdbda3590521e7` verifies existing8-case configured deposit matrix:607unit/358RLS+1priorhistoricalSKIP, builds/originalpreflight/Worker1/browser8PASS1.1m,16screens. [Evidence](../e2e-evidence/B-007/checkpoint-05369e4.md). Exact original present global row/orgflags restored/OFF; absent-initial branch source-only, last aggregate not the whole matrix. No app/rule/schema/legal change. B007 now `pending` for exact stage/catalog/app/roles, approved old-code/new-schema/OFF/rollback and ClaudeClassB; Ron namedCHECK exception already resolved. Publish/mirror then B008, whose first-invoice combined and read-only monthly planning gaps remain eligible; monthly execution is not claimed complete.

@@ -1,3 +1,5 @@
+> Latest 2026-10-30T17:04:34.378994-07:00: `05369e484a353fad0364d6b435fdbda3590521e7` SCOPED_LOCAL_PASS, ClassB. Gate607unit/358RLS+1priorhistoricalSKIP, builds/preflight/Worker1/browser8 PASS. [Proof/limits](checkpoint-05369e4.md). Exact original present global row and orgflags restored/OFF; absent branch source-only. WholeB007 pending stage/compatibility/Claude; Ron exception resolved. Next after publish/mirror: B008. Earlier records retain dated scope.
+
 > Latest local integration checkpoint (2026-10-30T03:05:16.071480-07:00): candidate `4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6`; see [core89 local verification](../integration/core89-local-verification.md). Whole-feature verdict remains INCOMPLETE/NO-GO; dated records below retain their original scope. This link supplies no staging/Claude/release waiver.
 
 # B-007 regional deposit checkpoint

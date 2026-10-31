@@ -1,0 +1,325 @@
+{
+  "recordedAt": "2026-10-30T17:02:25.428160-07:00",
+  "candidate": "05369e484a353fad0364d6b435fdbda3590521e7",
+  "sourceBaseline": "da4b13d8156fc35d6ac6ad67c2b932f333a670d6",
+  "scope": "B007 local Class B synthetic proof, not whole acceptance",
+  "sourceBlobs": {
+    "src/components/lease-terms-form.tsx": "63a2f11f946f26233946fb5e348e78be3c441fe2",
+    "src/components/lease-wizard.tsx": "733816336c8e578f0953dc43769385ac29562184",
+    "src/app/m/leases/[id]/page.tsx": "1e39c4ff208bf72c549caf31a3c81a0b45ce3dee",
+    "src/app/m/leases/new/page.tsx": "10b5caf53d160684db2e80b0c483cc2a6c90fb93",
+    "src/server/deposit-rules.ts": "c04b6b88929dfc4bb5ac3e7e52dcf75ca984db3a",
+    "src/server/domain.ts": "b9277c03ef7acece60710fd5c23098fbb4c528a9",
+    "src/server/queries.ts": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+    "src/server/import-batch.ts": "3cbcf60bd21c6066c802b6139130983b50261081",
+    "supabase/migrations/20261031100205_b007_deposit_rules.sql": "616af821a0c41681258c2b0d6ab47004ed8d91f1",
+    "src/server/seed.ts": "bbc6ef0de297b16879ec4d516ea55b848c342863",
+    "src/server/demo.ts": "a15ff0383e68459cf37a1a38167f2ea17042ec27",
+    "src/app/api/demo/reset/route.ts": "0ab5e99ff827ca01782c6081d5ac2dc40b7e47ea",
+    "e2e/b007-deposit.spec.ts": "f06e70b147af0ecc4917c71a4d9a2b6c991ce263",
+    "e2e/b007-deposit-private-playwright.config.ts": "28723db6f0903ded0e23759cce4432bb356b9d59",
+    "scripts/run-e2e.ts": "984d5fa1a0b088a6ad92c0a7930a1b5b2cf33b59"
+  },
+  "commands": {
+    "gate": "python3 ../run-b007-prepared-check.py condola_b007_gate_05369e4 b007-full-gate-05369e4.log bash scripts/gate.sh 05369e4",
+    "buildWorker": "python3 ../run-b007-prepared-check.py condola_b007_build_05369e4 b007-build-worker-driver-05369e4.log python3 ../b007-build-worker-final-commands.py",
+    "browser": "python3 ../run-b007-prepared-check.py condola_b007_http_05369e4 b007-http-05369e4.log node node_modules/@playwright/test/cli.js test --config e2e/b007-deposit-private-playwright.config.ts --output ../b007-http-05369e4-artifacts",
+    "readback": "node ../b007-readback.cjs condola_b007_http_05369e4 05369e4 condola_b007_build_05369e4"
+  },
+  "gate": {
+    "unit": {
+      "tests": 607,
+      "pass": 607,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "rls": {
+      "tests": 359,
+      "pass": 358,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 1
+    },
+    "skip": "one exact Ron-approved historical fixture"
+  },
+  "builds": {
+    "next": "PASS",
+    "cloudflare": "PASS",
+    "preflight": "PASS",
+    "preflightScriptSha256": "7c4a336fc33172efc8e0b736ac4930923801b776b3bd5d79240613b3b2f195cb",
+    "worker": "1 PASS"
+  },
+  "browser": {
+    "tests": 8,
+    "screenshots": 16,
+    "widths": [
+      390,
+      1280
+    ],
+    "scenarios": [
+      "off-us",
+      "on-tw",
+      "on-ca",
+      "on-us-missing"
+    ],
+    "scope": "OFF legacy US requires reason; ON configured TW requires reason; CA warning; US missing-rule information. No universal legal inference."
+  },
+  "syntheticReadback": {
+    "targetDatabase": "condola_b007_http_05369e4",
+    "candidateShort": "05369e4",
+    "baselineDatabase": "condola_b007_build_05369e4",
+    "globalOriginallyPresent": true,
+    "globalRestoredToSeededBaseline": true,
+    "orgRestoredToSeededBaseline": true,
+    "globalOff": true,
+    "controlSha256": "80a5b214eda0379bbdd2f1a5e8cf35433b89db36ce65bcd3a06a8a6b8c968433",
+    "orgFlagsSha256": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+    "properties": 1,
+    "units": 1,
+    "leases": 1,
+    "matching_leases": 1,
+    "evidence_count": 1,
+    "matching_evidence": 1,
+    "org_optins": 0,
+    "scope": "Only the last retained on-us-missing synthetic case; the eight-scenario matrix is browser evidence, not inferred here."
+  },
+  "provenance": "Prepared helper creates HTTP and build clones from template and executes candidate seed.ts in each; browser uses candidate demo reset. Readback compares final HTTP controls to same-source seeded build baseline, not raw template. Normal audit, timestamps and lease rows remain.",
+  "review": {
+    "classification": "B",
+    "requested": "highest independent review",
+    "actualModelEffort": "unknown",
+    "ronCheckException": "approved",
+    "claude": "pending"
+  },
+  "limitations": [
+    "All eight matrix outcomes are browser assertions; aggregate only covers retained final US scenario",
+    "Original absent-control restoration is not claimed unless actually exercised",
+    "Core91c/92b historical evidence is separate",
+    "Stage/catalog, old-code, approved rollback target and Claude review pending",
+    "No whole B007 acceptance or legal interpretation"
+  ],
+  "boundaries": {
+    "newMigration": false,
+    "legalChange": false,
+    "production": false,
+    "mainMerge": false,
+    "operationalMacMigration": false,
+    "persistentActivation": false,
+    "externalMessages": false
+  },
+  "artifacts": {
+    "copy-check.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/05369e484a353fad0364d6b435fdbda3590521e7.qpHrGa/copy-check.log",
+      "sha256": "8ea47b40ce061f33fc484d3472a8c0bc15c048fcda27e0a03fbf85a75e6f7f5f",
+      "bytes": 1434
+    },
+    "flag-expiry.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/05369e484a353fad0364d6b435fdbda3590521e7.qpHrGa/flag-expiry.log",
+      "sha256": "d8719ad21969aa9b78184a2d9a5f951a39b49fa118df013d403914eb44670892",
+      "bytes": 27
+    },
+    "lint.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/05369e484a353fad0364d6b435fdbda3590521e7.qpHrGa/lint.log",
+      "sha256": "da819f980b5df58f94df10cee617099a4a6539df6d5f02510c80645449817c1d",
+      "bytes": 2422
+    },
+    "npm-ci.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/05369e484a353fad0364d6b435fdbda3590521e7.qpHrGa/npm-ci.log",
+      "sha256": "cf0cd67af9f1c430f9585791d4e9f6c2a925b819c0fc8366fde5e64a622575a2",
+      "bytes": 1584
+    },
+    "postgres-16.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/05369e484a353fad0364d6b435fdbda3590521e7.qpHrGa/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "test-rls.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/05369e484a353fad0364d6b435fdbda3590521e7.qpHrGa/test-rls.log",
+      "sha256": "ba9ead7be4151684ab9a29cc9cac4bfd16e38a0c399398c7d478254e2aac3b9a",
+      "bytes": 100269
+    },
+    "test-unit.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/05369e484a353fad0364d6b435fdbda3590521e7.qpHrGa/test-unit.log",
+      "sha256": "c0eaf818902b9fa75039973f3f6aca6c566d9fc6e7328ed6b2a4a8f8884c29fa",
+      "bytes": 125244
+    },
+    "toolchain.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/05369e484a353fad0364d6b435fdbda3590521e7.qpHrGa/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    "typecheck.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/05369e484a353fad0364d6b435fdbda3590521e7.qpHrGa/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "gate-summary": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-05369e484a353fad0364d6b435fdbda3590521e7.md",
+      "sha256": "50c12ab2dcc91e794e0c3981ad3a2c54f8d6795da1f3aad1c9e591eaf9a5b40e",
+      "bytes": 971
+    },
+    "b007-full-gate-05369e4.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-full-gate-05369e4.log",
+      "sha256": "41466c07edf630428880d4f01fc5d0dea1484c8248818000e1b0536b10b39762",
+      "bytes": 470
+    },
+    "b007-build-worker-driver-05369e4.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-build-worker-driver-05369e4.log",
+      "sha256": "f6a523ecd59db011d76c6795a9286e6226684b770f9e6e3ddddd8ec21c03c06e",
+      "bytes": 357
+    },
+    "b007-next-build-05369e4.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-next-build-05369e4.log",
+      "sha256": "2922b50b566e81c2c1d96747408bc0b59133277257f7fae90f26b28e701d7c99",
+      "bytes": 12250
+    },
+    "b007-cf-build-05369e4.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-cf-build-05369e4.log",
+      "sha256": "a3412227ee6d4dc6757253dd549edf641d4331189780aaa88dff48b38ed153d9",
+      "bytes": 13959
+    },
+    "b007-preflight-05369e4.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-preflight-05369e4.log",
+      "sha256": "d9ee730ab292c61e6dc920c6b64146eaa642d2da9fe72893b0f4b416dff84924",
+      "bytes": 23
+    },
+    "b007-worker-05369e4.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-worker-05369e4.log",
+      "sha256": "e181e238785f3db75a6cc2f6177241515635be3ec8378570cd48fcfb7b71436d",
+      "bytes": 423
+    },
+    "b007-http-05369e4.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4.log",
+      "sha256": "2dd7a57dc0923f57a29ca7fa17afd035a892dd79390f2e145715a7babe299657",
+      "bytes": 667
+    },
+    "b007-synthetic-readback-05369e4.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-synthetic-readback-05369e4.json",
+      "sha256": "0d8b028c6672a69077bf7703992843cc64de95296c0f05a93e05c333589f8169",
+      "bytes": 720
+    },
+    "run-b007-prepared-check.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b007-prepared-check.py",
+      "sha256": "697637ccbe44248d12d83d045481ee084c97d48f3882735e1c3a576adcf1e924",
+      "bytes": 2026
+    },
+    "b007-build-worker-final-commands.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-build-worker-final-commands.py",
+      "sha256": "fdfc29896c7af3ee7ad3e5625c01734ae83fa79eccba52e721cf81284211d55c",
+      "bytes": 1264
+    },
+    "make-b007-final-proof.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/make-b007-final-proof.py",
+      "sha256": "c00a9328692714d7264a490bce7ac3e325a16e6df49df155059ca47f5b376b42",
+      "bytes": 10986
+    },
+    "b007-readback.cjs": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-readback.cjs",
+      "sha256": "7fa3a69272bf4896e2ec404169a990225033bf5e1a562decc1f1be6582b6f530",
+      "bytes": 4153
+    },
+    "B007-private-deposit-proof-plan.md": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/B007-private-deposit-proof-plan.md",
+      "sha256": "05168213244b5512340eda160be69d2ec82a32b5e571ece812107b4e8fdeca1b",
+      "bytes": 2489
+    },
+    "b007-typecheck-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-typecheck-draft-a.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "b007-lint-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-lint-draft-a.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "b007-http-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-draft-a.log",
+      "sha256": "89159411eb6f22cb9f95f7fb2faf59daca3a18bd09640fff2e73cd18c3973af1",
+      "bytes": 667
+    }
+  },
+  "screenshots": {
+    "b007-http-05369e4-artifacts/b007-deposit-B007-off-us-chromium-1280/edit-off-us-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-off-us-chromium-1280/edit-off-us-1280.png",
+      "sha256": "c5c8842975300d871f8338955a868fad71c35ae5c387d4355adae4d58ccaedac",
+      "bytes": 154664
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-off-us-chromium-1280/wizard-off-us-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-off-us-chromium-1280/wizard-off-us-1280.png",
+      "sha256": "e39c3b2067662962b9d70c405411b9932dd4dff7740d6c75b7327a248f67b643",
+      "bytes": 90459
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-off-us-chromium-390/edit-off-us-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-off-us-chromium-390/edit-off-us-390.png",
+      "sha256": "89c05f82bc6a5ee4c3b1b7403f09ff9772b76100930d5639039b3b01658cdcb6",
+      "bytes": 111166
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-off-us-chromium-390/wizard-off-us-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-off-us-chromium-390/wizard-off-us-390.png",
+      "sha256": "2fe3a94d233630078f5d718965a09c319250f36d4fc7b2cbca8fd163234524a0",
+      "bytes": 53884
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-ca-chromium-1280/edit-on-ca-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-ca-chromium-1280/edit-on-ca-1280.png",
+      "sha256": "ffe25f9e065c0277a526d08629c3a164ffcc51f366ac8e5b8a378d9a70a65874",
+      "bytes": 138805
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-ca-chromium-1280/wizard-on-ca-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-ca-chromium-1280/wizard-on-ca-1280.png",
+      "sha256": "d39ba6bc946577280320edb0ad1f9a215618ee081368f5a258502581a296502e",
+      "bytes": 83019
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-ca-chromium-390/edit-on-ca-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-ca-chromium-390/edit-on-ca-390.png",
+      "sha256": "18390b46b52cbd9e666a3cd685d3796fa33b060ecd18adf6c8dd858b33d99684",
+      "bytes": 97848
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-ca-chromium-390/wizard-on-ca-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-ca-chromium-390/wizard-on-ca-390.png",
+      "sha256": "26b8b003ea67a749d2a95f43986affef5669d874b4c66aad64135cbd96162205",
+      "bytes": 46017
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-tw-chromium-1280/edit-on-tw-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-tw-chromium-1280/edit-on-tw-1280.png",
+      "sha256": "52580996af5f1d2909a0cb94b77512665154ff23306e0ebb5b0b97abc432721b",
+      "bytes": 154228
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-tw-chromium-1280/wizard-on-tw-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-tw-chromium-1280/wizard-on-tw-1280.png",
+      "sha256": "21a4a805256f16e00058f186c1cf82bff2db5c7cfe9416a272fe460fd15e8a1a",
+      "bytes": 90461
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-tw-chromium-390/edit-on-tw-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-tw-chromium-390/edit-on-tw-390.png",
+      "sha256": "c23282d9167836828cd82c051aa808395bb029f1a00beddfc60e69e5c0697ee4",
+      "bytes": 110640
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-tw-chromium-390/wizard-on-tw-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-tw-chromium-390/wizard-on-tw-390.png",
+      "sha256": "01540489628771a3fcfe0ca668f149c5754b36b93e1bc8f7622850560fea90e0",
+      "bytes": 53615
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-us-missing-chromium-1280/edit-on-us-missing-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-us-missing-chromium-1280/edit-on-us-missing-1280.png",
+      "sha256": "20ea882fba03a49d40fbcf4b360d3894985fbf9ac9f08a30b046d129eb9357f9",
+      "bytes": 137405
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-us-missing-chromium-1280/wizard-on-us-missing-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-us-missing-chromium-1280/wizard-on-us-missing-1280.png",
+      "sha256": "1778de93202d8dd03edbe061a6b48aefcc83ac00a704a93ef4ea0539a923d7f6",
+      "bytes": 80146
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-us-missing-chromium-390/edit-on-us-missing-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-us-missing-chromium-390/edit-on-us-missing-390.png",
+      "sha256": "8aa72bd19031b7d698f6e95d7c713a56e2f62a2ef879044a1d2bbecaf99454ce",
+      "bytes": 91060
+    },
+    "b007-http-05369e4-artifacts/b007-deposit-B007-on-us-missing-chromium-390/wizard-on-us-missing-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b007-http-05369e4-artifacts/b007-deposit-B007-on-us-missing-chromium-390/wizard-on-us-missing-390.png",
+      "sha256": "65005a37893c1fc484abf5c63a71252aca9693f5fbea1e8c663c3e3bcc23e5b2",
+      "bytes": 43180
+    }
+  }
+}
