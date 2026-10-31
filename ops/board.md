@@ -295,3 +295,7 @@ Historicalbb45158 fullgate611unit/373RLS+1historicalSKIP, Next/CF/preflight/Work
 ## B008 monthly form visual correction — 2026-10-30T17:47:26.413907-07:00
 
 Candidate535c086 allruntimePASS (611unit/373RLS+1approvedSKIP/builds/preflight/Worker/browser6/22PNGs), exactcontrolrestorePASS, manifest2394b838… independently49bindings/36refschecked. Root4+independent18images coverall22. Newvisualfinding: baremonthfield/action lackseparation/touchheight at390. ExistingreservesONLY: esign_activation_resume childmonthlypage PageHeader/card/fg/f/inp/btnpri; initial_queue_reconciliation monthlybrowserfield/actiongeometry. Nofinancial/control/schema/copychange. Allruntimejobsdrainedbeforeedits, previousproofspreserved. Newcandidatefullgate/build/browserrequired.
+
+## B008 local checkpoint verified — 2026-10-30T17:58:16.504496-07:00
+
+Candidate `4b8228f995a29a56ac89bb86b4a8b2e7e12adfe8`:611unit/373RLS+1historicalSKIP, builds/preflight/Worker1/browser6PASS52.1s22PNGs; source/evidence independentPASS49bindings/36refs. Root4+reviewer18coverall22; mobileform and explicitmonth corrections resolved. ExactPRESENTglobal/orgrestoreOFF/0optins; capturelimits retained. No app/schema/control/copychanges afterfreeze. Root serializes notes/sessionlog/Originpush/renew/mirror. B008 remainsin_progress; concretewritercontract+eligible nonDBwork next, notinventedallDBblock.

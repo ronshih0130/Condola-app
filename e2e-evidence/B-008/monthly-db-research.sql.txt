@@ -1,0 +1,40 @@
+-- PROPOSAL ONLY — NOT APPROVED, NOT APPLIED, NOT A MIGRATION.
+-- This deliberately executable statement fails closed. The reference DDL below
+-- is commented out and is incomplete without the reviewed all-writer contract.
+DO $$ BEGIN RAISE EXCEPTION 'B008 proposal is not approved or executable'; END $$;
+
+/* REFERENCE DDL — DO NOT UNCOMMENT OR APPLY
+-- A later, separately assigned timestamp and exact baseline are required.
+-- Assumes app schema and existing composite parent keys, to be verified on PE.
+CREATE TABLE app.b008_monthly_rent_occurrences (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL,
+  lease_id uuid NOT NULL,
+  month_start date NOT NULL CHECK (isfinite(month_start) AND extract(day FROM month_start) = 1),
+  invoice_id uuid NOT NULL,
+  invoice_line_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp() CHECK (isfinite(created_at)),
+  UNIQUE (org_id, id),
+  UNIQUE (org_id, lease_id, month_start),
+  UNIQUE (org_id, invoice_line_id),
+  FOREIGN KEY (org_id, lease_id) REFERENCES public.leases(org_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (org_id, invoice_id) REFERENCES public.invoices(org_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (org_id, invoice_line_id) REFERENCES public.invoice_lines(org_id, id) ON DELETE RESTRICT
+);
+CREATE TABLE app.b008_monthly_rent_commands (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL,
+  actor_user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
+  request_id uuid NOT NULL,
+  request_digest bytea NOT NULL CHECK (octet_length(request_digest) = 32),
+  occurrence_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp() CHECK (isfinite(created_at)),
+  UNIQUE (org_id, actor_user_id, request_id),
+  FOREIGN KEY (org_id, occurrence_id) REFERENCES app.b008_monthly_rent_occurrences(org_id, id) ON DELETE RESTRICT
+);
+ALTER TABLE app.b008_monthly_rent_occurrences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.b008_monthly_rent_commands ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON app.b008_monthly_rent_occurrences, app.b008_monthly_rent_commands FROM PUBLIC, anon, authenticated, service_role;
+-- No policy, grant, RPC, scheduler, emitter, trigger, history mapping, backfill,
+-- or caller-accessible mutation is supplied by this reference foundation.
+*/

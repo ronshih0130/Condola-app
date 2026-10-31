@@ -1,3 +1,15 @@
+# B008 current status
+
+Updated 2026-10-30T17:58:16.504496-07:00. Candidate `4b8228f995a29a56ac89bb86b4a8b2e7e12adfe8`, branch `mode-b-repair-override-prep`. **IN PROGRESS / scoped local preview PASS**, not whole-B008 acceptance.
+
+[Current checkpoint](checkpoint-4b8228f.md): shared first-invoice preview and supported read-only monthly rent planning;611unit/373RLS+1approved historicalSKIP, builds/originalpreflight/Worker1 and6browser/22screens PASS. Native independent scope PASS. Global billing controls restoredOFF; no operational activation or DB migration.
+
+Remaining: actual monthly generation/full-bill parity and writer-invariant design; exact staging/owner/catalog/old-code/rollback and ClaudeClassB acceptance. [Non-executable DB research](monthly-db-research.md) is not apply-ready. Eligible nonDB design/application work continues; do not park the whole item or label it done.
+
+STOP POINT: WORKING; next: `cat ../B008-monthly-writer-contract-v2.md`; owner: Ron modeB3099AC86/Codex.
+
+## Historical checkpoint (superseded status, evidence scope retained)
+
 > Latest local integration checkpoint (2026-10-30T03:05:16.071480-07:00): candidate `4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6`; see [core89 local verification](../integration/core89-local-verification.md). Whole-feature verdict remains INCOMPLETE/NO-GO; dated records below retain their original scope. This link supplies no staging/Claude/release waiver.
 
 # B-008 statement and utility checkpoint
