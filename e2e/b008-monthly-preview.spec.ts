@@ -66,17 +66,25 @@ test("monthly rent preview preserves source distinctions",async ({page},info)=>{
   guard(info);
   const width=info.project.use.viewport?.width;
   if (width !== 390 && width !== 1280) throw new Error("B008 invalid viewport");
+  let phase="initial";
   const errors:string[]=[];
-  page.on("pageerror",()=>errors.push("page error"));
-  page.on("console",message=>{if(message.type()==="error")errors.push("console error");});
-  page.on("response",response=>{if(response.status()>=500)errors.push("server error");});
+  const classify=(value:string)=>{
+    const react=/Minified React error #([0-9]{1,3})\b/.exec(value);
+    if(react) return `react-${react[1]}`;
+    if(/hydration|hydrating|server rendered HTML/i.test(value)) return "hydration";
+    if(/ChunkLoadError|Loading chunk/i.test(value)) return "chunk-load";
+    return "other";
+  };
+  page.on("pageerror",error=>errors.push(`${phase}:page:${classify(error.message)}`));
+  page.on("console",message=>{if(message.type()==="error")errors.push(`${phase}:console:${classify(message.text())}`);});
+  page.on("response",response=>{if(response.status()>=500)errors.push(`${phase}:http:${response.status()}`);});
   await page.context().route("**/*",async route=>{
     try { if(new URL(route.request().url()).origin === origin) { await route.continue(); return; } } catch { /* reject malformed URL */ }
     errors.push("off-origin request"); await route.abort();
   });
   let snapshot: Snapshot | undefined, primary: string | undefined, restoration: string | undefined;
   try {
-    await reset(page); snapshot=await capture(); await establishOff();
+    phase="off"; await reset(page); snapshot=await capture(); await establishOff();
     const path="/m/rent/monthly-preview?month=2035-02";
     await page.goto("/api/demo/locale?set=en&next=/m/rent");
     await expect(page.getByRole("link",{name:"Monthly rent preview"})).toHaveCount(0);
@@ -84,7 +92,7 @@ test("monthly rent preview preserves source distinctions",async ({page},info)=>{
     await expect(page.getByText("Preview unavailable.",{exact:true})).toBeVisible();
     await expect(page.getByTestId("monthly-preview")).toHaveCount(0);
     await top(page); await page.screenshot({path:info.outputPath(`monthly-off-${width}.png`),fullPage:true});
-    const fixtures=await db(async c=>{
+    phase="fixtures"; const fixtures=await db(async c=>{
       await c.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='billing_previews'`,[ORG_ID]);
       await c.query(`UPDATE organizations SET feature_flags=feature_flags || '{"billing_previews":true}'::jsonb WHERE id=$1`,[ORG_ID]);
       const create=async(name:string,currency:string,rent:number,start="2035-01-01",frequency="monthly")=>{
@@ -102,7 +110,7 @@ test("monthly rent preview preserves source distinctions",async ({page},info)=>{
       }
       return {twd,usd,zero,partial,quarterly,missing,existing};
     });
-    await page.goto("/m/rent");
+    phase="entry"; await page.goto("/m/rent");
     await expect(page.getByRole("link",{name:"Monthly rent preview"})).toBeVisible();
     await page.getByRole("link",{name:"Monthly rent preview"}).click();
     await expect(page.locator('input[name="month"]')).toHaveValue("");
@@ -122,10 +130,10 @@ test("monthly rent preview preserves source distinctions",async ({page},info)=>{
     const field=geometry.field!, action=geometry.button!;
     expect(field.right <= action.left || action.right <= field.left || field.bottom <= action.top || action.bottom <= field.top).toBe(true);
     await top(page); await page.screenshot({path:info.outputPath(`monthly-choose-${width}.png`),fullPage:true});
-    await page.locator('input[name="month"]').fill("2035-02");
+    phase="selection"; await page.locator('input[name="month"]').fill("2035-02");
     await page.getByRole("button",{name:"Review",exact:true}).click();
     await expect(page).toHaveURL(/month=2035-02/);
-    const preview=page.getByTestId("monthly-preview"); await expect(preview).toBeVisible();
+    phase="amounts"; const preview=page.getByTestId("monthly-preview"); await expect(preview).toBeVisible();
     await expect(preview).toContainText("Supported rent subtotal only. This is not a complete bill.");
     const row=(name:string)=>page.getByTestId("monthly-rows").locator("tbody tr").filter({hasText:`B008 monthly ${name} · Synthetic`});
     await expect(row("TWD")).toContainText("TWD"); await expect(row("TWD").locator('td[data-label="Rent"] .v')).toHaveText("1000"); await expect(row("TWD")).toContainText("Ready for rent review");
@@ -141,24 +149,24 @@ test("monthly rent preview preserves source distinctions",async ({page},info)=>{
     await expect(page.getByRole("button",{name:/generate|issue|post/i})).toHaveCount(0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
     await top(page); await page.screenshot({path:info.outputPath(`monthly-on-${width}.png`),fullPage:true});
-    await db(c=>c.query(`UPDATE leases SET rent_amount_minor=23456 WHERE id=$1 AND org_id=$2`,[fixtures.usd.lease,ORG_ID]));
+    phase="refresh"; await db(c=>c.query(`UPDATE leases SET rent_amount_minor=23456 WHERE id=$1 AND org_id=$2`,[fixtures.usd.lease,ORG_ID]));
     await page.reload(); await expect(row("USD").locator('td[data-label="Rent"] .v')).toHaveText("234.56");
     await expect(subtotals.locator("li").filter({hasText:"TWD:"})).toHaveText("TWD: 1000 (2)");
     await expect(subtotals.locator("li").filter({hasText:"USD:"})).toHaveText("USD: 234.56 (1)");
-    await page.goto(`/api/demo/locale?set=zh-TW&next=${encodeURIComponent(path)}`);
+    phase="zh"; await page.goto(`/api/demo/locale?set=zh-TW&next=${encodeURIComponent(path)}`);
     await expect(page.getByTestId("monthly-preview")).toContainText("僅為可核對租金小計，並非完整帳單。");
     await expect(row("Partial")).toContainText("部分期間或搬離需核對");
     await expect(row("Quarterly")).toContainText("租金週期尚未支援");
     await expect(row("Missing period")).toContainText("歷史租金期間未記錄");
     await top(page); await page.screenshot({path:info.outputPath(`monthly-zh-${width}.png`),fullPage:true});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
-    await page.goto(`/api/demo/locale?set=en&next=${encodeURIComponent("/m/rent/monthly-preview?month=invalid")}`);
+    phase="invalid"; await page.goto(`/api/demo/locale?set=en&next=${encodeURIComponent("/m/rent/monthly-preview?month=invalid")}`);
     await expect(page.getByText("Preview unavailable.",{exact:true})).toBeVisible();
     await expect(page.getByTestId("monthly-preview")).toHaveCount(0);
     await top(page); await page.screenshot({path:info.outputPath(`monthly-invalid-${width}.png`),fullPage:true});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
     expect(errors).toEqual([]);
-  } catch(error) { primary=safeFailure("monthly preview journey",error); }
+  } catch(error) { primary=safeFailure(`monthly preview journey:${phase}`,error); }
   if(snapshot) try { await restore(snapshot); } catch(error) { restoration=safeFailure("control restoration",error); }
-  if(primary || restoration) throw new Error([primary,restoration].filter(Boolean).join("; "));
+  if(primary || restoration) throw new Error([primary,errors.length ? `events:${[...new Set(errors)].join(",")}` : undefined,restoration].filter(Boolean).join("; "));
 });

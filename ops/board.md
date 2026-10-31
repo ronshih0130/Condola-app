@@ -299,3 +299,19 @@ Candidate535c086 allruntimePASS (611unit/373RLS+1approvedSKIP/builds/preflight/W
 ## B008 local checkpoint verified — 2026-10-30T17:58:16.504496-07:00
 
 Candidate `4b8228f995a29a56ac89bb86b4a8b2e7e12adfe8`:611unit/373RLS+1historicalSKIP, builds/preflight/Worker1/browser6PASS52.1s22PNGs; source/evidence independentPASS49bindings/36refs. Root4+reviewer18coverall22; mobileform and explicitmonth corrections resolved. ExactPRESENTglobal/orgrestoreOFF/0optins; capturelimits retained. No app/schema/control/copychanges afterfreeze. Root serializes notes/sessionlog/Originpush/renew/mirror. B008 remainsin_progress; concretewritercontract+eligible nonDBwork next, notinventedallDBblock.
+
+## B008 scoped rent-operation continuation — 2026-10-30T18:17:58.782410-07:00
+
+Published/mirrored56bd499, app4b8228f fullychecked; freshrequestedAstra/ultra sourceGO forboundedownoperation, noapproveduniversallegacyDMLimmutability requirement. SourceanchorsJ3.1/MGT12/QA; actualwriterAdmin/Accountant, managerreadpreserved. NextNO-schema readonlydetail+sharedperleasepayer/currency/period/sourcefingerprint; separateunappliedowner-private2tableproposal. Rootplanoutside work/B008-rent-operation-detail-plan.md. Do notpromoteearlierglobalepochresearchintoprerequisite. WholeB008staysin_progress, no fullbillclaim.
+
+## B008 rent-detail exact path reservation — 2026-10-30T18:18:26.736621-07:00
+
+`b008_movein_preview_terra` server-only: NEW src/server/monthly-rent-operation-plan.ts +.test.ts, monthly-rent-preview.ts +.integration.test.ts; existing monthly-billing-rules.ts/.test.ts and monthly-billing-plan.ts/.integration.test.ts ONLY currency-reference metadata/exact formatting/newdigestversion/fixtureadaptation. No UI/seed/DS/appissuer orotherfinancialsource edits. A separateUIwriter willown NEWcomponents/monthly-rent-preview.tsx,i18n/monthly-rent-preview.ts,app/m/rent/monthly-preview/[leaseId]/page.tsx; existing components/monthly-billing-preview.tsx andi18n/monthly-billing-preview.ts onlydetailentry/configuredmoneyformat; NEW e2e/b008-monthly-rent-detail.spec.ts. Root owns package/config/runner/flags/docs and integration. ProposedDBauthorONLYoutsideDownloads new b008-monthly-operation-db-handoff.md plus20261031110008_b008_monthly_rent_operation.proposed.sql (workingunusedslot, PEconfirmallrefs/planbeforeapply); no repositorySQL orseededit untilreview. OldnonexecDBresearchuntouched. NoauthorrunsDB/tests/build/browser/commit/push.
+
+## B008 private browser failure diagnostic reservation — 2026-10-30T18:36:09.214886-07:00
+
+Firstnew8casepreliminaryrun7PASS/1FAIL oldmonthly1280genericjourney; all5casePNGsretainedincludinginvalid, actualeventorfinalgeometrycauseunknown. Rootaloneowns e2e/b008-monthly-preview.spec.ts staticphase/knownReact-hydration-chunk/httpcategorydiagnostics, no rawmessages/URLs/tokens/trace/ARIA. Noassertionweakened; originalsourcecopy/privatefailedlog/error-context/PNGsretained. Focused17/17serverPASS, type/lintPASS7existingwarnings. ProposedpostingflagOFFmetadatareservedonly. Nexttargetedguarded1280diagnostic aftersource review, no identicalblindrerun ornewPASSclaim.
+
+## B008 rent-detail candidate freeze — 2026-10-30T18:44:04.963320-07:00
+
+FreshAstra/ultra scopedserver/UI/proposalSOURCEGO;17focusedPASS,type/lintPASS(7existingwarnings). Firstprelimbrowser7/8FAILoldmonthly1280genericcatch; originalcauseUNKNOWN, notwaived/baseline. Source-safephase/eventdiagnostic keepsallassertions; targeted1280PASS13.2s thenfull8PASS1.1m onquietworktree. Originalfailedlog/error-context/PNGs/sourcepreservedprivately, no causeinferred. IndependentunappliedprivateDBproposalreviewPASS ONLY, no newDDLexecuted; independentpostingflagreservedOFFmetadata. Freeze allimplementation/tests now; next exactcandidatefullgate/build/Worker/private8case30PNG andnewreadback, source/evidenceQA; no furthermutationsduringHTTP. WholeB008IN_PROGRESS, releaseNO-GO andoriginalobservationretained.

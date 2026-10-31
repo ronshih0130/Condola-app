@@ -57,6 +57,14 @@ flags:
     global_kill: "platform_settings.billing_previews enabled must be boolean true and allowed_org_ids must include this organization"
     org_override: "organizations.feature_flags.billing_previews must be boolean true"
     activation: "local synthetic tests only; first-period formula/full billing preview still partial"
+  monthly_rent_posting:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "Reserved and unprovisioned; future platform_settings.monthly_rent_posting requires strict boolean enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
+    org_override: "Future organizations.feature_flags.monthly_rent_posting must be strict boolean true; new creation also requires the existing billing_previews global allowlist and organization gate"
+    activation: "OFF; this checkpoint is SELECT-only rent detail, without an issuing action; the private DB foundation is an unapplied PE review proposal, not an activated runtime capability"
   bank_matching:
     owner: Ron
     expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"

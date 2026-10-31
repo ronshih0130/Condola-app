@@ -8,7 +8,7 @@ if (process.env.B008_VIEWPORT_WIDTH || Object.entries(process.env).some(([name, 
 process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
 process.env.B008_PRIVATE_HTTP_CONFIG = "1";
 export default defineConfig({
-  testDir: ".", testMatch: ["b008-billing-preview.spec.ts", "b008-first-period.spec.ts", "b008-monthly-preview.spec.ts"], fullyParallel: false, workers: 1, timeout: 180_000,
+  testDir: ".", testMatch: ["b008-billing-preview.spec.ts", "b008-first-period.spec.ts", "b008-monthly-preview.spec.ts", "b008-monthly-rent-detail.spec.ts"], fullyParallel: false, workers: 1, timeout: 180_000,
   expect: { timeout: 15_000 }, reporter: "line",
   use: { baseURL: "http://127.0.0.1:43139", trace: "off", screenshot: "off", video: "off" },
   webServer: {
