@@ -105,6 +105,10 @@ test("monthly rent preview preserves source distinctions",async ({page},info)=>{
     await page.goto("/m/rent");
     await expect(page.getByRole("link",{name:"Monthly rent preview"})).toBeVisible();
     await page.getByRole("link",{name:"Monthly rent preview"}).click();
+    await expect(page.locator('input[name="month"]')).toHaveValue("");
+    await expect(page.getByText("Choose a month to review.",{exact:true})).toBeVisible();
+    await expect(page.getByTestId("monthly-preview")).toHaveCount(0);
+    await top(page); await page.screenshot({path:info.outputPath(`monthly-choose-${width}.png`),fullPage:true});
     await page.locator('input[name="month"]').fill("2035-02");
     await page.getByRole("button",{name:"Review",exact:true}).click();
     await expect(page).toHaveURL(/month=2035-02/);

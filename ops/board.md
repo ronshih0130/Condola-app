@@ -287,3 +287,7 @@ Highest scoped contract PASS SHA256535870b3dfff408be3f9808c36198994cfc41f935ca9d
 ## B008 preview candidate freeze — 2026-10-30T17:32:36.683525-07:00
 
 Highest scoped SOURCE GO for first-invoice reader/issuer extraction/authority and supported readonly monthly planner plus private browser/config/registrations. Focused19/19PASS, typecheckPASS, lint0errors/7existingwarnings; preliminarybrowser6PASS1.1m before final exact-subtotal assertion delta. Root freezes all application/test files now; no operational migrations or flags/provider/legal change. WholeB008 remains in_progress: actual monthly writer/full-bill parity not completed, later stage/ClassB gates pending. Next: clean exact-candidate fullgate, builds/originalGNUawkpreflight/Worker, final6browser and20image review, docs/Originpush/mirror.
+
+## B008 timezone default correction — 2026-10-30T17:38:19.318269-07:00
+
+Historicalbb45158 fullgate611unit/373RLS+1historicalSKIP, Next/CF/preflight/Worker allPASS. Before final acceptance, highest confirmed newly introduced taipeiToday default violates shared timezone contract at month boundaries. Existing source reservations extended only for explicit month selection: esign_activation_resume childmonthlypage+i18ncopy; initial_queue_reconciliation newmonthlybrowser blankinput/prompt/noresults afteractualentry. No business calculation/DB change. Build drained before mutations; previous report preserved privately work/b008-gate-bb45158-preserved.md. New exact candidate requires final fullgate/build/browser. Root serializes integration and new proof pins.
