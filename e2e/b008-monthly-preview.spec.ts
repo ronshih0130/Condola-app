@@ -108,6 +108,19 @@ test("monthly rent preview preserves source distinctions",async ({page},info)=>{
     await expect(page.locator('input[name="month"]')).toHaveValue("");
     await expect(page.getByText("Choose a month to review.",{exact:true})).toBeVisible();
     await expect(page.getByTestId("monthly-preview")).toHaveCount(0);
+    const geometry=await page.locator('input[name="month"]').evaluate(input=>{
+      const form=input.closest("form"), button=form?.querySelector("button");
+      const rect=(element:Element|null|undefined)=>element?.getBoundingClientRect().toJSON() ?? null;
+      return {field:rect(input),button:rect(button),viewport:window.innerWidth};
+    });
+    expect(geometry.field && geometry.button).toBeTruthy();
+    for (const box of [geometry.field,geometry.button]) {
+      expect(box!.width).toBeGreaterThan(0); expect(box!.height).toBeGreaterThan(0);
+      expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x+box!.width).toBeLessThanOrEqual(geometry.viewport+1);
+      if (width === 390) expect(box!.height).toBeGreaterThanOrEqual(44);
+    }
+    const field=geometry.field!, action=geometry.button!;
+    expect(field.right <= action.left || action.right <= field.left || field.bottom <= action.top || action.bottom <= field.top).toBe(true);
     await top(page); await page.screenshot({path:info.outputPath(`monthly-choose-${width}.png`),fullPage:true});
     await page.locator('input[name="month"]').fill("2035-02");
     await page.getByRole("button",{name:"Review",exact:true}).click();

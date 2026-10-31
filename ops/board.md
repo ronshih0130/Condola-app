@@ -291,3 +291,7 @@ Highest scoped SOURCE GO for first-invoice reader/issuer extraction/authority an
 ## B008 timezone default correction — 2026-10-30T17:38:19.318269-07:00
 
 Historicalbb45158 fullgate611unit/373RLS+1historicalSKIP, Next/CF/preflight/Worker allPASS. Before final acceptance, highest confirmed newly introduced taipeiToday default violates shared timezone contract at month boundaries. Existing source reservations extended only for explicit month selection: esign_activation_resume childmonthlypage+i18ncopy; initial_queue_reconciliation newmonthlybrowser blankinput/prompt/noresults afteractualentry. No business calculation/DB change. Build drained before mutations; previous report preserved privately work/b008-gate-bb45158-preserved.md. New exact candidate requires final fullgate/build/browser. Root serializes integration and new proof pins.
+
+## B008 monthly form visual correction — 2026-10-30T17:47:26.413907-07:00
+
+Candidate535c086 allruntimePASS (611unit/373RLS+1approvedSKIP/builds/preflight/Worker/browser6/22PNGs), exactcontrolrestorePASS, manifest2394b838… independently49bindings/36refschecked. Root4+independent18images coverall22. Newvisualfinding: baremonthfield/action lackseparation/touchheight at390. ExistingreservesONLY: esign_activation_resume childmonthlypage PageHeader/card/fg/f/inp/btnpri; initial_queue_reconciliation monthlybrowserfield/actiongeometry. Nofinancial/control/schema/copychange. Allruntimejobsdrainedbeforeedits, previousproofspreserved. Newcandidatefullgate/build/browserrequired.
