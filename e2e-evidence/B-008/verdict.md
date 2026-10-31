@@ -1,5 +1,5 @@
 # B008 verdict
 
-**PASS scoped local preview checkpoint / INCOMPLETE whole B008 / NO-GO release or activation.** Exact candidate `4b8228f995a29a56ac89bb86b4a8b2e7e12adfe8`; [evidence and limitations](checkpoint-4b8228f.md). Native independent source/evidence review passes,611unit/373RLS+1exact prior historicalSKIP, builds/originalpreflight/Worker and6browser/22PNGs pass. Monthly form and timezone findings are resolved in this candidate.
+**PASS scoped local code/evidence checkpoint / whole B008 INCOMPLETE / release NO-GO.** Candidate `17ec9dfdd45c4a47807d0a251cbdff1840fe74c0`; [scope and failures](checkpoint-17ec9df.md). User-requested last complete standardgate PASS615unit/380RLS+1sole exact prior approvedhistoricalSKIP, no waiver; samecode builds/preflight/Worker and8browser30screens PASS, actualexit0. Native independent scoped evidence review PASS.
 
-Actual monthly writer/full-bill parity, exact staging/owner/catalog/old-code/rollback and independent Claude/ClassB remain outstanding. ControlsOFF. No provider messages or operational migrations. Historical failed runs and older scoped passes are retained, not rewritten as final evidence.
+First preliminary1280 browser failure cause remains UNKNOWN and not waived. Actualmonthlywriter/fullbillparity incomplete; proposalunapplied/NOTRUN. Stage runtime/appversion/approvedoldcode/rollback and independentClaudeClassB UNVERIFIED. No operationalactivation. Ron stopped queue; no more implementation until resumed.

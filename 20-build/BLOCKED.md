@@ -1,3 +1,5 @@
+> **Current stop 2026-10-30T19:04:44.433953-07:00: queue paused by Ron. Current consolidated blockers/owners/next steps are in [codex-handoff-1030.md](codex-handoff-1030.md). Earlier absence/failure/continue notes retain their timestamp; do not treat them as current or authority to resume.**
+
 # Blocked and pending register
 
 **Codex skips blocked items (or the blocked part of an item) and moves on immediately. Never wait for a resolution.** Re-check this file at the start of each loop.
@@ -174,3 +176,18 @@ EXTERNAL_PENDING: PE/QA must verify exact staged catalog/function ownership/app/
 ## B008 scoped checkpoint and dependent remainder — 2026-10-30T17:58:16.504496-07:00
 
 `4b8228f995a29a56ac89bb86b4a8b2e7e12adfe8` localpreviewPASS; [checkpoint](../e2e-evidence/B-008/checkpoint-4b8228f.md). **B008_STAGE_CLASSB / DEPENDENCY** remains open for exact staging/catalog/capture-owner/approved old-code/OFF/rollback and independentClaude acceptance (owners PE/Ron/QA/Codex). Actualmonthlywriter/fullbillparity remains unfinished; source-invariant/old-writer contract is Codex/independentreview design work, not automatically a PE-apply-only blocker. Downloads `b008-monthly-db-handoff.md/.sql` are reviewednonexecutable research only; no final migration or safeall-writeradoption is claimed. Finalize a concrete contract/handoff before requesting PE application; do not apply fromMac. No renewed question about Ron approved /30. Eligiblelocaldesign/application work continues; wholeB008 notparked/done.
+
+## Requested stop / current open remainder — 2026-10-30T19:04:44.433953-07:00
+
+Last complete standardgate `17ec9dfdd45c4a47807d0a251cbdff1840fe74c0` PASS615unit/380RLS0FAIL0CANCEL1solepriorapprovedhistoricalSKIP; no newwaiver/relaxedassertion. [Exactresult](../e2e-evidence/integration/closeout-1030-gate.json). WholeB completion remains0; currentgate does not waive earlierUNKNOWNbrowserfailure or externalacceptance.
+
+- **B008 MONTHLY_OPERATION_DB**: new concreteMD/proposedSQL source-reviewedonly, NOT_APPLIED/syntax+runtimeNOT_RUN. [RepoMD](../e2e-evidence/B-008/monthly-operation-db-handoff.md), Downloads names/hashes inhandoff. PEreviews targetcatalog/roles/reset/lockorder/oldcode/OFF/rollback, unique timestamp, then authorizednonMac stagingentry. Codexactualwriter/fullbillparity unfinished. Oldall-writerfencingresearch is not an approved newprerequisite.
+- **B008 PRELIMINARY_UNKNOWN**: initialmonthly1280 7PASS1FAIL retained; actualcauseUNVERIFIED, notwaived/baseline. Laterdiagnostics/final8PASS do notresolve cause. QA investigates without skipping/weakeningassertions; releaseNO-GO.
+- **B013/B021 WORKFLOW_DB**: installedsettings5tables are not remaining6workflowtables/gateways. PEconsolidates existing2handoffs, verifiescurrentcatalog/history andfixedgateways/publicguards/reset/authority; Ronnotice beforedependentwork. No newstagingprobe duringcloseout, currentfullcatalogUNVERIFIED.
+- **B005 RESEND_DB / AUDIT_PRIVACY**: puremock only; no durable invitationdelivery. PEcompletesreviewedclosedproposal/privacy/gateways/UNKNOWN; realstagingprivacyexposureUNVERIFIED, nooutbound.
+- **B009 SUGGESTION_BASIS**: read-onlyaudit foundstoredreasonsnotshownbyUI; productgap notfixedhere. OnresumeCodexexposeshistoricalbasis withvalidation; no inventedHTTPsuite requirement. **B006/B009 CUSTOMER_FIXTURE**: authorizeddeidentifiedrealfile/dispositionneededfromRon; syntheticdoesnotproveprovenance.
+- **B010/B028 PRODUCER / B011 SETTLEMENT / B015 ARCHIVE**: partialintegrated/recoveryrefs retained; producerfailclosed, settlementstreamabort/authority andarchivematrix unfinished. Exactcurrentstage/fulle2e UNVERIFIED; followper-itemhandoffsteps, no realmessages. B012renewalcarryforwarddecisionknownbutfeatureunimplemented.
+- **STAGE/QA**: PE/RonboxremainsdesignatedDBoperator; read-onlymetadata/zero-row200 is not currentappdeployment/functionruntime/wholefeatureacceptance. Othermachine/Depot/ClaudeClassB andapprovedoldcode/OFF/rollbackstillUNVERIFIED. B006ClassAkeepsitsownrequirements.
+- **STOP/OWNERSHIP_RELEASE**: allproductworkpaused. claim.shrequirescleanmain+committedHANDOFF+alllocalbranchesexceptops-lockpublished. main2bedb895hasnoHANDOFF/contract; userprohibitsmainmerge. Do notchangeclaimscript/merge/steal; checkpoint+mirror, drainjobs, recordactualreleaseattempt/STOPPEDphase inDownloads handoff. Activeownershipdoesnotauthorizecontinueddevelopmentafterstop.
+
+Eachblockerhasownerandnextstepin[consolidatedhandoff](codex-handoff-1030.md). No new B until Ronresumes.

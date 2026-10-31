@@ -1,0 +1,138 @@
+{
+  "observedAt": "2026-10-31T01:04:55.244Z",
+  "referenceCandidate": "4b8228f995a29a56ac89bb86b4a8b2e7e12adfe8",
+  "scope": "STAGING READ-ONLY SCHEMA/PRIVILEGE AND NAMED FLAG METADATA; NO CUSTOMER ROWS OR FUNCTION EXECUTION; NO DEPLOY/MIGRATION/ACTIVATION",
+  "config": {
+    "encoding": "UTF8",
+    "read_only": "on",
+    "version_num": "170011",
+    "login_can_set_authenticated": true
+  },
+  "functions": [
+    {
+      "proname": "b008_capture_first_period",
+      "args": "p_lease uuid, p_prorate boolean",
+      "security_definer": true,
+      "fixed_config": [
+        "search_path=pg_catalog, public"
+      ],
+      "login_is_owner": true,
+      "login_execute": true,
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false,
+      "definitionSha256": "a22c66544e19fa00444ed19e8db7eb1cc174f37f4d7125a995b365d1efe6e997"
+    },
+    {
+      "proname": "b008_guard_first_period_basis",
+      "args": "",
+      "security_definer": false,
+      "fixed_config": [
+        "search_path=pg_catalog, public"
+      ],
+      "login_is_owner": true,
+      "login_execute": true,
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false,
+      "definitionSha256": "c89aa4cb5a4e669aafe5bfac9620f38494d2b4c57276cffa8cdff6234b4cd1a8"
+    }
+  ],
+  "columns": [
+    {
+      "table_name": "invoice_lines",
+      "column_name": "allocation_line_id",
+      "data_type": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_lines",
+      "column_name": "service_period",
+      "data_type": "daterange",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "leases",
+      "column_name": "due_day",
+      "data_type": "smallint",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "leases",
+      "column_name": "first_period_basis",
+      "data_type": "jsonb",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "leases",
+      "column_name": "moved_out_on",
+      "data_type": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "leases",
+      "column_name": "rent_frequency",
+      "data_type": "USER-DEFINED",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "leases",
+      "column_name": "terminated_on",
+      "data_type": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "utility_allocation_lines",
+      "column_name": "posted_amount_minor",
+      "data_type": "bigint",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "utility_allocation_lines",
+      "column_name": "posted_invoice_id",
+      "data_type": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "utility_allocation_lines",
+      "column_name": "posted_invoice_line_id",
+      "data_type": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "utility_allocation_lines",
+      "column_name": "posted_ledger_transaction_id",
+      "data_type": "uuid",
+      "is_nullable": "YES"
+    }
+  ],
+  "triggers": [
+    {
+      "tgname": "b008_guard_first_period_basis",
+      "tgenabled": "O"
+    }
+  ],
+  "repairTables": [
+    "b013_default_revisions",
+    "b013_default_roots",
+    "b013_override_revisions",
+    "b013_policy_commands",
+    "b013_regional_defaults"
+  ],
+  "flags": [
+    {
+      "key": "billing_previews",
+      "enabled": false
+    },
+    {
+      "key": "repair_approvals",
+      "enabled": false
+    }
+  ],
+  "limitations": [
+    "Presence and ACL metadata do not prove runtime boundary, deployed application version, full catalog compatibility or acceptance",
+    "No function invoked; no actual create/capture/sign/issue path exercised"
+  ]
+}

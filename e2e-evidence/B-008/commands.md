@@ -10,3 +10,7 @@ Pinned Node 20 (`/opt/homebrew/opt/node@20/bin`) and PostgreSQL 16 tools were pl
 - `npm run test:unit` — **545/550 passed, 5 failed**, described in status.md. Do not treat as a passed gate.
 - First-period checkpoint: `node --import tsx --test src/server/first-period-calculation.test.ts src/server/first-invoice-plan.test.ts` — **5/5 passed**; `node --import tsx --test src/server/first-period.integration.test.ts` — **5/5 passed** on an isolated disposable clone with migration 100210. The integration file creates and cleans up its own unique clone and checks actual lock edges. Final scoped ESLint and `npx tsc --noEmit` passed. These are reconstructed command/outcome notes; terminal output was not retained as a raw log.
 - `npx playwright test e2e/b008-first-period.spec.ts --workers=1` — **390px passed before final backend fixes; 1280px interrupted**, not a pass. The first lease and associated local demo records committed, but browser navigation did not complete. Root cause is unknown. Private raw screenshots/trace and hashes are identified in `first-period.md`; retention is unconfirmed. Both widths require a final-source rerun.
+
+## 2026-10-30 requested stop
+
+Exact last standard-gate command: 20-build/codex-handoff-1030.md, Last gate section. Exits, counts and private log bindings: [closeout receipt](../integration/closeout-1030-gate.json). This separate clean17ec9df rerun does not overwrite the earlier fixed candidate/browser manifest. No --release/--skip-rls/new test skip or implementation change. See currentcheckpoint17ec9df.

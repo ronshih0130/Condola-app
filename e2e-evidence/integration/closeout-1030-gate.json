@@ -1,0 +1,109 @@
+{
+  "recordedAt": "2026-10-30T19:02:44.990036-07:00",
+  "candidate": "17ec9dfdd45c4a47807d0a251cbdff1840fe74c0",
+  "branch": "mode-b-repair-override-prep",
+  "scope": "User-requested bounded stop: one standard complete gate only; no new B development",
+  "actualWrapperProcessExit": 0,
+  "result": "PASS",
+  "releaseChecksRequested": false,
+  "unit": {
+    "tests": 615,
+    "pass": 615,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "rls": {
+    "tests": 381,
+    "pass": 380,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 1
+  },
+  "onlyHistoricalSkip": [
+    "ok 6 - a database with the older 20261022180000 upgrades forward, then accepts the same file again # SKIP Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29"
+  ],
+  "newTestSkipsOrAssertionRelaxation": false,
+  "summary": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-closeout-1030/e2e/results/gate-17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.md",
+    "sha256": "4e4123a8ae96fcc2c894667b8cec7f9bd2cffde37ccb680f6559c6f86c9bfca2",
+    "bytes": 971
+  },
+  "wrapperLog": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-closeout-1030-full-gate.log",
+    "sha256": "0b5d00fbcb5c864cf8a1942703bb95ee4e492eb04b22ba950f7e0fe244403380",
+    "bytes": 463
+  },
+  "rawLogs": {
+    "copy-check.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.ICUB6U/copy-check.log",
+      "sha256": "c81904c94cb0d6be3aa6adf07f51a49f477f4c5c61d83647d00e51dc31a74744",
+      "bytes": 1437
+    },
+    "flag-expiry.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.ICUB6U/flag-expiry.log",
+      "sha256": "31d5d77ba8c1cbcf2ff8895e57581bd830ee34cf7d5e5f55251276efac0b2692",
+      "bytes": 27
+    },
+    "lint.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.ICUB6U/lint.log",
+      "sha256": "fb5bc411d85eca816f721e68b43d2f5c3c6ab36e215219c4b8bc8fa3080af531",
+      "bytes": 2387
+    },
+    "npm-ci.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.ICUB6U/npm-ci.log",
+      "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+      "bytes": 1585
+    },
+    "postgres-16.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.ICUB6U/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "test-rls.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.ICUB6U/test-rls.log",
+      "sha256": "9c85c4e7f0fa822754ac0265994c4a21b3df79d81b0a3db61e6fd7d3fcdc61b3",
+      "bytes": 105223
+    },
+    "test-unit.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.ICUB6U/test-unit.log",
+      "sha256": "86727e9c6cd88d73559863225c1cf22893dd6b7df084479e5ec143e4e882b8a9",
+      "bytes": 126786
+    },
+    "toolchain.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.ICUB6U/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    "typecheck.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.ICUB6U/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    }
+  },
+  "reviewedImplementationBlobs": {
+    "e2e/b008-monthly-preview.spec.ts": "a9aeef218ba52d6272477442ac4f2eca1617b0a5",
+    "e2e/b008-monthly-rent-detail.spec.ts": "eba24e24de63aed2ca6bb87fd774d397214ed91c",
+    "e2e/b008-preview-private-playwright.config.ts": "b9207d93a47fb054da34723df49a5c6179b15552",
+    "ops/flags.yaml": "2a4bc3f8c3a97a16943a0bc9025dd31410e9de22",
+    "package.json": "526b5d562a889730ae7c4edc4dd73f22418e4127",
+    "scripts/run-e2e.ts": "9b93ebc61b41d5ccb8cb665a3a609dcf6dba2e9d",
+    "src/app/m/rent/monthly-preview/[leaseId]/page.tsx": "7e513ae799743be39e5114e48789078262e9b092",
+    "src/components/monthly-billing-preview.tsx": "db84a310eaf4d1bc0aa9073e28aaa56e06f4ec45",
+    "src/components/monthly-rent-preview.tsx": "bb4337e25f4572350d720ce164772a695038f7ad",
+    "src/i18n/monthly-billing-preview.ts": "a7e00e5df4ad21a091fd5fa676762fad1ed3da5c",
+    "src/i18n/monthly-rent-preview.ts": "848cb1a28c7e250610405131ccd9c72ffede75df",
+    "src/server/monthly-billing-plan.ts": "991a163f878672a47c877656b004be177f95b8bf",
+    "src/server/monthly-billing-rules.test.ts": "39da5ac553468cb29ce10ea3edd04838e34d525f",
+    "src/server/monthly-billing-rules.ts": "b567aee1a284e5081ec5f7d00dcf883df9086829",
+    "src/server/monthly-rent-operation-plan.test.ts": "8ffa438d17eb72bef6c0ec1dd31030808af24700",
+    "src/server/monthly-rent-operation-plan.ts": "d5b7ce7677aa7a31fb09c5b26925c783894dbda4",
+    "src/server/monthly-rent-preview.integration.test.ts": "d5cfe73f091926df15350a346f611a54a58bda87",
+    "src/server/monthly-rent-preview.ts": "e7d839df6042a5c9ec6f5213b2c1d71a7484c326"
+  },
+  "constraints": [
+    "No operational migration, staging/prod operation, new proposed SQL execution, external message, main merge or flag activation",
+    "Existing approved disposable-fixture tests only",
+    "Mac-only result; not Claude/Class B, other-machine/Depot, release or whole-item completion"
+  ]
+}

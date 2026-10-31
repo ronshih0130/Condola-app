@@ -1,3 +1,5 @@
+> Latest scoped checkpoint `17ec9dfdd45c4a47807d0a251cbdff1840fe74c0`: [detail evidence](checkpoint-17ec9df.md). Standardgate615unit/380RLS+1prior historicalSKIP,8browser30screens PASS; whole B008 incomplete, initial preliminary failure UNKNOWN/unwaived. Stopped by Ron.
+
 > Current scoped checkpoint `4b8228f995a29a56ac89bb86b4a8b2e7e12adfe8`: [exact evidence](checkpoint-4b8228f.md). Six browser cases and22screens verified; full monthly generation and staging/ClassB remain pending.
 
 # B-008 scoped acceptance evidence

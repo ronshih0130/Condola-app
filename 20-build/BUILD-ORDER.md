@@ -1,5 +1,7 @@
 # Ordered build queue
 
+> **Current stop 2026-10-30T19:04:44.433953-07:00: paused by Ron; no automatic next B. Whole done0, partial/pending15, not-started/todo24. [Current handoff](codex-handoff-1030.md) supersedes earlier dated next-work instructions.**
+
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 
 All statuses begin `todo`, including previously built items: their first action is evidence reconciliation, not automatic reimplementation.
@@ -15,14 +17,14 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-005 | Onboarding, invitations and resumable trial | MGT-01/02/03/28; J1; CAP-M-04/05/28; P-10 | — | TEAM_INVITES_ENABLED; ONBOARDING_PROGRESS* | B | M / 16–24 | pending |
 | B-006 | Import error detail and regional source formats | MGT-05; J2.1; CAP-M-06 | — | IMPORT_ERROR_DETAILS* | A | S / 6–10 | pending |
 | B-007 | Deposit rule hints and excess-reason audit | MGT-08; J2.3; CAP-M-07 | — | DEPOSIT_RULE_HINTS* | B | M / 12–20 | pending |
-| B-008 | Billing, utility and statement amount previews | MGT-12/26; J3.1/J7; CAP-M-08/22; M-40 | — | BILLING_PREVIEWS* | B | M / 20–32 | in_progress |
-| B-009 | Bank CSV dedupe and manual matching | MGT-14; J3.5; CAP-M-10/23 | — | BANK_MATCHING* | B | M / 16–24 | in_progress |
+| B-008 | Billing, utility and statement amount previews | MGT-12/26; J3.1/J7; CAP-M-08/22; M-40 | — | BILLING_PREVIEWS* | B | M / 20–32 | pending |
+| B-009 | Bank CSV dedupe and manual matching | MGT-14; J3.5; CAP-M-10/23 | — | BANK_MATCHING* | B | M / 16–24 | pending |
 | B-010 | Rent reminders and payment review results | MGT-13/15, TEN-07; J3.2/6/7; CAP-M-09/11; M-70 reminder | —; delivery adapter contract in B-028 | RENT_EMAIL_REMINDERS*; PAYMENT_REVIEW_RESULTS* | B | M / 20–32 | pending |
 | B-011 | Handover and deposit settlement, including bilateral replies | MGT-16/23/24, TEN-10/11; J4/J6.6–8; CAP-M-12/14/21, CAP-T-05/10; M-26 | B-002 | HANDOVER_RECORDS*; DEPOSIT_SETTLEMENT* | B | L / 40–64 | pending |
 | B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | todo |
 | B-013 | Manager dispatch and shared repair approval state | MGT-17/18/19/35; J5; CAP-M-15/16; M-48/49 | —; coordinated B-021/B-024 | vendor_dispatch; REPAIR_APPROVALS* | B | L / 32–48 | pending |
 | B-014 | Owner net ledger, transfers and report versions | MGT-25/26/27, OWN-02; J7; CAP-M-17/18, CAP-O-03; M-43 | B-008 | OWNER_NET_LEDGER*; MONTHLY_REPORT_DELIVERY* | B | L / 24–40 | todo |
-| B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | in_progress |
+| B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | pending |
 | B-016 | Company/profile settings and management-fee rules | MGT-04; J1.1/J7; CAP-M-25/29; M-42/58 | B-003 | COMPANY_PROFILE_EDIT*; MANAGEMENT_FEE_RULES* | B | M / 20–32 | todo |
 | B-017 | Custom role permissions with escalation protection | PLT-01/02; J1.4; CAP-P-12; M-54 | — | CUSTOM_ROLES* | B | L / 24–40 | todo |
 | B-018 | Tenant payment history and home states | TEN-07/08; J3; CAP-T-04/09; T-09 | B-003, B-010 | TENANT_PAYMENT_HISTORY* | B | M / 12–20 | todo |
@@ -124,3 +126,7 @@ Candidate `05369e484a353fad0364d6b435fdbda3590521e7` verifies existing8-case con
 ## B008 preview continuation — 2026-10-30T17:58:16.504496-07:00
 
 Candidate `4b8228f995a29a56ac89bb86b4a8b2e7e12adfe8` adds shared first-invoice and supported read-only monthly rent previews.611unit/373RLS+1sole prior historicalSKIP, builds/originalpreflight/Worker1/browser6PASS52.1s/22screens, native independent scopedPASS. [Evidence](../e2e-evidence/B-008/checkpoint-4b8228f.md). Explicitmonth and mobileform findings resolved; controls exactly restoredOFF. **B008 stays in_progress**, notdone: monthlywriter/fullbillparity and exact staging/ClassB remain. DB research is nonexecutable/notapply-ready, not a blanketDBblock. Next eligible work remains withinB008: source-review the writer invariant and eligible non-writing scope before moving onward.
+
+## Requested final stop — 2026-10-30T19:04:44.433953-07:00
+
+All39IDs accounted for:0done/15partial-pending/24todo. No new B implementation started during closeout. B008rentdetail code `17ec9dfdd45c4a47807d0a251cbdff1840fe74c0` remains PARTIAL; user-requested cleanstandardgatePASS615unit/380RLS0FAIL1solepriorhistoricalSKIP. [Gate](../e2e-evidence/integration/closeout-1030-gate.md), [all item states](codex-handoff-1030.md), [inventory](../e2e-evidence/integration/closeout-1030-inventory.json). Samecodebuilds/preflight/Worker1/browser8/30PNGs alreadyPASS; initialpreliminarybrowsercauseUNKNOWN/unwaived. Actualmonthlywriter/fullbillparity and staging/Claude UNVERIFIED; newDBproposalunapplied. B008/B009/B015 changed fromin_progress topending because allworkstopped, not because accepted. Olderkeepworkinginstructions are historical; do not resume automatically.

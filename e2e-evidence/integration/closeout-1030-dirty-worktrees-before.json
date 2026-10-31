@@ -1,0 +1,146 @@
+{
+  "observedAt": "2026-10-30T19:03:23.968767-07:00",
+  "scope": "Read-only counts; no private content or other worktree edits; not a backup of uncommitted work",
+  "dirtyWorktrees": [
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-build",
+      "branch": "refs/heads/mode-b-build",
+      "head": "bb3890f2b206ec6ffcaee0b38f85c1730fd7bf00",
+      "trackedChanges": 1,
+      "untrackedFiles": 0
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-center-source-integration-prep",
+      "branch": "refs/heads/mode-b-center-source-integration-prep",
+      "head": "5647cdeb08a2b846efece9f8a4c2c0afbd6c4e4d",
+      "trackedChanges": 1,
+      "untrackedFiles": 0
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-mark-origin-diagnostic",
+      "branch": "DETACHED",
+      "head": "6ef43f9f3c5ac0a46afdbe365e0360be0943f590",
+      "trackedChanges": 1,
+      "untrackedFiles": 2
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-notification-producer-prep",
+      "branch": "refs/heads/mode-b-notification-producer-prep",
+      "head": "c47f20dc1883ddbc4de7ac0859453b494deaca20",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-real-producer-prep",
+      "branch": "refs/heads/mode-b-real-producer-prep",
+      "head": "b4a014a72a924b15a10b4b69ccd915f3cbee8173",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep",
+      "branch": "refs/heads/mode-b-repair-override-prep",
+      "head": "17ec9dfdd45c4a47807d0a251cbdff1840fe74c0",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-policy-prep",
+      "branch": "refs/heads/mode-b-repair-policy-prep",
+      "head": "5430d9ec299efbebf6372568bd7756fa81e25aec",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-tenant-directory-prep",
+      "branch": "refs/heads/mode-b-tenant-directory-edit-prep",
+      "head": "3f8505e87736c5ca422172d992bf33d9615ab390",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-b005",
+      "branch": "DETACHED",
+      "head": "dd8d12d347d057f71a01fd0845d9fed28433f2c4",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-closeout-1030",
+      "branch": "DETACHED",
+      "head": "17ec9dfdd45c4a47807d0a251cbdff1840fe74c0",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-core80",
+      "branch": "DETACHED",
+      "head": "00644ca3b233482ba658c1ea28cba6adcbf576f7",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-core81",
+      "branch": "DETACHED",
+      "head": "71db66e8c95561087d10e071827a3a0d2fff8d5a",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-core83",
+      "branch": "DETACHED",
+      "head": "ced9ebe87c8d801c049ebb72b3351f231dc7b40d",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-core85",
+      "branch": "DETACHED",
+      "head": "0e49bd0169557eec51e96a449db5a873a4b19e5b",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-core86",
+      "branch": "DETACHED",
+      "head": "a30591f54801f2bb8911fb578e1fd4c7a44dd1c5",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-core87",
+      "branch": "DETACHED",
+      "head": "edacd916a3e69226e4703b0ad101197731eec2f4",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-core88",
+      "branch": "DETACHED",
+      "head": "0fb2ded2974e8b6a493fc0556000e334801bf029",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-core89",
+      "branch": "DETACHED",
+      "head": "4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-core90",
+      "branch": "DETACHED",
+      "head": "5647cdeb08a2b846efece9f8a4c2c0afbd6c4e4d",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    },
+    {
+      "worktree": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/verify-f34",
+      "branch": "DETACHED",
+      "head": "f34ff9b32f4e8ab7d4767cda5b791853eb7c2d7e",
+      "trackedChanges": 0,
+      "untrackedFiles": 1
+    }
+  ]
+}

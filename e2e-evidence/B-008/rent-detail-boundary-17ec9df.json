@@ -1,0 +1,529 @@
+{
+  "recordedAt": "2026-10-30T18:55:01.989091-07:00",
+  "candidate": "17ec9dfdd45c4a47807d0a251cbdff1840fe74c0",
+  "baseline": "56bd4998adca57704dd26132cc39eaed5140f649",
+  "scope": "B008 SELECT-only per-lease monthly rent/payer/currency detail; no issuing action, applied schema, whole-feature acceptance or deployment approval",
+  "sourceBlobs": {
+    "e2e/b008-monthly-preview.spec.ts": "a9aeef218ba52d6272477442ac4f2eca1617b0a5",
+    "e2e/b008-monthly-rent-detail.spec.ts": "eba24e24de63aed2ca6bb87fd774d397214ed91c",
+    "e2e/b008-preview-private-playwright.config.ts": "b9207d93a47fb054da34723df49a5c6179b15552",
+    "ops/board.md": "9423e97529d7c4b89a1586a36ccc328f4241ed18",
+    "ops/flags.yaml": "2a4bc3f8c3a97a16943a0bc9025dd31410e9de22",
+    "ops/log/2026-10-30/0fc7f5de-6f65-498f-8766-0fbddbe98968.jsonl": "ae544e4908550c3cb27509e1ad754888c2df4715",
+    "ops/log/2026-10-30/acc4f3a6-9036-4de9-b88b-b1770f320e80.jsonl": "4ed48188b7ed840953f18d99486e79041159eca8",
+    "package.json": "526b5d562a889730ae7c4edc4dd73f22418e4127",
+    "scripts/run-e2e.ts": "9b93ebc61b41d5ccb8cb665a3a609dcf6dba2e9d",
+    "src/app/m/rent/monthly-preview/[leaseId]/page.tsx": "7e513ae799743be39e5114e48789078262e9b092",
+    "src/components/monthly-billing-preview.tsx": "db84a310eaf4d1bc0aa9073e28aaa56e06f4ec45",
+    "src/components/monthly-rent-preview.tsx": "bb4337e25f4572350d720ce164772a695038f7ad",
+    "src/i18n/monthly-billing-preview.ts": "a7e00e5df4ad21a091fd5fa676762fad1ed3da5c",
+    "src/i18n/monthly-rent-preview.ts": "848cb1a28c7e250610405131ccd9c72ffede75df",
+    "src/server/monthly-billing-plan.ts": "991a163f878672a47c877656b004be177f95b8bf",
+    "src/server/monthly-billing-rules.test.ts": "39da5ac553468cb29ce10ea3edd04838e34d525f",
+    "src/server/monthly-billing-rules.ts": "b567aee1a284e5081ec5f7d00dcf883df9086829",
+    "src/server/monthly-rent-operation-plan.test.ts": "8ffa438d17eb72bef6c0ec1dd31030808af24700",
+    "src/server/monthly-rent-operation-plan.ts": "d5b7ce7677aa7a31fb09c5b26925c783894dbda4",
+    "src/server/monthly-rent-preview.integration.test.ts": "d5cfe73f091926df15350a346f611a54a58bda87",
+    "src/server/monthly-rent-preview.ts": "e7d839df6042a5c9ec6f5213b2c1d71a7484c326"
+  },
+  "unchangedSourceBlobs": {
+    "src/server/first-invoice-plan.ts": "45670457c996ffa860b3ca21d140fd436dbc2149",
+    "src/server/first-period-calculation.ts": "ad0525448f9991c50199c512e77ee4e4d6089d9c",
+    "src/server/domain.ts": "b9277c03ef7acece60710fd5c23098fbb4c528a9",
+    "src/server/utility-posting.ts": "4bc322fffc65b819e13d76c8ae86816c674b6b95",
+    "src/server/seed.ts": "bbc6ef0de297b16879ec4d516ea55b848c342863",
+    "src/server/demo.ts": "a15ff0383e68459cf37a1a38167f2ea17042ec27",
+    "src/app/api/demo/reset/route.ts": "0ab5e99ff827ca01782c6081d5ac2dc40b7e47ea",
+    "src/components/first-period-summary.tsx": "4a081e2e350345c52b5ae8bb2d946232b234448c",
+    "supabase/migrations/20261031100210_b008_first_period_basis.sql": "e0f46b22d8c713c49a03142fd91be2598f023cfb",
+    "supabase/migrations/20261031100211_b001_esign_activation.sql": "96eae5c0e4d16553d11bbfda8eba0ce82c64cbb9",
+    "scripts/preflight-deploy.sh": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+    "src/server/billing-preview-authority.ts": "654640a49da53d9fdc0728ad7a92c6951e801e1c",
+    "src/server/move-in-invoice.ts": "59452c423d3df007eb943cc07b57490479358c7b",
+    "src/server/move-in-plan.ts": "ed1dba2aefb8c11ab79cd61d64902c8cec7f2512",
+    "src/server/move-in-preview.ts": "244cdbbb7c15460ce425f16c7e608ad8fe8d61be"
+  },
+  "unit": {
+    "tests": 615,
+    "pass": 615,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "rls": {
+    "tests": 381,
+    "pass": 380,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 1
+  },
+  "worker": {
+    "tests": 1,
+    "pass": 1,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "browser": {
+    "actualProcessExit": {
+      "recordedAt": "2026-10-30T18:54:55.364014-07:00",
+      "driverSha256Before": "f92675b3de3ea8cf5ef1cdfdcfbb32289fc5c1056493e7929588e0420c996345",
+      "driverSha256After": "f92675b3de3ea8cf5ef1cdfdcfbb32289fc5c1056493e7929588e0420c996345",
+      "candidateBefore": "17ec9dfdd45c4a47807d0a251cbdff1840fe74c0",
+      "candidateAfter": "17ec9dfdd45c4a47807d0a251cbdff1840fe74c0",
+      "cwd": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep",
+      "command": [
+        "node",
+        "node_modules/@playwright/test/cli.js",
+        "test",
+        "--config",
+        "e2e/b008-preview-private-playwright.config.ts",
+        "--output",
+        "../b008-rent-detail-http-17ec9df-artifacts"
+      ],
+      "playwrightExit": 0,
+      "effectiveExit": 0,
+      "sourcePinnedBefore": true,
+      "sourcePinnedAfter": true,
+      "elapsedSeconds": 70.662,
+      "stdoutLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-playwright-17ec9df.log",
+        "sha256": "a7585edf8cafd801187298761bfa7831acf6480587dd4f6480c77ae35854c7db",
+        "bytes": 953
+      },
+      "scope": "Actual subprocess result, not inferred from passed-case text; no environment or credentials captured"
+    },
+    "cases": 8,
+    "widths": [
+      390,
+      1280
+    ],
+    "screenshots": 30
+  },
+  "controlReadback": {
+    "targetDatabase": "condola_b008_http_17ec9df",
+    "candidateShort": "17ec9df",
+    "baselineDatabase": "condola_b008_build_17ec9df",
+    "globalOriginallyPresent": true,
+    "globalRestoredToSeededBaseline": true,
+    "orgRestoredToSeededBaseline": true,
+    "globalOff": true,
+    "orgOptins": 0,
+    "occurrence_absent": true,
+    "commands_absent": true,
+    "posting_control_absent": true,
+    "posting_optins": 0,
+    "controlSha256": "a9a8cffc72369c5dfd4f5881a4e77a197cf44a34c8052059a3ffa93fd24c9344",
+    "orgFlagsSha256": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+    "scope": "Control restoration and proposed-posting absence in this local clone only; browser resets remove earlier fixtures. No whole-database restore or all-case persistent aggregate is claimed."
+  },
+  "artifacts": {
+    "gate-17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.md": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.md",
+      "sha256": "7a259a1f8902ad237056fa72d416803e1b34d4fdcdb137a362384f201c244ee4",
+      "bytes": 971
+    },
+    "b008-rent-detail-full-gate-17ec9df.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-full-gate-17ec9df.log",
+      "sha256": "f01ef62ea81a928021844dd04512c594b98e91c6ec5d61c32e47512ab6c6ba0a",
+      "bytes": 470
+    },
+    "b008-rent-detail-build-worker-driver-17ec9df.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-build-worker-driver-17ec9df.log",
+      "sha256": "245d2354d22b4c29571a38e7ad4262cb79915cd23bf5d8a361b3b882758b5b8e",
+      "bytes": 358
+    },
+    "b008-next-build-17ec9df.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-next-build-17ec9df.log",
+      "sha256": "7819ac81b14773354aed3c59e6fda25bd09b35c528cda234dd8a18caaf2cf9cf",
+      "bytes": 12390
+    },
+    "b008-cf-build-17ec9df.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-cf-build-17ec9df.log",
+      "sha256": "dd2e7640359bb9479a272beeac47b0e5a71f33b6a4d0b432ba5b3e5e4103f168",
+      "bytes": 14099
+    },
+    "b008-preflight-17ec9df.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-preflight-17ec9df.log",
+      "sha256": "b3594d5743d731c976a4529f4d4bc2bb7eeb9e7b0985a12b2148a0f831e69d02",
+      "bytes": 23
+    },
+    "b008-worker-17ec9df.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-worker-17ec9df.log",
+      "sha256": "971d7fc673255c0ce1ff04acab80f2c21cdeffe69396ef4f4ab01aa23e4c0da9",
+      "bytes": 423
+    },
+    "b008-rent-detail-playwright-17ec9df.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-playwright-17ec9df.log",
+      "sha256": "a7585edf8cafd801187298761bfa7831acf6480587dd4f6480c77ae35854c7db",
+      "bytes": 953
+    },
+    "b008-rent-detail-http-exit-17ec9df.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-exit-17ec9df.json",
+      "sha256": "4d607908368609ccad232187fee50ef406a7aed950875b8c4fb598bcc1de63ae",
+      "bytes": 1208
+    },
+    "b008-rent-detail-http-17ec9df.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df.log",
+      "sha256": "d99a0b3ecf379ecd61da54be08774a70c370455f20f9295e6f90d117c79d3e04",
+      "bytes": 121
+    },
+    "b008-rent-detail-synthetic-readback-17ec9df.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-synthetic-readback-17ec9df.json",
+      "sha256": "a0395443e206d92bde62b12d453da5205a003944da18ce0f5703e6fbec4c5b90",
+      "bytes": 778
+    },
+    "postgres-16.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.cBee3m/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "lint.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.cBee3m/lint.log",
+      "sha256": "da819f980b5df58f94df10cee617099a4a6539df6d5f02510c80645449817c1d",
+      "bytes": 2422
+    },
+    "npm-ci.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.cBee3m/npm-ci.log",
+      "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+      "bytes": 1585
+    },
+    "typecheck.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.cBee3m/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "copy-check.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.cBee3m/copy-check.log",
+      "sha256": "409f371c2396f86d950fa9fda54c8dfab1a69ced909662ea91f6e31b94bfb374",
+      "bytes": 1433
+    },
+    "flag-expiry.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.cBee3m/flag-expiry.log",
+      "sha256": "31d5d77ba8c1cbcf2ff8895e57581bd830ee34cf7d5e5f55251276efac0b2692",
+      "bytes": 27
+    },
+    "test-unit.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.cBee3m/test-unit.log",
+      "sha256": "d66a5336c4444854598cd6c512de0470c1fd2f5dd1a40545bf4b476be92dad52",
+      "bytes": 126723
+    },
+    "test-rls.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.cBee3m/test-rls.log",
+      "sha256": "31335e7235a4f9159fdce350e6b939781e10e0c4674772adc440de1d319b14c8",
+      "bytes": 105218
+    },
+    "toolchain.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/17ec9dfdd45c4a47807d0a251cbdff1840fe74c0.cBee3m/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    "b008-rent-detail-focused-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-focused-a.log",
+      "sha256": "5e744210a9dbf4e872ddd6e9cb4a52b9af2a98b7d47d6464c43531833450b375",
+      "bytes": 3309
+    },
+    "b008-rent-detail-typecheck-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-typecheck-draft-a.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "b008-rent-detail-lint-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-lint-draft-a.log",
+      "sha256": "da819f980b5df58f94df10cee617099a4a6539df6d5f02510c80645449817c1d",
+      "bytes": 2422
+    },
+    "b008-rent-detail-http-draft-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-draft-a.log",
+      "sha256": "7aa8162f06264c43ac1b0e9f3c539eb8edf17979ac452afc9db22d64a984bfa2",
+      "bytes": 1981
+    },
+    "b008-rent-detail-http-diag-a.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-diag-a.log",
+      "sha256": "227ce893653142d29adc4d8dabd3a10ccaa06a10f25e8c7b44fa9b4f9fa97a76",
+      "bytes": 196
+    },
+    "b008-rent-detail-http-draft-b.log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-draft-b.log",
+      "sha256": "9f6b45d5b42b22033d995c119b9398deaa5577763c6e974fbee936d1863a05ea",
+      "bytes": 979
+    },
+    "b008-monthly-preview-before-diagnostic.spec.ts": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-monthly-preview-before-diagnostic.spec.ts",
+      "sha256": "d75e82a702081a85591ef0eb7873632ebcc43b101f4420b9cfa8a423d27f9506",
+      "bytes": 14272
+    },
+    "run-b008-prepared-check.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b008-prepared-check.py",
+      "sha256": "26f159ae926b5cc0e6a2e2c84b143dfaf5abe0f3f74612a8909cfab20fa766fa",
+      "bytes": 2026
+    },
+    "b008-build-worker-final-commands.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-build-worker-final-commands.py",
+      "sha256": "d1b111b651e2ebcd96e103d3c5ab879ff34a1b6db4a91db40849eaf834125444",
+      "bytes": 1264
+    },
+    "b008-rent-detail-readback.cjs": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-readback.cjs",
+      "sha256": "d4fbb9c5bd480e475bd7d0769a70d7cea2f06670491624b382ee1624daecd2ce",
+      "bytes": 3075
+    },
+    "b008-rent-detail-browser-driver.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-browser-driver.py",
+      "sha256": "f92675b3de3ea8cf5ef1cdfdcfbb32289fc5c1056493e7929588e0420c996345",
+      "bytes": 3775
+    },
+    "make-b008-rent-detail-proof.py": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/make-b008-rent-detail-proof.py",
+      "sha256": "b8fd159a0d03231710d26d00cd19aaac90f15d8061877de01f3b9a0cd4238c50",
+      "bytes": 13259
+    },
+    "b008-rent-detail-reviewed-source-freeze.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-reviewed-source-freeze.json",
+      "sha256": "abb6cefc9557f038428e15e193b00ee8a81099825f4258c7c382d7f4692eedb8",
+      "bytes": 1785
+    },
+    "probe-b008-staging-catalog-readonly.cjs": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/probe-b008-staging-catalog-readonly.cjs",
+      "sha256": "35289a02e595066ac0e244d862858a93995048a6e8ebdd2294ee13a5a80b30a4",
+      "bytes": 4992
+    },
+    "b008-staging-catalog-56bd499.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-staging-catalog-56bd499.json",
+      "sha256": "10eee6569ddf8ff7b71c4e72abd7c49c442c8ef8d5923ab2addafd1ab22f63c1",
+      "bytes": 3695
+    },
+    "probe-b008-staging-zero-row.cjs": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/probe-b008-staging-zero-row.cjs",
+      "sha256": "c55207133f33ddecba953840f8eae6c55a51b485bc44c2f8de63d1c17a7e32c2",
+      "bytes": 1220
+    },
+    "b008-staging-rest-zero-row-56bd499.json": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-staging-rest-zero-row-56bd499.json",
+      "sha256": "61df61cd92e8b205a44758836aa561353f74a7204710864c26b8745f0b379eeb",
+      "bytes": 247
+    }
+  },
+  "screenshots": {
+    "b008-rent-detail-http-17ec9df-artifacts/b008-billing-preview-statement-and-close-preview-chromium-1280/close-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-billing-preview-statement-and-close-preview-chromium-1280/close-1280.png",
+      "sha256": "112176de22f6fc5b0632a23c600846b127da22e41579a1d5954286a96df608c4",
+      "bytes": 118089
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-billing-preview-statement-and-close-preview-chromium-1280/statement-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-billing-preview-statement-and-close-preview-chromium-1280/statement-1280.png",
+      "sha256": "5b8d9b1ed1baf56d2237c397f4d5a0429264c8bc3e714e1b59a0d52c0ba3a76d",
+      "bytes": 110198
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-billing-preview-statement-and-close-preview-chromium-390/close-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-billing-preview-statement-and-close-preview-chromium-390/close-390.png",
+      "sha256": "84be6e32ea8e1e305bbc3af89ce19a22e36c285abc392d38dee33878fbc5b2b5",
+      "bytes": 72035
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-billing-preview-statement-and-close-preview-chromium-390/statement-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-billing-preview-statement-and-close-preview-chromium-390/statement-390.png",
+      "sha256": "835bded754a091d695db84911c71627d0de10bd5e7dfc6ddfb7fc22e07ef2ca4",
+      "bytes": 63161
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-1280/combined-after-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-1280/combined-after-1280.png",
+      "sha256": "59f61823b314c056d16ae480cbe65296bbe1cde32b517e5c60d9b23de8fd6fd0",
+      "bytes": 21231
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-1280/combined-before-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-1280/combined-before-1280.png",
+      "sha256": "0862bbbcd8079ef84dfa71e630eb1ca43c6c95cc2098f1ae3456009e5d4d6e61",
+      "bytes": 24450
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-1280/first-period-edit-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-1280/first-period-edit-1280.png",
+      "sha256": "5d9858b3ea4cafc8d793b46d0f6f1d8afa3751b718af5b2bd471d0e5ad259a62",
+      "bytes": 204667
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-1280/first-period-wizard-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-1280/first-period-wizard-1280.png",
+      "sha256": "f08ae4471bc8fb16fe4dc664e4eb18979fbfc7867b33447631fd780218158bff",
+      "bytes": 102953
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-390/combined-after-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-390/combined-after-390.png",
+      "sha256": "18a953ab53eb038b5b95d9ebaa5c91685088c0da91e1923d019f026ab8b476d3",
+      "bytes": 19999
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-390/combined-before-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-390/combined-before-390.png",
+      "sha256": "a5e2315897daedf3f3a4fa5f7ecbd809a50a3feb22143dd9f03351d64b5cdea6",
+      "bytes": 22990
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-390/first-period-edit-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-390/first-period-edit-390.png",
+      "sha256": "39157f96ed0c14d407b0676d294512b6ea921f85050d7d8e4edb7da2bbc165d5",
+      "bytes": 162002
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-390/first-period-wizard-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-first-period-first-period-preview-and-saved-edit-chromium-390/first-period-wizard-390.png",
+      "sha256": "a85ce5217c0aa9c80d003a7cfaf482a4095d315828a67dc9c1b9f2a360a79cca",
+      "bytes": 61042
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-choose-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-choose-1280.png",
+      "sha256": "6e2b8569be59eb066c735ffd6a7d4c60226ac255b7b8be9b0066229e1912fcea",
+      "bytes": 68063
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-invalid-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-invalid-1280.png",
+      "sha256": "2f1b963e893bbdb288dd29fbc699d900595dbd5648b4d19ac8d674d36918e9ce",
+      "bytes": 67980
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-off-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-off-1280.png",
+      "sha256": "16eab60a7a6c2c8b45870b17126763b17bb5d6a08ab69c78c695862e05220cde",
+      "bytes": 69841
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-on-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-on-1280.png",
+      "sha256": "4f24a60f81d3c871f2e3454c5c56d38489ac8737358b621a83f3599e0540feb1",
+      "bytes": 225568
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-zh-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-zh-1280.png",
+      "sha256": "cca8b202643d68595bf1289e1664e8a37a2e67abec2649b8cb4a3655816a147d",
+      "bytes": 231140
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-choose-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-choose-390.png",
+      "sha256": "6ae56425d7eaf0eccc620d31acde1f783fe190b2d87c013ca6e23bd2801684f5",
+      "bytes": 25878
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-invalid-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-invalid-390.png",
+      "sha256": "ea95035e03fbc1a127ba5b593b75f797941d6ce186c5d789a061bfe3c5d236b1",
+      "bytes": 25782
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-off-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-off-390.png",
+      "sha256": "d77e872b9aff77cccc2bb1d2aff2d8117afcaad54fc641203996fa271e6fd8e9",
+      "bytes": 27806
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-on-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-on-390.png",
+      "sha256": "9ac64ef13bf3c6da8f5a466d3eb943a5b38e78453835c4bb505b9bdb5776fc7a",
+      "bytes": 239139
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-zh-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-390/monthly-zh-390.png",
+      "sha256": "55e76c78adbfc20bb18cb896fc4c879cfc56746eaf3cf7ced74aadc3f2f9a5c2",
+      "bytes": 244624
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-1280/rent-detail-en-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-1280/rent-detail-en-1280.png",
+      "sha256": "24a00ed17044b297c4428e399565910d652481eb23382b9c1705b0b80233afe3",
+      "bytes": 96646
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-1280/rent-detail-off-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-1280/rent-detail-off-1280.png",
+      "sha256": "400038581d5afe560552d45a06aa49e6879f2145de9891206a44a450231a77b4",
+      "bytes": 67505
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-1280/rent-detail-unsupported-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-1280/rent-detail-unsupported-1280.png",
+      "sha256": "28eef7da5736317c8c72d0d03c3cc1ee9a0dc5b2ab368ebe670af8186c2d7ce0",
+      "bytes": 77058
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-1280/rent-detail-zh-1280.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-1280/rent-detail-zh-1280.png",
+      "sha256": "4e8d69e0c4b441e268fe56b210b1b243bf7d8cfd39fb0cc4dbdf047739e43677",
+      "bytes": 99791
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-390/rent-detail-en-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-390/rent-detail-en-390.png",
+      "sha256": "266bba3e4a77065a541e769b7048998fae962466e316978b633d45f282831a23",
+      "bytes": 56683
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-390/rent-detail-off-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-390/rent-detail-off-390.png",
+      "sha256": "de2a7eaf070d7fa1a30093c3b01ba5831e9a4072aa2844edb6bfae12f980d417",
+      "bytes": 25727
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-390/rent-detail-unsupported-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-390/rent-detail-unsupported-390.png",
+      "sha256": "599bc7b12423bae5b507fcc7643c7381625d6e176749dfaec9c91460ebddf2ca",
+      "bytes": 37779
+    },
+    "b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-390/rent-detail-zh-390.png": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-17ec9df-artifacts/b008-monthly-rent-detail-m-a38cc-ad-only-and-source-specific-chromium-390/rent-detail-zh-390.png",
+      "sha256": "8051b338a08cf1e72202a6c0b737a5de47599d446198fb7b521c6dad9834b6d5",
+      "bytes": 62341
+    }
+  },
+  "limits": [
+    "One exact Ron-approved historical skip retained",
+    "Operational staging/independent Claude/Class B gates pending",
+    "First invoice estimate is snapshot-time, not a reservation",
+    "Monthly posting and full billing generation not claimed",
+    "Control restoration does not restore normal audit/data changes",
+    "Initial preliminary monthly1280 failure is UNKNOWN and not waived; subsequent targeted/full diagnostics passed, cause not established",
+    "Pure 21-digit money test is not an issuable PostgreSQL numeric fixture",
+    "Staging probes are metadata and zero-row availability only; no application/version/new-schema or runtime-boundary acceptance"
+  ],
+  "preliminaryFailure": {
+    "status": "UNKNOWN_NOT_REPRODUCED_IN_DIAGNOSTICS",
+    "scope": "one monthly1280 preliminary case; not labeled baseline or waived",
+    "failureContext": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-draft-a-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/error-context.md",
+      "sha256": "dc9841da24a5020e4c9de32a8908f86f2693f3cb88063da9876030250eae28a2",
+      "bytes": 10654
+    },
+    "originalFailedScreenshots": {
+      "monthly-choose-1280.png": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-draft-a-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-choose-1280.png",
+        "sha256": "b56110872cdf86a24053fb3ef0d495990f0b6aa16dce7a1afaf886aa61efe29f",
+        "bytes": 68374
+      },
+      "monthly-invalid-1280.png": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-draft-a-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-invalid-1280.png",
+        "sha256": "c1517ee58fdd9a5e60dd859d595f0480525980c8de38d0f3e892e1a53449503c",
+        "bytes": 68276
+      },
+      "monthly-off-1280.png": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-draft-a-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-off-1280.png",
+        "sha256": "96567dcaf54b2436d0f390238db49d2d38bbf78d12b8dd17d77cd37266059447",
+        "bytes": 70124
+      },
+      "monthly-on-1280.png": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-draft-a-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-on-1280.png",
+        "sha256": "d7d891d4f18b6ec6a890010555da0a89d90d528040d382c0a6d483f916ce8321",
+        "bytes": 226765
+      },
+      "monthly-zh-1280.png": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b008-rent-detail-http-draft-a-artifacts/b008-monthly-preview-month-ad7a3-eserves-source-distinctions-chromium-1280/monthly-zh-1280.png",
+        "sha256": "a632d84c4809d9858812aec4cac13bbba4ffb51ede012d1c507f48fda5389715",
+        "bytes": 229953
+      }
+    },
+    "diagnostic": "target1PASS and full8PASS; exact original event/cause unavailable; all original assertions retained"
+  },
+  "stagingMetadataOnly": {
+    "readOnly": true,
+    "version": "170011",
+    "captureFunctions": 2,
+    "zeroRowRest": 200,
+    "notRuntimeAcceptance": true
+  },
+  "unappliedDbProposal": {
+    "handoff": {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b008-monthly-operation-db-handoff.md",
+      "sha256": "ffea9631d34ab50141d9a784c9d82a3ada76df3f23fad45627f2fc61c8980dbe",
+      "bytes": 17792
+    },
+    "sql": {
+      "path": "/Users/ron/Downloads/condola-bootstrap/20261031110008_b008_monthly_rent_operation.proposed.sql",
+      "sha256": "ce543dcbc2c3881c841f580dcf81823a1882f3cc5a9ae7c67c5a99df41f0b8e4",
+      "bytes": 5662
+    },
+    "sourceReview": "PASS_SCOPED_DB_PROPOSAL_REVIEW_ONLY",
+    "applied": false,
+    "syntaxAndBehavior": "NOT_RUN_REQUIRES_PE",
+    "newWriterImplemented": false
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "observedAt": "2026-10-31T01:09:45.813Z",
+  "scope": "STAGING ZERO-ROW REST GET ONLY; NO CUSTOMER DATA RETURNED OR MUTATION",
+  "httpStatus": 200,
+  "emptyArray": true,
+  "headers": "apikey AND Authorization Bearer present; values withheld"
+}

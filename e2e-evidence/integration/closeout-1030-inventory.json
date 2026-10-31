@@ -1,0 +1,404 @@
+{
+  "recordedAt": "2026-10-30T18:59:40.287626-07:00",
+  "definition": "whole done requires exact candidate staging and independent verdict; local gate alone is insufficient",
+  "completedWholeItems": [],
+  "partialItems": [
+    "B-001",
+    "B-002",
+    "B-003",
+    "B-004",
+    "B-005",
+    "B-006",
+    "B-007",
+    "B-008",
+    "B-009",
+    "B-010",
+    "B-011",
+    "B-013",
+    "B-015",
+    "B-021",
+    "B-028"
+  ],
+  "notStartedItems": [
+    "B-012",
+    "B-014",
+    "B-016",
+    "B-017",
+    "B-018",
+    "B-019",
+    "B-020",
+    "B-022",
+    "B-023",
+    "B-024",
+    "B-025",
+    "B-026",
+    "B-027",
+    "B-029",
+    "B-030",
+    "B-031",
+    "B-032",
+    "B-033",
+    "B-034",
+    "B-035",
+    "B-036",
+    "B-037",
+    "B-038",
+    "B-039"
+  ],
+  "items": {
+    "B-001": {
+      "title": "Finish e-sign integration and gates; activation: **Ron decides**",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "電子簽署、正式／測試組織界線、自動啟用及首張帳單已有本機實作／證據；簽署標題修正已驗證。",
+      "remainder": "原始 G0–G5／§11.1、目前 staging 版本、24 次冷啟動／React418／實際收件與 Claude ClassB 未驗證。",
+      "referenceSha": "41c5b7ff3c3a730308d4e31f3b4508df7a650055"
+    },
+    "B-002": {
+      "title": "Finish MOVE_OUT and ID_PURGE; activation: **Ron decides**",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "退租實際日期、ID 保留／清除及 HTTP／scheduler 的本機邊界已驗證。",
+      "remainder": "指定舊版／新結構及 rollback 相容性、目前 staging 與 Claude ClassB 未驗證；未做營運清除。",
+      "referenceSha": "71acf06d7675e99ef83cf20c545a2c56d775ccf3"
+    },
+    "B-003": {
+      "title": "Finish payee details and full access audit; activation: **Ron decides**",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "付款對象與私密資料檢視／稽核、指定組織與跨租客隔離已有本機證據。",
+      "remainder": "目前 staging、舊程式／新結構／rollback 與 Claude ClassB 未驗證。",
+      "referenceSha": "0fb7c15a3679d5338eafdab906571b5dc1814d1d"
+    },
+    "B-004": {
+      "title": "Verify paper lease versions, tenant downloads and audit",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "紙本版本、租客下載／歷史、授權與稽核已有本機證據。",
+      "remainder": "目前 staging、舊程式／新結構／rollback 與 Claude ClassB 未驗證；不把租客測試推論為所有 staff route 證據。",
+      "referenceSha": "ee734857cf04f75d84c5a01eb89d433b9e89bfae"
+    },
+    "B-005": {
+      "title": "Onboarding, invitations and resumable trial",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "邀請接受且綁定、明確無必要邀請、重返流程與報表已有本機證據；重寄只有純模擬／呈現。",
+      "remainder": "持久化重寄、固定授權 gateway／UNKNOWN 恢復未完成；generic invitation audit 隱私待核對；staging／Claude 未驗證。",
+      "referenceSha": "a95c7e1c86788d60b2eab2cb9405f494816fb75d"
+    },
+    "B-006": {
+      "title": "Import error detail and regional source formats",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "區域 CSV、錯誤說明與重新匯入已有合成資料本機證據（ClassA）。",
+      "remainder": "授權去識別真實客戶檔及目前 staging 未驗證；不以合成檔冒充真實客戶。",
+      "referenceSha": "9bbf04a300f073256bc9a7c887f3c6025b84c5ee"
+    },
+    "B-007": {
+      "title": "Deposit rule hints and excess-reason audit",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "地區押金提示、超額原因／稽核與 8 組配置矩陣已有本機證據；Ron 限定 CHECK 例外已批准。",
+      "remainder": "目前 staging、舊程式／新結構／OFF／rollback 與 Claude ClassB 未驗證。",
+      "referenceSha": "05369e484a353fad0364d6b435fdbda3590521e7"
+    },
+    "B-008": {
+      "title": "Billing, utility and statement amount previews",
+      "oldQueueStatus": "in_progress",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "statement／水電差異、首期 /30、首張帳單與只讀月租／帳單對象／幣別明細已有本機實作；目前停在只讀明細。",
+      "remainder": "實際月租出帳／完整帳單相符未完成；新 DB 提議未套用／語法及行為未驗證；最初瀏覽器失敗原因未明、未豁免；staging／Claude 未驗證。",
+      "referenceSha": "17ec9dfdd45c4a47807d0a251cbdff1840fe74c0"
+    },
+    "B-009": {
+      "title": "Bank CSV dedupe and manual matching",
+      "oldQueueStatus": "in_progress",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "CSV 精確重傳防重、人工配對／拒絕、決策紀錄與併發有既有本機實作／證據。",
+      "remainder": "建議依據存於來源但畫面只顯示姓名／分數，尚未補說明；真實去識別 CSV、目前 staging／owner 權限／Claude 未驗證。",
+      "referenceSha": "2dea9016a8e2f5b5813bd1c7da048f8285ab8133"
+    },
+    "B-010": {
+      "title": "Rent reminders and payment review results",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "提醒／付款結果契約、偏好及模擬已有部分整合；另有 recovery 分支。",
+      "remainder": "實際事件 producer 與完整派送／防重未完成；真實 Email 收件未驗證，沒有寄信。",
+      "referenceSha": "7e8a3ee0b7153955d051b03ed86883b0c253d2b2"
+    },
+    "B-011": {
+      "title": "Handover and deposit settlement, including bilateral replies",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "點交／雙方回覆有部分整合；結算 UNKNOWN 草稿／恢復 UI 留在獨立 recovery 分支。",
+      "remainder": "具權威的結算、押金證據／防重、最終金額與對方確認未完成；preview stream abort 未解；整合 gate／staging／Claude 未驗證。",
+      "referenceSha": "b13c82b0c10545e4611494cff2fe9f2464b47c31"
+    },
+    "B-012": {
+      "title": "Renewal comparison and early-termination lifecycle",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-013": {
+      "title": "Manager dispatch and shared repair approval state",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "個人預設＋物件覆寫／版本化門檻、audit／原請求恢復及 digest 修正已做本機驗證；PE 已裝設定切片。",
+      "remainder": "估價版本、指定屋主決策、dispatch／emergency／reminder enforcement 未完成；剩餘新結構及 gateways 未完成／未套用，整項 staging／Claude 未驗證。",
+      "referenceSha": "fbda2a0cc9ce592907632410e0eeea343dbdb5d2"
+    },
+    "B-014": {
+      "title": "Owner net ledger, transfers and report versions",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-015": {
+      "title": "Archive records and reuse/edit tenant identities",
+      "oldQueueStatus": "in_progress",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "只讀租客名錄及聯絡資料 CAS／UNKNOWN 編輯已部分整合，保留獨立 recovery ref。",
+      "remainder": "archive、完整 reuse／dependency matrix 尚未完成；目前 staging／Claude 未驗證；歷史 RSC transport 限制保留，不宣稱所有 request 完成。",
+      "referenceSha": "3f8505e87736c5ca422172d992bf33d9615ab390"
+    },
+    "B-016": {
+      "title": "Company/profile settings and management-fee rules",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-017": {
+      "title": "Custom role permissions with escalation protection",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-018": {
+      "title": "Tenant payment history and home states",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-019": {
+      "title": "Tenant conversation creation",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-020": {
+      "title": "Tenant account, sessions, preferences and data requests",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-021": {
+      "title": "Owner thresholds and versioned repair decisions",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "與 B013 共用屋主門檻設定／稽核／digest 切片。",
+      "remainder": "真正對同一版估價的指定屋主核准／退回／補件及新版本套新門檻的完整 workflow 未完成；staging／Claude 未驗證。",
+      "referenceSha": "fbda2a0cc9ce592907632410e0eeea343dbdb5d2"
+    },
+    "B-022": {
+      "title": "Owner transfers, receipt title and report replies",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-023": {
+      "title": "Owner files, lifecycle replies, repairs, messages and settings",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-024": {
+      "title": "Vendor accept/reject/schedule/completion UI",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-025": {
+      "title": "Vendor onboarding, fixed data, documents and trade fields",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-026": {
+      "title": "Vendor estimates, account/history and enhanced sharing",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-027": {
+      "title": "Platform isolation, partner consent and rollout controls",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-028": {
+      "title": "Event delivery results, reminders and four-app notification center",
+      "oldQueueStatus": "pending",
+      "category": "partial",
+      "queueStatus": "pending",
+      "localScope": "四角色通知中心／synthetic source、read／mark 及派送契約已有部分整合。",
+      "remainder": "真實事件來源與 delivery 結果仍未完成；mode-b-real-producer-prep 是 fail-closed 草稿，不是可用 producer；實際收件／staging／Claude 未驗證。",
+      "referenceSha": "b4a014a72a924b15a10b4b69ccd915f3cbee8173"
+    },
+    "B-029": {
+      "title": "Usage events and five metering hooks",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-030": {
+      "title": "Usage summaries, limits, plans and subscription lifecycle",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-031": {
+      "title": "Audit detail, reliable uploads and token/session hardening",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-032": {
+      "title": "Regional formats, export explanations and legacy-demo verification",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-033": {
+      "title": "LINE shared schema, real login, webhook and quota foundation",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-034": {
+      "title": "Tenant LIFF, invitations, binding and unlinking",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-035": {
+      "title": "Vendor LIFF and job-scoped binding",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-036": {
+      "title": "Owner LIFF and authorized-property binding",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-037": {
+      "title": "Rent and payment-result LINE pushes",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-038": {
+      "title": "Repair-state LINE pushes",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    },
+    "B-039": {
+      "title": "Dispatch LINE pushes and full three-portal rehearsal",
+      "oldQueueStatus": "todo",
+      "category": "not_started",
+      "queueStatus": "todo",
+      "localScope": "本輪佇列尚未開始功能實作；可能有既有 baseline 或來源研究，不等於整項不存在。",
+      "remainder": "完整逐項實作／驗收未驗證。",
+      "referenceSha": null
+    }
+  },
+  "paused": true,
+  "currentCandidate": "17ec9dfdd45c4a47807d0a251cbdff1840fe74c0",
+  "branch": "mode-b-repair-override-prep"
+}
