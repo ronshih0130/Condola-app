@@ -263,3 +263,27 @@ After published/mirroredda4b13d, highest plan GO. Reserve existing e2e/b007-depo
 ## B007 local checkpoint verified — 2026-10-30T17:05:07.679937-07:00
 
 Candidate `05369e484a353fad0364d6b435fdbda3590521e7`:607unit/358RLS+1priorhistoricalSKIP, builds/preflight/Worker1/browser8 PASS. Exact present-row global/orgrestore/OFF,16images; parent fullPage capture limit separate from scoped deposit geometry. Root serializes final verdict/log/commit/push/mirror. WholeClassB remainder pending; no new app/schema/legalchange. B008 starts only after publication.
+
+## B008 application continuation plan — 2026-10-30T17:09:59.345163-07:00
+
+After published/mirroredb40107b, highest source-first plan GO for actual combined first-invoice preview and supported read-only monthly planner, plus private existing-proof hardening. General monthly execution remains real unfinished work, no invented DB dependency. Root serializes exact file ownership/integration; writers receive disjoint paths before edits. No source mutation outside reservation or new DB/financial policy/provider/legal/pricing change. Role log follows. Source plan outside work/B008-preview-app-plan.md.
+
+## B008 exact application file ownership — 2026-10-30T17:12:18.937604-07:00
+
+Role sessionc146325d. `b008_movein_preview_terra` alone owns existing server/move-in-invoice.ts and app/m/leases/[id]/page.tsx plus new server/move-in-plan.ts, move-in-preview.ts, corresponding focused tests, components/move-in-invoice-preview.tsx and i18n/move-in-preview.ts. Shared firstInvoicePlan math/capture/migrations unchanged. `initial_queue_reconciliation` owns only existing e2e/b008-billing-preview.spec.ts + e2e/b008-first-period.spec.ts and new e2e/b008-preview-private-playwright.config.ts. Root owns package registrations/runner/helpers/docs, and later disjoint monthly-planner files only after source contract is fixed. No concurrent writer to those shared paths; existing statement/utility/first-period source files remain reserved/unmodified. Reader/planner implementation is nonDB; any actual new-object/privilege need becomes a concrete unapplied handoff.
+
+## B008 shared authorization and root harness reservation — 2026-10-30T17:22:39.961287-07:00
+
+Terra additionally owns new `src/server/billing-preview-authority.ts`; actual live-parent environment reread is currently an explicit source-review question, no role bypass allowed. Root reserves `package.json`, narrow `scripts/run-e2e.ts` dispatch and outside private B008 helpers/build driver. Monthly planner contract and actual-posting invariant research remain source review; no monthly source writer yet. No test/build executed for new application code.
+
+## B008 monthly readonly exact reservation — 2026-10-30T17:24:44.878685-07:00
+
+Highest scoped contract PASS SHA256535870b3dfff408be3f9808c36198994cfc41f935ca9dc251f6e9e1d1b75e19b. `esign_activation_resume` alone owns NEW server/monthly-billing-plan.ts, monthly-billing-rules.ts and focused corresponding tests, NEW components/monthly-billing-preview.tsx, i18n/monthly-billing-preview.ts, app/m/rent/monthly-preview/page.tsx, and narrow existing app/m/rent/page.tsx entry. Reuse Terra shared authority helper (read only, do not edit it), no other source paths. Unsupported/partial/conflicting rows must remain visible; cap overflow distinct incomplete with no digest/subtotal. Root owns e2e/registrations/docs/integration. This does not authorize posting SQL or complete B008.
+
+## B008 monthly browser reservation — 2026-10-30T17:28:22.928869-07:00
+
+`initial_queue_reconciliation` alone owns NEW e2e/b008-monthly-preview.spec.ts, actual browser route/selectedorg/source-state proof with private fixed-origin config. Existing first-period browser and both private config files are frozen; root alone integrates config testMatch/runner. Writer must not execute DB/build/browser or edit app. Root focused first-invoice integration13/13PASS at reviewed hashes; this is not immutable full gate or monthly runtime evidence.
+
+## B008 preview candidate freeze — 2026-10-30T17:32:36.683525-07:00
+
+Highest scoped SOURCE GO for first-invoice reader/issuer extraction/authority and supported readonly monthly planner plus private browser/config/registrations. Focused19/19PASS, typecheckPASS, lint0errors/7existingwarnings; preliminarybrowser6PASS1.1m before final exact-subtotal assertion delta. Root freezes all application/test files now; no operational migrations or flags/provider/legal change. WholeB008 remains in_progress: actual monthly writer/full-bill parity not completed, later stage/ClassB gates pending. Next: clean exact-candidate fullgate, builds/originalGNUawkpreflight/Worker, final6browser and20image review, docs/Originpush/mirror.

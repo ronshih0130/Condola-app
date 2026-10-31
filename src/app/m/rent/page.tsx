@@ -1,3 +1,5 @@
+import { monthlyBillingAvailable } from "@/server/monthly-billing-plan";
+import { monthlyBillingCopy } from "@/i18n/monthly-billing-preview";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { Fragment } from "react";
 import Link from "next/link";
@@ -23,7 +25,7 @@ export default async function RentPage() {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
-  const [rows, remindersEnabled] = await Promise.all([rentRoll(session), manualRemindersEnabled(session)]);
+  const [rows, remindersEnabled, monthlyAvailable] = await Promise.all([rentRoll(session), manualRemindersEnabled(session), monthlyBillingAvailable(session)]);
   const today = taipeiToday();
   let lastProperty = "";
   return (
@@ -31,9 +33,12 @@ export default async function RentPage() {
       <PageHeader
         title={t("i_rentroll_title")}
         actions={
+          <>
+          {monthlyAvailable && <Link className="btn" href="/m/rent/monthly-preview">{monthlyBillingCopy(session.locale).title}</Link>}
           <Link className="btn" href="/m/rent/utilities" data-testid="utility-entry">
             {t("i_utility_open")}
           </Link>
+          </>
         }
       />
       <div className="card">

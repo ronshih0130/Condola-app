@@ -9,6 +9,8 @@ import { PayDialog } from "@/components/dialogs";
 import { IdvCard } from "@/components/idv-card";
 import { LeaseTermsForm } from "@/components/lease-terms-form";
 import { FirstPeriodSummary } from "@/components/first-period-summary";
+import { MoveInInvoicePreview } from "@/components/move-in-invoice-preview";
+import { moveInPreview } from "@/server/move-in-preview";
 import { PdfDownloadButton } from "@/components/pdf-download-button";
 import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader, chargeKey, statusClass, statusKey } from "@/components/ui";
@@ -51,6 +53,7 @@ export default async function LeasePage({
   const detail = await leaseDetail(session, id);
   if (!detail) notFound();
   const { lease, signatures } = detail;
+  const firstInvoicePreview = tab === "summary" ? await moveInPreview(session, id) : null;
   const paymentRequestScoped = tab === "ledger" && detail.dueMinor > 0 && await paymentRequestEnabled(session);
   const canInvite = session.role === "admin" || session.role === "manager";
   const billingEnabled = canInvite && lease.rent_frequency === "monthly" ? await tx(session.userId, (client) => billingPreviewsEnabled(client, session.orgId), { orgId: session.orgId, environment: session.environment }, { readOnly: true }) : false;
@@ -98,6 +101,7 @@ export default async function LeasePage({
       />
       <ErrorBanner t={t} error={query.error} />
       <FirstPeriodSummary basis={lease.first_period_basis} locale={session.locale} />
+      {firstInvoicePreview ? <MoveInInvoicePreview preview={firstInvoicePreview} locale={session.locale} calendar={session.calendar} /> : null}
       {tab === "summary" ? <HandoverEntry session={session} leaseId={id} /> : null}
       {query.created === "1" ? (
         <div className="alert ok" data-testid="lease-created">
