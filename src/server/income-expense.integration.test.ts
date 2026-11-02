@@ -43,13 +43,17 @@ test("income and expense stay in SQL, per property, owner, and currency", async 
       chen: string;
       daan: string;
       xinyi: string;
+      owner_from: string;
+      lease_start: string;
     }>(
       `SELECT
          (SELECT paid_on::text FROM payments WHERE org_id = $1 AND status = 'confirmed' ORDER BY paid_on DESC LIMIT 1) AS paid_on,
          (SELECT incurred_on::text FROM expenses WHERE org_id = $1 AND description = '冷氣維修' AND status = 'approved' LIMIT 1) AS incurred_on,
          (SELECT id::text FROM contacts WHERE org_id = $1 AND display_name = '陳建宏' AND is_owner LIMIT 1) AS chen,
          (SELECT id::text FROM properties WHERE org_id = $1 AND name = '大安和平' LIMIT 1) AS daan,
-         (SELECT id::text FROM properties WHERE org_id = $1 AND name = '信義松仁' LIMIT 1) AS xinyi`,
+         (SELECT id::text FROM properties WHERE org_id = $1 AND name = '信義松仁' LIMIT 1) AS xinyi,
+         (SELECT po.effective_from::text FROM property_owners po JOIN properties p ON p.id=po.property_id AND p.org_id=po.org_id WHERE p.org_id=$1 AND p.name='信義松仁' AND po.is_primary LIMIT 1) AS owner_from,
+         (SELECT min(l.start_date)::text FROM leases l JOIN properties p ON p.id=l.property_id AND p.org_id=l.org_id WHERE p.org_id=$1 AND p.name='信義松仁') AS lease_start`,
       [ORG_ID],
     );
     return found.rows[0];
@@ -57,6 +61,9 @@ test("income and expense stay in SQL, per property, owner, and currency", async 
   assert.ok(seed?.paid_on && seed.incurred_on && seed.chen && seed.daan && seed.xinyi);
 
   const paidStart = `${seed.paid_on.slice(0, 7)}-01`;
+  // The sample payment can be in the prior month on the first three days.
+  // Its owner must already cover the sample lease and that report period.
+  assert.ok(seed.owner_from && seed.lease_start && seed.owner_from <= seed.lease_start && seed.lease_start <= seed.paid_on && seed.owner_from <= paidStart, "seeded ownership covers the historical sample period");
   const paidEnd = await tx(USERS.admin, async (client) => {
     const row = await client.query<{ end: string }>(
       `SELECT (date_trunc('month', $1::date) + interval '1 month' - interval '1 day')::date::text AS end`,

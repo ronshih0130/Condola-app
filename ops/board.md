@@ -329,3 +329,11 @@ Sol high planner source GO for hubJ3.5: expose stored historical suggestion basi
 ## B009 source freeze — 2026-11-02T10:26:08.474875-08:00
 
 Solhigh independentSOURCEGO10literalreviewedpins +3privatehelperhashes in e2e-evidence/B-009/source-review-1102.json. Finale2e7592517f includesstaticphases/safeeventcounts/top+2rAF; allfinancial/auth/decision assertions retained. Rootfreezesapp/tests/config/metadata now; candidatecommit then executoronlyserialfullgate/build/originalpreflight/Worker/twowidthbrowser/readback. No otherrepo writesduringbrowser. Actualruntime/visual/stage/Claude notyetaccepted.
+
+## B009 first gate failure / fixture correction reserve — 2026-11-02T10:30:43.651600-08:00
+
+Actualcf928cagateFAILRLS48PASS1FAILstopped49,unit618PASS. Unchangedincome-expenseseedownerdatecurrent_datecontradictspaymentcurrent_date-3atmonthboundary; productionreportcorrectlyexcludesfutureowner. No waiver/retry/skip. b009_executor_sol reservationexpandedONLYsrc/server/seed.ts +src/server/income-expense.integration.test.ts forcoherent syntheticownershipstart/historyprecondition; productionloader/schema/rulesfrozen. Reviewnewseed/test andoutside runtime-driverpinsetexpansionbeforecandidate2. Originalfailedoutputs preserved e2e-evidence/B-009/first-gate-cf928ca.md.
+
+## B009 fixture-corrected source freeze — 2026-11-02T10:33:07.828194-08:00
+
+IndependentSOURCEGO seedad8b93e2/test1e21698f +driver42a139c2; new12literalpins recorded. Focusincome-expenseactualPASS1, unchangedproductionreport/schema. OldcfFAILEDgate/receipts/driverreconstructionpreservedunwaived. Rootcandidate2committhenfreshownedfullgate; allsource/metadatafreeze duringruntime. No builds/browser untilgatePASS.

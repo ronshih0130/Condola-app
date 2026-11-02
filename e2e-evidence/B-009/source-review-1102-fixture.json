@@ -1,0 +1,41 @@
+{
+  "recordedAt": "2026-11-02T10:33:07.828194-08:00",
+  "baseline": "cf928ca63f97093a4a5ada2f4f05adba004da4fe",
+  "sourceBlobs": {
+    "src/lib/bank-match-basis.ts": "ed003b2f9345d5354e5913c6d30f05db1077bab7",
+    "src/lib/bank-match-basis.test.ts": "6a79ad3ddd2bb4bc0648503cad16e88c22a7771d",
+    "src/server/bank-matching.ts": "c3461fa84e30cfa2a33512ccfca24ec0102013f7",
+    "src/components/bank-matching.tsx": "144f1efe92fc8a2732fbc61305b7c388afd14ce0",
+    "src/i18n/bank-matching.ts": "6e62bdce04b6a5d4c6de335bfdd2469a0ae2ac32",
+    "src/server/bank-matching.integration.test.ts": "900ff90f7d0c0734b7d101cc1b91b15d9d3f2fc9",
+    "e2e/bank-matching.spec.ts": "7592517f9ed03bed850c44eaf51d2f914cbc798d",
+    "e2e/b009-bank-private-playwright.config.ts": "5a499d31393fc86c55f73d2581faffcdf2465d69",
+    "package.json": "792ba7ef533fc36cf302d0b68f685203ac7d49da",
+    "scripts/run-e2e.ts": "6d5e39d6bac70e387fad308d5cbc445013528363",
+    "src/server/seed.ts": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+    "src/server/income-expense.integration.test.ts": "1e21698f2627ce0a940d9be8b2dd2ddc2296e4f6"
+  },
+  "sourceReview": "PASS_SCOPED_SOURCE_AND_FIXTURE_DELTA_REVIEW",
+  "reviewerRequestedModel": "gpt-6.1-sol",
+  "reviewerRequestedEffort": "high",
+  "reviewerAgent": "resume_planner_sol",
+  "helperSha256": {
+    "run-b009-prepared-check.py": "e90689f22d126416437d4d13e35d8531575bc600fb0da4baf8422f6c71f8df0a",
+    "b009-runtime-driver.py": "42a139c2c24fc9c33a91c77c188a2781e049135c90629d535c4324243022d465",
+    "b009-controls-readback.cjs": "1d283eb28ff0105a363249066f50288d82555b613e52be6623945271501ddea2"
+  },
+  "firstFailedCandidate": "cf928ca63f97093a4a5ada2f4f05adba004da4fe",
+  "firstFailureNotWaived": true,
+  "oldDriverSource": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-runtime-driver-cf928ca-preserved.py",
+    "sha256": "044bd0376bf208a7bbba184b065dd92c1831eb2eb7b2482fc3318ad1caabb988",
+    "provenance": "Byte-identical reconstruction by reversing two known text edits, verified against original preexecution hash; not claimed as saved before edit"
+  },
+  "focus": "Existing income-expense focused1PASS actual/effective0; all original finance/org/assertions retained; uncommitted source under oldHEAD, not candidate2 full gate",
+  "runtimeNotYetRun": true,
+  "limits": [
+    "No production reporting/schema semantics changed",
+    "Whole B009 stage/realfile/Claude pending",
+    "Original B008 UNKNOWN unwaived"
+  ]
+}

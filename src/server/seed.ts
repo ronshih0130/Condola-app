@@ -209,8 +209,11 @@ export async function resetAndSeed() {
     );
 
     await client.query(
-      `INSERT INTO property_owners (org_id, property_id, owner_contact_id, is_primary, can_view_tenant_phone)
-       VALUES ($1,$2,$3,true,false), ($1,$4,$5,true,true), ($1,$6,$7,true,false)`,
+      `INSERT INTO property_owners (org_id, property_id, owner_contact_id, is_primary, can_view_tenant_phone, effective_from)
+       VALUES
+       ($1,$2,$3,true,false,(date_trunc('month', current_date) - interval '2 months')::date),
+       ($1,$4,$5,true,true,(date_trunc('month', current_date) - interval '2 months')::date),
+       ($1,$6,$7,true,false,(date_trunc('month', current_date) - interval '2 months')::date)`,
       [ORG_ID, ids.xinyi, ids.chen, ids.daan, ids.lin, ids.oakland, ids.morgan],
     );
 
