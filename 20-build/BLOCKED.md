@@ -191,3 +191,11 @@ Last complete standardgate `17ec9dfdd45c4a47807d0a251cbdff1840fe74c0` PASS615uni
 - **STOP/OWNERSHIP_RELEASE**: allproductworkpaused. claim.shrequirescleanmain+committedHANDOFF+alllocalbranchesexceptops-lockpublished. main2bedb895hasnoHANDOFF/contract; userprohibitsmainmerge. Do notchangeclaimscript/merge/steal; checkpoint+mirror, drainjobs, recordactualreleaseattempt/STOPPEDphase inDownloads handoff. Activeownershipdoesnotauthorizecontinueddevelopmentafterstop.
 
 Eachblockerhasownerandnextstepin[consolidatedhandoff](codex-handoff-1030.md). No new B until Ronresumes.
+
+## B009 current acceptance remainder — 2026-11-02T10:50:03.207749-08:00
+
+Local historical-basis delta verified at `0107baac619d3faee3f802f9a052aeb79bdbc84a` ([checkpoint](../e2e-evidence/B-009/checkpoint-0107baa.md)); no new local codefinding remains. **B009_REALFILE / EXTERNAL_PENDING**: authorized deidentified real bankCSV/source provenance still UNVERIFIED, Ron/authorizedparty suppliesfixture/disposition, never acquire customerdata onown. **B009_STAGE_CLASSB**: exact deployedapp/catalog/functionowner/grants/currentrole/oldcode/OFF/rollback, independentClaude/ClassB and Ron acceptance remain UNVERIFIED; PE/QA handles staging undercontract. Current stage wasnot reprobed here. No activation.
+
+**B009_SEED_MONTH_BOUNDARY — LOCALLY RESOLVED**: firstcf gateFAIL preserved; unchangedproductionreport correctlyexcludedfutureowner. Synthetic ownershipstart nowmatchesexistingsampleleasestart; meaningfuldateprecondition+allmoney/orgassertions retained. Fresh618unit/380RLS+solepriorSKIPgatePASS, no waivedfailure/newskip. **B009_READBACK_SCOPE — OBSERVATION CORRECTED**: originalnodeexitNOT_CAPTURED/unverified, outer0neverPASS; reviewedSELECT-onlyhelper nowchecksretainedhistory2each+currentjoin1each andsameexactcontrols/allocation; explicitactual0receipt. No historydeleted.
+
+SkiponlydependentB009acceptance; nextB010/B028actualpayercenter can reuseexisting neutral-source/center schema and fixedowner-role bridge acrosssix actualfinancialentrypoints. Do not reuse rent-only gateways or demand source19 universalwriter machinery. EmailpersonaldefaultONpreference persistence genuinelyneedsnarrowPEproposal; do not apply onMac. B008UNKNOWN and allotherhistoricalpendinggates unchanged.

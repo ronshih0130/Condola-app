@@ -1,0 +1,45 @@
+{
+  "targetDatabase": "condola_b009_http_0107baa",
+  "candidateShort": "0107baa",
+  "baselineDatabase": "condola_b009_build_0107baa",
+  "globalOriginallyPresent": true,
+  "globalRestoredToSeededBaseline": true,
+  "orgRestoredToSeededBaseline": true,
+  "globalOff": true,
+  "orgOptins": 0,
+  "controlSha256": "2707f20319dd08e178a6f14873acf8c0fdd53ebde4f9b9a26a35a97377eb0dbc",
+  "orgFlagsSha256": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+  "decisions": [
+    {
+      "decision": "match",
+      "source": "manual",
+      "reason": "Synthetic match",
+      "n": 2
+    },
+    {
+      "decision": "reject",
+      "source": "suggestion",
+      "reason": "Synthetic rejection",
+      "n": 2
+    }
+  ],
+  "currentDecisions": [
+    {
+      "decision": "match",
+      "source": "manual",
+      "reason": "Synthetic match",
+      "n": 1
+    },
+    {
+      "decision": "reject",
+      "source": "suggestion",
+      "reason": "Synthetic rejection",
+      "n": 1
+    }
+  ],
+  "allocations": {
+    "n": 1,
+    "amount": "76500"
+  },
+  "scope": "Exact full control-row metadata and whole org-flags restoration against same-source independently seeded build clone. Append-only decision history retains both widths (two manual matches and two suggestion rejections). Only last-width public bank/payment/allocation fixtures remain active after reset; current joined fixture contains one match/rejection and one allocation. No whole-database restore, production or staged acceptance claim."
+}

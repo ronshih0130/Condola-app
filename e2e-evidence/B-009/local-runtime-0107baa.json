@@ -1,0 +1,476 @@
+{
+  "recordedAt": "2026-11-02T10:45:06.150380-08:00",
+  "candidate": "0107baac619d3faee3f802f9a052aeb79bdbc84a",
+  "baseline": "e4432b94b0f554d3adc66e9c764598b0be2ce172",
+  "result": "PASS_LOCAL_SCOPED_B009_BASIS_AND_SEED_FIXTURE",
+  "scope": "Historical suggestion basis DTO/display; existing decision/import/auth/money assertions retained. Synthetic fixture ownership dates align with seeded historical lease start. No schema/action/auth/financial algorithm/legacy OFF change.",
+  "sourceReviewFreeze": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-reviewed-source-freeze-2.json",
+    "sha256": "90b63fc4fca84f04d08aaa3c4d5c42ff396d0860f8647881f22ac5413c47bacd",
+    "bytes": 2492
+  },
+  "literalReviewedTwelvePathMap": {
+    "src/lib/bank-match-basis.ts": "ed003b2f9345d5354e5913c6d30f05db1077bab7",
+    "src/lib/bank-match-basis.test.ts": "6a79ad3ddd2bb4bc0648503cad16e88c22a7771d",
+    "src/server/bank-matching.ts": "c3461fa84e30cfa2a33512ccfca24ec0102013f7",
+    "src/components/bank-matching.tsx": "144f1efe92fc8a2732fbc61305b7c388afd14ce0",
+    "src/i18n/bank-matching.ts": "6e62bdce04b6a5d4c6de335bfdd2469a0ae2ac32",
+    "src/server/bank-matching.integration.test.ts": "900ff90f7d0c0734b7d101cc1b91b15d9d3f2fc9",
+    "e2e/bank-matching.spec.ts": "7592517f9ed03bed850c44eaf51d2f914cbc798d",
+    "e2e/b009-bank-private-playwright.config.ts": "5a499d31393fc86c55f73d2581faffcdf2465d69",
+    "package.json": "792ba7ef533fc36cf302d0b68f685203ac7d49da",
+    "scripts/run-e2e.ts": "6d5e39d6bac70e387fad308d5cbc445013528363",
+    "src/server/seed.ts": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+    "src/server/income-expense.integration.test.ts": "1e21698f2627ce0a940d9be8b2dd2ddc2296e4f6"
+  },
+  "literalReviewedTwelvePathMapMatchesCurrent": true,
+  "runtimeReceipts": {
+    "gate": {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-gate-exit-0107baa.json",
+        "sha256": "0041309e2f24d82d3119897f3e2a39699fd37c3fc26141d65cb3731649fed693",
+        "bytes": 3366
+      },
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "seconds": 227.687,
+      "privateLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-gate-0107baa.log",
+        "sha256": "a5e02f9b84cda78845d18c79c2d011769180d17ddcc1590b5ba360643ef3d4cd",
+        "bytes": 444
+      }
+    },
+    "next-build": {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-next-build-exit-0107baa.json",
+        "sha256": "f53aa18a9a18b9b8687c914356cf1143862fa1ba8cda067c3107cba68be80be8",
+        "bytes": 3325
+      },
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "seconds": 20.005,
+      "privateLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-next-build-0107baa.log",
+        "sha256": "c755dc4957685d29269b7f2d901fa250f682a94cbec007d32a9d4c8cb4ab6345",
+        "bytes": 12390
+      }
+    },
+    "cf-build": {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-cf-build-exit-0107baa.json",
+        "sha256": "526012f67fb874bc19fbf7d3c95317ca3ef2ab47e57b618e56e780f9038d5a65",
+        "bytes": 3326
+      },
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "seconds": 27.742,
+      "privateLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-cf-build-0107baa.log",
+        "sha256": "1ed00458941c644a67629e323ab80ed3c5a30b7b16bb2c9e3348392c338e93f9",
+        "bytes": 14099
+      }
+    },
+    "preflight": {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-preflight-exit-0107baa.json",
+        "sha256": "c8f8c50f7b14f2d69af322250832f64413b2ad113c26f98b98d0f42e2c8e4a97",
+        "bytes": 3332
+      },
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "seconds": 3.291,
+      "privateLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-preflight-0107baa.log",
+        "sha256": "e4f3ed39a2cd81811dfc6321169323cca05bae5a1f474079b0d7c11968582dc3",
+        "bytes": 23
+      }
+    },
+    "worker": {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-worker-exit-0107baa.json",
+        "sha256": "841de689d9565728a27ef5e968f44a7f99cba27241ae83219fedbcafb2acd7fc",
+        "bytes": 3324
+      },
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "seconds": 2.347,
+      "privateLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-worker-0107baa.log",
+        "sha256": "6d24ba12d645d9ba4f06e44c4535479198cdaca386ba8c5744c7d58d7869ec9f",
+        "bytes": 423
+      }
+    },
+    "playwright": {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-playwright-exit-0107baa.json",
+        "sha256": "6e3be1bf336afad454611c57f76befd2e539829b6590c3e92defb63eb7a8eb2e",
+        "bytes": 3476
+      },
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "seconds": 18.154,
+      "privateLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-playwright-0107baa.log",
+        "sha256": "ba40b1228b28c6e14d83f5c360a8cbbec88fb87451dc6a515bb451f400c4bbb0",
+        "bytes": 239
+      }
+    },
+    "corrected-readback": {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-corrected-readback-exit-0107baa.json",
+        "sha256": "7cb438bdc8614e1ee8f235cdc6f8d25b5c687813b99e2936856454bdbc038ef9",
+        "bytes": 3418
+      },
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "seconds": 0.124,
+      "privateLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-corrected-readback-0107baa.log",
+        "sha256": "e566505834f4f15c17f08b82969e8339ced05a4a34320118d3326c902498d7bf",
+        "bytes": 1254
+      }
+    }
+  },
+  "rawGateTapCounters": {
+    "test-unit": {
+      "rawLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/test-unit.log",
+        "sha256": "d079d08516a600b6dd97a8b52cc5b6bf76813691b7ce8d5ecf8a51515f25f3ae",
+        "bytes": 127398
+      },
+      "totals": {
+        "tests": 618,
+        "pass": 618,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "skipLines": []
+    },
+    "test-rls": {
+      "rawLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/test-rls.log",
+        "sha256": "d7cd37ada25201a9f44ed5fe8a6fd5f0c960f45019123b40869d781767902a1c",
+        "bytes": 105193
+      },
+      "totals": {
+        "tests": 381,
+        "pass": 380,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1
+      },
+      "skipLines": [
+        "ok 6 - a database with the older 20261022180000 upgrades forward, then accepts the same file again # SKIP Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29"
+      ]
+    },
+    "copy-check": {
+      "rawLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/copy-check.log",
+        "sha256": "99d000ba77c3e6d94766bac409f263f58ecc982bdcf13de188b622b8232d2416",
+        "bytes": 1437
+      },
+      "totals": {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "skipLines": []
+    },
+    "worker": {
+      "rawLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-worker-0107baa.log",
+        "sha256": "6d24ba12d645d9ba4f06e44c4535479198cdaca386ba8c5744c7d58d7869ec9f",
+        "bytes": 423
+      },
+      "totals": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "skipLines": []
+    }
+  },
+  "gateSummary": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-0107baac619d3faee3f802f9a052aeb79bdbc84a.md",
+    "sha256": "c97625f3e9889b146cca7114ec419003e5ad39daa10603cfb36f2016b4dbeb9f",
+    "bytes": 971
+  },
+  "allGateRawLogs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/copy-check.log",
+      "sha256": "99d000ba77c3e6d94766bac409f263f58ecc982bdcf13de188b622b8232d2416",
+      "bytes": 1437
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/flag-expiry.log",
+      "sha256": "31d5d77ba8c1cbcf2ff8895e57581bd830ee34cf7d5e5f55251276efac0b2692",
+      "bytes": 27
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/lint.log",
+      "sha256": "da819f980b5df58f94df10cee617099a4a6539df6d5f02510c80645449817c1d",
+      "bytes": 2422
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/npm-ci.log",
+      "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+      "bytes": 1585
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/steps.md",
+      "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+      "bytes": 341
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/test-rls.log",
+      "sha256": "d7cd37ada25201a9f44ed5fe8a6fd5f0c960f45019123b40869d781767902a1c",
+      "bytes": 105193
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/test-unit.log",
+      "sha256": "d079d08516a600b6dd97a8b52cc5b6bf76813691b7ce8d5ecf8a51515f25f3ae",
+      "bytes": 127398
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/0107baac619d3faee3f802f9a052aeb79bdbc84a.EgilJy/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    }
+  ],
+  "browser": {
+    "cases": 2,
+    "workers": 1,
+    "actualExit": 0,
+    "http5xx": 0,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "offOriginRequests": 0,
+    "assertionEvidence": "Both cases enforce empty fixed-category errors array; no raw error payloads retained by test.",
+    "screens": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-http-0107baa-artifacts/bank-matching-manual-bank-reconciliation-at-1280px-chromium/bank-basis-en-1280.png",
+        "sha256": "305631eadc097267dc0d2fcccb2adcca49ceaad726e194d51202a716e65d4b03",
+        "bytes": 177254,
+        "width": 1280,
+        "height": 1522,
+        "locale": "en",
+        "capture": "Before suggestion rejection; full-page synthetic enabled board with recognized basis and unsupported fallback"
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-http-0107baa-artifacts/bank-matching-manual-bank-reconciliation-at-1280px-chromium/bank-basis-zh-TW-1280.png",
+        "sha256": "db9162115ae576682c5c62c76066e5162233039733460bbb2d98e2f983d2c745",
+        "bytes": 171073,
+        "width": 1280,
+        "height": 1522,
+        "locale": "zh-TW",
+        "capture": "Before suggestion rejection; full-page synthetic enabled board with recognized basis and unsupported fallback"
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-http-0107baa-artifacts/bank-matching-manual-bank-reconciliation-at-390px-chromium/bank-basis-en-390.png",
+        "sha256": "a1b2621ea7122ee4916548067db02ff6c4a093968c5b600d8faf1b46a9f102fb",
+        "bytes": 128502,
+        "width": 390,
+        "height": 1722,
+        "locale": "en",
+        "capture": "Before suggestion rejection; full-page synthetic enabled board with recognized basis and unsupported fallback"
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-http-0107baa-artifacts/bank-matching-manual-bank-reconciliation-at-390px-chromium/bank-basis-zh-TW-390.png",
+        "sha256": "5672617a7e59bde0c2ac1d279dfa2d43c68083edddeef817fdb402010cfbf73b",
+        "bytes": 126230,
+        "width": 390,
+        "height": 1616,
+        "locale": "zh-TW",
+        "capture": "Before suggestion rejection; full-page synthetic enabled board with recognized basis and unsupported fallback"
+      }
+    ],
+    "visualInspection": "Author inspected all four PNGs. Basis and fallback text readable at both widths/locales; root reported independent reviewer inspection.",
+    "visualLimit": "Existing Next development badge overlaps lower control/sidebar in full-page capture; does not cover basis or fallback. No full-parent perfection claim."
+  },
+  "controlReadback": {
+    "artifact": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-controls-readback-0107baa.json",
+      "sha256": "19ba8064f6af29a8fd68e86e3e8ea8a42a79ddc34a015bbe2235abfd4cec2315",
+      "bytes": 1500
+    },
+    "result": {
+      "targetDatabase": "condola_b009_http_0107baa",
+      "candidateShort": "0107baa",
+      "baselineDatabase": "condola_b009_build_0107baa",
+      "globalOriginallyPresent": true,
+      "globalRestoredToSeededBaseline": true,
+      "orgRestoredToSeededBaseline": true,
+      "globalOff": true,
+      "orgOptins": 0,
+      "controlSha256": "2707f20319dd08e178a6f14873acf8c0fdd53ebde4f9b9a26a35a97377eb0dbc",
+      "orgFlagsSha256": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+      "decisions": [
+        {
+          "decision": "match",
+          "source": "manual",
+          "reason": "Synthetic match",
+          "n": 2
+        },
+        {
+          "decision": "reject",
+          "source": "suggestion",
+          "reason": "Synthetic rejection",
+          "n": 2
+        }
+      ],
+      "currentDecisions": [
+        {
+          "decision": "match",
+          "source": "manual",
+          "reason": "Synthetic match",
+          "n": 1
+        },
+        {
+          "decision": "reject",
+          "source": "suggestion",
+          "reason": "Synthetic rejection",
+          "n": 1
+        }
+      ],
+      "allocations": {
+        "n": 1,
+        "amount": "76500"
+      },
+      "scope": "Exact full control-row metadata and whole org-flags restoration against same-source independently seeded build clone. Append-only decision history retains both widths (two manual matches and two suggestion rejections). Only last-width public bank/payment/allocation fixtures remain active after reset; current joined fixture contains one match/rejection and one allocation. No whole-database restore, production or staged acceptance claim."
+    },
+    "actualExitReceipt": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-corrected-readback-exit-0107baa.json",
+      "sha256": "7cb438bdc8614e1ee8f235cdc6f8d25b5c687813b99e2936856454bdbc038ef9",
+      "bytes": 3418
+    }
+  },
+  "helperHistory": {
+    "currentAndPreservedSources": {
+      "run-b009-prepared-check.py": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b009-prepared-check.py",
+        "sha256": "e90689f22d126416437d4d13e35d8531575bc600fb0da4baf8422f6c71f8df0a",
+        "bytes": 2056
+      },
+      "b009-runtime-driver.py": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-runtime-driver.py",
+        "sha256": "42a139c2c24fc9c33a91c77c188a2781e049135c90629d535c4324243022d465",
+        "bytes": 4208
+      },
+      "b009-controls-readback.cjs": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-controls-readback.cjs",
+        "sha256": "572d4aad8a054c223d45cb9a406fcd53e22c9d5a6f14b1740a7409916ca0de45",
+        "bytes": 4154
+      },
+      "b009-runtime-driver-cf928ca-preserved.py": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-runtime-driver-cf928ca-preserved.py",
+        "sha256": "044bd0376bf208a7bbba184b065dd92c1831eb2eb7b2482fc3318ad1caabb988",
+        "bytes": 4115
+      },
+      "b009-controls-readback-original-preserved.cjs": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-controls-readback-original-preserved.cjs",
+        "sha256": "1d283eb28ff0105a363249066f50288d82555b613e52be6623945271501ddea2",
+        "bytes": 3321
+      }
+    },
+    "sourceReview2OriginalHelperMap": {
+      "run-b009-prepared-check.py": "e90689f22d126416437d4d13e35d8531575bc600fb0da4baf8422f6c71f8df0a",
+      "b009-runtime-driver.py": "42a139c2c24fc9c33a91c77c188a2781e049135c90629d535c4324243022d465",
+      "b009-controls-readback.cjs": "1d283eb28ff0105a363249066f50288d82555b613e52be6623945271501ddea2"
+    },
+    "readbackOverride": {
+      "from": "1d283eb28ff0105a363249066f50288d82555b613e52be6623945271501ddea2",
+      "to": "572d4aad8a054c223d45cb9a406fcd53e22c9d5a6f14b1740a7409916ca0de45",
+      "sourceGo": "Root reported independent exact-hash SOURCEGO before corrected read-only execution.",
+      "reason": "Original helper expected one global historical decision per kind; append-only history correctly retains two width cases. Corrected helper asserts exact historical two per kind and current joined one per kind."
+    },
+    "oldDriverProvenance": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-runtime-driver-cf928ca-preserved.py",
+      "sha256": "044bd0376bf208a7bbba184b065dd92c1831eb2eb7b2482fc3318ad1caabb988",
+      "provenance": "Byte-identical reconstruction by reversing two known text edits, verified against original preexecution hash; not claimed as saved before edit"
+    }
+  },
+  "preservedFailures": [
+    {
+      "candidate": "cf928ca63f97093a4a5ada2f4f05adba004da4fe",
+      "gateActualExit": 1,
+      "gateReceipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-gate-exit-cf928ca.json",
+        "sha256": "56047bfae58d5c99fddd76557a3e40ccf62ba41b91fd4be1445c3ba7cba2b015",
+        "bytes": 3007
+      },
+      "gateLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-gate-cf928ca.log",
+        "sha256": "25a24b6d46b2fcd9d3086adf3d7ea2f6882ac0b1349ca3ade6f3d05c37c86048",
+        "bytes": 444
+      },
+      "gateDriverLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-gate-driver-cf928ca.log",
+        "sha256": "c346a6b491785fd6b90b49e2bf0d1fbceeb9a4efa93c7e512a7ecfeebfd500c7",
+        "bytes": 135
+      },
+      "gateSummary": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-cf928ca63f97093a4a5ada2f4f05adba004da4fe.md",
+        "sha256": "f5d8a9ef2ab82d491bad93a519d48d04b9671f6f1ea25e5c76d22ca5009b4eb9",
+        "bytes": 971
+      },
+      "rawTap": {
+        "rawLog": {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/cf928ca63f97093a4a5ada2f4f05adba004da4fe.vVLrxw/test-rls.log",
+          "sha256": "42f7165ad19c79c062cb1f3022be64047b572340da9b35052696b71d7d2de2cb",
+          "bytes": 18734
+        },
+        "totals": {
+          "tests": 49,
+          "pass": 48,
+          "fail": 1,
+          "cancelled": 0,
+          "skipped": 0
+        },
+        "skipLines": []
+      },
+      "cause": "Unchanged synthetic owner effective_from defaulted to Nov2, while seeded confirmed payment/report period ended Oct31. Owner name assertion failed; fixture corrected in candidate2 without report/schema or original financial-assertion change.",
+      "waived": false
+    },
+    {
+      "candidate": "0107baac619d3faee3f802f9a052aeb79bdbc84a",
+      "observation": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-readback-first-failure-observation-0107baa.json",
+        "sha256": "9fa24ee411605e3825e26b223b10e549c70410f512fc977f712101a8ecb50a78",
+        "bytes": 1131
+      },
+      "observationLog": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b009-readback-first-failure-observation-0107baa.log",
+        "sha256": "6fc5358d1cff9aa2cc4b369367f86b0f5796a84008db2c190da2875de51ac3ee",
+        "bytes": 236
+      },
+      "readbackProcessExit": "NOT_CAPTURED",
+      "readbackProcessExitVerification": "UNVERIFIED",
+      "outerCombinedCellExit": 0,
+      "notAReadbackPass": true,
+      "correctedResult": "Separate exact-hash helper correction ran once with captured actual0/effective0 receipt."
+    }
+  ],
+  "limits": [
+    "Local disposable synthetic verification only; not whole B009 completion.",
+    "Real regional/customer bank-file acceptance, exact staging/function-owner/catalog and independent Claude acceptance remain pending.",
+    "No production/main merge/deployment/operational migration/operational flag activation or external messages.",
+    "Original B008 UNKNOWN remains unwaived; other queue items retain their own remaining scope.",
+    "First-width public fixtures reset before second width; append-only decisions persist, as explicitly checked."
+  ],
+  "workingTreeStatusAtRuntimeEnd": "?? e2e/results/gate-0107baac619d3faee3f802f9a052aeb79bdbc84a.md"
+}

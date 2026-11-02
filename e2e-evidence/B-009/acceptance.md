@@ -1,3 +1,5 @@
+> Current exact code `0107baac619d3faee3f802f9a052aeb79bdbc84a`: [checkpoint](checkpoint-0107baa.md). Recognized historical basis/fallback, no rawJSON/digits, duplicate/reject/manual/actor/reason/allocation at390/1280 PASS. Full standardgate618unit/380RLS+1solepriorhistoricalSKIP; wholeB009/stage/realfile/Claude pending. Earlier dated scoped evidence retained below.
+
 # B-009 local acceptance evidence
 
 - Guarded synthetic database tests passed: exact repeated files including concurrent retries, repeated identical lines, overlap visibility, Big5/ROC and signed decimal parsing, no import-driven changes to payments/allocations/ledger, manager/cross-org/session/sandbox boundaries, and ordinary direct SQL denial while ON.

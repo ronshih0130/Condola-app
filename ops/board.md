@@ -337,3 +337,7 @@ Actualcf928cagateFAILRLS48PASS1FAILstopped49,unit618PASS. Unchangedincome-expens
 ## B009 fixture-corrected source freeze — 2026-11-02T10:33:07.828194-08:00
 
 IndependentSOURCEGO seedad8b93e2/test1e21698f +driver42a139c2; new12literalpins recorded. Focusincome-expenseactualPASS1, unchangedproductionreport/schema. OldcfFAILEDgate/receipts/driverreconstructionpreservedunwaived. Rootcandidate2committhenfreshownedfullgate; allsource/metadatafreeze duringruntime. No builds/browser untilgatePASS.
+
+## B009 local verification complete — 2026-11-02T10:50:03.207749-08:00
+
+Code0107baa, source12literalpins unchanged. Actual618unit/380RLS+1solehistoricalSKIP, builds/preflight/Worker1/browser2/4PNGs/readbackPASS; independent49bindings/43files+source/receipt checksPASS. Rootrecordsfinalmetadata/PEpartialend/push/renew/mirroronly. FirstcfFAIL/datefixture andreadbackNOT_CAPTURED history preserved; no release/wholeBacceptance. NextB010/B028sharedpaths remainUNRESERVEDuntilpublicationcomplete.

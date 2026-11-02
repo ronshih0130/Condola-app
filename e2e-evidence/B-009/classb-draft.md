@@ -1,7 +1,5 @@
-# B-009 Class B draft
+# B009 Class B draft
 
-Not signed; not GO. Whole B-009 remains INCOMPLETE.
+**UNSIGNED / NOT GO.** Code `0107baac619d3faee3f802f9a052aeb79bdbc84a` has [scoped local and native independent evidence](checkpoint-0107baa.md). Enabled-path suggestion basis is historical and sanitized; human financial decisions, authorization, schema and legacyOFF remain preserved. Synthetic ownership date correction changes no productionreporting rule.
 
-Scope: local default-OFF bank CSV retransmission handling, explicit manual match and rejection with append-only decisions, and common payment/invoice concurrency hardening. Financial changes require an authorized explicit decision; import only creates bank records and suggestions. No real bank connection, payment transfer, external message, staging or production access was used.
-
-Outstanding: reconcile utility writer invoice lock ordering; verify staging DB owner/function-owner relationship; review exact combined candidate and run its full gates; independent Claude desktop QA; CEO decision naming exact candidate and release slot. Production backup, rollback and monitoring conditions remain release-side. Historical and reordered/overlapping source rows remain manual where source identity cannot be established; original CSV bytes are not archived by this feature.
+Pending: real authorized deidentified bankfile, exact stage app/schema/owner/grants/currentruntime and approvedoldcode/new-schema/OFF/rollback, independentClaude QA and Ron exactcandidate/slot/release conditions. No provider/bank connection, real messages, operational migration, activation or productionaction. No approval borrowed from previous candidate.
