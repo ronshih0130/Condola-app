@@ -21,7 +21,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-009 | Bank CSV dedupe and manual matching | MGT-14; J3.5; CAP-M-10/23 | — | BANK_MATCHING* | B | M / 16–24 | pending |
 | B-010 | Rent reminders and payment review results | MGT-13/15, TEN-07; J3.2/6/7; CAP-M-09/11; M-70 reminder | —; delivery adapter contract in B-028 | RENT_EMAIL_REMINDERS*; PAYMENT_REVIEW_RESULTS* | B | M / 20–32 | pending |
 | B-011 | Handover and deposit settlement, including bilateral replies | MGT-16/23/24, TEN-10/11; J4/J6.6–8; CAP-M-12/14/21, CAP-T-05/10; M-26 | B-002 | HANDOVER_RECORDS*; DEPOSIT_SETTLEMENT* | B | L / 40–64 | pending |
-| B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | in_progress |
+| B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | pending |
 | B-013 | Manager dispatch and shared repair approval state | MGT-17/18/19/35; J5; CAP-M-15/16; M-48/49 | —; coordinated B-021/B-024 | vendor_dispatch; REPAIR_APPROVALS* | B | L / 32–48 | pending |
 | B-014 | Owner net ledger, transfers and report versions | MGT-25/26/27, OWN-02; J7; CAP-M-17/18, CAP-O-03; M-43 | B-008 | OWNER_NET_LEDGER*; MONTHLY_REPORT_DELIVERY* | B | L / 24–40 | todo |
 | B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | pending |
@@ -150,3 +150,7 @@ After publication/mirror, next eligible bounded work is B012 comparison/linked-d
 ## B012 current local work — 2026-11-02T13:53:29.354087-08:00
 
 B012 in_progress: authorized actual-current-vs-unsaved-proposed lease terms comparison source-reviewed, local runtime NOT RUN. Persistent linked-draft guard proposal is unapplied/source-only; dependent writer parked for PE validation/application, no full B012 completion or staging acceptance claimed. Existing B011 photo comparison checkpoint remains valid for its immutable candidate. All39/four-party/fullLINE scope remains open.
+
+## B012 local comparison checkpoint — 2026-11-02T14:21:46.495835-08:00
+
+Code `9caeed8a4378f7eff932d65b1f332581113646cc`:621unit/392RLS+solepriorhistoricalskip, builds/originalpreflight/Worker1,final4browser28PNG,independentSELECT-only keyABSENCE/wholeflags/OFF restoration PASS. Sol independently verified195bindings/51pins/13receipts/2histories;root14+reviewer14visualGO withknownbadge/paired-scrolllimits. [Checkpoint](../e2e-evidence/B-012/renewal-checkpoint-9caeed8.md). WholeB012 remains pendingdurablelinkedcreate/history,partyversionedintents/notices,tenantcomparison,earlytermination/depositcarryforward andstaging/Claude/ClassB/Ron. Codex stillowns lifecycle/authorityproposals/appwork;PE ownsapprovednonMacvalidation/apply,notunfinishedCodexdesign. Persistentholdproposal sourceGOONLYUNAPPLIED/NOTRUN/NOTAPPLYREADY. No39itemnewlyfullyaccepted/noMVPscope cut. Publish/renew/mirrorthencontinueorderedeligiblework;B013/B021workflowDB-dependentpartsremainparked;B014existing-ledgerrecordingplanavailable.

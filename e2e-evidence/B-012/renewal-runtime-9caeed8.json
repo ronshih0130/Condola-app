@@ -1,0 +1,1699 @@
+{
+  "schema": "b012-renewal-local-runtime-v1",
+  "createdAt": "2026-11-02T14:19:01.305973-08:00",
+  "classification": "LOCAL_SCOPED_RUNTIME_EVIDENCE_INDEPENDENT_REVIEW_PENDING",
+  "candidate": "9caeed8a4378f7eff932d65b1f332581113646cc",
+  "sourceVerification": {
+    "head": "9caeed8a4378f7eff932d65b1f332581113646cc",
+    "statusBeforeManifest": "?? e2e/results/gate-9caeed8a4378f7eff932d65b1f332581113646cc.md",
+    "freeze": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-reviewed-source-freeze.json",
+      "sha256": "1f7d3890cadbd3b723801d90ae519bce8af493c43a26f152c357d540ab8f1a44",
+      "bytes": 11308
+    },
+    "trackedReview": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-012/renewal-comparison-source-review-1102-candidate3.json",
+      "sha256": "1f7d3890cadbd3b723801d90ae519bce8af493c43a26f152c357d540ab8f1a44",
+      "bytes": 11308
+    },
+    "changed": 15,
+    "unchangedBaselineVerified": 36,
+    "matched": 51,
+    "files": [
+      {
+        "path": "src/lib/renewal-comparison.ts",
+        "classification": "changed",
+        "reviewedBlob": "25df4d7d3776dfc3c727fc57acba442ddbf924f5",
+        "candidateBlob": "25df4d7d3776dfc3c727fc57acba442ddbf924f5",
+        "currentBlob": "25df4d7d3776dfc3c727fc57acba442ddbf924f5",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/lib/renewal-comparison.test.ts",
+        "classification": "changed",
+        "reviewedBlob": "22ddab88af28910a7ef86dab2c62ffeae1bf1d22",
+        "candidateBlob": "22ddab88af28910a7ef86dab2c62ffeae1bf1d22",
+        "currentBlob": "22ddab88af28910a7ef86dab2c62ffeae1bf1d22",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/server/renewal-comparison.ts",
+        "classification": "changed",
+        "reviewedBlob": "b218cb5651a060bb29d0040eec53d0c7108a1f30",
+        "candidateBlob": "b218cb5651a060bb29d0040eec53d0c7108a1f30",
+        "currentBlob": "b218cb5651a060bb29d0040eec53d0c7108a1f30",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/server/renewal-comparison.integration.test.ts",
+        "classification": "changed",
+        "reviewedBlob": "3d55c658b26c17c397a65ac5057a13b8aec44543",
+        "candidateBlob": "3d55c658b26c17c397a65ac5057a13b8aec44543",
+        "currentBlob": "3d55c658b26c17c397a65ac5057a13b8aec44543",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/server/renewal-comparison-actions.ts",
+        "classification": "changed",
+        "reviewedBlob": "bd0fda7136ad37263476d649cf3957421028778e",
+        "candidateBlob": "bd0fda7136ad37263476d649cf3957421028778e",
+        "currentBlob": "bd0fda7136ad37263476d649cf3957421028778e",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/components/renewal-comparison.tsx",
+        "classification": "changed",
+        "reviewedBlob": "0c997c92101ed415939ea8cddf0242b9a544e9e4",
+        "candidateBlob": "0c997c92101ed415939ea8cddf0242b9a544e9e4",
+        "currentBlob": "0c997c92101ed415939ea8cddf0242b9a544e9e4",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/components/renewal-comparison-entry.tsx",
+        "classification": "changed",
+        "reviewedBlob": "06dc8366110077f4e0738a69dfbcf0588c6ac138",
+        "candidateBlob": "06dc8366110077f4e0738a69dfbcf0588c6ac138",
+        "currentBlob": "06dc8366110077f4e0738a69dfbcf0588c6ac138",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/i18n/renewal.ts",
+        "classification": "changed",
+        "reviewedBlob": "7d919dc94e89354fca83d54dda3416c3f93c6084",
+        "candidateBlob": "7d919dc94e89354fca83d54dda3416c3f93c6084",
+        "currentBlob": "7d919dc94e89354fca83d54dda3416c3f93c6084",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/app/m/leases/[id]/renewal/page.tsx",
+        "classification": "changed",
+        "reviewedBlob": "2da931e8e1ae2827589d672251e7bb8f05f3f34c",
+        "candidateBlob": "2da931e8e1ae2827589d672251e7bb8f05f3f34c",
+        "currentBlob": "2da931e8e1ae2827589d672251e7bb8f05f3f34c",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/app/m/leases/[id]/page.tsx",
+        "classification": "changed",
+        "reviewedBlob": "854be72e08abb8d9ef27fc1e13aaab8ca9a23b60",
+        "candidateBlob": "854be72e08abb8d9ef27fc1e13aaab8ca9a23b60",
+        "currentBlob": "854be72e08abb8d9ef27fc1e13aaab8ca9a23b60",
+        "baselineBlob": null
+      },
+      {
+        "path": "ops/flags.yaml",
+        "classification": "changed",
+        "reviewedBlob": "1db93a9a5eabea3cee0ea19e034ae0e73fc9ebc4",
+        "candidateBlob": "1db93a9a5eabea3cee0ea19e034ae0e73fc9ebc4",
+        "currentBlob": "1db93a9a5eabea3cee0ea19e034ae0e73fc9ebc4",
+        "baselineBlob": null
+      },
+      {
+        "path": "e2e/b012-renewal-comparison.spec.ts",
+        "classification": "changed",
+        "reviewedBlob": "a49438277ed19c01e9aba9fbe7a9eab2c7570c2d",
+        "candidateBlob": "a49438277ed19c01e9aba9fbe7a9eab2c7570c2d",
+        "currentBlob": "a49438277ed19c01e9aba9fbe7a9eab2c7570c2d",
+        "baselineBlob": null
+      },
+      {
+        "path": "e2e/b012-renewal-comparison-private-playwright.config.ts",
+        "classification": "changed",
+        "reviewedBlob": "b529eadcd743d57fa8e78d4716ede63c2da7393a",
+        "candidateBlob": "b529eadcd743d57fa8e78d4716ede63c2da7393a",
+        "currentBlob": "b529eadcd743d57fa8e78d4716ede63c2da7393a",
+        "baselineBlob": null
+      },
+      {
+        "path": "scripts/run-e2e.ts",
+        "classification": "changed",
+        "reviewedBlob": "56a0b7c011e36c1f23246c0d7641647afe6b3ece",
+        "candidateBlob": "56a0b7c011e36c1f23246c0d7641647afe6b3ece",
+        "currentBlob": "56a0b7c011e36c1f23246c0d7641647afe6b3ece",
+        "baselineBlob": null
+      },
+      {
+        "path": "package.json",
+        "classification": "changed",
+        "reviewedBlob": "304d9f4e358b85afa954e3d1ed4b2b9382570809",
+        "candidateBlob": "304d9f4e358b85afa954e3d1ed4b2b9382570809",
+        "currentBlob": "304d9f4e358b85afa954e3d1ed4b2b9382570809",
+        "baselineBlob": null
+      },
+      {
+        "path": "src/server/db.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+        "candidateBlob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+        "currentBlob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+        "baselineBlob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345"
+      },
+      {
+        "path": "src/server/session.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "eeac341482275fd4060c350e8dc02d20208de3bc",
+        "candidateBlob": "eeac341482275fd4060c350e8dc02d20208de3bc",
+        "currentBlob": "eeac341482275fd4060c350e8dc02d20208de3bc",
+        "baselineBlob": "eeac341482275fd4060c350e8dc02d20208de3bc"
+      },
+      {
+        "path": "src/server/consent-gate.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "6ac26ed5afa7757c297de45b8060f87f6c727f8e",
+        "candidateBlob": "6ac26ed5afa7757c297de45b8060f87f6c727f8e",
+        "currentBlob": "6ac26ed5afa7757c297de45b8060f87f6c727f8e",
+        "baselineBlob": "6ac26ed5afa7757c297de45b8060f87f6c727f8e"
+      },
+      {
+        "path": "src/server/consent.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+        "candidateBlob": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+        "currentBlob": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+        "baselineBlob": "0d2b9200e936b7a2ba065075ff998847c0ad9908"
+      },
+      {
+        "path": "src/server/perms.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "70355d4b1d93af3c4cc3e4a158e7a737de723898",
+        "candidateBlob": "70355d4b1d93af3c4cc3e4a158e7a737de723898",
+        "currentBlob": "70355d4b1d93af3c4cc3e4a158e7a737de723898",
+        "baselineBlob": "70355d4b1d93af3c4cc3e4a158e7a737de723898"
+      },
+      {
+        "path": "src/server/types.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "046221d44e89bdd3c2ed9534410df6573271da6a",
+        "candidateBlob": "046221d44e89bdd3c2ed9534410df6573271da6a",
+        "currentBlob": "046221d44e89bdd3c2ed9534410df6573271da6a",
+        "baselineBlob": "046221d44e89bdd3c2ed9534410df6573271da6a"
+      },
+      {
+        "path": "src/server/repair-rules.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "4efa249eabbf9fed9ab3660518b197347fe9c602",
+        "candidateBlob": "4efa249eabbf9fed9ab3660518b197347fe9c602",
+        "currentBlob": "4efa249eabbf9fed9ab3660518b197347fe9c602",
+        "baselineBlob": "4efa249eabbf9fed9ab3660518b197347fe9c602"
+      },
+      {
+        "path": "src/server/org-scope.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+        "candidateBlob": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+        "currentBlob": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+        "baselineBlob": "7d2e04341cbbd0cd072df1b549608eb5ba4da527"
+      },
+      {
+        "path": "src/server/format.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "00ec04f4df404b56c51a00e9152deac932c876d1",
+        "candidateBlob": "00ec04f4df404b56c51a00e9152deac932c876d1",
+        "currentBlob": "00ec04f4df404b56c51a00e9152deac932c876d1",
+        "baselineBlob": "00ec04f4df404b56c51a00e9152deac932c876d1"
+      },
+      {
+        "path": "src/server/seed.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+        "candidateBlob": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+        "currentBlob": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+        "baselineBlob": "ad8b93e2b7622557484865a20e30ef5ea1dc616c"
+      },
+      {
+        "path": "src/server/ids.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba",
+        "candidateBlob": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba",
+        "currentBlob": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba",
+        "baselineBlob": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba"
+      },
+      {
+        "path": "src/server/test-disposable-db.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265",
+        "candidateBlob": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265",
+        "currentBlob": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265",
+        "baselineBlob": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265"
+      },
+      {
+        "path": "src/server/test-database-clone.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "29a1fb5c8666985392f137cf2f94495e13b3246d",
+        "candidateBlob": "29a1fb5c8666985392f137cf2f94495e13b3246d",
+        "currentBlob": "29a1fb5c8666985392f137cf2f94495e13b3246d",
+        "baselineBlob": "29a1fb5c8666985392f137cf2f94495e13b3246d"
+      },
+      {
+        "path": "src/server/queries.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+        "candidateBlob": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+        "currentBlob": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+        "baselineBlob": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39"
+      },
+      {
+        "path": "src/i18n/index.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "00d6bc5b791a38dde92476ba92d3247f4ad5943f",
+        "candidateBlob": "00d6bc5b791a38dde92476ba92d3247f4ad5943f",
+        "currentBlob": "00d6bc5b791a38dde92476ba92d3247f4ad5943f",
+        "baselineBlob": "00d6bc5b791a38dde92476ba92d3247f4ad5943f"
+      },
+      {
+        "path": "src/i18n/en.json",
+        "classification": "unchanged",
+        "reviewedBlob": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+        "candidateBlob": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+        "currentBlob": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+        "baselineBlob": "697ff32aa3d94d7de430278daa55d335f86e6b2f"
+      },
+      {
+        "path": "src/i18n/zh-TW.json",
+        "classification": "unchanged",
+        "reviewedBlob": "6270729f648586a7443c15e6bb7f174c3ef61563",
+        "candidateBlob": "6270729f648586a7443c15e6bb7f174c3ef61563",
+        "currentBlob": "6270729f648586a7443c15e6bb7f174c3ef61563",
+        "baselineBlob": "6270729f648586a7443c15e6bb7f174c3ef61563"
+      },
+      {
+        "path": "src/app/globals.css",
+        "classification": "unchanged",
+        "reviewedBlob": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e",
+        "candidateBlob": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e",
+        "currentBlob": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e",
+        "baselineBlob": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e"
+      },
+      {
+        "path": "e2e/session.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "debb2f53da0343758c44f0f93621f2a680be80a9",
+        "candidateBlob": "debb2f53da0343758c44f0f93621f2a680be80a9",
+        "currentBlob": "debb2f53da0343758c44f0f93621f2a680be80a9",
+        "baselineBlob": "debb2f53da0343758c44f0f93621f2a680be80a9"
+      },
+      {
+        "path": "scripts/gate.sh",
+        "classification": "unchanged",
+        "reviewedBlob": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+        "candidateBlob": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+        "currentBlob": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+        "baselineBlob": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b"
+      },
+      {
+        "path": "scripts/preflight-deploy.sh",
+        "classification": "unchanged",
+        "reviewedBlob": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+        "candidateBlob": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+        "currentBlob": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+        "baselineBlob": "3214ee7db0b4a25417682de8c2cce7e104c260bb"
+      },
+      {
+        "path": "scripts/third-party-licenses.mjs",
+        "classification": "unchanged",
+        "reviewedBlob": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4",
+        "candidateBlob": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4",
+        "currentBlob": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4",
+        "baselineBlob": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4"
+      },
+      {
+        "path": "package-lock.json",
+        "classification": "unchanged",
+        "reviewedBlob": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+        "candidateBlob": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+        "currentBlob": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+        "baselineBlob": "30d7f0901663c0d507853aa0815e1495c9b8aae2"
+      },
+      {
+        "path": "tsconfig.json",
+        "classification": "unchanged",
+        "reviewedBlob": "c57349280afe4314902d14d337947deb5c42dca2",
+        "candidateBlob": "c57349280afe4314902d14d337947deb5c42dca2",
+        "currentBlob": "c57349280afe4314902d14d337947deb5c42dca2",
+        "baselineBlob": "c57349280afe4314902d14d337947deb5c42dca2"
+      },
+      {
+        "path": "supabase/migrations/20261018120000_schema.sql",
+        "classification": "unchanged",
+        "reviewedBlob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+        "candidateBlob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+        "currentBlob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+        "baselineBlob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74"
+      },
+      {
+        "path": "supabase/migrations/20261020120000_auth.sql",
+        "classification": "unchanged",
+        "reviewedBlob": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+        "candidateBlob": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+        "currentBlob": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+        "baselineBlob": "60998ac8e77a8366e67b9358dd87072b7d7b046a"
+      },
+      {
+        "path": "supabase/migrations/20261031100214_b011_handover_records.sql",
+        "classification": "unchanged",
+        "reviewedBlob": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4",
+        "candidateBlob": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4",
+        "currentBlob": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4",
+        "baselineBlob": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4"
+      },
+      {
+        "path": "src/components/handover-comparison.tsx",
+        "classification": "unchanged",
+        "reviewedBlob": "863a115be6cbb5a05f54b532ce544a15fd70772e",
+        "candidateBlob": "863a115be6cbb5a05f54b532ce544a15fd70772e",
+        "currentBlob": "863a115be6cbb5a05f54b532ce544a15fd70772e",
+        "baselineBlob": "863a115be6cbb5a05f54b532ce544a15fd70772e"
+      },
+      {
+        "path": "src/components/handover-page.tsx",
+        "classification": "unchanged",
+        "reviewedBlob": "abfa0e32f6a4591395d2352584da83473740e569",
+        "candidateBlob": "abfa0e32f6a4591395d2352584da83473740e569",
+        "currentBlob": "abfa0e32f6a4591395d2352584da83473740e569",
+        "baselineBlob": "abfa0e32f6a4591395d2352584da83473740e569"
+      },
+      {
+        "path": "src/i18n/handover.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "e48e84715e0a9c1e386b84e585d5eec0101acd4f",
+        "candidateBlob": "e48e84715e0a9c1e386b84e585d5eec0101acd4f",
+        "currentBlob": "e48e84715e0a9c1e386b84e585d5eec0101acd4f",
+        "baselineBlob": "e48e84715e0a9c1e386b84e585d5eec0101acd4f"
+      },
+      {
+        "path": "e2e/b011-handover-comparison.spec.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "298d594e1c0edd48497b94c20ce3199f7686e5d1",
+        "candidateBlob": "298d594e1c0edd48497b94c20ce3199f7686e5d1",
+        "currentBlob": "298d594e1c0edd48497b94c20ce3199f7686e5d1",
+        "baselineBlob": "298d594e1c0edd48497b94c20ce3199f7686e5d1"
+      },
+      {
+        "path": "e2e/b011-comparison-private-playwright.config.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac",
+        "candidateBlob": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac",
+        "currentBlob": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac",
+        "baselineBlob": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac"
+      },
+      {
+        "path": "e2e/b011-comparison-bucket.mjs",
+        "classification": "unchanged",
+        "reviewedBlob": "845f02623bdc61ece9f1517a3738a30f935144f5",
+        "candidateBlob": "845f02623bdc61ece9f1517a3738a30f935144f5",
+        "currentBlob": "845f02623bdc61ece9f1517a3738a30f935144f5",
+        "baselineBlob": "845f02623bdc61ece9f1517a3738a30f935144f5"
+      },
+      {
+        "path": "e2e/handover.spec.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "54132623983b8330214936414cf2ebffebceb03c",
+        "candidateBlob": "54132623983b8330214936414cf2ebffebceb03c",
+        "currentBlob": "54132623983b8330214936414cf2ebffebceb03c",
+        "baselineBlob": "54132623983b8330214936414cf2ebffebceb03c"
+      },
+      {
+        "path": "e2e/handover-playwright.config.ts",
+        "classification": "unchanged",
+        "reviewedBlob": "4da3fc5c5166042d3314b27d0d8661385c9c3b48",
+        "candidateBlob": "4da3fc5c5166042d3314b27d0d8661385c9c3b48",
+        "currentBlob": "4da3fc5c5166042d3314b27d0d8661385c9c3b48",
+        "baselineBlob": "4da3fc5c5166042d3314b27d0d8661385c9c3b48"
+      },
+      {
+        "path": "e2e/handover-bucket.mjs",
+        "classification": "unchanged",
+        "reviewedBlob": "50700d0f069e39d45fd316bd56d198e0fdbe64e1",
+        "candidateBlob": "50700d0f069e39d45fd316bd56d198e0fdbe64e1",
+        "currentBlob": "50700d0f069e39d45fd316bd56d198e0fdbe64e1",
+        "baselineBlob": "50700d0f069e39d45fd316bd56d198e0fdbe64e1"
+      }
+    ]
+  },
+  "helpers": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b012-renewal-final-check.py",
+      "sha256": "c1ae6533f16abe61c08bfd49b4904a67aea6840bcbe9aca6fec8626e5b4e44f9",
+      "bytes": 5140
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-runtime-driver.py",
+      "sha256": "740d496654ec05fbda844649f55392f95089830bd44ae519885fa5200bbfb142",
+      "bytes": 6024
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-control-readback.py",
+      "sha256": "3ae328ea48637706a53d9085927d91003df628bf8bfd78a55d6392f4ee3eca79",
+      "bytes": 7028
+    }
+  ],
+  "receipts": [
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-baseline-setup-exit-9caeed8-a3.json",
+        "sha256": "f727adaa941e2e4a309f604b9fdb53b66bac094bc5e73f16c17edbf613a925fa",
+        "bytes": 9873
+      },
+      "actualExit": null,
+      "createdbExit": 0,
+      "seedExit": 0,
+      "driverExit": null,
+      "effectiveExit": 0,
+      "profile": "baseline",
+      "elapsedSeconds": 0.746,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-baseline-setup-9caeed8-a3.log",
+        "sha256": "e0530c0a56f78928dae95dc1b622c37cbf2996ebdbcf48fab363f7552d5f45a8",
+        "bytes": 26
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-setup-exit-9caeed8-a3.json",
+        "sha256": "678005de01257b17f2d103c8dab0779db463bb8b66de5d58a2ad7432ad2baac6",
+        "bytes": 9868
+      },
+      "actualExit": null,
+      "createdbExit": 0,
+      "seedExit": 0,
+      "driverExit": 0,
+      "effectiveExit": 0,
+      "profile": "browser",
+      "elapsedSeconds": 36.055,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-setup-9caeed8-a3.log",
+        "sha256": "a0b076c058198c7fffa869c4fdaa6d0248f54ab960fb41b70d96bcf331c90a00",
+        "bytes": 79
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-build-setup-exit-9caeed8-a3.json",
+        "sha256": "403ae14d28d4a1c495950ff5f54ece31269ea54ce072097a61a8ab7f08a23ad3",
+        "bytes": 9863
+      },
+      "actualExit": null,
+      "createdbExit": 0,
+      "seedExit": 0,
+      "driverExit": 0,
+      "effectiveExit": 0,
+      "profile": "build",
+      "elapsedSeconds": 55.336,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-build-setup-9caeed8-a3.log",
+        "sha256": "7ac3e59d0dc10fa1bfc184ba995dbe624ad4e9e0849fd3653c71cdaaaffeb8dd",
+        "bytes": 187
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-cf-build-exit-9caeed8-a3.json",
+        "sha256": "737e75c984c42479482c22c237c7ec01e60ec28e3b32ad09e7e93da77fe1dd1e",
+        "bytes": 9809
+      },
+      "actualExit": 0,
+      "createdbExit": null,
+      "seedExit": null,
+      "driverExit": null,
+      "effectiveExit": 0,
+      "profile": "build",
+      "elapsedSeconds": 28.023,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-cf-build-9caeed8-a3.log",
+        "sha256": "24eeb617c1bad3b4814e45820bf78145f2ba9dc61b1bc2c5fdc830797762454f",
+        "bytes": 14169
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-comparison-focus-exit-9caeed8-a3.json",
+        "sha256": "50e4f0b2025875c185677437d7c547a097e1f5a39597dcd361424f61c458d89d",
+        "bytes": 10255
+      },
+      "actualExit": 0,
+      "createdbExit": null,
+      "seedExit": null,
+      "driverExit": null,
+      "effectiveExit": 0,
+      "profile": "focus",
+      "elapsedSeconds": 15.809,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-comparison-focus-9caeed8-a3.log",
+        "sha256": "29f3b3203a5a22c18ed830723796b9612d90549c6702d56ec78fae687e74c1bb",
+        "bytes": 151
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-comparison-playwright-exit-9caeed8-a3.json",
+        "sha256": "89b58b7dbf0a3b44561ee5832b720832029399b7326b6c4e7cd2d38e7d559b0c",
+        "bytes": 10067
+      },
+      "actualExit": 0,
+      "createdbExit": null,
+      "seedExit": null,
+      "driverExit": null,
+      "effectiveExit": 0,
+      "profile": "browser",
+      "elapsedSeconds": 34.596,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-comparison-playwright-9caeed8-a3.log",
+        "sha256": "584823f0de6260b069e1e366bd0d6584625ad702e03c8c5840bc0d27a5f6edc7",
+        "bytes": 460
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-control-readback-exit-9caeed8-a3.json",
+        "sha256": "bd9eeb29efbf33bfa84ea1ac489c6549189d2d20b718401ae1a978a5f5b172a8",
+        "bytes": 9739
+      },
+      "actualExit": 0,
+      "createdbExit": null,
+      "seedExit": null,
+      "driverExit": null,
+      "effectiveExit": 0,
+      "profile": "readback",
+      "elapsedSeconds": 0.073,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-control-readback-9caeed8-a3.log",
+        "sha256": "da732430e03dee124f76a3e89fa32426a3987698bb4abafb0e06b9d027cf70fb",
+        "bytes": 906
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-setup-exit-9caeed8-a3.json",
+        "sha256": "3c3d0a3bf66011da5c6196ccea807eed63bb890804bf35f57e2ebd5297f2e5d8",
+        "bytes": 9862
+      },
+      "actualExit": null,
+      "createdbExit": 0,
+      "seedExit": 0,
+      "driverExit": 0,
+      "effectiveExit": 0,
+      "profile": "focus",
+      "elapsedSeconds": 17.241,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-setup-9caeed8-a3.log",
+        "sha256": "c6c447c59285f57347adefd94f037027da8f99779f741c32150770b876a344e4",
+        "bytes": 74
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-gate-exit-9caeed8-a3.json",
+        "sha256": "9ffdbed04ede2bac036873f26561eb748a555015b6830fec10c41132303176a3",
+        "bytes": 9848
+      },
+      "actualExit": 0,
+      "createdbExit": null,
+      "seedExit": null,
+      "driverExit": null,
+      "effectiveExit": 0,
+      "profile": "gate",
+      "elapsedSeconds": 233.245,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-gate-9caeed8-a3.log",
+        "sha256": "b60dfe9f47eace9ad9a65d7a0f46266a55dd1598ed3c8ffba59983614cf504e6",
+        "bytes": 444
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-gate-setup-exit-9caeed8-a3.json",
+        "sha256": "3e682d9c20a59c520cd3c86549eb4969d6c359ba1bbd1daf817468fd7c781d5a",
+        "bytes": 9860
+      },
+      "actualExit": null,
+      "createdbExit": 0,
+      "seedExit": 0,
+      "driverExit": 0,
+      "effectiveExit": 0,
+      "profile": "gate",
+      "elapsedSeconds": 234.696,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-gate-setup-9caeed8-a3.log",
+        "sha256": "e17ab3976e2f2443db349b251504823ba11a8a8fc10d6de14749fdba1fece82e",
+        "bytes": 62
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-next-build-exit-9caeed8-a3.json",
+        "sha256": "2c731483707c2f0613f72aad6e01938787eae13ab2fd9756caf2482f6e0f8cb6",
+        "bytes": 9808
+      },
+      "actualExit": 0,
+      "createdbExit": null,
+      "seedExit": null,
+      "driverExit": null,
+      "effectiveExit": 0,
+      "profile": "build",
+      "elapsedSeconds": 19.274,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-next-build-9caeed8-a3.log",
+        "sha256": "3dd665872c7391c27bed03473fa2d32e9e03cd4eb29a306df127fda8a76ae5cd",
+        "bytes": 12460
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-preflight-exit-9caeed8-a3.json",
+        "sha256": "7b4f89d888eda8ba4b7fef925c40c82d55591317c9cdaf6a8eb9f464d8100a75",
+        "bytes": 9815
+      },
+      "actualExit": 0,
+      "createdbExit": null,
+      "seedExit": null,
+      "driverExit": null,
+      "effectiveExit": 0,
+      "profile": "build",
+      "elapsedSeconds": 3.277,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-preflight-9caeed8-a3.log",
+        "sha256": "b078ca06b8288ddd3711e8b740cc86598e6966b5977c5b3a61cec275bc61edc3",
+        "bytes": 23
+      }
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-worker-exit-9caeed8-a3.json",
+        "sha256": "ef3bfa03bb0c0f9402209514c2201076f4a186a08a7e64ca6afdf97c8b370d26",
+        "bytes": 9807
+      },
+      "actualExit": 0,
+      "createdbExit": null,
+      "seedExit": null,
+      "driverExit": null,
+      "effectiveExit": 0,
+      "profile": "build",
+      "elapsedSeconds": 2.327,
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-worker-9caeed8-a3.log",
+        "sha256": "64a1a7b9cd7cdd0e7347cf6b37021dd9f874b480baf8e9503dbe0c83b7b29f07",
+        "bytes": 423
+      }
+    }
+  ],
+  "gateSummary": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-9caeed8a4378f7eff932d65b1f332581113646cc.md",
+    "sha256": "933b39d5d4511c03ebbc7919a176df114d2b6bd27d72a5f097636a0c4f465703",
+    "bytes": 971
+  },
+  "privateRawGateLogs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/copy-check.log",
+      "sha256": "2fcf16575b9037715fafb364548f82080a48aa60add92a485fa1db9638c9756b",
+      "bytes": 1437
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/flag-expiry.log",
+      "sha256": "c9a608f15431d8b4fb4de2ae643f33e2ab1bd9665e6677b69397b42ffbb4e0dd",
+      "bytes": 27
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/lint.log",
+      "sha256": "b0f96cc3d3f5eeea02db057aa844739f7139e14132f2840c9109bb966dce3169",
+      "bytes": 2651
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/npm-ci.log",
+      "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+      "bytes": 1585
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/steps.md",
+      "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+      "bytes": 341
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/test-rls.log",
+      "sha256": "b62a1a69d59619c36368052fbfa96866398d3306ebc5b5cd4cc73ecf9d46552d",
+      "bytes": 109144
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/test-unit.log",
+      "sha256": "8ab3a29192a9e42736b2e16a4e834de7a90275b2c9aa8162dfb7fb5c4ca39223",
+      "bytes": 127868
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/9caeed8a4378f7eff932d65b1f332581113646cc.V83lFy/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    }
+  ],
+  "gateTapCounts": {
+    "test-unit.log": {
+      "tests": 621,
+      "pass": 621,
+      "fail": 0,
+      "skipped": 0
+    },
+    "test-rls.log": {
+      "tests": 393,
+      "pass": 392,
+      "fail": 0,
+      "skipped": 1
+    }
+  },
+  "browserScreenshots": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/comparison-zh-TW-1280.png",
+      "sha256": "9412a57d16f122d38cd1d8660e8bf9002cbc2ca1557526c6e35c933472a4893e",
+      "bytes": 131477,
+      "state": "comparison",
+      "locale": "zh-TW",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/initial-zh-TW-1280.png",
+      "sha256": "68294d210516df0a35868ce6df11ded4f064ea773e4a7fdd490dbf1059cd90b0",
+      "bytes": 93522,
+      "state": "initial",
+      "locale": "zh-TW",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/invalid-zh-TW-1280.png",
+      "sha256": "2fcdbb484a39f95600f6addc0802337f63103784db6e5205801a4a85490e53fc",
+      "bytes": 100233,
+      "state": "invalid",
+      "locale": "zh-TW",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/loading-zh-TW-1280.png",
+      "sha256": "fa9de21224bb008f225710248587561f7875815e0dfe775ef595e7afb14489d2",
+      "bytes": 95497,
+      "state": "loading",
+      "locale": "zh-TW",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/open-ended-zh-TW-1280.png",
+      "sha256": "32d3a4f9f3c216213204bcd98b5ae22d003fa7baa43199f5b608cc46aa34d965",
+      "bytes": 133590,
+      "state": "open-ended",
+      "locale": "zh-TW",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/stale-zh-TW-1280.png",
+      "sha256": "b681a022aae18f21cf08601f5c2ea7aa13431abc823ad5f379f6bf92eaa142db",
+      "bytes": 101607,
+      "state": "stale",
+      "locale": "zh-TW",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/comparison-en-1280.png",
+      "sha256": "fafe1117db660689f0d43e75a5899cb7aef8471b4d9a77940902e5d13945d328",
+      "bytes": 138379,
+      "state": "comparison",
+      "locale": "en",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/initial-en-1280.png",
+      "sha256": "eb3850b2a91b7ba995f2cf9c6b6436cd78433ccd2eed3e42960e1af423ae6043",
+      "bytes": 94700,
+      "state": "initial",
+      "locale": "en",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/invalid-en-1280.png",
+      "sha256": "6fb6717a43c8f7c0f1386b38bbf9d9d39ce407b17aaf7dd03f0f0e8780f6c79c",
+      "bytes": 100477,
+      "state": "invalid",
+      "locale": "en",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/loading-en-1280.png",
+      "sha256": "69c817794bda7386afefe4021558f49f85d4f18c5b065254a750bd428a4b1dda",
+      "bytes": 96653,
+      "state": "loading",
+      "locale": "en",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/open-ended-en-1280.png",
+      "sha256": "720b318fe5561a0bd76a95597feb0f6bad25966ca43e0f466af0a30cb2a73e31",
+      "bytes": 138744,
+      "state": "open-ended",
+      "locale": "en",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/stale-en-1280.png",
+      "sha256": "93f7b33dd83be992a9f9adac76cd71554e87fe23790ab247c7ec13df16fe4016",
+      "bytes": 101023,
+      "state": "stale",
+      "locale": "en",
+      "width": 1280
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/comparison-en-390.png",
+      "sha256": "3b95a8469a69bece9824c82b6cb72a4977d9c7f564f07a2c4857d478a0bc8355",
+      "bytes": 89405,
+      "state": "comparison",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/comparison-right-en-390.png",
+      "sha256": "9abbdbd109dc1162937839217cc457dac181010a6760102d61614418ae0d58b8",
+      "bytes": 88297,
+      "state": "comparison-right",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/initial-en-390.png",
+      "sha256": "4ff363f1ada03694fc62a7890d248f23a6a7e08344cded2fb05031a0f6552773",
+      "bytes": 57411,
+      "state": "initial",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/invalid-en-390.png",
+      "sha256": "59258b816fb1adbecedc627327037a615b180db5010c4097dbbf590e1360c8e5",
+      "bytes": 62322,
+      "state": "invalid",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/loading-en-390.png",
+      "sha256": "fba4311e7426a354faa6ce3270225e329c9dccdc07a0fe36cac72fdaf5ba1447",
+      "bytes": 58447,
+      "state": "loading",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/open-ended-en-390.png",
+      "sha256": "7e3bff10587ea1aa84352fa57b3f4111aa62c68ea6881914a602e248953aad78",
+      "bytes": 89398,
+      "state": "open-ended",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/open-ended-right-en-390.png",
+      "sha256": "097a82f45377848f889350c24ac7fda1310241562289eec376ebd59a719caef7",
+      "bytes": 88362,
+      "state": "open-ended-right",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/stale-en-390.png",
+      "sha256": "3b09db916665dc85e3b5d0c7fa6a4ad388aeab52ea8756fa982e2abf6298b75d",
+      "bytes": 62675,
+      "state": "stale",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/comparison-right-zh-TW-390.png",
+      "sha256": "d27186acf33839b8b8a3c78f787785e9c8e5b36d3bb586658af4e8ecac2cb0d5",
+      "bytes": 93565,
+      "state": "comparison-right",
+      "locale": "zh-TW",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/comparison-zh-TW-390.png",
+      "sha256": "8baa8273a1246294969ad1ce5f2ba2c0fbce8fcc46f7f4d3c03dc3c68b215f02",
+      "bytes": 96488,
+      "state": "comparison",
+      "locale": "zh-TW",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/initial-zh-TW-390.png",
+      "sha256": "40256f7b14a43e0cd7811af94480543a84917f8db793de5ea922016078ea95d6",
+      "bytes": 61381,
+      "state": "initial",
+      "locale": "zh-TW",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/invalid-zh-TW-390.png",
+      "sha256": "05e4c02844515f02926a1c4aa98756ce943d3de3e60ed5792bc2471078a16eba",
+      "bytes": 66977,
+      "state": "invalid",
+      "locale": "zh-TW",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/loading-zh-TW-390.png",
+      "sha256": "dac4ac8f5958995e076fe095b3a242a9dd5d78126c1b971beceaeae523e6d77b",
+      "bytes": 62808,
+      "state": "loading",
+      "locale": "zh-TW",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/open-ended-right-zh-TW-390.png",
+      "sha256": "19daecd1ca8665f843fa1891d3b8fe534c2a9631fb5b7252886f07b29c9272b1",
+      "bytes": 94350,
+      "state": "open-ended-right",
+      "locale": "zh-TW",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/open-ended-zh-TW-390.png",
+      "sha256": "e5f3d218520cac652eb4f65902845c105db21b383526e924ebe0bc6103d6ba97",
+      "bytes": 97169,
+      "state": "open-ended",
+      "locale": "zh-TW",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-browser-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/stale-zh-TW-390.png",
+      "sha256": "6ccd9a9a9df659b50b74a03a7c3f1e41edae5bc9bba2ba47d055f9993386d7d6",
+      "bytes": 68229,
+      "state": "stale",
+      "locale": "zh-TW",
+      "width": 390
+    }
+  ],
+  "diagnosticFocusScreenshots": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/comparison-en-390.png",
+      "sha256": "54497f8e8e7ebc1a3a28591d7fc0d3b266ca64e477f4270020bf0ef987df1514",
+      "bytes": 89196,
+      "state": "comparison",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/comparison-right-en-390.png",
+      "sha256": "9968c1df3910156ddb1a7c02456b5319f230a819fc7eec599b9d17958a314c3a",
+      "bytes": 88231,
+      "state": "comparison-right",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/initial-en-390.png",
+      "sha256": "7ee832742b8cf5f1c2a57afc96bce3066e729c726afaa0927b160985d3e215e5",
+      "bytes": 57145,
+      "state": "initial",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/invalid-en-390.png",
+      "sha256": "d9b07f7463d4e7a46016567f0b36f3eab9bba308041524d2383dbfca45f1321f",
+      "bytes": 62239,
+      "state": "invalid",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/loading-en-390.png",
+      "sha256": "1c8223dd57bd7581befb0e0c9006dfdf6818ceeff9cd9180896d7690e9874da0",
+      "bytes": 58049,
+      "state": "loading",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/open-ended-en-390.png",
+      "sha256": "b8ed02a8a68b1b002f78302580dd5fb530a3b5691ac85c7b395bb23c39825a11",
+      "bytes": 89350,
+      "state": "open-ended",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/open-ended-right-en-390.png",
+      "sha256": "829ab570797444c8cb6665095413976a070f34ee3beb8349ae891be7afce9151",
+      "bytes": 88444,
+      "state": "open-ended-right",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-focus-9caeed8-a3-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/stale-en-390.png",
+      "sha256": "47aafc192a582c46a2ffe77c725186d236aecd9e6be8d8716af3cbeed62a49c0",
+      "bytes": 62591,
+      "state": "stale",
+      "locale": "en",
+      "width": 390
+    }
+  ],
+  "focusVisualNote": "Root inspected initial, comparison-right and open-ended-right: form shown and proposed values/change markers readable; left captures retain labels/current. Next development badge edge overlay remains a visual limitation. Three of eight focus captures inspected; final 28 capture visual review pending.",
+  "readback": {
+    "nodeVersion": "v20.20.2",
+    "baselineDatabase": "condola_b012_renewal_baseline_9caeed8a3",
+    "browserDatabase": "condola_b012_renewal_browser_9caeed8a3",
+    "readOnlyConnections": true,
+    "exactControlValueDescriptionMicrosecondTimestampRestored": true,
+    "wholeSelectedOrgFlagsRestored": true,
+    "namedGlobalOff": true,
+    "namedOrgOptins": 0,
+    "controlSha256Before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "controlSha256After": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "wholeOrgFlagsSha256Before": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+    "wholeOrgFlagsSha256After": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+    "passed": true,
+    "scope": "Only lease_renewal global control including absence and selected organization whole feature_flags versus independent same-source seeded clone; no whole DB, audit-history, staging or settlement claim."
+  },
+  "priorAttempts": [
+    {
+      "manifest": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/manifest.json",
+        "sha256": "58c6433af69e7740930ed66309c9af1075f6c9d1affbfde353c7e62e843810f4",
+        "bytes": 12566
+      },
+      "result": "FAIL_FOCUSED_BROWSER",
+      "files": [
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-build-setup-59aff2e-a1.log",
+          "sha256": "7ac3e59d0dc10fa1bfc184ba995dbe624ad4e9e0849fd3653c71cdaaaffeb8dd",
+          "bytes": 187
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-build-setup-exit-59aff2e-a1.json",
+          "sha256": "7443232b0bf8a1e09bcc0d55df097b9b93702e408efcdedd4abf9ed4b64c7e50",
+          "bytes": 9863
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-cf-build-59aff2e-a1.log",
+          "sha256": "874c4b0eccfa15af55dfd81c8619d64cf0800ccd1b5c42bec347f05e31e1dd24",
+          "bytes": 14169
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-cf-build-exit-59aff2e-a1.json",
+          "sha256": "0ce72a8733545b3b5522c365f00d944037e4ba2cde5bfdc5f02dfeb5aba524d0",
+          "bytes": 9809
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-comparison-focus-59aff2e-a1.log",
+          "sha256": "6238bba927f6473c8e3814036d43f5a2aa9d00e82a850cd48e1be6cc702f8a87",
+          "bytes": 4457
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-comparison-focus-exit-59aff2e-a1.json",
+          "sha256": "4ac92f6198cc3e06e9e94ffa0ac0a775861935370619076e7a7754d546fd6077",
+          "bytes": 10256
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-focus-59aff2e-a1-artifacts/.last-run.json",
+          "sha256": "954b24b309eb8b45b560ac8f3c62aeae2953bfc9c03db59365dbd0270473c8d3",
+          "bytes": 96
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-focus-59aff2e-a1-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/error-context.md",
+          "sha256": "8fa15c43f8f3b5677eb9fb34a27aa2628bdad9822137650ec97ee1f7334738b6",
+          "bytes": 11035
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-focus-59aff2e-a1-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/initial-en-390.png",
+          "sha256": "3ea5bc576f43c3ed042c20b89f1da798fe747642025ef5e8212bb61c5c71bb25",
+          "bytes": 87710
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-focus-setup-59aff2e-a1.log",
+          "sha256": "bd46378c39c4e9ae76f2919e68062872be9405d4dd85e8e14b24e0fc6ab32b28",
+          "bytes": 74
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-focus-setup-exit-59aff2e-a1.json",
+          "sha256": "15be5288d51cd9185cec233ce994bb6ddddf906f5af9f67e3f9ae2ef24503ffa",
+          "bytes": 9862
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-gate-59aff2e-a1.log",
+          "sha256": "414146324d6c8de63b3916f34602569e2b9efe0e74877b8b22ae3ed7f6f46ca3",
+          "bytes": 444
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-gate-exit-59aff2e-a1.json",
+          "sha256": "a5c0da2bbe524a61a6136493c32f49fc1d0340e967ed388469e2ce0bb8401f01",
+          "bytes": 9848
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-gate-setup-59aff2e-a1.log",
+          "sha256": "e17ab3976e2f2443db349b251504823ba11a8a8fc10d6de14749fdba1fece82e",
+          "bytes": 62
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-gate-setup-exit-59aff2e-a1.json",
+          "sha256": "104ef740a4178a2ce55d81879fd5210ef6d9534ed874ac63951bf9bf71514213",
+          "bytes": 9860
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-gate-summary-59aff2e-a1.md",
+          "sha256": "fd57d8778c944bde190d6a15dc0c6c95ab1e65b9d2927d827a389291e8254c27",
+          "bytes": 971
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-next-build-59aff2e-a1.log",
+          "sha256": "c8ae6a5449ae2d3e6d4c76ff3e400ac3e746af74f9fec62d56b3882b98a45a89",
+          "bytes": 12460
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-next-build-exit-59aff2e-a1.json",
+          "sha256": "ea495f264a9ac0fda1f07705759077368dede0e776ee915c80bd607f130f721d",
+          "bytes": 9808
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-preflight-59aff2e-a1.log",
+          "sha256": "e1bb6cf7f64dec92060d3ebce2c80c40c3666e3847a8b0f45e4fa9468506e461",
+          "bytes": 23
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-preflight-exit-59aff2e-a1.json",
+          "sha256": "27a8ae9792032e9c1d69c4e5b7195f47ddc93f10a18979969cae4cbeafa38f0f",
+          "bytes": 9815
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-worker-59aff2e-a1.log",
+          "sha256": "b2c6825028b5d4ce29d694e8c1dbcc3263446a6d4752672aaffadc9fb7e60207",
+          "bytes": 423
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-worker-exit-59aff2e-a1.json",
+          "sha256": "7e382cf4675e3a8e62f70ed5511843af35db78a39e55e8039224d35b3a77c5d8",
+          "bytes": 9807
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-renewal-reviewed-source-freeze.json",
+          "sha256": "9a4d4e248f7c32974ae898701d55f9c201c1e1c80ade8e797c1b44b61a9db7c2",
+          "bytes": 9654
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/run-b012-renewal-final-check.py",
+          "sha256": "c1ae6533f16abe61c08bfd49b4904a67aea6840bcbe9aca6fec8626e5b4e44f9",
+          "bytes": 5140
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-renewal-runtime-driver.py",
+          "sha256": "740d496654ec05fbda844649f55392f95089830bd44ae519885fa5200bbfb142",
+          "bytes": 6024
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/work/b012-renewal-control-readback.py",
+          "sha256": "3ae328ea48637706a53d9085927d91003df628bf8bfd78a55d6392f4ee3eca79",
+          "bytes": 7028
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/copy-check.log",
+          "sha256": "35a6a72ac572867174fa573199b439293d9128112d6193fe6b3e74ab7deb8c30",
+          "bytes": 1437
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/flag-expiry.log",
+          "sha256": "c9a608f15431d8b4fb4de2ae643f33e2ab1bd9665e6677b69397b42ffbb4e0dd",
+          "bytes": 27
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/lint.log",
+          "sha256": "b0f96cc3d3f5eeea02db057aa844739f7139e14132f2840c9109bb966dce3169",
+          "bytes": 2651
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/npm-ci.log",
+          "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+          "bytes": 1585
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/postgres-16.log",
+          "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+          "bytes": 31
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/steps.md",
+          "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+          "bytes": 341
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/test-rls.log",
+          "sha256": "e869d89d5c2366b4f8513ec836678a70b0e5efcb2eb86be4def7400f96b0f1dd",
+          "bytes": 109173
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/test-unit.log",
+          "sha256": "c179d0382a2b801d57104ccb21cfa03a82a39edc3cd28266e76b0c45040b9ef0",
+          "bytes": 127892
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/toolchain.log",
+          "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+          "bytes": 27
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a1-selector-failure/gate-raw/typecheck.log",
+          "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+          "bytes": 43
+        }
+      ]
+    },
+    {
+      "manifest": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/manifest.json",
+        "sha256": "489d4ee09b38806bc0964ff5806dc1ed7d729ba29dff17dea5bb8b628f91fbe9",
+        "bytes": 29964
+      },
+      "result": "RUNTIME_PASS_VISUAL_EVIDENCE_INCOMPLETE",
+      "files": [
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-baseline-setup-12e103f-a2.log",
+          "sha256": "e0530c0a56f78928dae95dc1b622c37cbf2996ebdbcf48fab363f7552d5f45a8",
+          "bytes": 26
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-baseline-setup-exit-12e103f-a2.json",
+          "sha256": "fec99cd3a52057743834e4c712c94f107172a67211c52bcf049b2450927d23ab",
+          "bytes": 9873
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/.last-run.json",
+          "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+          "bytes": 45
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/comparison-zh-TW-1280.png",
+          "sha256": "dfe2fd6a7514e60a7513efd8b1fe26271d76214531d51b774e426147e5ffd6e8",
+          "bytes": 132421
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/initial-zh-TW-1280.png",
+          "sha256": "1c74134d74cd6c94110fdc97a9852fefeeaf1085812b6523ef3ab3955cdae687",
+          "bytes": 129460
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/invalid-zh-TW-1280.png",
+          "sha256": "4072dda30ea7a7563e5fa3e8b63693850e9d8ebc1e03bab9f73829f27ca16ec2",
+          "bytes": 100106
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/loading-zh-TW-1280.png",
+          "sha256": "7311a02ac6475a32d6b94d81078694a0bec218fd1380a962900e0341b25e028f",
+          "bytes": 95505
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/open-ended-zh-TW-1280.png",
+          "sha256": "6e6da27da5d8ffef2aaa4902d0221b080e05f6be4661a5af7b5485460720364f",
+          "bytes": 134398
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-re-232f5-saved-comparison-zh-TW-1280-chromium/stale-zh-TW-1280.png",
+          "sha256": "ba7fbf8ab33a7d941e628856a37c8cc56af4f26c8c4f9a1405ee8e9065fcec94",
+          "bytes": 101653
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/comparison-en-1280.png",
+          "sha256": "6d1e56652b2ede38fa222e066421997234800a2dda566ac407f8b0a6b835d9e7",
+          "bytes": 137920
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/initial-en-1280.png",
+          "sha256": "5ad37e1d250e8a60050310cc4c21e236ddae0e8fec0ae62aa50182b45d900579",
+          "bytes": 143078
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/invalid-en-1280.png",
+          "sha256": "b0901432ab13aadc2dc0c6bcf6f043dcee415e34d0925b6a42bef17e042d5561",
+          "bytes": 100124
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/loading-en-1280.png",
+          "sha256": "9003f10c990a85d4df27fcd0ebb7cc6f6dfafe9aa2a3d4e44e27582f7d69cb97",
+          "bytes": 96445
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/open-ended-en-1280.png",
+          "sha256": "dade00d7f55a015b5e6c737dc0253003e869ebbf4b02a7963543c9f3d4ab262f",
+          "bytes": 138298
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-1280-chromium/stale-en-1280.png",
+          "sha256": "9175acce045fb044e5c3ce908d4c83c7d008e49b57fe0f5b2875252e782acc98",
+          "bytes": 100855
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/comparison-en-390.png",
+          "sha256": "311fb3d932123102748f6cc9171354850e31fa0a1186281b1f39988a49243a35",
+          "bytes": 89794
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/initial-en-390.png",
+          "sha256": "f3136a748f0f31c0fd1998bf637b252e8ef0e924a0311584086db8b2b15bfbc0",
+          "bytes": 88092
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/invalid-en-390.png",
+          "sha256": "53c5ae1ed85abea5b29bc93fff943225b75daa18e01de94bb2f1fdb604e2170e",
+          "bytes": 62152
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/loading-en-390.png",
+          "sha256": "9bbda39c9a6f81489189904c77a6ade7ba9fe080950bc2d2288cdcbc156a2d51",
+          "bytes": 58463
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/open-ended-en-390.png",
+          "sha256": "7a840d77fab99211138fc331ee4986f8202871bdf0df93afc170c5d0be540ccf",
+          "bytes": 89944
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/stale-en-390.png",
+          "sha256": "178308406ec6ab1443d471973108e35872d190a6f22761c2bd6d7cde3903dbd8",
+          "bytes": 62714
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/comparison-zh-TW-390.png",
+          "sha256": "cabbe220290e6feb71e8ec1b8b6c116aeb1709380f6bb372df8a18ad1be610e8",
+          "bytes": 94644
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/initial-zh-TW-390.png",
+          "sha256": "0d0275c43d3c76cf489a66615e245904e3778c9ba62760ce4ce4f7e2f8dc50fb",
+          "bytes": 88349
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/invalid-zh-TW-390.png",
+          "sha256": "6ac73a8d72f79877002b303d9db450c9108f1a113c17949e5e5a612cd0e42c13",
+          "bytes": 66409
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/loading-zh-TW-390.png",
+          "sha256": "6af6b50adf48f226981f3e9a4dc7272e6a9d0e78f4fac89479030bec5e2575cf",
+          "bytes": 62253
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/open-ended-zh-TW-390.png",
+          "sha256": "ce5c8c8d2c472144603609eb6a208f8145d12696c66671b2c6b4835240431885",
+          "bytes": 95969
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-zh-TW-390-chromium/stale-zh-TW-390.png",
+          "sha256": "6e72581536320cdc05cebfd80c2a38931480dcc6d88eea15b51777608c700da1",
+          "bytes": 67497
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-setup-12e103f-a2.log",
+          "sha256": "a0b076c058198c7fffa869c4fdaa6d0248f54ab960fb41b70d96bcf331c90a00",
+          "bytes": 79
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-browser-setup-exit-12e103f-a2.json",
+          "sha256": "b8d727c9448831aea58f11fad70886ad71ed56de34496e8bbc4b4fb64ff86ee7",
+          "bytes": 9868
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-build-setup-12e103f-a2.log",
+          "sha256": "7ac3e59d0dc10fa1bfc184ba995dbe624ad4e9e0849fd3653c71cdaaaffeb8dd",
+          "bytes": 187
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-build-setup-exit-12e103f-a2.json",
+          "sha256": "712a7b2751b4e62919eac0bbb616c7d227e8fa9451aa11d2f379e125603fb36b",
+          "bytes": 9863
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-cf-build-12e103f-a2.log",
+          "sha256": "530ee1880f1e4bf95ff4819a9cd0203ac99f2d695d86873a338124329570384a",
+          "bytes": 14169
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-cf-build-exit-12e103f-a2.json",
+          "sha256": "e910a843858f36307db758fa4e55fea3ebec3ed0234f778f457ac8fdd320ee19",
+          "bytes": 9809
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-comparison-focus-12e103f-a2.log",
+          "sha256": "bdd6dcba2a19e3e7f47cf95303a6cbefd166171dfe5bb98ca9bfe1f7b0895d38",
+          "bytes": 151
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-comparison-focus-exit-12e103f-a2.json",
+          "sha256": "53af2d84025f4b5fca6af696e3df6ec6f2c396988ab61b56f600865493e2249d",
+          "bytes": 10255
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-comparison-playwright-12e103f-a2.log",
+          "sha256": "0c7ca9fa72acfbb732edbf79561eae264deab8800a814ce1d0c75e9a91bd1405",
+          "bytes": 460
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-comparison-playwright-exit-12e103f-a2.json",
+          "sha256": "bebe35f13d540cc865ce8ac2dfd7f8dcf1ddeec9fd058a5e923dc9b2d9e0ac9c",
+          "bytes": 10067
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-control-readback-12e103f-a2.log",
+          "sha256": "2bdb39ea11ae8ef789406774853d4bb57068b02b67e5fb24840566b69bb7000f",
+          "bytes": 906
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-control-readback-exit-12e103f-a2.json",
+          "sha256": "81e4d5f34ab68a1b2dafaea46ebfafe7f2399642829cd5a31d916a7c65b75fb0",
+          "bytes": 9739
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-focus-12e103f-a2-artifacts/.last-run.json",
+          "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+          "bytes": 45
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-focus-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/comparison-en-390.png",
+          "sha256": "3d3a4efcd6f5515bb3eff182d41801bd2994ef88a0436b4bec0ef969e9e91a90",
+          "bytes": 89386
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-focus-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/initial-en-390.png",
+          "sha256": "1aa642205456dfbf08653a3bd0f0653e3323c6cad4ab4f2097976fdfc1f75f7b",
+          "bytes": 87371
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-focus-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/invalid-en-390.png",
+          "sha256": "f63180d0bbcac1c71f3ceee7f727cfff9a5df187336a216de109d9f508372e53",
+          "bytes": 61456
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-focus-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/loading-en-390.png",
+          "sha256": "9cd15a94e76f21695e719eaab5f502c6b62c5362d257f39e81051ca3afa17611",
+          "bytes": 57751
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-focus-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/open-ended-en-390.png",
+          "sha256": "03afdac0adf5eedf12cda9273ed077a63c699d438bc98524f57cee6bb0ecf271",
+          "bytes": 89533
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-focus-12e103f-a2-artifacts/b012-renewal-comparison-renewal-unsaved-comparison-en-390-chromium/stale-en-390.png",
+          "sha256": "40341ec95f0ff04dbe13c8b1c45eb4d6c115db7abc96e62961526e264ffd7589",
+          "bytes": 62413
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-focus-setup-12e103f-a2.log",
+          "sha256": "c6c447c59285f57347adefd94f037027da8f99779f741c32150770b876a344e4",
+          "bytes": 74
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-focus-setup-exit-12e103f-a2.json",
+          "sha256": "9d6a3f78829d5fef0c50ac8ad9a78b7e6ab5d5faf62b6b5b69ddfadcf4cba866",
+          "bytes": 9862
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-gate-12e103f-a2.log",
+          "sha256": "14aec682abc73a46d534ee09db8af5381825661e510907eb28116f1c25e7b7e4",
+          "bytes": 444
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-gate-exit-12e103f-a2.json",
+          "sha256": "bf56dc6126018fddf1ec318287ac02f3ef74eb0d7ed5c55d964f908e38e728ed",
+          "bytes": 9848
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-gate-setup-12e103f-a2.log",
+          "sha256": "e17ab3976e2f2443db349b251504823ba11a8a8fc10d6de14749fdba1fece82e",
+          "bytes": 62
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-gate-setup-exit-12e103f-a2.json",
+          "sha256": "afd9fc52a2d32c0bb14b3bd7018198c7f95a4d4123933867782399baaddae68e",
+          "bytes": 9860
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-next-build-12e103f-a2.log",
+          "sha256": "ce2f7f61b5a41a5e3b10cebd2f40e6c82342750ed3de0bb698deb9073bd75376",
+          "bytes": 12460
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-next-build-exit-12e103f-a2.json",
+          "sha256": "253cea5fddb593132b4b1fd93d82772e6c2d7cfabab09cf41223ae0b513f9fe4",
+          "bytes": 9808
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-preflight-12e103f-a2.log",
+          "sha256": "6b305cb2c6b6bf39bfa9ee80d0a7be3481326764459d6bae7bafab76ef852a63",
+          "bytes": 23
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-preflight-exit-12e103f-a2.json",
+          "sha256": "a0990be4c6a6a5b55a212147d0ff817d96b86f51e72d147694210e6b99cc8c9e",
+          "bytes": 9815
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-worker-12e103f-a2.log",
+          "sha256": "138dad2016083409ff697e2feaa0592cef17ac2f72abc09f595121c39f884965",
+          "bytes": 420
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-worker-exit-12e103f-a2.json",
+          "sha256": "02eff8bf5c917e5ce48f235825a46fe37bcbbcf7ad874fbfc7ba156fbac0308e",
+          "bytes": 9807
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-renewal-reviewed-source-freeze.json",
+          "sha256": "4a31d7c6f5fb7a0b89ed17a3df62e597923f35e3888e24894101388c3285e7a7",
+          "bytes": 10630
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/run-b012-renewal-final-check.py",
+          "sha256": "c1ae6533f16abe61c08bfd49b4904a67aea6840bcbe9aca6fec8626e5b4e44f9",
+          "bytes": 5140
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-renewal-runtime-driver.py",
+          "sha256": "740d496654ec05fbda844649f55392f95089830bd44ae519885fa5200bbfb142",
+          "bytes": 6024
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/b012-renewal-control-readback.py",
+          "sha256": "3ae328ea48637706a53d9085927d91003df628bf8bfd78a55d6392f4ee3eca79",
+          "bytes": 7028
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/mode-b-repair-override-prep/e2e-evidence/B-012/renewal-runtime-12e103f.json",
+          "sha256": "400d84c79584eca02c3b9ee4d085b71b4036f3578fb68b17266f5feed2a9875f",
+          "bytes": 60031
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/work/mode-b-repair-override-prep/e2e/results/gate-12e103fa49b515dd999264d47c971ac2f002e58d.md",
+          "sha256": "1b17ff0b9085805d1be5f525252be69f599a08b9a7945e4037ba3c00ed96de59",
+          "bytes": 971
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/copy-check.log",
+          "sha256": "bb1d5399b8a29b46f21b4b40da710559c5a0dfd6656cff8f592f5a969d6a8fce",
+          "bytes": 1432
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/flag-expiry.log",
+          "sha256": "c9a608f15431d8b4fb4de2ae643f33e2ab1bd9665e6677b69397b42ffbb4e0dd",
+          "bytes": 27
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/lint.log",
+          "sha256": "b0f96cc3d3f5eeea02db057aa844739f7139e14132f2840c9109bb966dce3169",
+          "bytes": 2651
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/npm-ci.log",
+          "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+          "bytes": 1585
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/postgres-16.log",
+          "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+          "bytes": 31
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/steps.md",
+          "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+          "bytes": 341
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/test-rls.log",
+          "sha256": "cb857103fe76bafb61dcb27fa0d6014b5e42f72a79923d54ab20a8340478a4e5",
+          "bytes": 109172
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/test-unit.log",
+          "sha256": "7b2aea308715e669c975be761d066ae334af550ee66396b0564c307d3fca2770",
+          "bytes": 127886
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/toolchain.log",
+          "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+          "bytes": 27
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-renewal-a2-visual-incomplete/gate-raw/typecheck.log",
+          "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+          "bytes": 43
+        }
+      ]
+    }
+  ],
+  "priorAttemptNotes": [
+    "a1 failed focused browser selector matched Next announcer; later phases not run.",
+    "a2 passed measured local runtime but initial captures showed prior lease page and mobile table right columns were not captured; visual evidence incomplete."
+  ],
+  "databaseProposal": {
+    "verdict": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-012/renewal-persistent-hold-source-review-1102.json",
+      "sha256": "e6685f4fc7338805f3fb1e7ccd36ba96e63b024d01395357d69a0543cec1dbf9",
+      "bytes": 1165
+    },
+    "sourceVerdict": "GO_CLOSED_DESIGN_ONLY",
+    "runtimeVerdict": "NOT_RUN",
+    "applied": false,
+    "applyReady": false,
+    "files": [
+      {
+        "outside": {
+          "path": "/Users/ron/Downloads/condola-bootstrap/b012-renewal-persistent-hold-db-handoff.md",
+          "sha256": "7d83621b9305b5e5aedade04c931c061890c8bd9de71cb62692e76ad1adf9b71",
+          "bytes": 10051
+        },
+        "repositoryCopy": {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-012/renewal-persistent-hold-db-handoff.md",
+          "sha256": "7d83621b9305b5e5aedade04c931c061890c8bd9de71cb62692e76ad1adf9b71",
+          "bytes": 10051
+        }
+      },
+      {
+        "outside": {
+          "path": "/Users/ron/Downloads/condola-bootstrap/20261102213119_b012_renewal_persistent_hold.proposed.sql",
+          "sha256": "d6528e1f409dad372f2f1d4ebf9a7c8b950172b25dbb8887a6d17b2ca38386c0",
+          "bytes": 4758
+        },
+        "repositoryCopy": {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-012/renewal-persistent-hold-proposed.sql.txt",
+          "sha256": "d6528e1f409dad372f2f1d4ebf9a7c8b950172b25dbb8887a6d17b2ca38386c0",
+          "bytes": 4758
+        }
+      }
+    ]
+  },
+  "limits": [
+    "Renewal comparison is unsaved advisory only; overlap is not reservation or agreement.",
+    "Readback covers named global control including absence and selected whole-org feature_flags against same-source seeded baseline; not whole database or audit history.",
+    "No staging, Claude/Class B, Ron acceptance, saved renewal, release or production activation claim.",
+    "Proposed hold SQL remains unapplied, unexecuted and not apply-ready.",
+    "Independent exact-manifest and final visual review pending."
+  ]
+}

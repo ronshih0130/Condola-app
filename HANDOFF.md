@@ -306,3 +306,11 @@ STOP POINT: WORKING; next: commit pinned B012 candidate then serial isolated ful
 B012 a1 candidate59aff2e: standardgate621unit/392RLS+historical1 andall4buildchecksPASS; singleEN390focusFAIL1/0pass because unscopedalert selector matches invalidinputmessage plusNext routeannouncer. InitialPNG1 retained in work/b012-renewal-a1-selector-failure withallraws/receipts/frozenhelpers. Finalbrowser/baseline/RO NOTRUN. Next narrowonly2expectedalertselectors, independentreview,newimmutablecandidate,freshfullgate/build/focus/ALLbrowser/readback. No skip/assertion/timeout relaxation.
 
 B012 a2 code12e103f: allruntimePASS621unit/392RLS+historical1,build4,focus1/6PNG,final4/24PNG,baseline+unchangedRO exactabsence/wholeflags/OFF0optins. VisualevidenceINCOMPLETE: initialcapturesoldleasepage beforetransition; mobiletableproposed/changedrightsideuncaptured. Allraws/currentmanifest preserved work/b012-renewal-a2-visual-incomplete. Next bounded spec-onlyroute/formreadywait+native pairedtablescrollproof; no productlogic/math/timeout/skip changes. Existing measuredPASS doesnotestablishvisualacceptance.
+
+## B012 comparison locally verified; publication pending — 2026-11-02T14:21:46.495835-08:00
+
+Immutablecode `9caeed8a4378f7eff932d65b1f332581113646cc`;manifestb6e98361...89056B:195bindings/51pins/3helpers/13receipts/2archives110entries. Full621unit/392RLS+solehistoricalskip,build4/final4browser28PNG/PG-readonly originalglobalABSENCE+wholeorgflagsOFF0optins allPASS. Solindependent source/evidenceGO andall28visualroot14/reviewer14;knownNextbadge/pairedinner-scrolllimitsretained. Historiesa1FAIL/a2runtimePASSvisualINCOMPLETEpreserved. PE99beae29 endsPARTIAL, wholeB012notcomplete.
+
+Hostedatomiccreate parkedforpersistentguardPEvalidation/apply; remainingversionedpartyintents/notices/sourcecarryforwarddesign/appstillCodexTODO, not merelyexternalacceptance. CurrentproposalMD7d83621/SQLd6528e1 source-onlyNOTRUN/NOTAPPLYREADY; no Macmigration/prod/mainmerge/operationalflagactivation/messages/legalcopy. Stage/Claude/Ronunverified. Goalall39/fourpartyLINEactive;B008UNKNOWNunwaived.
+
+STOP POINT: WORKING; next: commit/pushscopedmetadata, renewsameowner/canonicalmirror, then read B014spec/currentledger source and reserveeligibleproductwork plus remainingB012lifecycleDBhandoff; ownerRon/Codex3099AC86.
