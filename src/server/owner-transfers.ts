@@ -26,8 +26,8 @@ async function snapshot(c:Client,s:Session,id:string):Promise<Snapshot|null> {
  h.minor_unit=Number(memo.slice(-1));
  const payable=e.find(x=>x.account==="owner_payable"),cash=e.find(x=>x.account==="cash_clearing");
  if(!payable || !cash || !payable.contact_id || payable.property_id!==h.property_id || cash.contact_id!==null || cash.property_id!==h.property_id) return null;
- const amount=BigInt(payable.amount_minor); if((h.kind==="owner_payout"?amount<=0n:amount>=0n) || BigInt(cash.amount_minor)!==-amount) return null;
- return {header:h,entries:e,ownerId:payable.contact_id,amountMinor:(amount<0n?-amount:amount).toString()};
+ const amount=BigInt(payable.amount_minor); if((h.kind==="owner_payout"?amount<=BigInt('0'):amount>=BigInt('0')) || BigInt(cash.amount_minor)!==-amount) return null;
+ return {header:h,entries:e,ownerId:payable.contact_id,amountMinor:(amount<BigInt('0')?-amount:amount).toString()};
 }
 async function openPeriod(c:Client,s:Session,day:string) { const r=await c.query(`SELECT 1 FROM public.month_closes WHERE org_id=$1 AND period_month >= date_trunc('month',$2::date)::date LIMIT 1`,[s.orgId,day]);return r.rowCount===0; }
 async function ownerContext(c:Client,s:Session,propertyId:string,ownerId:string,day:string) {
@@ -35,7 +35,7 @@ async function ownerContext(c:Client,s:Session,propertyId:string,ownerId:string,
 }
 function matches(a:Snapshot,b:{requestId:string;propertyId:string;ownerId:string;effectiveDate:string;amountMinor:string;reference:string;expectedCurrency:string;expectedMinorUnit:number},s:Session,currency:string) { const h=a.header;return h.kind==='owner_payout' && h.id===b.requestId && h.property_id===b.propertyId && a.ownerId===b.ownerId && h.effective_date===b.effectiveDate && a.amountMinor===b.amountMinor && h.description===(b.reference||null) && h.currency===currency && h.currency===b.expectedCurrency && h.minor_unit===b.expectedMinorUnit && h.created_by===s.userId; }
 async function insertEntries(c:Client,s:Session,id:string,property:string,owner:string,currency:string,amount:string,scale:number,reverse:boolean) {
- const n=BigInt(amount)*(reverse?-1n:1n);await c.query(`INSERT INTO public.ledger_entries(org_id,transaction_id,account,amount_minor,currency,contact_id,property_id,memo) VALUES ($1,$2,'owner_payable',$5::bigint,$6,$4,$3,$8),($1,$2,'cash_clearing',$7::bigint,$6,NULL,$3,$8)`,[s.orgId,id,property,owner,n.toString(),currency,(-n).toString(),`b014:v1:scale=${scale}`]);
+ const n=BigInt(amount)*(reverse?BigInt('-1'):BigInt('1'));await c.query(`INSERT INTO public.ledger_entries(org_id,transaction_id,account,amount_minor,currency,contact_id,property_id,memo) VALUES ($1,$2,'owner_payable',$5::bigint,$6,$4,$3,$8),($1,$2,'cash_clearing',$7::bigint,$6,NULL,$3,$8)`,[s.orgId,id,property,owner,n.toString(),currency,(-n).toString(),`b014:v1:scale=${scale}`]);
 }
 const unavailable={state:"unavailable" as const};
 export async function ownerTransferView(s:Session) {

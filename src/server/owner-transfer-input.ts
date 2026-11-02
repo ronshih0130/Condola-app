@@ -12,7 +12,7 @@ export function transferMinor(raw: unknown, scale: number): string | null {
   const m = /^(\d+)(?:\.(\d+))?$/.exec(raw.trim());
   if (!m || (m[2]?.length ?? 0) > scale) return null;
   const amount = BigInt(m[1] + (m[2] ?? "").padEnd(scale, "0"));
-  return amount > 0n && amount <= 9223372036854775807n ? amount.toString() : null;
+  return amount > BigInt('0') && amount <= BigInt('9223372036854775807') ? amount.toString() : null;
 }
 export function parseTransfer(input: TransferInput, scale: number) {
   if (!input || ![input.requestId, input.propertyId, input.ownerId].every(v => typeof v === "string" && isUuid(v)) || !validTransferDate(input.effectiveDate) || typeof input.reference !== "string") return null;

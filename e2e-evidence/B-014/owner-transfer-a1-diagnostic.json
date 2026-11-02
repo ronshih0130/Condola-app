@@ -1,0 +1,43 @@
+{
+  "recordedAt": "2026-11-02T15:26:24.759351-08:00",
+  "status": "OBSERVATION_COMPLETED_NOT_GATE_ACCEPTANCE",
+  "candidate": "c083603e9d037a3f9e3a5874834bdd4ebdf98c84",
+  "diagnostic": {
+    "candidate": "c083603e9d037a3f9e3a5874834bdd4ebdf98c84",
+    "attempt": "d1",
+    "scope": "Newbaselinefixture fixedwrapper vsrawobserve;NOToriginaltestPASS",
+    "nodeActualExit": 0,
+    "effectiveExit": 0,
+    "wrapper": "recorded/changed",
+    "rawChangeFinish": "recorded/changed andCOMMIT",
+    "metadata": "6fixedfunctions currentfresh vsoldB012baseline/browser equalatobservation; doesnotproveactualfailedchildclonecatalog",
+    "originalRlsCause": "UNKNOWN/unwaived",
+    "receipt": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-override-same-value-exit-c083603-d1.json",
+    "receiptSha256": "ae6d577e8f1d645b9c1866fd0e6d9fb93b3e110a3e398e7438b0401defcdeeb2"
+  },
+  "log": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-override-same-value-c083603-d1.log",
+    "sha256": "fdddabbc67b92d3b44751a336a36c51a456fcbe3d6b40dea5ddfd495001ca119",
+    "bytes": 12717
+  },
+  "rawStreams": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-override-same-value-c083603-d1.stdout.log",
+      "sha256": "634d1251c0bf2efaf0b45f58ecc422245653e84562ca46f67e43a60c3299f4ed",
+      "bytes": 9511,
+      "captureStatus": "complete"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-override-same-value-c083603-d1.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "captureStatus": "complete"
+    }
+  ],
+  "limitations": [
+    "A1 original RLS failure remains UNKNOWN and FAIL, not baseline waived",
+    "Actual failed RLS child clone was cleaned by existing test after hook; metadata observation uses fresh diag and old B012 clones only",
+    "No changes to B013 product, fixtures, assertions, exceptions or skips",
+    "Independent Sol revised source/evidence QA remains NOT_RUN_MODEL_UNAVAILABLE"
+  ]
+}
