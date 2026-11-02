@@ -53,7 +53,7 @@ function Phase({ phase, versions, leaseId, locale }: { phase: ComparisonVersion[
 
 export function HandoverComparison({ leaseId, locale, versions }: { leaseId: string; locale: string; versions: ComparisonVersion[] }) {
   const c = handoverComparisonCopy(locale);
-  return <section className="card pad" data-testid="handover-comparison"><h2>{c.title}</h2><p>{c.description}</p><div className="grid2">
+  return <section className="card pad" data-testid="handover-comparison"><h2>{c.title}</h2><p>{c.description}</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(min(100%, 260px), 1fr))",gap:16}}>
     <Phase key={`${leaseId}:move_in`} phase="move_in" versions={versions} leaseId={leaseId} locale={locale}/>
     <Phase key={`${leaseId}:move_out`} phase="move_out" versions={versions} leaseId={leaseId} locale={locale}/>
   </div></section>;

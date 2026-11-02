@@ -1,0 +1,128 @@
+{
+  "candidate": "9790f39d264faa501418abcbd924a9f96bc4f494",
+  "attempt": "a6",
+  "scope": "One EN390 focused diagnostic only",
+  "actualExit": 1,
+  "selected": 1,
+  "pass": 0,
+  "fail": 1,
+  "otherCasesNotRun": 3,
+  "pngs": 7,
+  "completedBeforeFailure": [
+    "Loading/error/recovery/decoded/no-loading assertions",
+    "Staff and tenant captures and version/provenance/source financial invariance",
+    "Cross-tenant and flag-OFF denials"
+  ],
+  "failure": "Final unexpected-errors array contains one generic resource404 console message with no recorded location",
+  "attribution": "UNKNOWN; expected image vs OFF document vs other not established",
+  "gateBuildBaselineReadback": "NOT RUN",
+  "visualLimit": "Tenant normal mobile fullPage capture has internally scrolled main, clipping comparison beginning; requires real additional viewport captures, no image editing",
+  "ownedPortsDrained": [
+    "43148",
+    "4608"
+  ],
+  "files": [
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b011-comparison-final-check.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/run-b011-comparison-final-check.py",
+      "sha256": "73c50cfe91b20287c327066b915c8e863f85d57ca4d284697c9289f8f99d5729",
+      "bytes": 4942
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-runtime-driver.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-comparison-runtime-driver.py",
+      "sha256": "abcf90f3f9c1e2c87482acc212ad04d6a6114823ae97f6867cb539eb69f48604",
+      "bytes": 6022
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-control-readback.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-comparison-control-readback.py",
+      "sha256": "1f6efcf0899430ed574903e6b5904e2c5d1fcf7982de8b0daa14f7b31767f9ac",
+      "bytes": 6983
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-reviewed-source-freeze.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-comparison-reviewed-source-freeze.json",
+      "sha256": "6c8f1c7a352a9f2b1ac13948553dd4a77366caed774a8ebf85e1ba7cefc50d6d",
+      "bytes": 10598
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-setup-exit-9790f39-a6.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-setup-exit-9790f39-a6.json",
+      "sha256": "f2a71500d85b74bf11caecc39128ee67791e6064ef0632d37d0b7e9e2c6af6a1",
+      "bytes": 5779
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-focus-exit-9790f39-a6.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-comparison-focus-exit-9790f39-a6.json",
+      "sha256": "41fb2866fa07cb171b0ace5361db364b4a9b702e538d3edad6f3fa69ff8fe4e8",
+      "bytes": 6161
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-focus-9790f39-a6.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-comparison-focus-9790f39-a6.log",
+      "sha256": "ae5b2c233ae38857f2aa96c2a2bf9bdfb43166680dce0180fa6aea6d791dc307",
+      "bytes": 2217
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-setup-9790f39-a6.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-setup-9790f39-a6.log",
+      "sha256": "9d098cdf795caf64db5dc72137d50e9aaaea1e56eb5b13d31d5ca0d51d54391b",
+      "bytes": 74
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-9790f39-a6-artifacts/.last-run.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-9790f39-a6-artifacts/.last-run.json",
+      "sha256": "659179a82ac79f26fabe171071c2b5789f01ab8b8ca5c842d7720a27091e79a0",
+      "bytes": 96
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "sha256": "06b20d5fe57bcbd9c2fc70bc700edb7a5bb189eee7fb8a19e419d71948f62f92",
+      "bytes": 286718
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "sha256": "07770295e9702e018a955817db032123dcf380f0cbfd8a13af04a61876801c66",
+      "bytes": 56278
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "sha256": "6776c43977835c0cae0ca55adeb88d2b6bc1a43f217cced3d62af2149169a496",
+      "bytes": 288769
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "sha256": "ee2b8d449dd284cc1ae594b0c72fcef935e350493b6a8890759258d868bf3f60",
+      "bytes": 97611
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/error-context.md",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/error-context.md",
+      "sha256": "390ddb362ced8076d7ba5ab0860dbcd5551602b1c32983ab76620ecafc0eb3cc",
+      "bytes": 16675
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "sha256": "e63004461d663ff4e790e57f8a1dc67d18089b671fa975f64855b70cd37379f8",
+      "bytes": 132635
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/staff-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/staff-en-390.png",
+      "sha256": "05571ec57c2e1cf57997d917a873709537a10e9ee990de18ed1c8dd041ddf39e",
+      "bytes": 283701
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a6-console-attribution-failure/b011-focus-9790f39-a6-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-en-390.png",
+      "sha256": "c1a403acef1e1e1dfab25e962f730c31f2a3a29cbdfa5fc25464f622aca774e3",
+      "bytes": 71138
+    }
+  ]
+}

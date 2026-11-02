@@ -31,10 +31,18 @@ const pdf=Buffer.from("%PDF-1.4\n%%EOF\n");
 for (const locale of ["en","zh-TW"] as const) for (const width of [390,1280]) test(`handover photo comparison ${locale} ${width}`,async ({page},info) => {
   await page.setViewportSize({width,height:900});
   const errors:string[]=[];
-  let injectedImageError="";
+  let injectedImageError="",knownInjectedPhoto="",expectedOffUrl="",phase="setup";
+  const consoleCategories:Record<string,number>={}, responseCategories:Record<string,number>={};
+  function locationCategory(value:string) {
+    if (!value) return "missing";
+    if (value===knownInjectedPhoto && knownInjectedPhoto) return "exactKnownInjectedPhoto";
+    if (value===expectedOffUrl && expectedOffUrl) return "exactOwnedOFFdocument";
+    try { return new URL(value).origin===origin ? "otherLocal" : "external"; } catch { return "missing"; }
+  }
+  function count(buckets:Record<string,number>,key:string) { buckets[key]=(buckets[key]??0)+1; }
   page.on("pageerror",e=>errors.push(e.message));
-  page.on("console",e=>{if(e.type()==="error" && !(injectedImageError && e.location().url===injectedImageError && e.text().includes("404")))errors.push(e.text());});
-  page.on("response",r=>{if(r.status()>=500)errors.push(`HTTP ${r.status()} ${new URL(r.url()).pathname}`);});
+  page.on("console",e=>{if(e.type()==="error"){count(consoleCategories,`${phase}:${locationCategory(e.location().url)}:404=${e.text().includes("404")}`);if(!(injectedImageError && e.location().url===injectedImageError && e.text().includes("404")))errors.push(e.text());}});
+  page.on("response",r=>{if(r.status()===404){const req=r.request(),type=req.resourceType()==="document"?"document":req.resourceType()==="image"?"image":"other";let main=false;try{main=req.frame()===page.mainFrame();}catch{}count(responseCategories,`${phase}:${locationCategory(r.url())}:${type}:main=${main}`);}if(r.status()>=500)errors.push(`HTTP ${r.status()} ${new URL(r.url()).pathname}`);});
   await page.route("**/*",async route=>{if(new URL(route.request().url()).origin===origin)await route.continue();else{errors.push("Unexpected external request");await route.abort();}});
   await resetDemo(page);
   const before=await db(async c=>({setting:(await c.query(`SELECT value,description,updated_at::text AS updated_at FROM platform_settings WHERE key='handover_records'`)).rows[0],flags:(await c.query(`SELECT feature_flags FROM organizations WHERE id=$1`,[ORG_ID])).rows[0].feature_flags}));
@@ -51,7 +59,7 @@ for (const locale of ["en","zh-TW"] as const) for (const width of [390,1280]) te
     await moveOut.getByLabel(label.condition).fill("synthetic move-out"); await moveOut.getByRole("button",{name:label.publish}).click(); await moveOut.getByLabel(label.choose).setInputFiles({name:"out.png",mimeType:"image/png",buffer:image2}); await moveOut.getByRole("button",{name:label.upload}).click(); await expect(cout.getByRole("img")).toBeVisible();
     const photoUrl=await cin.getByRole("img").getAttribute("src"); expect(photoUrl).toMatch(new RegExp(`^/api/handover/${lease}/`));
     const response=await page.request.get(photoUrl!); expect(response.status()).toBe(200); expect(response.headers()["cache-control"]).toBe("private, no-store"); expect(await response.body()).toEqual(image1);
-    const existingOut=await cout.getByRole("img").getAttribute("src"); expect(existingOut).toMatch(new RegExp(`^/api/handover/${lease}/`));
+    const existingOut=await cout.getByRole("img").getAttribute("src"); expect(existingOut).toMatch(new RegExp(`^/api/handover/${lease}/`)); phase="injected_image";
     const excluded=new Set([new URL(photoUrl!,origin).href,new URL(existingOut!,origin).href]);
     let observed=0,release!:()=>void; const hold=new Promise<void>(resolve=>{release=resolve;});
     const protectedPrefix=`/api/handover/${lease}/`;
@@ -59,7 +67,7 @@ for (const locale of ["en","zh-TW"] as const) for (const width of [390,1280]) te
     await page.route(matches,async route=>{
       const request=route.request(),url=request.url();
       if(request.method()!=="GET" || request.resourceType()!=="image" || excluded.has(url) || (injectedImageError && url!==injectedImageError)) return route.continue();
-      if(!injectedImageError) injectedImageError=url;
+      if(!injectedImageError) { injectedImageError=url; knownInjectedPhoto=url; }
       observed++; await hold; await route.fulfill({status:404,body:"Not found"});
     });
     let state:Awaited<ReturnType<typeof sourceState>>;
@@ -69,7 +77,7 @@ for (const locale of ["en","zh-TW"] as const) for (const width of [390,1280]) te
       console.log("B011_COMPARISON_PHASE first_new_image_request_wait"); await expect.poll(()=>observed,{timeout:20_000}).toBeGreaterThan(0); console.log("B011_COMPARISON_EVENT first_new_image_request_observed");
       await cout.getByLabel(label.photo).selectOption({label:"out-later.png"}); await expect(cout.getByRole("img")).toHaveAttribute("src",new URL(injectedImageError).pathname); await expect(cout.getByRole("status")).toBeVisible(); await page.screenshot({path:info.outputPath(`loading-${locale}-${width}.png`),fullPage:true}); release(); await expect(cout.getByRole("alert")).toBeVisible(); await page.screenshot({path:info.outputPath(`image-error-${locale}-${width}.png`),fullPage:true});
     } finally { release(); await page.unroute(matches); }
-    const newPhotoUrl=injectedImageError; injectedImageError=""; await page.reload(); await cout.getByLabel(label.photo).selectOption({label:"out-later.png"}); await expect.poll(()=>cout.getByRole("img").evaluate((image:HTMLImageElement)=>image.complete && image.naturalWidth>0 && image.naturalHeight>0)).toBe(true); const restored=await page.request.get(newPhotoUrl); expect(restored.status()).toBe(200); expect(restored.headers()["cache-control"]).toBe("private, no-store"); expect(await restored.body()).toEqual(image1);
+    const newPhotoUrl=injectedImageError; injectedImageError=""; phase="recovery"; await page.reload(); await cout.getByLabel(label.photo).selectOption({label:"out-later.png"}); await expect.poll(()=>cout.getByRole("img").evaluate((image:HTMLImageElement)=>image.complete && image.naturalWidth>0 && image.naturalHeight>0)).toBe(true); const restored=await page.request.get(newPhotoUrl); expect(restored.status()).toBe(200); expect(restored.headers()["cache-control"]).toBe("private, no-store"); expect(await restored.body()).toEqual(image1);
     await cin.getByLabel(label.version).selectOption({label:locale==="en"?"Version 1":"版本 1"}); await expect(cin).toContainText(label.noPhotos); await expect(cin.getByRole("img")).toHaveCount(0);
     await cin.getByLabel(label.version).selectOption({label:locale==="en"?"Version 2":"版本 2"}); await expect(cin).toContainText(label.pdfOnly);
     await cin.getByLabel(label.version).selectOption({label:locale==="en"?"Version 3":"版本 3"}); await expect(cin.getByLabel(label.photo)).toHaveValue(/.+:.+/);
@@ -78,14 +86,16 @@ for (const locale of ["en","zh-TW"] as const) for (const width of [390,1280]) te
     // Protected image GETs legitimately add attachment-read audit rows; they are not included here.
     expect(await sourceState(lease)).toEqual(state);
     for (const photo of [cin.getByRole("img"),cout.getByRole("img")]) { await expect.poll(()=>photo.evaluate((image:HTMLImageElement)=>image.complete && image.naturalWidth>0 && image.naturalHeight>0)).toBe(true); } await expect(cin.getByRole("alert")).toHaveCount(0); await expect(cout.getByRole("alert")).toHaveCount(0); await expect(comparison.getByRole("status")).toHaveCount(0);
+    const staffIn=await cin.boundingBox(),staffOut=await cout.boundingBox(); expect(staffIn).not.toBeNull();expect(staffOut).not.toBeNull(); if(width===390)expect(staffOut!.y).toBeGreaterThanOrEqual(staffIn!.y+staffIn!.height-1); else {expect(Math.abs(staffIn!.y-staffOut!.y)).toBeLessThanOrEqual(2);expect(staffOut!.x).toBeGreaterThanOrEqual(staffIn!.x+staffIn!.width-1);}
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true); await page.screenshot({path:info.outputPath(`staff-${locale}-${width}.png`),fullPage:true});
-    await signIn(page,ACCOUNTS.tenant); await page.context().addCookies([{name:"condola_lease",value:lease,url:origin}]); await page.goto(`/api/demo/locale?set=${locale}&next=/t/handover/${lease}`); await expect(page.getByTestId("handover-comparison").getByRole("img")).toHaveCount(2);
+    phase="tenant"; await signIn(page,ACCOUNTS.tenant); await page.context().addCookies([{name:"condola_lease",value:lease,url:origin}]); await page.goto(`/api/demo/locale?set=${locale}&next=/t/handover/${lease}`); await expect(page.getByTestId("handover-comparison").getByRole("img")).toHaveCount(2);
     const tenantIn=page.getByRole("region",{name:label.in,exact:true}); await tenantIn.getByLabel(label.choose).setInputFiles({name:"tenant-in.png",mimeType:"image/png",buffer:image2}); await tenantIn.getByRole("button",{name:label.upload}).click(); await expect(cin.getByLabel(label.photo).locator("option")).toHaveCount(2); await cin.getByLabel(label.photo).selectOption({label:"tenant-in.png"}); await expect(cin.getByRole("img")).toHaveAttribute("alt",/tenant-in\.png/); await expect(cin).toContainText(label.uploaded); await expect(cin).toContainText(label.published);
     const names=await db(async c=>(await c.query<{id:string;display_name:string}>(`SELECT id,display_name FROM profiles WHERE id=ANY($1::uuid[])`,[[USERS.admin,USERS.tenant]])).rows); const admin=names.find(n=>n.id===USERS.admin)?.display_name, tenant=names.find(n=>n.id===USERS.tenant)?.display_name; expect(admin).toBeTruthy();expect(tenant).toBeTruthy();await cin.getByLabel(label.photo).selectOption({label:"in.png"}); await expect(cin).toContainText(admin!); await expect(cin).toContainText(tenant!); await expect(cin.locator("time")).toHaveCount(2);
     for (const photo of [cin.getByRole("img"),cout.getByRole("img")]) { await expect.poll(()=>photo.evaluate((image:HTMLImageElement)=>image.complete && image.naturalWidth>0 && image.naturalHeight>0)).toBe(true); } await expect(cin.getByRole("alert")).toHaveCount(0); await expect(cout.getByRole("alert")).toHaveCount(0); await expect(comparison.getByRole("status")).toHaveCount(0);
-    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true); await page.screenshot({path:info.outputPath(`tenant-${locale}-${width}.png`),fullPage:true});
-    await signIn(page,ACCOUNTS.tenant2); await page.context().addCookies([{name:"condola_lease",value:lease,url:origin}]); expect((await page.request.get(photoUrl!)).status()).toBe(404);
-    await signIn(page,ACCOUNTS.admin); await db(c=>c.query(`UPDATE platform_settings SET value=jsonb_set(value,'{enabled}','false'::jsonb) WHERE key='handover_records'`)); expect((await page.request.get(photoUrl!)).status()).toBe(404); await page.goto(`/m/handover/${lease}`); await expect(page.getByTestId("handover-comparison")).toHaveCount(0);
+    const tenantInBox=await cin.boundingBox(),tenantOutBox=await cout.boundingBox(); expect(tenantInBox).not.toBeNull();expect(tenantOutBox).not.toBeNull();expect(tenantOutBox!.y).toBeGreaterThanOrEqual(tenantInBox!.y+tenantInBox!.height-1);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true); await comparison.evaluate(node=>node.scrollIntoView({block:"start"})); await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))); await page.screenshot({path:info.outputPath(`tenant-${locale}-${width}.png`),fullPage:true}); await cout.evaluate(node=>node.scrollIntoView({block:"center"})); await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))); await page.screenshot({path:info.outputPath(`tenant-moveout-viewport-${locale}-${width}.png`),fullPage:false});
+    phase="denial"; await signIn(page,ACCOUNTS.tenant2); await page.context().addCookies([{name:"condola_lease",value:lease,url:origin}]); expect((await page.request.get(photoUrl!)).status()).toBe(404);
+    phase="off"; await signIn(page,ACCOUNTS.admin); await db(c=>c.query(`UPDATE platform_settings SET value=jsonb_set(value,'{enabled}','false'::jsonb) WHERE key='handover_records'`)); expect((await page.request.get(photoUrl!)).status()).toBe(404); expectedOffUrl=new URL(`/m/handover/${lease}`,origin).href; const off=await page.goto(expectedOffUrl); expect(off?.status()).toBe(404); await expect(page.getByTestId("handover-comparison")).toHaveCount(0);
     expect(errors).toEqual([]);
-  } finally { await db(async c=>{await c.query(`UPDATE platform_settings SET value=$1,description=$2,updated_at=$3 WHERE key='handover_records'`,[before.setting.value,before.setting.description,before.setting.updated_at]);await c.query(`UPDATE organizations SET feature_flags=$2 WHERE id=$1`,[ORG_ID,before.flags]);}); }
+  } finally { console.log("B011_COMPARISON_CATEGORIES",JSON.stringify({console:consoleCategories,response404:responseCategories})); await db(async c=>{await c.query(`UPDATE platform_settings SET value=$1,description=$2,updated_at=$3 WHERE key='handover_records'`,[before.setting.value,before.setting.description,before.setting.updated_at]);await c.query(`UPDATE organizations SET feature_flags=$2 WHERE id=$1`,[ORG_ID,before.flags]);}); }
 });
