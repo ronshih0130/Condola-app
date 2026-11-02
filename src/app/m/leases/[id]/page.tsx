@@ -1,4 +1,5 @@
 import { HandoverEntry } from "@/components/handover-entry";
+import { RenewalComparisonEntry } from "@/components/renewal-comparison-entry";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -103,6 +104,7 @@ export default async function LeasePage({
       <FirstPeriodSummary basis={lease.first_period_basis} locale={session.locale} />
       {firstInvoicePreview ? <MoveInInvoicePreview preview={firstInvoicePreview} locale={session.locale} calendar={session.calendar} /> : null}
       {tab === "summary" ? <HandoverEntry session={session} leaseId={id} /> : null}
+      {tab === "summary" ? <RenewalComparisonEntry session={session} leaseId={id} /> : null}
       {query.created === "1" ? (
         <div className="alert ok" data-testid="lease-created">
           {t("i_lease_created")}

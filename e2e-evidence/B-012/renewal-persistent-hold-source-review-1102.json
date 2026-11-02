@@ -1,0 +1,26 @@
+{
+  "recordedAt": "2026-11-02T13:53:29.354087-08:00",
+  "reviewerRequestedModel": "gpt-6.1-sol",
+  "reviewerRequestedReasoning": "high",
+  "reviewerAgent": "resume_planner_sol",
+  "sourceVerdict": "GO_CLOSED_DESIGN_ONLY",
+  "runtimeVerdict": "NOT_RUN",
+  "applied": false,
+  "applyReady": false,
+  "files": {
+    "b012-renewal-persistent-hold-db-handoff.md": {
+      "sha256": "7d83621b9305b5e5aedade04c931c061890c8bd9de71cb62692e76ad1adf9b71",
+      "repositoryCopy": "renewal-persistent-hold-db-handoff.md"
+    },
+    "20261102213119_b012_renewal_persistent_hold.proposed.sql": {
+      "sha256": "d6528e1f409dad372f2f1d4ebf9a7c8b950172b25dbb8887a6d17b2ca38386c0",
+      "repositoryCopy": "renewal-persistent-hold-proposed.sql.txt"
+    }
+  },
+  "closedFinding": "Parent BEFORE trigger zz_b012_guard_held_lease now sorts after existing target normalizer; PE must verify actual trigger catalog order.",
+  "limits": [
+    "No SQL/parser/catalog/runtime/old-code/concurrency proof; no Mac migration",
+    "PE nonMac validation and approved apply required before persistent renewal writer",
+    "No release/unhold gateway in current proposal; no flag activation"
+  ]
+}

@@ -1,0 +1,88 @@
+-- PROPOSAL ONLY: UNAPPLIED / NOT RUN / NOT APPLY-READY.
+-- No release API, draft writer, access grant, or feature activation is included.
+-- PostgreSQL behavior, target owner, catalog and existing writer compatibility are unverified.
+
+INSERT INTO public.platform_settings(key, value, description)
+VALUES ('lease_renewal', '{"enabled":false,"allowed_org_ids":[]}'::jsonb, 'Lease renewal rollout')
+ON CONFLICT (key) DO NOTHING;
+
+ALTER TABLE public.leases
+  ADD COLUMN b012_renewal_draft_hold boolean NOT NULL DEFAULT false;
+
+-- Exact format is enforced below for held rows. Existing unheld keys are unaffected.
+CREATE UNIQUE INDEX b012_renewal_held_request_uidx
+  ON public.leases (org_id, split_part(idempotency_key, ':', 3))
+  WHERE b012_renewal_draft_hold;
+
+-- This guard applies regardless of application flags or current_user.
+CREATE FUNCTION app.b012_guard_held_lease() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.b012_renewal_draft_hold IS DISTINCT FROM OLD.b012_renewal_draft_hold THEN
+      RAISE EXCEPTION 'renewal hold cannot be changed' USING ERRCODE = '23514';
+    END IF;
+    IF OLD.b012_renewal_draft_hold AND
+       (NEW.id, NEW.org_id, NEW.previous_lease_id, NEW.created_by, NEW.created_at,
+        NEW.idempotency_key, NEW.property_id, NEW.unit_id, NEW.target_unit_id,
+        NEW.target_room_id, NEW.currency)
+       IS DISTINCT FROM
+       (OLD.id, OLD.org_id, OLD.previous_lease_id, OLD.created_by, OLD.created_at,
+        OLD.idempotency_key, OLD.property_id, OLD.unit_id, OLD.target_unit_id,
+        OLD.target_room_id, OLD.currency) THEN
+      RAISE EXCEPTION 'held renewal identity cannot be changed' USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  IF NEW.b012_renewal_draft_hold THEN
+    IF NEW.status <> 'draft' OR NEW.esign_status <> 'not_sent'
+       OR NEW.signed_at IS NOT NULL OR NEW.document_file_id IS NOT NULL
+       OR NEW.document_sha256 IS NOT NULL OR NEW.previous_lease_id IS NULL
+       OR NEW.created_by IS NULL OR NEW.created_at IS NULL
+       OR NEW.idempotency_key IS NULL
+       OR NEW.idempotency_key !~ '^b012-renewal-draft:v1:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{64}$' THEN
+      RAISE EXCEPTION 'held renewal must be an identified unsigned linked draft' USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+-- Sort after the baseline trg_lease_target_guard normalizer; verify actual target order.
+CREATE TRIGGER zz_b012_guard_held_lease BEFORE INSERT OR UPDATE ON public.leases
+  FOR EACH ROW EXECUTE FUNCTION app.b012_guard_held_lease();
+REVOKE ALL ON FUNCTION app.b012_guard_held_lease() FROM PUBLIC, anon, authenticated, service_role;
+
+-- Look up by globally unique parent id, not the caller-provided child org.
+-- Reject absent parents immediately, rather than relying on a later FK wait.
+-- The parent row lock coordinates with parent changes; isolation/visibility and
+-- preexisting-child races still require the explicit non-Mac validation plan.
+CREATE FUNCTION app.b012_guard_held_lease_child() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
+DECLARE parent_row record; found_new boolean := false; old_lease_id uuid;
+BEGIN
+  IF NEW.lease_id IS NULL THEN
+    RAISE EXCEPTION 'lease parent required' USING ERRCODE = '23503';
+  END IF;
+  IF TG_OP = 'UPDATE' THEN old_lease_id := OLD.lease_id; END IF;
+  FOR parent_row IN
+    SELECT l.id, l.b012_renewal_draft_hold FROM public.leases l
+    WHERE l.id = NEW.lease_id OR l.id = old_lease_id
+    ORDER BY l.id FOR KEY SHARE
+  LOOP
+    IF parent_row.id = NEW.lease_id THEN found_new := true; END IF;
+    IF parent_row.b012_renewal_draft_hold THEN
+      RAISE EXCEPTION 'held renewal cannot create or rebind signing or billing records' USING ERRCODE = '23514';
+    END IF;
+  END LOOP;
+  IF NOT found_new THEN
+    RAISE EXCEPTION 'lease parent not found' USING ERRCODE = '23503';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER b012_guard_esign_case BEFORE INSERT OR UPDATE OF org_id, lease_id ON public.esign_cases
+  FOR EACH ROW EXECUTE FUNCTION app.b012_guard_held_lease_child();
+CREATE TRIGGER b012_guard_lease_signature BEFORE INSERT OR UPDATE OF org_id, lease_id ON public.lease_signatures
+  FOR EACH ROW EXECUTE FUNCTION app.b012_guard_held_lease_child();
+CREATE TRIGGER b012_guard_signed_pdf BEFORE INSERT OR UPDATE OF org_id, lease_id ON public.lease_signed_pdfs
+  FOR EACH ROW EXECUTE FUNCTION app.b012_guard_held_lease_child();
+CREATE TRIGGER b012_guard_invoice BEFORE INSERT OR UPDATE OF org_id, lease_id ON public.invoices
+  FOR EACH ROW EXECUTE FUNCTION app.b012_guard_held_lease_child();
+REVOKE ALL ON FUNCTION app.b012_guard_held_lease_child() FROM PUBLIC, anon, authenticated, service_role;

@@ -21,7 +21,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-009 | Bank CSV dedupe and manual matching | MGT-14; J3.5; CAP-M-10/23 | — | BANK_MATCHING* | B | M / 16–24 | pending |
 | B-010 | Rent reminders and payment review results | MGT-13/15, TEN-07; J3.2/6/7; CAP-M-09/11; M-70 reminder | —; delivery adapter contract in B-028 | RENT_EMAIL_REMINDERS*; PAYMENT_REVIEW_RESULTS* | B | M / 20–32 | pending |
 | B-011 | Handover and deposit settlement, including bilateral replies | MGT-16/23/24, TEN-10/11; J4/J6.6–8; CAP-M-12/14/21, CAP-T-05/10; M-26 | B-002 | HANDOVER_RECORDS*; DEPOSIT_SETTLEMENT* | B | L / 40–64 | pending |
-| B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | todo |
+| B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | in_progress |
 | B-013 | Manager dispatch and shared repair approval state | MGT-17/18/19/35; J5; CAP-M-15/16; M-48/49 | —; coordinated B-021/B-024 | vendor_dispatch; REPAIR_APPROVALS* | B | L / 32–48 | pending |
 | B-014 | Owner net ledger, transfers and report versions | MGT-25/26/27, OWN-02; J7; CAP-M-17/18, CAP-O-03; M-43 | B-008 | OWNER_NET_LEDGER*; MONTHLY_REPORT_DELIVERY* | B | L / 24–40 | todo |
 | B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | pending |
@@ -146,3 +146,7 @@ Code `bb02a75d9440a20a067b9e6481a65b3a5bb78a83`:618unit/390RLS+one sole prior-ap
 Closed settlement proposal in Downloads remains UNAPPLIED/NOTRUN/NOTAPPLYREADY. Codex still owns the minimal canonical attribution/fixed-gateway proposal; PE owns later nonMac validation/application. Approved specific manual deposit proof is not blocked by unknown remainder purpose; invoice allocations are not an additional cash use. Current photo feature is independent of that work.
 
 After publication/mirror, next eligible bounded work is B012 comparison/linked-draft preparation. Hosted draft creation cannot rely solely on new TypeScript or flag OFF: old paper/e-sign code can activate drafts, so a narrow persistent hold guard/old-code evidence goes to PE and only that dependent writer stays parked. Keep all flags operationally OFF; no main/prod/Mac migrations or external messages.
+
+## B012 current local work — 2026-11-02T13:53:29.354087-08:00
+
+B012 in_progress: authorized actual-current-vs-unsaved-proposed lease terms comparison source-reviewed, local runtime NOT RUN. Persistent linked-draft guard proposal is unapplied/source-only; dependent writer parked for PE validation/application, no full B012 completion or staging acceptance claimed. Existing B011 photo comparison checkpoint remains valid for its immutable candidate. All39/four-party/fullLINE scope remains open.

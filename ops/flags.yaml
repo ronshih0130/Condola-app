@@ -109,6 +109,15 @@ flags:
     org_override: "organizations.feature_flags.handover_records must be boolean true"
     activation: "local synthetic private object service only; staging storage and app acceptance pending"
 
+  lease_renewal:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.lease_renewal requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.lease_renewal must be boolean true"
+    activation: "local read-only comparison only; no staging activation or saved renewal"
+
   notification_center_v2:
     owner: Ron
     expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"

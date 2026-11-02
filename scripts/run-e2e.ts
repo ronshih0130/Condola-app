@@ -57,6 +57,7 @@ for (const file of files) {
   const config = file === "e2e/handover.spec.ts"
     ? ["--config", "e2e/handover-playwright.config.ts"]
     : file === "e2e/b011-handover-comparison.spec.ts" ? ["--config", "e2e/b011-comparison-private-playwright.config.ts"]
+    : file === "e2e/b012-renewal-comparison.spec.ts" ? ["--config", "e2e/b012-renewal-comparison-private-playwright.config.ts"]
     : file === "e2e/b013-owner-override-local.spec.ts" ? ["--config", "e2e/repair-owner-override-playwright.config.ts"]
     : file === "e2e/b013-owner-policy-local.spec.ts" ? ["--config", "e2e/repair-owner-policy-playwright.config.ts"]
     : file === "e2e/b002-retention-http.spec.ts" ? ["--config", "e2e/b002-retention-http-playwright.config.ts"]

@@ -292,3 +292,13 @@ Immutable code `bb02a75d9440a20a067b9e6481a65b3a5bb78a83` on mode-b-repair-overr
 Whole settlement/source/gateway/oldstream/staging/Claude/ClassB/Ron pending; six-table Downloads proposal9ac060MD/1b5a94SQL unchanged UNAPPLIED/NOTRUN/NOTAPPLYREADY. Codex still needs minimal attribution/gateway proposal; PE later owns nonMac apply. Photo comparison independent, no newruntimeDDL. No prod/main merge/keys/externalmessages/operationalflagactivation/legalcopy. Evidence is local/private, not a remote-retention or release approval.
 
 Next command after metadata commit/push/renew/canonical mirror: read B012 spec/current source and execute the bounded plan, parking only hosted draft writers until narrow persistent hold/old-code safety is validated. Maintain same repository ownership3099AC86. No newB implementation started before this checkpoint publication. Goal remains active, not complete.
+
+## B011 published, B012 begins — 2026-11-02T13:33:54.490649-08:00
+
+Origin/privateGitHubrefs verifiedbranch21532937c54d53d440f5b57134451eef82252509/main2bedb895306726310252aac26f742baeaa6f3ea9/ops-locka357a7acf4c1b95a751cedc67d8b7733cfdaaeab; mirror13:20:27-0800; renew13:20:15gen49WORKING. B011photo localverifiedcodebb02a75, wholeB011pending. B012PEsession99beae29-e28a-4544-8b21-8d981ead9467 nowstartsboundedrealread-onlytermscomparison withparallelunappliedpersistent-holdproposal; node20/PG16, flagsoperationalOFF. Hostedcreate cannotuseonlyTS/flagguards becauseoldpaper/eSignactivatesdraft; requiredDBhold proposal/PEworkflow explicit. Next source review after15reservedpaths complete; no newDDL/ordinaryfinance/signwriters.
+
+## B012 source ready; runtime not yet run — 2026-11-02T13:53:29.354087-08:00
+
+15 reserved app/test paths and3 private helpers independently source-reviewed GO by Sol/high; runtime remains NOT RUN. Next freeze/commit immutable candidate then full standardgate/builds/preflight/Worker/privatebrowser/readback. Current source enables only authorized unsaved current-vs-proposed terms comparison; no durable lease/signature/invoice writer. Downloads persistent hold handoff/proposal copied as evidence with closed-design source GO only, UNAPPLIED/NOTRUN/NOTAPPLYREADY. Trigger normalizer order correction preserved; actual catalog/old-code/reset/concurrency validation and approved application belong to nonMac PE. Whole B012 comparison, lifecycle, bilateral deposit carryforward, staging and required acceptance remain incomplete.
+
+STOP POINT: WORKING; next: commit pinned B012 candidate then serial isolated full checks; ownerRon/Codex3099AC86.
