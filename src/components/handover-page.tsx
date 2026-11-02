@@ -4,12 +4,18 @@ import { handoverCopy } from "@/i18n/handover";
 import { readHandover } from "@/server/handover";
 import type { Session } from "@/server/types";
 import { HandoverDiscard, HandoverForm, HandoverUpload } from "./handover-upload";
+import { HandoverComparison, type ComparisonVersion } from "./handover-comparison";
 
 export async function HandoverPage({ session, leaseId }: { session: Session; leaseId: string }) {
   const data = await readHandover(session, leaseId); const copy = handoverCopy(session.locale);
   const stamp = (value: Date | string) => new Intl.DateTimeFormat(session.locale, { dateStyle:"medium",timeStyle:"short",timeZone:"UTC" }).format(new Date(value)) + " (UTC)";
+  const comparison: ComparisonVersion[] = data.versions.filter(v => v.phase === "move_in" || v.phase === "move_out").map(v => ({
+    id:v.version_id, phase:v.phase, revision:v.revision, publishedAt:new Date(v.created_at).toISOString(), author:v.author_name,
+    files:data.attachments.filter(a => a.version_id === v.version_id).map(a => ({id:a.id,name:a.file_name,mime:a.mime,uploadedAt:new Date(a.created_at).toISOString(),uploader:a.uploader_name})),
+  }));
   return <div><h1>{copy.title}</h1>
     {data.intents.length > 0 && <section className="card pad" style={{marginBottom:16}}><h2>{copy.pending}</h2>{data.intents.map(i => <div key={i.id} className="fg"><p>{i.file_name}{i.status === "discarded" ? ` — ${copy.discarded}` : i.status === "attached" ? ` — ${copy.attached}` : ""}</p>{i.can_resume && <HandoverUpload leaseId={leaseId} versionId={i.version_id} locale={session.locale} existingIntent={i.id} />}<HandoverDiscard leaseId={leaseId} intentId={i.id} locale={session.locale} /></div>)}</section>}
+    <HandoverComparison key={leaseId.toLowerCase()} leaseId={leaseId.toLowerCase()} locale={session.locale} versions={comparison} />
     <div className="grid2">{(["move_in", "move_out"] as const).map(phase => {
       const versions = data.versions.filter(v => v.phase === phase); const current = versions[0];
       return <section key={phase} className="card pad" aria-label={phase === "move_in" ? copy.in : copy.out}><h2>{phase === "move_in" ? copy.in : copy.out}</h2>

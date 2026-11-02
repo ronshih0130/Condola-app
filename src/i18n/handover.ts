@@ -3,3 +3,10 @@ const copies = {
   "zh-TW": { title: "點交紀錄", in: "入住點交", out: "退租點交", condition: "現況與備註", authored: "發布者", uploadedBy: "上傳者", unknownActor: "未記錄", at: "於", save: "發布版本", versions: "歷史紀錄", version: "版本", replies: "回覆", confirm: "確認", disagree: "不同意", reply: "送出回覆", upload: "新增照片或 PDF", choose: "選擇檔案", failed: "未完成，請重新整理後再試。", empty: "尚無紀錄。", staff: "管理方", tenant: "租客", details: "您的回覆只適用於這個版本。", uploading: "上傳中…", pending: "上傳與清理", resume: "以相同檔案重試", discard: "放棄並重試清理", discarded: "已放棄；可重試清理。", attached: "已加入；可重試清理暫存檔案。" },
 };
 export function handoverCopy(locale: string) { return locale === "zh-TW" ? copies["zh-TW"] : copies.en; }
+export function handoverComparisonCopy(locale: string) {
+  return locale === "zh-TW" ? {
+    title: "比較點交照片", description: "各選一個版本與照片進行比較。照片不一定是同一位置。", version: "選擇版本", photo: "選擇照片", noVersion: "尚無此階段紀錄。", noPhotos: "此版本沒有照片。", pdfOnly: "此版本只有 PDF，沒有照片可比較。", loading: "照片載入中…", imageError: "無法載入照片。", download: "開啟或下載原始檔", alt: "點交照片", published: "版本發布", uploaded: "原始上傳", by: "由", at: "於", unknown: "未記錄", moveIn: "入住點交", moveOut: "退租點交", revision: "版本",
+  } : {
+    title: "Compare handover photos", description: "Choose a version and photo for each phase. The photos may show different locations.", version: "Choose version", photo: "Choose photo", noVersion: "No record for this phase yet.", noPhotos: "This version has no photos.", pdfOnly: "This version contains only PDFs, so there are no photos to compare.", loading: "Loading photo…", imageError: "Could not load photo.", download: "Open or download original", alt: "Handover photo", published: "Version published", uploaded: "Originally uploaded", by: "by", at: "at", unknown: "Not recorded", moveIn: "Move-in", moveOut: "Move-out", revision: "Version",
+  };
+}

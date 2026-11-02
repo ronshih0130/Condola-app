@@ -266,3 +266,7 @@ Branchmode-b-repair-override-prep, testedcode `3c46882327ea85d3cc3be34758fca3922
 WholeB010/B028pendingstage/currenthostschemaowner/app/Claude/Ron,othernotificationfamilies,personalEmailpref/enforcement/claims/provider/realreceipt. DownloadsminimalprefhandoffMD5f848.../SQLb14c... source-reviewedONLYUNAPPLIED/NOTRUN; separateverdictrecordsactualreviewwithoutchangingdraftcreationNOTRUNlabel. PEonboxownsapprovedDBvalidation/apply; initialdraftsnotexecutionlist. No prod/mainmerge/newkeys/operationalactivation/externalmessages/legalcopy/operationalMacmigration. Otherworktrees/recoveryrefspreserved,quotacostunknownwhereunobservable. B008UNKNOWNunwaived.
 
 STOP POINT: WORKING; next: publishcheckpoint/mirror theninspectB011spec/currenthandover+settlementsource/recoveryrefs andRon'sdecisions; ownerRon/Codex3099AC86, Solhighplanner/reviewer andappropriateexecutor models.
+
+## B010 checkpoint published; B011 comparison begins — 2026-11-02T11:38:25.224218-08:00
+
+Origin/private GitHub selected refs both branch19c0817db04c6cfd30475eb5feec4a898f737ae9/main2bedb895306726310252aac26f742baeaa6f3ea9/ops-locka43f534372dba561c164dc516eda08a8694f567d; mirror11:37:16-0800. Verified code remains3c46882, docs-onlypublication. B011 existing-schema read-only photo comparison now reserved (board), PE sessionb03fc6e0-ffd2-4dbf-8b0c-52c8bb9f881f; settlement recovery remains incomplete/unverified and is not ported. Next: implement bounded comparison then independent source review and full local gate.

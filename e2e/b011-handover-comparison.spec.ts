@@ -1,0 +1,79 @@
+import { expect, test } from "@playwright/test";
+import { Client } from "pg";
+import { deflateSync } from "node:zlib";
+import { ORG_ID, USERS } from "../src/server/ids";
+import { disposableDbUrl } from "../src/server/test-disposable-db";
+import { ACCOUNTS, resetDemo, signIn } from "./session";
+
+const target=disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
+if (process.env.DEMO_MODE !== "true") throw new Error("Disposable comparison demo database required");
+const origin="http://127.0.0.1:43148";
+async function db<T>(fn:(client:Client)=>Promise<T>) { const client=new Client({connectionString:target.href}); await client.connect(); try{return await fn(client);}finally{await client.end();} }
+async function sourceState(lease:string) { return db(async c=>(await c.query(`SELECT
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM app.handover_records t WHERE lease_id=$1) records,
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM app.handover_versions t WHERE lease_id=$1) versions,
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM app.handover_attachments t WHERE lease_id=$1) attachments,
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.version_id,t.attachment_id),'[]'::jsonb) FROM app.handover_version_attachments t WHERE lease_id=$1) links,
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM app.handover_replies t WHERE lease_id=$1) replies,
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM public.invoices t WHERE org_id=$2) invoices,
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM public.invoice_lines t WHERE org_id=$2) invoice_lines,
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM public.payments t WHERE org_id=$2) payments,
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM public.payment_allocations t WHERE org_id=$2) allocations,
+  (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM public.ledger_transactions t WHERE org_id=$2) ledger`,[lease,ORG_ID])).rows[0]); }
+function png(red:number,green:number,blue:number) {
+  const crc32=(bytes:Buffer)=>{let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;};
+  const chunk=(type:string,data:Buffer)=>{const tag=Buffer.from(type),length=Buffer.alloc(4),crc=Buffer.alloc(4);length.writeUInt32BE(data.length);crc.writeUInt32BE(crc32(Buffer.concat([tag,data])));return Buffer.concat([length,tag,data,crc]);};
+  const header=Buffer.alloc(13);header.writeUInt32BE(1,0);header.writeUInt32BE(1,4);header[8]=8;header[9]=2;
+  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk("IHDR",header),chunk("IDAT",deflateSync(Buffer.from([0,red,green,blue]))),chunk("IEND",Buffer.alloc(0))]);
+}
+const image1=png(210,30,60),image2=png(30,90,220);
+const pdf=Buffer.from("%PDF-1.4\n%%EOF\n");
+for (const locale of ["en","zh-TW"] as const) for (const width of [390,1280]) test(`handover photo comparison ${locale} ${width}`,async ({page},info) => {
+  await page.setViewportSize({width,height:900});
+  const errors:string[]=[];
+  let injectedImageError="";
+  page.on("pageerror",e=>errors.push(e.message));
+  page.on("console",e=>{if(e.type()==="error" && !(injectedImageError && e.location().url===injectedImageError && e.text().includes("404")))errors.push(e.text());});
+  page.on("response",r=>{if(r.status()>=500)errors.push(`HTTP ${r.status()} ${new URL(r.url()).pathname}`);});
+  await page.route("**/*",async route=>{if(new URL(route.request().url()).origin===origin)await route.continue();else{errors.push("Unexpected external request");await route.abort();}});
+  await resetDemo(page);
+  const before=await db(async c=>({setting:(await c.query(`SELECT value,description,updated_at::text AS updated_at FROM platform_settings WHERE key='handover_records'`)).rows[0],flags:(await c.query(`SELECT feature_flags FROM organizations WHERE id=$1`,[ORG_ID])).rows[0].feature_flags}));
+  const label=locale==="en" ? {in:"Move-in",out:"Move-out",condition:"Condition and notes",publish:"Publish version",choose:"Choose file",upload:"Add photo or PDF",version:"Choose version",photo:"Choose photo",noVersion:"No record for this phase yet.",noPhotos:"This version has no photos.",pdfOnly:"This version contains only PDFs, so there are no photos to compare.",published:"Version published",uploaded:"Originally uploaded"} : {in:"入住點交",out:"退租點交",condition:"現況與備註",publish:"發布版本",choose:"選擇檔案",upload:"新增照片或 PDF",version:"選擇版本",photo:"選擇照片",noVersion:"尚無此階段紀錄。",noPhotos:"此版本沒有照片。",pdfOnly:"此版本只有 PDF，沒有照片可比較。",published:"版本發布",uploaded:"原始上傳"};
+  try {
+    const lease=await db(async c=>{await c.query(`UPDATE organizations SET feature_flags=feature_flags || '{"handover_records":true}'::jsonb WHERE id=$1`,[ORG_ID]);await c.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='handover_records'`,[ORG_ID]);return (await c.query<{id:string}>(`SELECT l.id FROM leases l JOIN lease_parties lp ON lp.lease_id=l.id JOIN contacts ct ON ct.id=lp.contact_id AND ct.org_id=lp.org_id WHERE l.org_id=$1 AND ct.user_id=$2 AND lp.role='primary' AND l.status<>'draft' LIMIT 1`,[ORG_ID,USERS.tenant])).rows[0].id;});
+    await page.goto(`/api/demo/locale?set=${locale}&next=/m/handover/${lease}`);
+    const comparison=page.getByTestId("handover-comparison"), cin=comparison.getByTestId("comparison-move_in"), cout=comparison.getByTestId("comparison-move_out");
+    await expect(cin).toContainText(label.noVersion); await expect(cout).toContainText(label.noVersion);
+    const moveIn=page.getByRole("region",{name:label.in,exact:true}); const moveOut=page.getByRole("region",{name:label.out,exact:true});
+    await moveIn.getByLabel(label.condition).fill("synthetic move-in"); await moveIn.getByRole("button",{name:label.publish}).click(); await expect(cin).toContainText(label.noPhotos);
+    await moveIn.getByLabel(label.choose).setInputFiles({name:"document.pdf",mimeType:"application/pdf",buffer:pdf}); await moveIn.getByRole("button",{name:label.upload}).click(); await expect(cin).toContainText(label.pdfOnly);
+    await moveIn.getByLabel(label.choose).setInputFiles({name:"in.png",mimeType:"image/png",buffer:image1}); await moveIn.getByRole("button",{name:label.upload}).click(); await expect(cin.getByRole("img")).toBeVisible(); await expect(cin).toContainText(label.published); await expect(cin).toContainText(label.uploaded);
+    await moveOut.getByLabel(label.condition).fill("synthetic move-out"); await moveOut.getByRole("button",{name:label.publish}).click(); await moveOut.getByLabel(label.choose).setInputFiles({name:"out.png",mimeType:"image/png",buffer:image2}); await moveOut.getByRole("button",{name:label.upload}).click(); await expect(cout.getByRole("img")).toBeVisible();
+    await moveOut.getByLabel(label.choose).setInputFiles({name:"out-later.png",mimeType:"image/png",buffer:image1}); await moveOut.getByRole("button",{name:label.upload}).click(); await expect(cout.getByLabel(label.photo).locator("option")).toHaveCount(2);
+    const state=await sourceState(lease);
+    const photoUrl=await cin.getByRole("img").getAttribute("src"); expect(photoUrl).toMatch(new RegExp(`^/api/handover/${lease}/`));
+    const response=await page.request.get(photoUrl!); expect(response.status()).toBe(200); expect(response.headers()["cache-control"]).toBe("private, no-store"); expect(await response.body()).toEqual(image1);
+    let started!:()=>void,release!:()=>void; const intercepted=new Promise<void>(resolve=>{started=resolve;}),hold=new Promise<void>(resolve=>{release=resolve;});
+    await cin.getByLabel(label.version).selectOption({label:locale==="en"?"Version 1":"版本 1"});
+    injectedImageError=new URL(photoUrl!,origin).href;
+    await page.route(injectedImageError,async route=>{started();await hold;await route.fulfill({status:404,body:"Not found"});});
+    await cin.getByLabel(label.version).selectOption({label:locale==="en"?"Version 3":"版本 3"}); await intercepted; await expect(cin.getByRole("status")).toBeVisible(); release(); await expect(cin.getByRole("alert")).toBeVisible(); await page.unroute(injectedImageError); injectedImageError="";
+    await cin.getByLabel(label.version).selectOption({label:locale==="en"?"Version 1":"版本 1"}); await expect(cin).toContainText(label.noPhotos);
+    await cin.getByLabel(label.version).selectOption({label:locale==="en"?"Version 2":"版本 2"}); await expect(cin).toContainText(label.pdfOnly);
+    await cin.getByLabel(label.version).selectOption({label:locale==="en"?"Version 3":"版本 3"}); await expect(cin.getByLabel(label.photo)).toHaveValue(/.+:.+/);
+    const beforeIn=await cin.getByRole("img").getAttribute("src"); await cout.getByLabel(label.photo).selectOption({label:"out-later.png"}); await expect(cout.getByRole("img")).toHaveAttribute("alt",/out-later\.png/); await expect(cin.getByRole("img")).toHaveAttribute("src",beforeIn!);
+    await cout.getByLabel(label.version).selectOption({label:locale==="en"?"Version 2":"版本 2"}); await expect(cout.getByRole("img")).toHaveAttribute("alt",/out\.png/); await page.reload(); await expect(cin.getByRole("img")).toBeVisible();
+    // Protected image GETs legitimately add attachment-read audit rows; they are not included here.
+    expect(await sourceState(lease)).toEqual(state);
+    for (const photo of [cin.getByRole("img"),cout.getByRole("img")]) { await expect.poll(()=>photo.evaluate((image:HTMLImageElement)=>image.complete && image.naturalWidth>0 && image.naturalHeight>0)).toBe(true); } await expect(cin.getByRole("alert")).toHaveCount(0); await expect(cout.getByRole("alert")).toHaveCount(0);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true); await page.screenshot({path:info.outputPath(`staff-${locale}-${width}.png`),fullPage:true});
+    await signIn(page,ACCOUNTS.tenant); await page.context().addCookies([{name:"condola_lease",value:lease,url:origin}]); await page.goto(`/api/demo/locale?set=${locale}&next=/t/handover/${lease}`); await expect(page.getByTestId("handover-comparison").getByRole("img")).toHaveCount(2);
+    const tenantIn=page.getByRole("region",{name:label.in,exact:true}); await tenantIn.getByLabel(label.choose).setInputFiles({name:"tenant-in.png",mimeType:"image/png",buffer:image2}); await tenantIn.getByRole("button",{name:label.upload}).click(); await expect(cin.getByLabel(label.photo).locator("option")).toHaveCount(2); await cin.getByLabel(label.photo).selectOption({label:"tenant-in.png"}); await expect(cin.getByRole("img")).toHaveAttribute("alt",/tenant-in\.png/); await expect(cin).toContainText(label.uploaded); await expect(cin).toContainText(label.published);
+    const names=await db(async c=>(await c.query<{id:string;display_name:string}>(`SELECT id,display_name FROM profiles WHERE id=ANY($1::uuid[])`,[[USERS.admin,USERS.tenant]])).rows); const admin=names.find(n=>n.id===USERS.admin)?.display_name, tenant=names.find(n=>n.id===USERS.tenant)?.display_name; expect(admin).toBeTruthy();expect(tenant).toBeTruthy();await cin.getByLabel(label.photo).selectOption({label:"in.png"}); await expect(cin).toContainText(admin!); await expect(cin).toContainText(tenant!); await expect(cin.locator("time")).toHaveCount(2);
+    for (const photo of [cin.getByRole("img"),cout.getByRole("img")]) { await expect.poll(()=>photo.evaluate((image:HTMLImageElement)=>image.complete && image.naturalWidth>0 && image.naturalHeight>0)).toBe(true); } await expect(cin.getByRole("alert")).toHaveCount(0); await expect(cout.getByRole("alert")).toHaveCount(0);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true); await page.screenshot({path:info.outputPath(`tenant-${locale}-${width}.png`),fullPage:true});
+    await signIn(page,ACCOUNTS.tenant2); await page.context().addCookies([{name:"condola_lease",value:lease,url:origin}]); expect((await page.request.get(photoUrl!)).status()).toBe(404);
+    await signIn(page,ACCOUNTS.admin); await db(c=>c.query(`UPDATE platform_settings SET value=jsonb_set(value,'{enabled}','false'::jsonb) WHERE key='handover_records'`)); expect((await page.request.get(photoUrl!)).status()).toBe(404); await page.goto(`/m/handover/${lease}`); await expect(page.getByTestId("handover-comparison")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  } finally { await db(async c=>{await c.query(`UPDATE platform_settings SET value=$1,description=$2,updated_at=$3 WHERE key='handover_records'`,[before.setting.value,before.setting.description,before.setting.updated_at]);await c.query(`UPDATE organizations SET feature_flags=$2 WHERE id=$1`,[ORG_ID,before.flags]);}); }
+});
