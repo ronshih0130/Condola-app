@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current resume 2026-11-02T10:18:15.431326-08:00: Ron resumed the complete queue and authorized appropriate execution models. B009 historical suggestion basis is in progress; prior 10/30 stop records remain historical.**
+> **Current 2026-11-02T13:18:10.146031-08:00: complete queue remains active. B011 photo comparison has scoped local PASS at `bb02a75d9440a20a067b9e6481a65b3a5bb78a83`; whole settlement/staging remains pending. Earlier stop notes are historical.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 
@@ -138,3 +138,11 @@ Code `0107baac619d3faee3f802f9a052aeb79bdbc84a` completes enabled-path historica
 ## B010/B028 real payment-center checkpoint — 2026-11-02T11:32:32.249854-08:00
 
 Code `3c46882327ea85d3cc3be34758fca39226f2b507` locallyimplementsall6actualfinancialentrypoints→eligiblepayerexistingcenter, samecommit; independentcenterflag, originalfinancialRLS/math/roles/JWTpreserved. [Evidence](../e2e-evidence/B-010/payment-center-checkpoint-3c46882.md):618unit/390RLS+solepriorapprovedhistoricalSKIP,builds/originalpreflight/Worker1,center2+affectedbank2browser/6screens/readbackactual0,independent62bindingsGO. No newruntimeDDL. WholeB010/B028 remains pendingremainingfamilies/stage/Claude/Emailpreference+capture+provider; separateminimalpaymentEmailSQLproposal sourceGOONLYUNAPPLIED/NOTRUN inDownloads. Skiponlydependentparts; afterpublication/mirror nextB011source/recoveryreconciliation. No wholeBnewlyaccepted/no39MVPcompletion.
+
+## B011 photo comparison local checkpoint — 2026-11-02T13:18:10.146031-08:00
+
+Code `bb02a75d9440a20a067b9e6481a65b3a5bb78a83`:618unit/390RLS+one sole prior-approved historical skip, builds/originalpreflight/Worker1, final4browser32captures, independent exact control metadata/whole-org flags restoration all PASS. Separate Sol source/evidence review PASS. [Checkpoint](../e2e-evidence/B-011/comparison-checkpoint-bb02a75.md). B011 remains `pending`: settlement attribution/gateways/outcomes/old stream, exact staging and required independent acceptance remain incomplete. No whole B item newly done, no scope cut.
+
+Closed settlement proposal in Downloads remains UNAPPLIED/NOTRUN/NOTAPPLYREADY. Codex still owns the minimal canonical attribution/fixed-gateway proposal; PE owns later nonMac validation/application. Approved specific manual deposit proof is not blocked by unknown remainder purpose; invoice allocations are not an additional cash use. Current photo feature is independent of that work.
+
+After publication/mirror, next eligible bounded work is B012 comparison/linked-draft preparation. Hosted draft creation cannot rely solely on new TypeScript or flag OFF: old paper/e-sign code can activate drafts, so a narrow persistent hold guard/old-code evidence goes to PE and only that dependent writer stays parked. Keep all flags operationally OFF; no main/prod/Mac migrations or external messages.
