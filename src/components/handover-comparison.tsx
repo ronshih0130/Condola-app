@@ -1,6 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Authorized files must bypass the shared image optimizer. */
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { handoverComparisonCopy } from "@/i18n/handover";
 
 export type ComparisonVersion = {
@@ -10,9 +10,12 @@ export type ComparisonVersion = {
 
 function PhotoImage({ url, alt, loading, error }: { url: string; alt: string; loading: string; error: string }) {
   const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
+  const checkImage = useCallback((node: HTMLImageElement | null) => {
+    if (node?.complete) setState(node.naturalWidth > 0 && node.naturalHeight > 0 ? "loaded" : "error");
+  }, []);
   return <>
     {state === "loading" && <p role="status">{loading}</p>}{state === "error" && <p role="alert">{error}</p>}
-    <img src={url} alt={alt} onLoad={() => setState("loaded")} onError={() => setState("error")} style={{display:state === "error" ? "none" : "block",maxWidth:"100%",maxHeight:360,objectFit:"contain"}} />
+    <img ref={checkImage} src={url} alt={alt} onLoad={() => setState("loaded")} onError={() => setState("error")} style={{display:state === "error" ? "none" : "block",maxWidth:"100%",maxHeight:360,objectFit:"contain"}} />
   </>;
 }
 

@@ -1,0 +1,115 @@
+{
+  "candidate": "d4a6aa4512dbe82b9a752aa616d4fc5cb64b602f",
+  "attempt": "a5",
+  "scope": "One EN390 focused diagnostic; not full browser/gate",
+  "actualExit": 1,
+  "selected": 1,
+  "pass": 0,
+  "fail": 1,
+  "otherCasesNotRun": 3,
+  "pngs": 5,
+  "completedBeforeFailure": [
+    "New first protected image request observed",
+    "Loading and injected404error captures",
+    "Reloaded real image decoded and GET200/private-no-store/exactbytes"
+  ],
+  "failure": "Normalstaffcomparison has2 loadingstatuses afterpositive decoded check; expected0 for20s",
+  "mechanism": "UNKNOWN; stale visible state is observed, cache/hydration cause not proven",
+  "gateBuildBaselineReadback": "NOT RUN",
+  "ownedPortsDrained": [
+    "43148",
+    "4608"
+  ],
+  "files": [
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b011-comparison-final-check.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/run-b011-comparison-final-check.py",
+      "sha256": "73c50cfe91b20287c327066b915c8e863f85d57ca4d284697c9289f8f99d5729",
+      "bytes": 4942
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-runtime-driver.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-comparison-runtime-driver.py",
+      "sha256": "abcf90f3f9c1e2c87482acc212ad04d6a6114823ae97f6867cb539eb69f48604",
+      "bytes": 6022
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-control-readback.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-comparison-control-readback.py",
+      "sha256": "1f6efcf0899430ed574903e6b5904e2c5d1fcf7982de8b0daa14f7b31767f9ac",
+      "bytes": 6983
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-reviewed-source-freeze.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-comparison-reviewed-source-freeze.json",
+      "sha256": "c246dadce7f8f1134b7852c4d19f041a3e6579bf66a109fd5e5eccf97825dc1e",
+      "bytes": 10045
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-setup-exit-d4a6aa4-a5.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-focus-setup-exit-d4a6aa4-a5.json",
+      "sha256": "0bfb13ce8d8cc0a49bbad2617a0175c53c33910485534e77319a9ee5a046e650",
+      "bytes": 5779
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-focus-exit-d4a6aa4-a5.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-comparison-focus-exit-d4a6aa4-a5.json",
+      "sha256": "bf85d408a767bceae9be29da3b1a984e0229ec4b3db295291e57818f8e5ffdb1",
+      "bytes": 6161
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-focus-d4a6aa4-a5.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-comparison-focus-d4a6aa4-a5.log",
+      "sha256": "7a638ae95fb53d5b3d2dbe26f499ec6304b858509a69f05a4594ab51c6cf8d33",
+      "bytes": 3486
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-setup-d4a6aa4-a5.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-focus-setup-d4a6aa4-a5.log",
+      "sha256": "9d098cdf795caf64db5dc72137d50e9aaaea1e56eb5b13d31d5ca0d51d54391b",
+      "bytes": 74
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-d4a6aa4-a5-artifacts/.last-run.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-focus-d4a6aa4-a5-artifacts/.last-run.json",
+      "sha256": "659179a82ac79f26fabe171071c2b5789f01ab8b8ca5c842d7720a27091e79a0",
+      "bytes": 96
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "sha256": "fa86a5255670c6675d73a24e169c16b3c9aa91bdfbc69353a5eab134a16517f4",
+      "bytes": 286095
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "sha256": "265bb6f01c9f8e492b945dd694d8c4660f523cb9866940332bdb75ac0d49493e",
+      "bytes": 58532
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "sha256": "6317e03ab5eb0bbd494aae7e65b8b65025cc61fae80d94d424cd41407f659026",
+      "bytes": 288118
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "sha256": "9292cb4774244eb1f3f911f1cf3854c1713e8e91a86043a60562973000bd7367",
+      "bytes": 97420
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/error-context.md",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/error-context.md",
+      "sha256": "44c5d12a9af9576a5af28d1286248c840ffe0940bdfccb285dd8b3eae503f38d",
+      "bytes": 17227
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a5-loading-state-failure/b011-focus-d4a6aa4-a5-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "sha256": "65c1e3e50402648067110d8a317e37f241bef77adbf27c608e66402445b53957",
+      "bytes": 132278
+    }
+  ]
+}
