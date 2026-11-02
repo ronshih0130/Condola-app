@@ -1,0 +1,468 @@
+{
+  "candidate": "98d5f792179e9374b25dc36e4c4fdbe02e7bfc65",
+  "attempt": "a8",
+  "overall": "NO-GO controlrestoration",
+  "focus": "actual0 1selected1PASS",
+  "gate": "actual0 unit618PASS RLS390PASS1historicalSKIP",
+  "build": "Next/CF/originalpreflight/Worker actual0",
+  "browser": "actual0 all4PASS49.3s",
+  "pngs": {
+    "focus": 8,
+    "browser": 32
+  },
+  "baseline": "createdb0seed0",
+  "readback": {
+    "actualExit": 1,
+    "globalOFF": true,
+    "orgOptins": 0,
+    "wholeOrgFlagsRestored": true,
+    "exactControlRow": false,
+    "differingField": "UNKNOWN before separate SELECTdiagnostic"
+  },
+  "noWeakening": "Exactvalue/description/microsecondtimestamp comparison retained",
+  "ownedPortsDrained": [
+    "43148",
+    "4608"
+  ],
+  "knownGeneratedSummaryMovedTo": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/gate-summary-moved-original.md",
+  "files": [
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b011-comparison-final-check.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/run-b011-comparison-final-check.py",
+      "sha256": "73c50cfe91b20287c327066b915c8e863f85d57ca4d284697c9289f8f99d5729",
+      "bytes": 4942
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-runtime-driver.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-comparison-runtime-driver.py",
+      "sha256": "abcf90f3f9c1e2c87482acc212ad04d6a6114823ae97f6867cb539eb69f48604",
+      "bytes": 6022
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-control-readback.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-comparison-control-readback.py",
+      "sha256": "1f6efcf0899430ed574903e6b5904e2c5d1fcf7982de8b0daa14f7b31767f9ac",
+      "bytes": 6983
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-reviewed-source-freeze.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-comparison-reviewed-source-freeze.json",
+      "sha256": "bdbd17b5337bcb88907abbb8fe6c54ed4b9a3b82e25757c3c3db972f1f8376d6",
+      "bytes": 12215
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-gate-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-gate-exit-98d5f79-a8.json",
+      "sha256": "779ac2696f48c981860d5426e22833e51c6cd23700bd8e64c83e7e3db48ba65a",
+      "bytes": 5762
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-cf-build-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-cf-build-exit-98d5f79-a8.json",
+      "sha256": "5cfe57449252b5a9418e7eeecfb60ba44c6f40a37a2da9cfc8698e63b2f53e04",
+      "bytes": 5723
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-preflight-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-preflight-exit-98d5f79-a8.json",
+      "sha256": "fecc95b49eb3c7e1def149f1f601dc05b918ac6ec60d65412ffa8e83ae350f29",
+      "bytes": 5729
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-worker-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-worker-exit-98d5f79-a8.json",
+      "sha256": "2075a909fc75cb3b2d39f81ca701bada606d52fbb184a7303427c9347a4f255d",
+      "bytes": 5721
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-baseline-setup-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-baseline-setup-exit-98d5f79-a8.json",
+      "sha256": "5494ccaeeaa75c19729c55184a56f01de1e10d142e6750a665ae2b848c656d52",
+      "bytes": 5790
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-setup-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-setup-exit-98d5f79-a8.json",
+      "sha256": "456b74f3790c56772d872addee70c4c01849b67a8540c924a68bf37dd76f52f4",
+      "bytes": 5785
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-gate-setup-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-gate-setup-exit-98d5f79-a8.json",
+      "sha256": "b0ff9d8810d12536c09ce6503128f87a9d92afdad3be57923004ff65a4d14c98",
+      "bytes": 5777
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-next-build-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-next-build-exit-98d5f79-a8.json",
+      "sha256": "7a2ac14cd7a4176de969953da345e9ce63e4fe904a8a0ff4a95ebdc23d9fb9db",
+      "bytes": 5721
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-build-setup-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-build-setup-exit-98d5f79-a8.json",
+      "sha256": "12ee5ddf55771bd3412b231d286cdc15e927c2a2832930275924cfc959659c35",
+      "bytes": 5780
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-setup-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-setup-exit-98d5f79-a8.json",
+      "sha256": "97c9a5c25767044441d56b5daba0699954371712246f38ee7067475bab089be3",
+      "bytes": 5779
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-focus-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-comparison-focus-exit-98d5f79-a8.json",
+      "sha256": "661f5b153e98d134a0201a72b84874d161abc932de078d41d48e3e73a006d830",
+      "bytes": 6160
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-control-readback-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-control-readback-exit-98d5f79-a8.json",
+      "sha256": "92c66e691c9f44e8e17bb88e90d1f6e76f76c0e94a9208808b06469242032060",
+      "bytes": 5653
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-playwright-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-comparison-playwright-exit-98d5f79-a8.json",
+      "sha256": "f3369d7e4d358492e42dc60ddae5a488c795fe63ab6fdd913ed9da3e1de0ce7b",
+      "bytes": 5974
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-build-setup-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-build-setup-98d5f79-a8.log",
+      "sha256": "5779aa792b8b707cb9abb628aa35da9a51ff9fbb0c40b8d52eb3a7df80d8ad7d",
+      "bytes": 187
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-preflight-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-preflight-98d5f79-a8.log",
+      "sha256": "000b2ead8b482e4718333a6d053d694104c750382df4d92cd3fe486ac25cd248",
+      "bytes": 23
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-setup-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-setup-98d5f79-a8.log",
+      "sha256": "e427e5ba77a7f807d7b56f92babd7039bf1dd0ddceb45dcdd3d11cfa467c685f",
+      "bytes": 79
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-cf-build-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-cf-build-98d5f79-a8.log",
+      "sha256": "3ca3d2be531617f6d25de5d35b52268fa088ae51320bbf7f2c7e489dc9ca2588",
+      "bytes": 14099
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-playwright-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-comparison-playwright-98d5f79-a8.log",
+      "sha256": "f1d49d0db4d6c020e9e4bbe604d45b9a55caa54b090ed715390c3d6e7a23ad92",
+      "bytes": 2784
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-focus-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-comparison-focus-98d5f79-a8.log",
+      "sha256": "fce5a20789335b9fa352d57b89ad6778704db8935329eb62675d34d506276687",
+      "bytes": 730
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-gate-setup-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-gate-setup-98d5f79-a8.log",
+      "sha256": "37af90285e16fc34325af5b7f0cb33e875df8db5a40a13763bdbee714abec39f",
+      "bytes": 62
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-gate-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-gate-98d5f79-a8.log",
+      "sha256": "f4e650daaefbf1d3de940d8f2446435bd60028fa6341ad3f59cbee51f204255f",
+      "bytes": 444
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-control-readback-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-control-readback-98d5f79-a8.log",
+      "sha256": "f79029f0bf9f0e001c16709b62fe8a97f2f2fefdb42547cba3c24214d12bf0a0",
+      "bytes": 899
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-worker-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-worker-98d5f79-a8.log",
+      "sha256": "3c86535489248a712ed681310aaeb8767be0b50bfd371c8ed5e4451741881c5e",
+      "bytes": 423
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-next-build-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-next-build-98d5f79-a8.log",
+      "sha256": "1754b29789fa75ab7c3a57039d4f3be85a00fdbe80498c89f8e552d4318f958e",
+      "bytes": 12390
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-setup-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-setup-98d5f79-a8.log",
+      "sha256": "41b6c7c892838bf0ec9b333886a83ce08e0962282eb611748436fc47dc42c0ea",
+      "bytes": 74
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-baseline-setup-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-baseline-setup-98d5f79-a8.log",
+      "sha256": "e0530c0a56f78928dae95dc1b622c37cbf2996ebdbcf48fab363f7552d5f45a8",
+      "bytes": 26
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-98d5f792179e9374b25dc36e4c4fdbe02e7bfc65.md",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/gate-98d5f792179e9374b25dc36e4c4fdbe02e7bfc65.md",
+      "sha256": "88337c6764763d6827280cd425bc10426b72c1cbc4bc0a45ab925218892c7c25",
+      "bytes": 971
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-98d5f79-a8-artifacts/.last-run.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-98d5f79-a8-artifacts/.last-run.json",
+      "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+      "bytes": 45
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "sha256": "28547012126c002b17c229fb7c47c89f7b02d321bb92d5f0cbdc40eb85213768",
+      "bytes": 287242
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-moveout-viewport-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-moveout-viewport-en-390.png",
+      "sha256": "e4f86c94328ba18f316c7784d0ca65ad06539cfc352bdb3db33a8f7772bbef1e",
+      "bytes": 70648
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "sha256": "ba73b5d2e518d24c130baf5235d391f8c1eb6f4e61d475ed84751e9ca2715d93",
+      "bytes": 58696
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "sha256": "6cb3d39872836724f8c9ef1b2bdef4b8a52cfa5419e675fc5e3cf9400320be6d",
+      "bytes": 289254
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "sha256": "603788f6506c1a700405ebc165942e607351a4fa2592c2fde23f1acd3a9d44d7",
+      "bytes": 97443
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "sha256": "bd72240669935af62f766424d746c8b134b9b007c7b73708dfbb477f13223e92",
+      "bytes": 132509
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/staff-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/staff-en-390.png",
+      "sha256": "c250eeb66e6516b6a80d2c4367ad6a81a85c7d980978533a2e826b44d50d23f0",
+      "bytes": 284198
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-focus-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-en-390.png",
+      "sha256": "bbb7e1cf6df5991c7502a5f465ba31ba2f100d81365d8c9dc03c10d6dcfa54b8",
+      "bytes": 75702
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/.last-run.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/.last-run.json",
+      "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+      "bytes": 45
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "sha256": "76b63459d3f0abdff7823f0ca57aff040592d41e1165154da4a8c76c9bdb31a9",
+      "bytes": 287568
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-moveout-viewport-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-moveout-viewport-en-390.png",
+      "sha256": "347f8367f47cb5b5fe0a458d25a218b16edaeb1ea543b20830f92bef44483e16",
+      "bytes": 70690
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "sha256": "ba73b5d2e518d24c130baf5235d391f8c1eb6f4e61d475ed84751e9ca2715d93",
+      "bytes": 58696
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "sha256": "13b6ef3c9818569e095ceccdbecece92ef64cbf2f921fd2d08820def9828b126",
+      "bytes": 289577
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "sha256": "56835c1672aacc2423946109f0bf1242c6e70c0bfacf0513a65449f11fab34b2",
+      "bytes": 97688
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "sha256": "cde047b2a5ff52be8e022a716bde13454ef9a1f9a483e5f28ef06d1516befb38",
+      "bytes": 132744
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/staff-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/staff-en-390.png",
+      "sha256": "f992013de6824e7768b66a2528ad8c19cc78b5cb84ec915bcfa4708158f38115",
+      "bytes": 284555
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-en-390.png",
+      "sha256": "3dd872d7756350d8fb0a47f3dbb26bce844bab0a0065f667913b8a7499ce81f0",
+      "bytes": 75812
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/pdf-only-zh-TW-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/pdf-only-zh-TW-1280.png",
+      "sha256": "ae9e1cc8054a9401287485eb37dfdc10d1d2894e1b2584a0c6603155d33bd172",
+      "bytes": 173319
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/tenant-zh-TW-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/tenant-zh-TW-1280.png",
+      "sha256": "c26228587ac36811e07c64f1b46ca31e35bc64e5881218d0d07a13eb95ba1ca3",
+      "bytes": 93392
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/tenant-moveout-viewport-zh-TW-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/tenant-moveout-viewport-zh-TW-1280.png",
+      "sha256": "a13dfb2e222af0a276c5d6813c308b8e92b163ad990f31f3bc2b600fedbe6174",
+      "bytes": 97459
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/empty-zh-TW-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/empty-zh-TW-1280.png",
+      "sha256": "26e2ba452fba79da12bc2532af5c06d183a1da7206968e2a5073273c5a4501ef",
+      "bytes": 88860
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/no-photos-zh-TW-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/no-photos-zh-TW-1280.png",
+      "sha256": "f6bb896e9b76c31990f7aa64980c6411f7b698f1b41d7cbb9ddfbc853915fa4f",
+      "bytes": 138320
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/staff-zh-TW-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/staff-zh-TW-1280.png",
+      "sha256": "25122c329640b773acb3b08a3ff52b36baa0e8541c2bed4fcd782e7a91e15874",
+      "bytes": 278982
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/image-error-zh-TW-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/image-error-zh-TW-1280.png",
+      "sha256": "641e4524b9f2849e683422d2bf478d831887e8be3d479f118416f3d8faeb36bf",
+      "bytes": 268036
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/loading-zh-TW-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-h-04637-photo-comparison-zh-TW-1280-chromium/loading-zh-TW-1280.png",
+      "sha256": "a1961d64443f6f838643a33d545c0ebba34e7915fca96cd81782a199c427c262",
+      "bytes": 284764
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/loading-en-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/loading-en-1280.png",
+      "sha256": "e3d2cdd6f61fe9aab499007e9daa3e97844f97e09d71d3af2ac9b880375a918e",
+      "bytes": 264748
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/image-error-en-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/image-error-en-1280.png",
+      "sha256": "6a898fe493499f94e024c6324b09d6a78c933d4a0746d7d93312948f7c4b9015",
+      "bytes": 278435
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/tenant-en-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/tenant-en-1280.png",
+      "sha256": "e298ee4f869b17888fa17f7a46cd6cfa812cd0c4b604025c49a1266ff87cfca9",
+      "bytes": 89254
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/empty-en-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/empty-en-1280.png",
+      "sha256": "c3df8ee8cd7b46957748e5b84f816404594243ff5c0af5851859c61f0fe20b44",
+      "bytes": 88647
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/no-photos-en-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/no-photos-en-1280.png",
+      "sha256": "16b330672b2a06ce1fb4107b8879cdf1615c7e8d2d89c8a686fcbb3d6918657f",
+      "bytes": 136704
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/staff-en-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/staff-en-1280.png",
+      "sha256": "9c2ad8269a74fed6e1de1634da56eaa6563d2a18e8a420369c97b58cd51e6a9d",
+      "bytes": 263983
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/tenant-moveout-viewport-en-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/tenant-moveout-viewport-en-1280.png",
+      "sha256": "113d6fee84bfd2c5b04702b04380658bb0e800b61cc5e81fb6082657563fb1b4",
+      "bytes": 91748
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/pdf-only-en-1280.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-en-1280-chromium/pdf-only-en-1280.png",
+      "sha256": "6c2b87d6285b9218b402736082f5d5487fb667fa5654a99e8dc4eaf1f117d8fc",
+      "bytes": 174657
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/loading-zh-TW-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/loading-zh-TW-390.png",
+      "sha256": "26b4a4a1b527e887ef8f28a70c2b466ddc7f5e29ce000ac6291fa7bb178c8946",
+      "bytes": 290350
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/tenant-moveout-viewport-zh-TW-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/tenant-moveout-viewport-zh-TW-390.png",
+      "sha256": "369584bf7363d6011b5426934a310407b3d8ef805c53073929dc211c56bfc7c7",
+      "bytes": 73512
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/empty-zh-TW-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/empty-zh-TW-390.png",
+      "sha256": "bc1c133c3528f90959b093e39a53f96f46c2285297376d67100b15309a267910",
+      "bytes": 64283
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/pdf-only-zh-TW-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/pdf-only-zh-TW-390.png",
+      "sha256": "71fe412736dc0a733b41f68200f866bfd464f8fb860baa8f01a77e79039ca20b",
+      "bytes": 136434
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/no-photos-zh-TW-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/no-photos-zh-TW-390.png",
+      "sha256": "202d16229b1e9b5548bf51838fce90f8ce89000de5bba97937f01fbafe5ac8c6",
+      "bytes": 103951
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/staff-zh-TW-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/staff-zh-TW-390.png",
+      "sha256": "b11beafa64c6d8aa41b8f9f05f4d660d46995c36425441f557348abd9be2e81b",
+      "bytes": 287157
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/image-error-zh-TW-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/image-error-zh-TW-390.png",
+      "sha256": "083df6da6e27071da3875618e0616d83cfc427726b6f712c8f131048633d1ce7",
+      "bytes": 292914
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/tenant-zh-TW-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/b011-browser-98d5f79-a8-artifacts/b011-handover-comparison-handover-photo-comparison-zh-TW-390-chromium/tenant-zh-TW-390.png",
+      "sha256": "7e0a226abd9079190382a19edbdf40353c878645fa29181b2dbe6db061002dbe",
+      "bytes": 76657
+    }
+  ]
+}

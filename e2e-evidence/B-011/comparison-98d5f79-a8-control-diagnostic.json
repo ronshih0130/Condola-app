@@ -1,0 +1,25 @@
+{
+  "scope": "Separate SELECT-onlydiagnostic afteroriginalreadbackFAIL; no restoration performed",
+  "actualExit": 0,
+  "proof": "Onlytimestamp differs; bothactualcatalogs enableBEFOREUPDATEtrigger settingNEW.updated_at=now()",
+  "files": [
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-control-diagnostic.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/diagnostic/b011-comparison-control-diagnostic.py",
+      "sha256": "a1057b51bf10d248e653f49710d57d7eb45a020b38285c7f7a6d8e33a0bcfc03",
+      "bytes": 7047
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-control-diagnostic-98d5f79-a8.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/diagnostic/b011-control-diagnostic-98d5f79-a8.log",
+      "sha256": "bdd8ed193a3b1bce936010b2dfd07f6e9105d2e9570a701009711d9d0f5c9577",
+      "bytes": 5223
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-control-diagnostic-exit-98d5f79-a8.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a8-control-restore-failure/diagnostic/b011-control-diagnostic-exit-98d5f79-a8.json",
+      "sha256": "ccbe84b5ae8cacaafe31dc7a86b78a6acdab25dbcafb1fcaa8548e546bbcd2ab",
+      "bytes": 5839
+    }
+  ]
+}
