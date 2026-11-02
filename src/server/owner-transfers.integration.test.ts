@@ -15,6 +15,8 @@ let clone:Awaited<ReturnType<typeof cloneTestDatabase>>;
 test.before(async()=>{clone=await cloneTestDatabase();});test.after(async()=>{await clone.cleanup();});
 async function blockedPid(c:Client,owner:number,exclude:number[],relation:boolean) {
  for(let i=0;i<100;i++){
+  // Refresh PostgreSQL's transaction-cached activity snapshot before polling.
+  await c.query('SELECT pg_catalog.pg_stat_clear_snapshot()');
   const r=await c.query<{pid:number}>(`SELECT a.pid FROM pg_stat_activity a WHERE a.datname=current_database() AND $1=ANY(pg_blocking_pids(a.pid)) AND NOT(a.pid=ANY($2::int[])) AND ($3::boolean=false AND a.query LIKE 'SELECT pg_advisory_xact_lock%' OR $3::boolean=true AND EXISTS(SELECT 1 FROM pg_locks l WHERE l.pid=a.pid AND NOT l.granted AND l.relation='public.ledger_entries'::regclass)) ORDER BY a.pid`,[owner,exclude,relation]);
   if(r.rows.length===1)return r.rows[0].pid;await new Promise(resolve=>setTimeout(resolve,50));
  }throw new Error('Expected owned blocked operation not observed');
