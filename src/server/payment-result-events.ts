@@ -12,5 +12,5 @@ export async function lockPaymentResultContext(client: Client, session: Session,
 }
 
 export async function emitPaymentResult(client: Client, paymentId: string, kind: "payment_confirmed" | "payment_rejected" | "payment_reversed") {
-  await client.query(`SELECT app.b010_emit_payment_event($1,$2)`,[paymentId,kind]);
+  return (await client.query<{id:string}>(`SELECT app.b010_emit_payment_event($1,$2)::text AS id`,[paymentId,kind])).rows[0].id;
 }

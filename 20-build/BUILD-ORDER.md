@@ -19,7 +19,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-007 | Deposit rule hints and excess-reason audit | MGT-08; J2.3; CAP-M-07 | — | DEPOSIT_RULE_HINTS* | B | M / 12–20 | pending |
 | B-008 | Billing, utility and statement amount previews | MGT-12/26; J3.1/J7; CAP-M-08/22; M-40 | — | BILLING_PREVIEWS* | B | M / 20–32 | pending |
 | B-009 | Bank CSV dedupe and manual matching | MGT-14; J3.5; CAP-M-10/23 | — | BANK_MATCHING* | B | M / 16–24 | pending |
-| B-010 | Rent reminders and payment review results | MGT-13/15, TEN-07; J3.2/6/7; CAP-M-09/11; M-70 reminder | —; delivery adapter contract in B-028 | RENT_EMAIL_REMINDERS*; PAYMENT_REVIEW_RESULTS* | B | M / 20–32 | pending |
+| B-010 | Rent reminders and payment review results | MGT-13/15, TEN-07; J3.2/6/7; CAP-M-09/11; M-70 reminder | —; delivery adapter contract in B-028 | RENT_EMAIL_REMINDERS*; PAYMENT_REVIEW_RESULTS* | B | M / 20–32 | in_progress |
 | B-011 | Handover and deposit settlement, including bilateral replies | MGT-16/23/24, TEN-10/11; J4/J6.6–8; CAP-M-12/14/21, CAP-T-05/10; M-26 | B-002 | HANDOVER_RECORDS*; DEPOSIT_SETTLEMENT* | B | L / 40–64 | pending |
 | B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | todo |
 | B-013 | Manager dispatch and shared repair approval state | MGT-17/18/19/35; J5; CAP-M-15/16; M-48/49 | —; coordinated B-021/B-024 | vendor_dispatch; REPAIR_APPROVALS* | B | L / 32–48 | pending |
@@ -37,7 +37,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-025 | Vendor onboarding, fixed data, documents and trade fields | VEN-02/05/06/07/08/11/12; J1.8/J5.7; CAP-V-04/05/07/08/09; V-05–10 | B-022, B-024 | VENDOR_DOCUMENTS* | B | L / 40–64 | todo |
 | B-026 | Vendor estimates, account/history and enhanced sharing | VEN-03/09, MGT-30; J1.8/J5; CAP-V-06/10/11, CAP-M-24; V-11/12/13 | B-013, B-024, B-025 | VENDOR_ACCOUNT*; VENDOR_ESTIMATES*; VENDOR_LINK_ENABLED | B | L / 32–48 | todo |
 | B-027 | Platform isolation, partner consent and rollout controls | PLT-01/02/03/16; J1; CAP-P-01/03/05/06/07/09/12/16; M-68 | B-001–003 for relevant integration checks | PARTNER_CONSENT_GATE; PARTNER_PRICING_HIDE*; PARTNER_UNIT_OVERRIDE*; PARTNER_EA* | B | L / 32–48 | todo |
-| B-028 | Event delivery results, reminders and four-app notification center | PLT-05/13; J1/J3/J5/J7; CAP-P-13/15/22; P-19, M-70 | — | EMAIL_DELIVERY_RESULTS*; NOTIFICATION_CENTER* | B | L / 32–48 | pending |
+| B-028 | Event delivery results, reminders and four-app notification center | PLT-05/13; J1/J3/J5/J7; CAP-P-13/15/22; P-19, M-70 | — | EMAIL_DELIVERY_RESULTS*; NOTIFICATION_CENTER* | B | L / 32–48 | in_progress |
 | B-029 | Usage events and five metering hooks | PLT-11; J2/J3/J4/J5; CAP-P-11; P-23 | — | USAGE_EVENTS* | B | M / 16–24 | todo |
 | B-030 | Usage summaries, limits, plans and subscription lifecycle | PLT-12/15, MGT-33; J1/J3; CAP-P-25/26; P-22/24, M-68 | B-027, B-029; Ron pricing/provider decisions | USAGE_LIMITS*; SUBSCRIPTIONS* | B | L / 40–64 | todo |
 | B-031 | Audit detail, reliable uploads and token/session hardening | PLT-07/08/09; J1/J2/J4/J5; CAP-P-19/20/21/24 | B-001 | AUDIT_DETAIL*; UPLOAD_RECOVERY*; SESSION_HARDENING* | B | L / 24–40 | todo |

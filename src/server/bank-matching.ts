@@ -3,6 +3,7 @@ import type { Client } from "pg";
 import { withClient } from "./db";
 import { allocateAndLedger, lockAllocationInvoices } from "./domain";
 import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
+import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
 import { scoreMatch } from "./money";
 import { parseBankCsv } from "./bank-matching-rules";
 import { bankMatchBasis } from "../lib/bank-match-basis";
@@ -91,6 +92,7 @@ export async function decideBankMatch(session: Session, input: {bankId:string;pa
   return operation(session,true,async (client) => {
     let initialPayment: {id:string;lease_id:string} | null=null;
     let resultEnabled=false;
+    let center:Awaited<ReturnType<typeof beginPaymentCenter>>=null;
     if (input.decision === "match") {
       const flag=(await client.query<{enabled:boolean}>(`SELECT EXISTS (SELECT 1 FROM organizations o JOIN platform_settings f ON f.key='payment_results_v2'
         WHERE o.id=$1 AND o.feature_flags->'payment_results_v2'='true'::jsonb AND f.value->'enabled'='true'::jsonb
@@ -101,6 +103,7 @@ export async function decideBankMatch(session: Session, input: {bankId:string;pa
       initialPayment=(await client.query<{id:string;lease_id:string}>(`SELECT id::text,lease_id::text FROM payments WHERE org_id=$1 AND id=$2`,[session.orgId,discovered])).rows[0] ?? null;
       if (!initialPayment) throw fail();
       resultEnabled=flag && await lockPaymentResultContext(client,session,initialPayment.lease_id);
+      center=await beginPaymentCenter(client,session,{leaseId:initialPayment.lease_id,paymentId:initialPayment.id,action:"bank_match"});
     }
     const bank = (await client.query<{status:string;amount:string;currency:string;property_id:string|null}>(`SELECT b.status::text,b.amount_minor::text AS amount,b.currency,a.property_id::text FROM bank_transactions b JOIN bank_accounts a ON a.org_id=b.org_id AND a.id=b.bank_account_id WHERE b.org_id=$1 AND b.id=$2 AND a.archived_at IS NULL FOR UPDATE OF b FOR SHARE OF a`,[session.orgId,input.bankId])).rows[0];
     if (!bank || !["unmatched","suggested"].includes(bank.status)) throw fail();
@@ -124,7 +127,8 @@ export async function decideBankMatch(session: Session, input: {bankId:string;pa
       if (resultEnabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw fail();
       await client.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now(),bank_transaction_id=$3 WHERE org_id=$4 AND id=$1`,[payment.id,session.userId,input.bankId,session.orgId]);
       await allocateAndLedger(client,payment,session.userId,invoices);
-      if (resultEnabled) await emitPaymentResult(client,payment.id,"payment_confirmed");
+      const source=resultEnabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
+      await finalizePaymentCenter(client,center,source);
     } else await client.query(`UPDATE payments SET bank_transaction_id=$2 WHERE id=$1 AND org_id=$3`,[payment.id,input.bankId,session.orgId]);
     if (suggestion) await client.query(`UPDATE bank_match_suggestions SET status='approved',decided_by=$2,decided_at=now() WHERE id=$1`,[suggestion.id,session.userId]);
     await client.query(`UPDATE bank_match_suggestions SET status='superseded',decided_by=$3,decided_at=now() WHERE org_id=$1 AND bank_transaction_id=$2 AND status='suggested'`,[session.orgId,input.bankId,session.userId]);
