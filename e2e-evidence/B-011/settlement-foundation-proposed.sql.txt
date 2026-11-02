@@ -1,0 +1,125 @@
+-- PROPOSAL ONLY: UNAPPLIED / NOT RUN / NOT APPLY-READY.
+-- Closed data foundation; no gateways, flag changes, financial authority or grants.
+-- Target catalog, ordering, owner, syntax and behavior remain unverified.
+
+CREATE TABLE app.b011_settlement_versions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL, lease_id uuid NOT NULL,
+  revision integer NOT NULL CHECK (revision > 0),
+  currency char(3) NOT NULL REFERENCES public.currencies(code),
+  source_coverage text NOT NULL CHECK (source_coverage IN ('unknown','partial','documented')),
+  basis jsonb NOT NULL CHECK (jsonb_typeof(basis) = 'object'),
+  calculated_balance_minor bigint,
+  created_by uuid NOT NULL, request_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (org_id, lease_id, revision),
+  UNIQUE (org_id, lease_id, id),
+  UNIQUE (org_id, lease_id, id, currency),
+  UNIQUE (created_by, request_id),
+  FOREIGN KEY (org_id, lease_id) REFERENCES public.leases(org_id, id)
+);
+
+-- References and snapshots describe evidence; they do not allocate funds.
+CREATE TABLE app.b011_settlement_sources (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL, lease_id uuid NOT NULL, version_id uuid NOT NULL,
+  ordinal integer NOT NULL CHECK (ordinal > 0),
+  payment_id uuid, handover_attachment_id uuid, file_id uuid,
+  facts jsonb NOT NULL CHECK (jsonb_typeof(facts) = 'object'),
+  created_by uuid NOT NULL, request_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (org_id, lease_id, version_id, id),
+  UNIQUE (version_id, ordinal), UNIQUE (created_by, request_id),
+  FOREIGN KEY (org_id, lease_id, version_id) REFERENCES app.b011_settlement_versions(org_id, lease_id, id),
+  FOREIGN KEY (org_id, payment_id) REFERENCES public.payments(org_id, id),
+  FOREIGN KEY (org_id, lease_id, handover_attachment_id) REFERENCES app.handover_attachments(org_id, lease_id, id),
+  FOREIGN KEY (org_id, file_id) REFERENCES public.files(org_id, id),
+  CHECK (num_nonnulls(payment_id, handover_attachment_id, file_id) = 1)
+);
+
+CREATE TABLE app.b011_settlement_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL, lease_id uuid NOT NULL, version_id uuid NOT NULL,
+  ordinal integer NOT NULL CHECK (ordinal > 0),
+  label text NOT NULL CHECK (length(btrim(label)) BETWEEN 1 AND 200),
+  amount_minor bigint NOT NULL CHECK (amount_minor >= 0),
+  reason text NOT NULL CHECK (length(btrim(reason)) BETWEEN 1 AND 2000),
+  evidence_source_id uuid NOT NULL, prior_item_id uuid,
+  created_by uuid NOT NULL, request_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (org_id, lease_id, id), UNIQUE (version_id, ordinal), UNIQUE (created_by, request_id),
+  FOREIGN KEY (org_id, lease_id, version_id) REFERENCES app.b011_settlement_versions(org_id, lease_id, id),
+  FOREIGN KEY (org_id, lease_id, version_id, evidence_source_id) REFERENCES app.b011_settlement_sources(org_id, lease_id, version_id, id),
+  FOREIGN KEY (org_id, lease_id, prior_item_id) REFERENCES app.b011_settlement_items(org_id, lease_id, id),
+  CHECK (prior_item_id IS DISTINCT FROM id)
+);
+
+CREATE TABLE app.b011_settlement_replies (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL, lease_id uuid NOT NULL, version_id uuid NOT NULL,
+  actor_id uuid NOT NULL, actor_kind text NOT NULL CHECK (actor_kind IN ('staff','tenant','owner')),
+  response text NOT NULL CHECK (response IN ('confirm','disagree')),
+  note text NOT NULL DEFAULT '' CHECK (length(note) <= 2000),
+  request_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (actor_id, request_id),
+  FOREIGN KEY (org_id, lease_id, version_id) REFERENCES app.b011_settlement_versions(org_id, lease_id, id)
+);
+
+-- A payer report is a claim with evidence, not proof of transfer or completion.
+CREATE TABLE app.b011_settlement_outcomes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL, lease_id uuid NOT NULL, version_id uuid NOT NULL,
+  direction text NOT NULL CHECK (direction IN ('refund','top_up')),
+  amount_minor bigint NOT NULL CHECK (amount_minor > 0),
+  currency char(3) NOT NULL, occurred_on date NOT NULL,
+  payer_id uuid NOT NULL, payee_id uuid NOT NULL, reporter_id uuid NOT NULL,
+  evidence_source_id uuid NOT NULL, request_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (org_id, lease_id, version_id, id), UNIQUE (reporter_id, request_id),
+  FOREIGN KEY (org_id, lease_id, version_id, currency) REFERENCES app.b011_settlement_versions(org_id, lease_id, id, currency),
+  FOREIGN KEY (org_id, lease_id, version_id, evidence_source_id) REFERENCES app.b011_settlement_sources(org_id, lease_id, version_id, id),
+  CHECK (payer_id <> payee_id AND reporter_id = payer_id)
+);
+
+CREATE TABLE app.b011_settlement_outcome_responses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL, lease_id uuid NOT NULL, version_id uuid NOT NULL, outcome_id uuid NOT NULL,
+  actor_id uuid NOT NULL, response text NOT NULL CHECK (response IN ('confirm','disagree')),
+  note text NOT NULL DEFAULT '' CHECK (length(note) <= 2000),
+  request_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (actor_id, request_id),
+  FOREIGN KEY (org_id, lease_id, version_id, outcome_id) REFERENCES app.b011_settlement_outcomes(org_id, lease_id, version_id, id)
+);
+
+-- Only the payee named on this exact report may respond. Identity/session and
+-- designated-party authority remain obligations of a future closed gateway.
+CREATE FUNCTION app.b011_outcome_response_scope() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app.b011_settlement_outcomes o
+    WHERE o.org_id = NEW.org_id AND o.lease_id = NEW.lease_id
+      AND o.version_id = NEW.version_id AND o.id = NEW.outcome_id
+      AND o.payee_id = NEW.actor_id AND o.payer_id <> NEW.actor_id) THEN
+    RAISE EXCEPTION 'invalid outcome responder' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER b011_outcome_response_scope BEFORE INSERT ON app.b011_settlement_outcome_responses
+  FOR EACH ROW EXECUTE FUNCTION app.b011_outcome_response_scope();
+
+CREATE FUNCTION app.b011_history_immutable() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN RAISE EXCEPTION 'settlement history is immutable' USING ERRCODE = '42501'; END $$;
+DO $$
+DECLARE relation_name text;
+BEGIN
+  FOREACH relation_name IN ARRAY ARRAY['b011_settlement_versions','b011_settlement_sources',
+    'b011_settlement_items','b011_settlement_replies','b011_settlement_outcomes',
+    'b011_settlement_outcome_responses'] LOOP
+    EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY', relation_name);
+    EXECUTE format('REVOKE ALL ON TABLE app.%I FROM PUBLIC, anon, authenticated, service_role', relation_name);
+    EXECUTE format('CREATE TRIGGER b011_history_immutable BEFORE UPDATE OR DELETE ON app.%I FOR EACH ROW EXECUTE FUNCTION app.b011_history_immutable()', relation_name);
+  END LOOP;
+END $$;
+REVOKE ALL ON FUNCTION app.b011_outcome_response_scope() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION app.b011_history_immutable() FROM PUBLIC, anon, authenticated, service_role;

@@ -1,0 +1,22 @@
+{
+  "recordedAt": "2026-11-02T12:23:15.295940-08:00",
+  "reviewerRequestedModel": "gpt-6.1-sol",
+  "reviewerRequestedReasoning": "high",
+  "actualModelIndependentlyObservable": false,
+  "sourceReview": "PASS_SCOPED_CLOSED_DESIGN_HANDOFF_ONLY",
+  "applyStatus": "UNAPPLIED / NOT RUN / NOT APPLY-READY",
+  "artifacts": {
+    "b011-settlement-db-handoff.md": "9ac0608d9e74baa32e65bf4385e528f894e806b624a2a81aba84834a38f16aa5",
+    "20261102194206_b011_settlement_foundation.proposed.sql": "1b5a94893e8bad11a0b933d0abce1fce05197f1b014a0e80abe9371b9ba70abe"
+  },
+  "scope": "Six closed private foundation tables with scoped immutable history and no public/anon/authenticated/service-role table or gateway grants; existing billing/payment/handover sources reused, not source consumption or financial authority",
+  "stillUnresolved": [
+    "Canonical source attribution/double use/currency/lease/status/caps/locking/source changes",
+    "Designated party/session/env/expiry/auth and effective reply/outcome semantics",
+    "Fixed gateway and reset/retention/old-code compatibility",
+    "Actual hosted catalog/history/timestamp/owner/grants/PG16-17 syntax and behavior",
+    "Backup/rowcounts/rollback/replay/concurrency/runtime/fullfeature/PE execution approval"
+  ],
+  "executionPerformed": false,
+  "note": "MD predates independent source GO; this companion records later design-only source review without runtime/apply authorization. B013/B021 approval does not extend to B011."
+}
