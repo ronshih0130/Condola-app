@@ -1,13 +1,9 @@
-> Current 2026-11-02T11:16:02.789742-08:00: actual payer-center wiring across all six payment entry paths has independent SOURCE GO at literal9changed+14unchangedpins in B-010/payment-center-source-review-1102.json. Focused/WIP results are not immutable-candidate PASS; final fullgate/build/Worker/center+affectedbank browser pending. No newDDL/appliedmigration/realmessages/activation; wholeitem and stage/Claude pending. Earlier dated entries remain historical.
+# B-028 current status
 
-# B-028 Four-portal notification center
+Updated 2026-11-02T11:32:32.249854-08:00, code `3c46882327ea85d3cc3be34758fca39226f2b507` onmode-b-repair-override-prep. **PENDING / actualpayerpaymentcenter locallyverified / wholeitemINCOMPLETE.**
 
-Updated2026-10-30T03:05:16.071480-07:00. Candidate`4e43104f45c3acf0dae76e40c7b577bd7ffb8ea6`. ModeB, ClassB, INCOMPLETE / NO-GO.
+[Currentcheckpoint](../B-010/payment-center-checkpoint-3c46882.md): all6actualconfirmed/rejected/reversed sources toeligiblepayerexistingcenter in samecommit, centerindependentofEmail/paymentResults;financialRLS/math/roles restored. Gate618unit/390RLS+solepriorhistoricalSKIP, builds/originalpreflight/Worker1, center2+affectedbank2browser/6screens/readbackactual0. Namedlocalcontrols restoredOFF/0optins; currentstage/prodstate not reprobed.
 
-Reviewed synthetic center15, exact persona/job authorization, individual first-read, pagination, real home entries and coordinated demo reset are integrated.
+Exactstaging/catalog/owner/runtime/Claudeacceptance andothernotificationfamilies/Emailpref/claimcapture/providerdelivery remainUNVERIFIED/incomplete. Separate Downloads paymentEmailproposal source-reviewedonly, UNAPPLIED/NOTRUN; currentcenter notDBblocked. B008UNKNOWNunwaived. Developmentfailures retained, source-specificunverifiedcausemappingnotfabricated.
 
-Allrealproducerfamilies and neutraladapter17 remain open; synthetic events are not application producer coverage. Retention/provider/realreceipt/activation and fullstaging/ClassB remain unverified.
-
-Common exact-candidate checks and artifact references: [core89 local verification](../integration/core89-local-verification.md). No production, real notifications or legal-copy authority.
-
-STOP POINT: WORKING; next: continue owning implementation and exact scoped verification, preserve incomplete evidence; owner: Ron/Codex.
+STOP POINT: WORKING; next: publish/mirrortheninspectB011actualsource/recovery; ownerRon/Codex3099AC86.

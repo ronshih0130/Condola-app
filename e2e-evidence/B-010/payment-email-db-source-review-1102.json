@@ -1,0 +1,17 @@
+{
+  "recordedAt": "2026-11-02T11:32:32.249854-08:00",
+  "requestedAuthorModel": "gpt-6.1-terra/high",
+  "requestedIndependentReviewer": "gpt-6.1-sol/high",
+  "verdict": "PASS_SCOPED_PROPOSAL_SOURCE_REVIEW_ONLY",
+  "handoffSha256": "5f848228737c3e46084152a831460cde9cab1332b8e1e269c700f277a1da744d",
+  "sqlSha256": "b14c2696afbf6ac101994a56296dc82d01d5a54671be77f7e036fcee42bffae8",
+  "applied": false,
+  "syntaxAndRuntime": "NOT_RUN_REQUIRES_PE",
+  "scope": "One separate default-true personal payment Email preference plus typed private get/set and redacted audit; due preferences preserved; existing reset lock admission reused, not rollout gating",
+  "remaining": [
+    "PE actual target/catalog/history/timestamp/owner/grants",
+    "PG16/17 parsing/security/expiry/concurrency/reset/old-code/OFF/backup/counts/rollback validation",
+    "Future application preference enforcement, claim/capture and provider receipt",
+    "No current-center DB blocker; no apply or delivery approval"
+  ]
+}

@@ -1,0 +1,700 @@
+{
+  "schema": "b010-local-runtime-manifest-v1",
+  "createdAt": "2026-11-02T11:27:21.605999-08:00",
+  "classification": "LOCAL_RUNTIME_EVIDENCE_ASSEMBLY_REVIEW_PENDING",
+  "candidate": "3c46882327ea85d3cc3be34758fca39226f2b507",
+  "baseline": "e28eefdf62942f149ca4cb5887e4fb683d5a140b",
+  "sourceVerification": {
+    "head": "3c46882327ea85d3cc3be34758fca39226f2b507",
+    "gitStatusShort": "?? e2e/results/gate-3c46882327ea85d3cc3be34758fca39226f2b507.md",
+    "reviewedSourceFreeze": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-reviewed-source-freeze.json",
+      "sha256": "a3a7d45c29bb963455c771b77b4e86d836a1ad65a7b7ee0c6f65210c56578110",
+      "bytes": 5453
+    },
+    "committedSourceReview": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-010/payment-center-source-review-1102.json",
+      "sha256": "a3a7d45c29bb963455c771b77b4e86d836a1ad65a7b7ee0c6f65210c56578110",
+      "bytes": 5453
+    },
+    "reviewedSourceReviewVerdict": "PASS_SCOPED_SOURCE_REVIEW",
+    "changedCount": 9,
+    "unchangedCount": 14,
+    "matchedCurrentCandidateAndReview": 23,
+    "files": [
+      {
+        "path": "src/server/payment-center-events.ts",
+        "classification": "changed_reviewed",
+        "expectedBlob": "6be85a278748c0a8bf988feed1f19a875452b5fe",
+        "currentBlob": "6be85a278748c0a8bf988feed1f19a875452b5fe",
+        "candidateBlob": "6be85a278748c0a8bf988feed1f19a875452b5fe"
+      },
+      {
+        "path": "src/server/payment-center-events.integration.test.ts",
+        "classification": "changed_reviewed",
+        "expectedBlob": "074dcd59fcf2144719f63ec0c9560eecdb38c376",
+        "currentBlob": "074dcd59fcf2144719f63ec0c9560eecdb38c376",
+        "candidateBlob": "074dcd59fcf2144719f63ec0c9560eecdb38c376"
+      },
+      {
+        "path": "src/server/payment-result-events.ts",
+        "classification": "changed_reviewed",
+        "expectedBlob": "aeb705c5210bd045d35e7453c03b9b48fe4d6410",
+        "currentBlob": "aeb705c5210bd045d35e7453c03b9b48fe4d6410",
+        "candidateBlob": "aeb705c5210bd045d35e7453c03b9b48fe4d6410"
+      },
+      {
+        "path": "src/server/domain.ts",
+        "classification": "changed_reviewed",
+        "expectedBlob": "3d768f26a295be3002bc8c5abc60ae0a3b479c03",
+        "currentBlob": "3d768f26a295be3002bc8c5abc60ae0a3b479c03",
+        "candidateBlob": "3d768f26a295be3002bc8c5abc60ae0a3b479c03"
+      },
+      {
+        "path": "src/server/bank-matching.ts",
+        "classification": "changed_reviewed",
+        "expectedBlob": "8f44e4265cb8767124d27e3059706751c67e7b1e",
+        "currentBlob": "8f44e4265cb8767124d27e3059706751c67e7b1e",
+        "candidateBlob": "8f44e4265cb8767124d27e3059706751c67e7b1e"
+      },
+      {
+        "path": "e2e/payment-center-events.spec.ts",
+        "classification": "changed_reviewed",
+        "expectedBlob": "c866af4cb38863969cd55057f036d10b2406319f",
+        "currentBlob": "c866af4cb38863969cd55057f036d10b2406319f",
+        "candidateBlob": "c866af4cb38863969cd55057f036d10b2406319f"
+      },
+      {
+        "path": "e2e/b010-payment-center-private-playwright.config.ts",
+        "classification": "changed_reviewed",
+        "expectedBlob": "d7ea07e1b432cb37d75c0add6af2f7cdb145dfc7",
+        "currentBlob": "d7ea07e1b432cb37d75c0add6af2f7cdb145dfc7",
+        "candidateBlob": "d7ea07e1b432cb37d75c0add6af2f7cdb145dfc7"
+      },
+      {
+        "path": "package.json",
+        "classification": "changed_reviewed",
+        "expectedBlob": "b6893d7fa2faf15e085c467eab75990272419dc6",
+        "currentBlob": "b6893d7fa2faf15e085c467eab75990272419dc6",
+        "candidateBlob": "b6893d7fa2faf15e085c467eab75990272419dc6"
+      },
+      {
+        "path": "scripts/run-e2e.ts",
+        "classification": "changed_reviewed",
+        "expectedBlob": "7ce72eab4431b66a04fd5fa74a9f5d427ecde6c6",
+        "currentBlob": "7ce72eab4431b66a04fd5fa74a9f5d427ecde6c6",
+        "candidateBlob": "7ce72eab4431b66a04fd5fa74a9f5d427ecde6c6"
+      },
+      {
+        "path": "src/lib/bank-match-basis.ts",
+        "classification": "unchanged",
+        "expectedBlob": "ed003b2f9345d5354e5913c6d30f05db1077bab7",
+        "currentBlob": "ed003b2f9345d5354e5913c6d30f05db1077bab7",
+        "candidateBlob": "ed003b2f9345d5354e5913c6d30f05db1077bab7"
+      },
+      {
+        "path": "src/lib/bank-match-basis.test.ts",
+        "classification": "unchanged",
+        "expectedBlob": "6a79ad3ddd2bb4bc0648503cad16e88c22a7771d",
+        "currentBlob": "6a79ad3ddd2bb4bc0648503cad16e88c22a7771d",
+        "candidateBlob": "6a79ad3ddd2bb4bc0648503cad16e88c22a7771d"
+      },
+      {
+        "path": "src/components/bank-matching.tsx",
+        "classification": "unchanged",
+        "expectedBlob": "144f1efe92fc8a2732fbc61305b7c388afd14ce0",
+        "currentBlob": "144f1efe92fc8a2732fbc61305b7c388afd14ce0",
+        "candidateBlob": "144f1efe92fc8a2732fbc61305b7c388afd14ce0"
+      },
+      {
+        "path": "src/i18n/bank-matching.ts",
+        "classification": "unchanged",
+        "expectedBlob": "6e62bdce04b6a5d4c6de335bfdd2469a0ae2ac32",
+        "currentBlob": "6e62bdce04b6a5d4c6de335bfdd2469a0ae2ac32",
+        "candidateBlob": "6e62bdce04b6a5d4c6de335bfdd2469a0ae2ac32"
+      },
+      {
+        "path": "src/server/bank-matching.integration.test.ts",
+        "classification": "unchanged",
+        "expectedBlob": "900ff90f7d0c0734b7d101cc1b91b15d9d3f2fc9",
+        "currentBlob": "900ff90f7d0c0734b7d101cc1b91b15d9d3f2fc9",
+        "candidateBlob": "900ff90f7d0c0734b7d101cc1b91b15d9d3f2fc9"
+      },
+      {
+        "path": "e2e/bank-matching.spec.ts",
+        "classification": "unchanged",
+        "expectedBlob": "7592517f9ed03bed850c44eaf51d2f914cbc798d",
+        "currentBlob": "7592517f9ed03bed850c44eaf51d2f914cbc798d",
+        "candidateBlob": "7592517f9ed03bed850c44eaf51d2f914cbc798d"
+      },
+      {
+        "path": "e2e/b009-bank-private-playwright.config.ts",
+        "classification": "unchanged",
+        "expectedBlob": "5a499d31393fc86c55f73d2581faffcdf2465d69",
+        "currentBlob": "5a499d31393fc86c55f73d2581faffcdf2465d69",
+        "candidateBlob": "5a499d31393fc86c55f73d2581faffcdf2465d69"
+      },
+      {
+        "path": "src/server/seed.ts",
+        "classification": "unchanged",
+        "expectedBlob": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+        "currentBlob": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+        "candidateBlob": "ad8b93e2b7622557484865a20e30ef5ea1dc616c"
+      },
+      {
+        "path": "src/server/income-expense.integration.test.ts",
+        "classification": "unchanged",
+        "expectedBlob": "1e21698f2627ce0a940d9be8b2dd2ddc2296e4f6",
+        "currentBlob": "1e21698f2627ce0a940d9be8b2dd2ddc2296e4f6",
+        "candidateBlob": "1e21698f2627ce0a940d9be8b2dd2ddc2296e4f6"
+      },
+      {
+        "path": "ops/flags.yaml",
+        "classification": "unchanged",
+        "expectedBlob": "2a4bc3f8c3a97a16943a0bc9025dd31410e9de22",
+        "currentBlob": "2a4bc3f8c3a97a16943a0bc9025dd31410e9de22",
+        "candidateBlob": "2a4bc3f8c3a97a16943a0bc9025dd31410e9de22"
+      },
+      {
+        "path": "scripts/preflight-deploy.sh",
+        "classification": "unchanged",
+        "expectedBlob": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+        "currentBlob": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+        "candidateBlob": "3214ee7db0b4a25417682de8c2cce7e104c260bb"
+      },
+      {
+        "path": "supabase/migrations/20261031100212_b010_b028_local_events.sql",
+        "classification": "unchanged",
+        "expectedBlob": "1bc00d2b73ec27429c66254435d354f252bbebb9",
+        "currentBlob": "1bc00d2b73ec27429c66254435d354f252bbebb9",
+        "candidateBlob": "1bc00d2b73ec27429c66254435d354f252bbebb9"
+      },
+      {
+        "path": "supabase/migrations/20261031100215_b028_center_foundation.sql",
+        "classification": "unchanged",
+        "expectedBlob": "33ba2a512832629ed6f0ef21b302ea580f65a301",
+        "currentBlob": "33ba2a512832629ed6f0ef21b302ea580f65a301",
+        "candidateBlob": "33ba2a512832629ed6f0ef21b302ea580f65a301"
+      },
+      {
+        "path": "supabase/migrations/20261031100217_b010_b028_source_foundation.sql",
+        "classification": "unchanged",
+        "expectedBlob": "1351ee49985987744e0fbe0c6f9ee29b220eb972",
+        "currentBlob": "1351ee49985987744e0fbe0c6f9ee29b220eb972",
+        "candidateBlob": "1351ee49985987744e0fbe0c6f9ee29b220eb972"
+      }
+    ],
+    "historicalFreezeRuntimeStatement": "immutableRuntimeNotYetRun was true at freeze time, prior to these final receipts"
+  },
+  "helpers": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b010-final-check.py",
+      "sha256": "ad3f92988056fc82351f3ff9030fba7b4befef83a1524c71b7e7a1b5cad65f2d",
+      "bytes": 2265
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-runtime-driver.py",
+      "sha256": "c4d9bd4bb9dfa0f2182d08c842bd9797dac13e1d0014216f15f0831917900401",
+      "bytes": 6428
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-control-readback.py",
+      "sha256": "4bc65b13c94a3217158f88e708372f908209ae31e979dacade88c05b512622de",
+      "bytes": 7124
+    }
+  ],
+  "actualReceipts": [
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-bank-playwright-exit-3c46882-a1.json",
+        "sha256": "6118eed1d606adec349606361cda45dc427045eb8f5db3290c4f39201a9d92ad",
+        "bytes": 5760
+      },
+      "profile": "browser-bank",
+      "actualExitField": "processExit",
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 16.14,
+      "command": [
+        "node",
+        "node_modules/@playwright/test/cli.js",
+        "test",
+        "--config",
+        "e2e/b009-bank-private-playwright.config.ts",
+        "--output",
+        "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-bank-3c46882-a1-artifacts"
+      ],
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-bank-playwright-3c46882-a1.log",
+        "sha256": "7375479c0799ed8c428f93585bde0d95babb2862cf39c23d8743f308febb0eba",
+        "bytes": 239
+      },
+      "preflightOutputValid": null
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-playwright-exit-3c46882-a1.json",
+        "sha256": "841c586d8ebdd51c9f15df9cf7284534eca4a80e3ca6f7cf55c852291f5aac84",
+        "bytes": 5777
+      },
+      "profile": "browser-center",
+      "actualExitField": "processExit",
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 20.506,
+      "command": [
+        "node",
+        "node_modules/@playwright/test/cli.js",
+        "test",
+        "--config",
+        "e2e/b010-payment-center-private-playwright.config.ts",
+        "--output",
+        "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-center-3c46882-a1-artifacts"
+      ],
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-playwright-3c46882-a1.log",
+        "sha256": "067ed9bd157af1234123e3252469b3ee4bf2555e8275f14375b315690121a846",
+        "bytes": 257
+      },
+      "preflightOutputValid": null
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-cf-build-exit-3c46882-a1.json",
+        "sha256": "ee46a2f721d18a77f84ed3bb72caaf992b3f78f6c412db92ec62ad58f2200814",
+        "bytes": 5513
+      },
+      "profile": "build",
+      "actualExitField": "processExit",
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 28.158,
+      "command": [
+        "npm",
+        "run",
+        "cf:build"
+      ],
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-cf-build-3c46882-a1.log",
+        "sha256": "ff5c1a7568b5e9b2b652ec18ed689332e545f4fce9a910e08d6b86baed361af0",
+        "bytes": 14099
+      },
+      "preflightOutputValid": null
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-control-readback-exit-3c46882-a1.json",
+        "sha256": "32915ee8fa122dcf6c5af934d05d59656322af6e9767f9902efc2c7ff2d1ad47",
+        "bytes": 5105
+      },
+      "profile": "control-readback",
+      "actualExitField": "actualProcessExit",
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 0.058,
+      "command": "See readback helper; node -e SELECT-only",
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-control-readback-3c46882-a1.log",
+        "sha256": "deebb7436c10b071cf826c295773f33221c79a9881c63e41e82c66fc5d06ad6c",
+        "bytes": 1775
+      },
+      "preflightOutputValid": null
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-gate-exit-3c46882-a1.json",
+        "sha256": "8bd9a1bfcbd3816cc2a537fa87cd1482973455fe998c1d4c969411add3116a30",
+        "bytes": 5552
+      },
+      "profile": "gate",
+      "actualExitField": "processExit",
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 233.848,
+      "command": [
+        "bash",
+        "scripts/gate.sh",
+        "3c46882327ea85d3cc3be34758fca39226f2b507"
+      ],
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-gate-3c46882-a1.log",
+        "sha256": "b07d7bf76e8f03c26b2eed29d8ceae28225ce6216ab68f409fe245b2b8202f03",
+        "bytes": 444
+      },
+      "preflightOutputValid": null
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-next-build-exit-3c46882-a1.json",
+        "sha256": "b905617b31969a8dc16c18106d69decbd94248be463292f8c93ced0683562b96",
+        "bytes": 5512
+      },
+      "profile": "build",
+      "actualExitField": "processExit",
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 20.672,
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-next-build-3c46882-a1.log",
+        "sha256": "f6a4718c548508624a5941015509dce9d801996900144ac5f3b833bcdf10a81f",
+        "bytes": 12390
+      },
+      "preflightOutputValid": null
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-preflight-exit-3c46882-a1.json",
+        "sha256": "5dd7d69016f598bd42dbe8f5971047680ef8ddb95080edc92f9cd1f171c64717",
+        "bytes": 5519
+      },
+      "profile": "build",
+      "actualExitField": "processExit",
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 3.379,
+      "command": [
+        "bash",
+        "scripts/preflight-deploy.sh"
+      ],
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-preflight-3c46882-a1.log",
+        "sha256": "2466b05e327df27530933354f9972e1d5eff6c9c0d0ab8f63cd801f1f5ffc1f4",
+        "bytes": 23
+      },
+      "preflightOutputValid": true
+    },
+    {
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-worker-exit-3c46882-a1.json",
+        "sha256": "fa68ac4c9a480d9738ff7fbeab0e7186c0f47429ad5258f9ef2cc9adf36d12a2",
+        "bytes": 5511
+      },
+      "profile": "build",
+      "actualExitField": "processExit",
+      "actualExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 2.329,
+      "command": [
+        "npm",
+        "run",
+        "test:worker"
+      ],
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-worker-3c46882-a1.log",
+        "sha256": "724c8c3cc08d526e27f7ebaaa7a481de40909d19f2c22f00a2e1e2a9ed23598b",
+        "bytes": 423
+      },
+      "preflightOutputValid": null
+    }
+  ],
+  "counts": {
+    "actualReceipts": 8,
+    "actualExitZero": 8,
+    "effectiveExitZero": 8,
+    "gateTAP": {
+      "test-unit.log": {
+        "tests": 618,
+        "pass": 618,
+        "fail": 0,
+        "skipped": 0
+      },
+      "test-rls.log": {
+        "tests": 391,
+        "pass": 390,
+        "fail": 0,
+        "skipped": 1
+      }
+    },
+    "browserCenterPassed": 2,
+    "browserBankPassed": 2,
+    "workerPassed": 1,
+    "screenshots": 6
+  },
+  "gateSummary": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-3c46882327ea85d3cc3be34758fca39226f2b507.md",
+    "sha256": "828266f4bac3dceccd26ad2e65eab0a2026e1703a14415fb86127dd202c4500e",
+    "bytes": 971
+  },
+  "privateRawGateLogs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/copy-check.log",
+      "sha256": "72476cbdeaa0f2c9f9d7436183617a8ad94f8e4170befed099ebc5dfb55c1be5",
+      "bytes": 1434
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/flag-expiry.log",
+      "sha256": "31d5d77ba8c1cbcf2ff8895e57581bd830ee34cf7d5e5f55251276efac0b2692",
+      "bytes": 27
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/lint.log",
+      "sha256": "da819f980b5df58f94df10cee617099a4a6539df6d5f02510c80645449817c1d",
+      "bytes": 2422
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/npm-ci.log",
+      "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+      "bytes": 1585
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/postgres-16.log",
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/steps.md",
+      "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+      "bytes": 341
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/test-rls.log",
+      "sha256": "f08873e2540cbb3570b5dabb796f4f2fa92f8805801c153f608461143c6817e4",
+      "bytes": 108532
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/test-unit.log",
+      "sha256": "b4102ff2247f7d5da3479d7915c0822f38371211b36635d30052b53333001fb0",
+      "bytes": 127360
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/toolchain.log",
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3c46882327ea85d3cc3be34758fca39226f2b507.r4foZm/typecheck.log",
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    }
+  ],
+  "extraRuntimeArtifacts": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-gate-driver-3c46882a1.log",
+      "sha256": "255c777e7d26dfcba3aff95fb52c3ca49301cbc5900368b0658eb3c92d6a6716",
+      "bytes": 128
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-build-driver-3c46882a1.log",
+      "sha256": "d00b2c6c6e97b4a448bc43d3fa57f2f7f79212bd39cdec8256c0b7b62078cbe4",
+      "bytes": 485
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-browser-driver-3c46882a1.log",
+      "sha256": "3a4149cb434bab22d718785b3e294436ae669b4ccbf8adb202976ee6966d2137",
+      "bytes": 167
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-bank-browser-driver-3c46882a1.log",
+      "sha256": "c47de120e4b351063e49d00905e8889455649ec60bc9df3e6133326d24dae51a",
+      "bytes": 161
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-center-3c46882-a1-artifacts/.last-run.json",
+      "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+      "bytes": 45
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-bank-3c46882-a1-artifacts/.last-run.json",
+      "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+      "bytes": 45
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-center-3c46882-a1-artifacts/payment-center-events-actual-payer-payment-center-at-1280px-chromium/actual-payer-1280.png",
+      "sha256": "d3104c8f33c8e1decb14230f7370532bcf7765a444668de76031782e63b5a423",
+      "bytes": 69417
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-center-3c46882-a1-artifacts/payment-center-events-actual-payer-payment-center-at-390px-chromium/actual-payer-390.png",
+      "sha256": "40afd79b911a3711ba7fb05778e49f7e086d34d00a2a38c517ee44a928645dbb",
+      "bytes": 51346
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-bank-3c46882-a1-artifacts/bank-matching-manual-bank-reconciliation-at-1280px-chromium/bank-basis-en-1280.png",
+      "sha256": "0e5e968e668daed014dd6dab6e95469349ada592ec68c0aa6fcdf52a9d9a5842",
+      "bytes": 176756
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-bank-3c46882-a1-artifacts/bank-matching-manual-bank-reconciliation-at-1280px-chromium/bank-basis-zh-TW-1280.png",
+      "sha256": "56cda7ecde34bd7e1447e3254d67b961cf406ba40e73f57202e830c4f530bc57",
+      "bytes": 170552
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-bank-3c46882-a1-artifacts/bank-matching-manual-bank-reconciliation-at-390px-chromium/bank-basis-en-390.png",
+      "sha256": "3e565a23e7c9bd5a90c9d9c923f9d1122a620c0e54efe401b5fb2a00710bfc9d",
+      "bytes": 129125
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-bank-3c46882-a1-artifacts/bank-matching-manual-bank-reconciliation-at-390px-chromium/bank-basis-zh-TW-390.png",
+      "sha256": "3e9f6a066e64c4e83537b0823c14db148e2d6f875d6a789875834b4e2ba9f863",
+      "bytes": 126823
+    }
+  ],
+  "controlReadback": {
+    "scope": "Only selected global control rows and whole selected-organization feature_flags were compared against an independently seeded same-source build clone. No whole-database restore, audit-history restoration, provider delivery or staging claim.",
+    "profiles": [
+      {
+        "profile": "center",
+        "targetDatabase": "condola_b010_center_http_3c46882a1",
+        "baselineDatabase": "condola_b010_center_build_3c46882a1",
+        "readOnlyConnections": true,
+        "exactControlValueDescriptionMicrosecondTimestampRestored": true,
+        "wholeOrgFlagsRestored": true,
+        "namedGlobalOff": {
+          "notification_center_v2": true,
+          "payment_results_v2": true
+        },
+        "namedOrgOptins": {
+          "notification_center_v2": 0,
+          "payment_results_v2": 0
+        },
+        "controlSha256Before": "f7c89a0aa91a0f26f3df167e76c0e599a57e6551f0be26e170d47954773e15a1",
+        "controlSha256After": "f7c89a0aa91a0f26f3df167e76c0e599a57e6551f0be26e170d47954773e15a1",
+        "wholeOrgFlagsSha256Before": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+        "wholeOrgFlagsSha256After": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+        "passed": true
+      },
+      {
+        "profile": "bank",
+        "targetDatabase": "condola_b009_b010reg_http_3c46882a1",
+        "baselineDatabase": "condola_b010_center_build_3c46882a1",
+        "readOnlyConnections": true,
+        "exactControlValueDescriptionMicrosecondTimestampRestored": true,
+        "wholeOrgFlagsRestored": true,
+        "namedGlobalOff": {
+          "bank_matching": true
+        },
+        "namedOrgOptins": {
+          "bank_matching": 0
+        },
+        "controlSha256Before": "0116b7f08341387f6dddc08ba2d7a434d574ba0259d0a93f9cd6d4608d7bf2c4",
+        "controlSha256After": "0116b7f08341387f6dddc08ba2d7a434d574ba0259d0a93f9cd6d4608d7bf2c4",
+        "wholeOrgFlagsSha256Before": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+        "wholeOrgFlagsSha256After": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+        "passed": true
+      }
+    ]
+  },
+  "history": {
+    "classification": "WIP_DEVELOPMENT_ON_DIRTY_BASELINE_NOT_IMMUTABLE_CANDIDATE_PASS",
+    "baseline": "e28eefdf62942f149ca4cb5887e4fb683d5a140b",
+    "artifacts": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102a.log",
+        "sha256": "4375308c3f66083bc8d4ea1ac45c196fc1bb13e5f2aa628b729d9de959e91d1c",
+        "bytes": 3970
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102b.log",
+        "sha256": "1efb9130335b989d84734419a96b4853f661b180e3ebdd358716cb902ae96b16",
+        "bytes": 3430
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102c.log",
+        "sha256": "c5cfdfef185f53a5e70399854e8376693cfa4c83cd8846710e37ca47583853cb",
+        "bytes": 1358
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102d.log",
+        "sha256": "cb6b2e96804f2ce685e722b328e2ab3a2eaada09ce838af4875fb6dabeb21930",
+        "bytes": 2812
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102e.log",
+        "sha256": "c24aa8837de62088cef3f72481addb0fe17b2ad6fb29037ff60ec79130721c1e",
+        "bytes": 7082
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102f.log",
+        "sha256": "8765dd5917064d73fab892dcb36ffa2aaf0e1bbd2e58bef5a5cedfd551b50b6d",
+        "bytes": 2748
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102g.log",
+        "sha256": "47f26a9e4878a002c5e94b48e140da1e1e7246c056ebd3e320a7328ce79a0111",
+        "bytes": 2082
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102h.log",
+        "sha256": "d7c07af013fdec81378f84186fb676e22a18da5730bdb648a23e95511591e842",
+        "bytes": 2359
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102i.log",
+        "sha256": "7c82093cb2690b2812ca7c09a6dde4e39ff31c00072647b8367db2a5d76213c3",
+        "bytes": 5740
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-center-focus-1102j.log",
+        "sha256": "9ad1cbde05688a6bb1597f8955a83e3788894d3830daf1c72fdb4277628c7ad2",
+        "bytes": 3241
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-wip-1102k.log",
+        "sha256": "56bef8f14485fb531b9a1f80a70abe5f4ecccbfe044d5ae9812ae14fad60a9d3",
+        "bytes": 283
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-browser-wip-1102k-receipt.json",
+        "sha256": "a4835739a977df4879b585ca0b6a5f27ef262abe1188fc0d95782279491c08e9",
+        "bytes": 2382
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-payment-center-wip-1102k-manifest.json",
+        "sha256": "48dba09b786ea0e798f4ca7f3756511241fa561a0971d104ac4b999ce6823205",
+        "bytes": 1670
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b010-payment-center-wip-1102k.patch",
+        "sha256": "63fd79f01fd0c2ca293c9f2f76b99092d1726e29bc7f24f8bdc504e632440029",
+        "bytes": 79097
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b010-browser-wip.py",
+        "sha256": "5ffb85f9e5c5ddaaa113de06b0442950e686cf51a147438efc3600f7501ca160",
+        "bytes": 1674
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b010-prepared-check.py",
+        "sha256": "4fc0fb9cd2c5ce31055a9851055822666e73d7dbb1ba57c7420e2ddc528b37d9",
+        "bytes": 2063
+      }
+    ],
+    "observed": "Focus logs a,b,d,e,f contain failing subtests; c,g,h,i,j show zero failed subtests with evolving test counts. WIP browser receipt reports wrapper exit 0 and 2 browser tests. These are not immutable candidate checks.",
+    "reportedEarlierIssues": [
+      "initial TypeScript/default-argument issue",
+      "legacy ON guard issue",
+      "test DTO extra opaque UUID",
+      "seeded payer fixture issues"
+    ],
+    "reportedIssuesEvidenceLimit": "Raw logs specifically substantiating attribution for each reported earlier issue were not located in this assembly; cause and exact mapping UNVERIFIED. Preserve all focus logs and patch."
+  },
+  "emailPreferenceProposal": {
+    "status": "SOURCE_REVIEWED_ONLY_UNAPPLIED_SQL_AND_RUNTIME_NOT_RUN",
+    "artifacts": [
+      {
+        "path": "/Users/ron/Downloads/condola-bootstrap/b010-payment-email-db-handoff.md",
+        "sha256": "5f848228737c3e46084152a831460cde9cab1332b8e1e269c700f277a1da744d",
+        "bytes": 7592
+      },
+      {
+        "path": "/Users/ron/Downloads/condola-bootstrap/20261102113010_b010_payment_email_preference.proposed.sql",
+        "sha256": "b14c2696afbf6ac101994a56296dc82d01d5a54671be77f7e036fcee42bffae8",
+        "bytes": 5949
+      }
+    ]
+  },
+  "limits": [
+    "No new tests, browser, DB calls or application changes were performed during manifest assembly.",
+    "Readback only compares named global controls and whole selected-org feature_flags against same-source seeded build clone, not whole DB or audit history.",
+    "Center and B009 browser profiles use separate owned clones, strict prefixes and origins; see bound drivers/configs.",
+    "No staging, Claude/Class B, Ron acceptance, provider receipt or Email delivery, complete B010/B028, release or MVP claim.",
+    "Independent manifest review remains pending."
+  ]
+}

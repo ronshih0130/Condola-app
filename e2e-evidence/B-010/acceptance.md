@@ -1,0 +1,2 @@
+> Current `3c46882327ea85d3cc3be34758fca39226f2b507` [actualpayercentercheckpoint](payment-center-checkpoint-3c46882.md): actualconfirm/reject/reversal+manager/legacy/enhancedconfirmation,roles/currentexpiry/payer/coTenant/crossscope/replay/concurrency/rollback/OFFnonownerandtwo-portalbrowserchecksPASS locally. Standardgate618unit/390RLS+solepriorhistoricalSKIP; broaderitem/staging/Claude/providerpending.
+

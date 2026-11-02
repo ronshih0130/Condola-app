@@ -1,0 +1,71 @@
+-- PROPOSAL ONLY: UNAPPLIED; not registered as a migration. Do not run on Mac.
+-- PE must first satisfy the handoff's catalog, ownership, review and target gates.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+ALTER TABLE app.b010_tenant_due_preferences
+  ADD COLUMN payment_result_enabled boolean NOT NULL DEFAULT true;
+
+CREATE FUNCTION app.b010_get_payment_email_preference(p_org uuid,p_live uuid,p_env text,p_session uuid,p_lease uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
+DECLARE v_actor uuid:=auth.uid(); v_value boolean;
+BEGIN
+  IF v_actor IS NULL OR NOT EXISTS (SELECT 1 FROM public.organizations o JOIN public.contacts ct ON ct.org_id=o.id
+    JOIN public.lease_parties lp ON lp.contact_id=ct.id AND lp.org_id=ct.org_id
+    JOIN public.auth_sessions sess ON sess.id=p_session AND sess.user_id=v_actor
+    WHERE o.id=p_org AND o.environment::text=p_env AND ((o.environment='live' AND o.id=p_live AND o.live_org_id IS NULL) OR (o.environment='sandbox' AND o.live_org_id=p_live))
+      AND ct.user_id=v_actor AND ct.archived_at IS NULL AND lp.lease_id=p_lease AND lp.role IN ('primary','co_tenant') AND sess.revoked_at IS NULL AND sess.expires_at>clock_timestamp()) THEN
+    RAISE EXCEPTION 'Preference unavailable' USING ERRCODE='42501';
+  END IF;
+  PERFORM 1 FROM public.organizations o JOIN public.contacts ct ON ct.org_id=o.id
+    JOIN public.lease_parties lp ON lp.contact_id=ct.id AND lp.org_id=ct.org_id
+    JOIN public.auth_sessions sess ON sess.id=p_session AND sess.user_id=v_actor
+    WHERE o.id=p_org AND o.environment::text=p_env AND ((o.environment='live' AND o.id=p_live AND o.live_org_id IS NULL) OR (o.environment='sandbox' AND o.live_org_id=p_live))
+      AND ct.user_id=v_actor AND ct.archived_at IS NULL AND lp.lease_id=p_lease AND lp.role IN ('primary','co_tenant') AND sess.revoked_at IS NULL AND sess.expires_at>clock_timestamp()
+    LIMIT 1 FOR SHARE OF o,ct,lp,sess NOWAIT;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Preference unavailable' USING ERRCODE='42501'; END IF;
+  SELECT pref.payment_result_enabled INTO v_value FROM app.b010_tenant_due_preferences pref WHERE pref.org_id=p_org AND pref.user_id=v_actor;
+  RETURN coalesce(v_value,true);
+END $$;
+
+CREATE FUNCTION app.b010_set_payment_email_preference(p_org uuid,p_live uuid,p_env text,p_session uuid,p_lease uuid,p_value boolean)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
+DECLARE v_actor uuid:=auth.uid(); v_old boolean;
+BEGIN
+  IF p_value IS NULL THEN RAISE EXCEPTION 'Preference unavailable' USING ERRCODE='42501'; END IF;
+  IF v_actor IS NULL OR NOT EXISTS (SELECT 1 FROM public.organizations o JOIN public.contacts ct ON ct.org_id=o.id
+    JOIN public.lease_parties lp ON lp.contact_id=ct.id AND lp.org_id=ct.org_id
+    JOIN public.auth_sessions sess ON sess.id=p_session AND sess.user_id=v_actor
+    WHERE o.id=p_org AND o.environment::text=p_env AND ((o.environment='live' AND o.id=p_live AND o.live_org_id IS NULL) OR (o.environment='sandbox' AND o.live_org_id=p_live))
+      AND ct.user_id=v_actor AND ct.archived_at IS NULL AND lp.lease_id=p_lease AND lp.role IN ('primary','co_tenant') AND sess.revoked_at IS NULL AND sess.expires_at>clock_timestamp()) THEN
+    RAISE EXCEPTION 'Preference unavailable' USING ERRCODE='42501';
+  END IF;
+  -- Coordinate with demo reset before taking parent or preference row locks.
+  LOCK TABLE public.platform_settings IN SHARE MODE NOWAIT;
+  PERFORM 1 FROM public.organizations o JOIN public.contacts ct ON ct.org_id=o.id
+    JOIN public.lease_parties lp ON lp.contact_id=ct.id AND lp.org_id=ct.org_id
+    JOIN public.auth_sessions sess ON sess.id=p_session AND sess.user_id=v_actor
+    WHERE o.id=p_org AND o.environment::text=p_env AND ((o.environment='live' AND o.id=p_live AND o.live_org_id IS NULL) OR (o.environment='sandbox' AND o.live_org_id=p_live))
+      AND ct.user_id=v_actor AND ct.archived_at IS NULL AND lp.lease_id=p_lease AND lp.role IN ('primary','co_tenant') AND sess.revoked_at IS NULL AND sess.expires_at>clock_timestamp()
+    LIMIT 1 FOR SHARE OF o,ct,lp,sess NOWAIT;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Preference unavailable' USING ERRCODE='42501'; END IF;
+  -- Preserve legacy due default on insert and never update due_enabled on conflict.
+  INSERT INTO app.b010_tenant_due_preferences(org_id,user_id) VALUES(p_org,v_actor) ON CONFLICT(org_id,user_id) DO NOTHING;
+  SELECT pref.payment_result_enabled INTO v_old FROM app.b010_tenant_due_preferences pref
+    WHERE pref.org_id=p_org AND pref.user_id=v_actor FOR UPDATE;
+  IF NOT EXISTS (SELECT 1 FROM public.auth_sessions sess WHERE sess.id=p_session AND sess.user_id=v_actor AND sess.revoked_at IS NULL AND sess.expires_at>clock_timestamp()) THEN
+    RAISE EXCEPTION 'Preference unavailable' USING ERRCODE='42501';
+  END IF;
+  UPDATE app.b010_tenant_due_preferences SET payment_result_enabled=p_value,updated_at=clock_timestamp()
+    WHERE org_id=p_org AND user_id=v_actor;
+  IF v_old IS DISTINCT FROM p_value THEN
+    INSERT INTO public.audit_log(org_id,actor_user_id,actor_role,table_name,row_id,action,event_type,old_row,new_row)
+      VALUES(p_org,v_actor,'tenant','b010_tenant_due_preferences',v_actor::text,'update','tenant_payment_email_preference_changed',jsonb_build_object('payment_result_enabled',v_old),jsonb_build_object('payment_result_enabled',p_value));
+  END IF;
+  RETURN p_value;
+END $$;
+REVOKE ALL ON FUNCTION app.b010_get_payment_email_preference(uuid,uuid,text,uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION app.b010_set_payment_email_preference(uuid,uuid,text,uuid,uuid,boolean) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION app.b010_get_payment_email_preference(uuid,uuid,text,uuid,uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION app.b010_set_payment_email_preference(uuid,uuid,text,uuid,uuid,boolean) TO service_role;
+COMMIT;
