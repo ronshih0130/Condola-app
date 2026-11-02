@@ -1,0 +1,143 @@
+{
+  "candidate": "5f5de707cacb3f72c0d91bbdacf6721c1a35191b",
+  "attempt": "a7",
+  "scope": "One observation-onlyEN390 focused diagnostic",
+  "actualExit": 1,
+  "selected": 1,
+  "pass": 0,
+  "fail": 1,
+  "otherCasesNotRun": 3,
+  "pngs": 8,
+  "failure": "Finalerrors[]contains1generic404; no errorswaived inobservation source",
+  "observedCorrelationThisRunOnly": {
+    "knownInjectedImage": {
+      "console404": 1,
+      "http404": 1,
+      "resourceType": "image",
+      "mainFrame": true
+    },
+    "exactOwnedOFFDocument": {
+      "console404": 1,
+      "http404": 1,
+      "resourceType": "document",
+      "mainFrame": true,
+      "gotoStatus404AssertPassed": true
+    }
+  },
+  "previousAttribution": "a3/a4/a6 not retroactively assigned",
+  "gateBuildBaselineReadback": "NOT RUN",
+  "ownedPortsDrained": [
+    "43148",
+    "4608"
+  ],
+  "files": [
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b011-comparison-final-check.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/run-b011-comparison-final-check.py",
+      "sha256": "73c50cfe91b20287c327066b915c8e863f85d57ca4d284697c9289f8f99d5729",
+      "bytes": 4942
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-runtime-driver.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-comparison-runtime-driver.py",
+      "sha256": "abcf90f3f9c1e2c87482acc212ad04d6a6114823ae97f6867cb539eb69f48604",
+      "bytes": 6022
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-control-readback.py",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-comparison-control-readback.py",
+      "sha256": "1f6efcf0899430ed574903e6b5904e2c5d1fcf7982de8b0daa14f7b31767f9ac",
+      "bytes": 6983
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-reviewed-source-freeze.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-comparison-reviewed-source-freeze.json",
+      "sha256": "8fd0d2e4bc7214a63689142605dd1347ef6690981b470f27405c03475c486501",
+      "bytes": 11362
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-setup-exit-5f5de70-a7.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-setup-exit-5f5de70-a7.json",
+      "sha256": "526a182e7bc683b0d2f877a5c3f2fe97f9446cc8e24ed152415b849b8183ea7a",
+      "bytes": 5779
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-focus-exit-5f5de70-a7.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-comparison-focus-exit-5f5de70-a7.json",
+      "sha256": "6754fe0d1ea3ab3c71b913cd5f29426ff4771805f6095544f1f62a2c8ae0373d",
+      "bytes": 6161
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-setup-5f5de70-a7.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-setup-5f5de70-a7.log",
+      "sha256": "9d098cdf795caf64db5dc72137d50e9aaaea1e56eb5b13d31d5ca0d51d54391b",
+      "bytes": 74
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-focus-5f5de70-a7.log",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-comparison-focus-5f5de70-a7.log",
+      "sha256": "8df56812b41047ea60d674f09b21bb0550c3f5a444d7ebb7fdfe43fa3f67e141",
+      "bytes": 2723
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/.last-run.json",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/.last-run.json",
+      "sha256": "659179a82ac79f26fabe171071c2b5789f01ab8b8ca5c842d7720a27091e79a0",
+      "bytes": 96
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/loading-en-390.png",
+      "sha256": "fde2d3788cfdb5086ca5bf6fa391a07db462d93956a91dbc93b6203bdfdc2ff7",
+      "bytes": 289305
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-moveout-viewport-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-moveout-viewport-en-390.png",
+      "sha256": "cf4d5b4c4931e2d930414a0005a91a797f2a5604a21244a066fd82de860d3e9e",
+      "bytes": 71132
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/empty-en-390.png",
+      "sha256": "ea1d3a4f50b924b737ad0c175ef001efde0c5399046c14163ca161bc3fc70809",
+      "bytes": 58573
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/image-error-en-390.png",
+      "sha256": "770d434e84df6ccfef4b2cc567b30fd6f2afdafc7793cba81919a0d971dffe86",
+      "bytes": 291329
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/no-photos-en-390.png",
+      "sha256": "1bf04a7bbe931bc7e0f26273b6b60249f9291be97c07e66efba177c3af86caa4",
+      "bytes": 97850
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/error-context.md",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/error-context.md",
+      "sha256": "4e62cd7eed6f20bf84f8bc9899af597bd0c26a990e95d825f4bc9fa7896f9ef3",
+      "bytes": 19283
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/pdf-only-en-390.png",
+      "sha256": "3746b4b846edeb0a534908eb6b131b38854026c402deb04773184660f01da810",
+      "bytes": 133215
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/staff-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/staff-en-390.png",
+      "sha256": "117193172074763f8325804711faf364b42643741bd6969a0101d4126a6bfc87",
+      "bytes": 286267
+    },
+    {
+      "original": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-en-390.png",
+      "preserved": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b011-comparison-a7-denial-observation/b011-focus-5f5de70-a7-artifacts/b011-handover-comparison-handover-photo-comparison-en-390-chromium/tenant-en-390.png",
+      "sha256": "d50d85730f3aa85a650f8b4d94f86afe13d9e15e8b37ba655520c84a6f3bcfc5",
+      "bytes": 76110
+    }
+  ]
+}
