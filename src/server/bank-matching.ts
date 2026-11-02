@@ -5,6 +5,7 @@ import { allocateAndLedger, lockAllocationInvoices } from "./domain";
 import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
 import { scoreMatch } from "./money";
 import { parseBankCsv } from "./bank-matching-rules";
+import { bankMatchBasis } from "../lib/bank-match-basis";
 import type { Session } from "./types";
 
 const fail = () => new Error("Bank matching unavailable");
@@ -39,8 +40,8 @@ export async function bankBoard(session: Session) {
        FROM bank_transactions b JOIN bank_accounts a ON a.id=b.bank_account_id AND a.org_id=b.org_id
        WHERE b.org_id=$1 AND a.archived_at IS NULL AND b.status IN ('unmatched','suggested') ORDER BY b.posted_on DESC,b.created_at DESC,b.id`,[session.orgId]);
     const payments = await client.query<{id:string;date:string;amount:string;currency:string;name:string|null;property_id:string}>(`SELECT p.id::text,p.paid_on::text AS date,p.amount_minor::text AS amount,p.currency,p.property_id::text,c.display_name AS name FROM payments p LEFT JOIN contacts c ON c.id=p.payer_contact_id AND c.org_id=p.org_id WHERE p.org_id=$1 AND p.bank_transaction_id IS NULL AND p.status IN ('submitted','confirmed') ORDER BY p.paid_on DESC,p.id`,[session.orgId]);
-    const suggestions = await client.query<{id:string;bank:string;payment:string;score:string}>(`SELECT s.id::text,s.bank_transaction_id::text AS bank,s.payment_id::text AS payment,s.score::text FROM bank_match_suggestions s JOIN payments p ON p.org_id=s.org_id AND p.id=s.payment_id WHERE s.org_id=$1 AND s.status='suggested' AND p.bank_transaction_id IS NULL AND p.status IN ('submitted','confirmed')`,[session.orgId]);
-    return { accounts:accounts.rows,lines:lines.rows,payments:payments.rows,suggestions:suggestions.rows };
+    const suggestions = await client.query<{id:string;bank:string;payment:string;score:string;reasons:unknown}>(`SELECT s.id::text,s.bank_transaction_id::text AS bank,s.payment_id::text AS payment,s.score::text,s.reasons FROM bank_match_suggestions s JOIN payments p ON p.org_id=s.org_id AND p.id=s.payment_id WHERE s.org_id=$1 AND s.status='suggested' AND p.bank_transaction_id IS NULL AND p.status IN ('submitted','confirmed')`,[session.orgId]);
+    return { accounts:accounts.rows,lines:lines.rows,payments:payments.rows,suggestions:suggestions.rows.map(({id,bank,payment,score,reasons}) => ({id,bank,payment,score,basis:bankMatchBasis(reasons)})) };
   });
 }
 

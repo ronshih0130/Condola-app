@@ -31,6 +31,14 @@ export function BankMatching({data,locale}:{data:Board;locale:Locale}) {
           {suggestions.map(suggestion => <form action={actionDecideBankMatch} key={suggestion.id}>
             <input type="hidden" name="bankId" value={line.id} /><input type="hidden" name="suggestionId" value={suggestion.id} />
             <p>{s.suggestions}: {data.payments.find(p => p.id === suggestion.payment)?.name || "—"} · {suggestion.score}</p>
+            <div data-testid="bank-suggestion-basis" className="hint">
+              <p>{s.basis}</p>
+              {suggestion.basis.amountExact || suggestion.basis.last5Matched || suggestion.basis.dateDeltaDays !== null ? <ul>
+                {suggestion.basis.amountExact ? <li>{s.amountExact}</li> : null}
+                {suggestion.basis.last5Matched ? <li>{s.last5Matched}</li> : null}
+                {suggestion.basis.dateDeltaDays !== null ? <li>{s.dateGap.replace("{days}", String(suggestion.basis.dateDeltaDays))}</li> : null}
+              </ul> : <p>{s.basisUnavailable}</p>}
+            </div>
             <label>{s.reason}<input className="inp" name="reason" required maxLength={500} /></label>
             <button className="btn" name="decision" value="match">{s.match}</button> <button className="btn" name="decision" value="reject">{s.reject}</button>
           </form>)}

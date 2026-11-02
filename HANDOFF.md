@@ -236,3 +236,11 @@ Ronpausedgoal andrequestedtruthfulcloseoutonly. Code17ec9df onmode-b-repair-over
 NewB008privateoperationDDL+MDreviewproposal inDownloads/repoevidence, NOTAPPLIED/NOTRUN; actualwriter/fullbillunfinished. PEownsnonMacDBchanges; B013/B021settingsonlydoesnotfinishworkflow. Allremainingblockers/nextsteps/handoffhashes/livebranchsnapshotlisted; stage/runtime/currentcatalog/Claude/othermachinesUNVERIFIED. No prod/newkey/mainmerge/operationalmigration/newproposedSQLexecution/realmessage/legalcopy/operationalactivation. Existingstagingbundleunchanged; quota/model/costunknownwhereunobservable.
 
 STOP POINT: STOPPED_AFTER_REQUESTED_HANDOFF; next: waitRonexplicitresume andreadDownloads handoffactualpublication/ownershipreceipt; rootfinishesonlyauthorizedpush/mirror/releaseattemptnow. DevelopmentrequiresRonexplicitresume. Ownershipreleasemayrejectcleanmaincontract; no bypass. Canonicalmirrorcoordinatormode-b-buildretainsitsoriginaldirtymirror.log. OwnerRon/Codex3099AC86.
+
+## Development resumed — 2026-11-02T10:18:15.431326-08:00
+
+Ron permitted Sol high execution/testing and broadened executor choice to appropriate subagent models. Goal active again; all39core/fourportal/LINEscope remains. SameUUID3099AC86 claimrenewedWORKING, ops-lockc2557f6; prod/stagingclaimsRELEASED. Currentbranch mode-b-repair-override-prep cleanbaselinee4432b9 beforethisresumeentry. Luna executor/observerinterrupted; no result/termination of unknownremoteoperationis fabricated. Localobservedpriorclaim/testprocessesnone aftercompletionofrootstatuscheck.
+
+Nexteligibleactualproductgap B009 storedsuggestionbasis: fixedserverprojection/sanitizedDTO/localizedhistoricallabel/fallback, originalhumanfinancialdecisionspreserved; rootreservesoperationaldocs, newSolhighauthorreservedpaths onboard. NewPEsessione57a057c-038c-4edf-a28c-aecb20708fd5. Runfocusedthenimmutablefullgate/build/originalpreflight/Worker/actual390+1280beforeOrigincheckpoint/mirror. No production/mainmerge/operationalMacmigration/newproposedSQLexecution/flagactivation/externalmessages/legalcopy. Last615unit/380RLS+1priorhistoricalskip evidenceishistorical, no approvaltransfer. Stage/currentcatalog/Claude/TRAINremainseparatepending.
+
+STOP POINT: WORKING; next: b009_executor_sol implementreservedsource then independentSolsource review; ownerRon/Codex3099AC86.

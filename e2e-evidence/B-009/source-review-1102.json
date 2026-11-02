@@ -1,0 +1,32 @@
+{
+  "recordedAt": "2026-11-02T10:26:08.474875-08:00",
+  "baseline": "e4432b94b0f554d3adc66e9c764598b0be2ce172",
+  "sourceBlobs": {
+    "src/lib/bank-match-basis.ts": "ed003b2f9345d5354e5913c6d30f05db1077bab7",
+    "src/lib/bank-match-basis.test.ts": "6a79ad3ddd2bb4bc0648503cad16e88c22a7771d",
+    "src/server/bank-matching.ts": "c3461fa84e30cfa2a33512ccfca24ec0102013f7",
+    "src/components/bank-matching.tsx": "144f1efe92fc8a2732fbc61305b7c388afd14ce0",
+    "src/i18n/bank-matching.ts": "6e62bdce04b6a5d4c6de335bfdd2469a0ae2ac32",
+    "src/server/bank-matching.integration.test.ts": "900ff90f7d0c0734b7d101cc1b91b15d9d3f2fc9",
+    "e2e/bank-matching.spec.ts": "7592517f9ed03bed850c44eaf51d2f914cbc798d",
+    "e2e/b009-bank-private-playwright.config.ts": "5a499d31393fc86c55f73d2581faffcdf2465d69",
+    "package.json": "792ba7ef533fc36cf302d0b68f685203ac7d49da",
+    "scripts/run-e2e.ts": "6d5e39d6bac70e387fad308d5cbc445013528363"
+  },
+  "helperSha256": {
+    "run-b009-prepared-check.py": "e90689f22d126416437d4d13e35d8531575bc600fb0da4baf8422f6c71f8df0a",
+    "b009-runtime-driver.py": "044bd0376bf208a7bbba184b065dd92c1831eb2eb7b2482fc3318ad1caabb988",
+    "b009-controls-readback.cjs": "1d283eb28ff0105a363249066f50288d82555b613e52be6623945271501ddea2"
+  },
+  "sourceReview": "PASS_SCOPED_SOURCE_REVIEW",
+  "reviewerRequestedModel": "gpt-6.1-sol",
+  "reviewerRequestedEffort": "high",
+  "reviewerAgent": "resume_planner_sol",
+  "runtimeNotYetRun": true,
+  "limits": [
+    "Not Claude/staging/full-B009 acceptance",
+    "Historical B008 UNKNOWN not waived",
+    "Legacy OFF screen unchanged",
+    "Focused pure/type/lint author-attributed until final log binding; DB focus log independently read1PASS"
+  ]
+}

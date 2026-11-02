@@ -125,8 +125,32 @@ test("import, decisions, privilege and concurrent payment matching", async () =>
   } finally { await blocker.end(); await config.end(); }
   await db.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text,$2::text)) WHERE key='bank_matching'`,[ORG_ID,sandbox]);
   const newPayment = (await db.query<{id:string}>(`INSERT INTO payments(org_id,property_id,lease_id,currency,amount_minor,paid_on,method,status,source,submitted_by) VALUES ($1,$2,$3,$4,7700,'2026-01-02','bank_transfer','submitted','tenant_portal',$5) RETURNING id::text`,[ORG_ID,property,lease,account.currency,USERS.admin])).rows[0].id;
-  const suggestionsImport = await importBankFile(session,account.id,new TextEncoder().encode("date,amount,last5,memo\n2026-01-02,77.00,12345,reject"),"utf-8"); assert.ok(suggestionsImport);
+  await db.query(`UPDATE payments SET payer_account_last5='01234' WHERE id=$1`,[newPayment]);
+  const suggestionsImport = await importBankFile(session,account.id,new TextEncoder().encode("date,amount,last5,memo\n2026-01-04,77.00,01234,reject"),"utf-8"); assert.ok(suggestionsImport);
   const suggested = (await db.query<{id:string;bank:string}>(`SELECT s.id::text,s.bank_transaction_id::text AS bank FROM bank_match_suggestions s JOIN bank_transactions b ON b.id=s.bank_transaction_id WHERE b.import_id=$1 AND s.payment_id=$2`,[suggestionsImport.importId,newPayment])).rows[0]; assert.ok(suggested);
+  const stored = (await db.query(`SELECT reasons,score::text FROM bank_match_suggestions WHERE id=$1`,[suggested.id])).rows[0];
+  assert.deepEqual(stored.reasons,{amount_exact:true,last5:"01234",date_delta_days:2});
+  const basisSnapshot = async () => {
+    const current = await bankBoard(session); assert.ok(current);
+    const item = current.suggestions.find(item=>item.id===suggested.id); assert.ok(item);
+    assert.equal(Object.hasOwn(item,"reasons"),false);
+    assert.equal(JSON.stringify(item).includes("01234"),false);
+    return item;
+  };
+  const historical = await basisSnapshot();
+  assert.deepEqual(historical.basis,{amountExact:true,last5Matched:true,dateDeltaDays:2});
+  assert.equal(historical.score,stored.score);
+  // Change current payment facts: the saved explanation and score remain historical.
+  await db.query(`UPDATE payments SET paid_on='2026-01-20',payer_account_last5='99999' WHERE id=$1`,[newPayment]);
+  assert.deepEqual(await basisSnapshot(),historical);
+  for (const reasons of [{private:"B009-private-marker",amount_exact:"true",last5:12345,date_delta_days:-1},[],null]) {
+    await db.query(`UPDATE bank_match_suggestions SET reasons=$2::jsonb WHERE id=$1`,[suggested.id,JSON.stringify(reasons)]);
+    const unsupported = await basisSnapshot();
+    assert.deepEqual(unsupported.basis,{amountExact:false,last5Matched:false,dateDeltaDays:null});
+    assert.equal(JSON.stringify(unsupported).includes("B009-private-marker"),false);
+    assert.equal(unsupported.score,stored.score);
+  }
+  await db.query(`UPDATE bank_match_suggestions SET reasons=$2::jsonb WHERE id=$1`,[suggested.id,JSON.stringify(stored.reasons)]);
   await db.query(`CREATE FUNCTION app.b009_test_fail_decision() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic audit failure'; END $$`);
   await db.query(`CREATE TRIGGER b009_test_fail_decision BEFORE INSERT ON app.b009_decisions FOR EACH ROW EXECUTE FUNCTION app.b009_test_fail_decision()`);
   await assert.rejects(decideBankMatch(session,{bankId:suggested.bank,suggestionId:suggested.id,decision:"reject",reason:"synthetic rejection"}));
