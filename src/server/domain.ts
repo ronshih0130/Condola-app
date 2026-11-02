@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
+import { currentOwnerTransferStaff, lockOwnerTransferPeriod } from "./owner-transfer-period-lock";
 import { maybe, many, one, svc, tx } from "./db";
 import { FlowError } from "./errors";
 import { deliveryPlan, outboundNote, SANDBOX_NOT_SENT } from "./outbound";
@@ -2653,15 +2654,21 @@ export async function closeMonth(session: Session, month: string, note: string) 
   assertPerm(session, "month.close");
   if (!/^\d{4}-\d{2}$/.test(month)) throw new FlowError("errors.required");
   await tx(session.userId, async (client) => {
+    if (!await currentOwnerTransferStaff(client, session)) throw new FlowError("errors.forbidden");
+    await lockOwnerTransferPeriod(client, session.orgId);
     const existing = await maybe<{ id: string }>(
       client,
       `SELECT id::text FROM month_closes WHERE org_id = $1 AND period_month = $2::date`,
       [session.orgId, `${month}-01`],
     );
-    if (existing) throw new FlowError("errors.paymentState");
+    if (existing) {
+      if (!await currentOwnerTransferStaff(client, session)) throw new FlowError("errors.forbidden");
+      throw new FlowError("errors.paymentState");
+    }
     await client.query(
       `INSERT INTO month_closes (org_id, period_month, closed_by, note) VALUES ($1, $2::date, $3, $4)`,
       [session.orgId, `${month}-01`, session.userId, note.trim() || null],
     );
-  });
+    if (!await currentOwnerTransferStaff(client, session)) throw new FlowError("errors.forbidden");
+  }, { orgId: session.orgId, environment: session.environment });
 }

@@ -1,3 +1,5 @@
+import { ownerTransferView } from "@/server/owner-transfers";
+import { ownerTransferCopy } from "@/i18n/owner-transfer";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -28,6 +30,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
     statementRoster(session, month),
     listProperties(session),
   ]);
+  const transferView = can(session.role, "month.close") ? await ownerTransferView(session) : null;
   const canGenerate = can(session.role, "stmt.generate");
   const canExpense = can(session.role, "exp.add");
   const roleLabel: Record<string, string> = {
@@ -45,6 +48,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader title={t("s_423eca6")} />
+      {transferView && <p><Link className="btn" href="/m/statements/transfers">{ownerTransferCopy(session.locale).entry}</Link></p>}
       <ErrorBanner t={t} error={params.error} />
       <StatementForm
         owners={owners}

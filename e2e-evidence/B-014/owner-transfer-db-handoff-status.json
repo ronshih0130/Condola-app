@@ -1,0 +1,13 @@
+{
+  "recordedAt": "2026-11-02T14:55:47.805383-08:00",
+  "sourcePath": "/Users/ron/Downloads/condola-bootstrap/b014-owner-transfer-db-handoff.md",
+  "sha256": "a496f32f580502ed5f074d40c154643fbc197f02b86089a6ae9c64b3a4abf66a",
+  "bytes": 11764,
+  "status": "DRAFT_UNREVIEWED_NOT_APPLY_READY",
+  "independentReview": "NOT_RUN_MODEL_UNAVAILABLE",
+  "sqlAuthored": false,
+  "applied": false,
+  "databaseTests": "NOT_RUN",
+  "remainingOwner": "Codex fixed gateway/role/guard/executable SQL/port design+implementation; PE actual target security/review and approved nonMac apply after design",
+  "scope": "Narrow future typed seal/legacy month close/reversal and owner read boundary, no operational authority or completed B014 claim"
+}

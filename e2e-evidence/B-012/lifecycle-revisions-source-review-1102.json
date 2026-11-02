@@ -1,0 +1,38 @@
+{
+  "recordedAt": "2026-11-02T14:38:56.303571-08:00",
+  "reviewerRequestedModel": "gpt-6.1-sol",
+  "reviewerRequestedReasoning": "high",
+  "reviewerAgent": "resume_planner_sol",
+  "actualModelIndependentlyObservable": false,
+  "sourceVerdict": "GO_CLOSED_FOUNDATION_DESIGN_ONLY",
+  "applied": false,
+  "parsedOrExecuted": false,
+  "runtime": "NOT_RUN",
+  "applyReady": false,
+  "files": {
+    "b012-lifecycle-revisions-db-handoff.md": {
+      "sha256": "a8cf8544a7599782f582d343ae95af3faeb8e69992ae98adf6dea43bcd0c0e1e",
+      "repositoryCopy": "lifecycle-revisions-db-handoff.md"
+    },
+    "20261102222644_b012_lifecycle_revisions.proposed.sql": {
+      "sha256": "22dabe038ebc40086837be60240b538bb011b6c013f97ae2f3b0e6dd8e6e225e",
+      "repositoryCopy": "lifecycle-revisions-proposed.sql.txt"
+    }
+  },
+  "closedP2": [
+    "party_direct prior actor identity immutable across successor as well as subject/origin; staff-reported actual correcting staff preserved",
+    "bounded change_reason mandatory every successor; root nonwithdrawn/reasonNULL; withdrawal as successor",
+    "MD corrected responseFK and ownership Codexdesign/implementation versusPEvalidation/approvednonMacapply"
+  ],
+  "preservedSourceOnlyHistory": [
+    "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-lifecycle-initial-source",
+    "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b012-lifecycle-pre-ownership-source"
+  ],
+  "limits": [
+    "No gateway implementation/grants/public write API; fixed actor/subject/privacy/current session/source authorization still Codex work",
+    "Future private-table synthetic reset allowlist/old replica-worker compatibility explicitly pending; FKs do not guarantee reset cleanup",
+    "Actual target catalog/PG16\u201317/security/grants/canonical replay/concurrency/retention/backup/rollback not runtime verified",
+    "No lease/status/signed term/actual moveout/signature/finance/outbound message change; existing hold proposal separate and unchanged",
+    "Specific subject intent or staff report is not other-party agreement/legal notice validity; unknown date remainsNULL"
+  ]
+}

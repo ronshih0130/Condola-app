@@ -1,0 +1,95 @@
+-- CLOSED SOURCE PROPOSAL: UNAPPLIED / NOT RUN / NOT APPLY-READY.
+-- No application gateways, grants, flags, lease updates, notifications or finance writes.
+-- Target catalog, role ownership, reset, retention and execution remain unverified.
+
+CREATE TABLE app.b012_lifecycle_revisions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL,
+  lease_id uuid NOT NULL,
+  record_id uuid NOT NULL,
+  revision integer NOT NULL CHECK (revision > 0),
+  prior_revision_id uuid,
+  response_to_revision_id uuid,
+  kind text NOT NULL CHECK (kind IN ('renewal_intent','termination_notice')),
+  subject_contact_id uuid NOT NULL,
+  subject_kind text NOT NULL CHECK (subject_kind IN ('tenant','owner')),
+  origin text NOT NULL CHECK (origin IN ('party_direct','staff_reported')),
+  actor_id uuid NOT NULL,
+  actor_kind text NOT NULL CHECK (actor_kind IN ('staff','tenant','owner')),
+  source_channel text NOT NULL CHECK (length(btrim(source_channel)) BETWEEN 1 AND 80),
+  source_note text NOT NULL DEFAULT '' CHECK (length(source_note) <= 2000),
+  asserted_event_date date,
+  intended_date date,
+  factual_value text NOT NULL CHECK (length(btrim(factual_value)) BETWEEN 1 AND 1000),
+  withdrawn boolean NOT NULL DEFAULT false,
+  change_reason text CHECK (change_reason IS NULL OR length(btrim(change_reason)) BETWEEN 1 AND 1000),
+  evidence_file_id uuid,
+  evidence_sha256 text CHECK (evidence_sha256 IS NULL OR evidence_sha256 ~ '^[0-9a-f]{64}$'),
+  evidence_metadata text CHECK (evidence_metadata IS NULL OR length(evidence_metadata) <= 1000),
+  request_id uuid NOT NULL,
+  request_payload_sha256 text NOT NULL CHECK (request_payload_sha256 ~ '^[0-9a-f]{64}$'),
+  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  UNIQUE (org_id, lease_id, id),
+  UNIQUE (org_id, lease_id, record_id, id),
+  UNIQUE (org_id, lease_id, record_id, revision),
+  UNIQUE (actor_id, request_id),
+  FOREIGN KEY (org_id, lease_id) REFERENCES public.leases(org_id, id),
+  FOREIGN KEY (org_id, subject_contact_id) REFERENCES public.contacts(org_id, id),
+  FOREIGN KEY (org_id, evidence_file_id) REFERENCES public.files(org_id, id),
+  FOREIGN KEY (org_id, lease_id, record_id, prior_revision_id)
+    REFERENCES app.b012_lifecycle_revisions(org_id, lease_id, record_id, id),
+  FOREIGN KEY (org_id, lease_id, response_to_revision_id)
+    REFERENCES app.b012_lifecycle_revisions(org_id, lease_id, id),
+  CHECK ((revision = 1 AND prior_revision_id IS NULL) OR (revision > 1 AND prior_revision_id IS NOT NULL)),
+  CHECK ((origin = 'party_direct' AND actor_kind = subject_kind) OR (origin = 'staff_reported' AND actor_kind = 'staff')),
+  CHECK ((revision = 1 AND change_reason IS NULL AND NOT withdrawn) OR (revision > 1 AND change_reason IS NOT NULL)),
+  CHECK (evidence_file_id IS NOT NULL OR (evidence_sha256 IS NULL AND evidence_metadata IS NULL)),
+  CHECK (prior_revision_id IS DISTINCT FROM id AND response_to_revision_id IS DISTINCT FROM id)
+);
+CREATE UNIQUE INDEX b012_lifecycle_one_successor
+  ON app.b012_lifecycle_revisions(prior_revision_id) WHERE prior_revision_id IS NOT NULL;
+
+-- A successor keeps the exact voice and subject; responses have a separate
+-- record and point to a particular revision, never rewrite that voice.
+CREATE FUNCTION app.b012_lifecycle_revision_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+DECLARE
+  prior_row app.b012_lifecycle_revisions%ROWTYPE;
+  response_record uuid;
+BEGIN
+  IF NEW.prior_revision_id IS NOT NULL THEN
+    SELECT * INTO prior_row FROM app.b012_lifecycle_revisions
+      WHERE org_id = NEW.org_id AND lease_id = NEW.lease_id
+        AND record_id = NEW.record_id AND id = NEW.prior_revision_id;
+    IF NOT FOUND OR NEW.revision <> prior_row.revision + 1 OR
+       (NEW.kind, NEW.subject_contact_id, NEW.subject_kind, NEW.origin, NEW.response_to_revision_id)
+       IS DISTINCT FROM
+       (prior_row.kind, prior_row.subject_contact_id, prior_row.subject_kind, prior_row.origin, prior_row.response_to_revision_id) OR
+       (NEW.origin = 'party_direct' AND NEW.actor_id IS DISTINCT FROM prior_row.actor_id) THEN
+      RAISE EXCEPTION 'invalid lifecycle revision' USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  IF NEW.response_to_revision_id IS NOT NULL THEN
+    SELECT record_id INTO response_record FROM app.b012_lifecycle_revisions
+      WHERE org_id = NEW.org_id AND lease_id = NEW.lease_id AND id = NEW.response_to_revision_id;
+    IF NOT FOUND OR response_record = NEW.record_id THEN
+      RAISE EXCEPTION 'response requires a different lifecycle record' USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER b012_lifecycle_revision_guard BEFORE INSERT ON app.b012_lifecycle_revisions
+  FOR EACH ROW EXECUTE FUNCTION app.b012_lifecycle_revision_guard();
+
+CREATE FUNCTION app.b012_lifecycle_history_immutable() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+  RAISE EXCEPTION 'lifecycle history is immutable' USING ERRCODE = '42501';
+END $$;
+CREATE TRIGGER b012_lifecycle_history_immutable BEFORE UPDATE OR DELETE ON app.b012_lifecycle_revisions
+  FOR EACH ROW EXECUTE FUNCTION app.b012_lifecycle_history_immutable();
+
+ALTER TABLE app.b012_lifecycle_revisions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE app.b012_lifecycle_revisions FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION app.b012_lifecycle_revision_guard() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION app.b012_lifecycle_history_immutable() FROM PUBLIC, anon, authenticated, service_role;
