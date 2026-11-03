@@ -1,0 +1,110 @@
+{
+  "candidate": "0b7c3a4da1ab4eed527f4b0ec68a436c8db2c159",
+  "baseline": "6c9d4d0bdf78436206c57b9e244e42cf225b7a9e",
+  "recordedAt": "2026-11-02T17:28:50-08:00",
+  "reviewerRequested": "gpt-6-astra",
+  "reasoningRequested": "high",
+  "actualRuntimeIdentityIndependentlyObservable": false,
+  "designation": "RON_AUTHORIZED_ASTRA_NO_SOL_RETRY_AFTER_RUNTIME",
+  "verdict": "GO_SCOPED_LOCAL_SOURCE_AND_RUNTIME_EVIDENCE",
+  "wholeB014": "INCOMPLETE",
+  "release": "NO_GO",
+  "scope": "Staff asserted transfer create/replay/reverse and staff history, existing-schema synthetic local runtime",
+  "manifest": {
+    "bytes": 61837,
+    "sha256": "2cf72869e02ff7e07c78f8d27f1cc5f7e4c336c8e47b0ed48f275e43753c456f"
+  },
+  "report": {
+    "bytes": 6711,
+    "sha256": "4bcb03ee7b39331c4fbe49119543c11480943ad8571ea796a4ab63c95811c0d6"
+  },
+  "sourceMapSha256": "284661f6faf70199f7acdb99e3811244922478d2c70ce6628281286a8615b584",
+  "freezeSha256": "876463d386e9d6d82b3e9b0e8384413a498b7a2ec6e811e0722fdd4b45242c42",
+  "sourceAndEvidence": {
+    "currentArtifactHashSizeBindings": 86,
+    "previousArtifactHashSizeBindings": 200,
+    "sourcePins": 68,
+    "changedFromBaseline": 8,
+    "unchangedFromBaseline": 60,
+    "helpers": 3,
+    "receipts": 13,
+    "beforeAfterSourcePinValues": 1768,
+    "allExecutedExitsZero": true,
+    "baselineOnlySetupDriver": "NOT_RUN_BY_DESIGN"
+  },
+  "gate": {
+    "passedSteps": 11,
+    "unit": {
+      "tests": 625,
+      "pass": 625,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "rls": {
+      "tests": 394,
+      "pass": 393,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 1,
+      "todo": 0
+    },
+    "soleSkip": "b888ccd historical Ron-approved"
+  },
+  "build": {
+    "next": "PASS",
+    "cf": "PASS",
+    "preflight": "PASS",
+    "workerPassed": 1
+  },
+  "browser": {
+    "focusPassed": 1,
+    "fullPassed": 4,
+    "focusPngs": 8,
+    "fullPngs": 32,
+    "independentOriginalsViewed": [
+      {
+        "locale": "en",
+        "width": 1280,
+        "states": 8
+      },
+      {
+        "locale": "zh-TW",
+        "width": 390,
+        "states": 8
+      },
+      {
+        "locale": "zh-TW",
+        "width": 1280,
+        "states": 8
+      }
+    ],
+    "coordinatorOriginalsReportedViewed": {
+      "finalEN390": 8,
+      "focusEN390": 8
+    },
+    "note": "Known development badge overlap and raw IDs/timestamps retained"
+  },
+  "closedFindings": [
+    "stale-tab-wrong-actor",
+    "json-null-treated-as-absent",
+    "definitive-owner-date-rejection-froze-form"
+  ],
+  "controls": {
+    "readOnly": true,
+    "globalControl": "Original key absent in both clones; positive full-row/microsecond restoration not exercised",
+    "selectedOrgWholeFlagsRestored": true,
+    "globalOff": true,
+    "orgOptins": 0,
+    "scope": "Named global control and selected organization flags only; no whole-database/audit-history claim"
+  },
+  "historicalA5": "NO_GO_SOURCE_UNCHANGED",
+  "a1OldRlsCause": "UNKNOWN_UNWAIVED",
+  "a2ObserverCause": "UNPROVEN_UNWAIVED",
+  "executionByThisReviewer": false,
+  "hostedPrivacyAndMixedVersions": "OPEN",
+  "ownerProjection": "OPEN",
+  "statementPayoutsReportVersionsDelivery": "OPEN",
+  "stagingClaudeClassBPilotRonAcceptance": "OPEN"
+}

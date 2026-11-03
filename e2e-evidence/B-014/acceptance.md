@@ -14,3 +14,7 @@ Candidate `6c9d4d0bdf78436206c57b9e244e42cf225b7a9e`. Local test results only; i
 | Full B014 | INCOMPLETE: independent QA, hosted/legacy sealing, owner projection, company-recipient cash/payout/report versions/delivery,staging/requiredacceptance |
 
 No actual remittance, bank confirmation, owner repayment or source-table marker authority is inferred.
+
+## Current a6 correction — 2026-11-02T17:30:19.018831-08:00
+
+Immutable `0b7c3a4da1ab4eed527f4b0ec68a436c8db2c159`; see [current checkpoint](owner-transfer-checkpoint-0b7c3a4.md) and [final independent verdict](independent-astra-final-a6.md). Standard gate625unit/393RLS+historical1,build4/focus1/final4/readback passed. Command receipts bind actual argv/helper hashes; no new SQL/migration. Whole B014/ClassB/release incomplete.

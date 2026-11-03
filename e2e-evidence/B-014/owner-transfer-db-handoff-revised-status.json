@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-11-02T17:30:19.018831-08:00",
+  "sourcePath": "/Users/ron/Downloads/condola-bootstrap/b014-owner-transfer-db-handoff.md",
+  "sha256": "3d36cabb7f9df773de22c6fb49974f00e67f34d98f20189b5dd6586ae8bd6299",
+  "bytes": 11371,
+  "status": "DESIGN_STARTING_POINT_GO_ONLY_NOT_APPLY_READY",
+  "independentReview": "ASTRA_ARCHITECTURE_GO_ONLY; executable SQL and hosted validation NOT RUN",
+  "sqlAuthored": false,
+  "applied": false,
+  "databaseTests": "NOT_RUN",
+  "remainingOwner": "Codex fixed gateway/role/guard/executable SQL/port design+implementation; PE actual target security/review and approved nonMac apply after design",
+  "scope": "Narrow future typed seal/legacy month close/reversal and owner read boundary, no operational authority or completed B014 claim",
+  "priorDraftSha256": "a496f32f580502ed5f074d40c154643fbc197f02b86089a6ae9c64b3a4abf66a"
+}

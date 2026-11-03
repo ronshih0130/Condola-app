@@ -1,9 +1,7 @@
 # B014 status
 
-2026-11-02T16:17:38.731758-08:00: partial local staff transfer/reversal/history code `6c9d4d0bdf78436206c57b9e244e42cf225b7a9e` passes recorded local tests. Independent model QA pending; wholeB014 `pending`, not implementation-complete, shipped or pilot-ready.
+2026-11-02T17:30:19.018831-08:00; partial staff manual transfer/reversal/history correction locally verified at `0b7c3a4da1ab4eed527f4b0ec68a436c8db2c159`. Whole B014 remains `pending`.
 
-[Checkpoint](owner-transfer-checkpoint-6c9d4d0.md), [provisional manifest](owner-transfer-runtime-6c9d4d0.json), [NO-GO verdict](verdict.md).
+[Current checkpoint](owner-transfer-checkpoint-0b7c3a4.md), [independent verdict](independent-astra-final-a6.md), [manifest](owner-transfer-runtime-0b7c3a4.json). Earlier source NO_GO and provisional records remain historical.
 
-STOP POINT: WORKING; next: commit/push WIP evidence, renew/mirror; resolve reviewer availability and continue only authorized unblocked work; ownerRon/Codex3099AC86.
-
-B014freshsource/helperGO 2026-11-02T16:50:37.708425-08:00: Astraindependentreview8boundedcorrectionpins+60unchanged/all68,3newa6helpersnamespace-onlyadaptation. SourceGOonly, freshruntimeNOTRUN. Old6c9/a5sourceNO_GOimmutable, historicalruntimePASSvalidated200bindings; priorSolitemclosureNOT_VERIFIED. Newcommandsbindrenderedactor/org/liveparent/envprecondition,currentauthorityunchanged; malformednullblocks, datedprewriterejectioneditable. Legacyunscopedpendingblockeduntouched: hostedupgrade/recoveryprivacyreviewrequired. Nextfreezeimmutablecandidateandisolateda6focus/fullgate/build/fullbrowser/readback, no newSQL/prod/mainmerge/operationalflagactivation. Newhelpersleavea5all200oldbindingsresolvable. B011draftUnicodev3awaitsfreshsourceonlyreview. B015boundedplanGOonly, appnotstarted.
+STOP POINT: WORKING; next: push/renew/mirror then reviewed B015 bounded guard; ownerRon/Codex3099AC86.

@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-02T13:18:10.146031-08:00: complete queue remains active. B011 photo comparison has scoped local PASS at `bb02a75d9440a20a067b9e6481a65b3a5bb78a83`; whole settlement/staging remains pending. Earlier stop notes are historical.**
+> **Current 2026-11-02T17:30:19.018831-08:00: complete queue active. B014 corrected local scope `0b7c3a4` passed full local checks and designated Astra review; whole B014 remains pending. Ron permits Astra; no Sol retry required. No whole item newly done.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 
