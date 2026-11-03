@@ -1,0 +1,31 @@
+{
+  "scope": "disconnectedmockv4 strict trust-domain matrix; independent review pending no execution",
+  "baseline": "0e4b2be112f777baf6f992fc292f40a1a0d016b4",
+  "files": {
+    "src/server/staff-email-rules.ts": {
+      "blob": "6b7b4e80d8045602c69ff937bbf87355496508f4",
+      "bytes": 1754,
+      "sha256": "b782051435e477f30b2c29496946f79bdc34b2cf65016336008bc6226529cddc"
+    },
+    "src/server/staff-email-provider.ts": {
+      "blob": "b49b65e61d17acd3057e4016fb3009c532f60f75",
+      "bytes": 7871,
+      "sha256": "a03cbb0c5b3196dd497f7e1c79fecbb87c92e06659bb5fb13260501fc8d6a732"
+    },
+    "src/server/staff-email-rules.test.ts": {
+      "blob": "3a86699457ef9b733cf51a301dd3fdc9d0ff5bf2",
+      "bytes": 1949,
+      "sha256": "c9c59fa54e96e8f02407d0c23a0131c5d32b2da4ec8df928333831f65e4911fb"
+    },
+    "src/server/staff-email-provider.test.ts": {
+      "blob": "ec4b132742ca5ead26823b413897bc2851d1f3fd",
+      "bytes": 13096,
+      "sha256": "0877eed217ade329c9028e9e150db41d4b7b6e6ee92984b19b51609eaaac51ae"
+    },
+    "package.json": {
+      "blob": "29a8383b466274d0699655e4308e49cb7659174a",
+      "bytes": 13468,
+      "sha256": "5da95d58d0b7545d595410b1d30d8e76bcd19844c4298dcb84ea41bee4f2b6f8"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+# B016 verified email mock plan review
+
+**PLAN_GO · four unconnected files only.**
+
+- `src/server/staff-email-rules.ts`
+- `src/server/staff-email-provider.ts`
+- `src/server/staff-email-rules.test.ts`
+- `src/server/staff-email-provider.test.ts`
+
+### Decision
+
+PLAN_GO for author reservation of the four listed, unconnected files only. Rules receive plain synthetic inputs. The adapter requires an injected transport and trusted fixed project configuration. Mocks are in-memory. Keep imports side-effect free, with no default fetch, environment reads, SDK initialization, registry edits, routes, UI, schema, package edits or application wiring. No test or provider request ran in this review.
+
+### Rules and caller boundary
+
+Use project email normalization semantics, preserve plus/dot distinctions, and treat same canonical address as unchanged. Take the privileged-address exclusions as explicit trusted input and deny both privileged current and target addresses. Pending/current address, account UUID, version and chosen old/new mailbox come from trusted caller state. Never accept an actor, pending target or proof destination from form authority. Unexpired identical pending requests must not automatically resend. Keep cancellation/expiry/restart policy outside the mocks until product policy is recorded.
+
+### Fresh password and actor binding
+
+Mock only the fixed password grant and, where needed, GET /auth/v1/user. Bind the actual access bearer used for PUT to the expected immutable account UUID, confirmed current email and an owned provider=email identity matching that address. Distinguish the identity row ID from identity.user_id; never substitute display/user metadata or a decoded but unverified token. Use the actual bearer on /user before PUT when the grant representation cannot prove the binding; an unconditional authenticated /user check is also a small closed implementation. Reject mismatches, empty tokens, malformed success, anonymous/SSO/unsupported accounts, verified MFA or unclear factor evidence. A provider-documented factors omission in a trusted complete representation must be distinguished from missing evidence in a partial body. Password failure or provider uncertainty cannot fall back to local crypt, MFA bypass, signup/invite/reset helpers or service/admin credentials. The published model and gateway identify these provider fields and AAL behavior. [Identity model](https://github.com/supabase/auth/blob/ae468cabab7359819730ca80b5c6178def3579a2/internal/models/identity.go#L12-L25) · [User model](https://github.com/supabase/auth/blob/ae468cabab7359819730ca80b5c6178def3579a2/internal/models/user.go#L53-L62) · [User update](https://github.com/supabase/auth/blob/ae468cabab7359819730ca80b5c6178def3579a2/internal/api/user.go#L87-L122)
+
+### Mutation contract
+
+The sole begin mutation is PUT /auth/v1/user with the fresh user bearer and only the normalized email field. Reserve the request origin/path/method and JSON shape inside the adapter. No caller-selected URLs or redirects, secret-bearing URLs, metadata update, password mutation, confirmation flag or administrative endpoint. Inject a fake transport only; enforce an abortable finite deadline, redirect:error and no retries. Distinguish definite pre-send rejection from timeout/response loss after a possible write. On uncertainty return a fixed unknown outcome requiring canonical reread; sending a second request is unsafe. A successful begin means request accepted and pending, not delivery or mailbox verification. Same-server reauthorization between grant and mutation remains a future controller responsibility. [Provider update](https://github.com/supabase/auth/blob/ae468cabab7359819730ca80b5c6178def3579a2/internal/api/user.go)
+
+### OTP and completion
+
+Use POST /auth/v1/verify with type=email_change, a token preserved as a string and the appropriate trusted current or pending address. Model both proof orders. The pinned first-leg response is a specific 200 message/code envelope without a completed user. Classify that recognizable response as partial, never classify arbitrary empty 200, contradictory fields or malformed JSON as accepted proof. A final provider response must identify exactly the expected UUID and target canonical email with a matching owned email identity and confirmation evidence. Neither an old email_confirmed_at, an unchanged old identity, nor a returned session token proves target ownership. Emit at most a provider-final candidate requiring canonical same-user target/identity readback before application success or reconciliation. Bad/expired/replayed codes do not automatically clear, restart or resend a pending request. Never sign the application in with tokens returned by verification. [Provider verify](https://github.com/supabase/auth/blob/ae468cabab7359819730ca80b5c6178def3579a2/internal/api/verify.go#L225-L292)
+
+### Mock acceptance
+
+Before mock execution independently review the four exact files. Minimum negatives cover spoofed grant user/bearer, foreign identity owner, wrong target, missing/unconfirmed email identity, verified provider factor, unsafe redirect, malformed responses, OTP retaining a leading zero, ambiguous timeout before/after a mutation, and no automatic second request. Positives cover genuine password grant + bound identity, exact one PUT, both orders of dual proof and final candidate pending trusted reread. Assert exact routes/header roles/body using synthetic sentinels without printed credentials. Public outputs and caught errors expose only fixed business states. Passwords, OTPs, bearer/refresh tokens, raw response bodies and identifying mailbox text do not enter logs, receipts, snapshots or caller-visible error messages. Return no general-purpose token capability to routes or DTOs.
+
+### Outstanding approvals
+
+Ron’s both-mailbox, expiry/start-over and leave-page/cancel decisions, PE exact deployed version, secure-change enabled, autoconfirm off, real OTP template/length/lifetime, redirect and send/rate controls remain outstanding prerequisites for runtime work. Provider commit and canonical application reconciliation are separate operations. Live authority/consent/partner gates, recovery of partial remote commits, session/reset/challenge invalidation, profile mirrors and safe old-code rollback remain for later review. No real address change, mailbox delivery, new storage, target readiness, pilot or whole B016 acceptance follows from this plan. The published canonical-email code checkpoint and open browser failure remain separate.

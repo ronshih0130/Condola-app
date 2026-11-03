@@ -15,3 +15,9 @@ Next browser approach: bounded enhanced-login-only observation and an independen
 Prior self-name checkpoint5a0c699 remains a separately bounded historical local GO. Regional company proposed SQL is source-reviewed but UNPARSED/UNAPPLIED/TARGET_UNVERIFIED/NOT_APPLY_READY pending PE evidence. Verified-email provider workflow/config/coherence and Ron policy decisions, versioned management fees, staging/Claude/ClassB/pilot/release remain incomplete. No whole B newly done; all39 retained, no B017 source.
 
 STOP POINT: WORKING; next: authorized branch publication/renew/mirror/direct-ref readback, then independent B016 work with browser gap explicit; owner: Ron/Codex3099AC86. Publication readback will be recorded outside at work/b016-identity-code-publish-v1.json; absence is not publication evidence.
+
+## B016 disconnected Email mock target 2026-11-03T09:14:57.857867-08:00
+
+Fourpure/injectedfake-onlysources ready; 13/13mocktests0fail/skip/cancel, wholeprojecttypecheck/scopedlint0, independentAstraMOCK_TARGET_GO. [Preparation](e2e-evidence/B-016/email-mock-preparation-v4.json). Explicitlyno applicationroute/UI/flag/env/defaultfetch/provider/DB/schema wiring. Onlysubmittedbegintargetusesformrepair; storedcurrent/pending/privileged/provideridentityaddressesstrictcanonical; actualbearerboundGETuser; exactpending/partial/finalcandidate, contradictoryerror/malformedproofunknown, finitebody/transportdeadline/noretries. ThreeearlierSOURCENO_GOs preservedandclosedbeforeanytargetexecution.
+
+NewsourcecleanfullcodegatePENDING; prioridentitytestedf6593ce/metadata0e4b2be remainsseparatefullcodeGO/browserFAILpending. RonEmailpolicy question andfeequestions pending; PEcompanytarget/providerconfig+canonicalreconciliation requiredbeforerealflow. No emails/providerrequests/newmigration/activation/mainmerge/prod/legalcopy. WholeB016in_progress/all39retained/no B017source. NextcommitcleancandidatethenONEfullcodegate; no browser/build/wholefeatureclaim.

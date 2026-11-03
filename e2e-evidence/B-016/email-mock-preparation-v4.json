@@ -1,0 +1,147 @@
+{
+  "time": "2026-11-03T09:14:57.857867-08:00",
+  "baseline": "0e4b2be112f777baf6f992fc292f40a1a0d016b4",
+  "status": "MOCK_SOURCE_TARGET_GO_FULL_CODE_GATE_PENDING",
+  "scope": "four disconnected pure/injected-fake source files plus2normalunitregistrations; no app routes/UI/flags/env/defaultfetch/provider/DB/schema integration",
+  "source": {
+    "src/server/staff-email-rules.ts": {
+      "blob": "6b7b4e80d8045602c69ff937bbf87355496508f4",
+      "bytes": 1754,
+      "sha256": "b782051435e477f30b2c29496946f79bdc34b2cf65016336008bc6226529cddc"
+    },
+    "src/server/staff-email-provider.ts": {
+      "blob": "b49b65e61d17acd3057e4016fb3009c532f60f75",
+      "bytes": 7871,
+      "sha256": "a03cbb0c5b3196dd497f7e1c79fecbb87c92e06659bb5fb13260501fc8d6a732"
+    },
+    "src/server/staff-email-rules.test.ts": {
+      "blob": "3a86699457ef9b733cf51a301dd3fdc9d0ff5bf2",
+      "bytes": 1949,
+      "sha256": "c9c59fa54e96e8f02407d0c23a0131c5d32b2da4ec8df928333831f65e4911fb"
+    },
+    "src/server/staff-email-provider.test.ts": {
+      "blob": "ec4b132742ca5ead26823b413897bc2851d1f3fd",
+      "bytes": 13096,
+      "sha256": "0877eed217ade329c9028e9e150db41d4b7b6e6ee92984b19b51609eaaac51ae"
+    },
+    "package.json": {
+      "blob": "29a8383b466274d0699655e4308e49cb7659174a",
+      "bytes": 13468,
+      "sha256": "5da95d58d0b7545d595410b1d30d8e76bcd19844c4298dcb84ea41bee4f2b6f8"
+    }
+  },
+  "target": {
+    "pass": 13,
+    "fail": 0,
+    "skip": 0,
+    "cancelled": 0,
+    "typecheck": 0,
+    "lint": 0
+  },
+  "failures": "V1root contradiction; V2Astra reply normalization/mixed envelopes; V3Astra outgoing stored destination. All source-only NO_GO preserved; no tests skipped or weakened. V4 strict trust-domain matrix supersedes.",
+  "pending": [
+    "Ron both-mailbox/expiry/startover policy",
+    "PE deployedAuth/version/secure-change/autoconfirm/template/rate/config",
+    "actual remote-to-local canonical reconciliation/session reset",
+    "provider calls/mailbox delivery",
+    "prior enhanced-login browser failures",
+    "full current code gate/build/browser/staging/pilot/whole B016"
+  ],
+  "refs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-plan-astra-v1.md",
+      "bytes": 6541,
+      "sha256": "f4a615baeec572634a430609727d4f24cf88044c2cd514a59d3d31ebfedb9984"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-plan-astra-v1.json",
+      "bytes": 7253,
+      "sha256": "06aee27c9b883b30559d59b61c31412e31eebe075ba5cf86f90e4b00e81865bb"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-source-terra-v4.md",
+      "bytes": 2415,
+      "sha256": "5f5248fec986ffa43d17bbc7c0d45da106d87cfea735afcfa80ef84a28e567f6"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-source-terra-v4.json",
+      "bytes": 2623,
+      "sha256": "884dee1bfc76f0addd10a528cf60eaa45883c7ed088f08cdceba19a6eed96aca"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-astra-source-v2.md",
+      "bytes": 4116,
+      "sha256": "c9e94931c6609a86d012f7ae850ff52c219144e7411a3cbb801abe961b5dfc1e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-astra-source-v2.json",
+      "bytes": 5717,
+      "sha256": "2c4b0aa39044fd0794536e1bacf0efc642e1a3105091a54ba0922bf4c3960408"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-astra-source-v3.md",
+      "bytes": 2421,
+      "sha256": "a86c85cb66a70c681fa83d5c849c2ce1d2a1a665289622f8f56a3ffa56712d7c"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-astra-source-v3.json",
+      "bytes": 4037,
+      "sha256": "a8c8079e3dd3f5da29a9dab1211153e740d22aac7b0e30cfa717a3be91c1db3d"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-astra-source-v4.md",
+      "bytes": 2108,
+      "sha256": "6cb7d1c2bc2a1bff83fe571f8d4472550f17c965a9cde2e036e693cf5d776e47"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-astra-source-v4.json",
+      "bytes": 3462,
+      "sha256": "9ea1ce153e1d8223a3da7dc96ead4ef68ff130336afe02ee3b95aa1c1b5b186a"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-astra-target-v4.md",
+      "bytes": 1645,
+      "sha256": "bdccc3cbd3b4b99849e2d36bc9f3b3f4c05adaa874402ff2c8bcd04fd627db3d"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-astra-target-v4.json",
+      "bytes": 4877,
+      "sha256": "40907f20355568caf1c094ba6146973310b5013d8c6b82c07d49946809bdd8f9"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-source-map-v4.json",
+      "bytes": 1228,
+      "sha256": "85282ba3e9a476630f2bc8cd38ce1e22f6ccde27ddae6d0c1c6f2a3980d38383"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-target-v4/authorization.json",
+      "bytes": 1630,
+      "sha256": "9a53daa3dbff8be9939d2de1249036898928dd2095f403be262007a6b5363672"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-target-v4/receipt.json",
+      "bytes": 3204,
+      "sha256": "cfb3a1a2f698036bc6dcd650ae6fe3d84045d6a1e29945a18d80d3c3c560d303"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-target-v4/execution-observations.json",
+      "bytes": 1375,
+      "sha256": "9dbbd70ce20c6265ed9758efd2d43f8841ed36a2c999d14409f3d45be402b4c5"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-source-v1-root-no-go/manifest.json",
+      "bytes": 2203,
+      "sha256": "915b7153c6cbdd63d6986500660023161e786715585decc6dac86bac4ab4a0b2"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-source-v2-astra-no-go/manifest.json",
+      "bytes": 3360,
+      "sha256": "9356b9af5e196cfb7ab46b9e09aec7bc1515cc22fd667bbaef3c7ed5cc97aa8d"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-source-v3-astra-no-go/manifest.json",
+      "bytes": 3361,
+      "sha256": "be90fb202e1f9b350bfd97f26161205a0e304c8e398c2feac89bd133a26c62bf"
+    }
+  ]
+}

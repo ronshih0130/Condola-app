@@ -1,0 +1,52 @@
+{
+  "status": "SOURCE_ONLY_INDEPENDENT_REVIEW_PENDING",
+  "files": [
+    {
+      "path": "src/server/staff-email-rules.ts",
+      "blob": "6b7b4e80d8045602c69ff937bbf87355496508f4",
+      "sha256": "b782051435e477f30b2c29496946f79bdc34b2cf65016336008bc6226529cddc",
+      "bytes": 1754
+    },
+    {
+      "path": "src/server/staff-email-provider.ts",
+      "blob": "b49b65e61d17acd3057e4016fb3009c532f60f75",
+      "sha256": "a03cbb0c5b3196dd497f7e1c79fecbb87c92e06659bb5fb13260501fc8d6a732",
+      "bytes": 7871
+    },
+    {
+      "path": "src/server/staff-email-rules.test.ts",
+      "blob": "3a86699457ef9b733cf51a301dd3fdc9d0ff5bf2",
+      "sha256": "c9c59fa54e96e8f02407d0c23a0131c5d32b2da4ec8df928333831f65e4911fb",
+      "bytes": 1949
+    },
+    {
+      "path": "src/server/staff-email-provider.test.ts",
+      "blob": "ec4b132742ca5ead26823b413897bc2851d1f3fd",
+      "sha256": "0877eed217ade329c9028e9e150db41d4b7b6e6ee92984b19b51609eaaac51ae",
+      "bytes": 13096
+    }
+  ],
+  "boundaryMatrix": {
+    "submitted target": "Only begin submitted target uses legacy form normalization; the result must also satisfy strict canonical syntax before grant.",
+    "trusted current": "Strict casefold-only canonical decoder; invalid state blocks begin and verify before transport.",
+    "trusted pending and verification target": "Pending is always strict if present, active pending must exist; verify requires strict target equal to strict stored pending, and uses that stored value for target proof. Current selector uses strict stored current. Both malformed branches return invalid before transport.",
+    "privileged exclusions": "Every trusted value uses strict casefold-only canonical decoder; any malformed exclusion blocks begin and verify.",
+    "grant and bearer user": "Grant checks envelope/bearer/user id, GET checks error envelope, exact UUID/confirmed identity and strict canonical evidence before PUT.",
+    "PUT": "Exact email-only body; strict provider new_email and no error envelope required for pending; ambiguity is unknown/no retry.",
+    "OTP partial/final": "Exact partial two-field envelope only; final requires expected UUID and strictly matching confirmed owned target identity with no error markers; final_candidate still needs canonical reread."
+  },
+  "v3NoGoArchive": "work/b016-email-mock-source-v3-astra-no-go/manifest.json",
+  "notRun": [
+    "tests",
+    "typecheck",
+    "lint",
+    "database",
+    "browser",
+    "provider",
+    "gate"
+  ],
+  "limitations": [
+    "Provider semantics and configuration remain unattested.",
+    "Mock-only, no application wiring or activation."
+  ]
+}

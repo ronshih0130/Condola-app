@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-03T08:50:34.524338-08:00: B016 identity security codef6593ce full code gate PASS630unit/467RLS+solepriorhistoricalskip and Astra CODE_GATE_GO. Browser FAIL/PENDING; wholeB016 in_progress for company/verifiedEmail/fees and external acceptance. No wholeBdone; all39 retained; no B017source.**
+> **Current 2026-11-03T09:14:57.857867-08:00: B016 disconnectedEmailmock target13PASS/typecheck/lint0, cleannewcodegatePENDING. Previousidentityf6593ce fullcodegateGO/browserFAILpending. WholeB016 in_progress (company/verifiedEmail/fees/external acceptance); no wholeBdone/all39retained/no B017source.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 

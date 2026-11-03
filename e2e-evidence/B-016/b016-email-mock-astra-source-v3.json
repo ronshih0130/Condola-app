@@ -1,0 +1,55 @@
+{
+  "verdict": "SOURCE_NO_GO",
+  "scope": "Disconnected B016 mock revision 3, no execution",
+  "sourceMapSha256": "951d0e4b65d8a752310412ff2e153ed541aa935ef602348b6838d3ed217a0df9",
+  "baseline": "0e4b2be112f777baf6f992fc292f40a1a0d016b4",
+  "files": {
+    "src/server/staff-email-rules.ts": {
+      "blob": "1bfb8b0c3be0d550f98099df2bea7c1e575bd405",
+      "bytes": 1388,
+      "sha256": "ffb90e37407ccfefd4b2d85a99c6f27a8746a92c7b73a60d0fad52f5cc5b4f70"
+    },
+    "src/server/staff-email-provider.ts": {
+      "blob": "542665252996af15554bee73210c81813b00e9a1",
+      "bytes": 7944,
+      "sha256": "bf88b0eb23b4b41537cea6879196bd356c4f0349267a3f54381b0b0433ca79d1"
+    },
+    "src/server/staff-email-rules.test.ts": {
+      "blob": "7ed0aff8882f5ec97f2eb8755b158fcbf573da4f",
+      "bytes": 1430,
+      "sha256": "8a83a7e7853dc52cd5659bf87fb37df83a099259d0c2e7c00fde05403d5882e2"
+    },
+    "src/server/staff-email-provider.test.ts": {
+      "blob": "df39e8cde6960d17e1b09c2c159869722d1ca6e1",
+      "bytes": 11647,
+      "sha256": "44cb54ece5ca06ad11c29184d251fe2b778af14de6001bb4dff82e62f1b6198b"
+    },
+    "package.json": {
+      "blob": "29a8383b466274d0699655e4308e49cb7659174a",
+      "bytes": 13468,
+      "sha256": "5da95d58d0b7545d595410b1d30d8e76bcd19844c4298dcb84ea41bee4f2b6f8"
+    }
+  },
+  "changedSinceV2": [
+    "src/server/staff-email-provider.ts",
+    "src/server/staff-email-provider.test.ts"
+  ],
+  "v2ArchiveSha256": "9356b9af5e196cfb7ab46b9e09aec7bc1515cc22fd667bbaef3c7ed5cc97aa8d",
+  "verifiedV2Bindings": 10,
+  "findings": [
+    {
+      "severity": "P1",
+      "files": [
+        "src/server/staff-email-provider.ts:81–83",
+        "src/server/staff-email-rules.ts:16–24"
+      ],
+      "issue": "The strict provider-address comparison is used on replies but not on the provider-owned state used to choose the outgoing verification mailbox. With pendingUnexpired true, state.pending equal to “new tag@example.test” and target equal to “new+tag@example.test”, verify repairs the space and proceeds to POST /auth/v1/verify for the plus address. A malformed current mailbox is likewise repaired when the current branch is selected. The verify endpoint consumes proof before any possible final UUID/target check; a first-leg partial response has no user at all. Current assess/begin can also report pending for that same stored mismatch. This is a source counterexample, not an observed real request.",
+      "fix": "Use strict canonical address decoding/comparison for trusted current and stored pending inputs; reserve form repair for a newly submitted target only. Treat inconsistent active pending state as invalid. Use the validated stored mailbox for verification. Add zero-transport mock assertions for malformed current/pending, both mailbox selectors, and an uppercase-plus canonical positive. Retain all existing response negatives and no-retry rules."
+    }
+  ],
+  "notes": [
+    "The two v2 response-side defects are closed. User email, owned identity_data.email, optional identity.email and PUT new_email use strict case-only canonical matching. VerifiedUser and grant/GET/PUT/final envelopes reject conflicting provider error markers. Only the pinned two-field partial response is accepted. Final evidence produces a candidate requiring trusted canonical reread.",
+    "The fixed origin, mandatory injected transport, fresh password grant, bearer-bound GET /user, email-only PUT, bounded transport/body timeout and no retry remain intact. Verified or ambiguous factors and explicit true/malformed SSO fields deny in the checked representation. The pinned provider version, actor projection, omission semantics and eventual canonical authorization are not deployed evidence.",
+    "All five current bindings and ten archived v2 bindings were rehashed. Only provider source and its mock tests changed from v2; the package retains exactly the two added test paths. Tests, compiler, lint, network, DB, browser and gate were not run. No broader source or feature verdict is supplied."
+  ]
+}

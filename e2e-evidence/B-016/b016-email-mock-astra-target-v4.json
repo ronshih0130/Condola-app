@@ -1,0 +1,83 @@
+{
+  "verdict": "MOCK_TARGET_GO_CANDIDATE_PREPARATION_ONLY",
+  "baseline": "0e4b2be112f777baf6f992fc292f40a1a0d016b4",
+  "provenance": "precommitworking-source exactly5frozenpaths, not baseline runtime claim",
+  "receiptSha256": "cfb3a1a2f698036bc6dcd650ae6fe3d84045d6a1e29945a18d80d3c3c560d303",
+  "authorizationSha256": "9a53daa3dbff8be9939d2de1249036898928dd2095f403be262007a6b5363672",
+  "sourceMapSha256": "85282ba3e9a476630f2bc8cd38ce1e22f6ccde27ddae6d0c1c6f2a3980d38383",
+  "sourceBindings": {
+    "src/server/staff-email-rules.ts": {
+      "blob": "6b7b4e80d8045602c69ff937bbf87355496508f4",
+      "bytes": 1754,
+      "sha256": "b782051435e477f30b2c29496946f79bdc34b2cf65016336008bc6226529cddc"
+    },
+    "src/server/staff-email-provider.ts": {
+      "blob": "b49b65e61d17acd3057e4016fb3009c532f60f75",
+      "bytes": 7871,
+      "sha256": "a03cbb0c5b3196dd497f7e1c79fecbb87c92e06659bb5fb13260501fc8d6a732"
+    },
+    "src/server/staff-email-rules.test.ts": {
+      "blob": "3a86699457ef9b733cf51a301dd3fdc9d0ff5bf2",
+      "bytes": 1949,
+      "sha256": "c9c59fa54e96e8f02407d0c23a0131c5d32b2da4ec8df928333831f65e4911fb"
+    },
+    "src/server/staff-email-provider.test.ts": {
+      "blob": "ec4b132742ca5ead26823b413897bc2851d1f3fd",
+      "bytes": 13096,
+      "sha256": "0877eed217ade329c9028e9e150db41d4b7b6e6ee92984b19b51609eaaac51ae"
+    },
+    "package.json": {
+      "blob": "29a8383b466274d0699655e4308e49cb7659174a",
+      "bytes": 13468,
+      "sha256": "5da95d58d0b7545d595410b1d30d8e76bcd19844c4298dcb84ea41bee4f2b6f8"
+    }
+  },
+  "logBindings": {
+    "tests.log": {
+      "sha256": "fc051ae702c62e02c43796abcb7cea419be91623188b126bee87f04451a1f2fb",
+      "bytes": 2818
+    },
+    "typecheck.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "lint.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  },
+  "phaseExits": {
+    "tests": 0,
+    "typecheck": 0,
+    "lint": 0
+  },
+  "tapTotals": {
+    "tests": 13,
+    "pass": 13,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "tapPasses": [
+    "fresh bearer is bound to the actual /user before exactly one email-only PUT",
+    "wrong grant, owned identity, target identity or unsupported account never writes",
+    "pending, unsafe configuration, failed transport and unclear mutation do not resend",
+    "deadline covers stalled transport and stalled response body without retry",
+    "both proof orders retain leading zero and only yield candidate pending readback",
+    "partial and final verification reject contradictory or malformed responses",
+    "a possible write with stalled response is unknown, with no automatic repeat",
+    "provider evidence does not repair spaces to plus and rejects contradictory identity email",
+    "mixed success and provider error envelopes fail closed at every stage",
+    "stored mailbox and privileged state must be canonical before any transport",
+    "normalization follows current auth behavior without removing dots or plus",
+    "privileged addresses and pending requests do not authorize a new send",
+    "stored addresses and privileged exclusions cannot use form-input repair"
+  ],
+  "materialFindings": [],
+  "notes": [
+    "MOCK_TARGET_GO only for the five frozen precommit working files against baseline 0e4b2be112f777baf6f992fc292f40a1a0d016b4. All thirteen named in-memory tests passed with zero failures, cancellations, skips or TODOs. The recorded whole-project no-emit typecheck and four-file lint each exited zero with empty logs. The three log hashes and lengths, authorized original map, before/after pins and current working bytes match.",
+    "The tests cover bound grant/GET identity, one email-only PUT, exact pending/partial/final states, both OTP orders with leading zeros, strict stored and provider mailbox comparisons, mixed error/success envelopes, bounded stalled transport/body, no resend and zero transport on malformed stored state. Production routes, UI and flag controls do not import the new modules. The only registration is the two unit test entries. The source requires injected transport; the run record describes local TCP guard and fakes. There is no provider/DB/browser outcome or OS-level networking claim.",
+    "GO to prepare a clean, immutable code candidate for a single standard code gate, subject to fresh verification of the committed tree, complete proposed 1018-pin lock, reviewed gate helper and per-SHA exclusivity. The target does not itself approve an unspecified future hash or establish a clean-gate result. No builds or browser matrix were run. The existing enhanced-login failure remains open. Ron\u2019s mailbox policy, target settings, real authority and remote/local reconciliation remain separate; whole B016 remains incomplete."
+  ]
+}
