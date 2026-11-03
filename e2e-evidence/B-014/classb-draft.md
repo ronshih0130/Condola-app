@@ -1,0 +1,3 @@
+# B014 Class B draft — NO RELEASE APPROVAL
+
+Candidate `6c9d4d0bdf78436206c57b9e244e42cf225b7a9e` local provisional results PASS. Requested independent revised-source/evidence review NOT_RUN_MODEL_UNAVAILABLE; no independent model downgrade or alternative GO assumed. No staging deploy or all-five ClassB conditions: actual target/catalog/migration fingerprint, restore-verified backup, before/after hostedcounts, rollbackID, T+0/T+15 are pending. Claude/Ron exactSHA/slot acceptance not obtained. All flags operationalOFF; no prod/main/keys/messages/Macmigration/legal changes. Typed seal+legacy compatibility and core report integration not complete.

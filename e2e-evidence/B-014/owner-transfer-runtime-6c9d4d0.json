@@ -1,0 +1,1810 @@
+{
+  "classification": "PROVISIONAL_LOCAL_RUNTIME_PASS_INDEPENDENT_QA_NOT_RUN",
+  "candidate": "6c9d4d0bdf78436206c57b9e244e42cf225b7a9e",
+  "baseline": "51c5d8f20f675e64a0aa79b0ba41c0604b2c1378",
+  "attempt": "a5",
+  "createdAt": "2026-11-02T16:05:46.830486-08:00",
+  "statusBeforeManifest": "M ops/board.md\n?? e2e/results/gate-6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.md",
+  "sourceFreeze": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-reviewed-source-freeze.json",
+    "sha256": "0a36ea94889bcd9879e989244c6ac00337b5d9a2368b7faee97180e2084ad240",
+    "bytes": 17097
+  },
+  "sourcePins": {
+    "src/server/owner-transfer-input.ts": {
+      "current": "2ff02cc84c8fc51cff41dd68c99566bcfeaab0cc",
+      "candidate": "2ff02cc84c8fc51cff41dd68c99566bcfeaab0cc",
+      "literal": "2ff02cc84c8fc51cff41dd68c99566bcfeaab0cc",
+      "baseline": null,
+      "sha256": "647aa8c8e6bdc3ca6194178507eb07a00d5c761ba3cd993f8e70cf45a03beca8"
+    },
+    "src/server/owner-transfer-input.test.ts": {
+      "current": "52d4da790b26aebff22eb7f9d518ffac6fa122d1",
+      "candidate": "52d4da790b26aebff22eb7f9d518ffac6fa122d1",
+      "literal": "52d4da790b26aebff22eb7f9d518ffac6fa122d1",
+      "baseline": null,
+      "sha256": "7a86ccf07cd49152e6f20c5c3a46597e1b82cfc44add593bb42eef0cf162103a"
+    },
+    "src/server/owner-transfer-period-lock.ts": {
+      "current": "db59bdc77fe547b9941a19453c8512642916b53b",
+      "candidate": "db59bdc77fe547b9941a19453c8512642916b53b",
+      "literal": "db59bdc77fe547b9941a19453c8512642916b53b",
+      "baseline": null,
+      "sha256": "55d5508d8613a6ef8b180336d62585b9006f7e53f33dc3f1d987b9378acb3ed0"
+    },
+    "src/server/owner-transfers.ts": {
+      "current": "e1241e967f7a201c8542433daa75d6556413dd93",
+      "candidate": "e1241e967f7a201c8542433daa75d6556413dd93",
+      "literal": "e1241e967f7a201c8542433daa75d6556413dd93",
+      "baseline": null,
+      "sha256": "975063a9ac8563d5b2064768e7ca4c142131fbcd5845b54ae3e6b769119cdf32"
+    },
+    "src/server/owner-transfers.integration.test.ts": {
+      "current": "014d15aab77df9a59fbd153bdcc3f8790497c72b",
+      "candidate": "014d15aab77df9a59fbd153bdcc3f8790497c72b",
+      "literal": "014d15aab77df9a59fbd153bdcc3f8790497c72b",
+      "baseline": null,
+      "sha256": "9e6e578f74e17d93de88a914675c05e48f1696c3f1999bd55f4f7cb95f7f8807"
+    },
+    "src/server/owner-transfer-actions.ts": {
+      "current": "d8a8f8d17bdeae264905e30ac4744948bbd9ebca",
+      "candidate": "d8a8f8d17bdeae264905e30ac4744948bbd9ebca",
+      "literal": "d8a8f8d17bdeae264905e30ac4744948bbd9ebca",
+      "baseline": null,
+      "sha256": "6a394d2aa9f86a070d325b97c23fc76d8fd765b538112b17d07e9be58e1f5340"
+    },
+    "src/components/owner-transfers.tsx": {
+      "current": "680c9c5ea809384b5a660b8e26d853d446142a51",
+      "candidate": "680c9c5ea809384b5a660b8e26d853d446142a51",
+      "literal": "680c9c5ea809384b5a660b8e26d853d446142a51",
+      "baseline": null,
+      "sha256": "f51e9605fa9e80cf47f1e0b4523fafc549547e0b5df015e50fd48cf36d21e486"
+    },
+    "src/i18n/owner-transfer.ts": {
+      "current": "6988b86598881fe69fca06fb3883b3ba48b4caa4",
+      "candidate": "6988b86598881fe69fca06fb3883b3ba48b4caa4",
+      "literal": "6988b86598881fe69fca06fb3883b3ba48b4caa4",
+      "baseline": null,
+      "sha256": "23b6845492c008a77e34f89f2c1f145f95cfb6adf6720f11f0ddf795a1ea0fb8"
+    },
+    "src/app/m/statements/transfers/page.tsx": {
+      "current": "33d1d9a0ee699d429805bb1dfb5651791666f55d",
+      "candidate": "33d1d9a0ee699d429805bb1dfb5651791666f55d",
+      "literal": "33d1d9a0ee699d429805bb1dfb5651791666f55d",
+      "baseline": null,
+      "sha256": "216fd1264cc08de8fda7a95eda0b9bfca5ac65d5dff9d2450a91adb2c3a82602"
+    },
+    "src/app/m/statements/page.tsx": {
+      "current": "b9e6614e0ea33ad5409d7f5e6ba882bbb7f84e56",
+      "candidate": "b9e6614e0ea33ad5409d7f5e6ba882bbb7f84e56",
+      "literal": "b9e6614e0ea33ad5409d7f5e6ba882bbb7f84e56",
+      "baseline": null,
+      "sha256": "5d378b891408d6b31b4b8df2274e3e6a426a88fbcac8c8f1f7e5795cc9092b4b"
+    },
+    "src/server/domain.ts": {
+      "current": "21be28007d39882643cbf2b66b52f0dc47b4e45a",
+      "candidate": "21be28007d39882643cbf2b66b52f0dc47b4e45a",
+      "literal": "21be28007d39882643cbf2b66b52f0dc47b4e45a",
+      "baseline": null,
+      "sha256": "8b3a232e9e7307bb6d3df9e88e9a8ebd4b853b310e1b048ec37758e268435666"
+    },
+    "ops/flags.yaml": {
+      "current": "554aa93d816d89a690be105e0b4d7252a6316b3e",
+      "candidate": "554aa93d816d89a690be105e0b4d7252a6316b3e",
+      "literal": "554aa93d816d89a690be105e0b4d7252a6316b3e",
+      "baseline": null,
+      "sha256": "c79944b70fa71d989782dabbb816a2fb1f36619bb34efb58400ba60e38961e79"
+    },
+    "e2e/b014-owner-transfers.spec.ts": {
+      "current": "1f6e9d9fe54a8bf545399303d28dd91ee60b7372",
+      "candidate": "1f6e9d9fe54a8bf545399303d28dd91ee60b7372",
+      "literal": "1f6e9d9fe54a8bf545399303d28dd91ee60b7372",
+      "baseline": null,
+      "sha256": "f81afd0ffcdaf5d3fde0c469ff1bed90dc4ee16de39caabc6a0cd77e514fde7c"
+    },
+    "e2e/b014-owner-transfers-private-playwright.config.ts": {
+      "current": "b588632d86cabafaf00ab61a261ec18084a1bf04",
+      "candidate": "b588632d86cabafaf00ab61a261ec18084a1bf04",
+      "literal": "b588632d86cabafaf00ab61a261ec18084a1bf04",
+      "baseline": null,
+      "sha256": "82876ed9b75e0b8e293ee983455ab080ca30d2c0ec48b5ebd7480e09d64ffbb0"
+    },
+    "scripts/run-e2e.ts": {
+      "current": "352d0c1881f28f80b1cc75cc2ce46a67817d9963",
+      "candidate": "352d0c1881f28f80b1cc75cc2ce46a67817d9963",
+      "literal": "352d0c1881f28f80b1cc75cc2ce46a67817d9963",
+      "baseline": null,
+      "sha256": "feb9d51d5c205336e67f8f158427a4e657f80b2b3706db81481f4c6d63c8b1ca"
+    },
+    "package.json": {
+      "current": "4c5430fec68fd135255d65075eb6cb5cb4aff72c",
+      "candidate": "4c5430fec68fd135255d65075eb6cb5cb4aff72c",
+      "literal": "4c5430fec68fd135255d65075eb6cb5cb4aff72c",
+      "baseline": null,
+      "sha256": "1c3b64b7a4c9a3b2ff837785f79565e5368f48383a18ab8b3116dcb1d9e26f49"
+    },
+    "e2e/b011-comparison-bucket.mjs": {
+      "current": "845f02623bdc61ece9f1517a3738a30f935144f5",
+      "candidate": "845f02623bdc61ece9f1517a3738a30f935144f5",
+      "literal": "845f02623bdc61ece9f1517a3738a30f935144f5",
+      "baseline": "845f02623bdc61ece9f1517a3738a30f935144f5",
+      "sha256": "eabf580dc2565bcf70cd8723d6f1daa9dbe1d4a0935bf06a39557977e2440df3"
+    },
+    "e2e/b011-comparison-private-playwright.config.ts": {
+      "current": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac",
+      "candidate": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac",
+      "literal": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac",
+      "baseline": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac",
+      "sha256": "f6b3d542fdf13a5af65565fccc1d1cdb5dfdcf5ec4df7de6bfea2264ed20171e"
+    },
+    "e2e/b011-handover-comparison.spec.ts": {
+      "current": "298d594e1c0edd48497b94c20ce3199f7686e5d1",
+      "candidate": "298d594e1c0edd48497b94c20ce3199f7686e5d1",
+      "literal": "298d594e1c0edd48497b94c20ce3199f7686e5d1",
+      "baseline": "298d594e1c0edd48497b94c20ce3199f7686e5d1",
+      "sha256": "81696cf050947f7cd9392fe9ecb9312333705a9bc0be8930966f3d04e2f7799b"
+    },
+    "e2e/b012-renewal-comparison-private-playwright.config.ts": {
+      "current": "b529eadcd743d57fa8e78d4716ede63c2da7393a",
+      "candidate": "b529eadcd743d57fa8e78d4716ede63c2da7393a",
+      "literal": "b529eadcd743d57fa8e78d4716ede63c2da7393a",
+      "baseline": "b529eadcd743d57fa8e78d4716ede63c2da7393a",
+      "sha256": "4da9dfb086d84919f118972f62fe73f3ec03d7b6b0ce0c3f47d6d0f2a9431433"
+    },
+    "e2e/b012-renewal-comparison.spec.ts": {
+      "current": "a49438277ed19c01e9aba9fbe7a9eab2c7570c2d",
+      "candidate": "a49438277ed19c01e9aba9fbe7a9eab2c7570c2d",
+      "literal": "a49438277ed19c01e9aba9fbe7a9eab2c7570c2d",
+      "baseline": "a49438277ed19c01e9aba9fbe7a9eab2c7570c2d",
+      "sha256": "c68b1acc9cbc16ce951a43b2cff7248bf11c0eb1a8d5e474e581e3a940b33bd5"
+    },
+    "e2e/handover-bucket.mjs": {
+      "current": "50700d0f069e39d45fd316bd56d198e0fdbe64e1",
+      "candidate": "50700d0f069e39d45fd316bd56d198e0fdbe64e1",
+      "literal": "50700d0f069e39d45fd316bd56d198e0fdbe64e1",
+      "baseline": "50700d0f069e39d45fd316bd56d198e0fdbe64e1",
+      "sha256": "d23c4b6ba82fe95503ac820093d8fc37ca39e94846ad957337b84c72d41c2584"
+    },
+    "e2e/handover-playwright.config.ts": {
+      "current": "4da3fc5c5166042d3314b27d0d8661385c9c3b48",
+      "candidate": "4da3fc5c5166042d3314b27d0d8661385c9c3b48",
+      "literal": "4da3fc5c5166042d3314b27d0d8661385c9c3b48",
+      "baseline": "4da3fc5c5166042d3314b27d0d8661385c9c3b48",
+      "sha256": "d9368bf984a10dc2e8c0f6f57d0fe38ffadd6a581b7bc73c577a22ecac83afba"
+    },
+    "e2e/handover.spec.ts": {
+      "current": "54132623983b8330214936414cf2ebffebceb03c",
+      "candidate": "54132623983b8330214936414cf2ebffebceb03c",
+      "literal": "54132623983b8330214936414cf2ebffebceb03c",
+      "baseline": "54132623983b8330214936414cf2ebffebceb03c",
+      "sha256": "d88e2e8c096a63e725292fd6e814345231a68687b4eb62e8da3b60260521992a"
+    },
+    "e2e/session.ts": {
+      "current": "debb2f53da0343758c44f0f93621f2a680be80a9",
+      "candidate": "debb2f53da0343758c44f0f93621f2a680be80a9",
+      "literal": "debb2f53da0343758c44f0f93621f2a680be80a9",
+      "baseline": "debb2f53da0343758c44f0f93621f2a680be80a9",
+      "sha256": "b2126c57d6ec31fe22e28edf49bbfff754e154791e2460b52e9890647987caee"
+    },
+    "package-lock.json": {
+      "current": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+      "candidate": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+      "literal": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+      "baseline": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+      "sha256": "554981cf583b54433847df06787cebd321a64cd2d6f77629dcf7335ec958d97a"
+    },
+    "scripts/gate.sh": {
+      "current": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+      "candidate": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+      "literal": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+      "baseline": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+      "sha256": "52bac3ab0e9bac90b1deb21c6eee4e81a280178435dc85d0f4ea56feb00831dd"
+    },
+    "scripts/preflight-deploy.sh": {
+      "current": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+      "candidate": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+      "literal": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+      "baseline": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+      "sha256": "7c4a336fc33172efc8e0b736ac4930923801b776b3bd5d79240613b3b2f195cb"
+    },
+    "scripts/third-party-licenses.mjs": {
+      "current": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4",
+      "candidate": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4",
+      "literal": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4",
+      "baseline": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4",
+      "sha256": "782a89f08950898ce960482863c06557f42250fd137e8f1e7f0bd3dadf6d87e1"
+    },
+    "src/app/globals.css": {
+      "current": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e",
+      "candidate": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e",
+      "literal": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e",
+      "baseline": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e",
+      "sha256": "4718d39e7c2dabdda5e6032639a7d357f0cdfc76d947791745f97e0b75082b59"
+    },
+    "src/app/m/leases/[id]/page.tsx": {
+      "current": "854be72e08abb8d9ef27fc1e13aaab8ca9a23b60",
+      "candidate": "854be72e08abb8d9ef27fc1e13aaab8ca9a23b60",
+      "literal": "854be72e08abb8d9ef27fc1e13aaab8ca9a23b60",
+      "baseline": "854be72e08abb8d9ef27fc1e13aaab8ca9a23b60",
+      "sha256": "17a40ba647c8ce259ac5af150a5df26e5ce312b98d2ddefb1d6149c6594c7bf0"
+    },
+    "src/app/m/leases/[id]/renewal/page.tsx": {
+      "current": "2da931e8e1ae2827589d672251e7bb8f05f3f34c",
+      "candidate": "2da931e8e1ae2827589d672251e7bb8f05f3f34c",
+      "literal": "2da931e8e1ae2827589d672251e7bb8f05f3f34c",
+      "baseline": "2da931e8e1ae2827589d672251e7bb8f05f3f34c",
+      "sha256": "652e2c6bbc95f4f14f304a4e14e1d60b13130e28cbd9ae57418091ca04c31c66"
+    },
+    "src/components/handover-comparison.tsx": {
+      "current": "863a115be6cbb5a05f54b532ce544a15fd70772e",
+      "candidate": "863a115be6cbb5a05f54b532ce544a15fd70772e",
+      "literal": "863a115be6cbb5a05f54b532ce544a15fd70772e",
+      "baseline": "863a115be6cbb5a05f54b532ce544a15fd70772e",
+      "sha256": "4e22481ff59c03b6fcbeaa185d61c2bef0d6e352f43714c5784363b4ccb14b06"
+    },
+    "src/components/handover-page.tsx": {
+      "current": "abfa0e32f6a4591395d2352584da83473740e569",
+      "candidate": "abfa0e32f6a4591395d2352584da83473740e569",
+      "literal": "abfa0e32f6a4591395d2352584da83473740e569",
+      "baseline": "abfa0e32f6a4591395d2352584da83473740e569",
+      "sha256": "7e9b88f809777e74edc6a3f526c2eb1b8af41fda126b17805e54b0cdca974f30"
+    },
+    "src/components/renewal-comparison-entry.tsx": {
+      "current": "06dc8366110077f4e0738a69dfbcf0588c6ac138",
+      "candidate": "06dc8366110077f4e0738a69dfbcf0588c6ac138",
+      "literal": "06dc8366110077f4e0738a69dfbcf0588c6ac138",
+      "baseline": "06dc8366110077f4e0738a69dfbcf0588c6ac138",
+      "sha256": "9ac3a53495204da607a276e0c34a18750bc4cfc5b438b7e3c53459dd61a143ca"
+    },
+    "src/components/renewal-comparison.tsx": {
+      "current": "0c997c92101ed415939ea8cddf0242b9a544e9e4",
+      "candidate": "0c997c92101ed415939ea8cddf0242b9a544e9e4",
+      "literal": "0c997c92101ed415939ea8cddf0242b9a544e9e4",
+      "baseline": "0c997c92101ed415939ea8cddf0242b9a544e9e4",
+      "sha256": "6e93cfced2a7374093688039915971d8ff1d1038a5a1d31b84e398a8088f1fb3"
+    },
+    "src/i18n/en.json": {
+      "current": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+      "candidate": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+      "literal": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+      "baseline": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+      "sha256": "7a6009146be8e153f20b687ca8545d75a266124f4a6814bc22305b6e9f500b5b"
+    },
+    "src/i18n/handover.ts": {
+      "current": "e48e84715e0a9c1e386b84e585d5eec0101acd4f",
+      "candidate": "e48e84715e0a9c1e386b84e585d5eec0101acd4f",
+      "literal": "e48e84715e0a9c1e386b84e585d5eec0101acd4f",
+      "baseline": "e48e84715e0a9c1e386b84e585d5eec0101acd4f",
+      "sha256": "84badc9c81a3c465ba688364fcbebc2f28ba3cd3f3185ccdb260abfcd0feed31"
+    },
+    "src/i18n/index.ts": {
+      "current": "00d6bc5b791a38dde92476ba92d3247f4ad5943f",
+      "candidate": "00d6bc5b791a38dde92476ba92d3247f4ad5943f",
+      "literal": "00d6bc5b791a38dde92476ba92d3247f4ad5943f",
+      "baseline": "00d6bc5b791a38dde92476ba92d3247f4ad5943f",
+      "sha256": "ec91a1ea11dfd69b31c71c036347d96495fe4fb87a3a215401399afb2374af08"
+    },
+    "src/i18n/renewal.ts": {
+      "current": "7d919dc94e89354fca83d54dda3416c3f93c6084",
+      "candidate": "7d919dc94e89354fca83d54dda3416c3f93c6084",
+      "literal": "7d919dc94e89354fca83d54dda3416c3f93c6084",
+      "baseline": "7d919dc94e89354fca83d54dda3416c3f93c6084",
+      "sha256": "620baf5bd026c1d1f89fe33bbd64516ad9a4fe2bfa7da67aa93d6f30986bf0a6"
+    },
+    "src/i18n/zh-TW.json": {
+      "current": "6270729f648586a7443c15e6bb7f174c3ef61563",
+      "candidate": "6270729f648586a7443c15e6bb7f174c3ef61563",
+      "literal": "6270729f648586a7443c15e6bb7f174c3ef61563",
+      "baseline": "6270729f648586a7443c15e6bb7f174c3ef61563",
+      "sha256": "25636c3ef5f0bd7ba695d067e7661fa25ed2d7b02a0e9bd887236c7b0233b8a8"
+    },
+    "src/lib/renewal-comparison.test.ts": {
+      "current": "22ddab88af28910a7ef86dab2c62ffeae1bf1d22",
+      "candidate": "22ddab88af28910a7ef86dab2c62ffeae1bf1d22",
+      "literal": "22ddab88af28910a7ef86dab2c62ffeae1bf1d22",
+      "baseline": "22ddab88af28910a7ef86dab2c62ffeae1bf1d22",
+      "sha256": "713bf89c68bb9a232111ea25793253a451341e4e6024ec8937acb9efca956fbc"
+    },
+    "src/lib/renewal-comparison.ts": {
+      "current": "25df4d7d3776dfc3c727fc57acba442ddbf924f5",
+      "candidate": "25df4d7d3776dfc3c727fc57acba442ddbf924f5",
+      "literal": "25df4d7d3776dfc3c727fc57acba442ddbf924f5",
+      "baseline": "25df4d7d3776dfc3c727fc57acba442ddbf924f5",
+      "sha256": "084f03180f1a84646818672e2a21d35f3e6802728e0dc7ce1f531bf27a29aa08"
+    },
+    "src/server/consent-gate.ts": {
+      "current": "6ac26ed5afa7757c297de45b8060f87f6c727f8e",
+      "candidate": "6ac26ed5afa7757c297de45b8060f87f6c727f8e",
+      "literal": "6ac26ed5afa7757c297de45b8060f87f6c727f8e",
+      "baseline": "6ac26ed5afa7757c297de45b8060f87f6c727f8e",
+      "sha256": "8859327682ebe4ef2445d85bd1e6808543b36ed48b3af6e0e205af9c8e44580d"
+    },
+    "src/server/consent.ts": {
+      "current": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+      "candidate": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+      "literal": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+      "baseline": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+      "sha256": "8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6"
+    },
+    "src/server/db.ts": {
+      "current": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+      "candidate": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+      "literal": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+      "baseline": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+      "sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b"
+    },
+    "src/server/format.ts": {
+      "current": "00ec04f4df404b56c51a00e9152deac932c876d1",
+      "candidate": "00ec04f4df404b56c51a00e9152deac932c876d1",
+      "literal": "00ec04f4df404b56c51a00e9152deac932c876d1",
+      "baseline": "00ec04f4df404b56c51a00e9152deac932c876d1",
+      "sha256": "175627b1b15bec7f2c0abe52cd1ebb5096ee02a0efd349803d33f3660b54245e"
+    },
+    "src/server/ids.ts": {
+      "current": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba",
+      "candidate": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba",
+      "literal": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba",
+      "baseline": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba",
+      "sha256": "d2c5609d0f8a7c7c990dfec43320881cddad287a60904fda626050da52f3436f"
+    },
+    "src/server/org-scope.ts": {
+      "current": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+      "candidate": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+      "literal": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+      "baseline": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+      "sha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427"
+    },
+    "src/server/perms.ts": {
+      "current": "70355d4b1d93af3c4cc3e4a158e7a737de723898",
+      "candidate": "70355d4b1d93af3c4cc3e4a158e7a737de723898",
+      "literal": "70355d4b1d93af3c4cc3e4a158e7a737de723898",
+      "baseline": "70355d4b1d93af3c4cc3e4a158e7a737de723898",
+      "sha256": "68c2d5771ec9aa7a98579ceb944326dc4bf489a21cbb3b5253e8e5fee39289b5"
+    },
+    "src/server/queries.ts": {
+      "current": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+      "candidate": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+      "literal": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+      "baseline": "0f10662d64dc9666d5c78230bbad4b92cb1d2c39",
+      "sha256": "499da687c81d2b29f5c2fe40ff60b252ecc48590111387b98cef8f94e1297e4b"
+    },
+    "src/server/renewal-comparison-actions.ts": {
+      "current": "bd0fda7136ad37263476d649cf3957421028778e",
+      "candidate": "bd0fda7136ad37263476d649cf3957421028778e",
+      "literal": "bd0fda7136ad37263476d649cf3957421028778e",
+      "baseline": "bd0fda7136ad37263476d649cf3957421028778e",
+      "sha256": "1706f9dd83b241b6951b18ac8d17478ce4629484e0a53fcd59089a0bc502ac6e"
+    },
+    "src/server/renewal-comparison.integration.test.ts": {
+      "current": "3d55c658b26c17c397a65ac5057a13b8aec44543",
+      "candidate": "3d55c658b26c17c397a65ac5057a13b8aec44543",
+      "literal": "3d55c658b26c17c397a65ac5057a13b8aec44543",
+      "baseline": "3d55c658b26c17c397a65ac5057a13b8aec44543",
+      "sha256": "83349a4b4bf6a2aa0e7503ca0e97c49ec4b6982fea825e9b6905e3e586dc5dec"
+    },
+    "src/server/renewal-comparison.ts": {
+      "current": "b218cb5651a060bb29d0040eec53d0c7108a1f30",
+      "candidate": "b218cb5651a060bb29d0040eec53d0c7108a1f30",
+      "literal": "b218cb5651a060bb29d0040eec53d0c7108a1f30",
+      "baseline": "b218cb5651a060bb29d0040eec53d0c7108a1f30",
+      "sha256": "2848481cb5cc870a52b48505772670146d00195003cd24929064f3f06a2d1e42"
+    },
+    "src/server/repair-rules.ts": {
+      "current": "4efa249eabbf9fed9ab3660518b197347fe9c602",
+      "candidate": "4efa249eabbf9fed9ab3660518b197347fe9c602",
+      "literal": "4efa249eabbf9fed9ab3660518b197347fe9c602",
+      "baseline": "4efa249eabbf9fed9ab3660518b197347fe9c602",
+      "sha256": "abba11db70e1fd34bc93a0cd698ecdd7c9e8068143468dabfc33b9564aa58f55"
+    },
+    "src/server/sandbox-data.ts": {
+      "current": "d8f6df15f812d8a2383d0475c0874e652579dc6a",
+      "candidate": "d8f6df15f812d8a2383d0475c0874e652579dc6a",
+      "literal": "d8f6df15f812d8a2383d0475c0874e652579dc6a",
+      "baseline": "d8f6df15f812d8a2383d0475c0874e652579dc6a",
+      "sha256": "4512b38d53ac0d0eb870d50cd7b6c635eea2626b4640b3ca8ce0b0c11d785243"
+    },
+    "src/server/sandbox-seed.ts": {
+      "current": "11f7c2e042b69ad28be308aa56b62fefd52e593d",
+      "candidate": "11f7c2e042b69ad28be308aa56b62fefd52e593d",
+      "literal": "11f7c2e042b69ad28be308aa56b62fefd52e593d",
+      "baseline": "11f7c2e042b69ad28be308aa56b62fefd52e593d",
+      "sha256": "b270def02813186784b774f5e5cf1ef2984f605fde3f10268e6c98aef613bb79"
+    },
+    "src/server/sandbox.ts": {
+      "current": "d6925304e83f7c38f1cddea6849d86defb5d4739",
+      "candidate": "d6925304e83f7c38f1cddea6849d86defb5d4739",
+      "literal": "d6925304e83f7c38f1cddea6849d86defb5d4739",
+      "baseline": "d6925304e83f7c38f1cddea6849d86defb5d4739",
+      "sha256": "d8d31eacd163d96511fae0be55b1165b7f987d7d1986415ff0bd1b089e2b623e"
+    },
+    "src/server/seed.ts": {
+      "current": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+      "candidate": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+      "literal": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+      "baseline": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+      "sha256": "276f3aa9b672f773d98b8a748e9ddd12577b5873f1628a60ec47a8536c3a6591"
+    },
+    "src/server/session.ts": {
+      "current": "eeac341482275fd4060c350e8dc02d20208de3bc",
+      "candidate": "eeac341482275fd4060c350e8dc02d20208de3bc",
+      "literal": "eeac341482275fd4060c350e8dc02d20208de3bc",
+      "baseline": "eeac341482275fd4060c350e8dc02d20208de3bc",
+      "sha256": "29ddce7340d5bbec5a6dcf3f3a3a944c800b3a0a55b0e44726bedba3348558fe"
+    },
+    "src/server/test-database-clone.ts": {
+      "current": "29a1fb5c8666985392f137cf2f94495e13b3246d",
+      "candidate": "29a1fb5c8666985392f137cf2f94495e13b3246d",
+      "literal": "29a1fb5c8666985392f137cf2f94495e13b3246d",
+      "baseline": "29a1fb5c8666985392f137cf2f94495e13b3246d",
+      "sha256": "75ac758e70869481ffc4d6f91e4ef90b186d59cada030e006ad5af1abdcf961e"
+    },
+    "src/server/test-disposable-db.ts": {
+      "current": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265",
+      "candidate": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265",
+      "literal": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265",
+      "baseline": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265",
+      "sha256": "264c4e1f18cb0aaf3905a6c3f21e356e7b9c0345b902395e1c9d11299a9a6260"
+    },
+    "src/server/types.ts": {
+      "current": "046221d44e89bdd3c2ed9534410df6573271da6a",
+      "candidate": "046221d44e89bdd3c2ed9534410df6573271da6a",
+      "literal": "046221d44e89bdd3c2ed9534410df6573271da6a",
+      "baseline": "046221d44e89bdd3c2ed9534410df6573271da6a",
+      "sha256": "e92720a3a76f49b337286bafe2a7ab87764a4f0edef9e218f6f7737dfbcfa1cf"
+    },
+    "supabase/migrations/20261018120000_schema.sql": {
+      "current": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+      "candidate": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+      "literal": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+      "baseline": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+      "sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615"
+    },
+    "supabase/migrations/20261020120000_auth.sql": {
+      "current": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+      "candidate": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+      "literal": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+      "baseline": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+      "sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81"
+    },
+    "supabase/migrations/20261030120000_org_scoped_reversal_audit.sql": {
+      "current": "138f64992d46f9ee6406e9ccb5dae247750ae8cc",
+      "candidate": "138f64992d46f9ee6406e9ccb5dae247750ae8cc",
+      "literal": "138f64992d46f9ee6406e9ccb5dae247750ae8cc",
+      "baseline": "138f64992d46f9ee6406e9ccb5dae247750ae8cc",
+      "sha256": "38b48136b26f18a16a1cbb4ff1508ad339b63c89d8f6e6bd4e3850e6fae1f00a"
+    },
+    "supabase/migrations/20261031100214_b011_handover_records.sql": {
+      "current": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4",
+      "candidate": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4",
+      "literal": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4",
+      "baseline": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4",
+      "sha256": "2678107e5fff47496159e8846680ba5c5b1f3b2e74c0baf175d267d0b250c94a"
+    },
+    "tsconfig.json": {
+      "current": "c57349280afe4314902d14d337947deb5c42dca2",
+      "candidate": "c57349280afe4314902d14d337947deb5c42dca2",
+      "literal": "c57349280afe4314902d14d337947deb5c42dca2",
+      "baseline": "c57349280afe4314902d14d337947deb5c42dca2",
+      "sha256": "be3d9c197bc2071d1b7a12a78fb0d06a3a6788c14c7cba4bcf52c34fa42173f8"
+    }
+  },
+  "counts": {
+    "currentCandidateLiteral": 68,
+    "unchangedBaseline": 52,
+    "changed": 16,
+    "helpers": 3,
+    "setupReceipts": 4,
+    "operationReceipts": 7,
+    "allReceipts": 11,
+    "screenshots": 32,
+    "priorArchiveEntries": 90,
+    "priorArchivePhysicalFilesIncludingManifests": 94
+  },
+  "helpers": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b014-owner-final-check.py",
+      "sha256": "b9a16b9b420ff5d5d86a20644e39793bf95a52e589087f86886d416f99605deb",
+      "bytes": 5160
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-runtime-driver.py",
+      "sha256": "12703a94aedf7c42da23fc6db07240b9bc1674719730b978097d0dfe000656d6",
+      "bytes": 6044
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-control-readback.py",
+      "sha256": "aa85915eece532ad0e129d3b14ae4d4b2eca86843f918898c360f37868e23c3c",
+      "bytes": 7056
+    }
+  ],
+  "receipts": [
+    {
+      "phase": "gate-setup",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-gate-setup-exit-6c9d4d0-a5.json",
+        "sha256": "f9b68648509533d5895fe5164b6410063b27d66109a749688c8eb6f50ad45c4f",
+        "bytes": 12801
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-gate-setup-6c9d4d0-a5.log",
+        "sha256": "0c5217f511040b562fcb4b1d22c822846945d2db8062758e85a9a2263220d817",
+        "bytes": 62
+      },
+      "actualProcessExit": null,
+      "effectiveExit": 0,
+      "createdbProcessExit": 0,
+      "seedProcessExit": 0,
+      "driverProcessExit": 0,
+      "elapsedSeconds": 266.93
+    },
+    {
+      "phase": "build-setup",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-build-setup-exit-6c9d4d0-a5.json",
+        "sha256": "deb502e83cdb911524be9ba8c85adce831a941bdcdc3fd39e24be80e64175170",
+        "bytes": 12805
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-build-setup-6c9d4d0-a5.log",
+        "sha256": "a04970066a2e361507e2a6fc746c76e15613e665f61661ee6426941b4d372cc0",
+        "bytes": 187
+      },
+      "actualProcessExit": null,
+      "effectiveExit": 0,
+      "createdbProcessExit": 0,
+      "seedProcessExit": 0,
+      "driverProcessExit": 0,
+      "elapsedSeconds": 67.629
+    },
+    {
+      "phase": "browser-setup",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-setup-exit-6c9d4d0-a5.json",
+        "sha256": "713fd04c46cf1f2d9381e214c5ce69c767c01eddd51b2e6e7bc6a756a66a7e54",
+        "bytes": 12810
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-setup-6c9d4d0-a5.log",
+        "sha256": "833966acef09f76b7f708e6faf58078289b2967ff67647b50c66ba24bf547e78",
+        "bytes": 83
+      },
+      "actualProcessExit": null,
+      "effectiveExit": 0,
+      "createdbProcessExit": 0,
+      "seedProcessExit": 0,
+      "driverProcessExit": 0,
+      "elapsedSeconds": 47.205
+    },
+    {
+      "phase": "baseline-setup",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-baseline-setup-exit-6c9d4d0-a5.json",
+        "sha256": "a25afe08cc00d936336298588b56d16b87d04beb759fd491d14db0f3cbb0c8e9",
+        "bytes": 12815
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-baseline-setup-6c9d4d0-a5.log",
+        "sha256": "e0530c0a56f78928dae95dc1b622c37cbf2996ebdbcf48fab363f7552d5f45a8",
+        "bytes": 26
+      },
+      "actualProcessExit": null,
+      "effectiveExit": 0,
+      "createdbProcessExit": 0,
+      "seedProcessExit": 0,
+      "driverProcessExit": null,
+      "elapsedSeconds": 0.941
+    },
+    {
+      "phase": "gate",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-gate-exit-6c9d4d0-a5.json",
+        "sha256": "483e71043e9dc7c01bbab9dd8a12a8a8aec0a1bd2a7afdf3e9a1a038b257f7c6",
+        "bytes": 12792
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-gate-6c9d4d0-a5.log",
+        "sha256": "267c1d62fb03b64d66c6868be76c6ec3548dbf096c8882b1f21ec51685d4c570",
+        "bytes": 444
+      },
+      "actualProcessExit": 0,
+      "effectiveExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "elapsedSeconds": 265.233
+    },
+    {
+      "phase": "next-build",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-next-build-exit-6c9d4d0-a5.json",
+        "sha256": "8c63ccca961118f64b1bd233813633967b5fc96485dc445e3e3fbb87e989a2c2",
+        "bytes": 12752
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-next-build-6c9d4d0-a5.log",
+        "sha256": "0f0cc2402f8dc0d30c2de110c05ff2564c2b13a7e053238daf406d3c045f1201",
+        "bytes": 12530
+      },
+      "actualProcessExit": 0,
+      "effectiveExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "elapsedSeconds": 24.686
+    },
+    {
+      "phase": "cf-build",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-cf-build-exit-6c9d4d0-a5.json",
+        "sha256": "b8a7a51ee29c0b83beb1796dfbd2bcb3b7a827724ebaabf64bc06d46290ddaa9",
+        "bytes": 12753
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-cf-build-6c9d4d0-a5.log",
+        "sha256": "da6ee24a3c11e562d0fa6fc1e2167fdb5467b76ee54a2d20352877f3948b48fa",
+        "bytes": 14239
+      },
+      "actualProcessExit": 0,
+      "effectiveExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "elapsedSeconds": 33.491
+    },
+    {
+      "phase": "preflight",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-preflight-exit-6c9d4d0-a5.json",
+        "sha256": "760f13a2fadf12bb946c1d53fda4534bee6d4e20ca2e4087658ded285b67e87e",
+        "bytes": 12759
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-preflight-6c9d4d0-a5.log",
+        "sha256": "00072df59f44811e40e111707f795b4c006137cce2d3e7dece7fb073f79774e3",
+        "bytes": 23
+      },
+      "actualProcessExit": 0,
+      "effectiveExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "elapsedSeconds": 3.381
+    },
+    {
+      "phase": "worker",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-worker-exit-6c9d4d0-a5.json",
+        "sha256": "b16f27c3a2292bc0b9b04d166b9e15574c16e5e57b9db5f6c820a2fb4e11733b",
+        "bytes": 12751
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-worker-6c9d4d0-a5.log",
+        "sha256": "634364bc62a3735900c2a1ddebc11a1872596eee89b6fce26be5fc620f8836d4",
+        "bytes": 421
+      },
+      "actualProcessExit": 0,
+      "effectiveExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "elapsedSeconds": 2.713
+    },
+    {
+      "phase": "owner-transfer-playwright",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-transfer-playwright-exit-6c9d4d0-a5.json",
+        "sha256": "5873e19bd408d386afb2357ae7f306ab151d1c171e9f410a90e956e88897ef90",
+        "bytes": 13012
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-transfer-playwright-6c9d4d0-a5.log",
+        "sha256": "032531fb9af1d7c25f235cda3c2a6079f5c8af980e38295dba75099685edc395",
+        "bytes": 432
+      },
+      "actualProcessExit": 0,
+      "effectiveExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "elapsedSeconds": 45.207
+    },
+    {
+      "phase": "control-readback",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-control-readback-exit-6c9d4d0-a5.json",
+        "sha256": "07c4c184c50221fa956b50006fc4d0b3b95a3849f2145c37d3b268df4bc206f0",
+        "bytes": 12683
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-control-readback-6c9d4d0-a5.log",
+        "sha256": "c057b3021cbc5b750cf8e4899d8787d61dfc8c596118503c4b4d7569a7eeade1",
+        "bytes": 904
+      },
+      "actualProcessExit": 0,
+      "effectiveExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "elapsedSeconds": 0.055
+    }
+  ],
+  "gate": {
+    "summary": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.md",
+      "sha256": "ef678f8dd061e4a511852dd4f7cada09b50b314450538ff73f6c36b6dd859f0e",
+      "bytes": 971
+    },
+    "rawLogs": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/copy-check.log",
+        "sha256": "0c346ab9b58b255018adea05970017d3dfeac4183407d4410a1a523ad696b34e",
+        "bytes": 1435
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/flag-expiry.log",
+        "sha256": "69341f362e375a58a3bf8e250fe74d39f2c6abc3340a921837b94eeb1a41ad3b",
+        "bytes": 27
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/lint.log",
+        "sha256": "b0f96cc3d3f5eeea02db057aa844739f7139e14132f2840c9109bb966dce3169",
+        "bytes": 2651
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/npm-ci.log",
+        "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+        "bytes": 1585
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/postgres-16.log",
+        "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+        "bytes": 31
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/steps.md",
+        "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+        "bytes": 341
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/test-rls.log",
+        "sha256": "bf6f581e0bc67f7d36f6c92c2c37bb09423111913d60e1149918a312d39d2fb3",
+        "bytes": 109716
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/test-unit.log",
+        "sha256": "f87affa27a36e2a10b52c05bd1296b42487943ac08af793e2f15c83dbdadce94",
+        "bytes": 128352
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/toolchain.log",
+        "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+        "bytes": 27
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/6c9d4d0bdf78436206c57b9e244e42cf225b7a9e.xnncO6/typecheck.log",
+        "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+        "bytes": 43
+      }
+    ],
+    "unit": {
+      "tests": 623,
+      "pass": 623,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "rls": {
+      "tests": 394,
+      "pass": 393,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 1,
+      "todo": 0
+    },
+    "historicalSkip": "Previously approved historical b888ccd upgrade skip; no other skips",
+    "checks": 11
+  },
+  "browser": {
+    "selected": 4,
+    "passed": 4,
+    "failed": 0,
+    "screenshots": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-1280-chromium/blocked-recovery-en-1280.png",
+        "sha256": "ad690125ec5baad0b9938996872c5d0384595f46ffd5621197550b18fa5aa1e0",
+        "bytes": 161070,
+        "state": "blocked-recovery",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-1280-chromium/initial-en-1280.png",
+        "sha256": "9cc695af33ae7a7b47949c4cf5056f87e502c1a05efc252b9f4463100f379fdc",
+        "bytes": 94523,
+        "state": "initial",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-1280-chromium/invalid-en-1280.png",
+        "sha256": "ef00c42b82604ff60d8a96f455998d80a202b74a6c530f90bade94076386f707",
+        "bytes": 103026,
+        "state": "invalid",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-1280-chromium/loading-en-1280.png",
+        "sha256": "3b07de97f144218553ad1856705486767c6db17c1ec99e162b998817ad4335e3",
+        "bytes": 101851,
+        "state": "loading",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-1280-chromium/recorded-en-1280.png",
+        "sha256": "abca488c981a52bfd1b7e2c6622fee8ee725106d1b1b3eecf389f31aaef9994f",
+        "bytes": 136538,
+        "state": "recorded",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-1280-chromium/recovered-en-1280.png",
+        "sha256": "7eeea1d3beeff0dc77c461ca73a904946e10477dbfd8169c4f74b8a3b3006ace",
+        "bytes": 138152,
+        "state": "recovered",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-1280-chromium/reversed-en-1280.png",
+        "sha256": "551c71b7a6c9c4b5e40d16dd34dd83cb60b74f4c4c7d79ad3743bb9751fa2a51",
+        "bytes": 160234,
+        "state": "reversed",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-1280-chromium/scope-reset-en-1280.png",
+        "sha256": "5b46af44e8d15ad33107510269c927430fec18fc5c503241bedca9104dfa6919",
+        "bytes": 148934,
+        "state": "scope-reset",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/blocked-recovery-en-390.png",
+        "sha256": "e628e7d2f3a4c2f7f3f8abd69932ee484c2d1ddccb852d330bd9e2644df13276",
+        "bytes": 111772,
+        "state": "blocked-recovery",
+        "locale": "en",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/initial-en-390.png",
+        "sha256": "c54ef3cef8b9c0624f0685cc6ef1254cf8adca617b2b64ab8ac3fc182960cae0",
+        "bytes": 52887,
+        "state": "initial",
+        "locale": "en",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/invalid-en-390.png",
+        "sha256": "70c7444b1a302c8a3a103f47a43e47f7c5f9c413a851367b1cad72dacd0f0321",
+        "bytes": 60907,
+        "state": "invalid",
+        "locale": "en",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/loading-en-390.png",
+        "sha256": "3687b42662fcfba77734c9f6b34375fe0e0c9ccff7e2e175bec52b85f2a89853",
+        "bytes": 59586,
+        "state": "loading",
+        "locale": "en",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/recorded-en-390.png",
+        "sha256": "e39b7a6a71f3f94e2564ebb17fc3a8eb78584766c7e633b9f9c6d58427f46ea0",
+        "bytes": 88580,
+        "state": "recorded",
+        "locale": "en",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/recovered-en-390.png",
+        "sha256": "4c314a8732fa7f6e93842a4f87e40e06aadeaa3e134e3b778c903226e64401a2",
+        "bytes": 90247,
+        "state": "recovered",
+        "locale": "en",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/reversed-en-390.png",
+        "sha256": "4d7fd39257e8d4bfff3cc5f48b5bc572ccee3e26c84144a53872b97055c9772f",
+        "bytes": 110168,
+        "state": "reversed",
+        "locale": "en",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/scope-reset-en-390.png",
+        "sha256": "80073d6af55b34d5c6fe2cad35e24bddae4a263a3a21c32c581304816bf525f3",
+        "bytes": 105537,
+        "state": "scope-reset",
+        "locale": "en",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-1280-chromium/blocked-recovery-zh-TW-1280.png",
+        "sha256": "737e5d0c71d1aa397647b430f5a0cdaac87f84398c2e0ce820106dc803028fca",
+        "bytes": 164476,
+        "state": "blocked-recovery",
+        "locale": "zh-TW",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-1280-chromium/initial-zh-TW-1280.png",
+        "sha256": "8a23d0da91589bb7e949f47007b18a315de856d58b928253afe0e4346375157c",
+        "bytes": 92999,
+        "state": "initial",
+        "locale": "zh-TW",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-1280-chromium/invalid-zh-TW-1280.png",
+        "sha256": "e5746b54633be3959e0329e9984934f8870c19fbbbe176588d39a63e229e9218",
+        "bytes": 101719,
+        "state": "invalid",
+        "locale": "zh-TW",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-1280-chromium/loading-zh-TW-1280.png",
+        "sha256": "98c3d10612d81011965e323c3a1c885aab99ef31426de067701d9fd3cbe1feb2",
+        "bytes": 99906,
+        "state": "loading",
+        "locale": "zh-TW",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-1280-chromium/recorded-zh-TW-1280.png",
+        "sha256": "73b2d17fe6ed2ec7b28acee0f6627a8723b9612cde1ddb2fd0411f331859555b",
+        "bytes": 133923,
+        "state": "recorded",
+        "locale": "zh-TW",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-1280-chromium/recovered-zh-TW-1280.png",
+        "sha256": "a3d9273616e8341561d899ecd958efd1cbe96bfb849fa0243ee94c66c673244f",
+        "bytes": 135791,
+        "state": "recovered",
+        "locale": "zh-TW",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-1280-chromium/reversed-zh-TW-1280.png",
+        "sha256": "bacfa86abf2a325a0cf55a9d07dc908037680aa9b8d79897da93a413239367b0",
+        "bytes": 161840,
+        "state": "reversed",
+        "locale": "zh-TW",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-1280-chromium/scope-reset-zh-TW-1280.png",
+        "sha256": "95c96f8b7181a53705a983fc0dd9f2a1ed0cf2ea5cc35992a30e4343c5a7c7e2",
+        "bytes": 151492,
+        "state": "scope-reset",
+        "locale": "zh-TW",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-390-chromium/blocked-recovery-zh-TW-390.png",
+        "sha256": "1f5abf4c011fb56110f90ed8889161e5a6858cbd56df960e80d1ddd549d1643a",
+        "bytes": 119554,
+        "state": "blocked-recovery",
+        "locale": "zh-TW",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-390-chromium/initial-zh-TW-390.png",
+        "sha256": "d8fd450d5e96a1be0ed1f7e4e680af0bd9fcf2090ada95c7c2b68ecfa0ccea8a",
+        "bytes": 55774,
+        "state": "initial",
+        "locale": "zh-TW",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-390-chromium/invalid-zh-TW-390.png",
+        "sha256": "48042a35545b2a219e4b04a941520969a6bdb44b0efe91dd619e73b1ed8c06ce",
+        "bytes": 63814,
+        "state": "invalid",
+        "locale": "zh-TW",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-390-chromium/loading-zh-TW-390.png",
+        "sha256": "d67d85cc9120fd83845abc8e9e0d01b1eea6f845420647fad92da4f9cd4b281d",
+        "bytes": 62735,
+        "state": "loading",
+        "locale": "zh-TW",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-390-chromium/recorded-zh-TW-390.png",
+        "sha256": "3afb95fb3b381b2cfb0e3e505bca12bc247463bb3ae2c8270360be8585464607",
+        "bytes": 93146,
+        "state": "recorded",
+        "locale": "zh-TW",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-390-chromium/recovered-zh-TW-390.png",
+        "sha256": "7395a377a4be5f5d0930ac26baf1d06e1f52796e101898a9199cb473b89991bd",
+        "bytes": 95790,
+        "state": "recovered",
+        "locale": "zh-TW",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-390-chromium/reversed-zh-TW-390.png",
+        "sha256": "308084155049249d342390094bddd0ad08f7ef24eeba69d16019ed819b516b03",
+        "bytes": 117197,
+        "state": "reversed",
+        "locale": "zh-TW",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-browser-6c9d4d0-a5-artifacts/b014-owner-transfers-owner-transfer-records-zh-TW-390-chromium/scope-reset-zh-TW-390.png",
+        "sha256": "a2e8bcc0d8b05ed58a95b5e076784c5f9f322d49b52a043aab38bcebd4fb11c5",
+        "bytes": 112754,
+        "state": "scope-reset",
+        "locale": "zh-TW",
+        "width": 390
+      }
+    ],
+    "visualReviewAtCreation": "NOT_YET_VIEWED",
+    "focusOnCandidate": "NOT_RUN",
+    "replayCoverage": "UI-produced payload reinserted as fixture after known success; no actual response-loss claim"
+  },
+  "controls": {
+    "readOnly": true,
+    "globalControl": "Original key absent in both clones; positive full-row timestamp restoration not exercised",
+    "selectedOrgWholeFlagsRestored": true,
+    "globalOff": true,
+    "orgOptins": 0,
+    "scope": "Named global control and selected organization flags only; no whole-database or audit-history restore claim"
+  },
+  "history": {
+    "archives": [
+      {
+        "attempt": "a1",
+        "manifest": {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/manifest.json",
+          "sha256": "60c5ebf338a2fe24082ec1f8f28a795c4157354e2490ffb479dcfbdc1638e81b",
+          "bytes": 7251
+        },
+        "artifacts": [
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/work/b014-gate-setup-c083603-a1.log",
+            "sha256": "66dcb25fe71b23ccc61c9ee6d93e0a9ae653d4c5a44196cc5e7ca9b2280c1c8d",
+            "bytes": 62
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/work/b014-gate-setup-exit-c083603-a1.json",
+            "sha256": "3955677ce9921e7a6c53bd6ae09f1c610f76a0ecb44793b204cfd758ca6c5466",
+            "bytes": 12802
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/work/b014-gate-exit-c083603-a1.json",
+            "sha256": "6582a7831dacd3c15c3788fe9400e52e184337df6911832cdf37505a8cb9f953",
+            "bytes": 12792
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/work/b014-gate-c083603-a1.log",
+            "sha256": "385bf0c8f55b8e00de5974b4f148a4fcd5fc0eab424d56e88eb02afda705f7fd",
+            "bytes": 444
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/work/b014-owner-reviewed-source-freeze.json",
+            "sha256": "688e2a0b5ad42acd513cd38be288bb3c6feab0a7ced050fa9ad7b979c4a153a1",
+            "bytes": 13200
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/work/run-b014-owner-final-check.py",
+            "sha256": "b9a16b9b420ff5d5d86a20644e39793bf95a52e589087f86886d416f99605deb",
+            "bytes": 5160
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/work/b014-owner-runtime-driver.py",
+            "sha256": "12703a94aedf7c42da23fc6db07240b9bc1674719730b978097d0dfe000656d6",
+            "bytes": 6044
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/work/b014-owner-control-readback.py",
+            "sha256": "aa85915eece532ad0e129d3b14ae4d4b2eca86843f918898c360f37868e23c3c",
+            "bytes": 7056
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/postgres-16.log",
+            "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+            "bytes": 31
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/lint.log",
+            "sha256": "b0f96cc3d3f5eeea02db057aa844739f7139e14132f2840c9109bb966dce3169",
+            "bytes": 2651
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/npm-ci.log",
+            "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+            "bytes": 1585
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/typecheck.log",
+            "sha256": "880288895a9996d48b0655fbb77581115f45801ffe9deec440fa6ad51b002fb2",
+            "bytes": 893
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/copy-check.log",
+            "sha256": "ae175435342ed70af95542ccb34dfc35b057d462373ef1f4812908846ce9d903",
+            "bytes": 1437
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/flag-expiry.log",
+            "sha256": "69341f362e375a58a3bf8e250fe74d39f2c6abc3340a921837b94eeb1a41ad3b",
+            "bytes": 27
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/steps.md",
+            "sha256": "45c4674e5536c66b68f233d09cf021a2d804dba2ccbbcb107531b5fb25034db9",
+            "bytes": 341
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/test-unit.log",
+            "sha256": "d7da315826136378d662d9991caa24472d2fae0c105d0f709ed433f13765960f",
+            "bytes": 128305
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/test-rls.log",
+            "sha256": "d647f0691b1ff2dfa675cc27b9c42177094c52665876d3dc8cc9d5e409b8b5ec",
+            "bytes": 104171
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/gate-raw/toolchain.log",
+            "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+            "bytes": 27
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a1-gate-failure/work/mode-b-repair-override-prep/e2e/results/gate-c083603e9d037a3f9e3a5874834bdd4ebdf98c84.md",
+            "sha256": "11a47508a21355d630f8af2dea79b2c946bbd2d8e0605c332f373a3ffba0878c",
+            "bytes": 971
+          }
+        ]
+      },
+      {
+        "attempt": "a2",
+        "manifest": {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/manifest.json",
+          "sha256": "78ef592048bb0aa26e22cf6ce9ebdbea06189230828d75089b1b12f4adcd05c8",
+          "bytes": 7446
+        },
+        "artifacts": [
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/work/b014-gate-setup-bbc8deb-a2.log",
+            "sha256": "66dcb25fe71b23ccc61c9ee6d93e0a9ae653d4c5a44196cc5e7ca9b2280c1c8d",
+            "bytes": 62
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/work/b014-gate-exit-bbc8deb-a2.json",
+            "sha256": "d192cba3c7b522cdf49d35d9275bbe99fb682a6364091cee64244daf3117b9ec",
+            "bytes": 12792
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/work/b014-gate-setup-exit-bbc8deb-a2.json",
+            "sha256": "b72ffcdbe4fe9752eedf67eef2cc8f00091d72b6ae5f0ee2249de77e05d8112a",
+            "bytes": 12802
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/work/b014-gate-bbc8deb-a2.log",
+            "sha256": "07b64ab05cb4252cb73fbb316b8723a7d1ff559187439edd59d03b551d824d2b",
+            "bytes": 444
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/work/b014-owner-reviewed-source-freeze.json",
+            "sha256": "6bd57c2338373f63f1669c89927f17172fbdd1c626efb6af28380fbaa64d8336",
+            "bytes": 14871
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/work/run-b014-owner-final-check.py",
+            "sha256": "b9a16b9b420ff5d5d86a20644e39793bf95a52e589087f86886d416f99605deb",
+            "bytes": 5160
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/work/b014-owner-runtime-driver.py",
+            "sha256": "12703a94aedf7c42da23fc6db07240b9bc1674719730b978097d0dfe000656d6",
+            "bytes": 6044
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/work/b014-owner-control-readback.py",
+            "sha256": "aa85915eece532ad0e129d3b14ae4d4b2eca86843f918898c360f37868e23c3c",
+            "bytes": 7056
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/postgres-16.log",
+            "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+            "bytes": 31
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/lint.log",
+            "sha256": "b0f96cc3d3f5eeea02db057aa844739f7139e14132f2840c9109bb966dce3169",
+            "bytes": 2651
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/npm-ci.log",
+            "sha256": "72de6a8ff59cfd135380a4a609bf0e6ec3739f7cd3b72984afb49124f1929417",
+            "bytes": 1586
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/typecheck.log",
+            "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+            "bytes": 43
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/copy-check.log",
+            "sha256": "5ee6131b756b09e5384f48be1ef70e3692a72b554e625c268b38b6cbf9ae9db7",
+            "bytes": 1437
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/flag-expiry.log",
+            "sha256": "69341f362e375a58a3bf8e250fe74d39f2c6abc3340a921837b94eeb1a41ad3b",
+            "bytes": 27
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/steps.md",
+            "sha256": "06eeb1a00ea6214a848a4a7b12dcf9c4790703bb8189c8314d22b328eefd2715",
+            "bytes": 341
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/test-unit.log",
+            "sha256": "50152bff467d618c45a32e9fd0a90c9eb3565a376959469ba40a187e13240b27",
+            "bytes": 128351
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/test-rls.log",
+            "sha256": "ff951494684d0c7761d97e1a5b6b5b4413502c4377d8300df906d6a10c1abec5",
+            "bytes": 110597
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/gate-raw/toolchain.log",
+            "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+            "bytes": 27
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a2-observer-failure/work/mode-b-repair-override-prep/e2e/results/gate-bbc8debb92471012b4e65b0edde741f7f8d564a4.md",
+            "sha256": "8eabfd8ae764c27c8f7f80e62db3e47b97badd0aa0700fad7957758c7a86882e",
+            "bytes": 971
+          }
+        ]
+      },
+      {
+        "attempt": "a3",
+        "manifest": {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/manifest.json",
+          "sha256": "6dfa0986393ffeb31cafdaaa63b06441507999e24d6d3c9e2f0bfb90f94d8d23",
+          "bytes": 12238
+        },
+        "artifacts": [
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-focus-setup-exit-ceba961-a3.json",
+            "sha256": "a67b317b98b31371789cef32c8cf16785f5e59f1f556e693b10de9aec00f3f45",
+            "bytes": 12804
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-gate-exit-ceba961-a3.json",
+            "sha256": "16fe4aa38df84be03c0f8b52721d660a9a2df6c087e4b5603985c007a1fd5048",
+            "bytes": 12792
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-worker-exit-ceba961-a3.json",
+            "sha256": "88276b9067206a2e6829a6d60319c0d0ce13c70efd332f90cd6a1004773a0a98",
+            "bytes": 12751
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-build-setup-exit-ceba961-a3.json",
+            "sha256": "77bf96dc8498156770f4b3aa07eaf858a079f0465dfd7210d3f72daf90bcaa67",
+            "bytes": 12805
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-gate-ceba961-a3.log",
+            "sha256": "a96592a8398d7ae253e311cf45b016f0f81dd9cd7aa23ec2cdab3a96d451f1b7",
+            "bytes": 444
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-next-build-ceba961-a3.log",
+            "sha256": "9f432eaa6c808c2ac25a69cee6a49d33598d19e3feca38e8b1bc470a3934ff30",
+            "bytes": 12530
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-build-setup-ceba961-a3.log",
+            "sha256": "a04970066a2e361507e2a6fc746c76e15613e665f61661ee6426941b4d372cc0",
+            "bytes": 187
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-owner-transfer-focus-ceba961-a3.log",
+            "sha256": "092ecc02eac59b689a5e4c831a137c718b19b241820752ec555405fec5fd371e",
+            "bytes": 4281
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-gate-summary-ceba961-a3.md",
+            "sha256": "151ff407ba20c2c1844569527561111ed11468d355720aeeef75da0c00774328",
+            "bytes": 971
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-focus-ceba961-a3-artifacts/.last-run.json",
+            "sha256": "a5bf634de9d1c7ec5b31074e01415dca7d9371a6bd5af478c61639b4686fdc30",
+            "bytes": 96
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-focus-ceba961-a3-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/error-context.md",
+            "sha256": "c2a9ab13b8d6aa21c857a74c4b1f66470e4623ddd895f3cd5b7b6f71fc1f21af",
+            "bytes": 11536
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-owner-transfer-focus-exit-ceba961-a3.json",
+            "sha256": "dc9368036e5b50c0b9a03f178eca7ca457daaf4ca0e8af4f9aa07027b3a7740a",
+            "bytes": 13196
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-cf-build-ceba961-a3.log",
+            "sha256": "671addc71ee7883a4740de1a2738d4ffd6dcc4e29b790a71489b3a4504c896f3",
+            "bytes": 14239
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-preflight-exit-ceba961-a3.json",
+            "sha256": "8161e6707d92e47af8c79c6fb944bdb75087c3a8efe01467520d2f0cb357e159",
+            "bytes": 12759
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-gate-setup-ceba961-a3.log",
+            "sha256": "0c5217f511040b562fcb4b1d22c822846945d2db8062758e85a9a2263220d817",
+            "bytes": 62
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-focus-setup-ceba961-a3.log",
+            "sha256": "a676582620fb2d8011deda4f9793986c1d7dea56a85aad3f99ff637da4cd9d43",
+            "bytes": 78
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-preflight-ceba961-a3.log",
+            "sha256": "ccf405dcda53e6078c8368d50803b60c845a7217beeb78fef4bccc435f9f7a18",
+            "bytes": 23
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-worker-ceba961-a3.log",
+            "sha256": "3aa00ce6ac528b9afc8ce0e5e2b0d69d4defdc2876e5c8a40a3cbcab1a4e0fa0",
+            "bytes": 423
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-cf-build-exit-ceba961-a3.json",
+            "sha256": "686105ea020cffc9f76be0a374bb834f6a6b87151ddbc9158fa68b93c8aadb4b",
+            "bytes": 12753
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-next-build-exit-ceba961-a3.json",
+            "sha256": "30c2c79060a618d4e02f01a4d83b264ce04130b9687271738a9e4e8766ded6ae",
+            "bytes": 12752
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-gate-setup-exit-ceba961-a3.json",
+            "sha256": "683ed09c0ae421c4db8fb2a435ed299b0c14aa84c225af8fcb2e546d40326fc1",
+            "bytes": 12802
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-owner-reviewed-source-freeze.json",
+            "sha256": "0567461c99b6a8196fde82c26a9e6a4f17d19fd6d2c73c75c143f2fea08f7c06",
+            "bytes": 15670
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/run-b014-owner-final-check.py",
+            "sha256": "b9a16b9b420ff5d5d86a20644e39793bf95a52e589087f86886d416f99605deb",
+            "bytes": 5160
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-owner-runtime-driver.py",
+            "sha256": "12703a94aedf7c42da23fc6db07240b9bc1674719730b978097d0dfe000656d6",
+            "bytes": 6044
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/work/b014-owner-control-readback.py",
+            "sha256": "aa85915eece532ad0e129d3b14ae4d4b2eca86843f918898c360f37868e23c3c",
+            "bytes": 7056
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/postgres-16.log",
+            "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+            "bytes": 31
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/lint.log",
+            "sha256": "b0f96cc3d3f5eeea02db057aa844739f7139e14132f2840c9109bb966dce3169",
+            "bytes": 2651
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/npm-ci.log",
+            "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+            "bytes": 1585
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/typecheck.log",
+            "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+            "bytes": 43
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/copy-check.log",
+            "sha256": "aa18b7eb3ed7d67a33bff308b3528ada5296c45836bd71acfd3ede8ea6ede43c",
+            "bytes": 1437
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/flag-expiry.log",
+            "sha256": "69341f362e375a58a3bf8e250fe74d39f2c6abc3340a921837b94eeb1a41ad3b",
+            "bytes": 27
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/steps.md",
+            "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+            "bytes": 341
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/test-unit.log",
+            "sha256": "099f0fdaf7ca7f754ad059171a1030a3113f4c10fc5e069f48db9c628e2e7298",
+            "bytes": 128316
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/test-rls.log",
+            "sha256": "c524fdb270ba4b6086eb1bd169d19b6a13f2457001040c50dfa1980a9fd070d6",
+            "bytes": 109650
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a3-focus-selector-failure/gate-raw/toolchain.log",
+            "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+            "bytes": 27
+          }
+        ]
+      },
+      {
+        "attempt": "a4",
+        "manifest": {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/manifest.json",
+          "sha256": "6206bcc1813098f2731c2973c283927898334903870b19367d55a388f1a4cf27",
+          "bytes": 7201
+        },
+        "artifacts": [
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-owner-transfer-focus-exit-cba8ade-a4.json",
+            "sha256": "39a033bca509df5e8fc0ca5e0a8eacc19c7f2264aa2de5dc715c78ff235c80ee",
+            "bytes": 13196
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-setup-cba8ade-a4.log",
+            "sha256": "8b841efb9bb98a91fc91294c0c290a963e6acfd5da8c75287390be55ec382e3e",
+            "bytes": 78
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-setup-exit-cba8ade-a4.json",
+            "sha256": "20ecbe88cf35732342739e64b46cf5e146842561cdf4bc24ae84025281673495",
+            "bytes": 12804
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-cba8ade-a4-artifacts/.last-run.json",
+            "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+            "bytes": 45
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-cba8ade-a4-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/loading-en-390.png",
+            "sha256": "3530ef246889d297f665824927783b689c1b82ee5132e897a04deaba05d750ec",
+            "bytes": 59517
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-cba8ade-a4-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/scope-reset-en-390.png",
+            "sha256": "255758b2a608e4c723a8c7485d7b5694c6990e3a4d31d18361ce7c76eaa9f69b",
+            "bytes": 103124
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-cba8ade-a4-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/initial-en-390.png",
+            "sha256": "8ec838d99881d18fae88d5cd77b43d64aa6098040c044c0c1b1ec2bca79707a2",
+            "bytes": 52918
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-cba8ade-a4-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/recorded-en-390.png",
+            "sha256": "06d78672ca2dbbda460d778056badc886b54e4941c854d22de5f8fbf5b1410b1",
+            "bytes": 88169
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-cba8ade-a4-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/invalid-en-390.png",
+            "sha256": "e99b2c200561a5c6784f4bdae15f062d9c0d3e31a4f04e2d83b8a608c5e9c287",
+            "bytes": 60992
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-cba8ade-a4-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/reversed-en-390.png",
+            "sha256": "06d58b6c36604915ddea28c39a0cf577e5f208c5d6004ce0be27fd1ce2d997a4",
+            "bytes": 107861
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-cba8ade-a4-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/recovered-en-390.png",
+            "sha256": "eb36ed23a379b2907c4de47e963d18c118501db0d7afe698ea557a281e7e3b42",
+            "bytes": 89659
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-focus-cba8ade-a4-artifacts/b014-owner-transfers-owner-transfer-records-en-390-chromium/blocked-recovery-en-390.png",
+            "sha256": "487fe1d4b8d30ac9b2d74be9004c927a00162935b478827449acdef649347fac",
+            "bytes": 109394
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-owner-transfer-focus-cba8ade-a4.log",
+            "sha256": "2749bd92d5fb3cc44b90f77e84390264cebac6f3c83d83d3bdaddb831dfb9eea",
+            "bytes": 144
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-owner-reviewed-source-freeze.json",
+            "sha256": "577c04a4ae956ccc57038493246111897ebbd1acb7966e53acf1de68ba7ff406",
+            "bytes": 16509
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/run-b014-owner-final-check.py",
+            "sha256": "b9a16b9b420ff5d5d86a20644e39793bf95a52e589087f86886d416f99605deb",
+            "bytes": 5160
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-owner-runtime-driver.py",
+            "sha256": "12703a94aedf7c42da23fc6db07240b9bc1674719730b978097d0dfe000656d6",
+            "bytes": 6044
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-owner-a4-focus-semantic-label/b014-owner-control-readback.py",
+            "sha256": "aa85915eece532ad0e129d3b14ae4d4b2eca86843f918898c360f37868e23c3c",
+            "bytes": 7056
+          }
+        ]
+      }
+    ],
+    "a1": "Gate FAIL: BigInt literal issue and prior B013 RLS failure; latter cause UNKNOWN/unwaived",
+    "a2": "Gate FAIL: observer did not observe blocked operation; cause unproven",
+    "a3": "Gate and four build phases passed; focus 1 selected, 0 passed, 1 failed, 0 PNG",
+    "a4": "Focus 1 selected and passed, 8 PNG; root viewed all and identified reversal-date semantic correction; later phases NOT_RUN",
+    "extraSourceArchives": [
+      {
+        "directory": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go",
+        "artifacts": [
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/e2e/b014-owner-transfers-private-playwright.config.ts",
+            "sha256": "82876ed9b75e0b8e293ee983455ab080ca30d2c0ec48b5ebd7480e09d64ffbb0",
+            "bytes": 1799
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/e2e/b014-owner-transfers.spec.ts",
+            "sha256": "cce1696d5cc4f623f92f59872a8e7d0a4b9d2b3db6e3fac98cf6a4e68fda360b",
+            "bytes": 8914
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/manifest.json",
+            "sha256": "55e4141f9d0337d7568078b96fd6c5fd71a68e1c7c19aec4250332b08e207e6b",
+            "bytes": 3849
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/ops/flags.yaml",
+            "sha256": "c79944b70fa71d989782dabbb816a2fb1f36619bb34efb58400ba60e38961e79",
+            "bytes": 9927
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/package.json",
+            "sha256": "1c3b64b7a4c9a3b2ff837785f79565e5368f48383a18ab8b3116dcb1d9e26f49",
+            "bytes": 12723
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/scripts/run-e2e.ts",
+            "sha256": "feb9d51d5c205336e67f8f158427a4e657f80b2b3706db81481f4c6d63c8b1ca",
+            "bytes": 5758
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/app/m/statements/page.tsx",
+            "sha256": "5d378b891408d6b31b4b8df2274e3e6a426a88fbcac8c8f1f7e5795cc9092b4b",
+            "bytes": 8301
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/app/m/statements/transfers/page.tsx",
+            "sha256": "5290257951b9037160ae00abf6d317b633ef75e25828db18d2179f8759d5e497",
+            "bytes": 738
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/components/owner-transfers.tsx",
+            "sha256": "ecf3b6496b28248519c303d62d456e02f72d4cf2d094ceb794a3aad5ad34db8b",
+            "bytes": 6598
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/i18n/owner-transfer.ts",
+            "sha256": "fc241fd046a3b3db532daa77890c834ec16df529669cd94f598ba3d73775b815",
+            "bytes": 1963
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/server/domain.ts",
+            "sha256": "510c4a9d84ae0c3951a1160dd39421b59aaa2e3bf54d99d325706ddf380a3ec4",
+            "bytes": 126116
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/server/owner-transfer-actions.ts",
+            "sha256": "6a394d2aa9f86a070d325b97c23fc76d8fd765b538112b17d07e9be58e1f5340",
+            "bytes": 579
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/server/owner-transfer-input.test.ts",
+            "sha256": "642c6dac3ba8719c6da7de064689f61c9431d6680a6078481be421ae718e2ccd",
+            "bytes": 1689
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/server/owner-transfer-input.ts",
+            "sha256": "3dcbdde868baf5a4a0247d37259cde60d962b4934aea7447e63c36b851d7f45a",
+            "bytes": 2164
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/server/owner-transfer-period-lock.ts",
+            "sha256": "98d82356820cac7d7e497ab4e3895354d699c082f9dd3ff54d222475a7408e19",
+            "bytes": 442
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/server/owner-transfers.integration.test.ts",
+            "sha256": "562d73e2d979a548df21b45ce949b5d6be4900edccf152f49e9cb5d5c6d20612",
+            "bytes": 7705
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-source-no-go/src/server/owner-transfers.ts",
+            "sha256": "4a20140cb2b0df535e072cbf8e63c976be6b770fe2793612ffaa24845a1b4893",
+            "bytes": 12321
+          }
+        ]
+      },
+      {
+        "directory": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-helper-drafts",
+        "artifacts": [
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-helper-drafts/b014-owner-control-readback.py",
+            "sha256": "0fdc3f59501bdd174d7c75ead66414dc256a10a550a85ce9591346042c013fd7",
+            "bytes": 7049
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-helper-drafts/b014-owner-runtime-driver.py",
+            "sha256": "1be2906c8055e560277a12faf8a3b8e451e7c7ad6b06803dfe7a379006ddbbf8",
+            "bytes": 6015
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-helper-drafts/manifest.json",
+            "sha256": "4f2c08069d7ac2dae62a41072fbb19452d565038cc9b4f046e1787c9a41c499e",
+            "bytes": 603
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-initial-helper-drafts/run-b014-owner-final-check.py",
+            "sha256": "02c5d348af15e5f0b4d0277911c25112416281fa517594800c44239415d732a3",
+            "bytes": 5131
+          }
+        ]
+      },
+      {
+        "directory": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-diagnostic-initial-source",
+        "artifacts": [
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-diagnostic-initial-source/b014-override-same-value-diagnostic.ts",
+            "sha256": "f8d08c65e483f89cc4efcd2806326ef860fb775c997b87908f98d2932d56b9ab",
+            "bytes": 9081
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-diagnostic-initial-source/manifest.json",
+            "sha256": "2909c61c293366a8197233a141b6ccebdd79f8a36d99941c668d40a0c7022ad1",
+            "bytes": 435
+          },
+          {
+            "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-diagnostic-initial-source/run-b014-override-same-value-diagnostic.py",
+            "sha256": "7672fa93d1a683502f024e9a450166e2325c8f50cc7d09e6af38070b89d226b5",
+            "bytes": 5979
+          }
+        ]
+      }
+    ]
+  },
+  "diagnostic": {
+    "artifacts": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-baseline-setup-exit-c083603-d1.json",
+        "sha256": "6be7bf4dfd020e8e5131f8606844fc562254aed09d4fa58733911496359c9b0b",
+        "bytes": 12815
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-baseline-setup-c083603-d1.log",
+        "sha256": "e0530c0a56f78928dae95dc1b622c37cbf2996ebdbcf48fab363f7552d5f45a8",
+        "bytes": 26
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-override-same-value-exit-c083603-d1.json",
+        "sha256": "ae6d577e8f1d645b9c1866fd0e6d9fb93b3e110a3e398e7438b0401defcdeeb2",
+        "bytes": 13718
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-override-same-value-c083603-d1.log",
+        "sha256": "fdddabbc67b92d3b44751a336a36c51a456fcbe3d6b40dea5ddfd495001ca119",
+        "bytes": 12717
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-override-same-value-c083603-d1.stdout.log",
+        "sha256": "634d1251c0bf2efaf0b45f58ecc422245653e84562ca46f67e43a60c3299f4ed",
+        "bytes": 9511
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-override-same-value-c083603-d1.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-override-same-value-diagnostic.ts",
+        "sha256": "f8d08c65e483f89cc4efcd2806326ef860fb775c997b87908f98d2932d56b9ab",
+        "bytes": 9081
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b014-override-same-value-diagnostic.py",
+        "sha256": "9287a5f241de151d82545e3c2ee87d7082db68bf3365def23b924a917cc71891",
+        "bytes": 6901
+      }
+    ],
+    "wrapper": "recorded/changed",
+    "raw": "change and finish recorded/changed; commit succeeded",
+    "sixFunctionMetadata": "fresh baseline matched both receipt-qualified B012 baseline/browser clones at observation",
+    "limit": "Did not reproduce or waive original a1 failure; not original test PASS"
+  },
+  "databaseProposals": {
+    "b014Draft": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-014/owner-transfer-db-handoff-draft.md",
+        "sha256": "a496f32f580502ed5f074d40c154643fbc197f02b86089a6ae9c64b3a4abf66a",
+        "bytes": 11764
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-014/owner-transfer-db-handoff-status.json",
+        "sha256": "be238adbffae7fd232e1ce89bd451c47cc3e060bc40585ea6db3627b88c2dde1",
+        "bytes": 729
+      }
+    ],
+    "b014Status": "DRAFT_UNREVIEWED_NOT_APPLY_READY; no executable SQL authored; NOT_RUN",
+    "b012PersistentHold": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-012/renewal-persistent-hold-db-handoff.md",
+        "sha256": "7d83621b9305b5e5aedade04c931c061890c8bd9de71cb62692e76ad1adf9b71",
+        "bytes": 10051
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-012/renewal-persistent-hold-proposed.sql.txt",
+        "sha256": "d6528e1f409dad372f2f1d4ebf9a7c8b950172b25dbb8887a6d17b2ca38386c0",
+        "bytes": 4758
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-012/renewal-persistent-hold-source-review-1102.json",
+        "sha256": "e6685f4fc7338805f3fb1e7ccd36ba96e63b024d01395357d69a0543cec1dbf9",
+        "bytes": 1165
+      }
+    ],
+    "b012Status": "GO_CLOSED_DESIGN_ONLY; SQL UNAPPLIED and NOT_RUN; not apply-ready"
+  },
+  "independentQA": {
+    "status": "NOT_RUN_MODEL_UNAVAILABLE",
+    "nextDeferredRetryAt": "2026-11-02T17:52:54.471870-08:00",
+    "finalVisualReview": "NOT_YET_VIEWED"
+  },
+  "limits": [
+    "Local synthetic existing-schema current-app workflow only; not full B014 or acceptance",
+    "Legacy direct ledger writers and older close/reversal paths do not share cooperative locks; final-validation-to-commit race remains",
+    "Owner-facing history, actual bank remittance, reconciliation/report versions and delivery remain outside this evidence",
+    "No staging, production, feature activation or proposed SQL apply",
+    "Current global control absent; no positive timestamp restoration exercised"
+  ]
+}

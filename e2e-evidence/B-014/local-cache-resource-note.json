@@ -1,0 +1,8 @@
+{
+  "recordedAt": "2026-11-02T16:09:11.323796-08:00",
+  "scope": "Only gitignored task-generated .next/cache after completed gate/build/browser and closed owned port. Rebuildable compiler cache only; no source/private evidence/clones/other worktree cleanup.",
+  "cachePath": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/.next/cache",
+  "cacheLogicalBytesRemoved": 1533320405,
+  "diskFreeBefore": 4009967616,
+  "diskFreeAfter": 5544026112
+}
