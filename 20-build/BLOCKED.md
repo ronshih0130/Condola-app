@@ -289,3 +289,9 @@ Latest explicit reply「Astra驗證完成可以不用sol」 supersedes prior mai
 Code `0b7c3a4da1ab4eed527f4b0ec68a436c8db2c159` has designated Astra local SOURCE/RUNTIME GO; 625unit/393RLS+solehistoricalskip/build4/focus1(8PNG)/final4(32PNG)/controlRO PASS. [Checkpoint](e2e-evidence/B-014/owner-transfer-checkpoint-0b7c3a4.md). WholeB014pending exactremaininghosted/owner/report/provenance/version/delivery/staging/Claude/pilot gaps. LatestRonAstraapproval supersedes prior maintainSol; no Solretryrequired. B011v3 source-onlyGO doesnotgrantapplyauthority. B015boundedplanready; startonlyafterthischeckpointpush/renew/mirror.
 
 STOP POINT: WORKING; next: publish metadata/renew/canonical mirror then B015 reviewed ancestry guard; ownerRon/Codex3099AC86.
+
+## B015 ancestry guard locally verified — 2026-11-02T20:21:01.680123-08:00
+
+Exactcode `9b057326c59cf64c55ce6094f02e767593d59951` scoped independentSol source/runtimeevidencePASS;625unit/402RLS+solehistoricalskip/9newPASS/build4/focus1(3PNG)/final4(12PNG)/positiveexistingtenant_directory_editfullrowus+wholeorgflagREADONLYequalityPASS. 113bindings/72pins/13receipts, all12finalvisualroot6/Sol6. Prior0be a1FAIL46of47RLS/35files andinitialsourceNO_GO10entries unwaived. [Checkpoint](e2e-evidence/B-015/archive-ancestry-checkpoint-9b05732.md). No newflag/migration/archivewriter; fullB015activework/history/owner/restore/legacyadmission/staging/Claude/pilot remainpending. NextFULLarchiveworkflowplan actualcommands+history, notanotherpreview; exactended-workfinancepolicyneedsRondecision andowner-onlymetadata/oldrawDBhandoff mayblockdependentpart. No newB016beforepublication.
+
+STOP POINT: WORKING; next: push/renew/canonicalmirror thenfinishfullB015approvedworkflowandrecord/skiponlydependentparts; ownerRon/Codex3099AC86.

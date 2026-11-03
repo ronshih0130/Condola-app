@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-02T17:30:19.018831-08:00: complete queue active. B014 corrected local scope `0b7c3a4` passed full local checks and designated Astra review; whole B014 remains pending. Ron permits Astra; no Sol retry required. No whole item newly done.**
+> **Current 2026-11-02T20:21:01.680123-08:00: queue active. B015 fresh-lease ancestry guard `9b05732` passed full local checks and independent Sol evidence review; whole B015 remains pending. B014 corrected local scope `0b7c3a4` retains Astra GO. No whole item newly done.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 

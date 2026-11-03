@@ -1,0 +1,434 @@
+{
+  "reviewedAt": "2026-11-02T20:17:29.378943-08:00",
+  "reviewerRequested": "Sol/high independent reviewer",
+  "runtimeModelIdentityObservable": false,
+  "verdict": "PASS_SCOPED_LOCAL_EVIDENCE_CHECKPOINT_PUBLICATION_GO",
+  "candidate": "9b057326c59cf64c55ce6094f02e767593d59951",
+  "baseline": "cf86d61cfe1ea91d2e032e68a535eeb325a74b9e",
+  "manifest": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-015/archive-ancestry-runtime-9b05732.json",
+    "sha256": "2242476e87c51abd2d8ee8a5ed34c28b441259d149f7e2c03324011f68e83c48",
+    "bytes": 67911
+  },
+  "allRuntimeSourceBlobs": {
+    "src/server/owner-transfer-input.ts": "3ae25aa8ecca17dcd6140878e3f075ef0a669dc2",
+    "src/server/owner-transfer-input.test.ts": "e84cdaebb394d13d756985257b388b1d5332de9c",
+    "src/server/owner-transfer-period-lock.ts": "db59bdc77fe547b9941a19453c8512642916b53b",
+    "src/server/owner-transfers.ts": "a2f68b993826eb17b3b74ecf80a25e96b9d049c9",
+    "src/server/owner-transfers.integration.test.ts": "c36eef9478268fe6287984b7000ed8d560ed3f1c",
+    "src/server/owner-transfer-actions.ts": "2d9f8b6a8c2a996fb9782504a1a7f48d33db9b13",
+    "src/components/owner-transfers.tsx": "c042fcf1c73bd0e8ae5f7ef06b37210711929b9e",
+    "src/i18n/owner-transfer.ts": "6988b86598881fe69fca06fb3883b3ba48b4caa4",
+    "src/app/m/statements/transfers/page.tsx": "a0d134c26e05f62f0b1553f4ac005cee62911db4",
+    "src/app/m/statements/page.tsx": "b9e6614e0ea33ad5409d7f5e6ba882bbb7f84e56",
+    "src/server/domain.ts": "d3be211639308e7667fe21a50bd55f28dfd963f6",
+    "ops/flags.yaml": "554aa93d816d89a690be105e0b4d7252a6316b3e",
+    "e2e/b014-owner-transfers.spec.ts": "6fdec690a63b29a01a7049232c8bd4c0acd1769d",
+    "e2e/b014-owner-transfers-private-playwright.config.ts": "b588632d86cabafaf00ab61a261ec18084a1bf04",
+    "scripts/run-e2e.ts": "cd4a8702b377525ba20fbcb02e1b9b039ba55b59",
+    "package.json": "e99acc33fd5c59a316cd21d259b6f80664862027",
+    "e2e/b011-comparison-bucket.mjs": "845f02623bdc61ece9f1517a3738a30f935144f5",
+    "e2e/b011-comparison-private-playwright.config.ts": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac",
+    "e2e/b011-handover-comparison.spec.ts": "298d594e1c0edd48497b94c20ce3199f7686e5d1",
+    "e2e/b012-renewal-comparison-private-playwright.config.ts": "b529eadcd743d57fa8e78d4716ede63c2da7393a",
+    "e2e/b012-renewal-comparison.spec.ts": "a49438277ed19c01e9aba9fbe7a9eab2c7570c2d",
+    "e2e/handover-bucket.mjs": "50700d0f069e39d45fd316bd56d198e0fdbe64e1",
+    "e2e/handover-playwright.config.ts": "4da3fc5c5166042d3314b27d0d8661385c9c3b48",
+    "e2e/handover.spec.ts": "54132623983b8330214936414cf2ebffebceb03c",
+    "e2e/session.ts": "debb2f53da0343758c44f0f93621f2a680be80a9",
+    "package-lock.json": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+    "scripts/gate.sh": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+    "scripts/preflight-deploy.sh": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+    "scripts/third-party-licenses.mjs": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4",
+    "src/app/globals.css": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e",
+    "src/app/m/leases/[id]/page.tsx": "854be72e08abb8d9ef27fc1e13aaab8ca9a23b60",
+    "src/app/m/leases/[id]/renewal/page.tsx": "2da931e8e1ae2827589d672251e7bb8f05f3f34c",
+    "src/components/handover-comparison.tsx": "863a115be6cbb5a05f54b532ce544a15fd70772e",
+    "src/components/handover-page.tsx": "abfa0e32f6a4591395d2352584da83473740e569",
+    "src/components/renewal-comparison-entry.tsx": "06dc8366110077f4e0738a69dfbcf0588c6ac138",
+    "src/components/renewal-comparison.tsx": "0c997c92101ed415939ea8cddf0242b9a544e9e4",
+    "src/i18n/en.json": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+    "src/i18n/handover.ts": "e48e84715e0a9c1e386b84e585d5eec0101acd4f",
+    "src/i18n/index.ts": "00d6bc5b791a38dde92476ba92d3247f4ad5943f",
+    "src/i18n/renewal.ts": "7d919dc94e89354fca83d54dda3416c3f93c6084",
+    "src/i18n/zh-TW.json": "6270729f648586a7443c15e6bb7f174c3ef61563",
+    "src/lib/renewal-comparison.test.ts": "22ddab88af28910a7ef86dab2c62ffeae1bf1d22",
+    "src/lib/renewal-comparison.ts": "25df4d7d3776dfc3c727fc57acba442ddbf924f5",
+    "src/server/consent-gate.ts": "6ac26ed5afa7757c297de45b8060f87f6c727f8e",
+    "src/server/consent.ts": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+    "src/server/db.ts": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+    "src/server/format.ts": "00ec04f4df404b56c51a00e9152deac932c876d1",
+    "src/server/ids.ts": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba",
+    "src/server/org-scope.ts": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+    "src/server/perms.ts": "70355d4b1d93af3c4cc3e4a158e7a737de723898",
+    "src/server/queries.ts": "20a388b494153c65bad700755cf3456d33fa4a46",
+    "src/server/renewal-comparison-actions.ts": "bd0fda7136ad37263476d649cf3957421028778e",
+    "src/server/renewal-comparison.integration.test.ts": "3d55c658b26c17c397a65ac5057a13b8aec44543",
+    "src/server/renewal-comparison.ts": "b218cb5651a060bb29d0040eec53d0c7108a1f30",
+    "src/server/repair-rules.ts": "4efa249eabbf9fed9ab3660518b197347fe9c602",
+    "src/server/sandbox-data.ts": "d8f6df15f812d8a2383d0475c0874e652579dc6a",
+    "src/server/sandbox-seed.ts": "11f7c2e042b69ad28be308aa56b62fefd52e593d",
+    "src/server/sandbox.ts": "d6925304e83f7c38f1cddea6849d86defb5d4739",
+    "src/server/seed.ts": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+    "src/server/session.ts": "eeac341482275fd4060c350e8dc02d20208de3bc",
+    "src/server/test-database-clone.ts": "29a1fb5c8666985392f137cf2f94495e13b3246d",
+    "src/server/test-disposable-db.ts": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265",
+    "src/server/types.ts": "046221d44e89bdd3c2ed9534410df6573271da6a",
+    "supabase/migrations/20261018120000_schema.sql": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+    "supabase/migrations/20261020120000_auth.sql": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+    "supabase/migrations/20261030120000_org_scoped_reversal_audit.sql": "138f64992d46f9ee6406e9ccb5dae247750ae8cc",
+    "supabase/migrations/20261031100214_b011_handover_records.sql": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4",
+    "tsconfig.json": "c57349280afe4314902d14d337947deb5c42dca2",
+    "src/server/lease-target.ts": "fd99d1e26fe134e58edbe17d4e3ad3b8a7a8a85d",
+    "src/server/lease-create-archive.integration.test.ts": "c367acef131e180555955769190f9ad60b63a9ac",
+    "e2e/b015-archive-guard.spec.ts": "3cbc831873d0a12042c5e6a5550b45f08485469d",
+    "e2e/b015-archive-guard-private-playwright.config.ts": "1d08460673793fbac45dbe2ab081a7bd4da7df8e"
+  },
+  "helperSha256": {
+    "run-b015-archive-final-check-a2.py": "e84340216fcc3d6866bdb9eabecf57309e5d5949879bc2cae936c50331484ede",
+    "b015-archive-runtime-driver-a2.py": "a9cbfe9cbcc929f33084dfacfd292b2403dceeeb4a79b868475aaa4f163aa0b9",
+    "b015-archive-control-readback-a2.py": "031a5abfd913d8e9bcd64eb275d19011e708287cbdb3677b0d03953d3549bd1a"
+  },
+  "freeze": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-archive-reviewed-source-freeze-a2.json",
+    "sha256": "ffb74abdecc86b949315de61f24357df8515ef996e2324693fa2bfe7c038918e",
+    "bytes": 7041
+  },
+  "bindingCounts": {
+    "artifactBindings": 113,
+    "uniqueArtifactPaths": 113,
+    "sourceFileSha256Values": 72,
+    "sourceBlobs": 72,
+    "changedNew": 8,
+    "baselineUnchanged": 64,
+    "receipts": 13,
+    "receiptSourceBeforeAfterBlobValues": 1872,
+    "receiptHelperBeforeAfterValues": 78,
+    "receiptFreezeBeforeAfterValues": 26,
+    "initialSourceNoGoEntries": 10,
+    "priorGateFailEntries": 35
+  },
+  "bindingErrors": [],
+  "sourcePinErrors": [],
+  "receiptBindingErrors": [],
+  "actualReceipts": [
+    {
+      "phase": "focus-setup",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-focus-setup-exit-9b05732-a2.json",
+        "sha256": "1c7111740339a292e454cadc7124e4de3b0f623573a916f2bb5e6628c33d70f8",
+        "bytes": 13568
+      },
+      "actualProcessExit": null,
+      "createdbProcessExit": 0,
+      "seedProcessExit": 0,
+      "driverProcessExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 16.578
+    },
+    {
+      "phase": "gate-setup",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-gate-setup-exit-9b05732-a2.json",
+        "sha256": "4bbd643793d6ca9bb9c1c5169ba251eef8a350f07541cc9522f45f6b647c404e",
+        "bytes": 13566
+      },
+      "actualProcessExit": null,
+      "createdbProcessExit": 0,
+      "seedProcessExit": 0,
+      "driverProcessExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 236.085
+    },
+    {
+      "phase": "build-setup",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-build-setup-exit-9b05732-a2.json",
+        "sha256": "aa71f9055f8655d74340dbf08052b9f1759bda3c143ac8eb18e1d7345066d7f7",
+        "bytes": 13569
+      },
+      "actualProcessExit": null,
+      "createdbProcessExit": 0,
+      "seedProcessExit": 0,
+      "driverProcessExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 60.996
+    },
+    {
+      "phase": "browser-setup",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-browser-setup-exit-9b05732-a2.json",
+        "sha256": "28ba8170327b9625e6ad987f67edae4c3fcd6be24e6d1e34b767dfbc1f3aada3",
+        "bytes": 13574
+      },
+      "actualProcessExit": null,
+      "createdbProcessExit": 0,
+      "seedProcessExit": 0,
+      "driverProcessExit": 0,
+      "effectiveExit": 0,
+      "elapsedSeconds": 26.667
+    },
+    {
+      "phase": "baseline-setup",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-baseline-setup-exit-9b05732-a2.json",
+        "sha256": "e6df8659530699ebab5442e9668f563b8bb2c588fbbd3092deca97c46dfa841c",
+        "bytes": 13579
+      },
+      "actualProcessExit": null,
+      "createdbProcessExit": 0,
+      "seedProcessExit": 0,
+      "driverProcessExit": null,
+      "effectiveExit": 0,
+      "elapsedSeconds": 0.708
+    },
+    {
+      "phase": "archive-focus",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-archive-focus-exit-9b05732-a2.json",
+        "sha256": "d1fed44024daf8a5af9f886dc4af46e309b575d45053714e1575939492eaebf1",
+        "bytes": 13943
+      },
+      "actualProcessExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "effectiveExit": 0,
+      "elapsedSeconds": 14.299
+    },
+    {
+      "phase": "gate",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-gate-exit-9b05732-a2.json",
+        "sha256": "78cfdfb0cd05ee0585b8628cdcdac6cafdf547a40d9e60b8f7e3c74718dae0b4",
+        "bytes": 13554
+      },
+      "actualProcessExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "effectiveExit": 0,
+      "elapsedSeconds": 234.368
+    },
+    {
+      "phase": "next-build",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-next-build-exit-9b05732-a2.json",
+        "sha256": "bcdc54da1d7c06644ac0ec5765a528ae740c43de6e892a1de41fc0f8e1a7c7a4",
+        "bytes": 13514
+      },
+      "actualProcessExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "effectiveExit": 0,
+      "elapsedSeconds": 24.063
+    },
+    {
+      "phase": "cf-build",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-cf-build-exit-9b05732-a2.json",
+        "sha256": "01195d69c5d63e2876e2553bd1feb0e3196802e3e8538f6393513a2ea11beb18",
+        "bytes": 13515
+      },
+      "actualProcessExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "effectiveExit": 0,
+      "elapsedSeconds": 28.004
+    },
+    {
+      "phase": "preflight",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-preflight-exit-9b05732-a2.json",
+        "sha256": "5f52b88daf8ce03eb2bb5a2b4683341f82df950a03736b12fec17c9b9779733d",
+        "bytes": 13521
+      },
+      "actualProcessExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "effectiveExit": 0,
+      "elapsedSeconds": 3.276
+    },
+    {
+      "phase": "worker",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-worker-exit-9b05732-a2.json",
+        "sha256": "d9414a6ff97d2b41de3bccc7c0135748acb91d99b7fd6fe78205649e0c3207a3",
+        "bytes": 13513
+      },
+      "actualProcessExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "effectiveExit": 0,
+      "elapsedSeconds": 2.493
+    },
+    {
+      "phase": "archive-playwright",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-archive-playwright-exit-9b05732-a2.json",
+        "sha256": "8ab8a4606e1b6afaa21fd442f92e5ccf87bbbe0d0d1988d7f7394eb9e53522c3",
+        "bytes": 13765
+      },
+      "actualProcessExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "effectiveExit": 0,
+      "elapsedSeconds": 24.917
+    },
+    {
+      "phase": "control-readback",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-control-readback-exit-9b05732-a2.json",
+        "sha256": "8731eac5fdf9a8ec414042ddc943e6a98c7082081b756ab66cda729e5f380b96",
+        "bytes": 13475
+      },
+      "actualProcessExit": 0,
+      "createdbProcessExit": null,
+      "seedProcessExit": null,
+      "driverProcessExit": null,
+      "effectiveExit": 0,
+      "elapsedSeconds": 0.05
+    }
+  ],
+  "gate": {
+    "standardChecks": 11,
+    "releaseRequested": false,
+    "unit": {
+      "tests": 625,
+      "pass": 625,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "rls": {
+      "tests": 403,
+      "pass": 402,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 1,
+      "todo": 0
+    },
+    "newArchiveIntegration": {
+      "total": 9,
+      "passed": 9,
+      "failed": 0
+    },
+    "skip": "Sole prior Ron-approved b888ccd historical upgrade skip; no new skip"
+  },
+  "browser": {
+    "focus": {
+      "selected": 1,
+      "pass": 1,
+      "fail": 0,
+      "png": 3
+    },
+    "final": {
+      "selected": 4,
+      "pass": 4,
+      "fail": 0,
+      "png": 12
+    },
+    "reviewerViewedOriginals": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-browser-9b05732-a2-artifacts/b015-archive-guard-archive-ancestry-en-1280-chromium/active-en-1280.png",
+        "sha256": "abd66c39f613a1414f2a81cc2b8f24f073c5feae47de9617669041a22ee24749",
+        "bytes": 81710,
+        "state": "active",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-browser-9b05732-a2-artifacts/b015-archive-guard-archive-ancestry-en-1280-chromium/filtered-en-1280.png",
+        "sha256": "b98acbf6d09ea83633ea0d92c1c8f88bc1e4e5540056a75a918775230b8a7885",
+        "bytes": 75350,
+        "state": "filtered",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-browser-9b05732-a2-artifacts/b015-archive-guard-archive-ancestry-en-1280-chromium/stale-en-1280.png",
+        "sha256": "b844cda8dafd4fe35e01d201d9dcf0d4d81ec7bef47a7301d2ffea753d299e92",
+        "bytes": 110191,
+        "state": "stale",
+        "locale": "en",
+        "width": 1280
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-browser-9b05732-a2-artifacts/b015-archive-guard-archive-ancestry-zh-TW-390-chromium/active-zh-TW-390.png",
+        "sha256": "73c0a4994b40b53ffad66040f831301f881c921491dacf665b67461f148976b8",
+        "bytes": 42159,
+        "state": "active",
+        "locale": "zh-TW",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-browser-9b05732-a2-artifacts/b015-archive-guard-archive-ancestry-zh-TW-390-chromium/filtered-zh-TW-390.png",
+        "sha256": "1853ef5914cf716c91a75a1f960293b79c99d9ff342da359933d0410e14dfdee",
+        "bytes": 39030,
+        "state": "filtered",
+        "locale": "zh-TW",
+        "width": 390
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-browser-9b05732-a2-artifacts/b015-archive-guard-archive-ancestry-zh-TW-390-chromium/stale-zh-TW-390.png",
+        "sha256": "46153549d33e178a08bcf347d3e927013d6f7353389b392297707bbeada00b1e",
+        "bytes": 69218,
+        "state": "stale",
+        "locale": "zh-TW",
+        "width": 390
+      }
+    ],
+    "rootReportedOtherOriginals": [
+      "en390 active/stale/filtered",
+      "zh-TW1280 active/stale/filtered"
+    ],
+    "scopeVerdict": "GO_SCOPED_GUARD_STATE_READABILITY_ONLY",
+    "limitations": [
+      "Baseline mobile long-value/table/button clipping not fixed",
+      "Next development badge remains",
+      "No whole parent wizard approval"
+    ]
+  },
+  "controls": {
+    "readOnly": true,
+    "existingControl": "tenant_directory_edit",
+    "rowsBefore": 1,
+    "rowsAfter": 1,
+    "fullValueDescriptionMicrosecondTimestampRestored": true,
+    "selectedOrgWholeFlagsRestored": true,
+    "scope": "Existing unrelated control and selected organization flags only; no archive-flag ON/OFF or whole-database claim"
+  },
+  "history": {
+    "sourceNoGoEntries": 10,
+    "priorGateFailEntries": 35,
+    "physicalFilesIncludingManifests": 47,
+    "innerManifestMapsVerified": true,
+    "originalA1HelpersAndFreezePreserved": true,
+    "a1GateActualExit": 1,
+    "a1Rls": {
+      "total": 47,
+      "pass": 46,
+      "fail": 1,
+      "skip": 0
+    },
+    "a1Later": "build/fullbrowser/baseline/readback NOT_RUN",
+    "fixtureCause": "Existing UNIQUE(property_id,label), SQLSTATE23505, duplicate destination unit fixture label; corrected without assertion relaxation"
+  },
+  "remainingScope": [
+    "archive/restore workflow",
+    "history and file/portal matrix",
+    "owner-only durable archive metadata",
+    "complete original tenant identity reuse",
+    "raw/older writer compatibility and after-create active-work policy",
+    "stage/Claude/ClassB/Ron acceptance; whole B015 not accepted"
+  ],
+  "reviewerActivities": "Read/hash/source/evidence/visual inspection only; no tests/DB/SQL parser/build/network/repository mutation. Wrote only authorized outside artifacts.",
+  "reportSha256": "0344a1b1a713001e5521f46674be85225853821c7d534f33e2753500660bf5c3",
+  "workflowDraft": "work/b015-next-workflow-independent-sol-plan.md is DRAFT and incomplete, not implementation GO"
+}
