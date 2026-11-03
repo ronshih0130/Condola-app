@@ -1,5 +1,5 @@
 # B015 current local verdict
 
-2026-11-03T01:31:54.262451-08:00; **CORRECTED_SOURCE_HELPER_GO / TARGETED_PASS / PRIOR_FULL_GATES_FAIL / FULL_RUNTIME_INCOMPLETE / WHOLE_ITEM_INCOMPLETE / RELEASE_NO_GO**.
+2026-11-03T01:49:31.900787-08:00; **SOURCE_HELPER_GO / PRIOR_GATE_BUILD_PASS / BROWSER_FAIL / WHOLE_ITEM_INCOMPLETE / RELEASE_NO_GO**.
 
-[A8sourceGO](workflow-astra-source-a8-go.md), [targets](workflow-targeted-summary-a8.json), [lastfullfailure](workflow-gate-08c2aa4-r2-fail.json). No newfullgate/build/browser acceptanceyet. OwnerDB/raw-oldwriterclosure, staging/Claude/pilot NOT VERIFIED. No new testskip or relaxation, production, legalcopy, provider, Macmigration oroperationalflagactivation.
+[A9sourceGO](workflow-astra-source-a9-go.md), [actualbrowserfailure](workflow-browser-177bd35-r3-fail.json). Fixtureonlymainmetercorrectionpreservesexistingmoney/assertions; no newruntimePASSclaim. Focusfirstbeforeanyfullrerun. OwnerDB/raw-oldwriterclosure/staging/Claude/pilot remainincomplete; no production/provider/legalcopy/Macmigration/operationalflagactivation.

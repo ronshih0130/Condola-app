@@ -1,0 +1,21 @@
+{
+  "recordedAt": "2026-11-03T01:44:53.054910-08:00",
+  "candidate": "177bd35fde17e7c919e128d445cc1787caf58eea",
+  "gate": "PASS unit627/627, RLS455PASS0FAIL1soleCEOapprovedhistoricalSKIP/456",
+  "build": "next/cf/preflight/worker actualPASS",
+  "browser": {
+    "passed": 0,
+    "failed": 4,
+    "configured": 4,
+    "laterAssertions": "NOT_RUN",
+    "cause": "Speccorrectedroommeter20to25 butretainedtotalKwh20, soexistingPUBLIC_POWER_RULEcorrectlycreatesownercredit-2000; intendednoownerchange scenario mustexplicitlysetactualmainmeter25",
+    "tenantCharge": "Actual10000minor/receivable10000 correct"
+  },
+  "controlsBaseline": "NOT_RUN",
+  "snapshot": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-177bd35-r3-browser-failure/manifest.json",
+    "entries": 212,
+    "sha256": "cb38ceb96e04d1087d8c3ebae66f1758677f6e9817710d36d839cf9fcad40f7c"
+  },
+  "next": "Onlycorrectnormaltestinput totalmeter25, retainnoownertransfer andexacttenant/invoice/ledgerassertions. TargetedEN390browserbeforeanynextfullgate, then stablecandidate gate/build/full4browser/controls."
+}
