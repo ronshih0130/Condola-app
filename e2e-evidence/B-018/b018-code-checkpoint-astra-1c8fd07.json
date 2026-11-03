@@ -1,0 +1,91 @@
+{
+  "verdict": "CODE_GATE_GO_BROWSER_FAIL_PENDING_ONLY",
+  "candidate": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+  "wholeCheckoutCleanAtReview": true,
+  "sourceCount": 1024,
+  "receiptSha256": "239dd55bb29ac7b9cc7685da8ac9e0e1d3c3de50f74e8b1ac1d4e2b1fb1015c1",
+  "gateSummarySha256": "ec202ef9122caa1d97d1df3327ca06965a82aaa8cb37ec69655daf86779bf930",
+  "codeOnlyLockSha256": "8114d21dcfbf3148152eab69a396b4594eaef06a33fd813bae065cbe71e7a1bd",
+  "helperSha256": {
+    "supervisor.py": "b4bcfac9085d71d43fcda2529100bbb757e57c7a1328fa7066b79e2c8c9363df"
+  },
+  "priorCodeOnlyReviewSha256": "5fe743df681b1b5316ebbff21cafe4721d270dcc32a79166b3b8d79bd414afce",
+  "rawFiles": {
+    "postgres-16.log": {
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "lint.log": {
+      "sha256": "4e7b3a6ec111ce7a3847a02cfc2a631a691808fc5bae42d475209d1be0268132",
+      "bytes": 3401
+    },
+    "npm-ci.log": {
+      "sha256": "6469fedd1d647a984cab4a453882c99cc067a57d799820b30ffe18a03e3f0e3b",
+      "bytes": 1794
+    },
+    "typecheck.log": {
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "copy-check.log": {
+      "sha256": "758672815ac84190b4bbf9d84b1b7e39577f57b62d420435fda76a00125b95e6",
+      "bytes": 1435
+    },
+    "flag-expiry.log": {
+      "sha256": "664d8d229205b5f7b3fdf3219105fa466aba17a2f88fdf54d987dacfee9dedfd",
+      "bytes": 27
+    },
+    "steps.md": {
+      "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+      "bytes": 341
+    },
+    "test-unit.log": {
+      "sha256": "b84b894e27ba2cecbf8f57662150787b37e456e686bb523d9bcd02b9f2c0541f",
+      "bytes": 134500
+    },
+    "test-rls.log": {
+      "sha256": "775550ccd5181cadfed8703b06174025e06997ba5e32daec4f0219b1529bfda4",
+      "bytes": 130497
+    },
+    "toolchain.log": {
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    }
+  },
+  "rawTap": {
+    "unit": {
+      "tests": 651,
+      "pass": 651,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0
+    },
+    "rls": {
+      "tests": 477,
+      "pass": 476,
+      "fail": 0,
+      "skipped": 1,
+      "cancelled": 0,
+      "todo": 0
+    }
+  },
+  "gateStepsPassed": 11,
+  "phaseExits": {
+    "createdb": 0,
+    "seed": 0,
+    "gate": 0
+  },
+  "ownedChildrenDrained": 3,
+  "gateClaimSha256": "9ba4f41da64ab53b294c5ce607018aa548c0687f82c4b8f7a2bda57a8331d014",
+  "priorDBReceiptSha256": "170f917bf4231b97853848fd9c76c73ea6a6cb26cda5c32c4f489808c63c66b9",
+  "priorFocusReceiptSha256": "940065e3aada47142f4d34a4303b8bf8fd6b2f4f6f0ab02b2af62c5d1f5e62d3",
+  "priorFocusManifestSha256": "2a1523146a275b2690417fcc13e58a734f3a3573e9565632b3d043455b0e085e",
+  "preservedFocusBindings": 21,
+  "browser": "FAIL_PENDING",
+  "enhancedLogin": "UNTESTED",
+  "financialLineage": "UNVERIFIED",
+  "publicReasonCopyReceiptSha256": "1e4a8583367dbebcc95d93a24863353cc01fc18c2e6a1a88928e0bb87be93442",
+  "buildStagingRelease": "NOT_VERIFIED",
+  "markdownSha256": "cdf3d613f45af140865e7acf4a60f8cb52e74523ad82a7ee6246e1df3f4fd0f7"
+}

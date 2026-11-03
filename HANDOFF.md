@@ -479,3 +479,14 @@ The reviewed correction preserves genuine issued balances before signature, incl
 Earlier b8c4134/DB9 evidence is bounded history, not proof of this correction. Full gate, browser focus/matrix and build remain pending. The inactive public-reason proposal is still in source review; no SQL was parsed/applied, and private internal notes remain private. B017 has reviewed policy and detailed operation/export contracts but no executable feature. All existing started capabilities remain open; no new B IDs.
 
 STOP POINT: targeted correction passed; next: commit clean candidate, independently freeze browser v4, run EN390 focus before one full gate; owner: Codex/Ron.
+
+
+## B018 code-only checkpoint — 2026-11-03T14:27:38.968891-08:00
+
+Tested `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`: full code gate PASS (651 unit, 476 RLS, zero failures, one sole prior historical skip), 11 steps and 3 drained code-gate children. Highest independent review approves working-branch code publication only. [Checkpoint](e2e-evidence/B-018/code-checkpoint-1c8fd07.md).
+
+Browser focus remains FAIL before any payment case; six script requests failed, cause UNVERIFIED. Recovery financial lineage remains UNVERIFIED/quarantined, controls unchanged OFF; detached browser abnormal-exit ownership is a diagnostic-helper gap. No test was skipped or relaxed to turn this into PASS. Builds, full browser matrix, staging and whole B018 remain incomplete. The new OFF-only diagnostic is still under independent source review.
+
+The separate public-reason SQL/PE handoff/seed patch bundle passed inactive source review and was copied with hashes to Downloads. It is not parsed/applied or target-ready; PE non-Mac validation/application and Codex app integration remain. B017 now has an amended minimal contract (18 recognized/17 supported; no new export product) and an unreviewed bounded authority-core SQL fragment, not a complete migration or feature. Governance, privacy/raw enforcement and operation integration remain Codex work. Finish the 20 already-started IDs, retain the full queue and start no new B IDs.
+
+STOP POINT: code checkpoint passed, browser failure open; next: publish/renew/mirror/ref verification, then reviewed login diagnostic and next B017 stage; owner: Codex/Ron.

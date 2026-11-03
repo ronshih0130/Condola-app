@@ -1,0 +1,75 @@
+{
+  "verdict": "SOURCE_FREEZE_GO_ONE_STRICT_EN390_FOCUS",
+  "candidate": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+  "committedAndWorkingGitBlobsVerified": 1024,
+  "inputSha256": {
+    "b018-runtime-v4/root-focus-lock-1c8fd07-v4.json": "b88298d3c1b0844638360b6c81c2094f500dee7c13f8aef5eaed94529c72eb56",
+    "b018-gate-build-v2/root-gate-build-lock-1c8fd07-v2.json": "3b4865d946c55b8c769e3064db640c5f24e093f3a70951722a418667738f1fa3",
+    "b018-db-target-v1/run-db-7efef46c4c0f/receipt.json": "170f917bf4231b97853848fd9c76c73ea6a6cb26cda5c32c4f489808c63c66b9",
+    "b018-browser-runtime-review-astra-v4.md": "20b1c508709ad203623fb773a7e55327d2b6916cebfaaf14ba4baa3005b86904",
+    "b018-browser-runtime-review-astra-v4.json": "465d4f84928526bd5cf108644f7a2f7eaec88c55b18cc550bd1856937ff2509c",
+    "b018-gate-build-review-astra-v2.md": "48a5e5322ebb4a334220575aa6067bfe382a35a2a7acd291b2d775ce016a7b07"
+  },
+  "databaseLock": "b018-db-target-v1/root-source-lock-v10b.json",
+  "databaseLockSha256": "3d1b246605ffba3c7e0f2ff344d8171cf8fa8339310a46246cb5427cc6ed23e6",
+  "dbReceiptCandidate": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+  "sameAll1024AsDatabaseBeforeAfter": true,
+  "dbArtifactHashesAndSizesVerified": 9,
+  "dbTap": {
+    "pass": 9,
+    "fail": 0,
+    "skip": 0,
+    "cancelled": 0,
+    "todo": 0
+  },
+  "dbExits": {
+    "createdb": 0,
+    "before": 0,
+    "integration": 0,
+    "after": 0
+  },
+  "testDrained": true,
+  "focusHelpers": {
+    "supervisor.py": "52c5d8ee89498fea9631847ba1554a838c16f5399f8e214b18e30474d90db710",
+    "probe.cjs": "41e0ead1a6971131c981fd5ddc19dfe5bbb72fb49109bba6240245819724ab24",
+    "recovery.cjs": "d4dd3956f450eb7e4747b46ff00b2f6ddaa671e9c2d2b712fbadd3a24f53d039",
+    "network-guard.cjs": "14adf9140aeda9563348b124b094cf4059448b94144c77664816e51c07e16a92"
+  },
+  "gateHelper": {
+    "supervisor.py": "b4bcfac9085d71d43fcda2529100bbb757e57c7a1328fa7066b79e2c8c9363df"
+  },
+  "playwrightBundleSha256": "829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d",
+  "v10AppTestPinsVerified": [
+    {
+      "path": "src/server/tenant-payment-history-rules.ts",
+      "blob": "eb312006537573d62d937ee3919c93fd5396567e",
+      "sha256": "5cf7322540741dd3ef8641894926b59bbc654f9149d69dd8ea4234eeae37d038"
+    },
+    {
+      "path": "src/server/tenant-payment-history-rules.test.ts",
+      "blob": "da24a52ad67d67c937b874f9cc6db1cbf428aded",
+      "sha256": "6dcf31d81f20670702f18932110740e25e3af1d61a308303f23ab97cf143716d"
+    },
+    {
+      "path": "src/server/tenant-payment-history.ts",
+      "blob": "8d2cd2d6de3e3c2a715c6ae26c93e402f059e0c3",
+      "sha256": "5f006ac243c3c18ebee21cbbe445a9737167aad37edb629acf23421dd930ef64"
+    },
+    {
+      "path": "src/server/tenant-payment-history.integration.test.ts",
+      "blob": "51fb4831e88405975e587e99c6a8a2cea6386716",
+      "sha256": "72c6920fd3ca632cc987fe06757b353e49469fe3fbae53dcc4efcdda14f1c101"
+    }
+  ],
+  "snapshot": {
+    "checkoutClean": true,
+    "dotenvOverrideAbsent": true,
+    "has1GiBDisk": true,
+    "noExistingGateClaimLockOrSummary": true,
+    "focusReceiptPresent": false
+  },
+  "liveChecks": "UNVERIFIED; launch-time trusted supervisor preflight and ownership verification by root",
+  "gateStatus": "HELD_UNTIL_EXACT_STRICT_FOCUS_PASS_VERIFIED_BY_ROOT",
+  "executedByReviewer": [],
+  "markdownSha256": "c9d7f2182add6f8f0f1055c1615f3dc2a2fee4733beaa1377b9447f30a9945db"
+}

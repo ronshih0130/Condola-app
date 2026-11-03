@@ -1,0 +1,351 @@
+{
+  "verdict": "GO_BOUNDED_INACTIVE_AUTHORING_WITH_BINDING_AMENDMENTS_NO_GO_UNCHANGED_V3",
+  "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+  "checkoutHead": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+  "subjectSha256": {
+    "b017-operation-export-contract-sol-v3.md": "683bbe29c180f7a23b87e35b5d6d29e3ee591fee3bf7a90420fa58bee730b6a7",
+    "b017-operation-export-contract-sol-v3.json": "4ab7e056cb0fe6a86f8f6b3fb32e69ecc875fe3989a81f79a908ff5210811214",
+    "b017-primary-plan-sol-v2.md": "a6af932a2eb43b17d1369c5ab7a9ec95317221abb62ac8cb7f14a36240d0529a",
+    "b017-primary-plan-sol-v2.json": "6d96772e1001c6efd65d6bbd2bf9014433b2b6d6c795fcec2d96901de667e98d",
+    "b017-primary-independent-astra-v2.md": "fd11dbce94ad0eea6e8969ef7c8186fa779efa9dfeb95c046b952b3567997c3a",
+    "b017-primary-independent-astra-v2.json": "f750f11da4dd725d6897bd37711d1ea105bd0dc43155776356cbb867a46f0044",
+    "ron-decisions-20261103-b017-b018.json": "337d8e2f76be98f09e21783574a915ff9e2881a35b60e1ba941626cf9899cacb"
+  },
+  "sourcePinsVerified": [
+    {
+      "path": "src/server/perms.ts",
+      "blob": "626c89472406558eaac053d952de2c4136c607dd",
+      "sha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9"
+    },
+    {
+      "path": "src/server/db.ts",
+      "blob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+      "sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b"
+    },
+    {
+      "path": "src/server/session.ts",
+      "blob": "4193fd22d30e558fb7a6620d70951121673ba0d0",
+      "sha256": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd"
+    },
+    {
+      "path": "src/server/org-scope.ts",
+      "blob": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+      "sha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427"
+    },
+    {
+      "path": "src/server/auth.ts",
+      "blob": "9a2f2a3a08a215b4e503350c5a3ede0fa1ac081e",
+      "sha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3"
+    },
+    {
+      "path": "src/server/queries.ts",
+      "blob": "bb40a5b03f5a1fea2c17bfc55682cec885c07ce2",
+      "sha256": "690781b8fd3e2e858925b53ee26427669230ee2f68b7383575d60d5c066ba679"
+    },
+    {
+      "path": "src/server/domain.ts",
+      "blob": "35bc6ac992368da7af34e8d70e62ee6e706b6766",
+      "sha256": "6a48d9373f922827a66e0f1a057559b8f4dd39e15f33be9fd835d9d323bc85e0"
+    },
+    {
+      "path": "src/server/portfolio.ts",
+      "blob": "453b1be3086777d9ecb6bdcace368ee1b5456219",
+      "sha256": "9913602298e87a39b8087677af18a28fb17e028fc76ea4f217115d2a2ab7365a"
+    },
+    {
+      "path": "src/server/import-batch.ts",
+      "blob": "1d2c2e7842ad00f326c1de1ddf14fdf6fd9320b0",
+      "sha256": "8138202415bbd5ddc35a1e0e8f7fb39499b33811a7411ed0810069823f83c273"
+    },
+    {
+      "path": "src/server/repairs.ts",
+      "blob": "1d4bab2a19d7a59f3b98b6bcb991b9e870478cd9",
+      "sha256": "2e3268ed30efd445c3e56337ee0658cfffe9064e2eda5b950f1411a109a2af5d"
+    },
+    {
+      "path": "src/server/ticket-photos.ts",
+      "blob": "e3250706f0e6c793f045b847063298bd3da20f1c",
+      "sha256": "788003d90bf7b9f3bb9966a78fe199be9f124e10722b9587e80300f3174b18ac"
+    },
+    {
+      "path": "src/server/bank-matching.ts",
+      "blob": "8f44e4265cb8767124d27e3059706751c67e7b1e",
+      "sha256": "1059c04d62365c9e3959248522bf1d066ff8e0fb5d91dc4b7173a71f74fdc35e"
+    },
+    {
+      "path": "src/server/expenses.ts",
+      "blob": "1a15f7255bde0740c10e2513aeb836f51f0e0639",
+      "sha256": "cc8499e4871222a9c218663910b565a1540a59d3ae1d387a5057281537f22fd0"
+    },
+    {
+      "path": "src/server/statement-preview.ts",
+      "blob": "fdf2316f38514766b84508193c29b52b039e7406",
+      "sha256": "e311b6adb9b1931057768110cdc321401dd108ce6b0c9d2bce9cb26757813090"
+    },
+    {
+      "path": "src/server/pdf-docs.ts",
+      "blob": "58750ab915cf674633164f8f5e5a0a0e877b8ff9",
+      "sha256": "312c4163b356d144c6e62da23600d006fdb79daaa7493cbe93d0665e02bb097e"
+    },
+    {
+      "path": "src/server/pdf-download.ts",
+      "blob": "e1c327653ffbecf88c3164b19a49d0f89fda1191",
+      "sha256": "8d4d1dbfa4e7a2403da172ffc29c1bfd37cbdbf8b6b743ae296dc8a3dccd3f9d"
+    },
+    {
+      "path": "src/server/owner-transfers.ts",
+      "blob": "4d8ba2a8be4dd754a7911e04b8634164fc20f78a",
+      "sha256": "0eef8ff3b7951d350a0d19e5b66d399f0f40cf026ecec163038fde65b39b86bc"
+    },
+    {
+      "path": "src/server/vendor-repair.ts",
+      "blob": "4a18311f490abb51446dc21f955cc372d65f4f4b",
+      "sha256": "28f2914dfd4e367d9e3c4baf46ef79d10159b147a9d4caaac16f829153480864"
+    },
+    {
+      "path": "src/server/audit-read.ts",
+      "blob": "bb26f44f927f116bd4a087ab7c7e8d1c7bba01b8",
+      "sha256": "5f637b887f6efd121af7a0d9388210683181e9000ee6c5edf004808abf32f167"
+    },
+    {
+      "path": "src/server/mail-settings.ts",
+      "blob": "2c0e85302cc0a67708366dbd2c63e91a69e36d56",
+      "sha256": "8a219f0348f2aa4f52b2514c0e6879ce007f20ce244ea2419ee00e1a90a6822e"
+    },
+    {
+      "path": "src/server/actions.ts",
+      "blob": "127a116bb2cad512d3551c061ab9e5160fa37845",
+      "sha256": "1a1080014065d2e47bbef6dd0af46d34a33720957b9e6b136dadeda3889b887b"
+    },
+    {
+      "path": "src/app/m/layout.tsx",
+      "blob": "ccb24258c06b15d36959dc69abd328e258137b50",
+      "sha256": "51243cea4b3c4342b2d541698202c578bec9ce6a8b7ebae9505bd664783c3863"
+    },
+    {
+      "path": "src/app/m/roles/page.tsx",
+      "blob": "ca61562f99a5c3cd24352584e0bc451f28d8f3f6",
+      "sha256": "df07a860fb668aa6cd3f523059e2f6b08a0f06f42a2787077e05919137823451"
+    },
+    {
+      "path": "src/app/api/export/route.ts",
+      "blob": "1704c4ea972c8baef612936d8a7fae5ecb9ba2df",
+      "sha256": "dd5de4dddf1da0e4336d6907f3ef78ed9903448dbdad913a5f18a86894e93e5f"
+    },
+    {
+      "path": "src/app/m/reports/export/route.ts",
+      "blob": "bdc2521cd5fa60cb4a008b1d774b18981ab6de01",
+      "sha256": "8b8419893545c51977f8ddf3ac3818179a674fd27e1c21734c0171d13d3e4d47"
+    },
+    {
+      "path": "src/app/api/flows/[action]/route.ts",
+      "blob": "ca7ae0de016f21fe18e62b0cc0ddec32ff7c6218",
+      "sha256": "6d53c2b6895fe0c3333abdf1ebaeed7c602a25788c45555e42cb103ed5e7783c"
+    },
+    {
+      "path": "src/i18n/en.json",
+      "blob": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+      "sha256": "7a6009146be8e153f20b687ca8545d75a266124f4a6814bc22305b6e9f500b5b"
+    },
+    {
+      "path": "src/i18n/zh-TW.json",
+      "blob": "6270729f648586a7443c15e6bb7f174c3ef61563",
+      "sha256": "25636c3ef5f0bd7ba695d067e7661fa25ed2d7b02a0e9bd887236c7b0233b8a8"
+    },
+    {
+      "path": "supabase/migrations/20261018120000_schema.sql",
+      "blob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+      "sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615"
+    },
+    {
+      "path": "supabase/migrations/20261020120000_auth.sql",
+      "blob": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+      "sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81"
+    },
+    {
+      "path": "supabase/migrations/20261020140000_audit_access.sql",
+      "blob": "f0802260e45c39c013af74c9e0e14e01e1b79316",
+      "sha256": "6f9909c6e9a4fbea6a8c3c58485b7d1336a93d61af485dd0766b033add43f5b6"
+    },
+    {
+      "path": "supabase/migrations/20261021120000_portfolio.sql",
+      "blob": "2291d93a3e3b4240282f9c929b7d894b8c778811",
+      "sha256": "1c8f88874cd3b992dfd950f75137af7754609609ac09e3bf613031db74465679"
+    },
+    {
+      "path": "supabase/migrations/20261023150000_repair_records.sql",
+      "blob": "f9a845fecd09adc7e2b21ad98da3f4d7767c45fd",
+      "sha256": "da735e1674d4b2c3c5998e80b12d0d9b9abf54a52b75d5a70da8b33beb620b17"
+    },
+    {
+      "path": "supabase/migrations/20261031100202_b003_payee_gateway.sql",
+      "blob": "1938d1d8a65fb6fe8ace288a3e7a3f133a573552",
+      "sha256": "1f929fe9c71e317ce044127c6cd6b25daa28f591a754ab297e0d7a7fe60be856"
+    },
+    {
+      "path": "20-build/specs/B-017.md",
+      "blob": "83a7ec091da5e9834b0b5b41639c35defd772f71",
+      "sha256": "04b1bbef926713e9e442444f03b44b7c0b2d65da14f9dc763bd003e02bcf2006"
+    },
+    {
+      "path": "e2e-evidence/B-017/status.md",
+      "blob": "74a1a679be365dcdda1ea4d5218f1f3f50564942",
+      "sha256": "9c7fb23859b54a32daaeb428387e30b3e3239787d5e5076bb80a349cb1c20168"
+    },
+    {
+      "path": "e2e-evidence/B-017/verdict.md",
+      "blob": "78c11c4890647efd27cfc8102db62ed905f9cff1",
+      "sha256": "dbecdffe703b31bfc197e022abdd730b0a5121d460327efb11e50ef45468dc21"
+    },
+    {
+      "path": "src/server/tenant-directory.ts",
+      "blob": "d5673da799f903b9a04f8914a1cb387079010672",
+      "sha256": "a249aa72e4a087bd309f1487e96afc7d0a5dfe0a43504eaa6f9230ddb33d22c3"
+    },
+    {
+      "path": "src/server/tenant-lease-history.ts",
+      "blob": "d704e7d3c5632b736160e68f7de3d97d75186c39",
+      "sha256": "792e724bf14c7d56619c984b8a95332965add68418348ecf25507f02bcd1f7b7"
+    },
+    {
+      "path": "src/server/portal-role.ts",
+      "blob": "1cfb243db89e7e4258a54fb1bc65f72deac066fc",
+      "sha256": "9e6970f2ff20d95545d11924c46fd9c2c61464bba1b44821d648b1bcc362a32e"
+    },
+    {
+      "path": "src/server/notification-center.ts",
+      "blob": "698ab84d041a40a27d951c8e00b56b2f7afba791",
+      "sha256": "0a754544a8ec9fcd10fc336609ddaeff939c22a2a535555151a13327444bbdba"
+    },
+    {
+      "path": "src/server/utility-reconciliation.ts",
+      "blob": "b96533499c6f29155a70785461ba020e56588176",
+      "sha256": "29b490bef69f2b2762dd08d75f098c1916bc34e9fcbad3a0d6a2ea6abcfc86e9"
+    },
+    {
+      "path": "src/server/billing-preview-authority.ts",
+      "blob": "654640a49da53d9fdc0728ad7a92c6951e801e1c",
+      "sha256": "b9601f404105f148e994665b5b108a76d35b5d7dbd29f5855936582fc035c016"
+    },
+    {
+      "path": "src/server/paper-lease-versions.ts",
+      "blob": "8f7b05da8f78b5cfb2e099138fdc0081adea7250",
+      "sha256": "c20a51a8e90e803379d1099ff1faabf852b68a37f8003c9ca881ab2c6be55571"
+    },
+    {
+      "path": "src/server/income-expense.ts",
+      "blob": "b7cb60ac2e9152d205ef461e7e035dd902cfe244",
+      "sha256": "daba76195902527f8cab29855bbaff0abf65045437ca9f47fa23e6f7aaae2a6b"
+    },
+    {
+      "path": "src/server/official-lease.ts",
+      "blob": "bb1761eff7cfdb6f927d7b952948cd74828cd600",
+      "sha256": "6de9a132226ccc6bfd58d14d1a86a007690d01e6ad1ad3e52ef87a511c70262f"
+    },
+    {
+      "path": "src/app/m/close/page.tsx",
+      "blob": "80da2135c91983b5c96257495fcc3499875586e9",
+      "sha256": "e21a495e94ef49b46832dd4e5af06c2348a7cd104b2f0c504f28c38a115eeca9"
+    },
+    {
+      "path": "src/server/consent.ts",
+      "blob": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+      "sha256": "8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6"
+    },
+    {
+      "path": "src/server/partner-consent.ts",
+      "blob": "bce24c570ce958cca91b6813d615fb97a8bc924b",
+      "sha256": "f37b3eac0212c684dbe53b272bd3c791b16fcf058d2b9026d5e51923777b411f"
+    },
+    {
+      "path": "src/server/record-archive.ts",
+      "blob": "7e2a5799b3d134be1cbeb875d32c35e937624af3",
+      "sha256": "b3f1b9356332843e19d371cbd0168b43781f2f24c3d4a3991b1869c5c8b9e161"
+    },
+    {
+      "path": "src/server/utility-posting.ts",
+      "blob": "13eb56e6407e7ec741e7dab559f41593aff31469",
+      "sha256": "745cfd9b604e73947c653eb73fb7864112497049669260b9e3c321b541a36ae0"
+    },
+    {
+      "path": "src/server/owner-transfer-input.ts",
+      "blob": "3ae25aa8ecca17dcd6140878e3f075ef0a669dc2",
+      "sha256": "19cded6330af69e626d74c66ddfb85a31a2ad8bc918630f43944f714918bcdb9"
+    }
+  ],
+  "currentDiffAmongPins": [
+    "e2e-evidence/B-017/status.md"
+  ],
+  "strictTypeExcerptsVerified": 10,
+  "designCounts": {
+    "recognized": 18,
+    "collectionProposals": 34,
+    "fileFamilyProposals": 6,
+    "uniqueLogicalInterfaces": 119
+  },
+  "canonicalWorkspaceSha256": {
+    "condola-app/hub/05-capabilities/current-state.md": "d7699465a69ec2129080bdc6f00c8d4e7b07265ba926c7f3eff592b151675e13",
+    "condola-app/hub/04-journeys/user-stories.md": "22bf0994f423501678f6b53272cf2487951a373ac9611a77eb19298cbbeada68",
+    "condola-app/hub/04-journeys/journeys.md": "08f6dc43aba0dec21760521bb4b11fe39b64c3be6f11e9ed3e41d87eb7d30334",
+    "condola-app/hub/05-capabilities/capability-list-v1.md": "66711f5a1083cdcff0e5e71120d9105280daeb5857e71ec41da9073edbffa840",
+    "condola-app/hub/04-journeys/_work/p0_cov_v2.txt": "bd0aa26fc0710550169fb7e5374a89e68656a95ec0dd3cd083f2925de75ad222"
+  },
+  "additionalEvidenceBaselineSha256": {
+    "20-build/specs/B-017.md": "04b1bbef926713e9e442444f03b44b7c0b2d65da14f9dc763bd003e02bcf2006",
+    "20-build/specs/B-032.md": "97e9b8958d6ec837ffaa03ed625b7047073396e6ea263242ce1d78e43cde6297",
+    "src/app/api/export/route.ts": "dd5de4dddf1da0e4336d6907f3ef78ed9903448dbdad913a5f18a86894e93e5f",
+    "src/app/m/properties/page.tsx": "ba872bc0ee9c1247a4c81122ec32276b83c373c6289e0b50fb13c2abcca5f060",
+    "src/app/m/reports/export/route.ts": "8b8419893545c51977f8ddf3ac3818179a674fd27e1c21734c0171d13d3e4d47",
+    "src/app/m/tickets/[id]/page.tsx": "f0a37e918615b83d2fa435c4d245d8ae7d34ad56d1d28d6dc7c0237df7d77c28",
+    "src/server/vendor-repair.ts": "28f2914dfd4e367d9e3c4baf46ef79d10159b147a9d4caaac16f829153480864",
+    "src/server/domain.ts": "6a48d9373f922827a66e0f1a057559b8f4dd39e15f33be9fd835d9d323bc85e0",
+    "src/server/portfolio.ts": "9913602298e87a39b8087677af18a28fb17e028fc76ea4f217115d2a2ab7365a",
+    "supabase/migrations/20261018120000_schema.sql": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+    "supabase/migrations/20261023150000_repair_records.sql": "da735e1674d4b2c3c5998e80b12d0d9b9abf54a52b75d5a70da8b33beb620b17",
+    "supabase/migrations/20261030150300_repair_owner_visibility.sql": "daa530894acd443000dc37ee7b7c5f52542b2664aaf49a95271a3d47c633cb0e",
+    "supabase/migrations/20261020140000_audit_access.sql": "6f9909c6e9a4fbea6a8c3c58485b7d1336a93d61af485dd0766b033add43f5b6"
+  },
+  "findings": [
+    {
+      "id": "S1",
+      "category": "Scope",
+      "finding": "Recognize all 18 catalog keys. The new all-data export is unsupported in this B017 contract.",
+      "evidence": "M-54 documents a fixed, view-only matrix (hub current-state.md:122). J1.4, PLT-01/02 and CAP-P-12 cover roles, tenant/owner/vendor isolation, Accountant photos and Admin-only company audit (journeys.md:48, user-stories.md:129–130, capability-list-v1.md:176). M-10 and M-35 describe the actual property and financial-report CSVs (current-state.md:78,103). PLT-14 and CAP-P-23 concern accurately describing available exports and map to B032 (user-stories.md:142, capability-list-v1.md:188, 20-build/specs/B-032.md:3–15). An earlier prototype coverage note proposes a ZIP plus background email (p0_cov_v2.txt:81). It does not assign that feature to B017. The executable source binds pm_export_all only to the catalog, with no full-export action. The prior independent v2 definition was a proposed design for a full export. It cannot expand Ron’s decision on supported permissions.",
+      "requiredCorrection": "Keep data.export visible as recognized and unavailable, disable selection, and reject new unsupported keys in editor/server/DB role create/edit/assign, import and replay. Never silently strip an invalid key or revert an existing referenced assignment to native permissions. Treat imported, stale or damaged assignments referencing unavailable capabilities as unavailable pending trusted repair. A future capability version requires separately proven support and revalidation, with no automatic activation. Keep ordinary property CSV at /api/export under effective props.view in enrolled orgs, preserve its six fields and gate the direct URL. Keep /m/reports/export under reports.export. Preserve unenrolled/OFF native behavior. Restrict no other key by the target native base. Retain the 34 collections, six file families and export-specific parts of the 119-name registry as unapproved design history. No new all-data route, file readers, report collections, B032 changes or external messages.",
+      "acceptanceCases": "Test 18 recognized keys including one visibly unavailable, rejected grant/import and poisoned referenced assignment; positive cross-base Manager bank.reconcile and supported key omissions; direct CSV and UI parity for staff, portal, foreign org and revoked session. Do not claim 18 functioning grants."
+    },
+    {
+      "id": "S2",
+      "category": "Privacy",
+      "finding": "The staff vendor-dispatch route can mint or disclose photo-capable bearer links to an Accountant with tickets.update.",
+      "evidence": "src/server/vendor-repair.ts:473 returns a freshly minted URL. Lines 619–652 read an existing secret, create a link and return attachment IDs/names. Lines 505–555 select and share attachments. The ticket detail surface calls loadVendorDispatch (src/app/m/tickets/[id]/page.tsx:40,172). A vendor token opens independent vendor readers, including findVendorPhoto and streamVendorPhoto (vendor-repair.ts:1062–1110). Excluding vendor secrets from export or filtering only staff photo GET leaves that read, share and bearer path open.",
+      "requiredCorrection": "Make the native floor binding at dispatch creation, current-link lookup, share/change commands and detail serialization. For restricted staff, provide text/status operations separately, omit attachment IDs/names/counts and photo-capable bearer URLs, and deny attempts to mint, rotate, replay or change sharing for such a link. Do not erase existing shares from a text-only command with an empty list. Genuine vendor access stays within its existing job audience. A copied bearer cannot be associated with a staff cookie on a different device. Before first enrollment or a staff transition that removes photo authority, revoke/rotate still-valid previously exposed photo-capable job bearers for that staff member, or conservatively invalidate potentially exposed bearers when exposure cannot be attributed. Alternatively defer enrollment/transition until verified expiry. Fence legacy minting first. Staff storage URL expiry alone cannot retire vendor job tokens. No new external delivery.",
+      "acceptanceCases": "Test assigned Accountant + tickets.update with an active job in both vendor modes, direct staff action, ticket HTML/RSC, guessed attachment IDs, previously copied job URL before and after transition, genuine vendor receiving job-scoped photos, text-only work without photo access and without losing existing sharing. No real vendor messages."
+    },
+    {
+      "id": "S3",
+      "category": "Privacy",
+      "finding": "Assigned-only raw-read fencing leaves an unassigned native Accountant inside an enrolled org outside the mandatory floor.",
+      "evidence": "The team_read generator includes files and ticket_attachments and admits active members for SELECT (supabase/migrations/20261018120000_schema.sql:2052,2080,2100). Permissive portal policies include uploaded-by-self file reads and ticket attachment reads (:2183,2191). app.can_see_ticket explicitly accepts org membership (20261030150300_repair_owner_visibility.sql:6–16). Ticket attachments can contain a legacy bytes column (20261023150000_repair_records.sql:266–272). A restrictive rule scoped only to custom assignees cannot prove the native Accountant floor for raw metadata/bytes. Target grants and storage policies are not verified here.",
+      "requiredCorrection": "For enforced orgs, apply mandatory native floors regardless of whether assignment exists. Use restrictive predicates or deny direct reads of the protected relations to that persona and return safe existing nonphoto expense/finance projections; include attachments, linked file/storage records, sharing tables, uploaded-by-self and alternate association paths. Do not treat an ordinary team or portal policy as sufficient; global staff-first applies even across selected orgs. Retain the native Admin-only company audit gate (20261020140000_audit_access.sql:5–7) across UI, direct read and definer paths. Whole raw audit is not an assignable permission. Keep unchanged native semantics outside enrollment as prescribed; do not claim a live catalog test from source.",
+      "acceptanceCases": "Test raw authenticated reads as assigned and unassigned Accountant with current and legacy photo rows, own uploader, alternate portal association, authorized genuine tenant/vendor, masked expense metadata and unaffected finance work. Include direct select of attachment content/path/name and a direct whole-company-audit denial."
+    },
+    {
+      "id": "S4",
+      "category": "Privacy and workflow parity",
+      "finding": "Property creation can enable owner phone disclosure under props.edit alone, and owner-edit signatures omit property associations.",
+      "evidence": "domain.PropertyInput includes canViewTenantPhone and createProperty writes that choice to property_owners (src/server/domain.ts:110,436–438). The separate setter enforces settings.edit (:563–568). owner_lease_tenants discloses the phone when that exception is true (20261018120000_schema.sql:2245–2246). The fixed registry also drops propertyIds from createOwner/updateOwner, although syncOwnerProperties deletes links absent from its input (src/server/portfolio.ts:357–375,376–431). Reusing the writer with [] could silently unlink existing properties. These are portal authority changes, not cosmetic schema differences.",
+      "requiredCorrection": "For enrolled custom staff, default a new owner visibility exception to false. A request to opt in must possess effective settings.edit as well as props.edit for property creation. Reject unauthorized true without side effects. Provide the existing separate per-link, org-bound settings.edit setter and preserve effective owner/global privacy rules. Keep existing native semantics through the compatibility path and explicitly test the previously permitted native creation choice. Include bounded, validated propertyIds and expected link/version state on owner link operations; never synthesize [] for missing input. Authorize recomputed additions/removals against actual org/owner/property, and do not reopen or change existing phone exceptions through an unrelated edit.",
+      "acceptanceCases": "Test props.edit-only direct create with true denied/rolled back and false allowed, authorized combined keys, per-link setter with org/owner guard, actual owner phone result, tracked owner edit preserving links, foreign/stale IDs rejected and intentionally submitted authorized unlink."
+    }
+  ],
+  "nonAcceptance": [
+    "runtime",
+    "SQL parser/application",
+    "database/target ACL",
+    "whole feature",
+    "browser/staging",
+    "B019+"
+  ],
+  "markdownSha256": "39185f00f2b5637e1ea804edb9574967da512a9f0f7ea9207c10fa369b204511"
+}

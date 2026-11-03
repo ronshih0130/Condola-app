@@ -1,0 +1,34 @@
+{
+  "verdict": "PLAN_GO_FOR_INACTIVE_AUTHORING_WITH_BINDING_VENDOR_AND_RESET_AMENDMENTS",
+  "primaryMdSha256": "7e456b2ad04473f37db0cd2f4b506305ae370f25da8b84e6eeef260ad42743ce",
+  "primaryJsonSha256": "a115c840989e70ea981620fce668b9936c5b7608541d266c0904648d221b669f",
+  "priorIndependentMdSha256": "39185f00f2b5637e1ea804edb9574967da512a9f0f7ea9207c10fa369b204511",
+  "priorIndependentJsonSha256": "3a9c92da1be3c7299643a276c647a437adc0e5c3693d55f35f1cd3e4a13bdd25",
+  "gitPinsVerified": 61,
+  "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+  "currentHead": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+  "governanceObjects": {
+    "recognized": 18,
+    "supported": 17,
+    "unsupported": [
+      "data.export"
+    ],
+    "tables": 4,
+    "ownerRoles": 2,
+    "coreFunctions": 29,
+    "operationGroups": 47
+  },
+  "acceptanceConditions": [
+    "Fixed legitimate vendor report/upload operations; no general service bypass",
+    "Genuine sandbox bootstrap and isolated demo-only reset are separate from enrolled live authority",
+    "Both OLD and NEW organization checks; sticky state, last Admin, old credential and bearer fence"
+  ],
+  "additionalSourcePins": {
+    "src/server/vendor-repair.ts": "28f2914dfd4e367d9e3c4baf46ef79d10159b147a9d4caaac16f829153480864",
+    "src/server/sandbox.ts": "d8d31eacd163d96511fae0be55b1165b7f987d7d1986415ff0bd1b089e2b623e",
+    "src/server/seed.ts": "276f3aa9b672f773d98b8a748e9ddd12577b5873f1628a60ec47a8536c3a6591",
+    "src/app/api/demo/reset/route.ts": "9a85a60d3dbdf3d5029f4c9fce02097f94d157630a636d32bfa9a2dd48f08968"
+  },
+  "execution": "NOT_RUN",
+  "markdownSha256": "c6c370c08cde5131e597f37bb90d2c15c580c7dfffaf08574d1d20276029c2c0"
+}

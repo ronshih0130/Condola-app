@@ -1,0 +1,92 @@
+{
+  "time": "2026-11-03T14:27:38.968891-08:00",
+  "candidate": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+  "verdict": "CODE_GATE_GO_BROWSER_FAIL_PENDING_ONLY; B018 INCOMPLETE; NOT RELEASE READY",
+  "unit": {
+    "pass": 651,
+    "fail": 0,
+    "skip": 0
+  },
+  "rls": {
+    "pass": 476,
+    "fail": 0,
+    "skip": 1,
+    "skipReason": "sole prior Ron-approved irretrievable b888ccd historical fixture"
+  },
+  "stepsPass": 11,
+  "childrenDrained": 3,
+  "sourceCount": 1024,
+  "sourceCanonicalSha256": "e2b0044b01f2e320d05dc4039e850ecd0e61bec20dbff12117daa06d1b0baa16",
+  "gateReceipt": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-gate-build-v2/run-gate-f89f8d3bb017/receipt.json",
+    "sha256": "239dd55bb29ac7b9cc7685da8ac9e0e1d3c3de50f74e8b1ac1d4e2b1fb1015c1"
+  },
+  "rawEvidence": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/1c8fd07bc1fd78e7a86a00daff994f68e734be4f.vYsxGH",
+    "files": {
+      "postgres-16.log": {
+        "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+        "bytes": 31
+      },
+      "lint.log": {
+        "sha256": "4e7b3a6ec111ce7a3847a02cfc2a631a691808fc5bae42d475209d1be0268132",
+        "bytes": 3401
+      },
+      "npm-ci.log": {
+        "sha256": "6469fedd1d647a984cab4a453882c99cc067a57d799820b30ffe18a03e3f0e3b",
+        "bytes": 1794
+      },
+      "typecheck.log": {
+        "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+        "bytes": 43
+      },
+      "copy-check.log": {
+        "sha256": "758672815ac84190b4bbf9d84b1b7e39577f57b62d420435fda76a00125b95e6",
+        "bytes": 1435
+      },
+      "flag-expiry.log": {
+        "sha256": "664d8d229205b5f7b3fdf3219105fa466aba17a2f88fdf54d987dacfee9dedfd",
+        "bytes": 27
+      },
+      "steps.md": {
+        "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+        "bytes": 341
+      },
+      "test-unit.log": {
+        "sha256": "b84b894e27ba2cecbf8f57662150787b37e456e686bb523d9bcd02b9f2c0541f",
+        "bytes": 134500
+      },
+      "test-rls.log": {
+        "sha256": "775550ccd5181cadfed8703b06174025e06997ba5e32daec4f0219b1529bfda4",
+        "bytes": 130497
+      },
+      "toolchain.log": {
+        "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+        "bytes": 27
+      }
+    },
+    "gateChildPid": 76168,
+    "summaryInode": 88353142,
+    "summaryDevice": 16777230,
+    "summaryCtimeNs": 1793744182362442778
+  },
+  "browser": {
+    "result": "STRICT_FAIL_BEFORE_PAYMENT_CASES",
+    "receipt": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-runtime-v4/run-focus-2645b90f8b18/receipt.json",
+    "sha256": "940065e3aada47142f4d34a4303b8bf8fd6b2f4f6f0ab02b2af62c5d1f5e62d3",
+    "failedScripts": 6,
+    "cause": "UNVERIFIED",
+    "recovery": "QUARANTINE; financial lineage UNVERIFIED; recorded Node process groups drained; no blanket detached-Chromium drain proof",
+    "archiveManifestSha256": "2a1523146a275b2690417fcc13e58a734f3a3573e9565632b3d043455b0e085e"
+  },
+  "publicReasonHandoff": {
+    "directory": "/Users/ron/Downloads/condola-bootstrap",
+    "manifest": "b018-public-reversal-handoff-manifest.json",
+    "sha256": "a2f9ce7e12b31df8d7fb4cfc4b11af9d8cb552256768cc43c726412c13fbee33",
+    "status": "6 source-reviewed files copied/verified; SQL and patch UNPARSED/UNAPPLIED/TARGET_UNVERIFIED/NOT_APPLY_READY; PE target work and Codex app integration pending"
+  },
+  "build": "NOT_RUN_HELD",
+  "staging": "UNVERIFIED_NOT_DEPLOYED",
+  "wholeFeature": "INCOMPLETE",
+  "quota": "unknown"
+}

@@ -1,0 +1,52 @@
+{
+  "verdict": "STRICT_FOCUS_FAIL_TRANSPORT_CAUSE_UNKNOWN",
+  "candidate": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+  "receiptSha256": "940065e3aada47142f4d34a4303b8bf8fd6b2f4f6f0ab02b2af62c5d1f5e62d3",
+  "preservedManifestSha256": "2a1523146a275b2690417fcc13e58a734f3a3573e9565632b3d043455b0e085e",
+  "preservedFilesMatched": 21,
+  "artifactsMatched": 11,
+  "sourceCount": 1024,
+  "helpersStable": true,
+  "browserDrained": true,
+  "serverDrained": true,
+  "phaseExits": {
+    "createdb": 0,
+    "seed": 0,
+    "fixture": 0,
+    "browser": 1,
+    "recovery": 1
+  },
+  "lifecycleCounts": {
+    "settled": 12,
+    "request": 44,
+    "response": 38,
+    "failed": 6,
+    "finished": 38,
+    "pointer-hit-test": 3,
+    "native-login-complete": 3
+  },
+  "failedRequestIds": [
+    6,
+    15,
+    21,
+    28,
+    36,
+    44
+  ],
+  "staticPathFingerprint": "406c56d186d66a2c",
+  "nativeSignins": 3,
+  "enhancedLogin": "UNTESTED",
+  "paymentCasesReached": false,
+  "financeLineage": "UNVERIFIED",
+  "recoveryActions": [],
+  "recoveryOffMatches": true,
+  "proposedDiagnostic": "new exact OFF-only matched JS-disabled/JS-enabled real sign-ins with privacy-filtered CDP + phase-aware no-finance baseline",
+  "codeGateFreeze": {
+    "status": "ONE_STANDARD_CODE_GATE_ONLY_GO",
+    "lockSha256": "8114d21dcfbf3148152eab69a396b4594eaef06a33fd813bae065cbe71e7a1bd",
+    "sourcePinsVerified": 1024,
+    "sharedLockGateAttemptAndReportAbsentAtInspection": true,
+    "buildAndFeature": "HELD"
+  },
+  "markdownSha256": "df574897b01dfa208a3e67e75b6993f318723a983636bb4c987a98e6dfd81ab2"
+}

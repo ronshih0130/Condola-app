@@ -1,0 +1,2224 @@
+{
+  "createdAt": "2026-11-03T14:14:54.870288-08:00",
+  "verdict": "MINIMAL_PRIMARY_V4_FOR_INDEPENDENT_REVIEW_AND_INACTIVE_AUTHORING_NOT_SQL_OR_ENROLLMENT_GO",
+  "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+  "currentHead": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+  "acceptedReview": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-contract-independent-astra-v3.md",
+    "sha256": "39185f00f2b5637e1ea804edb9574967da512a9f0f7ea9207c10fa369b204511",
+    "amendments": [
+      "S1",
+      "S2",
+      "S3",
+      "S4"
+    ]
+  },
+  "recognizedKeys": [
+    "dash.view",
+    "props.view",
+    "props.edit",
+    "leases.edit",
+    "tenants.contact",
+    "pay.record",
+    "pay.reverse",
+    "bank.reconcile",
+    "stmt.view",
+    "stmt.generate",
+    "exp.add",
+    "month.close",
+    "tickets.update",
+    "messages.send",
+    "reports.export",
+    "team.manage",
+    "settings.edit",
+    "data.export"
+  ],
+  "supportedKeys": [
+    "dash.view",
+    "props.view",
+    "props.edit",
+    "leases.edit",
+    "tenants.contact",
+    "pay.record",
+    "pay.reverse",
+    "bank.reconcile",
+    "stmt.view",
+    "stmt.generate",
+    "exp.add",
+    "month.close",
+    "tickets.update",
+    "messages.send",
+    "reports.export",
+    "team.manage",
+    "settings.edit"
+  ],
+  "unsupported": {
+    "key": "data.export",
+    "capabilityVersion": 1,
+    "state": "UNSUPPORTED_UNASSIGNABLE"
+  },
+  "contracts": {
+    "scope": "Accepted S1-S4 govern. Recognize18 PERMS keys but support17 in capability_version1. data.export is visibly UNSUPPORTED/unassignable. No all-data route,34 new collections,6 export file families,streaming product or B032 work. V3 export-only scaffolding remains immutable unapproved history and is superseded. Retain v2 explicit role assignment/four-table/governance design where valid; supersede its cross-org portal exception. Supported17 keys allow FULL cross-base explicit composition, never a target-base ceiling. This contract is source-only authoring guidance; no SQL/runtime/target/enrollment GO.",
+    "catalog": "One immutable supported-v1 list is the recognized PERMS18 minus data.export. Editor/API/DB role create/edit/assign, restored/imported authority validation, unassignment resulting state and replay all reject unknown, duplicate or unsupported keys. Do not silently remove a key. A referenced imported/stale/poisoned role or unavailable capability version returns UNAVAILABLE and no effective grants; it never becomes unassigned/native. Upgrading support version requires separate exact capability proof and explicit revalidation; no auto-grant. Existing property CSV remains six fields name,address,currency,mode,rooms,owner under effective props.view for enrolled staff; report CSV remains reports.export. Outside enrollment preserve original native/OFF behavior. Do not claim18 functioning grants.",
+    "context": "Trusted C derives from actual validated cookie and canonical getSession: session ID, actual actor, selected org/live parent/env, current native membership, effective keys and exact member/assignment/template/org-state revisions. Session UUID or submitted actor/role/GUC is not a credential. SQL additionally rechecks real unrevoked/unexpired session, live membership and selected relationship. Global staff-first includes every live membership, even hidden; staff in A plus tenant in B cannot choose B portal by a selected-org-only lookup. Genuine nonstaff tenant/owner/vendor remain separate exact existing audiences. Native Accountant photo denial and nativeAdmin company-audit/governance survive custom labels. Preserve B016 confirmed Auth Email and current B018 implementation unchanged.",
+    "governance": "Custom-role governance, nativeAdmin transitions and any transition removing a mandatory persona floor require nativeAdmin AND effective team.manage. Delegated team.manage permits ordinary nonself member operations only within full RESULTING actor authority, including all default rights of an unassigned target. Preserve inactive/removed membership native role and assignment tombstone; invitation issuance/acceptance/reactivation must examine them so deactivate/reinvite cannot turn Accountant into photo-capable Manager under a nonAdmin. No own direct/indirect authority change. Preserve existing billing-owner constraint/index; no invented owner recovery privilege. Role edits evaluate all assignees. Exact command receipt replay is freshly authorized; changed operation/payload/target/revision is conflict. No automatic retry of unknown mutation.",
+    "locking": "Authority order is current control fence where existing operation needs it -> live org FOR UPDATE -> selected sandbox org in deterministic order -> org_state FOR UPDATE -> members sorted ID -> roles sorted ID -> assignments/invite/receipt -> existing domain rows. Keep seat org-before-invite order. Domain writers hold shared authority/session rows before existing source/lease/invoice locks through COMMIT, so actor/template/session revocation serializes; recheck after waits under READ COMMITTED or proven equivalent. Bounded NOWAIT/lock timeout makes inverse old-writer order fail. Validate poststate >=1 active nativeAdmin with valid effective team.manage both command-end and deferred constraint across member/role/assignment transitions. Early SET CONSTRAINTS is not a reusable validation token. No locks while waiting on external storage/network; no background heartbeat.",
+    "S4": "OwnerCreate exact payload is {name,email,phone,propertyIds}; OwnerUpdate additionally ownerId and expectedOwnerLinksSha256. propertyIds is explicitly present, duplicate-free bounded uuid[]; missing INVALID, never default[]. Bind a256-link operational bound for this proposed command (not pricing). A text-only UI edit submits its actual complete array plus snapshot digest, never synthesized empty links. Explicit[] means intentional unlink only after same-org/current-authority/CAS checks. Canonical digest covers contact id/name/email/phone/is_owner/is_tenant/archived_at/updated_at at full SQL precision and ALL link tuples sorted immutable ID: id,property_id,owner_contact_id,is_primary,can_view_tenant_phone,effective_from,effective_to,created_at. Baseline property_owners has NO updated_at; do not invent one. Lock owner/current links/add-remove properties in stable order, recompute actual delta, validate same-org/active/history and preserve unchanged link IDs/dates/primary/phone flags. Do not call syncOwnerProperties with[] because a field was omitted.\nFor assigned/custom staff, new PropertyInput.canViewTenantPhone defaults false; explicit true requires props.edit AND effective settings.edit, checked before any property/contact/invite/link side effect. Reject unauthorized true atomically. Existing setOwnerPhoneVisibility is a separate explicit settings.edit operation with exact org/link/owner/property/expected-version checks; unrelated owner/contact/property edits never reopen exceptions. Global owner privacy stays its existing separate settings.edit contract. No new nativeAdmin ceiling is invented on a supported cross-base settings key. Preserve the previously permitted unassigned native creation choice only through an identified source-bound native compatibility branch, as S4 requires; custom props.edit does not acquire that implicit native exception. Explicitly test both branches.",
+    "S2S3": "In ENFORCED orgs the native Accountant floor applies to assigned AND unassigned members. Restrictive rules must defeat permissive team_read/uploaded-by-self/portal OR routes for files, ticket_attachments including legacy content, repair_vendor_job_shared_photos, repair_vendor_jobs, message_attachments and identity-document/photo relations. Native Accountant direct files reads may be denied wholesale; safe existing expense receipt-name/financial DTOs preserve nonphoto finance without raw file path/bytes. Actual ticket text/comments/status remain available under tickets.update while photo IDs/names/counts/paths/content/upload/sign/bytes are absent/denied. NativeAdmin company audit remains actual native role, never custom label/team.manage/settings.edit. Genuine tenant/vendor audience remains exact; global staff-first prevents staff portal coercion.\nAt staff dispatch creation, loadVendorDispatch secret/sharing lookup, share-change and detail serialization enforce the native floor. Accountant+tickets.update cannot mint/rotate/replay a photo-capable job URL, read it, enumerate attachments or change sharing. Safe text/vendor/status operations are separate. Text-only save omits sharing/photo fields entirely, never[] and never deletes existing shares. Revoke may return only status without mint/disclosure. Protect both existing vendor modes and findVendorPhoto/openVendorPhoto/streamVendorPhoto; a copied bearer on another device cannot be attributed through a staff cookie.",
+    "bearers": "Choose conservative retirement; no new exposure-tracking subsystem. Before first enrollment fence ALL old worker/credential minting and staff/vendor signed-read issuance, deploy checked proxies for staff and both vendor modes, and retire every potentially exposed active photo-capable org job bearer when attribution is absent. Set actual job inactive/revoked/expired, delete corresponding repair_vendor_secrets token; preserve job rows/shares/attachments/reported costs/expense/confirmation history. Verify OLD copied URLs fail through open_vendor_job and both legacy/enhanced photo paths. Wait>=600s from VERIFIED last old storage signed-read issuance, or prove actual storage revocation, without a DB lock during wait. Vendor job expiry is its own actual expires_at/revocation, not600s.\nAfter proxy rollout, any template/assignment/native-role/status/invite transition losing photo authority privately retires all potentially exposed org photo-capable bearers in the SAME governance transaction under org/job locks. No URL regeneration or external send. New deliberate dispatch/share waits for a properly authorized photo-capable staff actor. If issuance/credential fence or retirement cannot be verified, defer enrollment/transition honestly. Evidence timestamps/digests are records, never caller authorization. Already delivered bytes cannot be erased; in-flight/snapshot limits remain explicit.",
+    "ownersACL": "Use b017_authority_owner and b017_domain_owner as NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT roles. Backend receives exact function EXECUTE, never role membership/SET ROLE. Authority owner owns four private tables/functions and receives exact canonical org/member/session read grants/policies; avoid policy recursion. Domain owner owns only reviewed fixed domain/projection functions with exact source-table grants/policies. Private tables RLS ENABLE+FORCE, no PUBLIC/anon/authenticated/service direct SELECT/DML. Fixed definer functions fully qualify names, safe pg_catalog search_path, strict source schemas, no arbitrary action/table/field/actor SQL. Trigger invoker-owner checks run SECURITY INVOKER or bind actual invoker before definer context changes; never trust every non-authenticated/table-owner role. Existing function allowlist/default ACLs must be updated exactly. Actual login owner/BYPASSRLS/inheritance/FORCE RLS is TARGET_UNVERIFIED. An old privileged worker can bypass read RLS: require actual credential/worker retirement before enrollment, not only an inactive migration or flag.",
+    "raw": "Do not globally redefine app.has_role/is_member. Assigned broad raw SELECT and ordinary protected writes deny; exact named safe projections/domain operations authorize existing supported17 functionality. Enforced native mandatory floors and serialized governance/link guards are NOT assignment-only. Unknown service identity does not get a native fallback. Genuine portal operations keep exact existing row-shape checks and cannot be invoked by canonical staff to escape restrictions. Column masking requires a fixed safe projection; row policies cannot hide phones/path bytes. Amend owner_lease_tenants member phone shortcut to effective staff vs genuine owner privacy, not a global role rewrite. Old public/definer/domain gateways and backend owner queries must be fenced or amended at the precise call groups below. No arbitrary caller role/action/table/session impersonation is an API. An enrolled operation lacking its exact bridge stays UNAVAILABLE, visibly incomplete, and blocks enrollment/all17 acceptance. Codex owns source design/body/app port; PE does actual target verification and approved nonMac application, not undefined design.",
+    "package": "The initial author package is CLOSED inactive SQL+MD: four private tables/two owner roles; recognized18/supported17 validators; effective/policy helpers; fixed role/member/invite commands and request receipts; org-serialized recovery-Admin invariant; S2/S3 photo/raw/audit policies; S4 explicit versioned owner/link/privacy functions; private bearer-retirement helper. Existing domain bodies are reused/ported only for the47 actual call groups below, never119 export wrappers. Add a fixed DB privilege bridge only where current RLS/ACL/owner admission requires it; do not wrap every pure query redundantly. Exact new function bodies/signatures/grants and altered old functions belong in the source/ACL manifest. A reviewed core foundation may be prepared first with management OFF, but is NOT enrollment/apply-ready/full B017 until remaining supported route ports are closed. No TODO assigning missing Codex source work to PE.",
+    "rollout": "Management flag defaults OFF: strict global enabled+org allowlist+org opt-in allows management only, never chooses permission semantics. Persisted enforced state/assignments remain sticky during kill/OFF/expiry/readiness loss; poisoned/missing role/schema/version fails affected access closed, never native broad fallback. Before enrollment old code+new schema with no assignments/OFF must match baseline. After assignments old base-only code/credentials must not run: verified deny/quarantine/current bridge before rollback; no assignment delete, unenrollment, guard disabling or table drop to roll back. Capture exact support/callsite/credential/token-fence evidence, candidate SHA, flags/restoration and actual target owner/ACL/history/backup/restore tests. No Mac parser/application/production/activation by this task.",
+    "patches": "1 Root reserves disconnected catalog/evaluator/source tests and core author paths after exact-v4 independent review. 2 Terra authors complete inactive SQL/MD/source/ACL manifest in writable workspace, including strict supported17 and all S1-S4 requirements; independent exact source review precedes target execution. 3 Reserve effective resolver and47 actual call groups in bounded shared-file rounds, keep B0181c and B016 untouched. Unsafe enrolled branches first fail closed, then each exact existing route gets its reused or necessary fixed bridge. 4 Preserve the two actual CSVs; eliminate export-only scaffolding. 5 Approved nonMac target schema/ACL/native/OFF/poison/floors/oldclient/rollback proof then app targets, exact clean gate/build/browser/restoration and required independent Claude/Class B/Ron acceptance. 6 Later separately authorized enrollment only after all17 positives/negatives and credential/bearer fence. 7 Finish in-hand capability/handoff; no B019+new work. No source reservation/runtime authority is granted by this report.",
+    "acceptance": "S1:18 recognized/17supported; disabled unavailable data.export; editor/API/DB/import/replay reject it; poisoned reference unavailable. All17 native baseline/full cross-base positive (Manager bank reconcile required), omitted key negative, write-selector vs bulk read, actual page/action/API/fixed RPC/file/raw/old-owner paths, stale/revoked identity/revisions and org/env/global hidden staff persona.\nGovernance: concurrent last-two Admin changes, self/indirect template edit, nativeAdmin floor-removal, deactivate/reinvite/accept/reactivate attack, default unassigned actor ceiling, billing owner, same-key changed intent and raw DELETE/cascade escape.\nS2: Accountant+tickets.update both vendor modes/direct actions/HTML/RSC cannot mint/read/share/replay or obtain IDs/names/counts/link; text work preserves shares; copied old URL fails after retirement; genuine vendor retains job-scoped access; no messages. S3: assigned AND unassigned Accountant raw files/legacy content/own uploader/portal/sharing/identity-photo deny; safe finance remains usable; nativeAdmin full-audit positive vs nonAdmin custom deny. S4: custom false create positive; unauthorized true rolls back property/contact/invite/link; combined keys positive; native old true compatibility proof; exact per-link setter actual owner result; existing links/dates/flags preserved; missing vs explicit[]/stale/foreign link cases. Verify OFF/stickykill/oldcredential/token lifetimes/rollback on actual target. No runtime/staging/feature acceptance is asserted here."
+  },
+  "privateTables": [
+    {
+      "name": "app.b017_org_state",
+      "columns": "live_org_id uuid PK/FK; enforcement_state prepared|enforced; capability_version int=1; authority_revision bigint>0; support_manifest_sha256 bytea32; photo_issuance_fenced_at/vendor_bearers_retired_at/enrolled_at timestamptz nullable; updated_at timestamptz",
+      "invariant": "Enforced cannot downgrade/delete by UI/flags. Evidence is not capability. Enrollment is trusted nonMac maintenance after explicit activation gates."
+    },
+    {
+      "name": "app.b017_roles",
+      "columns": "org_id,role_id uuid compositePK; display_name bounded; name_key canonical unique per org; keys text[] canonical supported17; revision bigint; lifecycle draft|active|retired; created_by/updated_by UUID; timestamps",
+      "invariant": "No base ceiling field. Referenced retired/unknown/unsupported role unavailable. No role deletion/cascade broad fallback."
+    },
+    {
+      "name": "app.b017_assignments",
+      "columns": "org_id,member_id uuid compositePK/FK exact org_members; role_id nullable compositeFK exact role; revision bigint; assigned_by UUID; updated_at",
+      "invariant": "Explicit NULL-role tombstone on unassign, never delete/reset on suspend/reinvite. Expected membership/assignment/role revisions required."
+    },
+    {
+      "name": "app.b017_commands",
+      "columns": "org_id,actor_member_id,request_id UUID unique; command fixed authority enum; target_id; intent_sha256 bytea32; expected_revisions strict tuple; result_identity strict metadata; committed_at",
+      "invariant": "Immutable committed authority receipt only. SQL canonical intent; no arbitrary DML/actions, financial engine, token/email/free payload or secret."
+    }
+  ],
+  "ownerRoles": [
+    {
+      "name": "b017_authority_owner",
+      "attributes": "NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT"
+    },
+    {
+      "name": "b017_domain_owner",
+      "attributes": "NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT"
+    }
+  ],
+  "coreFixedFunctions": [
+    {
+      "signature": "app.b017_recognized_keys_v1()",
+      "result": "fixed text[]18",
+      "contract": "pure immutable recognized list; no authority",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_supported_keys_v1()",
+      "result": "fixed text[]17",
+      "contract": "pure immutable excludes data.export",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_keys_supported_v1(text[])",
+      "result": "boolean",
+      "contract": "strict canonical duplicate-free supported subset for CHECK+commands",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_effective_context(p_session uuid,p_org uuid,p_env text)",
+      "result": "bounded current C tuple",
+      "contract": "service-only verified cookie adapter; actual global persona/current session/member/revisions/readiness",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_has_permission(p_org uuid,p_key text)",
+      "result": "boolean",
+      "contract": "policy helper derives actual subject; unknown/unsupported/poison false; no mutation capability",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_raw_read_ok(p_org uuid,p_relation text)",
+      "result": "boolean",
+      "contract": "policy passes fixed literal relation; no arbitrary query/row output",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_native_photo_allowed(p_org uuid)",
+      "result": "boolean",
+      "contract": "native Accountant/global staff-first floor independent assignment",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_role_list(p_session uuid,p_org uuid,p_env text)",
+      "result": "bounded role/assignment metadata",
+      "contract": "nativeAdmin+effective team.manage",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_role_create(p_session uuid,p_org uuid,p_request uuid,p_name text,p_keys text[])",
+      "result": "roleId/revision",
+      "contract": "strict support/actor ceiling/current governance",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_role_edit(p_session uuid,p_org uuid,p_request uuid,p_role uuid,p_expected bigint,p_name text,p_keys text[])",
+      "result": "roleId/revision",
+      "contract": "all assignees/self/lastAdmin/photo-loss retirement",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_role_retire(p_session uuid,p_org uuid,p_request uuid,p_role uuid,p_expected bigint)",
+      "result": "roleId/revision",
+      "contract": "deny referenced role",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_role_assign(p_session uuid,p_org uuid,p_request uuid,p_member uuid,p_expected_member text,p_expected_assignment bigint,p_role uuid,p_expected_role bigint)",
+      "result": "member/assignment revision",
+      "contract": "resulting ceiling/floors",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_role_unassign(p_session uuid,p_org uuid,p_request uuid,p_member uuid,p_expected_member text,p_expected_assignment bigint)",
+      "result": "member/assignment revision",
+      "contract": "resulting full native set; no self or default escalation",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_command_status(p_session uuid,p_org uuid,p_request uuid,p_intent bytea)",
+      "result": "committed|unknown|forbidden",
+      "contract": "exact freshly authorized metadata receipt",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_member_set_role(p_session uuid,p_org uuid,p_request uuid,p_member uuid,p_expected text,p_assignment bigint,p_role public.org_role)",
+      "result": "member revision",
+      "contract": "nativeAdmin/floor/lastAdmin/ceiling invariants",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_member_set_status(p_session uuid,p_org uuid,p_request uuid,p_member uuid,p_expected text,p_assignment bigint,p_active boolean,p_confirmed boolean)",
+      "result": "member revision",
+      "contract": "seat/session/floor/lastAdmin atomic",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_member_invite(p_session uuid,p_org uuid,p_request uuid,p_email text,p_name text,p_role public.org_role)",
+      "result": "existing invite receipt",
+      "contract": "actual current inviter/inactive target/default ceiling, no send",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_member_invite_rotate(p_session uuid,p_org uuid,p_request uuid,p_invite uuid)",
+      "result": "existing invite receipt",
+      "contract": "fresh target/issuer floor",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_member_invite_revoke(p_session uuid,p_org uuid,p_request uuid,p_invite uuid)",
+      "result": "inviteId",
+      "contract": "current exact scope",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_member_invite_accept(p_actual_token_binding text,p_actual_user uuid,p_expected_invite text)",
+      "result": "member receipt",
+      "contract": "trusted original bearer/password/consent identity, current inviter/target native floor; actual user not form authority",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_owner_create(p_session uuid,p_org uuid,p_request uuid,p_name text,p_email text,p_phone text,p_property_ids uuid[])",
+      "result": "ownerId/link digest",
+      "contract": "explicit propertyIds required; no missing []",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_owner_update(p_session uuid,p_org uuid,p_request uuid,p_owner uuid,p_name text,p_email text,p_phone text,p_property_ids uuid[],p_expected_owner_links bytea)",
+      "result": "ownerId/link digest",
+      "contract": "same-org/CAS actual link delta preserving flags/dates",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_owner_phone_set(p_session uuid,p_org uuid,p_request uuid,p_link uuid,p_expected bytea,p_visible boolean)",
+      "result": "linkId/digest",
+      "contract": "explicit settings.edit and exact link/owner/property scope",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_retire_exposed_vendor_bearers(p_org uuid)",
+      "result": "void",
+      "contract": "PRIVATE governance helper only; retires token/secret, preserves shares/job/cost history",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_guard_authority_write()",
+      "result": "trigger SECURITY INVOKER",
+      "contract": "ordinary raw authority/member writes rejected when enforced; fixed owner only",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_guard_assigned_domain_write()",
+      "result": "trigger SECURITY INVOKER",
+      "contract": "fixed actual TG_TABLE_NAME set; assigned/unknown actor uses exact domain-owner bridge",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_guard_owner_link_write()",
+      "result": "trigger SECURITY INVOKER",
+      "contract": "versioned explicit owner/link/phone path, no ordinary raw mutation",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_require_recovery_admin()",
+      "result": "private validator+constraint trigger",
+      "contract": "poststate >=1 active nativeAdmin+team.manage; command-end and deferred",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    },
+    {
+      "signature": "app.b017_command_immutable()",
+      "result": "trigger",
+      "contract": "ordinary UPDATE/DELETE/TRUNCATE denied; explicit approved org/reset maintenance only",
+      "caller": "fixed trusted backend EXECUTE only, except explicitly pure/policy helper or private trigger"
+    }
+  ],
+  "policies": [
+    {
+      "name": "b017_assigned_read_fence",
+      "targets": [
+        "properties",
+        "property_owners",
+        "units",
+        "rooms",
+        "contacts",
+        "listing_terms",
+        "leases",
+        "lease_parties",
+        "lease_signatures",
+        "lease_signature_events",
+        "lease_charges",
+        "rule_check_results",
+        "meters",
+        "meter_readings",
+        "utility_bills",
+        "utility_allocation_runs",
+        "utility_allocation_lines",
+        "invoices",
+        "invoice_lines",
+        "payments",
+        "payment_allocations",
+        "ledger_transactions",
+        "ledger_entries",
+        "bank_accounts",
+        "bank_csv_mappings",
+        "bank_statement_imports",
+        "bank_transactions",
+        "bank_match_suggestions",
+        "maintenance_tickets",
+        "ticket_comments",
+        "ticket_attachments",
+        "expenses",
+        "owner_statements",
+        "owner_statement_lines",
+        "message_threads",
+        "thread_participants",
+        "messages",
+        "message_attachments",
+        "files",
+        "lease_signed_pdfs",
+        "repair_vendor_jobs",
+        "repair_vendor_job_shared_photos"
+      ],
+      "definition": "AS RESTRICTIVE FOR SELECT TO authenticated",
+      "predicate": "b017_raw_read_ok(org_id, fixed literal relation). Outside enforced existing semantics; assigned broad raw deny; genuine nonstaff original portal remains row-scoped; canonical staff foreign-portal denied."
+    },
+    {
+      "name": "b017_native_photo_floor",
+      "targets": [
+        "files",
+        "ticket_attachments",
+        "repair_vendor_job_shared_photos",
+        "repair_vendor_jobs",
+        "message_attachments",
+        "identity_document_photos",
+        "identity_documents"
+      ],
+      "definition": "AS RESTRICTIVE SELECT/ordinary writes where applicable TO authenticated",
+      "predicate": "Enforced native Accountant denies regardless assignment; defeats uploaded-by-self/team/portal OR and legacy content. Exact safe nonphoto finance projection replaces raw file join when needed."
+    },
+    {
+      "name": "b017_native_audit_floor",
+      "targets": [
+        "audit_log"
+      ],
+      "definition": "AS RESTRICTIVE FOR SELECT TO authenticated",
+      "predicate": "actual current nativeAdmin in org only; definer API checks same; no assignable raw-audit privilege"
+    },
+    {
+      "name": "b017_private_owner",
+      "targets": [
+        "app.b017_org_state",
+        "app.b017_roles",
+        "app.b017_assignments",
+        "app.b017_commands"
+      ],
+      "definition": "RLS ENABLE+FORCE + exact owner policies/ACL",
+      "predicate": "No public/anon/authenticated/service table access; exact owner policies avoid recursive member reads; backend EXECUTE only"
+    },
+    {
+      "name": "b017_phone_projection_fence",
+      "targets": [
+        "contacts",
+        "profiles",
+        "listing_terms",
+        "owner_lease_tenants"
+      ],
+      "definition": "fixed safe projection plus actual restrictive guards/view amendment",
+      "predicate": "No row-RLS claim of column masking; global staff-first, effective tenant phone, genuine owner privacy; self profile preferences remain actual existing self scope"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "b017_member_authority_guard",
+      "targets": [
+        "org_members"
+      ],
+      "events": "BEFORE INSERT/UPDATE/DELETE",
+      "function": "app.b017_guard_authority_write()",
+      "rule": "enforced raw role/status/user/org/billing owner/member deletion rejected; fixed commands include old invite and deactivate/reinvite"
+    },
+    {
+      "name": "b017_private_authority_guard",
+      "targets": [
+        "app.b017_org_state",
+        "app.b017_roles",
+        "app.b017_assignments"
+      ],
+      "events": "BEFORE INSERT/UPDATE/DELETE",
+      "function": "app.b017_guard_authority_write()",
+      "rule": "strict keys/revisions/org/sticky state; no ordinary delete/unassign fallback"
+    },
+    {
+      "name": "b017_last_admin_constraint",
+      "targets": [
+        "org_members",
+        "app.b017_roles",
+        "app.b017_assignments"
+      ],
+      "events": "DEFERRABLE INITIALLY DEFERRED AFTER INSERT/UPDATE/DELETE + command-end validator",
+      "function": "app.b017_require_recovery_admin()",
+      "rule": "org lock/current poststate, native/effective recoveryAdmin >=1"
+    },
+    {
+      "name": "b017_domain_write_guard",
+      "targets": [
+        "properties",
+        "property_owners",
+        "units",
+        "rooms",
+        "contacts",
+        "listing_terms",
+        "leases",
+        "lease_parties",
+        "lease_signatures",
+        "lease_signature_events",
+        "lease_charges",
+        "rule_check_results",
+        "meters",
+        "meter_readings",
+        "utility_bills",
+        "utility_allocation_runs",
+        "utility_allocation_lines",
+        "invoices",
+        "invoice_lines",
+        "payments",
+        "payment_allocations",
+        "ledger_transactions",
+        "ledger_entries",
+        "bank_accounts",
+        "bank_csv_mappings",
+        "bank_statement_imports",
+        "bank_transactions",
+        "bank_match_suggestions",
+        "maintenance_tickets",
+        "ticket_comments",
+        "ticket_attachments",
+        "expenses",
+        "owner_statements",
+        "owner_statement_lines",
+        "message_threads",
+        "thread_participants",
+        "messages",
+        "message_attachments",
+        "files",
+        "lease_signed_pdfs",
+        "repair_vendor_jobs",
+        "repair_vendor_job_shared_photos"
+      ],
+      "events": "BEFORE supported INSERT/UPDATE/DELETE",
+      "function": "app.b017_guard_assigned_domain_write()",
+      "rule": "assigned/unknown service actor only named domain-owner body; preserve genuine portal shape; not broad privileged-role waiver"
+    },
+    {
+      "name": "b017_owner_link_guard",
+      "targets": [
+        "property_owners"
+      ],
+      "events": "BEFORE INSERT/UPDATE/DELETE",
+      "function": "app.b017_guard_owner_link_write()",
+      "rule": "enforced explicit versioned links/privacy command; no empty-default or implicit visibility"
+    },
+    {
+      "name": "b017_command_no_change",
+      "targets": [
+        "app.b017_commands"
+      ],
+      "events": "BEFORE UPDATE/DELETE; BEFORE TRUNCATE statement",
+      "function": "app.b017_command_immutable()",
+      "rule": "ordinary immutable; approved org/reset maintenance separate and proved"
+    }
+  ],
+  "existingCallGroups": [
+    {
+      "id": "O01",
+      "operation": "navigation",
+      "keys": "all supported",
+      "paths": [
+        "src/server/perms.ts",
+        "src/app/m/layout.tsx",
+        "src/components/chrome.tsx"
+      ],
+      "entryPoints": "can/assertPerm/visibleNav/noPermHref/roleHome",
+      "minimumContract": "request snapshot display; operations reauthorize"
+    },
+    {
+      "id": "O02",
+      "operation": "roles",
+      "keys": "nativeAdmin+team.manage",
+      "paths": [
+        "src/app/m/roles/page.tsx"
+      ],
+      "entryPoints": "PERMS matrix/custom role controls",
+      "minimumContract": "18recognized/17selectable; fixed role CRUD/assign APIs"
+    },
+    {
+      "id": "O03",
+      "operation": "team_read",
+      "keys": "team.manage",
+      "paths": [
+        "src/app/m/team/page.tsx",
+        "src/server/queries.ts"
+      ],
+      "entryPoints": "listTeam",
+      "minimumContract": "existing safe member metadata only"
+    },
+    {
+      "id": "O04",
+      "operation": "member_role_status",
+      "keys": "team.manage + governance floor",
+      "paths": [
+        "src/server/auth.ts",
+        "src/server/auth-actions.ts"
+      ],
+      "entryPoints": "setMemberRole/setMemberActive",
+      "minimumContract": "atomic floor/lastAdmin/seat/session effects"
+    },
+    {
+      "id": "O05",
+      "operation": "invite_management",
+      "keys": "team.manage + resulting ceiling",
+      "paths": [
+        "src/server/auth.ts",
+        "src/server/domain.ts"
+      ],
+      "entryPoints": "inviteMember/resendInvite/revokeInvite/inviteTeammate",
+      "minimumContract": "current inviter/target native floor; no send"
+    },
+    {
+      "id": "O06",
+      "operation": "invite_accept",
+      "keys": "actual bearer + current inviter authority",
+      "paths": [
+        "src/server/auth.ts"
+      ],
+      "entryPoints": "acceptTeamInvite",
+      "minimumContract": "same org lock; inactive native floor and assignment retained"
+    },
+    {
+      "id": "O07",
+      "operation": "dashboard",
+      "keys": "dash.view",
+      "paths": [
+        "src/server/queries.ts",
+        "src/app/m/page.tsx"
+      ],
+      "entryPoints": "dashboard/loadManagerChrome",
+      "minimumContract": "bounded displayed aggregates; no bootstrap leakage"
+    },
+    {
+      "id": "O08",
+      "operation": "portfolio_lists",
+      "keys": "props.view",
+      "paths": [
+        "src/server/queries.ts",
+        "src/app/m/properties/page.tsx",
+        "src/app/m/units/page.tsx"
+      ],
+      "entryPoints": "listProperties/searchProperties/listSpaces/searchSpaces",
+      "minimumContract": "existing safe projection"
+    },
+    {
+      "id": "O09",
+      "operation": "portfolio_detail",
+      "keys": "props.view read / props.edit edit",
+      "paths": [
+        "src/server/queries.ts",
+        "src/app/m/properties/[id]/page.tsx"
+      ],
+      "entryPoints": "propertyDetail/propertyEditor/spaceEditor",
+      "minimumContract": "split financial/photo/edit subresults"
+    },
+    {
+      "id": "O10",
+      "operation": "property_create",
+      "keys": "props.edit + settings.edit for custom true",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/actions.ts",
+        "src/app/api/flows/[action]/route.ts"
+      ],
+      "entryPoints": "createProperty",
+      "minimumContract": "S4 false default; true admission before side effects"
+    },
+    {
+      "id": "O11",
+      "operation": "property_space_meter",
+      "keys": "props.edit",
+      "paths": [
+        "src/server/portfolio.ts",
+        "src/server/domain.ts",
+        "src/server/actions.ts"
+      ],
+      "entryPoints": "updateProperty/createSpace/updateSpace/setMeterSerial",
+      "minimumContract": "no implicit owner/privacy reset"
+    },
+    {
+      "id": "O12",
+      "operation": "owner_read",
+      "keys": "props.view",
+      "paths": [
+        "src/server/queries.ts",
+        "src/app/m/owners/page.tsx"
+      ],
+      "entryPoints": "listOwnerDirectory/ownerEditor/listOwners",
+      "minimumContract": "safe row; contact phone separate"
+    },
+    {
+      "id": "O13",
+      "operation": "owner_create",
+      "keys": "props.edit",
+      "paths": [
+        "src/server/portfolio.ts",
+        "src/server/actions.ts"
+      ],
+      "entryPoints": "createOwner/syncOwnerProperties",
+      "minimumContract": "required explicit propertyIds"
+    },
+    {
+      "id": "O14",
+      "operation": "owner_update",
+      "keys": "props.edit",
+      "paths": [
+        "src/server/portfolio.ts",
+        "src/server/actions.ts"
+      ],
+      "entryPoints": "updateOwner/syncOwnerProperties",
+      "minimumContract": "required propertyIds+link digest; preserve unchanged links"
+    },
+    {
+      "id": "O15",
+      "operation": "owner_phone",
+      "keys": "settings.edit explicit",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/auth.ts",
+        "src/server/auth-actions.ts"
+      ],
+      "entryPoints": "setOwnerPhoneVisibility/setOwnerPrivacy",
+      "minimumContract": "exact link/org/CAS; no cosmetic edit widening"
+    },
+    {
+      "id": "O16",
+      "operation": "portfolio_import",
+      "keys": "props.edit + leases.edit if actual lease",
+      "paths": [
+        "src/server/import-batch.ts",
+        "src/server/portfolio.ts",
+        "src/app/api/import/route.ts"
+      ],
+      "entryPoints": "dryRunImport/previewImport/commitImportBatch/seedPortfolio",
+      "minimumContract": "same source parser/atomic key conjunction"
+    },
+    {
+      "id": "O17",
+      "operation": "tenant_phone",
+      "keys": "props.view / tenants.contact",
+      "paths": [
+        "src/server/tenant-directory.ts",
+        "src/server/queries.ts"
+      ],
+      "entryPoints": "tenantDirectory/tenantDirectoryHistory/listTenants/leaseDetail",
+      "minimumContract": "effective phone CASE/search; no hidden phone or user/LINE payload"
+    },
+    {
+      "id": "O18",
+      "operation": "lease_read",
+      "keys": "props.view",
+      "paths": [
+        "src/server/queries.ts",
+        "src/app/m/leases/[id]/page.tsx"
+      ],
+      "entryPoints": "listLeases/searchLeases/leaseDetail",
+      "minimumContract": "safe metadata/signatures; separate financial/photo gates"
+    },
+    {
+      "id": "O19",
+      "operation": "lease_write",
+      "keys": "leases.edit",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/actions.ts",
+        "src/app/api/flows/[action]/route.ts"
+      ],
+      "entryPoints": "createLease/updateLease/createLeaseFromForm",
+      "minimumContract": "minimal selectors; exact existing terms/version/ancestry"
+    },
+    {
+      "id": "O20",
+      "operation": "lifecycle_rules",
+      "keys": "leases.edit",
+      "paths": [
+        "src/server/b002-move-out-actions.ts",
+        "src/server/deposit-rules-actions.ts",
+        "src/server/renewal-comparison.ts"
+      ],
+      "entryPoints": "actual move-out/deposit override/comparison",
+      "minimumContract": "no invented unfinished B012 writer"
+    },
+    {
+      "id": "O21",
+      "operation": "paper_sign_upload",
+      "keys": "leases.edit",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/paper-lease-versions.ts",
+        "src/server/actions.ts"
+      ],
+      "entryPoints": "signLease/uploadSignedLeasePdf/simulateTenantSignature",
+      "minimumContract": "same current staff audience/formal/sandbox"
+    },
+    {
+      "id": "O22",
+      "operation": "lease_pdf",
+      "keys": "props.view + exact file audience",
+      "paths": [
+        "src/server/pdf-download.ts",
+        "src/server/pdf-docs.ts",
+        "staff signed-PDF routes"
+      ],
+      "entryPoints": "leasePdfForSession/listPaperLeaseVersions",
+      "minimumContract": "reuse current renderer/version bytes, no new export reader"
+    },
+    {
+      "id": "O23",
+      "operation": "payment_action_read",
+      "keys": "pay.record selector; stmt.view financial list",
+      "paths": [
+        "src/server/queries.ts",
+        "src/app/m/payments/page.tsx"
+      ],
+      "entryPoints": "listPayments/payment target selectors",
+      "minimumContract": "write-only key no broad archive/raw journal"
+    },
+    {
+      "id": "O24",
+      "operation": "payment_record",
+      "keys": "pay.record",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/actions.ts",
+        "src/app/api/flows/[action]/route.ts"
+      ],
+      "entryPoints": "recordPayment",
+      "minimumContract": "unchanged allocation/posting/B010/B028"
+    },
+    {
+      "id": "O25",
+      "operation": "payment_confirm",
+      "keys": "pay.record",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/actions.ts",
+        "src/app/api/flows/[action]/route.ts"
+      ],
+      "entryPoints": "confirmPayment",
+      "minimumContract": "same source/locks/eligible state"
+    },
+    {
+      "id": "O26",
+      "operation": "payment_reject",
+      "keys": "pay.record",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/actions.ts",
+        "src/app/api/flows/[action]/route.ts"
+      ],
+      "entryPoints": "rejectPayment",
+      "minimumContract": "submitted-only explicit reason"
+    },
+    {
+      "id": "O27",
+      "operation": "payment_reverse",
+      "keys": "pay.reverse",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/auth-actions.ts",
+        "src/server/payment-center-events.ts"
+      ],
+      "entryPoints": "reversePayment/post_reversal payment path",
+      "minimumContract": "B018 separate reason unchanged; no arbitrary journal retarget"
+    },
+    {
+      "id": "O28",
+      "operation": "bank_read",
+      "keys": "bank.reconcile",
+      "paths": [
+        "src/server/bank-matching.ts",
+        "src/server/queries.ts",
+        "src/app/m/bank/page.tsx"
+      ],
+      "entryPoints": "bankMatchingEnabled/bankBoard/listMatches",
+      "minimumContract": "replace TS+owner SQL base ceilings; safe DTO"
+    },
+    {
+      "id": "O29",
+      "operation": "bank_import",
+      "keys": "bank.reconcile",
+      "paths": [
+        "src/server/bank-matching.ts",
+        "src/server/domain.ts",
+        "src/app/api/bank/matching/route.ts"
+      ],
+      "entryPoints": "importBankFile/importBankCsv",
+      "minimumContract": "same parser/dedupe/account/currency"
+    },
+    {
+      "id": "O30",
+      "operation": "bank_decision",
+      "keys": "bank.reconcile",
+      "paths": [
+        "src/server/bank-matching.ts",
+        "src/server/domain.ts",
+        "src/app/api/bank/matching/route.ts"
+      ],
+      "entryPoints": "decideBankMatch/approveMatch",
+      "minimumContract": "existing match-confirm composite, not general pay.record"
+    },
+    {
+      "id": "O31",
+      "operation": "statement_read",
+      "keys": "stmt.view",
+      "paths": [
+        "src/server/queries.ts",
+        "src/server/statement-preview.ts",
+        "src/app/m/statements/page.tsx"
+      ],
+      "entryPoints": "rentRoll/listStatements/statementDetail/statementPreview",
+      "minimumContract": "same safe math/DTO, no private raw sources"
+    },
+    {
+      "id": "O32",
+      "operation": "statement_generate",
+      "keys": "stmt.generate",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/actions.ts",
+        "src/app/m/statements/page.tsx"
+      ],
+      "entryPoints": "generateStatement",
+      "minimumContract": "command owner/month/preview only without stmt.view"
+    },
+    {
+      "id": "O33",
+      "operation": "statement_pdf",
+      "keys": "stmt.view + exact audience",
+      "paths": [
+        "src/server/pdf-download.ts",
+        "src/app/api/pdf/statements/[id]/route.ts"
+      ],
+      "entryPoints": "statementPdfForSession",
+      "minimumContract": "global staff-first, current renderer/privacy/audit"
+    },
+    {
+      "id": "O34",
+      "operation": "expenses",
+      "keys": "exp.add target / stmt.view full read",
+      "paths": [
+        "src/server/expenses.ts",
+        "src/server/actions.ts",
+        "src/app/m/expenses/page.tsx"
+      ],
+      "entryPoints": "expenseFormOptions/getExpense/createExpense/updateExpense/approveExpense/voidExpense",
+      "minimumContract": "safe receipt-name DTO despite native Accountant raw file fence"
+    },
+    {
+      "id": "O35",
+      "operation": "month_close",
+      "keys": "month.close",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/auth-actions.ts",
+        "src/app/m/close/page.tsx"
+      ],
+      "entryPoints": "closeMonth",
+      "minimumContract": "selected-month context only"
+    },
+    {
+      "id": "O36",
+      "operation": "owner_transfer",
+      "keys": "month.close existing B014 scope",
+      "paths": [
+        "src/server/owner-transfers.ts",
+        "src/server/owner-transfer-period-lock.ts"
+      ],
+      "entryPoints": "ownerTransferView/recordOwnerTransfer/reverseOwnerTransfer",
+      "minimumContract": "typed b014_owner_transfer_v1, no raw ledger/money movement"
+    },
+    {
+      "id": "O37",
+      "operation": "utilities",
+      "keys": "leases.edit writes / stmt.view read",
+      "paths": [
+        "src/server/utility-posting.ts",
+        "src/server/utility-reconciliation.ts",
+        "src/app/m/rent/utilities/page.tsx"
+      ],
+      "entryPoints": "prepareUtilityRun/confirmUtilityRun/voidUtilityRun/utilityReconciliation",
+      "minimumContract": "same original tenant/owner/math/rules/flags"
+    },
+    {
+      "id": "O38",
+      "operation": "ticket_text",
+      "keys": "tickets.update",
+      "paths": [
+        "src/server/repairs.ts",
+        "src/server/domain.ts",
+        "src/server/queries.ts",
+        "src/app/m/tickets/[id]/page.tsx"
+      ],
+      "entryPoints": "listTickets/ticketDetail/createTicket/updateTicket/saveRepairRecord/addTicketComment",
+      "minimumContract": "explicit repair workspace, photo subresult omitted for Accountant"
+    },
+    {
+      "id": "O39",
+      "operation": "ticket_expense",
+      "keys": "tickets.update AND exp.add",
+      "paths": [
+        "src/server/repairs.ts",
+        "src/server/vendor-repair.ts"
+      ],
+      "entryPoints": "saveRepairRecord postExpense/confirmVendorCost",
+      "minimumContract": "both keys; no photo/bearer inferred"
+    },
+    {
+      "id": "O40",
+      "operation": "staff_photo",
+      "keys": "tickets.update AND native!=accountant",
+      "paths": [
+        "src/server/ticket-photos.ts",
+        "src/server/repairs.ts",
+        "ticket photo API routes"
+      ],
+      "entryPoints": "prepareTicketPhotoUpload/confirmTicketPhoto/readRepairPhoto/openTicketPhoto",
+      "minimumContract": "assigned+unassigned floor; checked byte proxy"
+    },
+    {
+      "id": "O41",
+      "operation": "vendor_dispatch",
+      "keys": "tickets.update; native floor before mint",
+      "paths": [
+        "src/server/vendor-repair.ts",
+        "src/app/m/tickets/[id]/page.tsx"
+      ],
+      "entryPoints": "addVendor/dispatchVendor/revokeVendorJob/loadVendorDispatch",
+      "minimumContract": "text-only job view; no restricted mint/read/replay/attachment metadata"
+    },
+    {
+      "id": "O42",
+      "operation": "vendor_share",
+      "keys": "tickets.update AND native!=accountant",
+      "paths": [
+        "src/server/vendor-repair.ts"
+      ],
+      "entryPoints": "approveVendorSharing/loadVendorDispatch sharing",
+      "minimumContract": "separate explicit operation; text save never[]"
+    },
+    {
+      "id": "O43",
+      "operation": "vendor_bearer",
+      "keys": "genuine actual job token",
+      "paths": [
+        "src/server/vendor-repair.ts",
+        "vendor-job photo API routes"
+      ],
+      "entryPoints": "loadVendorJob/findVendorPhoto/streamVendorPhoto/openVendorPhoto",
+      "minimumContract": "both modes; old copied token retirement; current proxies"
+    },
+    {
+      "id": "O44",
+      "operation": "messages",
+      "keys": "messages.send",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/queries.ts",
+        "src/app/m/messages/page.tsx"
+      ],
+      "entryPoints": "listThreads/threadMessages/postMessage",
+      "minimumContract": "exact current in-app audience, no new file/export/send"
+    },
+    {
+      "id": "O45",
+      "operation": "property_csv",
+      "keys": "props.view enrolled",
+      "paths": [
+        "src/app/api/export/route.ts",
+        "src/app/m/properties/page.tsx"
+      ],
+      "entryPoints": "GET properties.csv",
+      "minimumContract": "exact six fields, direct URL parity, no data.export/new route"
+    },
+    {
+      "id": "O46",
+      "operation": "report_csv",
+      "keys": "reports.export",
+      "paths": [
+        "src/app/m/reports/export/route.ts",
+        "src/server/income-expense.ts"
+      ],
+      "entryPoints": "loadIncomeExpense/reportCsv",
+      "minimumContract": "same report/period fields only"
+    },
+    {
+      "id": "O47",
+      "operation": "settings",
+      "keys": "settings.edit; governance separate",
+      "paths": [
+        "src/server/auth.ts",
+        "src/server/mail-settings.ts",
+        "src/app/m/settings/page.tsx",
+        "src/app/m/notify/page.tsx"
+      ],
+      "entryPoints": "setRequireMfa/setOwnerPrivacy/saveOrgMailSettings",
+      "minimumContract": "fixed current settings tuple; no provider/flags/legal/B016 expansion"
+    }
+  ],
+  "operationBindings": [
+    {
+      "key": "dash.view",
+      "routes": [
+        "/m"
+      ],
+      "actualFunctions": [
+        "queries.dashboard",
+        "queries.counts",
+        "queries.loadManagerChrome"
+      ],
+      "rawObjects": [
+        "properties",
+        "units",
+        "rooms",
+        "leases",
+        "invoices",
+        "payments",
+        "maintenance_tickets"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "props.view",
+      "routes": [
+        "/m/properties",
+        "/m/units",
+        "/m/tenants",
+        "/m/leases",
+        "/m/owners",
+        "/m/archive",
+        "/api/pdf/leases/[id]",
+        "/m/leases/[id]/signed/[pdfId]"
+      ],
+      "actualFunctions": [
+        "queries.listProperties/searchProperties/propertyDetail/listOwners/listTenants/searchTenants/listLeases/searchLeases/leaseDetail/tenantDetail/listSpaces/searchSpaces",
+        "pdf-docs.canDownloadLeasePdf",
+        "pdf-download.leasePdfForSession",
+        "paper-lease-versions reads",
+        "record-archive.archiveView/archiveList"
+      ],
+      "rawObjects": [
+        "properties",
+        "property_owners",
+        "units",
+        "rooms",
+        "contacts",
+        "leases",
+        "lease_parties",
+        "lease_charges",
+        "listing_terms",
+        "lease_signatures",
+        "lease_signed_pdfs",
+        "files"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "props.edit",
+      "routes": [
+        "/m/properties/new",
+        "/m/properties/[id]/edit",
+        "/m/owners/[id]",
+        "/m/units/new",
+        "/m/units/room",
+        "/m/units/whole",
+        "/m/import",
+        "/api/import",
+        "/api/flows/createProperty"
+      ],
+      "actualFunctions": [
+        "domain.createProperty/setMeterSerial",
+        "portfolio.createOwner/updateOwner/updateProperty/createSpace/updateSpace/seedPortfolio",
+        "import-batch.dryRunImport/previewImport/commitImportBatch",
+        "record-archive.archiveCommand property/unit/room; owner archive is separate unfinished B015 scope"
+      ],
+      "rawObjects": [
+        "properties",
+        "property_owners",
+        "units",
+        "rooms",
+        "contacts",
+        "meters",
+        "listing_terms",
+        "import_jobs"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "leases.edit",
+      "routes": [
+        "/m/leases/new",
+        "/m/leases/[id] write actions",
+        "/m/rent/utilities",
+        "/api/flows/createLease",
+        "/api/flows/updateLease",
+        "lease signing/upload/simulation and B002 move-out handlers"
+      ],
+      "actualFunctions": [
+        "domain.createLease/updateLease/signLease/uploadSignedLeasePdf/simulateTenantSignature",
+        "deposit-rules-actions",
+        "b002-move-out-actions",
+        "renewal-comparison",
+        "actions.actionPrepareUtility/actionConfirmUtility/actionVoidUtility"
+      ],
+      "rawObjects": [
+        "leases",
+        "lease_parties",
+        "lease_charges",
+        "lease_signature_events",
+        "lease_signatures",
+        "invoices",
+        "invoice_lines",
+        "meter_readings",
+        "utility_bills",
+        "utility_allocation_runs",
+        "utility_allocation_lines"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "tenants.contact",
+      "routes": [
+        "/m/tenants",
+        "/m/leases/[id]",
+        "related ticket/contact selectors",
+        "/api/export/all filtered contacts"
+      ],
+      "actualFunctions": [
+        "queries.leaseDetail phone CASE",
+        "queries.listTenants/searchTenants/tenantDetail",
+        "owner_lease_tenants definer view",
+        "queries phone projections"
+      ],
+      "rawObjects": [
+        "contacts",
+        "listing_terms",
+        "profiles",
+        "owner_lease_tenants",
+        "tenant_lease_picker"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "pay.record",
+      "routes": [
+        "/m/payments",
+        "/api/flows/recordPayment",
+        "/api/flows/confirmPayment",
+        "/api/flows/rejectPayment"
+      ],
+      "actualFunctions": [
+        "domain.recordPayment/confirmPayment/rejectPayment",
+        "payment-center-events",
+        "payment-result-events",
+        "payment-request-status"
+      ],
+      "rawObjects": [
+        "payments",
+        "payment_allocations",
+        "invoices",
+        "invoice_lines",
+        "ledger_transactions",
+        "ledger_entries",
+        "app.b028_center_events / app.b028_center_recipients",
+        "app.b010_payment_commands / app.b010_source_events / app.b010_payment_contexts"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "pay.reverse",
+      "routes": [
+        "/m/payments reverse action",
+        "domain.reversePayment caller paths"
+      ],
+      "actualFunctions": [
+        "domain.reversePayment",
+        "public.post_reversal(two and three argument overloads)",
+        "payment-center-events reversal",
+        "payment-result-events reversal"
+      ],
+      "rawObjects": [
+        "payments",
+        "payment_allocations",
+        "ledger_transactions",
+        "ledger_entries",
+        "invoices",
+        "audit_log",
+        "B018 private public-reason companion if later installed"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "bank.reconcile",
+      "routes": [
+        "/m/bank",
+        "/api/bank/matching",
+        "/api/flows/importBankCsv",
+        "/api/flows/approveMatch"
+      ],
+      "actualFunctions": [
+        "bank-matching.authorize/bankMatchingEnabled/bankBoard/importBankFile/decideBankMatch",
+        "domain.importBankCsv/approveMatch",
+        "bank-match-basis"
+      ],
+      "rawObjects": [
+        "bank_accounts",
+        "bank_csv_mappings",
+        "bank_statement_imports",
+        "bank_transactions",
+        "bank_match_suggestions",
+        "payments",
+        "payment_allocations",
+        "ledger_transactions",
+        "ledger_entries",
+        "app.b009_file_imports",
+        "app.b009_decisions",
+        "files"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "stmt.view",
+      "routes": [
+        "/m/rent",
+        "/m/statements",
+        "/m/statements/preview",
+        "/api/pdf/statements/[id]"
+      ],
+      "actualFunctions": [
+        "queries.listStatements/statementRoster/rentRoll/statementDetail/statementPdfSource",
+        "statement-preview.statementPreview",
+        "utility-reconciliation",
+        "pdf-docs.canDownloadStatementPdf",
+        "pdf-download.statementPdfForSession"
+      ],
+      "rawObjects": [
+        "owner_statements",
+        "owner_statement_lines",
+        "invoices",
+        "payments",
+        "payment_allocations",
+        "expenses",
+        "management_agreements",
+        "fee_rules",
+        "ledger_entries"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "stmt.generate",
+      "routes": [
+        "/m/statements generate",
+        "/api/flows/generateStatement"
+      ],
+      "actualFunctions": [
+        "domain.generateStatement/linkStatementInvoices",
+        "statement-calculation.calculateStatement",
+        "statement-preview"
+      ],
+      "rawObjects": [
+        "owner_statements",
+        "owner_statement_lines",
+        "invoices",
+        "payments",
+        "payment_allocations",
+        "expenses",
+        "management_agreements",
+        "fee_rules"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "exp.add",
+      "routes": [
+        "/m/expenses",
+        "/m/statements expense form",
+        "/m/tickets/[id] expense subcommand"
+      ],
+      "actualFunctions": [
+        "expenses.expenseFormOptions/listExpenses/getExpense/createExpense/updateExpense/voidExpense/approveExpense/addExpense",
+        "repairs.saveRepairRecord",
+        "vendor-repair.confirmVendorCost"
+      ],
+      "rawObjects": [
+        "expenses",
+        "ledger_transactions",
+        "ledger_entries",
+        "maintenance_tickets",
+        "files"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "month.close",
+      "routes": [
+        "/m/close",
+        "/m/statements owner transfer actions"
+      ],
+      "actualFunctions": [
+        "domain.closeMonth",
+        "owner-transfers.ownerTransferView/recordOwnerTransfer/reverseOwnerTransfer",
+        "owner-transfer-period-lock"
+      ],
+      "rawObjects": [
+        "month_closes",
+        "ledger_transactions",
+        "ledger_entries",
+        "owner_statements",
+        "invoices",
+        "properties",
+        "property_owners",
+        "contacts"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "tickets.update",
+      "routes": [
+        "/m/tickets",
+        "/m/tickets/[id]",
+        "/api/flows/createTicket/updateTicket",
+        "/api/tickets/photos/sign/confirm/[id]",
+        "staff vendor-dispatch actions"
+      ],
+      "actualFunctions": [
+        "domain.createTicket/updateTicket",
+        "repairs.saveRepairRecord/addTicketComment/repairPhotoTarget/attachRepairPhoto/readRepairPhoto",
+        "ticket-photos.prepareTicketPhotoUpload/confirmTicketPhoto/openTicketPhoto/signTicketPhotoUrls",
+        "vendor-repair.addVendor/dispatchVendor/revokeVendorJob/approveVendorSharing/confirmVendorCost",
+        "vendor-onboarding staff paths"
+      ],
+      "rawObjects": [
+        "maintenance_tickets",
+        "ticket_comments",
+        "ticket_attachments",
+        "files",
+        "expenses",
+        "repair_vendor_jobs",
+        "repair vendor sharing/onboarding private objects (exact manifest required)"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "messages.send",
+      "routes": [
+        "/m/messages",
+        "/api/flows/postMessage"
+      ],
+      "actualFunctions": [
+        "queries.listThreads/threadMessages",
+        "domain.postMessage",
+        "message attachment readers"
+      ],
+      "rawObjects": [
+        "message_threads",
+        "thread_participants",
+        "messages",
+        "message_attachments",
+        "files"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "reports.export",
+      "routes": [
+        "/m/reports",
+        "/m/reports/export"
+      ],
+      "actualFunctions": [
+        "income-expense.loadIncomeExpense/reportCsv",
+        "src/app/m/reports/export/route.ts"
+      ],
+      "rawObjects": [
+        "properties",
+        "property_owners",
+        "contacts",
+        "payments",
+        "payment_allocations",
+        "expenses",
+        "ledger_transactions",
+        "ledger_entries",
+        "owner_statements"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "team.manage",
+      "routes": [
+        "/m/team",
+        "/m/roles assignment/editor only for baseAdmin",
+        "team invitation/member actions"
+      ],
+      "actualFunctions": [
+        "auth.inviteMember/resendInvite/revokeInvite/setMemberRole/setMemberActive/acceptTeamInvite",
+        "auth-actions",
+        "domain.inviteTeammate",
+        "queries.listTeam"
+      ],
+      "rawObjects": [
+        "org_members",
+        "invitations",
+        "auth_sessions",
+        "app.b017_roles",
+        "app.b017_assignments",
+        "app.b017_commands",
+        "app.b017_org_state"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "settings.edit",
+      "routes": [
+        "/m/settings",
+        "/m/notify",
+        "/m/roles existing owner privacy form",
+        "current org settings portions of /m/account"
+      ],
+      "actualFunctions": [
+        "auth.setRequireMfa/setOwnerPrivacy",
+        "domain.setOwnerPhoneVisibility",
+        "mail-settings.saveOrgMailSettings",
+        "settings/edit guards on current account view"
+      ],
+      "rawObjects": [
+        "organizations",
+        "jurisdiction_rules org overrides",
+        "reminder_rules",
+        "mail_preferences/settings private objects",
+        "property_owners"
+      ],
+      "state": "SUPPORTED_V1_FULL_CROSS_BASE"
+    },
+    {
+      "key": "data.export",
+      "routes": [
+        "existing /api/export properties.csv",
+        "proposed /api/export/all"
+      ],
+      "actualFunctions": [
+        "src/app/api/export/route.ts currently staff+consent only",
+        "queries.listProperties",
+        "No actual full-data export consumer exists in current source"
+      ],
+      "rawObjects": [
+        "all explicit authorized domain projection collections; files only via reauthorized per-file reader"
+      ],
+      "state": "UNSUPPORTED_UNASSIGNABLE_V1"
+    }
+  ],
+  "reusedActualInputSchemas": [
+    {
+      "name": "PropertyInput",
+      "source": "src/server/domain.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "export type PropertyInput = {\n  name: string;\n  city: string;\n  district: string;\n  street: string;\n  currency: \"TWD\" | \"USD\";\n  ownerMode: \"new\" | string;\n  ownerName: string;\n  ownerPhone: string;\n  ownerEmail: string;\n  canViewTenantPhone: boolean;\n  unitLabel: string;\n  floor: string;\n  doorSupplement?: string;\n  rentalMode: \"whole_unit\" | \"by_room\";\n  rooms: { label: string; roomType: string; baseRentMajor: number }[];\n  extraUnits?: { label: string; floor: string; door: string; rooms: { label: string; roomType: string; baseRentMajor: number }[] }[];\n  electric?: {\n    split: \"even\" | \"sub\" | \"owner\" | \"reading\" | \"days\";\n    rateMajor: number | null;\n    openings: (number | null)[];\n  } | null;\n  submitToken?: string;\n};",
+      "sha256": "f9ba84641f686463a5d03aa551b32772adb22d3b1b14996bf2ad312b7361dd97"
+    },
+    {
+      "name": "LeaseInput",
+      "source": "src/server/domain.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "export type LeaseInput = {\n  roomId: string;\n  tenantName: string;\n  tenantPhone: string;\n  tenantEmail: string;\n  /** Empty or \"new\" creates a contact. A contact id reuses that \u79df\u5ba2 in this firm. */\n  tenantContactId?: string;\n  lineUserId: string;\n  startDate: string;\n  endDate: string;\n  rentMajor: number | string | null;\n  depositMonths: number | string | null;\n  depositReason: string;\n  dueDay: number | null;\n  splitMethod: \"even\" | \"days_occupied\" | \"sub_meter\";\n  periodStart: string;\n  periodEnd: string;\n  billTotalMajor: number | null;\n  usageKwh: number | null;\n  rateMajor: number | null;\n  rateSource: \"fixed_rate\" | \"bill_average\";\n  overrideReason: string;\n  subUsages: { roomId: string; kwh: number }[];\n  /** Client UUID for this create attempt. A retry with the same key returns the first lease. */\n  idempotencyKey?: string | null;\n  /** Absent for legacy clients; an explicit choice opts into the captured basis. */\n  firstPeriodProrate?: boolean;\n};",
+      "sha256": "872dbe3d07b12682507c800bea2a413061a57e3fd58d9f127322a20ecd705882"
+    },
+    {
+      "name": "SignLeaseInput",
+      "source": "src/server/domain.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "type SignLeaseInput = { leaseId: string; signedName: string; consent: boolean };",
+      "sha256": "a1808b87f355e44be8820594deadda26c48a062682d1c1b288b7c791a0bac5c9"
+    },
+    {
+      "name": "SpaceInput",
+      "source": "src/server/portfolio.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "export type SpaceInput = {\n  propertyId: string;\n  ownerContactId: string;\n  kind: string;\n  floor: string;\n  roomLabel: string;\n  roomType: string;\n  area: number | null;\n  rentMajor: number;\n  electricityMethod: string;\n  ratePerKwh: number | null;\n  rateCapReason: string;\n  taipowerKwh: number | null;\n  taipowerAmountMajor: number | null;\n  notes: string;\n};",
+      "sha256": "9cbbdf94ad3a12ea45b614ab04c3b59c3b05ab73d99282914d905e8de443123d"
+    },
+    {
+      "name": "PropertyElectricityInput",
+      "source": "src/server/portfolio.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "export type PropertyElectricityInput = {\n  serial: string;\n  split: string;\n  bill: string;\n  usage: string;\n  rate: string;\n};",
+      "sha256": "12505eee8d8c0202f2f34c38b9e5bdc91fc643494236ba210068c56dff162f41"
+    },
+    {
+      "name": "RepairInput",
+      "source": "src/server/repairs.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "export type RepairInput = {\n  status: string;\n  note: string;\n  internal: boolean;\n  vendorName: string;\n  estimated: string;\n  finalCost: string;\n  costBearer: string;\n  scheduledOn: string;\n  completedOn: string;\n  postExpense: boolean;\n};",
+      "sha256": "f66d2577a79aa1b57aa8d5ae4fa5ef2a1604d942153b403f9803a3fc75020aea"
+    },
+    {
+      "name": "ExpenseDraft",
+      "source": "src/server/expenses.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "export type ExpenseDraft = {\n  propertyId: string;\n  unitId?: string;\n  category: string;\n  /** Already integer cents, for callers that did not start from form text. */\n  amountCents?: number;\n  /** Form text. Parsed to cents inside normalizeExpense. */\n  amountText?: string;\n  incurredOn?: string;\n  vendorName?: string;\n  description?: string;\n  receiptName?: string;\n};",
+      "sha256": "77875232e64ebc2f8020143f04e939a347f48a6b8c744bc53d82080217e3bd65"
+    },
+    {
+      "name": "TransferInput",
+      "source": "src/server/owner-transfer-input.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "export type TransferInput = { requestId: string; propertyId: string; ownerId: string; effectiveDate: string; amount: string; reference: string; expectedCurrency: string; expectedMinorUnit: number };",
+      "sha256": "da2efce426ef835bff64d364364e916c1a24c62ee6df3c5ad322a5a1573ac97c"
+    },
+    {
+      "name": "ReverseInput",
+      "source": "src/server/owner-transfer-input.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "export type ReverseInput = { requestId: string; originalId: string; effectiveDate: string; reason: string };",
+      "sha256": "163fbc9aa8027f09e5dd5990c92ada3ab257d43ea9f94bf67b906d48c3719651"
+    },
+    {
+      "name": "OwnerTransferScope",
+      "source": "src/server/owner-transfer-input.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "sourceExcerpt": "export type OwnerTransferScope={userId:string;orgId:string;liveOrgId:string;environment:\"live\"|\"sandbox\"};",
+      "sha256": "184a9e5a71476eeabf59d07f82dd5633a69c6dc74280a9d1bc1b755b1d6718a0"
+    }
+  ],
+  "sourcePins": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/perms.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "626c89472406558eaac053d952de2c4136c607dd",
+      "baselineSha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9",
+      "headMatchesB8": true,
+      "workingSha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/db.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+      "baselineSha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "headMatchesB8": true,
+      "workingSha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/session.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "4193fd22d30e558fb7a6620d70951121673ba0d0",
+      "baselineSha256": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+      "headMatchesB8": true,
+      "workingSha256": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/org-scope.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+      "baselineSha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427",
+      "headMatchesB8": true,
+      "workingSha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/auth.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "9a2f2a3a08a215b4e503350c5a3ede0fa1ac081e",
+      "baselineSha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+      "headMatchesB8": true,
+      "workingSha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/queries.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "bb40a5b03f5a1fea2c17bfc55682cec885c07ce2",
+      "baselineSha256": "690781b8fd3e2e858925b53ee26427669230ee2f68b7383575d60d5c066ba679",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "690781b8fd3e2e858925b53ee26427669230ee2f68b7383575d60d5c066ba679",
+      "headMatchesB8": true,
+      "workingSha256": "690781b8fd3e2e858925b53ee26427669230ee2f68b7383575d60d5c066ba679",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/domain.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "35bc6ac992368da7af34e8d70e62ee6e706b6766",
+      "baselineSha256": "6a48d9373f922827a66e0f1a057559b8f4dd39e15f33be9fd835d9d323bc85e0",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "6a48d9373f922827a66e0f1a057559b8f4dd39e15f33be9fd835d9d323bc85e0",
+      "headMatchesB8": true,
+      "workingSha256": "6a48d9373f922827a66e0f1a057559b8f4dd39e15f33be9fd835d9d323bc85e0",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/portfolio.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "453b1be3086777d9ecb6bdcace368ee1b5456219",
+      "baselineSha256": "9913602298e87a39b8087677af18a28fb17e028fc76ea4f217115d2a2ab7365a",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "9913602298e87a39b8087677af18a28fb17e028fc76ea4f217115d2a2ab7365a",
+      "headMatchesB8": true,
+      "workingSha256": "9913602298e87a39b8087677af18a28fb17e028fc76ea4f217115d2a2ab7365a",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/import-batch.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "1d2c2e7842ad00f326c1de1ddf14fdf6fd9320b0",
+      "baselineSha256": "8138202415bbd5ddc35a1e0e8f7fb39499b33811a7411ed0810069823f83c273",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "8138202415bbd5ddc35a1e0e8f7fb39499b33811a7411ed0810069823f83c273",
+      "headMatchesB8": true,
+      "workingSha256": "8138202415bbd5ddc35a1e0e8f7fb39499b33811a7411ed0810069823f83c273",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/repairs.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "1d4bab2a19d7a59f3b98b6bcb991b9e870478cd9",
+      "baselineSha256": "2e3268ed30efd445c3e56337ee0658cfffe9064e2eda5b950f1411a109a2af5d",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "2e3268ed30efd445c3e56337ee0658cfffe9064e2eda5b950f1411a109a2af5d",
+      "headMatchesB8": true,
+      "workingSha256": "2e3268ed30efd445c3e56337ee0658cfffe9064e2eda5b950f1411a109a2af5d",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/ticket-photos.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "e3250706f0e6c793f045b847063298bd3da20f1c",
+      "baselineSha256": "788003d90bf7b9f3bb9966a78fe199be9f124e10722b9587e80300f3174b18ac",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "788003d90bf7b9f3bb9966a78fe199be9f124e10722b9587e80300f3174b18ac",
+      "headMatchesB8": true,
+      "workingSha256": "788003d90bf7b9f3bb9966a78fe199be9f124e10722b9587e80300f3174b18ac",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/bank-matching.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "8f44e4265cb8767124d27e3059706751c67e7b1e",
+      "baselineSha256": "1059c04d62365c9e3959248522bf1d066ff8e0fb5d91dc4b7173a71f74fdc35e",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "1059c04d62365c9e3959248522bf1d066ff8e0fb5d91dc4b7173a71f74fdc35e",
+      "headMatchesB8": true,
+      "workingSha256": "1059c04d62365c9e3959248522bf1d066ff8e0fb5d91dc4b7173a71f74fdc35e",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/expenses.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "1a15f7255bde0740c10e2513aeb836f51f0e0639",
+      "baselineSha256": "cc8499e4871222a9c218663910b565a1540a59d3ae1d387a5057281537f22fd0",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "cc8499e4871222a9c218663910b565a1540a59d3ae1d387a5057281537f22fd0",
+      "headMatchesB8": true,
+      "workingSha256": "cc8499e4871222a9c218663910b565a1540a59d3ae1d387a5057281537f22fd0",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/statement-preview.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "fdf2316f38514766b84508193c29b52b039e7406",
+      "baselineSha256": "e311b6adb9b1931057768110cdc321401dd108ce6b0c9d2bce9cb26757813090",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "e311b6adb9b1931057768110cdc321401dd108ce6b0c9d2bce9cb26757813090",
+      "headMatchesB8": true,
+      "workingSha256": "e311b6adb9b1931057768110cdc321401dd108ce6b0c9d2bce9cb26757813090",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/pdf-docs.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "58750ab915cf674633164f8f5e5a0a0e877b8ff9",
+      "baselineSha256": "312c4163b356d144c6e62da23600d006fdb79daaa7493cbe93d0665e02bb097e",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "312c4163b356d144c6e62da23600d006fdb79daaa7493cbe93d0665e02bb097e",
+      "headMatchesB8": true,
+      "workingSha256": "312c4163b356d144c6e62da23600d006fdb79daaa7493cbe93d0665e02bb097e",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/pdf-download.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "e1c327653ffbecf88c3164b19a49d0f89fda1191",
+      "baselineSha256": "8d4d1dbfa4e7a2403da172ffc29c1bfd37cbdbf8b6b743ae296dc8a3dccd3f9d",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "8d4d1dbfa4e7a2403da172ffc29c1bfd37cbdbf8b6b743ae296dc8a3dccd3f9d",
+      "headMatchesB8": true,
+      "workingSha256": "8d4d1dbfa4e7a2403da172ffc29c1bfd37cbdbf8b6b743ae296dc8a3dccd3f9d",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/owner-transfers.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "4d8ba2a8be4dd754a7911e04b8634164fc20f78a",
+      "baselineSha256": "0eef8ff3b7951d350a0d19e5b66d399f0f40cf026ecec163038fde65b39b86bc",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "0eef8ff3b7951d350a0d19e5b66d399f0f40cf026ecec163038fde65b39b86bc",
+      "headMatchesB8": true,
+      "workingSha256": "0eef8ff3b7951d350a0d19e5b66d399f0f40cf026ecec163038fde65b39b86bc",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/vendor-repair.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "4a18311f490abb51446dc21f955cc372d65f4f4b",
+      "baselineSha256": "28f2914dfd4e367d9e3c4baf46ef79d10159b147a9d4caaac16f829153480864",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "28f2914dfd4e367d9e3c4baf46ef79d10159b147a9d4caaac16f829153480864",
+      "headMatchesB8": true,
+      "workingSha256": "28f2914dfd4e367d9e3c4baf46ef79d10159b147a9d4caaac16f829153480864",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/audit-read.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "bb26f44f927f116bd4a087ab7c7e8d1c7bba01b8",
+      "baselineSha256": "5f637b887f6efd121af7a0d9388210683181e9000ee6c5edf004808abf32f167",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "5f637b887f6efd121af7a0d9388210683181e9000ee6c5edf004808abf32f167",
+      "headMatchesB8": true,
+      "workingSha256": "5f637b887f6efd121af7a0d9388210683181e9000ee6c5edf004808abf32f167",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/mail-settings.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "2c0e85302cc0a67708366dbd2c63e91a69e36d56",
+      "baselineSha256": "8a219f0348f2aa4f52b2514c0e6879ce007f20ce244ea2419ee00e1a90a6822e",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "8a219f0348f2aa4f52b2514c0e6879ce007f20ce244ea2419ee00e1a90a6822e",
+      "headMatchesB8": true,
+      "workingSha256": "8a219f0348f2aa4f52b2514c0e6879ce007f20ce244ea2419ee00e1a90a6822e",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/actions.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "127a116bb2cad512d3551c061ab9e5160fa37845",
+      "baselineSha256": "1a1080014065d2e47bbef6dd0af46d34a33720957b9e6b136dadeda3889b887b",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "1a1080014065d2e47bbef6dd0af46d34a33720957b9e6b136dadeda3889b887b",
+      "headMatchesB8": true,
+      "workingSha256": "1a1080014065d2e47bbef6dd0af46d34a33720957b9e6b136dadeda3889b887b",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/layout.tsx",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "ccb24258c06b15d36959dc69abd328e258137b50",
+      "baselineSha256": "51243cea4b3c4342b2d541698202c578bec9ce6a8b7ebae9505bd664783c3863",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "51243cea4b3c4342b2d541698202c578bec9ce6a8b7ebae9505bd664783c3863",
+      "headMatchesB8": true,
+      "workingSha256": "51243cea4b3c4342b2d541698202c578bec9ce6a8b7ebae9505bd664783c3863",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/roles/page.tsx",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "ca61562f99a5c3cd24352584e0bc451f28d8f3f6",
+      "baselineSha256": "df07a860fb668aa6cd3f523059e2f6b08a0f06f42a2787077e05919137823451",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "df07a860fb668aa6cd3f523059e2f6b08a0f06f42a2787077e05919137823451",
+      "headMatchesB8": true,
+      "workingSha256": "df07a860fb668aa6cd3f523059e2f6b08a0f06f42a2787077e05919137823451",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/api/export/route.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "1704c4ea972c8baef612936d8a7fae5ecb9ba2df",
+      "baselineSha256": "dd5de4dddf1da0e4336d6907f3ef78ed9903448dbdad913a5f18a86894e93e5f",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "dd5de4dddf1da0e4336d6907f3ef78ed9903448dbdad913a5f18a86894e93e5f",
+      "headMatchesB8": true,
+      "workingSha256": "dd5de4dddf1da0e4336d6907f3ef78ed9903448dbdad913a5f18a86894e93e5f",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/reports/export/route.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "bdc2521cd5fa60cb4a008b1d774b18981ab6de01",
+      "baselineSha256": "8b8419893545c51977f8ddf3ac3818179a674fd27e1c21734c0171d13d3e4d47",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "8b8419893545c51977f8ddf3ac3818179a674fd27e1c21734c0171d13d3e4d47",
+      "headMatchesB8": true,
+      "workingSha256": "8b8419893545c51977f8ddf3ac3818179a674fd27e1c21734c0171d13d3e4d47",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/api/flows/[action]/route.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "ca7ae0de016f21fe18e62b0cc0ddec32ff7c6218",
+      "baselineSha256": "6d53c2b6895fe0c3333abdf1ebaeed7c602a25788c45555e42cb103ed5e7783c",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "6d53c2b6895fe0c3333abdf1ebaeed7c602a25788c45555e42cb103ed5e7783c",
+      "headMatchesB8": true,
+      "workingSha256": "6d53c2b6895fe0c3333abdf1ebaeed7c602a25788c45555e42cb103ed5e7783c",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/i18n/en.json",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+      "baselineSha256": "7a6009146be8e153f20b687ca8545d75a266124f4a6814bc22305b6e9f500b5b",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "7a6009146be8e153f20b687ca8545d75a266124f4a6814bc22305b6e9f500b5b",
+      "headMatchesB8": true,
+      "workingSha256": "7a6009146be8e153f20b687ca8545d75a266124f4a6814bc22305b6e9f500b5b",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/i18n/zh-TW.json",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "6270729f648586a7443c15e6bb7f174c3ef61563",
+      "baselineSha256": "25636c3ef5f0bd7ba695d067e7661fa25ed2d7b02a0e9bd887236c7b0233b8a8",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "25636c3ef5f0bd7ba695d067e7661fa25ed2d7b02a0e9bd887236c7b0233b8a8",
+      "headMatchesB8": true,
+      "workingSha256": "25636c3ef5f0bd7ba695d067e7661fa25ed2d7b02a0e9bd887236c7b0233b8a8",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261018120000_schema.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+      "baselineSha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "headMatchesB8": true,
+      "workingSha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261020120000_auth.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+      "baselineSha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81",
+      "headMatchesB8": true,
+      "workingSha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261020140000_audit_access.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "f0802260e45c39c013af74c9e0e14e01e1b79316",
+      "baselineSha256": "6f9909c6e9a4fbea6a8c3c58485b7d1336a93d61af485dd0766b033add43f5b6",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "6f9909c6e9a4fbea6a8c3c58485b7d1336a93d61af485dd0766b033add43f5b6",
+      "headMatchesB8": true,
+      "workingSha256": "6f9909c6e9a4fbea6a8c3c58485b7d1336a93d61af485dd0766b033add43f5b6",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261021120000_portfolio.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "2291d93a3e3b4240282f9c929b7d894b8c778811",
+      "baselineSha256": "1c8f88874cd3b992dfd950f75137af7754609609ac09e3bf613031db74465679",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "1c8f88874cd3b992dfd950f75137af7754609609ac09e3bf613031db74465679",
+      "headMatchesB8": true,
+      "workingSha256": "1c8f88874cd3b992dfd950f75137af7754609609ac09e3bf613031db74465679",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261023150000_repair_records.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "f9a845fecd09adc7e2b21ad98da3f4d7767c45fd",
+      "baselineSha256": "da735e1674d4b2c3c5998e80b12d0d9b9abf54a52b75d5a70da8b33beb620b17",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "da735e1674d4b2c3c5998e80b12d0d9b9abf54a52b75d5a70da8b33beb620b17",
+      "headMatchesB8": true,
+      "workingSha256": "da735e1674d4b2c3c5998e80b12d0d9b9abf54a52b75d5a70da8b33beb620b17",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261031100202_b003_payee_gateway.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "1938d1d8a65fb6fe8ace288a3e7a3f133a573552",
+      "baselineSha256": "1f929fe9c71e317ce044127c6cd6b25daa28f591a754ab297e0d7a7fe60be856",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "1f929fe9c71e317ce044127c6cd6b25daa28f591a754ab297e0d7a7fe60be856",
+      "headMatchesB8": true,
+      "workingSha256": "1f929fe9c71e317ce044127c6cd6b25daa28f591a754ab297e0d7a7fe60be856",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/specs/B-017.md",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "83a7ec091da5e9834b0b5b41639c35defd772f71",
+      "baselineSha256": "04b1bbef926713e9e442444f03b44b7c0b2d65da14f9dc763bd003e02bcf2006",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "04b1bbef926713e9e442444f03b44b7c0b2d65da14f9dc763bd003e02bcf2006",
+      "headMatchesB8": true,
+      "workingSha256": "04b1bbef926713e9e442444f03b44b7c0b2d65da14f9dc763bd003e02bcf2006",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-017/status.md",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "74a1a679be365dcdda1ea4d5218f1f3f50564942",
+      "baselineSha256": "9c7fb23859b54a32daaeb428387e30b3e3239787d5e5076bb80a349cb1c20168",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "f50dd7f8d019f4429adf6606a703d5ca99de38cf942392caf343dbc046269a3b",
+      "headMatchesB8": false,
+      "workingSha256": "f50dd7f8d019f4429adf6606a703d5ca99de38cf942392caf343dbc046269a3b",
+      "workingMatchesB8": false
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-017/verdict.md",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "78c11c4890647efd27cfc8102db62ed905f9cff1",
+      "baselineSha256": "dbecdffe703b31bfc197e022abdd730b0a5121d460327efb11e50ef45468dc21",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "dbecdffe703b31bfc197e022abdd730b0a5121d460327efb11e50ef45468dc21",
+      "headMatchesB8": true,
+      "workingSha256": "dbecdffe703b31bfc197e022abdd730b0a5121d460327efb11e50ef45468dc21",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/tenant-directory.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "d5673da799f903b9a04f8914a1cb387079010672",
+      "baselineSha256": "a249aa72e4a087bd309f1487e96afc7d0a5dfe0a43504eaa6f9230ddb33d22c3",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "a249aa72e4a087bd309f1487e96afc7d0a5dfe0a43504eaa6f9230ddb33d22c3",
+      "headMatchesB8": true,
+      "workingSha256": "a249aa72e4a087bd309f1487e96afc7d0a5dfe0a43504eaa6f9230ddb33d22c3",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/tenant-lease-history.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "d704e7d3c5632b736160e68f7de3d97d75186c39",
+      "baselineSha256": "792e724bf14c7d56619c984b8a95332965add68418348ecf25507f02bcd1f7b7",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "792e724bf14c7d56619c984b8a95332965add68418348ecf25507f02bcd1f7b7",
+      "headMatchesB8": true,
+      "workingSha256": "792e724bf14c7d56619c984b8a95332965add68418348ecf25507f02bcd1f7b7",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/portal-role.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "1cfb243db89e7e4258a54fb1bc65f72deac066fc",
+      "baselineSha256": "9e6970f2ff20d95545d11924c46fd9c2c61464bba1b44821d648b1bcc362a32e",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "9e6970f2ff20d95545d11924c46fd9c2c61464bba1b44821d648b1bcc362a32e",
+      "headMatchesB8": true,
+      "workingSha256": "9e6970f2ff20d95545d11924c46fd9c2c61464bba1b44821d648b1bcc362a32e",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/notification-center.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "698ab84d041a40a27d951c8e00b56b2f7afba791",
+      "baselineSha256": "0a754544a8ec9fcd10fc336609ddaeff939c22a2a535555151a13327444bbdba",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "0a754544a8ec9fcd10fc336609ddaeff939c22a2a535555151a13327444bbdba",
+      "headMatchesB8": true,
+      "workingSha256": "0a754544a8ec9fcd10fc336609ddaeff939c22a2a535555151a13327444bbdba",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/utility-reconciliation.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "b96533499c6f29155a70785461ba020e56588176",
+      "baselineSha256": "29b490bef69f2b2762dd08d75f098c1916bc34e9fcbad3a0d6a2ea6abcfc86e9",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "29b490bef69f2b2762dd08d75f098c1916bc34e9fcbad3a0d6a2ea6abcfc86e9",
+      "headMatchesB8": true,
+      "workingSha256": "29b490bef69f2b2762dd08d75f098c1916bc34e9fcbad3a0d6a2ea6abcfc86e9",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/billing-preview-authority.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "654640a49da53d9fdc0728ad7a92c6951e801e1c",
+      "baselineSha256": "b9601f404105f148e994665b5b108a76d35b5d7dbd29f5855936582fc035c016",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "b9601f404105f148e994665b5b108a76d35b5d7dbd29f5855936582fc035c016",
+      "headMatchesB8": true,
+      "workingSha256": "b9601f404105f148e994665b5b108a76d35b5d7dbd29f5855936582fc035c016",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/paper-lease-versions.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "8f7b05da8f78b5cfb2e099138fdc0081adea7250",
+      "baselineSha256": "c20a51a8e90e803379d1099ff1faabf852b68a37f8003c9ca881ab2c6be55571",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "c20a51a8e90e803379d1099ff1faabf852b68a37f8003c9ca881ab2c6be55571",
+      "headMatchesB8": true,
+      "workingSha256": "c20a51a8e90e803379d1099ff1faabf852b68a37f8003c9ca881ab2c6be55571",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/income-expense.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "b7cb60ac2e9152d205ef461e7e035dd902cfe244",
+      "baselineSha256": "daba76195902527f8cab29855bbaff0abf65045437ca9f47fa23e6f7aaae2a6b",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "daba76195902527f8cab29855bbaff0abf65045437ca9f47fa23e6f7aaae2a6b",
+      "headMatchesB8": true,
+      "workingSha256": "daba76195902527f8cab29855bbaff0abf65045437ca9f47fa23e6f7aaae2a6b",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/official-lease.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "bb1761eff7cfdb6f927d7b952948cd74828cd600",
+      "baselineSha256": "6de9a132226ccc6bfd58d14d1a86a007690d01e6ad1ad3e52ef87a511c70262f",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "6de9a132226ccc6bfd58d14d1a86a007690d01e6ad1ad3e52ef87a511c70262f",
+      "headMatchesB8": true,
+      "workingSha256": "6de9a132226ccc6bfd58d14d1a86a007690d01e6ad1ad3e52ef87a511c70262f",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/close/page.tsx",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "80da2135c91983b5c96257495fcc3499875586e9",
+      "baselineSha256": "e21a495e94ef49b46832dd4e5af06c2348a7cd104b2f0c504f28c38a115eeca9",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "e21a495e94ef49b46832dd4e5af06c2348a7cd104b2f0c504f28c38a115eeca9",
+      "headMatchesB8": true,
+      "workingSha256": "e21a495e94ef49b46832dd4e5af06c2348a7cd104b2f0c504f28c38a115eeca9",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/consent.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+      "baselineSha256": "8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6",
+      "headMatchesB8": true,
+      "workingSha256": "8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/partner-consent.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "bce24c570ce958cca91b6813d615fb97a8bc924b",
+      "baselineSha256": "f37b3eac0212c684dbe53b272bd3c791b16fcf058d2b9026d5e51923777b411f",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "f37b3eac0212c684dbe53b272bd3c791b16fcf058d2b9026d5e51923777b411f",
+      "headMatchesB8": true,
+      "workingSha256": "f37b3eac0212c684dbe53b272bd3c791b16fcf058d2b9026d5e51923777b411f",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/record-archive.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "7e2a5799b3d134be1cbeb875d32c35e937624af3",
+      "baselineSha256": "b3f1b9356332843e19d371cbd0168b43781f2f24c3d4a3991b1869c5c8b9e161",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "b3f1b9356332843e19d371cbd0168b43781f2f24c3d4a3991b1869c5c8b9e161",
+      "headMatchesB8": true,
+      "workingSha256": "b3f1b9356332843e19d371cbd0168b43781f2f24c3d4a3991b1869c5c8b9e161",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/utility-posting.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "13eb56e6407e7ec741e7dab559f41593aff31469",
+      "baselineSha256": "745cfd9b604e73947c653eb73fb7864112497049669260b9e3c321b541a36ae0",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "745cfd9b604e73947c653eb73fb7864112497049669260b9e3c321b541a36ae0",
+      "headMatchesB8": true,
+      "workingSha256": "745cfd9b604e73947c653eb73fb7864112497049669260b9e3c321b541a36ae0",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/owner-transfer-input.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "3ae25aa8ecca17dcd6140878e3f075ef0a669dc2",
+      "baselineSha256": "19cded6330af69e626d74c66ddfb85a31a2ad8bc918630f43944f714918bcdb9",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "19cded6330af69e626d74c66ddfb85a31a2ad8bc918630f43944f714918bcdb9",
+      "headMatchesB8": true,
+      "workingSha256": "19cded6330af69e626d74c66ddfb85a31a2ad8bc918630f43944f714918bcdb9",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261030150200_vendor_repair.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "43d2690d330a89d4d8f64b80a63c1e376726a306",
+      "baselineSha256": "cd3a324a64dd8d401b1a7bcaaa42b4e68154e7fc7188e14d8ff83a8972fdb7e5",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "cd3a324a64dd8d401b1a7bcaaa42b4e68154e7fc7188e14d8ff83a8972fdb7e5",
+      "headMatchesB8": true,
+      "workingSha256": "cd3a324a64dd8d401b1a7bcaaa42b4e68154e7fc7188e14d8ff83a8972fdb7e5",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261030150300_repair_owner_visibility.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "1d41a7de31956269be2ba2a7ba05ba94b00f20fa",
+      "baselineSha256": "daa530894acd443000dc37ee7b7c5f52542b2664aaf49a95271a3d47c633cb0e",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "daa530894acd443000dc37ee7b7c5f52542b2664aaf49a95271a3d47c633cb0e",
+      "headMatchesB8": true,
+      "workingSha256": "daa530894acd443000dc37ee7b7c5f52542b2664aaf49a95271a3d47c633cb0e",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261030150700_vendor_link_sharing_approval.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "8e7071b2f10484c0b6251f453b95511f14f8780e",
+      "baselineSha256": "cdd64597a75bf2693541de3bde38577f083487d7e3c01f21e984e6fcf1505b40",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "cdd64597a75bf2693541de3bde38577f083487d7e3c01f21e984e6fcf1505b40",
+      "headMatchesB8": true,
+      "workingSha256": "cdd64597a75bf2693541de3bde38577f083487d7e3c01f21e984e6fcf1505b40",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261029130000_id_no_direct_mutate.sql",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "d0dac4bb4559f1c0158d6a92ef3a1725d9fda4ba",
+      "baselineSha256": "549e5b7c8ae5cbb14cfde455118e73c2cb9ceb84bcfd8a3f7b95aaab96ca99fa",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "549e5b7c8ae5cbb14cfde455118e73c2cb9ceb84bcfd8a3f7b95aaab96ca99fa",
+      "headMatchesB8": true,
+      "workingSha256": "549e5b7c8ae5cbb14cfde455118e73c2cb9ceb84bcfd8a3f7b95aaab96ca99fa",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/tickets/[id]/page.tsx",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "b6c8e5333a2e38923a6a466c1a700382bc16eccf",
+      "baselineSha256": "f0a37e918615b83d2fa435c4d245d8ae7d34ad56d1d28d6dc7c0237df7d77c28",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "f0a37e918615b83d2fa435c4d245d8ae7d34ad56d1d28d6dc7c0237df7d77c28",
+      "headMatchesB8": true,
+      "workingSha256": "f0a37e918615b83d2fa435c4d245d8ae7d34ad56d1d28d6dc7c0237df7d77c28",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/properties/page.tsx",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "2f5fb9b2c53fdb53598bcc2bde8df3396e826d4f",
+      "baselineSha256": "ba872bc0ee9c1247a4c81122ec32276b83c373c6289e0b50fb13c2abcca5f060",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "ba872bc0ee9c1247a4c81122ec32276b83c373c6289e0b50fb13c2abcca5f060",
+      "headMatchesB8": true,
+      "workingSha256": "ba872bc0ee9c1247a4c81122ec32276b83c373c6289e0b50fb13c2abcca5f060",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/expenses/page.tsx",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "77b51ad6b29951c0de94c0c7ab5c1d4aa944441d",
+      "baselineSha256": "20d9734200495340750131f11dd0f21e30c2aa08fe095c453fd5379192fdd373",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "20d9734200495340750131f11dd0f21e30c2aa08fe095c453fd5379192fdd373",
+      "headMatchesB8": true,
+      "workingSha256": "20d9734200495340750131f11dd0f21e30c2aa08fe095c453fd5379192fdd373",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/auth-actions.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "fe57d75396628b85d7e718cabe8c47f80def07ac",
+      "baselineSha256": "39cad3edaa1df3c8c746683a82349dc57f1f1bd7830ce5e49b9182f8054a4689",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "39cad3edaa1df3c8c746683a82349dc57f1f1bd7830ce5e49b9182f8054a4689",
+      "headMatchesB8": true,
+      "workingSha256": "39cad3edaa1df3c8c746683a82349dc57f1f1bd7830ce5e49b9182f8054a4689",
+      "workingMatchesB8": true
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/owner-transfer-period-lock.ts",
+      "baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+      "baselineBlob": "db59bdc77fe547b9941a19453c8512642916b53b",
+      "baselineSha256": "55d5508d8613a6ef8b180336d62585b9006f7e53f33dc3f1d987b9378acb3ed0",
+      "head": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+      "headSha256": "55d5508d8613a6ef8b180336d62585b9006f7e53f33dc3f1d987b9378acb3ed0",
+      "headMatchesB8": true,
+      "workingSha256": "55d5508d8613a6ef8b180336d62585b9006f7e53f33dc3f1d987b9378acb3ed0",
+      "workingMatchesB8": true
+    }
+  ],
+  "drift": [
+    "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-017/status.md"
+  ],
+  "execution": "Read-only source/git/review inspection. Only these two workspace reports written; no app/SQL/runtime/reservation/DB/network/parser/browser/Downloads/flag/claim mutations.",
+  "markdownSha256": "7e456b2ad04473f37db0cd2f4b506305ae370f25da8b84e6eeef260ad42743ce"
+}

@@ -1,0 +1,15 @@
+{
+  "verdict": "SOURCE_GO_INACTIVE_HANDOFF_ONLY",
+  "sqlSha256": "5abc97ac4843ab81d24c78871f836d7a7513f42a6ef154ac8d0d78368fbe0adc",
+  "handoffSha256": "f3e1b8e3c412d859598fc96e136849c2dbd77769b412909bc0d32fed5572d416",
+  "unappliedSeedPatchSha256": "3990055d6905accc267490a2d96759aa2b773bc7c3a2b053524d4aafa500fb23",
+  "originalSeedSha256": "276f3aa9b672f773d98b8a748e9ddd12577b5873f1628a60ec47a8536c3a6591",
+  "priorSqlSha256": "091b91b0f214483d77f11d8375a88b993981fda24caf3a922778dc9cd533ac21",
+  "priorHandoffSha256": "fda14c1ed1f5334cc6c7ef00ecc5eab34f0c9048dd041e853b7193e475a134fa",
+  "closed": [
+    "Shared finite Unicode predicate at write gateway and storage",
+    "Exact optional disposable reset dependency and required two-cycle proof"
+  ],
+  "execution": "UNPARSED_UNAPPLIED_TARGET_UNVERIFIED",
+  "markdownSha256": "86aa79392b9e8b8413e94e6c5df2afb1b30e928d41f9ed5f4e60db8dd8d4e6ce"
+}

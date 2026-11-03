@@ -26,7 +26,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-014 | Owner net ledger, transfers and report versions | MGT-25/26/27, OWN-02; J7; CAP-M-17/18, CAP-O-03; M-43 | B-008 | OWNER_NET_LEDGER*; MONTHLY_REPORT_DELIVERY* | B | L / 24–40 | pending |
 | B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | pending |
 | B-016 | Company/profile settings and management-fee rules | MGT-04; J1.1/J7; CAP-M-25/29; M-42/58 | B-003 | company_profile_edit; MANAGEMENT_FEE_RULES* | B | M / 20–32 | pending |
-| B-017 | Custom role permissions with escalation protection | PLT-01/02; J1.4; CAP-P-12; M-54 | — | CUSTOM_ROLES* | B | L / 24–40 | pending |
+| B-017 | Custom role permissions with escalation protection | PLT-01/02; J1.4; CAP-P-12; M-54 | — | CUSTOM_ROLES* | B | L / 24–40 | in_progress |
 | B-018 | Tenant payment history and home states | TEN-07/08; J3; CAP-T-04/09; T-09 | B-003, B-010 | TENANT_PAYMENT_HISTORY* | B | M / 12–20 | in_progress |
 | B-019 | Tenant conversation creation | TEN-13; J5; CAP-T-12; T-15 | — | TENANT_THREAD_CREATE* | B | S / 6–10 | todo |
 | B-020 | Tenant account, sessions, preferences and data requests | TEN-18; J1; CAP-T-13; T-16/17 | —; notification integration B-028 | TENANT_ACCOUNT_SETTINGS* | B | M / 16–24 | todo |
@@ -208,3 +208,14 @@ The reviewed correction preserves genuine issued balances before signature, incl
 Earlier b8c4134/DB9 evidence is bounded history, not proof of this correction. Full gate, browser focus/matrix and build remain pending. The inactive public-reason proposal is still in source review; no SQL was parsed/applied, and private internal notes remain private. B017 has reviewed policy and detailed operation/export contracts but no executable feature. All existing started capabilities remain open; no new B IDs.
 
 STOP POINT: targeted correction passed; next: commit clean candidate, independently freeze browser v4, run EN390 focus before one full gate; owner: Codex/Ron.
+
+
+## B018 code-only checkpoint — 2026-11-03T14:27:38.968891-08:00
+
+Tested `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`: full code gate PASS (651 unit, 476 RLS, zero failures, one sole prior historical skip), 11 steps and 3 drained code-gate children. Highest independent review approves working-branch code publication only. [Checkpoint](../e2e-evidence/B-018/code-checkpoint-1c8fd07.md).
+
+Browser focus remains FAIL before any payment case; six script requests failed, cause UNVERIFIED. Recovery financial lineage remains UNVERIFIED/quarantined, controls unchanged OFF; detached browser abnormal-exit ownership is a diagnostic-helper gap. No test was skipped or relaxed to turn this into PASS. Builds, full browser matrix, staging and whole B018 remain incomplete. The new OFF-only diagnostic is still under independent source review.
+
+The separate public-reason SQL/PE handoff/seed patch bundle passed inactive source review and was copied with hashes to Downloads. It is not parsed/applied or target-ready; PE non-Mac validation/application and Codex app integration remain. B017 now has an amended minimal contract (18 recognized/17 supported; no new export product) and an unreviewed bounded authority-core SQL fragment, not a complete migration or feature. Governance, privacy/raw enforcement and operation integration remain Codex work. Finish the 20 already-started IDs, retain the full queue and start no new B IDs.
+
+STOP POINT: code checkpoint passed, browser failure open; next: publish/renew/mirror/ref verification, then reviewed login diagnostic and next B017 stage; owner: Codex/Ron.
