@@ -5,3 +5,5 @@
 Remaining: closed company/address/identifier, verifiedEmail and versionedfee design and actual proposedSQL handoff, then PE/nonMac application and exactstaging/Claude/ClassB/pilot acceptance. Downloads/b016-db-handoff-design-pending.md is NOT APPLY-READY and contains noSQL. Ronfee decisions pending. These scopes are not completed by a working name editor. No wholeBdone, no B017source.
 
 STOP POINT: WORKING; next: publish/renew/mirror/verify, continue B016 design; ownerRon/Codex3099AC86.
+
+2026-11-03T07:00:06.666365-08:00: RegionalcompanyinactiveSQL/handoff [v2 source-reviewed](company-regional-source-handoff-v2.json); target/PEplan/parse/apply/appintegrationstillpending. Prior noSQL statement is historical. Selfnamecode unchanged. VerifiedEmail/providerplanningnext; feechoicespending.

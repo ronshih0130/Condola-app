@@ -1,0 +1,365 @@
+{
+  "verdict": "PLAN_GO_SOURCE_ONLY_INACTIVE_HANDOFF",
+  "apply_ready": false,
+  "source_head": "21f5de45131e30d0e0b40d208f4eb58c68ef1a31",
+  "requested_model": "gpt-6.1-sol",
+  "requested_effort": "high",
+  "actual_model_identity": "UNOBSERVABLE",
+  "scope": "regional company legal_name/tax_id/address; display name readonly; no fee/email/production",
+  "plan_sha256": "f1cbfdc60da0f47c88d687c2d7eedd891cd627b16aa69e1a625f01c36bcc4dc7",
+  "source_pins": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 12654,
+      "sha256": "76a269081778856332ddc0eca751c432a6e6fc601da670fac2051cc83dc54346",
+      "git_blob": "26913f6a5f5ad5245f65216d258d6c7f52f1d2ef"
+    },
+    {
+      "path": "20-build/AGENTS.md",
+      "bytes": 5223,
+      "sha256": "ad6a6f6af1cefd99c36ee84a164bb97ce0211cbe59a648a472243260700e90cc",
+      "git_blob": "33d10495e499bfa4e23962d3ee3982efe1d2d512"
+    },
+    {
+      "path": "20-build/README.md",
+      "bytes": 3932,
+      "sha256": "aafa41ee66be82a905c68685099a5c00c1157a271c41fd7a5c62849e78946594",
+      "git_blob": "94e724891952e7c8f898b2f630a03289bd0cbefa"
+    },
+    {
+      "path": "20-build/BUILD-ORDER.md",
+      "bytes": 36522,
+      "sha256": "b5fc8bcf540090732f33eaddc5cefb816267c6eb9d132f33fab2c8d94db0900e",
+      "git_blob": "13abd48bae3fb8ebe6f0c91f9efc62f7df8ce6ba"
+    },
+    {
+      "path": "20-build/QA-STANDARD.md",
+      "bytes": 6192,
+      "sha256": "35d19d4363023810ab2083f910af926517e365d4f4e8bf37e6925f3c0801e7e6",
+      "git_blob": "9e596aa66ec64cf51f1f0433702a828d743ada39"
+    },
+    {
+      "path": "20-build/BLOCKED.md",
+      "bytes": 83180,
+      "sha256": "bee0b98f1e921b56659e4d99a71ba70de311a041a71ec8aeaaf5cede7312d395",
+      "git_blob": "f9fab175c41d0f172d4485cacd34e00776d659d6"
+    },
+    {
+      "path": "20-build/specs/B-016.md",
+      "bytes": 1047,
+      "sha256": "b3a78020ef699dd61f6927cbfb6d9f82fc46b62451e58bea707e2859e38729e5",
+      "git_blob": "396f8e6df2b628c7682118e8545060d0a99508eb"
+    },
+    {
+      "path": "e2e-evidence/B-016/self-profile-checkpoint-5a0c699.md",
+      "bytes": 3412,
+      "sha256": "d47b30142c6824be2c9be448fc1654867fc091d295351294effc9a939e089746",
+      "git_blob": "d702cfefdcb139e46c9b6cf6e6a3b71ce40bbd47"
+    },
+    {
+      "path": "e2e-evidence/B-003/status.md",
+      "bytes": 6695,
+      "sha256": "bc3f3eecfbec86591ce60b4b2f9da3d23915a82e9a3d5d74226606d431e6edc8",
+      "git_blob": "fcad2836facaa2fdcafcccea81b476a74f73850f"
+    },
+    {
+      "path": "supabase/migrations/20261018120000_schema.sql",
+      "bytes": 143903,
+      "sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "git_blob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74"
+    },
+    {
+      "path": "supabase/migrations/20261020120000_auth.sql",
+      "bytes": 7157,
+      "sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81",
+      "git_blob": "60998ac8e77a8366e67b9358dd87072b7d7b046a"
+    },
+    {
+      "path": "supabase/migrations/20261020180000_sandbox.sql",
+      "bytes": 4680,
+      "sha256": "d6bc8d10d75064f567c7d960387e1875f06119a71c7a98e94c084be16719b44f",
+      "git_blob": "1260b6cdf6427c8b075f0f137551a3e6daca484a"
+    },
+    {
+      "path": "supabase/migrations/20261022140000_portal_user_provision.sql",
+      "bytes": 1291,
+      "sha256": "37aef5ee1e56401128ea2263f9884adbda4ae271363fce8f95bcf1c6bd7b1683",
+      "git_blob": "e8281eb4fb07ebf217f700e2437703e7d23f3b98"
+    },
+    {
+      "path": "supabase/migrations/20261026100000_country_room_door.sql",
+      "bytes": 1272,
+      "sha256": "35ebc52b104203bcb3bf97b6fc0b6943d3d1f1206b412d6f2f70c39234154131",
+      "git_blob": "3d6e83666aec64d6827f80f0782e7d4bddadfcb6"
+    },
+    {
+      "path": "supabase/migrations/20261030150600_consents.sql",
+      "bytes": 4471,
+      "sha256": "946e246649e989eeaff3e70f9ea4950f3eed89159e17e2917bca62b5d0fd8e2a",
+      "git_blob": "b56682c33c5b4043ba90f9e2cf3fb7b4f7930364"
+    },
+    {
+      "path": "supabase/migrations/20261031100202_b003_payee_gateway.sql",
+      "bytes": 20060,
+      "sha256": "1f929fe9c71e317ce044127c6cd6b25daa28f591a754ab297e0d7a7fe60be856",
+      "git_blob": "1938d1d8a65fb6fe8ace288a3e7a3f133a573552"
+    },
+    {
+      "path": "src/countries.ts",
+      "bytes": 1372,
+      "sha256": "a16d504681e6bf16feb972aa78372428018e80cb3da795f1fb26a5011f291b57",
+      "git_blob": "6b88509df889d36a61680adc9a4c32a068d1a91e"
+    },
+    {
+      "path": "src/property-address.ts",
+      "bytes": 430,
+      "sha256": "94c416d3d688b5fb3e9c842f84a9c105012abdb461453aebb2693e30775584a8",
+      "git_blob": "1535291f928dfbef08f0b78945d28c2bd04661d4"
+    },
+    {
+      "path": "src/server/perms.ts",
+      "bytes": 7306,
+      "sha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9",
+      "git_blob": "626c89472406558eaac053d952de2c4136c607dd"
+    },
+    {
+      "path": "src/app/m/settings/page.tsx",
+      "bytes": 3522,
+      "sha256": "6723b2f914946f55e518374c7dc4e378081aad8971f4320027cf7c8059de2a68",
+      "git_blob": "9dd74ffabbf31606b1b446ec62c91fd64bd5b931"
+    },
+    {
+      "path": "src/server/mail-settings.ts",
+      "bytes": 3198,
+      "sha256": "8a219f0348f2aa4f52b2514c0e6879ce007f20ce244ea2419ee00e1a90a6822e",
+      "git_blob": "2c0e85302cc0a67708366dbd2c63e91a69e36d56"
+    },
+    {
+      "path": "src/server/auth-actions.ts",
+      "bytes": 24022,
+      "sha256": "39cad3edaa1df3c8c746683a82349dc57f1f1bd7830ce5e49b9182f8054a4689",
+      "git_blob": "fe57d75396628b85d7e718cabe8c47f80def07ac"
+    },
+    {
+      "path": "src/server/payee.ts",
+      "bytes": 5086,
+      "sha256": "e70c39322cc182a482a4985632cd146a187b6e8959602c2267f33857ee92cb0c",
+      "git_blob": "7ed8ce76ed36146a56b52e69d44a9e71f3116d40"
+    },
+    {
+      "path": "src/server/payee-actions.ts",
+      "bytes": 1815,
+      "sha256": "70e1e6084563d3dfeb398356599c2c7016754d27deab8f0665476c6dafa9e270",
+      "git_blob": "995352f892a9127d47ed10d40dde4ee4bad5dadd"
+    },
+    {
+      "path": "src/server/payee-action-context.ts",
+      "bytes": 1840,
+      "sha256": "16de9a2af75880d3e905992eb72c2657760982eac74b68c9393567f9177e0abf",
+      "git_blob": "1870d1b6c6efb71d4a05b0c9ee6f9a3f05dd2ee4"
+    },
+    {
+      "path": "src/server/payee-consent.ts",
+      "bytes": 773,
+      "sha256": "e0f7696098d43294f8d6826f5bb448e8eba806b293892f956440ec49d03f1a0f",
+      "git_blob": "21faa3a7ab54913196e8e0959b74a15dc5dd3fc3"
+    },
+    {
+      "path": "src/server/db.ts",
+      "bytes": 9056,
+      "sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "git_blob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345"
+    },
+    {
+      "path": "src/server/staff-profile.ts",
+      "bytes": 7210,
+      "sha256": "4cf782287e4213703ca87007b3557e520feb9fcaa02482529634a18284f95f55",
+      "git_blob": "292b97a00dd489c2878ba6169c1399557551d768"
+    },
+    {
+      "path": "src/server/staff-profile-actions.ts",
+      "bytes": 794,
+      "sha256": "ad190886aa73ff2fdc5ce3e6bf56f88fd2005fc729beb8f82868be4b5f497e7d",
+      "git_blob": "cdcbbb04815e9ac407b5a0e93bab1f5cc255081a"
+    },
+    {
+      "path": "src/server/consent.ts",
+      "bytes": 8359,
+      "sha256": "8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6",
+      "git_blob": "0d2b9200e936b7a2ba065075ff998847c0ad9908"
+    },
+    {
+      "path": "src/server/consent-gate.ts",
+      "bytes": 4289,
+      "sha256": "8859327682ebe4ef2445d85bd1e6808543b36ed48b3af6e0e205af9c8e44580d",
+      "git_blob": "6ac26ed5afa7757c297de45b8060f87f6c727f8e"
+    },
+    {
+      "path": "src/server/partner-consent.ts",
+      "bytes": 11327,
+      "sha256": "f37b3eac0212c684dbe53b272bd3c791b16fcf058d2b9026d5e51923777b411f",
+      "git_blob": "bce24c570ce958cca91b6813d615fb97a8bc924b"
+    },
+    {
+      "path": "src/server/partner-consent-rules.ts",
+      "bytes": 6382,
+      "sha256": "6f211e7661ee91b80ead941083c682850a67e43b9099f47871a94afbcc3c0cd1",
+      "git_blob": "1bccf8cf82c86e638fb27af7b8a82eb5876dcaf6"
+    },
+    {
+      "path": "src/server/audit.ts",
+      "bytes": 2305,
+      "sha256": "27f9acf92dbcbf92f2518b8b302bea48119a18129e572fd81861145fcf88493c",
+      "git_blob": "beec5aa7a76f3f075970087242526e2c696a6381"
+    },
+    {
+      "path": "src/server/audit-read.ts",
+      "bytes": 28765,
+      "sha256": "5f637b887f6efd121af7a0d9388210683181e9000ee6c5edf004808abf32f167",
+      "git_blob": "bb26f44f927f116bd4a087ab7c7e8d1c7bba01b8"
+    },
+    {
+      "path": "src/server/domain.ts",
+      "bytes": 132158,
+      "sha256": "6a48d9373f922827a66e0f1a057559b8f4dd39e15f33be9fd835d9d323bc85e0",
+      "git_blob": "35bc6ac992368da7af34e8d70e62ee6e706b6766"
+    },
+    {
+      "path": "src/server/queries.ts",
+      "bytes": 80126,
+      "sha256": "690781b8fd3e2e858925b53ee26427669230ee2f68b7383575d60d5c066ba679",
+      "git_blob": "bb40a5b03f5a1fea2c17bfc55682cec885c07ce2"
+    },
+    {
+      "path": "src/server/pdf-download.ts",
+      "bytes": 5160,
+      "sha256": "8d4d1dbfa4e7a2403da172ffc29c1bfd37cbdbf8b6b743ae296dc8a3dccd3f9d",
+      "git_blob": "e1c327653ffbecf88c3164b19a49d0f89fda1191"
+    },
+    {
+      "path": "src/server/pdf-docs.ts",
+      "bytes": 6050,
+      "sha256": "312c4163b356d144c6e62da23600d006fdb79daaa7493cbe93d0665e02bb097e",
+      "git_blob": "58750ab915cf674633164f8f5e5a0a0e877b8ff9"
+    },
+    {
+      "path": "src/server/esign/flow.ts",
+      "bytes": 23484,
+      "sha256": "5238a2d4339c91d2e30d0b2cc2ca6daaaf8e5e4246dadfea48dfd7474769ed0b",
+      "git_blob": "9272ddd8c566c4c0a974a2f89fcc2d486a7ac71b"
+    },
+    {
+      "path": "src/server/sandbox.ts",
+      "bytes": 11760,
+      "sha256": "d8d31eacd163d96511fae0be55b1165b7f987d7d1986415ff0bd1b089e2b623e",
+      "git_blob": "d6925304e83f7c38f1cddea6849d86defb5d4739"
+    },
+    {
+      "path": "src/server/seed.ts",
+      "bytes": 29223,
+      "sha256": "276f3aa9b672f773d98b8a748e9ddd12577b5873f1628a60ec47a8536c3a6591",
+      "git_blob": "ad8b93e2b7622557484865a20e30ef5ea1dc616c"
+    },
+    {
+      "path": "src/server/signup.ts",
+      "bytes": 30527,
+      "sha256": "7f4b763ac465a1be24a68076c78a30914b31a71b495ca288a8ed0f4ba9aa8115",
+      "git_blob": "13fc37221aae807238a642e5033544b789c81fe8"
+    },
+    {
+      "path": "src/server/id-docs.ts",
+      "bytes": 46743,
+      "sha256": "bd509ff1c6841447f777be8d8e538aafe982f45d54797be5c6d7d827eb39505e",
+      "git_blob": "69c147cc89f9bc5edc213205e30c745d17d3c1b1"
+    },
+    {
+      "path": "src/server/reminders.ts",
+      "bytes": 17582,
+      "sha256": "4ed3ff14d0f6908dc78c1aaccda635ec580d495f06f2dbef10e508e9c25b8e4c",
+      "git_blob": "2c3558108bf9ae287e111045d700fbc619f350b8"
+    },
+    {
+      "path": "src/components/statement-document.tsx",
+      "bytes": 4007,
+      "sha256": "b4c0578b6f1b0da5178c42945e1651706eb8b0be9591bb78131882340c5fd4ad",
+      "git_blob": "e0cfc5dfde727cfd39545b3eb2ca5acc36bde1da"
+    },
+    {
+      "path": "src/app/m/statements/[id]/page.tsx",
+      "bytes": 1826,
+      "sha256": "94b83a0b465d95ce34a74b10aaad82c763862044592d16090cae97c0ea0e9215",
+      "git_blob": "ec1e344c9f4827ca0afc63c36f9b7d019ba87a6a"
+    },
+    {
+      "path": "src/app/o/statements/[id]/page.tsx",
+      "bytes": 2051,
+      "sha256": "5523b681b7b34d2d32eea3b9d7e96247802825e67e490089c96b4fb1f09380aa",
+      "git_blob": "7029b4496d346f4f0a9b484c5c9226196ac4dbb5"
+    },
+    {
+      "path": "src/app/api/pdf/statements/[id]/route.ts",
+      "bytes": 896,
+      "sha256": "747c5e3931a14c764a3fa48f65d9be981d3193cc2d75b02eda3999cc45de6f15",
+      "git_blob": "fe2bc4b9032590001f3cdd98aa94d10e95fe38d4"
+    },
+    {
+      "path": "src/app/api/pdf/leases/[id]/route.ts",
+      "bytes": 888,
+      "sha256": "aea958340ad212cb2970e4976cc3e16fbfd3e211688c76ac3646429d93035bbb",
+      "git_blob": "16b85ecbb2d04a0abbc3739e88bb771d53600cae"
+    },
+    {
+      "path": "src/app/m/reports/export/route.ts",
+      "bytes": 1996,
+      "sha256": "8b8419893545c51977f8ddf3ac3818179a674fd27e1c21734c0171d13d3e4d47",
+      "git_blob": "bdc2521cd5fa60cb4a008b1d774b18981ab6de01"
+    },
+    {
+      "path": "ops/flags.yaml",
+      "bytes": 10998,
+      "sha256": "e6334b67a7c9280356aa34e453ec8a07f94959ecb427efacd318c585f9b88a9b",
+      "git_blob": "0397a923964b7c5669ba03f2a9ad1345fd95db82"
+    }
+  ],
+  "external_pins": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub/04-journeys/user-stories.md",
+      "bytes": 43511,
+      "sha256": "22bf0994f423501678f6b53272cf2487951a373ac9611a77eb19298cbbeada68"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub/05-capabilities/capability-list-v1.md",
+      "bytes": 41332,
+      "sha256": "66711f5a1083cdcff0e5e71120d9105280daeb5857e71ec41da9073edbffa840"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub/07-brand/brand-v2/brand-guide.md",
+      "bytes": 27564,
+      "sha256": "5aa3862edd1577dfe5b0bd6c3c39bcd4f5ff124505787896ba02a5926d21dd27"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/outputs/B016-fee-rule-decisions.txt",
+      "bytes": 1410,
+      "sha256": "765d5905ecd89ab95fb5fb9baf7010f079eec4e058201c2558806d61c11db274"
+    }
+  ],
+  "proposed_objects": [
+    "app.b016_company_profiles",
+    "app.b016_company_profile_gateway(uuid,uuid,text,jsonb)"
+  ],
+  "proposed_sql_destination": "/Users/ron/Downloads/20261103150000_b016_company_regional_profile.sql",
+  "source_or_runtime_modified": false,
+  "sql_authored_parsed_applied": false,
+  "independent_review": "PENDING_ROOT_ASTRA",
+  "known_limits": [
+    "base organizations existing member/contact-readable legal/tax fields and authenticated-admin raw writes remain",
+    "generic organization audit contains full base rows; new metadata event does not sanitize historical audit",
+    "canonical consent/partner and final clock-to-commit interval are current-app enforcement, not universal raw DB seal",
+    "company display name and issued-artifact future snapshot work explicitly unfinished",
+    "new-schema positive runtime waits approved PE non-Mac target/apply",
+    "whole B016/full39/fourpartyLINE remains incomplete"
+  ],
+  "memory_used": [
+    "MEMORY.md:48-86"
+  ]
+}

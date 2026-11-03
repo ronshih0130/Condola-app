@@ -1,0 +1,52 @@
+{
+  "time": "2026-11-03T07:00:06.666365-08:00",
+  "status": "SOURCE_GO_ONLY_NOT_APPLY_READY",
+  "runtimeCandidateUnchanged": "5a0c6990e4b4b75bb0ab2534cc7742d46c608787",
+  "sourceContext": "21f5de45131e30d0e0b40d208f4eb58c68ef1a31",
+  "newRuntimeRegistryOrFlags": false,
+  "sqlParsedOrExecuted": false,
+  "targetVerified": false,
+  "files": [
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/20261103143500_b016_company_regional_profile.proposed.sql",
+      "sha256": "e6d92407e5a11ff65cd56ef2497f584a7ee59773cd3445f959d35908687c4950",
+      "bytes": 12246
+    },
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b016-company-regional-profile-db-handoff.md",
+      "sha256": "457a2fe74baa29d9622d3f8729a5c20341764abb7b5ff4610cd9af63b1c7c586",
+      "bytes": 9791
+    },
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b016-company-regional-profile-review-cover-v2.md",
+      "sha256": "e785fdb0b2c17b05bc90695f4009ec572ad44f24d4b255fc51f1adc2d15d9c11",
+      "bytes": 1196
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-proposal-freeze-v2.json",
+      "sha256": "f4069a23d0ea223b6cd02980696dcafabacf1a1b2f8371d792994073f8bb3026",
+      "bytes": 1916
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-proposal-astra-v2.md",
+      "sha256": "5d45b5e541d47b978aeebc8b252d8a7a9ede5a31171250972fc96769d15d8315",
+      "bytes": 2262
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-proposal-astra-v2.json",
+      "sha256": "92b55eb496bde9b67b409e11a212e9a1bfa782bf305af95cc06ffe11ccf8e6aa",
+      "bytes": 4482
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-proposal-v1-no-go/manifest.json",
+      "sha256": "29d5d170d9d41b04a6ce278c6dbb4a863c0f051072c2a4b831b22c4295069850",
+      "bytes": 4307
+    }
+  ],
+  "remaining": [
+    "PE actual staging plan/owner/grants/catalog/history/backup/parse/nonMacapply/evidence",
+    "new-schema app integration/positive tests and stage/Claude acceptance",
+    "company display-name/issued-output provenance separately pending",
+    "verified Email/provider contract and fee decisions remain incomplete"
+  ]
+}

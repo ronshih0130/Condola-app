@@ -1,0 +1,66 @@
+{
+  "verdict": "SOURCE_GO",
+  "scope": "Inactive B016 regional company profile proposal v2, source review only",
+  "qaLog": "74bd789d-b4c6-4119-92b3-91553900bf5c",
+  "candidateContext": "21f5de45131e30d0e0b40d208f4eb58c68ef1a31",
+  "freeze": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-proposal-freeze-v2.json",
+    "sha256": "f4069a23d0ea223b6cd02980696dcafabacf1a1b2f8371d792994073f8bb3026",
+    "bindingsVerified": 7
+  },
+  "files": [
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/20261103143500_b016_company_regional_profile.proposed.sql",
+      "sha256": "e6d92407e5a11ff65cd56ef2497f584a7ee59773cd3445f959d35908687c4950",
+      "bytes": 12246
+    },
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b016-company-regional-profile-db-handoff.md",
+      "sha256": "457a2fe74baa29d9622d3f8729a5c20341764abb7b5ff4610cd9af63b1c7c586",
+      "bytes": 9791
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-db-primary-plan-sol.md",
+      "sha256": "f1cbfdc60da0f47c88d687c2d7eedd891cd627b16aa69e1a625f01c36bcc4dc7",
+      "bytes": 13015
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-db-primary-plan-sol.json",
+      "sha256": "b7ffc099be2906775e450de6f84cbad290e3760bcf90bbd5f2e3741487d86fdf",
+      "bytes": 14247
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-plan-root-notes.md",
+      "sha256": "daec14c3d6a7c435eec6b7faaa1237e941ea2527c3491c72155664492270b558",
+      "bytes": 2435
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-proposal-terra-v2.md",
+      "sha256": "db0227f4be589bf03bf013fa6d65702bd33c0717c8509d5e29f7e4dbb03ab40f",
+      "bytes": 1091
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-proposal-terra-v2.json",
+      "sha256": "224a907e69d7ed3120cd8fe7aa60ac167877ddb367b579b3fcb10a01445b8fb1",
+      "bytes": 1280
+    }
+  ],
+  "priorArchive": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-company-proposal-v1-no-go/manifest.json",
+    "sha256": "29d5d170d9d41b04a6ce278c6dbb4a863c0f051072c2a4b831b22c4295069850",
+    "bindingsVerified": 10,
+    "historicalVerdict": "SOURCE_NO_GO"
+  },
+  "closures": [
+    "P1 closed. Lines 129 and 133 enclose the complete CASE expression in parentheses, putting the inner THEN below the delimiter depth. Both old-value comparisons and legacy no-op behavior are intact.",
+    "P2 closed in the proposed contract. Line 48 sets a 500 ms lock timeout for each gateway invocation. The handoff also requires 500 ms lock and five-second statement limits in the same adapter transaction before admission reads or locks. Exceptions propagate to rollback and a generic unavailable result. These settings bound individual waits or statements. They do not bound total request duration or preserve a tighter caller timeout during the function."
+  ],
+  "openMaterialSourceFindings": [],
+  "limits": [
+    "No SQL parsing, database access, EXPLAIN, migration, feature activation or tests in this review. The required held-lock/rollback test, catalog owner/effective grants, backup and restore rehearsal, upgrade and compatibility checks, and PG17 validation on an authorized non-Mac target remain outstanding.",
+    "Service-only gateway invocation, trusted selected-live-org adapter, canonical same-transaction consent, partner, terminal authority and actual commit checks are part of the proposed call contract. Existing raw organization writers and the final authority-read to commit interval remain outside a universal seal.",
+    "Members and linked contacts retain the existing base organization read audience. Base updates retain the legacy full-row generic audit. Only the dedicated event is metadata-only, and the extension has private address storage. Actual target ACL closure remains unverified.",
+    "The prior self-name local checkpoint, regional application implementation, verified email, fee rules, staging and release are separate. The v1 rejection stays attached to v1, and the frozen proposal header predates this separate source verdict."
+  ],
+  "readiness": "UNPARSED / UNAPPLIED / TARGET UNVERIFIED / NOT APPLY-READY"
+}
