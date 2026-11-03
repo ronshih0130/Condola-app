@@ -1,0 +1,26 @@
+{
+  "recordedAt": "2026-11-03T02:10:39.245577-08:00",
+  "candidate": "2bdee5f7bf38539d5570fc41b85bb9797f4db871",
+  "focus": {
+    "selected": 1,
+    "passed": 0,
+    "failed": 1,
+    "otherCases": "3NOTRUN",
+    "laterGateBuildFullBrowserControls": "NOT_RUN",
+    "behavior": "Allworkflow/completefinancialvector/finance/history/restore assertions reachedandpassed; finalconsoleerrors[]failed",
+    "error": "Reacthydrationemptyinline styleattributes onreportinputs/navcheckbox",
+    "pngCount": 17
+  },
+  "diagnostic": {
+    "probe": "work/b015-caret-probe.json",
+    "isolatedResult": "defaultscreenshots turnall5styleattrs null\u2192emptystring; caretinitialkeepsnull; 2screenspixelidentical; actualexit0",
+    "source": "PinnedlocalPlaywright1.64.1 coreBundle.js:22755-22769 mutatescaret-coloronALLinputs, restoresvaluebutmayleaveemptyattr",
+    "limits": "Provesisolatedobservermutation, doesNOTproveactualReactfailurecausedbyit; actualunchangedconsoleassertfocusneeded"
+  },
+  "snapshot": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-2bdee5f-r5-focus-failure/manifest.json",
+    "entries": 184,
+    "sha256": "7fa985f23e968369c9121b882bc44d3ed72db5e80e49fe55102baf7ca4d66869"
+  },
+  "next": "Only2manual screenshotcalls caretinitial toavoidobserverDOMmutation; allconsole/functionalassertionsretained; independentreviewandfocusfirst"
+}
