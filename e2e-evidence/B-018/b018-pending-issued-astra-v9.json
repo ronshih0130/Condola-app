@@ -1,0 +1,62 @@
+{
+  "verdict": "SOURCE_NO_GO_FOR_DB_TARGET",
+  "severity": "P2",
+  "rootCause": "Same invoice nets to a zero header, but fixture expects the state requiring a negative outstanding header.",
+  "sourceFiles": [
+    {
+      "path": "src/server/tenant-payment-history-rules.ts",
+      "blob": "eb312006537573d62d937ee3919c93fd5396567e",
+      "sha256": "5cf7322540741dd3ef8641894926b59bbc654f9149d69dd8ea4234eeae37d038",
+      "bytes": 3084
+    },
+    {
+      "path": "src/server/tenant-payment-history-rules.test.ts",
+      "blob": "da24a52ad67d67c937b874f9cc6db1cbf428aded",
+      "sha256": "6dcf31d81f20670702f18932110740e25e3af1d61a308303f23ab97cf143716d",
+      "bytes": 3608
+    },
+    {
+      "path": "src/server/tenant-payment-history.ts",
+      "blob": "8d2cd2d6de3e3c2a715c6ae26c93e402f059e0c3",
+      "sha256": "5f006ac243c3c18ebee21cbbe445a9737167aad37edb629acf23421dd930ef64",
+      "bytes": 11546
+    },
+    {
+      "path": "src/server/tenant-payment-history.integration.test.ts",
+      "blob": "91ce88d44a4ab8eddc00756548afec36718be6f6",
+      "sha256": "da7fa95e51aaa44c180df9932617496e94372e7179c658d7b9a2f7dc3d736907",
+      "bytes": 33025
+    }
+  ],
+  "authorMdSha256": "edf891b6cfab3d9144c350f0cc0df6dc985841152d66420c5173a30ff9e11056",
+  "authorJsonSha256": "24a1c17e417f0470fe7e927a1f033c28d65818814f6aa5e147dd529a0e39caca",
+  "rawLogs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v9-pure.log",
+      "sha256": "c4bc8a79275c508aa5f0f7d99fd8a3d61d1589ca79978c841a9661af8b3e991d",
+      "bytes": 6891,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v9-type.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v9-eslint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit": 0
+    }
+  ],
+  "primaryEvidence": {
+    "purePass": 35,
+    "pureFail": 0,
+    "skip": 0,
+    "typecheckExit": 0,
+    "lintExit": 0
+  },
+  "runtime": "No reviewer execution. V9 DB/browser/gate not run.",
+  "markdownSha256": "8f2f613b3bc6fe41295658ca68ac2228384d9dfa9821be4126da201446540b96"
+}

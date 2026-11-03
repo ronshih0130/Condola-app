@@ -1,0 +1,32 @@
+# B018 pending issued bill v9 source handoff
+
+Independent review and DB/browser execution pending.
+
+- `src/server/tenant-payment-history-rules.ts` blob `eb312006537573d62d937ee3919c93fd5396567e` SHA-256 `5cf7322540741dd3ef8641894926b59bbc654f9149d69dd8ea4234eeae37d038` (3084 bytes).
+- `src/server/tenant-payment-history-rules.test.ts` blob `da24a52ad67d67c937b874f9cc6db1cbf428aded` SHA-256 `6dcf31d81f20670702f18932110740e25e3af1d61a308303f23ab97cf143716d` (3608 bytes).
+- `src/server/tenant-payment-history.ts` blob `8d2cd2d6de3e3c2a715c6ae26c93e402f059e0c3` SHA-256 `5f006ac243c3c18ebee21cbbe445a9737167aad37edb629acf23421dd930ef64` (11546 bytes).
+- `src/server/tenant-payment-history.integration.test.ts` blob `91ce88d44a4ab8eddc00756548afec36718be6f6` SHA-256 `da7fa95e51aaa44c180df9932617496e94372e7179c658d7b9a2f7dc3d736907` (33025 bytes).
+
+## Changes
+
+- Pending-signature with no eligible issued invoice remains unsigned; issued positive, zero, credit and offset balances retain their actual states.
+- Current-mode active and pending-signature leases can report only positive outstanding balances; ended remains read-only.
+- Existing pending credit/deposit integration case now includes zero offset, actual positive balance, normal tenant recordPayment, personal report and insert-audit provenance assertions.
+
+## Checks
+
+- Pure utility plus history rules target 35/35 pass, zero skips.
+- Pinned Node no-emit typecheck and scoped ESLint both exit 0.
+- No DB/integration/browser/gate/network/schema/provider execution.
+
+## Limits
+
+- New pending issued deposit and normal writer assertions are authored but NOT RUN against a database.
+- Prior b8c4134 DB9 and unit34 belong to prior source, not these changed bytes.
+- Independent source review and managed runtime authorization pending.
+
+## Logs
+
+- `/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v9-pure.log` exit 0 SHA-256 `c4bc8a79275c508aa5f0f7d99fd8a3d61d1589ca79978c841a9661af8b3e991d` (6891 bytes).
+- `/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v9-type.log` exit 0 SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (0 bytes).
+- `/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v9-eslint.log` exit 0 SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (0 bytes).

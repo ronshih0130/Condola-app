@@ -1,0 +1,9 @@
+# Pending issued bills v9 source review
+
+**SOURCE_NO_GO_FOR_DB_TARGET.** The revised product logic restores the pending tenant’s real balance and ordinary report action for issued positive balances, retains the unsigned state for no invoice, and preserves ended read-only history and the distinct payee audience check. Exact four source blobs, the author report and three logs were verified. The pure TAP records 35 pass, zero fail and zero skip. V9 DB/browser/gate not executed.
+
+**P2 · The new integration check cannot reach its intended real report.** In case nine the only invoice has a −4,000 residual credit. The fixture adds a +4,000 deposit to that same invoice and expects `offset`. Its header now has zero total and zero balance. The reader passes only invoice headers into summarizeBill. Without any outstanding invoice whose header balance is negative, it returns `zero_charge`. The passing pure offset check models two separate invoices, one positive and one negative. Those are distinct source vectors. The later +5,000 deposit, NT$10 due, ordinary report, original date and payment evidence assertions cannot run past this mismatch.
+
+Preserve both cases and all downstream assertions. A net-zero single invoice must show no amount payable, no report action and no available credit. Use separate equally opposed invoices when verifying the existing offset state. If identical offset copy on a single mixed-line invoice is required, supply validated signed line evidence to classify it explicitly without altering posting or weakening reconciliation. The frozen browser helper also builds a single invoice with +10,000 rent and −10,000 credit, then expects the cross-invoice offset copy. Correct its fixture and independent expected inventory before focus. The prior b8c4134 DB run remains 9/9 on its own source.
+
+Rebind the revised source and a complete 1,024-pin lock before requesting one disposable DB target. B018 browser, gate and builds remain held.

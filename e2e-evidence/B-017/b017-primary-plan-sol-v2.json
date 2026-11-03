@@ -1,0 +1,745 @@
+{
+  "createdAt": "2026-11-03T12:40:58.963779-08:00",
+  "status": "PRIMARY_V2_DESIGN_PROPOSAL_FOR_INDEPENDENT_ARCHITECTURAL_REVIEW; SQL_NOT_AUTHORED; NO_RUNTIME_OR_ACTIVATION_GO",
+  "requestedRoleModel": "User-authorized Sol/high primary planner; actual runtime provider identity not independently observable",
+  "baselineLocalHead": "4f85ea033e87cd242c23123066cf2bb3ff69ec90",
+  "scope": "B017 full supported cross-base composition; finish B017/B018 and in-hand capabilities then handoff; no new todo B019+ work",
+  "supersedes": "Astra-v1 base ceiling recommendation and both-mode evaluator only; preserve v1 source inventory and mandatory restrictions",
+  "permissionCount": 18,
+  "permissionMatrix": [
+    {
+      "key": "dash.view",
+      "routes": [
+        "/m"
+      ],
+      "actualFunctions": [
+        "queries.dashboard",
+        "queries.counts",
+        "queries.loadManagerChrome"
+      ],
+      "rawObjects": [
+        "properties",
+        "units",
+        "rooms",
+        "leases",
+        "invoices",
+        "payments",
+        "maintenance_tickets"
+      ],
+      "operationSemantics": "Org-level dashboard aggregates only; no contact phone, account numbers, raw journal or ticket photo in bootstrap HTML/badge payload. Minimal per-operation chrome counts must not restore forbidden datasets.",
+      "proposedFixedBridge": "app.b017_dashboard_read; source-bind exact dashboard DTO/aggregate SQL.",
+      "mandatoryLimits": "No automatic props.view/stmt.view grant; no hidden financial details beyond the deliberately advertised aggregate."
+    },
+    {
+      "key": "props.view",
+      "routes": [
+        "/m/properties",
+        "/m/units",
+        "/m/tenants",
+        "/m/leases",
+        "/m/owners",
+        "/m/archive",
+        "/api/pdf/leases/[id]",
+        "/m/leases/[id]/signed/[pdfId]"
+      ],
+      "actualFunctions": [
+        "queries.listProperties/searchProperties/propertyDetail/listOwners/listTenants/searchTenants/listLeases/searchLeases/leaseDetail/tenantDetail/listSpaces/searchSpaces",
+        "pdf-docs.canDownloadLeasePdf",
+        "pdf-download.leasePdfForSession",
+        "paper-lease-versions reads",
+        "record-archive.archiveView/archiveList"
+      ],
+      "rawObjects": [
+        "properties",
+        "property_owners",
+        "units",
+        "rooms",
+        "contacts",
+        "leases",
+        "lease_parties",
+        "lease_charges",
+        "listing_terms",
+        "lease_signatures",
+        "lease_signed_pdfs",
+        "files"
+      ],
+      "operationSemantics": "Read portfolio/tenant/lease metadata and authorized lease documents, with phone_e164 omitted unless tenants.contact. Signed original PDFs may themselves contain contact/ID data: permission must not supply a less-protected binary escape.",
+      "proposedFixedBridge": "app.b017_portfolio_read; app.b017_lease_document_read returns safe file reference only after document-specific admission; byte route rechecks.",
+      "mandatoryLimits": "No ID document photo, no other org/sandbox, no owner-portal extra data. For a document containing restricted tenant phone use tenants.contact as additional admission rather than pretend redaction of immutable original PDF."
+    },
+    {
+      "key": "props.edit",
+      "routes": [
+        "/m/properties/new",
+        "/m/properties/[id]/edit",
+        "/m/owners/[id]",
+        "/m/units/new",
+        "/m/units/room",
+        "/m/units/whole",
+        "/m/import",
+        "/api/import",
+        "/api/flows/createProperty"
+      ],
+      "actualFunctions": [
+        "domain.createProperty/setMeterSerial",
+        "portfolio.createOwner/updateOwner/updateProperty/createSpace/updateSpace/seedPortfolio",
+        "import-batch.dryRunImport/previewImport/commitImportBatch",
+        "record-archive.archiveCommand property/unit/room; owner archive is separate unfinished B015 scope"
+      ],
+      "rawObjects": [
+        "properties",
+        "property_owners",
+        "units",
+        "rooms",
+        "contacts",
+        "meters",
+        "listing_terms",
+        "import_jobs"
+      ],
+      "operationSemantics": "Create/edit portfolio and owner contact/space/meter data; property/unit/room archive/restore only existing approved ancestry/finance-warning semantics; owner-only archive remains unimplemented B015 dependent scope. Portfolio import which also commits an actual lease additionally requires leases.edit; preview may report that missing permission, never partially commit.",
+      "proposedFixedBridge": "app.b017_property_create/update; app.b017_owner_create/update; app.b017_space_create/update; app.b017_meter_set; app.b017_portfolio_import; app.b017_record_archive/restore (typed target only).",
+      "mandatoryLimits": "No custom authority over shared owner+tenant contact linkage, phone edits or ID records without actual corresponding operation admission; no creation of another identity to bypass archive."
+    },
+    {
+      "key": "leases.edit",
+      "routes": [
+        "/m/leases/new",
+        "/m/leases/[id] write actions",
+        "/m/rent/utilities",
+        "/api/flows/createLease",
+        "/api/flows/updateLease",
+        "lease signing/upload/simulation and B002 move-out handlers"
+      ],
+      "actualFunctions": [
+        "domain.createLease/updateLease/signLease/uploadSignedLeasePdf/simulateTenantSignature",
+        "deposit-rules-actions",
+        "b002-move-out-actions",
+        "renewal-comparison",
+        "actions.actionPrepareUtility/actionConfirmUtility/actionVoidUtility"
+      ],
+      "rawObjects": [
+        "leases",
+        "lease_parties",
+        "lease_charges",
+        "lease_signature_events",
+        "lease_signatures",
+        "invoices",
+        "invoice_lines",
+        "meter_readings",
+        "utility_bills",
+        "utility_allocation_runs",
+        "utility_allocation_lines"
+      ],
+      "operationSemantics": "Lease lifecycle and existing utility prepare/confirm/void operations; preserve signs, rule overrides, exact original tenant/owner attribution and feature gates. Staff signing can only exercise existing staff authority, never sign for a tenant.",
+      "proposedFixedBridge": "app.b017_lease_create/update/sign/upload/simulate; app.b017_move_out; app.b017_deposit_override; app.b017_utility_prepare/confirm/void. Existing unpublished DB-dependent lifecycle operations remain explicitly unavailable.",
+      "mandatoryLimits": "No new settlement, e-sign activation, protected ID-photo entitlement or tenant consent. Original document immutable; data/photo floor survives."
+    },
+    {
+      "key": "tenants.contact",
+      "routes": [
+        "/m/tenants",
+        "/m/leases/[id]",
+        "related ticket/contact selectors",
+        "/api/export/all filtered contacts"
+      ],
+      "actualFunctions": [
+        "queries.leaseDetail phone CASE",
+        "queries.listTenants/searchTenants/tenantDetail",
+        "owner_lease_tenants definer view",
+        "queries phone projections"
+      ],
+      "rawObjects": [
+        "contacts",
+        "listing_terms",
+        "profiles",
+        "owner_lease_tenants",
+        "tenant_lease_picker"
+      ],
+      "operationSemantics": "See tenant phone numbers within actual permitted staff record/context; does not grant tenant-directory mutation or all member profiles. Full raw contacts are not an acceptable fallback because they include email, notes, bank suffixes and multiple personas.",
+      "proposedFixedBridge": "app.b017_tenant_phone_read fixed bounded projection; optional phone fields in other fixed readers use the same current evaluator.",
+      "mandatoryLimits": "Remove app.is_member shortcut in owner_lease_tenants phone CASE for enrolled custom staff; genuine nonstaff owner privacy rule remains unchanged. Staff-first persona cannot route around key via own-owner view."
+    },
+    {
+      "key": "pay.record",
+      "routes": [
+        "/m/payments",
+        "/api/flows/recordPayment",
+        "/api/flows/confirmPayment",
+        "/api/flows/rejectPayment"
+      ],
+      "actualFunctions": [
+        "domain.recordPayment/confirmPayment/rejectPayment",
+        "payment-center-events",
+        "payment-result-events",
+        "payment-request-status"
+      ],
+      "rawObjects": [
+        "payments",
+        "payment_allocations",
+        "invoices",
+        "invoice_lines",
+        "ledger_transactions",
+        "ledger_entries",
+        "app.b028_center_events / app.b028_center_recipients",
+        "app.b010_payment_commands / app.b010_source_events / app.b010_payment_contexts"
+      ],
+      "operationSemantics": "Record staff payment; confirm/reject submitted report with existing exact allocation, posting, payer/audit and center/result semantics. Tenant own submitted report is a separate unchanged portal operation.",
+      "proposedFixedBridge": "app.b017_payment_record/confirm/reject; preserve existing B010/B028 functions and same transaction/order; replace their current role-list checks with operation-specific verified authority for enrolled actors.",
+      "mandatoryLimits": "No reversal, arbitrary payment status edit, money movement, bank auto-match or disclosure of other payer/private reason. All financial asserts remain."
+    },
+    {
+      "key": "pay.reverse",
+      "routes": [
+        "/m/payments reverse action",
+        "domain.reversePayment caller paths"
+      ],
+      "actualFunctions": [
+        "domain.reversePayment",
+        "public.post_reversal(two and three argument overloads)",
+        "payment-center-events reversal",
+        "payment-result-events reversal"
+      ],
+      "rawObjects": [
+        "payments",
+        "payment_allocations",
+        "ledger_transactions",
+        "ledger_entries",
+        "invoices",
+        "audit_log",
+        "B018 private public-reason companion if later installed"
+      ],
+      "operationSemantics": "Reverse an eligible actual confirmed payment using original business locks and exact journal opposition. Not a generic arbitrary journal reversal API. Manager assigned pay.reverse must succeed through this exact path, not be rejected by old admin/accountant lists.",
+      "proposedFixedBridge": "app.b017_payment_reverse with explicit payment ID/request/reason; scoped post_reversal admission validates canonical payment and preserves B018 sealed public-reason gateway if enrolled.",
+      "mandatoryLimits": "Private journal reason never projected as tenant reason; do not bypass B018 source-bound invariant. No arbitrary invoice retarget via three-argument overload, no portal reversal."
+    },
+    {
+      "key": "bank.reconcile",
+      "routes": [
+        "/m/bank",
+        "/api/bank/matching",
+        "/api/flows/importBankCsv",
+        "/api/flows/approveMatch"
+      ],
+      "actualFunctions": [
+        "bank-matching.authorize/bankMatchingEnabled/bankBoard/importBankFile/decideBankMatch",
+        "domain.importBankCsv/approveMatch",
+        "bank-match-basis"
+      ],
+      "rawObjects": [
+        "bank_accounts",
+        "bank_csv_mappings",
+        "bank_statement_imports",
+        "bank_transactions",
+        "bank_match_suggestions",
+        "payments",
+        "payment_allocations",
+        "ledger_transactions",
+        "ledger_entries",
+        "app.b009_file_imports",
+        "app.b009_decisions",
+        "files"
+      ],
+      "operationSemantics": "Bank board/import/dedupe/manual match/reject, including existing match-to-submitted-payment confirmation as part of bank.reconcile. This declared composite operation does not implicitly grant general pay.record. No automatic matching or changed math.",
+      "proposedFixedBridge": "app.b017_bank_board/import/decide; replace BOTH TS role check and owner-query SQL admin/accountant list with verified current bank.reconcile; preserve B009/B010/B028 concurrency and feature flags.",
+      "mandatoryLimits": "Ron explicit Manager bank-reconcile positive is required. Bank account full-payee detail remains B003 gateway-bound; bank.reconcile is not company account editor."
+    },
+    {
+      "key": "stmt.view",
+      "routes": [
+        "/m/rent",
+        "/m/statements",
+        "/m/statements/preview",
+        "/api/pdf/statements/[id]"
+      ],
+      "actualFunctions": [
+        "queries.listStatements/statementRoster/rentRoll/statementDetail/statementPdfSource",
+        "statement-preview.statementPreview",
+        "utility-reconciliation",
+        "pdf-docs.canDownloadStatementPdf",
+        "pdf-download.statementPdfForSession"
+      ],
+      "rawObjects": [
+        "owner_statements",
+        "owner_statement_lines",
+        "invoices",
+        "payments",
+        "payment_allocations",
+        "expenses",
+        "management_agreements",
+        "fee_rules",
+        "ledger_entries"
+      ],
+      "operationSemantics": "Read statement/rent-roll and read-only amount preview through existing financial calculation. Includes bounded source details needed to explain this statement, not unrestricted raw ledger/audit.",
+      "proposedFixedBridge": "app.b017_statement_read/preview/document_read, exact DTO and read-only snapshot.",
+      "mandatoryLimits": "No generate/issue/month close, no phone unless contact key, no admin audit/private identity document; owner projection stays own issued statements."
+    },
+    {
+      "key": "stmt.generate",
+      "routes": [
+        "/m/statements generate",
+        "/api/flows/generateStatement"
+      ],
+      "actualFunctions": [
+        "domain.generateStatement/linkStatementInvoices",
+        "statement-calculation.calculateStatement",
+        "statement-preview"
+      ],
+      "rawObjects": [
+        "owner_statements",
+        "owner_statement_lines",
+        "invoices",
+        "payments",
+        "payment_allocations",
+        "expenses",
+        "management_agreements",
+        "fee_rules"
+      ],
+      "operationSemantics": "Generate/issue statement with canonical amount/fee/rule snapshot, source fingerprint and invoice linkage; minimal owner/month selectors and preview for this command are included without broad stmt.view list.",
+      "proposedFixedBridge": "app.b017_statement_generate; source-port unchanged algorithm and fingerprint/multi-currency/idempotence.",
+      "mandatoryLimits": "No month close or arbitrary payouts; unresolved B014 report/payout expansion remains outside completed B017 evidence."
+    },
+    {
+      "key": "exp.add",
+      "routes": [
+        "/m/expenses",
+        "/m/statements expense form",
+        "/m/tickets/[id] expense subcommand"
+      ],
+      "actualFunctions": [
+        "expenses.expenseFormOptions/listExpenses/getExpense/createExpense/updateExpense/voidExpense/approveExpense/addExpense",
+        "repairs.saveRepairRecord",
+        "vendor-repair.confirmVendorCost"
+      ],
+      "rawObjects": [
+        "expenses",
+        "ledger_transactions",
+        "ledger_entries",
+        "maintenance_tickets",
+        "files"
+      ],
+      "operationSemantics": "Existing expense create/edit/approve/void workflows with current amount/source/closed-month invariants; expense-only form/read lists are included as current catalog behavior. Repair-linked expense posting needs tickets.update AND exp.add.",
+      "proposedFixedBridge": "app.b017_expense_create/update/approve/void; ticket expense path uses same private implementation after conjunctive admission.",
+      "mandatoryLimits": "No tickets.update or protected photos via expense attachment/cost details; reject caller-injected ticket link changes outside approved repair command."
+    },
+    {
+      "key": "month.close",
+      "routes": [
+        "/m/close",
+        "/m/statements owner transfer actions"
+      ],
+      "actualFunctions": [
+        "domain.closeMonth",
+        "owner-transfers.ownerTransferView/recordOwnerTransfer/reverseOwnerTransfer",
+        "owner-transfer-period-lock"
+      ],
+      "rawObjects": [
+        "month_closes",
+        "ledger_transactions",
+        "ledger_entries",
+        "owner_statements",
+        "invoices",
+        "properties",
+        "property_owners",
+        "contacts"
+      ],
+      "operationSemantics": "Existing period close and current manual owner transfer/reversal/history operation bound to month.close; preserve typed ledger and scoped origin checks. It records a human-reported transfer, does not initiate actual bank transfer. Current transfers are ledger records identified by source_table, not an owner_transfers table.",
+      "proposedFixedBridge": "app.b017_month_close; app.b017_owner_transfer_read/record/reverse; preserve B014 source/security and future seal contract rather than manufacture seal readiness.",
+      "mandatoryLimits": "No actual money movement, no arbitrary balance repair; no assumption B014 current advisory lock closes hosted legacy race."
+    },
+    {
+      "key": "tickets.update",
+      "routes": [
+        "/m/tickets",
+        "/m/tickets/[id]",
+        "/api/flows/createTicket/updateTicket",
+        "/api/tickets/photos/sign/confirm/[id]",
+        "staff vendor-dispatch actions"
+      ],
+      "actualFunctions": [
+        "domain.createTicket/updateTicket",
+        "repairs.saveRepairRecord/addTicketComment/repairPhotoTarget/attachRepairPhoto/readRepairPhoto",
+        "ticket-photos.prepareTicketPhotoUpload/confirmTicketPhoto/openTicketPhoto/signTicketPhotoUrls",
+        "vendor-repair.addVendor/dispatchVendor/revokeVendorJob/approveVendorSharing/confirmVendorCost",
+        "vendor-onboarding staff paths"
+      ],
+      "rawObjects": [
+        "maintenance_tickets",
+        "ticket_comments",
+        "ticket_attachments",
+        "files",
+        "expenses",
+        "repair_vendor_jobs",
+        "repair vendor sharing/onboarding private objects (exact manifest required)"
+      ],
+      "operationSemantics": "Ticket create/update/schedule/comment/vendor dispatch and attachment operation under current flags/scope. Accountant may manage supported text/status with this grant but protected photo metadata/signing/upload/view/bytes remain denied. Cost posting additionally exp.add.",
+      "proposedFixedBridge": "app.b017_ticket_create/update/comment; app.b017_vendor_add/dispatch/revoke/share; app.b017_ticket_photo_prepare/confirm/read only after mandatory base floor; new staff photo byte proxy.",
+      "mandatoryLimits": "Photo signing helpers cannot accept unreviewed arbitrary paths. Tenant/vendor own-ticket/token scopes remain separate; no custom entitlement can become portal identity or enlarge vendor token scope."
+    },
+    {
+      "key": "messages.send",
+      "routes": [
+        "/m/messages",
+        "/api/flows/postMessage"
+      ],
+      "actualFunctions": [
+        "queries.listThreads/threadMessages",
+        "domain.postMessage",
+        "message attachment readers"
+      ],
+      "rawObjects": [
+        "message_threads",
+        "thread_participants",
+        "messages",
+        "message_attachments",
+        "files"
+      ],
+      "operationSemantics": "Read allowed staff threads and send message within same org/current thread rules; no arbitrary contact/recipient or external Email/LINE delivery. New browser/mock tests capture locally.",
+      "proposedFixedBridge": "app.b017_message_threads/read/send/attachment_read with exact typed thread/message IDs.",
+      "mandatoryLimits": "Do not use read access to bypass tenants.contact via structured phone fields; existing free text is not a new automatic structured-data entitlement. Preserve participant/portal and internal message boundaries."
+    },
+    {
+      "key": "reports.export",
+      "routes": [
+        "/m/reports",
+        "/m/reports/export"
+      ],
+      "actualFunctions": [
+        "income-expense.loadIncomeExpense/reportCsv",
+        "src/app/m/reports/export/route.ts"
+      ],
+      "rawObjects": [
+        "properties",
+        "property_owners",
+        "contacts",
+        "payments",
+        "payment_allocations",
+        "expenses",
+        "ledger_transactions",
+        "ledger_entries",
+        "owner_statements"
+      ],
+      "operationSemantics": "Existing period/property/owner income-expense report view and CSV export; same scoped calculation and field list. No broad data export, private journal notes or audit snapshots.",
+      "proposedFixedBridge": "app.b017_income_expense_read/export (same result contract); route current can(session.role) replaced with effective read.",
+      "mandatoryLimits": "Keep min/max date constraints, archived/history semantics, org/env and read-only financial snapshot; tenant phone absent unless separately approved exact field."
+    },
+    {
+      "key": "team.manage",
+      "routes": [
+        "/m/team",
+        "/m/roles assignment/editor only for baseAdmin",
+        "team invitation/member actions"
+      ],
+      "actualFunctions": [
+        "auth.inviteMember/resendInvite/revokeInvite/setMemberRole/setMemberActive/acceptTeamInvite",
+        "auth-actions",
+        "domain.inviteTeammate",
+        "queries.listTeam"
+      ],
+      "rawObjects": [
+        "org_members",
+        "invitations",
+        "auth_sessions",
+        "app.b017_roles",
+        "app.b017_assignments",
+        "app.b017_commands",
+        "app.b017_org_state"
+      ],
+      "operationSemantics": "All supported staff personas may receive team.manage for member directory/invite/resend/revoke/nonself native nonAdmin role/status changes within actor resulting-grant ceiling. Custom role CRUD/assignment and native Admin governance remain baseAdmin AND team.manage because they confer recovery/audit/persona authority beyond catalog. No self role/status change.",
+      "proposedFixedBridge": "app.b017_team_invite/resend/revoke/set_role/set_status/accept; app.b017_role_create/edit/retire/assign/unassign; explicit signatures and invariant below.",
+      "mandatoryLimits": "Cannot create/demote/suspend/remove native Admin or alter billing owner as a nonAdmin. Only baseAdmin can confer native Admin implicit authority; template named Admin has none. Last usable Admin invariant and current inviter revalidation apply."
+    },
+    {
+      "key": "settings.edit",
+      "routes": [
+        "/m/settings",
+        "/m/notify",
+        "/m/roles existing owner privacy form",
+        "current org settings portions of /m/account"
+      ],
+      "actualFunctions": [
+        "auth.setRequireMfa/setOwnerPrivacy",
+        "domain.setOwnerPhoneVisibility",
+        "mail-settings.saveOrgMailSettings",
+        "settings/edit guards on current account view"
+      ],
+      "rawObjects": [
+        "organizations",
+        "jurisdiction_rules org overrides",
+        "reminder_rules",
+        "mail_preferences/settings private objects",
+        "property_owners"
+      ],
+      "operationSemantics": "Existing company rules/notification/owner-portal privacy/require-MFA settings only. May be granted cross-base; does not mutate global platform flags, role definitions, billing owner, own password/verified Email or fees policy not yet approved. Self account preferences keep independent existing self authority.",
+      "proposedFixedBridge": "app.b017_settings_rules/mail/privacy/mfa; call each existing fixed domain validation and require actual current key.",
+      "mandatoryLimits": "Do not expose other users MFA secrets, provider keys, private org audit or B016 unfinished company/Email/fee writers; no external messages or legal text."
+    },
+    {
+      "key": "data.export",
+      "routes": [
+        "existing /api/export properties.csv",
+        "proposed /api/export/all"
+      ],
+      "actualFunctions": [
+        "src/app/api/export/route.ts currently staff+consent only",
+        "queries.listProperties",
+        "No actual full-data export consumer exists in current source"
+      ],
+      "rawObjects": [
+        "all explicit authorized domain projection collections; files only via reauthorized per-file reader"
+      ],
+      "operationSemantics": "This key is currently a real implementation gap. Deliver finite all-authorized-data export package, not database dump: explicit collection/field manifest for portfolio/leases/contact fields/payments/bank/statements/expenses/tickets/messages/team/settings as permitted by current corresponding read/action key; authorized document/photo bytes only under original mandatory floors. Include omitted/redacted collection reasons and snapshot/currency/source metadata. data.export is export ability, not a bypass to all other read permissions.",
+      "proposedFixedBridge": "app.b017_export_manifest plus exact existing per-domain read projections; /api/export/all streams an authorized package; /api/export assigned branch requires data.export+props.view, unassigned old route unchanged.",
+      "mandatoryLimits": "Never export auth/session/invitation secrets, raw private command payloads, identity photos, whole-company audit, unapproved tenant reversal internal reasons, provider credentials or raw bank private fields. Accountant protected photo denial survives. Do not call property-only CSV \u201call data\u201d; until this package exists do not claim all18 supported-complete."
+    }
+  ],
+  "design": {
+    "authority": "Ron approved FULL supported cross-base composition by Admin. This supersedes the Astra-v1 base-ceiling recommendation and its proposed two-mode evaluator. One fixed policy only: an assigned native staff member has exactly the explicit supported template key set; do not intersect it with the target's old PERMS roles. An unassigned member has the current PERMS native behavior. The native persona remains immutable to that template and enforces mandatory Accountant protected-photo/ID restrictions, native-Admin-only full-company audit and governance, plus existing portal/company/environment boundaries. All eighteen catalog keys are eligible for cross-base grants, with each key's explicit operation semantics below; catalog labels never authorize unrelated APIs. No permission can create tenant/vendor/owner identity, platform-admin status or billing-owner powers. No independent review or runtime has run for this v2 plan.",
+    "evaluation": "Current lookup uses the validated cookie -> auth_sessions row -> current membership, selected live parent and selected environment. The service adapter validates the actual cookie hash; a session UUID or user ID supplied by a form is not a credential. The database verifier rechecks that session row, expiry/revocation, member ACTIVE/current native persona and selected-org/live-parent relation. Management is live-only; sandbox uses its live parent's effective assignment for previews, never independent role administration. Return readiness, member ID, native persona, explicit effective keys, template/assignment/state revisions and mandatory restrictions as a bounded request-local snapshot. Rendering may use that snapshot; each data projection and mutation must re-evaluate within its own transaction. No auth authority in cookies, submitted role values, writable GUCs, cached sidebar or stale Session.role. Keep canonical B016 confirmed Auth Email untouched. Current functions can/rolesFor remain native-matrix utilities; do not reinterpret rolesFor as a new authority source. Introduce explicit effective can/assert helpers and migrate actual consumers, so mixed native/effective calls are visible in review.",
+    "schema": "Minimal coherent persistence is FOUR private app tables, not just two nullable identity fields. (1) app.b017_org_state(live_org_id PK/FK, enforcement_state 'prepared'|'enforced', schema_contract integer, authority_revision bigint, enrolled_at nullable, created_at/updated_at): once enforced it never downgrades through user/admin flags; no ordinary DELETE or unenrollment. It is the durable fail-closed fence, not an activation flag. (2) app.b017_roles(org_id,role_id UUID, display_name bounded, name_key canonical, keys text[] sorted/unique/known <=18, revision bigint positive, lifecycle 'draft'|'active'|'retired', created_by/updated_by, timestamps; PK(org_id,role_id), UNIQUE(org_id,name_key)); no base-role ceiling column. PostgreSQL canonical name rule: trimmed/collapsed whitespace, documented lower-case comparison; reject empty/control/invisible/builtin-impersonating names. Client display normalization is not uniqueness authority. A checked known-key predicate binds the exact current PERMS catalog and schema contract; independent source parity check prevents two divergent catalogs. (3) app.b017_assignments(org_id,member_id,role_id nullable, revision bigint, assigned_by, updated_at): PK(org_id,member_id), composite FKs to org_members(org_id,id) and roles(org_id,role_id). Retain rows as unassignment tombstones with role_id NULL; never DELETE to restore base access. Inactive/removed members keep their assignment; reactivation rechecks it, never implicitly clears it. (4) app.b017_commands(org_id,actor_member_id,request_id,operation,target_id,payload_sha256,expected_revisions/result_revisions JSONB,result_identity JSONB,committed_at): unique(org_id,actor_member_id,request_id), immutable committed intent/receipt, bounded metadata only, no display names, email, permission-bearing free-text or cookies. A failed transaction leaves no success receipt. Same request/different operation/target/payload/revisions is conflict. Exact receipt does not bypass current reader authorization after revocation; return authorized committed identity or unavailable. Existing private audit_log gets one metadata event in the SAME transaction, not writeAudit after independent commit. Private role command rows are not a general request engine and are used only for role/member authority changes. No backfill to existing assignments, no ON DELETE CASCADE restoring privileges. Ordinary retirement requires zero active references; referenced retired/damaged role denies, never base fallback. Destructive org reset is maintenance-only with actual nonMac reset/retention evidence; private receipt/audit retention must be reconciled with existing org purge rather than invent permanent PII storage.",
+    "api": "Fixed role APIs only: b017_role_create(session,org,request,payloadDigest,name,keys); b017_role_edit(...role,expectedRoleRevision,name,keys); b017_role_retire(...role,expectedRoleRevision); b017_role_assign(...member,expectedMemberTuple,expectedAssignmentRevision,role,expectedRoleRevision); b017_role_unassign(...member,expectedMemberTuple,expectedAssignmentRevision); b017_role_command_status(...request,payloadDigest); bounded role/member-list/read-self projections. No caller-selected SQL, dynamic function name, arbitrary permission string, SET ROLE instruction or generic mutate(table,fields). Derive actor from the verified current session; any actor input is only compared to that identity. Creation cannot return an active grant before contract readiness. Assignment and edits require all keys in actor's current effective set and fully implemented support manifest. Unassignment/native-role change checks the FULL RESULTING native/default set and implicit governance/photo consequences, not merely old or added key difference. Only native Admin + current team.manage can create/edit/retire/assign/unassign custom roles. team.manage delegated to a nonAdmin remains meaningful for ordinary member management while not conferring the implicit Admin-only audit/recovery authority. A native Admin custom template may omit team.manage only if another active native Admin retains usable role administration. No own assignment/template permission edit, native role/status change or indirect assigned-template edit that changes own authority; exact no-op is permitted after fresh authorization, metadata-only renaming may proceed. No emergency recovery superuser is invented.",
+    "concurrency": "Every enrolled authority mutation has one transaction and an explicit order: existing global rollout-control fence (platform_settings SHARE where the existing domain requires it), live organizations row FOR UPDATE (seat changes already lock this row), selected sandbox org if any in deterministic ID order, b017_org_state FOR UPDATE, affected member rows ordered by immutable member ID, affected role rows ordered by role ID, assignment rows, command receipt, then existing domain rows. Reads/financial writes acquire the authority rows in FOR SHARE before domain locks and retain them to COMMIT, so a template revoke cannot commit between admission and posting. Revalidate after waits. READ COMMITTED re-reads or verified serializable equivalent; no stale REPEATABLE READ assumption. A direct writer with inverse lock order must fail promptly via bounded NOWAIT/lock timeout; deadlock/serialization failures return unavailable/stale, never authorization success or blind retry. Prevalidate own actor membership/session/consent health and hold a share lock on the canonical session row so session revocation serializes; other existing session/consent/member revokers must participate or trigger equivalent final validation. Role edit evaluates ALL active assignees and actor grant ceiling under the same org lock; it is not a cosmetic template update. Compute post-state recoverability before mutation and again with a deferred constraint: >=1 active native Admin with effective team.manage and valid role/assignment contract. Preserve is_billing_owner -> native admin check and existing one-owner index, without inventing an always-active owner. Deny removal/suspension of the last usable Admin, including two concurrent admins demoting each other. Membership INSERT/UPDATE/DELETE, role/status/billing-owner changes, assignment edits and role-key changes all schedule the same invariant. Deleting a referenced member/role or editing its org is denied in ordinary runtime. Maintenance/bootstrap/reset is a separate trusted offline path, not a caller GUC exception.",
+    "membership": "Convert inviteMember/resendInvite/revokeInvite/setMemberRole/setMemberActive and acceptTeamInvite to fixed enrolled-org gateways with SAME transaction audit. Existing TS source currently separates last-admin SELECT, UPDATE and audit; that is inadequate. Native Admin promotion/demotion/removal and billing-owner changes require native Admin, not delegated team.manage alone, because native Admin carries full-company audit outside the eighteen keys. Ordinary nonAdmin member operations may be delegated, but cannot act on self, cannot grant any resulting key or implicit protected capability the actor lacks, cannot strip another user's mandatory persona floor by a disguised role change, and cannot change template/member association behind expected revisions. Pending team invitations carry immutable native role and actual invited_by; at acceptance revalidate the inviter is current/active and can still grant the full resulting native set. Old pending invitations are not grandfathered if authority was revoked. An existing inactive member with a custom assignment retains it through acceptance/reactivation, and the expected assignment/native-role consequence is validated; no UPDATE role/status that silently clears authority. New org bootstrap creates its first native Admin before enforcement via its already trusted creation path; once state is enforced no frontend can invoke bootstrap to escape last-admin protection. Preserve seats, current team-invite allowlist, real user acceptance/password/consent requirements and no automatic sends.",
+    "raw": "Do NOT globally redefine app.is_member/app.has_role: their role arrays encode different operations and portal scope, and many later policies/functions depend on them. For assigned staff in an enforced live org or its linked sandbox, direct authenticated staff SELECT on covered domain tables is denied by named restrictive policies; authorized app reads use fixed safe projection functions. This deliberately prevents phone/notes/account/photo leakage through a broad row read. Preserve genuine unassigned/nonstaff portal predicates and their original own-record rules; an assigned staff-first person cannot claim portal authority in that same org to regain denied staff data. A person who is genuinely nonstaff in another org keeps that org's existing portal rights. Update owner_lease_tenants and every other SECURITY DEFINER view/function shortcut (notably phone CASE app.is_member) to use the same staff-versus-genuine-portal decision. Cover raw profiles_teammates phone and listing_terms tenant_phone, not only contacts. Public JWT role/GUC cannot establish gateway admission.\nFor enforced orgs, ordinary authenticated/service direct STAFF mutation of covered domain tables is rejected; allowed staff operations go through the exact fixed bridges in the key matrix, including unassigned native members in that enrolled org. Genuine existing tenant submitted-payment/ticket/comment and owner/vendor scoped flows remain their exact separate operations, never a staff escape; keep their existing row-shape checks. Each bridge reuses/ports the actual existing command body and calls a private authority checker, not arbitrary DML. Native/unassigned behavior in unenrolled orgs stays byte-equivalent under default-OFF, while new last-admin transaction fixes are separately regression tested. Direct org_members authority writes are denied once enforced, including deletion/cascade escape. New guarded functions must replace or fence current SECURITY DEFINER/owner-executed legacy entrypoints (post_reversal overloads, statement/utility writers, B003/B007/B009/B010/B014/etc). A role with a read key cannot use generic table INSERT/UPDATE to manufacture a journal, post expenses or reclassify a payment. Multi-key operations explicitly require conjunction; bank-match confirmation is the documented bank.reconcile composite, not general pay.record inheritance.\nThe fixed gateway owner is a dedicated NOLOGIN, non-superuser role with only enumerated object privileges; no membership in it is granted to anon/authenticated/service_role or an end-user-switchable role. Functions use fully qualified objects, pg_catalog-only safe search_path, explicit revokes, bounded inputs, no dynamic SQL from payload, and no PUBLIC/default EXECUTE. The trusted backend caller gets only exact fixed-function EXECUTE; current-user identity of a gateway must be distinguishable from caller identity in guard functions, which themselves cannot accidentally SECURITY DEFINER-switch before checking it. Ordinary row-level triggers are not permission secrets. Actual application pool role/owner/BYPASSRLS and service-role reachability are TARGET_UNVERIFIED. If the current pool is table owner/BYPASSRLS, protected credentials plus current application checks are a trust boundary, not proof an old worker is fenced. First enrollment requires an attested old-worker/old-credential fence and protected new function ACL; no assignment before that. Do not claim RLS constrains a DB owner. PE verifies/establishes the actual caller and NOLOGIN owner roles on nonMac; Codex supplies their exact SQL/grant manifest and adapter code.\nIdentity assumption must be explicit: Supabase authenticated is a NOLOGIN role reached only through its trusted verified-JWT broker, not a direct customer SQL login. A raw SQL test pins the actual tested subject; changing request.jwt.claim.sub is not an independent user credential. Gateway calls must still deny an untrusted caller even if it forges every GUC. If target allows end users arbitrary SQL as authenticated or table owner, caller-identity binding is a concrete security blocker; do not claim auth.uid alone closes that threat.",
+    "readmanifest": "Safe read families are explicit fixed projections, not SELECT *: dashboard; portfolio+lease metadata; tenant phone; payments/payer status; bank board; statement/preview; expenses; ticket text/status; authorized photo/file metadata+bytes; messages/attachments; team; org settings; income-expense report; export manifest. Each field has source object, key/mandatory floor and portal rule in the implementation manifest. Reuse current source DTOs but remove hidden privileged fields before serialization, including HTML/server-component payload and cache. For props.view without tenants.contact, omit phone in structured queries and deny immutable PDF/download objects whose known content includes restricted phone; do not promise PDF content redaction without actually implementing it. Edit commands may accept user-submitted phone fields to complete an existing typed workflow, but readback still obeys contact visibility; no broad phone list is inferred from edit. Minimal selectors required by a command are scoped to that command and expose only label/ID/currency/date/status needed to operate; a bank key need not grant general property or contacts navigation. Accountants get necessary finance DTOs with tickets.update text operations allowed when granted, while every protected photo metadata/path/upload/sign/read/bytes operation checks the mandatory native floor independently.",
+    "files": "Current ticket GET redirects to storage signed URL; signTicketPhotoUrls issues 600-second URLs. A fresh permission check at issuance does not revoke an already issued URL. For enrolled staff use a server byte proxy (reuse downloadRepairObject), private/no-store/nosniff, with current key/persona/session/org/ticket check on every GET; never emit raw signed storage URLs in DTOs or HTML. Preserve existing MIME/path/magic-byte/upload-grant checks, sizes and tenant/vendor exact scopes. Before first assignment fence old signed-URL issuance, wait >=600 seconds from verified last issuance (or revoke the storage capability through an independently proven mechanism), then enroll; previously downloaded bytes cannot be revoked and are not claimed erased. Native role changes within an enforced org then have no newly minted external staff bearer URL bypass. Signed lease/PDF/other attachments need their existing expiry/revocation semantics and mandatory audience check; an export must fetch bytes through the same authorization, not package privileged raw storage paths.",
+    "rollout": "CUSTOM_ROLES management control is strict global enabled + allowed org + selected-org opt-in; absent/malformed/missing schema means no new role management. It NEVER chooses permission policy. Prior to any enrollment, new additive objects have zero assigned grants, new app exact legacy native matrix/flags/portal behavior is proven against old and new schema. Then deploy all projection/admission/legacy guards and immutable support manifest while management OFF; prove all eighteen supported operations and mandatory restrictions in disposable/nonMac staging. PE attests target roles/ACL/FORCE RLS/default ACL/dependencies/migration history, old-worker and credential fence, backup/restore, row counts and rollback/quarantine. Only separate Ron/QA activation can move one allowed org to enforced and create assignments. No operational activation here.\nOnce enforced or an assignment row exists, guard enforcement is STICKY and independent of management OFF/global kill/expired flag; kill blocks new management and can deny affected operations, never restores native base keys. If contract/tables/lookup/readiness unavailable, deny affected org access with honest unavailable; no absent-table fallback for a configured/enrolled org. Pre-enrollment old-code/new-schema compatibility is required. Post-enrollment rollback to base-only code is prohibited unless a verified deny/quarantine bridge runs first; never delete assignments or unenroll to make rollback work. Revoke/fence old credentials/workers before granting, not after. SQL down migration is not an ordinary rollback. Each template/assignment mutation increments authority revision; request-local snapshots only, no cross-request permission cache until invalidation is separately proved. No secrets/new production keys/Mac parser/migrations/flag activation are authorized.",
+    "catalog": "The proposed SQL package must enumerate four private tables/constraints/indexes, exact NOLOGIN owner and exact caller EXECUTE ACLs, private fixed verifier/projections/domain gateways, org/member/role/assignment invariant triggers, covered-table restrictive policies, explicit modifications/revokes for every legacy definer/public RPC and owner-view bypass, and current function allowlist/default-ACL changes. It is NOT additive-only merely because table shapes are additive: policy/privilege changes must be classified accurately and reviewed. Do not blanket revoke table privileges from unassigned legacy orgs or claim column REVOKE overrides table-level SELECT/UPDATE. Capture pg_class owner/relrowsecurity/relforcerowsecurity, pg_roles rolsuper/rolbypassrls/inheritance, pg_auth_members, table+column ACLs, schema/default ACLs, pg_proc owner/security-definer/search_path/ACL and current view definitions; none are live-verified in this plan. SQL expected source object list is pinned from current repo, actual target reconciliation is PE work after Codex exact package is authored. NonMac parse/replay on clean and supported upgrade states plus existing old-code/OFF, assigned raw denial/allowed fixed RPC, reset/restore/rollback tests are mandatory. No new migration SQL is authored by this planning task.",
+    "implementation": "Sequential implementation order: (1) independent architectural review of this single approved policy and exact data/export/team semantics; (2) author disconnected pure rules from existing PERMS plus focused matrix tests, with NO provisional ceiling modes; root reserves paths first and owns flags/package/docs; (3) author complete inactive proposed SQL + MD + support/ACL/field manifest under current writable workspace, with exact function bodies and domain algorithm parity, no Mac parse/apply; source-only independent review before PE target work; (4) add effective resolver, named projection and fixed command adapters and role/member UI, updating actual routes/actions/files plus all bypass manifests in reserved bounded rounds; leave source-overlapping B016/B018 paths to root serialization; (5) execute only currently authorized old approved local fixtures until PE approved nonMac proposed-schema results exist; then exact candidate full gate/build/browser/staging and required independent Claude/Class B/Ron acceptance; (6) publish/mirror/handoff only under root authorization and stop without starting B019+. A pure evaluator or two-table foundation is partial, never all18/B017 done. This plan itself grants no source reservation, runtime permission or target authority.",
+    "acceptance": "For EACH of eighteen keys: unassigned native positive/negative compatibility; assigned explicit allowed outside native base positive (Manager bank reconcile mandatory); assigned key absent negative; permitted minimal selector vs forbidden broad list; page/nav/form/server action/API; named fixed RPC positive; ordinary authenticated raw table/RPC deny; service-only foreign session/forged actor/key/role/GUC deny; no hidden response/HTML/cache/file leak. Include shared key combinations: ticket+expense both required; bank reconciliation confirmation allowed only within exact match command; settings not role management; data.export not phone/photo/audit escape. All four native staff personas, identical user in another company, active/suspended/removed, revoked/expired session, live/sandbox, actual tenant/owner/vendor/anonymous and same-user staff-first persona cases.\nAdversarial authority cases: two admins simultaneous demote/suspend, template changes affecting self/last usable Admin, concurrent actor revoke vs financial commit, stale session/native role/assignment revisions, bulk edit all assignees, duplicate keys/unknown catalog, same request changed payload, lost response exact replay after subsequent edit, retire referenced role, FK/missing role/missing schema/global kill, delete membership/assignment, base promotion granting implicit Admin/photo entitlement, old invitation acceptance after inviter revoke, seat races, inherited role/owner/RLS bypass, SET ROLE/GUC forgery, direct raw insert/update/delete/cascade, and old Worker + old credentials after enrollment.\nRecord full original failures, audit transaction rollback, exact key absence/present metadata/org flags restoration, no old assertion relaxation, EN/zh-TW390/1280 empty/loading/invalid/stale/denied/success, direct financial and photo/data matrix. Actual target migration/ACL tests, current build/fullbrowser/staging/Claude/real-device are NOT RUN for this plan. Existing native review does not replace Claude acceptance. Whole item remains pending.",
+    "unresolved": "No new Ron decision is required for base ceilings: that is resolved. The explicit v2 operation contracts for team.manage (delegable ordinary member work, nativeAdmin-only implicit Admin/custom-role governance) and data.export (all currently authorized regular domain data, mandatory redaction/audience) are implementation proposals requiring the designated independent/root product-scope review; they are not historical approved behavior. If that review identifies a real incompatible canonical requirement, report that exact item to Ron rather than silently narrow all eighteen keys. Concrete current gaps: full-data export has no implementation; field/legacy gateway manifests and SQL bodies must be authored; current target privileged login/ACL/role memberships, old-worker fence and backup/restore are unverified. These are assigned work/prerequisites, not an undefined demand that PE invent the design. After source package exists, PE owns only actual target reconciliation, approved nonMac parse/application and proof; Codex still owns application integration and exact acceptance evidence. Earlier inventory primary v7 assessment is superseded by independent Astra NO_GO; B018 v8 review belongs to root and is outside this B017 plan."
+  },
+  "sourceBindings": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/perms.ts",
+      "sha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9",
+      "bytes": 7306,
+      "gitBlob": "626c89472406558eaac053d952de2c4136c607dd"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/db.ts",
+      "sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "bytes": 9056,
+      "gitBlob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/session.ts",
+      "sha256": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+      "bytes": 11449,
+      "gitBlob": "4193fd22d30e558fb7a6620d70951121673ba0d0"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/org-scope.ts",
+      "sha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427",
+      "bytes": 4740,
+      "gitBlob": "7d2e04341cbbd0cd072df1b549608eb5ba4da527"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/auth.ts",
+      "sha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+      "bytes": 62862,
+      "gitBlob": "9a2f2a3a08a215b4e503350c5a3ede0fa1ac081e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/queries.ts",
+      "sha256": "690781b8fd3e2e858925b53ee26427669230ee2f68b7383575d60d5c066ba679",
+      "bytes": 80126,
+      "gitBlob": "bb40a5b03f5a1fea2c17bfc55682cec885c07ce2"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/domain.ts",
+      "sha256": "6a48d9373f922827a66e0f1a057559b8f4dd39e15f33be9fd835d9d323bc85e0",
+      "bytes": 132158,
+      "gitBlob": "35bc6ac992368da7af34e8d70e62ee6e706b6766"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/portfolio.ts",
+      "sha256": "9913602298e87a39b8087677af18a28fb17e028fc76ea4f217115d2a2ab7365a",
+      "bytes": 42198,
+      "gitBlob": "453b1be3086777d9ecb6bdcace368ee1b5456219"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/import-batch.ts",
+      "sha256": "8138202415bbd5ddc35a1e0e8f7fb39499b33811a7411ed0810069823f83c273",
+      "bytes": 36838,
+      "gitBlob": "1d2c2e7842ad00f326c1de1ddf14fdf6fd9320b0"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/repairs.ts",
+      "sha256": "2e3268ed30efd445c3e56337ee0658cfffe9064e2eda5b950f1411a109a2af5d",
+      "bytes": 17799,
+      "gitBlob": "1d4bab2a19d7a59f3b98b6bcb991b9e870478cd9"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/ticket-photos.ts",
+      "sha256": "788003d90bf7b9f3bb9966a78fe199be9f124e10722b9587e80300f3174b18ac",
+      "bytes": 12989,
+      "gitBlob": "e3250706f0e6c793f045b847063298bd3da20f1c"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/bank-matching.ts",
+      "sha256": "1059c04d62365c9e3959248522bf1d066ff8e0fb5d91dc4b7173a71f74fdc35e",
+      "bytes": 16141,
+      "gitBlob": "8f44e4265cb8767124d27e3059706751c67e7b1e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/expenses.ts",
+      "sha256": "cc8499e4871222a9c218663910b565a1540a59d3ae1d387a5057281537f22fd0",
+      "bytes": 28849,
+      "gitBlob": "1a15f7255bde0740c10e2513aeb836f51f0e0639"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/statement-preview.ts",
+      "sha256": "e311b6adb9b1931057768110cdc321401dd108ce6b0c9d2bce9cb26757813090",
+      "bytes": 659,
+      "gitBlob": "fdf2316f38514766b84508193c29b52b039e7406"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/pdf-docs.ts",
+      "sha256": "312c4163b356d144c6e62da23600d006fdb79daaa7493cbe93d0665e02bb097e",
+      "bytes": 6050,
+      "gitBlob": "58750ab915cf674633164f8f5e5a0a0e877b8ff9"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/pdf-download.ts",
+      "sha256": "8d4d1dbfa4e7a2403da172ffc29c1bfd37cbdbf8b6b743ae296dc8a3dccd3f9d",
+      "bytes": 5160,
+      "gitBlob": "e1c327653ffbecf88c3164b19a49d0f89fda1191"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/owner-transfers.ts",
+      "sha256": "0eef8ff3b7951d350a0d19e5b66d399f0f40cf026ecec163038fde65b39b86bc",
+      "bytes": 13344,
+      "gitBlob": "4d8ba2a8be4dd754a7911e04b8634164fc20f78a"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/vendor-repair.ts",
+      "sha256": "28f2914dfd4e367d9e3c4baf46ef79d10159b147a9d4caaac16f829153480864",
+      "bytes": 46050,
+      "gitBlob": "4a18311f490abb51446dc21f955cc372d65f4f4b"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/audit-read.ts",
+      "sha256": "5f637b887f6efd121af7a0d9388210683181e9000ee6c5edf004808abf32f167",
+      "bytes": 28765,
+      "gitBlob": "bb26f44f927f116bd4a087ab7c7e8d1c7bba01b8"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/mail-settings.ts",
+      "sha256": "8a219f0348f2aa4f52b2514c0e6879ce007f20ce244ea2419ee00e1a90a6822e",
+      "bytes": 3198,
+      "gitBlob": "2c0e85302cc0a67708366dbd2c63e91a69e36d56"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/actions.ts",
+      "sha256": "1a1080014065d2e47bbef6dd0af46d34a33720957b9e6b136dadeda3889b887b",
+      "bytes": 31543,
+      "gitBlob": "127a116bb2cad512d3551c061ab9e5160fa37845"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/layout.tsx",
+      "sha256": "51243cea4b3c4342b2d541698202c578bec9ce6a8b7ebae9505bd664783c3863",
+      "bytes": 1836,
+      "gitBlob": "ccb24258c06b15d36959dc69abd328e258137b50"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/roles/page.tsx",
+      "sha256": "df07a860fb668aa6cd3f523059e2f6b08a0f06f42a2787077e05919137823451",
+      "bytes": 2835,
+      "gitBlob": "ca61562f99a5c3cd24352584e0bc451f28d8f3f6"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/api/export/route.ts",
+      "sha256": "dd5de4dddf1da0e4336d6907f3ef78ed9903448dbdad913a5f18a86894e93e5f",
+      "bytes": 1136,
+      "gitBlob": "1704c4ea972c8baef612936d8a7fae5ecb9ba2df"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/reports/export/route.ts",
+      "sha256": "8b8419893545c51977f8ddf3ac3818179a674fd27e1c21734c0171d13d3e4d47",
+      "bytes": 1996,
+      "gitBlob": "bdc2521cd5fa60cb4a008b1d774b18981ab6de01"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/api/flows/[action]/route.ts",
+      "sha256": "6d53c2b6895fe0c3333abdf1ebaeed7c602a25788c45555e42cb103ed5e7783c",
+      "bytes": 3516,
+      "gitBlob": "ca7ae0de016f21fe18e62b0cc0ddec32ff7c6218"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/i18n/en.json",
+      "sha256": "7a6009146be8e153f20b687ca8545d75a266124f4a6814bc22305b6e9f500b5b",
+      "bytes": 112497,
+      "gitBlob": "697ff32aa3d94d7de430278daa55d335f86e6b2f"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/i18n/zh-TW.json",
+      "sha256": "25636c3ef5f0bd7ba695d067e7661fa25ed2d7b02a0e9bd887236c7b0233b8a8",
+      "bytes": 110261,
+      "gitBlob": "6270729f648586a7443c15e6bb7f174c3ef61563"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261018120000_schema.sql",
+      "sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "bytes": 143903,
+      "gitBlob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261020120000_auth.sql",
+      "sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81",
+      "bytes": 7157,
+      "gitBlob": "60998ac8e77a8366e67b9358dd87072b7d7b046a"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261020140000_audit_access.sql",
+      "sha256": "6f9909c6e9a4fbea6a8c3c58485b7d1336a93d61af485dd0766b033add43f5b6",
+      "bytes": 294,
+      "gitBlob": "f0802260e45c39c013af74c9e0e14e01e1b79316"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261021120000_portfolio.sql",
+      "sha256": "1c8f88874cd3b992dfd950f75137af7754609609ac09e3bf613031db74465679",
+      "bytes": 4284,
+      "gitBlob": "2291d93a3e3b4240282f9c929b7d894b8c778811"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261023150000_repair_records.sql",
+      "sha256": "da735e1674d4b2c3c5998e80b12d0d9b9abf54a52b75d5a70da8b33beb620b17",
+      "bytes": 12479,
+      "gitBlob": "f9a845fecd09adc7e2b21ad98da3f4d7767c45fd"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261031100202_b003_payee_gateway.sql",
+      "sha256": "1f929fe9c71e317ce044127c6cd6b25daa28f591a754ab297e0d7a7fe60be856",
+      "bytes": 20060,
+      "gitBlob": "1938d1d8a65fb6fe8ace288a3e7a3f133a573552"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/specs/B-017.md",
+      "sha256": "04b1bbef926713e9e442444f03b44b7c0b2d65da14f9dc763bd003e02bcf2006",
+      "bytes": 1111,
+      "gitBlob": "83a7ec091da5e9834b0b5b41639c35defd772f71"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-017/status.md",
+      "sha256": "9c7fb23859b54a32daaeb428387e30b3e3239787d5e5076bb80a349cb1c20168",
+      "bytes": 2019,
+      "gitBlob": "74a1a679be365dcdda1ea4d5218f1f3f50564942"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-017/verdict.md",
+      "sha256": "dbecdffe703b31bfc197e022abdd730b0a5121d460327efb11e50ef45468dc21",
+      "bytes": 215,
+      "gitBlob": "78c11c4890647efd27cfc8102db62ed905f9cff1"
+    }
+  ],
+  "priorPlan": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-primary-plan-astra-v1.md",
+    "sha256": "a5578c51687cd3d3b4f2fdb7f385ba13b5f8319ee597cde17210c056966b797f"
+  },
+  "RonDecision": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/ron-decisions-20261103-b017-b018.json",
+    "sha256": "337d8e2f76be98f09e21783574a915ff9e2881a35b60e1ba941626cf9899cacb"
+  },
+  "execution": "Read-only local source/docs/git hash/status inspection only. No app/source/reservation edits, runtime/test/DB/network/parser, Downloads writes, operational flags or external transmission. Only these two workspace reports authored.",
+  "markdownSha256": "a6af932a2eb43b17d1369c5ab7a9ec95317221abb62ac8cb7f14a36240d0529a"
+}

@@ -18,9 +18,9 @@ export function historyFlagEnabled(global: unknown, org: unknown, orgId: string)
 export function summarizeBill(leaseStatus:string,invoices:InvoiceAmount[],timezone:string,at:Date):{state:BillState;overdue:boolean;balanceMinor:number;paidMinor:number} {
   const today=localReminderDate(at,timezone);
   for(const i of invoices) if (![i.total,i.paid,i.balance].every(Number.isSafeInteger)||i.paid<0||i.balance!==i.total-i.paid) throw new Error('Inconsistent invoice');
-  if(leaseStatus==='pending_signature'||leaseStatus==='draft')return {state:'unsigned',overdue:false,balanceMinor:0,paidMinor:0};
+  if(leaseStatus==='draft')return {state:'unsigned',overdue:false,balanceMinor:0,paidMinor:0};
   const payable=invoices.filter(i=>['open','partially_paid','paid'].includes(i.status));
-  if(!payable.length)return {state:invoices.length?'nonpayable':'no_invoice',overdue:false,balanceMinor:0,paidMinor:0};
+  if(!payable.length)return {state:invoices.length?'nonpayable':leaseStatus==='pending_signature'?'unsigned':'no_invoice',overdue:false,balanceMinor:0,paidMinor:0};
   for(const i of payable) {
     if ((i.status==='paid' && (i.total<=0||i.balance>0)) || (i.status==='partially_paid' && i.paid<=0) || (i.status==='open' && (i.paid!==0 || (i.total>0 && i.balance<=0)))) throw new Error('Inconsistent invoice state');
   }

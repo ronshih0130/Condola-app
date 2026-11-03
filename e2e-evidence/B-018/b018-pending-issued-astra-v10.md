@@ -1,0 +1,7 @@
+# B018 pending issued bills v10 independent review
+
+**SOURCE_AND_FREEZE_GO_ONE_DISPOSABLE_DB_TARGET_ONLY.** The unchanged DB supervisor and corrected v10b lock permit one coordinator-authorized isolated DB target. All 1,024 working blobs matched. Exactly the four reserved reader/rules/test paths differ from committed baseline b8c4134. V10 changes only the integration fixture relative to reviewed v9. The earlier v10 lock names the wrong HEAD and must stay unused.
+
+The fixture now proves two different zero balances. The single net-zero invoice checks zero_charge, no payable amount and no report action. Separate real negative and positive headers check offset with no report action. Raising the first deposit to 5,000 minor alongside its −4,000 residual yields a net positive 1,000 across the lease. The normal recordPayment writer sums those same open headers. The test still requires a submitted NT$10 report, unchanged bill balance, pending state and the original amount/date from the insert audit. The preceding residual-only negative case retains no account disclosure. Ended-read-only, OFF/ON audience and existing reconciliation checks have no production changes since v9. No outstanding source blocker for this target.
+
+No reviewer execution. The recorded 35/35 pure results apply to the unchanged v9 rules; v8’s earlier 9/9 target remains historical. V10 DB behavior and browser controls require fresh evidence. Browser, gate, builds, staging and public-reason work receive no acceptance from this review.

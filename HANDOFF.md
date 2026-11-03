@@ -470,3 +470,12 @@ The tenant history reader, shared home/payment states and ended-lease history ar
 Full gate and rendered browser checks are not yet run for this candidate. B018 remains in progress. The separately approved public reversal reason still needs a complete reviewed schema handoff and PE application; internal ledger notes remain private. B017 cross-base permission policy is approved, but implementation is pending. No operational flag activation, migration, main merge or production/provider operation.
 
 STOP POINT: B018 targeted tests passed; next: freeze the candidate and run reviewed EN390 browser focus before one full gate; owner: Codex/Ron.
+
+
+## B018 issued pending invoice regression — 2026-11-03T13:50:36.235246-08:00
+
+The reviewed correction preserves genuine issued balances before signature, including the existing tenant report action; it creates no invoice or new charge. True unsigned/no-invoice and ended read-only behavior remain. 35 focused unit tests and all 9 isolated integration cases passed, including a real NT$10 report on a pending-signature deposit and its original audit provenance. The fixtures distinguish a single zero-total invoice from two offsetting invoices. No assertions were skipped or weakened. [Exact target](e2e-evidence/B-018/precommit-target-v10.json).
+
+Earlier b8c4134/DB9 evidence is bounded history, not proof of this correction. Full gate, browser focus/matrix and build remain pending. The inactive public-reason proposal is still in source review; no SQL was parsed/applied, and private internal notes remain private. B017 has reviewed policy and detailed operation/export contracts but no executable feature. All existing started capabilities remain open; no new B IDs.
+
+STOP POINT: targeted correction passed; next: commit clean candidate, independently freeze browser v4, run EN390 focus before one full gate; owner: Codex/Ron.

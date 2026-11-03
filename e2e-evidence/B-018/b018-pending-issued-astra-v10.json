@@ -1,0 +1,23 @@
+{
+  "verdict": "SOURCE_AND_FREEZE_GO_ONE_DISPOSABLE_DB_TARGET_ONLY",
+  "candidateProvenance": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+  "workingPinsVerified": 1024,
+  "fourWorkingDeltas": {
+    "src/server/tenant-payment-history-rules.test.ts": "da24a52ad67d67c937b874f9cc6db1cbf428aded",
+    "src/server/tenant-payment-history-rules.ts": "eb312006537573d62d937ee3919c93fd5396567e",
+    "src/server/tenant-payment-history.integration.test.ts": "51fb4831e88405975e587e99c6a8a2cea6386716",
+    "src/server/tenant-payment-history.ts": "8d2cd2d6de3e3c2a715c6ae26c93e402f059e0c3"
+  },
+  "authorMdSha256": "b6f7619176becf6c56379e9783eb72359c532c8da04c20e6729a1a4d1a775d48",
+  "authorJsonSha256": "18c284502fb4750eab2bcf133018f71843fc69a7ed6b94becf251606ab14ef9d",
+  "helperSha256": {
+    "db-supervisor.py": "ed362161866bed0bfcc295b0413d75ee5ddb5dea4aa4a771ddd38249ddcf3f61",
+    "db-controls.cjs": "7c3969a27e0e7324c32120a882d57d4b42f8c5a09aa3d84d13003ee0b1cffc30",
+    "db-network-guard.cjs": "97d43dbc6ef1ad5d4f7e54f04784845114622b70122d805ad6bef723c5c6219f"
+  },
+  "lockSha256": "3d1b246605ffba3c7e0f2ff344d8171cf8fa8339310a46246cb5427cc6ed23e6",
+  "rejectedPriorLockSha256": "7c99f79a8042ceeb43a076624cad57fa94f3d7b9455835d2f5500dcdb085df5d",
+  "priorV9NoGoArchiveSha256": "4080fbd31761bd662b80a841cf52fdcac7f96670b72f5b7d24c03baaa60f8cce",
+  "noRuntime": true,
+  "markdownSha256": "f92d7cb2c2f5c6533e4dc5d859fedbe70042a9f54ce96f2389e16e03353ddc76"
+}

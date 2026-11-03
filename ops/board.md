@@ -715,3 +715,8 @@ The tenant history reader, shared home/payment states and ended-lease history ar
 Full gate and rendered browser checks are not yet run for this candidate. B018 remains in progress. The separately approved public reversal reason still needs a complete reviewed schema handoff and PE application; internal ledger notes remain private. B017 cross-base permission policy is approved, but implementation is pending. No operational flag activation, migration, main merge or production/provider operation.
 
 STOP POINT: B018 targeted tests passed; next: freeze the candidate and run reviewed EN390 browser focus before one full gate; owner: Codex/Ron.
+
+
+## B018 pending-invoice correction reservation — 2026-11-03T13:18:36.686284-08:00
+
+Independent review found that an issued positive deposit on a pending-signature lease lost its actual balance and existing report action when history was ON. Backend Terra owns only the reader, reader integration test, summary rules and rules test for v9. Existing unsigned-empty, ended-read-only, signed credit, bank audience, statement allocation and exact balance assertions stay active. Browser v2 and gate/build candidate locks are held; no browser/gate was started on the rejected source. Root will refreeze after independent review and actual targeted regression. Public-reason design and B017 work stay disjoint; no new B IDs.
