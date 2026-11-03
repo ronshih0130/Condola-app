@@ -690,3 +690,28 @@ NewsourcecleanfullcodegatePENDING; prioridentitytestedf6593ce/metadata0e4b2be re
 Tested 988b9f9d5348e9a4facaec8c563a007709fc2cd5: fullclean643unit/467RLS+1solepriorapprovedhistoricalskipPASS; target13/type/lintPASS; independentAstraCODE_GATE_GO_DISCONNECTED_MOCK_ONLY. [Checkpoint](e2e-evidence/B-016/email-mock-checkpoint-988b9f9.md). Canonicalsessionidentityfix unchangedandincluded. NO app/provider/DB/UI/flag integration, NO liveEmail/featureacceptance. AllthreeSOURCE_NO_GOarchives26bindingsretained; browserearlierv2/v3/v4FAILunwaivedandv5partialunreviewed/unexecuted.
 
 WholeB016incomplete: RonEmailpolicy/feechoices, PEcompanytargetandproviderconfig, canonicalcoherence/integration/currentbrowser/build/staging/Claude/pilot. No newDBproposalparsed/applied/no prod/mainmerge/messages/legalcopy/operationalflags. Skiponlydependentpartsandselectnexteligiblequeuereconciliationafterpublication; no wholeBdone/all39retained.
+
+## B017 custom-role policy/design blocker 2026-11-03T09:38:22.189758-08:00
+
+Read-onlyprimaryinventory e2e-evidence/B-017/b017-primary-plan-astra-v1.md/json complete; no source/SQL/runtime. Ronchoicepending: full supported cross-basecomposition vsbaseceilingonly; mandatoryAccountantphotos/Adminaudit/portal-companyisolationandactorceilingbothpreserved. No restriction-onlyscopeaccepted; no provisionalgenericpolicyengineauthoring. DBpersistence+eachkeyAPI/file/rawRLS/oldclient/lastadmin enforcement requiresconcretedesign. CodexmustfinishafterRonchoice, thenPEreviewscompletehandoff/nonMacparse/apply/evidence. Downloads/b017-db-handoff-design-pending.md isNOTAPPLYREADY/NO_SQL, notcompletedmigrationhandoff. RecordquestionandcontinueB018readonlydependencyreconciliation, no apppathreserved. B016remainingRonEmail/feechoices+PEtarget/config/coherence+browsergap pending; priorcodecheckpointsremainboundedGO. Full39/fourpartyLINE intact/no prod/mainmerge/newmigration/operationalflags/messages/legalcopy.
+
+## B018 source reservation 2026-11-03T09:51:50.540052-08:00
+
+AstraPLAN_GO9e490a13 existing-schema full tenant report/history+shared home/pay status+ended readonly scope. BackendTerra owns4new tenant-payment-history server/rules/tests; frontendTerra owns3existing tenantpages+newcomponent/copy; exactmap work/b018-source-reservation-v1.json. Rootflags/package/metadata/runtime. SinglebackendDTO/summaryauthority; preservelegacyOFF/payee/notifications/finance/session. No queries.ts editreserved. Ron reversalnoteaudience question pending; staff ledger notes private, originalprovenance honest. Pureunit/type/lint developmentallowed; no DB/browser/gate/newDDL/providerexecution before root GO. No legalcopy/operationalflag/prod/mainmerge. B016/B017 dependentparts pending; full39 preserved.
+
+Ron decisions 2026-11-03T10:21:01.924982-08:00: B017 APPROVED full supported cross-base composition by Admin, not restriction-only; mandatory Accountant photos/Adminaudit/company/portal restrictions retained. B018 APPROVED separately recorded tenant-visible reversal reason; internal journal reason stays private. work/ron-decisions-20261103-b017-b018.json. B017policyblockclosed; concrete per-key full delegation+DBdesign/handoff still Codex-owned pending. B018 current history/status work continues; publicreason storage/gateway needs source-bound minimaldesign and PEhandoff/nonMacapplication ifnewstructure. No existing internalnotes disclosed.
+
+## B018 shared credit display correction 2026-11-03T10:56:32.846832-08:00
+
+Actualv5andv6bDB7PASS1FAIL0skip preserved; dualscopes agree rawrecognizedcredit-8000+utility4000/headerbalance-4000, existingnettingreturns0, readercorrectlyrefusesmismatch. ReserveTerra additionalmoney.ts+utility-post.test.ts ONLYunconsumedcreditconservation/readprojection regressions. No posting/ledger/allocation changes or assertionwaiver; rootnewmap/review/target beforegate. work/b018-shared-credit-fix-reservation-v7.json.
+
+B018v8 2026-11-03T12:29:15.454340-08:00: v7SOURCE_NO_GO preserved; separate signedtenantdisplay fromoriginalstatementattribution, preserveunsignedpayeeON/OFF. Backendreservedmoney/utilitytest/pay-note/reader/integration/pay-page eligibility ONLY; UIauthorheldrepo. work/b018-v8-source-reservation.json. No newB aftercurrenthandoffscope.
+
+
+## B018 targeted local checkpoint — 2026-11-03T13:05:11.786319-08:00
+
+The tenant history reader, shared home/payment states and ended-lease history are implemented behind default-OFF `tenant_payment_history`. Exact precommit source passed 34 focused unit tests and 9 disposable-database integration tests, including actual paid utility correction and configured payee controls. Independent v8 source review passed; original owner-statement allocation and unsigned payee eligibility are preserved. Prior failures remain recorded, with no new skipped or weakened assertions. [Evidence](../e2e-evidence/B-018/precommit-target-v8.json).
+
+Full gate and rendered browser checks are not yet run for this candidate. B018 remains in progress. The separately approved public reversal reason still needs a complete reviewed schema handoff and PE application; internal ledger notes remain private. B017 cross-base permission policy is approved, but implementation is pending. No operational flag activation, migration, main merge or production/provider operation.
+
+STOP POINT: B018 targeted tests passed; next: freeze the candidate and run reviewed EN390 browser focus before one full gate; owner: Codex/Ron.

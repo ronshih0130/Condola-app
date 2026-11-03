@@ -12,6 +12,9 @@ import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 import { tenantDuePreference } from "@/server/tenant-reminder-preferences";
 import { reminderCopy } from "@/i18n/lanes/reminders";
+import { tenantPaymentHistory } from "@/server/tenant-payment-history";
+import { TenantBillSummary } from "@/components/tenant-payment-history";
+import { tenantPaymentHistoryCopy } from "@/i18n/tenant-payment-history";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +45,12 @@ export default async function TenantHome() {
   }
   const lease = leases.find((item) => item.lease_id === session.leaseId) ?? leases[0];
   if (!lease) return <p data-v2-page={v2 ? "t-home" : undefined}>{t("i_empty")}</p>;
-  const [money, idCheck, reminderPreference] = await Promise.all([
-    tenantLeaseMoney(session, lease.lease_id),
+  const [history, idCheck, reminderPreference] = await Promise.all([
+    tenantPaymentHistory(session, lease.lease_id, { view: 'current' }),
     loadLeaseIdCheck(session, lease.lease_id),
     tenantDuePreference(session,lease.lease_id),
   ]);
+  const money = history.state === "off" ? await tenantLeaseMoney(session, lease.lease_id) : null;
   const rentMinor = money?.lease.rent ?? "0";
   const depositMinor = money?.lease.deposit ?? "0";
   const dueMinor = money?.dueMinor ?? 0;
@@ -66,7 +70,7 @@ export default async function TenantHome() {
           <span className="small">{t("idv_gate")}</span>
         </p>
       ) : null}
-      {pendingUnsigned ? (
+      {history.state === 'unavailable' ? <p role="status">{tenantPaymentHistoryCopy(session.locale).unavailable}</p> : history.state === 'ready' ? <div data-testid="rent-due-notice"><TenantBillSummary data={history} locale={session.locale} /><Link className="fbtn" href="/t/pay">{t("i_rich_pay")}</Link></div> : pendingUnsigned ? (
         <p className="small" data-testid="unsigned-rent-note">{t("i_pay_unsigned_bill")}</p>
       ) : (
         <div className="flex" data-testid="rent-due-notice">

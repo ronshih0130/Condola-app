@@ -126,13 +126,28 @@ const PAYMENT_ORDER = ["rent", "add_on", "late_fee", "one_off", "maintenance", "
 const BILL_DISPLAY_ORDER = ["rent", "deposit", "utility"];
 
 /** A reversed 電費 line stays on the invoice. Its credit reduces what the tenant still owes. */
-function netElectricityCredits(lines: ChargeLine[]): ChargeLine[] {
-  let offset = lines
-    .filter((line) => line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費"))
-    .reduce((sum, line) => sum - line.amount_minor, 0);
-  if (offset === 0) {
-    return lines.filter((line) => !(line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費")));
+function netTenantElectricityCredits(lines: ChargeLine[]): ChargeLine[] {
+  // Keep each credit's own provenance; consume only what utility lines offset.
+  const netted = lines.map((line) => ({ ...line }));
+  const credits = netted.filter((line) => line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費") && line.amount_minor < 0);
+  let nextCredit = 0;
+  for (const line of netted) {
+    if (line.charge_type !== "utility" || line.amount_minor <= 0) continue;
+    while (line.amount_minor > 0 && nextCredit < credits.length) {
+      const credit = credits[nextCredit];
+      const take = Math.min(line.amount_minor, -credit.amount_minor);
+      line.amount_minor -= take;
+      credit.amount_minor += take;
+      if (credit.amount_minor === 0) nextCredit += 1;
+    }
   }
+  return netted.filter((line) => !(line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費") && line.amount_minor === 0));
+}
+
+/** Original financial attribution semantics retained for statements and staff defaults. */
+function netElectricityCredits(lines: ChargeLine[]): ChargeLine[] {
+  let offset = lines.filter((line) => line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費")).reduce((sum, line) => sum - line.amount_minor, 0);
+  if (offset === 0) return lines.filter((line) => !(line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費")));
   const netted: ChargeLine[] = [];
   for (const line of lines) {
     if (line.charge_type === "credit" && (line.description ?? "").startsWith("沖銷電費")) continue;
@@ -140,9 +155,7 @@ function netElectricityCredits(lines: ChargeLine[]): ChargeLine[] {
       const take = Math.min(offset, line.amount_minor);
       offset -= take;
       netted.push({ ...line, amount_minor: line.amount_minor - take });
-    } else {
-      netted.push(line);
-    }
+    } else netted.push(line);
   }
   return netted;
 }
@@ -176,8 +189,8 @@ function paymentRank(chargeType: string) {
  * Any other charge type is included so the rows sum to the open invoice balance.
  */
 export function tenantBillLines(lines: ChargeLine[], paidMinor: number): TenantBillLine[] {
-  const netted = netElectricityCredits(lines);
-  const applied = attributePayment(netted, paidMinor);
+  const netted = netTenantElectricityCredits(lines);
+  const applied = attributeNettedPayment(netted, paidMinor);
   const remaining = { rent: applied.rent, utility: applied.utility, deposit: applied.deposit, other: applied.other };
   const sorted = [...netted].sort((a, b) => paymentRank(a.charge_type) - paymentRank(b.charge_type));
   const outstanding: TenantBillLine[] = [];
@@ -214,10 +227,14 @@ export function tenantBillDueMinor(lines: ChargeLine[], paidMinor: number) {
 }
 
 export function attributePayment(lines: ChargeLine[], paidMinor: number) {
+  return attributeNettedPayment(netElectricityCredits(lines), paidMinor);
+}
+
+function attributeNettedPayment(lines: ChargeLine[], paidMinor: number) {
   const order = PAYMENT_ORDER;
   const buckets = { rent: 0, utility: 0, deposit: 0, other: 0 };
   let left = paidMinor;
-  const sorted = netElectricityCredits(lines).sort(
+  const sorted = [...lines].sort(
     (a, b) => order.indexOf(a.charge_type) - order.indexOf(b.charge_type),
   );
   for (const line of sorted) {

@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-03T09:28:00.900653-08:00: B016 code988b9f9 fullgate643unit/467RLS+solepriorhistoricalskip and mock13/type/lintPASS; Astra disconnectedmock CODE_GATE_GO. BrowserFAILpending and realEmail/company/fees/external acceptance incomplete. WholeB016 in_progress; no wholeBdone/all39retained. Next earliesteligiblequeue scope afterpublication.**
+> **Current 2026-11-03T09:28:00.900653-08:00: B016 code988b9f9 fullgate643unit/467RLS+solepriorhistoricalskip and mock13/type/lintPASS; Astra disconnectedmock CODE_GATE_GO. BrowserFAILpending and realEmail/company/fees/external acceptance incomplete. B016/B017 pending dependent decisions/readiness; B018 read-only inventory next. No wholeBdone/all39retained.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 
@@ -25,9 +25,9 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-013 | Manager dispatch and shared repair approval state | MGT-17/18/19/35; J5; CAP-M-15/16; M-48/49 | —; coordinated B-021/B-024 | vendor_dispatch; REPAIR_APPROVALS* | B | L / 32–48 | pending |
 | B-014 | Owner net ledger, transfers and report versions | MGT-25/26/27, OWN-02; J7; CAP-M-17/18, CAP-O-03; M-43 | B-008 | OWNER_NET_LEDGER*; MONTHLY_REPORT_DELIVERY* | B | L / 24–40 | pending |
 | B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | pending |
-| B-016 | Company/profile settings and management-fee rules | MGT-04; J1.1/J7; CAP-M-25/29; M-42/58 | B-003 | company_profile_edit; MANAGEMENT_FEE_RULES* | B | M / 20–32 | in_progress |
-| B-017 | Custom role permissions with escalation protection | PLT-01/02; J1.4; CAP-P-12; M-54 | — | CUSTOM_ROLES* | B | L / 24–40 | todo |
-| B-018 | Tenant payment history and home states | TEN-07/08; J3; CAP-T-04/09; T-09 | B-003, B-010 | TENANT_PAYMENT_HISTORY* | B | M / 12–20 | todo |
+| B-016 | Company/profile settings and management-fee rules | MGT-04; J1.1/J7; CAP-M-25/29; M-42/58 | B-003 | company_profile_edit; MANAGEMENT_FEE_RULES* | B | M / 20–32 | pending |
+| B-017 | Custom role permissions with escalation protection | PLT-01/02; J1.4; CAP-P-12; M-54 | — | CUSTOM_ROLES* | B | L / 24–40 | pending |
+| B-018 | Tenant payment history and home states | TEN-07/08; J3; CAP-T-04/09; T-09 | B-003, B-010 | TENANT_PAYMENT_HISTORY* | B | M / 12–20 | in_progress |
 | B-019 | Tenant conversation creation | TEN-13; J5; CAP-T-12; T-15 | — | TENANT_THREAD_CREATE* | B | S / 6–10 | todo |
 | B-020 | Tenant account, sessions, preferences and data requests | TEN-18; J1; CAP-T-13; T-16/17 | —; notification integration B-028 | TENANT_ACCOUNT_SETTINGS* | B | M / 16–24 | todo |
 | B-021 | Owner thresholds and versioned repair decisions | OWN-12/13/06; J5.4; CAP-O-01/02/08; O-05 | B-013 | REPAIR_APPROVALS* | B | M / 16–24 | pending |
@@ -190,3 +190,12 @@ Tested5a0c6990e4b4b75bb0ab2534cc7742d46c608787:630unit/466of467RLS (onlypriorhis
 IndependentAstraSOURCE_GO_ONLY for inactive2-objectcompany/addressproposal; SQL SHA e6d92407e5a11ff65cd56ef2497f584a7ee59773cd3445f959d35908687c4950, handoff457a2fe74baa29d9622d3f8729a5c20341764abb7b5ff4610cd9af63b1c7c586. [Source package](../e2e-evidence/B-016/company-regional-source-handoff-v2.json). ExactDownloads/condola-bootstrap SQL/handoff/source-review/coverprovided. UNPARSED/UNAPPLIED/TARGETUNVERIFIED/NOTAPPLYREADY: noMacparser/runtime/migration/registry/flag/appchange, no repeatgate. Source5a selfnamecheckpoint still630unit/466RLS+solehistoricalskip/build4/browser4PASS; no newwholeBdone. V1sourceNO_GO10bindingsretained.
 
 Companynew-schema path now waits PE stagedplan/catalog/owner/ACL/history/backup/nonMacparse/apply/evidence, then Codexfutureappreadiness/UI/positivechecks. Existingcompanyname readonly toavoidunresolvedissuerchanges; baselegal/taxintendedaudience andprivatefullrowauditdisclosed. Prior design-pendingMDremainsimmutablehistorical; newcovergovernscompanyproposalonly, Email/feesstillpending. CodexcontinuesB016verifiedEmail/providerplanningaroundRonfeechoices; noB017sourceyet. Do notcallthisapplyreadyorwholecompanyfeaturecomplete.
+
+
+## B018 targeted local checkpoint — 2026-11-03T13:05:11.786319-08:00
+
+The tenant history reader, shared home/payment states and ended-lease history are implemented behind default-OFF `tenant_payment_history`. Exact precommit source passed 34 focused unit tests and 9 disposable-database integration tests, including actual paid utility correction and configured payee controls. Independent v8 source review passed; original owner-statement allocation and unsigned payee eligibility are preserved. Prior failures remain recorded, with no new skipped or weakened assertions. [Evidence](../e2e-evidence/B-018/precommit-target-v8.json).
+
+Full gate and rendered browser checks are not yet run for this candidate. B018 remains in progress. The separately approved public reversal reason still needs a complete reviewed schema handoff and PE application; internal ledger notes remain private. B017 cross-base permission policy is approved, but implementation is pending. No operational flag activation, migration, main merge or production/provider operation.
+
+STOP POINT: B018 targeted tests passed; next: freeze the candidate and run reviewed EN390 browser focus before one full gate; owner: Codex/Ron.

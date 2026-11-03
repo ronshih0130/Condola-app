@@ -1,0 +1,530 @@
+{
+  "verdict": "PLAN_GO_BOUNDED_POLICY_AND_INACTIVE_DB_HANDOFF_ONLY",
+  "baseline": "4f85ea033e87cd242c23123066cf2bb3ff69ec90",
+  "wholeB017": "INCOMPLETE",
+  "needsRon": "Base persona restriction-only vs controlled cross-base delegation; undefined permission-operation mappings only if material",
+  "workspaceHub": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub",
+  "repoPins": {
+    "AGENTS.md": {
+      "sha256": "76a269081778856332ddc0eca751c432a6e6fc601da670fac2051cc83dc54346",
+      "bytes": 12654
+    },
+    "20-build/AGENTS.md": {
+      "sha256": "ad6a6f6af1cefd99c36ee84a164bb97ce0211cbe59a648a472243260700e90cc",
+      "bytes": 5223
+    },
+    "20-build/README.md": {
+      "sha256": "aafa41ee66be82a905c68685099a5c00c1157a271c41fd7a5c62849e78946594",
+      "bytes": 3932
+    },
+    "20-build/BUILD-ORDER.md": {
+      "sha256": "4a66c60bfb5efe32d5c2984c6c9b79812e2d90db4c95355308f2cf7d6fa042b6",
+      "bytes": 37761
+    },
+    "20-build/BLOCKED.md": {
+      "sha256": "9817fc66b350e6280754d8d1c31b8bae06c148ba6088844d611449dcaa6ee24d",
+      "bytes": 90753
+    },
+    "20-build/QA-STANDARD.md": {
+      "sha256": "35d19d4363023810ab2083f910af926517e365d4f4e8bf37e6925f3c0801e7e6",
+      "bytes": 6192
+    },
+    "20-build/specs/B-017.md": {
+      "sha256": "04b1bbef926713e9e442444f03b44b7c0b2d65da14f9dc763bd003e02bcf2006",
+      "bytes": 1111
+    },
+    "ops/flags.yaml": {
+      "sha256": "e6334b67a7c9280356aa34e453ec8a07f94959ecb427efacd318c585f9b88a9b",
+      "bytes": 10998
+    },
+    "src/server/perms.ts": {
+      "sha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9",
+      "bytes": 7306
+    },
+    "src/server/types.ts": {
+      "sha256": "e92720a3a76f49b337286bafe2a7ab87764a4f0edef9e218f6f7737dfbcfa1cf",
+      "bytes": 1148
+    },
+    "src/server/session.ts": {
+      "sha256": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+      "bytes": 11449
+    },
+    "src/server/org-scope.ts": {
+      "sha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427",
+      "bytes": 4740
+    },
+    "src/server/sandbox.ts": {
+      "sha256": "d8d31eacd163d96511fae0be55b1165b7f987d7d1986415ff0bd1b089e2b623e",
+      "bytes": 11760
+    },
+    "src/server/db.ts": {
+      "sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "bytes": 9056
+    },
+    "src/server/auth.ts": {
+      "sha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+      "bytes": 62862
+    },
+    "src/server/auth-actions.ts": {
+      "sha256": "39cad3edaa1df3c8c746683a82349dc57f1f1bd7830ce5e49b9182f8054a4689",
+      "bytes": 24022
+    },
+    "src/server/domain.ts": {
+      "sha256": "6a48d9373f922827a66e0f1a057559b8f4dd39e15f33be9fd835d9d323bc85e0",
+      "bytes": 132158
+    },
+    "src/server/audit.ts": {
+      "sha256": "27f9acf92dbcbf92f2518b8b302bea48119a18129e572fd81861145fcf88493c",
+      "bytes": 2305
+    },
+    "src/server/audit-read.ts": {
+      "sha256": "5f637b887f6efd121af7a0d9388210683181e9000ee6c5edf004808abf32f167",
+      "bytes": 28765
+    },
+    "src/server/repairs.ts": {
+      "sha256": "2e3268ed30efd445c3e56337ee0658cfffe9064e2eda5b950f1411a109a2af5d",
+      "bytes": 17799
+    },
+    "src/server/ticket-photos.ts": {
+      "sha256": "788003d90bf7b9f3bb9966a78fe199be9f124e10722b9587e80300f3174b18ac",
+      "bytes": 12989
+    },
+    "src/server/repair.integration.test.ts": {
+      "sha256": "13237c8d6cb3d4f24854d9755dbd16c13a64081f99e4037353a5409eed104cf7",
+      "bytes": 20549
+    },
+    "src/server/id-docs.ts": {
+      "sha256": "bd509ff1c6841447f777be8d8e538aafe982f45d54797be5c6d7d827eb39505e",
+      "bytes": 46743
+    },
+    "src/app/m/layout.tsx": {
+      "sha256": "51243cea4b3c4342b2d541698202c578bec9ce6a8b7ebae9505bd664783c3863",
+      "bytes": 1836
+    },
+    "src/app/m/roles/page.tsx": {
+      "sha256": "df07a860fb668aa6cd3f523059e2f6b08a0f06f42a2787077e05919137823451",
+      "bytes": 2835
+    },
+    "src/app/m/team/page.tsx": {
+      "sha256": "3e6e19c2c0f18b96504ef4ed5bc5d67121af8e4c7f644eafa21c5e65b750a423",
+      "bytes": 11063
+    },
+    "src/app/m/audit/page.tsx": {
+      "sha256": "5e60d0d0cc1560a6e3a556db715de105f5c022191ef8d85f34d954dc7619e51d",
+      "bytes": 4415
+    },
+    "src/app/api/export/route.ts": {
+      "sha256": "dd5de4dddf1da0e4336d6907f3ef78ed9903448dbdad913a5f18a86894e93e5f",
+      "bytes": 1136
+    },
+    "src/app/api/tickets/photos/sign/route.ts": {
+      "sha256": "51696dfb0d2068a39ff81ca0cc979b4d7a890bb820a131845437e812288f0949",
+      "bytes": 1329
+    },
+    "src/app/api/tickets/photos/confirm/route.ts": {
+      "sha256": "0e3539f9a0042b87d39f54228a3679cf8896c0a983da226dd3568b6abe67edbf",
+      "bytes": 1538
+    },
+    "src/app/api/tickets/photos/[id]/route.ts": {
+      "sha256": "83eda2e435632f1ade3348cec8781dd143af7838dec0988bc9adfbff62dc41db",
+      "bytes": 632
+    },
+    "supabase/migrations/20261018120000_schema.sql": {
+      "sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "bytes": 143903
+    },
+    "supabase/migrations/20261020140000_audit_access.sql": {
+      "sha256": "6f9909c6e9a4fbea6a8c3c58485b7d1336a93d61af485dd0766b033add43f5b6",
+      "bytes": 294
+    },
+    "supabase/migrations/20261020180000_sandbox.sql": {
+      "sha256": "d6bc8d10d75064f567c7d960387e1875f06119a71c7a98e94c084be16719b44f",
+      "bytes": 4680
+    },
+    "supabase/migrations/20261023150000_repair_records.sql": {
+      "sha256": "da735e1674d4b2c3c5998e80b12d0d9b9abf54a52b75d5a70da8b33beb620b17",
+      "bytes": 12479
+    }
+  },
+  "hubPins": {
+    "04-journeys/journeys.md": {
+      "sha256": "08f6dc43aba0dec21760521bb4b11fe39b64c3be6f11e9ed3e41d87eb7d30334",
+      "bytes": 29156
+    },
+    "04-journeys/user-stories.md": {
+      "sha256": "22bf0994f423501678f6b53272cf2487951a373ac9611a77eb19298cbbeada68",
+      "bytes": 43511
+    },
+    "05-capabilities/capability-list-v1.md": {
+      "sha256": "66711f5a1083cdcff0e5e71120d9105280daeb5857e71ec41da9073edbffa840",
+      "bytes": 41332
+    },
+    "05-capabilities/current-state.md": {
+      "sha256": "d7699465a69ec2129080bdc6f00c8d4e7b07265ba926c7f3eff592b151675e13",
+      "bytes": 73541
+    },
+    "07-brand/brand-v2/brand-guide.md": {
+      "sha256": "5aa3862edd1577dfe5b0bd6c3c39bcd4f5ff124505787896ba02a5926d21dd27",
+      "bytes": 27564
+    },
+    "07-brand/brand-v2/tokens.json": {
+      "sha256": "34825ab0899361d798d7af6c47c8b2a5615137dac294cac4f83918c76f1886af",
+      "bytes": 9311
+    }
+  },
+  "permissionInventory": {
+    "dash.view": {
+      "currentBaseRoles": [
+        "admin",
+        "manager",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": []
+    },
+    "props.view": {
+      "currentBaseRoles": [
+        "admin",
+        "manager",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/server/pdf-docs.ts",
+        "src/server/billing-preview-authority.ts",
+        "src/server/record-archive.ts"
+      ]
+    },
+    "props.edit": {
+      "currentBaseRoles": [
+        "admin",
+        "manager"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/units/page.tsx",
+        "src/app/m/properties/[id]/page.tsx",
+        "src/app/m/owners/page.tsx",
+        "src/app/m/import/page.tsx",
+        "src/server/portfolio.ts",
+        "src/server/import-batch.ts",
+        "src/server/record-archive.ts",
+        "src/components/chrome.tsx"
+      ]
+    },
+    "leases.edit": {
+      "currentBaseRoles": [
+        "admin",
+        "manager"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/rent/utilities/page.tsx",
+        "src/app/m/leases/[id]/page.tsx",
+        "src/server/renewal-comparison.ts",
+        "src/server/import-batch.ts",
+        "src/server/deposit-rules-actions.ts",
+        "src/server/b002-move-out-actions.ts",
+        "src/components/chrome.tsx"
+      ]
+    },
+    "tenants.contact": {
+      "currentBaseRoles": [
+        "admin",
+        "manager",
+        "maintenance"
+      ],
+      "explicitLiteralConsumersOutsidePerms": []
+    },
+    "pay.record": {
+      "currentBaseRoles": [
+        "admin",
+        "manager",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/payments/page.tsx"
+      ]
+    },
+    "pay.reverse": {
+      "currentBaseRoles": [
+        "admin",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/payments/page.tsx",
+        "src/server/domain.ts"
+      ]
+    },
+    "bank.reconcile": {
+      "currentBaseRoles": [
+        "admin",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/server/domain.ts"
+      ]
+    },
+    "stmt.view": {
+      "currentBaseRoles": [
+        "admin",
+        "manager",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/server/utility-reconciliation.ts",
+        "src/server/statement-preview.ts",
+        "src/server/pdf-docs.ts"
+      ]
+    },
+    "stmt.generate": {
+      "currentBaseRoles": [
+        "admin",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/statements/page.tsx",
+        "src/app/m/statements/preview/page.tsx",
+        "src/server/domain.ts"
+      ]
+    },
+    "exp.add": {
+      "currentBaseRoles": [
+        "admin",
+        "manager",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/tickets/[id]/page.tsx",
+        "src/app/m/statements/page.tsx",
+        "src/server/repairs.ts",
+        "src/server/vendor-repair.ts",
+        "src/server/expenses.ts"
+      ]
+    },
+    "month.close": {
+      "currentBaseRoles": [
+        "admin",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/statements/page.tsx",
+        "src/server/owner-transfers.ts",
+        "src/server/domain.ts"
+      ]
+    },
+    "tickets.update": {
+      "currentBaseRoles": [
+        "admin",
+        "manager",
+        "maintenance"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/tickets/page.tsx",
+        "src/app/m/tickets/[id]/page.tsx",
+        "src/server/repairs.ts",
+        "src/server/vendor-repair.ts",
+        "src/server/vendor-onboarding.ts",
+        "src/server/domain.ts"
+      ]
+    },
+    "messages.send": {
+      "currentBaseRoles": [
+        "admin",
+        "manager"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/server/domain.ts"
+      ]
+    },
+    "reports.export": {
+      "currentBaseRoles": [
+        "admin",
+        "manager",
+        "accountant"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/reports/export/route.ts",
+        "src/server/income-expense.ts"
+      ]
+    },
+    "team.manage": {
+      "currentBaseRoles": [
+        "admin"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/server/auth.ts"
+      ]
+    },
+    "settings.edit": {
+      "currentBaseRoles": [
+        "admin"
+      ],
+      "explicitLiteralConsumersOutsidePerms": [
+        "src/app/m/settings/page.tsx",
+        "src/app/m/roles/page.tsx",
+        "src/app/m/account/page.tsx",
+        "src/server/mail-settings.ts",
+        "src/server/domain.ts",
+        "src/server/auth.ts"
+      ]
+    },
+    "data.export": {
+      "currentBaseRoles": [
+        "admin"
+      ],
+      "explicitLiteralConsumersOutsidePerms": []
+    }
+  },
+  "centralHelperLexicalConsumers": [
+    "src/app/partner-consent/page.tsx",
+    "src/app/auth/continue/page.tsx",
+    "src/app/consent/page.tsx",
+    "src/app/consent/portal/page.tsx",
+    "src/app/m/layout.tsx",
+    "src/app/m/settings/page.tsx",
+    "src/app/m/tickets/page.tsx",
+    "src/app/m/tickets/[id]/page.tsx",
+    "src/app/m/payments/page.tsx",
+    "src/app/m/noperm/page.tsx",
+    "src/app/m/rent/utilities/page.tsx",
+    "src/app/m/expenses/page.tsx",
+    "src/app/m/roles/page.tsx",
+    "src/app/m/units/page.tsx",
+    "src/app/m/statements/page.tsx",
+    "src/app/m/statements/preview/page.tsx",
+    "src/app/m/leases/[id]/page.tsx",
+    "src/app/m/audit/page.tsx",
+    "src/app/m/properties/[id]/page.tsx",
+    "src/app/m/owners/page.tsx",
+    "src/app/m/account/page.tsx",
+    "src/app/m/import/page.tsx",
+    "src/app/m/reports/export/route.ts",
+    "src/app/login/page.tsx",
+    "src/server/utility-reconciliation.ts",
+    "src/server/renewal-comparison.ts",
+    "src/server/portfolio.ts",
+    "src/server/statement-preview.ts",
+    "src/server/repairs.ts",
+    "src/server/pdf-docs.ts",
+    "src/server/mail-settings.ts",
+    "src/server/import-batch.ts",
+    "src/server/consent-actions.ts",
+    "src/server/owner-transfers.ts",
+    "src/server/perms.ts",
+    "src/server/billing-preview-authority.ts",
+    "src/server/vendor-repair.ts",
+    "src/server/income-expense.ts",
+    "src/server/vendor-onboarding.ts",
+    "src/server/domain.ts",
+    "src/server/expenses.ts",
+    "src/server/deposit-rules-actions.ts",
+    "src/server/b002-move-out-actions.ts",
+    "src/server/auth.ts",
+    "src/server/record-archive.ts",
+    "src/components/chrome.tsx"
+  ],
+  "baseRoleLexicalCandidates": [
+    "src/app/layout.tsx",
+    "src/app/partner-consent/page.tsx",
+    "src/app/auth/continue/page.tsx",
+    "src/app/consent/page.tsx",
+    "src/app/consent/portal/page.tsx",
+    "src/app/api/demo/id-sample/route.ts",
+    "src/app/api/demo/reset/route.ts",
+    "src/app/m/layout.tsx",
+    "src/app/m/settings/page.tsx",
+    "src/app/m/tickets/page.tsx",
+    "src/app/m/tickets/[id]/page.tsx",
+    "src/app/m/payments/page.tsx",
+    "src/app/m/noperm/page.tsx",
+    "src/app/m/rent/utilities/page.tsx",
+    "src/app/m/expenses/page.tsx",
+    "src/app/m/roles/page.tsx",
+    "src/app/m/units/page.tsx",
+    "src/app/m/statements/page.tsx",
+    "src/app/m/statements/preview/page.tsx",
+    "src/app/m/leases/new/page.tsx",
+    "src/app/m/leases/[id]/page.tsx",
+    "src/app/m/audit/page.tsx",
+    "src/app/m/properties/page.tsx",
+    "src/app/m/properties/new/page.tsx",
+    "src/app/m/properties/[id]/page.tsx",
+    "src/app/m/team/page.tsx",
+    "src/app/m/owners/page.tsx",
+    "src/app/m/owners/[id]/page.tsx",
+    "src/app/m/account/page.tsx",
+    "src/app/m/import/page.tsx",
+    "src/app/m/reports/export/route.ts",
+    "src/app/login/page.tsx",
+    "src/server/payment-center-events.ts",
+    "src/server/renewal-comparison.ts",
+    "src/server/audit-read.ts",
+    "src/server/paper-lease-versions.ts",
+    "src/server/record-archive-caller.ts",
+    "src/server/id-docs.ts",
+    "src/server/staff-profile.ts",
+    "src/server/onboarding-progress.ts",
+    "src/server/repairs.ts",
+    "src/server/paper-lease-versions-panel.tsx",
+    "src/server/pdf-docs.ts",
+    "src/server/mail-settings.ts",
+    "src/server/payment-result-events.ts",
+    "src/server/consent-actions.ts",
+    "src/server/owner-transfers.ts",
+    "src/server/payment-request-status.ts",
+    "src/server/types.ts",
+    "src/server/perms.ts",
+    "src/server/auth-actions.ts",
+    "src/server/tenant-lease-history.ts",
+    "src/server/pdf-download.ts",
+    "src/server/billing-preview-authority.ts",
+    "src/server/bank-matching.ts",
+    "src/server/vendor-repair.ts",
+    "src/server/domain.ts",
+    "src/server/notification-center.ts",
+    "src/server/owner-transfer-period-lock.ts",
+    "src/server/deposit-rules-actions.ts",
+    "src/server/manual-reminders.ts",
+    "src/server/b002-move-out-actions.ts",
+    "src/server/auth.ts",
+    "src/server/local-reminder-capture.ts",
+    "src/server/partner-consent.ts",
+    "src/server/record-archive.ts",
+    "src/server/esign/repo.ts",
+    "src/server/esign/rules.ts",
+    "src/server/esign/flow.ts",
+    "src/server/esign/access.ts",
+    "src/components/esign-section.tsx",
+    "src/components/audit-log.tsx"
+  ],
+  "baseMemberOrRoleMigrationConsumers": [
+    "supabase/migrations/20261030150802_vendor_job_assignment.sql",
+    "supabase/migrations/20261031100202_b003_payee_gateway.sql",
+    "supabase/migrations/20261023090000_lease_deposit_override_check.sql",
+    "supabase/migrations/20261031100201_b001_esign_internal_helpers.sql",
+    "supabase/migrations/20261030120000_org_scoped_reversal_audit.sql",
+    "supabase/migrations/20261031100000_payee_details.sql",
+    "supabase/migrations/20261028130000_utility_charge_posting.sql",
+    "supabase/migrations/20261023150000_repair_records.sql",
+    "supabase/migrations/20261022180000_tenant_id_check.sql",
+    "supabase/migrations/20261020180000_sandbox.sql",
+    "supabase/migrations/20261021140000_basic_leases.sql",
+    "supabase/migrations/20261030150800_vendor_onboarding_job_types_receipts.sql",
+    "supabase/migrations/20261031100205_b007_deposit_rules.sql",
+    "supabase/migrations/20261030150500_revoke_public_function_execute.sql",
+    "supabase/migrations/20261030150300_repair_owner_visibility.sql",
+    "supabase/migrations/20261030150900_esign_core.sql",
+    "supabase/migrations/20261022200000_tenant_id_check_upgrade.sql",
+    "supabase/migrations/20261018120000_schema.sql",
+    "supabase/migrations/20261029130000_id_no_direct_mutate.sql",
+    "supabase/migrations/20261020120000_auth.sql",
+    "supabase/migrations/20261023170000_income_expense_report.sql",
+    "supabase/migrations/20261021120000_portfolio.sql",
+    "supabase/migrations/20261020140000_audit_access.sql",
+    "supabase/migrations/20261030140500_revoke_app_is_member_execute.sql",
+    "supabase/migrations/20261030150700_vendor_link_sharing_approval.sql",
+    "supabase/migrations/20261030150200_vendor_repair.sql",
+    "supabase/migrations/20261030151300_partner_agreement_consents.sql"
+  ],
+  "limits": "Static inventories are discovery aids, not semantic enforcement or target grant evidence. No source edit, SQL/parser, DB, browser, tests or runtime.",
+  "planMarkdownSha256": "a5578c51687cd3d3b4f2fdb7f385ba13b5f8319ee597cde17210c056966b797f",
+  "governanceScope": "Existing billing-owner base-Admin constraint and unique index; no generic recovery account or unapproved suspension immunity.",
+  "policyIndependentLocalWork": "Model both ceiling choices as explicit inputs; no positive custom authority before Ron decision."
+}

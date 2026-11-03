@@ -1,0 +1,100 @@
+{
+  "verdict": "SOURCE_GO_ONE_DB_TARGET_AFTER_EXACT_FREEZE",
+  "files": [
+    {
+      "path": "src/server/money.ts",
+      "blob": "2a12a65880e2f45930e16bd001cf0124771c3114",
+      "sha256": "31adbcd602075a4b311b1fc626e56568cf6dcc8e9e8653d08017a8bda36fbc04",
+      "bytes": 11259
+    },
+    {
+      "path": "src/server/utility-post.test.ts",
+      "blob": "f667fa36b0917afe8535b91bce4ea46c87f6b944",
+      "sha256": "0265c78481c0c3bfff3f30dfcd2c7858b2abda84fb0e47e327668a7814f9d1e6",
+      "bytes": 33206
+    },
+    {
+      "path": "src/server/pay-note.ts",
+      "blob": "1b809c393228aa527dac11b545516339bc11d292",
+      "sha256": "d45a8387e8f81b30be08d8d1593d7d78ff7a248880fc091fbbf2b7e03a7eaa6d",
+      "bytes": 757
+    },
+    {
+      "path": "src/server/tenant-payment-history.ts",
+      "blob": "b57a12b0dd7151b92457a2f3925736407e0134e6",
+      "sha256": "2de144ba14be8e3bd65da4730e31918d59b932d32bec54a14071378caa97e827",
+      "bytes": 11516
+    },
+    {
+      "path": "src/server/tenant-payment-history.integration.test.ts",
+      "blob": "965a3b9e40edc7e2ee42a3827977c75d5440fb68",
+      "sha256": "654e0ac0f748a3784ab3c2dcc5fdbb884dafaa2042f62b896e5b42d4b388f688",
+      "bytes": 31710
+    },
+    {
+      "path": "src/app/t/pay/page.tsx",
+      "blob": "946ac01357170f7c684fee49ea1950d08ca99e64",
+      "sha256": "fdfeb8e0021de3caa68d6040f51a824abeec5867fdcb63018c742ebb9b93b073",
+      "bytes": 5813
+    }
+  ],
+  "baseline": "4f85ea033e87cd242c23123066cf2bb3ff69ec90",
+  "workingMapCount": 1024,
+  "derivedMapDigest": "92a099d8904266dc47332a3aff4159a32941b78fe803104acc1e62eae26ac6a9",
+  "helperSha256": {
+    "db-supervisor.py": "ed362161866bed0bfcc295b0413d75ee5ddb5dea4aa4a771ddd38249ddcf3f61",
+    "db-controls.cjs": "7c3969a27e0e7324c32120a882d57d4b42f8c5a09aa3d84d13003ee0b1cffc30",
+    "db-network-guard.cjs": "97d43dbc6ef1ad5d4f7e54f04784845114622b70122d805ad6bef723c5c6219f"
+  },
+  "v8Lock": {
+    "verified": false,
+    "status": "Not yet supplied; compare exact new lock with the verified 1024-pin map and unchanged helper pins before execution."
+  },
+  "v7NoGoArchiveSha256": "72c3254c619c43f98b88038bdd083d2d30b9a4113b9f280b7a4165f668d2f1cf",
+  "bindingsInV7Archive": 20,
+  "developmentLogs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-pure-first.log",
+      "sha256": "531c31d6ef890bcbdb96c7cf449af78f759007c60c448c1104b1844f0f0a0342",
+      "bytes": 6668,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-type-first.log",
+      "sha256": "1d3e6a77d9332ae32b6cde15f8a16359d1d4d62526cb5a5c0ba7f16e8d23e8e4",
+      "bytes": 195,
+      "exit": 2
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-eslint-first.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-pure-final.log",
+      "sha256": "a8c1295fe736d42b5fa13127dd17c8d0b6e7f7d7219b3429116616ff300f2d51",
+      "bytes": 6666,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-type-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-eslint-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit": 0
+    }
+  ],
+  "materialFindings": [],
+  "notes": [
+    "SOURCE_GO for the six reviewed v8 files. The intended next action is one controlled disposable target using a freshly bound v8 lock. The prior supervisor and helpers are unchanged. The expected complete working map was independently rebuilt from v7 plus the six reserved blobs and all 1024 current files matched. Never execute with the v7 lock or treat the baseline HEAD as committed v8 product evidence.",
+    "Owner-statement calculateStatement still calls exported attributePayment with the legacy pooled offset behavior. Staff rentUtilityDueMinor retains that path and existing payment priority. The tenant display path separately retains unmatched negative recognized credits and attributes already-netted rows without netting twice. The earlier positive-prefixed +1000 plus +4000 utility/5000 allocation example remains utility 4000, other zero, residual 1000 in the real calculator exercised with an in-memory client. This is a source and mock check, not DB-backed issuance.",
+    "Both B018-ON and OFF tenant pay paths use tenantPayeeVisible. An unsigned residual-only recognized-credit list cannot invoke the payee component; existing eligible deposit/other lines and active lease controls remain admitted. The OFF page may now display an actual signed credit amount and retains legacy labels; it is not the ON credit UI. No browser verification is claimed. The reader still compares displayed line totals with each invoice’s canonical balance. The original eight integration assertions remain and a ninth synthetic configured-payee fixture was added.",
+    "The final unit log contains 34 passes and zero skipped/failures; the model did not execute tests. The initial typecheck failure TS2353 was retained; final no-emit and scoped lint recorded zero. The v7 source rejection and v6b measured failure remain historical. The new real utility-writer target and rendered bank-detail audience are unverified. No browser, full gate, DB writes, external connection or provider activity was performed in this review."
+  ]
+}

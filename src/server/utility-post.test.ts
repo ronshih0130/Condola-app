@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { electricityMonthLabel, moneyLabel } from "./format";
-import { tenantBillDueMinor, tenantBillLines, rentUtilityDueMinor } from "./money";
-import { unsignedRentNoteKey } from "./pay-note";
+import { tenantBillDueMinor, tenantBillLines, rentUtilityDueMinor, attributePayment } from "./money";
+import { tenantPayeeVisible, unsignedRentNoteKey } from "./pay-note";
+import { calculateStatement } from "./statement-calculation";
+import type { Client } from "pg";
 import { expenseDescriptionToWrite, LEGACY_VACANT_ELECTRICITY_DESCRIPTION, VACANT_ELECTRICITY_DESCRIPTION } from "./utility-expense";
 import {
   allocateUtilityMinor,
@@ -547,4 +549,76 @@ test("a blank even-split total still stores a positive bill usage at least the r
   assert.equal(billAverageBelowRate(300000, 600000, 5), false);
   assert.equal(evenBillUsageMilli(0, 5), 1);
   assert.equal(billAverageBelowRate(0, 1, 5), true);
+});
+
+
+test("recognized utility credits retain only unmatched original credit with provenance", () => {
+  const credit = { charge_type:"credit", amount_minor:-8000, description:"沖銷電費 2026-11", period_start:"2026-11-01" };
+  const utility = { charge_type:"utility", amount_minor:4000, description:"電費 2026-11", period_start:"2026-11-01" };
+  for (const values of [[credit,utility],[utility,credit]]) {
+    const rows=tenantBillLines(values,0);
+    assert.deepEqual(rows,[{chargeType:"credit",description:credit.description,amountMinor:-4000,periodStart:credit.period_start}]);
+    assert.equal(tenantBillDueMinor(values,0),-4000);
+    assert.equal(rentUtilityDueMinor(values,0),0);
+    assert.deepEqual(attributePayment(values,0),{rent:0,utility:0,deposit:0,other:0});
+  }
+  assert.equal(credit.amount_minor,-8000);
+  assert.equal(utility.amount_minor,4000);
+});
+
+test("utility credit matching preserves signed totals and allocation across cases", () => {
+  const credit=(amount:number,description:string)=>({charge_type:"credit",amount_minor:amount,description,period_start:"2026-11-01"});
+  const utility=(amount:number)=>({charge_type:"utility",amount_minor:amount,description:"電費"});
+  const cases=[
+    [credit(-4000,"沖銷電費 exact"),utility(4000)],
+    [credit(-2000,"沖銷電費 partial"),utility(4000)],
+    [credit(-8000,"沖銷電費 no utility")],
+    [credit(-3000,"沖銷電費 first"),credit(-5000,"沖銷電費 second"),utility(4000)],
+    [credit(-2000,"generic credit"),utility(4000)],
+    [credit(1000,"沖銷電費 positive"),utility(4000)],
+  ];
+  for(const lines of cases){
+    assert.equal(tenantBillDueMinor(lines,0),lines.reduce((sum,line)=>sum+line.amount_minor,0));
+  }
+  const multiple=tenantBillLines(cases[3],0);
+  assert.deepEqual(multiple.map(x=>[x.description,x.amountMinor]),[["沖銷電費 second",-4000]]);
+  const mixed=[{charge_type:"rent",amount_minor:10000,description:"rent"},{charge_type:"deposit",amount_minor:5000,description:"deposit"},credit(-8000,"沖銷電費 original"),utility(4000)];
+  assert.equal(tenantBillDueMinor(mixed,3000),8000);
+  assert.deepEqual(attributePayment(mixed,3000),{rent:3000,utility:0,deposit:0,other:0});
+  const projected=tenantBillLines(mixed,0).map(x=>({charge_type:x.chargeType,amount_minor:x.amountMinor,description:x.description,period_start:x.periodStart}));
+  assert.deepEqual(attributePayment(projected,3000),attributePayment(mixed,3000));
+  assert.equal(rentUtilityDueMinor(mixed,3000),7000);
+});
+
+
+test("unsigned residual-only utility credit does not extend payee visibility", () => {
+  const residual=[{chargeType:"credit",description:"沖銷電費 2026-11",amountMinor:-4000}];
+  assert.equal(tenantPayeeVisible("pending_signature",false,residual),false);
+  assert.equal(tenantPayeeVisible("pending_signature",true,[]),false);
+  assert.equal(tenantPayeeVisible("pending_signature",false),true);
+  assert.equal(tenantPayeeVisible("pending_signature",false,[...residual,{chargeType:"deposit",description:"deposit"}]),true);
+  assert.equal(tenantPayeeVisible("pending_signature",false,[{chargeType:"credit",description:"generic"}]),true);
+  assert.equal(tenantPayeeVisible("active",false,residual),true);
+  const page=readFileSync(new URL("../app/t/pay/page.tsx",import.meta.url),"utf8");
+  assert.match(page,/history\.lease\.legacyPayeeVisible && <TenantPayee/);
+  assert.match(page,/tenantPayeeVisible\(money\.lease\.status, billEmpty,[\s\S]*?\) && <TenantPayee/);
+});
+
+test("statement calculation preserves original positive-prefixed credit attribution and residual", async () => {
+  const fake={query:async(sql:string)=>{
+    if(sql.includes("FROM property_owners po"))return {rows:[{property_id:"p",ownership_id:"o",effective_from:"2026-01-01",effective_to:null,currency:"TWD",name:"Synthetic",owner_version:"1",property_version:"1"}]};
+    if(sql.includes("FROM payments p JOIN leases"))return {rows:[{id:"payment",property_id:"p",property_name:"Synthetic",version:"1",status:"confirmed",paid_on:"2026-11-01",amount_minor:"5000"}]};
+    if(sql.includes("FROM payment_allocations a"))return {rows:[{id:"allocation",version:"1",amount_minor:"5000",invoice_id:"invoice",invoice_version:"1",invoice_status:"paid"}]};
+    if(sql.includes("FROM invoice_lines WHERE"))return {rows:[{id:"u",version:"1",charge_type:"utility",amount_minor:"4000",description:"utility",service_period:null,quantity:"1",unit_amount_minor:"4000"},{id:"c",version:"1",charge_type:"credit",amount_minor:"1000",description:"沖銷電費 synthetic",service_period:null,quantity:"1",unit_amount_minor:"1000"}]};
+    if(sql.includes("FROM expenses")||sql.includes("FROM management_agreements")||sql.includes("FROM owner_statements"))return {rows:[]};
+    throw Error("Unexpected statement query");
+  }} as unknown as Client;
+  const statement=await calculateStatement(fake,"org","owner","2026-11");
+  assert.deepEqual(statement.payments[0].allocations[0].attributed,{rent:0,utility:4000,deposit:0,other:0});
+  assert.equal(statement.payments[0].allocations[0].residual,1000);
+  assert.equal(statement.propertyAmounts[0].utility,4000);
+  assert.equal(statement.propertyAmounts[0].other,0);
+  const positive=[{charge_type:"utility",amount_minor:4000,description:"utility"},{charge_type:"credit",amount_minor:1000,description:"沖銷電費 synthetic"}];
+  assert.deepEqual(attributePayment(positive,5000),{rent:0,utility:4000,deposit:0,other:0});
+  assert.equal(rentUtilityDueMinor(positive,0),4000);
 });

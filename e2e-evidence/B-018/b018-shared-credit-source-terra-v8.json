@@ -1,0 +1,96 @@
+{
+  "status": "SOURCE_PURE_CHECKS_INDEPENDENT_REVIEW_PENDING",
+  "files": [
+    {
+      "path": "src/server/money.ts",
+      "blob": "2a12a65880e2f45930e16bd001cf0124771c3114",
+      "sha256": "31adbcd602075a4b311b1fc626e56568cf6dcc8e9e8653d08017a8bda36fbc04",
+      "bytes": 11259
+    },
+    {
+      "path": "src/server/utility-post.test.ts",
+      "blob": "f667fa36b0917afe8535b91bce4ea46c87f6b944",
+      "sha256": "0265c78481c0c3bfff3f30dfcd2c7858b2abda84fb0e47e327668a7814f9d1e6",
+      "bytes": 33206
+    },
+    {
+      "path": "src/server/pay-note.ts",
+      "blob": "1b809c393228aa527dac11b545516339bc11d292",
+      "sha256": "d45a8387e8f81b30be08d8d1593d7d78ff7a248880fc091fbbf2b7e03a7eaa6d",
+      "bytes": 757
+    },
+    {
+      "path": "src/server/tenant-payment-history.ts",
+      "blob": "b57a12b0dd7151b92457a2f3925736407e0134e6",
+      "sha256": "2de144ba14be8e3bd65da4730e31918d59b932d32bec54a14071378caa97e827",
+      "bytes": 11516
+    },
+    {
+      "path": "src/server/tenant-payment-history.integration.test.ts",
+      "blob": "965a3b9e40edc7e2ee42a3827977c75d5440fb68",
+      "sha256": "654e0ac0f748a3784ab3c2dcc5fdbb884dafaa2042f62b896e5b42d4b388f688",
+      "bytes": 31710
+    },
+    {
+      "path": "src/app/t/pay/page.tsx",
+      "blob": "946ac01357170f7c684fee49ea1950d08ca99e64",
+      "sha256": "fdfeb8e0021de3caa68d6040f51a824abeec5867fdcb63018c742ebb9b93b073",
+      "bytes": 5813
+    }
+  ],
+  "logs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-pure-first.log",
+      "sha256": "531c31d6ef890bcbdb96c7cf449af78f759007c60c448c1104b1844f0f0a0342",
+      "bytes": 6668,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-type-first.log",
+      "sha256": "1d3e6a77d9332ae32b6cde15f8a16359d1d4d62526cb5a5c0ba7f16e8d23e8e4",
+      "bytes": 195,
+      "exit": 2
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-eslint-first.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-pure-final.log",
+      "sha256": "a8c1295fe736d42b5fa13127dd17c8d0b6e7f7d7219b3429116616ff300f2d51",
+      "bytes": 6666,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-type-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b018-v8-eslint-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exit": 0
+    }
+  ],
+  "changes": [
+    "Tenant display uses provenance-preserving signed utility-credit netting and its own allocation of already-netted display lines; public attributePayment and staff rentUtilityDueMinor retain original netting behavior.",
+    "Shared tenantPayeeVisible preserves pending-signature residual-only payee restriction while allowing prior positive non-residual rows; ON reader and OFF page call it.",
+    "Actual calculateStatement mocked-client regression checks positive prefixed credit yields utility 4000, other 0, residual 1000.",
+    "Integration source adds configured-payee pending credit and deposit control; no actual rendering claim."
+  ],
+  "results": [
+    "Pure target 34/34 pass, zero skips, final exit 0.",
+    "First no-emit failed TS2353 in new test due to excess fixture property; fixed fixture type and final no-emit exit 0.",
+    "Scoped ESLint first and final exit 0.",
+    "No DB, browser, full gate or provider execution; all eight prior integration assertions/diagnostic retained."
+  ],
+  "limits": [
+    "Actual utility correction database regression and pending payee browser cases require reviewed source and authorized managed execution.",
+    "Independent source review pending.",
+    "Statement test exercises actual calculator with in-memory client, not DB statement issuance."
+  ]
+}
