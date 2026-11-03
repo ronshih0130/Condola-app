@@ -1,7 +1,7 @@
-# B015 scoped local verdict
+# B015 current local verdict
 
-2026-11-02T20:21:01.680123-08:00; immutable `9b057326c59cf64c55ce6094f02e767593d59951`.
+2026-11-03T01:00:00.525404-08:00; stable uncommitted source map `8d65177fa87a5dcd8e622e81d4dddbda7c4eb5dbd956643412b9980b6f25a0b2`.
 
-**SCOPED_LOCAL_SOURCE_RUNTIME_EVIDENCE_PASS / WHOLE_ITEM_INCOMPLETE / RELEASE_NO_GO.**
+**SOURCE_GO / DEVELOPMENT_TARGETED_PASS / FULL_RUNTIME_INCOMPLETE / WHOLE_ITEM_INCOMPLETE / RELEASE_NO_GO.**
 
-[Independent Sol final verdict](independent-sol-final-a2.md) verifies625unit/402RLS+soleapprovedhistoricalskip,9newcases,build4/focus1/full4browser/readback; all12finaloriginals coveredroot6/reviewer6. [Checkpoint](archive-ancestry-checkpoint-9b05732.md) retains fullscope limits, original a1FAIL and oldsourceNO_GO, parentwizardclipping and unflaggedguard/controlreadback boundaries. FullB015archive/history/owner/restore/identity/oldwriter/staging/Claude/ClassB/pilot not accepted. [Historical directory/edit verdict](directory-edit-verdict-historical.md) retained.
+[Independent Astra A5 source verdict](workflow-astra-source-a5-go.md); [actual targeted results](workflow-targeted-summary-a5.json). Source/runtime initial failures retained in A1–A4 records. No full gate, build or browser acceptance for the new fullworkflow yet. Previous [guard verdict](archive-ancestry-verdict-9b05732-historical.md) is historical. Owner-only DB metadata/raw-old writer closure, staging, independent Claude ClassB and Ron/pilot release acceptance remain incomplete. All operational flags OFF; no production, external messaging, legal copy or Mac migration.

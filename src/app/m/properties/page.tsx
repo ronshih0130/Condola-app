@@ -1,5 +1,6 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
+import { archiveCopy } from "@/i18n/record-archive";
 import { makeT } from "@/i18n";
 import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { PageHeader } from "@/components/ui";
@@ -23,6 +24,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
         title={t("s_e03a6ec")}
         actions={
           <>
+            <Link className="btn" href="/m/archive">{archiveCopy(session.locale).entry}</Link>
             <a className="btn" href="/api/export" data-testid="export-properties">
               {t("s_de922fa")}
             </a>

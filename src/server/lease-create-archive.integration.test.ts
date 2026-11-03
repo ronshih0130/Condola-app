@@ -16,6 +16,7 @@ import { resetAndSeed } from "./seed";
 
 disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
 let clone:Awaited<ReturnType<typeof cloneTestDatabase>>;
+const archiveSessions = {admin:randomUUID(),manager:randomUUID()};
 test.before(async()=>{
   clone=await cloneTestDatabase();
   const savedDemo=process.env.DEMO_MODE;
@@ -25,6 +26,7 @@ test.before(async()=>{
     process.env.DEMO_MODE="true";
     for(const key of keyNames) process.env[key]=randomBytes(32).toString("hex");
     await resetAndSeed();
+    for(const role of ['admin','manager'] as const) await query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 day')`,[archiveSessions[role],USERS[role],randomUUID()]);
   } finally {
     if(savedDemo===undefined) delete process.env.DEMO_MODE; else process.env.DEMO_MODE=savedDemo;
     for(const key of keyNames) { const value=savedKeys[key]; if(value===undefined) delete process.env[key]; else process.env[key]=value; }
@@ -32,7 +34,7 @@ test.before(async()=>{
 });
 test.after(async()=>{await clone?.cleanup();});
 
-const staff = (role: "admin" | "manager"): Session => ({ userId: USERS[role], sessionId: `b015-${role}`, email: "", name: role, kind: "staff", role, orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", locale: "en", calendar: "gregorian", leaseId: null });
+const staff = (role: "admin" | "manager"): Session => ({ userId: USERS[role], sessionId: archiveSessions[role], email: "", name: role, kind: "staff", role, orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", locale: "en", calendar: "gregorian", leaseId: null });
 async function fixture(org = ORG_ID) {
   const property = (await query<{ id: string }>(`INSERT INTO properties(org_id,name,country_code,currency,timezone) VALUES($1,$2,'TW','TWD','Asia/Taipei') RETURNING id::text`, [org, `B015 ${randomUUID()}`])).rows[0].id;
   const unit = (await query<{ id: string }>(`INSERT INTO units(org_id,property_id,label,rental_mode,base_rent_minor) VALUES($1,$2,'B015','by_room',1000000) RETURNING id::text`, [org, property])).rows[0].id;

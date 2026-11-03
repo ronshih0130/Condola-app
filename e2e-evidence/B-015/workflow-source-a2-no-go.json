@@ -1,0 +1,18 @@
+{
+  "recordedAt": "2026-11-03T00:35:12.498177-08:00",
+  "status": "SOURCE_NO_GO_A2_RUNTIME_NOT_RUN",
+  "sourceMapSha256": "ae9d898102306cb9e1333cb69e0cb11bf439eeedbfaef57ee63483fb66aad0f5",
+  "reviewer": "Independent Astra/high",
+  "report": "workflow-astra-source-a2-no-go.json",
+  "findings": [
+    "P1 archived exact-source utility correction loses ended tenant allocation subject and can transfer charge to owner",
+    "P2 ordinary portal caller and tenant history staff-first persona check incomplete under hidden other-live-org RLS"
+  ],
+  "archive": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a2-source-no-go/manifest.json",
+    "entries": 159,
+    "sha256": "c22159b0fce914be1e7afc1c85c04ec11e0944d94cfdab840c23a8ce81b3610d"
+  },
+  "noTestRelaxation": true,
+  "next": "Bounded source fixes then fresh map and independent review; no runtime yet"
+}

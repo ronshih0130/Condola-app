@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { describe, test } from "node:test";
-import { svc, tx } from "./db";
+import { svc, tx, withClient } from "./db";
 import { createTicket } from "./domain";
 import { FlowError } from "./errors";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
@@ -18,10 +18,14 @@ import {
   submitVendorReport,
 } from "./vendor-repair";
 
+const sessionUsers = [USERS.admin, USERS.coastAdmin, USERS.tenant2];
+const sessionIds = new Map<string,string>(sessionUsers.map(user => [user, randomUUID()]));
+test.before(async () => { await withClient(async client => { for (const user of sessionUsers) await client.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 day')`,[sessionIds.get(user),user,randomUUID()]); }); });
+test.after(async () => { await withClient(client => client.query(`DELETE FROM auth_sessions WHERE id=ANY($1::uuid[])`,[[...sessionIds.values()]])); });
 function staff(userId: string, orgId = ORG_ID): Session {
   return {
     userId, orgId, liveOrgId: orgId,
-    sessionId: "vendor-link", email: "staff@demo", name: "Staff",
+    sessionId: sessionIds.get(userId) ?? "vendor-link-invalid", email: "staff@demo", name: "Staff",
     kind: "staff", role: "admin", environment: "live",
     locale: "zh-TW", calendar: "gregorian", leaseId: null,
   };

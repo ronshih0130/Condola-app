@@ -7,10 +7,11 @@ import { commitImportBatch, dryRunImport, previewImport, readImportBody } from "
 import { loadImportRegion } from "./import-region-context";
 import { ORG_ID, USERS } from "./ids";
 import { disposableDbUrl } from "./test-disposable-db";
+import { insertTestAuthSession } from "./test-auth-session";
 import type { Session } from "./types";
 
 const url = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE).href;
-const session: Session = {userId: USERS.admin,sessionId:"region-test",email:"",name:"Synthetic",kind:"staff",role:"admin",
+const session: Session = {userId: USERS.admin,sessionId:"",email:"",name:"Synthetic",kind:"staff",role:"admin",
   orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",locale:"zh-TW",calendar:"gregorian",leaseId:null};
 
 test("server selects regional profile on each operation and rejects mismatched targets without writes", async () => {
@@ -22,8 +23,11 @@ test("server selects regional profile on each operation and rejects mismatched t
   const badName = `region-blocked-${suffix}`;
   let propertyId = "";
   let legacyPropertyId = "";
+  let managerSessionId = "";
   const org = (await db.query(`SELECT country_code,jurisdiction_id,default_currency,timezone,feature_flags FROM organizations WHERE id=$1`,[ORG_ID])).rows[0];
   try {
+    session.sessionId=await insertTestAuthSession(db,USERS.admin);
+    managerSessionId=await insertTestAuthSession(db,USERS.manager);
     process.env.IMPORT_ERROR_DETAILS_ENABLED = "true";
     const jurisdictions = await db.query<{id:string;code:string}>(`SELECT id::text,code FROM jurisdictions WHERE code IN ('TW','US-CA')`);
     const tw = jurisdictions.rows.find(r => r.code === "TW")!.id;
@@ -46,7 +50,7 @@ test("server selects regional profile on each operation and rejects mismatched t
     assert.deepEqual(Object.keys(body).sort(),["fileName","mode","rows"]);
     assert.equal((await previewImport(session,body)).length,0);
     assert.equal((await dryRunImport(session,body)).created.leases,1);
-    const manager: Session = {...session,userId:USERS.manager,role:"manager"};
+    const manager: Session = {...session,sessionId:managerSessionId,userId:USERS.manager,role:"manager"};
     assert.equal((await previewImport(manager,body)).length,0);
     assert.equal((await dryRunImport(manager,body)).created.leases,1);
     const created = await commitImportBatch(manager,body);
@@ -99,6 +103,7 @@ test("server selects regional profile on each operation and rejects mismatched t
     assert.equal(await tx(USERS.admin,c => loadImportRegion(c,ORG_ID),{orgId:ORG_ID,environment:"live"}),null);
     await assert.doesNotReject(previewImport(session,{fileName:"legacy-global.csv",rows:[]}));
   } finally {
+    for(const id of [session.sessionId,managerSessionId])if(id)await db.query(`DELETE FROM auth_sessions WHERE id=$1::uuid`,[id]);
     if (oldEnv === undefined) delete process.env.IMPORT_ERROR_DETAILS_ENABLED; else process.env.IMPORT_ERROR_DETAILS_ENABLED=oldEnv;
     if (propertyId) { await db.query("DELETE FROM leases WHERE property_id=$1",[propertyId]); await db.query("DELETE FROM properties WHERE id=$1",[propertyId]); }
     if (legacyPropertyId) { await db.query("DELETE FROM leases WHERE property_id=$1",[legacyPropertyId]); await db.query("DELETE FROM properties WHERE id=$1",[legacyPropertyId]); }

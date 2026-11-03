@@ -1,0 +1,228 @@
+{
+  "review": "B015 independent Sol/high source review A1",
+  "reviewer": "/root/b015_ui_security_review_sol",
+  "independentOfImplementation": true,
+  "verdict": "SOURCE_NO_GO",
+  "recordedAt": "2026-11-03T06:45:34.691596+00:00",
+  "repo": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep",
+  "baseline": "516a5e8c2e7bc7f54cefe425e6551d9ea0fc793e",
+  "requestSha256": "b5aa8c02cd8a902871ab2cca250aeb883c08cbc8feb9f235d9d332829e587670",
+  "sourceMapSha256": "ad371c3a8113efd6b1b43ea0262d023204bf5ddb8400ed321895d42063f8fde4",
+  "allRuntimeSourceCount": 128,
+  "changedSourceCount": 53,
+  "uiPathCount": 22,
+  "allRuntimeSourceBlobMismatches": [],
+  "scope": "All 22 uiPaths plus actual tenant history/privacy service, current session/consent/RLS/read-only tx/audit/download contracts, archive recovery/action contracts and related archive/edit call paths. Backend concurrency/finance/helpers remain with separate reviewer.",
+  "findings": [
+    {
+      "id": "UI-A1-01",
+      "priority": "P1",
+      "title": "Archived draft leases still expose and accept ordinary terms edits",
+      "path": "src/app/m/leases/[id]/page.tsx",
+      "line": 212,
+      "related": [
+        {
+          "path": "src/server/domain.ts",
+          "line": 1317
+        },
+        {
+          "path": "src/server/domain.ts",
+          "line": 1379
+        },
+        {
+          "path": "src/server/lease-rules.ts",
+          "line": 47
+        },
+        {
+          "path": "src/server/record-archive.ts",
+          "line": 47
+        }
+      ],
+      "trigger": "A staff admin/manager has an unsigned draft lease with esign not_sent and no active signing/repair/utility work. Archive its property, unit, or room (drafts intentionally do not block archive), then open its existing /m/leases/<id> summary and submit changed rent/deposit.",
+      "evidence": "The new archive badge and sign-button guards do not guard LeaseTermsForm. Lines 212-229 check role, status and signature only. updateLease locks the lease then writes rent/deposit/document_sha256 with no active-ancestry admission or archive predicate. leaseTermsEditable accepts unsigned draft/not_sent. Existing active-lease signing admission does not run on updateLease.",
+      "impact": "Ordinary operational editing continues on an effectively archived space, violating the full workflow requirement and archive flag-OFF invariant. It also permits this writer to race archive without the agreed ancestry protocol.",
+      "requiredChange": "Hide ordinary terms editing on effective archive, and add the same active ancestry admission/recheck before the existing lease lock in updateLease. Preserve authorized historical finance and paper/PDF corrections. Add focused archived draft UI/direct-action and archive-versus-terms-edit ordering evidence.",
+      "basis": "Static call-path reasoning; not executed."
+    },
+    {
+      "id": "UI-A1-02",
+      "priority": "P2",
+      "title": "Active by-room physical units have no normal UI entry to their archive action",
+      "path": "src/app/m/units/room/[id]/page.tsx",
+      "line": 41,
+      "related": [
+        {
+          "path": "src/app/m/units/whole/[id]/page.tsx",
+          "line": 32
+        },
+        {
+          "path": "src/app/m/properties/[id]/page.tsx",
+          "line": 67
+        },
+        {
+          "path": "src/app/m/units/page.tsx",
+          "line": 105
+        },
+        {
+          "path": "src/server/queries.ts",
+          "line": 1597
+        },
+        {
+          "path": "src/server/record-archive.ts",
+          "line": 91
+        }
+      ],
+      "trigger": "An admin/manager wants to archive an active physical unit whose rental_mode is by_room, without archiving the whole property or each individual room.",
+      "evidence": "The room editor renders only ArchiveEntry(kind:room). The whole-unit editor is the only unit entry but spaceEditor(kind:whole_unit) requires rental_mode=whole_unit. The active space list emits room IDs for by_room units and only whole_unit physical unit IDs. Property detail contains room/unit labels but no physical by_room unit archive link. /m/archive only lists already own/inherited archived rows. The archive panel displays ancestry labels/timestamps without parent links.",
+      "impact": "The explicitly required physical by-room unit archive capability is reachable only by knowing its UUID and manually typing a route, or temporarily archiving its entire property. Normal users cannot perform a core B015 action through the rendered interface.",
+      "requiredChange": "Expose a clearly identified physical by-room unit archive/history link using its actual server-provided unit UUID (for example from the room editor or property hierarchy). Prove navigation by clicking from a normal entry; the current browser test directly navigates to /m/archive/unit/<fixture UUID> and misses this gap.",
+      "basis": "Static rendered-route and query analysis; not executed."
+    }
+  ],
+  "sourceChecksWithoutAdditionalBlocker": [
+    "Tenant history pages and byte GET call fresh getSession and current consent, stay outside /t/lease selectedLease layout, and expose no business mutation/selection action. Tenant layout history link survives null active lease.",
+    "tenant-lease-history uses tx with authenticated role, canonical org/env pins and actual org/live-parent, current auth-session, non-archived current tenant contact and exact same-org ended lease-party predicates. Exact PDF bytes are selected in the same constrained query; no service-role byte read or generic file fallback.",
+    "Signed PDF detail gate hides version/count metadata when unavailable. Existing current-pointer/newest fallback and stored UTC6 upload time are reused. URL lease/pdf identifiers do not supply actor/org authority.",
+    "Existing fixed download audit writes only canonical org/user/lease/PDF/server request trace after authorized read and response construction; failure returns private503 without the PDF. No IP or client-delivery claim. Private no-store/nosniff/type/length/generated filename preserved in source.",
+    "Archive recovery validates exact minimal storage shape, fails closed for malformed/null serialized data, preserves reason only in memory, keeps UNKNOWN/stale/already distinct from receipts, and requires explicit current-state review before a new decision. archiveViewAction expectedScope plus UI scope passing rejects an A-to-B actor switch before recovery review without clearing A pending.",
+    "Archive-aware existing expense options and report/B014 labels preserve normal finance forms; owner transfer change is label-only and retains its original recovery protocol.",
+    "Private browser source pins loopback port43152 and owned disposable database naming, reuseExistingServer=false, sanitized server environment, no trace/video, external browser request blocks and local synthetic PDF bytes. It snapshots/restores all three control row absence/value/description/timestamp and selected whole-org flags transactionally, including failure cleanup."
+  ],
+  "runtimeStatus": "NOT_RUN: no SQL parser, DB, tests, build, browser, network, secrets, providers, production, messages or source changes performed. Authored tests are hypotheses, not executed evidence. No screenshots/visual QA exist for this frozen candidate.",
+  "limits": [
+    "This is source-only NO_GO for the reviewed full UI scope, not acceptance of the baseline guard, complete B015, owner-only schema proposal, old/raw writer closure, all39, four portals/LINE, gate, staging or release.",
+    "No additional blocking tenant privacy finding in this static pass is not runtime/RLS/catalog proof.",
+    "Root draft runtime helpers are not accepted by this review; the separate backend/helper reviewer owns them.",
+    "Historical memory supplied boundaries only; live repository/source pins supply findings."
+  ],
+  "pins": {
+    "src/components/record-archive.tsx": {
+      "gitBlob": "bb6f4accb398f57d6b0e4deb175254d70ea7e1f8",
+      "sha256": "026881067a3ada804540527be7b89cd34fb86f98f1efd26a1420bcfb76a5ab44"
+    },
+    "src/components/record-archive-entry.tsx": {
+      "gitBlob": "ff73f9a2fb9fb83b1661237b84f53583a8838da5",
+      "sha256": "78c40403dacf9701c426fbb52d051f8d0d9f4a9b7ff23ccb7dcd13f969789cff"
+    },
+    "src/i18n/record-archive.ts": {
+      "gitBlob": "10e06c20b5371355b276ddfe33ec246f3cabb78c",
+      "sha256": "cb611113e108d6bed5a711595e7c1f9bbc3f1bbced88bff5e1fce60e6c5adea0"
+    },
+    "src/app/m/archive/page.tsx": {
+      "gitBlob": "a117712f6351ab9523ce5658ee43e876350ce7b1",
+      "sha256": "24d2386447373db8d5f8663bb1f8dbff1cfadec548ad8dbda3b8924b6abf5869"
+    },
+    "src/app/m/archive/[kind]/[id]/page.tsx": {
+      "gitBlob": "13305ee22b8d69207a1065ccfd34cb4cf415996a",
+      "sha256": "00a5fe6a29af0836631a5dac6a3568ec241da74a2651aa825fa922002af2de54"
+    },
+    "e2e/b015-archive-workflow.spec.ts": {
+      "gitBlob": "325d64b5cb56b9508300edc8642f7e3ace18384b",
+      "sha256": "fc87cccaf934a4c741e2cdeb0fbbe33babbfe3d0c84f4c9c93e2e38d4d4f9b17"
+    },
+    "e2e/b015-archive-workflow-private-playwright.config.ts": {
+      "gitBlob": "ef682a0d1bd6bb65d6de47657ebabfb27b54e3e8",
+      "sha256": "96a857e788d620920362c0a3c1afe6542080550e97ad951007f8c4ae4f64a981"
+    },
+    "src/app/m/properties/page.tsx": {
+      "gitBlob": "2f5fb9b2c53fdb53598bcc2bde8df3396e826d4f",
+      "sha256": "ba872bc0ee9c1247a4c81122ec32276b83c373c6289e0b50fb13c2abcca5f060"
+    },
+    "src/app/m/properties/[id]/page.tsx": {
+      "gitBlob": "f96cebc305665118d0292a057fd81a47c32f2e09",
+      "sha256": "4ae73585be12e6d82e86029897997951ff60f4eefbc500bcd91620e5678e3950"
+    },
+    "src/app/m/properties/[id]/edit/page.tsx": {
+      "gitBlob": "fba6f2b6a2dde247241368d1a50f2707ee6b2757",
+      "sha256": "6425ee9f5e4293a0552405e392f1d2ca07d1d681e864ddc938f07a71275e99a7"
+    },
+    "src/app/m/units/page.tsx": {
+      "gitBlob": "b0a33f8f3b504084409a1ebdff50468492c5c5cb",
+      "sha256": "de47d2f22005ff5bf90386a28898bd15a47bdb9d78f4a653a114cd1d3dad0236"
+    },
+    "src/app/m/units/room/[id]/page.tsx": {
+      "gitBlob": "30b2ce902b5cb2696994741d9996e73ee2f67aac",
+      "sha256": "d4b48ee9bafee399e477808fd0bdfe197c55431e95bac26828d3660603c2c00f"
+    },
+    "src/app/m/units/whole/[id]/page.tsx": {
+      "gitBlob": "24c18ee3c06a170f2258732e265544c330d22b36",
+      "sha256": "baccd2a0e749617b10f5da9e5b1920cae48b70ebea99823a2c2f8dc0b8a4cc12"
+    },
+    "src/app/m/leases/[id]/page.tsx": {
+      "gitBlob": "64770ab743c661cbf2daf83c80b2c21606fd2b90",
+      "sha256": "ac2b31e614ef8d97419e20add943c025ed79e6fe29c3b79b2c377c88302b0ecf"
+    },
+    "src/app/m/expenses/[id]/page.tsx": {
+      "gitBlob": "7bcae75a88832c1733c21aa03ec8b0cb306835f1",
+      "sha256": "9ed442ad7506bb7418beb4b5ebfd10a8a6e48f36c63e3a1bd74741a8cc81ac72"
+    },
+    "src/app/m/reports/page.tsx": {
+      "gitBlob": "3378782805eff21404310a4ce7301a1920ab4208",
+      "sha256": "2c9cc18317875447cda77398b6f9ceaed84c3c1c78ba6b117e8f78fd46a712ed"
+    },
+    "src/components/owner-transfers.tsx": {
+      "gitBlob": "0e8a6de03a579dcfd645a19f5ca35926e8db6041",
+      "sha256": "6475bd1e267ba3312c45945abb2799553bdd243692f96ff5ee38800ea3db6e64"
+    },
+    "src/app/t/history/page.tsx": {
+      "gitBlob": "49c40e895973eaa9e91f54de4e830c016658f3f9",
+      "sha256": "8e0b67508841751a282f86184ec5e0fd2f6f86c4940952384dff86bef272a8f6"
+    },
+    "src/app/t/history/[leaseId]/page.tsx": {
+      "gitBlob": "5d2f0e60ac851ceb78af2d08fe24c0fd549e73ae",
+      "sha256": "54a39a6a0d38b90e403b02639f8fafa6cb8b8356ec704ecb6f88a18b39317f37"
+    },
+    "src/app/t/history/[leaseId]/signed/[pdfId]/route.ts": {
+      "gitBlob": "a079fb4a81823284116f61d52f9c5c570627c72a",
+      "sha256": "7609ce5ad086f0f2fba200ae22cabe97d1797bda7b2ebb5a80732c60f591302d"
+    },
+    "src/i18n/tenant-lease-history.ts": {
+      "gitBlob": "1afeb7fbb1505143bc3cfe6ae950d2d15ed04b42",
+      "sha256": "a3ddabb0a81a990ccccd4c449a9984208c38116a355c12c64e73260e4a405143"
+    },
+    "src/app/t/layout.tsx": {
+      "gitBlob": "b7a1bfaffcdabcda9a0ec4fa5a7c2cc363a2c938",
+      "sha256": "d0300b7500819afb4eff57a13ddeabe0da8b6bf8771272c596911bc03979363e"
+    },
+    "src/server/tenant-lease-history.ts": {
+      "gitBlob": "0ae4541e33f977f3261538b4a8530c416fd52ff6",
+      "sha256": "09f59740372bea9ada9aba3f299eaf23cb54901bed248076d7a0588ca05890c4"
+    },
+    "src/server/record-archive-actions.ts": {
+      "gitBlob": "6e3f6fa8c57ba551aff0d74e7f0f620e25afbe6e",
+      "sha256": "8d7384dd5e549d8a97149ecfc1763024d719d536cebbbcb53955bfdbbc10b5b0"
+    },
+    "src/lib/record-archive.ts": {
+      "gitBlob": "4171974880dd3e5c3aa1e6bca2d7c43e27d769ce",
+      "sha256": "9f610cbbea2009aa7f3a854a536e325cbf13ef4fc21c1f765e247102c5d27eb8"
+    },
+    "src/server/domain.ts": {
+      "gitBlob": "c78c25310a8455d9ec7cebe54a27470c41f48fd6",
+      "sha256": "54cf30294360d77e37b2e73431eb5c7cfebb6862689c992fd13a68a8e5bd24d7"
+    },
+    "src/server/queries.ts": {
+      "gitBlob": "c40a97737875f339f20ee71f9dc8a17a0894b37f",
+      "sha256": "f0072183822c7cc03a66655eef60d95a15a676b83eebe4459167d5c149219886"
+    },
+    "src/server/record-archive.ts": {
+      "gitBlob": "f08c3c6925cb3d8f70a4839dfebff74dbb133756",
+      "sha256": "d15665b1b385404c482c4e1494d9b931f3406a4238a93fce019370e9b33b0c0f"
+    },
+    "src/server/tenant-signed-pdf-download.ts": {
+      "gitBlob": "7744dacafd84f9d123e8706ff7f81177a97f73be",
+      "sha256": "918374e3b87647a8d81d46fd70b2db446ddae15be7d65039b621b4ae23ede54f"
+    },
+    "src/server/audit.ts": {
+      "gitBlob": "beec5aa7a76f3f075970087242526e2c696a6381",
+      "sha256": "27f9acf92dbcbf92f2518b8b302bea48119a18129e572fd81861145fcf88493c"
+    },
+    "src/server/session.ts": {
+      "gitBlob": "eeac341482275fd4060c350e8dc02d20208de3bc",
+      "sha256": "29ddce7340d5bbec5a6dcf3f3a3a944c800b3a0a55b0e44726bedba3348558fe"
+    },
+    "src/server/db.ts": {
+      "gitBlob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+      "sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b"
+    }
+  }
+}

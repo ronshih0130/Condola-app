@@ -11,6 +11,7 @@ import { createLeaseFromForm } from "./lease-form";
 import { listLeases, listSpaces, vacantRooms } from "./queries";
 import { ensureSandbox } from "./sandbox";
 import type { Session } from "./types";
+import { insertTestAuthSession } from "./test-auth-session";
 
 const admin: Session = {
   userId: USERS.admin,
@@ -26,6 +27,8 @@ const admin: Session = {
   calendar: "gregorian",
   leaseId: null,
 };
+test.before(async()=>{admin.sessionId=await withClient(c=>insertTestAuthSession(c,admin.userId));});
+test.after(async()=>{await query(`DELETE FROM auth_sessions WHERE id=$1`,[admin.sessionId]);});
 
 function form(fields: Record<string, string>) {
   const data = new FormData();
@@ -363,7 +366,7 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     const sandboxId = await ensureSandbox(admin);
     const sandbox: Session = {
       ...admin,
-      sessionId: "lease-create-sandbox",
+      sessionId: admin.sessionId,
       orgId: sandboxId,
       environment: "sandbox",
     };

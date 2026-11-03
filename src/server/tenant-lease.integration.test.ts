@@ -10,6 +10,7 @@ import { createLeaseFromForm } from "./lease-form";
 import { listTenants, searchTenants } from "./queries";
 import { ensureSandbox } from "./sandbox";
 import type { Session } from "./types";
+import { insertTestAuthSession } from "./test-auth-session";
 
 const admin: Session = {
   userId: USERS.admin,
@@ -25,6 +26,8 @@ const admin: Session = {
   calendar: "gregorian",
   leaseId: null,
 };
+test.before(async()=>{admin.sessionId=await withClient(c=>insertTestAuthSession(c,admin.userId));});
+test.after(async()=>{await query(`DELETE FROM auth_sessions WHERE id=$1`,[admin.sessionId]);});
 
 function form(fields: Record<string, string>) {
   const data = new FormData();
@@ -521,7 +524,7 @@ test("a taken or sandbox email gets a new portal login, and an archived contact 
     const sandboxId = await ensureSandbox(admin);
     const sandbox: Session = {
       ...admin,
-      sessionId: "tenant-pick-sandbox",
+      sessionId: admin.sessionId,
       orgId: sandboxId,
       environment: "sandbox",
     };

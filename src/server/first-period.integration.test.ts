@@ -6,7 +6,8 @@ import { disposableDbUrl } from "./test-disposable-db";
 import { cloneTestDatabase } from "./test-database-clone";
 import { ORG_ID, USERS } from "./ids";
 import { createLease, createProperty, signLease, updateLease, uploadSignedLeasePdf } from "./domain";
-import { query, svc } from "./db";
+import { query, svc, withClient } from "./db";
+import { insertTestAuthSession } from "./test-auth-session";
 import { EsignRepo, type TransactionRunner } from "./esign/repo";
 import { lockSigningCase } from "./esign/lock";
 import type { Session } from "./types";
@@ -16,6 +17,7 @@ let clone: Awaited<ReturnType<typeof cloneTestDatabase>> | undefined;
 let priorOrgEsign: { present: boolean; value: unknown } | undefined;
 test.before(async () => {
   clone = await cloneTestDatabase();
+  await withClient(async c=>{staff.sessionId=await insertTestAuthSession(c,USERS.admin);ownerSessionId=await insertTestAuthSession(c,USERS.owner);managerSessionId=await insertTestAuthSession(c,USERS.manager);});
   const row = (await query<{ present: boolean; value: unknown }>(`SELECT feature_flags ? 'esign' AS present, feature_flags->'esign' AS value FROM organizations WHERE id=$1`, [ORG_ID])).rows[0];
   priorOrgEsign = row;
 });
@@ -32,6 +34,7 @@ test.afterEach(async () => {
   await query(`UPDATE organizations SET feature_flags=CASE WHEN $2 THEN jsonb_set(feature_flags,'{esign}',$3::jsonb) ELSE feature_flags - 'esign' END WHERE id=$1`, [ORG_ID, priorOrgEsign.present, JSON.stringify(priorOrgEsign.value)]);
 });
 const staff: Session = { userId: USERS.admin, sessionId: "b008-fixture", email: "staff@example.com", name: "Staff", kind: "staff", role: "admin", orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", locale: "en", calendar: "gregorian", leaseId: null };
+let ownerSessionId:string,managerSessionId:string;
 
 async function waitForBlockingEdge(waiter: number, blocker: number) {
   const deadline=Date.now()+5000;
@@ -111,7 +114,7 @@ test("captured first period survives flag off and is used by tenant-final signin
   await query(`UPDATE leases SET end_date='2027-11-30' WHERE id=$1`,[lease.leaseId]);
   await identityReady(lease.leaseId);
   assert.equal((await signLease(staff, {leaseId:lease.leaseId,signedName:"Staff",consent:true})).esign, "partially_signed");
-  const tenant: Session = {...staff, userId:lease.tenantUserId, kind:"tenant", role:null};
+  const tenant: Session = {...staff, sessionId:await withClient(c=>insertTestAuthSession(c,lease.tenantUserId)), userId:lease.tenantUserId, kind:"tenant", role:null};
   const result = await signLease(tenant, {leaseId:lease.leaseId,signedName:"Tenant",consent:true});
   assert.equal(result.esign, "fully_signed");
   const rent = await query<{amount:string}>(`SELECT amount_minor::text AS amount FROM invoice_lines WHERE invoice_id=$1 AND charge_type='rent'`, [result.invoiceId]);
@@ -153,7 +156,7 @@ test("a concurrent B001 signature wins before a waiting basis capture", async ()
   const unit = (await query<{id:string}>(`INSERT INTO units(org_id,property_id,label,rental_mode) VALUES ($1,$2,'race','whole_unit') RETURNING id::text`,[ORG_ID,property])).rows[0].id;
   const lease = (await query<{id:string}>(`INSERT INTO leases(org_id,property_id,unit_id,target_unit_id,status,start_date,end_date,currency,rent_amount_minor,deposit_amount_minor) VALUES ($1,$2,$3,$3,'draft','2026-12-16','2027-11-30','USD',30000,0) RETURNING id::text`,[ORG_ID,property,unit])).rows[0].id;
   const caseId=randomUUID(), versionId=randomUUID();
-  const admin={userId:USERS.admin,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"staff",role:"admin"} as const, owner={userId:USERS.owner,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"owner",role:null} as const;
+  const admin={userId:USERS.admin,sessionId:staff.sessionId,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"staff",role:"admin"} as const, owner={userId:USERS.owner,sessionId:ownerSessionId,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"owner",role:null} as const;
   const repo=new EsignRepo({check:async () => true});
   const state=await repo.createCase(admin,{caseId,leaseId:lease,versionId,body:"Synthetic",pdfBytes:Buffer.from("%PDF-1.7 fixture"),signers:[{id:USERS.owner,role:"owner",email:"owner@example.com"},{id:USERS.tenant,role:"tenant",email:"tenant@example.com"}]});
   const at="2026-10-26T12:00:00.000Z", expiry="2026-10-27T12:00:00.000Z";
@@ -197,7 +200,7 @@ test("capturing first fences B001 signing and concurrent case creation", async (
     const unit=(await query<{id:string}>(`INSERT INTO units(org_id,property_id,label,rental_mode) VALUES ($1,$2,$3,'whole_unit') RETURNING id::text`,[ORG_ID,property,randomUUID()])).rows[0].id;
     return (await query<{id:string}>(`INSERT INTO leases(org_id,property_id,unit_id,target_unit_id,status,start_date,end_date,currency,rent_amount_minor,deposit_amount_minor) VALUES ($1,$2,$3,$3,'draft','2026-12-16','2027-11-30','USD',30000,0) RETURNING id::text`,[ORG_ID,property,unit])).rows[0].id;
   }
-  const admin={userId:USERS.admin,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"staff",role:"admin"} as const, owner={userId:USERS.owner,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"owner",role:null} as const;
+  const admin={userId:USERS.admin,sessionId:staff.sessionId,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"staff",role:"admin"} as const, owner={userId:USERS.owner,sessionId:ownerSessionId,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"owner",role:null} as const;
   const repo=new EsignRepo({check:async () => true});
   const caseInput = (leaseId:string) => ({caseId:randomUUID(),leaseId,versionId:randomUUID(),body:"Synthetic",pdfBytes:Buffer.from("%PDF-1.7 fixture"),signers:[{id:USERS.owner,role:"owner" as const,email:"owner@example.com"},{id:USERS.tenant,role:"tenant" as const,email:"tenant@example.com"}]});
   const lease=await draft(), item=caseInput(lease), state=await repo.createCase(admin,item);
@@ -227,7 +230,7 @@ test("capturing first fences B001 signing and concurrent case creation", async (
     await managerClient.query(`SELECT set_config('request.jwt.claim.sub',$1,true)`,[USERS.manager]);
     await managerClient.query("SET LOCAL ROLE service_role");
     const managerPid=(await managerClient.query<{pid:number}>(`SELECT pg_backend_pid() AS pid`)).rows[0].pid;
-    const manager={userId:USERS.manager,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"staff",role:"manager"} as const;
+    const manager={userId:USERS.manager,sessionId:managerSessionId,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"staff",role:"manager"} as const;
     const managerAction=lockSigningCase(managerClient,manager,item.caseId,versionId);
     const managerOutcome=managerAction.then(()=>"resolved",(error:Error)=>error.message);
     await waitForBlockingEdge(managerPid,capturePid);
@@ -301,7 +304,7 @@ test("actual disposal of an expired partially signed case keeps basis capture lo
       await client.query("SET LOCAL ROLE service_role");
       try { return await work(client); } finally { await client.query("RESET ROLE"); }
     };
-    const repo=new EsignRepo({check:async()=>true},runner), admin={userId:USERS.admin,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"staff",role:"admin"} as const, owner={userId:USERS.owner,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"owner",role:null} as const;
+    const repo=new EsignRepo({check:async()=>true},runner), admin={userId:USERS.admin,sessionId:staff.sessionId,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"staff",role:"admin"} as const, owner={userId:USERS.owner,sessionId:ownerSessionId,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",kind:"owner",role:null} as const;
     const at="2026-10-26T12:00:00.000Z",expiry="2026-10-27T12:00:00.000Z";
     const state=await repo.createCase(admin,{caseId,leaseId:lease,versionId,body:"Synthetic disposal",pdfBytes:pdf,signers:[{id:USERS.owner,role:"owner",email:"owner@example.com"},{id:USERS.tenant,role:"tenant",email:"tenant@example.com"}]});
     await repo.apply(admin,caseId,{type:"send",versionId,at,presumedConsentDeadline:expiry,termsVersion:"fixture"});

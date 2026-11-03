@@ -102,8 +102,8 @@ export class EsignFlow {
     );
     return rows.rows.filter((r) => r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email));
   }
-  private async load(c: Connection, session: Session, caseId: string, versionId: string) {
-    const leaseId = await lockSigningCase(c, session, uuid(caseId), uuid(versionId), this.deps.enabled?.() ?? esignEnabled());
+  private async load(c: Connection, session: Session, caseId: string, versionId: string, active = false) {
+    const leaseId = await lockSigningCase(c, session, uuid(caseId), uuid(versionId), this.deps.enabled?.() ?? esignEnabled(), active);
     const versions = await c.query<{ state: Version; pdf_bytes: Buffer; final_pdf_bytes: Buffer | null }>(
       "SELECT state,pdf_bytes,final_pdf_bytes FROM esign_versions WHERE case_id=$1 AND id=$2",
       [caseId, uuid(versionId)],
@@ -185,7 +185,14 @@ export class EsignFlow {
         return { leaseId };
       }
 
-      const loaded = await this.load(c, session, command.caseId, command.versionId);
+      // Existing challenge replay is read-only. Detect it before any case lock,
+      // then revalidate the exact signer/challenge after the ordinary case authorization.
+      let possibleEmailReplay = false;
+      if (command.type === "email" && session.kind !== "staff") {
+        const prior = await c.query<{state:Version}>(`SELECT v.state FROM esign_versions v JOIN esign_cases ec ON ec.id=v.case_id WHERE ec.id=$1 AND ec.org_id=$2 AND v.id=$3`,[uuid(command.caseId),session.orgId,uuid(command.versionId)]);
+        possibleEmailReplay = Boolean(prior.rows[0]?.state.signers.find(x=>x.id===session.userId && x.role===session.kind)?.emailChallenge);
+      }
+      const loaded = await this.load(c, session, command.caseId, command.versionId, command.type !== "void" && command.type !== "object" && !possibleEmailReplay);
       const versionId = command.versionId, caseId = command.caseId;
       const signer = loaded.state.signers.find((s) => s.id === session.userId && s.role === session.kind);
       const self = () => {
@@ -204,6 +211,7 @@ export class EsignFlow {
           ensure(!loaded.state.halted && signer?.status === "pending_identity", "Identity out of order");
           let challenge = signer.emailChallenge;
           if (!challenge) {
+            ensure(!possibleEmailReplay, "Signing context changed");
             await repo.apply(actor, caseId, { type: "issue_identity", versionId, signerId, at,
               method: "email", expiresAt: new Date(Date.parse(at) + 10 * 60 * 1000).toISOString(), attemptCap: 5 });
             challenge = { issuedAt: at, expiresAt: new Date(Date.parse(at) + 600000).toISOString(), attempts: 0, attemptCap: 5 };

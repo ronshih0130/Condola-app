@@ -14,11 +14,14 @@ import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import type { ImportRequestRow } from "./owner-import";
 import { ensureSandbox } from "./sandbox";
 import type { Session } from "./types";
+import { insertTestAuthSession } from "./test-auth-session";
+
+const fixtureSessions = new Map<string,string>();
 
 function staff(overrides: Partial<Session> & Pick<Session, "userId" | "role">): Session {
   return {
     userId: overrides.userId,
-    sessionId: "import-integration",
+    sessionId: fixtureSessions.get(overrides.userId) ?? "",
     email: "yating.lin@songxin.demo",
     name: "Admin",
     kind: "staff",
@@ -35,6 +38,8 @@ function staff(overrides: Partial<Session> & Pick<Session, "userId" | "role">): 
 const admin = staff({ userId: USERS.admin, role: "admin" });
 const manager = staff({ userId: USERS.manager, role: "manager", email: "zhiming.huang@songxin.demo", name: "Manager" });
 const accountant = staff({ userId: USERS.accountant, role: "accountant", email: "meiling.zhou@songxin.demo", name: "Accountant" });
+test.before(async()=>{await withClient(async c=>{for(const s of [admin,manager,accountant]){s.sessionId=await insertTestAuthSession(c,s.userId);fixtureSessions.set(s.userId,s.sessionId);}});});
+test.after(async()=>{for(const id of fixtureSessions.values())await query(`DELETE FROM auth_sessions WHERE id=$1`,[id]);});
 
 function row(overrides: Partial<ImportRequestRow> = {}): ImportRequestRow {
   return {

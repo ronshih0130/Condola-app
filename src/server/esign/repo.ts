@@ -4,6 +4,7 @@ import { leaseIdentityReady } from "../id-docs";
 import { FlowError } from "../errors";
 import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type FirstPeriodLeaseSource } from "../move-in-invoice";
 import { lockSigningCase, lockSigningLeaseForCreate, type SigningActor } from "./lock";
+import { assertCurrentArchiveCaller } from "../record-archive-caller";
 import { esignEnabled } from "./access";
 import {
   createCase as createDomainCase,
@@ -89,8 +90,8 @@ export class EsignRepo {
     private readonly enabled: () => boolean = esignEnabled,
   ) {}
 
-  private async lock(client: Connection, actor: Actor, caseId: string, versionId?: string) {
-    await lockSigningCase(client, actor, caseId, versionId, this.enabled());
+  private async lock(client: Connection, actor: Actor, caseId: string, versionId?: string, active = false) {
+    await lockSigningCase(client, actor, caseId, versionId, this.enabled(), active);
   }
 
   private async role(
@@ -254,13 +255,14 @@ export class EsignRepo {
         client, input.caseId, state.versions[0], input.pdfBytes,
         new Map(input.signers.map((s) => [s.id, s.email])),
       );
+      await assertCurrentArchiveCaller(client,actor);
       return state;
     });
   }
 
   async addSigner(actor: Actor, caseId: string, versionId: string, input: SignerInput) {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId, versionId);
+      await this.lock(client, actor, caseId, versionId, true);
       await this.company(client, actor);
       const loaded = await this.load(client, caseId);
       const v = loaded.state.versions.find((x) => x.id === versionId);
@@ -278,12 +280,13 @@ export class EsignRepo {
       );
       await client.query(`UPDATE esign_versions SET state = $2 WHERE id = $1`,
         [versionId, JSON.stringify(v)]);
+      await assertCurrentArchiveCaller(client,actor);
     });
   }
 
   async apply(actor: Actor, caseId: string, event: WorkflowEvent): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId, event.versionId);
+      await this.lock(client, actor, caseId, event.versionId, event.type !== "void" && event.type !== "object");
       const { state } = await this.load(client, caseId);
       const v = state.versions.find((x) => x.id === event.versionId);
       const role = await this.role(client, actor, v);
@@ -298,6 +301,7 @@ export class EsignRepo {
       const eventRole = event.type === "send" && role === "company_staff" ? "company_admin" : role;
       const after = transition(state, { ...event, actorId: actor.userId, role: eventRole } as Event);
       await this.save(client, caseId, state, after);
+      if(event.type!=='void' && event.type!=='object')await assertCurrentArchiveCaller(client,actor);
       return after;
     });
   }
@@ -306,7 +310,7 @@ export class EsignRepo {
     versionId: string; signerId: string; at: string; response: string;
   }): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId, input.versionId);
+      await this.lock(client, actor, caseId, input.versionId, true);
       const { state } = await this.load(client, caseId);
       const v = state.versions.find((x) => x.id === input.versionId);
       const role = await this.role(client, actor, v);
@@ -326,13 +330,14 @@ export class EsignRepo {
         actorId: actor.userId, role, method: "email", codeMatches,
       });
       await this.save(client, caseId, state, after);
+      await assertCurrentArchiveCaller(client,actor);
       return after;
     });
   }
 
   async recordSignature(actor: Actor, caseId: string, input: SignatureInput) {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId, input.versionId);
+      await this.lock(client, actor, caseId, input.versionId, true);
       const { state } = await this.load(client, caseId);
       const v = state.versions.find((x) => x.id === input.versionId);
       const role = await this.role(client, actor, v);
@@ -385,6 +390,7 @@ export class EsignRepo {
               no_amount_due: invoice.rows[0].total_minor === "0" && invoice.rows[0].balance_minor === "0"})]);
         }
       }
+      await assertCurrentArchiveCaller(client,actor);
       return after;
     });
   }
@@ -418,7 +424,7 @@ export class EsignRepo {
     at: string;
   }): Promise<SigningCase> {
     return this.run(actor.userId, async (client) => {
-      await this.lock(client, actor, caseId, input.previousVersionId);
+      await this.lock(client, actor, caseId, input.previousVersionId, true);
       await this.company(client, actor);
       const { state } = await this.load(client, caseId);
       const after = transition(state, {
@@ -438,6 +444,7 @@ export class EsignRepo {
         after.versions.find((v) => v.id === fresh.supersedes_version_id),
       );
       await this.save(client, caseId, state, after);
+      await assertCurrentArchiveCaller(client,actor);
       return after;
     });
   }

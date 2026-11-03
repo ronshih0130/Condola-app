@@ -2,6 +2,7 @@ import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { connection } from "next/server";
 import { makeT } from "@/i18n";
+import { archiveCopy } from "@/i18n/record-archive";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionPrepareUtility, actionVoidUtility } from "@/server/actions";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
@@ -54,7 +55,7 @@ function readingValue(value: number | null | undefined) {
 export default async function UtilityPostingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ unit?: string; run?: string; error?: string; saved?: string; page?: string; month?: string; bill?: string; kwh?: string }>;
+  searchParams: Promise<{ unit?: string; run?: string; error?: string; saved?: string; page?: string; month?: string; bill?: string; kwh?: string; runPage?: string; historyUnit?: string }>;
 }) {
   await requireCurrentConsent(undefined, "page");
   await connection();
@@ -65,7 +66,8 @@ export default async function UtilityPostingPage({
   const month = utilityMonth(params.month);
   const period = monthBounds(month);
   const page = Number(params.page ?? "1");
-  const board = await listUtilityBoard(session, period.start, period.end, Number.isInteger(page) ? page : 1);
+  const runPage = Number(params.runPage ?? "1");
+  const board = await listUtilityBoard(session, period.start, period.end, Number.isInteger(page) ? page : 1, undefined, Number.isInteger(runPage) ? runPage : 1, params.historyUnit);
   const detail = params.run ? await utilityRunDetail(session, params.run) : null;
   const canPost = can(session.role, "leases.edit");
   const units = new Map<string, { id: string; propertyId: string; label: string; currency: string; rate: string; spaces: typeof board.spaces }>();
@@ -93,7 +95,10 @@ export default async function UtilityPostingPage({
       spaces: [],
     });
   }
-  const selected = (params.unit ? units.get(params.unit) : undefined) ?? (resultUnit ? units.get(resultUnit.unit_id) : undefined) ?? [...units.values()][0];
+  const selected = (resultUnit ? units.get(resultUnit.unit_id) : undefined) ?? (params.unit ? units.get(params.unit) : undefined) ?? [...units.values()][0];
+  const correctionDetail = detail && (detail.run.status === "posted" || detail.run.status === "pending_repost") ? detail : null;
+  const formSpaces = correctionDetail ? correctionDetail.correctionSpaces : selected?.spaces ?? [];
+  const canPrepare = !!selected && (correctionDetail ? correctionDetail.correctionAvailable : selected.spaces.length > 0);
   const money = (minor: number, currency: string) => signedMoney(minor, currency, session.locale, v2);
   const statusLabel = utilityStatusLabel(t, detail?.run.status);
   const formPeriod = detail
@@ -139,13 +144,15 @@ export default async function UtilityPostingPage({
           ) : null}
         </div>
       ) : null}
-      {canPost && selected ? (
+      {canPost && correctionDetail && !canPrepare && <p role="status">{archiveCopy(session.locale).unavailable}</p>}
+      {canPost && selected && canPrepare ? (
         <form className="card pad" action={actionPrepareUtility} style={{ maxWidth: 760 }} data-testid="utility-form">
           <input type="hidden" name="unitId" value={selected.id} />
+          {correctionDetail && <input type="hidden" name="sourceRunId" value={correctionDetail.run.id} />}
           <input type="hidden" name="periodStart" value={formPeriod.start} />
           <input type="hidden" name="periodEnd" value={formPeriod.end} />
           <div className="row" data-testid="utility-method" style={{ gap: 16, alignItems: "center", background: "#F6EEE6", borderRadius: 10, padding: "10px 14px" }}>
-            <span>{t("i_split")}：<b>{methodLabel(t, selected.spaces[0]?.method ?? null)}</b></span>
+            <span>{t("i_split")}：<b>{methodLabel(t, formSpaces[0]?.method ?? null)}</b></span>
             <span>{t("i_rate")}：<b>NT$</b></span>
             <input className="inp" name="rate" data-testid="utility-rate" inputMode="decimal" defaultValue={detail ? String(detail.rateMajor) : selected.rate} style={{ maxWidth: 120 }} />
             <Link href={`/m/properties/${selected.propertyId}/edit`} style={{ marginLeft: "auto" }}>{t("i_utility_settings")}</Link>
@@ -154,34 +161,35 @@ export default async function UtilityPostingPage({
           <div className="grid2">
             <div className="fg">
               <label className="f">{t("i_bill_total")}</label>
-              <input className="inp" name="billTotal" data-testid="utility-bill" inputMode="decimal" defaultValue={params.bill ?? ""} />
+              <input className="inp" name="billTotal" data-testid="utility-bill" inputMode="decimal" defaultValue={params.bill ?? (correctionDetail ? correctionDetail.correctionBillMajor ?? "" : "")} />
             </div>
             <div className="fg">
               <label className="f">{t("i_utility_total_kwh")}</label>
-              <input className="inp" name="totalKwh" data-testid="utility-total-kwh" inputMode="decimal" defaultValue={params.kwh ?? ""} />
+              <input className="inp" name="totalKwh" data-testid="utility-total-kwh" inputMode="decimal" defaultValue={params.kwh ?? (correctionDetail ? readingValue(correctionDetail.correctionTotalKwh) : "")} />
             </div>
           </div>
-          {selected.spaces.every((space) => space.method === "even") ? (
+          {formSpaces.length > 0 && formSpaces.every((space) => space.method === "even") ? (
             <p className="small">{t("i_utility_even_help")}</p>
           ) : (
             <>
               <h3>{t("i_utility_section_rooms")}</h3>
-              {selected.spaces.map((space) => {
+              {formSpaces.map((space) => {
                 const prior = detail?.lines.find((line) => (line.room_id ?? detail.run.unit_id) === space.space_id);
+                const saved = correctionDetail ? correctionDetail.correctionSpaces.find((item) => item.space_id === space.space_id) : undefined;
                 return (
                   <div className="fg" key={space.space_id}>
                     <label className="f">
                       {space.space_label} · {space.tenant || t("i_vacant")} · {methodLabel(t, space.method)}
                     </label>
                     <input type="hidden" name="spaceId" value={space.space_id} />
-                    <input type="hidden" name="kwh" value={prior?.usage ?? ""} />
+                    <input type="hidden" name="kwh" value={saved?.kwh ?? prior?.usage ?? ""} />
                     <div className="grid2">
                       <input
                         className="inp"
                         name="prevKwh"
                         data-testid={`kwh-prev-${space.space_label}`}
                         inputMode="decimal"
-                        defaultValue={readingValue(prior?.previousKwh)}
+                        defaultValue={readingValue(saved?.previousKwh ?? prior?.previousKwh)}
                         placeholder={t("i_utility_prev_kwh")}
                         aria-label={`${space.space_label} ${t("i_utility_prev_kwh")}`}
                       />
@@ -190,7 +198,7 @@ export default async function UtilityPostingPage({
                         name="currKwh"
                         data-testid={`kwh-curr-${space.space_label}`}
                         inputMode="decimal"
-                        defaultValue={readingValue(prior?.currentKwh)}
+                        defaultValue={readingValue(saved?.currentKwh ?? prior?.currentKwh)}
                         placeholder={t("i_utility_curr_kwh")}
                         aria-label={`${space.space_label} ${t("i_utility_curr_kwh")}`}
                       />
@@ -278,6 +286,10 @@ export default async function UtilityPostingPage({
         <div className="hd">
           <h3>{t("i_utility_runs")}</h3>
         </div>
+        <div className="row">
+          {board.runPage > 1 && <Link className="btn sm" href={utilityHref({month, unit: selected?.id, historyUnit: params.historyUnit, runPage: board.runPage - 1})}>{t("i_utility_prev")}</Link>}
+          {board.runHasMore && <Link className="btn sm" href={utilityHref({month, unit: selected?.id, historyUnit: params.historyUnit, runPage: board.runPage + 1})}>{t("i_utility_next")}</Link>}
+        </div>
         {board.runs.length === 0 ? (
           <div className="empty">{t("i_empty")}</div>
         ) : (
@@ -286,7 +298,7 @@ export default async function UtilityPostingPage({
               {board.runs.map((run) => (
                 <tr key={run.id}>
                   <td>
-                    <Link href={utilityHref({ run: run.id, unit: run.unit_id, month: run.period_start.slice(0, 7) })}>
+                    <Link href={utilityHref({ run: run.id, unit: run.unit_id, month: run.period_start.slice(0, 7), historyUnit: params.historyUnit, runPage: board.runPage })}>
                       {run.property_name} · {run.unit_label}
                     </Link>
                     <div className="small muted">

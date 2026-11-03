@@ -4,6 +4,8 @@ import { writeAudit } from "./audit";
 import { currentOwnerTransferStaff, lockOwnerTransferPeriod } from "./owner-transfer-period-lock";
 import { maybe, many, one, svc, tx } from "./db";
 import { lockFreshLeaseTarget } from "./lease-target";
+import { admitActiveArchiveAncestry, admitFreshLeaseAncestry, admitLeaseArchiveAncestry, admitTicketArchiveAncestry } from "./record-archive-admission";
+import { assertCurrentArchiveCaller } from "./record-archive-caller";
 import { FlowError } from "./errors";
 import { deliveryPlan, outboundNote, SANDBOX_NOT_SENT } from "./outbound";
 import {
@@ -524,12 +526,16 @@ export async function setMeterSerial(session: Session, propertyId: string, seria
   const value = serial.trim();
   if (!value) throw new FlowError("errors.required");
   await tx(session.userId, async (client) => {
+    await admitActiveArchiveAncestry(client, session.orgId, {kind:"property",id:propertyId});
+    await assertCurrentArchiveCaller(client, session);
     const unit = await maybe<{ id: string }>(
       client,
       `SELECT id FROM units WHERE property_id = $1 AND org_id = $2 AND archived_at IS NULL ORDER BY created_at LIMIT 1`,
       [propertyId, session.orgId],
     );
     if (!unit) throw new FlowError("errors.notFound");
+    await admitActiveArchiveAncestry(client, session.orgId, {kind:"unit",id:unit.id});
+    await assertCurrentArchiveCaller(client, session);
     const meter = await maybe<{ id: string }>(
       client,
       `SELECT id FROM meters
@@ -539,6 +545,7 @@ export async function setMeterSerial(session: Session, propertyId: string, seria
     );
     if (meter) {
       await client.query(`UPDATE meters SET serial_number = $2 WHERE id = $1 AND org_id = $3`, [meter.id, value, session.orgId]);
+      await assertCurrentArchiveCaller(client,session);
       return;
     }
     await client.query(
@@ -549,6 +556,7 @@ export async function setMeterSerial(session: Session, propertyId: string, seria
        DO UPDATE SET serial_number = EXCLUDED.serial_number`,
       [session.orgId, propertyId, unit.id, value],
     );
+    await assertCurrentArchiveCaller(client,session);
   });
 }
 
@@ -924,7 +932,12 @@ export async function createLease(session: Session, input: LeaseInput) {
         billKept: false,
       };
     }
+    await assertCurrentArchiveCaller(client, session);
+    const admitted = await admitFreshLeaseAncestry(client, session.orgId, input.roomId);
+    await assertCurrentArchiveCaller(client, session);
     const space = await lockFreshLeaseTarget(client, session.orgId, input.roomId);
+    await assertCurrentArchiveCaller(client, session);
+    if ((space.kind === "room" ? "room" : "unit") !== admitted.kind || space.property_id !== admitted.ancestry.propertyId || space.unit_id !== admitted.ancestry.unitId) throw new FlowError("errors.notFound");
     assertLeaseMoney(space.currency, rentMajor, depositMonths);
     const depositPolicy = await resolveDepositPolicy(client, session.orgId, space.property_id, input.startDate);
     const override = leaseDepositOverride(depositPolicy, depositMonths, input.depositReason ?? "", session.userId, toMinor(rentMajor));
@@ -1282,6 +1295,7 @@ export async function createLease(session: Session, input: LeaseInput) {
     }
     }
 
+    await assertCurrentArchiveCaller(client, session);
     return {
       leaseId: lease.id,
       tenantUserId,
@@ -1334,6 +1348,9 @@ export async function updateLease(
   return tx(
     session.userId,
     async (client) => {
+      await assertCurrentArchiveCaller(client, session);
+      const archiveTarget = await admitLeaseArchiveAncestry(client, session.orgId, input.leaseId);
+      await assertCurrentArchiveCaller(client, session);
       const existing = await maybe<{
         id: string;
         status: string;
@@ -1346,6 +1363,7 @@ export async function updateLease(
         currency: string;
         rent_frequency: "monthly" | "quarterly" | "yearly";
         property_id: string;
+        unit_id: string;
         months: string | null;
         rent_minor: string;
         reason: string | null;
@@ -1359,7 +1377,7 @@ export async function updateLease(
         client,
         `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, l.signed_at::text,
                 l.target_room_id::text, l.target_unit_id::text, l.start_date::text, l.end_date::text, l.currency,
-                l.property_id::text, l.deposit_months::text AS months, l.rent_amount_minor::text AS rent_minor, l.rent_frequency::text,
+                l.property_id::text, l.unit_id::text, l.deposit_months::text AS months, l.rent_amount_minor::text AS rent_minor, l.rent_frequency::text,
                 l.first_period_basis, l.prorate_first_period,
                 l.deposit_override_reason AS reason, l.deposit_overridden_by::text AS by, l.deposit_overridden_at::text AS at,
                 (l.updated_at = $3::timestamptz) AS same_version,
@@ -1372,6 +1390,8 @@ export async function updateLease(
         [input.leaseId, session.orgId, input.updatedAt],
       );
       if (!existing) throw new FlowError("errors.notFound");
+      await assertCurrentArchiveCaller(client, session);
+      if (existing.property_id !== archiveTarget.property_id || existing.unit_id !== archiveTarget.unit_id || existing.target_room_id !== archiveTarget.target_room_id) throw new FlowError("errors.notFound");
       if (!leaseTermsEditable({ status: existing.status, esign: existing.esign, signed: Boolean(existing.signed_at) || existing.party_signed })) {
         throw new FlowError("errors.leaseLocked");
       }
@@ -1422,6 +1442,7 @@ export async function updateLease(
       if (updated.rowCount !== 1) throw new FlowError("errors.staleLease");
       const choice = input.firstPeriodProrate ?? (existing.first_period_basis !== null ? existing.prorate_first_period : undefined);
       if (choice !== undefined) await captureFirstPeriod(client, input.leaseId, choice);
+      await assertCurrentArchiveCaller(client, session);
       return {
         leaseId: input.leaseId,
         depositWarn: await savedDepositWarn(
@@ -1484,14 +1505,23 @@ export async function recordLeaseNotice(leaseId: string, eventType: string) {
 
 type SignLeaseInput = { leaseId: string; signedName: string; consent: boolean };
 
-async function signLeaseOn(client: Client, session: Session, input: SignLeaseInput, simulation?: { contactId: string; signatureId: string }) {
-    const lease = await maybe<{ id: string; document_sha256: string; org_id: string; esign: string } & FirstPeriodLeaseSource>(
+async function signLeaseOn(client: Client, session: Session, input: SignLeaseInput, simulation?: { contactId: string; signatureId: string; archiveTarget:{property_id:string;unit_id:string;target_room_id:string|null} }) {
+    const permitted = await maybe<{ ok: boolean }>(client, `SELECT EXISTS(SELECT 1 FROM leases l WHERE l.id=$1 AND l.org_id=$2 AND (
+      ($3::text='tenant' AND EXISTS(SELECT 1 FROM lease_parties lp JOIN contacts c ON c.id=lp.contact_id AND c.org_id=lp.org_id WHERE lp.lease_id=l.id AND c.user_id=$4)) OR
+      (EXISTS(SELECT 1 FROM org_members m WHERE m.org_id=$2 AND m.user_id=$4 AND m.status='active' AND m.role IN ('admin','manager')))
+    )) AS ok`,[input.leaseId,session.orgId,session.kind,session.userId]);
+    if (!permitted?.ok) throw new FlowError("errors.forbidden");
+    const target = simulation?.archiveTarget ?? await admitLeaseArchiveAncestry(client, session.orgId, input.leaseId);
+    await assertCurrentArchiveCaller(client, session);
+    const lease = await maybe<{ id: string; document_sha256: string; org_id: string; esign: string; property_id:string; unit_id:string; target_room_id:string|null } & FirstPeriodLeaseSource>(
       client,
-      `SELECT id, document_sha256, org_id, esign_status::text AS esign, first_period_basis, rent_amount_minor::text, currency,
+      `SELECT id, document_sha256, org_id, property_id::text, unit_id::text, target_room_id::text, esign_status::text AS esign, first_period_basis, rent_amount_minor::text, currency,
               start_date::text, end_date::text, rent_frequency::text, prorate_first_period FROM leases WHERE id = $1 FOR UPDATE`,
       [input.leaseId],
     );
     if (!lease || lease.org_id !== session.orgId) throw new FlowError("errors.notFound");
+    await assertCurrentArchiveCaller(client, session);
+    if(lease.property_id!==target.property_id||lease.unit_id!==target.unit_id||lease.target_room_id!==target.target_room_id)throw new FlowError("errors.notFound");
     if (lease.esign === "imported") throw new FlowError("errors.forbidden");
     const contact = await maybe<{ id: string }>(
       client,
@@ -1550,6 +1580,7 @@ async function signLeaseOn(client: Client, session: Session, input: SignLeaseInp
     );
     if (Number(remaining.n) > 0) {
       await client.query(`UPDATE leases SET esign_status = 'partially_signed' WHERE id = $1`, [input.leaseId]);
+      await assertCurrentArchiveCaller(client,session);
       return { esign: "partially_signed" as const, invoiceId: null as string | null };
     }
     await client.query(
@@ -1559,6 +1590,7 @@ async function signLeaseOn(client: Client, session: Session, input: SignLeaseInp
     await ensureThread(client, input.leaseId);
     const invoiceId = await issueMoveInInvoice(client, input.leaseId);
     await queueDemoNotice(client, input.leaseId, "rent_due");
+    await assertCurrentArchiveCaller(client,session);
     return { esign: "fully_signed" as const, invoiceId };
 }
 
@@ -1581,13 +1613,20 @@ export async function uploadSignedLeasePdf(
   const fileName = signedPdfName(file.fileName);
   const hash = createHash("sha256").update(file.bytes).digest("hex");
   const result = await tx(session.userId, async (client) => {
-    const lease = await maybe<{ id: string; status: string; esign: string } & FirstPeriodLeaseSource>(
+    const prior = await maybe<{status:string;esign:string}>(client,`SELECT status::text,esign_status::text AS esign FROM leases WHERE id=$1 AND org_id=$2`,[leaseId,session.orgId]);
+    if(!prior)throw new FlowError("errors.notFound");
+    const needsAdmission=(row:{status:string;esign:string})=>row.esign!=='imported' && ['draft','pending_signature'].includes(row.status);
+    const target=needsAdmission(prior)?await admitLeaseArchiveAncestry(client,session.orgId,leaseId):null;
+    if (target) await assertCurrentArchiveCaller(client, session);
+    const lease = await maybe<{ id: string; status: string; esign: string; property_id:string;unit_id:string;target_room_id:string|null } & FirstPeriodLeaseSource>(
       client,
-      `SELECT id::text, status::text, esign_status::text AS esign, first_period_basis, rent_amount_minor::text, currency,
+      `SELECT id::text, status::text, esign_status::text AS esign, property_id::text,unit_id::text,target_room_id::text,first_period_basis, rent_amount_minor::text, currency,
               start_date::text, end_date::text, rent_frequency::text, prorate_first_period FROM leases WHERE id = $1 AND org_id = $2 FOR UPDATE`,
       [leaseId, session.orgId],
     );
     if (!lease) throw new FlowError("errors.notFound");
+    if (target) await assertCurrentArchiveCaller(client, session);
+    if((needsAdmission(lease)&&!target)||(target&&(target.property_id!==lease.property_id||target.unit_id!==lease.unit_id||target.target_room_id!==lease.target_room_id)))throw new FlowError("errors.notFound");
     if (lease.status === "draft" || lease.status === "pending_signature") validateFirstPeriodSource(lease, true);
     const versions = await import("./paper-lease-versions");
     const paperVersion = await versions.preparePaperLeaseVersion(client, session, leaseId, file.replaceReason);
@@ -1648,8 +1687,10 @@ export async function uploadSignedLeasePdf(
     if (activated) {
       await ensureThread(client, leaseId);
       const invoiceId = await issueMoveInInvoice(client, leaseId);
+      if(target)await assertCurrentArchiveCaller(client,session);
       return { activated: true, invoiceId };
     }
+    if(target)await assertCurrentArchiveCaller(client,session);
     return { activated: false, invoiceId: null as string | null };
   });
   if (result.activated) {
@@ -1762,9 +1803,10 @@ export async function simulateTenantSignature(session: Session, leaseId: string)
       await finalSimulationClock(client, session);
       return { denied: true as const };
     }
+    const archiveTarget = await admitLeaseArchiveAncestry(client, session.orgId, leaseId);
     const witness = await pinSimulationSubject(client, session, leaseId);
     if (!(await simulationContextValid(client, session))) throw new FlowError("errors.notFound");
-    const result = await signLeaseOn(client, session, { leaseId, signedName: witness.contact.display_name, consent: true }, { contactId: witness.contact.id, signatureId: witness.signatureId });
+    const result = await signLeaseOn(client, session, { leaseId, signedName: witness.contact.display_name, consent: true }, { contactId: witness.contact.id, signatureId: witness.signatureId, archiveTarget });
     await client.query(`SET CONSTRAINTS ALL IMMEDIATE`);
     await checkSimulationWitness(client, session, leaseId, witness, result.esign);
     if (!(await simulationContextValid(client, session))) throw new FlowError("errors.notFound");
@@ -2419,7 +2461,7 @@ export async function createTicket(
   input: { leaseId: string; category: string; title: string; description: string; priority?: string },
 ) {
   if (!input.title.trim()) throw new FlowError("errors.required");
-  return tx(session.userId, async (client) => {
+  const result = await tx(session.userId, async (client) => {
     const lease = await one<{ property_id: string; unit_id: string; target_room_id: string | null; org_id: string }>(
       client,
       `SELECT property_id::text, unit_id::text, target_room_id::text, org_id::text FROM leases WHERE id = $1`,
@@ -2433,7 +2475,13 @@ export async function createTicket(
         [input.leaseId, session.userId],
       );
       if (!contact) throw new FlowError("errors.forbidden");
+      const target = await admitLeaseArchiveAncestry(client, lease.org_id, input.leaseId);
+      await assertCurrentArchiveCaller(client, session);
+      if (target.property_id !== lease.property_id || target.unit_id !== lease.unit_id || target.target_room_id !== lease.target_room_id) throw new FlowError("errors.notFound");
+      const stillAuthorized = await maybe<{ id: string }>(client, `SELECT c.id FROM lease_parties lp JOIN contacts c ON c.id = lp.contact_id WHERE lp.lease_id = $1 AND c.user_id = $2`, [input.leaseId, session.userId]);
+      if (!stillAuthorized || stillAuthorized.id !== contact.id) throw new FlowError("errors.forbidden");
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`tickets:${lease.org_id}`]);
+      await assertCurrentArchiveCaller(client, session);
       const ticketNumber = await nextTicketNumber(lease.org_id);
       await client.query(
         `INSERT INTO maintenance_tickets (
@@ -2463,10 +2511,14 @@ export async function createTicket(
         [lease.org_id, ticketNumber],
       );
       await client.query(`SELECT app.note_ticket_opened($1::uuid)`, [ticket.id]);
-      await markTryout(lease.org_id, "repair");
-      return ticket.id;
+      await assertCurrentArchiveCaller(client,session);
+      return { ticketId: ticket.id, tryoutOrgId: lease.org_id };
     }
     assertPerm(session, "tickets.update");
+    if (lease.org_id !== session.orgId) throw new FlowError("errors.notFound");
+    const target = await admitLeaseArchiveAncestry(client, lease.org_id, input.leaseId);
+    await assertCurrentArchiveCaller(client, session);
+    if (target.property_id !== lease.property_id || target.unit_id !== lease.unit_id || target.target_room_id !== lease.target_room_id) throw new FlowError("errors.notFound");
     const number = await one<{ n: string }>(
       client,
       `SELECT (coalesce(max(ticket_number), 1000) + 1)::text AS n FROM maintenance_tickets WHERE org_id = $1`,
@@ -2492,8 +2544,11 @@ export async function createTicket(
       ],
     );
     await client.query(`SELECT app.note_ticket_opened($1::uuid)`, [ticket.id]);
-    return ticket.id;
+    await assertCurrentArchiveCaller(client,session);
+    return { ticketId: ticket.id, tryoutOrgId: null };
   });
+  if (result.tryoutOrgId) await markTryout(result.tryoutOrgId, "repair");
+  return result.ticketId;
 }
 
 export async function updateTicket(
@@ -2504,12 +2559,20 @@ export async function updateTicket(
   assertPerm(session, "tickets.update");
   if (patch.status) assertTicketStatus(patch.status);
   await tx(session.userId, async (client) => {
-    const current = await maybe<{ status: string }>(
+    const initial = await maybe<{status:string;assigned_member_id:string|null}>(client,`SELECT status::text,assigned_member_id::text FROM maintenance_tickets WHERE id=$1 AND org_id=$2`,[ticketId,session.orgId]);
+    if (!initial) throw new FlowError("errors.notFound");
+    const requiresAdmission = (row:{status:string;assigned_member_id:string|null}) => Boolean((patch.status && patch.status!==row.status && !["resolved","closed","cancelled"].includes(patch.status)) || (patch.assigneeMemberId && patch.assigneeMemberId!==row.assigned_member_id));
+    const admitted = requiresAdmission(initial);
+    if (admitted) await admitTicketArchiveAncestry(client, session.orgId, ticketId);
+    if (admitted) await assertCurrentArchiveCaller(client, session);
+    const current = await maybe<{ status: string; assigned_member_id:string|null }>(
       client,
-      `SELECT status::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`,
+      `SELECT status::text,assigned_member_id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2 FOR UPDATE`,
       [ticketId, session.orgId],
     );
     if (!current) throw new FlowError("errors.notFound");
+    if (admitted) await assertCurrentArchiveCaller(client, session);
+    if (!admitted && requiresAdmission(current)) throw new FlowError("errors.notFound");
     const statusChanged = Boolean(patch.status && patch.status !== current.status);
     if (statusChanged || patch.assigneeMemberId) {
       await client.query(
@@ -2537,6 +2600,7 @@ export async function updateTicket(
         [session.orgId, ticketId, session.userId, note, statusChanged ? current.status : null, statusChanged ? patch.status : null],
       );
     }
+    if (admitted) await assertCurrentArchiveCaller(client,session);
   });
 }
 

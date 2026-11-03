@@ -1,5 +1,6 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
+import { archiveCopy } from "@/i18n/record-archive";
 import { makeT } from "@/i18n";
 import { ListPager, ListSearch, listSummary } from "@/components/list-search";
 import { PageHeader } from "@/components/ui";
@@ -32,11 +33,11 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
       <PageHeader
         title={t("i_units_title")}
         actions={
-          editable ? (
+          <><Link className="btn" href="/m/archive">{archiveCopy(session.locale).entry}</Link>{editable ? (
             <Link className="btn pri" href="/m/units/new" data-testid="new-space">
               + {t("i_space_new")}
             </Link>
-          ) : null
+          ) : null}</>
         }
       />
       <div className="card">

@@ -1,11 +1,12 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { actionUpdateProperty } from "@/server/actions";
 import { listOwners, propertyEditor } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
+import { archiveView } from "@/server/record-archive";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,9 @@ export default async function EditPropertyPage({
   const query = await searchParams;
   const session = await getSession();
   const t = makeT(session.locale);
+  const archivedView = await archiveView(session,{kind:"property",id});
+  if (archivedView.state !== "ready") notFound();
+  if (archivedView.observed.archivedAtUtc || archivedView.observed.inherited.length) redirect(`/m/archive/property/${id}`);
   const [property, owners] = await Promise.all([propertyEditor(session, id), listOwners(session)]);
   if (!property) notFound();
   const address = property.address ?? {};

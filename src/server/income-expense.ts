@@ -35,7 +35,7 @@ export type ReportLabels = {
   total: string;
 };
 
-type Choice = { id: string; name: string };
+type Choice = { id: string; name: string; archiveState?: "active" | "archived" };
 
 export function reportPeriod(
   input: { mode?: string; month?: string; from?: string; to?: string },
@@ -95,7 +95,7 @@ export async function reportFilterOptions(session: Session) {
   return tx(session.userId, async (client) => {
     const properties = await many<Choice>(
       client,
-      `SELECT id::text, name FROM properties WHERE org_id = $1 AND archived_at IS NULL ORDER BY name`,
+      `SELECT id::text, name, CASE WHEN archived_at IS NULL THEN 'active' ELSE 'archived' END AS "archiveState" FROM properties WHERE org_id = $1 ORDER BY name`,
       [session.orgId],
     );
     const owners = await many<Choice>(

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { Client } from "pg";
-import { svc, tx } from "./db";
+import { svc, tx, withClient } from "./db";
 import { createTicket } from "./domain";
 import { FlowError } from "./errors";
 import { ORG_ID, ORG2_ID, USERS } from "./ids";
@@ -18,14 +18,17 @@ import {
 } from "./vendor-repair";
 import { GET } from "../app/api/vendor-jobs/[token]/photos/[id]/route";
 
+const adminSessionId = randomUUID(), tenantSessionId = randomUUID();
+test.before(async () => { await withClient(async client => { for (const [id,user] of [[adminSessionId,USERS.admin],[tenantSessionId,USERS.tenant2]]) await client.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 day')`,[id,user,randomUUID()]); }); });
+test.after(async () => { await withClient(client => client.query(`DELETE FROM auth_sessions WHERE id=ANY($1::uuid[])`,[[adminSessionId,tenantSessionId]])); });
 const admin: Session = {
   userId: USERS.admin, orgId: ORG_ID, liveOrgId: ORG_ID,
-  sessionId: "vendor-link-flag", email: "staff@demo", name: "Staff",
+  sessionId: adminSessionId, email: "staff@demo", name: "Staff",
   kind: "staff", role: "admin", environment: "live",
   locale: "zh-TW", calendar: "gregorian", leaseId: null,
 };
 const tenant: Session = {
-  ...admin, userId: USERS.tenant2, kind: "tenant", role: null,
+  ...admin, userId: USERS.tenant2, sessionId: tenantSessionId, kind: "tenant", role: null,
 };
 const notFound = (error: unknown) => error instanceof FlowError && error.key === "errors.notFound";
 const report = (token: string) => submitVendorReport(token, { done: true, cost: "100" });

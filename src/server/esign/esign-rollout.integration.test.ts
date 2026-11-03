@@ -13,7 +13,7 @@ import { EsignRepo } from "./repo";
 import { lockSigningLeaseForCreate } from "./lock";
 
 const url = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE).href;
-const admin: Session = {userId:USERS.admin,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",sessionId:"synthetic",kind:"staff",
+const admin: Session = {userId:USERS.admin,orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",sessionId:randomUUID(),kind:"staff",
   role:"admin",locale:"en",calendar:"gregorian",leaseId:null,email:"",name:"Synthetic",consent:buildStoredConsent("reconsent")};
 
 test("org rollout gates all personas, direct repo and a disable waiting on organization lock", async () => {
@@ -23,6 +23,7 @@ test("org rollout gates all personas, direct repo and a disable waiting on organ
   const original=(await setup.query<{id:string;feature_flags:unknown}>(`SELECT id::text,feature_flags FROM organizations WHERE id=ANY($1::uuid[])`,[[ORG_ID,ORG2_ID]])).rows;
   const caseId=randomUUID(), versionId=randomUUID();
   try {
+    await setup.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')`,[admin.sessionId,admin.userId,randomUUID()]);
     const lease=(await setup.query<{id:string}>(`SELECT id::text FROM leases WHERE org_id=$1 LIMIT 1`,[ORG_ID])).rows[0].id;
     const command={type:"create" as const,leaseId:lease,pdf:new Uint8Array(),ownerId:USERS.owner,tenantId:USERS.tenant,
       ownerDocument:false,tenantDocument:false,order:"parallel" as const,deadline:""};
@@ -98,6 +99,7 @@ test("org rollout gates all personas, direct repo and a disable waiting on organ
     assert.equal(blocked,true,"an in-flight writer must finish before disabling the organization");
   } finally {
     await blocker.query("ROLLBACK").catch(()=>{});
+    await setup.query(`DELETE FROM auth_sessions WHERE id=$1`,[admin.sessionId]);
     for(const row of original) await setup.query("UPDATE organizations SET feature_flags=$2 WHERE id=$1",[row.id,row.feature_flags]);
     if(prior===undefined) delete process.env.ESIGN_ENABLED; else process.env.ESIGN_ENABLED=prior;
     await Promise.all([setup.end(),blocker.end(),waiter.end()]);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { svc, tx } from "./db";
+import { query, svc, tx, withClient } from "./db";
+import { insertTestAuthSession } from "./test-auth-session";
 import { createTicket, updateTicket } from "./domain";
 import { FlowError } from "./errors";
 import { ORG_ID, USERS } from "./ids";
@@ -94,7 +95,9 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
   const wangSession = tenant(USERS.tenant2);
   const zhangSession = tenant(USERS.tenant);
   let ticketId = "";
+  const authIds:string[]=[];
   try {
+    for(const actor of [admin,accountant,wangSession,zhangSession]){actor.sessionId=await withClient(c=>insertTestAuthSession(c,actor.userId));authIds.push(actor.sessionId);}
     ticketId = await createTicket(wangSession, {
       leaseId: wang.id,
       category: "plumbing",
@@ -517,5 +520,6 @@ test("tenants see only their own repairs; staff can record cost, vendor, dates, 
     assert.equal(wangMissesStaff.rowCount, 0);
   } finally {
     await cleanup(title);
+    for(const id of authIds)await query(`DELETE FROM auth_sessions WHERE id=$1`,[id]);
   }
 });

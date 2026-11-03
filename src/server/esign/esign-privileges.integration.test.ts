@@ -5,6 +5,7 @@ import test from "node:test";
 import { withClient } from "../db";
 import { ORG_ID, ORG2_ID, USERS } from "../ids";
 import { insertSandboxOrg } from "../sandbox";
+import { insertTestAuthSession } from "../test-auth-session";
 import { EsignRepo, type TransactionRunner } from "./repo";
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
@@ -16,6 +17,7 @@ test("e-sign RLS helpers preserve intended access and honor environment pins", a
     const caseId = randomUUID(), version = randomUUID();
     let sequence = 0;
     await client.query("BEGIN");
+    const sessionId=await insertTestAuthSession(client,USERS.admin);
     await client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"esign":true}'::jsonb WHERE id=$1`, [ORG_ID]);
     await client.query(`SELECT set_config('request.jwt.claim.sub',$1,true), set_config('app.active_org_id',$2,true), set_config('app.env','live',true)`,[USERS.admin,ORG_ID]);
     async function scoped<T>(role: "authenticated" | "service_role" | "anon", actor: string, pin: string, env: string, fn: () => Promise<T>): Promise<T> {
@@ -44,7 +46,7 @@ test("e-sign RLS helpers preserve intended access and honor environment pins", a
         try { return await fn(client); } finally { await client.query("RESET ROLE"); }
       };
       const repo = new EsignRepo({ check: async () => true }, run);
-      await repo.createCase({ userId: USERS.admin, orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", kind: "staff", role: "admin" } as const, {
+      await repo.createCase({ userId: USERS.admin, sessionId, orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", kind: "staff", role: "admin" } as const, {
         caseId, leaseId: lease, versionId: version, body: "Synthetic contract",
         pdfBytes: new TextEncoder().encode("%PDF synthetic"),
         signers: [
@@ -54,13 +56,13 @@ test("e-sign RLS helpers preserve intended access and honor environment pins", a
       });
       const otherVersion = randomUUID();
       const otherBytes = Buffer.from("%PDF different version");
-      const admin = { userId: USERS.admin, orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", kind: "staff", role: "admin" } as const;
+      const admin = { userId: USERS.admin, sessionId, orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", kind: "staff", role: "admin" } as const;
       await repo.voidUnsigned(admin, caseId, version, "Synthetic replacement", "2026-10-26T12:00:00Z");
       await repo.supersede(admin, caseId, { previousVersionId: version, newVersionId: otherVersion,
         body: "Other version", pdfBytes: otherBytes, at: "2026-10-26T12:00:00Z" });
       await repo.addSigner(admin, caseId, otherVersion, { id: USERS.owner2, role: "owner", email: "other@example.com" });
       const assignedCase = randomUUID(), assignedVersion = randomUUID();
-      await repo.createCase({ userId: USERS.admin, orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", kind: "staff", role: "admin" } as const, {
+      await repo.createCase({ userId: USERS.admin, sessionId, orgId: ORG_ID, liveOrgId: ORG_ID, environment: "live", kind: "staff", role: "admin" } as const, {
         caseId: assignedCase, leaseId: lease, versionId: assignedVersion, body: "Synthetic assigned signer contract",
         pdfBytes: new TextEncoder().encode("%PDF synthetic assigned signer"),
         signers: [
@@ -75,7 +77,7 @@ test("e-sign RLS helpers preserve intended access and honor environment pins", a
       await client.query(`INSERT INTO properties(id,org_id,name,country_code,currency,timezone) VALUES ($1,$2,'Synthetic sandbox','TW','TWD','Asia/Taipei')`, [sandboxProperty, sandbox]);
       await client.query(`INSERT INTO units(id,org_id,property_id,label) VALUES ($1,$2,$3,'Synthetic')`, [sandboxUnit, sandbox, sandboxProperty]);
       await client.query(`INSERT INTO leases(id,org_id,property_id,unit_id,target_unit_id,start_date,end_date,currency,rent_amount_minor) VALUES ($1,$2,$3,$4,$4,'2026-01-01','2027-01-31','TWD',0)`, [sandboxLease, sandbox, sandboxProperty, sandboxUnit]);
-      await repo.createCase({ userId: USERS.admin, orgId: sandbox, liveOrgId: ORG_ID, environment: "sandbox", kind: "staff", role: "admin" } as const, {
+      await repo.createCase({ userId: USERS.admin, sessionId, orgId: sandbox, liveOrgId: ORG_ID, environment: "sandbox", kind: "staff", role: "admin" } as const, {
         caseId: sandboxCase, leaseId: sandboxLease, versionId: sandboxVersion, body: "Synthetic sandbox contract",
         pdfBytes: new TextEncoder().encode("%PDF synthetic sandbox"),
         signers: [

@@ -4,6 +4,8 @@ import { maybe, one, svc, tx } from "./db";
 import { FlowError } from "./errors";
 import { taipeiToday } from "./money";
 import { can, assertPerm } from "./perms";
+import { admitTicketArchiveAncestry } from "./record-archive-admission";
+import { assertCurrentArchiveCaller } from "./record-archive-caller";
 import {
   PHOTO_BUCKET,
   PHOTO_LIMIT,
@@ -139,8 +141,17 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
   if (input.postExpense && !can(session.role, "exp.add")) throw new FlowError("errors.forbidden");
 
   await tx(session.userId, async (client) => {
+    const prior = await maybe<{ status:string; scheduled_on:string|null; vendor_name:string|null }>(client,
+      `SELECT status::text, scheduled_on::text, vendor_name FROM maintenance_tickets WHERE id=$1 AND org_id=$2`,[ticketId,session.orgId]);
+    if (!prior) throw new FlowError("errors.notFound");
+    const operative = (row:typeof prior) => Boolean((input.status!==row.status && !["resolved","closed","cancelled"].includes(input.status)) || (scheduledOn && scheduledOn!==row.scheduled_on) || (vendorName && vendorName!==(row.vendor_name ?? "")));
+    const admitted = operative(prior);
+    if (admitted) await admitTicketArchiveAncestry(client,session.orgId,ticketId);
+    if (admitted) await assertCurrentArchiveCaller(client,session);
     const ticket = await loadTicket(client, ticketId, session.orgId);
+    if (admitted) await assertCurrentArchiveCaller(client,session);
     if (!ticket) throw new FlowError("errors.notFound");
+    if (!admitted && operative(ticket)) throw new FlowError("errors.notFound");
     const linked = ticket.expense_id
       ? await maybe<{ id: string; status: string }>(
           client,
@@ -248,7 +259,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
       });
     }
 
-    if (link === "skip") return;
+    if (link === "skip") { if(admitted)await assertCurrentArchiveCaller(client,session); return; }
     if (link === "keep") {
       if (existingExpense && existingExpense !== ticket.expense_id) {
         await client.query(`UPDATE maintenance_tickets SET expense_id = $2 WHERE id = $1 AND org_id = $3`, [
@@ -257,6 +268,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
           session.orgId,
         ]);
       }
+      if(admitted)await assertCurrentArchiveCaller(client,session);
       return;
     }
 
@@ -292,6 +304,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
       expense.id,
       session.orgId,
     ]);
+    if(admitted)await assertCurrentArchiveCaller(client,session);
   });
 }
 

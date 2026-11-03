@@ -5,6 +5,8 @@ import { normalizePhone } from "./lease-rules";
 import { toMinor } from "./money";
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
+import { admitActiveArchiveAncestry, admitRoomMove, lockArchiveAncestry } from "./record-archive-admission";
+import { assertCurrentArchiveCaller } from "./record-archive-caller";
 import type { Session } from "./types";
 import type { Client } from "pg";
 
@@ -572,6 +574,9 @@ export async function updateProperty(
   assertPerm(session, "props.edit");
   if (!input.name.trim() || !input.street.trim() || !input.ownerContactId) throw new FlowError("errors.required");
   await tx(session.userId, async (client) => {
+    const target = await lockArchiveAncestry(client, session.orgId, {kind:"property",id:propertyId}, true);
+    await assertCurrentArchiveCaller(client,session);
+    if (target.propertyArchived) throw new FlowError("errors.notFound");
     const property = await maybe<{ country_code: string; currency: string }>(
       client,
       `SELECT country_code, currency FROM properties WHERE id = $1 AND org_id = $2 AND archived_at IS NULL`,
@@ -602,6 +607,7 @@ export async function updateProperty(
       [propertyId, input.ownerContactId],
     );
     await savePropertyElectricity(client, session, propertyId, property.currency.trim(), input.electricity);
+    await assertCurrentArchiveCaller(client,session);
   });
 }
 
@@ -688,7 +694,8 @@ async function propertyAddressKey(client: Client, orgId: string, propertyId: str
   return key || null;
 }
 
-async function unitForFloor(client: Client, orgId: string, propertyId: string, floor: string, kind: SpaceKind) {
+async function unitForFloor(client: Client, orgId: string, propertyId: string, floor: string, kind: SpaceKind, expectedExisting?: string | null) {
+  await admitActiveArchiveAncestry(client, orgId, {kind:"property",id:propertyId});
   const areaUnit = (await propertyCountry(client, orgId, propertyId)) === "TW" ? "ping" : "sqft";
   const key = await propertyAddressKey(client, orgId, propertyId);
   const existing = await maybe<{ id: string; rental_mode: string }>(
@@ -697,6 +704,7 @@ async function unitForFloor(client: Client, orgId: string, propertyId: string, f
       WHERE property_id = $1 AND org_id = $2 AND label = $3 AND archived_at IS NULL`,
     [propertyId, orgId, floor],
   );
+  if (expectedExisting !== undefined && (existing?.id ?? null) !== expectedExisting) throw new FlowError("errors.notFound");
   if (!existing) {
     const created = await one<{ id: string }>(
       client,
@@ -706,6 +714,8 @@ async function unitForFloor(client: Client, orgId: string, propertyId: string, f
     );
     return { id: created.id, areaUnit, created: true };
   }
+  const ancestry = await admitActiveArchiveAncestry(client, orgId, {kind:"unit",id:existing.id});
+  if (ancestry.propertyId !== propertyId || ancestry.mode !== existing.rental_mode) throw new FlowError("errors.notFound");
   if (key) {
     await client.query(
       `UPDATE units SET import_address_key = COALESCE(import_address_key, $2) WHERE id = $1 AND org_id = $3`,
@@ -721,8 +731,11 @@ export async function createSpace(session: Session, input: SpaceInput) {
   assertPerm(session, "props.edit");
   const write = spaceWrite(input);
   return tx(session.userId, async (client) => {
+    await admitActiveArchiveAncestry(client, session.orgId, {kind:"property",id:input.propertyId});
+    await assertCurrentArchiveCaller(client,session);
     await ensureOwner(client, session.orgId, input.propertyId, input.ownerContactId);
     const unit = await unitForFloor(client, session.orgId, input.propertyId, write.floor, write.kind);
+    await assertCurrentArchiveCaller(client,session);
     if (write.kind === "whole_unit") {
       if (!unit.created) throw new FlowError("errors.generic");
       await client.query(
@@ -745,6 +758,7 @@ export async function createSpace(session: Session, input: SpaceInput) {
           session.orgId,
         ],
       );
+      await assertCurrentArchiveCaller(client,session);
       return { kind: "whole_unit" as const, id: unit.id };
     }
     const clash = await maybe<{ id: string }>(
@@ -775,6 +789,7 @@ export async function createSpace(session: Session, input: SpaceInput) {
         write.notes,
       ],
     );
+    await assertCurrentArchiveCaller(client,session);
     return { kind: "room" as const, id: room.id };
   });
 }
@@ -783,6 +798,9 @@ export async function updateSpace(session: Session, kind: SpaceKind, spaceId: st
   assertPerm(session, "props.edit");
   const write = spaceWrite({ ...input, kind });
   await tx(session.userId, async (client) => {
+    const moveTarget = kind === "room" ? await admitRoomMove(client, session.orgId, spaceId, write.floor) : undefined;
+    if (kind !== "room") await admitActiveArchiveAncestry(client, session.orgId, {kind:"unit",id:spaceId});
+    await assertCurrentArchiveCaller(client,session);
     if (kind === "whole_unit") {
       const unit = await maybe<{ id: string; property_id: string }>(
         client,
@@ -814,6 +832,7 @@ export async function updateSpace(session: Session, kind: SpaceKind, spaceId: st
           write.notes,
         ],
       );
+      await assertCurrentArchiveCaller(client,session);
       return;
     }
     const room = await maybe<{ id: string; unit_id: string; property_id: string }>(
@@ -825,7 +844,8 @@ export async function updateSpace(session: Session, kind: SpaceKind, spaceId: st
     );
     if (!room) throw new FlowError("errors.notFound");
     await ensureOwner(client, session.orgId, room.property_id, input.ownerContactId);
-    const unit = await unitForFloor(client, session.orgId, room.property_id, write.floor, "room");
+    const unit = await unitForFloor(client, session.orgId, room.property_id, write.floor, "room", moveTarget);
+    await assertCurrentArchiveCaller(client,session);
     const clash = await maybe<{ id: string }>(
       client,
       `SELECT id::text FROM rooms
@@ -856,6 +876,7 @@ export async function updateSpace(session: Session, kind: SpaceKind, spaceId: st
         write.notes,
       ],
     );
+    await assertCurrentArchiveCaller(client,session);
   });
 }
 
@@ -938,6 +959,13 @@ export async function seedPortfolio(session: Session, csv: string) {
   assertPerm(session, "props.edit");
   const plan = parsePortfolioCsv(csv);
   await tx(session.userId, async (client) => {
+    const names=plan.properties.map(p=>p.name);
+    const findProperties=async()=> (await client.query<{id:string}>(`SELECT id::text FROM properties WHERE org_id=$1 AND name=ANY($2::text[]) AND archived_at IS NULL ORDER BY id`,[session.orgId,names])).rows.map(r=>r.id);
+    const initial=await findProperties();
+    for(const id of initial) { const target=await lockArchiveAncestry(client,session.orgId,{kind:'property',id},true);if(target.propertyArchived)throw new FlowError('errors.notFound'); }
+    await assertCurrentArchiveCaller(client,session);
+    if(JSON.stringify(initial)!==JSON.stringify(await findProperties()))throw new FlowError('errors.notFound');
+    const protectedProperties=new Set(initial);
     const jurisdiction = await one<{ id: string }>(client, `SELECT id FROM jurisdictions WHERE code = 'TW'`);
     const ownerIds = new Map<string, string>();
     for (const owner of plan.owners) {
@@ -974,6 +1002,7 @@ export async function seedPortfolio(session: Session, csv: string) {
             [session.orgId, property.name],
           )
         )?.id ?? "";
+      if(propertyId && !protectedProperties.has(propertyId))throw new FlowError('errors.notFound');
       if (!propertyId) {
         const created = await one<{ id: string }>(
           client,
@@ -991,6 +1020,7 @@ export async function seedPortfolio(session: Session, csv: string) {
           ],
         );
         propertyId = created.id;
+        protectedProperties.add(propertyId);
       }
       await ensureOwner(client, session.orgId, propertyId, ownerId);
       await client.query(
@@ -1000,11 +1030,13 @@ export async function seedPortfolio(session: Session, csv: string) {
       for (const space of property.spaces) {
         if (space.kind === "whole_unit") {
           const unit = await unitForFloor(client, session.orgId, propertyId, space.floor, "whole_unit");
+          await assertCurrentArchiveCaller(client,session);
           await applySpaceColumns(client, "units", unit.id, session.orgId, "ping", space);
           await upsertTerms(client, session.orgId, { unitId: unit.id, roomId: null }, space);
           continue;
         }
         const unit = await unitForFloor(client, session.orgId, propertyId, space.floor, "room");
+        await assertCurrentArchiveCaller(client,session);
         const existingRoom = await maybe<{ id: string }>(
           client,
           `SELECT id::text FROM rooms WHERE unit_id = $1 AND label = $2 AND archived_at IS NULL`,
@@ -1027,6 +1059,7 @@ export async function seedPortfolio(session: Session, csv: string) {
         await upsertTerms(client, session.orgId, { unitId: null, roomId }, space);
       }
     }
+    await assertCurrentArchiveCaller(client,session);
   });
   return plan;
 }

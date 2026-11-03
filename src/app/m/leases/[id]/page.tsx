@@ -1,3 +1,4 @@
+import { archiveCopy } from "@/i18n/record-archive";
 import { HandoverEntry } from "@/components/handover-entry";
 import { RenewalComparisonEntry } from "@/components/renewal-comparison-entry";
 import { requireCurrentConsent } from "@/server/consent-gate";
@@ -83,6 +84,7 @@ export default async function LeasePage({
     : null;
   return (
     <>
+      {lease.archiveState !== "active" && <p>{lease.archiveState === "inherited" ? archiveCopy(session.locale).inherited : archiveCopy(session.locale).archived}</p>}
       <PageHeader
         title={
           <>
@@ -208,7 +210,7 @@ export default async function LeasePage({
       ) : null}
       {moveOut ? <ActualMoveOut leaseId={id} currentDate={moveOut.moved_out_on} locale={session.locale} /> : null}
       {tab === "summary" && (session.role === "admin" || session.role === "manager") ? (
-        leaseTermsEditable({
+        lease.archiveState === "active" && leaseTermsEditable({
           status: lease.status,
           esign: lease.esign,
           signed: Boolean(lease.signed_at) || signatures.some((row) => row.status === "signed"),
@@ -322,7 +324,7 @@ export default async function LeasePage({
                     <div className="small muted">{managerSig?.signed_at ? t("i_signed_at", { time: managerSig.signed_at }) : t("i_sign_pending")}</div>
                   </li>
                 </ul>
-                {session.environment === "sandbox" && !session.needsSandbox && tenantSig?.status !== "signed" ? (
+                {lease.archiveState === "active" && session.environment === "sandbox" && !session.needsSandbox && tenantSig?.status !== "signed" ? (
                   <form action={actionSimulateSign}>
                     <input type="hidden" name="leaseId" value={id} />
                     <button className="btn pri lg block" type="submit" data-testid="simulate-tenant-sign">
@@ -359,6 +361,8 @@ export default async function LeasePage({
             <h3>{t("i_manager_sign")}</h3>
             {managerSig?.status === "signed" ? (
               <div className="alert ok">{t("i_fully_signed")}</div>
+            ) : lease.archiveState !== "active" ? (
+              <p>{archiveCopy(session.locale).readOnly}</p>
             ) : (
               <form action={actionSign}>
                 <input type="hidden" name="leaseId" value={id} />

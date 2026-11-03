@@ -1,4 +1,6 @@
 import type { Client } from "pg";
+import { admitActiveArchiveAncestry, admitArchiveBatch, lockArchiveAncestry } from "./record-archive-admission";
+import { assertCurrentArchiveCaller } from "./record-archive-caller";
 import { maybe, many, one, tx } from "./db";
 import { FlowError } from "./errors";
 import { reserveInvoiceNumbers } from "./invoice-number";
@@ -6,6 +8,7 @@ import { inclusiveDays, monthBounds, taipeiToday, toMinor } from "./money";
 import { assertStaff, type Session } from "./types";
 import { syncVacantOwnerExpense } from "./utility-expense";
 import { BILL_GAP_DESCRIPTION, PUBLIC_ELECTRICITY_DESCRIPTION } from "./utility-expense";
+import { isUuid } from "./repair-rules";
 import {
   allocateUtilityMinor,
   billGapExceedsWarning,
@@ -67,6 +70,7 @@ type Share = {
 
 export type UtilityRunInput = {
   unitId: string;
+  sourceRunId?: string;
   periodStart: string;
   periodEnd: string;
   rateMajor: number;
@@ -103,8 +107,11 @@ export async function listUtilityBoard(
   periodEnd: string,
   page = 1,
   pageSize = BOARD_PAGE,
+  runPage = 1,
+  historyUnit?: string,
 ) {
   assertPeriod(periodStart, periodEnd);
+  if (!Number.isSafeInteger(runPage) || runPage < 1 || runPage > 100000 || (historyUnit !== undefined && !isUuid(historyUnit))) throw new FlowError("errors.notFound");
   const safePage = Number.isInteger(page) && page > 0 ? page : 1;
   const safeSize = Number.isInteger(pageSize) && pageSize > 0 && pageSize <= BOARD_PAGE ? pageSize : BOARD_PAGE;
   return tx(session.userId, async (client) => {
@@ -180,10 +187,10 @@ export async function listUtilityBoard(
          JOIN meters m ON m.id = r.meter_id
          JOIN units u ON u.id = m.unit_id
          JOIN properties p ON p.id = u.property_id
-        WHERE r.org_id = $1
-        ORDER BY r.computed_at DESC
-        LIMIT 20`,
-      [session.orgId],
+        WHERE r.org_id = $1 AND ($2::uuid IS NULL OR u.id=$2::uuid)
+        ORDER BY r.computed_at DESC,r.id DESC
+        LIMIT 21 OFFSET $3`,
+      [session.orgId, historyUnit ?? null, (runPage-1)*20],
     );
     const unitOrder: string[] = [];
     for (const space of spaces) {
@@ -193,7 +200,9 @@ export async function listUtilityBoard(
     const keep = new Set(unitOrder.slice(0, safeSize));
     return {
       spaces: spaces.filter((space) => keep.has(space.unit_id)),
-      runs,
+      runs: runs.slice(0,20),
+      runPage,
+      runHasMore:runs.length>20,
       page: safePage,
       hasMore,
     };
@@ -220,16 +229,18 @@ async function loadRun(client: Client, orgId: string, runId: string) {
     total: string;
     void_reason: string | null;
     inputs: unknown;
+    bill_amount_minor:string|null;
   }>(
     client,
     `SELECT r.id::text, r.status::text, u.id::text AS unit_id, p.id::text AS property_id, p.name AS property_name, u.label AS unit_label,
             r.currency, r.period_start::text, r.period_end::text,
             r.rate_minor_per_unit::text AS rate, r.total_usage::text AS usage, r.total_amount_minor::text AS total,
-            r.void_reason, r.inputs
+            r.void_reason, r.inputs,b.total_amount_minor::text AS bill_amount_minor
        FROM utility_allocation_runs r
        JOIN meters m ON m.id = r.meter_id
        JOIN units u ON u.id = m.unit_id
        JOIN properties p ON p.id = u.property_id
+       LEFT JOIN utility_bills b ON b.org_id=r.org_id AND b.id=r.utility_bill_id
       WHERE r.id = $1 AND r.org_id = $2`,
     [runId, orgId],
   );
@@ -269,10 +280,30 @@ async function loadRun(client: Client, orgId: string, runId: string) {
     [runId],
   );
   const rateMajor = rateMajorFromStored(run.rate);
+  const stored=run.inputs && typeof run.inputs==='object' && !Array.isArray(run.inputs) ? run.inputs as Record<string,unknown> : null;
+  const sourceReadings=Array.isArray(stored?.readings)?stored.readings:null;
+  const correctionSpaces:Array<{unit_id:string;property_id:string;property_name:string;unit_label:string;currency:string;space_id:string;space_label:string;method:string;rate:string|null;lease_id:string|null;tenant:string|null;kwh:number;previousKwh:number|null;currentKwh:number|null}>=[];
+  let correctionAvailable=['posted','pending_repost'].includes(run.status) && Boolean(sourceReadings?.length);
+  const seen=new Map<string,string>();
+  for(const value of sourceReadings??[]) {
+    if(!value||typeof value!=='object'||Array.isArray(value)){correctionAvailable=false;break;}
+    const x=value as Record<string,unknown>,spaceId=x.spaceId,method=x.method,kwh=x.kwh,previous=x.previousKwh??null,current=x.currentKwh??null;
+    const numeric=(n:unknown)=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=1000000;
+    if(typeof spaceId!=='string'||!isUuid(spaceId)||!['submeter','by_reading','even'].includes(String(method))||!numeric(kwh)||!(previous===null||numeric(previous))||!(current===null||numeric(current))||((previous===null)!==(current===null))){correctionAvailable=false;break;}
+    const signature=JSON.stringify([method,kwh,previous,current]),old=seen.get(spaceId);if(old!==undefined){if(old!==signature)correctionAvailable=false;continue;}seen.set(spaceId,signature);
+    const line=lines.find(l=>(l.room_id??run.unit_id)===spaceId);if(!line||line.method!==method){correctionAvailable=false;break;}
+    correctionSpaces.push({unit_id:run.unit_id,property_id:run.property_id,property_name:run.property_name,unit_label:run.unit_label,currency:run.currency,space_id:spaceId,space_label:line.space_label,method:String(method),rate:null,lease_id:line.lease_id,tenant:line.tenant,kwh:kwh as number,previousKwh:previous as number|null,currentKwh:current as number|null});
+  }
+  const total=stored?.totalKwh;
+  if(total!==null && total!==undefined && (typeof total!=='number'||!Number.isFinite(total)||total<0||total>1000000))correctionAvailable=false;
   return {
     run,
     rateMajor,
     adjustments: ownerAdjustments(run.inputs),
+    correctionAvailable,
+    correctionSpaces:correctionAvailable?correctionSpaces:[],
+    correctionBillMajor:run.bill_amount_minor===null?null:String(Number(run.bill_amount_minor)/100),
+    correctionTotalKwh:typeof total==='number'?total:null,
     lines: lines.map((line) => ({
       ...line,
       description: line.method === "even" ? "電費（平均分攤）" : utilityLineDescription(usageMilliFromText(line.usage), rateMajor),
@@ -307,6 +338,13 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
   }
 
   return tx(session.userId, async (client) => {
+    // A posted run may be corrected using its exact stored unit, period and
+    // active main meter. This is financial continuation, not a new run.
+    await assertCurrentArchiveCaller(client, session);
+    const prior = await maybe<{id:string;meter_id:string}>(client,`SELECT ur.id::text,ur.meter_id::text FROM utility_allocation_runs ur JOIN meters m ON m.org_id=ur.org_id AND m.id=ur.meter_id WHERE ur.org_id=$1 AND ur.unit_id=$2 AND ur.period_start=$3::date AND ur.period_end=$4::date AND ur.status IN ('posted','pending_repost') AND m.unit_id=$2 AND m.utility='electricity' AND m.room_id IS NULL AND m.archived_at IS NULL ORDER BY ur.computed_at DESC LIMIT 1`,[session.orgId,input.unitId,input.periodStart,input.periodEnd]);
+    const ancestry = prior ? await lockArchiveAncestry(client,session.orgId,{kind:'unit',id:input.unitId},false) : await admitActiveArchiveAncestry(client, session.orgId, {kind:"unit",id:input.unitId});
+    await assertCurrentArchiveCaller(client, session);
+    if (input.sourceRunId && (!isUuid(input.sourceRunId) || input.sourceRunId !== prior?.id)) throw new FlowError('errors.notFound');
     const unit = await maybe<{
       id: string;
       property_id: string;
@@ -318,13 +356,36 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
       client,
       `SELECT u.id::text, u.property_id::text, u.label, u.rental_mode::text, u.electricity_method AS method, p.currency
          FROM units u JOIN properties p ON p.id = u.property_id
-        WHERE u.id = $1 AND u.org_id = $2 AND u.archived_at IS NULL`,
-      [input.unitId, session.orgId],
+        WHERE u.id = $1 AND u.org_id = $2 AND (u.archived_at IS NULL OR $3::boolean)`,
+      [input.unitId, session.orgId, Boolean(prior)],
     );
-    if (!unit) throw new FlowError("errors.notFound");
+    if (!unit || unit.property_id!==ancestry.propertyId) throw new FlowError("errors.notFound");
+    const sourceArchived = prior ? (await maybe<{archived:boolean}>(client,`SELECT EXISTS(SELECT 1 FROM utility_allocation_lines al JOIN rooms r ON r.org_id=al.org_id AND r.id=al.room_id WHERE al.org_id=$1 AND al.run_id=$2 AND r.archived_at IS NOT NULL) AS archived`,[session.orgId,prior.id]))?.archived === true : false;
+    const archivedCorrection = ancestry.propertyArchived || ancestry.unitArchived || sourceArchived;
+    if (archivedCorrection && (!prior || input.sourceRunId !== prior.id)) throw new FlowError('errors.notFound');
+    const rooms = unit.rental_mode === 'by_room' ? await many<{id:string}>(client,`SELECT r.id::text FROM rooms r WHERE r.org_id=$1 AND r.unit_id=$2 AND (($4::boolean AND EXISTS(SELECT 1 FROM utility_allocation_lines al WHERE al.org_id=r.org_id AND al.run_id=$3::uuid AND al.room_id=r.id)) OR (NOT $4::boolean AND (r.archived_at IS NULL OR EXISTS(SELECT 1 FROM utility_allocation_lines al WHERE al.org_id=r.org_id AND al.run_id=$3::uuid AND al.room_id=r.id)))) ORDER BY r.id`,[session.orgId,unit.id,prior?.id??null,archivedCorrection]) : [];
+    await admitArchiveBatch(client,session.orgId,rooms.map(({id})=>({kind:'room',id})),Boolean(prior));
+    await assertCurrentArchiveCaller(client, session);
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [session.orgId, unit.id]);
-    const spaces = await loadSpaces(client, unit);
-    const occupants = await loadOccupants(client, session.orgId, unit.id, input.periodStart, input.periodEnd);
+    await assertCurrentArchiveCaller(client, session);
+    if(archivedCorrection && prior){
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`,[`utility-post:${prior.id}`]);
+      await assertCurrentArchiveCaller(client,session);
+      const locked=await maybe<{id:string}>(client,`SELECT id::text FROM utility_allocation_runs WHERE org_id=$1 AND id=$2 AND status='posted' AND currency=$3 AND unit_id=$4 FOR UPDATE`,[session.orgId,prior.id,unit.currency,unit.id]);
+      if(!locked)throw new FlowError('errors.notFound');
+    }
+    if(prior){const same=await maybe<{id:string}>(client,`SELECT ur.id::text FROM utility_allocation_runs ur JOIN meters m ON m.org_id=ur.org_id AND m.id=ur.meter_id WHERE ur.org_id=$1 AND ur.id=$2 AND ur.unit_id=$3 AND ur.meter_id=$4 AND ur.period_start=$5::date AND ur.period_end=$6::date AND ur.status IN ('posted','pending_repost') AND m.unit_id=$3 AND m.utility='electricity' AND m.room_id IS NULL AND m.archived_at IS NULL`,[session.orgId,prior.id,unit.id,prior.meter_id,input.periodStart,input.periodEnd]);if(!same)throw new FlowError('errors.notFound');
+      const shape=await maybe<{n:number;room_lines:number;whole_lines:number;moved:boolean;archived_source:boolean}>(client,`SELECT count(*)::int AS n,count(*) FILTER(WHERE al.room_id IS NOT NULL)::int AS room_lines,count(*) FILTER(WHERE al.room_id IS NULL)::int AS whole_lines,coalesce(bool_or((al.room_id IS NOT NULL AND r.unit_id IS DISTINCT FROM $3::uuid) OR (al.lease_id IS NOT NULL AND l.unit_id IS DISTINCT FROM $3::uuid)),false) AS moved,coalesce(bool_or(r.archived_at IS NOT NULL),false) AS archived_source FROM utility_allocation_lines al LEFT JOIN rooms r ON r.org_id=al.org_id AND r.id=al.room_id LEFT JOIN leases l ON l.org_id=al.org_id AND l.id=al.lease_id WHERE al.org_id=$1 AND al.run_id=$2`,[session.orgId,prior.id,unit.id]);
+      if(ancestry.propertyArchived||ancestry.unitArchived||shape?.archived_source) {
+        if (!archivedCorrection || input.sourceRunId !== prior.id) throw new FlowError('errors.notFound');
+        if(!shape||shape.n===0||shape.moved||(unit.rental_mode==='whole_unit'&&shape.room_lines>0)||(unit.rental_mode==='by_room'&&shape.whole_lines>0))throw new FlowError('errors.notFound');
+      }
+    }
+    const spaces = await loadSpaces(client, unit, prior?.id, archivedCorrection);
+    if (unit.rental_mode === 'by_room' && JSON.stringify(spaces.map(s=>s.space_id).sort()) !== JSON.stringify(rooms.map(r=>r.id).sort())) throw new FlowError("errors.notFound");
+    const occupants = archivedCorrection && prior
+      ? await historicalUtilityOccupants(client,session.orgId,unit,prior.id,spaces)
+      : await loadOccupants(client, session.orgId, unit.id, input.periodStart, input.periodEnd);
     const postable = spaces
       .filter((space) => isPostableMethod(space.method))
       .map((space) => ({ space, people: occupants.get(space.space_id) ?? [] }));
@@ -465,6 +526,13 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     ) {
       throw new FlowError("errors.amount");
     }
+    if(archivedCorrection && prior){
+      for(const share of shares)if(share.bearer==='tenant' && share.amountMinor===0){
+        const source=await maybe<{id:string;posted:boolean}>(client,`SELECT id::text,posted_ledger_transaction_id IS NOT NULL AS posted FROM utility_allocation_lines WHERE org_id=$1 AND run_id=$2 AND lease_id=$3 AND room_id IS NOT DISTINCT FROM $4::uuid`,[session.orgId,prior.id,share.leaseId,share.roomId]);
+        if(!source)throw new FlowError('errors.notFound');
+        if(source.posted && !await canZeroUtilityPosting(client,session.orgId,source.id))throw new FlowError('errors.notFound');
+      }
+    }
 
     const meterSplit = evenMode ? "even" : submeter.length ? "sub_meter" : "none";
     if (!Number.isSafeInteger(publicAmountMinor)) throw new FlowError("errors.amount");
@@ -505,6 +573,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
         FOR UPDATE`,
       [meter.id, input.periodStart, input.periodEnd],
     );
+    if(prior && (!existing || existing.id!==prior.id || meter.id!==prior.meter_id || !['posted','pending_repost'].includes(existing.status)))throw new FlowError('errors.notFound');
     if (usageMilli <= 0 && !evenMode && !existing) throw new FlowError("errors.amount", { field: "i_usage" });
     if (evenMode && usageMilli < 0) throw new FlowError("errors.amount", { field: "i_usage" });
 
@@ -643,6 +712,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     }
 
     await writeShares(client, session.orgId, runId, shares, ratePerUnit, totalMinor);
+    await assertCurrentArchiveCaller(client, session);
     return { runId };
   }, scope(session));
 }
@@ -695,6 +765,7 @@ export async function confirmUtilityRun(session: Session, runId: string) {
     if (!run) throw new FlowError("errors.notFound");
     if (run.status === "void") throw new FlowError("errors.utilityState");
     if (!run.utility_bill_id) throw new FlowError("errors.amount", { field: "i_usage" });
+    await verifyArchivedUtilitySubjects(client,session.orgId,runId);
     await assertRunCoversOccupied(client, session.orgId, runId);
     const priorStatus = run.status;
     await client.query(`SELECT set_config('app.change_reason', '確認登記電費', true)`);
@@ -789,6 +860,7 @@ export async function confirmUtilityRun(session: Session, runId: string) {
       amountMinor: adjustments.billGapMinor,
       description: BILL_GAP_DESCRIPTION,
     });
+    await verifyArchivedUtilitySubjects(client,session.orgId,runId);
     if (vacantExpense.changed || publicExpense.changed || gapExpense.changed) changed += 1;
     await client.query(`SELECT set_config('app.change_reason', '確認登記電費', true)`);
     await client.query(
@@ -983,18 +1055,21 @@ async function assertRunCoversOccupied(client: Client, orgId: string, runId: str
     period_start: string;
     period_end: string;
     inputs: unknown;
+    archived_source:boolean;
   }>(
     client,
     `SELECT u.id::text AS unit_id, u.rental_mode::text, u.electricity_method AS method,
-            r.period_start::text, r.period_end::text, r.inputs
+            r.period_start::text, r.period_end::text, r.inputs,
+            (p.archived_at IS NOT NULL OR u.archived_at IS NOT NULL OR EXISTS(SELECT 1 FROM utility_allocation_lines al JOIN rooms ar ON ar.org_id=al.org_id AND ar.id=al.room_id WHERE al.org_id=r.org_id AND al.run_id=r.id AND ar.archived_at IS NOT NULL)) AS archived_source
        FROM utility_allocation_runs r
        JOIN meters m ON m.id = r.meter_id
        JOIN units u ON u.id = m.unit_id
+       JOIN properties p ON p.org_id=u.org_id AND p.id=u.property_id
       WHERE r.id = $1 AND r.org_id = $2`,
     [runId, orgId],
   );
   if (!run) throw new FlowError("errors.notFound");
-  const spaces = await loadSpaces(client, { id: run.unit_id, rental_mode: run.rental_mode, method: run.method });
+  const spaces = await loadSpaces(client, { id: run.unit_id, rental_mode: run.rental_mode, method: run.method }, runId,run.archived_source);
   const recorded = recordedSpaceIds(run.inputs);
   const postable = spaces.filter((space) => isPostableMethod(space.method));
   if (postable.some((space) => !recorded.has(space.space_id))) {
@@ -1002,7 +1077,7 @@ async function assertRunCoversOccupied(client: Client, orgId: string, runId: str
   }
 }
 
-async function loadSpaces(client: Client, unit: { id: string; rental_mode: string; method: string | null }) {
+async function loadSpaces(client: Client, unit: { id: string; rental_mode: string; method: string | null }, priorRunId?:string, sourceOnly=false) {
   if (unit.rental_mode === "whole_unit") {
     return many<SpaceRow>(
       client,
@@ -1015,10 +1090,96 @@ async function loadSpaces(client: Client, unit: { id: string; rental_mode: strin
     client,
     `SELECT r.id::text AS space_id, r.label, coalesce(r.electricity_method, $2) AS method
        FROM rooms r
-      WHERE r.unit_id = $1 AND r.archived_at IS NULL
+      WHERE r.unit_id = $1 AND (($4::boolean AND EXISTS (SELECT 1 FROM utility_allocation_lines al WHERE al.org_id=r.org_id AND al.run_id=$3::uuid AND al.room_id=r.id)) OR (NOT $4::boolean AND (r.archived_at IS NULL OR EXISTS (SELECT 1 FROM utility_allocation_lines al WHERE al.org_id=r.org_id AND al.run_id=$3::uuid AND al.room_id=r.id))))
       ORDER BY r.label`,
-    [unit.id, unit.method],
+    [unit.id, unit.method, priorRunId??null,sourceOnly],
   );
+}
+
+/** A zero reversal needs unambiguous durable history after live pointers are cleared. */
+async function canZeroUtilityPosting(client:Client,orgId:string,lineId:string) {
+  const result=await maybe<{ok:boolean}>(client,`SELECT EXISTS(SELECT 1 FROM utility_allocation_lines a JOIN ledger_transactions t ON t.org_id=a.org_id AND t.id=a.posted_ledger_transaction_id JOIN invoices i ON i.org_id=a.org_id AND i.id=a.posted_invoice_id
+    WHERE a.org_id=$1 AND a.id=$2 AND a.posted_amount_minor>0
+      AND (SELECT count(*) FROM ledger_transactions x WHERE x.org_id=a.org_id AND x.kind='invoice' AND x.source_table='utility_allocation_lines' AND x.source_id=a.id)=1
+      AND (SELECT count(*) FROM invoice_lines x WHERE x.org_id=i.org_id AND x.invoice_id=i.id AND x.charge_type='utility' AND x.amount_minor=a.posted_amount_minor AND x.description=a.posted_description)=1
+      AND NOT EXISTS(SELECT 1 FROM invoice_lines x WHERE x.org_id=i.org_id AND x.invoice_id=i.id AND x.charge_type='credit' AND x.amount_minor=-a.posted_amount_minor AND x.description='沖銷'||a.posted_description)) AS ok`,[orgId,lineId]);
+  return result?.ok===true;
+}
+
+/** The immutable posting and its two legs must identify this exact allocation. */
+async function utilityPostingProof(client:Client,orgId:string,lineId:string,contactId:string|null,unit:{id:string;property_id:string;currency:string}) {
+  const result=await maybe<{ok:boolean}>(client,`SELECT EXISTS(SELECT 1 FROM utility_allocation_lines a WHERE a.org_id=$1 AND a.id=$2 AND (
+    ($3::uuid IS NULL AND a.bearer='owner' AND a.lease_id IS NULL AND a.posted_invoice_id IS NULL AND a.posted_invoice_line_id IS NULL AND a.posted_ledger_transaction_id IS NULL AND a.posted_amount_minor IS NULL AND a.posted_description IS NULL)
+    OR ($3::uuid IS NOT NULL AND a.bearer='tenant' AND a.lease_id IS NOT NULL AND (
+      EXISTS(SELECT 1 FROM ledger_transactions t JOIN invoices i ON i.org_id=a.org_id AND i.id=a.posted_invoice_id
+        JOIN invoice_lines il ON il.org_id=i.org_id AND il.invoice_id=i.id AND il.id=a.posted_invoice_line_id
+        WHERE t.org_id=a.org_id AND t.id=a.posted_ledger_transaction_id AND t.kind='invoice' AND t.source_table='utility_allocation_lines' AND t.source_id=a.id AND t.lease_id=a.lease_id AND t.property_id=$4 AND t.currency=$5
+          AND a.posted_amount_minor>0 AND t.description=a.posted_description AND i.lease_id=a.lease_id AND i.property_id=$4 AND i.currency=$5 AND i.bill_to_contact_id=$3
+          AND il.charge_type='utility' AND il.amount_minor=a.posted_amount_minor AND il.description=a.posted_description
+          AND (il.allocation_line_id=a.id OR (il.allocation_line_id IS NULL AND (SELECT count(*) FROM invoice_lines x WHERE x.org_id=i.org_id AND x.invoice_id=i.id AND x.charge_type='utility' AND x.amount_minor=a.posted_amount_minor AND x.description=a.posted_description)=1))
+          AND NOT EXISTS(SELECT 1 FROM ledger_transactions rev WHERE rev.org_id=t.org_id AND rev.reverses_transaction_id=t.id)
+          AND (SELECT count(*) FROM ledger_entries e WHERE e.org_id=t.org_id AND e.transaction_id=t.id)=2
+          AND (SELECT count(*) FROM ledger_entries e WHERE e.org_id=t.org_id AND e.transaction_id=t.id AND e.currency=t.currency AND e.contact_id=$3 AND e.property_id=$4 AND e.lease_id=a.lease_id AND e.invoice_id=i.id AND ((e.account='tenant_receivable' AND e.amount_minor=a.posted_amount_minor) OR (e.account='other_income' AND e.amount_minor=-a.posted_amount_minor)))=2)
+      OR (a.amount_minor=0 AND a.posted_invoice_id IS NULL AND a.posted_invoice_line_id IS NULL AND a.posted_ledger_transaction_id IS NULL AND a.posted_amount_minor IS NULL AND a.posted_description IS NULL
+        AND (SELECT count(*) FROM ledger_transactions t WHERE t.org_id=a.org_id AND t.kind='invoice' AND t.source_table='utility_allocation_lines' AND t.source_id=a.id)=1
+        AND EXISTS(SELECT 1 FROM ledger_transactions t JOIN ledger_transactions rev ON rev.org_id=t.org_id AND rev.reverses_transaction_id=t.id AND rev.kind='reversal' AND rev.source_table=t.source_table AND rev.source_id=t.source_id AND rev.lease_id=t.lease_id AND rev.property_id=t.property_id AND rev.currency=t.currency
+          JOIN ledger_entries e ON e.org_id=t.org_id AND e.transaction_id=t.id AND e.account='tenant_receivable' AND e.amount_minor>0
+          JOIN invoices i ON i.org_id=e.org_id AND i.id=e.invoice_id AND i.lease_id=a.lease_id AND i.property_id=$4 AND i.currency=$5 AND i.bill_to_contact_id=$3
+          JOIN ledger_entries re ON re.org_id=rev.org_id AND re.transaction_id=rev.id AND re.account='tenant_receivable' AND re.amount_minor=-e.amount_minor
+          JOIN invoices ci ON ci.org_id=re.org_id AND ci.id=re.invoice_id AND ci.lease_id=a.lease_id AND ci.property_id=$4 AND ci.currency=$5 AND ci.bill_to_contact_id=$3
+          WHERE t.org_id=a.org_id AND t.kind='invoice' AND t.source_table='utility_allocation_lines' AND t.source_id=a.id AND t.lease_id=a.lease_id AND t.property_id=$4 AND t.currency=$5 AND e.contact_id=$3 AND e.lease_id=a.lease_id AND e.property_id=$4 AND e.currency=$5
+            AND (SELECT count(*) FROM ledger_entries z WHERE z.org_id=t.org_id AND z.transaction_id=t.id)=2
+            AND (SELECT count(*) FROM ledger_entries z WHERE z.org_id=t.org_id AND z.transaction_id=t.id AND z.currency=t.currency AND z.contact_id=$3 AND z.property_id=$4 AND z.lease_id=a.lease_id AND z.invoice_id=i.id AND ((z.account='tenant_receivable' AND z.amount_minor=e.amount_minor) OR (z.account='other_income' AND z.amount_minor=-e.amount_minor)))=2
+            AND (SELECT count(*) FROM ledger_entries z WHERE z.org_id=rev.org_id AND z.transaction_id=rev.id)=2
+            AND (SELECT count(*) FROM ledger_entries z WHERE z.org_id=rev.org_id AND z.transaction_id=rev.id AND z.currency=t.currency AND z.contact_id=$3 AND z.property_id=$4 AND z.lease_id=a.lease_id AND z.invoice_id=ci.id AND ((z.account='tenant_receivable' AND z.amount_minor=-e.amount_minor) OR (z.account='other_income' AND z.amount_minor=e.amount_minor)))=2
+            AND (SELECT count(*) FROM invoice_lines x WHERE x.org_id=i.org_id AND x.invoice_id=i.id AND x.charge_type='utility' AND x.amount_minor=e.amount_minor AND x.description=t.description)=1
+            AND (SELECT count(*) FROM invoice_lines x WHERE x.org_id=ci.org_id AND x.invoice_id=ci.id AND x.charge_type='credit' AND x.amount_minor=-e.amount_minor AND x.description='沖銷'||t.description)=1))
+    )))) AS ok`,[orgId,lineId,contactId,unit.property_id,unit.currency]);
+  return result?.ok===true;
+}
+
+/** Reconstruct only subjects actually recorded by a posted source; ambiguity is not vacancy. */
+async function historicalUtilityOccupants(client:Client,orgId:string,unit:{id:string;property_id:string;currency:string},runId:string,spaces:SpaceRow[]) {
+  const run=await maybe<{inputs:unknown}>(client,`SELECT inputs FROM utility_allocation_runs WHERE org_id=$1 AND id=$2 AND unit_id=$3 AND status IN ('posted','pending_repost')`,[orgId,runId,unit.id]);
+  const inputs=run?.inputs && typeof run.inputs==='object' && !Array.isArray(run.inputs) ? run.inputs as Record<string,unknown> : null;
+  const readings=Array.isArray(inputs?.readings)?inputs.readings:null;
+  if(!readings?.length)throw new FlowError('errors.notFound');
+  const lines=await many<{id:string;room_id:string|null;lease_id:string|null;bearer:string;days:number|null;contact_id:string|null;contact_count:number;invoice_contact:string|null;invoice_lease:string|null;invoice_property:string|null;invoice_currency:string|null;invoice_line:string|null;ledger_id:string|null;method:string|null;lease_unit:string|null;lease_room:string|null;lease_property:string|null;lease_currency:string|null}>(client,`SELECT al.id::text,al.room_id::text,al.lease_id::text,al.bearer::text,al.days_occupied AS days,
+    (SELECT min(lp.contact_id::text) FROM lease_parties lp WHERE lp.org_id=al.org_id AND lp.lease_id=al.lease_id AND lp.role='primary') AS contact_id,
+    (SELECT count(*)::int FROM lease_parties lp WHERE lp.org_id=al.org_id AND lp.lease_id=al.lease_id AND lp.role='primary') AS contact_count,
+    i.bill_to_contact_id::text AS invoice_contact,i.lease_id::text AS invoice_lease,i.property_id::text AS invoice_property,i.currency::text AS invoice_currency,
+    il.id::text AS invoice_line,al.posted_ledger_transaction_id::text AS ledger_id,al.explanation->>'method' AS method,
+    l.unit_id::text AS lease_unit,l.target_room_id::text AS lease_room,l.property_id::text AS lease_property,l.currency::text AS lease_currency
+    FROM utility_allocation_lines al LEFT JOIN leases l ON l.org_id=al.org_id AND l.id=al.lease_id
+    LEFT JOIN invoices i ON i.org_id=al.org_id AND i.id=al.posted_invoice_id
+    LEFT JOIN invoice_lines il ON il.org_id=al.org_id AND il.invoice_id=i.id AND il.id=al.posted_invoice_line_id
+    WHERE al.org_id=$1 AND al.run_id=$2`,[orgId,runId]);
+  if(lines.length!==readings.length)throw new FlowError('errors.notFound');
+  const subjects=new Map<string,Occupant[]>(),seen=new Set<string>();
+  for(const line of lines){
+    const spaceId=line.room_id??unit.id,space=spaces.find(s=>s.space_id===spaceId),key=`${spaceId}:${line.lease_id??''}`;
+    if(!space||seen.has(key)||!line.method||space.method!==line.method||!Number.isInteger(line.days)||line.days===null||line.days<0)throw new FlowError('errors.notFound');
+    seen.add(key);
+    const matched=readings.filter(x=>x && typeof x==='object' && !Array.isArray(x) && (x as Record<string,unknown>).spaceId===spaceId && ((x as Record<string,unknown>).leaseId??null)===line.lease_id && (x as Record<string,unknown>).method===line.method && (x as Record<string,unknown>).days===line.days);
+    if(matched.length!==1)throw new FlowError('errors.notFound');
+    if(line.bearer==='owner' && line.lease_id===null && line.days===0){if(subjects.has(spaceId)||!await utilityPostingProof(client,orgId,line.id,null,unit))throw new FlowError('errors.notFound');subjects.set(spaceId,[]);continue;}
+    if(line.bearer!=='tenant'||!line.lease_id||line.days<=0||line.contact_count!==1||!line.contact_id||line.lease_unit!==unit.id||line.lease_room!==line.room_id||line.lease_property!==unit.property_id||line.lease_currency?.trim()!==unit.currency.trim()||!await utilityPostingProof(client,orgId,line.id,line.contact_id,unit))throw new FlowError('errors.notFound');
+    const people=subjects.get(spaceId);if(people?.length===0)throw new FlowError('errors.notFound');
+    subjects.set(spaceId,[...(people??[]),{leaseId:line.lease_id,contactId:line.contact_id,tenant:'',days:line.days}]);
+  }
+  if(spaces.some(space=>isPostableMethod(space.method)&&!subjects.has(space.space_id)))throw new FlowError('errors.notFound');
+  return subjects;
+}
+
+async function verifyArchivedUtilitySubjects(client:Client,orgId:string,runId:string) {
+  const row=await maybe<{id:string;property_id:string;currency:string;run_currency:string;rental_mode:string;method:string|null;archived:boolean}>(client,`SELECT u.id::text,u.property_id::text,p.currency::text,r.currency::text AS run_currency,u.rental_mode::text,u.electricity_method AS method,
+    (p.archived_at IS NOT NULL OR u.archived_at IS NOT NULL OR EXISTS(SELECT 1 FROM utility_allocation_lines al JOIN rooms ar ON ar.org_id=al.org_id AND ar.id=al.room_id WHERE al.org_id=r.org_id AND al.run_id=r.id AND ar.archived_at IS NOT NULL)) AS archived
+    FROM utility_allocation_runs r JOIN units u ON u.org_id=r.org_id AND u.id=r.unit_id JOIN properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE r.org_id=$1 AND r.id=$2`,[orgId,runId]);
+  if(!row)throw new FlowError('errors.notFound');
+  if(!row.archived)return;
+  if(row.run_currency.trim()!==row.currency.trim())throw new FlowError('errors.notFound');
+  const spaces=await loadSpaces(client,row,runId,true);
+  await historicalUtilityOccupants(client,orgId,row,runId,spaces);
 }
 
 /** A room is billed only to a fully signed lease. Any other lease is vacant and stays on the owner. */

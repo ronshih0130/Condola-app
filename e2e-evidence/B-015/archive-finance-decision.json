@@ -1,0 +1,9 @@
+{
+  "recordedAt": "2026-11-02T20:26:40.799483-08:00",
+  "authority": "Ron explicit asynchronous answer",
+  "answer": "允許封存，保留帳務入口（建議）",
+  "scope": "Ended operational work with open/partially paid invoices, submitted payments or pending finance-only expenses may be archived with clear warnings and existing authorized finance queues/actions retained. Archive changes visibility only, never settles/changes amounts/confirms payment/sends messages.",
+  "requiresImplementationAndTests": true,
+  "notReleaseApproval": true,
+  "otherArchiveDependenciesUnchanged": true
+}

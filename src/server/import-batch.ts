@@ -24,6 +24,10 @@ import {
   type SpaceKind,
 } from "./owner-import";
 import { assertPerm } from "./perms";
+import { admitArchiveBatch } from "./record-archive-admission";
+import { assertCurrentArchiveCaller } from "./record-archive-caller";
+import { isUuid } from "./repair-rules";
+import type { ArchiveRef } from "@/lib/record-archive";
 import { loadImportRegion } from "./import-region-context";
 import type { ImportRegion } from "./import-region";
 import type { Session } from "./types";
@@ -163,10 +167,18 @@ export async function commitImportBatch(
       if (parsed.length > 0) progress(1, parsed.length);
       await relaxStatementTimeout(client);
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`import:${session.orgId}`]);
-      const index = await loadIndex(client, session.orgId, parsed, progress);
+      const before = await loadIndex(client, session.orgId, parsed, progress);
+      const refs = reusedArchiveRefs(planRows(parsed, before));
+      await admitArchiveBatch(client, session.orgId, refs);
+      await assertCurrentArchiveCaller(client,session);
+      const index = await loadIndex(client, session.orgId, parsed);
       await checkTargetRegions(client, session.orgId, parsed, index, region);
+      const checkIndex = await loadIndex(client, session.orgId, parsed);
+      const rechecked = reusedArchiveRefs(planRows(parsed, checkIndex));
+      if (JSON.stringify(refs) !== JSON.stringify(rechecked)) throw new FlowError("errors.notFound");
       const jurisdiction = region ? { id: region.jurisdictionId } : await one<{ id: string }>(client, `SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
       const plans = await persistPlans(client, session, parsed, index, jurisdiction.id, progress, region);
+      await assertCurrentArchiveCaller(client,session);
       const totals = totalsFromPlans(plans, fileName, false);
       const rejected = plans.some((plan) => plan.blocked);
       if (!rejected) {
@@ -177,6 +189,7 @@ export async function commitImportBatch(
           [session.orgId, JSON.stringify({ fileName, kind: "bulk" }), plans.length, session.userId],
         );
       }
+      await assertCurrentArchiveCaller(client,session);
       return { totals, saved: !rejected };
     }, scope(session));
     if (result.saved) {
@@ -197,6 +210,14 @@ export async function commitImportBatch(
   } finally {
     logImportTiming("commit", counted, started);
   }
+}
+
+function reusedArchiveRefs(plans:RowPlan[]):ArchiveRef[] {
+  const refs=new Map<string,ArchiveRef>();
+  for(const p of plans) for(const [kind,id] of [["property",p.propertyId],["unit",p.unitId],["room",p.roomId]] as const) {
+    if(id && isUuid(id)) refs.set(`${kind}:${id}`,{kind,id});
+  }
+  return [...refs.values()].sort((a,b)=>`${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`));
 }
 
 function assertImport(session: Session) {
@@ -256,7 +277,7 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[],
               p.address_display
          FROM units u
          JOIN properties p ON p.id = u.property_id
-        WHERE u.org_id = $1 AND u.archived_at IS NULL
+        WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
           AND u.import_address_key = ANY($2::text[])
        UNION
        SELECT u.id::text, u.property_id::text, u.label, u.rental_mode::text AS rental_mode,
@@ -264,7 +285,7 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[],
               p.address_display
          FROM units u
          JOIN properties p ON p.id = u.property_id
-        WHERE u.org_id = $1 AND u.archived_at IS NULL
+        WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
           AND p.address_key = ANY($2::text[])
        UNION
        SELECT u.id::text, u.property_id::text, u.label, u.rental_mode::text AS rental_mode,
@@ -272,7 +293,7 @@ async function loadIndex(client: Client, orgId: string, rows: ParsedImportRow[],
               p.address_display
          FROM units u
          JOIN properties p ON p.id = u.property_id
-        WHERE u.org_id = $1 AND u.archived_at IS NULL
+        WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
           AND p.name = ANY($3::text[])`,
       [orgId, keys, names],
     );

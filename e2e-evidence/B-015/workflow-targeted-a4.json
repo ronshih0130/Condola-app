@@ -1,0 +1,30 @@
+{
+  "recordedAt": "2026-11-03T00:54:18.033775-08:00",
+  "status": "SOURCE_GO_TARGETED_ADMISSION_FAIL",
+  "sourceMapSha256": "4967dca13592fd27e7ed4be9e8dfb9148c55bd2bff9e04551b58e9daa5f04039",
+  "finance": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "effectiveExit": 0,
+    "receipt": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-finance-a4-t1-exit.json"
+  },
+  "admission": {
+    "passed": 30,
+    "failed": 1,
+    "skipped": 0,
+    "effectiveExit": 1,
+    "receipt": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-admission-a4-t1-exit.json",
+    "failure": "Positive dispatch fixture omitted required vendorTrade, errors.required before intended archive race",
+    "fixPlan": "Supply valid synthetic vendorTrade only, preserve all locks/assertions/timeouts"
+  },
+  "history": "NOT_RUN",
+  "archive": "NOT_RUN",
+  "fullGate": "NOT_RUN",
+  "snapshot": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a4-target-failure/manifest.json",
+    "sha256": "a9c10781972f4cb1a1ceb9a6acbaa8c8aef5985506903c3b1707ced63e768197",
+    "entries": 161
+  },
+  "next": "Narrow positive fixture correction then independent delta review and targeted remaining suites; stable clean candidate full gate later"
+}

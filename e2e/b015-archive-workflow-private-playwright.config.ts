@@ -1,0 +1,10 @@
+import { defineConfig,devices } from "@playwright/test";
+import { resolve } from "node:path";
+import { randomBytes } from "node:crypto";
+import { disposableDbUrl } from "../src/server/test-disposable-db";
+if(Object.entries(process.env).some(([n,v])=>Boolean(v)&&(n==='DEBUG'||n==='PWDEBUG'||n.startsWith('PW_')||(n.startsWith('PLAYWRIGHT_')&&!(v==='1'&&['PLAYWRIGHT_TEST','PLAYWRIGHT_NO_COPY_PROMPT'].includes(n))))))throw new Error('Private archive workflow rejects debug overrides');
+const target=disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);if(target.hostname!=='127.0.0.1'||target.port!=='55435'||!/^\/condola_b015_workflow_(focus|browser)_[0-9a-f]{7}[a-z0-9]{1,12}$/.test(target.pathname)||process.env.B015_WORKFLOW_OWNED_DATABASE!==target.pathname.slice(1)||process.env.DEMO_MODE!=='true')throw new Error('Owned B015 demo required');
+const env:Record<string,string>=Object.fromEntries(Object.entries(process.env).filter((entry):entry is [string,string]=>typeof entry[1]==='string'));
+for(const n of Object.keys(env))if(/SUPABASE|GOTRUE|BREVO|RESEND|LINE_CHANNEL|CLOUDFLARE|PROD|TOKEN|SECRET|_KEY/i.test(n))delete env[n];
+Object.assign(env,{WRANGLER_SEND_METRICS:'false',NEXT_TELEMETRY_DISABLED:'1'});for(const n of ['ID_DOC_ENCRYPTION_KEY','ID_DOC_HMAC_KEY','ID_DOC_SIGNING_SECRET','CRON_SECRET'])env[n]=randomBytes(32).toString('hex');process.env.PLAYWRIGHT_NO_COPY_PROMPT='1';
+export default defineConfig({testDir:'.',testMatch:'b015-archive-workflow.spec.ts',workers:1,timeout:180_000,expect:{timeout:20_000},reporter:'line',use:{baseURL:'http://127.0.0.1:43152',trace:'off',video:'off',screenshot:'off'},webServer:{cwd:resolve(__dirname,'..'),command:'node scripts/third-party-licenses.mjs --check && node scripts/third-party-licenses.mjs --vendor && node node_modules/next/dist/bin/next dev -p 43152 -H 127.0.0.1',url:'http://127.0.0.1:43152',reuseExistingServer:false,timeout:180_000,stdout:'ignore',stderr:'ignore',env},projects:[{name:'chromium',use:{...devices['Desktop Chrome']}}]});

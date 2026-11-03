@@ -295,9 +295,11 @@ export async function propertyDetail(session: Session, id: string) {
       address_display: string;
       currency: string;
       rental_mode: string;
+      archiveState: "active" | "archived";
     }>(
       client,
-      `SELECT id::text, name, coalesce(address_display,'') AS address_display, currency, default_rental_mode::text AS rental_mode
+      `SELECT id::text, name, coalesce(address_display,'') AS address_display, currency, default_rental_mode::text AS rental_mode,
+              CASE WHEN archived_at IS NULL THEN 'active' ELSE 'archived' END AS "archiveState"
          FROM properties WHERE id = $1 AND org_id = $2`,
       [id, session.orgId],
     );
@@ -327,7 +329,7 @@ export async function propertyDetail(session: Session, id: string) {
          LEFT JOIN leases l ON l.target_room_id = r.id AND l.status IN ('pending_signature','active')
          LEFT JOIN lease_parties lp ON lp.lease_id = l.id AND lp.role = 'primary'
          LEFT JOIN contacts c ON c.id = lp.contact_id
-        WHERE u.property_id = $1 AND r.archived_at IS NULL AND u.rental_mode = 'by_room'
+        WHERE u.property_id = $1 AND r.archived_at IS NULL AND u.archived_at IS NULL AND u.rental_mode = 'by_room'
         ORDER BY u.label, r.label`,
       [id],
     );
@@ -371,7 +373,8 @@ export async function propertyDetail(session: Session, id: string) {
         ORDER BY u.label`,
       [id, session.orgId],
     );
-    return { property, owner, rooms, wholes, meterSerial, repairs };
+    const byRoomUnits = await many<{id:string;label:string}>(client, `SELECT u.id::text,u.label FROM units u JOIN properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE u.org_id=$1 AND u.property_id=$2 AND p.archived_at IS NULL AND u.archived_at IS NULL AND u.rental_mode='by_room' ORDER BY u.label,u.id`,[session.orgId,id]);
+    return { property, owner, rooms, wholes, byRoomUnits, meterSerial, repairs };
   });
 }
 
@@ -667,6 +670,7 @@ export async function leaseDetail(session: Session, id: string) {
       signed_at: string | null;
       first_period_basis: unknown;
       rent_frequency: string;
+      archiveState: "active" | "archived" | "inherited";
     }>(
       client,
       `SELECT l.id::text, l.status::text, l.esign_status::text AS esign, l.currency,
@@ -674,6 +678,8 @@ export async function leaseDetail(session: Session, id: string) {
               l.deposit_months::text AS deposit_months, l.deposit_override_reason,
               l.updated_at::text AS updated_at, l.signed_at::text AS signed_at,
               l.start_date::text, l.end_date::text, l.first_period_basis, l.rent_frequency::text,
+              CASE WHEN (l.target_room_id IS NOT NULL AND r.archived_at IS NOT NULL) OR (l.target_room_id IS NULL AND u.archived_at IS NOT NULL) THEN 'archived'
+                   WHEN p.archived_at IS NOT NULL OR u.archived_at IS NOT NULL THEN 'inherited' ELSE 'active' END AS "archiveState",
               p.name || ' ' || u.label || coalesce(' ' || r.label, '') AS place,
               c.id::text AS tenant_contact_id,
               c.user_id::text AS tenant_user_id,
@@ -1589,7 +1595,7 @@ const SPACE_LIST_SQL = `SELECT kind, id, property_id, property_name, currency, f
            FROM rooms r
            JOIN units u ON u.id = r.unit_id
            JOIN properties p ON p.id = u.property_id
-          WHERE r.org_id = $1 AND r.archived_at IS NULL AND p.archived_at IS NULL AND u.rental_mode = 'by_room'
+          WHERE r.org_id = $1 AND r.archived_at IS NULL AND u.archived_at IS NULL AND p.archived_at IS NULL AND u.rental_mode = 'by_room'
          UNION ALL
          SELECT 'whole_unit'::text, u.id::text, p.id::text, p.name, p.currency,
                 u.label, NULL::text, NULL::text, u.area_value::text, u.area_unit,
@@ -1673,7 +1679,7 @@ export async function spaceEditor(session: Session, kind: "room" | "whole_unit",
                 coalesce(u.notes, '') AS notes, p.currency
            FROM units u
            JOIN properties p ON p.id = u.property_id
-          WHERE u.id = $1 AND u.org_id = $2 AND u.rental_mode = 'whole_unit' AND u.archived_at IS NULL`,
+          WHERE u.id = $1 AND u.org_id = $2 AND u.rental_mode = 'whole_unit' AND u.archived_at IS NULL AND p.archived_at IS NULL`,
         [id, session.orgId],
       );
     }
@@ -1693,7 +1699,7 @@ export async function spaceEditor(session: Session, kind: "room" | "whole_unit",
          FROM rooms r
          JOIN units u ON u.id = r.unit_id
          JOIN properties p ON p.id = u.property_id
-        WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL AND u.rental_mode = 'by_room'`,
+        WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL AND u.archived_at IS NULL AND p.archived_at IS NULL AND u.rental_mode = 'by_room'`,
       [id, session.orgId],
     );
   });

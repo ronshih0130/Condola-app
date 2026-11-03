@@ -1,0 +1,163 @@
+{
+  "recordedAt": "2026-11-03T01:00:00.525404-08:00",
+  "classification": "DEVELOPMENT_TARGETED_PASS_ONLY",
+  "sourceReview": "workflow-astra-source-a5-go.md/json",
+  "currentSourceMapSha256": "8d65177fa87a5dcd8e622e81d4dddbda7c4eb5dbd956643412b9980b6f25a0b2",
+  "profiles": [
+    {
+      "profile": "finance",
+      "revision": "a4",
+      "attempt": "t1",
+      "sourceMapSha256": "4967dca13592fd27e7ed4be9e8dfb9148c55bd2bff9e04551b58e9daa5f04039",
+      "counts": {
+        "tests": 10,
+        "pass": 10,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-finance-a4-t1-exit.json",
+        "sha256": "ebb03d2a4f88872fad3981ec6a7c9632171ecab86b9b037af0e1b002347990f9",
+        "bytes": 27363
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-finance-a4-t1.log",
+        "sha256": "244b43c5e2024b4d914b7e256300746f352545ecc2f8366d4326c3d014bf8d65",
+        "bytes": 2459
+      },
+      "subtests": [
+        "archiving warns about an existing expense and leaves its ordinary correction and reports available",
+        "an otherwise eligible owner financial record and its replay and reversal survive property archive",
+        "ended work with a partial invoice and submitted payment archives with a warning and retains the normal payment action",
+        "a completed vendor report remains confirmable after archive",
+        "a posted utility run remains available for its ordinary correction and void after archive",
+        "a posted correction retains the exact archived room already on the run",
+        "archived submeter correction retains the original readings and excludes later rooms",
+        "ended tenant remains the payer when an archived posted utility run is corrected",
+        "archived correction rejects another same-firm posting and a different line on the same invoice",
+        "archived two-room run can correct a tenant charge to zero once and replay safely"
+      ]
+    },
+    {
+      "profile": "admission",
+      "revision": "a5",
+      "attempt": "t2",
+      "sourceMapSha256": "8d65177fa87a5dcd8e622e81d4dddbda7c4eb5dbd956643412b9980b6f25a0b2",
+      "counts": {
+        "tests": 31,
+        "pass": 31,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-admission-a5-t2-exit.json",
+        "sha256": "3d16174b996d28ad9aeaa5774ed5e39c0d3115a8766c1a371549044c02dda0cc",
+        "bytes": 27373
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-admission-a5-t2.log",
+        "sha256": "80f96a1853cbc4444cd7884339f2d6803268c817a52f4ba668ddcc794c7bba70",
+        "bytes": 7021
+      },
+      "subtests": [
+        "manager utility creation denied after session revoked during archive lock wait",
+        "tenant ticket creation denied after session revoked during archive lock wait",
+        "tenant ticket rollback leaves repair trial progress unchanged and a committed ticket marks it",
+        "a newly active other-firm staff membership invalidates the waiting tenant persona",
+        "maintenance ticket reopening denied after session revoked during archive lock wait",
+        "archived draft lease rejects direct rent and deposit edits without changing either amount",
+        "an admitted new ticket completes first and the waiting archive observes it",
+        "archive-first blocks the real lease writer, then rejects the archived target without creating a lease",
+        "fresh lease admission canonicalizes nonstandard UUID text without allowing an ineligible colliding room to shadow a whole unit",
+        "tenant and maintenance ticket work and accountant finance retain their existing roles",
+        "a session revoked while archive waits cannot change the target",
+        "a real room move holding its property admission completes before a waiting property archive",
+        "an archive-first property blocks and rejects a real room move",
+        "archive-first blocks and rejects new utility preparation",
+        "archive-first blocks a real import that reuses the property and prevents its new lease",
+        "archive-first blocks live tenant signing and paper activation before any file or signature write",
+        "an archived ended imported lease retains historical paper upload and replacement",
+        "an admitted real import finishes first and its active lease blocks archive",
+        "archive-first rejects a real new dispatch without creating a job",
+        "a real admitted dispatch finishes before a property archive and leaves active work blocking it",
+        "utility preparation admitted first leaves a draft run that blocks archive",
+        "a real signer admitted first completes before archive observes the pending lease",
+        "a real fresh lease admitted first commits before archive observes its pending work",
+        "real tenant ticket creation obeys both archive and work lock orders",
+        "a role removed during an archive wait cannot authorize the write",
+        "archive-first rejects real enhanced signing creation before generating or sending anything",
+        "an existing enhanced-signing email challenge can be read-only replayed after archive",
+        "authorization loss after the update begins rolls back both marker and audit",
+        "paper activation admitted first finishes before archive observes the active lease",
+        "enhanced signing creation admitted first leaves live signing that blocks archive",
+        "unchanged historical ticket assignment and notes remain available after archive"
+      ]
+    },
+    {
+      "profile": "history",
+      "revision": "a5",
+      "attempt": "t2",
+      "sourceMapSha256": "8d65177fa87a5dcd8e622e81d4dddbda7c4eb5dbd956643412b9980b6f25a0b2",
+      "counts": {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-history-a5-t2-exit.json",
+        "sha256": "257934897221668d04bfdda75fbcff2493c5838fe99f324d56002dafb9f4fbdd",
+        "bytes": 27361
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-history-a5-t2.log",
+        "sha256": "e2d93b96f46d416811a54f1e8d021fcd1b9bbcfcea9f9d06adfd8cd8a981ffc0",
+        "bytes": 1574
+      },
+      "subtests": [
+        "ended tenant with no selected or active lease retains exact signed-paper bytes and audit across archive and restore",
+        "only current tenant party/session/context and exact ended-lease PDF pairs are authorized",
+        "PDF gates fail closed without hiding lease history or exposing a document count",
+        "paper metadata preserves source versions and falls back to the newest if no current pointer exists",
+        "a purged synthetic paper version is not a successful byte read",
+        "more than 50 ended leases paginate without duplicates while another active selection stays untouched"
+      ]
+    },
+    {
+      "profile": "archive",
+      "revision": "a5",
+      "attempt": "t2",
+      "sourceMapSha256": "8d65177fa87a5dcd8e622e81d4dddbda7c4eb5dbd956643412b9980b6f25a0b2",
+      "counts": {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-archive-a5-t2-exit.json",
+        "sha256": "69177c048737aed3bb43aeeff5d8f1da90e588ef4b46286602686698e6d7b0b2",
+        "bytes": 27355
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-archive-a5-t2.log",
+        "sha256": "ab82c080420b76d1b8cce1508bfc7260d21c20a88baf8be84011a937a2edc6ec",
+        "bytes": 1484
+      },
+      "subtests": [
+        "property detail exposes the actual empty by-room unit for normal archive navigation",
+        "archive and restore preserve ancestry, audit, stale versions, and role boundaries",
+        "missing or malformed controls, stale scope, and expired sessions fail closed",
+        "room restore requires usable current mode and cross-organization targets stay hidden",
+        "sandbox archive is bound to the selected environment and cannot accept a live-tab scope",
+        "more than 200 archived records remain reachable exactly once by strict keyset cursors"
+      ]
+    }
+  ],
+  "priorFailure": "workflow-targeted-a4.json; original admission30PASS1FAIL missingvalidpositivevendorTrade preserved161bindings, noassertion/timeoutsrelaxation",
+  "limits": [
+    "Finance target A4 map; only later change is unrelated dispatch positive fixture; candidate fullgate will exercise all suites",
+    "Full gate/build/browser not yet run on this new workflow",
+    "Owner-only metadata and raw/old writer DB closure handoff incomplete/unapplied; staging/Claude/pilot not accepted"
+  ]
+}

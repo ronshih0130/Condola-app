@@ -784,6 +784,7 @@ function utilityInput(formData: FormData) {
   const bill = optionalNum(formData.get("billTotal"));
   return {
     unitId: text(formData.get("unitId")),
+    sourceRunId: text(formData.get("sourceRunId")) || undefined,
     periodStart: text(formData.get("periodStart")),
     periodEnd: text(formData.get("periodEnd")),
     rateMajor: num(formData.get("rate")),
@@ -812,6 +813,8 @@ function utilityBack(formData: FormData) {
   const unitId = text(formData.get("unitId"));
   const month = text(formData.get("periodStart")).slice(0, 7);
   if (unitId) params.set("unit", unitId);
+  const sourceRunId = text(formData.get("sourceRunId"));
+  if (sourceRunId) { params.set("run", sourceRunId); if (unitId) params.set("historyUnit", unitId); }
   if (/^\d{4}-\d{2}$/.test(month)) params.set("month", month);
   const bill = text(formData.get("billTotal")).trim().slice(0, 16);
   const kwh = text(formData.get("totalKwh")).trim().slice(0, 16);

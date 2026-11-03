@@ -28,11 +28,15 @@ const ORG = ORG_ID;
 const PRO_ORG = "10000000-0000-4000-8000-0000000000a1";
 const SANDBOX_ORG = "10000000-0000-4000-8000-0000000000a2";
 const ORIGIN = "http://127.0.0.1:43123";
+const sessionUsers = [USERS.admin, USERS.manager, USERS.maintenance, USERS.accountant, USERS.coastAdmin, USERS.tenant, USERS.tenant2];
+const sessionIds = new Map<string,string>(sessionUsers.map(user => [user, randomUUID()]));
+test.before(async () => { await withClient(async client => { for (const user of sessionUsers) await client.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 day')`,[sessionIds.get(user),user,randomUUID()]); }); });
+test.after(async () => { await withClient(client => client.query(`DELETE FROM auth_sessions WHERE id=ANY($1::uuid[])`,[[...sessionIds.values()]])); });
 
 function staff(userId: string, role: Session["role"], orgId = ORG): Session {
   return {
     userId,
-    sessionId: "vendor-repair",
+    sessionId: sessionIds.get(userId) ?? "vendor-repair-invalid",
     email: "staff@songxin.demo",
     name: "Staff",
     kind: "staff",
@@ -49,7 +53,7 @@ function staff(userId: string, role: Session["role"], orgId = ORG): Session {
 function tenant(userId: string): Session {
   return {
     userId,
-    sessionId: "vendor-tenant",
+    sessionId: sessionIds.get(userId) ?? "vendor-tenant-invalid",
     email: "tenant@demo",
     name: "租客",
     kind: "tenant",

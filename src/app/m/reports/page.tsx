@@ -1,5 +1,6 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
+import { archiveCopy } from "@/i18n/record-archive";
 import { makeT } from "@/i18n";
 import { Cell, RfTable } from "@/components/rf";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -101,7 +102,7 @@ export default async function IncomeExpenseReportPage({
               <option value="">{t("i_report_all_properties")}</option>
               {choices.properties.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name}
+                  {item.name}{item.archiveState === "archived" ? ` (${archiveCopy(session.locale).archived})` : ""}
                 </option>
               ))}
             </select>

@@ -1,0 +1,18 @@
+{
+  "recordedAt": "2026-11-03T00:45:46.593262-08:00",
+  "status": "SOURCE_NO_GO_A3_RUNTIME_NOT_RUN",
+  "sourceMapSha256": "4d2f23307e82109d966d4891f0d90047b7b45245c673e139b55e24141975fa93",
+  "reviewer": "Independent Astra/high",
+  "report": "workflow-astra-source-a3-no-go.json",
+  "findings": [
+    "P1 same-org ledger/invoice pointer must prove THIS allocation provenance before reversal",
+    "P2 valid zero correction must not be stranded after pending prepare; prove zero lineage or reject unresolved source before any writes"
+  ],
+  "closedInSourceOnly": "A2 portal staff-first hidden-other-org finding; positive endedtenant80to100 subjectretention, runtimeNOTRUN",
+  "archive": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a3-source-no-go/manifest.json",
+    "entries": 156,
+    "sha256": "31dbc047e212278c333d0e1575692765fc1cd5645338eda93d89c689882b4e36"
+  },
+  "next": "Bounded provenance and zero-path fixes; preserve tests and noDBboundary; fresh source review"
+}

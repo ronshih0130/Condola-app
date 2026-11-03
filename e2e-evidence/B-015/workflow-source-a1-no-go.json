@@ -1,0 +1,67 @@
+{
+  "recordedAt": "2026-11-02T23:00:55.698608-08:00",
+  "status": "SOURCE_NO_GO_RUNTIME_NOT_RUN",
+  "baseline": "516a5e8c2e7bc7f54cefe425e6551d9ea0fc793e",
+  "sourceMapSha256": "ad371c3a8113efd6b1b43ea0262d023204bf5ddb8400ed321895d42063f8fde4",
+  "primaryReview": "Three concrete independent Sol findings delivered as messages; final report absent after model capacity failure. This coordinator record is not an independent final report.",
+  "findings": [
+    {
+      "id": "B-A1-01",
+      "priority": "P2",
+      "kind": "core security",
+      "issue": "Ordinary caller auth_sessions not rechecked after newly added cooperative waits; revoked cached caller can still write",
+      "paths": [
+        "src/server/domain.ts",
+        "src/server/portfolio.ts",
+        "src/server/utility-posting.ts"
+      ]
+    },
+    {
+      "id": "B-A1-02",
+      "priority": "P2",
+      "kind": "important status accuracy",
+      "issue": "Accountant partial signing RLS rendered verified coverage instead of unknown",
+      "paths": [
+        "src/server/record-archive.ts"
+      ]
+    },
+    {
+      "id": "B-A1-03",
+      "priority": "P2",
+      "kind": "important finance UX",
+      "issue": "Archived metered correction normal form loses stored spaces/readings; old archived run inaccessible behind recent20 cap",
+      "paths": [
+        "src/server/utility-posting.ts",
+        "src/app/m/rent/utilities/page.tsx"
+      ]
+    },
+    {
+      "id": "UI-A1-01",
+      "priority": "P1",
+      "kind": "archive invariant",
+      "issue": "Archived draft ordinary rent/deposit edit remains visible and server-accepted",
+      "paths": [
+        "src/app/m/leases/[id]/page.tsx",
+        "src/server/domain.ts"
+      ]
+    },
+    {
+      "id": "UI-A1-02",
+      "priority": "P2",
+      "kind": "important product reachability",
+      "issue": "Active physical by_room unit has no normal archive entry, including empty unit",
+      "paths": [
+        "src/app/m/properties/[id]/page.tsx",
+        "src/server/queries.ts"
+      ]
+    }
+  ],
+  "archive": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a1-source-no-go/manifest.json",
+    "sha256": "f9d08502f7c21a7430694d06816da9d844706127c8fea3eb081a29dc196417c1",
+    "entries": 148
+  },
+  "helperReview": "Primary structurally inspected all3hashes, no helper-specific blocker, no final sourceGO",
+  "reviewFocus": "Blocking/coresecurity/importantUX only, no style/minorrefactor",
+  "next": "Bounded coordinated fixes then fresh independent review; no runtime acceptance"
+}

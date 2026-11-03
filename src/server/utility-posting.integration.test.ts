@@ -11,6 +11,7 @@ import type { Session } from "./types";
 import { allocateUtilityMinor, meterUsageKwh, spreadCommonMilli, utilityLineDescription } from "./utility-post";
 import { BILL_GAP_DESCRIPTION, PUBLIC_ELECTRICITY_DESCRIPTION, VACANT_ELECTRICITY_DESCRIPTION } from "./utility-expense";
 import { confirmUtilityRun, currentUtilityPeriod, listUtilityBoard, prepareUtilityRun, utilityRunDetail, voidUtilityRun } from "./utility-posting";
+import { insertTestAuthSession } from "./test-auth-session";
 
 const admin: Session = {
   userId: USERS.admin,
@@ -37,6 +38,10 @@ const coast: Session = {
   orgId: ORG2_ID,
   liveOrgId: ORG2_ID,
 };
+const fixtureSessionIds:string[]=[];
+async function fixtureSession(userId:string){const id=await withClient(c=>insertTestAuthSession(c,userId));fixtureSessionIds.push(id);return id;}
+test.before(async()=>{for(const s of [admin,accountant,coast])s.sessionId=await fixtureSession(s.userId);});
+test.after(async()=>{for(const id of fixtureSessionIds)await query(`DELETE FROM auth_sessions WHERE id=$1`,[id]);});
 
 async function markLeaseIdReady(leaseId: string) {
   const party = await query<{ org_id: string; contact_id: string }>(
@@ -1657,7 +1662,7 @@ test("electricity split bills signed tenants only and treats a pending lease as 
     );
     userIds.push(signed.tenantUserId, pending.tenantUserId);
     await markLeaseIdReady(signed.leaseId);
-    const tenantSigned = await signLease({ ...admin, userId: signed.tenantUserId, kind: "tenant", role: null }, { leaseId: signed.leaseId, signedName: "已簽署租客", consent: true });
+    const tenantSigned = await signLease({ ...admin, sessionId:await fixtureSession(signed.tenantUserId), userId: signed.tenantUserId, kind: "tenant", role: null }, { leaseId: signed.leaseId, signedName: "已簽署租客", consent: true });
     assert.equal(tenantSigned.esign, "partially_signed");
     const activated = await signLease(admin, { leaseId: signed.leaseId, signedName: "管理方", consent: true });
     assert.equal(activated.esign, "fully_signed");
@@ -1813,7 +1818,7 @@ test("countersign leaves a pending room's electricity on the owner", async () =>
     assert.equal(vacant.rows[0]?.amount, "40000");
 
     await markLeaseIdReady(lease.leaseId);
-    const tenantSigned = await signLease({ ...admin, userId: lease.tenantUserId, kind: "tenant", role: null }, { leaseId: lease.leaseId, signedName: "待簽署租客", consent: true });
+    const tenantSigned = await signLease({ ...admin, sessionId:await fixtureSession(lease.tenantUserId), userId: lease.tenantUserId, kind: "tenant", role: null }, { leaseId: lease.leaseId, signedName: "待簽署租客", consent: true });
     assert.equal(tenantSigned.esign, "partially_signed");
     const waiting = await query<{ status: string; move_in: string }>(
       `SELECT l.status::text,

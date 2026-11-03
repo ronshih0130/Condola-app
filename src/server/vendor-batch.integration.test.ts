@@ -27,6 +27,7 @@ import {
   type VendorDocumentContext,
 } from "./vendor-receipt";
 import { sha256 } from "./vendor-receipt-pdf";
+import { insertTestAuthSession } from "./test-auth-session";
 
 const font = readFileSync(
   new URL("../../public/fonts/DroidSansFallback-subset.ttf", import.meta.url),
@@ -105,6 +106,7 @@ test(
     const vendorContactIds = [contactId, nextContactId];
     const ownerId = randomUUID();
     const ticketIds: string[] = [];
+    let tenantSessionId = "";
     let profileId = "";
     const prefix = `vendor-batch-${randomUUID()}`;
     const jobTypeCode = prefix;
@@ -194,6 +196,7 @@ test(
             `ALTER TABLE vendor_profile_versions
                ENABLE TRIGGER vendor_profile_versions_immutable`,
           );
+          if(tenantSessionId)await cleanup.query(`DELETE FROM auth_sessions WHERE id=$1`,[tenantSessionId]);
           await cleanup.query("COMMIT");
         } catch (error) {
           await cleanup.query("ROLLBACK");
@@ -222,8 +225,9 @@ test(
     );
     assert.ok(lease.rows[0], "run the standard local seed first");
     const propertyId = lease.rows[0].property_id;
+    const sessionClient=await pool.connect();try{tenantSessionId=await insertTestAuthSession(sessionClient,USERS.tenant2);}finally{sessionClient.release();}
     for (let index = 0; index < 3; index++) {
-      ticketIds.push(await createTicket(tenant(), {
+      ticketIds.push(await createTicket({...tenant(),sessionId:tenantSessionId}, {
         leaseId: lease.rows[0].id,
         category: "other",
         title: `${prefix}-${index}`,

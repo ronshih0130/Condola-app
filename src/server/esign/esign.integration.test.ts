@@ -32,9 +32,10 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
   const leaseId = randomUUID();
   const caseId = randomUUID();
   const firstId = randomUUID();
-  const admin: Actor = { userId: adminId, orgId: org, liveOrgId: org, environment: "live", kind: "staff", role: "admin" };
-  const owner: Actor = { userId: ownerId, orgId: org, liveOrgId: org, environment: "live", kind: "owner", role: null };
-  const tenant: Actor = { userId: tenantId, orgId: org, liveOrgId: org, environment: "live", kind: "tenant", role: null };
+  const admin: Actor = { userId: adminId, sessionId:randomUUID(), orgId: org, liveOrgId: org, environment: "live", kind: "staff", role: "admin" };
+  const otherAdmin: Actor = {userId:otherAdminId,sessionId:randomUUID(),orgId:otherOrg,liveOrgId:otherOrg,environment:"live",kind:"staff",role:"admin"};
+  const owner: Actor = { userId: ownerId, sessionId:randomUUID(), orgId: org, liveOrgId: org, environment: "live", kind: "owner", role: null };
+  const tenant: Actor = { userId: tenantId, sessionId:randomUUID(), orgId: org, liveOrgId: org, environment: "live", kind: "tenant", role: null };
   const time = "2026-10-26T12:00:00.000Z";
   const expiry = "2026-10-27T12:00:00.000Z";
   const document = new TextEncoder().encode("%PDF-1.7 synthetic unsigned contract");
@@ -127,6 +128,7 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
 
     try {
       await svcOn(client, adminId, async () => {
+        for(const actor of [admin,otherAdmin,owner,tenant])await client.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')`,[actor.sessionId,actor.userId,randomUUID()]);
         await client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"esign":true}'::jsonb WHERE id=ANY($1::uuid[])`, [[org,otherOrg]]);
         // The lane harness has already applied migrations and seed.ts.
         // Reuse its users, organizations and active admin memberships.
@@ -209,7 +211,7 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
           });
         }
         await assert.rejects(repo.voidUnsigned(
-          { userId: otherAdminId, orgId: otherOrg, liveOrgId: otherOrg, environment: "live", kind: "staff", role: "admin" }, caseId, firstId, "Synthetic reason", time,
+          otherAdmin, caseId, firstId, "Synthetic reason", time,
         ));
         await assert.rejects(asUser(ownerId, () => client.query(
           `UPDATE esign_versions SET status = 'voided' WHERE id = $1`, [firstId],
@@ -495,20 +497,21 @@ test("mounted action service on PG: Email replay, permissions, atomic replacemen
   const messages: { to: string; text: string }[] = [];
   let now = new Date("2026-10-26T12:00:00Z");
   const base: Session = {
-    userId: USERS.admin, orgId: ORG_ID, liveOrgId: ORG_ID, sessionId: "synthetic-session",
+    userId: USERS.admin, orgId: ORG_ID, liveOrgId: ORG_ID, sessionId: randomUUID(),
     kind: "staff", role: "admin", environment: "live", calendar: "gregorian", locale: "zh-TW",
     leaseId, email: "admin@example.com", name: "測試", consent: buildStoredConsent("reconsent"),
   };
-  const manager = { ...base, userId: USERS.manager, role: "manager" as const };
-  const owner = { ...base, userId: USERS.owner, kind: "owner" as const, role: null };
-  const tenant = { ...base, userId: USERS.tenant, kind: "tenant" as const, role: null };
-  const outsider = { ...base, userId: USERS.owner2, kind: "owner" as const, role: null };
-  const foreign = { ...base, userId: USERS.coastAdmin, orgId: ORG2_ID, liveOrgId: ORG2_ID };
+  const manager = { ...base, sessionId:randomUUID(), userId: USERS.manager, role: "manager" as const };
+  const owner = { ...base, sessionId:randomUUID(), userId: USERS.owner, kind: "owner" as const, role: null };
+  const tenant = { ...base, sessionId:randomUUID(), userId: USERS.tenant, kind: "tenant" as const, role: null };
+  const outsider = { ...base, sessionId:randomUUID(), userId: USERS.owner2, kind: "owner" as const, role: null };
+  const foreign = { ...base, sessionId:randomUUID(), userId: USERS.coastAdmin, orgId: ORG2_ID, liveOrgId: ORG2_ID };
   const strokes = [[{ x: 2, y: 2 }, { x: 30, y: 40 }, { x: 80, y: 8 }]];
   await withClient(async (client) => {
     const rollback = new FlowError("Rollback mounted e-sign fixtures");
     try {
       await svcOn(client, USERS.admin, async () => {
+        for(const actor of [base,manager,owner,tenant,outsider,foreign])await client.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')`,[actor.sessionId,actor.userId,randomUUID()]);
         await client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"esign":true}'::jsonb WHERE id=ANY($1::uuid[])`, [[ORG_ID,ORG2_ID]]);
         let index = 0;
         const run: TransactionRunner = async (actorId, work) => {

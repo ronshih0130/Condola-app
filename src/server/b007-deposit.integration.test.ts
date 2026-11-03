@@ -7,7 +7,8 @@ import { resolveDepositPolicy } from "./deposit-rules";
 import { insertSandboxOrg } from "./sandbox";
 import { cloneTestDatabase } from "./test-database-clone";
 import { createLease, createProperty, signLease } from "./domain";
-import { query } from "./db";
+import { query, withClient } from "./db";
+import { insertTestAuthSession } from "./test-auth-session";
 import type { Session } from "./types";
 
 const target = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
@@ -144,7 +145,7 @@ test("B007 rule resolver and direct lease writes enforce rollout, regional rules
 
 
 test("B007 actual createLease uses the selected property's configured warning rule", async () => {
-  const session: Session = { userId: USERS.admin, sessionId: "b007-fixture", email: "b007@example.com", name: "Fixture", kind: "staff", role: "admin", orgId: "10000000-0000-4000-8000-000000000001", liveOrgId: "10000000-0000-4000-8000-000000000001", environment: "live", locale: "en", calendar: "gregorian", leaseId: null };
+  const session: Session = { userId: USERS.admin, sessionId: await withClient(c=>insertTestAuthSession(c,USERS.admin)), email: "b007@example.com", name: "Fixture", kind: "staff", role: "admin", orgId: "10000000-0000-4000-8000-000000000001", liveOrgId: "10000000-0000-4000-8000-000000000001", environment: "live", locale: "en", calendar: "gregorian", leaseId: null };
   await query(`UPDATE organizations SET feature_flags=feature_flags || '{"deposit_rule_hints":true}'::jsonb WHERE id=$1`, [session.orgId]);
   await query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='deposit_rule_hints'`, [session.orgId]);
   const property = await createProperty(session, {
@@ -174,7 +175,7 @@ test("B007 actual createLease uses the selected property's configured warning ru
   }
   const manager = await signLease(session, { leaseId: pending.leaseId, signedName: "Manager fixture", consent: true });
   assert.equal(manager.esign, "partially_signed");
-  const tenant: Session = { ...session, kind: "tenant", role: null, userId: pending.tenantUserId, name: "Tenant fixture" };
+  const tenant: Session = { ...session, sessionId:await withClient(c=>insertTestAuthSession(c,pending.tenantUserId)), kind: "tenant", role: null, userId: pending.tenantUserId, name: "Tenant fixture" };
   const signed = await signLease(tenant, { leaseId: pending.leaseId, signedName: "Tenant fixture", consent: true });
   assert.equal(signed.esign, "fully_signed");
   const active = await query<{ status: string }>(`SELECT status::text FROM leases WHERE id=$1`, [pending.leaseId]);

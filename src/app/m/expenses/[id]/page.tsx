@@ -1,6 +1,7 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { archiveCopy } from "@/i18n/record-archive";
 import { makeT } from "@/i18n";
 import { ExpenseForm } from "@/components/expense-form";
 import { ErrorBanner, PageHeader, expenseCategoryKey, expenseStatusClass, expenseStatusKey } from "@/components/ui";
@@ -24,8 +25,9 @@ export default async function ExpenseDetailPage({
   const t = makeT(session.locale);
   const { id } = await params;
   const query = await searchParams;
-  const [row, choices] = await Promise.all([getExpense(session, id), expenseFormOptions(session)]);
+  const row = await getExpense(session, id);
   if (!row) notFound();
+  const choices = await expenseFormOptions(session, id);
   const known = (EXPENSE_CATEGORIES as readonly string[]).includes(row.category);
   const categories = [
     ...(known ? [] : [{ value: row.category, label: row.category }]),
@@ -92,8 +94,8 @@ export default async function ExpenseDetailPage({
           ) : null}
           <ExpenseForm
             action={actionUpdateExpense}
-            properties={choices.properties}
-            units={choices.units.map((unit) => ({ id: unit.id, propertyId: unit.property_id, label: unit.label }))}
+            properties={choices.properties.map(property=>({...property,name:property.archiveState==="archived"?`${property.name} (${archiveCopy(session.locale).archived})`:property.name}))}
+            units={choices.units.map((unit) => ({ id: unit.id, propertyId: unit.property_id, label: unit.archiveState!=="active"?`${unit.label} (${archiveCopy(session.locale).archived})`:unit.label }))}
             vendors={choices.vendors}
             categories={categories}
             lockFinancial={row.on_issued}

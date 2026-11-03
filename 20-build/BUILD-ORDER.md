@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-02T20:21:01.680123-08:00: queue active. B015 fresh-lease ancestry guard `9b05732` passed full local checks and independent Sol evidence review; whole B015 remains pending. B014 corrected local scope `0b7c3a4` retains Astra GO. No whole item newly done.**
+> **Current 2026-11-03T01:01:21.040482-08:00: queue active. B015 full current-app archive/history source stable with independent Astra source GO and development targets (finance10, admission31, history6, archive6 PASS); full candidate gate/build/browser pending. Whole B015 remains in_progress; no whole item newly done.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 
@@ -24,7 +24,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | pending |
 | B-013 | Manager dispatch and shared repair approval state | MGT-17/18/19/35; J5; CAP-M-15/16; M-48/49 | —; coordinated B-021/B-024 | vendor_dispatch; REPAIR_APPROVALS* | B | L / 32–48 | pending |
 | B-014 | Owner net ledger, transfers and report versions | MGT-25/26/27, OWN-02; J7; CAP-M-17/18, CAP-O-03; M-43 | B-008 | OWNER_NET_LEDGER*; MONTHLY_REPORT_DELIVERY* | B | L / 24–40 | pending |
-| B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | pending |
+| B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | in_progress |
 | B-016 | Company/profile settings and management-fee rules | MGT-04; J1.1/J7; CAP-M-25/29; M-42/58 | B-003 | COMPANY_PROFILE_EDIT*; MANAGEMENT_FEE_RULES* | B | M / 20–32 | todo |
 | B-017 | Custom role permissions with escalation protection | PLT-01/02; J1.4; CAP-P-12; M-54 | — | CUSTOM_ROLES* | B | L / 24–40 | todo |
 | B-018 | Tenant payment history and home states | TEN-07/08; J3; CAP-T-04/09; T-09 | B-003, B-010 | TENANT_PAYMENT_HISTORY* | B | M / 12–20 | todo |
@@ -158,3 +158,9 @@ Code `9caeed8a4378f7eff932d65b1f332581113646cc`:621unit/392RLS+solepriorhistoric
 ## B014 provisional local checkpoint — 2026-11-02T16:17:38.731758-08:00
 
 Code `6c9d4d0bdf78436206c57b9e244e42cf225b7a9e` localgate623unit/393RLS+solehist1/build4/full4browser32PNG/PGreadonlyoriginalkeyABSENCE+wholeflags/OFFrestorePASS. Rootvisual32andselfhash200bindings/68pins/11receipts; independentrevisedsource/evidenceQA NOT_RUN_MODEL_UNAVAILABLE, noacceptedmodelsubstitution. [Checkpoint](../e2e-evidence/B-014/owner-transfer-checkpoint-6c9d4d0.md). WholeB014pendinghostedlegacyseal/ownerread/recipientcash+payoutreportversions+delivery/staging/Claude/Ron; no39newfullyaccepteditem. Priorfailures/UNKNOWNpreserved. Nextmodelretry>=17:52:54-0800oralternateRonpermission; continueunblockedsource/designonly, noflagactivation/prod/main/Macmigration.
+
+## B015 full-workflow independent source A2 — 2026-11-03T00:36:51.512279-08:00
+
+All148 source pins matched at independent review; two actual blockers remain. A correction to a posted utility run must retain historical tenant/owner attribution after lease end, and portal calls must respect current staff-first persona even when another live organization is RLS-hidden. Existing UI/session/fixture fixes and the post-commit tenant repair tryout update remain unverified by runtime. The earlier failing noemit2 and later noemit0 observations are retained; the latter predates the final tryout change. Exact A2 bytes/evidence were archived before fixes. See [A2 findings](../e2e-evidence/B-015/workflow-astra-source-a2-no-go.md) and [snapshot record](../e2e-evidence/B-015/workflow-source-a2-no-go.json). No DB/schema operation, deployment, flag activation or new B016 implementation. Next: source-bound finance and persona fixes, independent review, then actual clean gate/build/browser on a pinned candidate.
+
+B015 stable-source checkpoint 2026-11-03T01:01:21.040482-08:00: source map 8d65177fa87a5dcd8e622e81d4dddbda7c4eb5dbd956643412b9980b6f25a0b2 (148pins) independentAstraA4/A5SOURCEGO; sourcefindingsresolved, priorA1/A2/A3NO_GOand A4targetfailure retained. Finance10PASS onA4unchangedfinancialsource, admission31/history6/archive6PASSA5, all0SKIP. Targeted summary e2e-evidence/B-015/workflow-targeted-summary-a5.json; freeze work/b015-workflow-reviewed-source-freeze.json. Currentappsourcecandidate abouttocommit for cleanfullgate/build/browser/controls; notwholefeature/staging/pilotPASS. Onlyowner-onlymetadata/raw-oldwriter DBpart, staging/Claude acceptance remainexternaldependent; existing unparsed/unapplied proposal notapplyready. No newB016implementation. STOP POINT: WORKING; next: clean pinned full candidate gate then builds/browser/readback; owner: Ron/Codex3099AC86-6AF0-4681-9944-304E930BFDC2.

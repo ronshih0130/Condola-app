@@ -6,6 +6,7 @@ import { createProperty } from "./domain";
 import { ORG_ID, USERS } from "./ids";
 import { createLeaseFromForm } from "./lease-form";
 import type { Session } from "./types";
+import { insertTestAuthSession } from "./test-auth-session";
 
 test("tenant signed PDF RLS requires global and org flags and own lease; team access is unchanged", async () => {
   const stamp = randomUUID();
@@ -15,6 +16,7 @@ test("tenant signed PDF RLS requires global and org flags and own lease; team ac
   let propertyId: string | undefined;
   let fixtureLeaseId: string | undefined;
   let tenantUserId: string | undefined;
+  let fixtureSessionId: string | undefined;
 
   try {
     await withClient(async (client) => {
@@ -74,10 +76,11 @@ test("tenant signed PDF RLS requires global and org flags and own lease; team ac
           )).rows[0];
           assert.ok(staff, "seed must contain an administrator in another organization");
           fixtureOrgId = staff.org_id;
+          fixtureSessionId=await withClient(c=>insertTestAuthSession(c,staff.user_id));
 
           const session: Session = {
             userId: staff.user_id,
-            sessionId: `tenant-signed-pdf-${stamp}`,
+            sessionId: fixtureSessionId,
             email: `signed.pdf.staff.${stamp}@example.com`,
             name: "Signed PDF fixture administrator",
             kind: "staff",
@@ -290,6 +293,7 @@ test("tenant signed PDF RLS requires global and org flags and own lease; team ac
       }
     });
   } finally {
+    if(fixtureSessionId)await query(`DELETE FROM auth_sessions WHERE id=$1`,[fixtureSessionId]);
     if (fixtureOrgId) {
       await withClient(async (client) => {
         await client.query("BEGIN");

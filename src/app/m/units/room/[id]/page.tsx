@@ -1,5 +1,7 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { ArchiveEntry } from "@/components/record-archive-entry";
+import { archiveView } from "@/server/record-archive";
 import { makeT } from "@/i18n";
 import { SpaceForm } from "@/components/space-form";
 import { SpaceRepairs } from "@/components/space-repairs";
@@ -23,6 +25,9 @@ export default async function EditRoomPage({
   const query = await searchParams;
   const session = await getSession();
   const t = makeT(session.locale);
+  const archivedView = await archiveView(session,{kind:"room",id});
+  if (archivedView.state !== "ready") notFound();
+  if (archivedView.observed.archivedAtUtc || archivedView.observed.inherited.length) redirect(`/m/archive/room/${id}`);
   const [space, properties, owners, repairs] = await Promise.all([
     spaceEditor(session, "room", id),
     listProperties(session),
@@ -33,7 +38,7 @@ export default async function EditRoomPage({
   const propertyName = properties.find((property) => property.id === space.propertyId)?.name ?? "";
   return (
     <>
-      <PageHeader title={t("i_space_edit")} crumb={t("i_units_title")} />
+      <PageHeader title={t("i_space_edit")} crumb={t("i_units_title")} actions={<ArchiveEntry refValue={{kind:"room",id}} locale={session.locale} />} />
       <ErrorBanner t={t} error={query.error} />
       <SpaceForm
         action={actionUpdateSpace}

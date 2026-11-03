@@ -146,6 +146,7 @@ const ROUTE_PERM: { prefix: string; perm: PermKey; exact?: boolean }[] = [
   { prefix: "/m/units/whole", perm: "props.edit" },
   { prefix: "/m/properties", perm: "props.view" },
   { prefix: "/m/units", perm: "props.view" },
+  { prefix: "/m/archive", perm: "props.view" },
   { prefix: "/m/tenants", perm: "props.view" },
   { prefix: "/m/leases", perm: "props.view" },
   { prefix: "/m/rent", perm: "stmt.view" },

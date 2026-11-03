@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { query } from "./db";
+import { query, withClient } from "./db";
+import { insertTestAuthSession } from "./test-auth-session";
 import { ORG_ID, USERS } from "./ids";
 import { disposableDbUrl } from "./test-disposable-db";
 import type { Session } from "./types";
@@ -9,6 +10,8 @@ import { utilityReconciliation } from "./utility-reconciliation";
 
 disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
 const admin: Session = {userId:USERS.admin,sessionId:"b008-utility",email:"admin@example.invalid",name:"B008",kind:"staff",role:"admin",orgId:ORG_ID,liveOrgId:ORG_ID,environment:"live",locale:"en",calendar:"gregorian",leaseId:null};
+test.before(async()=>{admin.sessionId=await withClient(c=>insertTestAuthSession(c,admin.userId));});
+test.after(async()=>{await query(`DELETE FROM auth_sessions WHERE id=$1`,[admin.sessionId]);});
 test("saved synthetic utility runs reconcile tenant, vacant, public and signed gaps in TWD and USD without writes", async () => {
   await query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='billing_previews'`,[ORG_ID]);
   await query(`UPDATE organizations SET feature_flags=feature_flags || '{"billing_previews":true}'::jsonb WHERE id=$1`,[ORG_ID]);

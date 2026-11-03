@@ -1,7 +1,7 @@
 # B015 current status
 
-2026-11-02T20:21:01.680123-08:00; wholeB015 `pending`. Bounded fresh lease ancestry/picker safety is locally verified at `9b057326c59cf64c55ce6094f02e767593d59951` with independent Sol SOURCE/RUNTIME evidence PASS.
+2026-11-03T01:00:00.525404-08:00; whole B015 `in_progress`. Current full application archive/restore, retained finance and ended-tenant history source is stable for a clean candidate gate after independent Astra A5 source/helper GO and targeted checks. [Targeted results](workflow-targeted-summary-a5.json): finance10PASS on unchanged A4 financial source; admission31/history6/archive6 PASS on A5, zero skips. Full newworkflow gate/build/browser NOT RUN yet.
 
-[Current checkpoint](archive-ancestry-checkpoint-9b05732.md), [final review](independent-sol-final-a2.md), [manifest](archive-ancestry-runtime-9b05732.json). Directory/edit prior evidence remains in [historical status](directory-edit-status-historical.md) and existing directory/contact manifests, not relabeled. Full archive/restore/history/owner identity/legacy writer/staging/Claude/Ron acceptance remains incomplete.
+Earlier directory/edit and fresh-create guard are historical scoped evidence, not fullworkflow acceptance. [Previous guard status](archive-ancestry-status-9b05732-historical.md). Owner-only marker/raw-old writer DB closure proposal remains incomplete, unapplied and not apply-ready; actual staging/Claude/ClassB/pilot acceptance missing.
 
-STOP POINT: WORKING; next: publish/renew/canonicalmirror then finish fullarchive workflow plan and implement eligible scope; ownerRon/Codex3099AC86.
+STOP POINT: WORKING; next: commit stable source then clean pinned full gate, builds and real browser/readonly controls; owner: Ron/Codex3099AC86-6AF0-4681-9944-304E930BFDC2.

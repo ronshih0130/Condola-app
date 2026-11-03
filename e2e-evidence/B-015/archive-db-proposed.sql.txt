@@ -1,0 +1,53 @@
+-- UNREVIEWED / UNAPPLIED / UNPARSED / NOT RUN / NOT APPLY READY
+-- Draft text only: not a completed migration. Do not apply.
+-- Existing writer roles and actual target catalog have not been inspected.
+-- No gateway, operational admission, role membership, or caller EXECUTE grant
+-- is supplied. See accompanying handoff and its blocking decisions.
+
+-- Must be created by an authorized migration principal only after catalog review.
+-- New non-login role; no members or SET ROLE grants are supplied here.
+CREATE ROLE b015_archive_writer NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+
+ALTER TABLE public.contacts
+  ADD COLUMN owner_directory_archived_at timestamptz DEFAULT NULL;
+
+-- Trigger is SECURITY INVOKER: within a future SECURITY DEFINER gateway it
+-- observes the gateway owner's effective current_user, not a caller-set GUC.
+-- It protects INSERT and marker transitions, including carrying a marked row
+-- to a different identity. No caller is granted the writer role here.
+CREATE FUNCTION app.b015_owner_marker_guard() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.owner_directory_archived_at IS NOT NULL
+       AND current_user <> 'b015_archive_writer' THEN
+      RAISE EXCEPTION 'owner directory archive marker unavailable' USING ERRCODE = '42501';
+    END IF;
+  ELSIF NEW.owner_directory_archived_at IS DISTINCT FROM OLD.owner_directory_archived_at
+     OR (OLD.owner_directory_archived_at IS NOT NULL
+         AND (NEW.org_id IS DISTINCT FROM OLD.org_id OR NEW.id IS DISTINCT FROM OLD.id)) THEN
+    IF current_user <> 'b015_archive_writer' THEN
+      RAISE EXCEPTION 'owner directory archive marker unavailable' USING ERRCODE = '42501';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION app.b015_owner_marker_guard() FROM PUBLIC;
+CREATE TRIGGER b015_owner_marker_guard
+BEFORE INSERT OR UPDATE ON public.contacts
+FOR EACH ROW EXECUTE FUNCTION app.b015_owner_marker_guard();
+
+-- Existing row, value, description and timestamp must remain untouched.
+INSERT INTO public.platform_settings (key, value, description)
+VALUES ('record_archive', '{"enabled":false,"allowed_org_ids":[]}'::jsonb,
+        'Record archive control; default disabled')
+ON CONFLICT (key) DO NOTHING;
+
+-- No membership in b015_archive_writer; no function is owned by it; no grants
+-- to it. No gateway, property/unit/room marker guard or operational admission
+-- exists here. The proposed contact guard is not a complete security boundary:
+-- target role ownership, inherited/superuser privileges, trigger disabling,
+-- actual table grants, RLS and deployment trust are unverified.
+-- A separately reviewed final migration must replace/extend this draft before
+-- any application; do not run this fragment independently.

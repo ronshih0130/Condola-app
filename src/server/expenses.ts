@@ -154,8 +154,8 @@ export type ExpenseDetail = ExpenseListRow & {
   month_closed: boolean;
 };
 
-type ChoiceProperty = { id: string; name: string };
-type ChoiceUnit = { id: string; property_id: string; label: string; property_name: string };
+type ChoiceProperty = { id: string; name: string; archiveState: "active" | "archived" };
+type ChoiceUnit = { id: string; property_id: string; label: string; property_name: string; archiveState: "active" | "archived" | "inherited" };
 type ChoiceVendor = { id: string; name: string };
 
 function day(value: string) {
@@ -184,23 +184,23 @@ async function closedThrough(client: Client, orgId: string) {
   return row?.m ? day(row.m) : null;
 }
 
-async function loadProperty(client: Client, orgId: string, propertyId: string) {
+async function loadProperty(client: Client, orgId: string, propertyId: string, allowArchived = false) {
   const row = await maybe<{ id: string; currency: string }>(
     client,
-    `SELECT id::text, currency FROM properties WHERE id = $1 AND org_id = $2 AND archived_at IS NULL`,
-    [propertyId, orgId],
+    `SELECT id::text, currency FROM properties WHERE id = $1 AND org_id = $2 AND (archived_at IS NULL OR $3::boolean)`,
+    [propertyId, orgId, allowArchived],
   );
   if (!row) throw new FlowError("errors.notFound");
   return row;
 }
 
-async function loadUnit(client: Client, orgId: string, propertyId: string, unitId: string) {
+async function loadUnit(client: Client, orgId: string, propertyId: string, unitId: string, allowArchived = false) {
   if (!unitId) return null;
   const row = await maybe<{ id: string }>(
     client,
     `SELECT id::text FROM units
-      WHERE id = $1 AND org_id = $2 AND property_id = $3 AND archived_at IS NULL`,
-    [unitId, orgId, propertyId],
+      WHERE id = $1 AND org_id = $2 AND property_id = $3 AND (archived_at IS NULL OR $4::boolean)`,
+    [unitId, orgId, propertyId, allowArchived],
   );
   if (!row) throw new FlowError("errors.notFound");
   return row.id;
@@ -315,22 +315,27 @@ function mapRow(row: Omit<ExpenseListRow, "included" | "incurred_on"> & { incurr
   };
 }
 
-export async function expenseFormOptions(session: Session) {
+export async function expenseFormOptions(session: Session, expenseId?: string) {
   assertPerm(session, "exp.add");
+  if (expenseId !== undefined && !UUID.test(expenseId)) throw new FlowError("errors.notFound");
   return tx(session.userId, async (client) => {
+    const stored = expenseId ? await maybe<{ property_id: string; unit_id: string | null }>(client,
+      `SELECT property_id::text, unit_id::text FROM expenses WHERE org_id = $1 AND id = $2`, [session.orgId, expenseId]) : null;
+    if (expenseId && !stored) throw new FlowError("errors.notFound");
     const properties = await many<ChoiceProperty>(
       client,
-      `SELECT id::text, name FROM properties WHERE org_id = $1 AND archived_at IS NULL ORDER BY name`,
-      [session.orgId],
+      `SELECT id::text, name, CASE WHEN archived_at IS NULL THEN 'active' ELSE 'archived' END AS "archiveState" FROM properties WHERE org_id = $1 AND (archived_at IS NULL OR id = $2::uuid) ORDER BY name`,
+      [session.orgId, stored?.property_id ?? null],
     );
     const units = await many<ChoiceUnit>(
       client,
-      `SELECT u.id::text, u.property_id::text, u.label, p.name AS property_name
+      `SELECT u.id::text, u.property_id::text, u.label, p.name AS property_name,
+              CASE WHEN u.archived_at IS NOT NULL THEN 'archived' WHEN p.archived_at IS NOT NULL THEN 'inherited' ELSE 'active' END AS "archiveState"
          FROM units u
-         JOIN properties p ON p.id = u.property_id
-        WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
+         JOIN properties p ON p.id = u.property_id AND p.org_id = u.org_id
+        WHERE u.org_id = $1 AND ((u.archived_at IS NULL AND p.archived_at IS NULL) OR (u.id = $2::uuid AND u.property_id = $3::uuid))
         ORDER BY p.name, u.label`,
-      [session.orgId],
+      [session.orgId, stored?.unit_id ?? null, stored?.property_id ?? null],
     );
     const vendors = await many<ChoiceVendor>(
       client,
@@ -436,6 +441,7 @@ export async function createExpense(session: Session, input: ExpenseDraft) {
 type StoredExpense = {
   id: string;
   property_id: string;
+  unit_id: string | null;
   status: string;
   amount_minor: string;
   incurred_on: string;
@@ -450,7 +456,7 @@ type StoredExpense = {
 async function loadStored(client: Client, orgId: string, expenseId: string) {
   const row = await maybe<StoredExpense>(
     client,
-    `SELECT id::text, property_id::text, status::text, amount_minor::text, incurred_on::text,
+    `SELECT id::text, property_id::text, unit_id::text, status::text, amount_minor::text, incurred_on::text,
             ledger_transaction_id::text, category, bill_to::text, currency, description, ticket_id::text
        FROM expenses WHERE id = $1 AND org_id = $2
        FOR UPDATE`,
@@ -472,8 +478,11 @@ export async function updateExpense(session: Session, expenseId: string, input: 
     if (monthIsClosed(current.incurred_on, closed)) throw new FlowError("errors.monthClosed");
     const incurred = fields.incurredOn ?? current.incurred_on;
     if (monthIsClosed(incurred, closed)) throw new FlowError("errors.monthClosed");
-    const property = await loadProperty(client, session.orgId, fields.propertyId);
-    const unitId = await loadUnit(client, session.orgId, fields.propertyId, fields.unitId);
+    const sameProperty = fields.propertyId === current.property_id;
+    const sameTarget = sameProperty && (fields.unitId || null) === current.unit_id;
+    const property = await loadProperty(client, session.orgId, fields.propertyId, sameTarget);
+    const unitId = await loadUnit(client, session.orgId, fields.propertyId, fields.unitId, sameTarget);
+    if (sameProperty) property.currency = current.currency;
     const financial =
       fields.amount !== Number(current.amount_minor) ||
       incurred !== current.incurred_on ||

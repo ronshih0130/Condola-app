@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { makeT } from "@/i18n";
+import { tenantLeaseHistoryCopy } from "@/i18n/tenant-lease-history";
 import { BrandImage } from "@/components/brand";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { requireCurrentConsent } from "@/server/consent-gate";
@@ -44,6 +45,7 @@ export default async function TenantLayout({ children }: { children: React.React
                 <BrandImage variant="stacked" alt={t("i_brand")} {...(v2 ? { v2: true } : {})} />
               </div>
             ) : null}
+            <p><Link href="/t/history" data-testid="tenant-history-link">{tenantLeaseHistoryCopy(session.locale).link}</Link></p>
             {children}
           </div>
           {task ? null : (

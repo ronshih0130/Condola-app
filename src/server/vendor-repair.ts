@@ -5,6 +5,7 @@ import { insertPostedRepairExpense } from "./expenses";
 import { FlowError } from "./errors";
 import { loadOrgCountry } from "./org-country";
 import { assertPerm, can } from "./perms";
+import { admitTicketArchiveAncestry } from "./record-archive-admission";
 import { portalInviteOrigin } from "./portal-invite";
 import { taipeiToday } from "./money";
 import {
@@ -30,6 +31,12 @@ import {
   vendorUploadGrantMatches,
 } from "./ticket-photos";
 import type { Session } from "./types";
+
+async function currentDispatchActor(client:Client,session:Session) {
+  if(session.kind!=='staff'||session.needsSandbox||!can(session.role,'tickets.update')||![session.userId,session.sessionId,session.orgId,session.liveOrgId].every(isUuid))throw new FlowError('errors.forbidden');
+  const result=await client.query(`SELECT 1 FROM organizations o JOIN org_members m ON m.org_id=$2 AND m.user_id=$3 AND m.status='active' AND m.role::text=$4 JOIN auth_sessions a ON a.id=$5 AND a.user_id=$3 WHERE o.id=$1 AND o.environment::text=$6 AND ((o.environment='live' AND o.id=$2 AND o.live_org_id IS NULL) OR (o.environment='sandbox' AND o.live_org_id=$2)) AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()`,[session.orgId,session.liveOrgId,session.userId,session.role,session.sessionId,session.environment]);
+  if(result.rowCount!==1)throw new FlowError('errors.forbidden');
+}
 import {
   VENDOR_LINK_DAYS,
   cleanContactWindow,
@@ -368,10 +375,16 @@ export async function dispatchVendor(
   if (!visible) throw new FlowError("errors.notFound");
 
   const jobId = await svc(session.userId, async (client) => {
+    await currentDispatchActor(client,session);
     await assertDispatchFlag(client, session.orgId);
+    await admitTicketArchiveAncestry(client, session.orgId, ticketId);
+    await currentDispatchActor(client,session);
+    await assertDispatchFlag(client,session.orgId);
     const enhanced = await vendorLinkEnabledOn(client, session.orgId);
     if (enhanced) await lockTicketThenJobs(client, session.orgId, ticketId);
     const ticket = await loadTicket(client, ticketId, session.orgId);
+    await currentDispatchActor(client,session);
+    await assertDispatchFlag(client,session.orgId);
     if (!ticket) throw new FlowError("errors.notFound");
     const current = await maybe<{
       id: string;
@@ -452,6 +465,8 @@ export async function dispatchVendor(
     );
     await noteStatus(client, session.orgId, ticket.id, session.userId, ticket.status, nextStatus);
     await writeAudit(session.orgId, session.userId, "repair_dispatch", { ticketId: ticket.id, jobId: job.id, vendorName: vendorNameSaved }, client);
+    await currentDispatchActor(client,session);
+    await assertDispatchFlag(client,session.orgId);
     return job.id;
   });
 

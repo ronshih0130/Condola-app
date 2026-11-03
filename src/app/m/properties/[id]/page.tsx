@@ -1,6 +1,8 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArchiveEntry } from "@/components/record-archive-entry";
+import { archiveCopy } from "@/i18n/record-archive";
 import { makeT } from "@/i18n";
 import { actionPhoneVisibility, actionSetMeter } from "@/server/actions";
 import { AuditHistory } from "@/components/audit-log";
@@ -27,6 +29,7 @@ export default async function PropertyPage({
   const t = makeT(session.locale);
   const detail = await propertyDetail(session, id);
   if (!detail) notFound();
+  const archived = detail.property.archiveState === "archived";
   return (
     <>
       <PageHeader
@@ -38,17 +41,19 @@ export default async function PropertyPage({
         crumb={<Link href="/m/properties">{t("s_e03a6ec")}</Link>}
         actions={
           <>
-            {can(session.role, "props.edit") ? (
+            <ArchiveEntry refValue={{kind:"property",id}} locale={session.locale} />
+            {!archived && can(session.role, "props.edit") ? (
               <Link className="btn" href={`/m/properties/${id}/edit`} data-testid="edit-property">
                 {t("i_edit")}
               </Link>
             ) : null}
-            <Link className="btn pri" href="/m/leases/new">
+            {!archived && <Link className="btn pri" href="/m/leases/new">
               + {t("s_e96eefc")}
-            </Link>
+            </Link>}
           </>
         }
       />
+      {archived && <p>{archiveCopy(session.locale).archived}</p>}
       <p className="muted">{detail.property.address_display}</p>
       {query.created === "1" ? (
         <p className="alert ok" data-testid="property-created">
@@ -62,6 +67,13 @@ export default async function PropertyPage({
             <h3>{t("s_a757163")}</h3>
           </div>
           <div className="bd tree">
+            {detail.byRoomUnits.map((unit) => (
+              <div className="n" key={unit.id} data-testid="by-room-unit">
+                <b>{displaySampleName(unit.label)}</b>
+                <span className="sp" />
+                <ArchiveEntry refValue={{kind:"unit",id:unit.id}} locale={session.locale} />
+              </div>
+            ))}
             {detail.wholes.map((unit) => (
               <div className="n" key={unit.id} data-testid="whole-unit-saved">
                 <b>{displaySampleName(unit.label)}</b>
@@ -93,7 +105,7 @@ export default async function PropertyPage({
               detail.owner ? displaySampleName(detail.owner.name) : null
             )}
           </p>
-          {detail.owner && (session.role === "admin" || session.role === "manager") ? (
+          {!archived && detail.owner && (session.role === "admin" || session.role === "manager") ? (
             <form action={actionPhoneVisibility}>
               <input type="hidden" name="propertyId" value={id} />
               <input type="hidden" name="propertyOwnerId" value={detail.owner.id} />
@@ -140,7 +152,7 @@ export default async function PropertyPage({
           ) : (
             <p data-testid="meter-number-prompt">{t("i_add_meter_prompt")}</p>
           )}
-          {session.role === "admin" || session.role === "manager" ? (
+          {!archived && (session.role === "admin" || session.role === "manager") ? (
             <form action={actionSetMeter}>
               <input type="hidden" name="propertyId" value={id} />
               <div className="fg">

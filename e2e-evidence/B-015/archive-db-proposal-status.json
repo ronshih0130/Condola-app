@@ -1,0 +1,21 @@
+{
+  "status": "DRAFT_UNREVIEWED_UNAPPLIED_UNPARSED_NOT_RUN_NOT_APPLY_READY",
+  "baseline": "516a5e8c2e7bc7f54cefe425e6551d9ea0fc793e",
+  "markdown_sha256": "4fc94ec401b3e48a2bd7d0206d16760b2ca3af4d5a89f1bd0136b092de6a7b89",
+  "sql_sha256": "919c139d5ffe2b7332a453641b91afddecef82c3650441d70d22244a047cd275",
+  "scope": "partial foundation, unbound owner-marker guard, agreed property ancestry lock contract and source-grounded gateway design; no executable gateways, old/raw admission, app port or release approval",
+  "blocking": [
+    "verified private server identity and broker binding",
+    "consent, membership and revocation serialization through commit",
+    "owner/contact and property assignment global lock order",
+    "pre-row-lock admission and old/raw writer fencing",
+    "canonical CAS byte/tuple transport with backend",
+    "complete Codex gateway SQL and application port",
+    "independent review and actual target assessment"
+  ],
+  "sql_parsed": false,
+  "sql_executed": false,
+  "database_accessed": false,
+  "independent_review": "NOT_RUN",
+  "prior_version_dir": "../b015-db-proposal-v1-immutable"
+}
