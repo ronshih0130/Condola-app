@@ -1,0 +1,41 @@
+{
+  "recordedAt": "2026-11-03T01:07:11.986174-08:00",
+  "candidate": "6694f0425ba18397e1c250a17ca54c50c28a7046",
+  "status": "FULL_GATE_FAIL",
+  "unit": {
+    "passed": 625,
+    "failed": 2,
+    "skipped": 0,
+    "total": 627
+  },
+  "rls": {
+    "passed": 6,
+    "failed": 2,
+    "skipped": 0,
+    "executed": 8,
+    "remainingChainedSuites": "NOT_RUN"
+  },
+  "passed": [
+    "clean checkout",
+    "toolchain",
+    "npm ci",
+    "typecheck",
+    "lint",
+    "copy",
+    "PG16",
+    "flag expiry",
+    "final clean"
+  ],
+  "failures": [
+    "History pages require actual consent guard as firststatement before other work; samepattern list+detail",
+    "e-sign flow unit mock does not model newly added actualancestry/sessionqueries",
+    "InitialRLS positivefixtures supply nonUUID placeholdersession rls/owner-provision, rejectedbynewcurrentcallercheck"
+  ],
+  "scope": "Actualgatefailure. Earlierdevelopmenttargetedprofilesremainseparate. Build/browser/baseline NOT_RUN. No testwaiver/skip/relaxation.",
+  "snapshot": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-6694f04-r1-gate-failure/manifest.json",
+    "entries": 171,
+    "sha256": "4a9e34236c91d1397c4c06ceab8c1ce5efdd1133d1bc11452f55ed8a20aae51a"
+  },
+  "next": "Narrow consentorder and positivefixture/mock corrections; targeted tests before freshstablecandidatefullgate"
+}

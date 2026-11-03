@@ -1,0 +1,71 @@
+{
+  "recordedAt": "2026-11-03T01:19:43.404212-08:00",
+  "classification": "DEVELOPMENT_TARGETED_PASS_ONLY",
+  "sourceMapSha256": "c1dc96dd2e6ea65192575684d8b3d5d7e760375bb2480af2a47a0651f8e076b1",
+  "profiles": [
+    {
+      "profile": "consent",
+      "counts": {
+        "tests": 4,
+        "pass": 4,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-consent-a7-t4-exit.json",
+        "sha256": "e11792a919140f1cbbd25c7dc3e92d7cbc0d2de5082c8e929cdedb4d7c5b1085",
+        "bytes": 27156
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-consent-a7-t4.log",
+        "sha256": "0d6698752cf0b97765a080da2c2d3ea840ef356393c36e3b12c36fd196d52421",
+        "bytes": 872
+      },
+      "sourceMapSha256": "c1dc96dd2e6ea65192575684d8b3d5d7e760375bb2480af2a47a0651f8e076b1"
+    },
+    {
+      "profile": "esign",
+      "counts": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-esign-a7-t4-exit.json",
+        "sha256": "0713ea98979f7dce728227085198e28d207cfb79787a84196ae27759f23e91aa",
+        "bytes": 27142
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-esign-a7-t4.log",
+        "sha256": "31a3d34d5757158a60c72c39c5409f03f205c4be55dcc1f62334e279c77ab09c",
+        "bytes": 1923
+      },
+      "sourceMapSha256": "c1dc96dd2e6ea65192575684d8b3d5d7e760375bb2480af2a47a0651f8e076b1"
+    },
+    {
+      "profile": "rls",
+      "counts": {
+        "tests": 8,
+        "pass": 8,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-rls-a7-t4-exit.json",
+        "sha256": "bc70e28d218ddb9b8b7668f0c3fc3ca7d88b19ca9bb6970c08deb097dd1e9c38",
+        "bytes": 27625
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-rls-a7-t4.log",
+        "sha256": "e52d21ee06e3e74e7efc209c821405c232fbd7f1e1007c124c6d742b0fa0bff1",
+        "bytes": 2292
+      },
+      "sourceMapSha256": "c1dc96dd2e6ea65192575684d8b3d5d7e760375bb2480af2a47a0651f8e076b1"
+    }
+  ],
+  "priorFullGate": "6694f0425ba18397e1c250a17ca54c50c28a7046 FAIL unit625/627 initialRLS6/8, laterRLS NOTRUN, builds/browserNOTRUN;171bindingfailurearchive preserved",
+  "priorConsentTarget": "A6FAIL3/4 retained159bindings, no testsweakened",
+  "sourceChanges": "Twohistorypages+PDFroute consentguardordering, realpositiveRLSsessions, explicitnewSQL e-signmock preservingdigest/delivery/lock assertions",
+  "limits": "No successful fullgate/build/browser on correctedcandidate yet; fullB015/staging/ownerDB/pilot incomplete"
+}

@@ -152,7 +152,7 @@ test("mounted copy follows the lane's banned-word and guarantee rules", () => {
 });
 
 test("direct review submission requires complete, signer/version/digest-bound delivery", async () => {
-  const signer: Session = { ...session, kind: "tenant", role: null };
+  const signer: Session = { ...session, sessionId: id, kind: "tenant", role: null };
   const pdf = await PDFDocument.create();
   pdf.addPage();
   pdf.addPage();
@@ -162,6 +162,8 @@ test("direct review submission requires complete, signer/version/digest-bound de
   const deliveries: { actorId: string; payload: ReviewBinding & { page: number | null } }[] = [];
   let stateDigest = digest;
   let lockPhase = 0;
+  let ancestryPhase = 0;
+  let activeAdmissions = 0;
   let authorizedLoads = 0;
   const c: Connection = {
     query: (async (sql: string, params: unknown[] = []) => {
@@ -174,14 +176,37 @@ test("direct review submission requires complete, signer/version/digest-bound de
         assert.ok(lockPhase === 0 || lockPhase === 4, "authorize before locks and reauthorize after them");
         assert.deepEqual(params, [signer.orgId, signer.environment, signer.liveOrgId, signer.kind, signer.role, id, signer.userId, id]);
         if (lockPhase === 0) lockPhase = 1;
-        else { lockPhase = 0; authorizedLoads++; }
+        else { assert.ok(ancestryPhase === 0 || ancestryPhase === 8, "active ancestry and session checks finish before reauthorization"); if (ancestryPhase === 8) activeAdmissions++; ancestryPhase = 0; lockPhase = 0; authorizedLoads++; }
         return { rows: [{ lease_id: id }], rowCount: 1 };
       }
-      if (sql.startsWith("SELECT id FROM leases")) {
+      if (sql.startsWith("SELECT property_id::text,unit_id::text,target_room_id::text FROM public.leases WHERE org_id=$1 AND id=$2")) {
+        assert.equal(lockPhase, 1); assert.ok(ancestryPhase === 0 || ancestryPhase === 5); assert.deepEqual(params, [signer.orgId, id]);
+        ancestryPhase = ancestryPhase === 0 ? 1 : 6;
+        return { rows: [{ property_id: id, unit_id: id, target_room_id: null }], rowCount: 1 };
+      }
+      if (sql.startsWith('SELECT p.id::text AS "propertyId",u.id::text AS "unitId"')) {
+        assert.equal(lockPhase, 1); assert.ok(ancestryPhase === 1 || ancestryPhase === 4); assert.deepEqual(params, [signer.orgId, id]);
+        ancestryPhase = ancestryPhase === 1 ? 2 : 5;
+        return { rows: [{ propertyId: id, unitId: id, roomId: null, propertyArchived: false, unitArchived: false, roomArchived: false, mode: "whole_unit" }], rowCount: 1 };
+      }
+      if (sql === "SELECT pg_advisory_xact_lock_shared(hashtextextended($1,0))") {
+        assert.equal(lockPhase, 1); assert.ok(ancestryPhase === 2 || ancestryPhase === 3);
+        assert.deepEqual(params, [`condola:record-archive:${signer.orgId}:${ancestryPhase === 2 ? "property" : "unit"}:${id}`]);
+        ancestryPhase++; return { rows: [{}], rowCount: 1 };
+      }
+      if (sql.startsWith("SELECT 1 FROM public.organizations o") && sql.includes("JOIN public.auth_sessions a")) {
+        assert.match(sql, /a\.revoked_at IS NULL AND a\.expires_at>clock_timestamp\(\)/);
+        assert.match(sql, /NOT EXISTS[\s\S]*public\.org_members sm LEFT JOIN public\.organizations so/);
+        assert.deepEqual(params, [signer.sessionId, signer.userId, signer.orgId, signer.liveOrgId, signer.environment, signer.kind, signer.role]);
+        assert.ok((lockPhase === 1 && ancestryPhase === 6) || (lockPhase === 4 && ancestryPhase === 7), "session rechecked after ancestry and physical locks");
+        ancestryPhase++; return { rows: [{}], rowCount: 1 };
+      }
+      if (sql.startsWith("SELECT property_id::text,unit_id::text,target_room_id::text FROM leases WHERE id=$1 AND org_id=$2 FOR UPDATE")) {
         assert.equal(lockPhase, 1);
+        assert.ok(ancestryPhase === 0 || ancestryPhase === 7, "physical lease lock follows active ancestry and session check");
         assert.deepEqual(params, [id, signer.orgId]);
         lockPhase = 2;
-        return { rows: [{ id }], rowCount: 1 };
+        return { rows: [{ property_id: id, unit_id: id, target_room_id: null }], rowCount: 1 };
       }
       if (sql.startsWith("SELECT id FROM esign_cases")) {
         assert.equal(lockPhase, 2);
@@ -250,4 +275,5 @@ test("direct review submission requires complete, signer/version/digest-bound de
   await requireReviewDelivery(c, binding, 2);
   assert.equal(lockPhase, 0);
   assert.equal(authorizedLoads, 9);
+  assert.equal(activeAdmissions, 3);
 });

@@ -10,6 +10,11 @@ import { ORG2_ID, ORG_ID, USERS } from "./ids";
 import { hashInviteToken, issuePortalInvite } from "./portal-invite";
 import { seedPortfolio } from "./portfolio";
 import type { Session } from "./types";
+import { insertTestAuthSession } from "./test-auth-session";
+
+let portfolioSessionId = "", provisionSessionId = "";
+test.before(async () => { await withClient(async client => { portfolioSessionId = await insertTestAuthSession(client, USERS.admin); provisionSessionId = await insertTestAuthSession(client, USERS.admin); }); });
+test.after(async () => { for (const id of [portfolioSessionId, provisionSessionId]) if (id) await query(`DELETE FROM auth_sessions WHERE id=$1`, [id]); });
 
 test("one organization cannot read another's properties", async () => {
   const songxin = await tx(USERS.admin, async (client) => {
@@ -72,7 +77,7 @@ test("seeded portfolio rows stay inside the firm and only admin or manager can w
   const csv = readFileSync(new URL("./fixtures/portfolio-sample.csv", import.meta.url), "utf8");
   const admin: Session = {
     userId: USERS.admin,
-    sessionId: "rls",
+    sessionId: portfolioSessionId,
     email: "yating.lin@songxin.demo",
     name: "Admin",
     kind: "staff",
@@ -347,7 +352,7 @@ test("creating a property with a new owner works as service_role without write a
 
   const admin: Session = {
     userId: USERS.admin,
-    sessionId: "owner-provision",
+    sessionId: provisionSessionId,
     email: "yating.lin@songxin.demo",
     name: "Admin",
     kind: "staff",

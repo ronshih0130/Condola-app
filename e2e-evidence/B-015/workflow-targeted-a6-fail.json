@@ -1,0 +1,20 @@
+{
+  "recordedAt": "2026-11-03T01:14:30.131625-08:00",
+  "status": "SOURCE_FIXES_GO_HELPER_NO_GO_TARGET_CONSENT_FAIL",
+  "targetedConsent": {
+    "passed": 3,
+    "failed": 1,
+    "skipped": 0,
+    "effectiveExit": 1,
+    "cause": "Exact signed-PDF route helper missing() called before canonical consent guard"
+  },
+  "esignTarget": "NOT_RUN",
+  "rlsTarget": "NOT_RUN",
+  "fullHelperIssue": "Root-created helper DBprefix workflow2 differs frozenbrowserguard workflow; discovered before any execution; originalguardpreserved",
+  "snapshot": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a6-source-target-failure/manifest.json",
+    "entries": 159,
+    "sha256": "2e60adeb16206792c2ca9b49380ad44574d21af1e70de3fec92b2f218fafa3c5"
+  },
+  "next": "Move actual routeguard before tenant-kind missinghelper, keep allresource/byteauthorization; newfullhelpers-a3 use originalstrictDBprefix and distinctfreeze/filenames; targetedretry then stablecandidatefullgate"
+}

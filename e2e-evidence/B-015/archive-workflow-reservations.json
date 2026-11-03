@@ -53,7 +53,9 @@
     "src/server/actions.ts",
     "src/server/esign/esign.integration.test.ts",
     "src/server/esign/esign-rollout.integration.test.ts",
-    "src/server/esign/esign-privileges.integration.test.ts"
+    "src/server/esign/esign-privileges.integration.test.ts",
+    "src/server/rls.test.ts",
+    "src/server/esign/flow.test.ts"
   ],
   "uiOwner": "b010_email_db_handoff_terra",
   "uiPaths": [
@@ -111,5 +113,13 @@
     ],
     "scope": "Real UUID authenticated-session positive fixtures and mandatory ordinary-cookie signing actor context; preserve token/service-specific authorization, all intentional negative cases, existing authorization/finance assertions. actions.ts only exact sourceRunId parsing and existing-run error return link. No optional session bypass or grants."
   },
-  "updatedAt": "2026-11-02T23:19:59.518173-08:00"
+  "updatedAt": "2026-11-02T23:19:59.518173-08:00",
+  "gateFixtureExtension": {
+    "recordedAt": "2026-11-03T01:07:11.986174-08:00",
+    "paths": [
+      "src/server/rls.test.ts",
+      "src/server/esign/flow.test.ts"
+    ],
+    "scope": "Actual real UUID auth_sessions for positive RLS fixtures; explicit new query/lock/currentcaller branches in existing e-sign unit mock. Preserve all original delivery/digest/roles/lock/assertions and error default. No genericmocksuccess or productionbypass."
+  }
 }

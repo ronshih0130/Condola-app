@@ -7,9 +7,9 @@ import { tenantEndedLeaseList } from '@/server/tenant-lease-history';
 
 export const dynamic = 'force-dynamic';
 export default async function TenantHistoryPage({ searchParams }: { searchParams: Promise<{ after?: string | string[] }> }) {
+  await requireCurrentConsent(undefined, 'page', '/t/history');
   const session = await getSession();
   if (session.kind !== 'tenant') redirect('/m');
-  await requireCurrentConsent(session, 'page', '/t/history');
   const t = tenantLeaseHistoryCopy(session.locale);
   const { after } = await searchParams;
   const result = Array.isArray(after) ? { state: 'unavailable' as const } : await tenantEndedLeaseList(session, after);

@@ -11,9 +11,9 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function missing() { return new Response('Not found', { status: 404, headers: signedPdfPrivateHeaders }); }
 export async function GET(_request: Request, { params }: { params: Promise<{ leaseId: string; pdfId: string }> }) {
   const session = await getSession();
-  if (session.kind !== 'tenant') return missing();
   const blocked = await requireCurrentConsent(session, 'api');
   if (blocked) return blocked;
+  if (session.kind !== 'tenant') return missing();
   const { leaseId, pdfId } = await params;
   if (!TENANT_SIGNED_PDF_ENABLED || !uuid.test(leaseId) || !uuid.test(pdfId)) return missing();
   try {

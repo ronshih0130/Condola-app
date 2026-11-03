@@ -7,9 +7,9 @@ import { tenantEndedLeaseDetail } from '@/server/tenant-lease-history';
 
 export const dynamic = 'force-dynamic';
 export default async function TenantHistoryDetail({ params }: { params: Promise<{ leaseId: string }> }) {
+  await requireCurrentConsent(undefined, 'page', '/t/history');
   const session = await getSession();
   if (session.kind !== 'tenant') redirect('/m');
-  await requireCurrentConsent(session, 'page', '/t/history');
   const { leaseId } = await params;
   const t = tenantLeaseHistoryCopy(session.locale);
   const result = await tenantEndedLeaseDetail(session, leaseId);

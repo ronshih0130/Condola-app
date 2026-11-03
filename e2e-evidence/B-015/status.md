@@ -1,7 +1,5 @@
 # B015 current status
 
-2026-11-03T01:00:00.525404-08:00; whole B015 `in_progress`. Current full application archive/restore, retained finance and ended-tenant history source is stable for a clean candidate gate after independent Astra A5 source/helper GO and targeted checks. [Targeted results](workflow-targeted-summary-a5.json): finance10PASS on unchanged A4 financial source; admission31/history6/archive6 PASS on A5, zero skips. Full newworkflow gate/build/browser NOT RUN yet.
+2026-11-03T01:19:43.404212-08:00; whole B015 `in_progress`. First fullworkflow candidate6694f04 gateFAILunit625/627 and initialRLS6/8, laterRLSNOTRUN. [Failure](workflow-gate-6694f04-r1-fail.json). Corrected150pin source has independentAstraA7SOURCE+HELPERGO; targetedconsent4/e-sign9/RLS8 allPASS0SKIP. [Targeted evidence](workflow-targeted-summary-a7.json). Correctedcandidatefullgate/build/browser/readback next. Earlierdevelopmentfinance10/admission31/history6/archive6 remainseparatescopedevidence.
 
-Earlier directory/edit and fresh-create guard are historical scoped evidence, not fullworkflow acceptance. [Previous guard status](archive-ancestry-status-9b05732-historical.md). Owner-only marker/raw-old writer DB closure proposal remains incomplete, unapplied and not apply-ready; actual staging/Claude/ClassB/pilot acceptance missing.
-
-STOP POINT: WORKING; next: commit stable source then clean pinned full gate, builds and real browser/readonly controls; owner: Ron/Codex3099AC86-6AF0-4681-9944-304E930BFDC2.
+Owner-onlymetadata/raw-oldwriter DBclosure proposal remains incomplete/unapplied/notapplyready; actualstaging/Claude/ClassB/pilot NOT VERIFIED. All operationalflagsOFF. STOP POINT: WORKING; next: commitcorrectedsource then cleanfullgate/build/browser/readback; ownerRon/Codex3099AC86.
