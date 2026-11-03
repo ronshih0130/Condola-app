@@ -1,0 +1,37 @@
+{
+  "recordedAt": "2026-11-02T19:53:06.776224-08:00",
+  "candidate": "0be51154123e078b9b5f356ea3af87e6fc024ebc",
+  "attempt": "a1",
+  "gate": "FAIL actual/effective1",
+  "unit": {
+    "tests": 625,
+    "pass": 625,
+    "fail": 0,
+    "skip": 0
+  },
+  "rlsExecutedBeforeChainStop": {
+    "tests": 47,
+    "pass": 46,
+    "fail": 1,
+    "skip": 0,
+    "cancelled": 0
+  },
+  "failure": "moved-unit test UPDATE hits units_property_id_label_key23505 before intended ancestry assertion; fixture duplicates unit label at destination",
+  "causeDisposition": "Raw error+fixture source support duplicate synthetic destination label; original gate remains FAIL; source correction not yet rerun",
+  "focus": "1PASS/3PNG",
+  "notRun": [
+    "build",
+    "full-browser",
+    "baseline",
+    "control-readback"
+  ],
+  "archive": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-archive-a1-gate-failure/manifest.json",
+    "sha256": "a4e6420ec716eb69c0f4491edc9b80142cb737f4684f1585c2851123c684b308",
+    "bytes": 16182,
+    "entries": 35
+  },
+  "newSourceFix": "One fixture destination label differs before blocking; fresh independent review pending, no assertion/timeout/skip changes",
+  "reviewerAvailability": "Astra newworkflowplan capacity failed; deferred retry of originally designated Sol/high eligible and requested1/2",
+  "scope": "No operational DB/flags/prod/main/messages/legal changes; all fixture DML local existing template only"
+}

@@ -185,6 +185,7 @@ test("fresh whole-unit create succeeds, and non-admitted staff cannot create", a
 
 test("unit moved during parent wait fails closed after locks", async () => {
   const f=await fixture(), other=await fixture(); const s=staff("admin");
+  await query(`UPDATE units SET label=$2 WHERE id=$1`,[other.unit,`B015 destination ${randomUUID()}`]);
   await coordinated(async (parent,start)=>{
     await parent.query(`UPDATE properties SET name=name WHERE id=$1`,[f.property]);
     const pid=(await parent.query<{pid:number}>(`SELECT pg_backend_pid() AS pid`)).rows[0].pid;
