@@ -64,7 +64,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
   let seedSample = false;
   const found = await withMissingConsentFallback(() => client.query<IdentityRow>(
         `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
-                coalesce(p.email::text, u.email) AS email, latest.consent
+                CASE WHEN u.email_confirmed_at IS NOT NULL THEN u.email ELSE NULL END AS email, latest.consent
            FROM auth_sessions s
            JOIN auth.users u ON u.id = s.user_id
            LEFT JOIN profiles p ON p.id = u.id
@@ -80,7 +80,7 @@ export async function readSessionOn(client: Client, options?: { touch?: boolean 
         [sha256(token)],
       ), () => client.query<IdentityRow>(
         `SELECT s.id::text AS session_id, s.user_id::text, p.display_name AS name,
-                coalesce(p.email::text, u.email) AS email, NULL::jsonb AS consent
+                CASE WHEN u.email_confirmed_at IS NOT NULL THEN u.email ELSE NULL END AS email, NULL::jsonb AS consent
            FROM auth_sessions s
            JOIN auth.users u ON u.id = s.user_id
            LEFT JOIN profiles p ON p.id = u.id

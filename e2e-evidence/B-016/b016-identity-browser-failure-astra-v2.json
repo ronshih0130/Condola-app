@@ -1,0 +1,103 @@
+{
+  "status": "FOCUS_FAIL_UNWAIVED",
+  "cause": "Strict failed-request gate; underlying per-request causes unknown",
+  "phase": "v2 EN390 focus only",
+  "archive": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-focus-v2-failure-archive/manifest.json",
+    "sha256": "b6c75b50d0ef88f0d874265f8a43fc36005fc8679e5703d34a74057f87c1a4cf",
+    "entriesVerified": 37
+  },
+  "receiptArtifactsVerified": 26,
+  "files": {
+    "receipt.json": {
+      "sha256": "68251fa6b302ab40ec9f41eda28d464ff1481116d6786a8c776bcf2ef2892e96",
+      "bytes": 182319
+    },
+    "browser-result.json": {
+      "sha256": "5fde2afb648db0988ee4dba14545b98418fbe00ed87d9675089127c49053c838",
+      "bytes": 3857
+    },
+    "case-en-390.json": {
+      "sha256": "c637a419bd4c97d3bd221f0af707ee69c91e1857cf0d015e1b42261b001c78d3",
+      "bytes": 4232
+    },
+    "server.log": {
+      "sha256": "9fdbc0beb04cfd95cd4816824d7b3382a4918ca1c2a6136e7a87eef57f603150",
+      "bytes": 2929
+    },
+    "recovery-result.json": {
+      "sha256": "b02ba61378ba737cec13dea1a1769ba3dbf003710d4fc70ed16c14ec8b7ab166",
+      "bytes": 12027
+    },
+    "attack-en-390.json": {
+      "sha256": "36d5c8f1b5590f3a8e342dd9ef2953dc51aa5cd7a40742eabf71bcd8a492c5fa",
+      "bytes": 7178
+    },
+    "positive-created-en-390.json": {
+      "sha256": "0602723ef934e6aa42e52851a8560c354b9c26cfe136fc76cae7f785b2037884",
+      "bytes": 561
+    },
+    "profile-missing-intent-en-390.json": {
+      "sha256": "a3e9cf83667c1741aa789ef2b36e184ce93fbad9a03ccf759eb5b3e498713874",
+      "bytes": 501
+    }
+  },
+  "exactFailedRequestRecords": [
+    {
+      "actor": "admin",
+      "type": "requestfailed",
+      "path": "/login"
+    },
+    {
+      "actor": "admin",
+      "type": "requestfailed",
+      "path": "/auth/continue"
+    },
+    {
+      "actor": "manager",
+      "type": "requestfailed",
+      "path": "/login"
+    },
+    {
+      "actor": "manager",
+      "type": "requestfailed",
+      "path": "/m"
+    },
+    {
+      "actor": "manager",
+      "type": "requestfailed",
+      "path": "/m"
+    },
+    {
+      "actor": "admin",
+      "type": "requestfailed",
+      "path": "/m/admin"
+    },
+    {
+      "actor": "admin",
+      "type": "requestfailed",
+      "path": "/m/admin"
+    },
+    {
+      "actor": "admin",
+      "type": "requestfailed",
+      "path": "/m/admin"
+    }
+  ],
+  "viewedOriginals": [
+    "en-390-positive-create.png",
+    "en-390-manager-denied.png"
+  ],
+  "notes": [
+    "Focus failed. Eight requestfailed events are the immediate reason the strict check returned exit 1. For the admin the paths are /login, /auth/continue and /m/admin three times. For the manager they are /login and /m twice. The browser records actor, type and path only. There is no failure text, method, resource type, request identifier, phase, redirect chain or start/finish time. The extra probe error is the aggregate failure. The evidence cannot distinguish a client cancellation from a transport error, a POST from a GET, or an in-flight refresh from a document request.",
+    "The server log shows successful login POST redirects, repeated GETs for the continuation, staff home and saved admin page, five intended manager 404s, and thirteen admin POST redirects including the positive create. Successful server responses do not identify what an individual browser request received. No unanticipated HTTP error, console or page error appears in browser-result, apart from the eight requestfailed events. The cause of each remains unknown.",
+    "The run recorded all twelve denied action submissions: create, set and clear for the spoofed, unconfirmed, null and empty variants. Each received 303 to /m/noperm. It recorded a positive owned partner-code row and finished the scripted checks. case-en-390.json was stamped pass before context closure and the strict aggregate check, so it is only a behavioral subresult. The missing-profile deletion intent and progress to the end imply its inline assertions returned. There is no separate durable witness of deletion, absent row, resulting request and restoration. Keep the missing-profile outcome independently unverified.",
+    "Recovery exited zero with no compensating actions. The protected readback equals the original identity baseline. Both groups drained, the server returned zero and the 1014 source / four executable helper pins remained stable. All 26 receipt artifact checks and all 37 failure-archive bindings matched. The prior database target remains separate. No other locale or width was run.",
+    "Driver sequencing can create competing navigations. The login URL predicate at probe.cjs line 42 accepts /auth/continue even though that page redirects to the role home. The locale endpoint already redirects to account, followed by an immediate second account navigation. The positive action waits for the saved URL but does not wait for the settled UI and completed action traffic before navigating again for the missing-profile case. Context closure happens before the final error decision. These are candidate mechanisms, not explanations for specific failed requests.",
+    "Use per-actor, sequence-numbered lifecycle records with monotonic timestamps, phase, main-frame/navigation/resource type, method, sanitized pathname, redirect linkage, response status and terminal finished/failed state including failure().errorText. Distinguish controlled same-origin action/RSC requests with boolean markers, without logging cookies, tokens, raw headers, form bodies, or raw query strings. Mark teardown start and completion, continue observing through close, and keep every requestfailed fatal. Cross-reference APIRequestContext submissions with their own response records since page listeners do not see them.",
+    "Arm waits before clicking. Wait for the terminal /m document or settled route and a real signed-in page element for each login. Observe completion of the initiated action and navigation. Verify selected locale on the redirected destination and use that document for the first account assertion. For the positive create, wait for the saved route, localized visible acknowledgement, rendered new code and completed originating request before the next read. Before context teardown finish outstanding relevant requests or fail with their IDs; a sleep or isolated networkidle is insufficient. Record deleted-row count and absence, authenticated response while absent, and exact restored-row equality for the missing-profile case. Publish behavioral and strict overall status separately.",
+    "Two originals inspected. The positive-create form is English. The manager denial is visibly Traditional Chinese because the existing MissingPage component hardcodes zh-TW. Record the actual language coverage. This does not identify a cause for the eight failures.",
+    "Separate future full-mode blocker: the current supervisor supplies DEMO_MODE=true to next start. The registered instrumentation calls enforceDemoSafety, whose production-like branch refuses that combination. Keep the product guard and use a separately reviewed demo-OFF full-mode server and appropriately scoped helper preconditions. Seed the isolated database and authenticate through ordinary synthetic credentials. Do not claim a production-build matrix from a development server. The focus failure itself ran next dev, so this future blocker did not cause it."
+  ],
+  "method": "Review of existing local files only. No database, application runtime, new browser run or implementation edits."
+}

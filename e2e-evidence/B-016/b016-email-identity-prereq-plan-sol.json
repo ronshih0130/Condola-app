@@ -1,0 +1,103 @@
+{
+  "verdict": "PRIORITY_PLAN_GO_EXISTING_SCHEMA_IDENTITY_AUTHORITY_FIX",
+  "source_head": "84b2fb0df63414a2d7ec379f8058b11bc7fbaa87",
+  "requested_model": "SOL",
+  "requested_effort": "high",
+  "actual_model_identity": "UNOBSERVABLE",
+  "plan_sha256": "846f07566fab1df1f8cddaf6740bf85b45413c46bd67aeee1eda4208d3d61211",
+  "source_pins": [
+    {
+      "path": "src/server/session.ts",
+      "sha256": "29ddce7340d5bbec5a6dcf3f3a3a944c800b3a0a55b0e44726bedba3348558fe",
+      "bytes": 11375,
+      "git_blob": "eeac341482275fd4060c350e8dc02d20208de3bc"
+    },
+    {
+      "path": "src/server/platform.ts",
+      "sha256": "3df96b591da53e60bdc7c34aef9420357a039e720766e1648d068a8ed44a64d0",
+      "bytes": 862,
+      "git_blob": "08df93427f97282c9712cd50b1742883b414d15c"
+    },
+    {
+      "path": "src/server/signup-actions.ts",
+      "sha256": "2631166724fc49ec3dd1029b05b6e3b0d9416b6dce316c8ba00bcf63099b1b8e",
+      "bytes": 9460,
+      "git_blob": "33a2eb4b67e8d18ca3432dadb3c0320d4e7ef6cf"
+    },
+    {
+      "path": "src/app/m/admin/page.tsx",
+      "sha256": "16377f36e8a9646364146464bb6e6c4706919ad519458701979458722db2c622",
+      "bytes": 5114,
+      "git_blob": "924197944cf25a4e1618fe93b5118f861beb966a"
+    },
+    {
+      "path": "src/server/db.ts",
+      "sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "bytes": 9056,
+      "git_blob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345"
+    },
+    {
+      "path": "src/server/consent.ts",
+      "sha256": "8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6",
+      "bytes": 8359,
+      "git_blob": "0d2b9200e936b7a2ba065075ff998847c0ad9908"
+    },
+    {
+      "path": "src/server/consent-gate.ts",
+      "sha256": "8859327682ebe4ef2445d85bd1e6808543b36ed48b3af6e0e205af9c8e44580d",
+      "bytes": 4289,
+      "git_blob": "6ac26ed5afa7757c297de45b8060f87f6c727f8e"
+    },
+    {
+      "path": "supabase/migrations/20261018120000_schema.sql",
+      "sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "bytes": 143903,
+      "git_blob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74"
+    },
+    {
+      "path": "supabase/migrations/20261020120000_auth.sql",
+      "sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81",
+      "bytes": 7157,
+      "git_blob": "60998ac8e77a8366e67b9358dd87072b7d7b046a"
+    },
+    {
+      "path": "supabase/stub/supabase_stub.sql",
+      "sha256": "53964bba53030cfcc11f0b2bc2143a6b8eeb72ad8d04395d6796c79e00a8f737",
+      "bytes": 3000,
+      "git_blob": "2efc7c2a50724b8223a7be25611e32a007bcd70c"
+    },
+    {
+      "path": "src/server/types.ts",
+      "sha256": "e92720a3a76f49b337286bafe2a7ab87764a4f0edef9e218f6f7737dfbcfa1cf",
+      "bytes": 1148,
+      "git_blob": "046221d44e89bdd3c2ed9534410df6573271da6a"
+    },
+    {
+      "path": "package.json",
+      "sha256": "ed3d384f81d4385e05f4ffa460d2e5cccff961d482a6dd864e4221eb62b64053",
+      "bytes": 13308,
+      "git_blob": "19e32ae8921cc5353338a768e3c1ab578fabd01a"
+    },
+    {
+      "path": "20-build/QA-STANDARD.md",
+      "sha256": "35d19d4363023810ab2083f910af926517e365d4f4e8bf37e6925f3c0801e7e6",
+      "bytes": 6192,
+      "git_blob": "9e596aa66ec64cf51f1f0433702a828d743ada39"
+    }
+  ],
+  "terras_proposed_paths": [
+    "src/server/session.ts",
+    "src/server/session-identity.integration.test.ts"
+  ],
+  "root_owned_optional_paths": [
+    "package.json",
+    "outside work/b016-email-identity-browser-v1/probe.cjs plus reviewed helpers"
+  ],
+  "source_change": "two email projections only: CASE WHEN u.email_confirmed_at IS NOT NULL THEN u.email ELSE NULL END AS email",
+  "new_db_objects_grants_keys_flags": [],
+  "positive_provider_calls": false,
+  "finding_scope": "source-confirmed conditional mutable-profile to platform-email allowlist authority; no deployed exploit test/claim",
+  "review": "PENDING_ROOT_ASTRA",
+  "execution": "NOT_RUN_PLAN_ONLY",
+  "no_source_or_runtime_changed": true
+}

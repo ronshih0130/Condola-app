@@ -1,0 +1,22 @@
+{
+  "time": "2026-11-03T07:41:38.433695-08:00",
+  "baseline": "84b2fb0df63414a2d7ec379f8058b11bc7fbaa87",
+  "files": {
+    "src/server/session.ts": {
+      "blob": "4193fd22d30e558fb7a6620d70951121673ba0d0",
+      "sha256": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+      "bytes": 11449
+    },
+    "src/server/session-identity.integration.test.ts": {
+      "blob": "3b2ebf7d4469586d8cfe017d811ec6b05d542748",
+      "sha256": "01bc4002ef628657451b9961fcb5d12d65db855ec0939b99d6abf38b3ab729f8",
+      "bytes": 5838
+    },
+    "package.json": {
+      "blob": "639bc9170c5eb03eb331520e95ab3207a8561e5a",
+      "sha256": "63a3f96a68fee2a835adc6347372e9bae6ad583453a2beff6ffcbb9b84653e96",
+      "bytes": 13391
+    }
+  },
+  "scope": "Canonical verified Auth identity only; no provider, schema, grants or rollout changes"
+}

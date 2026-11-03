@@ -1,0 +1,86 @@
+{
+  "verdict": "FOCUS_FAIL_UNWAIVED",
+  "candidateDecision": "GO_FOR_CLEAN_CANDIDATE_CODE_GATE_ONCE",
+  "usableCheckpoint": "Only after actual code gate PASS and within existing branch/push authority; browser failure remains explicit.",
+  "archive": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-v4-focus-failure-archive/manifest.json",
+    "sha256": "835d8a65a1b8d3611caf7f74210883be6c5d72e8c778d03155f62a431e127805",
+    "entries": 23
+  },
+  "runFiles": {
+    "receipt.json": {
+      "sha256": "42d2fe595aae5a34afe155e17355dcdf951d79e70f75d5182f539bd9f8cf82cc",
+      "bytes": 180246
+    },
+    "lifecycle.jsonl": {
+      "sha256": "c51612399fe59a316d65887f3143ec41636cac6a66fbe0313bdb5fe6c9c9df57",
+      "bytes": 25931
+    },
+    "browser-result.json": {
+      "sha256": "1290dcd8197003898e1842928bdb13629f26c52be29cb4ff0b2fb04846eb7222",
+      "bytes": 1142
+    },
+    "server.log": {
+      "sha256": "d122709a04a0885938558c752e0c901d5f3d80efbd60c0c97e101beb6f47f5a2",
+      "bytes": 737
+    },
+    "recovery-result.json": {
+      "sha256": "37c058597a7e1ba38130e3826d4b2328f347e5def6b0f582b7cd8c177b2a42d4",
+      "bytes": 12027
+    }
+  },
+  "requestfailed": [
+    {
+      "type": "requestfailed",
+      "event": "failed",
+      "actor": "admin",
+      "phase": "login-submit",
+      "id": 14,
+      "method": "POST",
+      "resourceType": "fetch",
+      "navigation": false,
+      "mainFrame": true,
+      "path": "/login",
+      "redirectFrom": null,
+      "sameOrigin": true,
+      "action": false,
+      "rsc": false,
+      "initiatorFrame": "/login",
+      "errorText": "net::ERR_ABORTED"
+    },
+    {
+      "type": "requestfailed",
+      "event": "failed",
+      "actor": "admin",
+      "phase": "login-submit",
+      "id": 19,
+      "method": "GET",
+      "resourceType": "fetch",
+      "navigation": false,
+      "mainFrame": true,
+      "path": "/auth/continue",
+      "redirectFrom": null,
+      "sameOrigin": true,
+      "action": false,
+      "rsc": true,
+      "initiatorFrame": "/auth/enter",
+      "errorText": "net::ERR_ABORTED"
+    }
+  ],
+  "caseCount": 0,
+  "exits": {
+    "createdb": 0,
+    "seed": 0,
+    "browser": 130,
+    "recovery": 0
+  },
+  "notes": [
+    "V4 EN390 focus remains FAIL_UNWAIVED. The seed succeeded. The first admin login generated POST /login fetch #14, which received 303 (event 44) and failed with net::ERR_ABORTED (51). Two distinct GET /auth/continue RSC fetches, #18 and #19, received 200. Request #19 failed with the same code (64) and #18 finished (65). Both /m RSC fetches (#22, #23) received 200 and finished. These events followed the natural first click, before the driver navigated again or began teardown. No second login, privilege tests or completed UI cases were recorded. A successful RSC fetch is insufficient to establish a settled user-visible dashboard, and no user-visible broken login is established either.",
+    "The installed Next 15.5.28 server-action reducer posts an encoded action to the current URL. Its server handler sets 303 for redirects and uses x-action-redirect for enhanced fetch actions; native form submissions use Location. The reducer interprets the response and routes using Flight data or native navigation. The application explicitly redirects through /auth/enter and /auth/continue before the staff home. Next fetch-server-response.js has a pagehide AbortController for outstanding RSC requests. The trace has no pagehide, raw browser initiator/cancellation reason, allowlisted redirect-header witness or terminal visible page evidence. These implementation paths explain why 303 and follow-on RSC requests fit the protocol, not why either specific fetch was aborted. The POST and RSC cancellation mechanisms need not be the same.",
+    "The observer has an independent liveness defect. In installed Playwright 1.64.1 coreBundle.js:61538–61540 and 63886–63903, Response.finished() races target closure with an internal promise. RequestFinished resolves that promise; RequestFailed emits a different event without resolving it. The helper awaits finished() on the observed login POST without a deadline. The log contains no marker distinguishing that await from earlier click completion. After the last transport event, more than 219 seconds elapsed before the root-authorized shutdown. The source establishes a mechanism for hanging after a failed fetch; the exact blocked await was not observed. The supervisor records browser exit 130, recovery 0, server 0 and both groups drained. All 23 archive bindings and the run receipt bindings match. Protected baseline equality and no recovery writes were verified.",
+    "Change the next experiment. Isolate one enhanced login on the exact build/transport being evaluated. Bound the click, action response, exact request terminal event and UI observation independently. Prefer a prearmed finished-or-failed event for that request ID. On failure, immediately retain the strict failure and take a bounded read-only DOM/screenshot/cookie-to-session witness rather than waiting for the failed response to finish. Add pagehide/pageshow/main-frame navigation, sanitized DevTools loadingFailed canceled/initiator and loader-ID relationships, and boolean Next-Action/RSC/content-type and allowlisted redirect-destination evidence. Preserve every requestfailed; no blanket ERR_ABORTED exception. An admin role or visible dashboard alone cannot establish authorization of the manager.",
+    "Separately, use the genuine native HTML login form with the server action (JavaScript disabled) as a transport control. If it yields an ordinary cookie and terminal authenticated home, the same cookie may be used in memory for a separately labelled account/authorization matrix under normal JavaScript. Both actors must obtain distinct ordinary sessions; no seeded token or bypass. Retain the enhanced login failure as its own result. A positive native control neither proves enhanced navigation correct nor closes the original strict UX gate. Record v2’s eight causes as unknown; the v4 IDs explain only v4.",
+    "Candidate decision: GO to freeze the reviewed three-file security correction on a clean candidate and run the ordinary full code gate once. The two query expressions remove mutable profile input from email-based platform authority, including the missing-consent projection. The clone target has 1 identity and 36 consent passes. The request cancellations occur on the first enhanced login and do not demonstrate a regression in either projection. A checkpoint on an already authorized working branch may follow a passing clean gate with the exact SHA, actual gate counts and explicit browser FAIL/PENDING. A remote push still requires existing scope-specific transmission authority. Do not merge/deploy or claim build, full matrix, whole-feature, hosted or release acceptance on this evidence. The existing source-preparation record labels those states separately."
+  ],
+  "scope": "Read-only existing artifacts and installed framework sources. No runtime or implementation changes."
+}
