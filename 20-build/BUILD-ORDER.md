@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-03T09:14:57.857867-08:00: B016 disconnectedEmailmock target13PASS/typecheck/lint0, cleannewcodegatePENDING. Previousidentityf6593ce fullcodegateGO/browserFAILpending. WholeB016 in_progress (company/verifiedEmail/fees/external acceptance); no wholeBdone/all39retained/no B017source.**
+> **Current 2026-11-03T09:28:00.900653-08:00: B016 code988b9f9 fullgate643unit/467RLS+solepriorhistoricalskip and mock13/type/lintPASS; Astra disconnectedmock CODE_GATE_GO. BrowserFAILpending and realEmail/company/fees/external acceptance incomplete. WholeB016 in_progress; no wholeBdone/all39retained. Next earliesteligiblequeue scope afterpublication.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 

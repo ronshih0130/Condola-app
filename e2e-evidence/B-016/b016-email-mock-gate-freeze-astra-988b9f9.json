@@ -1,0 +1,30 @@
+{
+  "verdict": "GATE_FREEZE_GO_ONE_GATE_ONLY",
+  "candidate": "988b9f9d5348e9a4facaec8c563a007709fc2cd5",
+  "gateLockSha256": "277157a84681acfc410e3ced9832b457983f9436edb19a7ec523b1a5b6c502f6",
+  "helperSha256": {
+    "supervisor.py": "b4bcfac9085d71d43fcda2529100bbb757e57c7a1328fa7066b79e2c8c9363df"
+  },
+  "pinsVerified": 1018,
+  "sourceMapSha256": "85282ba3e9a476630f2bc8cd38ce1e22f6ccde27ddae6d0c1c6f2a3980d38383",
+  "actualMockTargetReceiptSha256": "cfb3a1a2f698036bc6dcd650ae6fe3d84045d6a1e29945a18d80d3c3c560d303",
+  "coreKeys": {
+    "ops/flags.yaml": "0397a923964b7c5669ba03f2a9ad1345fd95db82",
+    "ops/toolchain.json": "fb03abaaa73a722b057c569022f618839c477051",
+    "package-lock.json": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+    "package.json": "29a8383b466274d0699655e4308e49cb7659174a",
+    "scripts/gate.sh": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+    "scripts/preflight-deploy.sh": "3214ee7db0b4a25417682de8c2cce7e104c260bb"
+  },
+  "observedAbsent": [
+    "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-b016-shared-checkout.lock",
+    "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-b016-gate-attempt-988b9f9d5348e9a4facaec8c563a007709fc2cd5.json",
+    "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-988b9f9d5348e9a4facaec8c563a007709fc2cd5.md"
+  ],
+  "activeChildPids": [],
+  "notes": [
+    "GATE_FREEZE_GO for ONE local standard code gate at 988b9f9d5348e9a4facaec8c563a007709fc2cd5. All 1018 committed blob IDs and working bytes match the lock. Against the prior 1014-pin gate set there are exactly four new mock files and a changed package registration. All five match the actual 13-test target. The only package change appends the two synthetic test files.",
+    "The gate supervisor hash and all six required core keys match. The index and working directory were clean at inspection. No unexpected root dotenv/dev-vars files, matching active gate/test/server process, existing shared execution lock, per-SHA attempt claim or candidate report were found. The supervisor still needs to acquire its exclusive lock and claim when the authorized run starts.",
+    "No runtime was started and no expected test count is substituted for actual evidence. The previous canonical-email checkpoint and unresolved browser evidence are separate. This freeze authorizes no build, browser matrix, live email change, staging or release. Whole B016 remains incomplete."
+  ]
+}

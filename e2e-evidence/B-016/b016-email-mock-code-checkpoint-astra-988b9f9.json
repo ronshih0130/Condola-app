@@ -1,0 +1,94 @@
+{
+  "verdict": [
+    "CODE_GATE_GO_DISCONNECTED_MOCK_ONLY",
+    "BROWSER_FAIL_PENDING",
+    "WHOLE_B016_INCOMPLETE"
+  ],
+  "candidate": "988b9f9d5348e9a4facaec8c563a007709fc2cd5",
+  "receiptSha256": "ee3885ba2ab84e9959217aeb75efc0ca78090292fbcf372ee7614dba312b5cf9",
+  "gateSummarySha256": "ffc0f76e0a01c415da756e5e2996eee44d6d0abb709388a475b6a29858b7bfa2",
+  "gateLockSha256": "277157a84681acfc410e3ced9832b457983f9436edb19a7ec523b1a5b6c502f6",
+  "rawBindings": {
+    "postgres-16.log": {
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "lint.log": {
+      "sha256": "4e7b3a6ec111ce7a3847a02cfc2a631a691808fc5bae42d475209d1be0268132",
+      "bytes": 3401
+    },
+    "npm-ci.log": {
+      "sha256": "6469fedd1d647a984cab4a453882c99cc067a57d799820b30ffe18a03e3f0e3b",
+      "bytes": 1794
+    },
+    "typecheck.log": {
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "copy-check.log": {
+      "sha256": "12dc6442e252fc898c2227a4caa799790a43b2e31a2bd4fd5a6a453e45775268",
+      "bytes": 1432
+    },
+    "flag-expiry.log": {
+      "sha256": "9ed87796fd93acd1722f8194c2e541245236881b2c51c2e8fe3eeadfa9b615ed",
+      "bytes": 27
+    },
+    "steps.md": {
+      "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+      "bytes": 341
+    },
+    "test-unit.log": {
+      "sha256": "82ac63cabdd8aca6f16bd6123d2e1e5efd76d01af1298f2ad48ae0c3cc14a6d8",
+      "bytes": 132714
+    },
+    "test-rls.log": {
+      "sha256": "3de5af1071b8c8dab676e6afbbd2e07eb0c55f9b0c941261b0ac7cba8aabab40",
+      "bytes": 128333
+    },
+    "toolchain.log": {
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    }
+  },
+  "targetReceiptSha256": "cfb3a1a2f698036bc6dcd650ae6fe3d84045d6a1e29945a18d80d3c3c560d303",
+  "sourceMapSha256": "85282ba3e9a476630f2bc8cd38ce1e22f6ccde27ddae6d0c1c6f2a3980d38383",
+  "verifiedCommittedWorkingPins": 1018,
+  "counts": {
+    "test-unit": {
+      "tests": 643,
+      "pass": 643,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "test-rls": {
+      "tests": 468,
+      "pass": 467,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 1,
+      "todo": 0
+    }
+  },
+  "historicalSkip": "ok 6 - a database with the older 20261022180000 upgrades forward, then accepts the same file again # SKIP Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29",
+  "priorRejectedSourceArchives": {
+    "b016-email-mock-source-v1-root-no-go": {
+      "sha256": "915b7153c6cbdd63d6986500660023161e786715585decc6dac86bac4ab4a0b2",
+      "entries": 6
+    },
+    "b016-email-mock-source-v2-astra-no-go": {
+      "sha256": "9356b9af5e196cfb7ab46b9e09aec7bc1515cc22fd667bbaef3c7ed5cc97aa8d",
+      "entries": 10
+    },
+    "b016-email-mock-source-v3-astra-no-go": {
+      "sha256": "be90fb202e1f9b350bfd97f26161205a0e304c8e398c2feac89bd133a26c62bf",
+      "entries": 10
+    }
+  },
+  "notes": [
+    "CODE_GATE_GO_DISCONNECTED_MOCK_ONLY at 988b9f9d5348e9a4facaec8c563a007709fc2cd5. The ten private raw files match their bound hashes and sizes. Raw TAP totals are 643 of 643 unit tests passed and 467 of 468 RLS/database tests passed, zero failures. The only skip is the previously approved historical b888ccd case. All thirteen named mock tests from the separate target also passed in the full unit run.",
+    "All eleven standard code checks returned zero. The three owned processes returned zero and drained. All 1018 working and committed blobs match the receipt snapshots, including the five target files. The reviewed helper, candidate lock, preserved summary and per-SHA claim match; the execution lock was released. The gate ended clean. The restored PE log was subsequently completed with outcome pass. The three prior mock source rejections remain preserved across 6, 10 and 10 bindings.",
+    "BROWSER_FAIL_PENDING / WHOLE_B016_INCOMPLETE. The passing mocks exercise injected synthetic transports only. Application routes, live provider requests, OTP delivery, deployed configuration, mailbox policy and canonical reconciliation have no integration acceptance. The earlier enhanced-login failure remains open. No build, browser matrix, staging, deployment or release is approved by this gate. The authorized working branch may carry this scoped code checkpoint."
+  ]
+}

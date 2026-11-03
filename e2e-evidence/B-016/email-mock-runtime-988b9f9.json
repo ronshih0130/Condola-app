@@ -1,0 +1,91 @@
+{
+  "time": "2026-11-03T09:28:00.900653-08:00",
+  "candidate": "988b9f9d5348e9a4facaec8c563a007709fc2cd5",
+  "status": "CODE_GATE_GO_DISCONNECTED_MOCK_ONLY_BROWSER_FAIL_PENDING_WHOLE_B016_INCOMPLETE",
+  "unit": {
+    "pass": 643,
+    "fail": 0,
+    "skip": 0,
+    "includesMock": 13
+  },
+  "rls": {
+    "pass": 467,
+    "fail": 0,
+    "skip": 1,
+    "total": 468,
+    "skipReason": "sole existing Ron-approved lost b888ccd fixture"
+  },
+  "gateStepsPass": 11,
+  "childrenDrained": 3,
+  "sourcePins": 1018,
+  "mockScope": "in-memory injectedfake adapter/rules only; no app/UI/route/env/defaultfetch/flag/provider/DB/schema integration",
+  "priorIdentity": "confirmed canonical Auth identity correction from f6593ce unchanged and included",
+  "browser": "All v2/v3/v4 failures UNWAIVED; prior enhanced login stillFAIL/PENDING; incompletev5neverreviewed/run",
+  "pending": [
+    "Ron both-mailbox/expiry/startover decision",
+    "Ron management-fee choices",
+    "PE regional company target parse/apply/evidence",
+    "PE deployed Auth/config/template/rate/secure dual-proof attestation",
+    "canonical remote-to-local reconciliation and real app integration",
+    "build/currentbrowser/staging/Claude/ClassB/device/mailbox/pilot/wholeB016"
+  ],
+  "retained": "3sourceNO_GO archives26entries, existingbrowserfailureartifacts; no new testskip/relaxation",
+  "independentReview": "b016-email-mock-code-checkpoint-astra-988b9f9.md",
+  "refs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-code-checkpoint-astra-988b9f9.md",
+      "sha256": "0c7405d4f80a499a0199e6d6457768456a2e38d048c5c3ffa5ae6a806d9c0076",
+      "bytes": 1493
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-code-checkpoint-astra-988b9f9.json",
+      "sha256": "2bd1eda92356abb643a643c58d1e9b83e8de6e327d5fcc14a94b0a5820fa5aea",
+      "bytes": 4437
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-gate-freeze-astra-988b9f9.md",
+      "sha256": "63fe0fab74ea9c9ad801eec21cdbca92368b50f3f54597c389423be0b8b81b16",
+      "bytes": 1130
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-mock-gate-freeze-astra-988b9f9.json",
+      "sha256": "28a429805203c9cdd36c785e0aa265ad397aa606c0b47ad54f74c105eb216b56",
+      "bytes": 2572
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/run-gate-e2a68f5a0de5/receipt.json",
+      "sha256": "ee3885ba2ab84e9959217aeb75efc0ca78090292fbcf372ee7614dba312b5cf9",
+      "bytes": 739994
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/run-gate-e2a68f5a0de5/gate-summary.md",
+      "sha256": "ffc0f76e0a01c415da756e5e2996eee44d6d0abb709388a475b6a29858b7bfa2",
+      "bytes": 971
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/root-source-lock-988b9f9.json",
+      "sha256": "277157a84681acfc410e3ced9832b457983f9436edb19a7ec523b1a5b6c502f6",
+      "bytes": 89110
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/root-runtime-authorization-988b9f9.json",
+      "sha256": "b9c604d91b028e86438689ce5494c23357d728507526f45ea3b6a183500e4481",
+      "bytes": 966
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/email-mock-gate-session-private/placement.json",
+      "sha256": "8c8d65e06477cf4c6344edfb3a49add9190176afef0134f45cb09054c22d9de2",
+      "bytes": 527
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-016/email-mock-preparation-v4.json",
+      "sha256": "a4e8d2725625c569935dff6bdb8be1d228e11e4a1cd669344512cd8aa2a732c4",
+      "bytes": 6911
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-016/identity-code-runtime-f6593ce.json",
+      "sha256": "217cae0ec2fca160b7392beb836328ef6427376df75c9c6f8613bdeba0f9a3b0",
+      "bytes": 11495
+    }
+  ]
+}
