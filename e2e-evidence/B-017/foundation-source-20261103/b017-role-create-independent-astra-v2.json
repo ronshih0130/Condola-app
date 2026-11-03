@@ -1,0 +1,16 @@
+{
+  "verdict": "SOURCE_GO_CREATE_FRAGMENT_ONLY",
+  "source": {
+    "02a-role-create-v2.sql": "aa7c4629d6a02736684213aa8e87aa4a3b76a2534518630c566a142bd9f359fe",
+    "02a-governance-interfaces-v2.json": "da478bce5ff649b64f7ac371ac88fc7ab77618913dcd61643f12323a444df8cc",
+    "02a-governance-status-v2.md": "558d41b2e4029efdf73ce67539501bff0b2a99c769d0046f1d072c310517c742"
+  },
+  "priorV1ReviewSha256": "45cd4c718d86889a2c79d42fe5f497d293da78129496e5aa060cb5648748ea55",
+  "acceptedStageOneReviewSha256": "41b43a0d81f162c5a39d74288f86c91a6227ad54f0fa41f700a978af89d71cf4",
+  "closedFindings": [
+    "Canonical reserved native codes and actual English/Traditional Chinese labels",
+    "Freshly authorized immutable original create-result replay independent of later role or org revisions"
+  ],
+  "execution": "UNPARSED_UNAPPLIED_NO_RUNTIME",
+  "markdownSha256": "88ff6749b5a544fbf496d604e6c4d6ec049b96585134597b02f5565412a1fc81"
+}

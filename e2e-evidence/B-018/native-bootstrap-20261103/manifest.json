@@ -1,0 +1,75 @@
+{
+  "scope": "Decision and failure evidence only; no new passing browser result",
+  "files": [
+    {
+      "source": "outputs/B018-native-bootstrap-criterion-decision-20261103.txt",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/B018-native-bootstrap-criterion-decision-20261103.txt",
+      "sha256": "9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec"
+    },
+    {
+      "source": "work/b018-native-bootstrap-ron-decision-20261103.json",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/b018-native-bootstrap-ron-decision-20261103.json",
+      "sha256": "322d8035dad725b65b1d18a42c8aac4d3ebe28109095eb830974b4bf2d03bb28"
+    },
+    {
+      "source": "work/b018-csp-decision-note-independent-astra-v1.md",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/b018-csp-decision-note-independent-astra-v1.md",
+      "sha256": "d4837d8e1e6320b43e9c27e7162d3bee398a51af10a5dd458690f33335093546"
+    },
+    {
+      "source": "work/b018-csp-decision-note-independent-astra-v1.json",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/b018-csp-decision-note-independent-astra-v1.json",
+      "sha256": "9f8e20bb7b656db4daa35d7124b4a2cd32f41fc73d7532ab6a6d934595e502da"
+    },
+    {
+      "source": "work/b018-login-actual-independent-astra-v1.md",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/b018-login-actual-independent-astra-v1.md",
+      "sha256": "0ada89c1a4f7ddb982b1bd7b82e27ace25b8156ba106fc77df13b27d37634c95"
+    },
+    {
+      "source": "work/b018-login-actual-independent-astra-v1.json",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/b018-login-actual-independent-astra-v1.json",
+      "sha256": "7147e69609398f995105c0e6b7a5600cdca3d27e7139886e34833936fa01f6b7"
+    },
+    {
+      "source": "work/b018-calibration-a-actual-astra-v1.md",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/b018-calibration-a-actual-astra-v1.md",
+      "sha256": "3a472d8e38b8844c4a6fcc41c42ae538863b8334b653b23547ad52ced66dd4e9"
+    },
+    {
+      "source": "work/b018-calibration-a-actual-astra-v1.json",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/b018-calibration-a-actual-astra-v1.json",
+      "sha256": "3e7a1bad75f33d2351ef0bfb0abaca29a29215cdb4b8989a0ed47b4fcbf62f22"
+    },
+    {
+      "source": "work/b018-native-csp-proposal-independent-astra-v2.md",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/b018-native-csp-proposal-independent-astra-v2.md",
+      "sha256": "39443afd0e20b730c2d78e2e6240e65afbee632ba7d506c8da66aa79041c0274"
+    },
+    {
+      "source": "work/b018-native-csp-proposal-independent-astra-v2.json",
+      "saved": "e2e-evidence/B-018/native-bootstrap-20261103/b018-native-csp-proposal-independent-astra-v2.json",
+      "sha256": "cb440f55543b19d9adf310fcf3a9ffd88e8a7a0dac02a987e267fb07a2e4c23a"
+    },
+    {
+      "source": "work/b018-login-diagnostic-v3/run-0cf54159036d/receipt.json",
+      "sha256": "4cea32d7046e67bbb25259247889dd73390ccad8262284e4b7ad2f69b63b5e25",
+      "raw_status": "FAIL preserved; not copied or relabeled"
+    },
+    {
+      "source": "work/b018-browser-calibration-a-v2/run-A-c884f0617da7/receipt.json",
+      "sha256": "7cd906ed32251d290d0212add77f15d2ee52a5333657c9e511460dccb31f60c1",
+      "raw_status": "FAIL preserved; not copied or relabeled"
+    },
+    {
+      "source": "work/b018-login-diagnostic-v3-actual-failure/manifest.json",
+      "sha256": "a9f25440e1dbe4772cad7c9b45b1f25755be10e97096fd4cd9291c9edb20d0a0",
+      "raw_status": "FAIL preserved; not copied or relabeled"
+    },
+    {
+      "source": "work/b018-calibration-a-v2-actual-failure/manifest.json",
+      "sha256": "98070fb4e78c7d1a26149167919c105ff430cd8dfa6364da01fb519b3f61b933",
+      "raw_status": "FAIL preserved; not copied or relabeled"
+    }
+  ]
+}

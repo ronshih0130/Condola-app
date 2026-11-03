@@ -1,0 +1,52 @@
+{
+  "verdict": "CONTROL_A_JS_DISABLED_SINGLE_POLICY_BLOCK_REPRODUCED_ENABLED_PASS_OVERALL_STRICT_FAIL",
+  "receiptSha256": "7cd906ed32251d290d0212add77f15d2ee52a5333657c9e511460dccb31f60c1",
+  "observationsSha256": "6a3adab8e7d246fe33dc22e6c70a654750e78aacd9129a62a45fe653e03fc53e",
+  "eventsSha256": "b51e9875cb8b7be543d8435a623a5370f5211d4600a100cbfa90cc1f70fb5be2",
+  "archiveManifestSha256": "98070fb4e78c7d1a26149167919c105ff430cd8dfa6364da01fb519b3f61b933",
+  "archiveCopiesVerified": 12,
+  "receiptArtifactsVerified": 3,
+  "browserVersion": "156.0.8078.4",
+  "currentExecutableSha256": "77d8278b1ac9d0687fad4e817ea83023ede09b1deef36e1864b49ba194ac9634",
+  "historicalExecutableBytes": "UNRECORDED",
+  "fixedHtmlSha256": "8bf525216dc54231056ffcef6b878cb74e9929ea9d53c8ac0c299141a800f858",
+  "arms": [
+    {
+      "run": "js-off",
+      "completed": true,
+      "strict": "fail",
+      "errors": [
+        "requestfailed",
+        "cdp-failed"
+      ],
+      "enforcedCsp": false,
+      "reportOnlyCsp": false,
+      "metaCsp": false,
+      "scriptExecuted": false
+    },
+    {
+      "run": "js-on",
+      "completed": true,
+      "strict": "pass",
+      "errors": [],
+      "enforcedCsp": false,
+      "reportOnlyCsp": false,
+      "metaCsp": false,
+      "scriptExecuted": true
+    }
+  ],
+  "disabledBlockEvent": {
+    "error": "MISSING",
+    "blocked": "csp",
+    "canceled": false
+  },
+  "effectiveExit": 1,
+  "normalBrowserCloseAndServerDrainVerified": true,
+  "originalFocusAndRealLoginStrictStatus": "FAIL_UNCHANGED",
+  "originalFinancialLineage": "UNVERIFIED",
+  "enhancedCancellationCause": "UNKNOWN",
+  "nextScope": "AUTHOR_FOR_REVIEW_ONLY_SEPARATE_STRICT_FAIL_PRESERVING_FINANCIAL_OBSERVATION",
+  "admitNewRuntime": false,
+  "acceptanceChange": "NOT_AUTHORIZED_NEW_EXPLICIT_RON_DECISION_REQUIRED_FOR_ANY_NATIVE_BLOCK_EXCEPTION",
+  "markdownSha256": "3a472d8e38b8844c4a6fcc41c42ae538863b8334b653b23547ad52ced66dd4e9"
+}

@@ -1,0 +1,26 @@
+{
+  "verdict": "SOURCE_GO_PRIVATE_RETIREMENT_FRAGMENT_ONLY",
+  "source": {
+    "03a-retire-job-bearers-v3.sql": "2f64bac47347f387b32d809ed401a47bd4a43206795da011664374f8de21e41b",
+    "03a-vendor-lifecycle-matrix-v3.md": "90d9043d5bc6e7d69d00570344bec652ccc2941ac85a848437a86a34582fe380",
+    "03a-retire-job-bearers-interfaces-v3.json": "4dc8ce6301f36372679e6bfccdfad22cc5f61c460bb784080daad40b2752e5bf",
+    "03a-retire-job-bearers-status-v3.md": "2023b7c9127bf1cc1327c5244ef699167119bd96e14f089160afaa103a24c2c4"
+  },
+  "checkedAppSource": {
+    "src/server/vendor-repair.ts": "28f2914dfd4e367d9e3c4baf46ef79d10159b147a9d4caaac16f829153480864",
+    "src/components/vendor-dispatch.tsx": "1a2780872a12b36739a7e2ee16cf76e83cd9a75224eb22cb48811522b0594750",
+    "supabase/migrations/20261030150200_vendor_repair.sql": "cd3a324a64dd8d401b1a7bcaaa42b4e68154e7fc7188e14d8ff83a8972fdb7e5",
+    "supabase/migrations/20261030150802_vendor_job_assignment.sql": "4ea3cf93dd6a5cf532e0cc71b7cc089ca3c73b26e2bfd723353490024389b3f5"
+  },
+  "priorFindingsClosed": [
+    "Reported-cost confirmation remains eligible",
+    "Legacy unreported dispatch replacement is reachable"
+  ],
+  "mandatoryUnverified": [
+    "Exact historical snapshot coverage before live sharing is removed",
+    "Positive foreign isolation, raw secret absence, revoked token and both lifecycle modes",
+    "Common writer locks, old workers, proxy and signed URL retirement before use"
+  ],
+  "execution": "UNPARSED_UNAPPLIED_NO_RUNTIME",
+  "markdownSha256": "ed8c6417c0e24c0d6da20f34e42ba28184972f6eaa26efd650fbf9a2c8b4312d"
+}

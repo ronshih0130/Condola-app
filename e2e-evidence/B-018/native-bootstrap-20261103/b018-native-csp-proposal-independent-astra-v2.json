@@ -1,0 +1,76 @@
+{
+  "verdict": "GO_BOUNDED_REPLACEMENT_AUTHORING_NO_GO_V2_INTEGRATION_OR_RUNTIME",
+  "approvedPolicySha256": "9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec",
+  "policyDecision": "OPTION_A_APPROVED",
+  "v2ManifestSha256": "2d2bcde61d7f0b4d80f04ed30bddb68a5fba6d316826f92ce4e1c367f3b74d10",
+  "v2ArtifactHashes": {
+    "reservation.json": {
+      "sha256": "7af5d0a851a68ef489a9998b0843ea64733009b3ca7d71bbb327703cbac8b86f",
+      "bytes": 220
+    },
+    "proposed-contract.md": {
+      "sha256": "64f4e32d382ae6ac56ffeffa96fb9fe92abe93a8fb15a07c0214452c320af6e7",
+      "bytes": 9830
+    },
+    "pure-typed-classification-proposal.ts": {
+      "sha256": "79dc002a86a04efe42d813afa71bf9ff1137fc4c2730021b2e39c3efe14e8c1b",
+      "bytes": 14506
+    },
+    "examples.json": {
+      "sha256": "e1d806f0bdc97845125758fbbcfadbc4bc229f1e51f0eeb81885c63f4f390c2e",
+      "bytes": 1778354
+    },
+    "proposed-integration-diff.md": {
+      "sha256": "bf97671c75db85c1e84e4b392ca44ca94728ae1341aa7a8c7b1de2d184b0587c",
+      "bytes": 6159
+    }
+  },
+  "vectorCount": 33,
+  "vectorsExecuted": false,
+  "findings": [
+    {
+      "id": "P1-1",
+      "title": "Bootstrap admission depends on an outcome that cannot yet exist.",
+      "evidence": "Integration calls proposedDecision before the financial journey. Classifier lines 48\u201351 already require independent final recovery and allFinancialCasesComplete. A qualifying native failure cannot proceed under this specification without inventing completion. The rejection helper at line 46 can also report rawStrict PASS for missing evidence or a financial failure when the ledger array is empty.",
+      "requiredCorrection": "Split provisional native admission from final aggregate. First verify complete bootstrap/session/asset evidence for the current phase plus exact eligible IDs, zero other already-observed failures, and checkpoint native rawStrict status. Native admission is never a full PASS. Then run strict enabled/financial phases with the unchanged fatal checks. After drain, recovery independently rechecks every ledger and exact native IDs, all required finance/control evidence, the decision hash and fresh run lock; only then compute aggregate and process exit. Empty/incomplete/unverified supplied data never yields raw PASS. Show separately network raw strictness and whole validation, or use UNKNOWN/FAIL when incomplete."
+    },
+    {
+      "id": "P1-2",
+      "title": "The native declaration-to-bytes mapping is not actually bound in the data model.",
+      "evidence": "Artifact contains scope, generation, browser config, pathname and digests, but neither document, loader, full declaration token nor map entry for the native or enabled render. Lines 64\u201365 compare generation/path/digests but cannot prove that the failed native request was declared against that mapping. Distinct full tokens are correct: pinned Next app-render.js:836,1242, get-asset-query-string.js:13\u201326 and required-scripts.js:22\u201371 add a per-render decimal v. Evidence for one webpack path alone cannot authenticate every per-render variant.",
+      "requiredCorrection": "Store two explicit render \u2192 declared full-URL-token \u2192 frozen mapping-entry \u2192 compiled-byte-digest records, bound to run/context/document/loader and stable build generation. Within each document match declaration, PW and CDP uniquely on exact full-URL/context/hop without exposing the actual query. Across contexts require the exact reviewed webpack path, actor/route, relevant declaration attributes and verified immutable content identity. Only none or one renderer-generated numeric v may differ; reject unrecognized or unproven cache-buster, rebuild/drift or additional query dimensions. Compare the successful enabled response bytes and the exact V8-covered script identity to that digest, with positive execution and complete zero native execution capture. Do not invent response bytes for a blocked request. Capture the real build output after any necessary prerender/compile, freeze it before the measured documents and verify after. No stable association means UNAVAILABLE."
+    },
+    {
+      "id": "P1-3",
+      "title": "Six independent labels do not prove three genuine login journeys or distinct counterpart documents.",
+      "evidence": "Each Session is checked only against one native context/scope (lines 63\u201367). The login and landing entries for an actor can come from different browser contexts, and the enabled counterpart\u2019s identity is not independently session-verified. usedCounterparts at line 59 uses context+document+requestID+hop, so the same counterpart document with a different request ID can be reused. Positive role/org labels alone do not establish that the primary tenant, other tenant and staff visited the required actual pages.",
+      "requiredCorrection": "Use one verified native login-chain receipt per actor; both its scopes must reference the same actor/context and ordered main-frame document chain, actual pointer POST, redirects, final document and current intended session/consent/org. Distinguish the two tenants even when their org matches. Use one separately verified JS-enabled actor/context for the matched login and landing documents; bind the actor, route and selected org of the authenticated landing, not a label alone. A real soft-navigation /t Fetch cannot stand in for a landing document. A separate normal authenticated direct document visit can provide counterpart evidence but never replace the real enabled login verdict. Count all candidates before filtering; enforce unique counterpart document/context and request identity across scopes, reject conflicting/duplicate/extra events, missing receipts, ambiguous joins and all enabled cancellations."
+    },
+    {
+      "id": "P2-4",
+      "title": "The policy parser is conservatively scoped; feasibility on the real app is not yet proved.",
+      "evidence": "policyAllows accepts only actual absence or complete single-directive self-only policies; it rejects all nonces, integrity attributes, additional directives and all non-self report-only policies. This is safe as an explicitly unavailable result, not proof that real documents qualify. No CSP declaration was found in inspected src/middleware.ts, next.config.ts or public/_headers; these files do not establish effective response/meta policies or intermediary/dev behavior. The previous product run did not capture them.",
+      "requiredCorrection": "Collect actual effective policy at the moment of each script/preload, preserving all distinct enforced response/meta policies and reporting-only presence; capture element/initiator and protected attributes before the request or reconcile from immutable response/parser data. Do not persist raw CSP, nonces or query strings. For the first implementation keep the small exact parser, or support a specifically reviewed actual template: script-src-elem \u2192 script-src \u2192 default-src, intersection of enforced policies, strict handling of nonce/strict-dynamic/integrity/initiator, report-only cannot grant or deny. For a supported nonce template require a per-document actual element/policy match in memory; compare effective permission for the asset, not nonce literals across documents. Any unsupported rule, unknown ordering, blocked policy or inconsistent evidence returns UNAVAILABLE. No general-purpose CSP reimplementation or speculative eligibility is required."
+    },
+    {
+      "id": "P2-5",
+      "title": "The implementation must bind the approved note, not require approval of this old proposal.",
+      "evidence": "V2 predates Ron\u2019s decision, asks for approval of its own manifest, and uses a top-level self-supplied manifestDigest compared to a phase witness. Domain separation and hardwired role keys are described but not implemented. Six signing roles add complexity without establishing the truth of browser, CSP or asset observations.",
+      "requiredCorrection": "Use the approved note SHA as policy authority and bind the **implementation** manifest, verified candidate, run nonce, helper/asset/browser freeze and mode separately in a parent-owned lock. Compare to independent expected values, not merely two matching input fields. A single pinned supervisor and private run directory, durable raw observer journals, parent-owned atomic phase manifests binding bytes/counts/hashes, and independent post-drain source/receipt/DB re-evaluation suffice under the locked local-process trust boundary. A self-reported hash alone is not independent evidence; recovery must verify raw journals/coverage/maps/session facts, not trust signed PASS booleans. Keep sensitive HMAC material memory-only. No six signing services or new user decision is necessary for an implementation remaining inside the approved note."
+    }
+  ],
+  "supportingSourceSha256": {
+    "next.config.ts": "ae886bdae4c9afcc89d7771e49dc169e6b48c59131e409cd13163dd0f4d2aae6",
+    "public/_headers": "1dc2347e22217ed6a75c892660f5344e4520afd19786cacda798d84f94e9ab5d",
+    "src/middleware.ts": "de1bc5a9db06d65b63673364c0d1b4ecfcf2d5d1c595df98833ee33805e5731e",
+    "src/server/seed.ts": "276f3aa9b672f773d98b8a748e9ddd12577b5873f1628a60ec47a8536c3a6591",
+    "node_modules/next/dist/server/app-render/app-render.js": "d4dba308e989004afb8a2f1e937e56e1f54f2c9e4f86429283f0408c10304cf4",
+    "node_modules/next/dist/server/app-render/get-asset-query-string.js": "e56261afec9bd6e964c53dc993443d53c29fc745470b37def69be70520b5db3e",
+    "node_modules/next/dist/server/app-render/required-scripts.js": "da22f1126a657cf668642039a22e653c5775df269278db585992db185a36c496"
+  },
+  "rawPriorFailures": "PRESERVED",
+  "enabledCancellations": "UNCONDITIONALLY_FATAL",
+  "originalFinancialLineage": "UNVERIFIED",
+  "runtime": "NOT_RUN_NOT_AUTHORIZED",
+  "markdownSha256": "39443afd0e20b730c2d78e2e6240e65afbee632ba7d506c8da66aa79041c0274"
+}

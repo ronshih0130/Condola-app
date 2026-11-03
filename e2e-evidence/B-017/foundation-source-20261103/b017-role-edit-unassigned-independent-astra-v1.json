@@ -1,0 +1,16 @@
+{
+  "verdict": "SOURCE_GO_UNASSIGNED_ROLE_EDIT_FRAGMENT_ONLY",
+  "source": {
+    "02b-role-edit-unassigned.sql": "134f8f22d3f0b62c06915b4137f6d69d2f91dfcd5307c444d77b03e40c5d4f8a",
+    "02b-governance-interfaces.json": "f47f7498e1829751da0067cf17c7696b95bd049b88257eac8713750b119842cb",
+    "02b-governance-status.md": "aba2ba7fa8a4f2999e117cc4f86123fd4ab9d3594cf44a164d4648ab8bfc9aae"
+  },
+  "dependencyReviewsSha256": {
+    "b017-role-create-independent-astra-v2.json": "6956d463131796062eff515709d63535b88305f4301417fb3caf716ba84eee60",
+    "b017-authority-core-independent-astra-v2.json": "41b43a0d81f162c5a39d74288f86c91a6227ad54f0fa41f700a978af89d71cf4"
+  },
+  "findings": [],
+  "binding": "All authority assignment/import writers serialize on the same live org and validate the target role version. Retry an unknown or busy outcome only with the exact original command identity.",
+  "execution": "UNPARSED_UNAPPLIED_NO_RUNTIME",
+  "markdownSha256": "752d20d6c89625efdcda63ea8ebf8ed2f630260f021742e9c38ad452a6eb7747"
+}

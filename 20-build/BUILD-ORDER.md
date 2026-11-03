@@ -219,3 +219,14 @@ Browser focus remains FAIL before any payment case; six script requests failed, 
 The separate public-reason SQL/PE handoff/seed patch bundle passed inactive source review and was copied with hashes to Downloads. It is not parsed/applied or target-ready; PE non-Mac validation/application and Codex app integration remain. B017 now has an amended minimal contract (18 recognized/17 supported; no new export product) and an unreviewed bounded authority-core SQL fragment, not a complete migration or feature. Governance, privacy/raw enforcement and operation integration remain Codex work. Finish the 20 already-started IDs, retain the full queue and start no new B IDs.
 
 STOP POINT: code checkpoint passed, browser failure open; next: publish/renew/mirror/ref verification, then reviewed login diagnostic and next B017 stage; owner: Codex/Ron.
+
+
+## B017/B018 decision and diagnostic checkpoint - 2026-11-03T15:48:33-08:00
+
+Ron approved the bounded native-JavaScript-disabled bootstrap negative criterion. Historical focus, login diagnostic and inert-control results stay FAIL; ordinary enabled-login cancellations remain fatal. Actual effective app CSP is UNVERIFIED. Replacement source is in progress after v2 circular admission/asset-binding findings; no new browser PASS. Application code remains tested 1c8fd07 (651 unit/476 RLS PASS, zero failures, sole prior historical skip). [Decision, exact raw-result hashes and next steps](../e2e-evidence/B-018/native-bootstrap-20261103/checkpoint.md).
+
+B017 authority core v2, draft create v2 and unassigned edit passed independent source review. Private bearer retirement v3 is source-only with snapshot/writer-fence prerequisites. Sealed inactive foundation package is being authored; no complete feature/target/apply acceptance. [Review bindings](../e2e-evidence/B-017/foundation-source-20261103/manifest.json). Unknown privileged worker access requires a separate non-Mac compiler cluster, not merely another database. Full assignment/in-use edits/privacy/47 operation groups remain Codex work. No new SQL parsed/applied on Mac.
+
+Both queue items remain in_progress. Finish the 20 previously started IDs only; all 39 queue rows and four-party LINE scope are preserved. No new B IDs, operational flags, main merge, production, external messages or legal-copy changes.
+
+STOP POINT: approved bounded criterion recorded, replacement helpers and inactive foundation in source preparation; next: independently review each complete module/package before any new execution or PE handoff; owner: Codex/Ron.

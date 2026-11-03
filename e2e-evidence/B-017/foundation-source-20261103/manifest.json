@@ -1,0 +1,65 @@
+{
+  "scope": "Source fragments and plan only; no SQL parse/application or feature acceptance",
+  "files": [
+    {
+      "source": "work/b017-authority-core-independent-astra-v2.md",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-authority-core-independent-astra-v2.md",
+      "sha256": "63af06deef8bb3cdc9c4c7a56bff3fc0ab19ce8f71239e901a57c0184774ef12"
+    },
+    {
+      "source": "work/b017-authority-core-independent-astra-v2.json",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-authority-core-independent-astra-v2.json",
+      "sha256": "41b43a0d81f162c5a39d74288f86c91a6227ad54f0fa41f700a978af89d71cf4"
+    },
+    {
+      "source": "work/b017-role-create-independent-astra-v2.md",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-role-create-independent-astra-v2.md",
+      "sha256": "88ff6749b5a544fbf496d604e6c4d6ec049b96585134597b02f5565412a1fc81"
+    },
+    {
+      "source": "work/b017-role-create-independent-astra-v2.json",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-role-create-independent-astra-v2.json",
+      "sha256": "6956d463131796062eff515709d63535b88305f4301417fb3caf716ba84eee60"
+    },
+    {
+      "source": "work/b017-role-edit-unassigned-independent-astra-v1.md",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-role-edit-unassigned-independent-astra-v1.md",
+      "sha256": "752d20d6c89625efdcda63ea8ebf8ed2f630260f021742e9c38ad452a6eb7747"
+    },
+    {
+      "source": "work/b017-role-edit-unassigned-independent-astra-v1.json",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-role-edit-unassigned-independent-astra-v1.json",
+      "sha256": "773ae148339105b2eb3d09c9437ebc4189c8d0b559d85498e9ff609becac067f"
+    },
+    {
+      "source": "work/b017-bearer-retirement-independent-astra-v3.md",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-bearer-retirement-independent-astra-v3.md",
+      "sha256": "ed8c6417c0e24c0d6da20f34e42ba28184972f6eaa26efd650fbf9a2c8b4312d"
+    },
+    {
+      "source": "work/b017-bearer-retirement-independent-astra-v3.json",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-bearer-retirement-independent-astra-v3.json",
+      "sha256": "8da2e6a506a50a37d258ce41caf94fb0d7af8be20af8b80dc8babf379ec98a66"
+    },
+    {
+      "source": "work/b017-foundation-split-primary-sol-v1.md",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-foundation-split-primary-sol-v1.md",
+      "sha256": "c268c6b6c40d633e6003ffd3b8d99177dde0dc08bc96b8d3e75f8ae6a6c2e2b6"
+    },
+    {
+      "source": "work/b017-foundation-split-primary-sol-v1.json",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-foundation-split-primary-sol-v1.json",
+      "sha256": "be5e44623c245938d10a8352723507c1bf92e2d9f9c1a7db4e8fce20acf78d5b"
+    },
+    {
+      "source": "work/b017-foundation-split-independent-astra-v1.md",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-foundation-split-independent-astra-v1.md",
+      "sha256": "06c82c6595af49edc183ba58745ad992482521bd18e1fac89cec8528739179ce"
+    },
+    {
+      "source": "work/b017-foundation-split-independent-astra-v1.json",
+      "saved": "e2e-evidence/B-017/foundation-source-20261103/b017-foundation-split-independent-astra-v1.json",
+      "sha256": "f120e37967a0e79ba4556d6f1b4446e2adedac9170f1a6f597cb0d4b80d21226"
+    }
+  ]
+}

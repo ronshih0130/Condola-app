@@ -1,0 +1,18 @@
+{
+  "verdict": "SOURCE_GO_NOTE_FOR_RON_DECISION_ONLY",
+  "decisionNoteSha256": "9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec",
+  "artifact": "outputs/B018-native-bootstrap-criterion-decision-20261103.txt",
+  "decisionReceived": false,
+  "currentRule": "ALL_FAILURES_FATAL",
+  "optionA": "future narrowly scoped policy only; no implementation, runtime, historical change, or feature acceptance approval",
+  "optionB": "retain canonical strict aggregate; any downstream diagnostic stays red after initial failure",
+  "proposalClassifiers": "NOT_APPROVED",
+  "originalFocusAndEnabledCancellationStatus": "FAIL",
+  "historicalFinancialLineage": "UNVERIFIED",
+  "evidenceHashes": {
+    "work/mode-b-repair-override-prep/e2e-evidence/B-018/code-checkpoint-1c8fd07.md": "f2d2b1dca751748181dc53561c1ddc02dc872fa9a3214badfd8964240cb9c9eb",
+    "work/b018-calibration-a-actual-astra-v1.md": "3a472d8e38b8844c4a6fcc41c42ae538863b8334b653b23547ad52ced66dd4e9",
+    "work/b018-login-actual-independent-astra-v1.md": "0ada89c1a4f7ddb982b1bd7b82e27ace25b8156ba106fc77df13b27d37634c95"
+  },
+  "markdownSha256": "d4837d8e1e6320b43e9c27e7162d3bee398a51af10a5dd458690f33335093546"
+}

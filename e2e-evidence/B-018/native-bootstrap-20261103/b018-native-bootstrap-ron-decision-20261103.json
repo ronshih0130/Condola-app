@@ -1,0 +1,12 @@
+{
+  "recorded_at": "2026-11-03T15:48:33-08:00",
+  "source": "Ron's explicit reply to call_e0f9782f2f0345179dc7af62b7432b1e",
+  "choice": "Approve bounded native-JavaScript-disabled bootstrap negative criterion",
+  "approved_note": "outputs/B018-native-bootstrap-criterion-decision-20261103.txt",
+  "approved_note_sha256": "9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec",
+  "implementation_status": "PENDING_INDEPENDENT_SOURCE_REVIEW",
+  "historical_results": "Immutable FAIL; no retrospective relabeling",
+  "ordinary_enabled_login_and_financial_errors": "Remain fatal",
+  "requirements": "Exact reviewed asset/scope and complete event correlation, same-asset positive evidence and policy proof, locked fresh execution, independent financial/control recovery",
+  "not_authorized": ["Unreviewed proposal-v1/v2 implementation", "Waiving ordinary canceled requests", "Production", "Mac migrations", "Operational flag activation", "Feature or staging acceptance"]
+}

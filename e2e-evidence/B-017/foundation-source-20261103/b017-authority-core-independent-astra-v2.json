@@ -1,0 +1,14 @@
+{
+  "verdict": "SOURCE_GO_STAGE_ONE_FRAGMENT_ONLY",
+  "source": {
+    "01-authority-core.sql": "9a4b87fc82935af4d4225d6092973d93a8b0676c4a3e3c94b96dbf747b0d50d9",
+    "core-interfaces.json": "acbe595f81e608fa85ccefc263c347b4a51a94c001a9f12ff7be16a0fee72bfc",
+    "01-core-status.md": "561d61684beccfafb361f6b44ee91046a0f7ad1435176df9d6fd7e000e0e36f9"
+  },
+  "priorV1ReviewSha256": "ca4daa1c7df82b271180744a507881984d7cba36fc11dd1bec62f7eecea32042",
+  "executableLinesChanged": 1,
+  "closedFinding": "Existing app.active_org_id and app.env pins must positively match selected arguments in addition to unchanged actor/session/membership checks.",
+  "targetTests": "NOT_RUN",
+  "stageTwoAndDomainEnforcement": "PENDING",
+  "markdownSha256": "63af06deef8bb3cdc9c4c7a56bff3fc0ab19ce8f71239e901a57c0184774ef12"
+}

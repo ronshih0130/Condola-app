@@ -1,0 +1,22 @@
+{
+  "verdict": "PLAN_GO_TO_AUTHOR_SEALED_FOUNDATION_PACKAGE_ONLY",
+  "primaryMarkdownSha256": "c268c6b6c40d633e6003ffd3b8d99177dde0dc08bc96b8d3e75f8ae6a6c2e2b6",
+  "primaryJsonSha256": "be5e44623c245938d10a8352723507c1bf92e2d9f9c1a7db4e8fce20acf78d5b",
+  "acceptedFragmentArtifactBindingsVerified": 15,
+  "repoBindingsVerified": 17,
+  "inventory": {
+    "roles": 2,
+    "tables": 4,
+    "fixedFunctions": 10,
+    "policies": 14
+  },
+  "criticalCondition": "Separate actual privileged runtime login/role chains from deployment principals. If unproven, dedicated isolated no-worker compiler cluster only; no app-connected installation.",
+  "sourceAuthoringScope": [
+    "exact transactional wrapper",
+    "all-runtime ACL seal",
+    "paired RESTRICT down",
+    "isolated proof and restore harness"
+  ],
+  "status": "NOT_A_REVIEWED_PACKAGE_NO_SQL_OR_RUNTIME",
+  "markdownSha256": "06c82c6595af49edc183ba58745ad992482521bd18e1fac89cec8528739179ce"
+}

@@ -1,0 +1,463 @@
+{
+  "title": "B017 sealed inactive foundation dependency split — primary source plan v1",
+  "verdict": "PLAN_GO_FOR_SEALED_FOUNDATION_PACKAGE_AUTHORING_AND_REVIEW_NOT_CURRENT_APPLY_APPROVAL",
+  "scope_completion_definition": "Complete scoped inactive foundation migration and PE compiler/template handoff only after exact wrapper/seal/down/proof artifacts are authored and independently accepted; B017 remains in_progress and not enrollment ready.",
+  "snapshot": {
+    "head": "9e53d4f2edaafb627a93dfc3776c1ceb3191384a",
+    "immutable_unrelated_baseline": "b8c4134fde7bbce933c1206137b9d92f4a55667f",
+    "local_date": "2026-11-03",
+    "method": "Source reads/hash/object inventory only. No SQL parser, DB, runtime, network or source mutation."
+  },
+  "accepted_inputs": [
+    {
+      "review_verdict": "SOURCE_GO_STAGE_ONE_FRAGMENT_ONLY",
+      "review_markdown": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-authority-core-independent-astra-v2.md",
+        "sha256": "63af06deef8bb3cdc9c4c7a56bff3fc0ab19ce8f71239e901a57c0184774ef12"
+      },
+      "review_json": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-authority-core-independent-astra-v2.json",
+        "sha256": "41b43a0d81f162c5a39d74288f86c91a6227ad54f0fa41f700a978af89d71cf4"
+      },
+      "files": [
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/01-authority-core.sql",
+          "sha256": "9a4b87fc82935af4d4225d6092973d93a8b0676c4a3e3c94b96dbf747b0d50d9"
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/core-interfaces.json",
+          "sha256": "acbe595f81e608fa85ccefc263c347b4a51a94c001a9f12ff7be16a0fee72bfc"
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/01-core-status.md",
+          "sha256": "561d61684beccfafb361f6b44ee91046a0f7ad1435176df9d6fd7e000e0e36f9"
+        }
+      ]
+    },
+    {
+      "review_verdict": "SOURCE_GO_CREATE_FRAGMENT_ONLY",
+      "review_markdown": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-role-create-independent-astra-v2.md",
+        "sha256": "88ff6749b5a544fbf496d604e6c4d6ec049b96585134597b02f5565412a1fc81"
+      },
+      "review_json": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-role-create-independent-astra-v2.json",
+        "sha256": "6956d463131796062eff515709d63535b88305f4301417fb3caf716ba84eee60"
+      },
+      "files": [
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/02a-role-create-v2.sql",
+          "sha256": "aa7c4629d6a02736684213aa8e87aa4a3b76a2534518630c566a142bd9f359fe"
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/02a-governance-interfaces-v2.json",
+          "sha256": "da478bce5ff649b64f7ac371ac88fc7ab77618913dcd61643f12323a444df8cc"
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/02a-governance-status-v2.md",
+          "sha256": "558d41b2e4029efdf73ce67539501bff0b2a99c769d0046f1d072c310517c742"
+        }
+      ]
+    },
+    {
+      "review_verdict": "SOURCE_GO_UNASSIGNED_ROLE_EDIT_FRAGMENT_ONLY",
+      "review_markdown": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-role-edit-unassigned-independent-astra-v1.md",
+        "sha256": "752d20d6c89625efdcda63ea8ebf8ed2f630260f021742e9c38ad452a6eb7747"
+      },
+      "review_json": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-role-edit-unassigned-independent-astra-v1.json",
+        "sha256": "773ae148339105b2eb3d09c9437ebc4189c8d0b559d85498e9ff609becac067f"
+      },
+      "files": [
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/02b-role-edit-unassigned.sql",
+          "sha256": "134f8f22d3f0b62c06915b4137f6d69d2f91dfcd5307c444d77b03e40c5d4f8a"
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/02b-governance-interfaces.json",
+          "sha256": "f47f7498e1829751da0067cf17c7696b95bd049b88257eac8713750b119842cb"
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/02b-governance-status.md",
+          "sha256": "aba2ba7fa8a4f2999e117cc4f86123fd4ab9d3594cf44a164d4648ab8bfc9aae"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    "app.b017_recognized_keys_v1()",
+    "app.b017_supported_keys_v1()",
+    "app.b017_keys_supported_v1(text[])",
+    "app.b017_native_keys_v1(public.org_role)",
+    "app.b017_support_digest_v1()",
+    "app.b017_effective_context(uuid,uuid,text)",
+    "app.b017_role_name_valid(text)",
+    "app.b017_role_name_key(text)",
+    "app.b017_create_role(uuid,uuid,text,uuid,uuid,bigint,text,text[])",
+    "app.b017_edit_unassigned_role(uuid,uuid,text,uuid,uuid,bigint,bigint,text,text[])"
+  ],
+  "tables": [
+    "app.b017_org_state",
+    "app.b017_roles",
+    "app.b017_assignments",
+    "app.b017_commands"
+  ],
+  "owner_roles": [
+    "b017_authority_owner",
+    "b017_domain_owner"
+  ],
+  "policies": [
+    {
+      "name": "b017_owner",
+      "table": "app.b017_org_state"
+    },
+    {
+      "name": "b017_owner",
+      "table": "app.b017_roles"
+    },
+    {
+      "name": "b017_owner",
+      "table": "app.b017_assignments"
+    },
+    {
+      "name": "b017_owner",
+      "table": "app.b017_commands"
+    },
+    {
+      "name": "b017_authority_session_read",
+      "table": "public.auth_sessions"
+    },
+    {
+      "name": "b017_authority_org_read",
+      "table": "public.organizations"
+    },
+    {
+      "name": "b017_authority_member_read",
+      "table": "public.org_members"
+    },
+    {
+      "name": "b017_authority_control_select",
+      "table": "public.platform_settings"
+    },
+    {
+      "name": "b017_authority_control_lock",
+      "table": "public.platform_settings"
+    },
+    {
+      "name": "b017_authority_org_lock",
+      "table": "public.organizations"
+    },
+    {
+      "name": "b017_authority_member_lock",
+      "table": "public.org_members"
+    },
+    {
+      "name": "b017_authority_session_lock",
+      "table": "public.auth_sessions"
+    },
+    {
+      "name": "b017_authority_audit_insert",
+      "table": "public.audit_log"
+    },
+    {
+      "name": "b017_authority_role_edit_audit",
+      "table": "public.audit_log"
+    }
+  ],
+  "seal": {
+    "private_table_rows": 0,
+    "runtime_function_execute": false,
+    "runtime_private_table_privileges": false,
+    "runtime_owner_membership_or_assumption": false,
+    "prepared_state_creation": false,
+    "enforcement_or_assignment": false,
+    "app_adapter_or_navigation": false,
+    "control_registration_or_changes": false,
+    "new_public_triggers": false,
+    "03_included": false,
+    "worker_privileged_login": "If actual worker is superuser/owner/owner-assumable or holds dangerous global privilege, ordinary runtime denial is not proved. Use a network-isolated no-worker clone for compiler feedback; shared app-connected installation remains blocked until separate credentials/ACL are proven. No broad credential rotation is performed by this foundation."
+  },
+  "package_order": [
+    {
+      "id": "P0",
+      "owner": "Codex",
+      "action": "Author exact wrapper, deterministic seal, paired down migration and target proof harness outside repo. Preserve reviewed fragment bytes as manifest inputs, no 03 or broader 02. Independent highest reviewer examines the assembled delta; source fragment verdicts do not approve installation."
+    },
+    {
+      "id": "P1",
+      "owner": "PE",
+      "action": "On authorized isolated nonMac disposable baseline clone, verify target/version/catalog/role identity and prove installation-privilege prerequisites before DDL. No Mac parser/migration and no production target."
+    },
+    {
+      "id": "P2",
+      "owner": "PE",
+      "action": "One transaction, ON_ERROR_STOP and bounded lock/statement timeout: preflight absent B017 objects/roles; execute only 01v2,02av2,02b; remove runtime EXECUTE and all direct private-table privileges; remove temporary owner membership/creation privileges; assert exact final owners/ACLs/RLS/policy inventory/empty tables and unchanged flag/application state; commit only if all assertions pass."
+    },
+    {
+      "id": "P3",
+      "owner": "PE",
+      "action": "From a separate real connection using each actual runtime login and SET ROLE context, prove table/column/sequence denial, owner-role assumption denial, zero callable B017 functions and no prepared/enforced/assignment creation. This is required to call the installed foundation sealed, not inferred from service_role alone."
+    },
+    {
+      "id": "P4",
+      "owner": "PE",
+      "action": "Run positive fragment tests only in a disposable fixture child restored from the sealed template, with privileged operator fixtures and owner-context invocation; roll back/drop all fixtures. Test compile, behavior, concurrency, fresh auth, Unicode, replay and atomicity. Do not grant the app runtime a test exception."
+    },
+    {
+      "id": "P5",
+      "owner": "PE",
+      "action": "Restore a second clean sealed template; compare B017 object fingerprints, zero data, ACLs, no flags/trigger additions and old app smoke evidence; exercise paired rollback on a clone. Return redacted compiler/test evidence with exact artifact/baseline/runtime SHA and target version."
+    },
+    {
+      "id": "P6",
+      "owner": "Codex",
+      "action": "Fix target compiler/semantic defects locally in a new source revision and obtain independent review. Continue credential lifecycle, member/assignment/enrollment, raw/resource adapters, 47 actual call groups and full product acceptance locally; no missing design is delegated to PE."
+    }
+  ],
+  "proof_matrix": [
+    {
+      "id": "F01",
+      "area": "DDL and deferred PL/pgSQL compilation",
+      "required_evidence": "Create against exact baseline and call every function on typed positive/negative owner fixtures; CREATE FUNCTION alone may defer body/branch errors. UTF8 normalize, digest, enum/FK/audit schema/grants/locks proven.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    },
+    {
+      "id": "F02",
+      "area": "Effective runtime ACL",
+      "required_evidence": "PUBLIC/anon/authenticated/service_role and actual connection login, inherited groups, database owner, maintenance identity separation. No effective private SELECT/DML/TRUNCATE/REFERENCES/TRIGGER or column grants; no EXECUTE on any ten functions; no direct/indirect SET ROLE owner or owner-admin/CREATEROLE/superuser escalation.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    },
+    {
+      "id": "F03",
+      "area": "No activation",
+      "required_evidence": "All four tables empty before/after install/restore/runtime calls; attempts insert prepared and enforced rows, role/assignment/tombstone/receipt fail. Existing guessed custom_roles true/malformed controls cannot bypass inaccessible function/table boundary. No flags changed in real installed foundation.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    },
+    {
+      "id": "F04",
+      "area": "Resolver owner fixtures",
+      "required_evidence": "Valid actor/session and exact selected org/env pins; dual-membership wrong org, wrong sandbox, missing/malformed pins, revoked/expired session and invalid native role deny. Supported17/recognized18 and full precision context digest fixed vectors. No actual-cookie admission claim from manual pins.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    },
+    {
+      "id": "F05",
+      "area": "Create owner fixtures",
+      "required_evidence": "Unicode native label rejection, canonical keys and unsupported data.export, strict OFF/malformed control, native Admin + team.manage + ceiling, exact replay after revision drift, conflict/stale, audit failure and rollback.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    },
+    {
+      "id": "F06",
+      "area": "Unassigned edit owner fixtures",
+      "required_evidence": "New edits reject every assignment reference including inactive member, preserve lifecycle, CAS both versions, exact replay preserves original result; changed-intent conflicts and metadata audit only. Two genuine clients prove serialized role/org lock and NOWAIT behavior.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    },
+    {
+      "id": "F07",
+      "area": "Owner source grants and FORCE RLS",
+      "required_evidence": "Owner can read/lock only declared source columns and audit insert shape. False WITH CHECK update policies are permissive policies, not universal deny: prove no other applicable policy grants an owner source UPDATE. Prove no recursion and exact target restrictive-policy interactions.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    },
+    {
+      "id": "F08",
+      "area": "Old-code compatibility",
+      "required_evidence": "Same pinned app with no adapter/flags/state: representative staff admin/manager/accountant/maintenance, genuine tenant/owner/vendor, live and linked sandbox/reset, auth/invite/team mutations and representative posting/read work unchanged. No new public trigger/view/RPC/helper rewrite or raw B017 enforcement; compatibility evidence is scoped, not full47 acceptance.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    },
+    {
+      "id": "F09",
+      "area": "Restore and rollback",
+      "required_evidence": "Clean sealed template dump/restore including two NOLOGIN role definitions or explicit operator provisioning for pg_dump role omission; verify all14 policies/10 functions/four FORCE-RLS tables and no membership/ACL leak. Paired down migration uses exact RESTRICT drops, no CASCADE, rejects nonempty/later dependencies; clean clone old smoke stays valid.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    },
+    {
+      "id": "F10",
+      "area": "Atomic install failure",
+      "required_evidence": "Inject conflict/privilege/owner-transfer/postassert failure and verify transaction leaves no partial B017 roles, tables, functions, policies, grants or migration receipt. Second install deliberately fails preflight without damage; no silent IF NOT EXISTS adoption.",
+      "status": "NOT_RUN",
+      "executor": "PE on authorized nonMac isolated target; Codex owns design and revisions"
+    }
+  ],
+  "later_codex_obligations": [
+    "03 actual legacy vendor lifecycle closure, signed URL/bearer retirement and credential fence",
+    "sticky prepared/enforced enrollment and immutable command/state guards",
+    "role assignment/unassignment/activation/in-use edit/retirement and imported assignment poison rejection",
+    "member/native role/status/deactivate/reinvite/invitation authority ceiling, global staff-first and last usable Admin/concurrency",
+    "all47 actual app/domain/API/file/raw-RLS/old-writer groups; policy-safe authenticated subject binding",
+    "native Accountant photos across vendor/raw/unassigned/legacy bearer and native Admin audit floor",
+    "explicit owner property link CAS and phone exception authority",
+    "genuine vendor submit/upload and approved sandbox reset compatibility ports",
+    "strict OFF management and sticky enforced rollback behavior after future enrollment",
+    "full app/DB/security/browser acceptance and canonical queue/status/handoff reconciliation"
+  ],
+  "source_refs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/01-authority-core.sql",
+      "line": 29,
+      "source_text": "CREATE TABLE app.b017_org_state ("
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/01-authority-core.sql",
+      "line": 76,
+      "source_text": "REVOKE ALL ON app.b017_org_state,app.b017_roles,app.b017_assignments,app.b017_commands FROM PUBLIC,anon,authenticated,service_role;"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/01-authority-core.sql",
+      "line": 132,
+      "source_text": "GRANT EXECUTE ON FUNCTION app.b017_effective_context(uuid,uuid,text) TO service_role;"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/02a-role-create-v2.sql",
+      "line": 90,
+      "source_text": "GRANT EXECUTE ON FUNCTION app.b017_create_role(uuid,uuid,text,uuid,uuid,bigint,text,text[]) TO service_role;"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b017-custom-roles-proposal-v1/parts-v2/02b-role-edit-unassigned.sql",
+      "line": 60,
+      "source_text": "GRANT EXECUTE ON FUNCTION app.b017_edit_unassigned_role(uuid,uuid,text,uuid,uuid,bigint,bigint,text,text[]) TO service_role;"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/db.ts",
+      "line": 90,
+      "source_text": "    connectionString: process.env.DATABASE_URL,"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/db.ts",
+      "line": 222,
+      "source_text": "      await client.query(\"SET LOCAL ROLE authenticated\");"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/db.ts",
+      "line": 258,
+      "source_text": "    await client.query(\"SET LOCAL ROLE service_role\");"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/scripts/check-function-privileges.sh",
+      "line": 484,
+      "source_text": "WHERE n.nspname = 'public'"
+    }
+  ],
+  "repo_pins": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/AGENTS.md",
+      "working_sha256": "76a269081778856332ddc0eca751c432a6e6fc601da670fac2051cc83dc54346",
+      "head_sha256": "76a269081778856332ddc0eca751c432a6e6fc601da670fac2051cc83dc54346",
+      "immutable_b8_sha256": "76a269081778856332ddc0eca751c432a6e6fc601da670fac2051cc83dc54346"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/AGENTS.md",
+      "working_sha256": "ad6a6f6af1cefd99c36ee84a164bb97ce0211cbe59a648a472243260700e90cc",
+      "head_sha256": "ad6a6f6af1cefd99c36ee84a164bb97ce0211cbe59a648a472243260700e90cc",
+      "immutable_b8_sha256": "ad6a6f6af1cefd99c36ee84a164bb97ce0211cbe59a648a472243260700e90cc"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/BUILD-ORDER.md",
+      "working_sha256": "8045a467046343bbe2c6af8a42ccd8a1026cbee4d4426b69f347ec40ad0e7e07",
+      "head_sha256": "8045a467046343bbe2c6af8a42ccd8a1026cbee4d4426b69f347ec40ad0e7e07",
+      "immutable_b8_sha256": "9229a7d5f2e7411b02f34fbfd32869729d0c0bf532f60b9f83519a8041cef2b6"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/BLOCKED.md",
+      "working_sha256": "a48b0cc4d623ec325b76e0df82fdbea2231719c95fd793b5f0733331967bda6c",
+      "head_sha256": "a48b0cc4d623ec325b76e0df82fdbea2231719c95fd793b5f0733331967bda6c",
+      "immutable_b8_sha256": "be0b2588927304454e97648f6db89fc1329aa96adaf76d9a2b9fb4ce11910abf"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/db.ts",
+      "working_sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "head_sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "immutable_b8_sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/perms.ts",
+      "working_sha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9",
+      "head_sha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9",
+      "immutable_b8_sha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/auth.ts",
+      "working_sha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+      "head_sha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+      "immutable_b8_sha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/org-scope.ts",
+      "working_sha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427",
+      "head_sha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427",
+      "immutable_b8_sha256": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/platform.ts",
+      "working_sha256": "3df96b591da53e60bdc7c34aef9420357a039e720766e1648d068a8ed44a64d0",
+      "head_sha256": "3df96b591da53e60bdc7c34aef9420357a039e720766e1648d068a8ed44a64d0",
+      "immutable_b8_sha256": "3df96b591da53e60bdc7c34aef9420357a039e720766e1648d068a8ed44a64d0"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/sandbox.ts",
+      "working_sha256": "d8d31eacd163d96511fae0be55b1165b7f987d7d1986415ff0bd1b089e2b623e",
+      "head_sha256": "d8d31eacd163d96511fae0be55b1165b7f987d7d1986415ff0bd1b089e2b623e",
+      "immutable_b8_sha256": "d8d31eacd163d96511fae0be55b1165b7f987d7d1986415ff0bd1b089e2b623e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/function-privileges.test.ts",
+      "working_sha256": "7b7e079d444da0ba2623446c02008f43eee6d0f078988139d66723be2cb3a16f",
+      "head_sha256": "7b7e079d444da0ba2623446c02008f43eee6d0f078988139d66723be2cb3a16f",
+      "immutable_b8_sha256": "7b7e079d444da0ba2623446c02008f43eee6d0f078988139d66723be2cb3a16f"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/scripts/check-function-privileges.sh",
+      "working_sha256": "47ebb32ad6f4be32ced6e3fc1b4dd90775c874549117072c814b4d281e74f0c9",
+      "head_sha256": "47ebb32ad6f4be32ced6e3fc1b4dd90775c874549117072c814b4d281e74f0c9",
+      "immutable_b8_sha256": "47ebb32ad6f4be32ced6e3fc1b4dd90775c874549117072c814b4d281e74f0c9"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/ops/flags.yaml",
+      "working_sha256": "91702b168d80b5001674485c7c32bc95975ae6100149edbfaad38eb88b7c4908",
+      "head_sha256": "91702b168d80b5001674485c7c32bc95975ae6100149edbfaad38eb88b7c4908",
+      "immutable_b8_sha256": "91702b168d80b5001674485c7c32bc95975ae6100149edbfaad38eb88b7c4908"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261018120000_schema.sql",
+      "working_sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "head_sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "immutable_b8_sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261020120000_auth.sql",
+      "working_sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81",
+      "head_sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81",
+      "immutable_b8_sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261030130000_default_function_privileges.sql",
+      "working_sha256": "57ac0d6ecf8c5300612a143e7739d9fb96804050966541b95a3ceef7ad26886d",
+      "head_sha256": "57ac0d6ecf8c5300612a143e7739d9fb96804050966541b95a3ceef7ad26886d",
+      "immutable_b8_sha256": "57ac0d6ecf8c5300612a143e7739d9fb96804050966541b95a3ceef7ad26886d"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261030150500_revoke_public_function_execute.sql",
+      "working_sha256": "6e301a863ac8da9600eac5b082ea34766e6f2a5d4644ee00e1c78848a69f26a6",
+      "head_sha256": "6e301a863ac8da9600eac5b082ea34766e6f2a5d4644ee00e1c78848a69f26a6",
+      "immutable_b8_sha256": "6e301a863ac8da9600eac5b082ea34766e6f2a5d4644ee00e1c78848a69f26a6"
+    }
+  ],
+  "not_claimed": [
+    "CURRENT_PACKAGE_APPLY_READY",
+    "B017_COMPLETE",
+    "ALL47_HANDOFF_COMPLETE",
+    "ENROLLMENT_READY",
+    "TARGET_PRIVILEGES_VERIFIED",
+    "MAC_SQL_ALLOWED",
+    "03_GO",
+    "PRODUCTION_OR_FLAG_ACTIVATION"
+  ]
+}

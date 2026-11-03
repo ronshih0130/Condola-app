@@ -1,0 +1,9 @@
+# B017 isolated create-role v2 source review
+
+**SOURCE_GO_CREATE_FRAGMENT_ONLY.** Both earlier P2 findings are closed on the three pinned v2 files. The original create draft and the accepted stage-one dependency remain byte-identical to their reviewed versions.
+
+The shared private comparison function uses PostgreSQL’s UTF8 normalize(value,NFKC) spelling, explicit whitespace and ignorable-character removal, and C-collation case folding. The resulting comparison key must be nonempty, bounded and different from all four native role codes and the actual English and zh-TW role labels. The display name remains separate. This contract addresses the specified built-in labels and their supported canonical variants. Verify the real PostgreSQL version/encoding, collation and uniqueness behavior with the documented vectors before application.
+
+After rechecking actual session, selected live org, current flag, native Admin, effective team.manage and requested-key ceiling, an exact committed retry reads the original receipt. The new receipt contains role UUID, original role revision and resulting numeric org authority revision. Replay verifies request intent/target and the stored result fields, rejects absent or malformed typed results and returns the original values without requiring a revision-one draft to still exist. It performs no new create, audit or revision update. A caller must preserve the original request, role ID, expected pre-create revision, name and canonical keys for recovery; read current role lifecycle or current authority separately. Lost-response retry is not a new submit. Future edit/import must reuse the same name comparison and enforce independent current authorization.
+
+No SQL was parsed or executed. The source verdict applies only to inactive draft creation; subsequent governance, deployment readiness, control registration, enrollment and target proofs remain open.

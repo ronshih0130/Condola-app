@@ -1,0 +1,76 @@
+{
+  "verdict": "BOTH_ARMS_STRICT_FAIL_CAUSE_CATEGORY_DISTINGUISHED_NO_EXCEPTION_NO_NEW_RUN",
+  "candidate": "9e53d4f2edaafb627a93dfc3776c1ceb3191384a",
+  "receiptSha256": "4cea32d7046e67bbb25259247889dd73390ccad8262284e4b7ad2f69b63b5e25",
+  "browserResultSha256": "e2a2ade3dc5df3d03f7ecb1ca1b50494a34953e5207be37d38093c496777a88e",
+  "recoverySha256": "0e2cb4d75318285a50af184f92ab186daf5a293d4a4d103e70c77ab7c3bd29d8",
+  "lifecycleSha256": "e73196bef1b313dffa126e83a615c7e3b420152b3e1c3691d44c770882ea3227",
+  "archiveManifestSha256": "a9f25440e1dbe4772cad7c9b45b1f25755be10e97096fd4cd9291c9edb20d0a0",
+  "preservedCopiesVerified": 16,
+  "receiptArtifactHashesVerified": 8,
+  "cdpFailureEvents": [
+    {
+      "arm": "disabled",
+      "phase": "login",
+      "id": "c6",
+      "hop": 0,
+      "error": "MISSING",
+      "canceled": false,
+      "blocked": "csp"
+    },
+    {
+      "arm": "disabled",
+      "phase": "submit",
+      "id": "c12",
+      "hop": 0,
+      "error": "MISSING",
+      "canceled": false,
+      "blocked": "csp"
+    },
+    {
+      "arm": "enabled",
+      "phase": "submit",
+      "id": "c14",
+      "hop": 0,
+      "error": "net::ERR_ABORTED",
+      "canceled": true,
+      "blocked": "MISSING"
+    },
+    {
+      "arm": "enabled",
+      "phase": "submit",
+      "id": "c18",
+      "hop": 0,
+      "error": "net::ERR_ABORTED",
+      "canceled": true,
+      "blocked": "MISSING"
+    }
+  ],
+  "nativeTransport": "Document",
+  "enabledSubmitObserved": "POST Fetch 303 then ERR_ABORTED",
+  "enabledDestination": "URL DOM and synthetic session verified; c18/c19 are Fetch on f1/l1; no /t Document request",
+  "codeRecovery": {
+    "database": "condola_b018_history_0cf54159036d",
+    "status": "PRE_FINANCE_BASELINE_VERIFIED",
+    "actions": [],
+    "scope": "login diagnostic only",
+    "authenticationEffects": 2
+  },
+  "priorFinancialLineage": "UNVERIFIED",
+  "observerCorrection": "classify observed transport independently of terminal success and distinguish failed complete evidence from absent terminal",
+  "appAndInstalledFrameworkSourcePins": {
+    "node_modules/playwright-core/lib/coreBundle.js": "829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d",
+    "node_modules/next/package.json": "c970fbf408a0cff68bce8d1ebe54cad3d546753fdc31cc57ea74c096532ec1bb",
+    "node_modules/next/dist/client/components/router-reducer/reducers/server-action-reducer.js": "4ffe36522324e9e0494e59aa55badac485042b8c53067c9520c4180ebbbccd29",
+    "node_modules/next/dist/client/components/router-reducer/fetch-server-response.js": "b1995017677c1b6311f1fa48cbf10c3ea22e4ac5b1aec2027eb045ae4ae2345e",
+    "node_modules/next/dist/client/components/app-router.js": "40965882017793245be84902100bdfcf8fa23d470288e3c2beed86988125f90f",
+    "node_modules/next/dist/server/app-render/action-handler.js": "b64f7197fc062a7f61d8fb9dc61049a916e70c22687aaebaec7144e0534b362a",
+    "next.config.ts": "ae886bdae4c9afcc89d7771e49dc169e6b48c59131e409cd13163dd0f4d2aae6",
+    "src/app/login/page.tsx": "8f0443b1f3ad20c82b164dfe1f7495b40bea18a44049952b3a6634132191fcba",
+    "src/server/auth-actions.ts": "39cad3edaa1df3c8c746683a82349dc57f1f1bd7830ce5e49b9182f8054a4689",
+    "src/app/auth/enter/page.tsx": "37f0c9da85b3bf0830a34a2c3ff9d1199122db8117287096baa02ec3b02c8d7d",
+    "src/app/auth/continue/page.tsx": "2113790e606be93f2e2b689af16f9cb6b02c375540a63cae0da85a44f174841f"
+  },
+  "reviewerRuntime": "NOT_RUN",
+  "markdownSha256": "0ada89c1a4f7ddb982b1bd7b82e27ace25b8156ba106fc77df13b27d37634c95"
+}
