@@ -1,0 +1,68 @@
+{
+  "status": "SOURCE_GO_FOR_TARGETED_DB_THEN_CONDITIONAL_EN390_FOCUS",
+  "baseHead": "f1be31ee77dff48d132ce71040af1c3d13e28d62",
+  "sourceMapSha256": "61d5f210da3e33cc718a53fd7813616ad47f53c0378a815e954ad5541f9327f4",
+  "pins": {
+    "src/server/staff-profile.ts": {
+      "blob": "292b97a00dd489c2878ba6169c1399557551d768",
+      "sha256": "4cf782287e4213703ca87007b3557e520feb9fcaa02482529634a18284f95f55",
+      "bytes": 7210
+    },
+    "src/server/staff-profile-rules.ts": {
+      "blob": "b9284a1756f407fd5518d6b01853cd2366af6fbb",
+      "sha256": "f8306e0f97d2cdb50aedbb9bcb2b8a8aaf4f73ea2397c7a202e00eea249e73b4",
+      "bytes": 936
+    },
+    "src/server/staff-profile-actions.ts": {
+      "blob": "cdcbbb04815e9ac407b5a0e93bab1f5cc255081a",
+      "sha256": "ad190886aa73ff2fdc5ce3e6bf56f88fd2005fc729beb8f82868be4b5f497e7d",
+      "bytes": 794
+    },
+    "src/server/staff-profile-rules.test.ts": {
+      "blob": "7eb734783128ed10f34de5095aa8c5fbcd2e5e1f",
+      "sha256": "dd6d94bb5ea9e40831da1a613dd352ccdea853a0280beccbcc9557c31bfd0df1",
+      "bytes": 1934
+    },
+    "src/server/staff-profile.integration.test.ts": {
+      "blob": "f233653a71d9a59275cc220242f0d01eb43fef1c",
+      "sha256": "41db5e6c5a15b37316a4f347a184c65300885934e4ab0cc30d658f16605bf800",
+      "bytes": 20341
+    },
+    "src/app/m/account/page.tsx": {
+      "blob": "8f4c38729c9f1f50ee32119eaa74289be817dbf9",
+      "sha256": "a5c83b0b76d59619dc1416411209d5a83565422c37a21ff2e4d04ee9e263f7b2",
+      "bytes": 8023
+    },
+    "src/i18n/staff-profile.ts": {
+      "blob": "e65a508324354016d18609296fc9de5a5f4da281",
+      "sha256": "dfa257780e5c11311faa649b5b690643987ca1004f39c83d1240138ea833b4a8",
+      "bytes": 1070
+    },
+    "package.json": {
+      "blob": "19e32ae8921cc5353338a768e3c1ab578fabd01a",
+      "sha256": "ed3d384f81d4385e05f4ffa460d2e5cccff961d482a6dd864e4221eb62b64053",
+      "bytes": 13308
+    },
+    "ops/flags.yaml": {
+      "blob": "0397a923964b7c5669ba03f2a9ad1345fd95db82",
+      "sha256": "e6334b67a7c9280356aa34e453ec8a07f94959ecb427efacd318c585f9b88a9b",
+      "bytes": 10998
+    }
+  },
+  "freezeSha256": "8925348f521944982110ed7a5548b4611cc9d2626c1418cec06e1c4ea85a8b18",
+  "workingSourceBlobsVerified": 1012,
+  "helperSha256": {
+    "supervisor.py": "15162f3923c355e94f25777166aa7cf75e90cfbe345e9d1be9ef7a4b9bf47477",
+    "probe.cjs": "837248ad243813c4ffd29908f650f79507474c272ea8a2d4f1d17b7b988f9068",
+    "recovery.cjs": "377fdc0489d021d7fdfe0b3711f8b38c0d8787622a88922983503c0fc00842a5"
+  },
+  "playwrightCoreBundleSha256": "829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d",
+  "changedPathVsA4": "src/server/staff-profile.integration.test.ts",
+  "changedBlob": "f233653a71d9a59275cc220242f0d01eb43fef1c",
+  "review": "Only the role-change subcase selects the seeded non-billing manager, changes that membership to accountant during the existing paused save, and restores the manager role. Expiry, revocation and organization opt-out subcases still use the administrator. The wait, unavailable result, unchanged own profile and no new audit assertions remain. The billing-owner constraint, production service and all other source-map paths are unchanged.",
+  "a4FailureManifestSha256": "797d195607d686555bf4c17f99aff0d625ff05cd19c08883efc5f39aeccff3e0",
+  "a4FailureBindingsVerified": 24,
+  "runtimeAtReview": "NOT_RUN",
+  "limits": "One bounded DB target on the approved frozen working bytes, then EN390 focus only after the DB target passes. No A5 runtime evidence, full browser, build, gate or release verdict is implied. A4 remains failed with 10 passes and one org_members_check fixture error.",
+  "blockingFindings": []
+}

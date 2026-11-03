@@ -1,0 +1,455 @@
+{
+  "decision": "SCOPED_LOCAL_GO",
+  "qaLog": "e31e3909-b39d-4bf9-8c21-35e1551a667e",
+  "candidate": "5a0c6990e4b4b75bb0ab2534cc7742d46c608787",
+  "manifest": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-016/self-profile-runtime-5a0c699.json",
+    "bytes": 198828,
+    "sha256": "4564888c76352ffa30fadccc052776212361ad05bc31b60771f971583ada101a",
+    "referenceCount": 334,
+    "distinctBindings": 240,
+    "creationStatus": "LOCAL_EVIDENCE_READY_PENDING_FINAL_INDEPENDENT_REVIEW"
+  },
+  "scope": "SCOPED_LOCAL_GO for current-app, default-OFF editing of the signed-in live staff member’s own account-wide display name on 5a0c6990e4b4b75bb0ab2534cc7742d46c608787. No material blocking, security or usability finding remains in that scope.",
+  "sourcePinsVerified": 1013,
+  "historicalFailureArchivesVerified": 7,
+  "archivedBindingsVerified": 253,
+  "perCase": {
+    "en-390": {
+      "viewport": {
+        "lang": "en",
+        "w": 390,
+        "h": 900
+      },
+      "returnFragmentCount": 1,
+      "chosenHit": {
+        "fragment": 0,
+        "x": 203.1875,
+        "y": 648.09375,
+        "hit": true,
+        "hitTag": "A",
+        "hitTestId": null
+      },
+      "documentNavigation": {
+        "label": "sandbox-live-document",
+        "requestOrigin": "http://127.0.0.1:43154",
+        "requestPath": "/api/env",
+        "isNavigationRequest": true,
+        "beforeOrigin": 1793714074982,
+        "afterOrigin": 1793714075401.4,
+        "banner": 0,
+        "panel": 0,
+        "guide": 0,
+        "editor": 1,
+        "expectedEditor": 1
+      },
+      "auditNewCount": 2,
+      "pendingWitness": true,
+      "clientInvalidWitness": true,
+      "unavailableWitness": "URL-rendered guidance only",
+      "settled": [
+        {
+          "label": "invalid-server",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account?profile=invalid",
+          "expectedStatus": "Enter a valid name of 1 to 100 characters.",
+          "expectedName": null,
+          "versionChanged": false
+        },
+        {
+          "label": "save",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account",
+          "expectedStatus": null,
+          "expectedName": "Synthetic en 390",
+          "versionChanged": true
+        },
+        {
+          "label": "stale",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account?profile=stale",
+          "expectedStatus": "The name changed. Review it before saving again.",
+          "expectedName": null,
+          "versionChanged": false
+        },
+        {
+          "label": "restore",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account",
+          "expectedStatus": null,
+          "expectedName": "林雅婷",
+          "versionChanged": true
+        }
+      ]
+    },
+    "en-1280": {
+      "viewport": {
+        "lang": "en",
+        "w": 1280,
+        "h": 900
+      },
+      "returnFragmentCount": 2,
+      "chosenHit": {
+        "fragment": 0,
+        "x": 676.921875,
+        "y": 431.09375,
+        "hit": true,
+        "hitTag": "A",
+        "hitTestId": null
+      },
+      "documentNavigation": {
+        "label": "sandbox-live-document",
+        "requestOrigin": "http://127.0.0.1:43154",
+        "requestPath": "/api/env",
+        "isNavigationRequest": true,
+        "beforeOrigin": 1793714081681.3,
+        "afterOrigin": 1793714082102.7,
+        "banner": 0,
+        "panel": 0,
+        "guide": 0,
+        "editor": 1,
+        "expectedEditor": 1
+      },
+      "auditNewCount": 2,
+      "pendingWitness": true,
+      "clientInvalidWitness": true,
+      "unavailableWitness": "URL-rendered guidance only",
+      "settled": [
+        {
+          "label": "invalid-server",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account?profile=invalid",
+          "expectedStatus": "Enter a valid name of 1 to 100 characters.",
+          "expectedName": null,
+          "versionChanged": false
+        },
+        {
+          "label": "save",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account",
+          "expectedStatus": null,
+          "expectedName": "Synthetic en 1280",
+          "versionChanged": true
+        },
+        {
+          "label": "stale",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account?profile=stale",
+          "expectedStatus": "The name changed. Review it before saving again.",
+          "expectedName": null,
+          "versionChanged": false
+        },
+        {
+          "label": "restore",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account",
+          "expectedStatus": null,
+          "expectedName": "林雅婷",
+          "versionChanged": true
+        }
+      ]
+    },
+    "zh-TW-390": {
+      "viewport": {
+        "lang": "zh-Hant-TW",
+        "w": 390,
+        "h": 900
+      },
+      "returnFragmentCount": 1,
+      "chosenHit": {
+        "fragment": 0,
+        "x": 289.671875,
+        "y": 549.09375,
+        "hit": true,
+        "hitTag": "A",
+        "hitTestId": null
+      },
+      "documentNavigation": {
+        "label": "sandbox-live-document",
+        "requestOrigin": "http://127.0.0.1:43154",
+        "requestPath": "/api/env",
+        "isNavigationRequest": true,
+        "beforeOrigin": 1793714088414.9,
+        "afterOrigin": 1793714088803.4,
+        "banner": 0,
+        "panel": 0,
+        "guide": 0,
+        "editor": 1,
+        "expectedEditor": 1
+      },
+      "auditNewCount": 2,
+      "pendingWitness": true,
+      "clientInvalidWitness": true,
+      "unavailableWitness": "URL-rendered guidance only",
+      "settled": [
+        {
+          "label": "invalid-server",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account?profile=invalid",
+          "expectedStatus": "請輸入 1 到 100 個字的有效名稱。",
+          "expectedName": null,
+          "versionChanged": false
+        },
+        {
+          "label": "save",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account",
+          "expectedStatus": null,
+          "expectedName": "Synthetic zh-TW 390",
+          "versionChanged": true
+        },
+        {
+          "label": "stale",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account?profile=stale",
+          "expectedStatus": "名稱已變更，請重新檢查後再儲存。",
+          "expectedName": null,
+          "versionChanged": false
+        },
+        {
+          "label": "restore",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account",
+          "expectedStatus": null,
+          "expectedName": "林雅婷",
+          "versionChanged": true
+        }
+      ]
+    },
+    "zh-TW-1280": {
+      "viewport": {
+        "lang": "zh-Hant-TW",
+        "w": 1280,
+        "h": 900
+      },
+      "returnFragmentCount": 1,
+      "chosenHit": {
+        "fragment": 0,
+        "x": 525.671875,
+        "y": 411.59375,
+        "hit": true,
+        "hitTag": "A",
+        "hitTestId": null
+      },
+      "documentNavigation": {
+        "label": "sandbox-live-document",
+        "requestOrigin": "http://127.0.0.1:43154",
+        "requestPath": "/api/env",
+        "isNavigationRequest": true,
+        "beforeOrigin": 1793714095113.7,
+        "afterOrigin": 1793714095537.5,
+        "banner": 0,
+        "panel": 0,
+        "guide": 0,
+        "editor": 1,
+        "expectedEditor": 1
+      },
+      "auditNewCount": 2,
+      "pendingWitness": true,
+      "clientInvalidWitness": true,
+      "unavailableWitness": "URL-rendered guidance only",
+      "settled": [
+        {
+          "label": "invalid-server",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account?profile=invalid",
+          "expectedStatus": "請輸入 1 到 100 個字的有效名稱。",
+          "expectedName": null,
+          "versionChanged": false
+        },
+        {
+          "label": "save",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account",
+          "expectedStatus": null,
+          "expectedName": "Synthetic zh-TW 1280",
+          "versionChanged": true
+        },
+        {
+          "label": "stale",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account?profile=stale",
+          "expectedStatus": "名稱已變更，請重新檢查後再儲存。",
+          "expectedName": null,
+          "versionChanged": false
+        },
+        {
+          "label": "restore",
+          "phase": "settled",
+          "url": "http://127.0.0.1:43154/m/account",
+          "expectedStatus": null,
+          "expectedName": "林雅婷",
+          "versionChanged": true
+        }
+      ]
+    }
+  },
+  "successfulRunReceipts": {
+    "backend-target-A5-precommit": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-self-profile-runtime-v4/run-db-7b05d6b5b851/receipt.json",
+      "sha256": "6bdbc366e03c9345abf34dd8dbc10e74c07e38d66fe41e0343cdbdfed0138839",
+      "bytes": 178536
+    },
+    "focus-A6-EN390-precommit": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-self-profile-runtime-v6/run-focus-2927551b083c/receipt.json",
+      "sha256": "a3b4515aacff6c409ff03bba0eea5b846bec75befe946573664050dc7e6ecaf9",
+      "bytes": 184022
+    },
+    "standard-gate-final": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/run-gate-c41843a285f3/receipt.json",
+      "sha256": "5224e5e03628e0554cf1fe516a871761e861d07caa9b6526c10e27834d7d8884",
+      "bytes": 736298
+    },
+    "build4-final": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/run-build-28fd24348d08/receipt.json",
+      "sha256": "018b5125bf768bd4e62fd90d192c8d6c80e601b272883dbd7c0414b8d95e726d",
+      "bytes": 1290673
+    },
+    "focus-EN1280-v7-final": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-self-profile-runtime-v7/run-focus-f285b014649d/receipt.json",
+      "sha256": "b060d80f235a494be22aa1d90d0c8bbd01871572bf0822bfc70ecacc973b456c",
+      "bytes": 184058
+    },
+    "full4-v7-final": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-self-profile-runtime-v7/run-full-3f97f7b61c4c/receipt.json",
+      "sha256": "1dc8c0ad15ee8ed699758cb33bb5a158c2a33816a83d70174dedbe759e65f365",
+      "bytes": 194148
+    }
+  },
+  "results": {
+    "targetA5": {
+      "integrationPass": 11,
+      "consentPass": 36
+    },
+    "gate": {
+      "unitPass": 630,
+      "rlsPass": 466,
+      "rlsTotal": 467,
+      "rlsFail": 0,
+      "rlsSkip": 1,
+      "onlySkip": "Previously Ron/CEO-approved b888ccd historical commit lost"
+    },
+    "builds": {
+      "next": 0,
+      "cloudflare": 0,
+      "originalGnuAwkPreflight": 0,
+      "worker": {
+        "exit": 0,
+        "pass": 1
+      }
+    },
+    "browser": {
+      "cases": 4,
+      "pass": 4,
+      "fail": 0,
+      "strictErrors": 0,
+      "profileAuditEvents": 8,
+      "auditPurpose": "two per case: UI save and UI restore",
+      "recovery": "verified_off_and_profile",
+      "recoveryActions": []
+    }
+  },
+  "finalOriginalsVisuallyInspected": [
+    "en-1280-invalid-client-result.png",
+    "en-1280-invalid-client.png",
+    "en-1280-invalid-server.png",
+    "en-1280-invalid-status.png",
+    "en-1280-login.png",
+    "en-1280-off.png",
+    "en-1280-restore.png",
+    "en-1280-restored-settled-before-reload.png",
+    "en-1280-sandbox-live-return.png",
+    "en-1280-sandbox-org.png",
+    "en-1280-sandbox-readonly.png",
+    "en-1280-sandbox-return.png",
+    "en-1280-sandbox-sandbox.png",
+    "en-1280-save-pending.png",
+    "en-1280-save.png",
+    "en-1280-saved-canonical.png",
+    "en-1280-saved-settled-before-reload.png",
+    "en-1280-stale-status.png",
+    "en-1280-stale.png",
+    "en-1280-unavailable-guidance-url.png",
+    "en-390-invalid-client-result.png",
+    "en-390-invalid-client.png",
+    "en-390-invalid-server.png",
+    "en-390-invalid-status.png",
+    "en-390-login.png",
+    "en-390-off.png",
+    "en-390-restore.png",
+    "en-390-restored-settled-before-reload.png",
+    "en-390-sandbox-live-return.png",
+    "en-390-sandbox-nav.png",
+    "en-390-sandbox-org.png",
+    "en-390-sandbox-readonly.png",
+    "en-390-sandbox-return.png",
+    "en-390-sandbox-sandbox.png",
+    "en-390-save-pending.png",
+    "en-390-save.png",
+    "en-390-saved-canonical.png",
+    "en-390-saved-settled-before-reload.png",
+    "en-390-stale-status.png",
+    "en-390-stale.png",
+    "en-390-unavailable-guidance-url.png",
+    "sandbox-setup-login.png",
+    "sandbox-setup-setup-live-return.png",
+    "sandbox-setup-setup-org.png",
+    "sandbox-setup-setup-readonly.png",
+    "sandbox-setup-setup-return.png",
+    "sandbox-setup-setup-sandbox.png",
+    "zh-TW-1280-invalid-client-result.png",
+    "zh-TW-1280-invalid-client.png",
+    "zh-TW-1280-invalid-server.png",
+    "zh-TW-1280-invalid-status.png",
+    "zh-TW-1280-login.png",
+    "zh-TW-1280-off.png",
+    "zh-TW-1280-restore.png",
+    "zh-TW-1280-restored-settled-before-reload.png",
+    "zh-TW-1280-sandbox-live-return.png",
+    "zh-TW-1280-sandbox-org.png",
+    "zh-TW-1280-sandbox-readonly.png",
+    "zh-TW-1280-sandbox-return.png",
+    "zh-TW-1280-sandbox-sandbox.png",
+    "zh-TW-1280-save-pending.png",
+    "zh-TW-1280-save.png",
+    "zh-TW-1280-saved-canonical.png",
+    "zh-TW-1280-saved-settled-before-reload.png",
+    "zh-TW-1280-stale-status.png",
+    "zh-TW-1280-stale.png",
+    "zh-TW-1280-unavailable-guidance-url.png",
+    "zh-TW-390-invalid-client-result.png",
+    "zh-TW-390-invalid-client.png",
+    "zh-TW-390-invalid-server.png",
+    "zh-TW-390-invalid-status.png",
+    "zh-TW-390-login.png",
+    "zh-TW-390-off.png",
+    "zh-TW-390-restore.png",
+    "zh-TW-390-restored-settled-before-reload.png",
+    "zh-TW-390-sandbox-live-return.png",
+    "zh-TW-390-sandbox-nav.png",
+    "zh-TW-390-sandbox-org.png",
+    "zh-TW-390-sandbox-readonly.png",
+    "zh-TW-390-sandbox-return.png",
+    "zh-TW-390-sandbox-sandbox.png",
+    "zh-TW-390-save-pending.png",
+    "zh-TW-390-save.png",
+    "zh-TW-390-saved-canonical.png",
+    "zh-TW-390-saved-settled-before-reload.png",
+    "zh-TW-390-stale-status.png",
+    "zh-TW-390-stale.png",
+    "zh-TW-390-unavailable-guidance-url.png"
+  ],
+  "actualDimensions": {
+    "total": 88,
+    "mobile390": 42,
+    "desktop1280": 46,
+    "setup": 6,
+    "case": 82
+  },
+  "visualReview": "I inspected all 88 final-run original screenshots individually: 42 at 390×900 and 46 at 1280×900. Six are sandbox setup and 82 belong to the four cases. English and Traditional Chinese validation, pending, stale and reload guidance were legible at both widths. The empty-field native validation bubble uses the Chromium language. The wrapped English desktop return link has two fragments; the first received a real hit at (676.92, 431.09) and led to a new live account document. All four post-return captures show an editable live form without the sandbox banner or tryout guide. Before-reload captures show confirmed save, stale rejection and restored canonical name.",
+  "provenance": "Verified the immutable 198,828-byte manifest and all 334 path/hash/size references (240 distinct bindings), the 1,013 committed/working source pins, and all 253 entries in seven historical failure archives. Six successful run directories are bound. The earlier A5 targeted DB receipt identifies a precommit working snapshot with identical backend bytes and an earlier account page. A6 EN390 focus likewise ran on pinned precommit working bytes. The standard gate, four builds, v7 EN1280 focus and fresh final matrix bind to the committed candidate. Both PE start/end logs are present, and the rejected r1 precondition remains a precondition failure, not a gate run.",
+  "testEvidence": "A5 passed all 11 integration and 36 consent checks, including all live staff roles, stale/self isolation, changes during waits, and real local transaction errors testing audit/commit rollback. The standard gate passed 630/630 unit checks and 466/467 RLS checks, with zero failures and only Ron’s historical b888ccd skip. Next, OpenNext Cloudflare, original GNU-awk preflight and Worker (1/1) passed. V7 EN1280 focus passed; the fresh final run passed EN390, EN1280, zh-TW390 and zh-TW1280 with zero strict browser errors.",
+  "restoration": "Each final case saved and restored the same synthetic account’s display name and added exactly two metadata-only events. The independent readback matched the first pre-activation original name, email, other profile fields and protected-table digests. All baseline organization/control rows remained exact, the fixture feature activation was removed, and the separately prepared owned OFF sandbox remained in the expected post-setup baseline. Recovery took no actions. All 109 full-run and 41 EN1280 focus receipt artifact bindings verified, and the owned browser/server groups drained. This evidence does not assert whole-database restoration.",
+  "limitations": "The browser covers a synthetic administrator in local Chromium viewport emulation. Unavailable guidance was displayed via its URL; browser transport loss was not injected. The transaction’s final consent/authority read precedes COMMIT, and raw or older writers are not sealed. Regional company fields, verified login-email change and versioned fees remain incomplete. Actual target grants, staging, other machines/Depot, Claude/Class B, physical devices, pilot, release and whole B-016 are unverified.",
+  "blockingFindings": []
+}

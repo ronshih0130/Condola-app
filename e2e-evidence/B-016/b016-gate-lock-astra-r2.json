@@ -1,0 +1,28 @@
+{
+  "status": "CORRECTED_GATE_LOCK_SOURCE_GO",
+  "candidate": "5a0c6990e4b4b75bb0ab2534cc7742d46c608787",
+  "r1LockSha256": "50340871ea0786508d6ec31682e00b8cc290dc69aa4a94510a77b320bc3fd77a",
+  "r1PreconditionRecordSha256": "5aad6d748f76016c8422c36463a77a3485b1eba90a61017c03dfc5eebb041fa8",
+  "r1Disposition": "PRECONDITION_FAILED_EXIT_1_GATE_NOT_STARTED",
+  "r2LockSha256": "97b363ade6cbe3fc755ebe65212215762f9ca864281cd71caae8128498e3d85d",
+  "sourcePinsVerifiedGitAndWorking": 1013,
+  "soleAddedPin": {
+    "path": "ops/toolchain.json",
+    "gitBlob": "fb03abaaa73a722b057c569022f618839c477051",
+    "sha256": "f654ca321264d079c59728455bd83beabf05484db237efff8fb3b367a27ef3fa",
+    "node": "20.20.2",
+    "npm": "10.8.2"
+  },
+  "mandatoryKeysVerified": [
+    "ops/flags.yaml",
+    "ops/toolchain.json",
+    "scripts/gate.sh",
+    "scripts/preflight-deploy.sh",
+    "package.json",
+    "package-lock.json"
+  ],
+  "helperSha256": "b4bcfac9085d71d43fcda2529100bbb757e57c7a1328fa7066b79e2c8c9363df",
+  "previousReviewCorrection": "The previous independent freeze review checked 1,012 committed files but missed a required gate-lock key. R1 actually exited 1 at the incomplete-lock check before setup, so it was not a gate run. The failure record, source ordering and absence of any generated run directory, worktree reservation, persistent gate claim or fixed gate summary agree. R1 is preserved.",
+  "verification": "R2 adds only ops/toolchain.json. All prior pins and lock metadata remain identical. The added file pins Node 20.20.2 and npm 10.8.2 and matches both the commit tree and working bytes. Independently verified all 1,013 pins and all six mandatory keys, the reviewed helper hash, current HEAD and a wholly clean checkout.",
+  "scope": "GO for root to authorize the first actual standard gate using the exact corrected lock hash. The corrected lock has not been executed in this review; gate, builds and wider acceptance remain pending."
+}

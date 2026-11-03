@@ -1,0 +1,17 @@
+{
+  "status": "HELPER_SOURCE_GO_EN1280_FOCUS_THEN_CONDITIONAL_FULL",
+  "candidate": "5a0c6990e4b4b75bb0ab2534cc7742d46c608787",
+  "lockSha256": "982609c2efc2e48aca0b735c7917b114cd84de094c2eb113839a9bb4d2c2c35c",
+  "sourcePinsVerifiedGitAndWorking": 1013,
+  "helpers": {
+    "supervisor.py": "15162f3923c355e94f25777166aa7cf75e90cfbe345e9d1be9ef7a4b9bf47477",
+    "probe.cjs": "6807541e172f060f967faa9582a6d46ac9399ea6702ad40807d6ac93681285b6",
+    "recovery.cjs": "09f647cb4f2e68d47a09503e08d93bfac8681e7a8a55241875f13aacddd122c2"
+  },
+  "installedPlaywrightCoreVerified": "829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d",
+  "priorFailureArchiveSha256": "9ec8a274fb69bfd0484552a1fd22caa420c188a895d22ab3f971f692507b4001",
+  "archivedBindingsVerified": 109,
+  "assessment": "The helper records the control’s union rectangle and individual client rectangles. For a wrapped control, it samples interior points per viewport-intersecting fragment. Only a point actually hit-testing to the selected element or its descendant can be selected, and an enabled target is still required for a real mouse click. A covered or clipped point cannot pass by geometry alone. Single-fragment controls retain the midpoint check. The only scroll intervention remains ordinary wheel input.",
+  "scope": "One EN1280 focus. Only after it passes, run the full four new cases in the prior order. Retain exact navigation, pending, invalid/stale/saved/restore, original profile, protected data and audit assertions. No product or DB migration change, full gate repeat, or build repeat is indicated. The failed v6 matrix remains failed; v7 has no runtime result at review.",
+  "blockingFindings": []
+}

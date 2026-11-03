@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-03T04:10:17.488096-08:00: active queue. B015 current-app archive/restore/history and normal existing-tenant wizard have scoped local GO. B015 pending only dependent owner/raw-writer DB, staging/Claude/pilot; no whole B done. Next B016 evidence reconciliation.**
+> **Current 2026-11-03T06:09:19.184184-08:00: active queue. B016 self-name code5a0c699 has full scoped local gate/build/browser/control PASS and Astra GO. WholeB016 in_progress for company/verifiedEmail/fee design+DB handoff and external acceptance. B015 stays pending owner/raw-writer DB and staging/Claude/pilot. No whole item newly done; no B017 source started.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 
@@ -180,3 +180,7 @@ B015 current-app localcheckpoint 2026-11-03T02:50:51.010991-08:00 tested3cab1ef3
 ## B015 wizard scoped assessment 2026-11-03T04:10:17.488096-08:00
 
 Unchangedbb180a5 application: V4 desktop2PASS/mobile2INCOMPLETE actualexit1 preserved; V5 mobile2PASS actualexit0. Exact rendered text readable across real scroll views; ordinary finalhit/createdlease/originalcontact/no duplicates/terms/strict errors/OFFfixture/drain/1006sourcepins independentlyverified. No appfix/fullgatererun. [Checkpoint](../e2e-evidence/B-015/mobile-wizard-checkpoint-bb180a5.md). B015pending owner-onlymetadata/raw-oldwriterDB design incomplete/unparsed/unapplied/notapplyready, staging/Claude/ClassB/physicaldevice/pilot/release UNVERIFIED. Next: Codex complete/review DBdesign then PEapprovednonMacapplication; Ron/Claude handleexactSHAstagingacceptance. Skip onlydependentpart; nextB016 read-onlyB003dependencyreconciliation. No wholeBnewlydone; all39retained.
+
+## B016 self-name scoped local checkpoint 2026-11-03T06:09:19.184184-08:00
+
+Tested5a0c6990e4b4b75bb0ab2534cc7742d46c608787:630unit/466of467RLS (onlypriorhistoricalskip), build4, freshbrowser4/88originals, exactOFF/profile_rest/selectedprotecteddigests and independentAstraSCOPED_LOCAL_GO. NewownnameeditorbehinddefaultOFF; actualstalesandboxbanner bug fixedwithnativeenvnavigation.253historicalfailurebindings retained; no newskip/relaxation. [Checkpoint](../e2e-evidence/B-016/self-profile-checkpoint-5a0c699.md). WholeB016in_progress, notwholefeature/staging/release: Codexstillownsclosedregionalcompany/verifiedEmail/versionedfee design and proposedSQLhandoff; current Downloads/b016-db-handoff-design-pending.md explicitlyNOTAPPLYREADY/noSQL. Ronfeechoices pending outputs/B016-fee-rule-decisions.txt. Nextcompleteconcretedesign/independentreviewthenPEapprovednonMacapplication; don'tdelegateundefineddesignorclaimmigrationhandoffcomplete. Currentappfinalread-toCOMMITgap and inheritedraw/APIpermissionsnotsealed. Staging/Claude/ClassB/physicaldevice/pilot UNVERIFIED. All39/fourpartyLINE preserved; no B017source/prod/mainmerge/hostedactivation/newmigration/externalmessages/legalcopy.

@@ -1,0 +1,114 @@
+{
+  "status": "SCOPED_LOCAL_GATE_AND_BUILD_PASS",
+  "candidate": "5a0c6990e4b4b75bb0ab2534cc7742d46c608787",
+  "gateReceiptSha256": "5224e5e03628e0554cf1fe516a871761e861d07caa9b6526c10e27834d7d8884",
+  "buildReceiptSha256": "018b5125bf768bd4e62fd90d192c8d6c80e601b272883dbd7c0414b8d95e726d",
+  "gateLockSha256": "97b363ade6cbe3fc755ebe65212215762f9ca864281cd71caae8128498e3d85d",
+  "helperSha256": {
+    "supervisor.py": "b4bcfac9085d71d43fcda2529100bbb757e57c7a1328fa7066b79e2c8c9363df"
+  },
+  "summarySha256": "3bae0b07701b781cb7e21aa4fbfb7f342ba7936be16dbf094fac51073974b726",
+  "persistentClaimSha256": "cd3f27d7f5dbb6d0ad223572802bb0e8542832524f83c31792c59d582ef02667",
+  "counts": {
+    "unit": {
+      "tests": 630,
+      "pass": 630,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "sha256": "8c6ba05da29d0f1a48aa13cdf7cbac950b0fc128ee12354e9fa0bf8709927d78"
+    },
+    "rls": {
+      "tests": 467,
+      "pass": 466,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 1,
+      "todo": 0,
+      "sha256": "cdaca895d72271aa01fb81b83670ffb031043c92a352d35873607a9a76bb52b3"
+    },
+    "worker": {
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "sha256": "c1cc9943e42fa2dd9d818a44cc9f737c7d8bdf37af3d52cba9476759d9f13b89"
+    }
+  },
+  "historicalSkip": [
+    "ok 6 - a database with the older 20261022180000 upgrades forward, then accepts the same file again # SKIP Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29"
+  ],
+  "phaseExits": {
+    "gate": {
+      "createdb": 0,
+      "seed": 0,
+      "gate": 0
+    },
+    "build": {
+      "createdb": 0,
+      "seed": 0,
+      "next-build": 0,
+      "cf-build": 0,
+      "preflight": 0,
+      "worker": 0
+    }
+  },
+  "privateGateArtifacts": {
+    "postgres-16.log": {
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "lint.log": {
+      "sha256": "4e7b3a6ec111ce7a3847a02cfc2a631a691808fc5bae42d475209d1be0268132",
+      "bytes": 3401
+    },
+    "npm-ci.log": {
+      "sha256": "e3953fb19bc9f390840ede6134a4356c4eef5e276bcb0a0f39f6d218434b4a3e",
+      "bytes": 1794
+    },
+    "typecheck.log": {
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "copy-check.log": {
+      "sha256": "8312c3b49bf1af2c8932ad2030c20a5da6c5b9cac72e8ee5e91f6d0e938d43c0",
+      "bytes": 1434
+    },
+    "flag-expiry.log": {
+      "sha256": "9ed87796fd93acd1722f8194c2e541245236881b2c51c2e8fe3eeadfa9b615ed",
+      "bytes": 27
+    },
+    "steps.md": {
+      "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+      "bytes": 341
+    },
+    "test-unit.log": {
+      "sha256": "8c6ba05da29d0f1a48aa13cdf7cbac950b0fc128ee12354e9fa0bf8709927d78",
+      "bytes": 129960
+    },
+    "test-rls.log": {
+      "sha256": "cdaca895d72271aa01fb81b83670ffb031043c92a352d35873607a9a76bb52b3",
+      "bytes": 127848
+    },
+    "toolchain.log": {
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    }
+  },
+  "buildLogHashes": {
+    "createdb": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "seed": "e0530c0a56f78928dae95dc1b622c37cbf2996ebdbcf48fab363f7552d5f45a8",
+    "next-build": "27ec8a715c34d7b18f3462f8b9f578283af74ae75918646fa83aab5897b96dfc",
+    "cf-build": "804310c4fc28b3afd93cfe6a5e22b8b8f77a7d66a1d4e9b5da9c5efe07446d00",
+    "preflight": "3b4bcfe0349595a2174dd56490774aa8b79280815bb5284399c44899c0ba465b",
+    "worker": "c1cc9943e42fa2dd9d818a44cc9f737c7d8bdf37af3d52cba9476759d9f13b89"
+  },
+  "ownedGateChildPid": 34642,
+  "verifiedPins": 1013,
+  "gateAndBuild": "SCOPED_LOCAL_PASS for the standard gate and four build phases on the exact committed candidate. All 11 gate checks passed, with no RLS waiver. Recounted 630/630 unit, 466/467 RLS with the single previously approved b888ccd skip, and 1/1 Worker; zero failures or cancellations. Next verified the client bundle, OpenNext produced the Worker, and the original GNU-awk preflight reported PASS.",
+  "provenance": "All nine child processes, including the disposable DB setup for each invocation, exited 0 and drained. The two receipts and each child’s before/after 1,013 source pins match the r2 lock; the helper hashes match. The gate logged pinned-clean/final-clean checks, both supervisors recorded a clean final checkout, and their startup checks require a clean checkout. Rehashed all ten private gate files and every child log. The summary and private log directory bind to the launched gate child. The persistent candidate claim is intact, the shared checkout lock has been released and no fixed summary remains in the checkout.",
+  "limits": "No new gate or tests executed in this review. The v6 full browser matrix remains failed; the v7 matrix is separate and was pending at assignment. Whole feature, hosted, staging, pilot and release are outside this verdict."
+}
