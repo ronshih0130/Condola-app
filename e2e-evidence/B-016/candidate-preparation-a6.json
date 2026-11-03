@@ -1,0 +1,62 @@
+{
+  "time": "2026-11-03T05:22:12.889214-08:00",
+  "scope": "Precommit A5 backend47PASS; A6 working-source EN390 focus1PASS. HEADf1 is provenance, not runtime Git-tree claim. Final clean candidate gate/build/fullbrowser NOTRUN.",
+  "sourceMapSha256": "dafa66b5ec57561174eb557ff56c4576837362280dbb363e30010f817182467c",
+  "bindings": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-self-profile-runtime-v4/run-db-7b05d6b5b851/receipt.json",
+      "sha256": "6bdbc366e03c9345abf34dd8dbc10e74c07e38d66fe41e0343cdbdfed0138839",
+      "bytes": 178536
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-self-profile-runtime-v6/run-focus-2927551b083c/receipt.json",
+      "sha256": "a3b4515aacff6c409ff03bba0eea5b846bec75befe946573664050dc7e6ecaf9",
+      "bytes": 184022
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-self-profile-runtime-v6/run-focus-2927551b083c/recovery-result.json",
+      "sha256": "fd2d82e764885b06f06079bbaffdd4933898bfec920e69e8ebcdcf9b7d0c5191",
+      "bytes": 13040
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-source-a1-no-go/manifest.json",
+      "sha256": "81abdba755e9c83183d5d533815fb9e9a18e8b175dd20ba8ccff61b067c21f23",
+      "bytes": 5851
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-source-a2-no-go/manifest.json",
+      "sha256": "97d3a2e49904e208d27016543ee53e357718c0805cd73f41144147cedcabd93c",
+      "bytes": 5879
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-source-a3-no-go/manifest.json",
+      "sha256": "7bf5d659dbe91eaab860c5e8e4b6fc0a6c241c9a04d25598470c1754397d2c2d",
+      "bytes": 5891
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-target-a4-failure/manifest.json",
+      "sha256": "797d195607d686555bf4c17f99aff0d625ff05cd19c08883efc5f39aeccff3e0",
+      "bytes": 10548
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-focus-v4-failure/manifest.json",
+      "sha256": "a3a6c785db080350fc81fe94206a1aee1ac0f8b02434802de719cc899d986bf0",
+      "bytes": 12671
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-focus-v5-failure/manifest.json",
+      "sha256": "7c9b2e56addb36274cbf5755302ff71647b2994d0ef144e3920af9b3949c892f",
+      "bytes": 24031
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-astra-v2.md",
+      "sha256": "32e441e789e21a8e8e25deeee3c01282d22b3e07135cfd178308ffa67ea1838e",
+      "bytes": 1613
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-self-profile-runtime-v6/root-source-lock-a6-v6.json",
+      "sha256": "274c05cd8c77adeee2ee0ffddc248eb25af96bf72fa104d55cd7b31d84fd677c",
+      "bytes": 88972
+    }
+  ]
+}

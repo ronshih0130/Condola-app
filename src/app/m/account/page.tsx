@@ -1,5 +1,9 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { cookies } from "next/headers";
+import { PendingSubmit } from "@/components/pending-submit";
+import { staffProfileCopy } from "@/i18n/staff-profile";
+import { staffProfileView } from "@/server/staff-profile";
+import { actionSaveStaffDisplayName } from "@/server/staff-profile-actions";
 import { makeT } from "@/i18n";
 import { BackupCodes } from "@/components/backup-codes";
 import { PasswordFields } from "@/components/password-field";
@@ -25,7 +29,7 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; enroll?: string; backup?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; enroll?: string; backup?: string; profile?: string }>;
 }) {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
@@ -37,6 +41,9 @@ export default async function AccountPage({
     mfaStatus(session.userId),
     showMailPrefs ? memberEmailPrefs(session.orgId, session.userId) : Promise.resolve(null),
   ]);
+  const profile = session.kind === 'staff' && session.environment === 'live' ? await staffProfileView(session) : {state:'unavailable' as const};
+  const profileCopy = staffProfileCopy(session.locale);
+  const profileMessage = params.profile && ['stale','invalid','unavailable'].includes(params.profile) ? profileCopy[params.profile as 'stale'|'invalid'|'unavailable'] : null;
   const jar = await cookies();
   const challenge = params.enroll === "1" ? await peekChallenge(jar.get(CHALLENGE_COOKIE)?.value ?? "") : null;
   const backup = params.backup === "1" ? backupDisplay(jar.get(BACKUP_COOKIE)?.value) : null;
@@ -52,6 +59,15 @@ export default async function AccountPage({
             <b>{session.name}</b>
           </p>
           <p className="small">{session.email}</p>
+          {session.kind === 'staff' && <p className="small">{profileCopy.scope}</p>}
+          {profileMessage && <p role="status">{profileMessage}</p>}
+          {session.kind === 'staff' && session.environment === 'sandbox' ? <p>{profileCopy.sandbox} <a href="/api/env?set=live&next=%2Fm%2Faccount">{profileCopy.live}</a></p> : null}
+          {profile.state === 'ready' && <form action={actionSaveStaffDisplayName}>
+            <label className="f" htmlFor="staff-display-name">{profileCopy.label}</label>
+            <input id="staff-display-name" className="inp" name="name" defaultValue={profile.name} maxLength={100} required />
+            <input type="hidden" name="version" value={profile.version} />
+            <PendingSubmit className="btn sm" idle={profileCopy.save} pending={profileCopy.working} />
+          </form>}
         </div>
         <form className="card pad" action={actionChangePassword}>
           <h3>{t("i_change_password")}</h3>

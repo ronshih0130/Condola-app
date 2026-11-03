@@ -1,0 +1,29 @@
+{
+  "status": "HELPER_SOURCE_GO_ONE_EN390_FOCUS",
+  "sourceLockSha256": "274c05cd8c77adeee2ee0ffddc248eb25af96bf72fa104d55cd7b31d84fd677c",
+  "sourcePinsVerified": 1012,
+  "soleProductDeltaFromPriorLock": {
+    "src/app/m/account/page.tsx": "0ff359a62a0668cdb2279e4baf22285f4d9db701"
+  },
+  "helpers": {
+    "supervisor.py": {
+      "bytes": 11644,
+      "sha256": "15162f3923c355e94f25777166aa7cf75e90cfbe345e9d1be9ef7a4b9bf47477"
+    },
+    "probe.cjs": {
+      "bytes": 27196,
+      "sha256": "fe0378b4bf837b29378ff21882f165a08068cd531d3739075c6538491162d37f"
+    },
+    "recovery.cjs": {
+      "bytes": 12781,
+      "sha256": "09f647cb4f2e68d47a09503e08d93bfac8681e7a8a55241875f13aacddd122c2"
+    }
+  },
+  "playwrightCoreBundleSha256": "829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d",
+  "v5FailureBindingsVerified": 51,
+  "v5ArchiveManifestSha256": "7c9b2e56addb36274cbf5755302ff71647b2994d0ef144e3920af9b3949c892f",
+  "navigationProof": "V6 arms the live-switch navigation GET and the main-frame destination before the natural click. It checks a changed performance.timeOrigin, the exact account URL, absent sandbox banner and both guide variants, and the expected live editor state before recording a screenshot. There is no test-induced reload or goto between clicking and that state check.",
+  "actionProof": "Action outcome checks are armed before the pointer. Invalid/stale require the exact account URL, localized profile-card status and a finished pending state. Same-URL save/restore require canonical rendered name and input, a new hidden version, and finished pending state. The harness captures these before test reload and retains exact post-response and DB readbacks. The unchanged supervisor, independent recovery, exact local network guard and first-attempt baseline retain their prior scope.",
+  "blockingFindings": [],
+  "scope": "Permission is for one isolated EN390 focus only. There is no v6 runtime evidence yet. The V5 mixed-environment product issue and invalid-URL diagnostic failure remain historical; product correction and redirect settlement require the new runtime witnesses. Gate/build, full browser and release remain outside this verdict."
+}

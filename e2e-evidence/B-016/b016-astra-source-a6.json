@@ -1,0 +1,62 @@
+{
+  "status": "SOURCE_GO_FOR_BOUNDED_FOCUS_AFTER_HELPER_REVIEW",
+  "sourceMapSha256": "dafa66b5ec57561174eb557ff56c4576837362280dbb363e30010f817182467c",
+  "baseHead": "f1be31ee77dff48d132ce71040af1c3d13e28d62",
+  "pins": {
+    "src/server/staff-profile.ts": {
+      "blob": "292b97a00dd489c2878ba6169c1399557551d768",
+      "sha256": "4cf782287e4213703ca87007b3557e520feb9fcaa02482529634a18284f95f55",
+      "bytes": 7210
+    },
+    "src/server/staff-profile-rules.ts": {
+      "blob": "b9284a1756f407fd5518d6b01853cd2366af6fbb",
+      "sha256": "f8306e0f97d2cdb50aedbb9bcb2b8a8aaf4f73ea2397c7a202e00eea249e73b4",
+      "bytes": 936
+    },
+    "src/server/staff-profile-actions.ts": {
+      "blob": "cdcbbb04815e9ac407b5a0e93bab1f5cc255081a",
+      "sha256": "ad190886aa73ff2fdc5ce3e6bf56f88fd2005fc729beb8f82868be4b5f497e7d",
+      "bytes": 794
+    },
+    "src/server/staff-profile-rules.test.ts": {
+      "blob": "7eb734783128ed10f34de5095aa8c5fbcd2e5e1f",
+      "sha256": "dd6d94bb5ea9e40831da1a613dd352ccdea853a0280beccbcc9557c31bfd0df1",
+      "bytes": 1934
+    },
+    "src/server/staff-profile.integration.test.ts": {
+      "blob": "f233653a71d9a59275cc220242f0d01eb43fef1c",
+      "sha256": "41db5e6c5a15b37316a4f347a184c65300885934e4ab0cc30d658f16605bf800",
+      "bytes": 20341
+    },
+    "src/app/m/account/page.tsx": {
+      "blob": "0ff359a62a0668cdb2279e4baf22285f4d9db701",
+      "sha256": "da640e06c35c197395947e646b3abb1dac410241978ef9258970e98d8e531262",
+      "bytes": 7987
+    },
+    "src/i18n/staff-profile.ts": {
+      "blob": "e65a508324354016d18609296fc9de5a5f4da281",
+      "sha256": "dfa257780e5c11311faa649b5b690643987ca1004f39c83d1240138ea833b4a8",
+      "bytes": 1070
+    },
+    "package.json": {
+      "blob": "19e32ae8921cc5353338a768e3c1ab578fabd01a",
+      "sha256": "ed3d384f81d4385e05f4ffa460d2e5cccff961d482a6dd864e4221eb62b64053",
+      "bytes": 13308
+    },
+    "ops/flags.yaml": {
+      "blob": "0397a923964b7c5669ba03f2a9ad1345fd95db82",
+      "sha256": "e6334b67a7c9280356aa34e453ec8a07f94959ecb427efacd318c585f9b88a9b",
+      "bytes": 10998
+    }
+  },
+  "soleDelta": "src/app/m/account/page.tsx",
+  "deltaBlob": "0ff359a62a0668cdb2279e4baf22285f4d9db701",
+  "v5FailureManifestSha256": "7c9b2e56addb36274cbf5755302ff71647b2994d0ef144e3920af9b3949c892f",
+  "v5FailureBindingsVerified": 51,
+  "a5DbReceiptSha256": "6bdbc366e03c9345abf34dd8dbc10e74c07e38d66fe41e0343cdbdfed0138839",
+  "priorBackendEvidence": "11 integration plus 36 consent checks passed on unchanged backend bytes. No DB repeat needed for this source delta.",
+  "assessment": "The component now renders an ordinary same-origin anchor to the existing cookie-changing GET route, in place of the Next Link. This matches both established environment controls. The href, sandbox/staff visibility condition, localized text, live editor admission and other account behavior are unchanged. The only other diff removes the unused import. This directly targets the observed inconsistency without changing the root layout or authorization service.",
+  "remainingEvidence": "One separately reviewed/frozen EN390 focus should demonstrate a genuine new document from the natural click and show the live editor with neither sandbox banner nor tryout guide before any tester reload or goto. The helper must independently wait for exact invalid/stale URLs and localized statuses, or for the settled canonical name when success redirects to the same path. Source inspection does not establish either runtime outcome. V5 remains failed; prefetch causality is unproven.",
+  "runtime": "A6 browser/build/gate NOT_RUN",
+  "blockingFindings": []
+}

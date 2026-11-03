@@ -1,0 +1,528 @@
+{
+  "createdAt": "2026-11-03T04:23:17.574759-08:00",
+  "role": "PRIMARY_READ_ONLY_PLAN_NOT_IMPLEMENTATION_OR_FINAL_QA",
+  "requestedModel": "Sol/high",
+  "runtimeModelIdentity": "UNOBSERVABLE",
+  "candidate": "f1be31ee77dff48d132ce71040af1c3d13e28d62",
+  "ownerSession": "3099AC86-6AF0-4681-9944-304E930BFDC2",
+  "planningLog": "c9e45de4-664e-47d8-8594-34a5fc60a318",
+  "classification": "NARROW_LOCAL_SELF_NAME_PLAN_READY_FOR_INDEPENDENT_REVIEW",
+  "sourcePins": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/account/page.tsx",
+      "sha256": "18ab7b742bfbcb277773145b31c0ef93ffb13249ba0253e0527311a7ade87ac9",
+      "bytes": 6506,
+      "relativePath": "src/app/m/account/page.tsx",
+      "gitBlob": "cb7c7ed115a5f2353eda7c1bf37ab80629e96245"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/app/m/settings/page.tsx",
+      "sha256": "6723b2f914946f55e518374c7dc4e378081aad8971f4320027cf7c8059de2a68",
+      "bytes": 3522,
+      "relativePath": "src/app/m/settings/page.tsx",
+      "gitBlob": "9dd74ffabbf31606b1b446ec62c91fd64bd5b931"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/auth.ts",
+      "sha256": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+      "bytes": 62862,
+      "relativePath": "src/server/auth.ts",
+      "gitBlob": "9a2f2a3a08a215b4e503350c5a3ede0fa1ac081e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/auth-actions.ts",
+      "sha256": "39cad3edaa1df3c8c746683a82349dc57f1f1bd7830ce5e49b9182f8054a4689",
+      "bytes": 24022,
+      "relativePath": "src/server/auth-actions.ts",
+      "gitBlob": "fe57d75396628b85d7e718cabe8c47f80def07ac"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/audit.ts",
+      "sha256": "27f9acf92dbcbf92f2518b8b302bea48119a18129e572fd81861145fcf88493c",
+      "bytes": 2305,
+      "relativePath": "src/server/audit.ts",
+      "gitBlob": "beec5aa7a76f3f075970087242526e2c696a6381"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/db.ts",
+      "sha256": "782c99e988cee35570f7266c89d8cda814224a8abafb2707df23545ec8fbcc6b",
+      "bytes": 9056,
+      "relativePath": "src/server/db.ts",
+      "gitBlob": "1e7a4bc6a1bf93d10c921b2321666cba9465b345"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/session.ts",
+      "sha256": "29ddce7340d5bbec5a6dcf3f3a3a944c800b3a0a55b0e44726bedba3348558fe",
+      "bytes": 11375,
+      "relativePath": "src/server/session.ts",
+      "gitBlob": "eeac341482275fd4060c350e8dc02d20208de3bc"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/types.ts",
+      "sha256": "e92720a3a76f49b337286bafe2a7ab87764a4f0edef9e218f6f7737dfbcfa1cf",
+      "bytes": 1148,
+      "relativePath": "src/server/types.ts",
+      "gitBlob": "046221d44e89bdd3c2ed9534410df6573271da6a"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/perms.ts",
+      "sha256": "833b806c9cfdb8f3639a126756eb4ca60ae8acd3abdd6d2439700c50e17fced9",
+      "bytes": 7306,
+      "relativePath": "src/server/perms.ts",
+      "gitBlob": "626c89472406558eaac053d952de2c4136c607dd"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/record-archive-caller.ts",
+      "sha256": "f3a49286595554b0dac28668f41f898962670538e89e37ffd93f928a7378d611",
+      "bytes": 1802,
+      "relativePath": "src/server/record-archive-caller.ts",
+      "gitBlob": "29cf24a372c858c896f855ae78924650818b7088"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/consent-gate.ts",
+      "sha256": "8859327682ebe4ef2445d85bd1e6808543b36ed48b3af6e0e205af9c8e44580d",
+      "bytes": 4289,
+      "relativePath": "src/server/consent-gate.ts",
+      "gitBlob": "6ac26ed5afa7757c297de45b8060f87f6c727f8e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/consent-entrypoints.test.ts",
+      "sha256": "7d9c1deb0ba1a4d44cd1f8ac3ba90efd912d59d4a7126ec16648c2c0cf423d6c",
+      "bytes": 21418,
+      "relativePath": "src/server/consent-entrypoints.test.ts",
+      "gitBlob": "6c6439908a5c856573c874134fa7bf550f8124a5"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/mail-settings.ts",
+      "sha256": "8a219f0348f2aa4f52b2514c0e6879ce007f20ce244ea2419ee00e1a90a6822e",
+      "bytes": 3198,
+      "relativePath": "src/server/mail-settings.ts",
+      "gitBlob": "2c0e85302cc0a67708366dbd2c63e91a69e36d56"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/signup.ts",
+      "sha256": "7f4b763ac465a1be24a68076c78a30914b31a71b495ca288a8ed0f4ba9aa8115",
+      "bytes": 30527,
+      "relativePath": "src/server/signup.ts",
+      "gitBlob": "13fc37221aae807238a642e5033544b789c81fe8"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/signup-gotrue.ts",
+      "sha256": "2f54d6ca0c0c06e33cc225419d2206c07e1a548c22c2657595fabead3c2056a2",
+      "bytes": 9877,
+      "relativePath": "src/server/signup-gotrue.ts",
+      "gitBlob": "b6b8a057166a565995694d75c13dfa33098d3c5a"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/org-country.ts",
+      "sha256": "70c62190f68e2d48e92c931e3919400a04ac4cccd10105bb7585125b925394a1",
+      "bytes": 571,
+      "relativePath": "src/server/org-country.ts",
+      "gitBlob": "5e0510a40e9925814ddaaa88e6d0d9eb946e76d4"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/countries.ts",
+      "sha256": "a16d504681e6bf16feb972aa78372428018e80cb3da795f1fb26a5011f291b57",
+      "bytes": 1372,
+      "relativePath": "src/countries.ts",
+      "gitBlob": "6b88509df889d36a61680adc9a4c32a068d1a91e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/domain.ts",
+      "sha256": "6a48d9373f922827a66e0f1a057559b8f4dd39e15f33be9fd835d9d323bc85e0",
+      "bytes": 132158,
+      "relativePath": "src/server/domain.ts",
+      "gitBlob": "35bc6ac992368da7af34e8d70e62ee6e706b6766"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/queries.ts",
+      "sha256": "690781b8fd3e2e858925b53ee26427669230ee2f68b7383575d60d5c066ba679",
+      "bytes": 80126,
+      "relativePath": "src/server/queries.ts",
+      "gitBlob": "bb40a5b03f5a1fea2c17bfc55682cec885c07ce2"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/statement-calculation.ts",
+      "sha256": "5a98d53ed37d9e5c41cc3e593aa370e7b9b06ebbc3b71ac8c6fd6ba5721551a4",
+      "bytes": 7626,
+      "relativePath": "src/server/statement-calculation.ts",
+      "gitBlob": "aeb6da8bbbb7726d0d4117e5fb9d769438045d5e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/money.ts",
+      "sha256": "29aa4315f5aee3f508e8260ad3151fa1ce653329de49e1c44ad6175dbf2deb33",
+      "bytes": 10102,
+      "relativePath": "src/server/money.ts",
+      "gitBlob": "86628e46e20968a991cbe54360ba22d5b5ed7dca"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/audit-read.ts",
+      "sha256": "5f637b887f6efd121af7a0d9388210683181e9000ee6c5edf004808abf32f167",
+      "bytes": 28765,
+      "relativePath": "src/server/audit-read.ts",
+      "gitBlob": "bb26f44f927f116bd4a087ab7c7e8d1c7bba01b8"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/billing-preview-rules.ts",
+      "sha256": "cf81f239a556d77ceb523299d7aa2baee53ff5f4fb02d01389504579667573b7",
+      "bytes": 912,
+      "relativePath": "src/server/billing-preview-rules.ts",
+      "gitBlob": "9bf3887037c0ae7e75656c590996b8888fe9618b"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/test-auth-session.ts",
+      "sha256": "c89bbf1916f4c59fa72f1d6b7e729e335620a3e29fad6b43cfb6b42480acf507",
+      "bytes": 580,
+      "relativePath": "src/server/test-auth-session.ts",
+      "gitBlob": "7657ab42f0a52fa44bee680d203b929002c7b871"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/auth.integration.test.ts",
+      "sha256": "2687227952f7050172bcbe202a37f784459211057b70e55fb3141d0c3334ff8f",
+      "bytes": 23508,
+      "relativePath": "src/server/auth.integration.test.ts",
+      "gitBlob": "51336c73b93c32950b8b674792545ee9ace695f9"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/src/server/statement-preview.integration.test.ts",
+      "sha256": "0c819c9e4b4121c29a313772ccb5443cea57ab056b26ddc092e8a60b724c4458",
+      "bytes": 22892,
+      "relativePath": "src/server/statement-preview.integration.test.ts",
+      "gitBlob": "5310e4fb887322eba9edf6dc174b74f83150d8fd"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261018120000_schema.sql",
+      "sha256": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615",
+      "bytes": 143903,
+      "relativePath": "supabase/migrations/20261018120000_schema.sql",
+      "gitBlob": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261020120000_auth.sql",
+      "sha256": "6fa5fce2fd2316c59eb2632967db5a6ae380531f9caa478ff9142a5046e21c81",
+      "bytes": 7157,
+      "relativePath": "supabase/migrations/20261020120000_auth.sql",
+      "gitBlob": "60998ac8e77a8366e67b9358dd87072b7d7b046a"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261020140000_audit_access.sql",
+      "sha256": "6f9909c6e9a4fbea6a8c3c58485b7d1336a93d61af485dd0766b033add43f5b6",
+      "bytes": 294,
+      "relativePath": "supabase/migrations/20261020140000_audit_access.sql",
+      "gitBlob": "f0802260e45c39c013af74c9e0e14e01e1b79316"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/supabase/migrations/20261022120000_self_serve_signup.sql",
+      "sha256": "54621978adc7a13cff25ea813118c363bae15125526abd2864b080dc0e458cb4",
+      "bytes": 5005,
+      "relativePath": "supabase/migrations/20261022120000_self_serve_signup.sql",
+      "gitBlob": "e386801939bcb6ab5d624ca8de1d73938fd5530f"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/ops/flags.yaml",
+      "sha256": "a428e008e7f93787037ae7f221a9ad482da1b4658ec70595ed656d42ed419502",
+      "bytes": 10406,
+      "relativePath": "ops/flags.yaml",
+      "gitBlob": "71d694650ae5983e91ad862948450e6d368d678e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/package.json",
+      "sha256": "6e65dc79f1221efe3c97c918c4c814383e710e4f15d928baf5cedfa225c4f7b6",
+      "bytes": 13189,
+      "relativePath": "package.json",
+      "gitBlob": "e2c594b3ea755aa386eb1d7ac5b1ad9e3c9f8e5d"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/scripts/gate.sh",
+      "sha256": "52bac3ab0e9bac90b1deb21c6eee4e81a280178435dc85d0f4ea56feb00831dd",
+      "bytes": 11096,
+      "relativePath": "scripts/gate.sh",
+      "gitBlob": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/scripts/run-e2e.ts",
+      "sha256": "31fe636d5185667737b49bdf5308520271785e5d4f88c005615a106dcf5944a1",
+      "bytes": 6000,
+      "relativePath": "scripts/run-e2e.ts",
+      "gitBlob": "da324da9c0d1999b7139452e5503b2e6e4e42168"
+    }
+  ],
+  "policyBindings": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/AGENTS.md",
+      "sha256": "76a269081778856332ddc0eca751c432a6e6fc601da670fac2051cc83dc54346",
+      "bytes": 12654
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/AGENTS.md",
+      "sha256": "ad6a6f6af1cefd99c36ee84a164bb97ce0211cbe59a648a472243260700e90cc",
+      "bytes": 5223
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/README.md",
+      "sha256": "aafa41ee66be82a905c68685099a5c00c1157a271c41fd7a5c62849e78946594",
+      "bytes": 3932
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/BUILD-ORDER.md",
+      "sha256": "17edf74440b18e4b80d7da7098b6064a4d9db3346f8ec07f10020c3d06f84442",
+      "bytes": 35246
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/BLOCKED.md",
+      "sha256": "759d10c8ec830028a4adaadb20379e190a51f79764b3f15f7d250195a0e41d0f",
+      "bytes": 80070
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/QA-STANDARD.md",
+      "sha256": "35d19d4363023810ab2083f910af926517e365d4f4e8bf37e6925f3c0801e7e6",
+      "bytes": 6192
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/20-build/specs/B-016.md",
+      "sha256": "b3a78020ef699dd61f6927cbfb6d9f82fc46b62451e58bea707e2859e38729e5",
+      "bytes": 1047
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/ops/roles/start.md",
+      "sha256": "d7174e8af0444018e7f188d7b28bd741dc2c83df3d8b2a778725e8d92d928c6a",
+      "bytes": 4361
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/ops/roles/pe.md",
+      "sha256": "ff4d33bc3fb755a026e61fae911195d13fc9e752eca34594cdd050712cfcb701",
+      "bytes": 4505
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/ops/roles/qa.md",
+      "sha256": "f7467415a3783a31aa11e91aedcddfb6169296c0f9a1065aec1604663f1e5467",
+      "bytes": 4556
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/ops/RULES.md",
+      "sha256": "f80bc1c60dfa3b37144c29cb3f287402ff29a5e192b246912fea48e8627609f8",
+      "bytes": 3852
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/ops/PRINCIPLES.md",
+      "sha256": "8e01d4987f2c4585865ac7b68c89d94757e405cdbf26bfd2ab038cc1ffdb7a7a",
+      "bytes": 6668
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/ops/ROADMAP.md",
+      "sha256": "6ea80325f99b087ae7bfdefec4ed04a9eeb00bb6e5d3a8d5803e244bbcd722e3",
+      "bytes": 1475
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/docs/README.md",
+      "sha256": "85792705c86e94f49a8199e38170301e00e844a63a2318a4a770b85165890706",
+      "bytes": 2255
+    }
+  ],
+  "hubBindings": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/README-context-pack.md",
+      "sha256": "53ebeae8384afe7ed154ea47e0db7b29bc50a48e4713477b93450211fb57c413",
+      "bytes": 782
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub/INDEX.md",
+      "sha256": "81b4cb36a265052e56295ee6b7ee199b1c172422c98608b265e9cfe3da1b1ec0",
+      "bytes": 2962
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub/05-capabilities/capability-list-v1.md",
+      "sha256": "66711f5a1083cdcff0e5e71120d9105280daeb5857e71ec41da9073edbffa840",
+      "bytes": 41332
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub/05-capabilities/current-state.md",
+      "sha256": "d7699465a69ec2129080bdc6f00c8d4e7b07265ba926c7f3eff592b151675e13",
+      "bytes": 73541
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub/04-journeys/user-stories.md",
+      "sha256": "22bf0994f423501678f6b53272cf2487951a373ac9611a77eb19298cbbeada68",
+      "bytes": 43511
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub/04-journeys/journeys.md",
+      "sha256": "08f6dc43aba0dec21760521bb4b11fe39b64c3be6f11e9ed3e41d87eb7d30334",
+      "bytes": 29156
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/hub/05-capabilities/p0-build-queue.md",
+      "sha256": "06d3aba41e1518bd1d9d41de674af8eec405abecebc138326cc838e1e8ef8b7f",
+      "bytes": 28180
+    }
+  ],
+  "evidenceBindings": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-003/status.md",
+      "sha256": "bc3f3eecfbec86591ce60b4b2f9da3d23915a82e9a3d5d74226606d431e6edc8",
+      "bytes": 6695
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-003/verdict.md",
+      "sha256": "44375f697320c156e1db825d5007f2c14324ed490a7261fb9b4c5d7b93b5a204",
+      "bytes": 1685
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-014/owner-transfer-checkpoint-0b7c3a4.md",
+      "sha256": "8ce0df8d51a98fc7dbcb16925d206a3ab78d21648cc66847d99da89290d97980",
+      "bytes": 3432
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-015/mobile-wizard-checkpoint-bb180a5.md",
+      "sha256": "edb88cef16260e8a171f1dfe1d762b1b808063fb131b7b0094d7f1910683f09b",
+      "bytes": 2280
+    }
+  ],
+  "hubFreshness": "Supplied PE context snapshot dated2026-10-29, parent verifies context-pack SHA2569a344a2200e3a19be1a21dbcfcfea5904859d77d3403d91d5008d16884e821ec; canonical path mapping, not current deployment proof.",
+  "hubBasis": [
+    {
+      "path": "hub/05-capabilities/capability-list-v1.md",
+      "lines": [
+        102,
+        106
+      ],
+      "requirement": "CAP-M-25 full regional company profile after CAP-M-03; CAP-M-29 fee maintenance/audit and personal name/email editing."
+    },
+    {
+      "path": "hub/05-capabilities/current-state.md",
+      "lines": [
+        110,
+        126,
+        130
+      ],
+      "requirement": "M-42 fee edit absent; M-58 personal name/email readonly; M-62 existing admin company contact mail/phone is already built."
+    },
+    {
+      "path": "hub/04-journeys/user-stories.md",
+      "lines": [
+        37,
+        37
+      ],
+      "requirement": "MGT-04 company/contact details editable; addresses/identifiers region-specific."
+    }
+  ],
+  "dependency": "B0030fb7c15 scoped local PASS reused only for existing payee gateway/company-contact boundary. B003 whole item pending old-app/new-schema/rollback, exact staging/grants/Claude/ClassB/Ron. Local personal-name slice neither invokes payee fields nor depends on staged schema, so may proceed separately; no whole dependency done claim.",
+  "reconciliation": {
+    "alreadyBuilt": [
+      "Company contact email/phone and reminder toggles via actionOrgMail/saveOrgMailSettings; company settings admin-only.",
+      "Profile shows session.name/email and existing password/MFA/session management; signup and invitation provisioning are not a signed-in verified email replacement.",
+      "Existing fee_rules supports fixed/percent/hybrid/per_usage and management_agreements effective dates; generic audit exists.",
+      "Statement issuance stores fee_rule_snapshot and amounts and existing generate returns stored statement; current label roster still looks up live fee name."
+    ],
+    "missing": [
+      "Personal name save form/service.",
+      "Verified signed-in email-change lifecycle/provider integration, separate from signup/unaccepted-invite flows.",
+      "Regional company address storage/identifier schema and authorized regional field registry; existing name/legal_name/tax_id do not supply complete regional profile.",
+      "Versioned fee editing, deterministic per-scope resolution, immutable attribution, explicit effective-date/overlap policy and full issued-report immutability."
+    ],
+    "importantConstraints": [
+      "profiles are user-global and lack org_id, so sandbox must not silently mutate real identity.",
+      "Authenticated profile self-RLS is available but audit_log INSERT is explicitly revoked; tx plus separate writeAudit is not atomic. Existing svc+same-client writeAudit supports narrow authorized atomic application write.",
+      "No current raw/older-writer DB-seal or hosted guarantee is supplied by this app-only slice."
+    ]
+  },
+  "selectedSlice": {
+    "title": "Actual live-staff self display-name edit on /m/account",
+    "writes": [
+      "profiles.display_name only",
+      "same-transaction metadata-only auth_events audit"
+    ],
+    "neverWrites": [
+      "profiles.email",
+      "auth.users or identities/email/password/MFA/session state",
+      "contacts/invitations",
+      "organizations legal/contact/payee data",
+      "fee_rules/management_agreements/statements"
+    ],
+    "identityScope": "Account-wide self name; clearly state scope in UI. Permit current live staff only, all four existing staff roles self-only. Sandbox read-only with existing return-to-live route; owner/tenant persona and missing/stale/forged live/member/session scope denied. This is bounded first slice, not final whole B016 identity policy.",
+    "flag": "Adopt one canonical company_profile_edit key, explicit reconciliation of proposed COMPANY_PROFILE_EDIT* queue spelling. Strict global object enabled===true+allowed_org_ids includes exact selected live org AND org.feature_flags.company_profile_edit===true. Missing/null/malformed/wrong type/global OFF/no allowlist/orgfalse OFF. Registry defaultOFF owner expiry ring/kill. No uppercase/lowercase aliases, new schema, operational setting or opt-in provisioned.",
+    "action": "Dedicated src/server/staff-profile-actions.ts with direct requireCurrentConsent before any FormData parsing, fresh getSession, minimal result only; derive self user/org/session/live context, never accept target principal or company authority from form.",
+    "service": "Dedicated staff-profile.ts. Validate server-selected live staff and input. Preauthorize before svc; within existing svc(userId,...), independently revalidate actual selected org/live structure, active same-role membership, current matching auth session and consent/partner state; serialize own profile and compare expected version after locks/waits, recheck current clock-time/session/flag before mutation. Update one self row only, exact allowlisted column; metadata audit via writeAudit(orgId,userId,profile_name_changed,{field:display_name,scope:account,source:manager_account,...safe context},sameClient) commits atomically. Audit failure rolls name back. No new privileged DB function or granted browser write authority.",
+    "concurrency": "Expected digest of self profile id/display_name/version using exact row version; lock/re-read own row. Same requested value\u2192unchanged, stale different value\u2192conflict with reload, zero row\u2192unavailable. No blind overwrite, automatic retry or fabricated saved status. Hold/recheck actual authority through waits. No generic receipt/recovery engine; for uncertain network outcome reload current canonical name before retry.",
+    "input": "One trimmed Unicode display name, nonblank, bounded100 Unicode code points, reject control characters; no ASCII-only rule, email/phone parsing or invented legal-name validation. HTML maxLength may be conservative, server authoritative.",
+    "ui": "Small native guarded self-name form in existing /m/account card, localized in src/i18n/staff-profile.ts; account-wide note and live-only editing, sandboxreadonly. Existing email staysreadonly. Success/error/conflict/unavailable/explicit reload accurately reflect canonical state; no fake saved state, no protected legal copy/global CSS work. A new client component is not required; exact7 author paths govern. Any essential extra path needs root reconciliation before edit."
+  },
+  "proposedReservations": [
+    "src/server/staff-profile.ts",
+    "src/server/staff-profile-rules.ts",
+    "src/server/staff-profile-actions.ts",
+    "src/server/staff-profile-rules.test.ts",
+    "src/server/staff-profile.integration.test.ts",
+    "src/app/m/account/page.tsx",
+    "src/i18n/staff-profile.ts",
+    "ops/flags.yaml",
+    "package.json"
+  ],
+  "reservationLimits": "Root has reserved exact7 Terra paths plus2 root paths per b016-self-profile-reservation.json; no other source/helper/runtime paths implicitly reserved. Browser probe outside under root only; no permanent new e2e file/runner edit needed.",
+  "targetedAcceptance": [
+    "Real self admin/manager/accountant/maintenance name update; original user identity, profile/auth email, password hash, contacts, org/payee/fee/statement rows unchanged.",
+    "Denied actor cases: anonymous/tenant/owner, forged other user ID, other-org or mismatched env/live/member/session context, suspended/changed-role/revoked/expired while waiting. Sandbox makes no global identity write.",
+    "Strict defaultOFF/global/org/malformed/allowscope matrix; flag hidden control and direct server action both enforce. Normal self edit cannot modify another user, even if caller can view teammate.",
+    "Two tabs stale different name\u2192conflict; same requestedvalue replay\u2192unchanged; profile row missing\u2192no insertion; concurrent writes do not lose newer update.",
+    "Audit metadata contains no old/new name/email/token; injected actual audit write failure rolls name back. No failure logs expose inputs.",
+    "Actual /m/account UI on EN/zh390/1280: OFF readonly; local ON seeded normal name\u2192new name\u2192reload persists in profile/sidebar; readonly trusted email unchanged; invalid name and stale second-tab conflict; network uncertain reload, pending disabled and ordinary pointer save.",
+    "No external Email/LINE/provider call; strict console/pageerror/5xx/external request checks; flags full-row/selected-org restoration and read-only readback."
+  ],
+  "commandsNotRun": [
+    "node --import tsx --test src/server/staff-profile-rules.test.ts",
+    "node --import tsx --test --test-concurrency=1 src/server/staff-profile.integration.test.ts",
+    "node --import tsx --test src/server/consent-entrypoints.test.ts src/server/consent-enforcement.test.ts",
+    "node --import tsx --test src/server/auth.integration.test.ts (isolated approved disposable clone)",
+    "npm run typecheck",
+    "npx eslint src/server/staff-profile*.ts src/app/m/account/page.tsx src/i18n/staff-profile.ts",
+    "npm run copy:check",
+    "node /Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-staff-profile-browser-v1/probe.cjs (root-owned future outside actual UI probe)"
+  ],
+  "runtimeContract": "Root owns unique loopback port and fresh existing-approved core93 synthetic clone, pinnedNode20.20.2/npm per ops/toolchain, source/helper freeze and cleanup. Only existing approved schema/seed; NO proposed SQL/parser/new migration. Source+helper independent review first; targeted tests and EN390 focus first. Once stable freeze immutable candidate and standard scripts/gate.sh <exactSHA> clean clone; after actual PASS Next+CF+original GNUawk preflight+Worker and final EN/zh390/1280 browser/read-only control readback. No third identical failure/full-gate loop; preserve each failure; highest independent final reviewer separate from author. B003/staging/Claude/othermachine/pilot not inferred.",
+  "futureHandoffPlan": {
+    "status": "NOT_READY_PENDING_CLOSED_HANDOFF_DESIGN; planning considerations only, not implementation authority",
+    "ownership": "Codex authors complete app/gateway/schema/compatibility design plus source review; PE provides actual target/catalog/private-server/security, approved non-Mac application/backup/counts/rollback evidence; no offloading unspecified design to PE.",
+    "deliverables": "Separate detailed B016 company/verified-email/fee handoff Markdown + inactive proposed unique-timestamp additive SQL only after primary design decisions/source review. Do not package unreviewed draft as apply-ready. This read-only task writes only the outside primary plan.",
+    "companyRegion": [
+      "Reuse organizations name/legal_name/tax_id/country/jurisdiction/contact fields. Add or explicitly justify versioned structured company address storage, canonical field schema/version/source and metadata; do not hide a new unchecked schema in generic settings.",
+      "Existing countries.ts offers TW only and unknown country falls back toTW; new identifier editor must not silently reuse that fallback for an unsupported jurisdiction. Scope fields/validation to authorized source and actual country; unsupported incomplete mapping\u2192explicit unavailable, never inventedidentifier or verifiedqualification.",
+      "Admin settings.edit; selected-org/current-authority/env/version checks, granular snapshots/audits and address/identifier data boundaries. No payment-account mutation/qualifying legal claim."
+    ],
+    "verifiedEmail": [
+      "Do not reuse signup_verifications or invitation acceptance to replace established login email. Preserve current auth.users email, identities, recovery routing and profiles.email until actual provider verified change.",
+      "Design user-bound one-time pending request with target/original normalized identities, current reauth/MFA assurance, source/request/version/expiry/status/tokenhash; invalidate superseded/replayed/expired targets, case uniqueness and provider identity coherence.",
+      "Exact new-address proof and required old-address/step-up policy, cancellation, revoke/retain session policy, provider integration and rollback are explicit design decisions; local no-send mocks only. Gate email write dependent until settled, independently reviewed and actual target supported.",
+      "Test wrong-user/token/state/replay/concurrent targets, old-email login/recovery preserved before verification, verified commit atomically changes coherent auth/profile only once; mocks do not prove real inbox delivery."
+    ],
+    "feeVersions": [
+      "Retain existing fee_rules fields and management_agreements relationships, but add closed append-only revisions/bindings/effective intervals/source actor+request id and deterministic overlap constraints with correct org/owner/property/currency semantics. Never mutate old fee rows referenced by issued snapshots.",
+      "Current calculateStatement chooses one owner rule LIMIT1 at period-end and applies it to aggregated owner rent; it ignores separate property rates/max/basis variants. Define approved supported policy: default vs property precedence, exact effective cutoff/midmonth behavior, fixed fee once-per-owner vs perproperty, archived rule/currency handling and allowed supported formula shapes. These financial choices are unresolved; do not silently invent rules to implement an editor.",
+      "Define serialization of setting change vs preview/issuance, version/fingerprint provenance and statement fee snapshot including exact rule/revision/source. Snapshot label must serve issued roster/PDF/history, not current live fee lookup at queries.ts904\u2013909. Preserve existing stored amounts/report rows; no retroactive issue rewrite.",
+      "Coordinate B014 report-version/issued-row/oldwriter guarantees and avoid claiming existing snapshots prove DB-level immutability. Test disjoint/backdated/equal-boundary/overlapping/concurrent effective changes, perproperty and owner defaults, unsupported shape denial, prior issued snapshot/bytes and amounts unchanged, future report correct, raw/oldwriter admission/rollback on actual target."
+    ]
+  },
+  "openDependencies": [
+    "Full regional company metadata/identifier contract",
+    "Verified email durable/provider/security flow",
+    "Full fee version/effective resolution and issued-report immutability/compatibility",
+    "B003 staged/rollback/Claude acceptance and B014 report-version integration",
+    "Exact hosted catalog/app/security/backup/rollback/staging/Claude/ClassB/Ron/pilot"
+  ],
+  "actionsPerformed": {
+    "sourceEdits": false,
+    "repoWrites": false,
+    "runtime": false,
+    "tests": false,
+    "database": false,
+    "sqlParseOrApply": false,
+    "wrappers": false,
+    "externalMessages": false,
+    "flags": false,
+    "nextItemStarted": false
+  },
+  "decision": "Proceed to independent plan review and root path reservation for narrow live-staff self-name implementation on existing schema. Park only verified-email/regional/versioned-fee schema/provider dependencies with detailed design handoff. Whole B016 and all39/four-appLINE ecosystem/pilot remain incomplete.",
+  "reservationBinding": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-self-profile-reservation.json",
+    "sha256": "567871d8421b13311b5c3ee414c0e5b58ce08f319905a0032716444280dcd9d4"
+  }
+}
