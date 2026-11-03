@@ -3,6 +3,7 @@ import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { currentOwnerTransferStaff, lockOwnerTransferPeriod } from "./owner-transfer-period-lock";
 import { maybe, many, one, svc, tx } from "./db";
+import { lockFreshLeaseTarget } from "./lease-target";
 import { FlowError } from "./errors";
 import { deliveryPlan, outboundNote, SANDBOX_NOT_SENT } from "./outbound";
 import {
@@ -923,34 +924,7 @@ export async function createLease(session: Session, input: LeaseInput) {
         billKept: false,
       };
     }
-    const space = await one<{
-      id: string;
-      unit_id: string;
-      property_id: string;
-      currency: string;
-      kind: string;
-      label: string;
-    }>(
-      client,
-      `SELECT id, unit_id, property_id, currency, kind, label
-         FROM (
-           SELECT r.id, r.unit_id, u.property_id, p.currency, 'room'::text AS kind, r.label, 0 AS rank
-             FROM rooms r
-             JOIN units u ON u.id = r.unit_id
-             JOIN properties p ON p.id = u.property_id
-            WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL
-              AND u.rental_mode = 'by_room'
-           UNION ALL
-           SELECT u.id, u.id, u.property_id, p.currency, 'whole_unit'::text, u.label, 1
-             FROM units u
-             JOIN properties p ON p.id = u.property_id
-            WHERE u.id = $1 AND u.org_id = $2 AND u.archived_at IS NULL
-              AND u.rental_mode = 'whole_unit'
-         ) spaces
-        ORDER BY rank
-        LIMIT 1`,
-      [input.roomId, session.orgId],
-    );
+    const space = await lockFreshLeaseTarget(client, session.orgId, input.roomId);
     assertLeaseMoney(space.currency, rentMajor, depositMonths);
     const depositPolicy = await resolveDepositPolicy(client, session.orgId, space.property_id, input.startDate);
     const override = leaseDepositOverride(depositPolicy, depositMonths, input.depositReason ?? "", session.userId, toMinor(rentMajor));

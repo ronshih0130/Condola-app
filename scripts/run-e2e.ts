@@ -71,6 +71,7 @@ for (const file of files) {
     : ["e2e/b008-billing-preview.spec.ts", "e2e/b008-first-period.spec.ts", "e2e/b008-monthly-preview.spec.ts", "e2e/b008-monthly-rent-detail.spec.ts"].includes(file) ? ["--config", "e2e/b008-preview-private-playwright.config.ts"]
     : file === "e2e/bank-matching.spec.ts" ? ["--config", "e2e/b009-bank-private-playwright.config.ts"]
     : file === "e2e/payment-center-events.spec.ts" ? ["--config", "e2e/b010-payment-center-private-playwright.config.ts"]
+    : file === "e2e/b015-archive-guard.spec.ts" ? ["--config", "e2e/b015-archive-guard-private-playwright.config.ts"]
     : file === "e2e/b015-edit-local.spec.ts" ? ["--config", "e2e/tenant-directory-edit-playwright.config.ts"]
     : file === "e2e/b015-directory-local.spec.ts" ? ["--config", "e2e/tenant-directory-compat-playwright.config.ts"]
     : centerSpecs.has(file) ? ["--config", "playwright.b017-localhost.config.ts"] : [];

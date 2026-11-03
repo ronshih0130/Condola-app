@@ -483,15 +483,15 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
                   p.name AS property_name, p.currency, r.base_rent_minor::text AS base_rent_minor,
                   'room'::text AS kind, p.created_at, 0 AS rank
              FROM rooms r
-             JOIN units u ON u.id = r.unit_id
-             JOIN properties p ON p.id = u.property_id
-            WHERE r.org_id = $1 AND r.archived_at IS NULL AND p.archived_at IS NULL
+             JOIN units u ON u.id = r.unit_id AND u.org_id = r.org_id
+             JOIN properties p ON p.id = u.property_id AND p.org_id = u.org_id
+            WHERE r.org_id = $1 AND r.archived_at IS NULL AND u.archived_at IS NULL AND p.archived_at IS NULL
               AND u.rental_mode = 'by_room'
            UNION ALL
            SELECT u.id::text, ''::text, u.id::text, u.label, p.name, p.currency,
                   u.base_rent_minor::text, 'whole_unit'::text, p.created_at, 1
              FROM units u
-             JOIN properties p ON p.id = u.property_id
+             JOIN properties p ON p.id = u.property_id AND p.org_id = u.org_id
             WHERE u.org_id = $1 AND u.archived_at IS NULL AND p.archived_at IS NULL
               AND u.rental_mode = 'whole_unit'
          ) spaces
