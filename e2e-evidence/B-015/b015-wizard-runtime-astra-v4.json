@@ -1,0 +1,132 @@
+{
+  "status": "DESKTOP_PASS_MOBILE_SUBMIT_UNVERIFIED",
+  "decision": "Desktop existing-tenant submission passed in both languages. Both 390 cases reached review but stopped before final submit. No core product blocker was established. The four-case diagnostic remains incomplete.",
+  "candidate": "bb180a50f0ca17e889728c29e737f659f42977c0",
+  "receiptBindingsVerified": 66,
+  "sourcePinsVerifiedBeforeAfter": 1006,
+  "helpersVerifiedBeforeAfter": 2,
+  "pngDimensions": {
+    "390x900": 26,
+    "1280x900": 22
+  },
+  "originalsVisuallyReviewed": [
+    "en-390-review-initial.png",
+    "en-390-review-horizontal-0.png",
+    "en-390-review-horizontal-1.png",
+    "zh-TW-390-review-initial.png",
+    "zh-TW-390-review-horizontal-0.png",
+    "zh-TW-390-review-horizontal-1.png",
+    "en-1280-submit.png",
+    "zh-TW-1280-submit.png"
+  ],
+  "mobileTextIntervalsPixels": {
+    "en-390": [
+      [
+        0,
+        207.703125
+      ],
+      [
+        47.703125,
+        377.375
+      ]
+    ],
+    "zh-TW-390": [
+      [
+        0,
+        245
+      ],
+      [
+        47,
+        377.0625
+      ]
+    ]
+  },
+  "mobileNextHitsPerLocale": 7,
+  "mobileFinalSubmit": "NOT_REACHED",
+  "desktopCasesPassed": 2,
+  "desktopOrgContactCounts": "10→10 each",
+  "v4ProcessExits": {
+    "createdbExit": 0,
+    "seedExit": 0,
+    "browserExit": 1,
+    "effectiveExit": 1,
+    "serverExit": 0
+  },
+  "strictErrors": [],
+  "finalControls": {
+    "organizations": [
+      {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "environment": "live",
+        "live_org_id": null,
+        "feature_flags": {
+          "line_alerts": false,
+          "branded_line_oa": false
+        }
+      },
+      {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "environment": "live",
+        "live_org_id": null,
+        "feature_flags": {
+          "line_alerts": false,
+          "branded_line_oa": false
+        }
+      }
+    ],
+    "aggregate": {
+      "optins": 0,
+      "any_org_enabled": 0,
+      "enabled": 0
+    },
+    "baselineComparison": {
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "knownRowsUnchanged": true
+    }
+  },
+  "inputs": {
+    "receipt.json": {
+      "bytes": 186027,
+      "sha256": "04cf09efd5d50942d22a5b0b10196d6bfec3e2fba26082b16ab44b5b366ce8d4"
+    },
+    "browser-result.json": {
+      "bytes": 531,
+      "sha256": "7b6ff1f586e43128fb414bf725d5932717d813fc0b6a80cf347906ee7eb2c598"
+    },
+    "source-lock-v4.json": {
+      "bytes": 88262,
+      "sha256": "d6857c408de4c3c9b644e57a7d1bf4064ff703ac33e9cb8b40611efd59c23fb8"
+    },
+    "flags-seed.json": {
+      "bytes": 542,
+      "sha256": "555855bf1ab77509e27beb8cef48ba60d16030b3eb1c5b0b8fe59a892403095f"
+    },
+    "flags-off.json": {
+      "bytes": 544,
+      "sha256": "35130523593e75e553aa8ac5859f5df3528432427a35397433f242b9ac39d7af"
+    },
+    "flags-final.json": {
+      "bytes": 661,
+      "sha256": "48f9ef926d6c9a11cf94fdcc67e0fd9b6b791a1013be2136e64e8952262e6563"
+    },
+    "en-390.json": {
+      "bytes": 130344,
+      "sha256": "c592a2324e82e59bd496f07fedfe7bbaaaafaca9f22ef84ef278ba056806f827"
+    },
+    "zh-TW-390.json": {
+      "bytes": 130257,
+      "sha256": "541b2d7c6216936a177047f6f422260b429f0abd1ba279ac897ae4086099224f"
+    },
+    "en-1280.json": {
+      "bytes": 84066,
+      "sha256": "4588c72f2564e13d1d616e1f4f7fcdb0b4a2496edde71dd1b60d1e37f8e2746a"
+    },
+    "zh-TW-1280.json": {
+      "bytes": 83916,
+      "sha256": "7c9ea575a368c827dd9f0c53d7280aca3e4711f36f184694f950f43ee9e7de71"
+    }
+  },
+  "nextStep": "Run EN and zh-TW at 390×900 only on unchanged product code and a fresh owned fixture/evidence namespace. Keep unique displayed target selection, all seven natural Next clicks, and fully visible tenant/rent/deposit. For the one long room string allow contiguous coverage of the identical rendered text range across overlapping views after observed user scrolling. Require matching content and geometry, vertical visibility and original screenshots. On each locale record the final button before waiting or scrolling, then its enabled state, ancestor clips, hit-test points and a genuine pointer click. Verify one created lease for the exact room, primary original contact, unchanged org contact count, terms, no console/page/5xx/external errors and final controls. Preserve v4 as incomplete. No product edit or full gate is indicated by this evidence."
+}

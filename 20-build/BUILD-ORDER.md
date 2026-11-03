@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-03T02:50:51.010991-08:00: queue active. B015 current-app archive/restore/ended-tenant history at3cab1ef has full local gate/build/browser/control PASS and independent Astra SCOPED_LOCAL_GO. WholeB015 remains in_progress: assess prior mobile lease-wizard clipping; owner/raw-writer DB and staging/Claude/pilot pending. No whole item newly done.**
+> **Current 2026-11-03T04:10:17.488096-08:00: active queue. B015 current-app archive/restore/history and normal existing-tenant wizard have scoped local GO. B015 pending only dependent owner/raw-writer DB, staging/Claude/pilot; no whole B done. Next B016 evidence reconciliation.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 
@@ -24,7 +24,7 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 | B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | pending |
 | B-013 | Manager dispatch and shared repair approval state | MGT-17/18/19/35; J5; CAP-M-15/16; M-48/49 | —; coordinated B-021/B-024 | vendor_dispatch; REPAIR_APPROVALS* | B | L / 32–48 | pending |
 | B-014 | Owner net ledger, transfers and report versions | MGT-25/26/27, OWN-02; J7; CAP-M-17/18, CAP-O-03; M-43 | B-008 | OWNER_NET_LEDGER*; MONTHLY_REPORT_DELIVERY* | B | L / 24–40 | pending |
-| B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | in_progress |
+| B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | pending |
 | B-016 | Company/profile settings and management-fee rules | MGT-04; J1.1/J7; CAP-M-25/29; M-42/58 | B-003 | COMPANY_PROFILE_EDIT*; MANAGEMENT_FEE_RULES* | B | M / 20–32 | todo |
 | B-017 | Custom role permissions with escalation protection | PLT-01/02; J1.4; CAP-P-12; M-54 | — | CUSTOM_ROLES* | B | L / 24–40 | todo |
 | B-018 | Tenant payment history and home states | TEN-07/08; J3; CAP-T-04/09; T-09 | B-003, B-010 | TENANT_PAYMENT_HISTORY* | B | M / 12–20 | todo |
@@ -176,3 +176,7 @@ B015 full-input-vector focus checkpoint 2026-11-03T02:00:33.756097-08:00: r4focu
 B015 nonmutatingcapture checkpoint 2026-11-03T02:15:26.678175-08:00: R5focus0/1FAILfinalconsole afterallbehaviorassertions; other3/gateNOTRUN,184bindingfailure/probesnapshot retained. Only2manualscreenshotscaretinitialnow, ALLerrors[]/pageerror/5xx/functional/financialchecksunchanged. PinnedPlaywrightprobeisolatedDOMmutationconfirmedwithpixelidenticalPNGs; actualR5hydrationcauseremainsUNVERIFIEDpendingnewfocus. IndependentAstraA11source/helpersGO150mapcafc71a5103c0a4a2a416595b428abdad34b9a6ff3782fe94abdf988cf86856d. NextcleanEN390focusFIRST; onlyPASS→fullgate/build/full4browser/controls. OwnerDB/staging/pilot incomplete; no newB016.
 
 B015 current-app localcheckpoint 2026-11-03T02:50:51.010991-08:00 tested3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8: fullgate627/627unit,455/456RLS0FAIL1solepriorhistoricalskip; build4/focus1/fullbrowser4/SELECTcontrolsPASS; independentAstraSCOPED_LOCAL_GO. Manifestbe73d0dd(76897B),150pins/74deltas/13receipts;1692oldfailurebindingspreserved;85originalsreviewedroot17/Astra68; actualstale-restoreonly1280disclosed. No wholeBdone. Currentlocalarchive/history blockersresolvedwithinexactscope; earlierparentwizardmobileclipping UNAPPROVED needslocalassessment (not automaticwaiver). Owner-onlymetadata/raw-oldwriterDBproposal incomplete/unapplied/notapplyready, staging/Claude/pilot stillUNVERIFIED. Checkpoint e2e-evidence/B-015/archive-workflow-checkpoint-3cab1ef.md. Nextpublish/renew/canonicalmirror/refverifythenSolassessearliestunblockedB015remainderbeforeB016; flagsOFF/no prod/mainmerge/migration/providers/legalcopy.
+
+## B015 wizard scoped assessment 2026-11-03T04:10:17.488096-08:00
+
+Unchangedbb180a5 application: V4 desktop2PASS/mobile2INCOMPLETE actualexit1 preserved; V5 mobile2PASS actualexit0. Exact rendered text readable across real scroll views; ordinary finalhit/createdlease/originalcontact/no duplicates/terms/strict errors/OFFfixture/drain/1006sourcepins independentlyverified. No appfix/fullgatererun. [Checkpoint](../e2e-evidence/B-015/mobile-wizard-checkpoint-bb180a5.md). B015pending owner-onlymetadata/raw-oldwriterDB design incomplete/unparsed/unapplied/notapplyready, staging/Claude/ClassB/physicaldevice/pilot/release UNVERIFIED. Next: Codex complete/review DBdesign then PEapprovednonMacapplication; Ron/Claude handleexactSHAstagingacceptance. Skip onlydependentpart; nextB016 read-onlyB003dependencyreconciliation. No wholeBnewlydone; all39retained.

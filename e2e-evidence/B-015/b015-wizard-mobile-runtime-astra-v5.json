@@ -1,0 +1,198 @@
+{
+  "decision": "SCOPED_LOCAL_GO for the normal existing-tenant wizard journey on the unchanged application. V4 passed both desktop cases and exited 1 with both mobile submissions untested. V5 passed both mobile cases and exited 0. No product change was made.",
+  "candidate": "bb180a50f0ca17e889728c29e737f659f42977c0",
+  "v5SourceRuntimePinsVerified": 1006,
+  "helperHashesVerified": 2,
+  "receiptBindingsVerified": 39,
+  "originalsVisuallyInspected": [
+    "en-390-existing.png",
+    "en-390-next-1.png",
+    "en-390-next-2.png",
+    "en-390-next-3.png",
+    "en-390-next-4.png",
+    "en-390-next-5.png",
+    "en-390-next-6.png",
+    "en-390-next-7.png",
+    "en-390-pick-tenant.png",
+    "en-390-review-horizontal-0.png",
+    "en-390-review-horizontal-1.png",
+    "en-390-review-initial.png",
+    "en-390-submit.png",
+    "zh-TW-390-existing.png",
+    "zh-TW-390-next-1.png",
+    "zh-TW-390-next-2.png",
+    "zh-TW-390-next-3.png",
+    "zh-TW-390-next-4.png",
+    "zh-TW-390-next-5.png",
+    "zh-TW-390-next-6.png",
+    "zh-TW-390-next-7.png",
+    "zh-TW-390-pick-tenant.png",
+    "zh-TW-390-review-horizontal-0.png",
+    "zh-TW-390-review-horizontal-1.png",
+    "zh-TW-390-review-initial.png",
+    "zh-TW-390-submit.png"
+  ],
+  "cases": {
+    "en-390": {
+      "label": "Maple Court · Unit 2A Garden room overlooking the courtyard",
+      "intervals": [
+        [
+          0,
+          207.703125
+        ],
+        [
+          47.703125,
+          377.375
+        ],
+        [
+          47.703125,
+          377.375
+        ]
+      ],
+      "extent": 377.375,
+      "submitPoint": {
+        "x": 259.5546875,
+        "y": 533.59375,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      "buttonRect": {
+        "x": 129.109375,
+        "y": 511.59375,
+        "width": 286.796875,
+        "height": 44
+      },
+      "terms": {
+        "id": "59758d72-877b-4dfe-b6bb-fd1d5f086527",
+        "rent_amount_minor": "1000000",
+        "deposit_months": "2.00",
+        "due_day": 5,
+        "start_date": "2094-01-01",
+        "end_date": "2094-12-31",
+        "contact_id": "f89cae9f-d530-4db9-9b13-409f7cb7f86e",
+        "contact_count": 1
+      },
+      "contacts": [
+        10,
+        10
+      ]
+    },
+    "zh-TW-390": {
+      "label": "Cedar Court · Unit 2A Garden room overlooking the courtyard",
+      "intervals": [
+        [
+          0,
+          245
+        ],
+        [
+          47,
+          377.0625
+        ],
+        [
+          47,
+          377.0625
+        ]
+      ],
+      "extent": 377.0625,
+      "submitPoint": {
+        "x": 287,
+        "y": 512.59375,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      "buttonRect": {
+        "x": 200,
+        "y": 490.59375,
+        "width": 174,
+        "height": 44
+      },
+      "terms": {
+        "id": "97028c3c-52f0-4e8a-8ee9-892aa9f92c0c",
+        "rent_amount_minor": "1000000",
+        "deposit_months": "2.00",
+        "due_day": 5,
+        "start_date": "2094-01-01",
+        "end_date": "2094-12-31",
+        "contact_id": "f89cae9f-d530-4db9-9b13-409f7cb7f86e",
+        "contact_count": 1
+      },
+      "contacts": [
+        10,
+        10
+      ]
+    }
+  },
+  "controls": {
+    "organizations": [
+      {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "environment": "live",
+        "live_org_id": null,
+        "feature_flags": {
+          "line_alerts": false,
+          "branded_line_oa": false
+        }
+      },
+      {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "environment": "live",
+        "live_org_id": null,
+        "feature_flags": {
+          "line_alerts": false,
+          "branded_line_oa": false
+        }
+      }
+    ],
+    "aggregate": {
+      "optins": 0,
+      "any_org_enabled": 0,
+      "enabled": 0
+    },
+    "baselineComparison": {
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "knownRowsUnchanged": true
+    }
+  },
+  "issuesRequiringRepair": [],
+  "limits": "The English final button extends about 26 CSS px past the right edge. Its visible area provided a natural pointer target and the lease was created. The Chinese button fits. The evidence covers Chromium viewport emulation, not physical devices, staging or release. Whole B-015 retains its separate pending scopes.",
+  "inputs": {
+    "receipt.json": {
+      "bytes": 182198,
+      "sha256": "b5dc019693fea6cbf3f9fb9eb6199e40e7a6ab729ed76fc0b68367567a4b1f77"
+    },
+    "browser-result.json": {
+      "bytes": 372,
+      "sha256": "136ce226314c7b02df4e89608d1e9d7292e4d359ae2f9a6a63b4d7eeb073783c"
+    },
+    "en-390.json": {
+      "bytes": 143366,
+      "sha256": "a869d509fd09edf70a17f3ea303fc94eee15ad8d18dba84c7fb85727acee71a9"
+    },
+    "zh-TW-390.json": {
+      "bytes": 143166,
+      "sha256": "0f7f1d76c75e03faf4b70e143dd47456073fb93f7bd977871f7a7e8ea5adbd96"
+    },
+    "flags-seed.json": {
+      "bytes": 542,
+      "sha256": "555855bf1ab77509e27beb8cef48ba60d16030b3eb1c5b0b8fe59a892403095f"
+    },
+    "flags-off.json": {
+      "bytes": 544,
+      "sha256": "35130523593e75e553aa8ac5859f5df3528432427a35397433f242b9ac39d7af"
+    },
+    "flags-final.json": {
+      "bytes": 661,
+      "sha256": "48f9ef926d6c9a11cf94fdcc67e0fd9b6b791a1013be2136e64e8952262e6563"
+    },
+    "source-lock-v5.json": {
+      "bytes": 88262,
+      "sha256": "aaddf7137b733986868ae8dd8ff730401914f3042f84a9b93aa1a94f5c7b03b9"
+    },
+    "prior/v4-runtime-review.json": {
+      "bytes": 4396,
+      "sha256": "7596cf372eb10d751751516d1e659a539ab084d7cfd1d3c37955a3ae4eb2ac2a"
+    }
+  }
+}

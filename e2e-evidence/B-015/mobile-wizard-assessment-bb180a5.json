@@ -1,0 +1,658 @@
+{
+  "observedAt": "2026-11-03T04:10:17.488096-08:00",
+  "candidate": "bb180a50f0ca17e889728c29e737f659f42977c0",
+  "status": "SCOPED_LOCAL_GO_ONLY",
+  "applicationSourceChanged": false,
+  "fullGateRerun": false,
+  "gateReference": "archive-workflow-runtime-3cab1ef.json (unchanged runtime source; no new gate claim)",
+  "runs": [
+    {
+      "directory": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/receipt.json",
+        "sha256": "04cf09efd5d50942d22a5b0b10196d6bfec3e2fba26082b16ab44b5b366ce8d4",
+        "bytes": 186027
+      },
+      "actual": {
+        "playwrightCoreVersion": "1.64.1",
+        "configuredCases": 4,
+        "cases": [
+          {
+            "name": "en-390",
+            "status": "diagnostic_incomplete"
+          },
+          {
+            "name": "en-1280",
+            "status": "pass"
+          },
+          {
+            "name": "zh-TW-390",
+            "status": "diagnostic_incomplete"
+          },
+          {
+            "name": "zh-TW-1280",
+            "status": "pass"
+          }
+        ],
+        "flagsOffFixtureEstablished": true,
+        "flagMutationAttempted": true,
+        "flagMutationApplied": true,
+        "flagsFinalEqualOff": true,
+        "errors": [],
+        "processExit": 1
+      },
+      "sourcePins": 1006,
+      "stable": true,
+      "effectiveExit": 1,
+      "allFiles": [
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/browser-result.json",
+          "sha256": "7b6ff1f586e43128fb414bf725d5932717d813fc0b6a80cf347906ee7eb2c598",
+          "bytes": 531
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/browser.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-existing.png",
+          "sha256": "4c35432b2ba39b282c332b27c45ea7a9a2217c3ed86990946f28c796ad0c003f",
+          "bytes": 83410
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-next-1.png",
+          "sha256": "8ea49e17bace0e12fb29088e9f6832ed14550888f60c61516d6e3826a50a4f96",
+          "bytes": 75689
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-next-2.png",
+          "sha256": "c5b3708c14241a19c99d784a6b7566494440cba04e9c9f5e3c348c00a140537f",
+          "bytes": 85996
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-next-3.png",
+          "sha256": "d91e460396295d9f5c0e46a3272a17704cb4525673a74756d2536c92867c7545",
+          "bytes": 86169
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-next-4.png",
+          "sha256": "80d6dd2a26d282df0e387b09ecf66b2a46b63fc9a40ed47e4b37533c8c62305e",
+          "bytes": 74235
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-next-5.png",
+          "sha256": "a15df86097d5e5b930c4435d11e373e2c07e42cbc641868c8eca007c1680eaa5",
+          "bytes": 79745
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-next-6.png",
+          "sha256": "b6154ec8f78e5cbee6a8851561b158d25a6dfc4ebd5003bd0c80eb3a3b8f552b",
+          "bytes": 93109
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-next-7.png",
+          "sha256": "d5b66ae711c08b1db8335f99fbbd77ad8a664653a0ddf3a6d384915558c0de94",
+          "bytes": 90051
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-pick-tenant.png",
+          "sha256": "3314434acfa1b0512f631e02c7a81eca6bab1c5008e0a5c258410bea0b41775f",
+          "bytes": 85463
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-review-initial.png",
+          "sha256": "ac9ceb9fc37e670ed588cf7bb243347ce0d1c6950ef9e2dfb69f41df89c8059c",
+          "bytes": 94502
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280-submit.png",
+          "sha256": "9de0e656f92e38cf14169bfc84a9fccb401a3ca4c3ebb17e46150712f55330d1",
+          "bytes": 94574
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-1280.json",
+          "sha256": "4588c72f2564e13d1d616e1f4f7fcdb0b4a2496edde71dd1b60d1e37f8e2746a",
+          "bytes": 84066
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-existing.png",
+          "sha256": "0ec8a2944edb0f97772f37030d008bfc07637a8c73affefcd1239f728d6a3654",
+          "bytes": 43549
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-failure.png",
+          "sha256": "b02103a9f3735f35e156b6f60016d3e9f98bb7698dd580c774c1dbe9b908f6e9",
+          "bytes": 44291
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-next-1.png",
+          "sha256": "f2d8fac4752c88f6225e23d20665efc79b2143ed4561fe7fbd47d29544da55b1",
+          "bytes": 34191
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-next-2.png",
+          "sha256": "1f6f95bbfe1f25761be1a401ce93a8a2afd8523348564f6ef1473f72950f0d9e",
+          "bytes": 44726
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-next-3.png",
+          "sha256": "1939b229c03515acad723434819823670e7cf067a0713cb9971650f8211f3c9e",
+          "bytes": 44686
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-next-4.png",
+          "sha256": "f4e1ca00d990fcce38af028cd4555f40c3252b35c00325eaf249e0aae51b702f",
+          "bytes": 35246
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-next-5.png",
+          "sha256": "991b77f773c43dba89a991c3ba94ca9ef3dcb6fdc5a1429e5fa5a5c671b1eb41",
+          "bytes": 38158
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-next-6.png",
+          "sha256": "1e725d44baa6e4388a5d66366263c8a9d897b6a7d795a51c1f34d0883a5a2d2a",
+          "bytes": 51422
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-next-7.png",
+          "sha256": "b70c2d8a97f61f064481465828be05311ee50ea1e0781ecb3e700745117fada2",
+          "bytes": 49092
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-pick-tenant.png",
+          "sha256": "946fd5d89d562a93ddc149a2ad0fd2d35235e00de97e0d1a4aa54236db41fc2d",
+          "bytes": 44227
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-review-horizontal-0.png",
+          "sha256": "1413e653cbb45799120d6c8bcdcee492f62452fa355d9bcd2083b69170b83357",
+          "bytes": 44249
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-review-horizontal-1.png",
+          "sha256": "7ddfbb294997cc31266f072efa9ccb7ddc7575c476ab6e3abfdcd83e94ad8f3d",
+          "bytes": 44289
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390-review-initial.png",
+          "sha256": "ad4b9edf45ef6f4e36d662f5c5fca576a948b644cc950069de630fa90f5d033a",
+          "bytes": 52212
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/en-390.json",
+          "sha256": "c592a2324e82e59bd496f07fedfe7bbaaaafaca9f22ef84ef278ba056806f827",
+          "bytes": 130344
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/execution-authorization-v4.json",
+          "sha256": "64d46b67797968d252b4a6e95eebcc182bdf23a5c3cdfb318a977ddfd8318a70",
+          "bytes": 1142
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/flags-final.json",
+          "sha256": "48f9ef926d6c9a11cf94fdcc67e0fd9b6b791a1013be2136e64e8952262e6563",
+          "bytes": 661
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/flags-off.json",
+          "sha256": "35130523593e75e553aa8ac5859f5df3528432427a35397433f242b9ac39d7af",
+          "bytes": 544
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/flags-seed.json",
+          "sha256": "555855bf1ab77509e27beb8cef48ba60d16030b3eb1c5b0b8fe59a892403095f",
+          "bytes": 542
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/probe-v3.cjs",
+          "sha256": "5be51da874c776fc430801876a931f0ddacffdb5379ecf83e4fe6be648c38156",
+          "bytes": 20831
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/probe-v4.cjs",
+          "sha256": "9cc239210e5e55860dab043abed7cc87bf3239f94442f193f45d8589c1a89b75",
+          "bytes": 21313
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/receipt.json",
+          "sha256": "04cf09efd5d50942d22a5b0b10196d6bfec3e2fba26082b16ab44b5b366ce8d4",
+          "bytes": 186027
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/server.log",
+          "sha256": "2df2b1c28182d1464b41637876f729beee3ad2d83876a889dec846f8789eb764",
+          "bytes": 3263
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/setup.log",
+          "sha256": "e0530c0a56f78928dae95dc1b622c37cbf2996ebdbcf48fab363f7552d5f45a8",
+          "bytes": 26
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/source-lock-v3.json",
+          "sha256": "73205fd8d306ab9d52cd40110086da40bd821216fb7309322bba04dae2538956",
+          "bytes": 88262
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/source-lock-v4.json",
+          "sha256": "d6857c408de4c3c9b644e57a7d1bf4064ff703ac33e9cb8b40611efd59c23fb8",
+          "bytes": 88262
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/supervisor-v3.py",
+          "sha256": "bc03bf9db0b9b86031d14bf3c9c8314a1c1c08b46b0833f42be7ee57897522ce",
+          "bytes": 7605
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/supervisor-v4.py",
+          "sha256": "0dbc4561bf4470cff5384af41db7c0c45a5d90915391279f33423023664b29b1",
+          "bytes": 7605
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-existing.png",
+          "sha256": "8be1c174762727912b6aacd1c71f207a7c7c39fc19d84939089eee116f851702",
+          "bytes": 80376
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-next-1.png",
+          "sha256": "a1f9b6a91ba4334fdf87a60e5c759639a77468f010b61b423b1eb1e5e8b14458",
+          "bytes": 72084
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-next-2.png",
+          "sha256": "56687ced509a1749f70cecf7d1859a4527c3447d41e7f03c39862cae1bf3513d",
+          "bytes": 81835
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-next-3.png",
+          "sha256": "2eb66c49b66129f7e88fbf44ee8d3104defa3459c4cd61e67c0b9f82b30a55f0",
+          "bytes": 81347
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-next-4.png",
+          "sha256": "f68eda45f4fd56501e60763dbdb5a31a8f58afe66f232ac9b40e3e8830441564",
+          "bytes": 70260
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-next-5.png",
+          "sha256": "422035513ab53688a0302a44ac01d7a52dfa4a36d9d96dec1700c5bff8d6a09d",
+          "bytes": 77872
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-next-6.png",
+          "sha256": "ed856c27ad4e8d9ccbb6d1d48e8aa979e4a05d5db442e67138c8edab4cd39393",
+          "bytes": 86001
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-next-7.png",
+          "sha256": "001d63fe76e9a95e48ae024365e36348a3b86e691eee0ac99bdca4e5d42e9040",
+          "bytes": 87965
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-pick-tenant.png",
+          "sha256": "2694fdc791dd80448b14d546875bb0602ba538acee629a1da7c94e7841371c73",
+          "bytes": 81403
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-review-initial.png",
+          "sha256": "cf62b5bc386c1d7832e2cffda42a4fdedf5495b0d2f95514b97f4f4c0e0460e1",
+          "bytes": 93599
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280-submit.png",
+          "sha256": "1993960a0f1e56fc7c477d5beefc13d59b7002e7a560deb96ffada59db8d2891",
+          "bytes": 93638
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-1280.json",
+          "sha256": "7c9ea575a368c827dd9f0c53d7280aca3e4711f36f184694f950f43ee9e7de71",
+          "bytes": 83916
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-existing.png",
+          "sha256": "f288228c2768d2ab148ee4c7878f3bdfb4607cd24b73deade64eb4f5b5c5b7ca",
+          "bytes": 45654
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-failure.png",
+          "sha256": "ad82ad75ce9110b587529aef21978f3cb823cd61aa6161a290a575bed975021e",
+          "bytes": 44626
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-next-1.png",
+          "sha256": "e963fbec26b8cb066073aae676273cba724258b898a8f766f1841dcb690dff6c",
+          "bytes": 35411
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-next-2.png",
+          "sha256": "27bbd13981b73055ab7657df3abd589c755df8efee770c802a436a99589bdfe3",
+          "bytes": 45722
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-next-3.png",
+          "sha256": "f13d33ae62f1b77b3ff07dd20a03c88a2c357b36645964016043d29b3d45ed65",
+          "bytes": 45269
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-next-4.png",
+          "sha256": "359728041b583235ffa8206050b4771815d2b75f6b0769e80e2e59d7be7b52bc",
+          "bytes": 36398
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-next-5.png",
+          "sha256": "50b5ffff853315fdc775f597c6f6abefcbcc939bef0473aaf5f1840c81c18fc6",
+          "bytes": 41257
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-next-6.png",
+          "sha256": "0ac1f10ec38c2f22c6890ce14f986d00a34236d9941419563ad2d11fc7840f60",
+          "bytes": 48769
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-next-7.png",
+          "sha256": "60bff58149e66ec31f6256a17cf4b208d21f88f1e3b7f683c6492c27f97f5279",
+          "bytes": 50948
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-pick-tenant.png",
+          "sha256": "1b8b34bc3a03bb12468b7ef8645457a49b9b1b2d8ac34a9be23b4debe9146946",
+          "bytes": 45195
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-review-horizontal-0.png",
+          "sha256": "8f43ec1c53da4be62bb78fb9b294abfc31403ce12cfc5bf6c9c32880f585d292",
+          "bytes": 44602
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-review-horizontal-1.png",
+          "sha256": "47a3352a4f7a3754ec80403596d1b521fe7212667d46e2f1a847576f8e627398",
+          "bytes": 44626
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390-review-initial.png",
+          "sha256": "6f2acbb0ef389e0c5a565d468373c644c546bb351c9ecfbdf532cc24205ff576",
+          "bytes": 54761
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-diagnostic-v3/zh-TW-390.json",
+          "sha256": "541b2d7c6216936a177047f6f422260b429f0abd1ba279ac897ae4086099224f",
+          "bytes": 130257
+        }
+      ]
+    },
+    {
+      "directory": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5",
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/receipt.json",
+        "sha256": "b5dc019693fea6cbf3f9fb9eb6199e40e7a6ab729ed76fc0b68367567a4b1f77",
+        "bytes": 182198
+      },
+      "actual": {
+        "playwrightCoreVersion": "1.64.1",
+        "configuredCases": 2,
+        "cases": [
+          {
+            "name": "en-390",
+            "status": "pass"
+          },
+          {
+            "name": "zh-TW-390",
+            "status": "pass"
+          }
+        ],
+        "flagsOffFixtureEstablished": true,
+        "flagMutationAttempted": true,
+        "flagMutationApplied": true,
+        "flagsFinalEqualOff": true,
+        "errors": [],
+        "processExit": 0
+      },
+      "sourcePins": 1006,
+      "stable": true,
+      "effectiveExit": 0,
+      "allFiles": [
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/browser-result.json",
+          "sha256": "136ce226314c7b02df4e89608d1e9d7292e4d359ae2f9a6a63b4d7eeb073783c",
+          "bytes": 372
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/browser.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-existing.png",
+          "sha256": "0ec8a2944edb0f97772f37030d008bfc07637a8c73affefcd1239f728d6a3654",
+          "bytes": 43549
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-next-1.png",
+          "sha256": "f2d8fac4752c88f6225e23d20665efc79b2143ed4561fe7fbd47d29544da55b1",
+          "bytes": 34191
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-next-2.png",
+          "sha256": "1f6f95bbfe1f25761be1a401ce93a8a2afd8523348564f6ef1473f72950f0d9e",
+          "bytes": 44726
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-next-3.png",
+          "sha256": "1939b229c03515acad723434819823670e7cf067a0713cb9971650f8211f3c9e",
+          "bytes": 44686
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-next-4.png",
+          "sha256": "7fdde6f91d1ddad9f01fca6c61054c2349ede5b2382c299584f35f149475f774",
+          "bytes": 35227
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-next-5.png",
+          "sha256": "88e7d5b4b38c83fd03ed00312e061e710b0d29260f247e2d738a8f086f45632c",
+          "bytes": 38101
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-next-6.png",
+          "sha256": "1657775c373850f5600d257d3f7a943a1b2fae17d36fda385aff4e719bd21ab1",
+          "bytes": 51393
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-next-7.png",
+          "sha256": "413f937941466838465190f956b0d5c2d73192e0221396b94ee541c804e76cab",
+          "bytes": 49045
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-pick-tenant.png",
+          "sha256": "946fd5d89d562a93ddc149a2ad0fd2d35235e00de97e0d1a4aa54236db41fc2d",
+          "bytes": 44227
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-review-horizontal-0.png",
+          "sha256": "1413e653cbb45799120d6c8bcdcee492f62452fa355d9bcd2083b69170b83357",
+          "bytes": 44249
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-review-horizontal-1.png",
+          "sha256": "b9e85c3c1e21a2f57615bd62558cfb187d89f5aff27ca99cf38933333022f868",
+          "bytes": 44294
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-review-initial.png",
+          "sha256": "23a430212fa6163553a21346b0fe6167f7ba0fc974627d49226822f0aed293ef",
+          "bytes": 52170
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390-submit.png",
+          "sha256": "b02103a9f3735f35e156b6f60016d3e9f98bb7698dd580c774c1dbe9b908f6e9",
+          "bytes": 44291
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/en-390.json",
+          "sha256": "a869d509fd09edf70a17f3ea303fc94eee15ad8d18dba84c7fb85727acee71a9",
+          "bytes": 143366
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/execution-authorization-v5.json",
+          "sha256": "7d97277f38cb0be4550b609875986f97a9783a3753a8ffed3a280a7d45b56c67",
+          "bytes": 444
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/flags-final.json",
+          "sha256": "48f9ef926d6c9a11cf94fdcc67e0fd9b6b791a1013be2136e64e8952262e6563",
+          "bytes": 661
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/flags-off.json",
+          "sha256": "35130523593e75e553aa8ac5859f5df3528432427a35397433f242b9ac39d7af",
+          "bytes": 544
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/flags-seed.json",
+          "sha256": "555855bf1ab77509e27beb8cef48ba60d16030b3eb1c5b0b8fe59a892403095f",
+          "bytes": 542
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/probe-v5.cjs",
+          "sha256": "21d57f688ea86af5df0798c90dd929a74f7d67ba04f2849ee60fd89b4a331975",
+          "bytes": 22541
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/receipt.json",
+          "sha256": "b5dc019693fea6cbf3f9fb9eb6199e40e7a6ab729ed76fc0b68367567a4b1f77",
+          "bytes": 182198
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/server.log",
+          "sha256": "2ac169a34a8acf3bc74183d993ff89c89b62bcddd44baf3494e6bc7514a65e94",
+          "bytes": 2643
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/setup.log",
+          "sha256": "e0530c0a56f78928dae95dc1b622c37cbf2996ebdbcf48fab363f7552d5f45a8",
+          "bytes": 26
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/source-lock-v5.json",
+          "sha256": "aaddf7137b733986868ae8dd8ff730401914f3042f84a9b93aa1a94f5c7b03b9",
+          "bytes": 88262
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/supervisor-v5.py",
+          "sha256": "f09fc93fb8959676a43796487a9636314db8ffbdf931d8fe920a6d508090490c",
+          "bytes": 7607
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-existing.png",
+          "sha256": "f288228c2768d2ab148ee4c7878f3bdfb4607cd24b73deade64eb4f5b5c5b7ca",
+          "bytes": 45654
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-next-1.png",
+          "sha256": "e963fbec26b8cb066073aae676273cba724258b898a8f766f1841dcb690dff6c",
+          "bytes": 35411
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-next-2.png",
+          "sha256": "27bbd13981b73055ab7657df3abd589c755df8efee770c802a436a99589bdfe3",
+          "bytes": 45722
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-next-3.png",
+          "sha256": "f13d33ae62f1b77b3ff07dd20a03c88a2c357b36645964016043d29b3d45ed65",
+          "bytes": 45269
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-next-4.png",
+          "sha256": "fb4dc79fd7738161b1d40bba1ef177c0119ff0646c1b36a2bceb7c17aa95cbcf",
+          "bytes": 36381
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-next-5.png",
+          "sha256": "50b5ffff853315fdc775f597c6f6abefcbcc939bef0473aaf5f1840c81c18fc6",
+          "bytes": 41257
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-next-6.png",
+          "sha256": "5dac8b7ab23cf27a8d13392594c295e99bbf43e6da1d87314392592c4ae85984",
+          "bytes": 48768
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-next-7.png",
+          "sha256": "0dc68d86529258a4e3bb445d7c726d0ca1a7e067e351506738a5399569f8c4fa",
+          "bytes": 50948
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-pick-tenant.png",
+          "sha256": "1b8b34bc3a03bb12468b7ef8645457a49b9b1b2d8ac34a9be23b4debe9146946",
+          "bytes": 45195
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-review-horizontal-0.png",
+          "sha256": "8f43ec1c53da4be62bb78fb9b294abfc31403ce12cfc5bf6c9c32880f585d292",
+          "bytes": 44602
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-review-horizontal-1.png",
+          "sha256": "47a3352a4f7a3754ec80403596d1b521fe7212667d46e2f1a847576f8e627398",
+          "bytes": 44626
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-review-initial.png",
+          "sha256": "6f2acbb0ef389e0c5a565d468373c644c546bb351c9ecfbdf532cc24205ff576",
+          "bytes": 54761
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390-submit.png",
+          "sha256": "ad82ad75ce9110b587529aef21978f3cb823cd61aa6161a290a575bed975021e",
+          "bytes": 44626
+        },
+        {
+          "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-v5/zh-TW-390.json",
+          "sha256": "0f7f1d76c75e03faf4b70e143dd47456073fb93f7bd977871f7a7e8ea5adbd96",
+          "bytes": 143166
+        }
+      ]
+    }
+  ],
+  "supporting": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-mobile-wizard-plan-sol.md",
+      "sha256": "e974d8e74ac03b4134527ed76f16c9aa97a4273d698bec0f5d3dfb07b1ca641a",
+      "bytes": 8658
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-mobile-followup-plan-sol.md",
+      "sha256": "d7412edc33c268b513ab17f997cd97a42a93a8befa5f0cd2a10f48332bec7847",
+      "bytes": 6542
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-astra-source-v5.md",
+      "sha256": "d20f644c84ad60df86d52d3b507f99841fee85229a5c0a3676059cca61da6d1a",
+      "bytes": 2312
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-runtime-astra-v4.md",
+      "sha256": "6af1f30b08d37ceaa66c7f13a92b0a96e29a7fe688499d8fe003abd46ca97201",
+      "bytes": 4099
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-mobile-runtime-astra-v5.md",
+      "sha256": "28ac1912e9de533300451e42805e2d0e92ce9f1bdd6e04665d47312537960cde",
+      "bytes": 3666
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-wizard-precondition-failure-v2.json",
+      "sha256": "1a0a14dea42e2a0da6295d8d7f26687cc88a140d4b247626975faa84c964e5ab",
+      "bytes": 7640
+    }
+  ],
+  "limitations": [
+    "V4 exit1 retained: desktop2PASS/mobile2INCOMPLETE; V5 exit0:mobile2PASS only.",
+    "EN390 right edge of final button clipped, visible hit succeeded.",
+    "submit PNGs record before pointer click; persisted success is database readback.",
+    "Synthetic local desktop Chromium only; physical device, staging, Claude/ClassB, pilot and whole B015 unverified.",
+    "Owner-specific marker/raw-oldwriter DB design incomplete, unparsed/unapplied/not apply-ready."
+  ]
+}
