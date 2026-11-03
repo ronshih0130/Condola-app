@@ -1,0 +1,28 @@
+{
+  "verdict": "GATE_FREEZE_GO_ONE_GATE_ONLY",
+  "candidate": "f6593cedb0cd19aac879fe59d3bf911f1ca5bbc3",
+  "gateLockSha256": "32b973459ea696a93ce73a3260536355893a0d080b8016d398a014b438ef5bb2",
+  "supervisorSha256": "b4bcfac9085d71d43fcda2529100bbb757e57c7a1328fa7066b79e2c8c9363df",
+  "verifiedWorkingAndCommittedBlobs": 1014,
+  "requiredPins": {
+    "ops/flags.yaml": "0397a923964b7c5669ba03f2a9ad1345fd95db82",
+    "ops/toolchain.json": "fb03abaaa73a722b057c569022f618839c477051",
+    "package-lock.json": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+    "package.json": "639bc9170c5eb03eb331520e95ab3207a8561e5a",
+    "scripts/gate.sh": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+    "scripts/preflight-deploy.sh": "3214ee7db0b4a25417682de8c2cce7e104c260bb"
+  },
+  "checkedAbsent": [
+    "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-b016-shared-checkout.lock",
+    "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-b016-gate-attempt-f6593cedb0cd19aac879fe59d3bf911f1ca5bbc3.json",
+    "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-f6593cedb0cd19aac879fe59d3bf911f1ca5bbc3.md"
+  ],
+  "matchingActiveChildPidsAtInspection": [],
+  "cleanStatus": true,
+  "scope": "No runtime in this review; one gate only.",
+  "notes": [
+    "GATE_FREEZE_GO for one standard local code gate on f6593cedb0cd19aac879fe59d3bf911f1ca5bbc3. The worktree and index are clean. All 1014 working files and committed tree blobs match the complete prior database-target and focus source maps. The reviewed supervisor and new candidate lock match their expected hashes, including the toolchain and six required keys.",
+    "At inspection, the shared checkout execution lock, per-candidate attempt claim and candidate summary were absent. No matching active local gate, identity helper, browser server or test process was found. The root contained .env.example only among dotenv/dev-vars names. No credentials were read. The supervisor must still reacquire its exclusive execution lock and create the candidate attempt claim at launch.",
+    "The preparation record in the commit keeps the 37 targeted database tests separate from the failed browser diagnostics. V2\u2019s eight transport causes remain unknown, v3 failed during seed setup, and v4 stopped during the first natural login with zero complete cases. No full-gate result, build, browser rerun, staging or release is granted by this freeze review."
+  ]
+}

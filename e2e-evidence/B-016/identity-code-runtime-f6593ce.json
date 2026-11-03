@@ -1,0 +1,241 @@
+{
+  "time": "2026-11-03T08:50:34.524338-08:00",
+  "candidate": "f6593cedb0cd19aac879fe59d3bf911f1ca5bbc3",
+  "status": "CODE_GATE_GO_BROWSER_FAIL_PENDING_WHOLE_B016_INCOMPLETE",
+  "gate": {
+    "unit": {
+      "pass": 630,
+      "fail": 0,
+      "skip": 0
+    },
+    "rls": {
+      "pass": 467,
+      "fail": 0,
+      "skip": 1,
+      "total": 468,
+      "skipReason": "Only preexisting Ron-approved b888ccd lost historical commit fixture"
+    },
+    "steps": 11,
+    "exit": 0,
+    "cleanAfter": true,
+    "childrenDrained": true
+  },
+  "target": {
+    "identity": 1,
+    "consentSecurity": 36,
+    "fail": 0,
+    "skip": 0
+  },
+  "sourceMap": {
+    "src/server/session.ts": {
+      "blob": "4193fd22d30e558fb7a6620d70951121673ba0d0",
+      "sha256": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+      "bytes": 11449
+    },
+    "src/server/session-identity.integration.test.ts": {
+      "blob": "3b2ebf7d4469586d8cfe017d811ec6b05d542748",
+      "sha256": "01bc4002ef628657451b9961fcb5d12d65db855ec0939b99d6abf38b3ab729f8",
+      "bytes": 5838
+    },
+    "package.json": {
+      "blob": "639bc9170c5eb03eb331520e95ab3207a8561e5a",
+      "sha256": "63a3f96a68fee2a835adc6347372e9bae6ad583453a2beff6ffcbb9b84653e96",
+      "bytes": 13391
+    }
+  },
+  "sourceCount": 1014,
+  "browser": {
+    "v2": "FAIL8 requestfailed, causesUNKNOWN; behavioral subresult is not overallPASS; missing-profile independent completionUNVERIFIED",
+    "v3": "SETUPFAIL seed1; zero cases; readonlyquarantine",
+    "v4": "ROOT_INTERRUPTED_HUNG_PROBE browser130; zero completedcases; two actualfetch ERR_ABORTED, causeUNKNOWN; recovery0/drainedtrue/server0"
+  },
+  "independentVerdict": "b016-identity-code-checkpoint-astra-f6593ce.md",
+  "notVerified": [
+    "missing-consent fallback dispatch",
+    "full browser matrix",
+    "provider-owned email change workflow",
+    "hosted allowlist/grants/exploitability",
+    "staging/Claude/pilot/release/wholeB016",
+    "build/release checks on f6593ce",
+    "native control and bounded enhanced-login diagnostic"
+  ],
+  "boundaries": "no prod/main merge/new migration execution/operational flag/provider message/legal text change",
+  "incompleteDraft": "V5 login helper author turn stopped by tool content flag;4partial files preserved; never reviewed/run/authorized",
+  "refs": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-code-checkpoint-astra-f6593ce.md",
+      "bytes": 1878,
+      "sha256": "6cc9d76125fa5681848a66cc782ea6591db3fbb3a45332bd84ad82e0cb489ff2"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-code-checkpoint-astra-f6593ce.json",
+      "bytes": 5257,
+      "sha256": "c81aa1f906c7e137bb77d4ada2974bbe9b95fd4a90e68d77b15df587b182531f"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-gate-freeze-astra-f6593ce.md",
+      "bytes": 1241,
+      "sha256": "b3ed70058a8f6a3bab79aa7a9ac21e4bd8f864ddc4c38c64dcc300bbe979a725"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-gate-freeze-astra-f6593ce.json",
+      "bytes": 2568,
+      "sha256": "8b1040d365ea4ef3b98672695a3de396e32f19bb99c0c6c1fbe17b4ade26812a"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/run-gate-715688a6abc2/receipt.json",
+      "bytes": 737114,
+      "sha256": "5cc0977cba3b834c85e3c6d72d4abfb099850173feeb6c8383f971d6bbe3999e"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/run-gate-715688a6abc2/gate-summary.md",
+      "bytes": 971,
+      "sha256": "dc46e3976b818cd14539f274e3a84f3dbb4474555541c7281b5ac8187176657b"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/root-source-lock-f6593ce.json",
+      "bytes": 88760,
+      "sha256": "32b973459ea696a93ce73a3260536355893a0d080b8016d398a014b438ef5bb2"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/root-runtime-authorization-f6593ce.json",
+      "bytes": 986,
+      "sha256": "e1ce32079eb49d2af88296471d85d8a6ad71d3c1210141bf9aa8c882096c4e01"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-gate-build-v2/identity-gate-session-private/placement.json",
+      "bytes": 546,
+      "sha256": "ace3372b0103662e14971927266e2991397675470e698f507e4a7eead80888c2"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-login-v5-incomplete-preserved/manifest.json",
+      "bytes": 831,
+      "sha256": "ab50ace4490b98178df637c704f4420e2f1011aec5445c4aa68a0fadbdcdd933"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-016/identity-security-preparation-v1.json",
+      "bytes": 96488,
+      "sha256": "e8af6c663887916b585f66bc6e4d3a1688572f330085e8385c304f8522206d66"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-prereq-plan-sol.md",
+      "bytes": 6993,
+      "sha256": "846f07566fab1df1f8cddaf6740bf85b45413c46bd67aeee1eda4208d3d61211"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-prereq-plan-sol.json",
+      "bytes": 3951,
+      "sha256": "4066bd7f41a71f38643661d0410111f302f5b116298976980a3610236df315a1"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-source-map-v1.json",
+      "bytes": 842,
+      "sha256": "12caa092b9c05bb03a16626526067d6845c191dac74e65e0080bc3eff8034e64"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-source-v1.md",
+      "bytes": 1706,
+      "sha256": "5da88bb89ed5f7a7748e43374f4bff33003bf7ee4c419746b9a8d8217c85c521"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-source-v1.json",
+      "bytes": 3300,
+      "sha256": "17fd55eadbc0fb0c80255e18f716c89d8d2d8c9ec8126f870546aefd92645fec"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-browser-failure-astra-v2.md",
+      "bytes": 4942,
+      "sha256": "32770d88f8a0e83671b1ef5351f3e95fd7bc198eb8f5823b67d21b7fab2560f9"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-browser-failure-astra-v2.json",
+      "bytes": 7537,
+      "sha256": "0e05241ee7de657e25cbdabe1b17958127236ddc6472048ce9007d696563cf89"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-helpers-v1.md",
+      "bytes": 3331,
+      "sha256": "7df1c85153f416081bb925d08d5615024299c129852d3e9b0719ce4926cac7ca"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-helpers-v1.json",
+      "bytes": 6310,
+      "sha256": "4197eedcadee6567cdc068c296e26c31ab1c376486394cbe6a06336eca664658"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-helpers-v2.md",
+      "bytes": 2562,
+      "sha256": "44210d13a8cc129dd79a084be33f14114a3c779e5f1e41a44363021527e106a6"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-helpers-v2.json",
+      "bytes": 4641,
+      "sha256": "2355ecf6f6135955c6a544c10eab54e27591a68211249c6c5a180a259a6b266a"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-helpers-v3.md",
+      "bytes": 2824,
+      "sha256": "182c170901cae1bcedcf2af0efcb7b9334fdef95ce63ca14b32ce82daf3425dc"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-helpers-v3.json",
+      "bytes": 4113,
+      "sha256": "6d113f1b45032a4a68d0d263bb78b95455de742930f7df2fb6d4240a02c98be6"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-helpers-v4.md",
+      "bytes": 2642,
+      "sha256": "c4303aec0839de5bcff9dc831d08d724b30d01674426737aa67836c0f9898278"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-astra-helpers-v4.json",
+      "bytes": 3840,
+      "sha256": "fc09eb505a08e64f64c26b9fd9f8bb41b0d0f24758543ff5f914cde70a949af2"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-helper-v1-no-go/manifest.json",
+      "bytes": 3420,
+      "sha256": "308235fbee914f0d72c188d6744291a2cddbe8eaa565f1129b63b5b1dcad150b"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-focus-v2-failure-archive/manifest.json",
+      "bytes": 7610,
+      "sha256": "b6c75b50d0ef88f0d874265f8a43fc36005fc8679e5703d34a74057f87c1a4cf"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-v3-setup-failure-archive/manifest.json",
+      "bytes": 2747,
+      "sha256": "5cb600b1edb5cfb42ddccfd87ad2dcb8c26da56d741c8e84e2c164277531ac1b"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-v4-focus-failure-archive/manifest.json",
+      "bytes": 4619,
+      "sha256": "835d8a65a1b8d3611caf7f74210883be6c5d72e8c778d03155f62a431e127805"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-identity-v4-pre-drain-snapshot/manifest.json",
+      "bytes": 1699,
+      "sha256": "e2547cf8f2835cdfe7a5535935110c5a21d74f0b03c4f881ae4ee37387fdc6a1"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-browser-v1/run-db-fbe7ab7ec022/receipt.json",
+      "bytes": 179085,
+      "sha256": "fe28bff5933f13dac0899f7c9b2af5f3b118c14ddd022392fdec09d73bdf9763"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-browser-v2/run-focus-e5eeb6d942ea/receipt.json",
+      "bytes": 182319,
+      "sha256": "68251fa6b302ab40ec9f41eda28d464ff1481116d6786a8c776bcf2ef2892e96"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-browser-v3/run-focus-804cfb7f2b26/receipt.json",
+      "bytes": 178761,
+      "sha256": "238efb6e1c1c48d50f0c8d9f9df43ea177fa7ccb73987ac7b698e64c51c07a30"
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b016-email-identity-browser-v4/run-focus-de9509be8fd4/receipt.json",
+      "bytes": 180246,
+      "sha256": "42d2fe595aae5a34afe155e17355dcdf951d79e70f75d5182f539bd9f8cf82cc"
+    }
+  ]
+}

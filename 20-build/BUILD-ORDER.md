@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-03T08:34:45.487284-08:00: active queue. B016 canonical identity security source/target37 PASS, browser FAIL_UNWAIVED, clean fullgate pending; self-name5a scoped local GO remains historical. WholeB016 in_progress (company/verifiedEmail/fees and external acceptance). B015 pending owner/raw-writer DB/staging/Claude/pilot. No wholeB newly done; all39 retained; no B017 source.**
+> **Current 2026-11-03T08:50:34.524338-08:00: B016 identity security codef6593ce full code gate PASS630unit/467RLS+solepriorhistoricalskip and Astra CODE_GATE_GO. Browser FAIL/PENDING; wholeB016 in_progress for company/verifiedEmail/fees and external acceptance. No wholeBdone; all39 retained; no B017source.**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 

@@ -1,0 +1,104 @@
+{
+  "verdict": [
+    "CODE_GATE_GO",
+    "BROWSER_FAIL_PENDING",
+    "WHOLE_B016_INCOMPLETE"
+  ],
+  "candidate": "f6593cedb0cd19aac879fe59d3bf911f1ca5bbc3",
+  "receiptSha256": "5cc0977cba3b834c85e3c6d72d4abfb099850173feeb6c8383f971d6bbe3999e",
+  "summarySha256": "dc46e3976b818cd14539f274e3a84f3dbb4474555541c7281b5ac8187176657b",
+  "gateLockSha256": "32b973459ea696a93ce73a3260536355893a0d080b8016d398a014b438ef5bb2",
+  "perCandidateClaimSha256": "09d2e93822d8e592b12365d9cce47a4d79916201d8ee6dce2a9c12a83dd94b2c",
+  "sourcePins": 1014,
+  "threeFileMapSha256": "12caa092b9c05bb03a16626526067d6845c191dac74e65e0080bc3eff8034e64",
+  "counts": {
+    "test-unit": {
+      "tests": 630,
+      "pass": 630,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "test-rls": {
+      "tests": 468,
+      "pass": 467,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 1,
+      "todo": 0
+    }
+  },
+  "skip": "ok 6 - a database with the older 20261022180000 upgrades forward, then accepts the same file again # SKIP Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29",
+  "rawFileBindings": {
+    "postgres-16.log": {
+      "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+      "bytes": 31
+    },
+    "lint.log": {
+      "sha256": "4e7b3a6ec111ce7a3847a02cfc2a631a691808fc5bae42d475209d1be0268132",
+      "bytes": 3401
+    },
+    "npm-ci.log": {
+      "sha256": "4ecdb75e86a7dcdb5e4404e07324101f527dc830a69140cdadbab5c6cbd48094",
+      "bytes": 1794
+    },
+    "typecheck.log": {
+      "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+      "bytes": 43
+    },
+    "copy-check.log": {
+      "sha256": "480c90cc61109f8858eabe064eab20bde176bc49d449cb0421b62f20ec7d21f2",
+      "bytes": 1436
+    },
+    "flag-expiry.log": {
+      "sha256": "9ed87796fd93acd1722f8194c2e541245236881b2c51c2e8fe3eeadfa9b615ed",
+      "bytes": 27
+    },
+    "steps.md": {
+      "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+      "bytes": 341
+    },
+    "test-unit.log": {
+      "sha256": "4ba0939479056b37ae6786783faa993c3962087ce99f3bb967a30851d2f19afc",
+      "bytes": 129926
+    },
+    "test-rls.log": {
+      "sha256": "d20030026d5634550b30ec5f510bdfdccb95a9fbe3d4c9da24b1f46a2ab2188e",
+      "bytes": 128330
+    },
+    "toolchain.log": {
+      "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+      "bytes": 27
+    }
+  },
+  "targetReceiptSha256": "fe28bff5933f13dac0899f7c9b2af5f3b118c14ddd022392fdec09d73bdf9763",
+  "reviewArchiveBindings": {
+    "b016-identity-helper-v1-no-go": {
+      "manifestSha256": "308235fbee914f0d72c188d6744291a2cddbe8eaa565f1129b63b5b1dcad150b",
+      "bindings": 8
+    },
+    "b016-identity-focus-v2-failure-archive": {
+      "manifestSha256": "b6c75b50d0ef88f0d874265f8a43fc36005fc8679e5703d34a74057f87c1a4cf",
+      "bindings": 37
+    },
+    "b016-identity-v3-setup-failure-archive": {
+      "manifestSha256": "5cb600b1edb5cfb42ddccfd87ad2dcb8c26da56d741c8e84e2c164277531ac1b",
+      "bindings": 14
+    },
+    "b016-identity-v4-focus-failure-archive": {
+      "manifestSha256": "835d8a65a1b8d3611caf7f74210883be6c5d72e8c778d03155f62a431e127805",
+      "bindings": 23
+    },
+    "b016-identity-login-v5-incomplete-preserved": {
+      "manifestSha256": "ab50ace4490b98178df637c704f4420e2f1011aec5445c4aa68a0fadbdcdd933",
+      "bindings": 4
+    }
+  },
+  "notes": [
+    "CODE_GATE_GO for the canonical session email correction at f6593cedb0cd19aac879fe59d3bf911f1ca5bbc3. Both readSessionOn projections use confirmed Auth email. The scoped RLS regression ran in the clean gate. The unit TAP totals were 630 passed out of 630. Database/RLS TAP totaled 467 passed out of 468, zero failures and the sole previously approved historical b888ccd skip. The separately seeded target retained 1 identity and 36 consent/security passes.",
+    "All eleven standard checks returned zero. The three owned child processes returned zero with no remaining owned PIDs. Ten private raw files match the receipt hashes and lengths. The saved summary hash, durable per-SHA claim, released mutual-exclusion lock and absence of the original owned summary match the reviewed supervisor protocol. The run ended clean. The sole untracked file visible at review start was the restored, completed PE log. No new test, build or browser process was run during review.",
+    "All 1014 committed blobs and working bytes match the gate snapshot, including the three source-map paths. The gate helper also stayed pinned. The source review and preparation-record references match, as do the archived helper and browser evidence. The v1 helper rejection, v2 eight unknown failed requests, v3 seed failure and v4 interrupted zero-case focus remain distinct and unwaived. Four incomplete v5 draft files are preserved; there is no v5 execution approval.",
+    "BROWSER_FAIL_PENDING. No successful full browser matrix, build, missing-consent fallback dispatch or hosted exploit determination is supplied. WHOLE_B016_INCOMPLETE. The evidence supports an already-authorized working-branch code checkpoint retaining these labels. Staging, deployment, main merge and release are outside this verdict."
+  ]
+}
