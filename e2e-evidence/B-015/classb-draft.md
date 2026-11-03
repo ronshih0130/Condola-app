@@ -1,5 +1,5 @@
-# B015 Class B draft — NOT APPROVED
+# B015 Class B draft - NOT APPROVED FOR RELEASE
 
-2026-11-03T01:00:00.525404-08:00; scope: current-app property/unit/room archive/restore with fresh ancestry admission, finance continuation and existing-right ended-tenant history/PDF route; existing tenant identity edit/reuse remains earlier scoped work. Independent Astra source GO and development targets do not constitute final QA or release GO. Exact candidate full gate/build/browser/control readback and independent evidence review are next.
+2026-11-03T02:50:51.010991-08:00; exactcode3cab1ef. Currentapparchive/restore/retainedfinance andexisting-rightendedtenanthistory have scopedindependentAstra localGO; [checkpoint](archive-workflow-checkpoint-3cab1ef.md). No wholeB015 orproductionacceptance.
 
-Owner-only metadata/raw-old writer closure proposal is incomplete, unparsed, unapplied and not apply-ready; no Mac DB migration is authorized. Staging catalog/application, old-code compatibility, independent Claude QA, backup/row counts/rollback identity/T+0/T+15 and Ron exact-SHA approval remain missing. No whole B015 or pilot completion; no production or real Email/LINE.
+Owner-onlymetadata/raw-oldwriterDBclosure proposal remainsincomplete/unparsed/unapplied/notapplyready, and earlierparentwizardvisualfollowup remainsunapproved. Actualstaging/catalog/app, othermachine/Depot, independentClaudeClassB, approvedcompatibility/backup/rowcounts/rollback/T+0/T+15 andRonexactpilotGO remainUNVERIFIED. FlagsOFF; no production/realmails/legalcopy/Macmigration.

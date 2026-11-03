@@ -1,5 +1,9 @@
-# B015 current local verdict
+# B015 current scoped verdict
 
-2026-11-03T02:15:26.678175-08:00; **SOURCE_HELPER_GO / PRIOR_FOCUS_FAIL / FULL_RUNTIME_INCOMPLETE / WHOLE_ITEM_INCOMPLETE / RELEASE_NO_GO**.
+2026-11-03T02:50:51.010991-08:00; testedcode `3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8`.
 
-[A11sourceGO](workflow-astra-source-a11-go.md), [actualfocusfailure](workflow-focus-2bdee5f-r5-fail.json). ObserverprobeisolatedPASSisnotactualbrowserPASS. Strictconsoleerrorsstillfail; focusedjourneybeforefurtherfullchecks. OwnerDB/staging/Claude/pilotremainincomplete; no production/provider/legalcopy/Macmigration/operationalflagactivation.
+**SCOPED_LOCAL_GO / WHOLE_B015_INCOMPLETE / RELEASE_NO_GO.**
+
+[Independent Astra final](independent-astra-workflow-final-r6.md) and [checkpoint](archive-workflow-checkpoint-3cab1ef.md) define exact scope/evidence and limits. Fullgate627unit/455RLS+1priorhistoricalskip; builds4/focus1/fullbrowser4/readonlycontrolsPASS. Root17+reviewer68originals; actualwidth/capturelimits disclosed. All10 historicalfailurearchives/1692bindings preserved. No new skip/testrelaxation.
+
+Owner-onlyDB/raw-oldwriterclosure, earlierwholeleasewizardvisualapproval, staging/Claude/physicaldevice/pilot/release remainincomplete. No production/mainmerge/provider/legalcopy/Macmigration/hostedflagactivation.

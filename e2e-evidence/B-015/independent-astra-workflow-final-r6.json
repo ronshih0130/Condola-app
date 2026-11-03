@@ -1,0 +1,91 @@
+{
+  "recordedAt": "2026-11-03T02:45:19-08:00",
+  "qaLog": "f05107df-d7e1-441a-8425-5efcd43903ff",
+  "candidate": "3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8",
+  "baseline": "516a5e8c2e7bc7f54cefe425e6551d9ea0fc793e",
+  "reviewerRequested": "gpt-6-astra/high",
+  "runtimeModelIndependentlyObservable": false,
+  "verdict": "SCOPED_LOCAL_GO",
+  "wholeB015": "INCOMPLETE",
+  "release": "NO_GO",
+  "manifest": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e-evidence/B-015/archive-workflow-runtime-3cab1ef.json",
+    "sha256": "be73d0dda33d44bce4f9466073f39dc935f8d4475a83528a3d650f40c9689246",
+    "bytes": 76897
+  },
+  "sourceMapSha256": "cafc71a5103c0a4a2a416595b428abdad34b9a6ff3782fe94abdf988cf86856d",
+  "freezeSha256": "d24f2c160f2dc879cc03d66227a095faa6050fbe8ae8718d9683636ea1deef91",
+  "helperSha256": {
+    "run-b015-workflow-final-check-a7.py": "4605e004dc6868774cc22941781c813828b39be004220dea2065a5e35c22300e",
+    "b015-workflow-runtime-driver-a7.py": "cfc1cdaf18853ed4f80611b69c1e58f729d73cc8e4f0f20611afd5ceb5a45f10",
+    "b015-workflow-control-readback-a7.py": "58ac733fc4e28d454a2903f80d6f087ae2b2b52eefa2cd9dea9e450f07fe3ae7"
+  },
+  "reverified": {
+    "manifestArtifactReferences": 153,
+    "distinctPaths": 139,
+    "sourcePins": 150,
+    "baselineDeltas": 74,
+    "unchangedFromBaseline": 76,
+    "receipts": 13,
+    "receiptBeforeAfterSourceValues": 3900,
+    "historicalManifests": 10,
+    "historicalBindings": 1692
+  },
+  "gate": {
+    "unit": {
+      "tests": 627,
+      "pass": 627,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    "rls": {
+      "tests": 456,
+      "pass": 455,
+      "fail": 0,
+      "skipped": 1,
+      "cancelled": 0,
+      "skipLines": [
+        "ok 6 - a database with the older 20261022180000 upgrades forward, then accepts the same file again # SKIP Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29"
+      ]
+    }
+  },
+  "build": {
+    "next": "PASS",
+    "cloudflare": "PASS",
+    "preflight": "PASS",
+    "worker": "PASS",
+    "releaseGateRequested": false
+  },
+  "focusPassed": 1,
+  "fullBrowserPassed": 4,
+  "fullBrowserPNGsInspectedPersonally": 68,
+  "separateCoordinatorFocusPNGsInspected": 17,
+  "actualWidths": {
+    "focus": {
+      "390": 16,
+      "1280": 1
+    },
+    "browser": {
+      "390": 32,
+      "1280": 36
+    }
+  },
+  "rootFocusReview": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-root-focus-visual-r6.json",
+    "sha256": "0abd201d8deab3133684abe60c8be8df8af5ccd75475276945c1eca446603a4a",
+    "bytes": 7042
+  },
+  "staleRestore390px": "NOT_CAPTURED_NONBLOCKING_SCOPED_VISUAL_LIMIT",
+  "reportsCapture": "CURRENT_EMPTY_PERIOD_SELECTOR_ONLY",
+  "unknownRecovery": "KNOWN_SUCCESS_REINSERTED_UI_PAYLOAD",
+  "R5HydrationCause": "UNPROVEN",
+  "controls": "THREE_ABSENT_GLOBALS_BOTH_OFF_ZERO_OPTINS_WHOLE_SELECTED_ORG_EQUAL",
+  "existingGlobalRowTimestampRestore": "NOT_EXERCISED",
+  "wholeDbRestore": "NOT_VERIFIED",
+  "ownerOnlyArchiveRawLegacyWriterSeal": "INCOMPLETE_UNAPPLIED",
+  "stagingDepotClaudeClassBPilotRelease": "UNVERIFIED",
+  "runtimeByThisReviewer": false,
+  "reportSha256": "fb3ce7f3ef15e5f83b7db56a330123023f81928f98a0bfed931dd0f0979c9db1",
+  "reportBytes": 7600
+}

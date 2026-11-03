@@ -1,15 +1,16 @@
 # B015 current acceptance evidence
 
-2026-11-03T01:00:00.525404-08:00; development targeted evidence only. Candidate gate/build/browser and final independent evidence review remain pending.
+2026-11-03T02:50:51.010991-08:00; exactlocalcode3cab1ef, scopedindependentAstraGO. Wholeitemincomplete.
 
-| Requirement | Current authoritative result | Remaining |
+| Requirement | Actual evidence | Remaining |
 |---|---|---|
-| Archive/restore physical records, live dependency guidance, stale/replay/audit behavior | A5 archive6/6 and admission31/31 targets PASS, no skips | Clean candidate gate and real UI/browser |
-| Keep normal finance after ended work | A4 finance10/10 PASS, including source/payer/ledger binding, 80→100 and 80→0/replay, forbidden pointers, retained expense/payment/vendor/report flows | Candidate gate and normal finance forms |
-| Current ordinary caller and hidden-other-org staff persona | A5 admitted wait/race and tenant history targets PASS under authenticated roles | Final combined candidate and UI |
-| Ended tenant list/detail/exact signed bytes under existing rights | A5 history6/6 PASS, exact scope/role/flag/audit failures | Normal history entry/download browser |
-| Tenant identity edit/reuse and new-work picker | Previous scoped directory/guard evidence retained separately | Final regression, staging acceptance |
-| Owner-only archive metadata and old/raw writer closure | Proposal incomplete/unapplied, NOT VERIFIED | Codex design plus PE target plan/approved non-Mac apply |
-| Staging, Claude ClassB, pilot release | NOT VERIFIED | Separate authorized evidence; no production work |
+| Archive/restore physical property/unit/room, own/inherited/stale state and audit | Fullgate and real4browserPASS | Staging/raw-oldwriterclosure |
+| Linked active work blocks; ended finance remains available | Actualrole/lock/race suites and normal expense/payment/vendor/utility/transfer paths PASS | Owner-onlymetadata/newDB and hosted acceptance |
+| Historical utility tenant/payer/ledger identity, zero and replay | Finance10 target plus finalfullRLS; realnormalcorrection UI completevector/finance/replay PASS | Ambiguous source intentionallydenied, not invented |
+| Tenant endedlease/signedpaper list/detail/bytes/audit | Actualrolehistorysuite and all4browser PASS | Existingrights only; no activeworkspace expansion |
+| Tenant identity reuse/edit and mobile parent wizard | Earlier scoped evidence retained; no wholeparentwizardvisualGO | Assess previouslyrecordedmobileclipping before nextitem |
+| OFF/control cleanup | All3globals ABSENT->ABSENT, selectedwholeorgflags equal, zerooptins | Positiveexistingrow/wholeDB/hostedrestore NOT VERIFIED |
+| Owner-only archive and raw writer DB guards | Incompleteunappliedfoundationproposal only | Codexdesign/PEtarget+nonMacapply |
+| Staging/Claude/physicaldevice/pilot/release | NOT VERIFIED | Separate evidence/approval |
 
-Actual commands, source maps, exits, raw test names and preserved failure links: [targeted summary](workflow-targeted-summary-a5.json). No test skip or relaxation was introduced.
+[Immutablemanifest](archive-workflow-runtime-3cab1ef.json), [independentverdict](independent-astra-workflow-final-r6.md). Actual68finalPNGwidths32mobile36desktop; stale-messageonly1280, coveragelimitnotblanketmobileclaim. Allfailedattemptsretained.

@@ -1,0 +1,1345 @@
+{
+  "classification": "SCOPED_LOCAL_RUNTIME_PASS_FINAL_INDEPENDENT_REVIEW_PENDING",
+  "candidate": "3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8",
+  "baseline": "516a5e8c2e7bc7f54cefe425e6551d9ea0fc793e",
+  "attempt": "r6",
+  "createdAt": "2026-11-03T02:43:15.345550-08:00",
+  "sourcePins": {
+    "e2e/b011-comparison-bucket.mjs": "845f02623bdc61ece9f1517a3738a30f935144f5",
+    "e2e/b011-comparison-private-playwright.config.ts": "ff4ef724f0b6399313f7bc470f9d9576f9eed5ac",
+    "e2e/b011-handover-comparison.spec.ts": "298d594e1c0edd48497b94c20ce3199f7686e5d1",
+    "e2e/b012-renewal-comparison-private-playwright.config.ts": "b529eadcd743d57fa8e78d4716ede63c2da7393a",
+    "e2e/b012-renewal-comparison.spec.ts": "a49438277ed19c01e9aba9fbe7a9eab2c7570c2d",
+    "e2e/b014-owner-transfers-private-playwright.config.ts": "b588632d86cabafaf00ab61a261ec18084a1bf04",
+    "e2e/b014-owner-transfers.spec.ts": "6fdec690a63b29a01a7049232c8bd4c0acd1769d",
+    "e2e/b015-archive-guard-private-playwright.config.ts": "1d08460673793fbac45dbe2ab081a7bd4da7df8e",
+    "e2e/b015-archive-guard.spec.ts": "3cbc831873d0a12042c5e6a5550b45f08485469d",
+    "e2e/b015-archive-workflow-private-playwright.config.ts": "ef682a0d1bd6bb65d6de47657ebabfb27b54e3e8",
+    "e2e/b015-archive-workflow.spec.ts": "5be8e65ba37b0db406156aab981adeea52772d5b",
+    "e2e/handover-bucket.mjs": "50700d0f069e39d45fd316bd56d198e0fdbe64e1",
+    "e2e/handover-playwright.config.ts": "4da3fc5c5166042d3314b27d0d8661385c9c3b48",
+    "e2e/handover.spec.ts": "54132623983b8330214936414cf2ebffebceb03c",
+    "e2e/session.ts": "debb2f53da0343758c44f0f93621f2a680be80a9",
+    "ops/flags.yaml": "71d694650ae5983e91ad862948450e6d368d678e",
+    "package-lock.json": "30d7f0901663c0d507853aa0815e1495c9b8aae2",
+    "package.json": "e2c594b3ea755aa386eb1d7ac5b1ad9e3c9f8e5d",
+    "scripts/gate.sh": "4ad38c2a63cffb936eb39ecc396ff869436d5e4b",
+    "scripts/preflight-deploy.sh": "3214ee7db0b4a25417682de8c2cce7e104c260bb",
+    "scripts/run-e2e.ts": "da324da9c0d1999b7139452e5503b2e6e4e42168",
+    "scripts/third-party-licenses.mjs": "b72b9c3342dabdf9a0afd4ae63f396cbdd12faa4",
+    "src/app/globals.css": "d792fa940c951dd603a076ab2e827bc2bd5e6e7e",
+    "src/app/m/archive/[kind]/[id]/page.tsx": "13305ee22b8d69207a1065ccfd34cb4cf415996a",
+    "src/app/m/archive/page.tsx": "a117712f6351ab9523ce5658ee43e876350ce7b1",
+    "src/app/m/expenses/[id]/page.tsx": "7bcae75a88832c1733c21aa03ec8b0cb306835f1",
+    "src/app/m/leases/[id]/page.tsx": "af5308499fb73ac4897f4f5be789ed7a231d1041",
+    "src/app/m/leases/[id]/renewal/page.tsx": "2da931e8e1ae2827589d672251e7bb8f05f3f34c",
+    "src/app/m/properties/[id]/edit/page.tsx": "fba6f2b6a2dde247241368d1a50f2707ee6b2757",
+    "src/app/m/properties/[id]/page.tsx": "f398e947abfd456faadd786b26d1bf4dffe3dc6c",
+    "src/app/m/properties/page.tsx": "2f5fb9b2c53fdb53598bcc2bde8df3396e826d4f",
+    "src/app/m/rent/utilities/page.tsx": "15ef0294d53ef4ee046303da9df7bd9822a70486",
+    "src/app/m/reports/page.tsx": "3378782805eff21404310a4ce7301a1920ab4208",
+    "src/app/m/statements/page.tsx": "b9e6614e0ea33ad5409d7f5e6ba882bbb7f84e56",
+    "src/app/m/statements/transfers/page.tsx": "a0d134c26e05f62f0b1553f4ac005cee62911db4",
+    "src/app/m/units/page.tsx": "b0a33f8f3b504084409a1ebdff50468492c5c5cb",
+    "src/app/m/units/room/[id]/page.tsx": "30b2ce902b5cb2696994741d9996e73ee2f67aac",
+    "src/app/m/units/whole/[id]/page.tsx": "24c18ee3c06a170f2258732e265544c330d22b36",
+    "src/app/t/history/[leaseId]/page.tsx": "8eb2ab71e61285a2a7df486a4b534bfc49cec032",
+    "src/app/t/history/[leaseId]/signed/[pdfId]/route.ts": "e541cc14d6337a5bbf684fdabf8dd2f7f7967426",
+    "src/app/t/history/page.tsx": "b22d28a8a1be3bb0885354bf6d305018b25a946d",
+    "src/app/t/layout.tsx": "b7a1bfaffcdabcda9a0ec4fa5a7c2cc363a2c938",
+    "src/app/t/lease/layout.tsx": "75ce43b2dd03ef905649c3fce206b595aaefad65",
+    "src/app/t/page.tsx": "697f94a751067ceec8341b3b4796acde98671665",
+    "src/components/handover-comparison.tsx": "863a115be6cbb5a05f54b532ce544a15fd70772e",
+    "src/components/handover-page.tsx": "abfa0e32f6a4591395d2352584da83473740e569",
+    "src/components/owner-transfers.tsx": "0e8a6de03a579dcfd645a19f5ca35926e8db6041",
+    "src/components/record-archive-entry.tsx": "ff73f9a2fb9fb83b1661237b84f53583a8838da5",
+    "src/components/record-archive.tsx": "bb6f4accb398f57d6b0e4deb175254d70ea7e1f8",
+    "src/components/renewal-comparison-entry.tsx": "06dc8366110077f4e0738a69dfbcf0588c6ac138",
+    "src/components/renewal-comparison.tsx": "0c997c92101ed415939ea8cddf0242b9a544e9e4",
+    "src/i18n/en.json": "697ff32aa3d94d7de430278daa55d335f86e6b2f",
+    "src/i18n/handover.ts": "e48e84715e0a9c1e386b84e585d5eec0101acd4f",
+    "src/i18n/index.ts": "00d6bc5b791a38dde92476ba92d3247f4ad5943f",
+    "src/i18n/owner-transfer.ts": "6988b86598881fe69fca06fb3883b3ba48b4caa4",
+    "src/i18n/record-archive.ts": "10e06c20b5371355b276ddfe33ec246f3cabb78c",
+    "src/i18n/renewal.ts": "7d919dc94e89354fca83d54dda3416c3f93c6084",
+    "src/i18n/tenant-lease-history.ts": "1afeb7fbb1505143bc3cfe6ae950d2d15ed04b42",
+    "src/i18n/zh-TW.json": "6270729f648586a7443c15e6bb7f174c3ef61563",
+    "src/lib/record-archive.test.ts": "15abcac019027910299216589d3912133cb7d8ae",
+    "src/lib/record-archive.ts": "4171974880dd3e5c3aa1e6bca2d7c43e27d769ce",
+    "src/lib/renewal-comparison.test.ts": "22ddab88af28910a7ef86dab2c62ffeae1bf1d22",
+    "src/lib/renewal-comparison.ts": "25df4d7d3776dfc3c727fc57acba442ddbf924f5",
+    "src/lib/tenant-lease.ts": "e962b804ea64b5249614477cc69aed916bec32d0",
+    "src/server/actions.ts": "127a116bb2cad512d3551c061ab9e5160fa37845",
+    "src/server/after-response.ts": "fe76efad0df1fdf0282100e42d9ed10993b20029",
+    "src/server/audit.ts": "beec5aa7a76f3f075970087242526e2c696a6381",
+    "src/server/auth.integration.test.ts": "51336c73b93c32950b8b674792545ee9ace695f9",
+    "src/server/auth.ts": "9a2f2a3a08a215b4e503350c5a3ede0fa1ac081e",
+    "src/server/b007-deposit.integration.test.ts": "6170be52510ca104c6bb0622163ed04a7624b4b4",
+    "src/server/consent-gate.ts": "6ac26ed5afa7757c297de45b8060f87f6c727f8e",
+    "src/server/consent.ts": "0d2b9200e936b7a2ba065075ff998847c0ad9908",
+    "src/server/db.ts": "1e7a4bc6a1bf93d10c921b2321666cba9465b345",
+    "src/server/domain.ts": "35bc6ac992368da7af34e8d70e62ee6e706b6766",
+    "src/server/esign/esign-privileges.integration.test.ts": "346429d40c784dd0f1e5998a618dbcf801d20e77",
+    "src/server/esign/esign-rollout.integration.test.ts": "d334f04d2d436ab36e6abb789ade23581ea9fc8a",
+    "src/server/esign/esign.integration.test.ts": "16d986c6b8185bc48a36c51967db2204159247a7",
+    "src/server/esign/flow.test.ts": "0988a6853390d490015561491c00bc4d1d22b726",
+    "src/server/esign/flow.ts": "9272ddd8c566c4c0a974a2f89fcc2d486a7ac71b",
+    "src/server/esign/lock.ts": "d59303e000d72986fd2d32f77a13265f0ca8236c",
+    "src/server/esign/repo.ts": "67eaf7bb38861de8e21f790f15c031413d07dd8d",
+    "src/server/expenses.ts": "1a15f7255bde0740c10e2513aeb836f51f0e0639",
+    "src/server/first-period.integration.test.ts": "00ff525510739f0433e5d133a76cba9034be70a6",
+    "src/server/format.ts": "00ec04f4df404b56c51a00e9152deac932c876d1",
+    "src/server/ids.ts": "5bb2c63749e7a606d90f1b3c7d79b2e8607142ba",
+    "src/server/import-batch.ts": "1d2c2e7842ad00f326c1de1ddf14fdf6fd9320b0",
+    "src/server/import-region.integration.test.ts": "2f9c6ac3fcd597b22c18b2bb8c049c05f4f728a2",
+    "src/server/import.integration.test.ts": "6779e178ce6fb4da2c844a1ff489bfe8017ff481",
+    "src/server/income-expense.ts": "b7cb60ac2e9152d205ef461e7e035dd902cfe244",
+    "src/server/lease-create-archive.integration.test.ts": "4574104ff47efdbcfe58f8f2e0c5df22cd51954d",
+    "src/server/lease-create.integration.test.ts": "14d9ca69069b38b1256240f3a2ca414f613a6a76",
+    "src/server/lease-target.ts": "fd99d1e26fe134e58edbe17d4e3ad3b8a7a8a85d",
+    "src/server/org-scope.ts": "7d2e04341cbbd0cd072df1b549608eb5ba4da527",
+    "src/server/owner-transfer-actions.ts": "2d9f8b6a8c2a996fb9782504a1a7f48d33db9b13",
+    "src/server/owner-transfer-input.test.ts": "e84cdaebb394d13d756985257b388b1d5332de9c",
+    "src/server/owner-transfer-input.ts": "3ae25aa8ecca17dcd6140878e3f075ef0a669dc2",
+    "src/server/owner-transfer-period-lock.ts": "db59bdc77fe547b9941a19453c8512642916b53b",
+    "src/server/owner-transfers.integration.test.ts": "c36eef9478268fe6287984b7000ed8d560ed3f1c",
+    "src/server/owner-transfers.ts": "4d8ba2a8be4dd754a7911e04b8634164fc20f78a",
+    "src/server/paper-lease-versions.integration.test.ts": "ad4c6394002fa0317f5cf7023060104452989c24",
+    "src/server/perms.ts": "626c89472406558eaac053d952de2c4136c607dd",
+    "src/server/portal-role.ts": "1cfb243db89e7e4258a54fb1bc65f72deac066fc",
+    "src/server/portfolio.ts": "453b1be3086777d9ecb6bdcace368ee1b5456219",
+    "src/server/queries.ts": "bb40a5b03f5a1fea2c17bfc55682cec885c07ce2",
+    "src/server/record-archive-actions.ts": "6e3f6fa8c57ba551aff0d74e7f0f620e25afbe6e",
+    "src/server/record-archive-admission.integration.test.ts": "3d07de9ea266dca151cea3af09553b2baf3c5b81",
+    "src/server/record-archive-admission.ts": "782571292a15897d48b41cae7278fa1419ad097f",
+    "src/server/record-archive-caller.ts": "29cf24a372c858c896f855ae78924650818b7088",
+    "src/server/record-archive-finance.integration.test.ts": "806a21ebe563dbdb9ff77ca660442ed3651151a3",
+    "src/server/record-archive.integration.test.ts": "83859c55a5974e667758263153c34d5bb72fdebf",
+    "src/server/record-archive.ts": "7e2a5799b3d134be1cbeb875d32c35e937624af3",
+    "src/server/renewal-comparison-actions.ts": "bd0fda7136ad37263476d649cf3957421028778e",
+    "src/server/renewal-comparison.integration.test.ts": "3d55c658b26c17c397a65ac5057a13b8aec44543",
+    "src/server/renewal-comparison.ts": "b218cb5651a060bb29d0040eec53d0c7108a1f30",
+    "src/server/repair-rules.ts": "4efa249eabbf9fed9ab3660518b197347fe9c602",
+    "src/server/repair.integration.test.ts": "8cac38063f4cca0e2e52610829b792f2a6ba88e2",
+    "src/server/repairs.ts": "1d4bab2a19d7a59f3b98b6bcb991b9e870478cd9",
+    "src/server/rls.test.ts": "63a3e67082ef1b084f820c956cac095b0a147b5e",
+    "src/server/sandbox-data.ts": "d8f6df15f812d8a2383d0475c0874e652579dc6a",
+    "src/server/sandbox-seed.ts": "11f7c2e042b69ad28be308aa56b62fefd52e593d",
+    "src/server/sandbox.ts": "d6925304e83f7c38f1cddea6849d86defb5d4739",
+    "src/server/seed.ts": "ad8b93e2b7622557484865a20e30ef5ea1dc616c",
+    "src/server/session.ts": "eeac341482275fd4060c350e8dc02d20208de3bc",
+    "src/server/tenant-lease-history.integration.test.ts": "bf04dddbc91e41566b9c4e05b7ac4c47895514cd",
+    "src/server/tenant-lease-history.ts": "d704e7d3c5632b736160e68f7de3d97d75186c39",
+    "src/server/tenant-lease.integration.test.ts": "9a9880c4c1a99f69c42b8d8a4dc7a124cdbc56e3",
+    "src/server/tenant-signed-pdf-download.ts": "7744dacafd84f9d123e8706ff7f81177a97f73be",
+    "src/server/tenant-signed-pdf-rules.ts": "9cfbae0131ce6ecb50c8fdcea95eee0016d12576",
+    "src/server/tenant-signed-pdf.integration.test.ts": "b471de7a76af6dc01256e4ee7f79e227cce7a91c",
+    "src/server/test-auth-session.ts": "7657ab42f0a52fa44bee680d203b929002c7b871",
+    "src/server/test-database-clone.ts": "29a1fb5c8666985392f137cf2f94495e13b3246d",
+    "src/server/test-disposable-db.ts": "3f34e7fe98613f2a82e6c788bfe4b07a5eeea265",
+    "src/server/types.ts": "046221d44e89bdd3c2ed9534410df6573271da6a",
+    "src/server/utility-posting.integration.test.ts": "f591db3bca2b250a5a83ae7bc7cd825c2b4b17c3",
+    "src/server/utility-posting.ts": "13eb56e6407e7ec741e7dab559f41593aff31469",
+    "src/server/utility-reconciliation.integration.test.ts": "7771f90c0df039a67a715b12411eb128653c0fd5",
+    "src/server/vendor-batch.integration.test.ts": "a159b8263cebb75e583519966c589ac4cc0214c0",
+    "src/server/vendor-link-flag.integration.test.ts": "7856e9bdd10d8f0d97d565dfbcc1f9e404f250da",
+    "src/server/vendor-link.integration.test.ts": "d3302ab9bc8cefa331d81238a391e9cd14c86cc8",
+    "src/server/vendor-repair.integration.test.ts": "c3ee258f9f2ea397428fa4605e81ea6bc98d76c7",
+    "src/server/vendor-repair.ts": "4a18311f490abb51446dc21f955cc372d65f4f4b",
+    "supabase/migrations/20261018120000_schema.sql": "29f354b2f0c9edda8ebb618cf5b413cf9da21e74",
+    "supabase/migrations/20261020120000_auth.sql": "60998ac8e77a8366e67b9358dd87072b7d7b046a",
+    "supabase/migrations/20261020140000_audit_access.sql": "f0802260e45c39c013af74c9e0e14e01e1b79316",
+    "supabase/migrations/20261022170000_archive_whole_unit_rooms.sql": "eeda68e4256a0220829786022959048cfa256622",
+    "supabase/migrations/20261030120000_org_scoped_reversal_audit.sql": "138f64992d46f9ee6406e9ccb5dae247750ae8cc",
+    "supabase/migrations/20261030151400_tenant_signed_pdf_read.sql": "5d6d2fd66c4321f1ac6de1ed53b2afeef143980f",
+    "supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql": "968ff476247a310a3570be1a4328c0a1b7c56859",
+    "supabase/migrations/20261031100214_b011_handover_records.sql": "64ad38b2fd5c6e0d33fbc09ed641c20cb26675c4",
+    "tsconfig.json": "c57349280afe4314902d14d337947deb5c42dca2"
+  },
+  "sourceMapSha256": "cafc71a5103c0a4a2a416595b428abdad34b9a6ff3782fe94abdf988cf86856d",
+  "changedFromBaseline": {
+    "e2e/b015-archive-workflow-private-playwright.config.ts": "ef682a0d1bd6bb65d6de47657ebabfb27b54e3e8",
+    "e2e/b015-archive-workflow.spec.ts": "5be8e65ba37b0db406156aab981adeea52772d5b",
+    "ops/flags.yaml": "71d694650ae5983e91ad862948450e6d368d678e",
+    "package.json": "e2c594b3ea755aa386eb1d7ac5b1ad9e3c9f8e5d",
+    "scripts/run-e2e.ts": "da324da9c0d1999b7139452e5503b2e6e4e42168",
+    "src/app/m/archive/[kind]/[id]/page.tsx": "13305ee22b8d69207a1065ccfd34cb4cf415996a",
+    "src/app/m/archive/page.tsx": "a117712f6351ab9523ce5658ee43e876350ce7b1",
+    "src/app/m/expenses/[id]/page.tsx": "7bcae75a88832c1733c21aa03ec8b0cb306835f1",
+    "src/app/m/leases/[id]/page.tsx": "af5308499fb73ac4897f4f5be789ed7a231d1041",
+    "src/app/m/properties/[id]/edit/page.tsx": "fba6f2b6a2dde247241368d1a50f2707ee6b2757",
+    "src/app/m/properties/[id]/page.tsx": "f398e947abfd456faadd786b26d1bf4dffe3dc6c",
+    "src/app/m/properties/page.tsx": "2f5fb9b2c53fdb53598bcc2bde8df3396e826d4f",
+    "src/app/m/rent/utilities/page.tsx": "15ef0294d53ef4ee046303da9df7bd9822a70486",
+    "src/app/m/reports/page.tsx": "3378782805eff21404310a4ce7301a1920ab4208",
+    "src/app/m/units/page.tsx": "b0a33f8f3b504084409a1ebdff50468492c5c5cb",
+    "src/app/m/units/room/[id]/page.tsx": "30b2ce902b5cb2696994741d9996e73ee2f67aac",
+    "src/app/m/units/whole/[id]/page.tsx": "24c18ee3c06a170f2258732e265544c330d22b36",
+    "src/app/t/history/[leaseId]/page.tsx": "8eb2ab71e61285a2a7df486a4b534bfc49cec032",
+    "src/app/t/history/[leaseId]/signed/[pdfId]/route.ts": "e541cc14d6337a5bbf684fdabf8dd2f7f7967426",
+    "src/app/t/history/page.tsx": "b22d28a8a1be3bb0885354bf6d305018b25a946d",
+    "src/app/t/layout.tsx": "b7a1bfaffcdabcda9a0ec4fa5a7c2cc363a2c938",
+    "src/components/owner-transfers.tsx": "0e8a6de03a579dcfd645a19f5ca35926e8db6041",
+    "src/components/record-archive-entry.tsx": "ff73f9a2fb9fb83b1661237b84f53583a8838da5",
+    "src/components/record-archive.tsx": "bb6f4accb398f57d6b0e4deb175254d70ea7e1f8",
+    "src/i18n/record-archive.ts": "10e06c20b5371355b276ddfe33ec246f3cabb78c",
+    "src/i18n/tenant-lease-history.ts": "1afeb7fbb1505143bc3cfe6ae950d2d15ed04b42",
+    "src/lib/record-archive.test.ts": "15abcac019027910299216589d3912133cb7d8ae",
+    "src/lib/record-archive.ts": "4171974880dd3e5c3aa1e6bca2d7c43e27d769ce",
+    "src/server/actions.ts": "127a116bb2cad512d3551c061ab9e5160fa37845",
+    "src/server/b007-deposit.integration.test.ts": "6170be52510ca104c6bb0622163ed04a7624b4b4",
+    "src/server/domain.ts": "35bc6ac992368da7af34e8d70e62ee6e706b6766",
+    "src/server/esign/esign-privileges.integration.test.ts": "346429d40c784dd0f1e5998a618dbcf801d20e77",
+    "src/server/esign/esign-rollout.integration.test.ts": "d334f04d2d436ab36e6abb789ade23581ea9fc8a",
+    "src/server/esign/esign.integration.test.ts": "16d986c6b8185bc48a36c51967db2204159247a7",
+    "src/server/esign/flow.test.ts": "0988a6853390d490015561491c00bc4d1d22b726",
+    "src/server/esign/flow.ts": "9272ddd8c566c4c0a974a2f89fcc2d486a7ac71b",
+    "src/server/esign/lock.ts": "d59303e000d72986fd2d32f77a13265f0ca8236c",
+    "src/server/esign/repo.ts": "67eaf7bb38861de8e21f790f15c031413d07dd8d",
+    "src/server/expenses.ts": "1a15f7255bde0740c10e2513aeb836f51f0e0639",
+    "src/server/first-period.integration.test.ts": "00ff525510739f0433e5d133a76cba9034be70a6",
+    "src/server/import-batch.ts": "1d2c2e7842ad00f326c1de1ddf14fdf6fd9320b0",
+    "src/server/import-region.integration.test.ts": "2f9c6ac3fcd597b22c18b2bb8c049c05f4f728a2",
+    "src/server/import.integration.test.ts": "6779e178ce6fb4da2c844a1ff489bfe8017ff481",
+    "src/server/income-expense.ts": "b7cb60ac2e9152d205ef461e7e035dd902cfe244",
+    "src/server/lease-create-archive.integration.test.ts": "4574104ff47efdbcfe58f8f2e0c5df22cd51954d",
+    "src/server/lease-create.integration.test.ts": "14d9ca69069b38b1256240f3a2ca414f613a6a76",
+    "src/server/owner-transfers.ts": "4d8ba2a8be4dd754a7911e04b8634164fc20f78a",
+    "src/server/paper-lease-versions.integration.test.ts": "ad4c6394002fa0317f5cf7023060104452989c24",
+    "src/server/perms.ts": "626c89472406558eaac053d952de2c4136c607dd",
+    "src/server/portfolio.ts": "453b1be3086777d9ecb6bdcace368ee1b5456219",
+    "src/server/queries.ts": "bb40a5b03f5a1fea2c17bfc55682cec885c07ce2",
+    "src/server/record-archive-actions.ts": "6e3f6fa8c57ba551aff0d74e7f0f620e25afbe6e",
+    "src/server/record-archive-admission.integration.test.ts": "3d07de9ea266dca151cea3af09553b2baf3c5b81",
+    "src/server/record-archive-admission.ts": "782571292a15897d48b41cae7278fa1419ad097f",
+    "src/server/record-archive-caller.ts": "29cf24a372c858c896f855ae78924650818b7088",
+    "src/server/record-archive-finance.integration.test.ts": "806a21ebe563dbdb9ff77ca660442ed3651151a3",
+    "src/server/record-archive.integration.test.ts": "83859c55a5974e667758263153c34d5bb72fdebf",
+    "src/server/record-archive.ts": "7e2a5799b3d134be1cbeb875d32c35e937624af3",
+    "src/server/repair.integration.test.ts": "8cac38063f4cca0e2e52610829b792f2a6ba88e2",
+    "src/server/repairs.ts": "1d4bab2a19d7a59f3b98b6bcb991b9e870478cd9",
+    "src/server/rls.test.ts": "63a3e67082ef1b084f820c956cac095b0a147b5e",
+    "src/server/tenant-lease-history.integration.test.ts": "bf04dddbc91e41566b9c4e05b7ac4c47895514cd",
+    "src/server/tenant-lease-history.ts": "d704e7d3c5632b736160e68f7de3d97d75186c39",
+    "src/server/tenant-lease.integration.test.ts": "9a9880c4c1a99f69c42b8d8a4dc7a124cdbc56e3",
+    "src/server/tenant-signed-pdf.integration.test.ts": "b471de7a76af6dc01256e4ee7f79e227cce7a91c",
+    "src/server/test-auth-session.ts": "7657ab42f0a52fa44bee680d203b929002c7b871",
+    "src/server/utility-posting.integration.test.ts": "f591db3bca2b250a5a83ae7bc7cd825c2b4b17c3",
+    "src/server/utility-posting.ts": "13eb56e6407e7ec741e7dab559f41593aff31469",
+    "src/server/utility-reconciliation.integration.test.ts": "7771f90c0df039a67a715b12411eb128653c0fd5",
+    "src/server/vendor-batch.integration.test.ts": "a159b8263cebb75e583519966c589ac4cc0214c0",
+    "src/server/vendor-link-flag.integration.test.ts": "7856e9bdd10d8f0d97d565dfbcc1f9e404f250da",
+    "src/server/vendor-link.integration.test.ts": "d3302ab9bc8cefa331d81238a391e9cd14c86cc8",
+    "src/server/vendor-repair.integration.test.ts": "c3ee258f9f2ea397428fa4605e81ea6bc98d76c7",
+    "src/server/vendor-repair.ts": "4a18311f490abb51446dc21f955cc372d65f4f4b"
+  },
+  "sourceFreeze": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-reviewed-source-freeze-a7.json",
+    "sha256": "d24f2c160f2dc879cc03d66227a095faa6050fbe8ae8718d9683636ea1deef91",
+    "bytes": 14669
+  },
+  "helpers": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/run-b015-workflow-final-check-a7.py",
+      "sha256": "4605e004dc6868774cc22941781c813828b39be004220dea2065a5e35c22300e",
+      "bytes": 5270
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-runtime-driver-a7.py",
+      "sha256": "cfc1cdaf18853ed4f80611b69c1e58f729d73cc8e4f0f20611afd5ceb5a45f10",
+      "bytes": 6184
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-control-readback-a7.py",
+      "sha256": "58ac733fc4e28d454a2903f80d6f087ae2b2b52eefa2cd9dea9e450f07fe3ae7",
+      "bytes": 8144
+    }
+  ],
+  "counts": {
+    "unit": {
+      "tests": 627,
+      "pass": 627,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    "rls": {
+      "tests": 456,
+      "pass": 455,
+      "fail": 0,
+      "skipped": 1,
+      "cancelled": 0,
+      "skipLines": [
+        "ok 6 - a database with the older 20261022180000 upgrades forward, then accepts the same file again # SKIP Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29"
+      ]
+    }
+  },
+  "focus": {
+    "configured": 1,
+    "passed": 1,
+    "otherCasesNotRunByFocus": 3,
+    "screenshots": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/archived-en-390.png",
+        "sha256": "513490a6be568729935a56201036a31e0c8945c106cf80eac5bea8f7b716a6a8",
+        "bytes": 85242,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/blocked-en-390.png",
+        "sha256": "681f83c4b0809501e9b9404ff5379d6b0191cbf901d5d2874f9ff1eb68651ca6",
+        "bytes": 71789,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/corrupt-recovery-en-390.png",
+        "sha256": "2b59135cd4fada19ecb9dea89c3f40b614e3719b8402366006eb4fbf2aec6cd2",
+        "bytes": 81032,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/error-en-390.png",
+        "sha256": "5bb9e5b85d00f93f98a52ceeac9de917ccc6ce07e9c1179d45a9b2da3c14325c",
+        "bytes": 82556,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/finance-en-390.png",
+        "sha256": "38827b4efb14f17fbc5517086390474a72378351bcf02bc5df523c8a90d2e1c0",
+        "bytes": 79333,
+        "width": 390,
+        "height": 1429
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/history-en-390.png",
+        "sha256": "541bbabc50f2950c30afa8f09350177611ff1ba33077f834c07bd5536dbaf8ef",
+        "bytes": 83134,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/inherited-en-390.png",
+        "sha256": "be0a62edbf77c45feffc77247abbcea24b4ad8529816b52e96f5bf7e3bac4a57",
+        "bytes": 75231,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/initial-en-390.png",
+        "sha256": "3c5024ca7f4a0c32ef5ced8f4d39721ac282435eac02a46cc6b0eb81d3fc98e3",
+        "bytes": 80633,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/loading-en-390.png",
+        "sha256": "c86ed2975980d20f48fd90a6eaa520cd2d339cdc00c8d162930619a0eb2b62e2",
+        "bytes": 74423,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/off-history-en-390.png",
+        "sha256": "d4ad100e5144a95f11096bd971b948cbdade72da05f9524c930aa6e6dba9c017",
+        "bytes": 77824,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/owner-finance-en-390.png",
+        "sha256": "24c65cfd06c256d5507c872f6e423b030a410087f99738d26604b8a6cd3000cb",
+        "bytes": 56182,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/report-finance-en-390.png",
+        "sha256": "60c3fcebb3fd0b3e452991e1233273ce874b6636fb911907101b65cea95a57a6",
+        "bytes": 60865,
+        "width": 390,
+        "height": 1071
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/restored-en-390.png",
+        "sha256": "02340e88b807088b188798a793752248cf2b92c72e027628227d8d97df672e97",
+        "bytes": 83400,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/stale-restore-en-390.png",
+        "sha256": "1ecd6b5ba6e169e9e09d531981de3961cf46bff8a2f3c0d49f429f6472613ae4",
+        "bytes": 129973,
+        "width": 1280,
+        "height": 821
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/tenant-history-detail-en-390.png",
+        "sha256": "3460b3277bbe64ae4ce3da466a5daf602b2bd87efbb111fb36e55278591a2846",
+        "bytes": 70330,
+        "width": 390,
+        "height": 966
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/tenant-history-en-390.png",
+        "sha256": "2b16ccecae45af2e67d576c95ec10eb74655480f8e62f2c8cbbd3eeda9d03180",
+        "bytes": 68725,
+        "width": 390,
+        "height": 966
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/unknown-review-en-390.png",
+        "sha256": "3fa88088a74dabd847267ebcb51137defbb3da5d25c32a951cb1f14676a8d7ff",
+        "bytes": 95255,
+        "width": 390,
+        "height": 944
+      }
+    ]
+  },
+  "browser": {
+    "configured": 4,
+    "passed": 4,
+    "localeWidths": [
+      "en390",
+      "en1280",
+      "zhTW390",
+      "zhTW1280"
+    ],
+    "screenshots": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/archived-en-1280.png",
+        "sha256": "964e58d962102e2f82df3cea660826007419d2cfefac08bb706d59ad43f456b9",
+        "bytes": 131557,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/blocked-en-1280.png",
+        "sha256": "f827f3499875af830041c0bc7fea7db4eb33cf245f07b12bdfdefb1b493940ba",
+        "bytes": 118248,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/corrupt-recovery-en-1280.png",
+        "sha256": "c79436c316dabdf02b736e91a8be5ef5d27962293de6c6f137095e83e83af126",
+        "bytes": 126118,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/error-en-1280.png",
+        "sha256": "cd62290c33001e70bed18e3ae7240c7df2c0f50aa0f802bb3f9b3c8311451c1a",
+        "bytes": 128649,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/finance-en-1280.png",
+        "sha256": "41aa4a4df1a74f600a87161451388e0669b6ebb00de66b3f66fdefb3244323e1",
+        "bytes": 126301,
+        "width": 1280,
+        "height": 1360
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/history-en-1280.png",
+        "sha256": "3e7ffa77337b8785fb2a5b975d35423d927eb15fc63bd9ab391e599bff9e5fcc",
+        "bytes": 128646,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/inherited-en-1280.png",
+        "sha256": "f2fd46dfb41ffd891289758b71082ff1279ee114b8c37bb26a71f593d76a5731",
+        "bytes": 124929,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/initial-en-1280.png",
+        "sha256": "eb1c0c548dc503f18da349cd455164ca21807eb7a8bb29e5d9f59d05332ee4b8",
+        "bytes": 126228,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/loading-en-1280.png",
+        "sha256": "f93117e4f62be5bac38e70f5d55ff5d918a39dec524c58cd86ee13663294787d",
+        "bytes": 119627,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/off-history-en-1280.png",
+        "sha256": "5d4e7d649ca46e5f1eac82301ef6299a059e24e6d8137bd211441c33cbdee97a",
+        "bytes": 122722,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/owner-finance-en-1280.png",
+        "sha256": "243ad5c7150af2a88e377598acd98537e0175ead51dd858b11c263225c00aa18",
+        "bytes": 103059,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/report-finance-en-1280.png",
+        "sha256": "6d2c45b08c2c0926082f2ddec51ccfdca0282bdf41aa531c19256881316c11ef",
+        "bytes": 101512,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/restored-en-1280.png",
+        "sha256": "5b5fb280590ae5a9b20de88611dd17b6a300dae6b1e22613a76efbc4332b5397",
+        "bytes": 129132,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/stale-restore-en-1280.png",
+        "sha256": "5039db8dbbdfa324f346a12f7ce06dc24014057a62e3cb84c06ac6036f86d32b",
+        "bytes": 129286,
+        "width": 1280,
+        "height": 821
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/tenant-history-detail-en-1280.png",
+        "sha256": "8f8aaf5154c0961fcce14e4c62e981d6578c06330dfc5bb3c2ebbbe7eb6420dd",
+        "bytes": 93860,
+        "width": 1280,
+        "height": 922
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/tenant-history-en-1280.png",
+        "sha256": "78387652727e9d541b6d542acc80cce7343d7a047d9fdd6f4cbd381c37f5a7c5",
+        "bytes": 90766,
+        "width": 1280,
+        "height": 922
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-1280-chromium/unknown-review-en-1280.png",
+        "sha256": "5beb0de26c7e659d90b38f7d6175d5252fbcf4a15e2feb9eaa299e51841a4c71",
+        "bytes": 140262,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/archived-en-390.png",
+        "sha256": "5672bac7e19e2d76f0bf211dc1d4e4297fdb3458624112cf43d92ad9456335ec",
+        "bytes": 85966,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/blocked-en-390.png",
+        "sha256": "1c3984e427045cfebde32be1bdeadf44ca72834d15d349fb772c2621eef7bffd",
+        "bytes": 71188,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/corrupt-recovery-en-390.png",
+        "sha256": "62a57e51059f24dd58cd2ddba5ce334f654f725f8a2f12a42afb537d921fbeae",
+        "bytes": 81758,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/error-en-390.png",
+        "sha256": "b2a0fd1deb432599cf4527be8cca3d8f1e7b0402e79bef1a9043a6a4ca3e4961",
+        "bytes": 83237,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/finance-en-390.png",
+        "sha256": "edb4c999557acbd55f4633f63c41726e9c8b8ec79745bb580a53ee2dc1b2671d",
+        "bytes": 78873,
+        "width": 390,
+        "height": 1429
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/history-en-390.png",
+        "sha256": "66e2b5c25815207e7d5b12f9f53de4b7cb715cd83d95e1cf20c87c9109340451",
+        "bytes": 83860,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/inherited-en-390.png",
+        "sha256": "80260c95d2921c6501a603f39d39c0282bc3386e240dae9d879766fa6a5726bb",
+        "bytes": 75358,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/initial-en-390.png",
+        "sha256": "6eba8015d4ff5604d3cb30e823bbb7119d49c46663bd369724b8117ca59c3e75",
+        "bytes": 81315,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/loading-en-390.png",
+        "sha256": "b9f710b8f899d3eb2621b39914a0b83d8819a8c3fe3f49c4cb6e9970381f04fd",
+        "bytes": 75123,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/off-history-en-390.png",
+        "sha256": "6842210d70f67e7422589c46afe34108f29754cb085f2dcb855d711c4bb60b59",
+        "bytes": 78566,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/owner-finance-en-390.png",
+        "sha256": "94aa88de81026810529c1544de17e367a4105e40fab532c79fc9ecbe44c72009",
+        "bytes": 56050,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/report-finance-en-390.png",
+        "sha256": "78542c79e3c352f0f3f36cd14d44d805b196420ada251b6c9a6663166140e8a3",
+        "bytes": 60714,
+        "width": 390,
+        "height": 1071
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/restored-en-390.png",
+        "sha256": "e8c9a84343f4511cda759e9bf3c0c791bc137d561d9a0369567092630bc40365",
+        "bytes": 83064,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/stale-restore-en-390.png",
+        "sha256": "01e0af7fd4e2c5af306fc49cc2db285775cc1fd2afa2be2fd714a5d871fe74cf",
+        "bytes": 130744,
+        "width": 1280,
+        "height": 821
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/tenant-history-detail-en-390.png",
+        "sha256": "15660d51deeb537b7fabe59c72b9f446553ff686ff4e8ff552fb2265a835e591",
+        "bytes": 71555,
+        "width": 390,
+        "height": 966
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/tenant-history-en-390.png",
+        "sha256": "1632d6851d706829af2b5d7fbc3a9859becc1bfadc986834a883b6faf113873b",
+        "bytes": 69160,
+        "width": 390,
+        "height": 966
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-en-390-chromium/unknown-review-en-390.png",
+        "sha256": "f605e4b54c60a58892ac1220c030adb54c97a464b1c89acce0ad8ff2f5d0353d",
+        "bytes": 95980,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/archived-zh-TW-1280.png",
+        "sha256": "34d6de6fabdfff8cce385880844462701138524ade0291fae53cfffa64679c84",
+        "bytes": 126778,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/blocked-zh-TW-1280.png",
+        "sha256": "c853f110c199b820064b500e30b4ccea00bf808693fb88cb7be6cc123d080145",
+        "bytes": 111071,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/corrupt-recovery-zh-TW-1280.png",
+        "sha256": "6196d35e326ca0fd328e62b01c13269c4b31a7ba6a326d9e466bca58c8c9e06b",
+        "bytes": 125746,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/error-zh-TW-1280.png",
+        "sha256": "7b85c0a2a269a0fc09dc2944fa3472f22aba7de9d20268f903b92706446ffb7e",
+        "bytes": 124003,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/finance-zh-TW-1280.png",
+        "sha256": "1c20889c02c60a17a20515f2f8d7fc281949d7842c9094fe9a3666a07405b300",
+        "bytes": 123205,
+        "width": 1280,
+        "height": 1360
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/history-zh-TW-1280.png",
+        "sha256": "95c5de4d6d6e062f5befb414dd68359bd7b101c82628918082c8888d2f54888d",
+        "bytes": 123638,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/inherited-zh-TW-1280.png",
+        "sha256": "07a7e697c577c5ac0261eacf92b050a2649dd925afc695b6ea221459155dd098",
+        "bytes": 119257,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/initial-zh-TW-1280.png",
+        "sha256": "41242d99527bfe6d13283b7c868ae5c72e7accf99755d1c5c0ab6962c8030cbf",
+        "bytes": 121195,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/loading-zh-TW-1280.png",
+        "sha256": "b458e3a7e1b338c6c222b1c858e3db096e68c1253549829d4b96b887c7f1d014",
+        "bytes": 115582,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/off-history-zh-TW-1280.png",
+        "sha256": "31671359389eef49ba1d4892843358898898c3d32d70d9de6152b373261f5efa",
+        "bytes": 119759,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/owner-finance-zh-TW-1280.png",
+        "sha256": "9db53c0faa08159d7bb0497ea018a274f2688bc1600abaf9fc246ce332d7e305",
+        "bytes": 100445,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/report-finance-zh-TW-1280.png",
+        "sha256": "bce51a4f3675f9c8f9fb6e85a16a0d19513c102262088185fedbc343443834cb",
+        "bytes": 97427,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/restored-zh-TW-1280.png",
+        "sha256": "61c6ad6ab858b763b0787ab4b07aeddd8b18b8abc627a6ca3915a0701d3a3357",
+        "bytes": 124128,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/stale-restore-zh-TW-1280.png",
+        "sha256": "ca9dec0c92bf7676369ebccb05f0a13be189e4cfe9e7f26a0eb8e67b056d0d2f",
+        "bytes": 133199,
+        "width": 1280,
+        "height": 821
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/tenant-history-detail-zh-TW-1280.png",
+        "sha256": "b2814173124d0700faf076c88a1b8072eda6c9639283d98d0b3c5fd9e64156f3",
+        "bytes": 100111,
+        "width": 1280,
+        "height": 922
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/tenant-history-zh-TW-1280.png",
+        "sha256": "99c5aad324d40f85a7d64f52ce886f2b45e02c3465ba656c90f05eb4c3b44a08",
+        "bytes": 97997,
+        "width": 1280,
+        "height": 922
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-1280-chromium/unknown-review-zh-TW-1280.png",
+        "sha256": "42ffbd5d687399052e93ff35141279120e3c79e158dec2e0ea5c91b99ce781e7",
+        "bytes": 140098,
+        "width": 1280,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/archived-zh-TW-390.png",
+        "sha256": "002a5474c9e24bebeaa8951977b0fd2854bf8c1634b0eba6395f605fc4f99509",
+        "bytes": 81457,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/blocked-zh-TW-390.png",
+        "sha256": "bf88fec7e264f694ae49e9a7c60d57fe31e3e1a627071047e9b7ea3459a8622e",
+        "bytes": 69942,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/corrupt-recovery-zh-TW-390.png",
+        "sha256": "947fd8cc67f276f292d801d1d700afe86cd5e6529ffa26dfc32a4e1b128b510f",
+        "bytes": 81149,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/error-zh-TW-390.png",
+        "sha256": "fc3d7c0d954c19a521377595552ae56a6717490dcebfa05ec56af91702adf3fc",
+        "bytes": 78555,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/finance-zh-TW-390.png",
+        "sha256": "6a9d609204405f7c9a08dbed1070eb3661a1be62079644f03c0f2fe972aef508",
+        "bytes": 81424,
+        "width": 390,
+        "height": 1411
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/history-zh-TW-390.png",
+        "sha256": "255accc4430536270a422e13bae8bf2e2a88122ebff45853cac263d498812d53",
+        "bytes": 79337,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/inherited-zh-TW-390.png",
+        "sha256": "638a91b6b82cb7eaccb28ceaa3dd6534736bb2f0e4972bc1cadeb8c563d2af14",
+        "bytes": 71444,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/initial-zh-TW-390.png",
+        "sha256": "2bf5610151933c2ba04f36b050ec55acf7f4a3d984ed08b750a41e68efee5a0e",
+        "bytes": 76336,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/loading-zh-TW-390.png",
+        "sha256": "7c0b2b11ea9169381df0b13aa25802ebcc5f5bf40e310d62e77ec38c4d28e568",
+        "bytes": 70984,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/off-history-zh-TW-390.png",
+        "sha256": "806c2d43ea2b9bd256ee3274cae9e3821b9a482c2ae7768537f501022463dc77",
+        "bytes": 75796,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/owner-finance-zh-TW-390.png",
+        "sha256": "27f81f87b2938fd56dfedbbdcc9c8c1b29fc03e1c7955a958e48bf8bf69df780",
+        "bytes": 58499,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/report-finance-zh-TW-390.png",
+        "sha256": "a4ba8498f5cbd608c7dd6d5e3ca9da075e4f097a0e8fbb6a7f5b647f3294c83d",
+        "bytes": 61054,
+        "width": 390,
+        "height": 994
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/restored-zh-TW-390.png",
+        "sha256": "afd6a3ce480a22966a28200ab176201f2a93085e793d34b0442f35e439593bf3",
+        "bytes": 79083,
+        "width": 390,
+        "height": 944
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/stale-restore-zh-TW-390.png",
+        "sha256": "7f6de99564e5f26abe490dbb8b2b62dead859991b552c3ad10b450da68a39027",
+        "bytes": 133569,
+        "width": 1280,
+        "height": 821
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/tenant-history-detail-zh-TW-390.png",
+        "sha256": "6de773246959fda86d21b96902c262a4366e9cd6103ef34ec7a0d280d1dbec3f",
+        "bytes": 76909,
+        "width": 390,
+        "height": 966
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/tenant-history-zh-TW-390.png",
+        "sha256": "ec1c32e11cccbbabf86e006aa47e6114891f0cf2cff0f79d4d27b07daf14a0b9",
+        "bytes": 75011,
+        "width": 390,
+        "height": 966
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-3cab1ef-r6-artifacts/b015-archive-workflow-archive-workflow-zh-TW-390-chromium/unknown-review-zh-TW-390.png",
+        "sha256": "148c3173306359ac6feacc4a04c58d7a4dc806f3e93cf0361fd0b03c1f942ed2",
+        "bytes": 95498,
+        "width": 390,
+        "height": 944
+      }
+    ],
+    "actualWidths": {
+      "390": 32,
+      "1280": 36
+    },
+    "coverageNote": "Two stale-restore files labelled390 actual1280 popup. No exact mobile stale-message visualclaim; sixteen otherstates bothwidths/bothlocales."
+  },
+  "build": {
+    "next": "PASS",
+    "cloudflare": "PASS",
+    "preflight": "PASS",
+    "worker": "PASS",
+    "releaseGateRequested": false
+  },
+  "controls": {
+    "readback": {
+      "nodeVersion": "v20.20.2",
+      "baselineDatabase": "condola_b015_workflow_baseline_3cab1efr6",
+      "browserDatabase": "condola_b015_workflow_browser_3cab1efr6",
+      "readOnlyConnections": true,
+      "exactControlValueDescriptionMicrosecondTimestampRestored": true,
+      "wholeSelectedOrgFlagsRestored": true,
+      "namedControls": {
+        "record_archive": {
+          "rowsBefore": 0,
+          "rowsAfter": 0,
+          "globalOffBefore": true,
+          "globalOffAfter": true,
+          "orgOptinsBefore": 0,
+          "orgOptinsAfter": 0,
+          "sha256Before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "sha256After": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "owner_transfers": {
+          "rowsBefore": 0,
+          "rowsAfter": 0,
+          "globalOffBefore": true,
+          "globalOffAfter": true,
+          "orgOptinsBefore": 0,
+          "orgOptinsAfter": 0,
+          "sha256Before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "sha256After": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "tenant_signed_pdf": {
+          "rowsBefore": 0,
+          "rowsAfter": 0,
+          "globalOffBefore": true,
+          "globalOffAfter": true,
+          "orgOptinsBefore": 0,
+          "orgOptinsAfter": 0,
+          "sha256Before": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "sha256After": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      },
+      "wholeOrgFlagsSha256Before": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+      "wholeOrgFlagsSha256After": "1c0542b245c2c50eb5288df0b0cd0b6304e387b06b6944c2e72502d38248c16f",
+      "passed": true,
+      "scope": "Only record_archive, owner_transfers and tenant_signed_pdf global controls including absence and selected organization whole feature_flags versus independent same-source seeded clone; no whole DB, audit-history, staging or settlement claim."
+    },
+    "log": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-control-readback-3cab1ef-r6.log",
+      "sha256": "9526f1f966a9ee85493fcca0eab4273146840d0eddbd41179971233eb95ca8ed",
+      "bytes": 1638
+    },
+    "scope": "Only3namedglobals ABSENT->ABSENT/OFF/0optins and selectedwholeorgflags exact; no positive-existing-row/wholeDB/audit-history/hostedrestore claim"
+  },
+  "receipts": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-archive-workflow-focus-exit-3cab1ef-r6.json",
+      "sha256": "d6db6cf6fe784b240d15f7b3633d3a6a77797fde5054a9cbc1df0dd37a15eab3",
+      "bytes": 27693,
+      "profile": "focus",
+      "processExit": 0,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-archive-workflow-playwright-exit-3cab1ef-r6.json",
+      "sha256": "9452d14801f45058a2130deec30f66d74920d3e3617b66c9321db180d63277d9",
+      "bytes": 27516,
+      "profile": "browser",
+      "processExit": 0,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-baseline-setup-exit-3cab1ef-r6.json",
+      "sha256": "538cb672d792993f3b54cc7a1944d24e2363b86d93c85a1ae1d893aaa9fd25ba",
+      "bytes": 27318,
+      "profile": "baseline",
+      "processExit": null,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-setup-exit-3cab1ef-r6.json",
+      "sha256": "562571425b84c4fc49e27ff576d58a8facfc9e8813066995b71b468c7d62f549",
+      "bytes": 27314,
+      "profile": "browser",
+      "processExit": null,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-build-setup-exit-3cab1ef-r6.json",
+      "sha256": "bf6ec3970070b124331950bfa513ca6c5b7e4b186c8585913ee7b0210d5904d0",
+      "bytes": 27308,
+      "profile": "build",
+      "processExit": null,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-cf-build-exit-3cab1ef-r6.json",
+      "sha256": "52302e90c16f98024173958e1d4d0d2952a894c6eb15d54edc96b61859f6027c",
+      "bytes": 27244,
+      "profile": "build",
+      "processExit": 0,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-control-readback-exit-3cab1ef-r6.json",
+      "sha256": "a17390c3aeb85982d7c14c4fe70e59341a8d043b58680b1ea265f41e23794d7f",
+      "bytes": 27225,
+      "profile": null,
+      "processExit": 0,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-setup-exit-3cab1ef-r6.json",
+      "sha256": "72560c8e379890458cbb30512836e80088fb104f4209e1d05922be5a2f67da69",
+      "bytes": 27307,
+      "profile": "focus",
+      "processExit": null,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-gate-exit-3cab1ef-r6.json",
+      "sha256": "589c98340fae22a50ee44e34a7593cb9f9ae8e6bc0099bb80dedd24baf51a8ee",
+      "bytes": 27283,
+      "profile": "gate",
+      "processExit": 0,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-gate-setup-exit-3cab1ef-r6.json",
+      "sha256": "f0e8c9edff267c5cc8e305f9dd683597bd60c228db86325fda8fe1d8576156d5",
+      "bytes": 27305,
+      "profile": "gate",
+      "processExit": null,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-next-build-exit-3cab1ef-r6.json",
+      "sha256": "8634ccdf6fd3ceef41cb2acc1d5193b8c3d6268b8be9f3b10913e82b17de5301",
+      "bytes": 27242,
+      "profile": "build",
+      "processExit": 0,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-preflight-exit-3cab1ef-r6.json",
+      "sha256": "e177609f6b1868c6fb8d05afa2143d7490fcbc0ab7986b428cc39d92bceae5e9",
+      "bytes": 27250,
+      "profile": "build",
+      "processExit": 0,
+      "effectiveExit": 0
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-worker-exit-3cab1ef-r6.json",
+      "sha256": "a4a36d88674f6684fe32285217e7f933c499cccfa6be1c671d84f12416038d78",
+      "bytes": 27242,
+      "profile": "build",
+      "processExit": 0,
+      "effectiveExit": 0
+    }
+  ],
+  "runtimeFiles": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-archive-workflow-focus-3cab1ef-r6.log",
+      "sha256": "c3484f18566612348105e7e7f98cf8e1673b7940e24ad2ff0cecf2735c54aa87",
+      "bytes": 140
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-archive-workflow-focus-exit-3cab1ef-r6.json",
+      "sha256": "d6db6cf6fe784b240d15f7b3633d3a6a77797fde5054a9cbc1df0dd37a15eab3",
+      "bytes": 27693
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-archive-workflow-playwright-3cab1ef-r6.log",
+      "sha256": "de81c4b6a2bf6a9516c649f4092e21067890f3dd5a51756b5376bdcea02968f8",
+      "bytes": 415
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-archive-workflow-playwright-exit-3cab1ef-r6.json",
+      "sha256": "9452d14801f45058a2130deec30f66d74920d3e3617b66c9321db180d63277d9",
+      "bytes": 27516
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-baseline-setup-3cab1ef-r6.log",
+      "sha256": "e0530c0a56f78928dae95dc1b622c37cbf2996ebdbcf48fab363f7552d5f45a8",
+      "bytes": 26
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-baseline-setup-exit-3cab1ef-r6.json",
+      "sha256": "538cb672d792993f3b54cc7a1944d24e2363b86d93c85a1ae1d893aaa9fd25ba",
+      "bytes": 27318
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-setup-3cab1ef-r6.log",
+      "sha256": "9717d600a8522b2d7eb6eb639a040342b860df2451a4f9b2134d411d24dcf961",
+      "bytes": 94
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-browser-setup-exit-3cab1ef-r6.json",
+      "sha256": "562571425b84c4fc49e27ff576d58a8facfc9e8813066995b71b468c7d62f549",
+      "bytes": 27314
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-build-setup-3cab1ef-r6.log",
+      "sha256": "f59056f6be25351420e7750b92a7b33c7f14fe393487d8f03c29d7f063fbe65a",
+      "bytes": 223
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-build-setup-exit-3cab1ef-r6.json",
+      "sha256": "bf6ec3970070b124331950bfa513ca6c5b7e4b186c8585913ee7b0210d5904d0",
+      "bytes": 27308
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-cf-build-3cab1ef-r6.log",
+      "sha256": "bdd2c8668b074b7e897b01720579d145aca2a403c6beec64ca972b8731211eff",
+      "bytes": 15127
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-cf-build-exit-3cab1ef-r6.json",
+      "sha256": "52302e90c16f98024173958e1d4d0d2952a894c6eb15d54edc96b61859f6027c",
+      "bytes": 27244
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-control-readback-3cab1ef-r6.log",
+      "sha256": "9526f1f966a9ee85493fcca0eab4273146840d0eddbd41179971233eb95ca8ed",
+      "bytes": 1638
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-control-readback-exit-3cab1ef-r6.json",
+      "sha256": "a17390c3aeb85982d7c14c4fe70e59341a8d043b58680b1ea265f41e23794d7f",
+      "bytes": 27225
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-setup-3cab1ef-r6.log",
+      "sha256": "4494489d12fde3f4a5b87834420675800f39fb11e9d8488fb3b6e3d97e3de363",
+      "bytes": 89
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-focus-setup-exit-3cab1ef-r6.json",
+      "sha256": "72560c8e379890458cbb30512836e80088fb104f4209e1d05922be5a2f67da69",
+      "bytes": 27307
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-gate-3cab1ef-r6.log",
+      "sha256": "9f306f6c7bb358697bab9dd79496d4cb54021295ead2d616e03e1e7708ae37d4",
+      "bytes": 444
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-gate-exit-3cab1ef-r6.json",
+      "sha256": "589c98340fae22a50ee44e34a7593cb9f9ae8e6bc0099bb80dedd24baf51a8ee",
+      "bytes": 27283
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-gate-setup-3cab1ef-r6.log",
+      "sha256": "bf6e5a7cd44f1d3bcaa5a97ee7accf49310e2fef79b9ae4145b74caba21e8749",
+      "bytes": 71
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-gate-setup-exit-3cab1ef-r6.json",
+      "sha256": "f0e8c9edff267c5cc8e305f9dd683597bd60c228db86325fda8fe1d8576156d5",
+      "bytes": 27305
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-next-build-3cab1ef-r6.log",
+      "sha256": "7e8a0cbcbf5a0a7f766e2d33ac55c5fe853ba2525e9f9e25d5cb6c6c45510e81",
+      "bytes": 13418
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-next-build-exit-3cab1ef-r6.json",
+      "sha256": "8634ccdf6fd3ceef41cb2acc1d5193b8c3d6268b8be9f3b10913e82b17de5301",
+      "bytes": 27242
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-preflight-3cab1ef-r6.log",
+      "sha256": "ab9640774628306cde7c63f6674f2d29c4f813d0db3b2eef29b5c4c5ac95a9f7",
+      "bytes": 23
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-preflight-exit-3cab1ef-r6.json",
+      "sha256": "e177609f6b1868c6fb8d05afa2143d7490fcbc0ab7986b428cc39d92bceae5e9",
+      "bytes": 27250
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-worker-3cab1ef-r6.log",
+      "sha256": "db770018ea67dee2d4dd316642f81d7bf56345b2a766bba446bbb12438d60a46",
+      "bytes": 423
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-worker-exit-3cab1ef-r6.json",
+      "sha256": "a4a36d88674f6684fe32285217e7f933c499cccfa6be1c671d84f12416038d78",
+      "bytes": 27242
+    }
+  ],
+  "gate": {
+    "summary": {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/mode-b-repair-override-prep/e2e/results/gate-3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.md",
+      "sha256": "39a40db4a2183116e037bf3d2dfab58878e6ce4becd84ea1eab64fb8c166e2e5",
+      "bytes": 971
+    },
+    "privateRawFiles": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/copy-check.log",
+        "sha256": "753d2d57210f9e13c8be9ff992e6c491d99a324c64d9d02372aa9ba1b371fc5b",
+        "bytes": 1437
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/flag-expiry.log",
+        "sha256": "b1e57bd8df358ea02fc2ae44b4520ae3ed0cbe12a35fbf398716dabc62f1146b",
+        "bytes": 27
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/lint.log",
+        "sha256": "4e7b3a6ec111ce7a3847a02cfc2a631a691808fc5bae42d475209d1be0268132",
+        "bytes": 3401
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/npm-ci.log",
+        "sha256": "d4655181482df391a9b2cf63eb5a8fea526ba23469be4ade9b53eba6e2ca2e24",
+        "bytes": 1585
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/postgres-16.log",
+        "sha256": "4a0eff3eab2238dd1b54eb1e22da694ef1ce0f9d4237f416083d92a66b1b9c26",
+        "bytes": 31
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/steps.md",
+        "sha256": "111de602b2b457842732fb87225436219fa28b9045ab6be58357204127d98787",
+        "bytes": 341
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/test-rls.log",
+        "sha256": "b16dffe57e26196f3f0e0abc437ea98d8a71d5e42a26e273130a0ef6693cd153",
+        "bytes": 124971
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/test-unit.log",
+        "sha256": "98cf2de3fc5b74cecf8692e6421c7a29403550a437867b369ebcbf15055ca57d",
+        "bytes": 129268
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/toolchain.log",
+        "sha256": "5e05394d61b8e22d70d7d7ed7c867bddbfd6ca872000e4afff4804e40d7614d9",
+        "bytes": 27
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/condola-app/.git/condola-gate-logs/3cab1ef3da074c5fd35489e1d66772b8b6b8a8d8.ULmQ5g/typecheck.log",
+        "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+        "bytes": 43
+      }
+    ]
+  },
+  "historyArchives": [
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a1-source-no-go/manifest.json",
+      "sha256": "f9d08502f7c21a7430694d06816da9d844706127c8fea3eb081a29dc196417c1",
+      "bytes": 66264,
+      "entries": 148
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a2-source-no-go/manifest.json",
+      "sha256": "c22159b0fce914be1e7afc1c85c04ec11e0944d94cfdab840c23a8ce81b3610d",
+      "bytes": 71355,
+      "entries": 159
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a3-source-no-go/manifest.json",
+      "sha256": "31dbc047e212278c333d0e1575692765fc1cd5645338eda93d89c689882b4e36",
+      "bytes": 70047,
+      "entries": 156
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a4-target-failure/manifest.json",
+      "sha256": "a9c10781972f4cb1a1ceb9a6acbaa8c8aef5985506903c3b1707ced63e768197",
+      "bytes": 72517,
+      "entries": 161
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-6694f04-r1-gate-failure/manifest.json",
+      "sha256": "4a9e34236c91d1397c4c06ceab8c1ce5efdd1133d1bc11452f55ed8a20aae51a",
+      "bytes": 78185,
+      "entries": 171
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-a6-source-target-failure/manifest.json",
+      "sha256": "2e60adeb16206792c2ca9b49380ad44574d21af1e70de3fec92b2f218fafa3c5",
+      "bytes": 72758,
+      "entries": 159
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-08c2aa4-r2-gate-failure/manifest.json",
+      "sha256": "54829a2dd128d9dfa3be965b6c3ee0c2bf6faddb3f1e5a626e3868c7cabf7d6e",
+      "bytes": 79099,
+      "entries": 173
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-177bd35-r3-browser-failure/manifest.json",
+      "sha256": "cb38ceb96e04d1087d8c3ebae66f1758677f6e9817710d36d839cf9fcad40f7c",
+      "bytes": 99945,
+      "entries": 212
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-1c43f48-r4-focus-failure/manifest.json",
+      "sha256": "53506b11bab8a403a3deb53c659a5b8d7379c63815e370d496b4b1f6593832fa",
+      "bytes": 77959,
+      "entries": 169
+    },
+    {
+      "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-2bdee5f-r5-focus-failure/manifest.json",
+      "sha256": "7fa985f23e968369c9121b882bc44d3ed72db5e80e49fe55102baf7ca4d66869",
+      "bytes": 85906,
+      "entries": 184
+    }
+  ],
+  "historyEntries": 1692,
+  "rootVisualReview": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-root-focus-visual-r6.json",
+    "sha256": "0abd201d8deab3133684abe60c8be8df8af5ccd75475276945c1eca446603a4a",
+    "bytes": 7042
+  },
+  "review": {
+    "sourceAndHelpers": "IndependentAstraA11GO",
+    "sourceReports": [
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-independent-astra-source-a11.md",
+        "sha256": "1b34c98295d8e08da9bf317a15278b2d450cdcf0a1a66e9d78987114429d2947",
+        "bytes": 3520
+      },
+      {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-independent-astra-source-a11.json",
+        "sha256": "85f20d96534f430143c6293c5ee6bb477ff0fe726e8ecedd96132fe036bcb847",
+        "bytes": 14582
+      }
+    ],
+    "finalIndependentVerdict": "PENDING; separate report will bind this immutable manifest; not an existing PASS"
+  },
+  "limits": [
+    "WholeB015 NOT accepted: owner-onlymetadata/raw-oldwriterDBclosure incomplete/unapplied/notapplyready; participatingcurrentapp safety only",
+    "No staging/othermachine/Depot/ClaudeClassB/physicaldevice/pilot/release acceptance",
+    "Tenant existingendedlease/signedpaper rights only; no activeworkspace/generalfileauthority expansion",
+    "UNKNOWN case reinserts UI-produced pendingdata afterknownsuccess, not realnetworkloss proof",
+    "Reportbrowser retainedarchivedselector/currentemptyperiod only; not populated2090reportUI",
+    "No newmigration/proposedSQLparser/prod/provider/legalcopy/operationalflagactivation",
+    "Solehistorical b888ccd testskip priorCEOapproved; no otherwaiver"
+  ]
+}
