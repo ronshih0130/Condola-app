@@ -1,0 +1,37 @@
+{
+  "recordedAt": "2026-11-02T16:31:15.844454-08:00",
+  "sourceBaseline": "3d8f356d0b1f98dd2a6471d8221b7cb752001a17",
+  "existingFoundationUnchanged": {
+    "mdSha256": "9ac0608d9e74baa32e65bf4385e528f894e806b624a2a81aba84834a38f16aa5",
+    "sqlSha256": "1b5a94893e8bad11a0b933d0abce1fce05197f1b014a0e80abe9371b9ba70abe"
+  },
+  "status": "DRAFT_UNREVIEWED_UNAPPLIED_NOT_RUN_NOT_APPLY_READY",
+  "priorPlan": "Minimal one canonical attribution revision object previously Sol PLAN GO; no fresh exact-DDL approval",
+  "independentReview": "NOT_RUN_MODEL_UNAVAILABLE",
+  "files": {
+    "b011-deposit-attribution-db-handoff.md": {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b011-deposit-attribution-db-handoff.md",
+      "repositoryCopy": "deposit-attribution-db-handoff-draft.md",
+      "sha256": "aedb1500da149be85cd841b77c0d2cc95a0a975bf7ea8d8841612f2b48f6954d",
+      "bytes": 9900
+    },
+    "20261103002338_b011_deposit_attribution.proposed.sql": {
+      "path": "/Users/ron/Downloads/condola-bootstrap/20261103002338_b011_deposit_attribution.proposed.sql",
+      "repositoryCopy": "deposit-attribution-proposed.sql.txt",
+      "sha256": "302f34ff21593744ff0619628a03dc1bfa8231117356e1057ebce895c691b59e",
+      "bytes": 5687
+    }
+  },
+  "rootSourceObservation": "Actual stored provenance/reason length bound corrected; not independent QA. Initial2drafts preserved work/b011-attribution-initial-source.",
+  "openDesign": [
+    "Provider-specific external case-sensitive canonicalization vs forced lower-case is not settled or approved",
+    "Live payment org/lease/currency/confirmed/reversed/currentgross and genuine independent use caps require fixed gateway/source-writer coordination; row snapshot bound not cash authority",
+    "Same invoice-level allocation is context, not another cash use; supported manual10k from30k with20krent+10kdeposit needs no classification of remainder",
+    "Actor/request hash shape and exact typed revision FK are not live authorization or source consumption",
+    "New private table needs explicit reset/replica/old-worker/retention handling; no interval invented",
+    "Canonical-source/gateway/executable migration design and implementation remains Codex work; PE target/security/approved nonMac validation/application later"
+  ],
+  "parsedOrExecuted": false,
+  "runtimeTests": "NOT_RUN",
+  "appSourceChanged": false
+}

@@ -1,0 +1,94 @@
+-- DRAFT / UNREVIEWED / UNAPPLIED / NOT RUN / NOT APPLY-READY.
+-- Depends on the separate unpublished B011 settlement foundation proposal.
+-- No financial authority, fixed gateway, access grant, flag or money operation.
+
+CREATE TABLE app.b011_deposit_attribution_revisions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id uuid NOT NULL,
+  lease_id uuid NOT NULL,
+  root_id uuid NOT NULL,
+  revision integer NOT NULL CHECK (revision > 0),
+  prior_revision_id uuid,
+  source_kind text NOT NULL CHECK (source_kind IN ('payment','external')),
+  payment_id uuid,
+  external_namespace text,
+  external_identity text,
+  currency char(3) NOT NULL REFERENCES public.currencies(code),
+  gross_snapshot_minor bigint NOT NULL CHECK (gross_snapshot_minor >= 0),
+  attributed_minor bigint NOT NULL CHECK (attributed_minor >= 0 AND attributed_minor <= gross_snapshot_minor),
+  evidence_file_id uuid,
+  handover_attachment_id uuid,
+  provenance text NOT NULL CHECK (length(btrim(provenance)) >= 1 AND length(provenance) <= 2000),
+  reason text NOT NULL CHECK (length(btrim(reason)) >= 1 AND length(reason) <= 2000),
+  actor_id uuid NOT NULL REFERENCES auth.users(id),
+  request_id uuid NOT NULL,
+  request_payload_sha256 text NOT NULL CHECK (request_payload_sha256 ~ '^[0-9a-f]{64}$'),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  UNIQUE (org_id, lease_id, id),
+  UNIQUE (org_id, lease_id, root_id, id),
+  UNIQUE (org_id, root_id, revision),
+  UNIQUE (actor_id, request_id),
+  FOREIGN KEY (org_id, lease_id) REFERENCES public.leases(org_id, id),
+  FOREIGN KEY (org_id, payment_id) REFERENCES public.payments(org_id, id),
+  FOREIGN KEY (org_id, evidence_file_id) REFERENCES public.files(org_id, id),
+  FOREIGN KEY (org_id, lease_id, handover_attachment_id) REFERENCES app.handover_attachments(org_id, lease_id, id),
+  FOREIGN KEY (org_id, lease_id, root_id, prior_revision_id)
+    REFERENCES app.b011_deposit_attribution_revisions(org_id, lease_id, root_id, id),
+  CHECK ((revision = 1 AND prior_revision_id IS NULL) OR (revision > 1 AND prior_revision_id IS NOT NULL)),
+  CHECK (prior_revision_id IS DISTINCT FROM id),
+  CHECK (num_nonnulls(evidence_file_id, handover_attachment_id) = 1),
+  CHECK ((source_kind = 'payment' AND payment_id IS NOT NULL AND external_namespace IS NULL AND external_identity IS NULL)
+    OR (source_kind = 'external' AND payment_id IS NULL
+        AND external_namespace IS NOT NULL AND length(external_namespace) BETWEEN 1 AND 100
+        AND external_namespace = lower(btrim(external_namespace))
+        AND external_identity IS NOT NULL AND length(external_identity) BETWEEN 1 AND 200
+        AND external_identity = lower(btrim(external_identity))))
+);
+-- One first revision per org/payment or org/operator-canonical external identity,
+-- independent of lease; superseded revisions are not additional source uses.
+CREATE UNIQUE INDEX b011_deposit_payment_root_unique
+  ON app.b011_deposit_attribution_revisions(org_id, payment_id)
+  WHERE revision = 1 AND source_kind = 'payment';
+CREATE UNIQUE INDEX b011_deposit_external_root_unique
+  ON app.b011_deposit_attribution_revisions(org_id, external_namespace, external_identity)
+  WHERE revision = 1 AND source_kind = 'external';
+CREATE UNIQUE INDEX b011_deposit_one_successor
+  ON app.b011_deposit_attribution_revisions(prior_revision_id)
+  WHERE prior_revision_id IS NOT NULL;
+
+CREATE FUNCTION app.b011_deposit_revision_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+DECLARE prior_row app.b011_deposit_attribution_revisions%ROWTYPE;
+BEGIN
+  IF NEW.prior_revision_id IS NOT NULL THEN
+    SELECT * INTO prior_row FROM app.b011_deposit_attribution_revisions
+      WHERE org_id = NEW.org_id AND lease_id = NEW.lease_id
+        AND root_id = NEW.root_id AND id = NEW.prior_revision_id;
+    IF NOT FOUND OR NEW.revision <> prior_row.revision + 1 OR
+       (NEW.source_kind, NEW.payment_id, NEW.external_namespace, NEW.external_identity, NEW.currency)
+       IS DISTINCT FROM
+       (prior_row.source_kind, prior_row.payment_id, prior_row.external_namespace, prior_row.external_identity, prior_row.currency) THEN
+      RAISE EXCEPTION 'invalid deposit attribution revision' USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER b011_deposit_revision_guard BEFORE INSERT ON app.b011_deposit_attribution_revisions
+  FOR EACH ROW EXECUTE FUNCTION app.b011_deposit_revision_guard();
+
+CREATE FUNCTION app.b011_deposit_history_immutable() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN RAISE EXCEPTION 'deposit attribution history is immutable' USING ERRCODE = '42501'; END $$;
+CREATE TRIGGER b011_deposit_history_immutable BEFORE UPDATE OR DELETE ON app.b011_deposit_attribution_revisions
+  FOR EACH ROW EXECUTE FUNCTION app.b011_deposit_history_immutable();
+ALTER TABLE app.b011_deposit_attribution_revisions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE app.b011_deposit_attribution_revisions FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION app.b011_deposit_revision_guard() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION app.b011_deposit_history_immutable() FROM PUBLIC, anon, authenticated, service_role;
+
+-- One optional exact typed reference, independent of the existing exact-one
+-- payment/handover/file evidence check in the separate settlement foundation.
+ALTER TABLE app.b011_settlement_sources ADD COLUMN attribution_revision_id uuid;
+ALTER TABLE app.b011_settlement_sources ADD CONSTRAINT b011_source_attribution_revision_fk
+  FOREIGN KEY (org_id, lease_id, attribution_revision_id)
+  REFERENCES app.b011_deposit_attribution_revisions(org_id, lease_id, id);
