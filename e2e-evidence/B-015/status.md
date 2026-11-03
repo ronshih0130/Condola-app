@@ -1,5 +1,5 @@
 # B015 current status
 
-2026-11-03T01:19:43.404212-08:00; whole B015 `in_progress`. First fullworkflow candidate6694f04 gateFAILunit625/627 and initialRLS6/8, laterRLSNOTRUN. [Failure](workflow-gate-6694f04-r1-fail.json). Corrected150pin source has independentAstraA7SOURCE+HELPERGO; targetedconsent4/e-sign9/RLS8 allPASS0SKIP. [Targeted evidence](workflow-targeted-summary-a7.json). Correctedcandidatefullgate/build/browser/readback next. Earlierdevelopmentfinance10/admission31/history6/archive6 remainseparatescopedevidence.
+2026-11-03T01:31:54.262451-08:00; wholeB015 in_progress. Lastcandidate08c2aa4 fullgateFAILunit627PASS/RLS290PASS1FAIL1soleapprovedhistoricalSKIP/292executed; tailNOTRUN. [Failure](workflow-gate-08c2aa4-r2-fail.json). Onlyimportdiagnosticsordering corrected underindependentAstraA8source/helperGO; targetedimportregion1/import18/admission31PASS0SKIP [evidence](workflow-targeted-summary-a8.json). Correctedcandidatecleanfullgate/build/browser/controls next. No wholeB015/staging/pilot acceptance; owner-onlymetadata/raw-oldwriter proposalunapplied/incomplete/notapplyready. AlloperationalflagsOFF.
 
-Owner-onlymetadata/raw-oldwriter DBclosure proposal remains incomplete/unapplied/notapplyready; actualstaging/Claude/ClassB/pilot NOT VERIFIED. All operationalflagsOFF. STOP POINT: WORKING; next: commitcorrectedsource then cleanfullgate/build/browser/readback; ownerRon/Codex3099AC86.
+STOP POINT: WORKING; next: commitstablecorrection thenfullgate/build/browser/readback; ownerRon/Codex3099AC86.

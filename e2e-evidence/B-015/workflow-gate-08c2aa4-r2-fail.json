@@ -1,0 +1,26 @@
+{
+  "recordedAt": "2026-11-03T01:25:41.106584-08:00",
+  "candidate": "08c2aa48313fd9b9edb9c3239965ad7d2290c7be",
+  "status": "FULL_GATE_FAIL",
+  "unit": {
+    "passed": 627,
+    "failed": 0,
+    "skipped": 0
+  },
+  "rlsExecuted": {
+    "tests": 292,
+    "passed": 290,
+    "failed": 1,
+    "skipped": 1,
+    "skipReason": "Only priorCEOapproved historicalb888ccdmissingcommit",
+    "remainingChainedSuites": "NOT_RUN"
+  },
+  "failure": "import-region conflict annotations mutate parsed rows before reused-target ref comparison, causing false errors.notFound instead of line-specific im_region_conflict/no writes",
+  "snapshot": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-08c2aa4-r2-gate-failure/manifest.json",
+    "entries": 173,
+    "sha256": "54829a2dd128d9dfa3be965b6c3ee0c2bf6faddb3f1e5a626e3868c7cabf7d6e"
+  },
+  "next": "Compare target identity before diagnostic mutation; preserve actual drift guard and existing strict regional no-write assertions; targeted import family +admission before stablecandidate fullgate",
+  "buildBrowserBaseline": "NOT_RUN"
+}

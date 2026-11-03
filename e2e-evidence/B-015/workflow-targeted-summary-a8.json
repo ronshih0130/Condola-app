@@ -1,0 +1,70 @@
+{
+  "recordedAt": "2026-11-03T01:31:54.262451-08:00",
+  "classification": "DEVELOPMENT_TARGETED_PASS_ONLY",
+  "sourceMapSha256": "0a1d78e9eb954fcbc1b75317a7e96c63834e644e4960b8071db5c7fae05dfcb5",
+  "profiles": [
+    {
+      "profile": "importregion",
+      "counts": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-importregion-a8-t5-exit.json",
+        "sha256": "15ec3fbe68b6b75444f497ee56273118dce6cebf855a61ac5f6d099b1005a781",
+        "bytes": 27683
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-importregion-a8-t5.log",
+        "sha256": "a746c8cbd1b933733e5d958b3cb6634ccf0f49cd5ca4c5eb64b3f399144b4b5f",
+        "bytes": 393
+      },
+      "sourceMapSha256": "0a1d78e9eb954fcbc1b75317a7e96c63834e644e4960b8071db5c7fae05dfcb5"
+    },
+    {
+      "profile": "import",
+      "counts": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-import-a8-t5-exit.json",
+        "sha256": "e1f51268c3a804b7651a1a75778f14409f4aa7d4f5e92d19726b9409156640de",
+        "bytes": 27653
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-import-a8-t5.log",
+        "sha256": "e50e6508254caa649e380a50604f15cadceb66ee8d04b8df83ea33524fbb469a",
+        "bytes": 3408
+      },
+      "sourceMapSha256": "0a1d78e9eb954fcbc1b75317a7e96c63834e644e4960b8071db5c7fae05dfcb5"
+    },
+    {
+      "profile": "admission",
+      "counts": {
+        "tests": 31,
+        "pass": 31,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-admission-a8-t5-exit.json",
+        "sha256": "2728b30a315517a8bcde2825dfe329ff55aff24e13eeb50061ec837c8af5951b",
+        "bytes": 27683
+      },
+      "log": {
+        "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-development-admission-a8-t5.log",
+        "sha256": "f0b0512d441de2230cc63a41bf894413a49c23f8bbd42751518695b1a2b60be8",
+        "bytes": 7022
+      },
+      "sourceMapSha256": "0a1d78e9eb954fcbc1b75317a7e96c63834e644e4960b8071db5c7fae05dfcb5"
+    }
+  ],
+  "priorFullGate": "08c2aa4 FAILunit627PASS/RLS290PASS1FAIL1solehistoricalSKIP/292executed; tailNOTRUN;173bindingfailuresnapshotpreserved",
+  "sourceChange": "Only region diagnostics order after exactref comparison beforepersistence; originaltests/guardsunchanged",
+  "limits": "No fullgate/build/browserPASSonnewcandidateyet; allpriorfailuresunwaived; ownerDB/staging/Claude/pilot incomplete"
+}

@@ -172,10 +172,10 @@ export async function commitImportBatch(
       await admitArchiveBatch(client, session.orgId, refs);
       await assertCurrentArchiveCaller(client,session);
       const index = await loadIndex(client, session.orgId, parsed);
-      await checkTargetRegions(client, session.orgId, parsed, index, region);
       const checkIndex = await loadIndex(client, session.orgId, parsed);
       const rechecked = reusedArchiveRefs(planRows(parsed, checkIndex));
       if (JSON.stringify(refs) !== JSON.stringify(rechecked)) throw new FlowError("errors.notFound");
+      await checkTargetRegions(client, session.orgId, parsed, index, region);
       const jurisdiction = region ? { id: region.jurisdictionId } : await one<{ id: string }>(client, `SELECT id::text FROM jurisdictions WHERE code = 'TW'`);
       const plans = await persistPlans(client, session, parsed, index, jurisdiction.id, progress, region);
       await assertCurrentArchiveCaller(client,session);
