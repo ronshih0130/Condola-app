@@ -11,15 +11,15 @@ CREATE TABLE app.b011_deposit_attribution_revisions (
   prior_revision_id uuid,
   source_kind text NOT NULL CHECK (source_kind IN ('payment','external')),
   payment_id uuid,
-  external_namespace text,
-  external_identity text,
+  external_namespace text COLLATE "C",
+  external_identity text COLLATE "C",
   currency char(3) NOT NULL REFERENCES public.currencies(code),
   gross_snapshot_minor bigint NOT NULL CHECK (gross_snapshot_minor >= 0),
   attributed_minor bigint NOT NULL CHECK (attributed_minor >= 0 AND attributed_minor <= gross_snapshot_minor),
   evidence_file_id uuid,
   handover_attachment_id uuid,
-  provenance text NOT NULL CHECK (length(btrim(provenance)) >= 1 AND length(provenance) <= 2000),
-  reason text NOT NULL CHECK (length(btrim(reason)) >= 1 AND length(reason) <= 2000),
+  provenance text NOT NULL CHECK (provenance ~ U&'[^\0001-\001F\007F-\009F\0020\00A0\1680\2000-\200A\2028\2029\202F\205F\3000]' AND length(provenance) <= 2000),
+  reason text NOT NULL CHECK (reason ~ U&'[^\0001-\001F\007F-\009F\0020\00A0\1680\2000-\200A\2028\2029\202F\205F\3000]' AND length(reason) <= 2000),
   actor_id uuid NOT NULL REFERENCES auth.users(id),
   request_id uuid NOT NULL,
   request_payload_sha256 text NOT NULL CHECK (request_payload_sha256 ~ '^[0-9a-f]{64}$'),
@@ -39,10 +39,11 @@ CREATE TABLE app.b011_deposit_attribution_revisions (
   CHECK (num_nonnulls(evidence_file_id, handover_attachment_id) = 1),
   CHECK ((source_kind = 'payment' AND payment_id IS NOT NULL AND external_namespace IS NULL AND external_identity IS NULL)
     OR (source_kind = 'external' AND payment_id IS NULL
-        AND external_namespace IS NOT NULL AND length(external_namespace) BETWEEN 1 AND 100
-        AND external_namespace = lower(btrim(external_namespace))
+        AND external_namespace IS NOT NULL
+        AND external_namespace ~ '^[a-z0-9][a-z0-9._-]{0,99}$'
         AND external_identity IS NOT NULL AND length(external_identity) BETWEEN 1 AND 200
-        AND external_identity = lower(btrim(external_identity))))
+        AND external_identity !~ U&'[\0001-\001F\007F-\009F]'
+        AND external_identity !~ U&'(^[\0009-\000D\0020\0085\00A0\1680\2000-\200A\2028\2029\202F\205F\3000]|[\0009-\000D\0020\0085\00A0\1680\2000-\200A\2028\2029\202F\205F\3000]$)'))
 );
 -- One first revision per org/payment or org/operator-canonical external identity,
 -- independent of lease; superseded revisions are not additional source uses.

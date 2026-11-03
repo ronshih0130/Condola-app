@@ -1,30 +1,30 @@
 {
-  "recordedAt": "2026-11-02T16:31:15.844454-08:00",
+  "recordedAt": "2026-11-02T16:49:58.847890-08:00",
   "sourceBaseline": "3d8f356d0b1f98dd2a6471d8221b7cb752001a17",
   "existingFoundationUnchanged": {
     "mdSha256": "9ac0608d9e74baa32e65bf4385e528f894e806b624a2a81aba84834a38f16aa5",
     "sqlSha256": "1b5a94893e8bad11a0b933d0abce1fce05197f1b014a0e80abe9371b9ba70abe"
   },
-  "status": "DRAFT_UNREVIEWED_UNAPPLIED_NOT_RUN_NOT_APPLY_READY",
+  "status": "DRAFT_REVISED_PENDING_FRESH_REVIEW_UNAPPLIED_NOT_RUN_NOT_APPLY_READY",
   "priorPlan": "Minimal one canonical attribution revision object previously Sol PLAN GO; no fresh exact-DDL approval",
-  "independentReview": "NOT_RUN_MODEL_UNAVAILABLE",
+  "independentReview": "ASTRA_NO_GO_PRIOR_TWO_VERSIONS; FRESH_REVIEW_NOT_RUN",
   "files": {
     "b011-deposit-attribution-db-handoff.md": {
       "path": "/Users/ron/Downloads/condola-bootstrap/b011-deposit-attribution-db-handoff.md",
       "repositoryCopy": "deposit-attribution-db-handoff-draft.md",
-      "sha256": "aedb1500da149be85cd841b77c0d2cc95a0a975bf7ea8d8841612f2b48f6954d",
-      "bytes": 9900
+      "sha256": "f6ba25eb4480f99971cfd766ae69d188ae39ca1b0982d8a0cc19f067a9c15e2b",
+      "bytes": 11112
     },
     "20261103002338_b011_deposit_attribution.proposed.sql": {
       "path": "/Users/ron/Downloads/condola-bootstrap/20261103002338_b011_deposit_attribution.proposed.sql",
       "repositoryCopy": "deposit-attribution-proposed.sql.txt",
-      "sha256": "302f34ff21593744ff0619628a03dc1bfa8231117356e1057ebce895c691b59e",
-      "bytes": 5687
+      "sha256": "148d7e2063ef0da187cc7a73897ae78b3e034e976e1fb20817a61682de9691bf",
+      "bytes": 5964
     }
   },
-  "rootSourceObservation": "Actual stored provenance/reason length bound corrected; not independent QA. Initial2drafts preserved work/b011-attribution-initial-source.",
+  "rootSourceObservation": "Two prior Astra NO_GO versions preserved; revised source awaiting fresh independent review.",
   "openDesign": [
-    "Provider-specific external case-sensitive canonicalization vs forced lower-case is not settled or approved",
+    "Provider-specific equivalence and cross-kind duplicate identification remain UNKNOWN; exact case-preserving keys do not prove economic uniqueness",
     "Live payment org/lease/currency/confirmed/reversed/currentgross and genuine independent use caps require fixed gateway/source-writer coordination; row snapshot bound not cash authority",
     "Same invoice-level allocation is context, not another cash use; supported manual10k from30k with20krent+10kdeposit needs no classification of remainder",
     "Actor/request hash shape and exact typed revision FK are not live authorization or source consumption",
@@ -33,5 +33,23 @@
   ],
   "parsedOrExecuted": false,
   "runtimeTests": "NOT_RUN",
-  "appSourceChanged": false
+  "appSourceChanged": false,
+  "priorReview": {
+    "verdict": "NO_GO",
+    "reviewedMdSha256": "aedb1500da149be85cd841b77c0d2cc95a0a975bf7ea8d8841612f2b48f6954d",
+    "reviewedSqlSha256": "302f34ff21593744ff0619628a03dc1bfa8231117356e1057ebce895c691b59e",
+    "findings": [
+      "case-sensitive opaque provider identities were lowercased",
+      "whitespace/control-only provenance and reason, and padded/control identity keys were accepted"
+    ],
+    "preserved": "work/b011-attribution-astra-no-go-source/"
+  },
+  "revision": "Explicit Unicode White_Space repertoire and C0/C1 control ranges replace locale-dependent POSIX classes; opaque IDs retain deterministic case-sensitive C collation. PostgreSQL U& escapes and range behavior require fresh independent review and PG16/17 validation. Zero-width/provider-specific equivalence remains UNKNOWN.",
+  "secondPriorReview": {
+    "verdict": "NO_GO",
+    "reviewedMdSha256": "ccd53e9a91c23dd002b1424c550c0ce93685d545da190271f349b3baf37b4931",
+    "reviewedSqlSha256": "e438f5565e67ddaebd0af08b1ef97e88873b5bc0236c0785e7a5560804549bbc",
+    "finding": "C-collation POSIX classes do not cover Unicode whitespace including U+3000 and U+00A0",
+    "preserved": "work/b011-attribution-astra-no-go-v2-source/"
+  }
 }

@@ -6,7 +6,11 @@ import { cloneTestDatabase } from './test-database-clone';
 import { disposableDbUrl } from './test-disposable-db';
 import { ORG_ID, USERS } from './ids';
 import type { Session } from './types';
-import { ownerTransferView, recordOwnerTransfer, reverseOwnerTransfer } from './owner-transfers';
+import { ownerTransferView, recordOwnerTransfer as recordScoped, reverseOwnerTransfer as reverseScoped } from './owner-transfers';
+import type { TransferInput,ReverseInput } from './owner-transfer-input';
+const scope=(s:Session)=>({userId:s.userId,orgId:s.orgId,liveOrgId:s.liveOrgId,environment:s.environment});
+const recordOwnerTransfer=(s:Session,i:TransferInput)=>recordScoped(s,i,scope(s));
+const reverseOwnerTransfer=(s:Session,i:ReverseInput)=>reverseScoped(s,i,scope(s));
 import { closeMonth } from './domain';
 import { ensureSandbox } from './sandbox';
 import { ORG2_ID } from './ids';
@@ -47,7 +51,14 @@ test('staff recording, exact replay, reversal, close and legacy extra entries fa
  const acctInput={...input,requestId:randomUUID()};assert.equal((await recordOwnerTransfer(accountant,acctInput)).state,'recorded');assert.equal((await c.query(`SELECT id FROM ledger_transactions WHERE id=$1 AND created_by=$2`,[acctInput.requestId,USERS.accountant])).rowCount,1);
  const sandboxId=await ensureSandbox(s);await c.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text,$2::text)) WHERE key='owner_transfers'`,[ORG_ID,sandboxId]);
  const sandbox={...s,orgId:sandboxId,liveOrgId:ORG_ID,environment:'sandbox' as const};assert.ok(await ownerTransferView(sandbox));
- for(const denied of [manager,tenant,owner,expired,revoked,{...s,orgId:ORG2_ID,liveOrgId:ORG2_ID},sandbox]){const deniedInput={...input,requestId:randomUUID()};assert.equal((await recordOwnerTransfer(denied,deniedInput)).state,'unavailable');assert.equal((await c.query(`SELECT id FROM ledger_transactions WHERE id=$1`,[deniedInput.requestId])).rowCount,0);}
+ for(const denied of [manager,tenant,owner,expired,revoked,{...s,orgId:ORG2_ID,liveOrgId:ORG2_ID},sandbox]){const deniedInput={...input,requestId:randomUUID()};assert.equal((await recordOwnerTransfer(denied,deniedInput)).state,denied===sandbox?'invalid':'unavailable');assert.equal((await c.query(`SELECT id FROM ledger_transactions WHERE id=$1`,[deniedInput.requestId])).rowCount,0);}
+ // A mounted tab's rendered actor scope is not authority for a new session.
+ const staleActorInput={...input,requestId:randomUUID()};
+ assert.equal((await recordScoped(accountant,staleActorInput,scope(s))).state,'unavailable');
+ assert.equal((await c.query(`SELECT id FROM ledger_transactions WHERE id=$1`,[staleActorInput.requestId])).rowCount,0);
+ assert.equal((await recordScoped(s,staleActorInput,scope(accountant))).state,'unavailable');
+ const wrongDate={...input,requestId:randomUUID(),effectiveDate:'1900-01-01'};
+ assert.equal((await recordOwnerTransfer(s,wrongDate)).state,'invalid');assert.equal((await c.query(`SELECT id FROM ledger_transactions WHERE id=$1`,[wrongDate.requestId])).rowCount,0);
  const stale={...input,requestId:randomUUID(),expectedMinorUnit:(option.minorUnit+1)%5};assert.equal((await recordOwnerTransfer(s,stale)).state,'stale');assert.equal((await c.query(`SELECT id FROM ledger_transactions WHERE id=$1`,[stale.requestId])).rowCount,0);
  assert.equal((await recordOwnerTransfer(s,{...input,requestId:randomUUID(),effectiveDate:'2090-02-30'})).state,'invalid');
  const [a,b]=await Promise.all([recordOwnerTransfer(s,input),recordOwnerTransfer(s,input)]);assert.equal(a.state,'recorded');assert.equal(b.state,'recorded');assert.equal((await recordOwnerTransfer(s,{...input,amount:'13'})).state,'unavailable');
@@ -57,7 +68,9 @@ test('staff recording, exact replay, reversal, close and legacy extra entries fa
  assert.equal((await recordOwnerTransfer(s,input)).state,'recorded');
  await c.query(`UPDATE currencies SET minor_unit=$2 WHERE code=$1`,[option.currency,option.minorUnit]);
  await c.query(`UPDATE contacts SET archived_at=NULL WHERE id=$1`,[option.ownerId]);
- const counts=await c.query(`SELECT count(*)::int n,array_agg(memo ORDER BY id) memos FROM ledger_entries WHERE transaction_id=$1`,[input.requestId]);assert.equal(counts.rows[0].n,2);assert.deepEqual(counts.rows[0].memos,[`b014:v1:scale=${option.minorUnit}`,`b014:v1:scale=${option.minorUnit}`]);assert.equal((await recordOwnerTransfer(accountant,input)).state,'unavailable');
+ const counts=await c.query(`SELECT count(*)::int n,array_agg(memo ORDER BY id) memos FROM ledger_entries WHERE transaction_id=$1`,[input.requestId]);assert.equal(counts.rows[0].n,2);assert.deepEqual(counts.rows[0].memos,[`b014:v1:scale=${option.minorUnit}`,`b014:v1:scale=${option.minorUnit}`]);assert.equal((await recordOwnerTransfer(accountant,input)).state,'unavailable');const refreshed=await sessionFor(USERS.admin,'admin');assert.equal((await recordScoped(refreshed,input,scope(s))).state,'recorded');
+ const staleReverse={requestId:randomUUID(),originalId:input.requestId,effectiveDate:'2090-02-01',reason:'stale actor'};
+ assert.equal((await reverseScoped(accountant,staleReverse,scope(s))).state,'unavailable');assert.equal((await c.query(`SELECT id FROM ledger_transactions WHERE id=$1`,[staleReverse.requestId])).rowCount,0);
  const rev={requestId:randomUUID(),originalId:input.requestId,effectiveDate:'2090-02-01',reason:'Correction'};const [r1,r2]=await Promise.all([reverseOwnerTransfer(s,rev),reverseOwnerTransfer(s,rev)]);assert.equal(r1.state,'reversed');assert.equal(r2.state,'reversed');assert.equal((await reverseOwnerTransfer(s,{...rev,requestId:randomUUID()})).state,'unavailable');
  await closeMonth(s,'2091-01','synthetic');assert.equal((await recordOwnerTransfer(s,{...input,requestId:randomUUID(),effectiveDate:'2090-12-01'})).state,'closed');assert.equal((await reverseOwnerTransfer(s,{...rev,requestId:randomUUID(),effectiveDate:'2090-12-01'})).state,'closed');
  // Enqueue both real operations behind an owned advisory lock; observing each

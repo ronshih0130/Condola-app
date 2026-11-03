@@ -3,7 +3,7 @@ import { tx } from "./db";
 import { can } from "./perms";
 import { isUuid } from "./repair-rules";
 import type { Session } from "./types";
-import { parseReversal, parseTransfer, type ReverseInput, type TransferInput } from "./owner-transfer-input";
+import { parseReversal, parseTransfer, sameOwnerTransferScope, type OwnerTransferScope, type ReverseInput, type TransferInput } from "./owner-transfer-input";
 import { currentOwnerTransferStaff, lockOwnerTransferPeriod } from "./owner-transfer-period-lock";
 
 const marker = "b014_owner_transfer_v1";
@@ -49,20 +49,20 @@ export async function ownerTransferView(s:Session) {
  for(const item of records.filter(x=>x.header.kind==='reversal')){const original=records.find(x=>x.header.id===item.header.reverses_transaction_id);if(!original || original.header.kind!=='owner_payout' || original.ownerId!==item.ownerId || original.amountMinor!==item.amountMinor || original.header.property_id!==item.header.property_id || original.header.currency!==item.header.currency || original.header.minor_unit!==item.header.minor_unit)return null;}
  if(!await authorized(c,s))return null;return {options,records};},{orgId:s.orgId,environment:s.environment});}catch{return null;}
 }
-export async function recordOwnerTransfer(s:Session,input:TransferInput) {
- if(!permitted(s))return unavailable;const parsed=input && parseTransfer(input,input.expectedMinorUnit);if(!parsed)return {state:'invalid' as const};
+export async function recordOwnerTransfer(s:Session,input:TransferInput,expectedScope:OwnerTransferScope) {
+ if(!permitted(s)||!sameOwnerTransferScope(expectedScope,s))return unavailable;const parsed=input && parseTransfer(input,input.expectedMinorUnit);if(!parsed)return {state:'invalid' as const};
  try{return await tx(s.userId,async c=>{await lockOwnerTransferPeriod(c,s.orgId);if(!await authorized(c,s))return unavailable;
  const prior=await snapshot(c,s,parsed.requestId);if(prior)return matches(prior,parsed,s,prior.header.currency)&&await authorized(c,s)?{state:'recorded' as const,id:prior.header.id}:unavailable;
  if((await c.query(`SELECT 1 FROM public.ledger_transactions WHERE org_id=$1 AND id=$2`,[s.orgId,parsed.requestId])).rowCount)return unavailable;
- const context=await ownerContext(c,s,parsed.propertyId,parsed.ownerId,parsed.effectiveDate);if(!context)return unavailable;if(context.currency!==parsed.expectedCurrency||context.minor_unit!==parsed.expectedMinorUnit)return {state:'stale' as const};
+ const context=await ownerContext(c,s,parsed.propertyId,parsed.ownerId,parsed.effectiveDate);if(!context)return {state:'invalid' as const};if(context.currency!==parsed.expectedCurrency||context.minor_unit!==parsed.expectedMinorUnit)return {state:'stale' as const};
  if(!await openPeriod(c,s,parsed.effectiveDate))return {state:'closed' as const};
  const inserted=await c.query(`INSERT INTO public.ledger_transactions(id,org_id,property_id,kind,currency,effective_date,description,source_table,created_by) VALUES($1,$2,$3,'owner_payout',$4,$5::date,$6,$7,$8) ON CONFLICT(id) DO NOTHING RETURNING id`,[parsed.requestId,s.orgId,parsed.propertyId,context.currency,parsed.effectiveDate,parsed.reference||null,marker,s.userId]);
  if(!inserted.rowCount)return unavailable;await insertEntries(c,s,parsed.requestId,parsed.propertyId,parsed.ownerId,context.currency,parsed.amountMinor,parsed.expectedMinorUnit,false);
  await c.query('SET CONSTRAINTS ALL IMMEDIATE');const fresh=await snapshot(c,s,parsed.requestId),freshContext=await ownerContext(c,s,parsed.propertyId,parsed.ownerId,parsed.effectiveDate);if(!fresh||!freshContext||freshContext.currency!==context.currency||freshContext.minor_unit!==parsed.expectedMinorUnit||!matches(fresh,parsed,s,context.currency)||!await authorized(c,s))throw new Error('Transfer unavailable');return {state:'recorded' as const,id:parsed.requestId};
  },{orgId:s.orgId,environment:s.environment});}catch{return unavailable;}
 }
-export async function reverseOwnerTransfer(s:Session,input:ReverseInput) {
- const parsed=parseReversal(input);if(!permitted(s))return unavailable;if(!parsed)return {state:'invalid' as const};
+export async function reverseOwnerTransfer(s:Session,input:ReverseInput,expectedScope:OwnerTransferScope) {
+ const parsed=parseReversal(input);if(!permitted(s)||!sameOwnerTransferScope(expectedScope,s))return unavailable;if(!parsed)return {state:'invalid' as const};
  try{return await tx(s.userId,async c=>{await lockOwnerTransferPeriod(c,s.orgId);if(!await authorized(c,s))return unavailable;
  const original=await snapshot(c,s,parsed.originalId);if(!original||original.header.kind!=='owner_payout')return unavailable;
  const expected=(x:Snapshot)=>x.header.kind==='reversal'&&x.header.id===parsed.requestId&&x.header.reverses_transaction_id===parsed.originalId&&x.header.created_by===s.userId&&x.header.effective_date===parsed.effectiveDate&&x.header.reason===parsed.reason&&x.header.property_id===original.header.property_id&&x.header.currency===original.header.currency&&x.header.minor_unit===original.header.minor_unit&&x.ownerId===original.ownerId&&x.amountMinor===original.amountMinor;

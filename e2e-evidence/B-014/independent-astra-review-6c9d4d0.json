@@ -1,0 +1,68 @@
+{
+  "reviewId": "82fbcfad-6d20-4892-ac86-0c955e30c5dd",
+  "candidate": "6c9d4d0bdf78436206c57b9e244e42cf225b7a9e",
+  "baseline": "51c5d8f20f675e64a0aa79b0ba41c0604b2c1378",
+  "docsHead": "cf86da952e654e022177eb84e67679e2db704b82",
+  "requestedModel": "gpt-6-astra",
+  "requestedReasoning": "high",
+  "runtimeModelIndependentVerification": false,
+  "sourceVerdict": "NO_GO",
+  "existingRuntimeEvidence": "VERIFIED_A5_SCOPED",
+  "implementationOrRuntimeRerunsByReviewer": false,
+  "report": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b014-independent-astra-review.md",
+    "bytes": 9957,
+    "sha256": "b4a2185362183cef16fa07f61882af5c13b15027989bb02bb628396595e91156"
+  },
+  "runtimeManifestSha256": "264b0bf6634c1a0c05c95f3df56971f44f3d1874317f28703482031833f28305",
+  "checked": {
+    "sourcePins": 68,
+    "baselineIdentical": 52,
+    "changed": 16,
+    "helpers": 3,
+    "receipts": 11,
+    "receiptBeforeAndAfterSourcePinValues": 1496,
+    "artifactHashSizeBindings": 200,
+    "currentPNGs": 32,
+    "visualOriginals": 9,
+    "gateStepsPassed": 11,
+    "unitPassed": 623,
+    "rlsPassed": 393,
+    "rlsFailed": 0,
+    "rlsSkippedHistoricalOnly": 1,
+    "browserCasesPassed": 4,
+    "historicalArchiveEntries": 90,
+    "historicalArchivePhysicalFiles": 94
+  },
+  "visualOriginals": [
+    "reversed-en-390",
+    "reversed-zh-TW-1280",
+    "recovered-zh-TW-390",
+    "blocked-recovery-en-1280",
+    "loading-zh-TW-390",
+    "scope-reset-en-1280",
+    "invalid-en-390",
+    "initial-zh-TW-1280",
+    "recorded-en-390"
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "id": "wrong-actor-stale-tab"
+    },
+    {
+      "priority": "P2",
+      "id": "present-json-null"
+    },
+    {
+      "priority": "P2",
+      "id": "definitive-owner-date-rejection-locks-form"
+    }
+  ],
+  "priorSolFindingByFindingClosure": "NOT_VERIFIED_ORIGINAL_VERDICT_TEXT_UNAVAILABLE",
+  "priorA1OldRlsCause": "UNKNOWN_UNWAIVED",
+  "priorA2OriginalTimeoutCause": "UNPROVEN_UNWAIVED",
+  "wholeB014": "INCOMPLETE",
+  "hostedSafetyStagingClaudePilotRonAcceptance": "UNVERIFIED",
+  "release": "NO_GO"
+}

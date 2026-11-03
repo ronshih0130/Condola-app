@@ -27,3 +27,32 @@ export function parseReversal(input: ReverseInput) {
   if (!reason || reason.length > 500) return null;
   return { requestId: input.requestId.toLowerCase(), originalId: input.originalId.toLowerCase(), effectiveDate: input.effectiveDate, reason };
 }
+
+/** Recovery storage is absent only when getItem returns null; JSON null is corrupt. */
+function parseRecoveryJson(raw:string|null):unknown {
+  if (raw===null) return undefined;
+  if (typeof raw!=="string" || raw.length>16000) throw new Error("Invalid recovery data");
+  return JSON.parse(raw);
+}
+export type OwnerTransferScope={userId:string;orgId:string;liveOrgId:string;environment:"live"|"sandbox"};
+export type TransferRecovery=TransferInput & {expectedScope:OwnerTransferScope};
+export type ReversalRecovery=ReverseInput & {expectedScope:OwnerTransferScope};
+export function parseTransferRecovery(raw:string|null):TransferRecovery|null {
+  const value=parseRecoveryJson(raw);if(value===undefined)return null;
+  if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("Invalid recovery data");
+  const v=value as TransferRecovery;
+  if(Object.keys(v).sort().join(',')!=="amount,effectiveDate,expectedCurrency,expectedMinorUnit,expectedScope,ownerId,propertyId,reference,requestId"||!parseTransfer(v,v.expectedMinorUnit)||!sameOwnerTransferScope(v.expectedScope,v.expectedScope))throw new Error("Invalid recovery data");
+  return v;
+}
+export function parseReversalRecovery(raw:string|null):Record<string,ReversalRecovery> {
+  const value=parseRecoveryJson(raw);if(value===undefined)return {};
+  if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("Invalid recovery data");
+  const entries=Object.entries(value);if(entries.length>100)throw new Error("Invalid recovery data");
+  for(const [id,v] of entries)if(!v||typeof v!=="object"||Array.isArray(v)||Object.keys(v).sort().join(',')!=="effectiveDate,expectedScope,originalId,reason,requestId"||!parseReversal(v as ReverseInput)||(v as ReverseInput).originalId!==id||!sameOwnerTransferScope((v as ReversalRecovery).expectedScope,(v as ReversalRecovery).expectedScope))throw new Error("Invalid recovery data");
+  return Object.fromEntries(entries) as Record<string,ReversalRecovery>;
+}
+export function sameOwnerTransferScope(expected:unknown,actual:OwnerTransferScope):boolean {
+  if(!expected||typeof expected!=="object"||Array.isArray(expected))return false;
+  const s=expected as OwnerTransferScope;if(!actual||typeof actual!=="object")return false;
+  return Object.keys(s).sort().join(",")==="environment,liveOrgId,orgId,userId" && ["live","sandbox"].includes(s.environment) && [s.userId,s.orgId,s.liveOrgId].every(v=>typeof v==="string"&&isUuid(v)) && s.userId===actual.userId && s.orgId===actual.orgId && s.liveOrgId===actual.liveOrgId && s.environment===actual.environment;
+}
