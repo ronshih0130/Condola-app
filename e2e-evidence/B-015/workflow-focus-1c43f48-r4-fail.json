@@ -1,0 +1,20 @@
+{
+  "recordedAt": "2026-11-03T01:55:16.976204-08:00",
+  "candidate": "1c43f48793ee44d22e69010a4e03556c157c6c30",
+  "focus": {
+    "selected": 1,
+    "passed": 0,
+    "failed": 1,
+    "otherCases": "3NOTRUN",
+    "laterGateBuildBrowserBaselineControls": "NOT_RUN"
+  },
+  "observedInputVector": "READONLYtotal25/public0/gap-2000/bill8000minor/run8000minor, room25@rate4; priorbill80 retained in normalcorrectionform",
+  "cause": "No-owner-change fixture also needs correctedactualbill100; existingBILL_GAP_RULE correctlypostsretainedbill80-minus100 credit20",
+  "approachChange": "Aftertwofinancialfixturefailures, jointlycheckALLrate/room/total/billinputs +persistedinputvector beforefocusedretry, not isolatedonefieldguess; no productmath/assertionrelaxation",
+  "snapshot": {
+    "path": "/Users/ron/Documents/Codex/2026-10-29/https-origin-cursor-com-ron-shih-2/work/b015-workflow-1c43f48-r4-focus-failure/manifest.json",
+    "entries": 169,
+    "sha256": "53506b11bab8a403a3deb53c659a5b8d7379c63815e370d496b4b1f6593832fa"
+  },
+  "next": "Onlyfixture bill80assert+fill100 andstoredvector assertions; freshindependentreview; focusEN390beforeanygate"
+}
