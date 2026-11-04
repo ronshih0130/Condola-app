@@ -1,3 +1,17 @@
+> Staging-ready code, not `done`, recorded 2026-11-03T21:35 PT. Paper versions, tenant downloads, and download audit were already on this branch. BUILD-ORDER says `done` means an exact-SHA staging check plus the required independent verdict. Both are still blocked. Flags stay OFF. No hosted database was changed.
+
+# B-004 staging apply
+
+No new feature in this note. The implementation is the existing paper-version and tenant-download path.
+
+- Schema, in filename order, through `scripts/db-migrate.sh` on the Tokyo session connection (port 5432), only if that filename is not already recorded: `20261030151400_tenant_signed_pdf_read.sql`, `20261030151500_paper_lease_versions.sql`, `20261031100204_b004_paper_delivery_boundary.sql`. Do not apply `supabase/stub/supabase_stub.sql` and do not run `db:reset` on staging.
+- Worker: redeploy the existing staging Worker when this branch is applied. Routes already exist at `src/app/t/lease/signed/[pdfId]/route.ts` and `src/app/m/leases/[id]/signed/[pdfId]/route.ts`. No new binding.
+- Flags stay OFF. `PAPER_LEASE_VERSIONS_ENABLED` must be absent or any value other than the string `true`. `platform_settings` key `tenant_signed_pdf` stays absent. Organization flags `paper_lease_versions` and `tenant_signed_pdf` stay unset. `ops/flags.yaml` keeps `PAPER_LEASE_VERSIONS_ENABLED` default false.
+- Gate coverage already includes the paper-version, delivery-boundary, label, and tenant signed-PDF unit and RLS tests. The skipped `b888ccd` case is the lost identity-document upgrade of `20261022180000_tenant_id_check.sql`. It does not assert paper delivery, so it stays skipped.
+- Still blocked: hosted staging catalog and apply, old-code/rollback proof on staging, and the independent Class B verdict. Production is out of scope.
+
+Local browser evidence remains candidate `ee734857cf04f75d84c5a01eb89d433b9e89bfae`. This note does not rerun that browser.
+
 > 1103交接：**partial / STOPPED**。最後綜合應用候選 `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`；局部驗證SHA保留如下。下一步由Grok Bot（CEO）依 [完整交接](../../20-build/codex-handoff-1103.md) 安排。未驗證或待PE事項不視為done。
 
 > Follow-up 2026-10-30T15:56:54.814861-07:00: the pre-existing parent heading finding below is locally resolved by B001 `41c5b7ff3c3a730308d4e31f3b4508df7a650055`; [proof](../B-001/heading-checkpoint-41c5b7f.md). The original B004 scoped checkpoint and its pending external acceptance are unchanged.

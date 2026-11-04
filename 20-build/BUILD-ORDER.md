@@ -252,3 +252,7 @@ After repeated source failures, the independently reviewed sequence prioritizes 
 B017 limited compiler delivery remains unparsed/unapplied/target UNVERIFIED; full governance/47 operation groups/app integration still incomplete. Unassigned-role retirement is a new inactive source candidate awaiting different Astra review. All39 queue rows retained, no new B IDs. No prod/main merge/operational flag/messaging/legal change.
 
 STOP POINT: bounded source review in progress; next: finish accepted safe diagnostic composition and independently freeze before one OFF-only attempt; owner: Codex/Ron.
+
+## B-004 staging-ready code — 2026-11-03T21:35 PT
+
+Paper lease versions, tenant downloads, and download audit are already implemented on this branch. Queue status stays `partial`. `done` still means exact-SHA staging verification and the required independent verdict, and neither has been run. Flags stay OFF. Staging later applies `20261030151400_tenant_signed_pdf_read.sql`, `20261030151500_paper_lease_versions.sql`, and `20261031100204_b004_paper_delivery_boundary.sql` through `scripts/db-migrate.sh`, then redeploys the existing Worker. No new feature, hosted database change, or production step. Detail: [status](../e2e-evidence/B-004/status.md).
