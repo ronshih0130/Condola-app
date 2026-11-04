@@ -8,6 +8,6 @@ export async function statementPreview(session: Session, ownerId: string, month:
   assertPerm(session,"stmt.view");
   return tx(session.userId, async (client) => {
     if (!(await billingPreviewsEnabled(client,session.orgId))) return null;
-    return calculateStatement(client,session.orgId,ownerId,month);
+    return calculateStatement(client,session.orgId,ownerId,month,undefined,{repairCostFilter:true});
   }, {orgId:session.orgId,environment:session.environment}, {isolation:"repeatable read",readOnly:true});
 }

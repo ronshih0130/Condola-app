@@ -19,7 +19,10 @@ async function current(c:Client,s:Session) {
  return q.rowCount===1;
 }
 async function enabled(c:Client,s:Session) {
- const q=await c.query(`SELECT 1 FROM public.organizations o JOIN public.platform_settings f ON f.key='record_archive' WHERE o.id=$1 AND o.feature_flags->'record_archive'='true'::jsonb AND f.value->'enabled'='true'::jsonb AND CASE WHEN jsonb_typeof(f.value->'allowed_org_ids')='array' THEN NOT EXISTS (SELECT 1 FROM jsonb_array_elements(f.value->'allowed_org_ids') AS item(value) WHERE jsonb_typeof(item.value)<>'string' OR (item.value #>> '{}') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') ELSE false END AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)`,[s.orgId]);return q.rowCount===1;
+ return recordArchiveEnabledFor(c,s.orgId);
+}
+export async function recordArchiveEnabledFor(c:Client,orgId:string):Promise<boolean> {
+ const q=await c.query(`SELECT 1 FROM public.organizations o JOIN public.platform_settings f ON f.key='record_archive' WHERE o.id=$1 AND o.feature_flags->'record_archive'='true'::jsonb AND f.value->'enabled'='true'::jsonb AND CASE WHEN jsonb_typeof(f.value->'allowed_org_ids')='array' THEN NOT EXISTS (SELECT 1 FROM jsonb_array_elements(f.value->'allowed_org_ids') AS item(value) WHERE jsonb_typeof(item.value)<>'string' OR (item.value #>> '{}') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') ELSE false END AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)`,[orgId]);return q.rowCount===1;
 }
 async function observe(c:Client,s:Session,ref:ArchiveRef):Promise<ArchiveObserved|null> {
  const joins=ref.kind==='property' ? `FROM public.properties p` : ref.kind==='unit' ? `FROM public.units u JOIN public.properties p ON p.id=u.property_id AND p.org_id=u.org_id` : `FROM public.rooms r JOIN public.units u ON u.id=r.unit_id AND u.org_id=r.org_id JOIN public.properties p ON p.id=u.property_id AND p.org_id=u.org_id`;

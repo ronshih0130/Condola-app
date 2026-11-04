@@ -46,6 +46,34 @@ test("preview is read-only, stale sources block issue and identical sources issu
   }
 });
 
+test("open-ticket expenses retain legacy OFF totals and are excluded from ON preview and issuance", async () => {
+  const owner=(await query<{owner:string;property:string}>(`SELECT po.owner_contact_id::text AS owner,po.property_id::text AS property FROM property_owners po JOIN properties p ON p.id=po.property_id WHERE po.org_id=$1 AND p.currency='TWD' ORDER BY p.name LIMIT 1`,[ORG_ID])).rows[0];
+  try {
+    await query(`UPDATE platform_settings SET value='{"enabled":false,"allowed_org_ids":[]}'::jsonb WHERE key='billing_previews'`);
+    await query(`UPDATE organizations SET feature_flags=feature_flags || '{"billing_previews":false}'::jsonb WHERE id=$1`,[ORG_ID]);
+    const ticket=(await query<{id:string}>(`INSERT INTO maintenance_tickets(org_id,ticket_number,property_id,category,priority,status,title,currency) SELECT $1,coalesce(max(ticket_number),0)+1,$2,'other','normal','open','B008 open repair','TWD' FROM maintenance_tickets WHERE org_id=$1 RETURNING id::text`,[ORG_ID,owner.property])).rows[0].id;
+    for (const date of ['2099-12-12','2100-01-12']) {
+      await query(`INSERT INTO expenses(org_id,property_id,ticket_id,category,currency,amount_minor,incurred_on,paid_by,bill_to,status) VALUES ($1,$2,$3,'fixture','TWD',1234,$4::date,'owner','owner','approved')`,[ORG_ID,owner.property,ticket,date]);
+    }
+    assert.equal(await statementPreview(admin,owner.owner,"2099-12"),null);
+    const legacy=await generateStatement(admin,{ownerContactId:owner.owner,month:"2099-12"});
+    assert.equal((await query<{amount:string}>(`SELECT expenses_minor::text AS amount FROM owner_statements WHERE id=$1`,[legacy.statementId])).rows[0].amount,'1234');
+
+    await query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',true,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='billing_previews'`,[ORG_ID]);
+    await query(`UPDATE organizations SET feature_flags=feature_flags || '{"billing_previews":true}'::jsonb WHERE id=$1`,[ORG_ID]);
+    const preview=await statementPreview(admin,owner.owner,"2100-01");assert.ok(preview);
+    assert.equal(preview.expenseTotal,0);
+    assert.equal(preview.expenses.some(expense=>expense.ticket_id===ticket),false);
+    const issued=await generateStatement(admin,{ownerContactId:owner.owner,month:"2100-01",previewFingerprint:preview.fingerprint});
+    const stored=(await query<{amount:string;closing:string}>(`SELECT expenses_minor::text AS amount,closing_balance_minor::text AS closing FROM owner_statements WHERE id=$1`,[issued.statementId])).rows[0];
+    assert.equal(stored.amount,'0');
+    assert.equal(Number(stored.closing),preview.closing);
+  } finally {
+    await query(`UPDATE platform_settings SET value='{"enabled":false,"allowed_org_ids":[]}'::jsonb WHERE key='billing_previews'`);
+    await query(`UPDATE organizations SET feature_flags=feature_flags || '{"billing_previews":false}'::jsonb WHERE id=$1`,[ORG_ID]);
+  }
+});
+
 test("OFF issuance uses legacy read-committed isolation during a concurrent expense update", async () => {
   const { Client } = await import("pg");
   const owner=(await query<{owner:string;property:string}>(`SELECT po.owner_contact_id::text AS owner,po.property_id::text AS property FROM property_owners po JOIN properties p ON p.id=po.property_id WHERE po.org_id=$1 AND p.currency='TWD' ORDER BY p.name LIMIT 1`,[ORG_ID])).rows[0];

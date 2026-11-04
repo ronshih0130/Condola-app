@@ -2379,7 +2379,7 @@ export async function generateStatement(session: Session, input: { ownerContactI
       return { id: existing.id, earned: Number(row.rent) + Number(row.other) > 0 };
     }
 
-    const calculation = await calculateStatement(client, session.orgId, input.ownerContactId, input.month, `${STATEMENT_EXPENSE_SQL}`);
+    const calculation = await calculateStatement(client, session.orgId, input.ownerContactId, input.month, `${STATEMENT_EXPENSE_SQL}`, { repairCostFilter: previewEnabled });
     if ((previewEnabled || input.previewFingerprint) && (!input.previewFingerprint || input.previewFingerprint !== calculation.fingerprint)) {
       throw new FlowError("errors.statementPreviewChanged");
     }

@@ -21,7 +21,7 @@ export type StatementCalculation = {
 };
 
 /** Read source rows and calculate exactly the amounts used to issue a statement. */
-export async function calculateStatement(client: Client, orgId: string, ownerContactId: string, month: string, expensePredicate = STATEMENT_EXPENSE_SQL): Promise<StatementCalculation> {
+export async function calculateStatement(client: Client, orgId: string, ownerContactId: string, month: string, expensePredicate = STATEMENT_EXPENSE_SQL, { repairCostFilter = false }: { repairCostFilter?: boolean } = {}): Promise<StatementCalculation> {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new FlowError("errors.required");
   const bounds = monthBounds(month);
   const properties = await many<Property>(client, `SELECT po.property_id::text,po.id::text AS ownership_id,po.effective_from::text,po.effective_to::text,p.currency,p.name,po.xmin::text AS owner_version,p.xmin::text AS property_version FROM property_owners po JOIN properties p ON p.id=po.property_id WHERE po.org_id=$1 AND po.owner_contact_id=$2 AND (po.effective_to IS NULL OR po.effective_to >= $3::date) ORDER BY po.property_id,po.effective_from,po.id`, [orgId,ownerContactId,bounds.start]);
@@ -47,7 +47,7 @@ export async function calculateStatement(client: Client, orgId: string, ownerCon
   }
   const propertyAmounts = [...buckets.values()];
   const rent = propertyAmounts.reduce((s,p) => s+p.rent,0), other = propertyAmounts.reduce((s,p) => s+p.utility+p.other,0);
-  const expenses = await many<Expense>(client, `SELECT id::text,xmin::text AS version,amount_minor::text,description,category,property_id::text,status::text,incurred_on::text,ticket_id::text FROM expenses WHERE org_id=$1 AND property_id=ANY($2::uuid[]) AND ${expensePredicate} AND app.repair_cost_on_statement(ticket_id,org_id) AND incurred_on BETWEEN $3 AND $4 AND currency=$5 ORDER BY id`, [orgId,propertyIds,bounds.start,bounds.end,currency]);
+  const expenses = await many<Expense>(client, `SELECT id::text,xmin::text AS version,amount_minor::text,description,category,property_id::text,status::text,incurred_on::text,ticket_id::text FROM expenses WHERE org_id=$1 AND property_id=ANY($2::uuid[]) AND ${expensePredicate}${repairCostFilter ? " AND app.repair_cost_on_statement(ticket_id,org_id)" : ""} AND incurred_on BETWEEN $3 AND $4 AND currency=$5 ORDER BY id`, [orgId,propertyIds,bounds.start,bounds.end,currency]);
   const expenseTotal = expenses.reduce((s,e) => s+Number(e.amount_minor),0);
   const rule = await maybe<Rule>(client, `SELECT fr.id::text,ma.id::text AS agreement_id,ma.xmin::text AS agreement_version,fr.xmin::text AS version,fr.kind::text,fr.hybrid_mode::text,fr.percent_bp,fr.fixed_amount_minor::text,fr.minimum_minor::text,fr.name FROM management_agreements ma JOIN fee_rules fr ON fr.id=ma.fee_rule_id WHERE ma.org_id=$1 AND ma.owner_contact_id=$2 AND (ma.property_id IS NULL OR ma.property_id=ANY($3::uuid[])) AND ma.effective_from <= $4 AND (ma.effective_to IS NULL OR ma.effective_to > $4) ORDER BY ma.property_id NULLS LAST LIMIT 1`, [orgId,ownerContactId,propertyIds,bounds.end]);
   const fee = rule ? managementFeeMinor(rule,rent) : 0;
