@@ -344,7 +344,7 @@
     },
     {
       "file": "supabase/migrations/20261031100211_b001_esign_activation.sql",
-      "sha256": "853a35e66cc5fe3eacc7b2aefde59a7042e00ce35f7c4a53ff1625ba270c2436"
+      "sha256": "ad69d0dec60dd63968eaea8be6722ccb8f045c76dcaf14fe0730affa097e1cc6"
     },
     {
       "file": "supabase/migrations/20261031100212_b010_b028_local_events.sql",
