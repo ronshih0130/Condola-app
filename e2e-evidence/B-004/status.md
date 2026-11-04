@@ -23,6 +23,7 @@ The candidate refuses a new signed PDF on an archived lease. Flags stay OFF. Thi
 - Full gate on `db49503b7b410b6214e62b4f416275ee98f514eb`: unit 655 pass, 0 fail, 0 skip; RLS 492 pass, 0 fail, 1 UNAPPROVED `b888ccd` skip. New raw logs: [unit](gate-db49503b7b410b6214e62b4f416275ee98f514eb-unit.log), [RLS](gate-db49503b7b410b6214e62b4f416275ee98f514eb-rls.log).
 - The lost `b888ccd` file is covered by a synthetic upgrade on the current schema: relax `delete_after` and the photo-size cap, seed both violations, run `20261022200000_tenant_id_check_upgrade.sql` twice, and require the same outcome. That test is not skipped.
 - Full gate on `d565c9b8491c5b9634e57fad64b9fb4b2af2c612`: unit 655 pass, 0 fail, 0 skip; RLS 496 pass, 0 fail, 0 skip. New raw logs: [unit](gate-d565c9b8491c5b9634e57fad64b9fb4b2af2c612-unit.log), [RLS](gate-d565c9b8491c5b9634e57fad64b9fb4b2af2c612-rls.log).
+- Full gate on `cedb144692919b80152846078d2c2f3f0b7d328e`: unit 655 pass, 0 fail, 0 skip; RLS 496 pass, 0 fail, 0 skip. New raw logs: [unit](gate-cedb144692919b80152846078d2c2f3f0b7d328e-unit.log), [RLS](gate-cedb144692919b80152846078d2c2f3f0b7d328e-rls.log).
 
 Functional compare for CAP-M-02 and CAP-T-02: [qa-full-diff.md](qa-full-diff.md).
 

@@ -253,6 +253,10 @@ B017 limited compiler delivery remains unparsed/unapplied/target UNVERIFIED; ful
 
 STOP POINT: bounded source review in progress; next: finish accepted safe diagnostic composition and independently freeze before one OFF-only attempt; owner: Codex/Ron.
 
+## B-004 QA round 3 — 2026-11-04
+
+B-004 stays `partial`. With paper flags off, the legacy signed-PDF upload is refused on an archived lease. A direct insert as authenticated staff returns `42501` and leaves the signed-PDF row count and the audit count unchanged. Archive state is only the property, unit, or target room. `scripts/write-pr-migrations.mjs` does not pin migration hashes. Full gate on `cedb144692919b80152846078d2c2f3f0b7d328e`: unit 655 pass, 0 fail, 0 skip; RLS 496 pass, 0 fail, 0 skip. Detail: [status](../e2e-evidence/B-004/status.md).
+
 ## B-004 archived lease — 2026-11-04
 
 B-004 stays `partial`. Staff cannot upload or replace a signed PDF when the lease property, unit, or target room is archived. The action returns `errors.notFound` before insert, and `20261031100224_b004_archived_lease_signed_pdf.sql` raises `42501` before a version row or replacement audit. The `b888ccd` case is a synthetic upgrade with 0 RLS skips. `20261030151400` and `20261030151500` set lock and statement timeouts; neither file is on `main`. Full gate on `d565c9b8491c5b9634e57fad64b9fb4b2af2c612`: unit 655 pass, 0 fail, 0 skip; RLS 496 pass, 0 fail, 0 skip. Detail: [status](../e2e-evidence/B-004/status.md).
