@@ -253,6 +253,10 @@ B017 limited compiler delivery remains unparsed/unapplied/target UNVERIFIED; ful
 
 STOP POINT: bounded source review in progress; next: finish accepted safe diagnostic composition and independently freeze before one OFF-only attempt; owner: Codex/Ron.
 
+## B-004 archived lease — 2026-11-04
+
+B-004 stays `partial`. Staff cannot upload or replace a signed PDF when the lease property, unit, or target room is archived. The action returns `errors.notFound` before insert, and `20261031100224_b004_archived_lease_signed_pdf.sql` raises `42501` before a version row or replacement audit. The `b888ccd` case is a synthetic upgrade with 0 RLS skips. `20261030151400` and `20261030151500` set lock and statement timeouts; neither file is on `main`. Full gate on `d565c9b8491c5b9634e57fad64b9fb4b2af2c612`: unit 655 pass, 0 fail, 0 skip; RLS 496 pass, 0 fail, 0 skip. Detail: [status](../e2e-evidence/B-004/status.md).
+
 ## B-004 QA round 5 — 2026-11-04
 
 B-004 stays `partial`. Signed-PDF upload time is formatted in Asia/Taipei on the tenant lease page and the tenant history page. The staff panel display is unverified. `wrangler rollback e6788e38` restores a secret set that predates `PAPER_LEASE_VERSIONS_ENABLED`; redeploy `1c8fd07` with that flag secret instead. [Cause](../e2e-evidence/B-004/old-code-staff-404.md). [Checklist](../docs/policy/deploy-checklist.md). `/t/history/<lease>/signed` serves an own ended lease only; pending and active are 404. [Route note](../e2e-evidence/B-004/history-signed-route.md). Full gate on `db49503b7b410b6214e62b4f416275ee98f514eb`: unit 655 pass, 0 fail, 0 skip; RLS 492 pass, 0 fail, 1 UNAPPROVED skip. Detail: [status](../e2e-evidence/B-004/status.md).

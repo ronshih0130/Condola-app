@@ -2,7 +2,7 @@
 
 # B-004 staging state
 
-No new feature in this note.
+The candidate refuses a new signed PDF on an archived lease. Flags stay OFF. This note does not deploy.
 
 - Applied on staging, 2026-10-30, all three: `20261030151400_tenant_signed_pdf_read.sql`, `20261030151500_paper_lease_versions.sql`, `20261031100204_b004_paper_delivery_boundary.sql`. These are not pending apply.
 - Staging Worker at notes commit `3fd94e0` is `efe4a399`. This notes-fix commit does not deploy.
@@ -20,6 +20,8 @@ No new feature in this note.
 - QA round 5 formats signed-PDF upload time in Asia/Taipei on the tenant lease page and the tenant history page. The staff panel display is unverified. The history signed route is specified in [history-signed-route.md](history-signed-route.md): pending and active are 404; an own ended lease can succeed. B-004 stays partial.
 - The 404 from `wrangler rollback e6788e38` is corrected in [old-code-staff-404.md](old-code-staff-404.md): that rollback restores the version's own secret set, which predates `PAPER_LEASE_VERSIONS_ENABLED`. Redeploying `1c8fd07` with the secrets set (staging Worker `16b745e5`) returned 200 with the same bytes for staff and tenant, and wrote a tenant audit only. The old code writes no staff audit; that is accepted. The rollback steps are in [docs/policy/deploy-checklist.md](../../docs/policy/deploy-checklist.md). Logged-in rollback remains a procedure, not a standing proof that this candidate is done.
 - Full gate on `db49503b7b410b6214e62b4f416275ee98f514eb`: unit 655 pass, 0 fail, 0 skip; RLS 492 pass, 0 fail, 1 UNAPPROVED `b888ccd` skip. New raw logs: [unit](gate-db49503b7b410b6214e62b4f416275ee98f514eb-unit.log), [RLS](gate-db49503b7b410b6214e62b4f416275ee98f514eb-rls.log).
+- The lost `b888ccd` file is covered by a synthetic upgrade on the current schema: relax `delete_after` and the photo-size cap, seed both violations, run `20261022200000_tenant_id_check_upgrade.sql` twice, and require the same outcome. That test is not skipped.
+- Full gate on `d565c9b8491c5b9634e57fad64b9fb4b2af2c612`: unit 655 pass, 0 fail, 0 skip; RLS 496 pass, 0 fail, 0 skip. New raw logs: [unit](gate-d565c9b8491c5b9634e57fad64b9fb4b2af2c612-unit.log), [RLS](gate-d565c9b8491c5b9634e57fad64b9fb4b2af2c612-rls.log).
 
 Functional compare for CAP-M-02 and CAP-T-02: [qa-full-diff.md](qa-full-diff.md).
 
