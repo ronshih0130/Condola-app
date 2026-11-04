@@ -28,7 +28,7 @@ import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-ev
 import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
 import { syncVacantOwnerExpense } from "./utility-expense";
 import { depositMinorForFrequency, depositPolicyState, resolveDepositPolicy, type DepositPolicy } from "./deposit-rules";
-import { depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
+import { depositCapSaveAllowed, depositReasonOk, depositWarnFlag, isSignedPdf, leaseTermsEditable, normalizeIdempotencyKey, normalizeLineId, normalizePhone, signedPdfName } from "./lease-rules";
 import { addressKey } from "./owner-import";
 import { assertPerm } from "./perms";
 import { leaseIdentityReady } from "./id-docs";
@@ -680,10 +680,8 @@ async function savedDepositWarn(client: Client, leaseId: string, depositMonths: 
   );
   const outcome = depositCheck?.outcome ?? null;
   if (policy.regionalEnabled) return outcome === "warn";
-  // OFF and missing-resolver fallback use only the legacy product cap.
-  // Regional audit outcomes must not veto an otherwise valid legacy override.
-  if (depositMonths > 2 && !reasonOk) throw new FlowError("errors.depositCap");
-  return depositWarnFlag(depositMonths, reasonOk ? "overridden" : null);
+  if (!depositCapSaveAllowed(depositMonths, outcome, reasonOk)) throw new FlowError("errors.depositCap");
+  return depositWarnFlag(depositMonths, outcome);
 }
 
 /** Blank electricity is optional. A partial bill still needs a positive usage; a missing rate uses the bill average. */
