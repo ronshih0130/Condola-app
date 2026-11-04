@@ -1,0 +1,41 @@
+{
+  "verdict": "NO_GO_COMPILER_FIRST_OPERATOR_V1_SOURCE_CORRECTION_ONLY",
+  "packageManifestSha256": "bbc77748f1421d228a708b33fa83a38608a9aa30bd8a4c2dadce657cc6f71509",
+  "verifiedFiles": 24,
+  "verifiedPlans": 4,
+  "reportSha256": "c9e2f358fc3271a4250cc7ee1d241b6b04768df2d60ab90ae88a15c3bbddfc19",
+  "priorInputReviews": {
+    "b017-authority-core-independent-astra-v2.json": "41b43a0d81f162c5a39d74288f86c91a6227ad54f0fa41f700a978af89d71cf4",
+    "b017-role-create-independent-astra-v2.json": "6956d463131796062eff515709d63535b88305f4301417fb3caf716ba84eee60",
+    "b017-role-edit-unassigned-independent-astra-v1.json": "773ae148339105b2eb3d09c9437ebc4189c8d0b559d85498e9ff609becac067f"
+  },
+  "localPg16ReferenceSha256": {
+    "runtime-config-client.html": "5baa6acfff3ef57618eb5560cbbcf9947a5411931dd0c25f6a2daaabdd7ec548",
+    "libpq-connect.html": "5eec6129d0ebc3bd341da1e36781c23a7cc4ae41cac2520578e85afaa7aface9",
+    "libpq-envars.html": "8ddd2fa0ce8bccaf2c485db7ea8513aa31a5486cc35885d5a7df4dbcf4c6cd3b",
+    "catalog-pg-trigger.html": "5499d4acc0af426bb2a7550f31c50b2be30142a726660bdaa4d71a126171b9b7"
+  },
+  "blockers": [
+    "Enforce check_function_bodies before compiler DDL",
+    "Bind the protected private socket and expected OS server peer",
+    "Bind separate recovery to original package/target/install and snapshot receipts",
+    "Catalog the three FKs internal public-parent trigger effects, state and restoration"
+  ],
+  "fullFeature": "INCOMPLETE",
+  "proofs": {
+    "F01": "NOT_RUN",
+    "F02": "NOT_RUN",
+    "F03": "NOT_RUN",
+    "F04": "NOT_RUN",
+    "F05": "NOT_RUN",
+    "F06": "NOT_RUN",
+    "F07": "NOT_RUN",
+    "F08": "NOT_RUN",
+    "F09": "NOT_RUN",
+    "F10": "NOT_RUN"
+  },
+  "parser": "NOT_RUN",
+  "runtime": "NOT_RUN",
+  "target": "UNVERIFIED",
+  "productionOrStagingAuthorized": false
+}

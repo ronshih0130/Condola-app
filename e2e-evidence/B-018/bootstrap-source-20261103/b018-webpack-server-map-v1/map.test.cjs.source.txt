@@ -1,0 +1,135 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const {EventEmitter} = require('node:events');
+const {compileFunction} = require('node:vm');
+const fs = require('node:fs');
+const path = require('node:path');
+const {createHash,createHmac} = require('node:crypto');
+const {queryRule,isWebpackMapHandle} = require('./map.cjs');
+const origin = 'http://127.0.0.1:43156', literal = '/_next/static/chunks/webpack.js';
+const sha = b => createHash('sha256').update(b).digest('hex');
+const script = fs.readFileSync(path.join(__dirname,'map.cjs'),'utf8');
+const sourceList = fs.readFileSync(path.join(__dirname,'source-pins.json'));
+const realPackage = path.join(__dirname,'../mode-b-repair-override-prep');
+const pinBytes = Object.fromEntries(Object.keys(JSON.parse(sourceList)).map(p=>[p,fs.readFileSync(path.join(realPackage,p))]));
+const run = 'ab12cd34ef56', runDir='/owned/run-'+run, app=runDir+'/application', bin='/opt/homebrew/opt/node@20/bin/node';
+const asset = app+'/.next/static/chunks/webpack.js';
+const url=origin+literal;
+const params={sourceLockFile:'/immutable/root.json',serverGroup:2711,hmacKey:Buffer.alloc(32,8)};
+function model() {
+  const flags={};
+  const frozen=Buffer.from(JSON.stringify({webpackMapPlan:{version:1,run,runDir,appRoot:app,origin,
+    candidate:'9'.repeat(40),pinsSha256:sha(sourceList),decisionSha256:'9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec'}}));
+  const bytes = new Map([[params.sourceLockFile,frozen],[asset,Buffer.from('/* controlled webpack bytes */')],[path.join(__dirname,'source-pins.json'),sourceList]]);
+  for(const [p,b] of Object.entries(pinBytes)) bytes.set(path.join(app,p),b);
+  const dirs=new Set([runDir,app,app+'/.next',app+'/.next/static',app+'/.next/static/chunks']);
+  const fds=new Map(), watchers=[], queries=[];
+  let nextFd=0;
+  function stat(f,big) {
+    if (!dirs.has(f) && !bytes.has(f)) throw Error('unavailable');
+    const directory=dirs.has(f), mode=(directory?0o40700:0o100600);
+    const num = n=>big?BigInt(n):n;
+    return {isFile:()=>!directory && !(flags.symlink && f===asset),isDirectory:()=>directory,
+      dev:num(1),ino:num(10+f.length),uid:num(process.getuid()),mode:num(mode),size:num(bytes.get(f)?.length||0),
+      nlink:num(flags.hardlink && f===asset?2:1),mtimeNs:num(400),
+      ctimeNs:num((flags.changed && f===asset)||(flags.dirChanged && f.endsWith('/chunks'))?401:400)};
+  }
+  const fakeFs = {constants:fs.constants,
+    readFileSync(f){const b=bytes.get(f); if(!b)throw Error('missing');return Buffer.from(b);},
+    mkdirSync(f){if(dirs.has(f))throw Error('exists');dirs.add(f);},
+    realpathSync(f){return flags.linkDir && f.endsWith('/chunks')?'/elsewhere':f;},
+    lstatSync(f,opt){return stat(f,opt?.bigint);},fstatSync(fd,opt){return stat(fds.get(fd),opt?.bigint);},
+    openSync(f,mode){if(mode==='wx'){if(bytes.has(f))throw Error('exists');bytes.set(f,Buffer.alloc(0));}else stat(f,false);
+      fds.set(++nextFd,f); return nextFd;},
+    readSync(fd,b,offset,len,position){return bytes.get(fds.get(fd)).copy(b,offset,position,position+len);},
+    writeFileSync(fd,b){bytes.set(fds.get(fd),Buffer.from(b));},fsyncSync(){},closeSync(fd){fds.delete(fd);},
+    watch(f,opts,cb){const w=new EventEmitter();w.close=()=>{w.closed=true;};watchers.push({f,cb,w});return w;}
+  };
+  function exec(_file,args) {
+    if(args.includes('-Fpn'))return 'p2712\nn127.0.0.1:43156';
+    if(args.includes('cwd'))return 'p2711\nfcwd\nn'+app;
+    if(args.includes('ppid='))return flags.wrongParent?'42':'2711';
+    if(args.includes('command='))return args.at(-1)==='2711'?
+      bin+' node_modules/next/dist/bin/next dev -p 43156 -H 127.0.0.1':'next-server (v15.5.28)';
+    return '2711 Mon Nov 2 12:00:00 2026';
+  }
+  const http={get(opts,cb){ assert.equal(opts.hostname,'127.0.0.1');assert.equal(opts.port,43156);
+    assert.equal(opts.agent,false);assert.deepEqual(opts.headers,{'Accept-Encoding':'identity'});
+    queries.push(opts.path);
+    const req=new EventEmitter();req.destroy=()=>req.emit('close');
+    queueMicrotask(()=>{const res=new EventEmitter();res.destroy=()=>req.emit('close');
+      const b=flags.httpDrift?Buffer.alloc(bytes.get(asset).length):bytes.get(asset);
+      res.headers={'content-length':String(b.length),'content-type':'application/javascript; charset=utf-8'};
+      if(flags.cookie)res.headers['set-cookie']='synthetic-should-never-be-recorded';
+      res.statusCode=flags.redirect?302:200;res.complete=!flags.incomplete;
+      cb(res);if(!res.listenerCount('data'))return;
+      res.emit('data',b);res.emit('end');req.emit('close');
+    }); return req;}};
+  const local={exports:{}};
+  compileFunction(script,['require','module','__dirname','process'])(key=>{
+    if(key==='node:fs')return fakeFs;if(key==='node:http')return http;
+    if(key==='node:child_process')return {execFileSync:exec};
+    return require(key);
+  },local,__dirname,{platform:'darwin',getuid:process.getuid});
+  return {flags,bytes,watchers,queries,module:local.exports,
+    open:(overrides={})=>local.exports.openWebpackMap({...params,sourceLockSha256:sha(frozen),...overrides})};
+}
+function render(handle,n,label,patch={}) {
+  const context='ctx'+n,document=context+'-'+label,frame='f1',loader='l'+(label==='login'?1:2);
+  const rawUrl=url+'?v=9847000000111';
+  const fullUrlToken=createHmac('sha256',params.hmacKey).update([run,context,document,frame,loader,rawUrl].join('\0')).digest('hex');
+  const pre=handle.beginRender({context,document});
+  const end=handle.endRender({context,document,frame,loader,rawUrl,fullUrlToken,declarationSha256:'e'.repeat(64),...patch});
+  assert.equal(pre.beforeProofSha256,end.beforeProofSha256);
+  return end;
+}
+test('literal target and single decimal renderer version only',()=>{
+  assert.equal(queryRule(url),'none');assert.equal(queryRule(url+'?v=0'),'single-renderer-decimal-v');
+  for(const value of [url+'?',url+'?v=',url+'?v=1&v=2',url+'?v=%31',url+'?%76=1',url+'?v=1#',url+'#f',url+'?v=1\n',
+    url.replace('127.0.0.1','localhost'),url.replace('/chunks','/q/../chunks'),url.replace('webpack.js','%77ebpack.js'),url.replace('43156','43157'),
+    url.replace('http://','http://a@'),url+'?v='+'5'.repeat(65),null,{}])assert.throws(()=>queryRule(value));
+  assert.equal(isWebpackMapHandle({status:'PROVISIONAL'}),false);
+});
+test('mocked full producer links both controls, all real-shape render bindings, unchanged root lock and disk readback',async()=>{
+  const f=model(), h=await f.open();assert.equal(h.status,'PROVISIONAL');assert.equal(f.module.isWebpackMapHandle(h),true);
+  const original=f.bytes.get(params.sourceLockFile);
+  const docs=[];for(let n=1;n<=6;n++)for(const l of ['login','landing'])docs.push(render(h,n,l));
+  assert.equal(new Set(docs.map(d=>d.fullUrlToken)).size,12);
+  assert.equal((await h.sealWhileServerOwned()).status,'LIVE_CONTROLS_VERIFIED');
+  assert.equal(h.verifyDiskAfterParentDrain().status,'DISK_READBACK_VERIFIED');
+  assert.deepEqual(f.queries,[literal,literal+'?v=0',literal,literal+'?v=0']);assert.ok(f.watchers.every(x=>x.w.closed));
+  assert.deepEqual(f.bytes.get(params.sourceLockFile),original);
+  const data=[...f.bytes].filter(([p])=>p.startsWith(runDir+'/webpack-map/')&&p.endsWith('.json')).map(([,b])=>b.toString()).join('\n');
+  assert.ok(!data.includes('9847000000111')&&!data.includes('?v=')&&!data.includes(params.hmacKey.toString('hex')));
+});
+for(const flag of ['httpDrift','redirect','cookie','incomplete','linkDir','symlink','hardlink','wrongParent']){
+  test('mocked '+flag+' makes initial mapping unavailable',async()=>{const f=model();f.flags[flag]=true;
+    const h=await f.open();assert.equal(h.status,'UNAVAILABLE');assert.equal(f.module.isWebpackMapHandle(h),false);});
+}
+test('root pin mismatch and renderer pin drift fail closed',async()=>{
+  const f=model();assert.equal((await f.open({sourceLockSha256:'e'.repeat(64)})).status,'UNAVAILABLE');
+  f.bytes.set(app+'/next.config.ts',Buffer.from('changed'));assert.equal((await f.open()).status,'UNAVAILABLE');
+});
+for(const flag of ['changed','dirChanged','wrongParent']){
+  test('mocked '+flag+' invalidates per-render evidence',async()=>{const f=model(),h=await f.open();f.flags[flag]=true;
+    assert.throws(()=>render(h,1,'login'));assert.equal((await h.sealWhileServerOwned()).status,'UNAVAILABLE');});
+}
+test('dropped watcher identity, malformed target, token substitution and repeated render fail closed',async()=>{
+  for(const bad of ['watch','spelling','token','duplicate']){const f=model(),h=await f.open();
+    if(bad==='watch')f.watchers[0].cb('change',null);
+    if(bad==='duplicate')render(h,1,'login');
+    const patch=bad==='token'?{fullUrlToken:'b'.repeat(64)}:bad==='spelling'?{rawUrl:url+'?v=%31'}:{};
+    assert.throws(()=>render(h,1,'login',patch));assert.equal((await h.sealWhileServerOwned()).status,'UNAVAILABLE');
+  }
+});
+test('missing render cannot seal and disk result requires separate live seal',async()=>{
+  const f=model(),h=await f.open();render(h,1,'login');assert.equal((await h.sealWhileServerOwned()).status,'UNAVAILABLE');
+  const g=model(),other=await g.open();assert.equal(other.verifyDiskAfterParentDrain().status,'UNAVAILABLE');
+});
+test('post-seal source artifact alteration overturns provisional result',async()=>{
+  const f=model(),h=await f.open();for(let n=1;n<=6;n++)for(const l of ['login','landing'])render(h,n,l);
+  assert.equal((await h.sealWhileServerOwned()).status,'LIVE_CONTROLS_VERIFIED');
+  f.bytes.set(runDir+'/webpack-map/ctx1-login-after.json',Buffer.from('{}'));
+  assert.equal(h.verifyDiskAfterParentDrain().status,'UNAVAILABLE');
+});

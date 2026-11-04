@@ -1,0 +1,244 @@
+'use strict';
+
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {qualifyNativeBootstrap: native,finalizeAggregate: final,digest,FINANCIAL_CASES} = require('./classifier.cjs');
+const NOTE='9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec';
+const ORG='10000000-0000-4000-8000-000000000001', origin='http://127.0.0.1:43156';
+const webpack='/_next/static/chunks/webpack.js', run='synthetic-run', generation=digest('synthetic-webpack-generation');
+const clone=structuredClone;
+function build() {
+  const assetMap={generation,origin,path:webpack,compiledSha256:digest('same-compiled-bytes'),bytes:1200,
+    queryRules:['none','single-renderer-decimal-v'],immutableAcrossRenderVersions:true,serverMappingProofSha256:digest('resolver')};
+  const freeze={run,decisionSha256:NOTE,candidate:'1'.repeat(40),sourceSha256:digest('source'),
+    helperSha256:digest('helpers'),browserSha256:digest('browser'),serverGeneration:generation,
+    assetMapSha256:digest(assetMap),financialCases:[...FINANCIAL_CASES]};
+  const evidence={run,freezeSha256:digest(freeze),assetMap,complete:true,observerDrained:true,
+    journalSha256:digest('bootstrap-journal'),failures:[],actors:[]};
+  for(const [actor,last,persona,landing] of [['primary','006','tenant','/t'],['foreign','005','tenant','/t'],['staff','001','admin','/m']]) {
+    const actorId='20000000-0000-4000-8000-000000000'+last, group={actor};
+    for(const mode of ['native','enabled']) {
+      const context=actor+'-'+mode, javascriptEnabled=mode==='enabled';
+      const documents=['/login',landing].map((route,i)=>{
+        const id=context+'-d'+i, frame='f1', loader='l'+i;
+        const token=digest({context,id,loader,rawUrl:webpack+'?v='+id.length});
+        const declaration={origin,path:webpack,fullUrlToken:token,kind:'both',nonce:'absent',integrity:'absent',
+          complete:true,declarationSha256:digest(id+'-declaration')};
+        const binding={origin,path:webpack,fullUrlToken:token,hop:0,method:'GET',context,document:id,frame,loader};
+        const block=!javascriptEnabled && actor==='primary' && i===0;
+        const statuses=block?[]:[200];
+        const pw={...binding,observer:'pw',type:'script',id:id+'-pw-end',requestId:'pw2',statuses,
+          terminal:block?'failed':'finished',error:block?'csp':null,blocked:null,canceled:null};
+        const cdp={...binding,observer:'cdp',type:'Script',id:id+'-cdp-end',requestId:'cdp'+i,statuses,
+          terminal:block?'failed':'finished',error:block?'MISSING':null,blocked:block?'csp':null,canceled:block?false:null};
+        // IDs are unique within each context, across the two documents.
+        pw.requestId='pw'+i;
+        if(block) evidence.failures.push(clone(pw),clone(cdp));
+        const hop={...binding,type:'Script',navigation:false,uniqueCorrelationCount:1,
+          queryKind:'single-renderer-decimal-v',queryCount:1,pw,cdp};
+        const mapping={run,generation,mapSha256:digest(assetMap),origin,path:webpack,context,document:id,frame,loader,
+          fullUrlToken:token,declarationSha256:declaration.declarationSha256,compiledSha256:assetMap.compiledSha256,
+          responseSha256:javascriptEnabled?assetMap.compiledSha256:null,frozenBeforeDocuments:true};
+        mapping.entrySha256=digest({run,context,document:id,frame,loader,fullUrlToken:token,queryKind:hop.queryKind,
+          declarationSha256:declaration.declarationSha256,mapSha256:digest(assetMap),compiledSha256:assetMap.compiledSha256});
+        const coverage={context,document:id,frame,loader,fullUrlToken:token,compiledSha256:assetMap.compiledSha256,
+          mechanism:'v8-precise-coverage',complete:true,executedBytes:javascriptEnabled?120:0,proofSha256:digest(id+'-coverage')};
+        const policy={context,document:id,frame,loader,completeAtRequest:true,enforcedHeaderCount:0,
+          reportOnlyHeaderCount:0,effectiveMetaCount:0,captureSha256:digest(id+'-policy')};
+        return {context,id,frame,loader,org:ORG,actorId,origin,mainFrame:true,kind:'Document',status:200,
+          path:route,terminal:'finished',inventoryComplete:true,inventorySha256:digest(id+'-inventory'),
+          declarations:[declaration],hops:[hop],mapping,coverage,policy};
+      });
+      const session={actorId,persona,org:ORG,context,currentConsent:true,notExpired:true,naturalClick:true,
+        sessionVerified:true,visible:true,finalPath:landing,sessionAlias:context+'-session',proofSha256:digest(context+'-db'),
+        loginDocument:documents[0].id,landingDocument:documents[1].id};
+      if(javascriptEnabled) Object.assign(session,{observedPostType:'Fetch',postPath:'/login',authenticatedArrival:true});
+      else Object.assign(session,{navigation:[['POST','/login',303],['GET','/auth/enter',307],['GET','/auth/continue',307],
+        ['GET',landing,200]],redirectsComplete:true});
+      group[mode]={context,javascriptEnabled,session,documents};
+    }
+    evidence.actors.push(group);
+  }
+  const postDrain={run,freezeSha256:digest(freeze),bootstrapEvidenceSha256:digest(evidence),bootstrapJournalSha256:evidence.journalSha256,
+    complete:true,journalSha256:digest('final-journal'),allFailures:clone(evidence.failures),
+    financialCases:freeze.financialCases.map(id=>({id,status:'PASS',receiptSha256:digest(id+'-case')})),
+    enabledStrict:'PASS',financialStrict:'PASS',browserClosed:true,serverDrained:true,controlsRestored:true,
+    lineage:'VERIFIED',protectedReadback:'VERIFIED',sourcesStable:true,generationAfter:generation,mapSha256After:digest(assetMap),
+    recoveryReceiptSha256:digest('independent-recovery')};
+  const x={evidence,postDrain,lock:{freeze}};
+  seal(x);
+  return x;
+}
+function seal(x) {
+  const freezeSha256=digest(x.lock.freeze);
+  x.evidence.freezeSha256=freezeSha256;
+  x.postDrain.freezeSha256=freezeSha256;
+  x.postDrain.bootstrapEvidenceSha256=digest(x.evidence);
+  function receipt(stage,data) {return {stage,run:x.lock.freeze.run,freezeSha256,evidenceSha256:digest(data)};}
+  x.lock.bootstrapReceipt=receipt('bootstrap',x.evidence);
+  x.lock.finalReceipt=receipt('final',x.postDrain);
+}
+function docs(x) {return [x.evidence.actors[0].native.documents[0],x.evidence.actors[0].enabled.documents[0]];}
+function clean(x) {
+  x.evidence.failures=[];x.postDrain.allFailures=[];
+  docs(x)[0].declarations=[];docs(x)[0].hops=[];
+  x.evidence.assetMap=null;x.lock.freeze.assetMapSha256=null;x.postDrain.mapSha256After=null;
+  seal(x);
+}
+test('native admission requires no financial evidence or final receipt; raw events survive final PASS',()=>{
+  const x=build(); const a=native(x.evidence,{freeze:x.lock.freeze,bootstrapReceipt:x.lock.bootstrapReceipt});
+  assert.deepEqual(a.qualifiedIds,x.evidence.failures.map(f=>f.id));assert.deepEqual(a.rawFailureIds,a.qualifiedIds);
+  assert.equal(a.rawStrict,'FAIL');assert.equal(a.nativeAdmission,'ADMIT');assert.equal(a.aggregate,'PENDING');
+  assert.deepEqual(final(x.evidence,x.postDrain,x.lock),{...a,aggregate:'PASS',reason:'fully-recovered'});
+});
+test('ordinary complete run needs no exceptional webpack request/map',()=>{
+  const x=build(); clean(x);assert.equal(native(x.evidence,x.lock).rawStrict,'PASS');assert.equal(final(x.evidence,x.postDrain,x.lock).aggregate,'PASS');
+});
+test('hash-sealed receipt is post-capture, never a browser argument or an edit of the original freeze',()=>{
+  const x=build(),original=digest(x.lock.freeze);x.evidence.actors.reverse();
+  assert.equal(native(x.evidence,x.lock).reason,'parent-bootstrap-binding');assert.equal(digest(x.lock.freeze),original);
+});
+const negative=[
+  ['missing actor',x=>x.evidence.actors.pop()],
+  ['reused native actor context',x=>x.evidence.actors[1].native.context=x.evidence.actors[0].native.context],
+  ['staff replaced with tenant',x=>x.evidence.actors[2].native.session.persona='tenant'],
+  ['wrong foreign tenant',x=>x.evidence.actors[1].enabled.session.actorId=x.evidence.actors[0].enabled.session.actorId],
+  ['foreign org',x=>x.evidence.actors[1].native.session.org='other'],
+  ['expired session',x=>x.evidence.actors[1].native.session.notExpired=false],
+  ['missing consent',x=>x.evidence.actors[0].native.session.currentConsent=false],
+  ['wrong landing route',x=>x.evidence.actors[2].native.documents[1].path='/t'],
+  ['mixed actor login/landing',x=>x.evidence.actors[0].native.documents[1]=clone(x.evidence.actors[1].native.documents[1])],
+  ['missing native redirect',x=>x.evidence.actors[0].native.session.navigation.splice(1,1)],
+  ['unverified enabled session',x=>x.evidence.actors[0].enabled.session.sessionVerified=false],
+  ['enabled fetch as landing document',x=>x.evidence.actors[0].enabled.documents[1].kind='Fetch'],
+  ['missing matched enabled document',x=>x.evidence.actors[0].enabled.documents.pop()],
+  ['incomplete capture',x=>x.evidence.complete=false],
+  ['unsettled observation',x=>x.evidence.observerDrained=false],
+  ['absent failures array',x=>delete x.evidence.failures],
+  ['missing raw PW',x=>x.evidence.failures.shift()],
+  ['missing raw CDP',x=>x.evidence.failures.pop()],
+  ['raw ID relabel',x=>x.evidence.failures[0].id='rewritten'],
+  ['same ID cross-observer',x=>x.evidence.failures[1].id=x.evidence.failures[0].id],
+  ['wrong request id in raw record',x=>x.evidence.failures[0].requestId='other'],
+  ['wrong loader in raw record',x=>x.evidence.failures[1].loader='other'],
+  ['different origin',x=>docs(x)[0].hops[0].origin='http://other'],
+  ['arbitrary same-origin asset',x=>docs(x)[0].hops[0].path='/_next/static/admin.js'],
+  ['CDP canceled',x=>docs(x)[0].hops[0].cdp.canceled=true],
+  ['PW error not csp',x=>docs(x)[0].hops[0].pw.error='net::ERR_FAILED'],
+  ['prior HTTP response',x=>docs(x)[0].hops[0].cdp.statuses=[200]],
+  ['missing terminal',x=>docs(x)[0].hops[0].pw.terminal='missing'],
+  ['ambiguous correlation',x=>docs(x)[0].hops[0].uniqueCorrelationCount=2],
+  ['extra query',x=>docs(x)[0].hops[0].queryCount=2],
+  ['unsupported query kind',x=>docs(x)[1].hops[0].queryKind='other'],
+  ['present enforced CSP',x=>docs(x)[0].policy.enforcedHeaderCount=1],
+  ['present report-only policy unsupported',x=>docs(x)[1].policy.reportOnlyHeaderCount=1],
+  ['meta policy',x=>docs(x)[0].policy.effectiveMetaCount=1],
+  ['missing policy count',x=>delete docs(x)[0].policy.enforcedHeaderCount],
+  ['nonce unknown',x=>docs(x)[0].declarations[0].nonce='unknown'],
+  ['integrity present',x=>docs(x)[1].declarations[0].integrity='present'],
+  ['duplicate candidate enabled request',x=>docs(x)[1].hops.push(clone(docs(x)[1].hops[0]))],
+  ['good plus failed distinct counterpart',x=>{const h=clone(docs(x)[1].hops[0]);h.cdp.terminal='failed';docs(x)[1].hops.push(h);}],
+  ['missing declaration',x=>docs(x)[0].declarations=[]],
+  ['different declaration kind',x=>docs(x)[1].declarations[0].kind='script'],
+  ['swapped actor counterpart',x=>x.evidence.actors[0].enabled=clone(x.evidence.actors[1].enabled)],
+  ['unfrozen asset map',x=>docs(x)[0].mapping.frozenBeforeDocuments=false],
+  ['different generation on native map',x=>docs(x)[0].mapping.generation=digest('other')],
+  ['both map digest fields relabeled',x=>{for(const d of docs(x)) d.mapping.compiledSha256=digest('other');}],
+  ['map entry bound to other request',x=>docs(x)[0].mapping.entrySha256=docs(x)[1].mapping.entrySha256],
+  ['missing native map',x=>delete docs(x)[0].mapping],
+  ['enabled body digest different',x=>docs(x)[1].mapping.responseSha256=digest('other')],
+  ['fake native bytes',x=>docs(x)[0].mapping.responseSha256=docs(x)[1].mapping.responseSha256],
+  ['unknown capture before native script',x=>docs(x)[0].coverage.complete=false],
+  ['enabled never executed',x=>docs(x)[1].coverage.executedBytes=0],
+  ['native script did execute',x=>docs(x)[0].coverage.executedBytes=1],
+  ['token reused across contexts',x=>docs(x)[1].hops[0].fullUrlToken=docs(x)[0].hops[0].fullUrlToken],
+  ['unmatched ordinary enabled cancellation',x=>x.evidence.failures.push({id:'enabled-post-abort',phase:'enabled-login',error:'net::ERR_ABORTED'})],
+  ['console error',x=>x.evidence.failures.push({id:'console-error',phase:'native-login',type:'console'})],
+  ['wrong decision digest',x=>x.lock.freeze.decisionSha256=digest('different-note')],
+  ['mandatory finance case removed',x=>x.lock.freeze.financialCases.shift()],
+];
+for(const [label,mutate] of negative) test('rejects '+label,()=>{
+  const x=build();mutate(x);seal(x);const a=native(x.evidence,x.lock);assert.equal(a.nativeAdmission,'FAIL');assert.notEqual(a.rawStrict,'PASS');
+});
+const finalNegative=[
+  ['late cancellation',x=>x.postDrain.allFailures.push({id:'late',error:'net::ERR_ABORTED'})],
+  ['dropped raw event',x=>x.postDrain.allFailures.pop()],
+  ['substituted bootstrap journal',x=>x.postDrain.bootstrapJournalSha256=digest('other')],
+  ['enabled fails',x=>x.postDrain.enabledStrict='FAIL'],
+  ['financial request fails',x=>x.postDrain.financialStrict='FAIL'],
+  ['missing case',x=>x.postDrain.financialCases.pop()],
+  ['duplicate financial case',x=>x.postDrain.financialCases[1]=x.postDrain.financialCases[0]],
+  ['failed case',x=>x.postDrain.financialCases[0].status='FAIL'],
+  ['browser uncertain',x=>x.postDrain.browserClosed=false],
+  ['server still active',x=>x.postDrain.serverDrained=false],
+  ['changed controls',x=>x.postDrain.controlsRestored=false],
+  ['unverified finance',x=>x.postDrain.lineage='UNVERIFIED'],
+  ['stale protected data',x=>x.postDrain.protectedReadback='UNKNOWN'],
+  ['after-source drift',x=>x.postDrain.sourcesStable=false],
+  ['after-map drift',x=>x.postDrain.mapSha256After=digest('other')],
+  ['generation drift',x=>x.postDrain.generationAfter=digest('other')],
+];
+for(const [label,mutate] of finalNegative) test('final rejects '+label+' after independent native admission',()=>{
+  const x=build();mutate(x);seal(x);const a=final(x.evidence,x.postDrain,x.lock);
+  assert.equal(a.nativeAdmission,'ADMIT');assert.equal(a.rawStrict,'FAIL');assert.equal(a.aggregate,'FAIL');
+});
+test('clean partial data is UNKNOWN, not raw PASS',()=>{
+  const x=build();clean(x);x.evidence.complete=false;seal(x);assert.equal(native(x.evidence,x.lock).rawStrict,'UNKNOWN');
+});
+test('clean bootstrap cannot make a missing post-drain receipt pass',()=>{
+  const x=build();clean(x);delete x.lock.finalReceipt;const a=final(x.evidence,x.postDrain,x.lock);
+  assert.equal(a.aggregate,'FAIL');assert.equal(a.rawStrict,'UNKNOWN');
+});
+test('parent-tampered after receipts are detected',()=>{
+  const x=build();x.postDrain.recoveryReceiptSha256=digest('changed');assert.equal(final(x.evidence,x.postDrain,x.lock).reason,'parent-final-binding');
+});
+test('ordinary higher-severity enabled failure retains *all* original IDs and raw FAIL',()=>{
+  const x=build();x.evidence.failures.push({id:'enabled-failed',phase:'enabled-login',error:'net::ERR_ABORTED'});
+  seal(x);const a=native(x.evidence,x.lock);
+  assert.equal(a.nativeAdmission,'FAIL');assert.equal(a.rawStrict,'FAIL');
+  assert.deepEqual(a.rawFailureIds,x.evidence.failures.map(e=>e.id));
+});
+test('frozen actual enabled cancellations remain fatal against otherwise qualifying synthetic data',()=>{
+  const logsDir=path.resolve(__dirname,'../b018-login-diagnostic-v3/run-0cf54159036d');
+  const events=fs.readFileSync(path.join(logsDir,'lifecycle.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+  const failures=events.filter(e=>e.arm==='enabled' && e.event==='cdp-failed');
+  assert.deepEqual(failures.map(e=>[e.id,e.error,e.canceled]),[
+    ['c14','net::ERR_ABORTED',true],['c18','net::ERR_ABORTED',true],
+  ]);
+  const x=build();
+  x.evidence.failures.push(...failures.map(e=>({id:'actual-'+e.id,phase:'enabled-login',event:e})));
+  seal(x);
+  const a=native(x.evidence,x.lock);assert.equal(a.nativeAdmission,'FAIL');assert.equal(a.rawStrict,'FAIL');
+  assert.ok(a.rawFailureIds.includes('actual-c14') && a.rawFailureIds.includes('actual-c18'));
+});
+test('actual Control A confirms the shape but its non-product asset never qualifies',()=>{
+  const log=fs.readFileSync(path.resolve(__dirname,'../b018-browser-calibration-a-v2/run-A-c884f0617da7/events.jsonl'),'utf8');
+  const rows=log.trim().split('\n').map(JSON.parse);
+  const failure=rows.find(e=>e.run==='js-off' && e.event==='cdp-failed');
+  const request=rows.find(e=>e.run==='js-off' && e.event==='cdp-request' && e.id===failure.id);
+  assert.deepEqual([request.path,failure.blocked,failure.error,failure.canceled],['/asset.js','csp','MISSING',false]);
+  const x=build();docs(x)[0].hops[0].path=request.path;seal(x);
+  assert.equal(native(x.evidence,x.lock).nativeAdmission,'FAIL');
+});
+test('unknown frontend policy on original v4 failure stays unqualified',()=>{
+  const records=fs.readFileSync(path.resolve(__dirname,'../b018-runtime-v4/run-focus-2645b90f8b18/lifecycle.jsonl'),'utf8')
+    .trim().split('\n').map(JSON.parse);
+  const failures=records.filter(e=>e.event==='failed');
+  assert.equal(failures.length,6);assert.ok(failures.every(e=>e.errorText==='REDACTED_OR_UNAVAILABLE'));
+  const x=build();delete docs(x)[0].policy;seal(x);
+  assert.equal(native(x.evidence,x.lock).nativeAdmission,'FAIL');
+});
+test('a new final failure after a clean bootstrap turns rawStrict into FAIL',()=>{
+  const x=build();clean(x);x.postDrain.allFailures.push({id:'late-finance-error'});seal(x);
+  const v=final(x.evidence,x.postDrain,x.lock);assert.equal(v.rawStrict,'FAIL');assert.equal(v.aggregate,'FAIL');
+});
+test('qualified native failures in two distinct actor scopes are not merged',()=>{
+  const x=build(),p=x.evidence.actors[1].native.documents[1],h=p.hops[0];
+  Object.assign(h.pw,{terminal:'failed',statuses:[],error:'csp',blocked:null,canceled:null});
+  Object.assign(h.cdp,{terminal:'failed',statuses:[],error:'MISSING',blocked:'csp',canceled:false});
+  x.evidence.failures.push(clone(h.pw),clone(h.cdp));x.postDrain.allFailures=clone(x.evidence.failures);seal(x);
+  const v=final(x.evidence,x.postDrain,x.lock);assert.equal(v.aggregate,'PASS');assert.equal(v.rawStrict,'FAIL');
+  assert.deepEqual(v.qualifiedIds,x.evidence.failures.map(e=>e.id));
+});

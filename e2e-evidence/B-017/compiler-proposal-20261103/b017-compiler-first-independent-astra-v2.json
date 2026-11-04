@@ -1,0 +1,32 @@
+{
+  "verdict": "SOURCE_GO_LIMITED_PE_COMPILER_PROPOSAL_ONLY",
+  "manifestSha256": "b9c2d5b0dc1f00652b7d056948a2ea051a04d55a7ea78de48521f4f4013fac30",
+  "v1ManifestSha256": "bbc77748f1421d228a708b33fa83a38608a9aa30bd8a4c2dadce657cc6f71509",
+  "reportSha256": "bd982079603782206e43654222c89234df85d31c8724afedc9035a973c69690b",
+  "verifiedArtifacts": 25,
+  "verifiedPlans": 4,
+  "v1Blockers": {
+    "compiler_body_check": "source_resolved",
+    "socket_peer_identity": "source_resolved_target_load_unverified",
+    "original_recovery_lineage": "source_resolved",
+    "public_internal_fk_trigger_delta": "source_resolved"
+  },
+  "syntaxCheck": "Python standard-library AST only; operator not imported or run",
+  "databaseSqlParser": "NOT_RUN",
+  "physicalTarget": "UNVERIFIED",
+  "deployment": "NOT_APPLY_READY",
+  "runtimeApproval": false,
+  "proofs": {
+    "F01": "NOT_RUN",
+    "F02": "NOT_RUN",
+    "F03": "NOT_RUN",
+    "F04": "NOT_RUN",
+    "F05": "NOT_RUN",
+    "F06": "NOT_RUN",
+    "F07": "NOT_RUN",
+    "F08": "NOT_RUN",
+    "F09": "NOT_RUN",
+    "F10": "NOT_RUN"
+  },
+  "scope": "Three byte-pinned inactive inputs, sealed readback and paired removal only. Any future target and execution require separate approval."
+}

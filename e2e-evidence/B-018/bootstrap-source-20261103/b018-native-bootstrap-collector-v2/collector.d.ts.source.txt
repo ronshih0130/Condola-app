@@ -1,0 +1,43 @@
+/** Source-only proposal. Parent must pin/review kernel, map provider, verifier and collector. */
+export type Actor = 'primary' | 'foreign' | 'staff';
+export type SessionLookup = {contextId:string; mode:'native'|'enabled'; tokenHash:string; actorId:string; orgId:string; persona:'tenant'|'admin'; cookieScope:{org:string|null;environment:string|null;lease:string|null;portalRole:string|null}};
+export type SessionReadback = {
+  tokenHash:string; sessionId:string; userId:string; orgId:string; persona:'tenant'|'admin';
+  revokedAt:null; expiresAt:string; consent:unknown; readbackSha256:string;
+};
+export type AssetMap = {generation:string;compiledSha256:string;serverMappingProofSha256:string;origin:string;path:string;bytes:number;queryRules:['none','single-renderer-decimal-v'];immutableAcrossRenderVersions:true};
+export type BootstrapFreeze = {run:string;decisionSha256:string;candidate:string;sourceSha256:string;helperSha256:string;browserSha256:string;serverGeneration:string;assetMapSha256:string;financialCases:string[]};
+export type RenderBinding = {context:string;document:string;frame:string;loader:string;rawUrl:string;fullUrlToken:string;declarationSha256:string};
+export type RenderProof = Omit<RenderBinding,'rawUrl'> & {generation:string;mapSha256:string;compiledSha256:string;queryKind:'none'|'single-renderer-decimal-v';beforeProofSha256:string;afterProofSha256:string};
+export type WebpackMapHandle = {status:'PROVISIONAL';map:AssetMap;freeze:{run:string;candidate:string;sourceLockSha256:string;serverGeneration:string;assetMapSha256:string;serverMappingProofSha256:string;assetSnapshotSha256:string};mappingProofFile:string;assetFile:string;beginRender(input:{context:string;document:string}):void;endRender(input:RenderBinding):RenderProof;sealWhileServerOwned():Promise<{status:string}>;verifyDiskAfterParentDrain():{status:string}};
+export type CollectorOptions = {
+  /** Real Playwright browser owned by the future parent; never created/closed here. */
+  browser:import('../mode-b-repair-override-prep/node_modules/playwright-core').Browser;
+  freeze:BootstrapFreeze;
+  /** Opened by parent using the reviewed map adapter after warm-up and with the same in-memory HMAC key. */
+  webpackMapHandle:WebpackMapHandle; sourceLockSha256:string; applicationBuildDir:string;
+  database:string; hmacKey:Buffer; journalFd:number; journalPath:string;
+  /** Returned credentials remain in memory; no provider/network call is authorized. */
+  credentialFor(actor:Actor):Promise<{email:string;password:string}>;
+  /** Trusted parent performs actual read-only clone DB query for this hash; do not log the argument or response. */
+  egressGuard:{assertBound(browser:unknown):Promise<void>|void;createContext(options:{javaScriptEnabled:boolean;viewport:{width:number;height:number}}):Promise<import('../mode-b-repair-override-prep/node_modules/playwright-core').BrowserContext>};
+  sessionVerifier(input:SessionLookup):Promise<SessionReadback|null>;
+  /** Exact pinned application consent rule, acting on the real returned consent record. */
+  consentCoversCurrent(record:unknown):boolean;
+};
+export type Observer = {context:string;document:string;frame:string;loader:string;origin:string;path:string;method:string;type:string;fullUrlToken:string;hop:number;observer:'pw'|'cdp';id:string;requestId:string;terminal:string;statuses:number[];error:string|null;blocked:string|null;canceled:boolean|null};
+export type Hop = {context:string;document:string;frame:string;loader:string;origin:string;path:string;method:string;type:string;fullUrlToken:string;hop:number;navigation:boolean;uniqueCorrelationCount:number;queryKind:string;queryCount:number;pw:Observer;cdp:Observer};
+export type Declaration = {origin:string;path:string;kind:string;nonce:string;integrity:string;fullUrlToken:string;declarationSha256:string;complete:boolean};
+export type Document = {context:string;id:string;frame:string;loader:string;org:string;actorId:string;origin:string;kind:'Document';path:string;terminal:'finished';mainFrame:true;status:200;inventoryComplete:true;inventorySha256:string;declarations:Declaration[];hops:Hop[];policy:{context:string;document:string;frame:string;loader:string;completeAtRequest:boolean;enforcedHeaderCount:number;reportOnlyHeaderCount:number;effectiveMetaCount:number;captureSha256:string};coverage:{context:string;document:string;frame:string;loader:string;fullUrlToken:string;compiledSha256:string;mechanism:'v8-precise-coverage';complete:true;executedBytes:number;proofSha256:string};mapping:{context:string;document:string;frame:string;loader:string;run:string;origin:string;path:string;generation:string;mapSha256:string;fullUrlToken:string;declarationSha256:string;compiledSha256:string;entrySha256:string;responseSha256:string|null;frozenBeforeDocuments:true}};
+export type SessionEvidence = {actorId:string;persona:'tenant'|'admin';org:string;context:string;sessionAlias:string;loginDocument:string;landingDocument:string;currentConsent:true;notExpired:true;naturalClick:true;sessionVerified:true;visible:true;finalPath:string;proofSha256:string} & ({navigation:[string,string,number][];redirectsComplete:true}|{observedPostType:string;postPath:'/login';authenticatedArrival:true});
+export type Side = {context:string;javascriptEnabled:boolean;session:SessionEvidence;documents:[Document,Document]};
+export type SafeFailure = Observer | {id:string;kind:string;context:string;[key:string]:unknown};
+export type BootstrapEvidence = {run:string;freezeSha256:string;complete:true;observerDrained:true;journalSha256:string;assetMap:AssetMap;actors:{actor:Actor;native:Side;enabled:Side}[];failures:SafeFailure[]};
+export type CollectorResult = {
+  status:'CAPTURED'|'UNAVAILABLE'; evidence:BootstrapEvidence|null; bootstrapJournalBytes:Buffer;
+  /** Live contexts contain session cookies; keep in memory and never serialize/log them. */
+  contexts:{context:import('../mode-b-repair-override-prep/node_modules/playwright-core').BrowserContext;page:import('../mode-b-repair-override-prep/node_modules/playwright-core').Page;cdp:import('../mode-b-repair-override-prep/node_modules/playwright-core').CDPSession;contextId:string;actor:Actor;mode:'native'|'enabled';closed:boolean}[]; getAllFailures():SafeFailure[];
+  /** Closes collector-owned contexts only. Parent separately awaits browser.close and server drain. */
+  closeContexts():Promise<{contextsClosed:boolean}>;
+};
+export function collectBootstrap(options:CollectorOptions):Promise<CollectorResult>;

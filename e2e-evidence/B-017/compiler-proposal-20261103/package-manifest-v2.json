@@ -1,0 +1,195 @@
+{
+  "scope": "COMPILER_FIRST_PROPOSAL_ONLY",
+  "status": "AUTHOR_FROZEN_PENDING_INDEPENDENT_REVIEW",
+  "deployment": "NOT_APPLY_READY",
+  "target": "UNVERIFIED_SEPARATE_CLUSTER_ONLY",
+  "parser": "NOT_RUN",
+  "proofs": {
+    "F01": "NOT_RUN",
+    "F02": "NOT_RUN",
+    "F03": "NOT_RUN",
+    "F04": "NOT_RUN",
+    "F05": "NOT_RUN",
+    "F06": "NOT_RUN",
+    "F07": "NOT_RUN",
+    "F08": "NOT_RUN",
+    "F09": "NOT_RUN",
+    "F10": "NOT_RUN"
+  },
+  "exclusions": [
+    "NO_SHARED_STAGING",
+    "NO_APPWORKERS",
+    "NO_FEATUREGO",
+    "NO_03",
+    "FULL_HANDOFF_INCOMPLETE"
+  ],
+  "source_commit_reference": "9e53d4f2edaafb627a93dfc3776c1ceb3191384a",
+  "plans": [
+    {
+      "name": "b017-foundation-split-primary-sol-v1.md",
+      "sha256": "c268c6b6c40d633e6003ffd3b8d99177dde0dc08bc96b8d3e75f8ae6a6c2e2b6"
+    },
+    {
+      "name": "b017-foundation-split-primary-sol-v1.json",
+      "sha256": "be5e44623c245938d10a8352723507c1bf92e2d9f9c1a7db4e8fce20acf78d5b"
+    },
+    {
+      "name": "b017-foundation-split-independent-astra-v1.md",
+      "sha256": "06c82c6595af49edc183ba58745ad992482521bd18e1fac89cec8528739179ce"
+    },
+    {
+      "name": "b017-foundation-split-independent-astra-v1.json",
+      "sha256": "f120e37967a0e79ba4556d6f1b4446e2adedac9170f1a6f597cb0d4b80d21226"
+    }
+  ],
+  "immutable_inputs": {
+    "01-authority-core.sql": "9a4b87fc82935af4d4225d6092973d93a8b0676c4a3e3c94b96dbf747b0d50d9",
+    "02a-role-create-v2.sql": "aa7c4629d6a02736684213aa8e87aa4a3b76a2534518630c566a142bd9f359fe",
+    "02b-role-edit-unassigned.sql": "134f8f22d3f0b62c06915b4137f6d69d2f91dfcd5307c444d77b03e40c5d4f8a"
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 11324,
+      "sha256": "b31b4933e816998676bca26c7c6ce86f7c6adfde1dabaaa0e24f80fffd62ca03"
+    },
+    {
+      "path": "baseline.sql",
+      "bytes": 122,
+      "sha256": "780c394cb595b423c951c111fe7c296571f062f385a790cd19bf1d3acd9a57c5"
+    },
+    {
+      "path": "compiler_operator.py",
+      "bytes": 12827,
+      "sha256": "05575ad37b74bacde50ab9eb9b23d5498f6bedd599f267a711e740dbfc24df02"
+    },
+    {
+      "path": "down.proposed.sql",
+      "bytes": 261,
+      "sha256": "0de7c78fd87858b3886fabca90de528d54c07fd7d92d960c367b2982de011c06"
+    },
+    {
+      "path": "inputs/01-authority-core.sql",
+      "bytes": 13177,
+      "sha256": "9a4b87fc82935af4d4225d6092973d93a8b0676c4a3e3c94b96dbf747b0d50d9"
+    },
+    {
+      "path": "inputs/02a-role-create-v2.sql",
+      "bytes": 10749,
+      "sha256": "aa7c4629d6a02736684213aa8e87aa4a3b76a2534518630c566a142bd9f359fe"
+    },
+    {
+      "path": "inputs/02b-role-edit-unassigned.sql",
+      "bytes": 9054,
+      "sha256": "134f8f22d3f0b62c06915b4137f6d69d2f91dfcd5307c444d77b03e40c5d4f8a"
+    },
+    {
+      "path": "install.proposed.sql",
+      "bytes": 548,
+      "sha256": "3df6dbe6ef56ebbdb73d5d473eae262a408cdf49039e94fba6c8e083c7801fa1"
+    },
+    {
+      "path": "inventory.json",
+      "bytes": 3222,
+      "sha256": "d2bc0d28b51f77b15794802f91910267a0512b9345e7f9d4947ed68b8a8ef701"
+    },
+    {
+      "path": "proof/contention.sql",
+      "bytes": 417,
+      "sha256": "ba9ee07a53459c59650c0e57178fceab22f67dd993b3b5cd7ea8f136ace5ea2b"
+    },
+    {
+      "path": "proof/native.sql",
+      "bytes": 1848,
+      "sha256": "99ab1091cea3b59dca7620e10b000db29ea58f1ee557d3b85d7d3e678590283b"
+    },
+    {
+      "path": "proof/owner-fixture.sql",
+      "bytes": 6878,
+      "sha256": "f581263842916092f80e125bc46501d77409a7716691ffe4274cbf7b845a43fb"
+    },
+    {
+      "path": "proof/runtime-denial.sql",
+      "bytes": 1509,
+      "sha256": "ea712e4bb97b0039565e12a52fd61d4f99e09581edea63b1e7d6a4ab764f04f3"
+    },
+    {
+      "path": "sealed-readback.sql",
+      "bytes": 144,
+      "sha256": "d2659873db02290da8b2d8a2bba8fbf2e81c2474caeb8d660974691d4e9fa2de"
+    },
+    {
+      "path": "sql/assert-sealed.sql",
+      "bytes": 3969,
+      "sha256": "5affc4e1abf04a11f1a5dd087f7a9541ea002de756dec384a22f8321f5f581e5"
+    },
+    {
+      "path": "sql/down.sql",
+      "bytes": 274,
+      "sha256": "191a1f7721073c777e8048c3897bc7ae9d603bae940573987946ba475b83680b"
+    },
+    {
+      "path": "sql/drop.sql",
+      "bytes": 1885,
+      "sha256": "4cb97c1fa71dfa71d45f93527fd384f36c0365808d5af0ec5bebbaf3a7d51bfa"
+    },
+    {
+      "path": "sql/guard.sql",
+      "bytes": 2919,
+      "sha256": "fe7df159655136f2c56452336bee6aa26ee57297c23370ed6c728d2279107f46"
+    },
+    {
+      "path": "sql/inventory.sql",
+      "bytes": 1813,
+      "sha256": "85960aae04002ea07bed9e1d4516016d393d65fbe1424e7abb0feddff23a0f80"
+    },
+    {
+      "path": "sql/match.sql",
+      "bytes": 158,
+      "sha256": "cbb61fe61b1a84f11fc8cd83412265f6b4a5943c9fcf2afcce2bf4a38c763628"
+    },
+    {
+      "path": "sql/parent-fk-delta.sql",
+      "bytes": 2149,
+      "sha256": "b0de2683a12e24cfd57f7f80f682d1a9eef270ccd3db33ed9a7b186fc43571de"
+    },
+    {
+      "path": "sql/preflight.sql",
+      "bytes": 2096,
+      "sha256": "7d6193314e88a414471a2685cdd19161389bb3b913bf8af717f416f154fd80ee"
+    },
+    {
+      "path": "sql/seal.sql",
+      "bytes": 2507,
+      "sha256": "d27da873c7b7963cb0371130743e7eab41b8d77f9392a2455a4acc98aa47138b"
+    },
+    {
+      "path": "sql/snapshot.sql",
+      "bytes": 4889,
+      "sha256": "935dadf277cccebc97e490c96ec7c6c43b87041598142395003ddf73e03b69a5"
+    },
+    {
+      "path": "target.example.json",
+      "bytes": 611,
+      "sha256": "276af4c761a2c160d395a6c324fd45b31f36fc793f6c74fb1e7fa7bcff4964ad"
+    }
+  ],
+  "version": 2,
+  "previous_manifest": "bbc77748f1421d228a708b33fa83a38608a9aa30bd8a4c2dadce657cc6f71509",
+  "previous_review": {
+    "b017-compiler-first-independent-astra-v1.json": "c41e1f3acf561d39f945d55e285a20d26bbc9ef447bab206ea65f70f630043b8",
+    "b017-compiler-first-independent-astra-v1.md": "c9e2f358fc3271a4250cc7ee1d241b6b04768df2d60ab90ae88a15c3bbddfc19"
+  },
+  "changed": [
+    "README.md",
+    "compiler_operator.py",
+    "install.proposed.sql",
+    "inventory.json",
+    "sql/guard.sql",
+    "sql/snapshot.sql",
+    "target.example.json"
+  ],
+  "added": [
+    "sql/parent-fk-delta.sql"
+  ]
+}

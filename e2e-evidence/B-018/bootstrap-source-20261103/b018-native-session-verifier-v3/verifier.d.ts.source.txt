@@ -1,0 +1,5 @@
+export type Scope = {org:string|null;environment:string|null;lease:string|null;portalRole:string|null};
+export type Input = {contextId:`ctx${1|2|3|4|5|6}`;mode:'native'|'enabled';tokenHash:string;actorId:string;orgId:string;persona:'tenant'|'admin';cookieScope:Scope};
+export type Readback = {sessionId:string;tokenHash:string;userId:string;orgId:string;persona:'tenant'|'admin';revokedAt:null;expiresAt:string;consent:unknown;readbackSha256:string};
+export type Outcome = {contextId:string;mode:'native'|'enabled';outcome:'NOT_ATTEMPTED'|'FAILED'|'VERIFIED_SNAPSHOT'|'DUPLICATE_ATTEMPT'};
+export function createSessionVerifier(options:{appRoot:string;sourceLockFile:string;sourceLockSha256:string;databaseName:string;run:string;runStartedAt:string;hmacKey:Buffer}):Promise<{verify(input:Input):Promise<Readback>;ledger():Outcome[]}>;

@@ -742,3 +742,14 @@ B017 authority core v2, draft create v2 and unassigned edit passed independent s
 Both queue items remain in_progress. Finish the 20 previously started IDs only; all 39 queue rows and four-party LINE scope are preserved. No new B IDs, operational flags, main merge, production, external messages or legal-copy changes.
 
 STOP POINT: approved bounded criterion recorded, replacement helpers and inactive foundation in source preparation; next: independently review each complete module/package before any new execution or PE handoff; owner: Codex/Ron.
+
+
+## B017 compiler delivery / B018 evidence source checkpoint - 2026-11-03T17:02:35-08:00
+
+B017: limited compiler proposal v2 passed independent source review and five reviewed files were copied without overwrite to Downloads. Archive SHA 3a079e30dd0bc4b281c255dee1e0b41c33f9624a4832fd334fb596529f9e6169. [Exact handoff](../e2e-evidence/B-017/compiler-proposal-20261103/b017-foundation-compiler-handoff-v2.md). It is UNPARSED/UNAPPLIED/target UNVERIFIED/NOT_APPLY_READY; all F01-F10 remain NOT_RUN. PE must bind actual separate sole-operator compiler-cluster admission before executing the narrow proposal. Full custom-role assignment, privacy/operation bridges, app integration and missing proof fixtures remain Codex work; no feature completion or service/flag activation.
+
+B018: the approved native-negative criterion has independently accepted pure kernel/map (85+17 pure/mock tests) and snapshot verifier components. Collector v1/v2 and guard v1/v2 are rejected, unexecuted source. After two collector source failures, the approach changes to explicit document-lifetime indexes and complete raw-event replay, with actual outgoing-cookie and HMR transport proof; no third phase-only patch. [Frozen provenance](../e2e-evidence/B-018/bootstrap-source-20261103/README.md). Guard-v3/index authoring and reviewed complete parent/recovery are pending. Actual browser results remain FAIL; ordinary enhanced-login cancellation cause remains UNVERIFIED, with no source-justified product patch.
+
+Application code is unchanged from tested1c8fd07 (651unit/476RLS PASS, zero failures, sole prior historical skip). No new full gate, browser, HTTP, database, migration or staging operation ran for these prototypes. Both items stay in_progress; preserve all39 rows and finish only the20 already-started IDs. No newB, prod/main merge/operational flag/external message/legal edit.
+
+STOP POINT: inactive compiler handoff copied; B018 integration source NO-GO pending corrected lifetime approach; next: publish checkpoint/renew/mirror, continue independent source review and bounded authoring; owner: Codex/Ron.

@@ -1,0 +1,30 @@
+{
+  "inputManifestSha256": "0e442659e543ae242487c3d6b9382e921abd830629c2f479aeeac0c4986fef8b",
+  "inputCodeSha256": "e26dc5fdad52fc2eb59cc6bde7a44f6e140e80c454d3f48c4c9fcadf32206349",
+  "verdict": "REJECTED_SOURCE_INTEGRATION",
+  "frozenPureTestsPassed": 19,
+  "syntax": "PASS",
+  "threeAdversarialTraces": "IN_MEMORY_ONLY",
+  "runtime": "NOT_RUN",
+  "markdownSha256": "e8f07e93412ef634304e045cbcac12f033be994bb3d5610d84a16b9ad0ece781",
+  "findings": [
+    {
+      "id": "G01",
+      "title": "Ordinary downstream cancellations can pass unnoticed",
+      "reference": "guard.cjs 48\u201364, 90",
+      "detail": "A complete GET or POST body can be followed by a client disconnect before the reply finishes. IncomingMessage.aborted concerns the incoming body. There is no ServerResponse close/finish comparison. The mock emitted response close with writableFinished false and a frontend socket close. failed stayed false and the upstream request remained open. Track each exchange through both normal terminals, immediately record incomplete downstream responses and stop the fixed upstream. Keep ordinary enabled-login cancellations fatal."
+    },
+    {
+      "id": "G02",
+      "title": "The close receipt can precede upstream completion or a late failure",
+      "reference": "guard.cjs 59\u201363, 72\u201393, 125\u2013133",
+      "detail": "close() destroys sockets without checking unfinished exchanges and awaits only the frontend server callback. It never awaits an upstream close or seals the ledger against later updates. In a mock with one assigned upstream socket, orderly browser shutdown produced closed=true, failed=false before any upstream close event. A later request error set failed=true after the caller already held a passing snapshot. Track pending requests before socket assignment, pending replies, both-direction socket closes and upgrade lifetimes. Require bounded positive quiescence, or an explicit quarantine result. Planned browser shutdown must never erase unfinished HTTP. Distinguish an expected HMR close at an actual closed context from unexplained transport loss."
+    },
+    {
+      "id": "G03",
+      "title": "The proxy can remove the precise CSP evidence being tested",
+      "reference": "guard.cjs 22\u201329, 42\u201346, 53\u201357",
+      "detail": "HTTP connection-nominated headers are removed on both legs. In a mocked response carrying Connection: content-security-policy and an enforced Content-Security-Policy header, the browser-facing document lost the policy, and the guard recorded only a normal forward. The downstream collector could then assert zero while the actual server supplied CSP. Reject any policy/representation discrepancy, bind a sanitized upstream policy-presence witness to the exact final document, and reject unsupported semantic transformations. Audit informational responses such as 103 Link hints, which the current proxy never forwards or records."
+    }
+  ]
+}

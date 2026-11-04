@@ -1,0 +1,27 @@
+{
+  "state": "SOURCE_DRAFT_NOT_REVIEWED_NOT_RUN",
+  "files": {
+    "reservation.json": {
+      "sha256": "51659c93cdf8af413cd367ede406db2001af8e038a975c290fb452e6c1747114",
+      "bytes": 122
+    },
+    "collector.cjs": {
+      "sha256": "25ad88d87de323b4f8525a4bbf69c229d487381a0350dddd26059cb58aac94f3",
+      "bytes": 41962
+    },
+    "collector.d.ts": {
+      "sha256": "d9d4daf21b0c93ac24043d1cd90164692024c417525244f82c6b626fb7c4d699",
+      "bytes": 6480
+    },
+    "README.md": {
+      "sha256": "0aab64e74d0a4717494fd8a8431bdfda650c5d0689655c63db8f97e477292f70",
+      "bytes": 9767
+    }
+  },
+  "dependencies": {
+    "kernelClassifierSha256": "3b47340b7c99d50d918ba37fafca850b69817b8a73133f82c7885fc236722be9",
+    "mapAdapterSha256": "6bfe02e8b973f9a65b68ed706d39c6f130e6bf8a42062225647a854fff41b876",
+    "egressGuardSha256": "e26dc5fdad52fc2eb59cc6bde7a44f6e140e80c454d3f48c4c9fcadf32206349",
+    "verifierV3ManifestSha256": "d59ece040786ed2a841094237f7d83d74dad758a311163507d30f2022d1eeb98"
+  }
+}

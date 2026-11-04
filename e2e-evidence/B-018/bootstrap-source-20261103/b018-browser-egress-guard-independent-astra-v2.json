@@ -1,0 +1,73 @@
+{
+  "scope": "source, syntax and pure mocks",
+  "decision": "NO_GO_INTEGRATION_OR_EXECUTION",
+  "report_sha256": "6b05528d27d8746817056b42738b8a432ff9013174a08aafe9aa9778c7d110c1",
+  "manifest_sha256": "494eb9401ed7582b9aa8228b6cba3a9133840d69ca2297feabdefebebf3da745",
+  "bindings": {
+    "reservation.json": {
+      "sha256": "d279026cb189140985740b4d1e384135c5b32e6258545594c45f9beee60c06c4",
+      "bytes": 115
+    },
+    "guard.cjs": {
+      "sha256": "e3df429da664065e59a7ba5860165abdaa4790d5b89d2c470f799f03679cde72",
+      "bytes": 18097
+    },
+    "guard.d.ts": {
+      "sha256": "5d4ebeb5553097770db73689e1b1ce3ea2872b87d823e635c14c22735c7e2b50",
+      "bytes": 1767
+    },
+    "target.test.cjs": {
+      "sha256": "77aafeacd1fa82b81fe984aec596075609641d89e61299bbb652737006a2f53d",
+      "bytes": 1306
+    },
+    "lifecycle.test.cjs": {
+      "sha256": "aab697b2866b7f76ce5d10160f1520eb249c01a303f0ea2f62162214b6953f6b",
+      "bytes": 7874
+    },
+    "README.md": {
+      "sha256": "a161dc72501027b9bd6213d291124afa047aa1d5ee81b462740dd050f534c1c3",
+      "bytes": 3990
+    }
+  },
+  "prior_review_sha256": "e8f07e93412ef634304e045cbcac12f033be994bb3d5610d84a16b9ad0ece781",
+  "author_memo_sha256": "fdc0e08d4272893ff392a47b0e4605eca1423d1a95e14951b324e815a87d4cba",
+  "syntax": "PASS",
+  "unit": {
+    "pass": 29,
+    "fail": 0,
+    "skip": 0
+  },
+  "additional_mock_traces": 2,
+  "findings": [
+    {
+      "severity": "P1",
+      "subject": "Global context count cannot establish exact owner document retirement",
+      "mock": [
+        "unexpected-hmr-client-close",
+        "unexpected-hmr-upstream-close"
+      ]
+    },
+    {
+      "severity": "P2",
+      "subject": "Missing or wrong key/accept admitted as successful HMR handshake",
+      "basis": "existing positive test has no key, accept or attached context"
+    },
+    {
+      "severity": "P1",
+      "subject": "Post-drain receipt cannot stand as final acceptance without independent terminal ledger through process exit",
+      "mock": {
+        "at_close": [
+          false,
+          4
+        ],
+        "after_late_error": [
+          true,
+          5
+        ]
+      }
+    }
+  ],
+  "application_runtime": "NOT_RUN",
+  "network_browser_database": "NOT_RUN",
+  "historical_failures": "UNCHANGED"
+}

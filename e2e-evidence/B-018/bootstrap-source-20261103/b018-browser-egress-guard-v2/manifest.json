@@ -1,0 +1,31 @@
+{
+  "state": "SOURCE_DRAFT_NOT_INDEPENDENTLY_REVIEWED_NOT_RUNTIME_AUTHORIZED",
+  "sourceV1Manifest": "0e442659e543ae242487c3d6b9382e921abd830629c2f479aeeac0c4986fef8b",
+  "verification": "29 pure in-memory tests passed; no actual sockets, HTTP, browser or DB",
+  "files": {
+    "reservation.json": {
+      "sha256": "d279026cb189140985740b4d1e384135c5b32e6258545594c45f9beee60c06c4",
+      "bytes": 115
+    },
+    "guard.cjs": {
+      "sha256": "e3df429da664065e59a7ba5860165abdaa4790d5b89d2c470f799f03679cde72",
+      "bytes": 18097
+    },
+    "guard.d.ts": {
+      "sha256": "5d4ebeb5553097770db73689e1b1ce3ea2872b87d823e635c14c22735c7e2b50",
+      "bytes": 1767
+    },
+    "target.test.cjs": {
+      "sha256": "77aafeacd1fa82b81fe984aec596075609641d89e61299bbb652737006a2f53d",
+      "bytes": 1306
+    },
+    "lifecycle.test.cjs": {
+      "sha256": "aab697b2866b7f76ce5d10160f1520eb249c01a303f0ea2f62162214b6953f6b",
+      "bytes": 7874
+    },
+    "README.md": {
+      "sha256": "a161dc72501027b9bd6213d291124afa047aa1d5ee81b462740dd050f534c1c3",
+      "bytes": 3990
+    }
+  }
+}

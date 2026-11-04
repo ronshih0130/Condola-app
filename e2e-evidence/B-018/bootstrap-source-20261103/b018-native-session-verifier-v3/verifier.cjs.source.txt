@@ -1,0 +1,151 @@
+'use strict';
+// Source-only parent component. No connection or application import on module load.
+const {createRequire}=require('node:module');
+const {pathToFileURL}=require('node:url');
+const path=require('node:path'),fs=require('node:fs'),crypto=require('node:crypto');
+const ORG='10000000-0000-4000-8000-000000000001';
+const FIXTURES=Object.freeze({
+ '20000000-0000-4000-8000-000000000006':'tenant',
+ '20000000-0000-4000-8000-000000000005':'tenant',
+ '20000000-0000-4000-8000-000000000001':'admin',
+});
+const uuid=x=>typeof x==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(x);
+const hex=x=>typeof x==='string'&&/^[a-f0-9]{64}$/.test(x);
+function demand(ok){if(!ok)throw Error('native-session-readback-unavailable');}
+
+/** Parent supplies the existing, isolated clone/run and private run key. This is not an app API. */
+async function createSessionVerifier({appRoot,sourceLockFile,sourceLockSha256,databaseName,run,runStartedAt,hmacKey}) {
+ demand(typeof run==='string'&&/^[a-f0-9]{12}$/.test(run));
+ demand(databaseName==='condola_b018_history_'+run);
+ demand(process.env.CONDOLA_RLS_DISPOSABLE==='YES'&&process.env.DEMO_MODE==='false'&&
+  process.env.B018_OWNED_DATABASE===databaseName&&process.env.DATABASE_URL===`postgres://condola:condola@127.0.0.1:55435/${databaseName}`);
+ demand(typeof runStartedAt==='string'&&Number.isFinite(Date.parse(runStartedAt)));
+ demand(Buffer.isBuffer(hmacKey)&&hmacKey.length===32&&hex(sourceLockSha256));
+ const lockBytes=fs.readFileSync(sourceLockFile);demand(crypto.createHash('sha256').update(lockBytes).digest('hex')===sourceLockSha256);
+ const lock=JSON.parse(lockBytes),plan=lock.webpackMapPlan,root=fs.realpathSync(appRoot);
+ demand(plan&&plan.version===1&&plan.run===run&&plan.origin==='http://127.0.0.1:43156'&&plan.pinsSha256==='4a530511972574022f2916b2c895fae3bb4249ea26bce1679358c98365b34a90'&&plan.decisionSha256==='9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec'&&/^[a-f0-9]{40}$/.test(plan.candidate)&&lock.candidate===plan.candidate&&
+  path.isAbsolute(plan.runDir)&&path.basename(plan.runDir)==='run-'+run&&plan.appRoot===path.join(plan.runDir,'application')&&
+  appRoot===plan.appRoot&&root===appRoot&&fs.realpathSync(plan.runDir)===plan.runDir);
+ for(const d of [plan.runDir,root]){const st=fs.lstatSync(d);demand(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.getuid()&&(st.mode&0o077)===0);}
+ const pins=lock.sourceBlobs;demand(pins&&typeof pins==='object'&&!Array.isArray(pins)&&Object.keys(pins).length>=1018);
+ const exact={'src/server/consent.ts':'8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6','src/server/org-scope.ts':'04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427','src/server/portal-role.ts':'9e6970f2ff20d95545d11924c46fd9c2c61464bba1b44821d648b1bcc362a32e'};
+ function checkSourcePins(){demand(crypto.createHash('sha256').update(fs.readFileSync(sourceLockFile)).digest('hex')===sourceLockSha256);for(const [name,expected] of Object.entries(pins)){
+  demand(typeof name==='string'&&!path.isAbsolute(name)&&!name.split('/').includes('..')&&/^[a-f0-9]{40}$/.test(expected));
+  const file=path.join(root,name),st=fs.lstatSync(file);demand(st.isFile()&&!st.isSymbolicLink()&&fs.realpathSync(file)===file);
+  const bytes=fs.readFileSync(file),blob=crypto.createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');demand(blob===expected);
+  if(exact[name])demand(crypto.createHash('sha256').update(bytes).digest('hex')===exact[name]);
+ }
+ demand(Object.keys(exact).every(name=>Object.hasOwn(pins,name)));}
+ checkSourcePins();
+ const req=createRequire(path.join(root,'package.json')),{Client}=req('pg');
+ // Parent must pin these canonical sources and use the already pinned tsx loader.
+ const load=relative=>import(pathToFileURL(path.join(root,relative)).href);
+ const [{consentCoversCurrent},{resolveStaffOrg},{pickPortalOrg,resolvePortalKind}]=await Promise.all([
+  load('src/server/consent.ts'),load('src/server/org-scope.ts'),load('src/server/portal-role.ts'),
+ ]);
+ demand([consentCoversCurrent,resolveStaffOrg,pickPortalOrg,resolvePortalKind].every(x=>typeof x==='function'));
+ const seen=new Set(),attempts=new Map(),violations=new Set();
+ const slots=Object.freeze({ctx1:['20000000-0000-4000-8000-000000000006','native'],ctx2:['20000000-0000-4000-8000-000000000006','enabled'],ctx3:['20000000-0000-4000-8000-000000000005','native'],ctx4:['20000000-0000-4000-8000-000000000005','enabled'],ctx5:['20000000-0000-4000-8000-000000000001','native'],ctx6:['20000000-0000-4000-8000-000000000001','enabled']});
+ const keyed=value=>crypto.createHmac('sha256',hmacKey).update(JSON.stringify(value)).digest('hex');
+ async function verify({contextId,mode,tokenHash,actorId,orgId,persona,cookieScope}) {
+  demand(Object.hasOwn(slots,contextId));
+  if(attempts.has(contextId)){violations.add(contextId);throw Error('native-session-readback-unavailable');}
+  attempts.set(contextId,'FAILED'); // consume slot synchronously before validation and I/O
+  demand(slots[contextId][0]===actorId&&slots[contextId][1]===mode);checkSourcePins();
+  demand(hex(tokenHash)&&FIXTURES[actorId]===persona&&orgId===ORG);
+  // Values come privately from the actual context's cookie inventory, never from a page DTO.
+  // A fresh bootstrap may not choose a lease/sandbox or an unrelated organization.
+  demand(cookieScope&&Object.keys(cookieScope).sort().join(',')==='environment,lease,org,portalRole');
+  demand((cookieScope.org===null||cookieScope.org===ORG)&&
+   (cookieScope.environment===null||cookieScope.environment==='live')&&cookieScope.lease===null);
+  demand(persona==='tenant'?cookieScope.portalRole==='tenant':cookieScope.portalRole===null);
+  const c=new Client({connectionString:`postgres://condola:condola@127.0.0.1:55435/${databaseName}`,
+   options:'-c default_transaction_read_only=on -c statement_timeout=10000 -c lock_timeout=1000',
+   application_name:'b018_native_session_proof',connectionTimeoutMillis:5000,query_timeout:12000});
+  let begun=false;
+  try {
+   await c.connect();
+   await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');begun=true;
+   const endpoint=await c.query(`SELECT current_database() AS db,host(inet_server_addr()) AS host,
+     inet_server_port() AS port,current_setting('transaction_read_only') AS ro`);
+   demand(endpoint.rowCount===1&&endpoint.rows[0].db===databaseName&&endpoint.rows[0].host==='127.0.0.1'&&
+    endpoint.rows[0].port===55435&&endpoint.rows[0].ro==='on');
+   const result=await c.query(`SELECT s.id::text AS session_id,s.user_id::text,s.token_hash,
+     s.created_at::text,s.expires_at::text,s.revoked_at::text,
+     (SELECT jsonb_build_object('accepted_at',z.accepted_at,'terms_version',z.terms_version,
+       'privacy_version',z.privacy_version,'source',z.source) FROM public.consents z
+       WHERE z.user_id=s.user_id ORDER BY z.recorded_at DESC,z.id DESC LIMIT 1) AS consent
+     FROM public.auth_sessions s JOIN auth.users u ON u.id=s.user_id
+     WHERE s.token_hash=$1 AND s.user_id=$2::uuid AND s.revoked_at IS NULL
+       AND s.expires_at>clock_timestamp() AND s.created_at>=$3::timestamptz
+       AND u.email_confirmed_at IS NOT NULL`,[tokenHash,actorId,runStartedAt]);
+   demand(result.rowCount===1);
+   const row=result.rows[0];
+   demand(uuid(row.session_id)&&row.user_id===actorId&&row.token_hash===tokenHash&&
+    row.revoked_at===null&&consentCoversCurrent(row.consent)&&!seen.has(row.session_id));
+   // Reserve synchronously before another await. A failed attempt stays consumed;
+   // concurrent calls cannot both attest the same SID and there is no retry in this run.
+   seen.add(row.session_id);
+   // Canonical staff-first resolution is shared with actual session.ts; no new base-role rule.
+   const firm=await resolveStaffOrg(c,actorId,cookieScope.org,cookieScope.environment);
+   if(persona==='admin') {
+    demand(firm&&firm.role==='admin'&&firm.orgId===ORG&&firm.liveOrgId===ORG&&
+     firm.environment==='live'&&firm.needsSandbox===false);
+    // This finite fixture verifier supports only the already-OFF partner gate. It never
+    // turns a caught partner-document/config error into evidence of accepted consent.
+    const partner=await c.query(`SELECT (SELECT value FROM public.platform_settings
+      WHERE key='design_partner_consent_gate') AS global,
+      EXISTS(SELECT 1 FROM public.platform_settings WHERE key='design_partner_consent_gate') AS global_present,
+      jsonb_typeof(feature_flags) AS flags_type, feature_flags ? 'design_partner_consent_gate' AS company_present,
+      feature_flags->'design_partner_consent_gate' AS company FROM public.organizations
+      WHERE id=$1::uuid AND environment='live' AND live_org_id IS NULL`,[ORG]);
+    demand(partner.rowCount===1&&partner.rows[0].flags_type==='object'&&
+     (partner.rows[0].global_present===false||partner.rows[0].global===false)&&
+     (partner.rows[0].company_present===false||partner.rows[0].company===false));
+   } else {
+    demand(firm===null);
+    // B018 admission also excludes orphaned active staff membership. The canonical
+    // resolver joins live organizations; an orphan must not fall back to a tenant.
+    const staff=await c.query(`SELECT EXISTS(SELECT 1 FROM public.org_members m
+      LEFT JOIN public.organizations o ON o.id=m.org_id WHERE m.user_id=$1::uuid
+      AND m.status='active' AND (o.id IS NULL OR o.environment='live')) AS present`,[actorId]);
+    demand(staff.rowCount===1&&staff.rows[0].present===false);
+    const contacts=await c.query(`SELECT c.org_id::text,o.environment::text,
+      coalesce(o.live_org_id::text,c.org_id::text) AS live_org_id,
+      bool_or(c.is_tenant) AS is_tenant,bool_or(c.is_owner) AS is_owner,
+      (SELECT i.kind::text FROM public.invitations i WHERE i.accepted_by=$1::uuid AND
+        i.org_id=c.org_id AND i.status='accepted' AND i.kind IN('owner','tenant')
+        ORDER BY i.accepted_at DESC NULLS LAST LIMIT 1) AS latest_kind,
+      (SELECT i.accepted_at::text FROM public.invitations i WHERE i.accepted_by=$1::uuid AND
+        i.org_id=c.org_id AND i.status='accepted' AND i.kind IN('owner','tenant')
+        ORDER BY i.accepted_at DESC NULLS LAST LIMIT 1) AS latest_at
+      FROM public.contacts c JOIN public.organizations o ON o.id=c.org_id
+      WHERE c.user_id=$1::uuid AND c.archived_at IS NULL
+      GROUP BY c.org_id,o.environment,o.live_org_id ORDER BY c.org_id`,[actorId]);
+    const picked=pickPortalOrg(contacts.rows.map(row=>({row,isOwner:row.is_owner,isTenant:row.is_tenant,
+     latestAt:row.latest_at?Date.parse(row.latest_at):null})),'/t',cookieScope.portalRole)?.row;
+    demand(picked&&picked.org_id===ORG&&picked.environment==='live'&&picked.live_org_id===ORG);
+    const latest=['tenant','owner'].includes(picked.latest_kind)?picked.latest_kind:null;
+    demand(resolvePortalKind({path:'/t',cookie:cookieScope.portalRole,
+     isOwner:contacts.rows.some(x=>x.is_owner),isTenant:contacts.rows.some(x=>x.is_tenant),latest})==='tenant');
+   }
+   const current=await c.query(`SELECT 1 FROM public.auth_sessions WHERE id=$1::uuid
+     AND token_hash=$2 AND user_id=$3::uuid AND revoked_at IS NULL AND expires_at>clock_timestamp()`,
+    [row.session_id,tokenHash,actorId]);
+   demand(current.rowCount===1);
+   checkSourcePins();await c.query('COMMIT');begun=false;
+   // Return privately to collector; persist only the HMAC, public synthetic IDs and booleans.
+   attempts.set(contextId,'VERIFIED_SNAPSHOT');
+   return {sessionId:row.session_id,tokenHash,userId:actorId,orgId:ORG,persona,
+    revokedAt:null,expiresAt:row.expires_at,consent:row.consent,
+    readbackSha256:keyed({run,sourceLockSha256,contextId,mode,databaseName,actorId,persona,cookieScope,tokenHash,sessionId:row.session_id,
+     createdAt:row.created_at,expiresAt:row.expires_at,consent:row.consent})};
+  } catch {
+   attempts.set(contextId,'FAILED');
+   if(begun)try{await c.query('ROLLBACK');}catch{}
+   throw Error('native-session-readback-unavailable');
+  } finally {try{await c.end();}catch{attempts.set(contextId,'FAILED');throw Error('native-session-readback-unavailable');}}
+ }
+ return Object.freeze({verify,ledger:()=>Object.keys(slots).map(contextId=>({contextId,mode:slots[contextId][1],outcome:violations.has(contextId)?'DUPLICATE_ATTEMPT':attempts.get(contextId)||'NOT_ATTEMPTED'}))});
+}
+module.exports={createSessionVerifier};

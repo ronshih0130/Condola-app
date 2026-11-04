@@ -1,0 +1,25 @@
+{
+  "scope": "Source-only transport guard; independent QA and live controls pending",
+  "files": {
+    "target.test.cjs": {
+      "sha256": "77aafeacd1fa82b81fe984aec596075609641d89e61299bbb652737006a2f53d",
+      "bytes": 1306
+    },
+    "README.md": {
+      "sha256": "d5d56a43421db6c589a1e8293f6e57a00f2fbdebe46b4e7cf227f8166e0a3840",
+      "bytes": 3258
+    },
+    "guard.cjs": {
+      "sha256": "e26dc5fdad52fc2eb59cc6bde7a44f6e140e80c454d3f48c4c9fcadf32206349",
+      "bytes": 9138
+    }
+  },
+  "tests": {
+    "command": "Node20 --test target.test.cjs before final handshake-only timeout adjustment",
+    "pass": 19,
+    "fail": 0,
+    "skip": 0,
+    "scope": "URL admission only; no socket/proxy/browser/HTTP execution"
+  },
+  "runtime": "NOT_RUN"
+}

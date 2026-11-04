@@ -1,0 +1,95 @@
+TAP version 13
+# Subtest: literal target and single decimal renderer version only
+ok 1 - literal target and single decimal renderer version only
+  ---
+  duration_ms: 0.75725
+  ...
+# Subtest: mocked full producer links both controls, all real-shape render bindings, unchanged root lock and disk readback
+ok 2 - mocked full producer links both controls, all real-shape render bindings, unchanged root lock and disk readback
+  ---
+  duration_ms: 22.620625
+  ...
+# Subtest: mocked httpDrift makes initial mapping unavailable
+ok 3 - mocked httpDrift makes initial mapping unavailable
+  ---
+  duration_ms: 2.238083
+  ...
+# Subtest: mocked redirect makes initial mapping unavailable
+ok 4 - mocked redirect makes initial mapping unavailable
+  ---
+  duration_ms: 1.930125
+  ...
+# Subtest: mocked cookie makes initial mapping unavailable
+ok 5 - mocked cookie makes initial mapping unavailable
+  ---
+  duration_ms: 2.320542
+  ...
+# Subtest: mocked incomplete makes initial mapping unavailable
+ok 6 - mocked incomplete makes initial mapping unavailable
+  ---
+  duration_ms: 1.944542
+  ...
+# Subtest: mocked linkDir makes initial mapping unavailable
+ok 7 - mocked linkDir makes initial mapping unavailable
+  ---
+  duration_ms: 1.122584
+  ...
+# Subtest: mocked symlink makes initial mapping unavailable
+ok 8 - mocked symlink makes initial mapping unavailable
+  ---
+  duration_ms: 1.09925
+  ...
+# Subtest: mocked hardlink makes initial mapping unavailable
+ok 9 - mocked hardlink makes initial mapping unavailable
+  ---
+  duration_ms: 1.057541
+  ...
+# Subtest: mocked wrongParent makes initial mapping unavailable
+ok 10 - mocked wrongParent makes initial mapping unavailable
+  ---
+  duration_ms: 0.97275
+  ...
+# Subtest: root pin mismatch and renderer pin drift fail closed
+ok 11 - root pin mismatch and renderer pin drift fail closed
+  ---
+  duration_ms: 0.466167
+  ...
+# Subtest: mocked changed invalidates per-render evidence
+ok 12 - mocked changed invalidates per-render evidence
+  ---
+  duration_ms: 5.373792
+  ...
+# Subtest: mocked dirChanged invalidates per-render evidence
+ok 13 - mocked dirChanged invalidates per-render evidence
+  ---
+  duration_ms: 3.213333
+  ...
+# Subtest: mocked wrongParent invalidates per-render evidence
+ok 14 - mocked wrongParent invalidates per-render evidence
+  ---
+  duration_ms: 3.158458
+  ...
+# Subtest: dropped watcher identity, malformed target, token substitution and repeated render fail closed
+ok 15 - dropped watcher identity, malformed target, token substitution and repeated render fail closed
+  ---
+  duration_ms: 12.926833
+  ...
+# Subtest: missing render cannot seal and disk result requires separate live seal
+ok 16 - missing render cannot seal and disk result requires separate live seal
+  ---
+  duration_ms: 6.443708
+  ...
+# Subtest: post-seal source artifact alteration overturns provisional result
+ok 17 - post-seal source artifact alteration overturns provisional result
+  ---
+  duration_ms: 18.015041
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 129.193833

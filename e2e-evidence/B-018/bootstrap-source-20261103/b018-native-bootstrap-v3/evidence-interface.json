@@ -1,0 +1,1190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "B018 native bootstrap normalized parent-owned evidence",
+  "description": "Wire envelope. lock is independently read from trusted parent; postDrain is optional for provisional admission. Digest references require independent artifact readback. See README for producer obligations.",
+  "type": "object",
+  "properties": {
+    "lock": {
+      "$ref": "#/$defs/lock"
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidence"
+    },
+    "postDrain": {
+      "$ref": "#/$defs/postDrain"
+    }
+  },
+  "required": [
+    "lock",
+    "evidence"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "freeze": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "decisionSha256": {
+          "const": "9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec"
+        },
+        "candidate": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "helperSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "browserSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "serverGeneration": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "assetMapSha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "financialCases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+          }
+        }
+      },
+      "required": [
+        "run",
+        "decisionSha256",
+        "candidate",
+        "sourceSha256",
+        "helperSha256",
+        "browserSha256",
+        "serverGeneration",
+        "assetMapSha256",
+        "financialCases"
+      ],
+      "additionalProperties": false
+    },
+    "receipt": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "stage": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "freezeSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "evidenceSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "run",
+        "stage",
+        "freezeSha256",
+        "evidenceSha256"
+      ],
+      "additionalProperties": false
+    },
+    "lock": {
+      "type": "object",
+      "properties": {
+        "freeze": {
+          "$ref": "#/$defs/freeze"
+        },
+        "bootstrapReceipt": {
+          "$ref": "#/$defs/receipt"
+        },
+        "finalReceipt": {
+          "$ref": "#/$defs/receipt"
+        }
+      },
+      "required": [
+        "freeze",
+        "bootstrapReceipt"
+      ],
+      "additionalProperties": false
+    },
+    "assetMap": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "compiledSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "serverMappingProofSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queryRules": {
+          "const": [
+            "none",
+            "single-renderer-decimal-v"
+          ]
+        },
+        "immutableAcrossRenderVersions": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "generation",
+        "compiledSha256",
+        "serverMappingProofSha256",
+        "origin",
+        "path",
+        "bytes",
+        "queryRules",
+        "immutableAcrossRenderVersions"
+      ],
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "document": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "frame": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "loader": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "completeAtRequest": {
+          "type": "boolean"
+        },
+        "enforcedHeaderCount": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reportOnlyHeaderCount": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effectiveMetaCount": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "captureSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "context",
+        "document",
+        "frame",
+        "loader",
+        "completeAtRequest",
+        "enforcedHeaderCount",
+        "reportOnlyHeaderCount",
+        "effectiveMetaCount",
+        "captureSha256"
+      ],
+      "additionalProperties": false
+    },
+    "declaration": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string"
+        },
+        "integrity": {
+          "type": "string"
+        },
+        "fullUrlToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "declarationSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "origin",
+        "path",
+        "kind",
+        "nonce",
+        "integrity",
+        "fullUrlToken",
+        "declarationSha256",
+        "complete"
+      ],
+      "additionalProperties": false
+    },
+    "observer": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "document": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "frame": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "loader": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "fullUrlToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "hop": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observer": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "terminal": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blocked": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "canceled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "context",
+        "document",
+        "frame",
+        "loader",
+        "origin",
+        "path",
+        "method",
+        "type",
+        "fullUrlToken",
+        "hop",
+        "observer",
+        "id",
+        "requestId",
+        "terminal",
+        "statuses",
+        "error",
+        "blocked",
+        "canceled"
+      ],
+      "additionalProperties": false
+    },
+    "hop": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "document": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "frame": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "loader": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "fullUrlToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "hop": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "navigation": {
+          "type": "boolean"
+        },
+        "uniqueCorrelationCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queryKind": {
+          "type": "string"
+        },
+        "queryCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pw": {
+          "$ref": "#/$defs/observer"
+        },
+        "cdp": {
+          "$ref": "#/$defs/observer"
+        }
+      },
+      "required": [
+        "context",
+        "document",
+        "frame",
+        "loader",
+        "origin",
+        "path",
+        "method",
+        "type",
+        "fullUrlToken",
+        "hop",
+        "navigation",
+        "uniqueCorrelationCount",
+        "queryKind",
+        "queryCount",
+        "pw",
+        "cdp"
+      ],
+      "additionalProperties": false
+    },
+    "mapping": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "document": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "frame": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "loader": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "run": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "mapSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "fullUrlToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "declarationSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "compiledSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "entrySha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "responseSha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frozenBeforeDocuments": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "context",
+        "document",
+        "frame",
+        "loader",
+        "run",
+        "origin",
+        "path",
+        "generation",
+        "mapSha256",
+        "fullUrlToken",
+        "declarationSha256",
+        "compiledSha256",
+        "entrySha256",
+        "responseSha256",
+        "frozenBeforeDocuments"
+      ],
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "document": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "frame": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "loader": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "fullUrlToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "compiledSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "proofSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "mechanism": {
+          "const": "v8-precise-coverage"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "executedBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "context",
+        "document",
+        "frame",
+        "loader",
+        "fullUrlToken",
+        "compiledSha256",
+        "proofSha256",
+        "mechanism",
+        "complete",
+        "executedBytes"
+      ],
+      "additionalProperties": false
+    },
+    "document": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "frame": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "loader": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "org": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "terminal": {
+          "type": "string"
+        },
+        "mainFrame": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inventoryComplete": {
+          "type": "boolean"
+        },
+        "inventorySha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "declarations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/declaration"
+          }
+        },
+        "hops": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hop"
+          }
+        },
+        "mapping": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/mapping"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/policy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/coverage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "context",
+        "id",
+        "frame",
+        "loader",
+        "org",
+        "actorId",
+        "origin",
+        "kind",
+        "path",
+        "terminal",
+        "mainFrame",
+        "status",
+        "inventoryComplete",
+        "inventorySha256",
+        "declarations",
+        "hops"
+      ],
+      "additionalProperties": false
+    },
+    "session": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "persona": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "org": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "context": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "sessionAlias": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "loginDocument": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "landingDocument": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "currentConsent": {
+              "type": "boolean"
+            },
+            "notExpired": {
+              "type": "boolean"
+            },
+            "naturalClick": {
+              "type": "boolean"
+            },
+            "sessionVerified": {
+              "type": "boolean"
+            },
+            "visible": {
+              "type": "boolean"
+            },
+            "finalPath": {
+              "type": "string"
+            },
+            "proofSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "navigation": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                ],
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "redirectsComplete": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "actorId",
+            "persona",
+            "org",
+            "context",
+            "sessionAlias",
+            "loginDocument",
+            "landingDocument",
+            "currentConsent",
+            "notExpired",
+            "naturalClick",
+            "sessionVerified",
+            "visible",
+            "finalPath",
+            "proofSha256",
+            "navigation",
+            "redirectsComplete"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "persona": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "org": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "context": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "sessionAlias": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "loginDocument": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "landingDocument": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "currentConsent": {
+              "type": "boolean"
+            },
+            "notExpired": {
+              "type": "boolean"
+            },
+            "naturalClick": {
+              "type": "boolean"
+            },
+            "sessionVerified": {
+              "type": "boolean"
+            },
+            "visible": {
+              "type": "boolean"
+            },
+            "finalPath": {
+              "type": "string"
+            },
+            "proofSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "observedPostType": {
+              "type": "string"
+            },
+            "postPath": {
+              "type": "string"
+            },
+            "authenticatedArrival": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "actorId",
+            "persona",
+            "org",
+            "context",
+            "sessionAlias",
+            "loginDocument",
+            "landingDocument",
+            "currentConsent",
+            "notExpired",
+            "naturalClick",
+            "sessionVerified",
+            "visible",
+            "finalPath",
+            "proofSha256",
+            "observedPostType",
+            "postPath",
+            "authenticatedArrival"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "side": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "javascriptEnabled": {
+          "type": "boolean"
+        },
+        "session": {
+          "$ref": "#/$defs/session"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/document"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "context",
+        "javascriptEnabled",
+        "session",
+        "documents"
+      ],
+      "additionalProperties": false
+    },
+    "actor": {
+      "type": "object",
+      "properties": {
+        "actor": {
+          "enum": [
+            "primary",
+            "foreign",
+            "staff"
+          ]
+        },
+        "native": {
+          "$ref": "#/$defs/side"
+        },
+        "enabled": {
+          "$ref": "#/$defs/side"
+        }
+      },
+      "required": [
+        "actor",
+        "native",
+        "enabled"
+      ],
+      "additionalProperties": false
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/observer"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "freezeSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "journalSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "assetMap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/assetMap"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "observerDrained": {
+          "type": "boolean"
+        },
+        "failures": {
+          "$ref": "#/$defs/failures"
+        },
+        "actors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/actor"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "run",
+        "freezeSha256",
+        "journalSha256",
+        "assetMap",
+        "complete",
+        "observerDrained",
+        "failures",
+        "actors"
+      ],
+      "additionalProperties": false
+    },
+    "case": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "status": {
+          "type": "string"
+        },
+        "receiptSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "receiptSha256"
+      ],
+      "additionalProperties": false
+    },
+    "postDrain": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "freezeSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "bootstrapEvidenceSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "bootstrapJournalSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "journalSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "generationAfter": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "recoveryReceiptSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "mapSha256After": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "allFailures": {
+          "$ref": "#/$defs/failures"
+        },
+        "financialCases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/case"
+          }
+        },
+        "enabledStrict": {
+          "type": "string"
+        },
+        "financialStrict": {
+          "type": "string"
+        },
+        "lineage": {
+          "type": "string"
+        },
+        "protectedReadback": {
+          "type": "string"
+        },
+        "browserClosed": {
+          "type": "boolean"
+        },
+        "serverDrained": {
+          "type": "boolean"
+        },
+        "controlsRestored": {
+          "type": "boolean"
+        },
+        "sourcesStable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "run",
+        "freezeSha256",
+        "bootstrapEvidenceSha256",
+        "bootstrapJournalSha256",
+        "journalSha256",
+        "generationAfter",
+        "recoveryReceiptSha256",
+        "mapSha256After",
+        "complete",
+        "allFailures",
+        "financialCases",
+        "enabledStrict",
+        "financialStrict",
+        "lineage",
+        "protectedReadback",
+        "browserClosed",
+        "serverDrained",
+        "controlsRestored",
+        "sourcesStable"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

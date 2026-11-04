@@ -1,0 +1,320 @@
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const http = require('node:http');
+const {execFileSync} = require('node:child_process');
+const {createHash,createHmac} = require('node:crypto');
+
+const ORIGIN = 'http://127.0.0.1:43156';
+const ASSET = '/_next/static/chunks/webpack.js';
+const RULES = ['none', 'single-renderer-decimal-v'];
+const PIN_SHA = '4a530511972574022f2916b2c895fae3bb4249ea26bce1679358c98365b34a90';
+const DECISION = '9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec';
+const handles = new WeakSet();
+const MAX = 8 * 1024 * 1024;
+const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+const hex = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+const sorted = value => Array.isArray(value) ? value.map(sorted) : value && typeof value === 'object'
+  ? Object.fromEntries(Object.keys(value).sort().map(key => [key, sorted(value[key])])) : value;
+const digest = value => sha(JSON.stringify(sorted(value)));
+class Unavailable extends Error {}
+function need(ok, reason) { if (!ok) throw new Unavailable(reason); }
+function safeError(e) { return e instanceof Unavailable ? e.message : 'observation-unavailable'; }
+
+function queryRule(raw) {
+  const prefix = ORIGIN + ASSET;
+  if (raw === prefix) return RULES[0];
+  need(typeof raw === 'string' && raw.startsWith(prefix) &&
+    /^\?v=[0-9]{1,64}$/.test(raw.slice(prefix.length)) &&
+    !/[\r\n]/.test(raw), 'target-spelling');
+  return RULES[1];
+}
+function describe(stat) {
+  return Object.fromEntries(['dev','ino','mode','uid','nlink','size','mtimeNs','ctimeNs'].map(k => [k, String(stat[k])]));
+}
+function ownedDir(dir, privateMode = false) {
+  const s = fs.lstatSync(dir);
+  need(path.isAbsolute(dir) && fs.realpathSync(dir) === dir && s.isDirectory() &&
+    s.uid === process.getuid() && (s.mode & (privateMode ? 0o077 : 0o022)) === 0, 'unsafe-directory');
+  return s;
+}
+function readAsset(file) {
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+  try {
+    const s = fs.fstatSync(fd, {bigint:true});
+    need(s.isFile() && s.uid === BigInt(process.getuid()) && s.nlink === 1n &&
+      (s.mode & 0o022n) === 0n && s.size > 0n && s.size <= BigInt(MAX), 'unsafe-compiled-file');
+    const bytes = Buffer.alloc(Number(s.size));
+    let offset = 0;
+    while (offset < bytes.length) {
+      const n = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+      need(n > 0, 'short-file');
+      offset += n;
+    }
+    const stat = describe(s);
+    need(digest(stat) === digest(describe(fs.fstatSync(fd, {bigint:true}))) &&
+      digest(stat) === digest(describe(fs.lstatSync(file, {bigint:true}))), 'file-changed');
+    return {bytes, stat, sha256:sha(bytes)};
+  } finally { fs.closeSync(fd); }
+}
+function verifySources(app) {
+  const bytes = fs.readFileSync(path.join(__dirname, 'source-pins.json'));
+  need(sha(bytes) === PIN_SHA, 'source-pin-list');
+  const pins = JSON.parse(bytes);
+  for (const [file, expected] of Object.entries(pins)) {
+    need(sha(fs.readFileSync(path.join(app, file))) === expected, 'source-drift');
+  }
+  return pins;
+}
+function tool(executable, args) {
+  return execFileSync(executable, args, {encoding:'utf8',timeout:3000,maxBuffer:65536,
+    env:{PATH:'/usr/bin:/bin:/usr/sbin',LC_ALL:'C'},stdio:['ignore','pipe','pipe']}).trim();
+}
+// Parent passes the pgid of its own freshly spawned, still-owned Next CLI leader.
+function service(app, group) {
+  need(process.platform === 'darwin' && Number.isSafeInteger(group) && group > 1, 'unsupported-owner');
+  const fields = tool('/usr/sbin/lsof',['-nP','-a','-iTCP:43156','-sTCP:LISTEN','-Fpn']).split('\n');
+  const ids = fields.filter(x => /^p[1-9][0-9]*$/.test(x));
+  const names = fields.filter(x => x[0] === 'n');
+  need(ids.length === 1 && names.length === 1 && names[0] === 'n127.0.0.1:43156', 'listener-owner');
+  const pid = Number(ids[0].slice(1));
+  const identify = id => {
+    const info = tool('/bin/ps',['-o','pgid=,lstart=','-p',String(id)]);
+    const match = /^(\d+)\s+(.+)$/.exec(info);
+    need(match && Number(match[1]) === group, 'owner-group');
+    const cwd = tool('/usr/sbin/lsof',['-a','-p',String(id),'-d','cwd','-Fn']).split('\n').filter(x=>x[0]==='n');
+    need(cwd.length === 1 && cwd[0] === 'n'+app, 'owner-cwd');
+    return {id, started:match[2]};
+  };
+  const node = '/opt/homebrew/opt/node@20/bin/node';
+  const cli = 'node_modules/next/dist/bin/next';
+  const cmd = tool('/bin/ps',['-ww','-o','command=','-p',String(group)]);
+  const exactCmd = [node,fs.realpathSync(node)].some(bin =>
+    [cli,path.join(app,cli)].some(entry => cmd === bin+' '+entry+' dev -p 43156 -H 127.0.0.1'));
+  need(pid !== group && exactCmd &&
+    tool('/bin/ps',['-o','ppid=','-p',String(pid)]) === String(group) &&
+    tool('/bin/ps',['-ww','-o','command=','-p',String(pid)]) === 'next-server (v15.5.28)', 'unexpected-launch');
+  return {leader:identify(group), listener:identify(pid)};
+}
+function responseShape(res, size) {
+  const h = res.headers;
+  need(res.statusCode === 200 && /^(application|text)\/(javascript|x-javascript)(?:\s*;|$)/i.test(h['content-type'] || '') &&
+    h['content-length'] === String(size) && !('location' in h) && !('set-cookie' in h) &&
+    !('content-range' in h) && !('transfer-encoding' in h) &&
+    (!('content-encoding' in h) || h['content-encoding'] === 'identity'), 'control-response');
+}
+// No URL, host, redirect, headers, transport or query can be injected by the caller.
+function readControl(kind, asset) {
+  need(RULES.includes(kind), 'control-kind');
+  return new Promise((resolve,reject) => {
+    const h = createHash('sha256');
+    let size = 0;
+    const req = http.get({hostname:'127.0.0.1',port:43156,family:4,agent:false,
+      path:ASSET + (kind === RULES[1] ? '?v=0' : ''),headers:{'Accept-Encoding':'identity'}}, res => {
+      try { responseShape(res,asset.bytes.length); } catch (e) { reject(e); res.destroy(); return; }
+      res.on('error', () => reject(new Unavailable('control-stream')));
+      res.on('aborted', () => reject(new Unavailable('control-aborted')));
+      res.on('data', buf => {
+        size += buf.length;
+        if (size > asset.bytes.length) { reject(new Unavailable('control-size')); res.destroy(); return; }
+        h.update(buf);
+      });
+      res.on('end', () => {
+        const bodySha256 = h.digest('hex');
+        if (!res.complete || size !== asset.bytes.length || bodySha256 !== asset.sha256) {
+          reject(new Unavailable('control-bytes')); return;
+        }
+        resolve({kind, status:200, bytes:size, bodySha256});
+      });
+    });
+    const timer = setTimeout(() => req.destroy(new Error('deadline')),5000);
+    req.on('error', () => reject(new Unavailable('control-transport')));
+    req.on('close', () => clearTimeout(timer));
+  });
+}
+function readLock(file, expected) {
+  const bytes = fs.readFileSync(file);
+  need(hex(expected) && sha(bytes) === expected, 'source-freeze');
+  const full = JSON.parse(bytes);
+  const p = full.webpackMapPlan;
+  need(p && p.version === 1 && p.origin === ORIGIN && p.pinsSha256 === PIN_SHA &&
+    p.decisionSha256 === DECISION && /^[a-f0-9]{40}$/.test(p.candidate) &&
+    typeof p.run === 'string' && /^[a-f0-9]{12}$/.test(p.run), 'source-plan');
+  need(typeof p.runDir === 'string' && path.basename(p.runDir) === 'run-'+p.run &&
+    p.appRoot === path.join(p.runDir,'application'), 'workspace-plan');
+  ownedDir(p.runDir,true); ownedDir(p.appRoot,true);
+  return p;
+}
+function save(dir,name,bytes) {
+  const fd = fs.openSync(path.join(dir,name),'wx',0o600);
+  try { fs.writeFileSync(fd,bytes); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  const d = fs.openSync(dir,'r');
+  try { fs.fsyncSync(d); } finally { fs.closeSync(d); }
+  need(sha(fs.readFileSync(path.join(dir,name))) === sha(bytes),'artifact-readback');
+  return sha(bytes);
+}
+function writeJson(dir,name,x) { return save(dir,name,Buffer.from(JSON.stringify(x,null,2)+'\n')); }
+
+async function openWebpackMap({sourceLockFile, sourceLockSha256, serverGroup, hmacKey}) {
+  let key;
+  let out, invalid, initial, originServer, stage = 'source-freeze';
+  const watches = [];
+  const mark = reason => { invalid ||= reason; };
+  const close = () => { if (key) key.fill(0); for (const w of watches.splice(0)) w.close(); };
+  const unavailable = e => {
+    close();
+    const failure = {status:'UNAVAILABLE',stage,reason:invalid || safeError(e)};
+    if (out) { try { writeJson(out,'unavailable.json',failure); } catch { failure.artifactUnavailable = true; } }
+    return failure;
+  };
+  try {
+    need(Buffer.isBuffer(hmacKey) && hmacKey.length === 32, 'missing-run-key');
+    key = Buffer.from(hmacKey);
+    const p = readLock(sourceLockFile,sourceLockSha256);
+    const dir = path.join(p.runDir,'webpack-map');
+    fs.mkdirSync(dir,{mode:0o700});
+    out = dir;
+    const app = p.appRoot;
+    const build = path.join(app,'.next');
+    const chunks = path.join(build,'static','chunks');
+    const file = path.join(chunks,'webpack.js');
+    const dirs = [app,build,path.dirname(chunks),chunks];
+    stage = 'source-and-generation';
+    const pinSet = verifySources(app);
+    originServer = service(app,serverGroup);
+    const identities = dirs.map(dir => {
+      ownedDir(dir);
+      const s = fs.lstatSync(dir,{bigint:true});
+      return [String(s.dev),String(s.ino),String(s.ctimeNs)];
+    });
+    // Watch each *parent* for replacement of the monitored child, plus the file itself.
+    // Other chunks may be emitted by Next. They do not select bytes for this literal path.
+    for (const [index,dir] of dirs.entries()) {
+      const child = path.basename(dirs[index+1] || file);
+      const w = fs.watch(dir, {persistent:false}, (_type,name) => {
+        if (!name || name === child) mark('asset-path-event');
+      });
+      w.on('error',() => mark('watch-error')); watches.push(w);
+    }
+    const rootWatch = fs.watch(p.runDir,{persistent:false},(_type,name)=>{
+      if (!name || name === 'application') mark('workspace-replaced');
+    });
+    rootWatch.on('error',() => mark('watch-error')); watches.push(rootWatch);
+    const w = fs.watch(file,{persistent:false},() => mark('asset-file-event'));
+    w.on('error',() => mark('watch-error')); watches.push(w);
+    initial = readAsset(file);
+    const generation = digest({run:p.run,sourceLockSha256,originServer,identities,stat:initial.stat,compiledSha256:initial.sha256});
+    function inspect(live) {
+      need(!invalid,invalid || 'invalidated');
+      need(readLock(sourceLockFile,sourceLockSha256).run === p.run,'source-freeze-changed');
+      verifySources(app);
+      dirs.forEach((dir,i)=>{
+        ownedDir(dir);
+        const s = fs.lstatSync(dir,{bigint:true});
+        need(String(s.dev) === identities[i][0] && String(s.ino) === identities[i][1] && String(s.ctimeNs) === identities[i][2],'directory-generation-changed');
+      });
+      const now = readAsset(file);
+      need(now.sha256 === initial.sha256 && digest(now.stat) === digest(initial.stat),'asset-generation-changed');
+      if (live) need(digest(service(app,serverGroup)) === digest(originServer),'server-generation-changed');
+    }
+    async function controls() {
+      inspect(true);
+      const result = [];
+      for (const kind of RULES) result.push(await readControl(kind,initial));
+      await new Promise(resolve => setImmediate(resolve));
+      inspect(true); return result;
+    }
+    stage = 'post-warm-controls';
+    const pre = await controls();
+    const rendererPins = {};
+    for (const name of ['app-render.js','get-asset-query-string.js','required-scripts.js']) {
+      rendererPins[name] = pinSet['node_modules/next/dist/server/app-render/'+name];
+    }
+    const proof = {kind:'next-15.5.28-dev-webpack-map-v1',generation,origin:ORIGIN,path:ASSET,
+      queryRules:[...RULES],compiledSha256:initial.sha256,bytes:initial.bytes.length,assetRealPath:file,
+      rendererPins,sourcePinListSha256:PIN_SHA,sourceLockSha256,run:p.run,candidate:p.candidate,
+      stat:initial.stat,originServer,directoryIdentity:identities,controls:pre};
+    const assetSnapshotSha256 = save(out,'compiled-webpack.bin',initial.bytes);
+    const serverMappingProofSha256 = writeJson(out,'mapping-proof.json',proof);
+    const map = {generation,origin:ORIGIN,path:ASSET,queryRules:[...RULES],compiledSha256:initial.sha256,
+      bytes:initial.bytes.length,immutableAcrossRenderVersions:true,serverMappingProofSha256};
+    const mapFileSha256 = writeJson(out,'asset-map.json',map);
+    const freeze = {kind:'post-warm-observation-freeze-v1',run:p.run,candidate:p.candidate,
+      sourceLockSha256,serverGeneration:generation,assetMapSha256:digest(map),mapFileSha256,
+      serverMappingProofSha256,assetSnapshotSha256};
+    const observationFreezeSha256 = writeJson(out,'observation-freeze.json',freeze);
+    const artifacts = {'compiled-webpack.bin':assetSnapshotSha256,'mapping-proof.json':serverMappingProofSha256,
+      'asset-map.json':mapFileSha256,'observation-freeze.json':observationFreezeSha256};
+    function readback() {
+      for (const [name,hash] of Object.entries(artifacts)) {
+        const f = path.join(out,name), s = fs.lstatSync(f);
+        need(s.isFile() && s.nlink === 1 && s.uid === process.getuid() && (s.mode & 0o077) === 0 &&
+          sha(fs.readFileSync(f)) === hash,'artifact-drift');
+      }
+    }
+    const begun = new Map(), ended = new Set(), tokens = new Set();
+    let phase = 'measuring';
+    const handle = {
+      status:'PROVISIONAL',map:Object.freeze({...map,queryRules:Object.freeze([...RULES])}),
+      freeze:Object.freeze(freeze),mappingProofFile:path.join(out,'mapping-proof.json'),assetFile:file,
+      observationFreezeSha256,
+      beginRender({context,document}) {
+        try {
+          need(phase === 'measuring' && typeof context === 'string' && /^ctx[1-6]$/.test(context) &&
+            [context+'-login',context+'-landing'].includes(document) &&
+            !begun.has(document),'render-begin-order');
+          inspect(true);
+          const witness = {kind:'before-render',run:p.run,context,document,observationFreezeSha256,
+            generation,compiledSha256:initial.sha256,stat:initial.stat};
+          const name = document+'-before.json';
+          const beforeProofSha256 = writeJson(out,name,witness);
+          artifacts[name] = beforeProofSha256;
+          begun.set(document,beforeProofSha256);
+          return {context,document,generation,beforeProofSha256};
+        } catch(e) { mark(safeError(e)); throw new Unavailable(invalid); }
+      },
+      endRender({context,document,frame,loader,rawUrl,fullUrlToken,declarationSha256}) {
+        try {
+          need(phase === 'measuring' && typeof context === 'string' && /^ctx[1-6]$/.test(context) &&
+            [context+'-login',context+'-landing'].includes(document) && begun.has(document) &&
+            !ended.has(document) && typeof frame === 'string' && typeof loader === 'string' && /^f[1-9][0-9]{0,5}$/.test(frame) && /^l[1-9][0-9]{0,5}$/.test(loader) &&
+            hex(declarationSha256) && hex(fullUrlToken),'render-end-order');
+          const queryKind = queryRule(rawUrl);
+          const token = createHmac('sha256',key).update([p.run,context,document,frame,loader,rawUrl].join('\0')).digest('hex');
+          need(token === fullUrlToken && !tokens.has(token),'render-token');
+          inspect(true);
+          const binding = {generation,mapSha256:freeze.assetMapSha256,compiledSha256:initial.sha256,queryKind,
+            context,document,frame,loader,fullUrlToken,declarationSha256,beforeProofSha256:begun.get(document)};
+          const name = document+'-after.json';
+          const afterProofSha256 = writeJson(out,name,{kind:'after-render',run:p.run,observationFreezeSha256,stat:initial.stat,...binding});
+          artifacts[name] = afterProofSha256;
+          ended.add(document); tokens.add(token);
+          return {...binding,afterProofSha256};
+        } catch(e) { mark(safeError(e)); throw new Unavailable(invalid); }
+      },
+      async sealWhileServerOwned() {
+        try {
+          need(phase === 'measuring','invalid-seal-order'); phase = 'sealing'; stage = 'post-measurement-controls';
+          need(begun.size === 12 && ended.size === 12,'render-inventory-incomplete');
+          const post = await controls(); readback();
+          const r = {status:'LIVE_CONTROLS_VERIFIED',observationFreezeSha256,generation,controls:post,renderWitnessSha256:digest(artifacts)};
+          artifacts['live-seal.json'] = writeJson(out,'live-seal.json',r);
+          phase = 'sealed'; return r;
+        } catch(e) { phase = 'failed'; return unavailable(e); }
+      },
+      verifyDiskAfterParentDrain() {
+        try {
+          need(phase === 'sealed','missing-live-seal'); phase = 'closed'; stage = 'post-drain-disk';
+          inspect(false); readback();
+          const r = {status:'DISK_READBACK_VERIFIED',run:p.run,sourceLockSha256,observationFreezeSha256,
+            generation,mapSha256:freeze.assetMapSha256,liveSealSha256:artifacts['live-seal.json']};
+          writeJson(out,'disk-readback.json',r); close(); return r;
+        } catch(e) { phase='failed'; return unavailable(e); }
+      },
+      quarantine() { phase='failed'; mark('parent-quarantine'); return unavailable(new Unavailable(invalid)); }
+    };
+    handles.add(handle); return Object.freeze(handle);
+  } catch(e) { return unavailable(e); }
+}
+module.exports = {openWebpackMap,queryRule,isWebpackMapHandle:value => handles.has(value)};

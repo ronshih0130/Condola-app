@@ -1,0 +1,40 @@
+{
+  "scope": "source-only one-path parent producer, mocked tests only",
+  "decisionSha256": "9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec",
+  "sourceFileCount": 27,
+  "files": [
+    {
+      "name": "map.cjs",
+      "bytes": 17476,
+      "sha256": "6bfe02e8b973f9a65b68ed706d39c6f130e6bf8a42062225647a854fff41b876"
+    },
+    {
+      "name": "source-pins.json",
+      "bytes": 3377,
+      "sha256": "4a530511972574022f2916b2c895fae3bb4249ea26bce1679358c98365b34a90"
+    },
+    {
+      "name": "map.test.cjs",
+      "bytes": 9607,
+      "sha256": "2f04590a8f638c5942a67ffcbe3d5881e1a1ec4db5900ef7a6f9fd40b89875bc"
+    },
+    {
+      "name": "pure-tests.tap",
+      "bytes": 3054,
+      "sha256": "f966e523ae285780117493c172cfb12bde15479192c31ee379e1447b28d0f80b"
+    },
+    {
+      "name": "README.md",
+      "bytes": 10300,
+      "sha256": "b307cd78f1d29f0832182b159e8b903a3d5803b734f1516e582415eefa5848e3"
+    }
+  ],
+  "pureTests": {
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0,
+    "liveInterfaces": "all mocked"
+  },
+  "runtimeAuthorized": false,
+  "independentQA": "pending"
+}

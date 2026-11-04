@@ -1,0 +1,265 @@
+{
+  "scope": "INACTIVE PROVENANCE SNAPSHOTS; not application integration or runtime authorization",
+  "files": [
+    {
+      "source": "work/b018-native-bootstrap-v3/classifier.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-v3/classifier.cjs.source.txt",
+      "sha256": "3b47340b7c99d50d918ba37fafca850b69817b8a73133f82c7885fc236722be9"
+    },
+    {
+      "source": "work/b018-native-bootstrap-v3/classifier.test.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-v3/classifier.test.cjs.source.txt",
+      "sha256": "1d16ffbcb80bcb8b790e40ebd449b593a4537f6ae67c672f6e28a15accfe131f"
+    },
+    {
+      "source": "work/b018-native-bootstrap-v3/evidence-interface.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-v3/evidence-interface.json",
+      "sha256": "02c54f8bbcb95449277e25a14463506d3c3fd74efe025961ef04348ac5e52ae0"
+    },
+    {
+      "source": "work/b018-native-bootstrap-v3/README.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-v3/README.md",
+      "sha256": "bb04862482547cfacaef31f062ef3530f6afe20d3eab9b891d0e79088848c513"
+    },
+    {
+      "source": "work/b018-native-bootstrap-v3/pure-tests.tap",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-v3/pure-tests.tap",
+      "sha256": "c0a6523300d6f669007ad5f9c3d2a2d92db171892bf0ea75ff19e9c2f388a21f"
+    },
+    {
+      "source": "work/b018-native-bootstrap-v3/manifest.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-v3/manifest.json",
+      "sha256": "e8a38c434928711ca4ae79eaf65a11d7c5ddbfc1bbd348e228f541b8a0dd8865"
+    },
+    {
+      "source": "work/b018-webpack-server-map-v1/map.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-webpack-server-map-v1/map.cjs.source.txt",
+      "sha256": "6bfe02e8b973f9a65b68ed706d39c6f130e6bf8a42062225647a854fff41b876"
+    },
+    {
+      "source": "work/b018-webpack-server-map-v1/source-pins.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-webpack-server-map-v1/source-pins.json",
+      "sha256": "4a530511972574022f2916b2c895fae3bb4249ea26bce1679358c98365b34a90"
+    },
+    {
+      "source": "work/b018-webpack-server-map-v1/map.test.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-webpack-server-map-v1/map.test.cjs.source.txt",
+      "sha256": "2f04590a8f638c5942a67ffcbe3d5881e1a1ec4db5900ef7a6f9fd40b89875bc"
+    },
+    {
+      "source": "work/b018-webpack-server-map-v1/pure-tests.tap",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-webpack-server-map-v1/pure-tests.tap",
+      "sha256": "f966e523ae285780117493c172cfb12bde15479192c31ee379e1447b28d0f80b"
+    },
+    {
+      "source": "work/b018-webpack-server-map-v1/README.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-webpack-server-map-v1/README.md",
+      "sha256": "b307cd78f1d29f0832182b159e8b903a3d5803b734f1516e582415eefa5848e3"
+    },
+    {
+      "source": "work/b018-webpack-server-map-v1/manifest.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-webpack-server-map-v1/manifest.json",
+      "sha256": "48e06745725f62d71be5ca909bccf57c598bd634191556ae2d94fed2ccad6413"
+    },
+    {
+      "source": "work/b018-native-session-verifier-v3/reservation.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-session-verifier-v3/reservation.json",
+      "sha256": "b91d6c9971e48a2c6c21db7cc1db8d485a32f63231af724283defbeb9f444077"
+    },
+    {
+      "source": "work/b018-native-session-verifier-v3/verifier.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-session-verifier-v3/verifier.cjs.source.txt",
+      "sha256": "931daca260abf4f7c54fe4099cbc2cb9aeeaca5ee06feb27d2740a5a282693c1"
+    },
+    {
+      "source": "work/b018-native-session-verifier-v3/verifier.d.ts",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-session-verifier-v3/verifier.d.ts.source.txt",
+      "sha256": "3ddfaf820ab79aaed267b335d28c04ed95dd89a30deb8d70ff36811a4d94b318"
+    },
+    {
+      "source": "work/b018-native-session-verifier-v3/README.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-session-verifier-v3/README.md",
+      "sha256": "0eab1a3c43738f4f80a6236b48832a46932e853891c2beb6ca6f6a92dc0367fc"
+    },
+    {
+      "source": "work/b018-native-session-verifier-v3/manifest.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-session-verifier-v3/manifest.json",
+      "sha256": "d59ece040786ed2a841094237f7d83d74dad758a311163507d30f2022d1eeb98"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v1/reservation.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v1/reservation.json",
+      "sha256": "6721029b2fbd0d1508e642fd51069f9576c2bbf85218bf49a0d080b13a0db81f"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v1/collector.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v1/collector.cjs.source.txt",
+      "sha256": "f9380d9e72243e910e79e3cc6bc465b57f81cda9b5b0dc00bfd9323be835e8e3"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v1/collector.d.ts",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v1/collector.d.ts.source.txt",
+      "sha256": "d13712d1d8b76c3a4cf15d93e3e76049dbf8f75b58606edf29b6c44506bdb054"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v1/README.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v1/README.md",
+      "sha256": "a9d01488fcc3ebc06785679180f5cbc5fe3db33f795bb6b9595c30dba2c61a2f"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v1/manifest.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v1/manifest.json",
+      "sha256": "83fadbaa4f6258f6210ddb2aeb34659b7af042bc9ab54567ba71a05a0ae6e277"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v2/reservation.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v2/reservation.json",
+      "sha256": "51659c93cdf8af413cd367ede406db2001af8e038a975c290fb452e6c1747114"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v2/collector.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v2/collector.cjs.source.txt",
+      "sha256": "25ad88d87de323b4f8525a4bbf69c229d487381a0350dddd26059cb58aac94f3"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v2/collector.d.ts",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v2/collector.d.ts.source.txt",
+      "sha256": "d9d4daf21b0c93ac24043d1cd90164692024c417525244f82c6b626fb7c4d699"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v2/README.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v2/README.md",
+      "sha256": "0aab64e74d0a4717494fd8a8431bdfda650c5d0689655c63db8f97e477292f70"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v2/manifest.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-v2/manifest.json",
+      "sha256": "7f33a9c87acd6fd1911214061cfee27c733da4c7b65b6200baa86a665e95fd01"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v1/target.test.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v1/target.test.cjs.source.txt",
+      "sha256": "77aafeacd1fa82b81fe984aec596075609641d89e61299bbb652737006a2f53d"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v1/README.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v1/README.md",
+      "sha256": "d5d56a43421db6c589a1e8293f6e57a00f2fbdebe46b4e7cf227f8166e0a3840"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v1/guard.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v1/guard.cjs.source.txt",
+      "sha256": "e26dc5fdad52fc2eb59cc6bde7a44f6e140e80c454d3f48c4c9fcadf32206349"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v1/manifest.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v1/manifest.json",
+      "sha256": "0e442659e543ae242487c3d6b9382e921abd830629c2f479aeeac0c4986fef8b"
+    },
+    {
+      "source": "work/b018-bootstrap-independent-astra-v3.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-bootstrap-independent-astra-v3.md",
+      "sha256": "3f6f17328b8c32c10fbebdeac4515b5f1c14a022ee154cd377f4fb9084f40d90"
+    },
+    {
+      "source": "work/b018-bootstrap-independent-astra-v3.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-bootstrap-independent-astra-v3.json",
+      "sha256": "59f013ba3f0931ff2399cf6f1464e223593aa059246c25c753e14433fe965c1c"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-independent-astra-v1.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-independent-astra-v1.md",
+      "sha256": "e8f07e93412ef634304e045cbcac12f033be994bb3d5610d84a16b9ad0ece781"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-independent-astra-v1.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-independent-astra-v1.json",
+      "sha256": "425dd4b36b0a42ee6a3ab52fcdecaff85a86e63475b669dacc2d46b093334bf1"
+    },
+    {
+      "source": "work/b018-native-session-verifier-independent-astra-v2.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-session-verifier-independent-astra-v2.md",
+      "sha256": "ba91fd2fa8041b6576b03e3e74cb819b24f33118c366b20f40da1c3d6322ced3"
+    },
+    {
+      "source": "work/b018-native-session-verifier-independent-astra-v2.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-session-verifier-independent-astra-v2.json",
+      "sha256": "916d575e2f9ccb61227f5002cdcd03cd10bd3cb5a2234085467ce37d090dec6c"
+    },
+    {
+      "source": "work/b018-native-session-verifier-independent-astra-v3.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-session-verifier-independent-astra-v3.md",
+      "sha256": "ece126bc5d9112adbb86b40a9afb39b311c0b520a05fbff0bdb62da7c8b4efb2"
+    },
+    {
+      "source": "work/b018-native-session-verifier-independent-astra-v3.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-session-verifier-independent-astra-v3.json",
+      "sha256": "893db254d4b370d4c4133319ad8becec27981dff12a8292cd08c3d7f94f5cb07"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-independent-astra-v2.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-independent-astra-v2.md",
+      "sha256": "56f6bff5534beb425ef7c2163e900b451d501eefe5aa07fc156a5d33b6320a85"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-independent-astra-v2.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-collector-independent-astra-v2.json",
+      "sha256": "c4067b489e8d01f610c069ea3dce6afc99f72ecd07a527586620cfecac1b7074"
+    },
+    {
+      "source": "work/b018-native-bootstrap-parent-design-independent-astra-v1.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-parent-design-independent-astra-v1.md",
+      "sha256": "04eeb937254ccd6901a3128d030868b12766504e56500b2f2f6001df8e5e8f41"
+    },
+    {
+      "source": "work/b018-native-bootstrap-parent-design-independent-astra-v1.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-native-bootstrap-parent-design-independent-astra-v1.json",
+      "sha256": "2485c4571627d567ba6fd6d81bb07dd00b80d78704f9d141613421847c96645a"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v2/reservation.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v2/reservation.json",
+      "sha256": "d279026cb189140985740b4d1e384135c5b32e6258545594c45f9beee60c06c4"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v2/guard.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v2/guard.cjs.source.txt",
+      "sha256": "e3df429da664065e59a7ba5860165abdaa4790d5b89d2c470f799f03679cde72"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v2/guard.d.ts",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v2/guard.d.ts.source.txt",
+      "sha256": "5d4ebeb5553097770db73689e1b1ce3ea2872b87d823e635c14c22735c7e2b50"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v2/target.test.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v2/target.test.cjs.source.txt",
+      "sha256": "77aafeacd1fa82b81fe984aec596075609641d89e61299bbb652737006a2f53d"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v2/lifecycle.test.cjs",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v2/lifecycle.test.cjs.source.txt",
+      "sha256": "aab697b2866b7f76ce5d10160f1520eb249c01a303f0ea2f62162214b6953f6b"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v2/README.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v2/README.md",
+      "sha256": "a161dc72501027b9bd6213d291124afa047aa1d5ee81b462740dd050f534c1c3"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v2/manifest.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-v2/manifest.json",
+      "sha256": "494eb9401ed7582b9aa8228b6cba3a9133840d69ca2297feabdefebebf3da745"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-independent-astra-v2.md",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-independent-astra-v2.md",
+      "sha256": "6b05528d27d8746817056b42738b8a432ff9013174a08aafe9aa9778c7d110c1"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-independent-astra-v2.json",
+      "saved": "e2e-evidence/B-018/bootstrap-source-20261103/b018-browser-egress-guard-independent-astra-v2.json",
+      "sha256": "95b3a6aa7e5566ce687236ae40ba4bd54f657ecc1814692d6340cecd23d9e659"
+    }
+  ]
+}

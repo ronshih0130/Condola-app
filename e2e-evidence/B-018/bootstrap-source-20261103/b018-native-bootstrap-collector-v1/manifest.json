@@ -1,0 +1,28 @@
+{
+  "state": "SOURCE_DRAFT_NOT_REVIEWED_NOT_RUN",
+  "files": {
+    "reservation.json": {
+      "sha256": "6721029b2fbd0d1508e642fd51069f9576c2bbf85218bf49a0d080b13a0db81f",
+      "bytes": 171
+    },
+    "collector.cjs": {
+      "sha256": "f9380d9e72243e910e79e3cc6bc465b57f81cda9b5b0dc00bfd9323be835e8e3",
+      "bytes": 38348
+    },
+    "collector.d.ts": {
+      "sha256": "d13712d1d8b76c3a4cf15d93e3e76049dbf8f75b58606edf29b6c44506bdb054",
+      "bytes": 6189
+    },
+    "README.md": {
+      "sha256": "a9d01488fcc3ebc06785679180f5cbc5fe3db33f795bb6b9595c30dba2c61a2f",
+      "bytes": 8763
+    }
+  },
+  "dependencies": {
+    "kernelClassifierSha256": "3b47340b7c99d50d918ba37fafca850b69817b8a73133f82c7885fc236722be9",
+    "kernelSchemaSha256": "02c54f8bbcb95449277e25a14463506d3c3fd74efe025961ef04348ac5e52ae0",
+    "mapAdapterSha256": "6bfe02e8b973f9a65b68ed706d39c6f130e6bf8a42062225647a854fff41b876",
+    "mapSourcePinsSha256": "4a530511972574022f2916b2c895fae3bb4249ea26bce1679358c98365b34a90",
+    "sessionVerifierV2ManifestSha256": "8795a6008560ff3978ba794ce1b3d33de09fdf6c838327bc21b6af74e546ab42"
+  }
+}

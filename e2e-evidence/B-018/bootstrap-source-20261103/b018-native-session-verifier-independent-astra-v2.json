@@ -1,0 +1,30 @@
+{
+  "verdict": "NO_GO_V2_INTEGRATION",
+  "reportSha256": "ba91fd2fa8041b6576b03e3e74cb819b24f33118c366b20f40da1c3d6322ced3",
+  "reviewed": {
+    "work/b018-native-session-verifier-v2/manifest.json": "8795a6008560ff3978ba794ce1b3d33de09fdf6c838327bc21b6af74e546ab42",
+    "work/b018-native-session-verifier-v2/verifier.cjs": "6b5980355d4048bedd3731e92ddb9e51218198e69f30d72bbbcc885a504e636a",
+    "work/b018-native-session-verifier-v2/README.md": "a6fd349aeed4db85420d884b3aa086b18bf70718f30a26a238c7937bb95b1032",
+    "work/b018-native-bootstrap-collector-v1/collector.cjs": "61aaaf2d58bb6114828c60ea9055cd87a15a81c602c1d7d031b7e48921e5aaa7",
+    "work/b018-login-diagnostic-v3/run-0cf54159036d/flags-off.json": "8d610aea3fbbe594e474dbb59d5a5a18d29a15f268bf60c594cc34a3e9a96465",
+    "work/mode-b-repair-override-prep/node_modules/playwright-core/lib/coreBundle.js": "829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d",
+    "work/mode-b-repair-override-prep/src/server/session.ts": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+    "work/mode-b-repair-override-prep/src/server/org-scope.ts": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427",
+    "work/mode-b-repair-override-prep/src/server/portal-role.ts": "9e6970f2ff20d95545d11924c46fd9c2c61464bba1b44821d648b1bcc362a32e",
+    "work/mode-b-repair-override-prep/src/server/consent.ts": "8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6",
+    "work/mode-b-repair-override-prep/src/server/partner-consent.ts": "f37b3eac0212c684dbe53b272bd3c791b16fcf058d2b9026d5e51923777b411f",
+    "work/mode-b-repair-override-prep/src/server/partner-consent-rules.ts": "6f211e7661ee91b80ead941083c682850a67e43b9099f47871a94afbcc3c0cd1",
+    "work/mode-b-repair-override-prep/src/server/tenant-lease-history.ts": "792e724bf14c7d56619c984b8a95332965add68418348ecf25507f02bcd1f7b7",
+    "work/mode-b-repair-override-prep/src/server/seed.ts": "276f3aa9b672f773d98b8a748e9ddd12577b5873f1628a60ec47a8536c3a6591",
+    "work/mode-b-repair-override-prep/supabase/migrations/20261018120000_schema.sql": "f5c78c6d77539f09e05625dc945b7989fe3257f5b1ad09626d9ad5d675ee7615"
+  },
+  "blockers": [
+    "Run namespace and canonical import provenance must match measured copy and pre-run lock.",
+    "Real landing cookie inventory must reject route-specific shadow SID or lease.",
+    "Positive absence/boolean-false only partner proof must distinguish JSON null and malformed container.",
+    "One attempt per actor/arm/context and source-bound HMAC, concurrent SID uniqueness, immutable failure reservation."
+  ],
+  "scope": "Verifier/collector boundary only. Repeatable-read attests a sampled transaction. Post-drain authentication/financial reconciliation remains separate.",
+  "mockOrRuntimeTestRun": false,
+  "runtimeAuthorized": false
+}

@@ -1,0 +1,138 @@
+'use strict';
+// Unreviewed source-only component. Nothing listens or launches on import.
+const http=require('node:http'),fs=require('node:fs'),crypto=require('node:crypto');
+const ORIGIN='http://127.0.0.1:43156', HOST='127.0.0.1:43156';
+const handles=new WeakSet();
+const REQUIRED_ARGS=Object.freeze(['--disable-quic','--dns-prefetch-disable',
+ '--force-webrtc-ip-handling-policy=disable_non_proxied_udp']);
+const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+function target(raw,upgrade=false){
+ if(typeof raw!=='string'||raw.length>16384||raw.includes('#')||/[\x00-\x20\x7f\\]/.test(raw))return null;
+ let u;try{u=new URL(raw);}catch{return null;}
+ if(u.username||u.password||u.hash||u.host!==HOST||
+  !(u.protocol==='http:'||upgrade&&u.protocol==='ws:'))return null;
+ const prefix=(u.protocol==='ws:'?'ws://':'http://')+HOST;
+ // Do not admit normalized host/port/authority variants.
+ if(!raw.startsWith(prefix+'/')||raw!==u.href)return null;
+ if(upgrade&&u.pathname!=='/_next/webpack-hmr')return null;
+ return u.pathname+u.search;
+}
+function statKey(file){const s=fs.lstatSync(file);if(!s.isFile()||s.isSymbolicLink())throw Error('egress-binary-unavailable');
+ return JSON.stringify([s.dev,s.ino,s.size,s.mtimeMs,s.ctimeMs]);}
+function cleanHeaders(headers,websocket=false){
+ const banned=new Set(['proxy-authorization','proxy-connection','connection','keep-alive','upgrade',
+  'forwarded','x-forwarded-host','x-forwarded-proto','x-forwarded-for']);
+ for(const x of String(headers.connection||'').split(','))banned.add(x.trim().toLowerCase());
+ const result={};for(const [k,v] of Object.entries(headers))if(!banned.has(k.toLowerCase()))result[k]=v;
+ result.host=HOST;
+ if(websocket){result.connection='Upgrade';result.upgrade='websocket';}
+ return result;
+}
+async function openBrowserEgressGuard({browserExecutablePath,browserExecutableSha256,onEvent}) {
+ if(typeof onEvent!=='function'||!/^[a-f0-9]{64}$/.test(browserExecutableSha256||''))throw Error('egress-options-unavailable');
+ const exe=fs.realpathSync(browserExecutablePath),binaryStat=statKey(exe);
+ if(sha(fs.readFileSync(exe))!==browserExecutableSha256)throw Error('egress-binary-mismatch');
+ const sockets=new Set(),upstream=new Set(),contexts=new Set();
+ let browser=null,attached=false,closing=false,closed=false,failed=false,sequence=0,denied=0,forwarded=0;
+ function emit(event,reason){const row={sequence:++sequence,event,reason};
+  try{onEvent(row);}catch{failed=true;for(const s of [...sockets,...upstream])s.destroy();throw Error('egress-journal-unavailable');}}
+ function deny(socket,response,reason){failed=true;denied++;emit('denied',reason);
+  if(response){response.writeHead(502,{'content-type':'text/plain','cache-control':'no-store'});response.end('Blocked by local test guard');}
+  else socket.destroy();}
+ function upstreamHeaders(res){
+  const h=cleanHeaders(res.headers);delete h.host;
+  if(res.headers.location){let u;try{u=new URL(res.headers.location,ORIGIN);}catch{return null;}
+   if(u.origin!==ORIGIN||u.username||u.password)return null;}
+  return h;
+ }
+ const server=http.createServer((req,res)=>{
+  const endpoint=target(req.url);
+  if(closing||!endpoint||!['GET','POST','HEAD'].includes(req.method))return deny(req.socket,res,'http-target-or-method');
+  forwarded++;emit('forwarded','fixed-local-http');
+  const q=http.request({hostname:'127.0.0.1',port:43156,path:endpoint,method:req.method,
+   headers:cleanHeaders(req.headers),agent:false,timeout:30000},r=>{
+   const headers=upstreamHeaders(r);
+   if(!headers){r.destroy();return deny(req.socket,res,'external-or-invalid-redirect');}
+   res.writeHead(r.statusCode,headers);r.pipe(res);
+   r.on('error',()=>{failed=true;emit('failure','response-stream');res.destroy();});
+  });
+  q.on('socket',s=>{upstream.add(s);s.on('close',()=>upstream.delete(s));});
+  q.on('timeout',()=>{failed=true;emit('failure','upstream-timeout');q.destroy();});
+  q.on('error',()=>{failed=true;emit('failure','upstream-http');res.destroy();});
+  req.on('aborted',()=>{failed=true;emit('failure','client-abort');q.destroy();});
+  req.pipe(q);
+ });
+ server.on('connect',(req,s)=>deny(s,null,'connect-denied'));
+ server.on('upgrade',(req,s,head)=>{
+  const endpoint=target(req.url,true);
+  if(closing||req.method!=='GET'||!endpoint||String(req.headers.upgrade).toLowerCase()!=='websocket')return deny(s,null,'upgrade-target');
+  forwarded++;emit('forwarded','fixed-local-hmr');
+  const q=http.request({hostname:'127.0.0.1',port:43156,path:endpoint,method:'GET',
+   headers:cleanHeaders(req.headers,true),agent:false,timeout:30000});
+  q.on('socket',u=>{upstream.add(u);u.on('close',()=>upstream.delete(u));});
+  q.on('upgrade',(r,u,h)=>{
+   if(r.statusCode!==101){u.destroy();return deny(s,null,'invalid-upgrade-response');}
+   // The bounded handshake is complete; the owned HMR socket lives until explicit
+   // parent teardown, while the overall diagnostic remains externally bounded.
+   q.setTimeout(0);u.setTimeout(0);
+   const allowed=new Set(['upgrade','connection','sec-websocket-accept','sec-websocket-protocol','sec-websocket-extensions']);
+   let response='HTTP/1.1 101 Switching Protocols\r\n';
+   for(let i=0;i<r.rawHeaders.length;i+=2)if(allowed.has(r.rawHeaders[i].toLowerCase()))response+=r.rawHeaders[i]+': '+r.rawHeaders[i+1]+'\r\n';
+   s.write(response+'\r\n');if(h.length)s.write(h);if(head.length)u.write(head);
+   s.pipe(u);u.pipe(s);s.on('close',()=>u.destroy());u.on('close',()=>s.destroy());
+   u.on('error',()=>{failed=true;emit('failure','hmr-upstream');s.destroy();});
+  });
+  q.on('response',r=>{r.destroy();deny(s,null,'upgrade-refused');});
+  q.on('timeout',()=>{failed=true;emit('failure','hmr-timeout');q.destroy();s.destroy();});
+  q.on('error',()=>{failed=true;emit('failure','hmr-request');s.destroy();});
+  q.end();
+ });
+ server.on('connection',s=>{sockets.add(s);s.on('close',()=>sockets.delete(s));s.on('error',()=>{failed=true;emit('failure','proxy-client-socket');});});
+ server.on('clientError',(_e,s)=>deny(s,null,'proxy-client-protocol'));
+ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+ server.on('error',()=>{failed=true;emit('failure','proxy-server');});
+ const address=server.address(),proxy='http://127.0.0.1:'+address.port;
+ function assertBound(expected){
+  if(!attached||browser!==expected||!browser.isConnected()||closing||closed||failed||
+   !server.listening||statKey(exe)!==binaryStat)throw Error('egress-binding-unavailable');
+  return true;
+ }
+ const api={
+  proxyLaunchOptions:Object.freeze({proxy:Object.freeze({server:proxy}),args:REQUIRED_ARGS}),
+  async attach(b){
+   if(attached||closing||closed||failed||!b?.isConnected())throw Error('egress-attach-unavailable');
+   const session=await b.newBrowserCDPSession();let args;
+   try{args=(await session.send('Browser.getBrowserCommandLine')).arguments;}finally{await session.detach();}
+   const exactly=(prefix,value)=>args.filter(x=>x.startsWith(prefix)).length===1&&args.includes(value);
+   if(!Array.isArray(args)||fs.realpathSync(args[0])!==exe||statKey(exe)!==binaryStat||
+    !exactly('--proxy-server=',`--proxy-server=${proxy}`)||
+    !exactly('--proxy-bypass-list=','--proxy-bypass-list=<-loopback>')||
+    REQUIRED_ARGS.some(x=>args.filter(v=>v.split('=')[0]===x.split('=')[0]).length!==1||!args.includes(x))||
+    args.some(x=>/^--(?:no-proxy-server|proxy-auto-detect|proxy-pac-url|load-extension)(?:=|$)/.test(x)))
+    throw Error('egress-launch-proof-unavailable');
+   browser=b;attached=true;b.on('disconnected',()=>{if(!closing){failed=true;emit('failure','unexpected-browser-disconnect');}});
+   emit('attached','pinned-browser-and-proxy');return api.snapshot();
+  },
+  assertBound,
+  async createContext(options){
+   assertBound(browser);
+   if(!options||Object.keys(options).some(x=>!['javaScriptEnabled','viewport'].includes(x)))throw Error('egress-context-options');
+   const ctx=await browser.newContext({...options,serviceWorkers:'block'});contexts.add(ctx);
+   ctx.on('serviceworker',()=>{failed=true;emit('failure','unexpected-serviceworker');});
+   return ctx;
+  },
+  snapshot(){return {attached,failed,closed,denied,forwarded,sequence,browserExecutableSha256,
+   proxyBound:attached&&!failed&&!closed&&server.listening};},
+  // Parent declares shutdown only after normal browser close is about to begin. The
+  // collector still owns per-page/context planned-close and complete failure ledgers.
+  beginPlannedBrowserClose(){assertBound(browser);closing=true;emit('shutdown','planned-browser-close');},
+  async close(){
+   if(closed)return api.snapshot();if(browser?.isConnected()){failed=true;emit('failure','cleanup-before-browser-drained');}closing=true;
+   const finished=new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
+   for(const s of [...sockets,...upstream])s.destroy();await finished;
+   closed=true;emit('closed','proxy-sockets-drained');return api.snapshot();
+  },
+ };
+ handles.add(api);emit('opened','fixed-local-only-proxy');return Object.freeze(api);
+}
+module.exports={classifyProxyTarget:target,openBrowserEgressGuard,isBrowserEgressGuard:value=>handles.has(value)};

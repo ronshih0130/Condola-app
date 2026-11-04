@@ -1,0 +1,435 @@
+TAP version 13
+# Subtest: native admission requires no financial evidence or final receipt; raw events survive final PASS
+ok 1 - native admission requires no financial evidence or final receipt; raw events survive final PASS
+  ---
+  duration_ms: 12.891625
+  ...
+# Subtest: ordinary complete run needs no exceptional webpack request/map
+ok 2 - ordinary complete run needs no exceptional webpack request/map
+  ---
+  duration_ms: 5.628459
+  ...
+# Subtest: hash-sealed receipt is post-capture, never a browser argument or an edit of the original freeze
+ok 3 - hash-sealed receipt is post-capture, never a browser argument or an edit of the original freeze
+  ---
+  duration_ms: 2.293791
+  ...
+# Subtest: rejects missing actor
+ok 4 - rejects missing actor
+  ---
+  duration_ms: 2.575209
+  ...
+# Subtest: rejects reused native actor context
+ok 5 - rejects reused native actor context
+  ---
+  duration_ms: 2.832292
+  ...
+# Subtest: rejects staff replaced with tenant
+ok 6 - rejects staff replaced with tenant
+  ---
+  duration_ms: 3.575125
+  ...
+# Subtest: rejects wrong foreign tenant
+ok 7 - rejects wrong foreign tenant
+  ---
+  duration_ms: 3.735167
+  ...
+# Subtest: rejects foreign org
+ok 8 - rejects foreign org
+  ---
+  duration_ms: 3.019
+  ...
+# Subtest: rejects expired session
+ok 9 - rejects expired session
+  ---
+  duration_ms: 3.439542
+  ...
+# Subtest: rejects missing consent
+ok 10 - rejects missing consent
+  ---
+  duration_ms: 2.956042
+  ...
+# Subtest: rejects wrong landing route
+ok 11 - rejects wrong landing route
+  ---
+  duration_ms: 3.053125
+  ...
+# Subtest: rejects mixed actor login/landing
+ok 12 - rejects mixed actor login/landing
+  ---
+  duration_ms: 2.76025
+  ...
+# Subtest: rejects missing native redirect
+ok 13 - rejects missing native redirect
+  ---
+  duration_ms: 2.725542
+  ...
+# Subtest: rejects unverified enabled session
+ok 14 - rejects unverified enabled session
+  ---
+  duration_ms: 2.585417
+  ...
+# Subtest: rejects enabled fetch as landing document
+ok 15 - rejects enabled fetch as landing document
+  ---
+  duration_ms: 2.63475
+  ...
+# Subtest: rejects missing matched enabled document
+ok 16 - rejects missing matched enabled document
+  ---
+  duration_ms: 2.558084
+  ...
+# Subtest: rejects incomplete capture
+ok 17 - rejects incomplete capture
+  ---
+  duration_ms: 2.698
+  ...
+# Subtest: rejects unsettled observation
+ok 18 - rejects unsettled observation
+  ---
+  duration_ms: 2.811333
+  ...
+# Subtest: rejects absent failures array
+ok 19 - rejects absent failures array
+  ---
+  duration_ms: 2.732292
+  ...
+# Subtest: rejects missing raw PW
+ok 20 - rejects missing raw PW
+  ---
+  duration_ms: 3.173833
+  ...
+# Subtest: rejects missing raw CDP
+ok 21 - rejects missing raw CDP
+  ---
+  duration_ms: 2.703708
+  ...
+# Subtest: rejects raw ID relabel
+ok 22 - rejects raw ID relabel
+  ---
+  duration_ms: 3.262625
+  ...
+# Subtest: rejects same ID cross-observer
+ok 23 - rejects same ID cross-observer
+  ---
+  duration_ms: 2.72275
+  ...
+# Subtest: rejects wrong request id in raw record
+ok 24 - rejects wrong request id in raw record
+  ---
+  duration_ms: 2.765709
+  ...
+# Subtest: rejects wrong loader in raw record
+ok 25 - rejects wrong loader in raw record
+  ---
+  duration_ms: 2.635125
+  ...
+# Subtest: rejects different origin
+ok 26 - rejects different origin
+  ---
+  duration_ms: 2.713042
+  ...
+# Subtest: rejects arbitrary same-origin asset
+ok 27 - rejects arbitrary same-origin asset
+  ---
+  duration_ms: 2.637125
+  ...
+# Subtest: rejects CDP canceled
+ok 28 - rejects CDP canceled
+  ---
+  duration_ms: 2.670166
+  ...
+# Subtest: rejects PW error not csp
+ok 29 - rejects PW error not csp
+  ---
+  duration_ms: 2.572625
+  ...
+# Subtest: rejects prior HTTP response
+ok 30 - rejects prior HTTP response
+  ---
+  duration_ms: 2.393417
+  ...
+# Subtest: rejects missing terminal
+ok 31 - rejects missing terminal
+  ---
+  duration_ms: 2.651041
+  ...
+# Subtest: rejects ambiguous correlation
+ok 32 - rejects ambiguous correlation
+  ---
+  duration_ms: 2.63275
+  ...
+# Subtest: rejects extra query
+ok 33 - rejects extra query
+  ---
+  duration_ms: 2.551792
+  ...
+# Subtest: rejects unsupported query kind
+ok 34 - rejects unsupported query kind
+  ---
+  duration_ms: 2.405375
+  ...
+# Subtest: rejects present enforced CSP
+ok 35 - rejects present enforced CSP
+  ---
+  duration_ms: 2.801
+  ...
+# Subtest: rejects present report-only policy unsupported
+ok 36 - rejects present report-only policy unsupported
+  ---
+  duration_ms: 2.713709
+  ...
+# Subtest: rejects meta policy
+ok 37 - rejects meta policy
+  ---
+  duration_ms: 2.71625
+  ...
+# Subtest: rejects missing policy count
+ok 38 - rejects missing policy count
+  ---
+  duration_ms: 2.465958
+  ...
+# Subtest: rejects nonce unknown
+ok 39 - rejects nonce unknown
+  ---
+  duration_ms: 2.756458
+  ...
+# Subtest: rejects integrity present
+ok 40 - rejects integrity present
+  ---
+  duration_ms: 2.594917
+  ...
+# Subtest: rejects duplicate candidate enabled request
+ok 41 - rejects duplicate candidate enabled request
+  ---
+  duration_ms: 2.687
+  ...
+# Subtest: rejects good plus failed distinct counterpart
+ok 42 - rejects good plus failed distinct counterpart
+  ---
+  duration_ms: 2.625333
+  ...
+# Subtest: rejects missing declaration
+ok 43 - rejects missing declaration
+  ---
+  duration_ms: 2.421125
+  ...
+# Subtest: rejects different declaration kind
+ok 44 - rejects different declaration kind
+  ---
+  duration_ms: 2.761125
+  ...
+# Subtest: rejects swapped actor counterpart
+ok 45 - rejects swapped actor counterpart
+  ---
+  duration_ms: 2.694458
+  ...
+# Subtest: rejects unfrozen asset map
+ok 46 - rejects unfrozen asset map
+  ---
+  duration_ms: 2.720958
+  ...
+# Subtest: rejects different generation on native map
+ok 47 - rejects different generation on native map
+  ---
+  duration_ms: 2.556166
+  ...
+# Subtest: rejects both map digest fields relabeled
+ok 48 - rejects both map digest fields relabeled
+  ---
+  duration_ms: 2.7315
+  ...
+# Subtest: rejects map entry bound to other request
+ok 49 - rejects map entry bound to other request
+  ---
+  duration_ms: 2.674875
+  ...
+# Subtest: rejects missing native map
+ok 50 - rejects missing native map
+  ---
+  duration_ms: 2.591708
+  ...
+# Subtest: rejects enabled body digest different
+ok 51 - rejects enabled body digest different
+  ---
+  duration_ms: 3.194208
+  ...
+# Subtest: rejects fake native bytes
+ok 52 - rejects fake native bytes
+  ---
+  duration_ms: 2.564375
+  ...
+# Subtest: rejects unknown capture before native script
+ok 53 - rejects unknown capture before native script
+  ---
+  duration_ms: 2.924417
+  ...
+# Subtest: rejects enabled never executed
+ok 54 - rejects enabled never executed
+  ---
+  duration_ms: 3.192334
+  ...
+# Subtest: rejects native script did execute
+ok 55 - rejects native script did execute
+  ---
+  duration_ms: 2.627708
+  ...
+# Subtest: rejects token reused across contexts
+ok 56 - rejects token reused across contexts
+  ---
+  duration_ms: 2.862792
+  ...
+# Subtest: rejects unmatched ordinary enabled cancellation
+ok 57 - rejects unmatched ordinary enabled cancellation
+  ---
+  duration_ms: 5.697417
+  ...
+# Subtest: rejects console error
+ok 58 - rejects console error
+  ---
+  duration_ms: 2.827459
+  ...
+# Subtest: rejects wrong decision digest
+ok 59 - rejects wrong decision digest
+  ---
+  duration_ms: 2.081417
+  ...
+# Subtest: rejects mandatory finance case removed
+ok 60 - rejects mandatory finance case removed
+  ---
+  duration_ms: 2.377875
+  ...
+# Subtest: final rejects late cancellation after independent native admission
+ok 61 - final rejects late cancellation after independent native admission
+  ---
+  duration_ms: 2.928542
+  ...
+# Subtest: final rejects dropped raw event after independent native admission
+ok 62 - final rejects dropped raw event after independent native admission
+  ---
+  duration_ms: 2.891583
+  ...
+# Subtest: final rejects substituted bootstrap journal after independent native admission
+ok 63 - final rejects substituted bootstrap journal after independent native admission
+  ---
+  duration_ms: 2.512166
+  ...
+# Subtest: final rejects enabled fails after independent native admission
+ok 64 - final rejects enabled fails after independent native admission
+  ---
+  duration_ms: 2.661875
+  ...
+# Subtest: final rejects financial request fails after independent native admission
+ok 65 - final rejects financial request fails after independent native admission
+  ---
+  duration_ms: 2.860875
+  ...
+# Subtest: final rejects missing case after independent native admission
+ok 66 - final rejects missing case after independent native admission
+  ---
+  duration_ms: 2.578083
+  ...
+# Subtest: final rejects duplicate financial case after independent native admission
+ok 67 - final rejects duplicate financial case after independent native admission
+  ---
+  duration_ms: 2.957917
+  ...
+# Subtest: final rejects failed case after independent native admission
+ok 68 - final rejects failed case after independent native admission
+  ---
+  duration_ms: 2.561375
+  ...
+# Subtest: final rejects browser uncertain after independent native admission
+ok 69 - final rejects browser uncertain after independent native admission
+  ---
+  duration_ms: 2.556041
+  ...
+# Subtest: final rejects server still active after independent native admission
+ok 70 - final rejects server still active after independent native admission
+  ---
+  duration_ms: 2.78725
+  ...
+# Subtest: final rejects changed controls after independent native admission
+ok 71 - final rejects changed controls after independent native admission
+  ---
+  duration_ms: 2.588125
+  ...
+# Subtest: final rejects unverified finance after independent native admission
+ok 72 - final rejects unverified finance after independent native admission
+  ---
+  duration_ms: 2.832959
+  ...
+# Subtest: final rejects stale protected data after independent native admission
+ok 73 - final rejects stale protected data after independent native admission
+  ---
+  duration_ms: 2.564084
+  ...
+# Subtest: final rejects after-source drift after independent native admission
+ok 74 - final rejects after-source drift after independent native admission
+  ---
+  duration_ms: 2.568166
+  ...
+# Subtest: final rejects after-map drift after independent native admission
+ok 75 - final rejects after-map drift after independent native admission
+  ---
+  duration_ms: 2.88575
+  ...
+# Subtest: final rejects generation drift after independent native admission
+ok 76 - final rejects generation drift after independent native admission
+  ---
+  duration_ms: 2.599875
+  ...
+# Subtest: clean partial data is UNKNOWN, not raw PASS
+ok 77 - clean partial data is UNKNOWN, not raw PASS
+  ---
+  duration_ms: 3.191958
+  ...
+# Subtest: clean bootstrap cannot make a missing post-drain receipt pass
+ok 78 - clean bootstrap cannot make a missing post-drain receipt pass
+  ---
+  duration_ms: 2.382875
+  ...
+# Subtest: parent-tampered after receipts are detected
+ok 79 - parent-tampered after receipts are detected
+  ---
+  duration_ms: 1.829417
+  ...
+# Subtest: ordinary higher-severity enabled failure retains *all* original IDs and raw FAIL
+ok 80 - ordinary higher-severity enabled failure retains *all* original IDs and raw FAIL
+  ---
+  duration_ms: 2.773542
+  ...
+# Subtest: frozen actual enabled cancellations remain fatal against otherwise qualifying synthetic data
+ok 81 - frozen actual enabled cancellations remain fatal against otherwise qualifying synthetic data
+  ---
+  duration_ms: 4.533875
+  ...
+# Subtest: actual Control A confirms the shape but its non-product asset never qualifies
+ok 82 - actual Control A confirms the shape but its non-product asset never qualifies
+  ---
+  duration_ms: 2.717833
+  ...
+# Subtest: unknown frontend policy on original v4 failure stays unqualified
+ok 83 - unknown frontend policy on original v4 failure stays unqualified
+  ---
+  duration_ms: 4.563542
+  ...
+# Subtest: a new final failure after a clean bootstrap turns rawStrict into FAIL
+ok 84 - a new final failure after a clean bootstrap turns rawStrict into FAIL
+  ---
+  duration_ms: 3.1065
+  ...
+# Subtest: qualified native failures in two distinct actor scopes are not merged
+ok 85 - qualified native failures in two distinct actor scopes are not merged
+  ---
+  duration_ms: 2.92025
+  ...
+1..85
+# tests 85
+# suites 0
+# pass 85
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 329.538417

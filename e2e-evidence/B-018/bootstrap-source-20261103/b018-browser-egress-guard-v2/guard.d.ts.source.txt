@@ -1,0 +1,14 @@
+export type ProtectedHeaders = readonly (readonly [string,string])[];
+export type PrivateExchange = Readonly<({sequence:number;exchangeId:string}) & (
+ | {type:'http-request'|'hmr-request';requestMethod:string;rawUrl:string;incomingHeaders:ProtectedHeaders;forwardedHeaders:ProtectedHeaders}
+ | {type:'http-response'|'hmr-response';status:number;upstreamHeaders:ProtectedHeaders;downstreamHeaders:ProtectedHeaders}
+ | {type:'http-response-rejected'|'hmr-response-rejected';status:number;upstreamHeaders:ProtectedHeaders}
+ | {type:'transport-terminal';part:string;terminal:'end'|'finish'|'close'}
+ | {type:'http-terminal';terminal:'completed'|'failed';reason?:string}
+ | {type:'hmr-terminal';terminal:'both-peers-closed'|'failed';reason?:string})>;
+export type PublicEvent = Readonly<{sequence:number;event:string;reason:string}>;
+export type Snapshot = {attached:boolean;failed:boolean;closed:boolean;denied:number;forwarded:number;sequence:number;browserExecutableSha256:string;pendingHttp:number;pendingTunnels:number;clientSockets:number;upstreamSockets:number;proxyBound:boolean};
+export type Guard = {proxyLaunchOptions:unknown;observeExchanges(observer:(event:PrivateExchange)=>void):()=>void;attach(browser:unknown):Promise<Snapshot>;assertBound(browser:unknown):true;createContext(options:{javaScriptEnabled:boolean;viewport:{width:number;height:number}}):Promise<unknown>;snapshot():Snapshot;beginPlannedBrowserClose():void;close():Promise<Snapshot>};
+export function classifyProxyTarget(raw:string,upgrade?:boolean):string|null;
+export function isBrowserEgressGuard(value:unknown):value is Guard;
+export function openBrowserEgressGuard(options:{browserExecutablePath:string;browserExecutableSha256:string;onEvent:(event:PublicEvent)=>void}):Promise<Guard>;

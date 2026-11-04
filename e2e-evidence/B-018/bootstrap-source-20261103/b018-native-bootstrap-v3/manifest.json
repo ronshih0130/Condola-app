@@ -1,0 +1,41 @@
+{
+  "scope": "pure classifier and offline adversarial tests only; independent QA and producer integration pending",
+  "decisionSha256": "9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec",
+  "files": {
+    "classifier.cjs": {
+      "sha256": "3b47340b7c99d50d918ba37fafca850b69817b8a73133f82c7885fc236722be9",
+      "bytes": 14180
+    },
+    "classifier.test.cjs": {
+      "sha256": "1d16ffbcb80bcb8b790e40ebd449b593a4537f6ae67c672f6e28a15accfe131f",
+      "bytes": 18013
+    },
+    "evidence-interface.json": {
+      "sha256": "02c54f8bbcb95449277e25a14463506d3c3fd74efe025961ef04348ac5e52ae0",
+      "bytes": 27487
+    },
+    "README.md": {
+      "sha256": "bb04862482547cfacaef31f062ef3530f6afe20d3eab9b891d0e79088848c513",
+      "bytes": 7153
+    },
+    "pure-tests.tap": {
+      "sha256": "c0a6523300d6f669007ad5f9c3d2a2d92db171892bf0ea75ff19e9c2f388a21f",
+      "bytes": 12247
+    }
+  },
+  "tests": {
+    "pass": 85,
+    "fail": 0,
+    "skip": 0,
+    "cancelled": 0,
+    "todo": 0,
+    "command": "/opt/homebrew/opt/node@20/bin/node --test work/b018-native-bootstrap-v3/classifier.test.cjs"
+  },
+  "offlineInputSha256": {
+    "work/b018-login-diagnostic-v3/run-0cf54159036d/lifecycle.jsonl": "e73196bef1b313dffa126e83a615c7e3b420152b3e1c3691d44c770882ea3227",
+    "work/b018-runtime-v4/run-focus-2645b90f8b18/lifecycle.jsonl": "eeab601365fc933aa9cd70bf9feb2cfbf6be3449ce502f81bd3204c3f0ad52fa",
+    "work/b018-browser-calibration-a-v2/run-A-c884f0617da7/events.jsonl": "b51e9875cb8b7be543d8435a623a5370f5211d4600a100cbfa90cc1f70fb5be2"
+  },
+  "browserDbRuntime": "NOT_RUN",
+  "independentQA": "PENDING"
+}

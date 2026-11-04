@@ -1,0 +1,21 @@
+{
+  "state": "SOURCE_DRAFT_NOT_REVIEWED_NOT_RUN",
+  "files": {
+    "reservation.json": {
+      "sha256": "b91d6c9971e48a2c6c21db7cc1db8d485a32f63231af724283defbeb9f444077",
+      "bytes": 111
+    },
+    "verifier.cjs": {
+      "sha256": "931daca260abf4f7c54fe4099cbc2cb9aeeaca5ee06feb27d2740a5a282693c1",
+      "bytes": 12319
+    },
+    "verifier.d.ts": {
+      "sha256": "3ddfaf820ab79aaed267b335d28c04ed95dd89a30deb8d70ff36811a4d94b318",
+      "bytes": 835
+    },
+    "README.md": {
+      "sha256": "0eab1a3c43738f4f80a6236b48832a46932e853891c2beb6ca6f6a92dc0367fc",
+      "bytes": 2069
+    }
+  }
+}

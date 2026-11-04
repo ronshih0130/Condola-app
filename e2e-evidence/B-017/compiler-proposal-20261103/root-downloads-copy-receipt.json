@@ -1,0 +1,25 @@
+{
+  "scope": "Reviewed inactive B017 limited compiler proposal copied only; no SQL parsing/application or target execution",
+  "files": [
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b017-compiler-first-independent-astra-v2.json",
+      "sha256": "ff1272b2e543bd4380a2c7e1700cde5535b972887f4e2db5af6ea77e57eac160"
+    },
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b017-compiler-first-independent-astra-v2.md",
+      "sha256": "bd982079603782206e43654222c89234df85d31c8724afedc9035a973c69690b"
+    },
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b017-foundation-compiler-handoff-v2.md",
+      "sha256": "31cfc4ed401779a66bab09c715885b2eb06cb41931dd416cab7c381c649eee0a"
+    },
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b017-foundation-compiler-proposal-v2.tgz",
+      "sha256": "3a079e30dd0bc4b281c255dee1e0b41c33f9624a4832fd334fb596529f9e6169"
+    },
+    {
+      "path": "/Users/ron/Downloads/condola-bootstrap/b017-foundation-compiler-delivery-v2.json",
+      "sha256": "ec782401c4145c2e56f1c13cc1cbf29dd1ea02f613bb78cc6caf1899069c46a2"
+    }
+  ]
+}

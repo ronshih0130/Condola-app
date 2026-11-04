@@ -1,0 +1,23 @@
+{
+  "verdict": "GO_AUTHOR_OFF_ONLY_PARENT_NO_RUNTIME_APPROVAL",
+  "reportSha256": "04eeb937254ccd6901a3128d030868b12766504e56500b2f2f6001df8e5e8f41",
+  "fileSha256": {
+    "work/b018-native-bootstrap-parent-design-v1.md": "8eb0a440a63f30c4a5e8c3bb148184610aa0349055b77f700fad2cf28e8f9927",
+    "outputs/B018-native-bootstrap-criterion-decision-20261103.txt": "9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec",
+    "work/b018-login-diagnostic-v3/supervisor.py": "c92f4dd21a3ef40776027cb8cdcde07d698c98d0ba204b4bf6d50d0687238a90",
+    "work/b018-login-diagnostic-v3/recovery.cjs": "87dcf51c41c180ccbcffefd3b9c04f2c0ebf2575941fb71242276cffc84c3a10",
+    "work/b018-runtime-v4/probe.cjs": "41e0ead1a6971131c981fd5ddc19dfe5bbb72fb49109bba6240245819724ab24",
+    "work/mode-b-repair-override-prep/node_modules/next/dist/server/lib/router-server.js": "b41301ce6de392d509c0854ee2517191484c31b1d1d907c9f5a1d29a08360eac",
+    "work/mode-b-repair-override-prep/node_modules/next/dist/server/lib/router-utils/filesystem.js": "18f7bea8391031f16a084e03841f8f2039da1839582fcc366a6b1f0478866547",
+    "work/mode-b-repair-override-prep/node_modules/next/dist/server/dev/hot-reloader-webpack.js": "b8d4fa453ee0ebed545ef3fe9f9e8422316174ed84babf12801e6d29cbc4e0da"
+  },
+  "requiredSourceAcceptance": [
+    "Exclusive build-tree origin and exact dev handler fallthrough, continuous generation and per-render asset evidence",
+    "Lossless strict event prefix/tail including server error observer from before warm-up through drain",
+    "Clone-bound per-attempt authentication effect and full protected financial/control/audit snapshot comparison",
+    "Fresh run-local authentication, provisional admission and independent aggregate statuses"
+  ],
+  "finance": "PENDING",
+  "executionAuthorized": false,
+  "classifierReviewed": false
+}

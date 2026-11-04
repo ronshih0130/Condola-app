@@ -1,0 +1,237 @@
+'use strict';
+
+const {createHash} = require('node:crypto');
+const DECISION = '9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec';
+const ORIGIN = 'http://127.0.0.1:43156';
+const ASSET = '/_next/static/chunks/webpack.js';
+const ORG = '10000000-0000-4000-8000-000000000001';
+const ACTORS = Object.freeze({
+  primary: ['20000000-0000-4000-8000-000000000006', 'tenant', '/t'],
+  foreign: ['20000000-0000-4000-8000-000000000005', 'tenant', '/t'],
+  staff: ['20000000-0000-4000-8000-000000000001', 'admin', '/m'],
+});
+const FINANCIAL_CASES = Object.freeze([
+  'off-legacy-bill', 'foreign-selector', 'no_invoice', 'zero', 'unsigned', 'credit', 'offset',
+  'same_invoice_zero', 'void', 'written_off', 'prior_paid_due', 'ended', 'pending', 'partial',
+  'reopened', 'settled', 'unsigned_residual-off', 'unsigned_residual-on', 'unsigned_deposit-off',
+  'unsigned_deposit-on', 'rejection-correction', 'reversal-history-privacy', 'ledger-lineage',
+]);
+const hex = v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
+const id = v => typeof v === 'string' && /^[A-Za-z0-9_.:-]{1,128}$/.test(v);
+const integer = Number.isSafeInteger;
+function check(ok, reason) { if (!ok) throw new Error(reason); }
+function unique(set, key, reason) { check(!set.has(key), reason); set.add(key); }
+
+// The parent and independent verifier hash the same canonical JSON. Reject non-JSON values.
+function canonical(value) {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string' || integer(value))
+    return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    const items = [];
+    for (let i = 0; i < value.length; i++) {
+      check(Object.hasOwn(value, i), 'non-json-array');
+      items.push(canonical(value[i]));
+    }
+    return '[' + items.join(',') + ']';
+  }
+  check(value !== null && typeof value === 'object' &&
+    [null, Object.prototype].includes(Object.getPrototypeOf(value)), 'non-json-object');
+  return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}';
+}
+function digest(value) { return createHash('sha256').update(canonical(value)).digest('hex'); }
+const equal = (a,b) => canonical(a) === canonical(b);
+
+function validateFreeze(f) {
+  check(f && f.decisionSha256 === DECISION && id(f.run) && /^[a-f0-9]{40}$/.test(f.candidate) &&
+    typeof f.candidate === 'string' && [f.sourceSha256, f.helperSha256, f.browserSha256,
+      f.serverGeneration].every(hex) && (f.assetMapSha256 === null || hex(f.assetMapSha256)), 'freeze');
+  check(Array.isArray(f.financialCases) && f.financialCases.every(id) &&
+    new Set(f.financialCases).size === f.financialCases.length &&
+    FINANCIAL_CASES.every(x => f.financialCases.includes(x)), 'frozen-case-inventory');
+}
+function verifyReceipt(data, lock, stage) {
+  const f = lock.freeze;
+  validateFreeze(f);
+  const receipt = stage === 'bootstrap' ? lock.bootstrapReceipt : lock.finalReceipt;
+  check(receipt && receipt.run === f.run && receipt.stage === stage && receipt.freezeSha256 === digest(f)
+    && data.run === f.run && data.freezeSha256 === receipt.freezeSha256 &&
+    receipt.evidenceSha256 === digest(data), 'parent-' + stage + '-binding');
+}
+function ledger(events) {
+  check(Array.isArray(events), 'missing-failure-ledger');
+  const byId = new Map();
+  for (const e of events) {
+    check(e && id(e.id) && !byId.has(e.id), 'ambiguous-failure-event');
+    byId.set(e.id, e);
+  }
+  return byId;
+}
+function validateSession(actor, mode, side, state) {
+  const [actorId, persona, landing] = ACTORS[actor], s = side.session;
+  check(id(side.context) && side.javascriptEnabled === (mode === 'enabled'), 'context-mode');
+  unique(state.contexts, side.context, 'context-reused');
+  check(s && s.actorId === actorId && s.persona === persona && s.org === ORG && s.context === side.context &&
+    s.currentConsent === true && s.notExpired === true && s.naturalClick === true &&
+    s.sessionVerified === true && s.visible === true && s.finalPath === landing &&
+    id(s.sessionAlias) && hex(s.proofSha256), 'session-identity');
+  unique(state.sessions, s.sessionAlias, 'session-reused');
+  const docs = side.documents;
+  check(Array.isArray(docs) && docs.length === 2, 'document-inventory');
+  for (let i = 0; i < 2; i++) {
+    const d = docs[i];
+    check(d.context === side.context && id(d.id) && id(d.frame) && id(d.loader) &&
+      d.org === ORG && d.actorId === actorId && d.origin === ORIGIN && d.mainFrame === true &&
+      d.kind === 'Document' && d.status === 200 && d.path === (i ? landing : '/login') &&
+      d.terminal === 'finished' && d.inventoryComplete === true && hex(d.inventorySha256) &&
+      Array.isArray(d.declarations) && Array.isArray(d.hops), 'document-binding');
+    unique(state.documents, side.context + '|' + d.id, 'document-reused');
+  }
+  check(docs[0].frame === docs[1].frame && docs[0].loader !== docs[1].loader &&
+    s.loginDocument === docs[0].id && s.landingDocument === docs[1].id, 'document-chain');
+  if (mode === 'native') {
+    check(equal(s.navigation, [['POST','/login',303],['GET','/auth/enter',307],
+      ['GET','/auth/continue',307],['GET',landing,200]]) && s.redirectsComplete === true, 'native-post-chain');
+  } else {
+    check(['Fetch','XHR','Document'].includes(s.observedPostType) && s.postPath === '/login' &&
+      s.authenticatedArrival === true, 'enabled-login-evidence');
+  }
+}
+function validateAssetMap(map, freeze) {
+  check(map && digest(map) === freeze.assetMapSha256 && map.generation === freeze.serverGeneration &&
+    map.origin === ORIGIN && map.path === ASSET && hex(map.compiledSha256) &&
+    integer(map.bytes) && map.bytes > 0 &&
+    equal(map.queryRules,['none','single-renderer-decimal-v']) && map.immutableAcrossRenderVersions === true &&
+    hex(map.serverMappingProofSha256), 'frozen-asset-map');
+}
+function validateHop(h, d, state) {
+  check(h && hex(h.fullUrlToken) && h.origin === ORIGIN && h.path === ASSET &&
+    h.method === 'GET' && h.type === 'Script' && h.navigation === false && h.hop === 0 &&
+    h.uniqueCorrelationCount === 1 && h.context === d.context && h.document === d.id &&
+    h.frame === d.frame && h.loader === d.loader, 'hop-binding');
+  check(h.queryKind === 'none' && h.queryCount === 0 ||
+    h.queryKind === 'single-renderer-decimal-v' && h.queryCount === 1, 'asset-query');
+  unique(state.tokens,h.fullUrlToken,'within-hop-token-reused');
+  for (const name of ['pw','cdp']) {
+    const event = h[name];
+    check(event && event.observer === name && id(event.id) && id(event.requestId) &&
+      event.fullUrlToken === h.fullUrlToken && event.hop === 0 && event.origin === ORIGIN &&
+      event.path === ASSET && event.method === 'GET' && event.type === (name === 'pw' ? 'script' : 'Script') &&
+      event.context === d.context && event.document === d.id && event.frame === d.frame &&
+      event.loader === d.loader && Array.isArray(event.statuses), 'observer-binding');
+    unique(state.eventIds, event.id, 'observer-event-reused');
+    unique(state.requests, [name,d.context,event.requestId,event.hop].join('|'), 'observer-request-reused');
+  }
+}
+function finished(h) {
+  return [h.pw,h.cdp].every(e => e.terminal === 'finished' && equal(e.statuses,[200]) &&
+    e.error === null && e.blocked === null && e.canceled === null);
+}
+function validatePolicy(d) {
+  const p = d.policy;
+  check(p && p.completeAtRequest === true && p.context === d.context && p.document === d.id &&
+    p.frame === d.frame && p.loader === d.loader && p.enforcedHeaderCount === 0 &&
+    p.reportOnlyHeaderCount === 0 && p.effectiveMetaCount === 0 && hex(p.captureSha256), 'policy-unavailable');
+}
+function validateDeclaration(d,h) {
+  check(d.declarations.length === 1, 'declaration-count');
+  const dec = d.declarations[0];
+  check(dec.path === ASSET && dec.origin === ORIGIN && dec.fullUrlToken === h.fullUrlToken &&
+    ['script','preload','both'].includes(dec.kind) && dec.nonce === 'absent' && dec.integrity === 'absent' &&
+    dec.complete === true && hex(dec.declarationSha256), 'declaration-binding');
+  return dec;
+}
+function verifyMapping(d,h,dec,state,mode) {
+  const {freeze,map} = state;
+  const a = d.mapping, v = d.coverage;
+  check(a && a.run === freeze.run && a.generation === freeze.serverGeneration &&
+    a.mapSha256 === freeze.assetMapSha256 && a.frozenBeforeDocuments === true &&
+    a.origin === ORIGIN && a.path === ASSET && a.context === d.context && a.document === d.id &&
+    a.frame === d.frame && a.loader === d.loader && a.fullUrlToken === h.fullUrlToken &&
+    a.declarationSha256 === dec.declarationSha256 && a.compiledSha256 === map.compiledSha256 &&
+    a.entrySha256 === digest({run:freeze.run,context:d.context,document:d.id,frame:d.frame,loader:d.loader,
+      fullUrlToken:h.fullUrlToken,queryKind:h.queryKind,declarationSha256:dec.declarationSha256,
+      mapSha256:freeze.assetMapSha256,compiledSha256:map.compiledSha256}),
+    'render-asset-map');
+  check(v && v.context === d.context && v.document === d.id && v.frame === d.frame &&
+    v.loader === d.loader && v.fullUrlToken === h.fullUrlToken && v.compiledSha256 === a.compiledSha256 &&
+    v.mechanism === 'v8-precise-coverage' && v.complete === true && hex(v.proofSha256) &&
+    integer(v.executedBytes), 'coverage-binding');
+  check(mode === 'enabled'
+    ? v.executedBytes > 0 && v.executedBytes <= map.bytes && a.responseSha256 === a.compiledSha256
+    : v.executedBytes === 0 && a.responseSha256 === null, 'execution-or-content');
+  return a.compiledSha256;
+}
+function inspectScope(n,c,state) {
+  // Ordinary clean paths do not need to manufacture an exceptional asset request or coverage.
+  for (const d of [n,c]) for (const h of d.hops) validateHop(h,d,state);
+  for (const h of c.hops) check(finished(h), 'enabled-asset-failure');
+  if (n.hops.every(finished)) return;
+  check(n.hops.length === 1 && c.hops.length === 1, 'counterpart-count');
+  const h = n.hops[0], pos = c.hops[0];
+  check(h.pw.terminal === 'failed' && h.cdp.terminal === 'failed' &&
+    h.pw.statuses.length === 0 && h.cdp.statuses.length === 0 && h.pw.error === 'csp' &&
+    h.pw.blocked === null && h.pw.canceled === null && h.cdp.blocked === 'csp' &&
+    h.cdp.error === 'MISSING' && h.cdp.canceled === false, 'native-block-shape');
+  for (const e of [h.pw,h.cdp]) {
+    check(state.failures.has(e.id) && equal(state.failures.get(e.id),e), 'raw-failure-mismatch');
+  }
+  validateAssetMap(state.map,state.freeze);
+  validatePolicy(n); validatePolicy(c);
+  const nd = validateDeclaration(n,h), cd = validateDeclaration(c,pos);
+  check(nd.kind === cd.kind && verifyMapping(n,h,nd,state,'native') ===
+    verifyMapping(c,pos,cd,state,'enabled'), 'counterpart-content');
+  state.qualified.push(h.pw.id,h.cdp.id);
+}
+function failure(reason, rawStrict = 'UNKNOWN', rawFailureIds = []) {
+  return {nativeAdmission:'FAIL',aggregate:'FAIL',rawStrict,reason,qualifiedIds:[],rawFailureIds};
+}
+function qualifyNativeBootstrap(evidence, lock) {
+  let raw = 'UNKNOWN', rawIds = [];
+  try {
+    verifyReceipt(evidence,lock,'bootstrap');
+    check(evidence.complete === true && hex(evidence.journalSha256) &&
+      evidence.observerDrained === true, 'bootstrap-incomplete');
+    const failures = ledger(evidence.failures);
+    rawIds = [...failures.keys()];
+    if (failures.size) raw = 'FAIL';
+    const state = {freeze:lock.freeze,map:evidence.assetMap,failures,contexts:new Set(),documents:new Set(),sessions:new Set(),
+      eventIds:new Set(),requests:new Set(),tokens:new Set(),qualified:[]};
+    check(Array.isArray(evidence.actors) && evidence.actors.length === 3,'actor-inventory');
+    for (const name of Object.keys(ACTORS)) {
+      const actors = evidence.actors.filter(x => x.actor === name);
+      check(actors.length === 1,'actor-missing-or-duplicate');
+      const {native,enabled} = actors[0];
+      validateSession(name,'native',native,state); validateSession(name,'enabled',enabled,state);
+      for (let s=0; s<2; s++) inspectScope(native.documents[s],enabled.documents[s],state);
+    }
+    check(state.qualified.length === failures.size,'unmatched-raw-failure');
+    return {nativeAdmission:'ADMIT',aggregate:'PENDING',rawStrict:failures.size?'FAIL':'PASS',
+      reason:failures.size?'qualified-native-block':'ordinary-strict',qualifiedIds:state.qualified,rawFailureIds:rawIds};
+  } catch(e) { return failure(e.message,raw,rawIds); }
+}
+function finalizeAggregate(evidence, postDrain, lock) {
+  const native = qualifyNativeBootstrap(evidence,lock);
+  if (native.nativeAdmission !== 'ADMIT') return native;
+  let raw = native.rawStrict === 'FAIL'?'FAIL':'UNKNOWN', rawIds=native.rawFailureIds;
+  try {
+    verifyReceipt(postDrain,lock,'final');
+    check(postDrain.bootstrapEvidenceSha256 === lock.bootstrapReceipt.evidenceSha256 &&
+      postDrain.bootstrapJournalSha256 === evidence.journalSha256 && postDrain.complete === true &&
+      hex(postDrain.journalSha256),'final-journal-binding');
+    rawIds = [...ledger(postDrain.allFailures).keys()];
+    if (postDrain.allFailures.length) raw='FAIL';
+    check(equal(postDrain.allFailures,evidence.failures),'extra-or-altered-failure');
+    const cases = postDrain.financialCases;
+    check(Array.isArray(cases) && cases.length === lock.freeze.financialCases.length &&
+      lock.freeze.financialCases.every(name => cases.filter(x =>
+        x.id === name && x.status === 'PASS' && hex(x.receiptSha256)).length === 1),'financial-case-failed');
+    check(postDrain.enabledStrict === 'PASS' && postDrain.financialStrict === 'PASS' &&
+      postDrain.browserClosed === true && postDrain.serverDrained === true &&
+      postDrain.controlsRestored === true && postDrain.lineage === 'VERIFIED' &&
+      postDrain.protectedReadback === 'VERIFIED' && postDrain.sourcesStable === true &&
+      postDrain.generationAfter === lock.freeze.serverGeneration && postDrain.mapSha256After === lock.freeze.assetMapSha256 &&
+      hex(postDrain.recoveryReceiptSha256),'final-recovery-incomplete');
+    return {...native,aggregate:'PASS',reason:'fully-recovered'};
+  } catch(e) { return {...failure(e.message,raw,rawIds),nativeAdmission:'ADMIT',qualifiedIds:native.qualifiedIds}; }
+}
+module.exports = {qualifyNativeBootstrap,finalizeAggregate,digest,FINANCIAL_CASES};
