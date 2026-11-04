@@ -23,6 +23,33 @@ test.before(async()=>{clone=await cloneTestDatabase();const names=['DEMO_MODE','
 test.after(async()=>{await clone?.cleanup();});
 function bounded<T>(p:Promise<T>):Promise<T>{let timer:ReturnType<typeof setTimeout>|undefined;return Promise.race([p,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Operation did not finish')),10000);})]).finally(()=>{if(timer)clearTimeout(timer);});}
 
+async function rejectsArchivedUtilityWithFlagsOff(s:Session,input:Parameters<typeof prepareUtilityRun>[1],runId:string) {
+ const setting=(await query<{value:unknown}>(`SELECT value FROM platform_settings WHERE key='record_archive'`)).rows[0].value;
+ const flags=(await query<{feature_flags:unknown}>(`SELECT feature_flags FROM organizations WHERE id=$1`,[ORG_ID])).rows[0].feature_flags;
+ const snapshot=async()=>({
+  run:(await query(`SELECT status::text,total_amount_minor::text,inputs FROM utility_allocation_runs WHERE id=$1`,[runId])).rows,
+  lines:(await query(`SELECT * FROM utility_allocation_lines WHERE run_id=$1 ORDER BY id`,[runId])).rows,
+  ledger:(await query(`SELECT * FROM ledger_transactions WHERE org_id=$1 ORDER BY id`,[ORG_ID])).rows,
+  entries:(await query(`SELECT * FROM ledger_entries WHERE org_id=$1 ORDER BY id`,[ORG_ID])).rows,
+ });
+ const before=await snapshot();
+ try {
+  // Each switch independently closes both preparation and confirmation.
+  for(const off of ['platform','organization'] as const) {
+   await query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='record_archive'`,[JSON.stringify(setting)]);
+   await query(`UPDATE organizations SET feature_flags=$2::jsonb WHERE id=$1`,[ORG_ID,JSON.stringify(flags)]);
+   if(off==='platform')await query(`UPDATE platform_settings SET value=jsonb_set(value,'{enabled}','false'::jsonb) WHERE key='record_archive'`);
+   else await query(`UPDATE organizations SET feature_flags=jsonb_set(feature_flags,'{record_archive}','false'::jsonb) WHERE id=$1`,[ORG_ID]);
+   await assert.rejects(()=>prepareUtilityRun(s,input),error=>error instanceof FlowError&&error.key==='errors.notFound');
+   await assert.rejects(()=>confirmUtilityRun(s,runId),error=>error instanceof FlowError&&error.key==='errors.notFound');
+   assert.deepEqual(await snapshot(),before);
+  }
+ } finally {
+  await query(`UPDATE platform_settings SET value=$1::jsonb WHERE key='record_archive'`,[JSON.stringify(setting)]);
+  await query(`UPDATE organizations SET feature_flags=$2::jsonb WHERE id=$1`,[ORG_ID,JSON.stringify(flags)]);
+ }
+}
+
 test('archiving warns about an existing expense and leaves its ordinary correction and reports available',async()=>{
  const sid=randomUUID();await query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')`,[sid,USERS.admin,randomUUID()]);
  const s:Session={userId:USERS.admin,sessionId:sid,email:'',name:'admin',kind:'staff',role:'admin',orgId:ORG_ID,liveOrgId:ORG_ID,environment:'live',locale:'en',calendar:'gregorian',leaseId:null};
@@ -119,6 +146,7 @@ test('a posted utility run remains available for its ordinary correction and voi
  await assert.rejects(()=>prepareUtilityRun(s,{...input,billTotalMajor:120}),error=>error instanceof FlowError&&error.key==='errors.notFound');
  await assert.rejects(()=>prepareUtilityRun(s,{...input,sourceRunId:randomUUID(),billTotalMajor:120}),error=>error instanceof FlowError&&error.key==='errors.notFound');
  const revised=await prepareUtilityRun(s,{...input,sourceRunId:prepared.runId,billTotalMajor:120});assert.equal(revised.runId,prepared.runId);assert.equal((await query<{status:string}>(`SELECT status::text FROM utility_allocation_runs WHERE id=$1`,[prepared.runId])).rows[0].status,'pending_repost');await confirmUtilityRun(s,prepared.runId);
+ await rejectsArchivedUtilityWithFlagsOff(s,{...input,sourceRunId:prepared.runId,billTotalMajor:120},prepared.runId);
  await assert.rejects(()=>prepareUtilityRun(s,{...input,periodStart:'2099-03-01',periodEnd:'2099-04-01'}),error=>error instanceof FlowError&&error.key==='errors.notFound');
  await voidUtilityRun(s,prepared.runId,'Synthetic correction');assert.equal((await query<{status:string}>(`SELECT status::text FROM utility_allocation_runs WHERE id=$1`,[prepared.runId])).rows[0].status,'void');
 });
@@ -133,6 +161,7 @@ test('a posted correction retains the exact archived room already on the run',as
  const input={unitId:u,periodStart:'2099-01-01',periodEnd:'2099-02-01',rateMajor:5,totalKwh:20,readings:[],billTotalMajor:100,overrideReason:''};const original=await prepareUtilityRun(s,input);await confirmUtilityRun(s,original.runId);
  const ref={kind:'room' as const,id:room};const view=await archiveView(s,ref);assert.equal(view.state,'ready');if(view.state!=='ready')throw new Error('View unavailable');assert.equal((await archiveCommand(s,{ref,desired:'archived',expectedVersion:view.observed.version,renderedScope:archiveScope(s),reason:'Ended room',requestId:randomUUID()})).state,'changed');
  const revised=await prepareUtilityRun(s,{...input,sourceRunId:original.runId,billTotalMajor:120});assert.equal(revised.runId,original.runId);assert.ok((await query(`SELECT id FROM utility_allocation_lines WHERE org_id=$1 AND run_id=$2 AND room_id=$3`,[ORG_ID,original.runId,room])).rowCount);await confirmUtilityRun(s,original.runId);
+ await rejectsArchivedUtilityWithFlagsOff(s,{...input,sourceRunId:original.runId,billTotalMajor:120},original.runId);
  await query(`UPDATE units SET rental_mode='whole_unit' WHERE org_id=$1 AND id=$2`,[ORG_ID,u]);const before=(await query(`SELECT status::text,total_amount_minor::text FROM utility_allocation_runs WHERE id=$1`,[original.runId])).rows[0];
  await assert.rejects(()=>prepareUtilityRun(s,{...input,sourceRunId:original.runId,billTotalMajor:130}),error=>error instanceof FlowError&&error.key==='errors.notFound');assert.deepEqual((await query(`SELECT status::text,total_amount_minor::text FROM utility_allocation_runs WHERE id=$1`,[original.runId])).rows[0],before);
 });
@@ -231,7 +260,11 @@ test('archived two-room run can correct a tenant charge to zero once and replay 
  const input={unitId:u,periodStart:'2099-01-01',periodEnd:'2099-02-01',rateMajor:4,totalKwh:30,readings:[{spaceId:ids[0].room,kwh:20},{spaceId:ids[1].room,kwh:10}],billTotalMajor:120,overrideReason:''};const run=(await prepareUtilityRun(s,input)).runId;await confirmUtilityRun(s,run);
  const before=await query<{id:string;lease_id:string;posted_ledger_transaction_id:string;posted_amount_minor:string}>(`SELECT id::text,lease_id::text,posted_ledger_transaction_id::text,posted_amount_minor::text FROM utility_allocation_lines WHERE run_id=$1 ORDER BY lease_id`,[run]);assert.equal(before.rowCount,2);const a=before.rows.find(x=>x.lease_id===ids[0].lease)!,b=before.rows.find(x=>x.lease_id===ids[1].lease)!;assert.equal(a.posted_amount_minor,'8000');assert.equal(b.posted_amount_minor,'4000');
  await query(`UPDATE leases SET status='ended' WHERE id=ANY($1::uuid[])`,[ids.map(x=>x.lease)]);const ref={kind:'unit' as const,id:u};const v=await archiveView(s,ref);assert.equal(v.state,'ready');if(v.state!=='ready')throw new Error('View unavailable');assert.equal((await archiveCommand(s,{ref,desired:'archived',expectedVersion:v.observed.version,renderedScope:archiveScope(s),reason:'Ended work',requestId:randomUUID()})).state,'changed');
- const zero={...input,sourceRunId:run,totalKwh:10,billTotalMajor:40,readings:[{spaceId:ids[0].room,kwh:0},{spaceId:ids[1].room,kwh:10}]};await prepareUtilityRun(s,zero);await confirmUtilityRun(s,run);
+ const zero={...input,sourceRunId:run,totalKwh:10,billTotalMajor:40,readings:[{spaceId:ids[0].room,kwh:0},{spaceId:ids[1].room,kwh:10}]};
+ await rejectsArchivedUtilityWithFlagsOff(s,zero,run);
+ await prepareUtilityRun(s,zero);
+ await rejectsArchivedUtilityWithFlagsOff(s,zero,run);
+ await confirmUtilityRun(s,run);
  const after=(await query<{id:string;lease_id:string;bearer:string;posted_ledger_transaction_id:string|null;amount_minor:string}>(`SELECT id::text,lease_id::text,bearer::text,posted_ledger_transaction_id::text,amount_minor::text FROM utility_allocation_lines WHERE run_id=$1 ORDER BY lease_id`,[run])).rows;const zeroLine=after.find(x=>x.id===a.id)!;const other=after.find(x=>x.id===b.id)!;assert.equal(zeroLine.lease_id,ids[0].lease);assert.equal(zeroLine.bearer,'tenant');assert.equal(zeroLine.amount_minor,'0');assert.equal(zeroLine.posted_ledger_transaction_id,null);assert.equal(other.posted_ledger_transaction_id,b.posted_ledger_transaction_id);
  const totals=async()=>({receivable:(await query<{amount:string}>(`SELECT coalesce(sum(amount_minor),0)::text AS amount FROM ledger_entries WHERE org_id=$1 AND lease_id=$2 AND account='tenant_receivable'`,[ORG_ID,ids[0].lease])).rows[0].amount,reversals:(await query(`SELECT id FROM ledger_transactions WHERE org_id=$1 AND reverses_transaction_id=$2`,[ORG_ID,a.posted_ledger_transaction_id])).rowCount,credits:(await query(`SELECT il.id FROM invoice_lines il JOIN invoices i ON i.org_id=il.org_id AND i.id=il.invoice_id WHERE i.org_id=$1 AND i.lease_id=$2 AND il.charge_type='credit'`,[ORG_ID,ids[0].lease])).rowCount});
  const expected=await totals();assert.deepEqual(expected,{receivable:'0',reversals:1,credits:1});await confirmUtilityRun(s,run);assert.deepEqual(await totals(),expected);

@@ -1,6 +1,7 @@
 import type { Client } from "pg";
 import { admitActiveArchiveAncestry, admitArchiveBatch, lockArchiveAncestry } from "./record-archive-admission";
 import { assertCurrentArchiveCaller } from "./record-archive-caller";
+import { recordArchiveEnabledFor } from "./record-archive";
 import { maybe, many, one, tx } from "./db";
 import { FlowError } from "./errors";
 import { reserveInvoiceNumbers } from "./invoice-number";
@@ -362,6 +363,7 @@ export async function prepareUtilityRun(session: Session, input: UtilityRunInput
     if (!unit || unit.property_id!==ancestry.propertyId) throw new FlowError("errors.notFound");
     const sourceArchived = prior ? (await maybe<{archived:boolean}>(client,`SELECT EXISTS(SELECT 1 FROM utility_allocation_lines al JOIN rooms r ON r.org_id=al.org_id AND r.id=al.room_id WHERE al.org_id=$1 AND al.run_id=$2 AND r.archived_at IS NOT NULL) AS archived`,[session.orgId,prior.id]))?.archived === true : false;
     const archivedCorrection = ancestry.propertyArchived || ancestry.unitArchived || sourceArchived;
+    if (archivedCorrection && !await recordArchiveEnabledFor(client,session.orgId)) throw new FlowError('errors.notFound');
     if (archivedCorrection && (!prior || input.sourceRunId !== prior.id)) throw new FlowError('errors.notFound');
     const rooms = unit.rental_mode === 'by_room' ? await many<{id:string}>(client,`SELECT r.id::text FROM rooms r WHERE r.org_id=$1 AND r.unit_id=$2 AND (($4::boolean AND EXISTS(SELECT 1 FROM utility_allocation_lines al WHERE al.org_id=r.org_id AND al.run_id=$3::uuid AND al.room_id=r.id)) OR (NOT $4::boolean AND (r.archived_at IS NULL OR EXISTS(SELECT 1 FROM utility_allocation_lines al WHERE al.org_id=r.org_id AND al.run_id=$3::uuid AND al.room_id=r.id)))) ORDER BY r.id`,[session.orgId,unit.id,prior?.id??null,archivedCorrection]) : [];
     await admitArchiveBatch(client,session.orgId,rooms.map(({id})=>({kind:'room',id})),Boolean(prior));
@@ -1177,6 +1179,7 @@ async function verifyArchivedUtilitySubjects(client:Client,orgId:string,runId:st
     FROM utility_allocation_runs r JOIN units u ON u.org_id=r.org_id AND u.id=r.unit_id JOIN properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE r.org_id=$1 AND r.id=$2`,[orgId,runId]);
   if(!row)throw new FlowError('errors.notFound');
   if(!row.archived)return;
+  if(!await recordArchiveEnabledFor(client,orgId))throw new FlowError('errors.notFound');
   if(row.run_currency.trim()!==row.currency.trim())throw new FlowError('errors.notFound');
   const spaces=await loadSpaces(client,row,runId,true);
   await historicalUtilityOccupants(client,orgId,row,runId,spaces);
