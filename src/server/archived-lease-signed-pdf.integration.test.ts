@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
-import { query, withClient } from "./db";
+import { query, tx, withClient } from "./db";
 import { uploadSignedLeasePdf } from "./domain";
 import { FlowError } from "./errors";
 import { ORG_ID, USERS } from "./ids";
+import { paperLeaseVersionsEnabled } from "./paper-lease-versions";
 import type { Session } from "./types";
 import { insertTestAuthSession } from "./test-auth-session";
 
@@ -93,18 +94,43 @@ async function footprint(leaseId: string) {
   )).rows[0];
 }
 
-test("an archived lease refuses the first signed PDF with no row and no audit", async () => {
+test("with paper flags off, the legacy upload path is refused on an archived lease", async () => {
   const session = await staff();
-  const { lease } = await space("property");
-  await assert.rejects(
-    () => uploadSignedLeasePdf(session, lease, { bytes, fileName: "first.pdf" }),
-    notFound,
+  const flags = await query<{ feature_flags: unknown }>(
+    `SELECT feature_flags FROM organizations WHERE id = $1`,
+    [ORG_ID],
   );
-  const saved = await footprint(lease);
-  assert.equal(saved.pdfs, 0);
-  assert.equal(saved.files, 0);
-  assert.equal(saved.replaced, 0);
-  assert.equal(saved.lease_audits, 0);
+  const original = flags.rows[0].feature_flags;
+  const savedPaper = process.env.PAPER_LEASE_VERSIONS_ENABLED;
+  delete process.env.PAPER_LEASE_VERSIONS_ENABLED;
+  try {
+    await query(
+      `UPDATE organizations
+          SET feature_flags = coalesce(feature_flags, '{}'::jsonb) - 'paper_lease_versions'
+        WHERE id = $1`,
+      [ORG_ID],
+    );
+    await tx(session.userId, async (client) => {
+      assert.equal(await paperLeaseVersionsEnabled(client, ORG_ID), false);
+    }, { orgId: ORG_ID });
+    const { lease } = await space("property");
+    await assert.rejects(
+      () => uploadSignedLeasePdf(session, lease, { bytes, fileName: "legacy.pdf" }),
+      notFound,
+    );
+    const saved = await footprint(lease);
+    assert.equal(saved.pdfs, 0);
+    assert.equal(saved.files, 0);
+    assert.equal(saved.replaced, 0);
+    assert.equal(saved.lease_audits, 0);
+  } finally {
+    await query(`UPDATE organizations SET feature_flags = $2::jsonb WHERE id = $1`, [
+      ORG_ID,
+      original == null ? null : JSON.stringify(original),
+    ]);
+    if (savedPaper === undefined) delete process.env.PAPER_LEASE_VERSIONS_ENABLED;
+    else process.env.PAPER_LEASE_VERSIONS_ENABLED = savedPaper;
+  }
 });
 
 test("replacing a signed PDF after the unit is archived leaves the first row and writes no audit", async () => {
@@ -152,7 +178,7 @@ test("replacing a signed PDF after the unit is archived leaves the first row and
   }
 });
 
-test("a direct insert on a room-archived lease raises 42501 and keeps the prior version without an audit", async () => {
+test("a logged-in staff insert on an archived lease returns 42501 and changes no row or audit", async () => {
   const { room, lease } = await space("none");
   const hash = createHash("sha256").update(bytes).digest("hex");
   const path = `${ORG_ID}/${lease}/${randomUUID()}.pdf`;
@@ -168,43 +194,45 @@ test("a direct insert on a room-archived lease raises 42501 and keeps the prior 
     [ORG_ID, lease, file, path, bytes],
   );
   await query(`UPDATE rooms SET archived_at = clock_timestamp() WHERE id = $1`, [room]);
+  const replacement = `${ORG_ID}/${lease}/${randomUUID()}.pdf`;
+  const next = (await query<{ id: string }>(
+    `INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, sha256, uploaded_by)
+     VALUES ($1, 'lease-documents-private', $2, 'second.pdf', 'application/pdf', $3, $4, $5)
+     RETURNING id::text`,
+    [ORG_ID, replacement, bytes.length, hash, USERS.admin],
+  )).rows[0].id;
   const before = await footprint(lease);
   assert.equal(before.pdfs, 1);
   assert.equal(before.replaced, 0);
+  const current = (await query<{ id: string }>(
+    `SELECT id::text FROM lease_signed_pdfs WHERE lease_id = $1`,
+    [lease],
+  )).rows[0].id;
 
   await withClient(async (client) => {
-    await client.query("BEGIN");
-    try {
-      const replacement = `${ORG_ID}/${lease}/${randomUUID()}.pdf`;
-      const next = await client.query<{ id: string }>(
-        `INSERT INTO files (org_id, storage_bucket, storage_path, file_name, mime_type, size_bytes, sha256, uploaded_by)
-         VALUES ($1, 'lease-documents-private', $2, 'second.pdf', 'application/pdf', $3, $4, $5)
-         RETURNING id::text`,
-        [ORG_ID, replacement, bytes.length, hash, USERS.admin],
-      );
-      const current = (await client.query<{ id: string }>(
-        `SELECT id::text FROM lease_signed_pdfs WHERE lease_id = $1`,
-        [lease],
-      )).rows[0].id;
-      await assert.rejects(
-        () => client.query(
-          `INSERT INTO lease_signed_pdfs
-             (org_id, lease_id, file_id, bucket, object_path, content, uploaded_by, replace_reason, supersedes_id)
-           VALUES ($1, $2, $3, 'lease-documents-private', $4, $5, $6, 'corrected_signature', $7)`,
-          [ORG_ID, lease, next.rows[0].id, replacement, bytes, USERS.admin, current],
-        ),
-        archivedInsert,
-      );
-      await client.query("ROLLBACK");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    }
+    await client.query("SET ROLE authenticated");
+    await client.query(
+      `SELECT set_config('request.jwt.claim.sub', $1, false),
+              set_config('request.jwt.claim.role', 'authenticated', false),
+              set_config('request.jwt.claims', $2, false)`,
+      [USERS.admin, JSON.stringify({ sub: USERS.admin, role: "authenticated" })],
+    );
+    const who = await client.query<{ role: string }>("SELECT current_user AS role");
+    assert.equal(who.rows[0].role, "authenticated");
+    await assert.rejects(
+      () => client.query(
+        `INSERT INTO lease_signed_pdfs
+           (org_id, lease_id, file_id, bucket, object_path, content, uploaded_by, replace_reason, supersedes_id)
+         VALUES ($1, $2, $3, 'lease-documents-private', $4, $5, $6, 'corrected_signature', $7)`,
+        [ORG_ID, lease, next, replacement, bytes, USERS.admin, current],
+      ),
+      archivedInsert,
+    );
   });
 
   const after = await footprint(lease);
-  assert.equal(after.pdfs, 1);
-  assert.equal(after.files, 1);
-  assert.equal(after.replaced, 0);
+  assert.equal(after.pdfs, before.pdfs);
+  assert.equal(after.files, before.files);
+  assert.equal(after.replaced, before.replaced);
   assert.equal(after.lease_audits, before.lease_audits);
 });
