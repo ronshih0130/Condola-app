@@ -62,9 +62,9 @@ for(const results of [false,true]) test(`six real payment paths reach only the p
     await c.query(`UPDATE platform_settings SET value=jsonb_set(value,'{enabled}','false'::jsonb) WHERE key='bank_matching'`);
     const legacy=await pair();await approveMatch(session,legacy.suggestion);await check(legacy.payment,"payment_confirmed");
     await c.query(`UPDATE platform_settings SET value=jsonb_set(value,'{enabled}','true'::jsonb) WHERE key='bank_matching'`);
-    const enhanced=await pair();await decideBankMatch(session,{bankId:enhanced.bank,suggestionId:enhanced.suggestion,decision:"match",reason:"Synthetic"});await check(enhanced.payment,"payment_confirmed");
-    const suggestion=await pair();await decideBankMatch(session,{bankId:suggestion.bank,suggestionId:suggestion.suggestion,decision:"reject",reason:"Synthetic"});assert.equal((await c.query(`SELECT 1 FROM app.b017_occurrences WHERE payment_id=$1`,[suggestion.payment])).rowCount,0);
-    const linked=await pair(manager.paymentId);await decideBankMatch(session,{bankId:linked.bank,suggestionId:linked.suggestion,decision:"match",reason:"Synthetic"});await check(manager.paymentId,"payment_confirmed");
+    const enhanced=await pair();await decideBankMatch(session,{bankId:enhanced.bank,suggestionId:enhanced.suggestion,decision:"match",reason:"other"});await check(enhanced.payment,"payment_confirmed");
+    const suggestion=await pair();await decideBankMatch(session,{bankId:suggestion.bank,suggestionId:suggestion.suggestion,decision:"reject",reason:"other"});assert.equal((await c.query(`SELECT 1 FROM app.b017_occurrences WHERE payment_id=$1`,[suggestion.payment])).rowCount,0);
+    const linked=await pair(manager.paymentId);await decideBankMatch(session,{bankId:linked.bank,suggestionId:linked.suggestion,decision:"match",reason:"other"});await check(manager.paymentId,"payment_confirmed");
     const none=await submitted(null);await confirmPayment(session,none);await check(none,"payment_confirmed",0);
     for(const payment of [manager.paymentId,legacy.payment,enhanced.payment]) {assert.equal((await c.query(`SELECT 1 FROM ledger_transactions WHERE source_table='payments' AND source_id=$1 AND kind='payment'`,[payment])).rowCount,1);assert.equal((await c.query(`SELECT sum(amount_minor)::int AS n FROM payment_allocations WHERE payment_id=$1`,[payment])).rows[0].n,100);}
     const sid=randomUUID();await c.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')`,[sid,lease.principal,randomUUID()]);
@@ -150,7 +150,7 @@ test("existing manager/accountant action roles remain exact while the center is 
   const recorded=await recordPayment(manager,{leaseId:lease.id,amountMajor:1,paidOn:"2026-11-01",last5:"12345",reference:"Synthetic"});
   for(const payment of [confirmed,rejected,recorded.paymentId])assert.equal((await c.query(`SELECT 1 FROM app.b017_occurrences WHERE payment_id=$1 AND actor_id=$2`,[payment,manager.userId])).rowCount,1);
   await assert.rejects(reversePayment(manager,confirmed,"Synthetic"));await reversePayment(accountant,confirmed,"Synthetic");
-  const bank=await pair();assert.equal(await decideBankMatch(manager,{bankId:bank.bank,paymentId:bank.payment,decision:"match",reason:"Synthetic"}),null);assert.equal(await decideBankMatch(accountant,{bankId:bank.bank,paymentId:bank.payment,decision:"match",reason:"Synthetic"}),true);
+  const bank=await pair();assert.equal(await decideBankMatch(manager,{bankId:bank.bank,paymentId:bank.payment,decision:"match",reason:"other"}),null);assert.equal(await decideBankMatch(accountant,{bankId:bank.bank,paymentId:bank.payment,decision:"match",reason:"other"}),true);
   await c.query(`UPDATE platform_settings SET value=jsonb_set(value,'{enabled}','false'::jsonb) WHERE key='bank_matching'`);const legacy=await pair();await approveMatch(accountant,legacy.suggestion);
   for(const payment of [bank.payment,legacy.payment])assert.equal((await c.query(`SELECT 1 FROM app.b017_occurrences WHERE payment_id=$1 AND actor_id=$2`,[payment,accountant.userId])).rowCount,1);
   const forged=await submitted();await assert.rejects(confirmPayment({...session,role:"manager"},forged));assert.equal((await c.query(`SELECT status::text FROM payments WHERE id=$1`,[forged])).rows[0].status,"submitted");

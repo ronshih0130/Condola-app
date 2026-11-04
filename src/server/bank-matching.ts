@@ -5,7 +5,7 @@ import { allocateAndLedger, lockAllocationInvoices } from "./domain";
 import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
 import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
 import { scoreMatch } from "./money";
-import { parseBankCsv } from "./bank-matching-rules";
+import { bankMatchReasonCode, parseBankCsv } from "./bank-matching-rules";
 import { bankMatchBasis } from "../lib/bank-match-basis";
 import type { Session } from "./types";
 
@@ -86,9 +86,9 @@ export async function importBankFile(session: Session, accountId: string, bytes:
   });
 }
 
-export async function decideBankMatch(session: Session, input: {bankId:string;paymentId?:string;suggestionId?:string;decision:"match"|"reject";reason:string}) {
-  const reason = typeof input.reason === "string" ? input.reason.trim() : "";
-  if (!reason || reason.length > 500 || !["match","reject"].includes(input.decision)) throw fail();
+export async function decideBankMatch(session: Session, input: {bankId:string;paymentId?:string;suggestionId?:string;decision:"match"|"reject";reason:unknown}) {
+  const reason = bankMatchReasonCode(input.reason);
+  if (!reason || !["match","reject"].includes(input.decision)) throw fail();
   return operation(session,true,async (client) => {
     let initialPayment: {id:string;lease_id:string} | null=null;
     let resultEnabled=false;

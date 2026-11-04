@@ -71,7 +71,7 @@ test("bank lock first does not append utility to an invoice that became paid", a
   const before=await snapshot();
   let bank:Promise<unknown>|undefined, utility:Promise<unknown>|undefined;
   try {
-    bank=decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"synthetic race"});
+    bank=decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"other"});
     const bankPid=await waitBlocked(gate.pid);
     utility=confirmUtilityRun(session,f.run);
     await waitBlocked(bankPid);
@@ -98,7 +98,7 @@ test("utility lock first preserves a full bank payment without partial posting",
   try {
     utility=confirmUtilityRun(session,f.run);
     const utilityPid=await waitBlocked(gate.pid);
-    bank=decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"synthetic race"});
+    bank=decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"other"});
     await waitBlocked(utilityPid);
     await gate.release();
     const outcomes=await Promise.allSettled([utility,bank]);
@@ -155,7 +155,7 @@ test("mixed paid and unpaid invoice corrections preserve both paths", async () =
   const payment=(await db.query<{id:string}>(`INSERT INTO payments(org_id,property_id,lease_id,payer_contact_id,currency,amount_minor,paid_on,method,status,source,submitted_by) VALUES ($1,$2,$3,$4,'TWD',$5,$6,'bank_transfer','submitted','tenant_portal',$7) RETURNING id::text`,[ORG_ID,property,parties[0].lease,parties[0].contact,amount,period.start,USERS.admin])).rows[0].id;
   const imported=await importBankFile(session,account,new TextEncoder().encode(`date,amount,last5,memo\n${period.start},140.00,12345,mixed-correction`),"utf-8"); assert.ok(imported);
   const bank=(await db.query<{id:string}>(`SELECT id::text FROM bank_transactions WHERE import_id=$1`,[imported.importId])).rows[0].id;
-  assert.equal(await decideBankMatch(session,{bankId:bank,paymentId:payment,decision:"match",reason:"mixed fixture"}),true);
+  assert.equal(await decideBankMatch(session,{bankId:bank,paymentId:payment,decision:"match",reason:"other"}),true);
   const paidBefore=(await db.query(`SELECT to_jsonb(i) AS invoice,(SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM invoice_lines l WHERE l.invoice_id=i.id) AS lines FROM invoices i WHERE id=$1`,[parties[0].invoice])).rows[0];
   const correction=await prepareUtilityRun(session,{...input,readings:rooms.map(spaceId=>({spaceId,kwh:20}))}); assert.equal(correction.runId,run.runId);
   await confirmUtilityRun(session,correction.runId);
