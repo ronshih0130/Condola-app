@@ -27,6 +27,7 @@ BEGIN
     IF cols IS NULL THEN RETURN NEW; END IF;
   END IF;
 
+  BEGIN
   -- Portal tokens live in portal_invite_secrets, not invitations.
   -- Also exclude token fields if present in an invitation row.
   FOR row_index IN 1..2 LOOP
@@ -87,6 +88,29 @@ BEGIN
       n := j;
     END IF;
   END LOOP;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'fn_audit_invitations masking fallback: %', SQLSTATE;
+
+    FOR row_index IN 1..2 LOOP
+      j := CASE WHEN row_index = 1 THEN o ELSE n END;
+      IF j IS NOT NULL THEN
+        j := j - ARRAY['code_hash', 'token', 'token_hash', 'invite_token',
+                       'invite_token_hash', 'portal_token', 'portal_token_hash'];
+        IF j ? 'email' THEN
+          j := jsonb_set(j, '{email}', to_jsonb('[redacted]'::text), false);
+        END IF;
+        IF j ? 'phone_e164' THEN
+          j := jsonb_set(j, '{phone_e164}', to_jsonb('[redacted]'::text), false);
+        END IF;
+      END IF;
+
+      IF row_index = 1 THEN
+        o := j;
+      ELSE
+        n := j;
+      END IF;
+    END LOOP;
+  END;
 
   INSERT INTO audit_log (
     org_id, actor_user_id, actor_role, table_name, row_id, action,
@@ -100,9 +124,6 @@ BEGIN
     nullif(current_setting('app.change_reason', true), ''),
     nullif(current_setting('app.request_id', true), '')
   );
-  RETURN coalesce(NEW, OLD);
-EXCEPTION WHEN OTHERS THEN
-  -- Audit failures must never reject the invitation write.
   RETURN coalesce(NEW, OLD);
 END;
 $$;
