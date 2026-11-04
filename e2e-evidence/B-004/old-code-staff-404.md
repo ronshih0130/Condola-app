@@ -41,4 +41,4 @@ Redeploying `1c8fd07bc1fd78e7a86a00daff994f68e734be4f` with the secrets set, sta
 
 The source reading above still describes the old program: it needs `PAPER_LEASE_VERSIONS_ENABLED` in the environment, and it does not read `TENANT_SIGNED_PDF_ENABLED` or `platform_settings` for the staff download. With that flag secret present, the old program serves the file. The 404 was the missing secret restored by version rollback, not an incompatibility that new code has to patch.
 
-Flags stay OFF in this note. No secret value is recorded here. The rollback procedure is in `ops/deploy-checklist.md`.
+Flags stay OFF in this note. No secret value is recorded here. The rollback procedure is in [docs/policy/deploy-checklist.md](../../docs/policy/deploy-checklist.md).

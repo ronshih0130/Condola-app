@@ -11,30 +11,43 @@
 
 來源：I-24；QA 10/26 02:20。
 
-## B-004 rollback by redeploy
+## B-004 rollback
 
-`wrangler rollback e6788e38` is not the B-004 rollback. It restores that version's own secret set, which predates `PAPER_LEASE_VERSIONS_ENABLED`. Use a redeploy of the old SHA with the flag secret set, then roll forward and turn every B-004 switch OFF.
+Two paths. Names only. No secret values belong in this file.
 
-Names only. No secret values belong in this file.
+A flag is ON only when its environment value is exactly `true`. OFF is the kill: the secret is absent, or the value is anything other than `true`. `true` is the enable string, not the kill.
+
+### Scope
+
+Staging Worker `condola-staging`, Wrangler env `staging`, deploy `scripts/cf-deploy-staging.sh`. Production Worker `condola-prod`, Wrangler env `production`, deploy as in `docs/DEPLOY.md` (`npm run cf:build`, then `npx wrangler deploy --env production`). This note does not run either deploy and does not merge `main`. Flags stay OFF unless an accepted flags-ON check turns them on and then restores them.
 
 ### Flag secrets each target carries
 
 | Target | Flag secret names |
 | --- | --- |
-| `wrangler rollback` of Worker version `e6788e38` | None for B-004. That secret set predates `PAPER_LEASE_VERSIONS_ENABLED`. `TENANT_SIGNED_PDF_ENABLED` is not a secret in that program. |
-| Redeploy of `1c8fd07bc1fd78e7a86a00daff994f68e734be4f` (proved on staging Worker `16b745e5`) | `PAPER_LEASE_VERSIONS_ENABLED`. `TENANT_SIGNED_PDF_ENABLED` is still not a secret; that source hard-codes it. |
-| Current candidate on `mode-b-repair-override-prep` | `PAPER_LEASE_VERSIONS_ENABLED` and `TENANT_SIGNED_PDF_ENABLED`. Both stay unset, or any value other than the exact kill-switch string, unless a later accepted check turns one on and then turns it off again. |
+| Flags-OFF emergency: `wrangler rollback 569555df` | That version's own secret set. It is the path while B-004 flags are already OFF. Do not add `PAPER_LEASE_VERSIONS_ENABLED` for this path. |
+| `wrangler rollback e6788e38` | None for B-004. That secret set predates `PAPER_LEASE_VERSIONS_ENABLED`. Do not use this version for a flags-ON rollback. |
+| Flags-ON: redeploy `1c8fd07bc1fd78e7a86a00daff994f68e734be4f` (proved on staging Worker `16b745e5`) | `PAPER_LEASE_VERSIONS_ENABLED`. `TENANT_SIGNED_PDF_ENABLED` is not a secret in that source; the constant is hard-coded. |
+| Current candidate on `mode-b-repair-override-prep` | `PAPER_LEASE_VERSIONS_ENABLED` and `TENANT_SIGNED_PDF_ENABLED`. Both stay absent, or set to a value that is not `true`. |
 
-### Redeploy the old SHA
+### Flags-OFF emergency rollback
 
-1. Check out `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`. Do not merge `main`.
+`wrangler rollback 569555df` on the Worker that is serving (`condola-staging` or, when production is authorized, `condola-prod`). Do not set B-004 flag secrets. Do not change `platform_settings` or organization flags.
+
+### Flags-ON rollback
+
+Redeploy the old code with the secrets set. Do not use `wrangler rollback e6788e38`.
+
+1. Check out `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`.
 2. Build with `npm run cf:build`.
-3. Deploy with `scripts/cf-deploy-staging.sh` (`npx opennextjs-cloudflare deploy --env staging`). Worker name: `condola-staging`.
-4. Set the flag secret `PAPER_LEASE_VERSIONS_ENABLED` on that Worker. Do not record the value.
+3. Staging: `scripts/cf-deploy-staging.sh` to `condola-staging`. Production, only when authorized: the production deploy in `docs/DEPLOY.md` to `condola-prod`.
+4. Set the flag secret `PAPER_LEASE_VERSIONS_ENABLED` on that latest deployment. Do not record the value.
 5. Set platform_settings row `tenant_signed_pdf` to JSON true for the tenant read.
 6. Set organization flags `paper_lease_versions` and `tenant_signed_pdf` to boolean true on the organization under test only.
 
-### After that redeploy
+If a secret update fails, or the secret attaches only to the latest Worker version and not to a rolled-back version, stop retrying it on the old version. Redeploy the target code so that deployment is the latest version, then set the secret there.
+
+After that redeploy:
 
 - Logged-in staff download of the same signed PDF returns 200.
 - Logged-in tenant download of that PDF returns 200.
@@ -43,20 +56,11 @@ Names only. No secret values belong in this file.
 - A logged-out request returns 307 to login.
 - The old code writes a tenant download audit and writes no staff download audit. The missing staff audit is accepted.
 
-### Roll forward
+### Roll forward and restore
 
-1. Check out the candidate that was serving before the rollback.
-2. Build with `npm run cf:build` and deploy `condola-staging` again with `scripts/cf-deploy-staging.sh`.
-3. Remove `PAPER_LEASE_VERSIONS_ENABLED` and `TENANT_SIGNED_PDF_ENABLED` from the Worker, or leave them as any value other than the exact kill-switch string.
-4. Remove the `tenant_signed_pdf` platform_settings row.
-5. Unset organization flags `paper_lease_versions` and `tenant_signed_pdf`.
-
-### Everything OFF
-
-Confirm all of these before calling the rollback finished:
-
-- `PAPER_LEASE_VERSIONS_ENABLED` is absent or not the exact kill-switch string.
-- `TENANT_SIGNED_PDF_ENABLED` is absent or not the exact kill-switch string.
-- `platform_settings` has no `tenant_signed_pdf` row.
-- No organization has `paper_lease_versions` or `tenant_signed_pdf` set.
-- `ops/flags.yaml` still has both of those flags default false.
+1. Record, before any change, the audit_log high-water mark and the exact prior value of each B-004 secret, `platform_settings` row, and organization flag (absent or the stored value).
+2. Check out the candidate that was serving before the rollback.
+3. Build with `npm run cf:build` and deploy that candidate to the same Worker.
+4. Restore each flag exactly to the recorded value. If that value was absent or false, leaving it absent or false is the accepted restoration. Do not leave a flag `true`.
+5. Final check: `audit_log` has 0 new rows from this procedure after that restore. If the flags-ON proof wrote its one accepted tenant `signed_pdf_downloaded` row, record that row and require 0 further rows.
+6. `ops/flags.yaml` still has `PAPER_LEASE_VERSIONS_ENABLED` and `TENANT_SIGNED_PDF_ENABLED` default false.

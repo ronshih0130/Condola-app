@@ -459,9 +459,10 @@ STOP POINT: bounded source review in progress; next: finish accepted safe diagno
 
 STOP POINT: STOPPED_FOR_GROK_CEO_HANDOFF; next: CEO讀交接並安排權責，禁止自動續作；owner: Grok Bot（CEO）。
 
-## B-004 已知差異，延後 — 2026-11-04
+## B-004 已知差異，延後 — Ron 2026-11-04 01:25 PT
 
-Low priority. No code change in this note. Flags stay OFF.
+Decided by Ron at 01:25 PT, relayed via QA. Low priority. No code change in this note. Flags stay OFF.
 
-- 已知差異，延後: the staff paper/signed-PDF panel stays inside the signing card and is hidden while the tenant ID check blocks signing (`idBlocked`).
-- 已知差異，延後: `/t/history/<lease>/signed` and its panel serve only the tenant's own ended leases; an active lease is not served there. `pending_signature` stays 404 with no audit.
+- 已知差異，延後, decided: the staff paper/signed-PDF panel stays inside the signing card and is hidden while the tenant ID check blocks signing (`idBlocked`).
+- 已知差異，延後, decided: `/t/history/<lease>/signed` and its panel serve only the tenant's own ended leases. An active lease is not served there.
+- OPEN: whether a `pending_signature` lease on `/t/history/<lease>/signed` stays 404 with no audit. Not decided.
