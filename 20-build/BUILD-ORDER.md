@@ -255,7 +255,7 @@ STOP POINT: bounded source review in progress; next: finish accepted safe diagno
 
 ## B-004 QA round 4 — 2026-11-04
 
-B-004 stays `partial`. The raw log `gate-9ce4a168d5482ae1afb3189624ddd1b2c50fbf38-rls.log` is restored to the bytes at `4da59509`. The UNAPPROVED correction is [gate-9ce4a168-correction.md](../e2e-evidence/B-004/gate-9ce4a168-correction.md). Tenant signed-PDF downloads are tested through the route GET handler. Detail: [status](../e2e-evidence/B-004/status.md).
+B-004 stays `partial`. The raw log `gate-9ce4a168d5482ae1afb3189624ddd1b2c50fbf38-rls.log` is restored to the bytes at `4da59509`. The UNAPPROVED correction is [gate-9ce4a168-correction.md](../e2e-evidence/B-004/gate-9ce4a168-correction.md). Tenant signed-PDF downloads are tested through the route GET handler. Full gate on `f8e8e56b2b1759799500554ec962f48e1ef1bd95`: unit 654 pass, 0 fail, 0 skip; RLS 488 pass, 0 fail, 1 UNAPPROVED skip. Detail: [status](../e2e-evidence/B-004/status.md).
 
 ## B-004 QA round 3 — 2026-11-04
 
