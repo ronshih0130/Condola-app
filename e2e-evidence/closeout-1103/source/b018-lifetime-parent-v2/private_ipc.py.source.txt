@@ -1,0 +1,154 @@
+"""Inactive private framed pipe transport; no I/O occurs on import."""
+from __future__ import annotations
+import json
+import os
+import struct
+import threading
+from owned import Unavailable, _strict_json
+
+MAX_FRAME=32*1024*1024
+
+
+def encode(value: dict) -> bytes:
+    raw=json.dumps(value,separators=(',',':'),allow_nan=False).encode('utf-8','strict');_strict_json(raw)
+    if not 0 < len(raw) <= MAX_FRAME:
+        raise Unavailable('private-frame-size-unavailable')
+    return struct.pack('>I',len(raw))+raw
+
+
+def _pairs(items):
+    result={}
+    for key,value in items:
+        if key in result:
+            raise Unavailable('private-frame-ambiguous')
+        result[key]=value
+    return result
+
+
+def decode(raw: bytes) -> dict:
+    if not 0 < len(raw) <= MAX_FRAME:
+        raise Unavailable('private-frame-size-unavailable')
+    return _strict_json(raw)
+
+
+class PrivateExchange:
+    """One request/response, bounded by the owner's actual child deadline.
+
+    Parent must call launched() immediately after spawn, then stop/reap the owned
+    child before finish(). On an interrupted spawn call abort_before_launch().
+    No data or exception payload is logged or included in public child receipts.
+    """
+    def __init__(self, request: dict):
+        self._frame=encode(request)
+        self.child_input=self._parent_output=self._parent_input=self.child_output=-1
+        self._lock=threading.Lock();self._closed=False;self._launched=False
+        try:
+            self.child_input,self._parent_output=os.pipe()
+            self._parent_input,self.child_output=os.pipe()
+        except BaseException:
+            for name in ('child_input','_parent_output','_parent_input','child_output'):
+                try:self._close(name)
+                except OSError:pass
+            self._frame=b'';self._closed=True;raise
+        self.result=None;self.failed=False;self._threads=[]
+
+    def _close(self,name):
+        with self._lock:
+            fd=getattr(self,name);setattr(self,name,-1)
+        if fd>=0: os.close(fd)
+
+    def child_fds(self):
+        if self._launched or self._closed:
+            raise Unavailable('private-channel-state')
+        return (self.child_input,self.child_output)
+
+    def launched(self):
+        if self._launched or self._closed:
+            raise Unavailable('private-channel-state')
+        self._launched=True
+        errors=False
+        for name in ('child_input','child_output'):
+            try:self._close(name)
+            except OSError:errors=True
+        if errors:
+            self.failed=True;self._frame=b''
+            for name in ('_parent_input','_parent_output'):
+                try:self._close(name)
+                except OSError:pass
+            self._closed=True;raise Unavailable('private-channel-close')
+        def write():
+            try:
+                view=memoryview(self._frame)
+                while view:
+                    n=os.write(self._parent_output,view)
+                    if n<=0:
+                        raise Unavailable('private-channel-write')
+                    view=view[n:]
+            except BaseException:
+                self.failed=True
+            finally:
+                self._frame=b''
+                try:self._close('_parent_output')
+                except OSError:self.failed=True
+        def read_exact(n):
+            parts=[]
+            while n:
+                part=os.read(self._parent_input,n)
+                if not part:
+                    raise Unavailable('private-channel-truncated')
+                parts.append(part);n-=len(part)
+            return b''.join(parts)
+        def read():
+            try:
+                length=struct.unpack('>I',read_exact(4))[0]
+                if not 0<length<=MAX_FRAME:
+                    raise Unavailable('private-channel-size')
+                raw=read_exact(length)
+                if os.read(self._parent_input,1):
+                    raise Unavailable('private-channel-trailing-data')
+                self.result=decode(raw)
+            except BaseException:
+                self.failed=True
+            finally:
+                try:self._close('_parent_input')
+                except OSError:self.failed=True
+        for target,name in ((write,'_parent_output'),(read,'_parent_input')):
+            thread=threading.Thread(target=target,daemon=True)
+            try:thread.start();self._threads.append(thread)
+            except BaseException:
+                self.failed=True
+                try:self._close(name)
+                except OSError:pass
+                if name=='_parent_output':
+                    self._frame=b''
+                    try:self._close('_parent_input')
+                    except OSError:pass
+                raise Unavailable('private-channel-thread-unavailable')
+
+
+    def abort_before_launch(self):
+        with self._lock:
+            if self._launched: raise Unavailable('private-channel-already-launched')
+            if self._closed: return
+            self._closed=True
+        failed=False
+        for name in ('child_input','child_output','_parent_input','_parent_output'):
+            try:self._close(name)
+            except OSError:failed=True
+        self._frame=b''
+        if failed:raise Unavailable('private-channel-close')
+
+    def finish(self):
+        if not self._launched or self._closed:
+            raise Unavailable('private-channel-state')
+        for thread in self._threads:
+            thread.join(timeout=5)
+        # Never close a descriptor underneath a still-running thread: ownership is
+        # unknown until it exits. The outer parent quarantines and reports this.
+        if any(thread.is_alive() for thread in self._threads):
+            raise Unavailable('private-channel-not-drained')
+        self._closed=True
+        if self.failed or not isinstance(self.result,dict):
+            raise Unavailable('private-channel-unavailable')
+        result=self.result;self.result=None
+        return result

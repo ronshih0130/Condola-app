@@ -1,6 +1,6 @@
 # Ordered build queue
 
-> **Current 2026-11-03T09:28:00.900653-08:00: B016 code988b9f9 fullgate643unit/467RLS+solepriorhistoricalskip and mock13/type/lintPASS; Astra disconnectedmock CODE_GATE_GO. BrowserFAILpending and realEmail/company/fees/external acceptance incomplete. B016/B017 pending dependent decisions/readiness; B018 read-only inventory next. No wholeBdone/all39retained.**
+> **交接停止 2026-11-03T18:51:59-08:00: 20 個已開始項目皆 partial，19 個 todo，無 whole-feature done。應用程式候選 1c8fd07 的既有完整 gate 651 unit / 476 RLS PASS，0 FAIL、1 個先前核准的歷史 fixture SKIP；1024 source pins 未變。最後狀態與逐項下一步見 codex-handoff-1103.md。由 Grok Bot（CEO）統籌決策；未授權自動續作。**
 
 Priority follows ROADMAP P1: finish existing flag-OFF work, then manager → tenant → owner → vendor → platform gaps, then complete three-portal LINE.
 
@@ -10,34 +10,34 @@ All feature flags below default **OFF**. Names marked `*` are proposals; reconci
 
 | ID | Title | Story / journey / capability; inventory | Depends on | Flag, default OFF | Class | Size / hours | Status |
 |---|---|---|---|---|---|---|---|---|
-| B-001 | Finish e-sign integration and gates; activation: **Ron decides** | MGT-09/10, TEN-03; J2; CAP-P-09/10, CAP-T-01/08, CAP-M-01/19; T-04 | Existing paper fallback evidence | ESIGN_ENABLED | B | L / 24–40 | pending |
-| B-002 | Finish MOVE_OUT and ID_PURGE; activation: **Ron decides** | MGT-20, TEN-02, PLT-04; J1.7/J6; CAP-M-13, CAP-P-02, CAP-T-06; M-67 | Existing errredact/privacy release evidence | MOVE_OUT_ENABLED; ID_PURGE_ENABLED | B | M / 16–24 | pending |
-| B-003 | Finish payee details and full access audit; activation: **Ron decides** | MGT-04, TEN-06; J3.3; CAP-M-03, CAP-T-03; T-08 | Existing payee lane | PAYEE_DETAILS_ENABLED | B | M / 16–24 | pending |
-| B-004 | Verify paper lease versions, tenant downloads and audit | MGT-10, TEN-03; J2.6/7; CAP-M-02, CAP-T-02 | — | PAPER_LEASE_VERSIONS_ENABLED; TENANT_SIGNED_PDF_ENABLED | B | S / 6–10 | pending |
-| B-005 | Onboarding, invitations and resumable trial | MGT-01/02/03/28; J1; CAP-M-04/05/28; P-10 | — | TEAM_INVITES_ENABLED; ONBOARDING_PROGRESS* | B | M / 16–24 | pending |
-| B-006 | Import error detail and regional source formats | MGT-05; J2.1; CAP-M-06 | — | IMPORT_ERROR_DETAILS* | A | S / 6–10 | pending |
-| B-007 | Deposit rule hints and excess-reason audit | MGT-08; J2.3; CAP-M-07 | — | DEPOSIT_RULE_HINTS* | B | M / 12–20 | pending |
-| B-008 | Billing, utility and statement amount previews | MGT-12/26; J3.1/J7; CAP-M-08/22; M-40 | — | BILLING_PREVIEWS* | B | M / 20–32 | pending |
-| B-009 | Bank CSV dedupe and manual matching | MGT-14; J3.5; CAP-M-10/23 | — | BANK_MATCHING* | B | M / 16–24 | pending |
-| B-010 | Rent reminders and payment review results | MGT-13/15, TEN-07; J3.2/6/7; CAP-M-09/11; M-70 reminder | —; delivery adapter contract in B-028 | RENT_EMAIL_REMINDERS*; PAYMENT_REVIEW_RESULTS* | B | M / 20–32 | pending |
-| B-011 | Handover and deposit settlement, including bilateral replies | MGT-16/23/24, TEN-10/11; J4/J6.6–8; CAP-M-12/14/21, CAP-T-05/10; M-26 | B-002 | HANDOVER_RECORDS*; DEPOSIT_SETTLEMENT* | B | L / 40–64 | pending |
-| B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | pending |
-| B-013 | Manager dispatch and shared repair approval state | MGT-17/18/19/35; J5; CAP-M-15/16; M-48/49 | —; coordinated B-021/B-024 | vendor_dispatch; REPAIR_APPROVALS* | B | L / 32–48 | pending |
-| B-014 | Owner net ledger, transfers and report versions | MGT-25/26/27, OWN-02; J7; CAP-M-17/18, CAP-O-03; M-43 | B-008 | OWNER_NET_LEDGER*; MONTHLY_REPORT_DELIVERY* | B | L / 24–40 | pending |
-| B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | pending |
-| B-016 | Company/profile settings and management-fee rules | MGT-04; J1.1/J7; CAP-M-25/29; M-42/58 | B-003 | company_profile_edit; MANAGEMENT_FEE_RULES* | B | M / 20–32 | pending |
-| B-017 | Custom role permissions with escalation protection | PLT-01/02; J1.4; CAP-P-12; M-54 | — | CUSTOM_ROLES* | B | L / 24–40 | in_progress |
-| B-018 | Tenant payment history and home states | TEN-07/08; J3; CAP-T-04/09; T-09 | B-003, B-010 | TENANT_PAYMENT_HISTORY* | B | M / 12–20 | in_progress |
+| B-001 | Finish e-sign integration and gates; activation: **Ron decides** | MGT-09/10, TEN-03; J2; CAP-P-09/10, CAP-T-01/08, CAP-M-01/19; T-04 | Existing paper fallback evidence | ESIGN_ENABLED | B | L / 24–40 | partial |
+| B-002 | Finish MOVE_OUT and ID_PURGE; activation: **Ron decides** | MGT-20, TEN-02, PLT-04; J1.7/J6; CAP-M-13, CAP-P-02, CAP-T-06; M-67 | Existing errredact/privacy release evidence | MOVE_OUT_ENABLED; ID_PURGE_ENABLED | B | M / 16–24 | partial |
+| B-003 | Finish payee details and full access audit; activation: **Ron decides** | MGT-04, TEN-06; J3.3; CAP-M-03, CAP-T-03; T-08 | Existing payee lane | PAYEE_DETAILS_ENABLED | B | M / 16–24 | partial |
+| B-004 | Verify paper lease versions, tenant downloads and audit | MGT-10, TEN-03; J2.6/7; CAP-M-02, CAP-T-02 | — | PAPER_LEASE_VERSIONS_ENABLED; TENANT_SIGNED_PDF_ENABLED | B | S / 6–10 | partial |
+| B-005 | Onboarding, invitations and resumable trial | MGT-01/02/03/28; J1; CAP-M-04/05/28; P-10 | — | TEAM_INVITES_ENABLED; ONBOARDING_PROGRESS* | B | M / 16–24 | partial |
+| B-006 | Import error detail and regional source formats | MGT-05; J2.1; CAP-M-06 | — | IMPORT_ERROR_DETAILS* | A | S / 6–10 | partial |
+| B-007 | Deposit rule hints and excess-reason audit | MGT-08; J2.3; CAP-M-07 | — | DEPOSIT_RULE_HINTS* | B | M / 12–20 | partial |
+| B-008 | Billing, utility and statement amount previews | MGT-12/26; J3.1/J7; CAP-M-08/22; M-40 | — | BILLING_PREVIEWS* | B | M / 20–32 | partial |
+| B-009 | Bank CSV dedupe and manual matching | MGT-14; J3.5; CAP-M-10/23 | — | BANK_MATCHING* | B | M / 16–24 | partial |
+| B-010 | Rent reminders and payment review results | MGT-13/15, TEN-07; J3.2/6/7; CAP-M-09/11; M-70 reminder | —; delivery adapter contract in B-028 | RENT_EMAIL_REMINDERS*; PAYMENT_REVIEW_RESULTS* | B | M / 20–32 | partial |
+| B-011 | Handover and deposit settlement, including bilateral replies | MGT-16/23/24, TEN-10/11; J4/J6.6–8; CAP-M-12/14/21, CAP-T-05/10; M-26 | B-002 | HANDOVER_RECORDS*; DEPOSIT_SETTLEMENT* | B | L / 40–64 | partial |
+| B-012 | Renewal comparison and early-termination lifecycle | MGT-20/21/22, TEN-14–17; J6; CAP-M-13/20, CAP-T-11; M-25 | B-002, B-011 | LEASE_LIFECYCLE_RECORDS*; LEASE_RENEWAL* | B | L / 32–48 | partial |
+| B-013 | Manager dispatch and shared repair approval state | MGT-17/18/19/35; J5; CAP-M-15/16; M-48/49 | —; coordinated B-021/B-024 | vendor_dispatch; REPAIR_APPROVALS* | B | L / 32–48 | partial |
+| B-014 | Owner net ledger, transfers and report versions | MGT-25/26/27, OWN-02; J7; CAP-M-17/18, CAP-O-03; M-43 | B-008 | OWNER_NET_LEDGER*; MONTHLY_REPORT_DELIVERY* | B | L / 24–40 | partial |
+| B-015 | Archive records and reuse/edit tenant identities | MGT-06/07; J2.1/3; CAP-M-26/27; M-11/14 | — | RECORD_ARCHIVE*; TENANT_DIRECTORY_EDIT* | B | M / 16–24 | partial |
+| B-016 | Company/profile settings and management-fee rules | MGT-04; J1.1/J7; CAP-M-25/29; M-42/58 | B-003 | company_profile_edit; MANAGEMENT_FEE_RULES* | B | M / 20–32 | partial |
+| B-017 | Custom role permissions with escalation protection | PLT-01/02; J1.4; CAP-P-12; M-54 | — | CUSTOM_ROLES* | B | L / 24–40 | partial |
+| B-018 | Tenant payment history and home states | TEN-07/08; J3; CAP-T-04/09; T-09 | B-003, B-010 | TENANT_PAYMENT_HISTORY* | B | M / 12–20 | partial |
 | B-019 | Tenant conversation creation | TEN-13; J5; CAP-T-12; T-15 | — | TENANT_THREAD_CREATE* | B | S / 6–10 | todo |
 | B-020 | Tenant account, sessions, preferences and data requests | TEN-18; J1; CAP-T-13; T-16/17 | —; notification integration B-028 | TENANT_ACCOUNT_SETTINGS* | B | M / 16–24 | todo |
-| B-021 | Owner thresholds and versioned repair decisions | OWN-12/13/06; J5.4; CAP-O-01/02/08; O-05 | B-013 | REPAIR_APPROVALS* | B | M / 16–24 | pending |
+| B-021 | Owner thresholds and versioned repair decisions | OWN-12/13/06; J5.4; CAP-O-01/02/08; O-05 | B-013 | REPAIR_APPROVALS* | B | M / 16–24 | partial |
 | B-022 | Owner transfers, receipt title and report replies | OWN-02/03/10; J5.7/J7; CAP-O-04/06/07; O-08 | B-014 | OWNER_RECEIPT_TITLE*; OWNER_REPORT_REPLIES* | B | M / 16–24 | todo |
 | B-023 | Owner files, lifecycle replies, repairs, messages and settings | OWN-04/05/07/08/09; J1/J2/J5/J6; CAP-O-09/10/11; O-06/07/09/10/11 | B-001, B-011, B-012 | OWNER_PORTAL_EXTENSIONS* | B | L / 40–64 | todo |
 | B-024 | Vendor accept/reject/schedule/completion UI | VEN-01/04/13; J5.2–6; CAP-V-01/02/03; V-01/02/03 | B-013, B-021 | vendor_dispatch; VENDOR_COMPLETION_REASON*; REPAIR_APPROVALS* | B | M / 20–32 | todo |
 | B-025 | Vendor onboarding, fixed data, documents and trade fields | VEN-02/05/06/07/08/11/12; J1.8/J5.7; CAP-V-04/05/07/08/09; V-05–10 | B-022, B-024 | VENDOR_DOCUMENTS* | B | L / 40–64 | todo |
 | B-026 | Vendor estimates, account/history and enhanced sharing | VEN-03/09, MGT-30; J1.8/J5; CAP-V-06/10/11, CAP-M-24; V-11/12/13 | B-013, B-024, B-025 | VENDOR_ACCOUNT*; VENDOR_ESTIMATES*; VENDOR_LINK_ENABLED | B | L / 32–48 | todo |
 | B-027 | Platform isolation, partner consent and rollout controls | PLT-01/02/03/16; J1; CAP-P-01/03/05/06/07/09/12/16; M-68 | B-001–003 for relevant integration checks | PARTNER_CONSENT_GATE; PARTNER_PRICING_HIDE*; PARTNER_UNIT_OVERRIDE*; PARTNER_EA* | B | L / 32–48 | todo |
-| B-028 | Event delivery results, reminders and four-app notification center | PLT-05/13; J1/J3/J5/J7; CAP-P-13/15/22; P-19, M-70 | — | EMAIL_DELIVERY_RESULTS*; NOTIFICATION_CENTER* | B | L / 32–48 | pending |
+| B-028 | Event delivery results, reminders and four-app notification center | PLT-05/13; J1/J3/J5/J7; CAP-P-13/15/22; P-19, M-70 | — | EMAIL_DELIVERY_RESULTS*; NOTIFICATION_CENTER* | B | L / 32–48 | partial |
 | B-029 | Usage events and five metering hooks | PLT-11; J2/J3/J4/J5; CAP-P-11; P-23 | — | USAGE_EVENTS* | B | M / 16–24 | todo |
 | B-030 | Usage summaries, limits, plans and subscription lifecycle | PLT-12/15, MGT-33; J1/J3; CAP-P-25/26; P-22/24, M-68 | B-027, B-029; Ron pricing/provider decisions | USAGE_LIMITS*; SUBSCRIPTIONS* | B | L / 40–64 | todo |
 | B-031 | Audit detail, reliable uploads and token/session hardening | PLT-07/08/09; J1/J2/J4/J5; CAP-P-19/20/21/24 | B-001 | AUDIT_DETAIL*; UPLOAD_RECOVERY*; SESSION_HARDENING* | B | L / 24–40 | todo |

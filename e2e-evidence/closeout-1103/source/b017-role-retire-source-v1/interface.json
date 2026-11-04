@@ -1,0 +1,40 @@
+{
+  "status": "INACTIVE_UNPARSED_UNAPPLIED_SOURCE_ONLY",
+  "signature": "app.b017_retire_unassigned_role(uuid,uuid,text,uuid,uuid,bigint,bigint)",
+  "inputs": [
+    "p_session uuid (actual authenticated session checked by trusted adapter and auth.uid())",
+    "p_org uuid (pinned selected same live org)",
+    "p_env text (live only)",
+    "p_request uuid (caller retains per actor membership/org)",
+    "p_role uuid (scoped to org)",
+    "p_expected_role bigint 1..9223372036854775806",
+    "p_expected_authority bigint 1..9223372036854775806"
+  ],
+  "outputs": [
+    "outcome text",
+    "role_id uuid",
+    "role_revision bigint",
+    "authority_revision bigint"
+  ],
+  "outcomes": {
+    "retired": "original new result before verified COMMIT",
+    "replayed": "original committed metadata under fresh admission and original intent, no writes",
+    "conflict": "existing actor/request key has different operation, target or expected revisions",
+    "stale": "new otherwise admissible request has stale role or authority revision",
+    "in_use": "new current request found an assignment reference regardless of status",
+    "unavailable": "scope/control/session/role/receipt/ceiling failure; anomalous reference on exact historical replay unavailable",
+    "exception": "lock or post-write validation failure; transaction must roll back, no response treated as success"
+  },
+  "contract": {
+    "capabilityVersion": 1,
+    "supported": 17,
+    "recognized": 18,
+    "unsupported": "data.export",
+    "ceiling": "private original template keys subset of current effective keys; no target-base ceiling",
+    "ceilingEvidence": "17-bit mask of actual DB role keys, zero-based order from frozen supported catalog, stored only in private receipt, with digest and validated against intent",
+    "executeUnder": "READ COMMITTED inside canonical trusted adapter; currently no runtime caller privileges",
+    "mutation": "draft|active -> retired; no membership/assignment writes; exactly one role and one org epoch increment, one command and one audit",
+    "replayOrder": "Fresh management checks; original command/target/expected checks; reconstruct original ceiling and digest, no current target revision requirement. Recheck no reference/fresh session/authority before returning original result.",
+    "newOutcomePrecedence": "Failed governance/ceiling or missing/retired target -> unavailable. Current expected revisions required before in_use; all rejection results carry NULL identities/revisions."
+  }
+}

@@ -1,0 +1,58 @@
+"""Pure mocks and private temporary files only; no process, network or database."""
+import hashlib,os,tempfile,types,unittest
+from pathlib import Path
+from unittest.mock import patch
+import materialize,owned,private_ipc
+from owned import Unavailable
+class ParentAdversarial(unittest.TestCase):
+ def test_published_temp_symlink_replacement_is_rejected(self):
+  with tempfile.TemporaryDirectory(dir="/private/tmp") as tmp:
+   root=Path(tmp);os.chmod(root,0o700);(root/'other').write_text('{"x":1}\n');real=os.link
+   def attack(src,dst,**kw):
+    os.unlink(src,dir_fd=kw['src_dir_fd']);os.symlink('other',src,dir_fd=kw['src_dir_fd']);return real(src,dst,**kw)
+   with patch.object(owned.os,'link',side_effect=attack),self.assertRaises(Unavailable): owned.write_json(root,'test.json',{'x':1})
+ def test_private_reader_rejects_symlink_even_same_bytes(self):
+  with tempfile.TemporaryDirectory(dir="/private/tmp") as tmp:
+   root=Path(tmp);os.chmod(root,0o700);(root/'real').write_text('{"x":1}');os.chmod(root/'real',0o600);(root/'alias').symlink_to('real')
+   with self.assertRaises((Unavailable,OSError)):owned.read_json(root/'alias',hashlib.sha256(b'{"x":1}').hexdigest())
+ def test_unreadable_subtree_and_unlisted_application_entry_fail(self):
+  with tempfile.TemporaryDirectory(dir="/private/tmp") as tmp:
+   root=Path(tmp);os.chmod(root,0o700);child=root/'sub';child.mkdir();(child/'hidden').write_text('x');child.chmod(0)
+   try:
+    with self.assertRaises(Unavailable):materialize.tree_pins(root)
+   finally:child.chmod(0o700)
+   with self.assertRaises(Unavailable):materialize.verify_application_inventory(root,{'sub/expected':'a'*40})
+ def test_link_intermediate_cannot_escape_or_be_another_symlink(self):
+  with tempfile.TemporaryDirectory(dir="/private/tmp") as tmp:
+   root=Path(tmp);os.chmod(root,0o700);(root/'real').write_text('x');(root/'hop').symlink_to('real');(root/'outer').symlink_to('hop')
+   with self.assertRaises(Unavailable):materialize.tree_pins(root)
+ def test_live_leader_never_produces_drained_or_signal(self):
+  o=owned.OwnedChildren.__new__(owned.OwnedChildren);p=types.SimpleNamespace(returncode=None);c={'pid':123,'group':123,'process':p,'reaped':False,'drained':False,'exit':None,'signals':[],'naturalExitObserved':False}
+  fake=types.SimpleNamespace(stdout='123 123 123 S\n');clock=iter([0,0,2])
+  with patch.object(owned.sys,'platform','darwin'),patch.object(owned.subprocess,'run',return_value=fake),patch.object(owned.time,'monotonic',side_effect=lambda:next(clock)),patch.object(owned.time,'sleep'),patch.object(owned.os,'killpg',create=True) as kill:
+   with self.assertRaises(Unavailable):o.wait(c,1)
+   with self.assertRaises(Unavailable):o.stop(c)
+   kill.assert_not_called();self.assertFalse(c['drained'])
+ def test_unreaped_zombie_only_then_direct_child_waitpid(self):
+  o=owned.OwnedChildren.__new__(owned.OwnedChildren);p=types.SimpleNamespace(returncode=None);c={'pid':123,'group':123,'process':p,'reaped':False,'drained':False,'exit':None,'signals':[],'naturalExitObserved':False};fake=types.SimpleNamespace(stdout='123 123 123 Z\n')
+  with patch.object(owned.sys,'platform','darwin'),patch.object(owned.subprocess,'run',return_value=fake),patch.object(owned.os,'waitpid',return_value=(123,0)) as wait:
+   self.assertEqual(o.wait(c,1),0);wait.assert_called_once_with(123,os.WNOHANG);self.assertTrue(c['drained']);self.assertTrue(c['naturalExitObserved'])
+ def test_unknown_reaper_and_census_failure_never_certify_drain(self):
+  o=owned.OwnedChildren.__new__(owned.OwnedChildren);p=types.SimpleNamespace(returncode=None);c={'pid':123,'group':123,'process':p,'reaped':False,'drained':False,'exit':None,'signals':[],'naturalExitObserved':False};fake=types.SimpleNamespace(stdout='123 123 123 Z\n')
+  with patch.object(owned.sys,'platform','darwin'),patch.object(owned.subprocess,'run',return_value=fake),patch.object(owned.os,'waitpid',side_effect=ChildProcessError()):
+   with self.assertRaises(Unavailable):o.wait(c,1)
+  self.assertFalse(c['drained'])
+  with patch.object(owned.sys,'platform','darwin'),patch.object(owned.subprocess,'run',side_effect=owned.subprocess.TimeoutExpired('ps',5)):
+   with self.assertRaises(Unavailable):o.members(c)
+ def test_partial_pipe_and_duplicate_abort_cannot_close_reused_fds(self):
+  closed=[]
+  with patch.object(private_ipc.os,'pipe',side_effect=[(11,12),OSError('fake')]),patch.object(private_ipc.os,'close',side_effect=closed.append):
+   with self.assertRaises(OSError):private_ipc.PrivateExchange({'x':1})
+  self.assertCountEqual(closed,[11,12]);closed=[]
+  with patch.object(private_ipc.os,'pipe',side_effect=[(11,12),(13,14)]),patch.object(private_ipc.os,'close',side_effect=closed.append):
+   x=private_ipc.PrivateExchange({'x':1});x.abort_before_launch();x.abort_before_launch()
+  self.assertCountEqual(closed,[11,12,13,14])
+ def test_strict_numbers_and_utf8(self):
+  for raw in [b'{"x":1.5}',b'{"x":1e3}',b'{"x":9007199254740992}',b'{"x":"\\ud800"}',b'{"x":"\xff"}']:
+   with self.subTest(raw=raw),self.assertRaises((Unavailable,ValueError,UnicodeError)):private_ipc.decode(raw)
+if __name__=='__main__': unittest.main()

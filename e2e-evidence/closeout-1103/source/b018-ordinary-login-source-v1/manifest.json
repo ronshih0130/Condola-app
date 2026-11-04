@@ -1,0 +1,28 @@
+{
+  "scope": "One non-admitting ordinary-enabled raw acquisition component",
+  "status": "INDEPENDENT_SOURCE_REVIEW_PENDING",
+  "runtime": "NOT_RUN",
+  "fullController": "ABSENT",
+  "tests": {
+    "syntheticGroups": 4,
+    "pass": 4,
+    "fail": 0,
+    "skip": 0,
+    "actualGuard": "MOCKED",
+    "actualVerifier": "MOCKED"
+  },
+  "files": {
+    "observer.cjs": {
+      "bytes": 16144,
+      "sha256": "af7d1d4974e607b038d3e271a9ab0f6724b1c6ca89944f267dafb27bb33e369d"
+    },
+    "README.md": {
+      "bytes": 3404,
+      "sha256": "628710e6ccf9a3f18724f4ea887d0edf6bd1aa3c2778555a5240bfd813f5c3bd"
+    },
+    "observer.test.cjs": {
+      "bytes": 6167,
+      "sha256": "3cd36e75650968081aceb33fd14fa5a2bf0dcdd001a0d690daa2177ef1598052"
+    }
+  }
+}

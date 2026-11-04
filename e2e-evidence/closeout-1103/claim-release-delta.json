@@ -1,0 +1,7 @@
+{
+  "authority": "Ron 2026-11-03 explicitly requested CLAIM_RELEASE_BRANCH release from mode-b-repair-override-prep without main merge",
+  "originalSha256": "d08575dee871ed125081da2df37c88d7e2ca56013a74e4c803f2f0ab8f56fc08",
+  "adapterSha256": "b52ba5039b091eb4ab99ae083c4c5fb975d86de4e84958eac8aabeb7b0cbf7ef",
+  "onlyChange": "Allow explicit main or mode-b-repair-override-prep release branch; retain owner, child locks, clean checkout, all-local-branches-published, evidence and CAS guards",
+  "appScriptUnchanged": true
+}

@@ -1,0 +1,197 @@
+'use strict';
+// SOURCE ONLY. One non-admitting ordinary enabled login. No bootstrap exception.
+// Import has no browser, DB, socket, application or provider side effects.
+const crypto=require('node:crypto');
+const ORIGIN='http://127.0.0.1:43156';
+const routes=new Set(['/login','/auth/enter','/auth/continue','/api/demo/locale','/t','/m','/_next/webpack-hmr']);
+const OWN='10000000-0000-4000-8000-000000000001';
+const ACTOR='20000000-0000-4000-8000-000000000006';
+const cookieNames=new Set(['condola_session','condola_org','condola_env','condola_lease','condola_portal_role']);
+function createOrdinaryObserver({run,hmacKey,journalSink}){
+ if(!/^[a-f0-9]{12}$/.test(run||'')||!Buffer.isBuffer(hmacKey)||hmacKey.length!==32||typeof journalSink!=='function')throw Error('ordinary-input-unavailable');
+ const key=Buffer.from(hmacKey),mac=(purpose,raw)=>crypto.createHmac('sha256',key).update(purpose+'\0').update(String(raw)).digest('hex');
+ const aliases={PW:new WeakMap(),CDP:new Map(),FRAME:new Map(),PROXY:new Map()};
+ const counts={PW:0,CDP:0,FRAME:0,PROXY:0};
+ let sequence=0,rawFailures=0,observerFailures=0,consoleFailures=0,httpFailures=0,guardFailures=0;
+ let actionAttempted=false;
+ let attached=false,planned=false,browserClosed=false,contextClosed=false,cdpClosed=false,actionCompleted=false,authSnapshot=false;
+ let browser=null,guard=null,context=null,page=null,cdp=null,verifier=null,recovery=null,guardSequence=0,publicGuardSequence=0;
+ const pending=new Set(),requests=new Map(),privateProxy=new Map();
+ function id(channel,value){const m=aliases[channel];if(!m.has(value))m.set(value,++counts[channel]);return m.get(value);}
+ function emit(source,event,facts={}){
+  const row={version:1,run,seq:++sequence,monotonicNs:process.hrtime.bigint().toString(),source,event,...facts};
+  try{journalSink(Object.freeze(row));}catch{observerFailures++;throw Error('ordinary-journal-unavailable');}
+  return row.seq;
+ }
+ function issue(reason){observerFailures++;emit('OBSERVER','failure',{reason});}
+ function url(raw){try{const u=new URL(raw);return {url:mac('url',raw),origin:u.origin===ORIGIN?'owned':'foreign',path:routes.has(u.pathname)?u.pathname:u.pathname.startsWith('/_next/static/')?'next-static':'other',rscQuery:u.searchParams.has('_rsc')};}catch{return {url:mac('url',raw),origin:'unavailable',path:'unavailable',rscQuery:false};}}
+ function verb(value){return ['GET','POST','HEAD'].includes(value)?value:'OTHER';}
+ function headers(value){
+  const entries=Array.isArray(value)?value:Object.entries(value||{});
+  const all=name=>entries.filter(([k])=>String(k).toLowerCase()===name).flatMap(([,v])=>Array.isArray(v)?v.map(String):[String(v)]);
+  const cookies=all('cookie'),ua=all('user-agent'),locations=all('location');
+  const result={cookieCount:cookies.length,cookie:mac('cookie',JSON.stringify(cookies)),uaCount:ua.length,ua:mac('ua',JSON.stringify(ua)),
+   rsc:all('rsc').map(x=>x==='1'?'one':'other'),action:all('next-action').length>0,routerState:all('next-router-state-tree').length>0,
+   contentType:all('content-type').map(x=>x.startsWith('text/x-component')?'rsc':x.startsWith('text/html')?'html':x.startsWith('text/plain')?'plain':'other'),
+   locationCount:locations.length,locations:locations.map(x=>mac('location',x)),
+   actionRedirect:all('x-action-redirect').map(x=>mac('action-redirect',x)),
+   csp:all('content-security-policy').length,reportOnly:all('content-security-policy-report-only').length};
+  result.setCookies=all('set-cookie').map(raw=>{
+   const first=raw.split(';')[0],at=first.indexOf('='),name=first.slice(0,at),value=first.slice(at+1);
+   const attrs=raw.split(';').slice(1).map(x=>x.trim().toLowerCase());
+   return {name:at>0&&cookieNames.has(name)?name:'other',value:value===''?'empty':name==='condola_portal_role'?(value==='tenant'?'tenant':value==='owner'?'owner':'other'):'opaque',
+    valueTag:mac('set-cookie-value',value),rootPath:attrs.includes('path=/'),domain:attrs.some(x=>x.startsWith('domain=')),
+    maxAgeZero:attrs.includes('max-age=0'),epochExpiry:attrs.includes('expires=thu, 01 jan 1970 00:00:00 gmt'),partitioned:attrs.includes('partitioned')};
+  });
+  return result;
+ }
+ function error(raw){return raw===undefined?'MISSING':raw===''?'EMPTY':raw==='csp'?'csp':typeof raw==='string'&&/^net::ERR_[A-Z0-9_]+$/.test(raw)?raw:'OTHER';}
+ function later(label,fn){
+  let p; p=Promise.resolve().then(fn).catch(()=>issue(label)).finally(()=>pending.delete(p));pending.add(p);
+ }
+ function registerRequest(r){
+  if(aliases.PW.has(r))return aliases.PW.get(r);
+  const n=id('PW',r),previous=r.redirectedFrom();
+  const record={request:r,id:n,terminal:null,previous:previous?aliases.PW.get(previous)||null:null};requests.set(n,record);
+  emit('PW','request',{id:n,previous:record.previous,method:verb(r.method()),resource:r.resourceType(),navigation:r.isNavigationRequest(),...url(r.url())});
+  return n;
+ }
+ function terminal(r,state){
+  // Source outcome is journaled at callback entry, before any asynchronous reads.
+  const n=aliases.PW.get(r);if(!n){issue('orphan-pw-terminal');return;}
+  const item=requests.get(n),failure=state==='failed'?error(r.failure()?.errorText):null;
+  if(state==='failed')rawFailures++;
+  emit('PW','terminal',{id:n,state,error:failure});
+  if(item.terminal!==null)issue('duplicate-pw-terminal');else item.terminal=state;
+ }
+ function privateGuard(e){
+  if(!e||!Number.isSafeInteger(e.sequence)||e.sequence!==guardSequence+1){issue('guard-event-order');return;}
+  guardSequence=e.sequence;
+  const n=id('PROXY',e.exchangeId);
+  const known=new Set(['http-request','hmr-request','http-response','hmr-response','http-response-rejected','hmr-response-rejected','http-terminal','hmr-terminal','hmr-close-frame','hmr-owner','hmr-intent','hmr-anchor','transport-terminal']);
+  if(!known.has(e.type)){issue('guard-event-unknown');return;}
+  if(e.type==='http-request'||e.type==='hmr-request'){
+   privateProxy.set(n,{method:e.requestMethod,url:e.rawUrl,incoming:e.incomingHeaders,forwarded:e.forwardedHeaders});
+   emit('PROXY',e.type,{id:n,guardSequence:e.sequence,method:verb(e.requestMethod),...url(e.rawUrl),incoming:headers(e.incomingHeaders),forwarded:headers(e.forwardedHeaders)});
+  }else if(e.type==='http-response'||e.type==='hmr-response'){
+   emit('PROXY',e.type,{id:n,guardSequence:e.sequence,status:e.status,upstream:headers(e.upstreamHeaders),downstream:headers(e.downstreamHeaders)});
+   if(e.status>=400)httpFailures++;
+  }else{
+   const terminals=new Set(['end','finish','close','wire-fin','forwarded-fin','completed','failed','bilateral-close-provisional','unavailable']);
+   emit('PROXY',e.type,{id:n,guardSequence:e.sequence,terminal:terminals.has(e.terminal)?e.terminal:null});
+   if(e.type.endsWith('rejected')||['failed','unavailable'].includes(e.terminal)){guardFailures++;}
+  }
+ }
+ function guardEvent(e){
+  if(!e||!Number.isSafeInteger(e.sequence)||e.sequence!==publicGuardSequence+1){issue('guard-public-order');return;}
+  publicGuardSequence=e.sequence;
+  const events=new Set(['opened','attached','forward','forwarded','denied','failure','hmr','shutdown','closed']);
+  if(!events.has(e.event)||typeof e.reason!=='string'||!/^[a-z0-9-]{1,100}$/.test(e.reason)){issue('guard-public-unavailable');return;}
+  emit('GUARD',e.event,{guardSequence:e.sequence,reason:e.reason});
+  if(e.event==='failure'||e.event==='denied')guardFailures++;
+ }
+ function observeGuard(ownedGuard){
+  if(guard||attached||!ownedGuard||typeof ownedGuard.observeExchanges!=='function')throw Error('ordinary-guard-unavailable');
+  guard=ownedGuard;guard.observeExchanges(privateGuard);
+ }
+ async function install({browser:actualBrowser,sessionVerifier}){
+  if(attached||!guard||!actualBrowser||!sessionVerifier||typeof sessionVerifier.verify!=='function')throw Error('ordinary-install-unavailable');
+  attached=true;browser=actualBrowser;verifier=sessionVerifier;
+  browser.on('disconnected',()=>{browserClosed=true;emit('BROWSER','disconnected',{planned});if(!planned)issue('unexpected-browser-close');});
+  await guard.attach(browser);
+  context=await guard.createContext({javaScriptEnabled:true,viewport:{width:390,height:844}});
+  context.on('request',registerRequest);
+  context.on('requestfinished',r=>terminal(r,'finished'));
+  context.on('requestfailed',r=>terminal(r,'failed'));
+  context.on('response',response=>{
+   const r=response.request(),n=aliases.PW.get(r);
+   if(!n){issue('orphan-pw-response');return;}
+   const status=response.status();if(status>=400)httpFailures++;
+   emit('PW','response',{id:n,status});
+   later('pw-response-headers',async()=>{
+    const responseHeaders=await response.headersArray(),requestHeaders=await r.headersArray();
+    emit('PW','headers',{id:n,response:headers(responseHeaders.map(x=>[x.name,x.value])),request:headers(requestHeaders.map(x=>[x.name,x.value]))});
+   });
+  });
+  context.on('serviceworker',()=>issue('unexpected-serviceworker'));
+  context.on('close',()=>{contextClosed=true;emit('PW','context-close',{planned});if(!planned)issue('unexpected-context-close');});
+  // There are no measured actions until all page/CDP callbacks and domain acks below.
+  page=await context.newPage();
+  page.on('pageerror',()=>{consoleFailures++;emit('PW','page-error');});
+  page.on('console',m=>{if(m.type()==='error'){consoleFailures++;emit('PW','console-error');}});
+  page.on('crash',()=>issue('page-crash'));
+  page.on('framenavigated',f=>emit('PW','frame-navigated',{frame:id('FRAME',f),main:f===page.mainFrame(),...url(f.url())}));
+  page.on('worker',()=>issue('unexpected-worker'));
+  page.on('popup',()=>issue('unexpected-popup'));
+  cdp=await context.newCDPSession(page);
+  cdp.on('close',()=>{cdpClosed=true;emit('CDP','session-close',{planned});if(!planned)issue('unexpected-cdp-close');});
+  cdp.on('Inspector.detached',()=>{emit('CDP','inspector-detached',{planned});if(!planned)issue('unexpected-inspector-detach');});
+  cdp.on('Network.requestWillBeSent',e=>{
+   const n=id('CDP',e.requestId);
+   emit('CDP','request',{id:n,method:verb(e.request.method),resource:e.type||'UNREPORTED',frame:e.frameId?id('FRAME','cdp:'+e.frameId):null,loader:e.loaderId?mac('loader',e.loaderId):null,
+    ...url(e.request.url),headers:headers(e.request.headers),redirect:e.redirectResponse?{status:e.redirectResponse.status,...url(e.redirectResponse.url),headers:headers(e.redirectResponse.headers)}:null});
+  });
+  cdp.on('Network.requestWillBeSentExtraInfo',e=>emit('CDP','request-extra',{id:id('CDP',e.requestId),headers:headers(e.headers)}));
+  cdp.on('Network.responseReceivedExtraInfo',e=>emit('CDP','response-extra',{id:id('CDP',e.requestId),status:e.statusCode,headers:headers(e.headers)}));
+  cdp.on('Network.responseReceived',e=>{
+   if(e.response.status>=400)httpFailures++;
+   const flags={};for(const n of ['fromDiskCache','fromServiceWorker','fromPrefetchCache'])flags[n]=Object.hasOwn(e.response,n)?e.response[n]:'UNREPORTED';
+   emit('CDP','response',{id:id('CDP',e.requestId),status:e.response.status,resource:e.type||'UNREPORTED',...url(e.response.url),headers:headers(e.response.headers),flags});
+  });
+  cdp.on('Network.loadingFinished',e=>emit('CDP','terminal',{id:id('CDP',e.requestId),state:'finished'}));
+  cdp.on('Network.loadingFailed',e=>{
+   rawFailures++;
+   emit('CDP','terminal',{id:id('CDP',e.requestId),state:'failed',error:error(e.errorText),canceled:Object.hasOwn(e,'canceled')?e.canceled:'UNREPORTED',blockedReason:Object.hasOwn(e,'blockedReason')?(['csp','mixed-content','inspector','subresource-filter','other'].includes(e.blockedReason)?e.blockedReason:'OTHER'):'UNREPORTED'});
+  });
+  cdp.on('Page.frameNavigated',e=>emit('CDP','frame-navigated',{frame:id('FRAME','cdp:'+e.frame.id),parent:e.frame.parentId?id('FRAME','cdp:'+e.frame.parentId):null,loader:e.frame.loaderId?mac('loader',e.frame.loaderId):null,...url(e.frame.url)}));
+  cdp.on('Page.navigatedWithinDocument',e=>emit('CDP','same-document-navigation',{frame:id('FRAME','cdp:'+e.frameId),kind:['fragment','historyApi','other'].includes(e.navigationType)?e.navigationType:'UNREPORTED',...url(e.url)}));
+  for(const command of ['Page.enable','Network.enable']){emit('PARENT','domain-issued',{command});await cdp.send(command);emit('PARENT','domain-ack',{command});}
+  emit('PARENT','ready');
+ }
+ async function performLogin({email,password}){
+  if(!attached||!page||actionAttempted||typeof email!=='string'||typeof password!=='string')throw Error('ordinary-action-unavailable');
+  actionAttempted=true;
+  emit('PARENT','action',{kind:'navigate-login'});
+  await page.goto(ORIGIN+'/api/demo/locale?set=en&next=%2Flogin',{timeout:30000});
+  await page.getByTestId('login-email').fill(email,{timeout:10000});
+  await page.getByTestId('login-password').fill(password,{timeout:10000});
+  emit('PARENT','action',{kind:'ordinary-submit-click'});
+  await page.getByTestId('login-submit').click({timeout:30000});
+  // Observe ordinary client/server navigation. Never manufacture a landing goto.
+  await page.waitForURL(u=>u.origin===ORIGIN&&u.pathname==='/t',{timeout:30000});
+  await page.getByTestId('liff-frame').waitFor({state:'visible',timeout:15000});
+  actionCompleted=true;emit('PARENT','ordinary-arrival');
+  await pendingReads();
+  const jar=await context.cookies(),values=Object.create(null);
+  for(const c of jar){if(!cookieNames.has(c.name))continue;if(c.domain!=='127.0.0.1'||c.path!=='/'||c.partitionKey!=null||Object.hasOwn(values,c.name))throw Error('ordinary-cookie-unavailable');values[c.name]=c.value;}
+  const token=values.condola_session;if(!token)throw Error('ordinary-cookie-unavailable');
+  const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
+  const cookieScope={org:values.condola_org??null,environment:values.condola_env??null,lease:values.condola_lease??null,portalRole:values.condola_portal_role??null};
+  const result=await verifier.verify({contextId:'ctx2',mode:'enabled',tokenHash,actorId:ACTOR,orgId:OWN,persona:'tenant',cookieScope});
+  if(!result||result.tokenHash!==tokenHash||result.userId!==ACTOR||result.orgId!==OWN||result.persona!=='tenant'||!/^[a-f0-9]{64}$/.test(result.readbackSha256||''))throw Error('ordinary-snapshot-unavailable');
+  authSnapshot=true;recovery={verification:result,cookieScope};emit('PARENT','canonical-session-snapshot',{status:'VERIFIED_SNAPSHOT'});
+ }
+ async function pendingReads(){
+  // The outer process deadline bounds callbacks; no fixed sleep truncates evidence.
+  while(pending.size)await Promise.all([...pending]);
+ }
+ function beginClose(){if(planned||!browser||!guard)throw Error('ordinary-close-unavailable');planned=true;emit('PARENT','planned-browser-close');guard.beginPlannedBrowserClose();}
+ function outcome(){
+  let g;try{g=guard?.snapshot();}catch{g=null;}
+  const guardUnverified=!g||g.failed||g.denied>0;
+  const strictFailures=rawFailures+observerFailures+consoleFailures+httpFailures+guardFailures+(guardUnverified?1:0);
+  const openPwRequests=[...requests.values()].filter(x=>!x.terminal).length;
+  const ended=browserClosed&&contextClosed&&cdpClosed&&planned&&g?.closed&&pending.size===0&&openPwRequests===0;
+  return {version:1,kind:'NON_ADMITTING_ORDINARY_LOGIN_DIAGNOSTIC',status:strictFailures?'FAIL':actionCompleted&&authSnapshot&&ended?'DIAGNOSTIC_COMPLETED_ONLY':'UNAVAILABLE',
+   rawFailureObservations:rawFailures,observerFailures,consoleFailures,httpFailureObservations:httpFailures,guardFailures,
+   actionCompleted,canonicalSessionSnapshot:authSnapshot?'VERIFIED_SNAPSHOT':'UNVERIFIED',browserClosed,contextClosed,cdpClosed,planned,
+   pendingReads:pending.size,openPwRequests,guardClosed:g?.closed===true,guardStateUnverified:guardUnverified,
+   bootstrapException:'NOT_EVALUATED',financialAggregate:'PENDING',fullBrowserAcceptance:'NOT_RUN'};
+ }
+ function privateMaterial(){return {verifierLedger:verifier?verifier.ledger():[],contexts:[],partialSnapshot:recovery};}
+ return Object.freeze({observeGuard,guardEvent,install,performLogin,pendingReads,beginClose,outcome,privateMaterial,
+  // Test harness may drive the same actual event callbacks through real-shaped emitters.
+  // No public append/certify/skip or supplied verified boolean exists.
+ });
+}
+module.exports={createOrdinaryObserver};

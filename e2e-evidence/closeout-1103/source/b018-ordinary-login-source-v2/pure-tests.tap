@@ -1,0 +1,90 @@
+TAP version 13
+# Subtest: same ordinary action source distinguishes finished Fetch303 from canceled Fetch200
+ok 1 - same ordinary action source distinguishes finished Fetch303 from canceled Fetch200
+  ---
+  duration_ms: 7.207459
+  ...
+# Subtest: a later terminal invalidates earlier completed-only output
+ok 2 - a later terminal invalidates earlier completed-only output
+  ---
+  duration_ms: 1.687667
+  ...
+# Subtest: unrelated CSP-looking error remains opaque and missing cancel stays unreported
+ok 3 - unrelated CSP-looking error remains opaque and missing cancel stays unreported
+  ---
+  duration_ms: 1.291
+  ...
+# Subtest: real-shaped repeated Set-Cookie and partial source projections preserve privacy and per-cookie attributes
+ok 4 - real-shaped repeated Set-Cookie and partial source projections preserve privacy and per-cookie attributes
+  ---
+  duration_ms: 1.816083
+  ...
+# Subtest: empty flows and missing independent source prevent completion
+ok 5 - empty flows and missing independent source prevent completion
+  ---
+  duration_ms: 1.943792
+  ...
+# Subtest: unclosed CDP hops retain their actual ids through finite timeout and cleanup
+ok 6 - unclosed CDP hops retain their actual ids through finite timeout and cleanup
+  ---
+  duration_ms: 5.044833
+  ...
+# Subtest: orphan PW failure retains safe error and ID, duplicate opening is sticky
+ok 7 - orphan PW failure retains safe error and ID, duplicate opening is sticky
+  ---
+  duration_ms: 2.126958
+  ...
+# Subtest: foreign requests and undeclared transports cannot yield completed-only
+ok 8 - foreign requests and undeclared transports cannot yield completed-only
+  ---
+  duration_ms: 5.30925
+  ...
+# Subtest: persistent HMR does not hold HTTP quiet; PW and independent CDP socket errors are fatal
+ok 9 - persistent HMR does not hold HTTP quiet; PW and independent CDP socket errors are fatal
+  ---
+  duration_ms: 3.054375
+  ...
+# Subtest: held request times out before actual close, then cleanup-triggered failures stay recorded
+ok 10 - held request times out before actual close, then cleanup-triggered failures stay recorded
+  ---
+  duration_ms: 2.601375
+  ...
+# Subtest: rejected guard ack permits cleanup only; locale and hit test must succeed
+ok 11 - rejected guard ack permits cleanup only; locale and hit test must succeed
+  ---
+  duration_ms: 1.813958
+  ...
+# Subtest: same CDP request id retains distinct redirect/finished hops and no inferred extra hop
+ok 12 - same CDP request id retains distinct redirect/finished hops and no inferred extra hop
+  ---
+  duration_ms: 0.94475
+  ...
+# Subtest: actual modeled POST303 abort remains fatal alongside finished arrival sibling and verified partial snapshot
+ok 13 - actual modeled POST303 abort remains fatal alongside finished arrival sibling and verified partial snapshot
+  ---
+  duration_ms: 0.787833
+  ...
+# Subtest: completed-looking requests with contradictory source URL or orphan ExtraInfo stay unavailable
+ok 14 - completed-looking requests with contradictory source URL or orphan ExtraInfo stay unavailable
+  ---
+  duration_ms: 1.473125
+  ...
+# Subtest: ordinary observer retains known HMR retirement failure and every strict console/page/HTTP error
+ok 15 - ordinary observer retains known HMR retirement failure and every strict console/page/HTTP error
+  ---
+  duration_ms: 0.729875
+  ...
+# Subtest: private readback never supplies a completed auth envelope, even on clean modeled observation
+ok 16 - private readback never supplies a completed auth envelope, even on clean modeled observation
+  ---
+  duration_ms: 0.706083
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 76.399083

@@ -1,0 +1,60 @@
+{
+  "verdict": "GO_EXACT_REPO_RELEASE_ADAPTER_ONLY",
+  "originalSha256": "d08575dee871ed125081da2df37c88d7e2ca56013a74e4c803f2f0ab8f56fc08",
+  "adapterSha256": "b52ba5039b091eb4ab99ae083c4c5fb975d86de4e84958eac8aabeb7b0cbf7ef",
+  "deltaManifestSha256": "5eb7367d6885bef395b3f37b951667f9d5660a8e08a963448482bb20abba0ef0",
+  "reviewMdSha256": "cfc5c4ec6a62d92401089908862bf51a213a38fd00d6445d8dde0077cf3d0e28",
+  "exactSingleReplacement": true,
+  "bashSyntax": "PASS",
+  "offlineBranchGuard": [
+    {
+      "selector": null,
+      "current": "main",
+      "accepted": true
+    },
+    {
+      "selector": "",
+      "current": "main",
+      "accepted": true
+    },
+    {
+      "selector": null,
+      "current": "mode-b-repair-override-prep",
+      "accepted": false
+    },
+    {
+      "selector": "main",
+      "current": "main",
+      "accepted": true
+    },
+    {
+      "selector": "main",
+      "current": "mode-b-repair-override-prep",
+      "accepted": false
+    },
+    {
+      "selector": "mode-b-repair-override-prep",
+      "current": "mode-b-repair-override-prep",
+      "accepted": true
+    },
+    {
+      "selector": "mode-b-repair-override-prep",
+      "current": "main",
+      "accepted": false
+    },
+    {
+      "selector": "topic",
+      "current": "topic",
+      "accepted": false
+    },
+    {
+      "selector": "mode-b-*",
+      "current": "mode-b-repair-override-prep",
+      "accepted": false
+    }
+  ],
+  "liveClaimRun": false,
+  "mirrorRun": false,
+  "networkUsed": false,
+  "outstandingChildJobs": 0
+}

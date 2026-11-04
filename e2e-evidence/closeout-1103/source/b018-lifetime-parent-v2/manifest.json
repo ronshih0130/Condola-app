@@ -1,0 +1,48 @@
+{
+  "state": "STOPPED_INCOMPLETE_NOT_REVIEWED_NOT_RUNTIME_AUTHORIZED",
+  "files": {
+    "materialize.py": {
+      "sha256": "9b95b7337ab88b1bd2e6821fe6735c8ab9686416ca1558e71f1237b4e1293b0b",
+      "bytes": 11280
+    },
+    "owned.py": {
+      "sha256": "af43989c1f8e608e3d732b150fa21df774ebab46756191bce7eecd8786725963",
+      "bytes": 10579
+    },
+    "phase-worker.cjs": {
+      "sha256": "469ef64fac5041670c41c252633c29e95129f8f72cd17d3e736a816359da7924",
+      "bytes": 14065
+    },
+    "private_ipc.py": {
+      "sha256": "41fb462aa80280d7edaa304e55d095dd034e7ea350a17bf5f12d72d3000498b2",
+      "bytes": 5931
+    },
+    "reservation.json": {
+      "sha256": "8f1446fab77def24afbc9e4f8970d232e19fcfd2cbb05395f4ec08a1436fb0e6",
+      "bytes": 120
+    },
+    "strict-json.cjs": {
+      "sha256": "c6ae70d56bbfeae5440b1aad81bf789c1c65522a7c1856c878332099c5328226",
+      "bytes": 1786
+    },
+    "test_parent_adversarial.py": {
+      "sha256": "fc2de101e9a7cd6dc708dbd32e99df9f6631318bd7824758c9ae17ef5d78c628",
+      "bytes": 5113
+    },
+    "test_parent_pure.py": {
+      "sha256": "c845ef7af914442462ccb1c04a83a675bbcd5887b903e23b4419ee66628b5a2e",
+      "bytes": 1525
+    },
+    "test_worker.cjs": {
+      "sha256": "e23564281f6659f5681f34f6b4522a8014b27201a4308f4e55928826c429988a",
+      "bytes": 3390
+    }
+  },
+  "tests": "Python: 12 tests passed (3 unchanged originals and 9 adversarial). Node: syntax check and 6 pure/temp tests passed after the final worker edit. The new verifySourceBlobs path is not directly covered by those tests.",
+  "limitations": [
+    "No integration or runtime GO.",
+    "No auto signaling; persistent server graceful shutdown unresolved.",
+    "Worker API and full source/dependency immutability need independent review, especially FD ancestry and generated output boundary.",
+    "Controller, detached browser ownership, final recovery and natural-exit proof remain unimplemented."
+  ]
+}

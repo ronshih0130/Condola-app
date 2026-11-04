@@ -1,0 +1,48 @@
+{
+  "scope": "One non-admitting ordinary enabled login observer source only",
+  "sourceStatus": "INDEPENDENT_SOURCE_REVIEW_PENDING",
+  "runtime": "NOT_RUN",
+  "financialAggregate": "PENDING",
+  "authRecovery": "UNVERIFIED_QUARANTINE",
+  "checks": {
+    "node": "v20.20.2",
+    "pureEmitterGroups": 16,
+    "passed": 16,
+    "failed": 0,
+    "skipped": 0,
+    "syntaxPassed": 3,
+    "liveSources": 0
+  },
+  "files": {
+    "README.md": {
+      "bytes": 5779,
+      "sha256": "94ba6f4a538381a7b70534bdaff654860113f3216bc1ea706b938501eddb4bb1"
+    },
+    "observer.cjs": {
+      "bytes": 24432,
+      "sha256": "6e0fd97d862e5081771c0d9e400d89e93c39126851101b36000484f2e717eb85"
+    },
+    "observer.test.cjs": {
+      "bytes": 17099,
+      "sha256": "dc4aaf12567ef887ea4fbd00c309f001067ba3d545ba5755f5fa1c4640d45254"
+    },
+    "projection.cjs": {
+      "bytes": 4843,
+      "sha256": "7546b3dc2a34deb4b389b74910785a9073353066778d34674f46977b700ed243"
+    },
+    "pure-tests.tap": {
+      "bytes": 3665,
+      "sha256": "d74a61d6d8f830c874bdfbc2271ce2a56cd9802132b49594f254eaf843fbb86d"
+    }
+  },
+  "inputPins": {
+    "b018-ordinary-login-source-v1/manifest.json": "562e09653f3ec353cb68a14f9310f4550976b42ed04c7b8be9377e3ce7af9ade",
+    "b018-ordinary-login-independent-astra-v1.md": "b5cbb1c5e53eef94bc5e6b27063663d349b2c2c0540c3f07fec1e3bef8caeff6",
+    "b018-ordinary-login-independent-astra-v1.json": "7816c20569dc0a40ccef727674e53d0f5c392574a98233203e977a0957b3094f",
+    "b018-login-diagnostic-v3/probe.cjs": "11dd5af4f01b6ba463c0a65815600fed9c426c6c0ac555706fbcd3c4c3c30fc6",
+    "b018-browser-egress-guard-v4/guard.cjs": "20210c8b09ebefbb26546c946454744f51a7cec03624232ecced296da0453a13",
+    "b018-native-session-verifier-v3/verifier.cjs": "931daca260abf4f7c54fe4099cbc2cb9aeeaca5ee06feb27d2740a5a282693c1",
+    "b018-acquisition-contract-independent-astra-v4.md": "607ad3064da33dca4d2a114d3c9d87aa6dd35965fc8474a2741c26d82e232bc4",
+    "mode-b-repair-override-prep/node_modules/next/dist/client/components/router-reducer/reducers/server-action-reducer.js": "4ffe36522324e9e0494e59aa55badac485042b8c53067c9520c4180ebbbccd29"
+  }
+}

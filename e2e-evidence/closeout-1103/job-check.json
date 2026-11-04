@@ -1,0 +1,6 @@
+{
+  "matchingTaskProcesses": [],
+  "scope": "Specific known B018 executor paths only; not global or historical detached-Chromium proof",
+  "allAgentsStoppedReported": true,
+  "newLiveJobsThisPhase": 0
+}

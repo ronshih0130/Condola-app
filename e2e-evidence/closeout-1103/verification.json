@@ -1,0 +1,15 @@
+{
+  "testedCandidate": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+  "unchangedSourcePins": 1024,
+  "fullGate": "REUSED_COMPLETED_UNCHANGED_SOURCE",
+  "unitPass": 651,
+  "rlsPass": 476,
+  "rlsTotal": 477,
+  "fail": 0,
+  "approvedHistoricalSkip": 1,
+  "noNewTestSkip": true,
+  "browser": "HISTORICAL_FAIL_UNWAIVED",
+  "newRuntime": "NOT_RUN",
+  "allAgentsStoppedReported": true,
+  "releaseAdapter": "INDEPENDENT_SOURCE_GO_OFFLINE9_AND_SYNTAX"
+}

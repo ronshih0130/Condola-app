@@ -1,0 +1,144 @@
+{
+  "scope": "B017 inactive, role_retire solely for unassigned same-live-org roles",
+  "status": "SOURCE_CANDIDATE_PENDING_SEPARATE_REVIEW",
+  "artifacts": [
+    {
+      "path": "02c-retire-unassigned-role.sql",
+      "bytes": 11669,
+      "sha256": "089575347f0afb4574e49c566b43df5fc1730a93aabcf383f291a1658414447e"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5977,
+      "sha256": "0c05bc4aacde7cd134e88321f50f5bc57d24ee1b673378428240de3c5340db96"
+    },
+    {
+      "path": "acl-delta.json",
+      "bytes": 1088,
+      "sha256": "0ef7c8262fcdd91bdf0c5b34e26b62550033890578b06a0c837062e4c029bcf2"
+    },
+    {
+      "path": "interface.json",
+      "bytes": 2504,
+      "sha256": "d92217b3fbdb7a8b0e419a03043b95dd43a0bd1c7b319d97b3310d68f05956f6"
+    },
+    {
+      "path": "target-vectors.json",
+      "bytes": 6222,
+      "sha256": "e91f4356a76515efc863700241eca2c5c68cbcfc9c1ab337fc5d45540300d77f"
+    }
+  ],
+  "sourceInputs": [
+    {
+      "path": "work/b017-primary-contract-sol-v4.md",
+      "bytes": 38274,
+      "sha256": "7e456b2ad04473f37db0cd2f4b506305ae370f25da8b84e6eeef260ad42743ce"
+    },
+    {
+      "path": "work/b017-primary-contract-sol-v4.json",
+      "bytes": 113801,
+      "sha256": "a115c840989e70ea981620fce668b9936c5b7608541d266c0904648d221b669f"
+    },
+    {
+      "path": "work/b017-primary-plan-sol-v2.md",
+      "bytes": 45932,
+      "sha256": "a6af932a2eb43b17d1369c5ab7a9ec95317221abb62ac8cb7f14a36240d0529a"
+    },
+    {
+      "path": "work/b017-minimal-contract-independent-astra-v4.md",
+      "bytes": 4808,
+      "sha256": "c6c370c08cde5131e597f37bb90d2c15c580c7dfffaf08574d1d20276029c2c0"
+    },
+    {
+      "path": "work/b017-authority-core-independent-astra-v2.md",
+      "bytes": 1401,
+      "sha256": "63af06deef8bb3cdc9c4c7a56bff3fc0ab19ce8f71239e901a57c0184774ef12"
+    },
+    {
+      "path": "work/b017-role-create-independent-astra-v2.md",
+      "bytes": 1910,
+      "sha256": "88ff6749b5a544fbf496d604e6c4d6ec049b96585134597b02f5565412a1fc81"
+    },
+    {
+      "path": "work/b017-role-edit-unassigned-independent-astra-v1.md",
+      "bytes": 2479,
+      "sha256": "752d20d6c89625efdcda63ea8ebf8ed2f630260f021742e9c38ad452a6eb7747"
+    },
+    {
+      "path": "work/b017-compiler-first-independent-astra-v2.md",
+      "bytes": 3997,
+      "sha256": "bd982079603782206e43654222c89234df85d31c8724afedc9035a973c69690b"
+    },
+    {
+      "path": "work/b017-sealed-foundation-proposal-v2/manifest.json",
+      "bytes": 6080,
+      "sha256": "b9c2d5b0dc1f00652b7d056948a2ea051a04d55a7ea78de48521f4f4013fac30"
+    },
+    {
+      "path": "work/b017-sealed-foundation-proposal-v2/README.md",
+      "bytes": 11324,
+      "sha256": "b31b4933e816998676bca26c7c6ce86f7c6adfde1dabaaa0e24f80fffd62ca03"
+    },
+    {
+      "path": "work/b017-custom-roles-proposal-v1/parts-v2/01-authority-core.sql",
+      "bytes": 13177,
+      "sha256": "9a4b87fc82935af4d4225d6092973d93a8b0676c4a3e3c94b96dbf747b0d50d9"
+    },
+    {
+      "path": "work/b017-custom-roles-proposal-v1/parts-v2/02a-role-create-v2.sql",
+      "bytes": 10749,
+      "sha256": "aa7c4629d6a02736684213aa8e87aa4a3b76a2534518630c566a142bd9f359fe"
+    },
+    {
+      "path": "work/b017-custom-roles-proposal-v1/parts-v2/02b-role-edit-unassigned.sql",
+      "bytes": 9054,
+      "sha256": "134f8f22d3f0b62c06915b4137f6d69d2f91dfcd5307c444d77b03e40c5d4f8a"
+    },
+    {
+      "path": "work/b017-custom-roles-proposal-v1/parts-v2/core-interfaces.json",
+      "bytes": 4314,
+      "sha256": "acbe595f81e608fa85ccefc263c347b4a51a94c001a9f12ff7be16a0fee72bfc"
+    },
+    {
+      "path": "work/b017-custom-roles-proposal-v1/parts-v2/02a-governance-interfaces-v2.json",
+      "bytes": 3146,
+      "sha256": "da478bce5ff649b64f7ac371ac88fc7ab77618913dcd61643f12323a444df8cc"
+    },
+    {
+      "path": "work/b017-custom-roles-proposal-v1/parts-v2/02b-governance-interfaces.json",
+      "bytes": 2735,
+      "sha256": "f47f7498e1829751da0067cf17c7696b95bd049b88257eac8713750b119842cb"
+    },
+    {
+      "path": "work/b017-custom-roles-proposal-v1/parts-v2/01-core-status.md",
+      "bytes": 4562,
+      "sha256": "561d61684beccfafb361f6b44ee91046a0f7ad1435176df9d6fd7e000e0e36f9"
+    },
+    {
+      "path": "work/b017-custom-roles-proposal-v1/parts-v2/02a-governance-status-v2.md",
+      "bytes": 4230,
+      "sha256": "558d41b2e4029efdf73ce67539501bff0b2a99c769d0046f1d072c310517c742"
+    },
+    {
+      "path": "work/b017-custom-roles-proposal-v1/parts-v2/02b-governance-status.md",
+      "bytes": 1746,
+      "sha256": "aba2ba7fa8a4f2999e117cc4f86123fd4ab9d3594cf44a164d4648ab8bfc9aae"
+    }
+  ],
+  "compilerInputEqualityVerified": [
+    "01-authority-core.sql",
+    "02a-role-create-v2.sql",
+    "02b-role-edit-unassigned.sql"
+  ],
+  "sqlParsed": false,
+  "executed": false,
+  "targetVectors": {
+    "count": 20,
+    "status": "NOT_RUN"
+  },
+  "runtimePrincipalGranted": false,
+  "activation": false,
+  "sandboxGovernance": "UNAVAILABLE_IN_THIS_FRAGMENT",
+  "operationPackageReadiness": "UNPROVEN",
+  "historicalCompilerInputsModified": false
+}

@@ -1,0 +1,165 @@
+"""Inactive owner primitives. No process is launched or inspected on import."""
+from __future__ import annotations
+import hashlib,json,os,re,stat,subprocess,sys,time
+from pathlib import Path
+
+class Unavailable(RuntimeError): pass
+
+def _same(a,b): return (a.st_dev,a.st_ino,a.st_mode,a.st_uid,a.st_nlink)==(b.st_dev,b.st_ino,b.st_mode,b.st_uid,b.st_nlink)
+def _strict_json(raw):
+    def pairs(items):
+        out={}
+        for k,v in items:
+            if k in out: raise Unavailable('ambiguous-json-key')
+            out[k]=v
+        return out
+    def integer(value):
+        n=int(value)
+        if abs(n)>9007199254740991: raise Unavailable('json-number-unavailable')
+        return n
+    def floating(_value): raise Unavailable('json-number-unavailable')
+    try:
+        obj=json.loads(raw.decode('utf-8',errors='strict'),object_pairs_hook=pairs,parse_int=integer,parse_float=floating,parse_constant=lambda _: (_ for _ in ()).throw(Unavailable('json-number-unavailable')))
+        def strings(v):
+            if isinstance(v,str): v.encode('utf-8','strict')
+            elif isinstance(v,list):
+                for x in v: strings(x)
+            elif isinstance(v,dict):
+                for k,x in v.items(): strings(k);strings(x)
+        strings(obj)
+        if not isinstance(obj,dict): raise Unavailable('artifact-object-required')
+        return obj
+    except (UnicodeError,ValueError,RecursionError) as e: raise Unavailable('invalid-json') from e
+
+class Directory:
+    """Open each absolute path component without following symlinks; retain all handles."""
+    def __init__(self,path:Path,private=True):
+        if not path.is_absolute() or str(path)!=os.path.normpath(str(path)): raise Unavailable('private-directory-unavailable')
+        self.path=path;self.fds=[];self.parts=path.parts[1:]
+        try:
+            fd=os.open('/',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW);self.fds.append(fd)
+            for part in self.parts:
+                child=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd);self.fds.append(child)
+                if not _same(os.fstat(child),os.stat(part,dir_fd=fd,follow_symlinks=False)): raise Unavailable('directory-substitution')
+                fd=child
+            st=os.fstat(self.fds[-1])
+            if not stat.S_ISDIR(st.st_mode) or (private and (st.st_uid!=os.getuid() or st.st_mode&0o077)): raise Unavailable('private-directory-unavailable')
+            self.verify()
+        except BaseException:
+            self.close();raise
+    def verify(self):
+        for parent,child,name in zip(self.fds,self.fds[1:],self.parts):
+            if not _same(os.fstat(child),os.stat(name,dir_fd=parent,follow_symlinks=False)): raise Unavailable('directory-substitution')
+    @property
+    def fd(self): return self.fds[-1]
+    def close(self):
+        while self.fds:
+            fd=self.fds.pop();os.close(fd)
+    def __enter__(self): return self
+    def __exit__(self,*_): self.close()
+
+def private_directory(path:Path)->None:
+    with Directory(path): pass
+
+def _read_fd(fd):
+    parts=[]
+    while True:
+        b=os.read(fd,1048576)
+        if not b: break
+        parts.append(b)
+        if sum(map(len,parts))>33554432: raise Unavailable('artifact-too-large')
+    return b''.join(parts)
+
+def checked_bytes(file:Path,expected:str|None=None)->bytes:
+    if not file.is_absolute() or not file.name: raise Unavailable('artifact-path-unavailable')
+    with Directory(file.parent) as parent:
+        fd=os.open(file.name,os.O_RDONLY|os.O_NOFOLLOW,dir_fd=parent.fd)
+        try:
+            initial=os.fstat(fd);named=os.stat(file.name,dir_fd=parent.fd,follow_symlinks=False)
+            if not stat.S_ISREG(initial.st_mode) or initial.st_uid!=os.getuid() or initial.st_mode&0o077 or initial.st_nlink!=1 or not _same(initial,named): raise Unavailable('private-artifact-unavailable')
+            raw=_read_fd(fd);end=os.fstat(fd);named=os.stat(file.name,dir_fd=parent.fd,follow_symlinks=False);parent.verify()
+            if not _same(initial,end) or not _same(end,named) or end.st_size!=len(raw) or (initial.st_mtime_ns,initial.st_ctime_ns)!=(end.st_mtime_ns,end.st_ctime_ns): raise Unavailable('artifact-drift')
+            if expected is not None and (not re.fullmatch(r'[a-f0-9]{64}',expected) or hashlib.sha256(raw).hexdigest()!=expected): raise Unavailable('artifact-binding-unavailable')
+            return raw
+        finally: os.close(fd)
+
+def sha256(path:Path)->str:return hashlib.sha256(checked_bytes(path)).hexdigest()
+def read_json(path:Path,expected:str)->dict:return _strict_json(checked_bytes(path,expected))
+
+def write_json(directory:Path,name:str,value:dict)->str:
+    if not re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,100}\.json',name): raise Unavailable('artifact-name-unavailable')
+    raw=(json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False)+'\n').encode('utf-8','strict');_strict_json(raw)
+    with Directory(directory) as parent:
+        temp='.'+name+'.'+os.urandom(8).hex()+'.tmp';fd=os.open(temp,os.O_CREAT|os.O_EXCL|os.O_RDWR|os.O_NOFOLLOW,0o600,dir_fd=parent.fd)
+        try:
+            n=0
+            while n<len(raw): n+=os.write(fd,raw[n:])
+            os.fchmod(fd,0o400);os.fsync(fd);before=os.fstat(fd);named=os.stat(temp,dir_fd=parent.fd,follow_symlinks=False)
+            if not stat.S_ISREG(before.st_mode) or before.st_uid!=os.getuid() or before.st_mode&0o077 or before.st_nlink!=1 or not _same(before,named): raise Unavailable('temp-substitution')
+            parent.verify();os.link(temp,name,src_dir_fd=parent.fd,dst_dir_fd=parent.fd,follow_symlinks=False)
+            linked=os.fstat(fd);dest=os.stat(name,dir_fd=parent.fd,follow_symlinks=False);source=os.stat(temp,dir_fd=parent.fd,follow_symlinks=False)
+            if not _same(linked,dest) or not _same(linked,source) or linked.st_nlink!=2: raise Unavailable('publication-substitution')
+            os.unlink(temp,dir_fd=parent.fd);os.fsync(parent.fd);final=os.fstat(fd);dest=os.stat(name,dir_fd=parent.fd,follow_symlinks=False);parent.verify()
+            if final.st_nlink!=1 or not _same(final,dest): raise Unavailable('publication-drift')
+            os.lseek(fd,0,os.SEEK_SET)
+            if _read_fd(fd)!=raw: raise Unavailable('artifact-readback-unavailable')
+            return hashlib.sha256(raw).hexdigest()
+        finally:
+            try:
+                t=os.stat(temp,dir_fd=parent.fd,follow_symlinks=False)
+                if (t.st_dev,t.st_ino)==(os.fstat(fd).st_dev,os.fstat(fd).st_ino): os.unlink(temp,dir_fd=parent.fd)
+            except FileNotFoundError: pass
+            os.close(fd)
+
+class OwnedChildren:
+    """Darwin-only natural drain; no automatic signalling, detached browser separate.
+
+    Retain the direct Popen leader unreaped. Darwin ps reports Z for a terminated
+    process; require the anchored leader and no other group members in two bounded
+    censuses before the sole direct-child waitpid reaps it. Any uncertainty quarantines.
+    """
+    def __init__(self,output:Path,cwd:Path):
+        private_directory(output);private_directory(cwd);self.output=output;self.cwd=cwd;self.children=[]
+    def start(self,label,argv,env,pass_fds=()):
+        if sys.platform!='darwin' or not re.fullmatch(r'[a-z][a-z0-9-]{0,40}',label) or not argv or not Path(argv[0]).is_absolute() or any(c['label']==label for c in self.children): raise Unavailable('child-command-unavailable')
+        with Directory(self.output) as directory:
+            fd=os.open(label+'.log',os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600,dir_fd=directory.fd)
+            try: p=subprocess.Popen(argv,cwd=self.cwd,env=env,stdout=fd,stderr=fd,pass_fds=tuple(pass_fds),start_new_session=True)
+            finally: os.close(fd)
+        child={'label':label,'argv':list(argv),'pid':p.pid,'group':p.pid,'process':p,'signals':[],'exit':None,'naturalExitObserved':False,'drained':False,'reaped':False}
+        self.children.append(child);return child
+    def members(self,child):
+        if sys.platform!='darwin' or child['reaped'] or child['process'].returncode is not None: raise Unavailable('leader-anchor-unavailable')
+        try: r=subprocess.run(['/bin/ps','-axo','pid=,pgid=,sess=,stat='],capture_output=True,text=True,timeout=5,check=True)
+        except (subprocess.SubprocessError,OSError) as e: raise Unavailable('process-census-unavailable') from e
+        rows=[]
+        for line in r.stdout.splitlines():
+            f=line.split()
+            if len(f)!=4 or not all(x.isdigit() for x in f[:3]): raise Unavailable('process-census-malformed')
+            if int(f[1])==child['group']:
+                if int(f[2])!=child['group']: raise Unavailable('child-session-unavailable')
+                rows.append((int(f[0]),f[3]))
+        leaders=[x for x in rows if x[0]==child['pid']]
+        if len(leaders)!=1: raise Unavailable('leader-anchor-unavailable')
+        return sorted(rows)
+    def wait(self,child,timeout):
+        if timeout<=0 or child['reaped']: raise Unavailable('child-deadline-unavailable')
+        until=time.monotonic()+timeout
+        while time.monotonic()<until:
+            first=self.members(child)
+            if first==[(child['pid'],'Z')] or len(first)==1 and first[0][0]==child['pid'] and first[0][1].startswith('Z'):
+                second=self.members(child)
+                if len(second)==1 and second[0][0]==child['pid'] and second[0][1].startswith('Z'):
+                    try: pid,status=os.waitpid(child['pid'],os.WNOHANG)
+                    except (OSError,ChildProcessError) as e: raise Unavailable('child-reap-unavailable') from e
+                    if pid!=child['pid']: raise Unavailable('child-not-reaped')
+                    code=os.waitstatus_to_exitcode(status);child['process'].returncode=code;child['exit']=code;child['reaped']=True;child['drained']=True;child['naturalExitObserved']=os.WIFEXITED(status) and code==0 and not child['signals'];return code
+            time.sleep(.1)
+        raise Unavailable('child-not-naturally-drained')
+    def stop(self,child):
+        # A timeout or live group is quarantined. No numeric PGID is ever signalled.
+        if not child['reaped'] or not child['drained']: raise Unavailable('child-group-ownership-unresolved')
+    def receipt(self,child):
+        if not child['reaped'] or not child['drained'] or child['exit'] is None: raise Unavailable('child-receipt-unavailable')
+        log=self.output/(child['label']+'.log');raw=checked_bytes(log)
+        return {k:v for k,v in child.items() if k!='process'}|{'logSha256':hashlib.sha256(raw).hexdigest(),'logBytes':len(raw),'noRemainingGroupMembers':True}

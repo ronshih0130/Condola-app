@@ -1,0 +1,25 @@
+{
+  "signature": "app.b017_retire_unassigned_role(uuid,uuid,text,uuid,uuid,bigint,bigint)",
+  "newObjects": [
+    "one SECURITY DEFINER fixed function"
+  ],
+  "owner": "b017_authority_owner",
+  "callerGrants": [],
+  "removeExecuteFrom": [
+    "PUBLIC",
+    "anon",
+    "authenticated",
+    "service_role"
+  ],
+  "effectiveSeal": "DDL transaction rejects any residual non-owner grantee and rejects owner login, superuser, bypass-RLS, inheritance/creation/replication or role membership. No grants to workers or runtime principals. Separate deployment and effective-access readback required.",
+  "existingPoliciesReused": [
+    "02a global control select/lock and org/member/session lock grants & RLS",
+    "01 FORCE RLS private authority-owner policies",
+    "02a audit INSERT column grant",
+    "02b b017_authority_role_edit_audit allows b017_roles metadata update event"
+  ],
+  "tableGrantsAdded": [],
+  "policyChanges": [],
+  "runtimeStateCreated": [],
+  "integration": "Never add to the frozen three-input compiler manifest. Independent successor seal, rollback and gates required."
+}

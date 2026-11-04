@@ -1,0 +1,31 @@
+"""Synthetic-only checks. No processes, browser, SQL, sockets or DB are used."""
+import struct
+import unittest
+from materialize import blob_sha,relative_name
+from private_ipc import encode,decode
+from owned import Unavailable
+
+class PureParent(unittest.TestCase):
+    def test_paths_cannot_escape_or_alias_the_frozen_namespace(self):
+        for value in ['/etc/passwd','../foo','a/../foo','a//b','a/./b','a/','a\nb','a\x00b','']:
+            with self.subTest(value=repr(value)),self.assertRaises(Unavailable):
+                relative_name(value)
+        self.assertEqual(relative_name('node_modules/.bin/next'),'node_modules/.bin/next')
+
+    def test_blob_pins_bind_git_header_and_raw_bytes(self):
+        self.assertEqual(blob_sha(b''),'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391')
+        self.assertNotEqual(blob_sha(b'a\nb'),blob_sha(b'a\r\nb'))
+
+    def test_private_framing_keeps_order_and_rejects_ambiguous_json(self):
+        value={'envelope':{'verification':{'z':1,'a':2}},'baseline':{'mac':'synthetic'}}
+        frame=encode(value)
+        self.assertEqual(struct.unpack('>I',frame[:4])[0],len(frame)-4)
+        decoded=decode(frame[4:])
+        self.assertEqual(list(decoded['envelope']['verification']),['z','a'])
+        self.assertEqual(decoded,value)
+        for raw in [b'{"a":1,"a":2}',b'{"x":{"a":1,"a":2}}',b'[]',b'{"x":NaN}',b'{"x":Infinity}']:
+            with self.subTest(raw=raw),self.assertRaises((Unavailable,ValueError)):
+                decode(raw)
+
+if __name__=='__main__':
+    unittest.main()

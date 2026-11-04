@@ -1,0 +1,369 @@
+'use strict';
+// Import has no application, provider, network or browser effects.
+const crypto = require('node:crypto');
+const {ORIGIN,HMR,cookieNames,makeProjection} = require('./projection.cjs');
+const OWN = '10000000-0000-4000-8000-000000000001';
+const ACTOR = '20000000-0000-4000-8000-000000000006';
+const httpKinds = new Set('document stylesheet image media font script texttrack xhr fetch prefetch preflight manifest signedexchange ping cspviolationreport other'.split(' '));
+const publicGuardKinds = new Set('opened attached policy forwarded denied failure hmr shutdown closed'.split(' '));
+const publicGuardReasons = new Set(('fixed-local-only-proxy pinned-browser-and-proxy fixed-local-http fixed-local-hmr '+
+  'upstream-enforced-and-report-only-absent planned-browser-close proxy-sockets-and-requests-drained '+
+  'hmr-close-before-intent hmr-retirement-incomplete hmr-lifetime-timeout cleanup-with-pending-transport '+
+  'cleanup-before-browser-drained proxy-drain-unavailable proxy-drain-changed unexpected-browser-disconnect '+
+  'client-abort client-response-incomplete response-stream upstream-http request-body-incomplete').split(' '));
+const guardKinds = new Set('http-request hmr-request http-response hmr-response http-response-rejected hmr-response-rejected http-terminal hmr-terminal hmr-close-frame hmr-owner hmr-intent hmr-anchor transport-terminal'.split(' '));
+
+function createOrdinaryObserver({run,hmacKey,journalSink}) {
+  if (!/^[a-f0-9]{12}$/.test(run||'') || !Buffer.isBuffer(hmacKey) || hmacKey.length!==32 || typeof journalSink!=='function')
+    throw Error('ordinary-input-unavailable');
+  const key = Buffer.from(hmacKey);
+  const mac = (scope,raw)=>crypto.createHmac('sha256',key).update(scope+'\0').update(String(raw)).digest('hex');
+  const {url,error,headers} = makeProjection(mac);
+  const pw = new Map(), cdpIds = new Map(), hops = [], proxy = new Map(), frames = new Map(), extras = new Set();
+  const pending = new Set(), guardLifecycle = new Set();
+  const problems = {rawFailures:0,observerFailures:0,consoleFailures:0,httpFailures:0,guardFailures:0};
+  let seq=0, phase='setup', publicSeq=0, privateSeq=0, lastHttp=Date.now();
+  let ready=false, attempted=false, actionCompleted=false, snapshot=null, closeIntent=false, closeAck=false, issued=false, returned=false;
+  let browserClosed=false, contextClosed=false, cdpClosed=false, mainCdp=null;
+  const landingNavigation={PW:false,CDP:false};
+  let guard,browser,ctx,page,cdp,verifier;
+  const id = (map,k)=>{if(!map.has(k))map.set(k,map.size+1);return map.get(k);};
+  const method = m=>['GET','POST','HEAD'].includes(m)?m:'OTHER';
+  const resource = v=>httpKinds.has(String(v).toLowerCase())?v:'UNDECLARED';
+  const emit = (source,event,facts={})=>{
+    const row={version:2,run,seq:++seq,monotonicNs:process.hrtime.bigint().toString(),phase,source,event,...facts};
+    try {journalSink(Object.freeze(row));} catch {problems.observerFailures++;throw Error('ordinary-journal-unavailable');}
+  };
+  function issue(reason){problems.observerFailures++;emit('OBSERVER','failure',{reason});}
+  function tick(){lastHttp=Date.now();}
+  function httpStatus(status){if(status>=400)problems.httpFailures++;}
+  function afterClose(closed){if(closed)issue('activity-after-source-close');}
+  function track(raw,type) {
+    const facts=url(raw);
+    if(facts.origin!=='owned'|| type==='UNDECLARED')issue('foreign-or-undeclared-http');
+    return facts;
+  }
+  function wsUrl(raw,wire=false) {
+    if(raw!==HMR && !(wire&&raw===ORIGIN+'/_next/webpack-hmr'))issue('undeclared-websocket');
+    return url(raw);
+  }
+  function later(fn) {
+    const task=Promise.resolve().then(fn).catch(()=>issue('pw-header-read')).finally(()=>pending.delete(task));
+    pending.add(task);
+  }
+  function pwRecord(r) {
+    if(!pw.has(r))pw.set(r,{id:pw.size+1,opened:false,terminal:null,status:null});
+    return pw.get(r);
+  }
+  function cdpRecord(key) {
+    if(!cdpIds.has(key))cdpIds.set(key,{id:cdpIds.size+1,current:null});
+    return cdpIds.get(key);
+  }
+  function pwRequest(r) {
+    const row=pwRecord(r),prev=r.redirectedFrom(),kind=resource(r.resourceType());
+    let frame=null;
+    try{frame=r.frame();}catch{}
+    afterClose(contextClosed);tick();
+    if(row.opened||row.terminal)issue('duplicate-or-late-pw-open');
+    Object.assign(row,{opened:true,phase,method:method(r.method()),kind,main:frame?frame===page?.mainFrame():null,...track(r.url(),kind)});
+    const previous=prev?pwRecord(prev):null;
+    if(previous&&!previous.opened)issue('orphan-pw-redirect');
+    emit('PW','request',{id:row.id,previous:previous?.id??null,method:row.method,resource:kind,
+      navigation:r.isNavigationRequest(),frame:frame?id(frames,frame):null,main:row.main,...url(r.url())});
+  }
+  function pwTerminal(r,state) {
+    const row=pwRecord(r);
+    if(state==='failed')problems.rawFailures++;
+    emit('PW','terminal',{id:row.id,state,...(state==='failed'?error(r.failure()?.errorText):{}),orphan:!row.opened});
+    afterClose(contextClosed);tick();
+    if(!row.opened)issue('orphan-pw-terminal');
+    if(row.terminal)issue('duplicate-pw-terminal');else row.terminal=state;
+  }
+  function pwResponse(resp) {
+    const r=resp.request(),row=pwRecord(r),status=resp.status();
+    httpStatus(status);emit('PW','response',{id:row.id,status});tick();afterClose(contextClosed);
+    if(!row.opened||row.terminal||row.status!==null)issue('unexpected-pw-response');
+    row.status=status;
+    const pairs=a=>a.map(({name,value})=>[name,value]);
+    later(async()=>{
+      const [a,b]=await Promise.all([resp.headersArray(),r.headersArray()]);
+      emit('PW','headers',{id:row.id,response:headers(pairs(a),'PW'),request:headers(pairs(b),'PW')});
+    });
+  }
+  function cdpRequest(e) {
+    const channel=cdpRecord(e.requestId), prior=channel.current, kind=resource(e.type);
+    tick();afterClose(cdpClosed);
+    if(e.redirectResponse) {
+      const prev=e.redirectResponse;httpStatus(prev.status);
+      const prevUrl=track(prev.url);
+      emit('CDP','redirect-terminal',{id:channel.id,hop:prior?.hop??null,status:prev.status,...prevUrl,headers:headers(prev.headers,'CDP')});
+      if(!prior||prior.terminal||prior.url!==prevUrl.url||prev.status<300||prev.status>=400)issue('invalid-cdp-redirect');
+      if(prior){prior.terminal='redirect';prior.status=prev.status;}
+    } else if(prior)issue('duplicate-cdp-open');
+    const row={id:channel.id,hop:prior?prior.hop+1:0,phase,method:method(e.request.method),kind,
+      frame:e.frameId?id(frames,'cdp:'+e.frameId):null,loader:e.loaderId?mac('loader',e.loaderId):null,
+      ...track(e.request.url,kind),status:null,terminal:null};
+    hops.push(row);channel.current=row;
+    emit('CDP','request',{id:row.id,hop:row.hop,method:row.method,resource:kind,frame:row.frame,loader:row.loader,
+      ...url(e.request.url),headers:headers(e.request.headers,'CDP')});
+  }
+  function cdpResponse(e) {
+    const ch=cdpRecord(e.requestId), row=ch.current, status=e.response.status;
+    httpStatus(status);tick();afterClose(cdpClosed);
+    const facts=track(e.response.url,resource(e.type));
+    if(!row||row.terminal||row.status!==null||row.url!==facts.url)issue('unexpected-cdp-response');
+    if(row)row.status=status;
+    const flags={};
+    for(const n of ['fromDiskCache','fromServiceWorker','fromPrefetchCache'])
+      flags[n]=typeof e.response[n]==='boolean'?e.response[n]:'UNREPORTED';
+    emit('CDP','response',{id:ch.id,hop:row?.hop??null,status,resource:resource(e.type),...facts,headers:headers(e.response.headers,'CDP'),flags});
+  }
+  function cdpTerminal(e,state) {
+    const ch=cdpRecord(e.requestId),row=ch.current;
+    const safeBlocked = ['csp','mixed-content','inspector','subresource-filter','other'];
+    const failure={};
+    if(state==='failed'){
+      problems.rawFailures++;
+      Object.assign(failure,error(e.errorText),{canceled:typeof e.canceled==='boolean'?e.canceled:'UNREPORTED',
+        blockedReason:e.blockedReason===undefined?'UNREPORTED':safeBlocked.includes(e.blockedReason)?e.blockedReason:'OTHER'});
+      if(failure.blockedReason==='OTHER')failure.blockedTag=mac('blocked',e.blockedReason);
+    }
+    emit('CDP','terminal',{id:ch.id,hop:row?.hop??null,state,...failure});
+    tick();afterClose(cdpClosed);
+    if(!row||row.terminal)issue('unexpected-cdp-terminal');else row.terminal=state;
+  }
+  function extra(e,response) {
+    const ch=cdpRecord(e.requestId);extras.add(ch);tick();afterClose(cdpClosed);
+    if(response)httpStatus(e.statusCode);
+    // Protocol extra info has no hop and may arrive on either side of a redirect.
+    emit('CDP',response?'response-extra':'request-extra',{id:ch.id,hop:'UNREPORTED',...(response?{status:e.statusCode}:{}),headers:headers(e.headers,'CDP')});
+  }
+  function privateGuard(e) {
+    if(!e||e.sequence!==++privateSeq){issue('guard-event-order');return;}
+    if(!guardKinds.has(e.type)){issue('guard-event-unknown');return;}
+    afterClose(guardLifecycle.has('closed'));
+    if(!proxy.has(e.exchangeId))proxy.set(e.exchangeId,{id:proxy.size+1,opened:false,status:null,terminal:null});
+    const row=proxy.get(e.exchangeId),base={id:row.id,guardSequence:e.sequence};
+    if(['http-request','hmr-request'].includes(e.type)) {
+      if(row.opened)issue('duplicate-proxy-open');
+      row.hmr=e.type==='hmr-request';
+      Object.assign(row,{opened:true,phase,method:method(e.requestMethod),...(row.hmr?wsUrl(e.rawUrl,true):track(e.rawUrl))});
+      emit('PROXY',e.type,{...base,method:row.method,...url(e.rawUrl),incoming:headers(e.incomingHeaders,'guard-request'),forwarded:headers(e.forwardedHeaders,'guard-request')});
+      return;
+    }
+    if(!row.opened)issue('proxy-orphan');
+    if(['http-response','hmr-response'].includes(e.type)){
+      if(row.status!==null||row.terminal)issue('unexpected-proxy-response');
+      httpStatus(e.status);row.status=e.status;
+      emit('PROXY',e.type,{...base,status:e.status,upstream:headers(e.upstreamHeaders,'guard-response'),downstream:headers(e.downstreamHeaders,'guard-response')});
+    }else{
+      const terms=['end','finish','close','wire-fin','forwarded-fin','completed','failed','bilateral-close-provisional','unavailable'];
+      const term=terms.includes(e.terminal)?e.terminal:null;
+      if(['http-terminal','hmr-terminal'].includes(e.type)){
+        if(row.terminal)issue('duplicate-proxy-terminal');
+        row.terminal=term;
+      }
+      emit('PROXY',e.type,{...base,terminal:term,...(e.part?{partTag:mac('guard-part',e.part)}:{})});
+      if(e.type.endsWith('rejected')||['failed','unavailable'].includes(term))problems.guardFailures++;
+    }
+  }
+  function guardEvent(e) {
+    if(!e||e.sequence!==++publicSeq){issue('guard-public-order');return;}
+    if(!publicGuardKinds.has(e.event)){issue('guard-public-unknown');return;}
+    afterClose(guardLifecycle.has('closed'));
+    if(['attached','opened','shutdown','closed'].includes(e.event)){
+      if(guardLifecycle.has(e.event))issue('guard-duplicate-lifecycle');
+      guardLifecycle.add(e.event);
+    }
+    if(e.event==='denied'||e.event==='failure')problems.guardFailures++;
+    emit('GUARD',e.event,{guardSequence:e.sequence,reason:publicGuardReasons.has(e.reason)?e.reason:'OTHER',reasonTag:mac('guard-reason',e.reason)});
+  }
+  function observeGuard(g){
+    if(guard||browser||typeof g?.observeExchanges!=='function')throw Error('ordinary-guard-unavailable');
+    guard=g;guard.observeExchanges(privateGuard);
+  }
+  async function install({browser:owned,sessionVerifier}){
+    if(browser||!guard||!owned||typeof sessionVerifier?.verify!=='function'||typeof sessionVerifier.ledger!=='function')throw Error('ordinary-install-unavailable');
+    browser=owned;verifier=sessionVerifier;
+    function physical(source,event,already){
+      emit(source,event,{closeIssued:issued,guardAcknowledged:closeAck});
+      if(!issued||!closeAck||already)issue('unexpected-physical-close');
+    }
+    browser.on('disconnected',()=>{physical('BROWSER','disconnected',browserClosed);browserClosed=true;});
+    await guard.attach(browser);
+    ctx=await guard.createContext({javaScriptEnabled:true,viewport:{width:390,height:900}});
+    ctx.on('request',pwRequest);ctx.on('response',pwResponse);
+    ctx.on('requestfinished',r=>pwTerminal(r,'finished'));ctx.on('requestfailed',r=>pwTerminal(r,'failed'));
+    ctx.on('serviceworker',()=>issue('unexpected-serviceworker'));
+    ctx.on('close',()=>{physical('PW','context-close',contextClosed);contextClosed=true;});
+    page=await ctx.newPage();
+    page.on('pageerror',()=>{problems.consoleFailures++;emit('PW','page-error');});
+    page.on('console',m=>{if(m.type()==='error'){problems.consoleFailures++;emit('PW','console-error');}});
+    page.on('crash',()=>issue('page-crash'));
+    page.on('close',()=>{emit('PW','page-close',{closeIssued:issued});if(!issued)issue('unexpected-page-close');});
+    page.on('worker',()=>issue('unexpected-worker'));page.on('popup',()=>issue('unexpected-popup'));
+    page.on('framenavigated',f=>{
+      afterClose(contextClosed);const raw=f.url();
+      if(raw!=='about:blank')track(raw);
+      if(phase==='submit'&&f===page.mainFrame()&&url(raw).origin==='owned'&&url(raw).path==='/t')landingNavigation.PW=true;
+      emit('PW','frame-navigated',{frame:id(frames,f),main:f===page.mainFrame(),...url(raw)});
+    });
+    page.on('websocket',ws=>{
+      afterClose(contextClosed);const label=mac('pw-ws',ws.url());
+      emit('PW','websocket-created',{tag:label,...wsUrl(ws.url())});
+      ws.on('socketerror',e=>{problems.rawFailures++;emit('PW','websocket-error',{tag:label,...error(e)});});
+      ws.on('close',()=>emit('PW','websocket-close',{tag:label,closeIssued:issued}));
+    });
+    cdp=await ctx.newCDPSession(page);
+    cdp.on('close',()=>{physical('CDP','session-close',cdpClosed);cdpClosed=true;});
+    cdp.on('Inspector.detached',()=>{emit('CDP','inspector-detached',{closeIssued:issued});if(!issued)issue('unexpected-inspector-detach');});
+    cdp.on('Network.requestWillBeSent',cdpRequest);cdp.on('Network.responseReceived',cdpResponse);
+    cdp.on('Network.requestWillBeSentExtraInfo',e=>extra(e,false));cdp.on('Network.responseReceivedExtraInfo',e=>extra(e,true));
+    cdp.on('Network.loadingFinished',e=>cdpTerminal(e,'finished'));cdp.on('Network.loadingFailed',e=>cdpTerminal(e,'failed'));
+    cdp.on('Network.webSocketCreated',e=>{afterClose(cdpClosed);emit('CDP','websocket-created',{tag:mac('cdp-ws',e.requestId),...wsUrl(e.url)});});
+    cdp.on('Network.webSocketFrameError',e=>{problems.rawFailures++;emit('CDP','websocket-error',{tag:mac('cdp-ws',e.requestId),...error(e.errorMessage)});});
+    cdp.on('Network.webSocketHandshakeResponseReceived',e=>{
+      afterClose(cdpClosed);httpStatus(e.response.status);emit('CDP','websocket-response',{tag:mac('cdp-ws',e.requestId),status:e.response.status});
+    });
+    cdp.on('Network.webSocketClosed',e=>emit('CDP','websocket-close',{tag:mac('cdp-ws',e.requestId),closeIssued:issued}));
+    for(const event of ['Network.webTransportCreated','Network.directTCPSocketCreated','Network.directUDPSocketCreated'])
+      cdp.on(event,()=>issue('undeclared-transport'));
+    cdp.on('Page.frameNavigated',e=>{
+      afterClose(cdpClosed);
+      const f=e.frame,frame=id(frames,'cdp:'+f.id);
+      if(!f.parentId)mainCdp=frame;
+      if(f.url!=='about:blank')track(f.url);
+      if(phase==='submit'&&!f.parentId&&url(f.url).origin==='owned'&&url(f.url).path==='/t')landingNavigation.CDP=true;
+      emit('CDP','frame-navigated',{frame,parent:f.parentId?id(frames,'cdp:'+f.parentId):null,loader:f.loaderId?mac('loader',f.loaderId):null,...url(f.url)});
+    });
+    cdp.on('Page.navigatedWithinDocument',e=>{
+      afterClose(cdpClosed);const facts=track(e.url);
+      if(phase==='submit'&&id(frames,'cdp:'+e.frameId)===mainCdp&&facts.origin==='owned'&&facts.path==='/t')landingNavigation.CDP=true;
+      emit('CDP','same-document-navigation',{frame:id(frames,'cdp:'+e.frameId),kind:['fragment','historyApi','other'].includes(e.navigationType)?e.navigationType:'UNREPORTED',...url(e.url)});
+    });
+    for(const [command,params] of [['Page.enable',{}],['Network.enable',{}],['Network.setCacheDisabled',{cacheDisabled:true}]]){
+      emit('PARENT','domain-issued',{command});await cdp.send(command,params);emit('PARENT','domain-ack',{command});
+    }
+    ready=true;emit('PARENT','ready');
+  }
+
+  function openHttp(){
+    return {pw:[...pw.values()].filter(x=>x.opened&&!x.terminal).map(x=>x.id),
+      cdp:hops.filter(x=>!x.terminal).map(({id,hop})=>({id,hop}))};
+  }
+  async function settle(stage){
+    const start=Date.now();
+    while(Date.now()-start<20000){
+      const open=openHttp();
+      if(!open.pw.length&&!open.cdp.length&&Date.now()-lastHttp>=500){
+        emit('PARENT','http-quiet',{stage});return true;
+      }
+      await new Promise(resolve=>setTimeout(resolve,50));
+    }
+    issue('http-settle-timeout');emit('PARENT','http-settle-timeout',{stage,open:openHttp()});return false;
+  }
+  async function performLogin({email,password}){
+    if(!ready||attempted||closeIntent||typeof email!=='string'||typeof password!=='string')throw Error('ordinary-action-unavailable');
+    attempted=true;phase='login';
+    try {
+      emit('PARENT','action',{kind:'navigate-login'});
+      await page.goto(ORIGIN+'/api/demo/locale?set=en&next=%2Flogin',{timeout:30000});
+      if(!await settle('pre-click')||await page.evaluate(()=>document.documentElement.lang)!=='en')throw Error('login-precondition');
+      emit('PARENT','locale-confirmed',{locale:'en'});
+      await page.getByTestId('login-email').fill(email);
+      await page.getByTestId('login-password').fill(password);
+      const submit=page.getByTestId('login-submit');
+      await submit.scrollIntoViewIfNeeded();
+      const point=await submit.evaluate(el=>{
+        for(const rect of el.getClientRects()){
+          const x=(Math.max(rect.left,0)+Math.min(rect.right,innerWidth))/2;
+          const y=(Math.max(rect.top,0)+Math.min(rect.bottom,innerHeight))/2;
+          const hit=document.elementFromPoint(x,y);
+          if(x>=0&&y>=0&&x<innerWidth&&y<innerHeight&&(hit===el||el.contains(hit)))return {x,y};
+        }
+        return null;
+      });
+      if(!point)throw Error('pointer-unavailable');
+      phase='submit';emit('PARENT','action',{kind:'ordinary-submit-click'});
+      await page.mouse.click(point.x,point.y);
+      await page.waitForURL(u=>u.origin===ORIGIN&&u.pathname==='/t',{timeout:30000});
+      await page.getByTestId('liff-frame').waitFor({state:'visible',timeout:15000});
+      emit('PARENT','ordinary-arrival');
+      if(!await settle('post-arrival'))throw Error('arrival-not-settled');
+      const values=Object.create(null);
+      for(const c of await ctx.cookies()){
+        if(!cookieNames.has(c.name))continue;
+        if(c.domain!=='127.0.0.1'||c.path!=='/'||c.partitionKey!=null||Object.hasOwn(values,c.name))throw Error('cookie-scope');
+        values[c.name]=c.value;
+      }
+      if(!values.condola_session)throw Error('session-cookie');
+      const tokenHash=crypto.createHash('sha256').update(values.condola_session).digest('hex');
+      const cookieScope={org:values.condola_org??null,environment:values.condola_env??null,lease:values.condola_lease??null,portalRole:values.condola_portal_role??null};
+      const result=await verifier.verify({contextId:'ctx2',mode:'enabled',tokenHash,actorId:ACTOR,orgId:OWN,persona:'tenant',cookieScope});
+      if(!result||result.tokenHash!==tokenHash||result.userId!==ACTOR||result.orgId!==OWN||result.persona!=='tenant'||!/^[a-f0-9]{64}$/.test(result.readbackSha256||''))throw Error('snapshot');
+      snapshot={verification:result,cookieScope};actionCompleted=true;emit('PARENT','canonical-session-snapshot',{status:'VERIFIED_SNAPSHOT'});
+    } catch {
+      issue('ordinary-action-incomplete');throw Error('ordinary-action-incomplete');
+    }
+  }
+  async function pendingReads(){while(pending.size)await Promise.all([...pending]);}
+  async function closeBrowser(){
+    if(!browser||closeIntent)throw Error('ordinary-close-unavailable');
+    closeIntent=true;emit('PARENT','close-intent');
+    try{await settle('pre-close');}catch{issue('close-settle-unavailable');}
+    phase='teardown';
+    try{
+      const prior=publicSeq,wasAcknowledged=guardLifecycle.has('shutdown');
+      guard.beginPlannedBrowserClose();
+      closeAck=!wasAcknowledged&&publicSeq>prior&&guardLifecycle.has('shutdown');
+      if(!closeAck)issue('missing-guard-close-ack');
+      emit('PARENT','guard-close-return',{ack:closeAck});
+    }catch{issue('guard-close-rejected');}
+    // Cleanup is required even after a timeout or rejected guard acknowledgement.
+    issued=true;emit('PARENT','browser-close-issued');
+    try{await browser.close();returned=true;emit('PARENT','browser-close-returned');}
+    catch{issue('browser-close-failed');throw Error('ordinary-close-failed');}
+  }
+  function coverage(){
+    const sources={PW:[...pw.values()],CDP:hops,PROXY:[...proxy.values()].filter(x=>!x.hmr)};
+    const essentials={}, shapes={};
+    for(const [source,rows] of Object.entries(sources)){
+      const ok=r=>r.origin==='owned'&&['completed','finished','redirect'].includes(r.terminal)&&
+        (source==='PROXY'||(source==='PW'?r.main===true:mainCdp!==null&&r.frame===mainCdp&&!!r.loader));
+      const type=(row,kinds)=>source==='PROXY'||kinds.includes(row.kind?.toLowerCase());
+      const present=rows.filter(ok);
+      const core={
+        login:present.filter(r=>r.phase==='login'&&r.path==='/login'&&r.method==='GET'&&r.status===200&&type(r,['document'])),
+        post:present.filter(r=>r.phase==='submit'&&r.path==='/login'&&r.method==='POST'&&r.status>=200&&r.status<400&&type(r,['document','fetch','xhr'])),
+        landing:present.filter(r=>r.phase==='submit'&&r.path==='/t'&&r.method==='GET'&&r.status===200&&type(r,['document','fetch','xhr']))
+      };
+      essentials[source]=Object.fromEntries(Object.entries(core).map(([name,items])=>[name,items.length]));
+      // Compare multisets, never assign an individual hop by timing. No raw URL escapes.
+      shapes[source]=JSON.stringify(Object.values(core).map(items=>items.map(r=>r.url+':'+r.status).sort()));
+    }
+    const mainNavigation={...landingNavigation};
+    return {essentials,mainNavigation,complete:mainNavigation.PW&&mainNavigation.CDP&&
+      shapes.PW===shapes.CDP&&shapes.PW===shapes.PROXY&&
+      Object.values(essentials).every(x=>x.login===1&&x.post===1&&x.landing>=1)&&
+      Object.values(sources).every(rows=>rows.every(r=>r.status!==null&&['finished','redirect','completed'].includes(r.terminal)))&&
+      [...extras].every(ch=>ch.current!==null)};
+  }
+  function outcome(){
+    let g;try{g=guard?.snapshot();}catch{}
+    const guardError=!!g&&(g.failed===true||g.denied>0);
+    const guardDrained=g?.attached===true&&g.closed===true&&g.failed===false&&g.denied===0&&g.sequence===publicSeq&&
+      g.forwarded===proxy.size&&[g.clientSockets,g.upstreamSockets,g.pendingHttp,g.pendingTunnels].every(n=>n===0)&&
+      ['opened','attached','shutdown','closed'].every(k=>guardLifecycle.has(k));
+    const observed=coverage(),open=openHttp();
+    const strictFailures=Object.values(problems).some(n=>n>0)||guardError;
+    const complete=ready&&actionCompleted&&!!snapshot&&guardDrained&&issued&&returned&&closeAck&&browserClosed&&contextClosed&&cdpClosed&&pending.size===0&&observed.complete;
+    return {version:2,kind:'NON_ADMITTING_ORDINARY_LOGIN_DIAGNOSTIC',status:strictFailures?'FAIL':complete?'DIAGNOSTIC_COMPLETED_ONLY':'UNAVAILABLE',
+      rawFailureObservations:problems.rawFailures,observerFailures:problems.observerFailures,consoleFailures:problems.consoleFailures,httpFailureObservations:problems.httpFailures,guardFailures:problems.guardFailures,
+      actionCompleted,canonicalSessionSnapshot:snapshot?'VERIFIED_SNAPSHOT':'UNVERIFIED',browserClosed,contextClosed,cdpClosed,closeIntent,guardCloseAck:closeAck,closeIssued:issued,closeReturned:returned,
+      pendingReads:pending.size,openPwRequests:open.pw.length,openCdpHops:open.cdp.length,coverage:observed,guardDrained,
+      bootstrapException:'NOT_EVALUATED',financialAggregate:'PENDING',fullBrowserAcceptance:'NOT_RUN',authRecovery:'UNVERIFIED'};
+  }
+  function privateMaterial(){return {verifierLedger:verifier?verifier.ledger():[],contexts:[],partialSnapshot:snapshot};}
+  return Object.freeze({observeGuard,guardEvent,install,performLogin,closeBrowser,pendingReads,outcome,privateMaterial});
+}
+module.exports={createOrdinaryObserver};

@@ -1,0 +1,197 @@
+-- Inactive source proposal. No caller, enrollment, flag registration or application.
+-- Run no DDL from this fragment outside a separately reviewed target procedure.
+BEGIN;
+
+CREATE FUNCTION app.b017_retire_unassigned_role(
+ p_session uuid, p_org uuid, p_env text, p_request uuid, p_role uuid,
+ p_expected_role bigint, p_expected_authority bigint
+)
+RETURNS TABLE(outcome text,role_id uuid,role_revision bigint,authority_revision bigint)
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,pg_temp SET lock_timeout='500ms'
+AS $retire$
+DECLARE
+ c record;
+ admitted_actor uuid;
+ admitted_member uuid;
+ prior_keys text[];
+ prior_assignment_revision bigint;
+ prior_actor_role_revision bigint;
+ control jsonb;
+ flags jsonb;
+ st app.b017_org_state%ROWTYPE;
+ r app.b017_roles%ROWTYPE;
+ receipt app.b017_commands%ROWTYPE;
+ replay boolean;
+ supported text[] := app.b017_supported_keys_v1();
+ manifest bytea := app.b017_support_digest_v1();
+ ceiling_keys text[];
+ ceiling_mask integer;
+ stored_mask numeric;
+ expected jsonb;
+ result jsonb;
+ intent bytea;
+ new_role bigint;
+ new_authority bigint;
+BEGIN
+ -- Unavailable until the trusted adapter supplies an actual authenticated live
+ -- transaction. A submitted SID, transaction pin or role ID is not a credential.
+ IF p_session IS NULL OR p_org IS NULL OR p_env IS DISTINCT FROM 'live'
+    OR p_request IS NULL OR p_role IS NULL
+    OR p_expected_role IS NULL OR p_expected_role NOT BETWEEN 1 AND 9223372036854775806
+    OR p_expected_authority IS NULL OR p_expected_authority NOT BETWEEN 1 AND 9223372036854775806
+    OR current_setting('transaction_isolation') IS DISTINCT FROM 'read committed'
+    OR cardinality(supported) IS DISTINCT FROM 17 THEN
+  RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ SELECT * INTO c FROM app.b017_effective_context(p_session,p_org,p_env);
+ IF c.status IS DISTINCT FROM 'ready' OR c.live_org_id IS DISTINCT FROM p_org
+    OR c.native_role IS DISTINCT FROM 'admin' OR ('team.manage'=ANY(c.effective_keys)) IS NOT TRUE THEN
+  RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ admitted_actor:=c.actor_user_id;
+ admitted_member:=c.member_id;
+
+ SELECT ps.value INTO control FROM public.platform_settings ps WHERE ps.key='custom_roles' FOR SHARE NOWAIT;
+ IF NOT FOUND OR jsonb_typeof(control) IS DISTINCT FROM 'object'
+    OR control->'enabled' IS DISTINCT FROM 'true'::jsonb
+    OR jsonb_typeof(control->'allowed_org_ids') IS DISTINCT FROM 'array' THEN
+  RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ IF EXISTS (SELECT 1 FROM jsonb_array_elements(control->'allowed_org_ids') a(value)
+            WHERE jsonb_typeof(a.value) IS DISTINCT FROM 'string'
+               OR (a.value#>>'{}') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+    OR NOT (control->'allowed_org_ids' @> jsonb_build_array(p_org::text)) THEN
+  RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ SELECT o.feature_flags INTO flags FROM public.organizations o
+ WHERE o.id=p_org AND o.environment::text='live' AND o.live_org_id IS NULL FOR UPDATE NOWAIT;
+ IF NOT FOUND OR jsonb_typeof(flags) IS DISTINCT FROM 'object'
+    OR flags->'custom_roles' IS DISTINCT FROM 'true'::jsonb THEN
+  RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ SELECT s.* INTO st FROM app.b017_org_state s WHERE s.live_org_id=p_org FOR UPDATE NOWAIT;
+ IF NOT FOUND OR st.capability_version IS DISTINCT FROM 1 OR st.support_manifest_sha256 IS DISTINCT FROM manifest
+    OR st.enforcement_state NOT IN ('prepared','enforced') THEN
+  RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ PERFORM 1 FROM public.org_members m WHERE m.org_id=p_org AND m.id=admitted_member
+  AND m.user_id=admitted_actor AND m.status::text='active' AND m.role::text='admin' FOR SHARE NOWAIT;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN; END IF;
+ PERFORM 1 FROM public.auth_sessions s WHERE s.id=p_session AND s.user_id=admitted_actor
+  AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp() FOR SHARE NOWAIT;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN; END IF;
+ SELECT * INTO c FROM app.b017_effective_context(p_session,p_org,p_env);
+ IF c.status IS DISTINCT FROM 'ready' OR c.live_org_id IS DISTINCT FROM p_org
+    OR c.actor_user_id IS DISTINCT FROM admitted_actor OR c.member_id IS DISTINCT FROM admitted_member
+    OR c.native_role IS DISTINCT FROM 'admin' OR ('team.manage'=ANY(c.effective_keys)) IS NOT TRUE
+    OR c.authority_revision IS DISTINCT FROM st.authority_revision THEN
+  RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ prior_keys:=c.effective_keys;
+ prior_assignment_revision:=c.assignment_revision;
+ prior_actor_role_revision:=c.role_revision;
+
+ SELECT x.* INTO r FROM app.b017_roles x WHERE x.org_id=p_org AND x.role_id=p_role FOR UPDATE NOWAIT;
+ SELECT x.* INTO receipt FROM app.b017_commands x
+ WHERE x.org_id=p_org AND x.actor_member_id=admitted_member AND x.request_id=p_request FOR UPDATE NOWAIT;
+ replay:=FOUND;
+ expected:=jsonb_build_object('role',p_expected_role,'authority',p_expected_authority);
+ new_role:=p_expected_role+1;
+ new_authority:=p_expected_authority+1;
+
+ IF replay THEN
+  IF receipt.command IS DISTINCT FROM 'role_retire' OR receipt.target_id IS DISTINCT FROM p_role
+     OR receipt.expected_revisions IS DISTINCT FROM expected THEN
+   RETURN QUERY SELECT 'conflict',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+  END IF;
+  IF jsonb_typeof(receipt.result_identity->'ceiling_mask_v1') IS DISTINCT FROM 'number' THEN
+   RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+  END IF;
+  stored_mask:=(receipt.result_identity->>'ceiling_mask_v1')::numeric;
+  IF stored_mask NOT BETWEEN 0 AND 131071 OR trunc(stored_mask)<>stored_mask THEN
+   RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+  END IF;
+  ceiling_mask:=stored_mask::integer;
+  SELECT COALESCE(array_agg(k.name ORDER BY k.ord),ARRAY[]::text[]) INTO ceiling_keys
+   FROM unnest(supported) WITH ORDINALITY AS k(name,ord)
+   WHERE (ceiling_mask & (1 << ((k.ord-1)::integer)))<>0;
+ ELSE
+  IF r.role_id IS NULL OR r.lifecycle NOT IN ('draft','active') OR NOT app.b017_keys_supported_v1(r.keys) THEN
+   RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+  END IF;
+  ceiling_keys:=r.keys;
+  SELECT COALESCE(bit_or(1 << ((k.ord-1)::integer)),0) INTO ceiling_mask
+   FROM unnest(supported) WITH ORDINALITY AS k(name,ord) WHERE k.name=ANY(ceiling_keys);
+ END IF;
+ IF (ceiling_keys <@ prior_keys) IS NOT TRUE THEN
+  RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ intent:=sha256(convert_to(jsonb_build_array('b017_unassigned_role_retire_v1',p_org::text,admitted_member::text,
+  p_request::text,p_role::text,p_expected_role,p_expected_authority,encode(manifest,'hex'),ceiling_mask)::text,'UTF8'));
+ result:=jsonb_build_object('role_id',p_role::text,'role_revision',new_role,'authority_revision',new_authority,
+  'support_sha256',encode(manifest,'hex'),'ceiling_mask_v1',ceiling_mask);
+ IF replay AND (receipt.intent_sha256 IS DISTINCT FROM intent OR receipt.result_identity IS DISTINCT FROM result) THEN
+  RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ IF NOT replay AND (r.revision IS DISTINCT FROM p_expected_role OR st.authority_revision IS DISTINCT FROM p_expected_authority) THEN
+  RETURN QUERY SELECT 'stale',NULL::uuid,NULL::bigint,NULL::bigint; RETURN;
+ END IF;
+ -- No membership status predicate. A retained reference, including the actor's,
+ -- prevents the command even if the referring member is suspended or removed.
+ IF EXISTS (SELECT 1 FROM app.b017_assignments a WHERE a.org_id=p_org AND a.role_id=p_role) THEN
+  IF replay THEN RETURN QUERY SELECT 'unavailable',NULL::uuid,NULL::bigint,NULL::bigint;
+  ELSE RETURN QUERY SELECT 'in_use',NULL::uuid,NULL::bigint,NULL::bigint; END IF;
+  RETURN;
+ END IF;
+ IF NOT replay THEN
+  UPDATE app.b017_roles AS x SET lifecycle='retired',revision=new_role,updated_by=admitted_actor,updated_at=clock_timestamp()
+   WHERE x.org_id=p_org AND x.role_id=p_role AND x.revision=p_expected_role AND x.lifecycle IN ('draft','active');
+  IF NOT FOUND THEN RAISE EXCEPTION 'B017 retirement inconsistent' USING ERRCODE='40001'; END IF;
+  UPDATE app.b017_org_state AS s SET authority_revision=new_authority,updated_at=clock_timestamp()
+   WHERE s.live_org_id=p_org AND s.authority_revision=p_expected_authority;
+  IF NOT FOUND THEN RAISE EXCEPTION 'B017 retirement inconsistent' USING ERRCODE='40001'; END IF;
+  INSERT INTO app.b017_commands(org_id,actor_member_id,request_id,command,target_id,intent_sha256,expected_revisions,result_identity)
+   VALUES(p_org,admitted_member,p_request,'role_retire',p_role,intent,expected,result);
+  INSERT INTO public.audit_log(org_id,actor_user_id,actor_role,table_name,row_id,action,new_row,request_id)
+   VALUES(p_org,admitted_actor,'b017_authority_owner','b017_roles',p_role::text,'update',
+    jsonb_build_object('event','b017_unassigned_role_retired','role_id',p_role::text,
+     'role_revision',new_role,'authority_revision',new_authority),p_request::text);
+ END IF;
+
+ SELECT * INTO c FROM app.b017_effective_context(p_session,p_org,p_env);
+ IF c.status IS DISTINCT FROM 'ready' OR c.live_org_id IS DISTINCT FROM p_org
+    OR c.actor_user_id IS DISTINCT FROM admitted_actor OR c.member_id IS DISTINCT FROM admitted_member
+    OR c.native_role IS DISTINCT FROM 'admin' OR ('team.manage'=ANY(c.effective_keys)) IS NOT TRUE
+    OR (ceiling_keys <@ c.effective_keys) IS NOT TRUE OR c.effective_keys IS DISTINCT FROM prior_keys
+    OR c.assignment_revision IS DISTINCT FROM prior_assignment_revision OR c.role_revision IS DISTINCT FROM prior_actor_role_revision
+    OR c.authority_revision IS DISTINCT FROM (CASE WHEN replay THEN st.authority_revision ELSE new_authority END) THEN
+  RAISE EXCEPTION 'B017 unavailable' USING ERRCODE='42501';
+ END IF;
+ -- Metainformation about the original transaction, not a fresh lifecycle assertion.
+ RETURN QUERY SELECT (CASE WHEN replay THEN 'replayed' ELSE 'retired' END),p_role,new_role,new_authority;
+END;
+$retire$;
+
+ALTER FUNCTION app.b017_retire_unassigned_role(uuid,uuid,text,uuid,uuid,bigint,bigint) OWNER TO b017_authority_owner;
+REVOKE ALL ON FUNCTION app.b017_retire_unassigned_role(uuid,uuid,text,uuid,uuid,bigint,bigint)
+ FROM PUBLIC,anon,authenticated,service_role;
+
+-- Fail the DDL transaction if target default ACLs left any other named grantee.
+DO $seal$
+DECLARE fn regprocedure := 'app.b017_retire_unassigned_role(uuid,uuid,text,uuid,uuid,bigint,bigint)'::regprocedure;
+BEGIN
+ IF NOT EXISTS (
+  SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_roles o ON o.oid=p.proowner
+   WHERE p.oid=fn AND o.rolname='b017_authority_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper
+    AND NOT o.rolbypassrls AND NOT o.rolinherit AND NOT o.rolcreaterole AND NOT o.rolcreatedb AND NOT o.rolreplication
+    AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.roleid=o.oid OR m.member=o.oid)
+ ) THEN RAISE EXCEPTION 'B017 retire owner is not isolated'; END IF;
+ IF EXISTS (
+  SELECT 1 FROM pg_catalog.pg_proc p CROSS JOIN LATERAL
+   pg_catalog.aclexplode(COALESCE(p.proacl,pg_catalog.acldefault('f',p.proowner))) a
+   WHERE p.oid=fn AND a.grantee<>p.proowner
+ ) THEN RAISE EXCEPTION 'B017 retire function ACL is not sealed'; END IF;
+END;
+$seal$;
+COMMIT;

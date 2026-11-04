@@ -1,0 +1,83 @@
+'use strict';
+
+const ORIGIN = 'http://127.0.0.1:43156';
+const HMR = 'ws://127.0.0.1:43156/_next/webpack-hmr';
+const routes = new Set(['/login','/auth/enter','/auth/continue','/api/demo/locale','/t','/m','/_next/webpack-hmr']);
+const cookieNames = new Set(['condola_session','condola_org','condola_env','condola_lease','condola_portal_role']);
+const safeErrors = new Set(['net::ERR_ABORTED','net::ERR_FAILED','net::ERR_BLOCKED_BY_CLIENT',
+  'net::ERR_CONNECTION_CLOSED','net::ERR_CONNECTION_RESET','net::ERR_CONNECTION_REFUSED',
+  'net::ERR_TIMED_OUT','net::ERR_INSUFFICIENT_RESOURCES','csp']);
+const missing = 'UNREPORTED';
+
+function makeProjection(mac) {
+  function url(raw) {
+    const facts = {url:mac('url',raw),origin:'unavailable',path:'other',rscQuery:missing};
+    try {
+      const u = new URL(raw);
+      facts.origin = raw === HMR ? 'owned-hmr' : u.protocol === 'http:' && u.origin === ORIGIN && !u.username && !u.password ? 'owned' : 'foreign';
+      facts.path = routes.has(u.pathname) ? u.pathname : u.pathname.startsWith('/_next/static/') ? 'next-static' : 'other';
+      facts.rscQuery = u.searchParams.has('_rsc');
+    } catch {}
+    return facts;
+  }
+
+  function error(raw) {
+    if (raw === undefined || raw === null) return {error:'MISSING'};
+    if (raw === '') return {error:'EMPTY'};
+    return safeErrors.has(raw) ? {error:raw} : {error:'OTHER',errorTag:mac('error',raw)};
+  }
+
+  function destination(raw, action) {
+    const result = {tag:mac(action ? 'action-redirect' : 'location',raw),scope:'unknown',route:'unknown',mode:'unknown'};
+    const fields = action ? raw.split(';') : [raw];
+    if (action && (fields.length !== 2 || !['push','replace'].includes(fields[1]))) return result;
+    if (!fields[0] || !/^(?:\/(?!\/)|https?:\/\/)/.test(fields[0]) || /[\s\\]/.test(fields[0])) return result;
+    try {
+      const u = new URL(fields[0],ORIGIN);
+      if (u.username || u.password) return result;
+      result.scope = u.origin === ORIGIN ? 'owned' : 'foreign';
+      if (result.scope === 'owned' && routes.has(u.pathname)) result.route = u.pathname;
+      result.mode = action ? fields[1] : 'location';
+    } catch {}
+    return result;
+  }
+
+  function setCookie(raw) {
+    const [first,...attributes] = raw.split(';'), pos = first.indexOf('=');
+    const name = first.slice(0,pos), value = first.slice(pos+1);
+    const attrs = attributes.map(x=>x.trim().toLowerCase());
+    return {name:pos>0&&cookieNames.has(name)?name:'other',
+      value:value===''?'empty':name==='condola_portal_role'&&['owner','tenant'].includes(value)?value:'opaque',
+      valueTag:mac('set-cookie-value',value),rootPath:attrs.includes('path=/'),
+      domain:attrs.some(x=>x.startsWith('domain=')),maxAgeZero:attrs.includes('max-age=0'),
+      epochExpiry:attrs.includes('expires=thu, 01 jan 1970 00:00:00 gmt'),partitioned:attrs.includes('partitioned')};
+  }
+
+  function headers(value,source) {
+    // All counts here describe this particular supplied projection, never the wire by inference.
+    const entries = Array.isArray(value) ? value : Object.entries(value || {});
+    const projected = source === 'guard-request' ? ['cookie','sec-websocket-key'] :
+      source === 'guard-response' ? ['content-security-policy','content-security-policy-report-only','link','set-cookie','location','sec-websocket-accept'] : null;
+    function read(name,transform) {
+      if (!value || (projected && !projected.includes(name))) return missing;
+      const values = entries.filter(([k])=>k.toLowerCase()===name).flatMap(([,v])=>Array.isArray(v)?v:[v]);
+      return transform(source === 'CDP' ? values.flatMap(x=>x.split('\n').map(s=>s.replace(/\r$/,''))) : values);
+    }
+    const media = s => {
+      const type = s.split(';',1)[0].trim().toLowerCase();
+      return type==='text/x-component'?'rsc':type==='text/html'?'html':type==='text/plain'?'plain':'other';
+    };
+    return {coverage:source,cookieCount:read('cookie',a=>a.length),cookie:read('cookie',a=>mac('cookie',JSON.stringify(a))),
+      uaCount:read('user-agent',a=>a.length),ua:read('user-agent',a=>mac('ua',JSON.stringify(a))),
+      rsc:read('rsc',a=>a.map(x=>x==='1'?'one':'other')),
+      action:read('next-action',a=>a.length>0),actionTags:read('next-action',a=>a.map(x=>mac('action',x))),
+      routerState:read('next-router-state-tree',a=>a.length>0),
+      accept:read('accept',a=>a.map(media)),contentType:read('content-type',a=>a.map(media)),
+      locations:read('location',a=>a.map(x=>destination(x,false))),
+      actionRedirect:read('x-action-redirect',a=>a.map(x=>destination(x,true))),
+      csp:read('content-security-policy',a=>a.length),reportOnly:read('content-security-policy-report-only',a=>a.length),
+      setCookies:read('set-cookie',a=>a.map(setCookie))};
+  }
+  return {url,error,headers};
+}
+module.exports = {ORIGIN,HMR,cookieNames,makeProjection};

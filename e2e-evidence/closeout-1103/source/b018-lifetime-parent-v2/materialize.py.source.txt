@@ -1,0 +1,208 @@
+"""Inactive source preparation; import does not read, copy or execute anything."""
+from __future__ import annotations
+import hashlib
+import os
+from pathlib import Path, PurePosixPath
+import re
+import stat
+import subprocess
+from owned import Unavailable, private_directory, Directory
+
+
+def relative_name(value: str) -> str:
+    if not isinstance(value, str) or not value or '\x00' in value or '\n' in value or '\r' in value:
+        raise Unavailable('unsafe-relative-name')
+    path = PurePosixPath(value)
+    if path.is_absolute() or path.as_posix() != value or any(x in ('', '.', '..') for x in value.split('/')):
+        raise Unavailable('unsafe-relative-name')
+    return value
+
+
+def blob_sha(raw: bytes) -> str:
+    return hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\x00'+raw).hexdigest()
+
+
+def _stat_key(st):
+    return (st.st_dev,st.st_ino,st.st_mode,st.st_uid,st.st_nlink,st.st_size,st.st_mtime_ns,st.st_ctime_ns)
+
+def _read_entry(parent,name):
+    fd=os.open(name,os.O_RDONLY|os.O_NOFOLLOW,dir_fd=parent)
+    try:
+        before=os.fstat(fd);named=os.stat(name,dir_fd=parent,follow_symlinks=False)
+        if not stat.S_ISREG(before.st_mode) or _stat_key(before)!=_stat_key(named): raise Unavailable('source-file-unavailable')
+        chunks=[]
+        while True:
+            chunk=os.read(fd,1048576)
+            if not chunk: break
+            chunks.append(chunk)
+        data=b''.join(chunks);after=os.fstat(fd);named=os.stat(name,dir_fd=parent,follow_symlinks=False)
+        if _stat_key(before)!=_stat_key(after) or _stat_key(after)!=_stat_key(named) or len(data)!=after.st_size: raise Unavailable('source-changed-during-read')
+        return data,after
+    finally: os.close(fd)
+
+def stable_read(file:Path)->bytes:
+    with Directory(file.parent,private=False) as parent:
+        data,_=_read_entry(parent.fd,file.name);parent.verify();return data
+
+def tree_pins(root:Path)->dict:
+    """FD-rooted, full, race-checked inventory. Any scan error is fatal."""
+    result={}
+    with Directory(root,private=False) as base:
+        def verify_link(parent_parts,target):
+            if not target or os.path.isabs(target) or '\x00' in target: raise Unavailable('unsafe-dependency-link')
+            stack=list(parent_parts)
+            for piece in target.split('/'):
+                if piece in ('','.'): continue
+                if piece=='..':
+                    if not stack: raise Unavailable('escaping-dependency-link')
+                    stack.pop()
+                else: stack.append(piece)
+            if not stack: raise Unavailable('dependency-link-root')
+            fd=os.dup(base.fd)
+            try:
+                for i,part in enumerate(stack):
+                    st=os.stat(part,dir_fd=fd,follow_symlinks=False)
+                    if stat.S_ISLNK(st.st_mode): raise Unavailable('nested-dependency-link')
+                    if i<len(stack)-1:
+                        nxt=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
+                        if _stat_key(os.fstat(nxt))!=_stat_key(st): os.close(nxt);raise Unavailable('dependency-link-drift')
+                        os.close(fd);fd=nxt
+                    elif not (stat.S_ISREG(st.st_mode) or stat.S_ISDIR(st.st_mode)): raise Unavailable('special-dependency-link')
+            finally: os.close(fd)
+        def walk(fd,parts):
+            before=os.fstat(fd)
+            if not stat.S_ISDIR(before.st_mode) or not before.st_mode&0o444 or not before.st_mode&0o111: raise Unavailable('unreadable-dependency-directory')
+            names=sorted(os.listdir(fd))
+            for name in names:
+                rel=relative_name('/'.join((*parts,name)));st=os.stat(name,dir_fd=fd,follow_symlinks=False)
+                if stat.S_ISLNK(st.st_mode):
+                    target=os.readlink(name,dir_fd=fd);verify_link(parts,target)
+                    if _stat_key(st)!=_stat_key(os.stat(name,dir_fd=fd,follow_symlinks=False)): raise Unavailable('dependency-link-drift')
+                    result[rel]={'kind':'link','target':target}
+                elif stat.S_ISREG(st.st_mode):
+                    data,actual=_read_entry(fd,name);result[rel]={'kind':'file','sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'executable':bool(actual.st_mode&0o111)}
+                elif stat.S_ISDIR(st.st_mode):
+                    child=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
+                    try:
+                        if _stat_key(os.fstat(child))!=_stat_key(st): raise Unavailable('dependency-directory-drift')
+                        result[rel]={'kind':'directory'};walk(child,(*parts,name))
+                        if _stat_key(os.fstat(child))!=_stat_key(os.stat(name,dir_fd=fd,follow_symlinks=False)): raise Unavailable('dependency-directory-drift')
+                    finally: os.close(child)
+                else: raise Unavailable('special-dependency-file')
+            if names!=sorted(os.listdir(fd)) or _stat_key(before)!=_stat_key(os.fstat(fd)): raise Unavailable('dependency-directory-drift')
+        try: walk(base.fd,());base.verify()
+        except OSError as e: raise Unavailable('dependency-scan-unavailable') from e
+    return dict(sorted(result.items()))
+
+
+def create_file(file:Path,raw:bytes,mode=0o400)->None:
+    with Directory(file.parent) as parent:
+        fd=os.open(file.name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,mode,dir_fd=parent.fd)
+        try:
+            pos=0
+            while pos<len(raw): pos+=os.write(fd,raw[pos:])
+            os.fchmod(fd,mode);os.fsync(fd);actual=os.fstat(fd);named=os.stat(file.name,dir_fd=parent.fd,follow_symlinks=False);parent.verify()
+            if not stat.S_ISREG(actual.st_mode) or _stat_key(actual)!=_stat_key(named) or actual.st_nlink!=1 or actual.st_size!=len(raw): raise Unavailable('created-file-drift')
+            os.fsync(parent.fd)
+        finally: os.close(fd)
+
+def ensure_parents(root:Path,relative:str)->Path:
+    relative_name(relative);parts=PurePosixPath(relative).parts
+    with Directory(root) as base:
+        fd=os.dup(base.fd)
+        try:
+            for part in parts[:-1]:
+                try: os.mkdir(part,0o700,dir_fd=fd)
+                except FileExistsError: pass
+                child=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd);st=os.fstat(child);named=os.stat(part,dir_fd=fd,follow_symlinks=False)
+                if _stat_key(st)!=_stat_key(named) or st.st_uid!=os.getuid() or st.st_mode&0o077: os.close(child);raise Unavailable('parent-directory-drift')
+                os.close(fd);fd=child
+            base.verify()
+        finally: os.close(fd)
+    return root/relative
+
+
+def verify_working_sources(repository: Path, sources: dict) -> None:
+    if len(sources) < 1024:
+        raise Unavailable('incomplete-source-pins')
+    for name, expected in sources.items():
+        relative_name(name)
+        if not re.fullmatch('[a-f0-9]{40}', expected) or blob_sha(stable_read(repository/name)) != expected:
+            raise Unavailable('application-source-drift')
+        if (repository/name).resolve() != repository/name:
+            raise Unavailable('application-source-link')
+
+
+def materialize_sources(repository: Path, candidate: str, destination: Path, sources: dict) -> None:
+    """Read exact Git blobs; no checkout hooks, worktree overlays or archive links."""
+    private_directory(destination)
+    if any(destination.iterdir()) or not re.fullmatch('[a-f0-9]{40}', candidate):
+        raise Unavailable('application-destination-unavailable')
+    verify_working_sources(repository, sources)
+    # Metadata-only plumbing uses an explicit object name and separately validated paths.
+    # No shell, executable Git hooks, build or application process runs here.
+    requests = ''.join(candidate+':'+relative_name(name)+'\n' for name in sources).encode()
+    proc = subprocess.run(['/usr/bin/git','cat-file','--batch'], input=requests,
+                          cwd=repository, capture_output=True, timeout=60, check=False)
+    if proc.returncode != 0:
+        raise Unavailable('candidate-blob-read-unavailable')
+    raw = proc.stdout
+    cursor = 0
+    for name, expected in sources.items():
+        end = raw.find(b'\n',cursor)
+        if end < 0:
+            raise Unavailable('candidate-blob-header-unavailable')
+        header = raw[cursor:end].split(b' ')
+        if len(header)!=3 or header[0].decode('ascii')!=expected or header[1]!=b'blob' or not header[2].isdigit():
+            raise Unavailable('candidate-blob-header-mismatch')
+        size = int(header[2]); cursor = end+1
+        data = raw[cursor:cursor+size]; cursor += size
+        if raw[cursor:cursor+1]!=b'\n' or blob_sha(data)!=expected:
+            raise Unavailable('candidate-blob-body-mismatch')
+        cursor += 1
+        create_file(ensure_parents(destination,name),data)
+    if cursor != len(raw):
+        raise Unavailable('candidate-blob-trailing-data')
+    verify_working_sources(repository,sources)
+    verify_working_sources(destination,sources)
+    verify_application_inventory(destination,sources)
+
+
+def verify_application_inventory(destination:Path,sources:dict)->None:
+    expected_names=set(sources)
+    for name in sources:
+        parent=PurePosixPath(name).parent
+        while str(parent)!='.': expected_names.add(str(parent));parent=parent.parent
+    actual=tree_pins(destination)
+    if set(actual)!=expected_names or any(info['kind'] not in ('file','directory') for info in actual.values()): raise Unavailable('application-unlisted-entry')
+
+
+def copy_dependencies(source: Path, destination: Path, expected: dict) -> None:
+    """Exclusive private copy, exact before/after bytes, read-only dependency namespace."""
+    private_directory(destination.parent)
+    if destination.exists() or destination.is_symlink() or tree_pins(source) != expected:
+        raise Unavailable('dependency-copy-precondition')
+    destination.mkdir(mode=0o700)
+    for name, info in expected.items():
+        relative_name(name)
+        file = ensure_parents(destination,name)
+        if info['kind']=='directory':
+            file.mkdir(mode=0o700,exist_ok=True)
+            private_directory(file)
+        elif info['kind']=='file':
+            data=stable_read(source/name)
+            if hashlib.sha256(data).hexdigest()!=info['sha256'] or len(data)!=info['bytes']:
+                raise Unavailable('dependency-copy-drift')
+            create_file(file,data,0o500 if info['executable'] else 0o400)
+        elif info['kind']=='link':
+            with Directory(file.parent) as parent:
+                os.symlink(info['target'],file.name,dir_fd=parent.fd);os.fsync(parent.fd);parent.verify()
+        else:
+            raise Unavailable('dependency-pin-kind-unavailable')
+    if tree_pins(source)!=expected or tree_pins(destination)!=expected:
+        raise Unavailable('dependency-copy-readback-drift')
+    for name in sorted((n for n,v in expected.items() if v['kind']=='directory'),key=lambda x:x.count('/'),reverse=True):
+        with Directory(destination/name,private=False) as opened: os.fchmod(opened.fd,0o500);opened.verify()
+    with Directory(destination,private=False) as opened: os.fchmod(opened.fd,0o500);opened.verify()
+    if tree_pins(destination)!=expected:
+        raise Unavailable('dependency-copy-final-drift')

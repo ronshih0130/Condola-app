@@ -1,0 +1,207 @@
+{
+  "scope": "STOPPED source snapshots; no new runtime; ordinary-v2 and parent-v2 NOT_REVIEWED",
+  "files": [
+    {
+      "source": "work/b017-role-retire-source-v1/02c-retire-unassigned-role.sql",
+      "saved": "source/b017-role-retire-source-v1/02c-retire-unassigned-role.sql.source.txt",
+      "sha256": "089575347f0afb4574e49c566b43df5fc1730a93aabcf383f291a1658414447e",
+      "bytes": 11669
+    },
+    {
+      "source": "work/b017-role-retire-source-v1/README.md",
+      "saved": "source/b017-role-retire-source-v1/README.md",
+      "sha256": "0c05bc4aacde7cd134e88321f50f5bc57d24ee1b673378428240de3c5340db96",
+      "bytes": 5977
+    },
+    {
+      "source": "work/b017-role-retire-source-v1/acl-delta.json",
+      "saved": "source/b017-role-retire-source-v1/acl-delta.json",
+      "sha256": "0ef7c8262fcdd91bdf0c5b34e26b62550033890578b06a0c837062e4c029bcf2",
+      "bytes": 1088
+    },
+    {
+      "source": "work/b017-role-retire-source-v1/interface.json",
+      "saved": "source/b017-role-retire-source-v1/interface.json",
+      "sha256": "d92217b3fbdb7a8b0e419a03043b95dd43a0bd1c7b319d97b3310d68f05956f6",
+      "bytes": 2504
+    },
+    {
+      "source": "work/b017-role-retire-source-v1/manifest.json",
+      "saved": "source/b017-role-retire-source-v1/manifest.json",
+      "sha256": "c64eb2615b42cff4b8fadaebc972df8595d2d9631fe94ff8456342ea2336c98d",
+      "bytes": 5040
+    },
+    {
+      "source": "work/b017-role-retire-source-v1/target-vectors.json",
+      "saved": "source/b017-role-retire-source-v1/target-vectors.json",
+      "sha256": "e91f4356a76515efc863700241eca2c5c68cbcfc9c1ab337fc5d45540300d77f",
+      "bytes": 6222
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v1/README.md",
+      "saved": "source/b018-ordinary-login-source-v1/README.md",
+      "sha256": "628710e6ccf9a3f18724f4ea887d0edf6bd1aa3c2778555a5240bfd813f5c3bd",
+      "bytes": 3404
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v1/manifest.json",
+      "saved": "source/b018-ordinary-login-source-v1/manifest.json",
+      "sha256": "562e09653f3ec353cb68a14f9310f4550976b42ed04c7b8be9377e3ce7af9ade",
+      "bytes": 749
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v1/observer.cjs",
+      "saved": "source/b018-ordinary-login-source-v1/observer.cjs.source.txt",
+      "sha256": "af7d1d4974e607b038d3e271a9ab0f6724b1c6ca89944f267dafb27bb33e369d",
+      "bytes": 16144
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v1/observer.test.cjs",
+      "saved": "source/b018-ordinary-login-source-v1/observer.test.cjs.source.txt",
+      "sha256": "3cd36e75650968081aceb33fd14fa5a2bf0dcdd001a0d690daa2177ef1598052",
+      "bytes": 6167
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v2/README.md",
+      "saved": "source/b018-ordinary-login-source-v2/README.md",
+      "sha256": "94ba6f4a538381a7b70534bdaff654860113f3216bc1ea706b938501eddb4bb1",
+      "bytes": 5779
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v2/manifest.json",
+      "saved": "source/b018-ordinary-login-source-v2/manifest.json",
+      "sha256": "c19718b9fbd59bb8e62380bb8d1f1239573f15759842e7c035b7969058d0f45e",
+      "bytes": 2137
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v2/observer.cjs",
+      "saved": "source/b018-ordinary-login-source-v2/observer.cjs.source.txt",
+      "sha256": "6e0fd97d862e5081771c0d9e400d89e93c39126851101b36000484f2e717eb85",
+      "bytes": 24432
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v2/observer.test.cjs",
+      "saved": "source/b018-ordinary-login-source-v2/observer.test.cjs.source.txt",
+      "sha256": "dc4aaf12567ef887ea4fbd00c309f001067ba3d545ba5755f5fa1c4640d45254",
+      "bytes": 17099
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v2/projection.cjs",
+      "saved": "source/b018-ordinary-login-source-v2/projection.cjs.source.txt",
+      "sha256": "7546b3dc2a34deb4b389b74910785a9073353066778d34674f46977b700ed243",
+      "bytes": 4843
+    },
+    {
+      "source": "work/b018-ordinary-login-source-v2/pure-tests.tap",
+      "saved": "source/b018-ordinary-login-source-v2/pure-tests.tap",
+      "sha256": "d74a61d6d8f830c874bdfbc2271ce2a56cd9802132b49594f254eaf843fbb86d",
+      "bytes": 3665
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/STOPPED.md",
+      "saved": "source/b018-lifetime-parent-v2/STOPPED.md",
+      "sha256": "600f9cd78e75ebd0ed3e748bdbf6e05758f5b802f942f47b92401d5817a06355",
+      "bytes": 1969
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/manifest.json",
+      "saved": "source/b018-lifetime-parent-v2/manifest.json",
+      "sha256": "546c8154bec0527979745c9b5106830efcea6d832879726057d24f67e2af3e6c",
+      "bytes": 1930
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/materialize.py",
+      "saved": "source/b018-lifetime-parent-v2/materialize.py.source.txt",
+      "sha256": "9b95b7337ab88b1bd2e6821fe6735c8ab9686416ca1558e71f1237b4e1293b0b",
+      "bytes": 11280
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/owned.py",
+      "saved": "source/b018-lifetime-parent-v2/owned.py.source.txt",
+      "sha256": "af43989c1f8e608e3d732b150fa21df774ebab46756191bce7eecd8786725963",
+      "bytes": 10579
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/phase-worker.cjs",
+      "saved": "source/b018-lifetime-parent-v2/phase-worker.cjs.source.txt",
+      "sha256": "469ef64fac5041670c41c252633c29e95129f8f72cd17d3e736a816359da7924",
+      "bytes": 14065
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/private_ipc.py",
+      "saved": "source/b018-lifetime-parent-v2/private_ipc.py.source.txt",
+      "sha256": "41fb462aa80280d7edaa304e55d095dd034e7ea350a17bf5f12d72d3000498b2",
+      "bytes": 5931
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/reservation.json",
+      "saved": "source/b018-lifetime-parent-v2/reservation.json",
+      "sha256": "8f1446fab77def24afbc9e4f8970d232e19fcfd2cbb05395f4ec08a1436fb0e6",
+      "bytes": 120
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/strict-json.cjs",
+      "saved": "source/b018-lifetime-parent-v2/strict-json.cjs.source.txt",
+      "sha256": "c6ae70d56bbfeae5440b1aad81bf789c1c65522a7c1856c878332099c5328226",
+      "bytes": 1786
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/test_parent_adversarial.py",
+      "saved": "source/b018-lifetime-parent-v2/test_parent_adversarial.py.source.txt",
+      "sha256": "fc2de101e9a7cd6dc708dbd32e99df9f6631318bd7824758c9ae17ef5d78c628",
+      "bytes": 5113
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/test_parent_pure.py",
+      "saved": "source/b018-lifetime-parent-v2/test_parent_pure.py.source.txt",
+      "sha256": "c845ef7af914442462ccb1c04a83a675bbcd5887b903e23b4419ee66628b5a2e",
+      "bytes": 1525
+    },
+    {
+      "source": "work/b018-lifetime-parent-v2/test_worker.cjs",
+      "saved": "source/b018-lifetime-parent-v2/test_worker.cjs.source.txt",
+      "sha256": "e23564281f6659f5681f34f6b4522a8014b27201a4308f4e55928826c429988a",
+      "bytes": 3390
+    },
+    {
+      "source": "work/b017-role-retire-independent-astra-v1.md",
+      "saved": "reviews/b017-role-retire-independent-astra-v1.md",
+      "sha256": "a07da60ec10cc6fc07c2ab67630c8de33200510d61fa5bda61c80a0cf8f78f12"
+    },
+    {
+      "source": "work/b017-role-retire-independent-astra-v1.json",
+      "saved": "reviews/b017-role-retire-independent-astra-v1.json",
+      "sha256": "405fad7cbc2face497751ea79b33c841288730c5c5def20d53161267f67d2bfd"
+    },
+    {
+      "source": "work/b018-ordinary-login-independent-astra-v1.md",
+      "saved": "reviews/b018-ordinary-login-independent-astra-v1.md",
+      "sha256": "b5cbb1c5e53eef94bc5e6b27063663d349b2c2c0540c3f07fec1e3bef8caeff6"
+    },
+    {
+      "source": "work/b018-ordinary-login-independent-astra-v1.json",
+      "saved": "reviews/b018-ordinary-login-independent-astra-v1.json",
+      "sha256": "7816c20569dc0a40ccef727674e53d0f5c392574a98233203e977a0957b3094f"
+    },
+    {
+      "source": "work/b018-owned-group-primary-astra-v1.md",
+      "saved": "reviews/b018-owned-group-primary-astra-v1.md",
+      "sha256": "61d07a81dc5a472e10e61cc382c74c3e7f963937232084e1b13f1c4a037e7b4a"
+    },
+    {
+      "source": "work/b018-owned-group-primary-astra-v1.json",
+      "saved": "reviews/b018-owned-group-primary-astra-v1.json",
+      "sha256": "70c24446688d2e6c43a4eb0af43a8ea8dc9569943422aba3283746bb73f11fbd"
+    },
+    {
+      "source": "work/b018-owned-group-independent-astra-v1.md",
+      "saved": "reviews/b018-owned-group-independent-astra-v1.md",
+      "sha256": "afa6074b10a51a07b832a7ec358829340c564e6ddc83acc63f8e836265d738ca"
+    },
+    {
+      "source": "work/b018-owned-group-independent-astra-v1.json",
+      "saved": "reviews/b018-owned-group-independent-astra-v1.json",
+      "sha256": "033d5991ae1b8e1b42a695c0cee7223a5acf2fadb1e39aab8c25cb019790b3fd"
+    }
+  ]
+}

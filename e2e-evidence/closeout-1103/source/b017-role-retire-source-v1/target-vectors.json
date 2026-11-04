@@ -1,0 +1,126 @@
+{
+  "state": "NOT_RUN",
+  "target": "separate explicitly approved future isolated environment only",
+  "vectors": [
+    {
+      "id": "T01",
+      "setup": "New same-org draft, no matching assignment, keys within ceiling, both gates/current revisions valid",
+      "assert": "retired; role lifecycle only + metadata; both revisions +1; exactly one metadata audit and immutable command.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T02",
+      "setup": "Repeat T01 for an active unassigned role, empty supported-key role and cross-base explicit role within actor authority",
+      "assert": "Same atomic effect. No native-base restriction. Name/key/ID/created fields retained.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T03",
+      "setup": "Any active, suspended, removed or otherwise retained same-org assignment matches role; repeat with actor own assignment",
+      "assert": "in_use when revisions current; no membership/template/receipt/audit/revision changes.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T04",
+      "setup": "Only a NULL-role tombstone exists; or same role UUID under another org has assignments",
+      "assert": "No cross-org effects; only references to exact composite target count.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T05",
+      "setup": "Actor is delegated non-Admin with team.manage; or native Admin custom template lacks team.manage",
+      "assert": "unavailable, no information or write.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T06",
+      "setup": "Reduced Admin has team.manage but lacks one original target key; include metadata-only and cross-base target variants",
+      "assert": "unavailable even on exact replay; never derive ceiling from native Admin defaults or submitted keys.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T07",
+      "setup": "Missing/empty/wrong active org or environment pin; foreign role, sandbox selection, revoked/expired SID, mismatched auth.uid, inactive actor",
+      "assert": "unavailable, NULL result identity; no changes.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T08",
+      "setup": "Global OFF/missing/malformed/unenrolled allowlist or org opt-in false; absent org state, capability version/digest mismatch, actor poisoned imported role",
+      "assert": "unavailable; no registration/enrollment or native fallback.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T09",
+      "setup": "New request mismatches target revision or org epoch; or revision inputs zero/negative/null/overflowing",
+      "assert": "stale for valid range existing target; invalid range unavailable. No partial mutation.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T10",
+      "setup": "New request on previously retired or absent role",
+      "assert": "unavailable; no physical deletion, reactivation, reassignment or extra audit.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T11",
+      "setup": "Exact committed request retried after unrelated role/authority update; current actor still covers original keys",
+      "assert": "replayed with original two result epochs. All rows and audit count unchanged.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T12",
+      "setup": "Change operation, target, expected role or expected authority using same actor/org/request",
+      "assert": "conflict, NULL metadata and zero writes. Other org/member receipt is outside key scope.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T13",
+      "setup": "Original mask missing, text, fraction, negative, out of 17-bit range; changed support digest, wrong result identity/revisions, unexpected field, changed intent digest",
+      "assert": "unavailable for invalid original metadata; no new commit or repair.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T14",
+      "setup": "Global/org OFF, actor revoked or effective-key loss after successful retirement but before lost-response retry",
+      "assert": "fresh checks deny; retained receipt confers no access. Reauthorizing actor may recover exact original committed metadata.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T15",
+      "setup": "Imported damaged assignment references previously retired role before exact retry",
+      "assert": "unavailable; no history disclosure as a successful current operation, no auto-repair.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T16",
+      "setup": "Two real transactions retire same role/expected epoch, same or distinct request IDs; exercise rollbacks and NOWAIT",
+      "assert": "No double bump; only after confirmation of first commit can matching request replay. Busy/deadlock/unknown outcome never proves success.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T17",
+      "setup": "Real assign or import races retire in both lock orders; actor role update/revoke races same org/session locks",
+      "assert": "Assign first blocks retirement through stale/in_use. Retire first requires assigner to reread retired lifecycle and refuse. No FK-only claim; future writer/guards mandatory.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T18",
+      "setup": "Force receipt uniqueness failure, audit INSERT/identity denial, terminal actor change, post-wait consent/partner or deferred last-admin rejection",
+      "assert": "Whole transaction rolls back including both revisions, receipt and audit. Last-Admin remains usable and actor rights unchanged.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T19",
+      "setup": "Inject direct raw write, service-role/worker call, default-ACL leak or owner-role membership in isolated target",
+      "assert": "No runtime invocation; inherited/default-ACL drift fails seal/readback. Verify existing FORCE RLS, grants and membership behavior with actual separate principals.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T20",
+      "setup": "Lost response around commit; independently read original request outcome using approved future trusted adapter",
+      "assert": "No blind retries, no recreated request/changed revisions. Actual receipt required. No definitive outcome while inaccessible or after authority loss.",
+      "status": "NOT_RUN"
+    }
+  ]
+}

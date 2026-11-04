@@ -1,0 +1,70 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),{EventEmitter}=require('node:events');
+const {createOrdinaryObserver}=require('./observer.cjs');
+const ROOT='http://127.0.0.1:43156',SID='synthetic-private-sid',EMAIL='synthetic-private-email',PASSWORD='synthetic-private-password';
+function request(url,method='GET',type='fetch'){
+ return {url:()=>ROOT+url,method:()=>method,resourceType:()=>type,isNavigationRequest:()=>type==='document',redirectedFrom:()=>null,
+  headersArray:async()=>[{name:'cookie',value:'condola_session='+SID},{name:'user-agent',value:'SyntheticUA'}],failure:()=>({errorText:'net::ERR_ABORTED'})};
+}
+async function scenario({failed=false,late=false,oddCsp=false}={}){
+ const rows=[],b=new EventEmitter(),ctx=new EventEmitter(),p=new EventEmitter(),cdp=new EventEmitter();
+ const obs=createOrdinaryObserver({run:'aabbccddeeff',hmacKey:Buffer.alloc(32,42),journalSink:r=>rows.push(r)});
+ let guardPrivate,publicSeq=0,privateSeq=0,guardClosed=false;
+ const guard={observeExchanges:fn=>{guardPrivate=fn;},attach:async()=>{},createContext:async()=>ctx,
+  beginPlannedBrowserClose:()=>{},snapshot:()=>({closed:guardClosed,failed:false,denied:0})};
+ const pub=(event,reason)=>obs.guardEvent({sequence:++publicSeq,event,reason});
+ const wire=e=>guardPrivate({sequence:++privateSeq,...e});
+ function response(r,status,headers=[]){return {request:()=>r,status:()=>status,headersArray:async()=>headers};}
+ let reqN=0;
+ function flight(path,method,type,status,fail=false){
+  const r=request(path,method,type),n='cdp-'+(++reqN);ctx.emit('request',r);
+  cdp.emit('Network.requestWillBeSent',{requestId:n,type:type==='document'?'Document':'Fetch',frameId:'main',loaderId:'loader',request:{url:r.url(),method,headers:{cookie:'condola_session='+SID,'user-agent':'SyntheticUA'}}});
+  const rid='wire-'+reqN;
+  wire({type:'http-request',exchangeId:rid,requestMethod:method,rawUrl:r.url(),incomingHeaders:[['cookie','condola_session='+SID]],forwardedHeaders:[['cookie','condola_session='+SID]]});
+  const role=path==='/login'&&method==='POST'?[{name:'set-cookie',value:'condola_portal_role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT'}]:[];
+  ctx.emit('response',response(r,status,role));
+  cdp.emit('Network.responseReceived',{requestId:n,type:'Fetch',response:{url:r.url(),status,headers:{'content-type':'text/html'}}});
+  wire({type:'http-response',exchangeId:rid,status,upstreamHeaders:role.map(x=>[x.name,x.value]),downstreamHeaders:role.map(x=>[x.name,x.value])});
+  if(fail){ctx.emit('requestfailed',r);cdp.emit('Network.loadingFailed',{requestId:n,errorText:oddCsp?'net::ERR_NOT_CSP_RELATED':'net::ERR_ABORTED'});}
+  else {ctx.emit('requestfinished',r);cdp.emit('Network.loadingFinished',{requestId:n});}
+  wire({type:'http-terminal',exchangeId:rid,terminal:fail?'failed':'completed'});
+  return r;
+ }
+ cdp.send=async()=>({});ctx.newCDPSession=async()=>cdp;ctx.newPage=async()=>p;
+ ctx.cookies=async()=>[{name:'condola_session',value:SID,domain:'127.0.0.1',path:'/'},{name:'condola_portal_role',value:'tenant',domain:'127.0.0.1',path:'/'}];
+ p.mainFrame=()=>p;
+ p.goto=async()=>{flight('/login','GET','document',200);};
+ p.waitForURL=async fn=>{assert(fn(new URL(ROOT+'/t')));};
+ p.getByTestId=name=>({fill:async()=>{},waitFor:async()=>{assert.equal(name,'liff-frame');},click:async()=>{
+  assert.equal(name,'login-submit');flight('/login','POST','fetch',303);flight('/t','GET','fetch',200,failed);
+  cdp.emit('Page.navigatedWithinDocument',{frameId:'main',url:ROOT+'/t',navigationType:'historyApi'});
+ }});
+ const verifier={verify:async x=>({tokenHash:x.tokenHash,userId:x.actorId,orgId:x.orgId,persona:x.persona,readbackSha256:'f'.repeat(64)}),ledger:()=>[]};
+ obs.observeGuard(guard);pub('opened','fixed-local-only-proxy');await obs.install({browser:b,sessionVerifier:verifier});
+ await obs.performLogin({email:EMAIL,password:PASSWORD});await obs.pendingReads();
+ obs.beginClose();ctx.emit('close');cdp.emit('close');b.emit('disconnected');guardClosed=true;pub('closed','proxy-sockets-and-requests-drained');
+ const before=obs.outcome();
+ if(late){const r=flight('/t','GET','fetch',200,true);assert(r);await obs.pendingReads();}
+ return {obs,rows,before,after:obs.outcome()};
+}
+test('same ordinary action source distinguishes finished Fetch303 from canceled Fetch200',async()=>{
+ const positive=await scenario();assert.equal(positive.after.status,'DIAGNOSTIC_COMPLETED_ONLY');assert.equal(positive.after.bootstrapException,'NOT_EVALUATED');assert.equal(positive.after.financialAggregate,'PENDING');
+ const post=positive.rows.find(x=>x.source==='PW'&&x.event==='request'&&x.method==='POST');
+ assert(positive.rows.some(x=>x.source==='PW'&&x.event==='terminal'&&x.id===post.id&&x.state==='finished'));
+ const negative=await scenario({failed:true});assert.equal(negative.after.status,'FAIL');assert.equal(negative.after.rawFailureObservations,2);
+ assert(!negative.rows.some(x=>x.source==='PARENT'&&x.kind==='navigate-landing'));
+});
+test('a later terminal invalidates earlier completed-only output',async()=>{
+ const r=await scenario({late:true});assert.equal(r.before.status,'DIAGNOSTIC_COMPLETED_ONLY');assert.equal(r.after.status,'FAIL');
+});
+test('unrelated CSP-looking error never becomes approved csp and missing cancel stays unreported',async()=>{
+ const r=await scenario({failed:true,oddCsp:true});
+ const e=r.rows.find(x=>x.source==='CDP'&&x.event==='terminal'&&x.state==='failed');assert.equal(e.error,'net::ERR_NOT_CSP_RELATED');assert.equal(e.canceled,'UNREPORTED');assert.equal(r.after.status,'FAIL');
+});
+test('trace retains actual role tombstone without leaking private header, identity or credential values',async()=>{
+ const r=await scenario();const raw=JSON.stringify(r.rows);
+ for(const secret of [SID,EMAIL,PASSWORD,'SyntheticUA'])assert(!raw.includes(secret));
+ const role=r.rows.flatMap(x=>x.response?.setCookies||x.upstream?.setCookies||[]).find(x=>x.name==='condola_portal_role');
+ assert(role);assert.equal(role.value,'empty');assert.equal(role.epochExpiry,true);
+ const header=r.rows.find(x=>x.source==='CDP'&&x.event==='response');assert.equal(header.flags.fromDiskCache,'UNREPORTED');
+});

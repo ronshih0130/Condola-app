@@ -1,0 +1,16 @@
+'use strict';
+// Strict UTF-8, duplicate-key and bounded safe-integer JSON for all worker boundaries.
+const {TextDecoder}=require('node:util');
+function parseStrict(bytes){
+ if(!Buffer.isBuffer(bytes)||bytes.length===0||bytes.length>33554432)throw Error('json-unavailable');
+ let s;try{s=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{throw Error('json-unavailable');}let i=0;
+ const bad=()=>{throw Error('json-unavailable');},ws=()=>{while(i<s.length&&/[\x20\x09\x0a\x0d]/.test(s[i]))i++;};
+ function scalarString(){const start=i;if(s[i++]!=='"')bad();let escape=false;while(i<s.length){const c=s[i++];if(escape){escape=false;continue;}if(c==='\\'){escape=true;continue;}if(c==='"'){let v;try{v=JSON.parse(s.slice(start,i));}catch{bad();}for(let n=0;n<v.length;n++){const x=v.charCodeAt(n);if(x>=0xd800&&x<=0xdbff){if(++n>=v.length||v.charCodeAt(n)<0xdc00||v.charCodeAt(n)>0xdfff)bad();}else if(x>=0xdc00&&x<=0xdfff)bad();}return v;}if(c.charCodeAt(0)<32)bad();}bad();}
+ function value(depth){if(depth>256)bad();ws();const c=s[i];if(c==='"'){scalarString();return;}if(c==='{'){i++;ws();const keys=new Set();if(s[i]==='}'){i++;return;}for(;;){ws();const key=scalarString();if(keys.has(key))bad();keys.add(key);ws();if(s[i++]!==':')bad();value(depth+1);ws();if(s[i]==='}'){i++;return;}if(s[i++]!==',')bad();}}
+  if(c==='['){i++;ws();if(s[i]===']'){i++;return;}for(;;){value(depth+1);ws();if(s[i]===']'){i++;return;}if(s[i++]!==',')bad();}}
+  for(const lit of ['true','false','null'])if(s.startsWith(lit,i)){i+=lit.length;return;}
+  const m=/^-?(?:0|[1-9][0-9]*)/.exec(s.slice(i));if(!m)bad();i+=m[0].length;const n=Number(m[0]);if(!Number.isSafeInteger(n))bad();
+ }
+ value(0);ws();if(i!==s.length)bad();try{return JSON.parse(s);}catch{bad();}
+}
+module.exports={parseStrict};

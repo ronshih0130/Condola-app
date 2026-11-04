@@ -1,3 +1,5 @@
+> 1103交接：**partial / STOPPED**。最後綜合應用候選 `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`；局部驗證SHA保留如下。下一步由Grok Bot（CEO）依 [完整交接](../../20-build/codex-handoff-1103.md) 安排。未驗證或待PE事項不視為done。
+
 # B017 custom-role permissions
 
 2026-11-03T17:02:35-08:00; **in_progress / whole feature INCOMPLETE**. Ron approved Admin composition across supported base roles. The contract recognizes 18 keys and supports 17 grants; data.export remains unsupported. Accountant photo restrictions, native-Admin company audit, actor ceiling and company/portal separation remain mandatory.

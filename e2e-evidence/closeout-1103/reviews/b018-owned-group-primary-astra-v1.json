@@ -1,0 +1,133 @@
+{
+  "assessment": "CONDITIONAL_SOURCE_DESIGN_ONLY",
+  "reviewType": "PRIMARY",
+  "numericGroupSignalling": "Conditional on continuous unreaped PID reservation and closed sole-reaper composition",
+  "drainProof": "Separately required; positive terminal direct-child evidence plus complete quiescent or atomic group membership and exact direct reap. Detached-process cleanup separate.",
+  "preflight": "Future approved fixed harmless /usr/bin/true must remain a personally waitable zombie; successful direct reap, immutable later ownership regime. Not performed.",
+  "knownNextEscape": "flushDetached spawns even when submission disabled; pinned debug branch uses synchronous non-detached helper, private log obligations and independent validation remain.",
+  "normalShutdown": "Anchored direct CLI SIGTERM and bounded expected handler/worker exit; own-channel self-SIGTERM optional fallback.",
+  "neverSignalAfterReap": true,
+  "requiredIndependentReview": "Different reviewer before implementation; exact controller, workload, target and approval before execution.",
+  "runtimeAuthorized": false,
+  "implemented": false,
+  "processStateInspected": false,
+  "managedOrTestChildLaunched": false,
+  "liveSignalsSent": false,
+  "sourcePins": [
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man2/fork.2",
+      "bytes": 4666,
+      "sha256": "e9ab8f14990c2aa679887ecb15a317b2f0b37d096c2b3390c9008362a539c428"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man2/intro.2",
+      "bytes": 28660,
+      "sha256": "e4d72055d812a838a2053d15f9ed21a63c3c2ad15942665dbbf93aba68a4f277"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man2/setsid.2",
+      "bytes": 3253,
+      "sha256": "b90521a68f707ec8e88f6e8c4fea9d745eaaa430b28eeddcebfb1db03ba5c722"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man2/setpgid.2",
+      "bytes": 4564,
+      "sha256": "c0266df5531a862435f68e669f307f5fa0f37c9df5ab740fce37cd4ecb59fbe4"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man2/killpg.2",
+      "bytes": 3224,
+      "sha256": "fec81b2fbda8ffab3f17575a90623c8f98b52f52caf6e8a2fab9748b769791da"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man2/sigaction.2",
+      "bytes": 17057,
+      "sha256": "5538ae92984c07616a250ebc73b52eaca60b27a231a67b2fbd1e6b9a85ab7097"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man2/wait.2",
+      "bytes": 8764,
+      "sha256": "2178648ce5091cba439ca601216ec3f368ed64487f91385f68b65e7b5e5e5409"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man2/_exit.2",
+      "bytes": 3796,
+      "sha256": "1ec9c9769314aa3a7bb2a1bd612781bd91b8803e8d034f2b6b0c3095846729f7"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man1/ps.1",
+      "bytes": 18590,
+      "sha256": "fbddf023ce4960c7e6eadebcfb7f0badf0ab6c3f59b2b97c2807d3f67a85142d"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/include/sys/wait.h",
+      "bytes": 10352,
+      "sha256": "b77f7dd6f592eba8b0d51c15c7b975472fdad50c12ea296f74f062cbf98dcbf7"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/include/sys/proc.h",
+      "bytes": 11669,
+      "sha256": "596875a5d64d4cdf814aa00f7e14d87b24b8d8b8d990d97b01cfed045d6de837"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/include/sys/signal.h",
+      "bytes": 16773,
+      "sha256": "171af7545ef750627aeba02c1de838c05e2cf396e2f49881ea74dba6990c44a3"
+    },
+    {
+      "path": "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py",
+      "bytes": 82644,
+      "sha256": "d2f73c7128a3931f74411b46352146ba85322a8dc8f12a721d4801dc43d9766e"
+    },
+    {
+      "path": "/opt/homebrew/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py",
+      "bytes": 90781,
+      "sha256": "26b3db4e83c14b624f11907ee81f1fc76d54c3bb56617d6888af60c066d21dcd"
+    },
+    {
+      "path": "work/b018-lifetime-parent-primitives-independent-astra-v1.md",
+      "bytes": 9305,
+      "sha256": "5e77279a7510da526023ca1d66cdaac54008d3e1b9ce1a3bd0b5c1bd185a2f5a"
+    },
+    {
+      "path": "work/b018-lifetime-parent-v2/owned.py",
+      "bytes": 10462,
+      "sha256": "6a832b4a234e5fddb6227320ed511bef137ff11237860d92eb9c064baa858248"
+    },
+    {
+      "path": "work/mode-b-repair-override-prep/node_modules/next/dist/bin/next",
+      "bytes": 13452,
+      "sha256": "d0970bf699d636c8a748c157beccf63e73ebe60ffd54e0d47d951637ef2a389d"
+    },
+    {
+      "path": "work/mode-b-repair-override-prep/node_modules/next/dist/cli/next-dev.js",
+      "bytes": 14848,
+      "sha256": "b46a2850779145ff6913dda7f33ab0616881b02cc9b42080c3d02c4ee4d71be2"
+    },
+    {
+      "path": "work/mode-b-repair-override-prep/node_modules/next/dist/cli/next-start.js",
+      "bytes": 1222,
+      "sha256": "acaec61a77f4540a8e3aae124107f413eed5f4c892d1975e3ad0e345556617b1"
+    },
+    {
+      "path": "work/mode-b-repair-override-prep/node_modules/next/dist/server/lib/start-server.js",
+      "bytes": 19579,
+      "sha256": "4738e401646f8130e408cf6b17e1874970a348d736884449e4fdc628a98dd658"
+    },
+    {
+      "path": "work/mode-b-repair-override-prep/node_modules/next/dist/telemetry/storage.js",
+      "bytes": 12097,
+      "sha256": "89b15d2b26bc56aca40bc1639e6fa26192b85da19243776d8a60874029620eb3"
+    },
+    {
+      "path": "work/mode-b-repair-override-prep/node_modules/next/dist/telemetry/detached-flush.js",
+      "bytes": 1819,
+      "sha256": "40ac344ef5bbf6190ba56946c03e10dcfa0ecee237c3e49bc89b3971a7b2e6b8"
+    }
+  ],
+  "report": {
+    "path": "work/b018-owned-group-primary-astra-v1.md",
+    "bytes": 10693,
+    "sha256": "61d07a81dc5a472e10e61cc382c74c3e7f963937232084e1b13f1c4a037e7b4a"
+  }
+}

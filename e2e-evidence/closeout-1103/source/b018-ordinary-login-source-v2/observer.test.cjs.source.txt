@@ -1,0 +1,205 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),{EventEmitter}=require('node:events');
+const {createOrdinaryObserver}=require('./observer.cjs');
+const ROOT='http://127.0.0.1:43156',SID='synthetic-private-sid',EMAIL='synthetic-private-email',PASSWORD='synthetic-private-password',UA='SyntheticUA';
+let now;
+test.beforeEach(t=>{
+  now=0;
+  t.mock.method(Date,'now',()=>now);
+  t.mock.method(global,'setTimeout',(resolve,ms)=>{assert.equal(ms,50);queueMicrotask(()=>{now+=ms;resolve();});});
+});
+async function scenario(opts={}){
+  const rows=[],b=new EventEmitter(),ctx=new EventEmitter(),page=new EventEmitter(),cdp=new EventEmitter(),main={url:()=>ROOT+'/login'};
+  const obs=createOrdinaryObserver({run:'aabbccddeeff',hmacKey:Buffer.alloc(32,42),journalSink:r=>rows.push(r)});
+  let priv,publicSeq=0,privateSeq=0,closed=false,forwarded=0,requestCount=0,loginCount=0,readbacks=0;
+  const pub=(event,reason=event)=>obs.guardEvent({sequence:++publicSeq,event,reason});
+  const wire=e=>priv({sequence:++privateSeq,...e});
+  const guard={observeExchanges(fn){priv=fn;},async attach(){pub('attached');},
+    async createContext(options){assert.deepEqual(options,{javaScriptEnabled:true,viewport:{width:390,height:900}});return ctx;},
+    beginPlannedBrowserClose(){if(opts.rejectGuardClose)throw Error();pub('shutdown','planned-browser-close');},
+    snapshot:()=>({attached:true,closed,failed:false,denied:0,sequence:publicSeq,forwarded,clientSockets:0,upstreamSockets:0,pendingHttp:0,pendingTunnels:0})};
+  const role='condola_portal_role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0';
+  const setSid='condola_session='+SID+'; Path=/';
+  const env={ctx,cdp,page,pub,wire};
+  function flight(path,method,type,status,options={}){
+    const raw=path.includes('://')?path:ROOT+path, requestId=options.requestId??'c'+(++requestCount),exchangeId='x'+(forwarded+1);
+    const requestHeaders={'user-agent':UA,cookie:'condola_session='+SID};
+    if(method==='POST')Object.assign(requestHeaders,{'next-action':'private-action-marker','next-router-state-tree':'private-tree',accept:'text/x-component'});
+    const req={url:()=>raw,method:()=>method,resourceType:()=>type.toLowerCase(),isNavigationRequest:()=>type==='Document',frame:()=>main,
+      redirectedFrom:()=>options.previous??null,headersArray:async()=>Object.entries(requestHeaders).map(([name,value])=>({name,value})),
+      failure:()=>({errorText:options.oddCsp?'net::ERR_NOT_CSP_RELATED':'net::ERR_ABORTED'})};
+    const headerPairs=method==='POST'?[['set-cookie',setSid],['set-cookie',role],['x-action-redirect','/t;push'],['content-type','text/plain']]:[['content-type','text/html']];
+    const cdpHeaders=Object.fromEntries(headerPairs);
+    if(method==='POST')cdpHeaders['set-cookie']=setSid+'\n'+role;
+    const guardHeaders=headerPairs.filter(([name])=>name==='set-cookie');
+    const response={request:()=>req,status:()=>status,headersArray:async()=>headerPairs.map(([name,value])=>({name,value}))};
+    if(!opts.noRows){
+      if(!opts.noPW)ctx.emit('request',req);
+      cdp.emit('Network.requestWillBeSent',{requestId,type,frameId:'main',loaderId:'loader',request:{url:raw,method,headers:requestHeaders},redirectResponse:options.redirectResponse});
+      if(!opts.noWire){forwarded++;wire({type:'http-request',exchangeId,requestMethod:method,rawUrl:opts.mismatchWire&&method==='POST'?raw+'?private-drift':raw,incomingHeaders:[['cookie',requestHeaders.cookie]],forwardedHeaders:[['cookie',requestHeaders.cookie]]});pub('forwarded');}
+      if(!opts.noPW)ctx.emit('response',response);
+      if(!options.redirects)cdp.emit('Network.responseReceived',{requestId,type,response:{url:raw,status,headers:cdpHeaders}});
+      if(!opts.noWire){wire({type:'http-response',exchangeId,status,upstreamHeaders:guardHeaders,downstreamHeaders:guardHeaders});pub('policy');}
+      if(!options.pending){
+        if(!opts.noPW)ctx.emit(options.failed?'requestfailed':'requestfinished',req);
+        if(!opts.noCdpFinish&&!options.redirects){
+          cdp.emit(options.failed?'Network.loadingFailed':'Network.loadingFinished',options.failed?{requestId,errorText:req.failure().errorText}:{requestId});
+        }
+        if(!opts.noWire)wire({type:'http-terminal',exchangeId,terminal:options.failed?'failed':'completed'});
+      }
+    }
+    return {req,requestId,raw,status};
+  }
+  Object.assign(env,{flight});
+  cdp.send=async(command,params)=>{if(command==='Network.setCacheDisabled')assert.deepEqual(params,{cacheDisabled:true});return {};};
+  ctx.newCDPSession=async()=>cdp;ctx.newPage=async()=>page;
+  ctx.cookies=async()=>[{name:'condola_session',value:SID,domain:'127.0.0.1',path:'/'},{name:'condola_portal_role',value:'tenant',domain:'127.0.0.1',path:'/'}];
+  page.mainFrame=()=>main;
+  page.goto=async raw=>{
+    assert.equal(raw,ROOT+'/api/demo/locale?set=en&next=%2Flogin');assert.equal(++loginCount,1);
+    if(opts.redirect){
+      const r=flight('/api/demo/locale?set=en&next=%2Flogin','GET','Document',307,{redirects:true});
+      flight('/login','GET','Document',200,{requestId:r.requestId,previous:r.req,redirectResponse:{url:r.raw,status:307,headers:{location:'/login'}}});
+    }else flight('/login','GET','Document',200);
+    cdp.emit('Page.frameNavigated',{frame:{id:'main',loaderId:'loader',url:ROOT+'/login'}});
+    page.emit('framenavigated',main);
+  };
+  page.evaluate=async fn=>fn.toString().includes('document.documentElement.lang')?(opts.locale||'en'):assert.fail('unexpected evaluation');
+  const fields={};
+  page.getByTestId=name=>({
+    fill:async v=>{fields[name]=v;},waitFor:async x=>{assert.equal(name,'liff-frame');assert.equal(x.state,'visible');},
+    scrollIntoViewIfNeeded:async()=>assert.equal(name,'login-submit'),
+    evaluate:async fn=>{assert.equal(name,'login-submit');assert(fn.toString().includes('document.elementFromPoint'));return opts.noHit?null:{x:20,y:30};}
+  });
+  page.mouse={click:async(x,y)=>{
+    assert.deepEqual([x,y],[20,30]);assert.deepEqual(fields,{'login-email':EMAIL,'login-password':PASSWORD});
+    const post=flight('/login','POST','Fetch',303,{failed:opts.failedPost});
+    if(opts.duplicate)ctx.emit('request',post.req);
+    flight('/t?_rsc=private-query','GET','Fetch',200,{failed:opts.failed,oddCsp:opts.oddCsp});
+    if(opts.sibling)flight('/t?_rsc=sibling-private','GET','Fetch',200);
+    if(opts.duringClick)opts.duringClick(env);
+    main.url=()=>ROOT+'/t';page.emit('framenavigated',main);
+    cdp.emit('Page.navigatedWithinDocument',{frameId:'main',url:ROOT+'/t',navigationType:'historyApi'});
+  }};
+  page.waitForURL=async fn=>assert(fn(new URL(ROOT+'/t')));
+  const verifier={verify:async x=>{
+    readbacks++;assert.equal(x.contextId,'ctx2');assert.equal(x.mode,'enabled');assert(x.actorId.endsWith('000006'));
+    return {tokenHash:x.tokenHash,userId:x.actorId,orgId:x.orgId,persona:x.persona,readbackSha256:'f'.repeat(64)};
+  },ledger:()=>[{contextId:'ctx2',outcome:readbacks?'VERIFIED_SNAPSHOT':'NOT_ATTEMPTED'}]};
+  b.close=async()=>{opts.atClose?.(env);page.emit('close');ctx.emit('close');cdp.emit('close');b.emit('disconnected');};
+  pub('opened');obs.observeGuard(guard);await obs.install({browser:b,sessionVerifier:verifier});
+  let actionError=false;
+  try{await obs.performLogin({email:EMAIL,password:PASSWORD});}catch{actionError=true;}
+  assert.equal(loginCount,1);
+  opts.beforeClose?.(env);await obs.closeBrowser();closed=true;pub('closed');await obs.pendingReads();
+  const before=obs.outcome();opts.late?.(env);await obs.pendingReads();
+  return {obs,rows,before,after:obs.outcome(),actionError};
+}
+test('same ordinary action source distinguishes finished Fetch303 from canceled Fetch200',async()=>{
+  const positive=await scenario();assert.equal(positive.after.status,'DIAGNOSTIC_COMPLETED_ONLY');
+  assert.equal(positive.after.bootstrapException,'NOT_EVALUATED');assert.equal(positive.after.financialAggregate,'PENDING');
+  const post=positive.rows.find(x=>x.source==='PW'&&x.event==='request'&&x.method==='POST');
+  assert(positive.rows.some(x=>x.source==='PW'&&x.event==='terminal'&&x.id===post.id&&x.state==='finished'));
+  const negative=await scenario({failed:true});assert.equal(negative.after.status,'FAIL');assert.equal(negative.after.rawFailureObservations,2);
+  assert(!negative.rows.some(x=>x.source==='PARENT'&&x.kind==='navigate-landing'));
+});
+test('a later terminal invalidates earlier completed-only output',async()=>{
+  const r=await scenario({late:e=>e.flight('/t','GET','Fetch',200,{failed:true})});
+  assert.equal(r.before.status,'DIAGNOSTIC_COMPLETED_ONLY');assert.equal(r.after.status,'FAIL');
+});
+test('unrelated CSP-looking error remains opaque and missing cancel stays unreported',async()=>{
+  const r=await scenario({failed:true,oddCsp:true}),e=r.rows.find(x=>x.source==='CDP'&&x.event==='terminal'&&x.state==='failed');
+  assert.equal(e.error,'OTHER');assert.match(e.errorTag,/^[0-9a-f]{64}$/);assert.equal(e.canceled,'UNREPORTED');assert.equal(r.after.status,'FAIL');
+  assert(!JSON.stringify(r.rows).includes('net::ERR_NOT_CSP_RELATED'));
+});
+test('real-shaped repeated Set-Cookie and partial source projections preserve privacy and per-cookie attributes',async()=>{
+  const r=await scenario(),raw=JSON.stringify(r.rows);
+  for(const secret of [SID,EMAIL,PASSWORD,UA,'private-action-marker','private-query','private-tree'])assert(!raw.includes(secret));
+  const shown=r.rows.flatMap(x=>x.response?.setCookies||x.upstream?.setCookies||[]).find(x=>x.name==='condola_portal_role');
+  assert(shown);assert.equal(shown.value,'empty');assert.equal(shown.epochExpiry,true);
+  const cd=r.rows.find(x=>x.source==='CDP'&&x.event==='response'&&x.status===303);assert.equal(cd.flags.fromDiskCache,'UNREPORTED');
+  const [sid,role]=cd.headers.setCookies;assert.equal(sid.name,'condola_session');assert.equal(sid.maxAgeZero,false);
+  assert.equal(role.name,'condola_portal_role');assert.equal(role.epochExpiry,true);assert.equal(role.maxAgeZero,true);
+  assert.deepEqual(cd.headers.actionRedirect.map(({scope,route,mode})=>[scope,route,mode]),[['owned','/t','push']]);
+  const [wire]=r.rows.filter(x=>x.source==='PROXY'&&x.method==='POST'),[browser]=r.rows.filter(x=>x.source==='CDP'&&x.method==='POST');
+  assert.equal(wire.incoming.cookie,browser.headers.cookie);assert.equal(wire.incoming.uaCount,'UNREPORTED');assert.equal(browser.headers.uaCount,1);
+  assert.equal(wire.incoming.action,'UNREPORTED');assert.equal(browser.headers.action,true);assert.deepEqual(browser.headers.accept,['rsc']);
+  const response=r.rows.find(x=>x.source==='PROXY'&&x.status===303);assert.equal(response.upstream.contentType,'UNREPORTED');assert.equal(response.upstream.actionRedirect,'UNREPORTED');
+});
+test('empty flows and missing independent source prevent completion',async()=>{
+  for(const opts of [{noRows:true},{noPW:true},{noWire:true}])assert.equal((await scenario(opts)).after.status,'UNAVAILABLE');
+});
+test('unclosed CDP hops retain their actual ids through finite timeout and cleanup',async()=>{
+  const r=await scenario({noCdpFinish:true});
+  assert.equal(r.after.status,'FAIL');assert.equal(r.after.closeReturned,true);
+  const t=r.rows.find(x=>x.event==='http-settle-timeout');assert.equal(t.stage,'pre-click');assert.deepEqual(t.open.cdp,[{id:1,hop:0}]);
+});
+test('orphan PW failure retains safe error and ID, duplicate opening is sticky',async()=>{
+  const a=await scenario({duringClick:({ctx})=>ctx.emit('requestfailed',{failure:()=>({errorText:'net::ERR_ABORTED'})})});
+  assert.equal(a.after.rawFailureObservations,1);assert.equal(a.after.status,'FAIL');
+  assert(a.rows.some(x=>x.source==='PW'&&x.orphan&&x.id&&x.error==='net::ERR_ABORTED'));
+  assert.equal((await scenario({duplicate:true})).after.status,'FAIL');
+});
+test('foreign requests and undeclared transports cannot yield completed-only',async()=>{
+  for(const duringClick of [e=>e.flight('https://foreign.invalid/t','GET','Fetch',200),e=>e.flight('/sse','GET','EventSource',200),e=>e.flight('blob:http://127.0.0.1:43156/private','GET','Fetch',200),
+    e=>e.cdp.emit('Network.webTransportCreated',{}),e=>e.cdp.emit('Network.webSocketCreated',{requestId:'secret',url:'ws://127.0.0.1:43156/other'}),
+    e=>e.cdp.emit('Network.responseReceivedExtraInfo',{requestId:'c2',statusCode:503,headers:{}})]){
+    assert.equal((await scenario({duringClick})).after.status,'FAIL');
+  }
+});
+test('persistent HMR does not hold HTTP quiet; PW and independent CDP socket errors are fatal',async()=>{
+  const ws=()=>{const w=new EventEmitter();w.url=()=>ROOT.replace('http:','ws:')+'/_next/webpack-hmr';return w;};
+  for(const kind of ['clean','PW','CDP']){
+    const r=await scenario({duringClick:e=>{const w=ws();e.page.emit('websocket',w);e.cdp.emit('Network.webSocketCreated',{requestId:'w',url:w.url()});
+      if(kind==='PW')w.emit('socketerror','opaque-secret');if(kind==='CDP')e.cdp.emit('Network.webSocketFrameError',{requestId:'w',errorMessage:'opaque-secret'});
+      w.emit('close');e.cdp.emit('Network.webSocketClosed',{requestId:'w'});
+    }});
+    assert.equal(r.after.status,kind==='clean'?'DIAGNOSTIC_COMPLETED_ONLY':'FAIL');assert(!JSON.stringify(r.rows).includes('opaque-secret'));
+  }
+});
+test('held request times out before actual close, then cleanup-triggered failures stay recorded',async()=>{
+  let open;
+  const r=await scenario({beforeClose:e=>{open=e.flight('/t','GET','Fetch',200,{pending:true});},
+    atClose:e=>{e.ctx.emit('requestfailed',open.req);e.cdp.emit('Network.loadingFailed',{requestId:open.requestId,errorText:'net::ERR_ABORTED',canceled:true});}});
+  const t=r.rows.find(x=>x.event==='http-settle-timeout'&&x.stage==='pre-close'),ack=r.rows.find(x=>x.event==='guard-close-return'),issued=r.rows.find(x=>x.event==='browser-close-issued');
+  assert(t.open.pw.length&&t.open.cdp.length);assert(t.seq<ack.seq&&ack.seq<issued.seq);
+  assert.equal(r.after.rawFailureObservations,2);assert.equal(r.after.closeReturned,true);assert.equal(r.after.status,'FAIL');
+});
+test('rejected guard ack permits cleanup only; locale and hit test must succeed',async()=>{
+  for(const opts of [{rejectGuardClose:true},{locale:'fr'},{noHit:true}]){
+    const r=await scenario(opts);assert.equal(r.after.status,'FAIL');assert(r.after.closeReturned);
+    if(opts.rejectGuardClose)assert.equal(r.after.guardCloseAck,false);
+    else assert(!r.rows.some(x=>x.kind==='ordinary-submit-click'));
+  }
+});
+test('same CDP request id retains distinct redirect/finished hops and no inferred extra hop',async()=>{
+  const r=await scenario({redirect:true,duringClick:e=>e.cdp.emit('Network.requestWillBeSentExtraInfo',{requestId:'c1',headers:{}})});
+  assert.equal(r.after.status,'DIAGNOSTIC_COMPLETED_ONLY');
+  const a=r.rows.find(x=>x.event==='redirect-terminal');assert.equal(a.hop,0);assert.equal(a.status,307);
+  assert(r.rows.some(x=>x.source==='CDP'&&x.event==='terminal'&&x.id===a.id&&x.hop===1&&x.state==='finished'));
+  assert.equal(r.rows.find(x=>x.event==='request-extra').hop,'UNREPORTED');
+});
+test('actual modeled POST303 abort remains fatal alongside finished arrival sibling and verified partial snapshot',async()=>{
+  const r=await scenario({failedPost:true,failed:true,sibling:true});
+  assert.equal(r.after.status,'FAIL');assert.equal(r.after.rawFailureObservations,4);assert.equal(r.after.canonicalSessionSnapshot,'VERIFIED_SNAPSHOT');
+  assert.deepEqual(r.obs.privateMaterial().contexts,[]);assert(r.obs.privateMaterial().partialSnapshot);assert.equal(r.after.authRecovery,'UNVERIFIED');
+});
+
+test('completed-looking requests with contradictory source URL or orphan ExtraInfo stay unavailable',async()=>{
+  for(const opts of [{mismatchWire:true},{duringClick:e=>e.cdp.emit('Network.responseReceivedExtraInfo',{requestId:'missing',statusCode:200,headers:{}})}]){
+    const r=await scenario(opts);assert.equal(r.after.status,'UNAVAILABLE');assert(!JSON.stringify(r.rows).includes('private-drift'));
+  }
+});
+test('ordinary observer retains known HMR retirement failure and every strict console/page/HTTP error',async()=>{
+  const r=await scenario({duringClick:e=>{
+    e.pub('failure','hmr-retirement-incomplete');e.page.emit('pageerror',Error('private-exception'));e.page.emit('console',{type:()=>'error'});
+    e.cdp.emit('Network.responseReceivedExtraInfo',{requestId:'c2',statusCode:503,headers:{}});
+  }});
+  assert.equal(r.after.status,'FAIL');assert.equal(r.after.consoleFailures,2);assert.equal(r.after.httpFailureObservations,1);assert.equal(r.after.guardFailures,1);
+  assert(r.rows.some(x=>x.event==='failure'&&x.reason==='hmr-retirement-incomplete'));assert(!JSON.stringify(r.rows).includes('private-exception'));
+});
+test('private readback never supplies a completed auth envelope, even on clean modeled observation',async()=>{
+  const r=await scenario();assert.equal(r.after.authRecovery,'UNVERIFIED');assert.equal(r.after.fullBrowserAcceptance,'NOT_RUN');assert.deepEqual(r.obs.privateMaterial().contexts,[]);
+  assert.deepEqual(r.rows.filter(x=>x.event==='http-quiet').map(x=>x.stage),['pre-click','post-arrival','pre-close']);
+  assert.equal(r.rows.filter(x=>x.event==='browser-close-issued').length,1);
+});
