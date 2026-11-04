@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261104120100_b002_retention_compat.sql": {
+    addOnly: false,
+    reason: "Restores legacy nullable photo-gate arguments with explicit scope checks, backfills known fixed-term retention origins, and extends origin capture for later end-date edits. Rewrites functions and existing rows; unknown closed origins remain held.",
+  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",
