@@ -14,10 +14,6 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
-  "supabase/migrations/20261104120100_b002_retention_compat.sql": {
-    addOnly: false,
-    reason: "Restores legacy nullable photo-gate arguments with explicit scope checks, backfills known fixed-term retention origins, and extends origin capture for later end-date edits. Rewrites functions and existing rows; unknown closed origins remain held.",
-  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",
@@ -174,98 +170,6 @@ const added = {
     addOnly: false,
     reason: "Adds a move-out date, replaces the retention function and privileges, and updates existing document retention dates.",
   },
-  "supabase/migrations/20261031100212_b010_b028_local_events.sql": {
-    addOnly: false,
-    reason: "Adds default-OFF private local notification and payment-transition tables with constraints, restricted gateways, deferred financial/event guards and legacy-writer fences; due-email personal preference alone defaults ON. No external delivery or historical backfill.",
-  },
-  "supabase/migrations/20261031100217_b010_b028_source_foundation.sql": {
-    addOnly: false,
-    reason: "Adds private typed-source/provenance/resolution tables, extends the exact center source constraint and replaces guards/read predicates with backward-compatible typed branches; changes owner-only functions and grants no new application source authority. Existing source bytes unchanged; no backfill or production activation.",
-  },
-  "supabase/migrations/20261031100218_b015_tenant_directory_edit.sql": {
-    addOnly: false,
-    reason: "Adds a default-OFF private hash-only contact-edit command table, scoped cascade constraints, immutable and deferred authorization guards, and fixed service-only edit/view/status/close/final-check gateways with restricted grants. No legacy contact, login identity, historical source or financial rows are rewritten.",
-  },
-  "supabase/migrations/20261031100222_b004_reason_no_pii.sql": {
-    addOnly: false,
-    reason: "Rejects email-shaped and long digit-run replacement reasons and records only a safe reason on the replacement audit. Existing safe reasons stay. No column removed.",
-  },
-  "supabase/migrations/20261031100223_b004_reason_codes.sql": {
-    addOnly: false,
-    reason: "Restricts replacement reasons to a fixed code set and records only that code on the replacement audit. A non-code row stops the migration. The zero-row update to other changes nothing. No column removed.",
-  },
-  "supabase/migrations/20261104120000_b007_deposit_fixes.sql": {
-    addOnly: false,
-    reason: "Replaces resolve_deposit_rule, fn_lease_deposit_check and app.b007_lock_deposit_policy to preserve legacy deposit compatibility and bound policy lock waits. No columns or constraints changed; old Worker compatible.",
-  },
-  "supabase/migrations/20261031100224_b004_archived_lease_signed_pdf.sql": {
-    addOnly: false,
-    reason: "Rejects a new signed PDF when the lease property, unit, or room is archived. The check runs before insert, so no version row or replacement audit is written. Re-run keeps the same guard.",
-  },
-  "supabase/migrations/20261031100221_b013_owner_repair_override.sql": {
-    addOnly: false,
-    reason: "Adds restricted service-only property-override change/status/close/final-check functions using the existing public column and private immutable revision/command tables. Changes restricted privileges and the explicit authorized write path; no historical values rewritten, new tables, public workflow triggers or estimate approval/dispatch authority."
-  },
-  "supabase/migrations/20261031100220_b013_owner_repair_policy.sql": {
-    addOnly: false,
-    reason: "New private owner-policy roots, immutable revisions and command tables with NOT NULL/CHECK/FK constraints and restricted service-only functions. Existing property override values are retained unchanged; no public repair workflow trigger or estimate/dispatch authority. Default-OFF platform control and explicit authorized default-change audit only."
-  },
-  "supabase/migrations/20261031100215_b028_center_foundation.sql": {
-    addOnly: false,
-    reason: "Adds independent default-OFF private typed notification center events/entitlements/read markers/cursors and restricted authorization gateways, immutable/source guards and deferred expiry checks; no producer grant or historical backfill.",
-  },
-  "supabase/migrations/20261031100214_b011_handover_records.sql": {
-    addOnly: false,
-    reason: "Adds default-OFF private versioned handover/evidence/reply/upload-intent and durable cleanup tables with composite constraints, restricted privileges and immutable guards. No historical migration or financial/retention date rewritten.",
-  },
-  "supabase/migrations/20261031100216_b001_invoices_index_concurrently.sql": {
-    addOnly: false,
-    reason: "Enforces live move-in invoice uniqueness with a concurrent partial unique index, duplicate preflight and invalid-index retry cleanup. Requires psql without a transaction wrapper; preserves an existing valid staging index.",
-  },
-  "supabase/migrations/20261031100213_b001_zero_first_invoice.sql": {
-    addOnly: false,
-    reason: "Replaces only the deferred completion financial postcondition to support Ron-approved explicit zero-total first invoice with no ledger transaction, entries or payment allocations and actual-actor no_amount_due audit; preserves positive branch; has no dependency on the b001 move-in invoice index (built concurrently in 20261031100216).",
-  },
-  "supabase/migrations/20261031100211_b001_esign_activation.sql": {
-    addOnly: false,
-    reason: "Adds private transaction-only completion requirements, early parent-lock guard triggers and deferred financial/actor postcondition; restricts helper/table privileges and checks duplicate first invoices. Index creation is moved to 20261031100216, applied outside a transaction; already-applied staging copies retain their index.",
-  },
-  "supabase/migrations/20261031100210_b008_first_period_basis.sql": {
-    addOnly: false,
-    reason: "Adds nullable versioned first-period source with trusted capture and signing/actor guards, restricted execution and no historical backfill. Existing unknown sources remain legacy full-rent; no data or columns removed.",
-  },
-  "supabase/migrations/20261031100209_b009_bank_match_decisions.sql": {
-    addOnly: false,
-    reason: "Adds exact-file source registry and immutable decision tables/constraints plus owner-only gated bank-link write guards, permissions and default-OFF setting. No historical rewrite or duplicate-data backfill.",
-  },
-  "supabase/migrations/20261031100208_b008_billing_previews.sql": {
-    addOnly: false,
-    reason: "Seeds a default-OFF guarded billing-preview rollout setting without changing stored invoice amounts or regional formulas.",
-  },
-  "supabase/migrations/20261031100207_b005_onboarding_progress.sql": {
-    addOnly: false,
-    reason: "Adds default-OFF rollout setting and server-owned onboarding metadata guard/trigger with privilege restrictions; changes authorization for a settings subtree without deleting data or columns.",
-  },
-  "supabase/migrations/20261031100206_b002_legacy_open_moveout.sql": {
-    addOnly: false,
-    reason: "Replaces only the database-owned provenance trigger function to recognize a newly observed move-out on an older active open lease. Preserves unknown closed cases, ACLs and published SQL; no data/date backfill or columns removed.",
-  },
-  "supabase/migrations/20261031100205_b007_deposit_rules.sql": {
-    addOnly: false,
-    reason: "Ron authorized replacing only leases_deposit_over_cap_requires_override for local/staging. Replaces write enforcement with regional resolution and flag locks, adds metadata guards/functions/privileges and default-OFF rollout setting; no historical SQL, stored data or columns removed.",
-  },
-  "supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql": {
-    addOnly: false,
-    reason: "Replaces tenant PDF visibility helper and adds immutable-version mutation guards with controlled parent-cascade exceptions and privilege changes. Re-run keeps that helper and guard. No historical migration or contract text is changed.",
-  },
-  "supabase/migrations/20261031100203_b002_retention_boundary.sql": {
-    addOnly: false,
-    reason: "Adds nullable database-owned lease provenance and guards; replaces retention, protected photo access, preview and purge functions, and restricts privileges. Enforces fixed policy, transaction ordering and destructive mode boundary. No historical file, original dates, table, column or data is deleted.",
-  },
-  "supabase/migrations/20261031100201_b001_esign_internal_helpers.sql": {
-    addOnly: false,
-    reason: "Creates app-schema context, case, version and audit helpers with organization and environment scoping, repoints SELECT policies, and revokes public-helper execution from PUBLIC, anon, and authenticated.",
-  },
   "supabase/migrations/20261031100000_payee_details.sql": {
     addOnly: false,
     reason: "Adds payee columns, a protected account table, RLS policies, grants and triggers; requires catalog and compatibility review.",
@@ -278,9 +182,109 @@ const added = {
     addOnly: false,
     reason: "Creates a security-definer function and grants execution; the following hardening migration revokes direct access.",
   },
+  "supabase/migrations/20261031100201_b001_esign_internal_helpers.sql": {
+    addOnly: false,
+    reason: "Creates app-schema context, case, version and audit helpers with organization and environment scoping, repoints SELECT policies, and revokes public-helper execution from PUBLIC, anon, and authenticated.",
+  },
   "supabase/migrations/20261031100202_b003_payee_gateway.sql": {
     addOnly: false,
     reason: "Revokes direct table and function privileges, adds assignment guard and service-only audited gateway; requires access and compatibility review.",
+  },
+  "supabase/migrations/20261031100203_b002_retention_boundary.sql": {
+    addOnly: false,
+    reason: "Adds nullable database-owned lease provenance and guards; replaces retention, protected photo access, preview and purge functions, and restricts privileges. Enforces fixed policy, transaction ordering and destructive mode boundary. No historical file, original dates, table, column or data is deleted.",
+  },
+  "supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql": {
+    addOnly: false,
+    reason: "Replaces tenant PDF visibility helper and adds immutable-version mutation guards with controlled parent-cascade exceptions and privilege changes. Re-run keeps that helper and guard. No historical migration or contract text is changed.",
+  },
+  "supabase/migrations/20261031100205_b007_deposit_rules.sql": {
+    addOnly: false,
+    reason: "Ron authorized replacing only leases_deposit_over_cap_requires_override for local/staging. Replaces write enforcement with regional resolution and flag locks, adds metadata guards/functions/privileges and default-OFF rollout setting; no historical SQL, stored data or columns removed.",
+  },
+  "supabase/migrations/20261031100206_b002_legacy_open_moveout.sql": {
+    addOnly: false,
+    reason: "Replaces only the database-owned provenance trigger function to recognize a newly observed move-out on an older active open lease. Preserves unknown closed cases, ACLs and published SQL; no data/date backfill or columns removed.",
+  },
+  "supabase/migrations/20261031100207_b005_onboarding_progress.sql": {
+    addOnly: false,
+    reason: "Adds default-OFF rollout setting and server-owned onboarding metadata guard/trigger with privilege restrictions; changes authorization for a settings subtree without deleting data or columns.",
+  },
+  "supabase/migrations/20261031100208_b008_billing_previews.sql": {
+    addOnly: false,
+    reason: "Seeds a default-OFF guarded billing-preview rollout setting without changing stored invoice amounts or regional formulas.",
+  },
+  "supabase/migrations/20261031100209_b009_bank_match_decisions.sql": {
+    addOnly: false,
+    reason: "Adds exact-file source registry and immutable decision tables/constraints plus owner-only gated bank-link write guards, permissions and default-OFF setting. No historical rewrite or duplicate-data backfill.",
+  },
+  "supabase/migrations/20261031100210_b008_first_period_basis.sql": {
+    addOnly: false,
+    reason: "Adds nullable versioned first-period source with trusted capture and signing/actor guards, restricted execution and no historical backfill. Existing unknown sources remain legacy full-rent; no data or columns removed.",
+  },
+  "supabase/migrations/20261031100211_b001_esign_activation.sql": {
+    addOnly: false,
+    reason: "Adds private transaction-only completion requirements, early parent-lock guard triggers and deferred financial/actor postcondition; restricts helper/table privileges and checks duplicate first invoices. Index creation is moved to 20261031100216, applied outside a transaction; already-applied staging copies retain their index.",
+  },
+  "supabase/migrations/20261031100212_b010_b028_local_events.sql": {
+    addOnly: false,
+    reason: "Adds default-OFF private local notification and payment-transition tables with constraints, restricted gateways, deferred financial/event guards and legacy-writer fences; due-email personal preference alone defaults ON. No external delivery or historical backfill.",
+  },
+  "supabase/migrations/20261031100213_b001_zero_first_invoice.sql": {
+    addOnly: false,
+    reason: "Replaces only the deferred completion financial postcondition to support Ron-approved explicit zero-total first invoice with no ledger transaction, entries or payment allocations and actual-actor no_amount_due audit; preserves positive branch; has no dependency on the b001 move-in invoice index (built concurrently in 20261031100216).",
+  },
+  "supabase/migrations/20261031100214_b011_handover_records.sql": {
+    addOnly: false,
+    reason: "Adds default-OFF private versioned handover/evidence/reply/upload-intent and durable cleanup tables with composite constraints, restricted privileges and immutable guards. No historical migration or financial/retention date rewritten.",
+  },
+  "supabase/migrations/20261031100215_b028_center_foundation.sql": {
+    addOnly: false,
+    reason: "Adds independent default-OFF private typed notification center events/entitlements/read markers/cursors and restricted authorization gateways, immutable/source guards and deferred expiry checks; no producer grant or historical backfill.",
+  },
+  "supabase/migrations/20261031100216_b001_invoices_index_concurrently.sql": {
+    addOnly: false,
+    reason: "Enforces live move-in invoice uniqueness with a concurrent partial unique index, duplicate preflight and invalid-index retry cleanup. Requires psql without a transaction wrapper; preserves an existing valid staging index.",
+  },
+  "supabase/migrations/20261031100217_b010_b028_source_foundation.sql": {
+    addOnly: false,
+    reason: "Adds private typed-source/provenance/resolution tables, extends the exact center source constraint and replaces guards/read predicates with backward-compatible typed branches; changes owner-only functions and grants no new application source authority. Existing source bytes unchanged; no backfill or production activation.",
+  },
+  "supabase/migrations/20261031100218_b015_tenant_directory_edit.sql": {
+    addOnly: false,
+    reason: "Adds a default-OFF private hash-only contact-edit command table, scoped cascade constraints, immutable and deferred authorization guards, and fixed service-only edit/view/status/close/final-check gateways with restricted grants. No legacy contact, login identity, historical source or financial rows are rewritten.",
+  },
+  "supabase/migrations/20261031100220_b013_owner_repair_policy.sql": {
+    addOnly: false,
+    reason: "New private owner-policy roots, immutable revisions and command tables with NOT NULL/CHECK/FK constraints and restricted service-only functions. Existing property override values are retained unchanged; no public repair workflow trigger or estimate/dispatch authority. Default-OFF platform control and explicit authorized default-change audit only."
+  },
+  "supabase/migrations/20261031100221_b013_owner_repair_override.sql": {
+    addOnly: false,
+    reason: "Adds restricted service-only property-override change/status/close/final-check functions using the existing public column and private immutable revision/command tables. Changes restricted privileges and the explicit authorized write path; no historical values rewritten, new tables, public workflow triggers or estimate approval/dispatch authority."
+  },
+  "supabase/migrations/20261031100222_b004_reason_no_pii.sql": {
+    addOnly: false,
+    reason: "Rejects email-shaped and long digit-run replacement reasons and records only a safe reason on the replacement audit. Existing safe reasons stay. No column removed.",
+  },
+  "supabase/migrations/20261031100223_b004_reason_codes.sql": {
+    addOnly: false,
+    reason: "Restricts replacement reasons to a fixed code set and records only that code on the replacement audit. A non-code row stops the migration. The zero-row update to other changes nothing. No column removed.",
+  },
+  "supabase/migrations/20261031100224_b004_archived_lease_signed_pdf.sql": {
+    addOnly: false,
+    reason: "Rejects a new signed PDF when the lease property, unit, or room is archived. The check runs before insert, so no version row or replacement audit is written. Re-run keeps the same guard.",
+  },
+  "supabase/migrations/20261104120000_b007_deposit_fixes.sql": {
+    addOnly: false,
+    reason: "Replaces resolve_deposit_rule, fn_lease_deposit_check and app.b007_lock_deposit_policy to preserve legacy deposit compatibility and bound policy lock waits. No columns or constraints changed; old Worker compatible.",
+  },
+  "supabase/migrations/20261104120100_b002_retention_compat.sql": {
+    addOnly: false,
+    reason: "Restores legacy nullable photo-gate arguments with explicit scope checks, backfills known fixed-term retention origins, and extends origin capture for later end-date edits. Rewrites functions and existing rows; unknown closed origins remain held.",
+  },
+  "supabase/migrations/20261104120200_b005_invitations_audit_mask.sql": {
+    addOnly: false,
+    reason: "Replaces the invitations audit trigger function; no table/column change; old Worker compatible.",
   },
 };
 
