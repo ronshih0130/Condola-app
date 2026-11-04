@@ -9,6 +9,7 @@ import { loadLeaseIdCheck } from "@/server/id-docs";
 import { tenantLeaseMoney, tenantSignedLeasePdfs } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { tenantSignedPdfStrings } from "@/i18n/tenant-signed-pdf";
+import { signedPdfUploadedAt } from "@/server/paper-lease-history-time";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function TenantLeasePage() {
                 <span>{pdf.current ? signedCopy.current : signedCopy.historical}</span>
                 {" · "}
                 <span>
-                  {signedCopy.uploaded}: {new Date(pdf.created_at).toLocaleString(session.locale)}
+                  {signedCopy.uploaded}: {signedPdfUploadedAt(pdf.created_at, session.locale, session.calendar)?.label}
                 </span>
                 {" · "}
                 <a href={`/t/lease/signed/${pdf.id}`} target="_blank" rel="noopener noreferrer">

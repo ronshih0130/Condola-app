@@ -1,3 +1,11 @@
+/** Signed-PDF upload times are shown in Taipei, not the server zone. */
+export const SIGNED_PDF_UPLOAD_ZONE = "Asia/Taipei";
+
+export function signedPdfUploadedAt(value: string | Date, locale: string, calendar = "gregorian") {
+  const instant = value instanceof Date ? value.toISOString() : value;
+  return paperHistoryTime(instant, SIGNED_PDF_UPLOAD_ZONE, locale, calendar);
+}
+
 /** Render history timestamps using the selected organization's zone, never the server zone. */
 export function paperHistoryTime(value: string, zone: string, locale: string, calendar = "gregorian") {
   if (!/(?:Z|[+-]\d\d(?::?\d\d)?)$/i.test(value)) return null;

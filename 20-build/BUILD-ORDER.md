@@ -253,6 +253,10 @@ B017 limited compiler delivery remains unparsed/unapplied/target UNVERIFIED; ful
 
 STOP POINT: bounded source review in progress; next: finish accepted safe diagnostic composition and independently freeze before one OFF-only attempt; owner: Codex/Ron.
 
+## B-004 QA round 5 — 2026-11-04
+
+B-004 stays `partial`. Signed-PDF upload times on the tenant and staff panels display in Asia/Taipei. Old staff download 404 is explained in [old-code-staff-404.md](../e2e-evidence/B-004/old-code-staff-404.md): the old worker does not consult the tenant flag or `platform_settings`, and new code cannot make that rollback succeed. `/t/history/<lease>/signed` serves an own ended lease only; pending and active are 404. [Route note](../e2e-evidence/B-004/history-signed-route.md). Detail: [status](../e2e-evidence/B-004/status.md).
+
 ## B-004 QA round 4 — 2026-11-04
 
 B-004 stays `partial`. The raw log `gate-9ce4a168d5482ae1afb3189624ddd1b2c50fbf38-rls.log` is restored to the bytes at `4da59509`. The UNAPPROVED correction is [gate-9ce4a168-correction.md](../e2e-evidence/B-004/gate-9ce4a168-correction.md). Tenant signed-PDF downloads are tested through the route GET handler. Full gate on `f8e8e56b2b1759799500554ec962f48e1ef1bd95`: unit 654 pass, 0 fail, 0 skip; RLS 488 pass, 0 fail, 1 UNAPPROVED skip. Detail: [status](../e2e-evidence/B-004/status.md).

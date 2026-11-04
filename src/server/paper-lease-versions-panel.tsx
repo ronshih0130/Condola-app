@@ -1,7 +1,7 @@
 import { paperLeaseCopy, paperLeaseReasonLabel } from "@/i18n/paper-lease-versions";
 import { PAPER_LEASE_REASON_CODES } from "./paper-lease-versions-rules";
 import { listPaperLeaseVersions } from "./paper-lease-versions";
-import { paperHistoryTime } from "./paper-lease-history-time";
+import { signedPdfUploadedAt } from "./paper-lease-history-time";
 import type { Session } from "./types";
 
 export async function paperLeaseVersionPanel(
@@ -20,7 +20,7 @@ export async function paperLeaseVersionPanel(
       <p className="small muted">{copy.hint}</p>
       <ul data-testid="paper-version-history">
         {versions.map((version) => {
-          const uploaded = paperHistoryTime(version.created_at, version.timezone, session.locale, session.calendar);
+          const uploaded = signedPdfUploadedAt(version.created_at, session.locale, session.calendar);
           return (
           <li key={version.id} data-current={version.current ? "true" : "false"}>
             <strong>

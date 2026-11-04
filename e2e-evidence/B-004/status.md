@@ -1,4 +1,4 @@
-> QA round 3 after the round-2 failure at `4da5950`. B-004 stays **partial**. `done` still means an exact-SHA staging check plus the required independent verdict. Flags stay OFF. This commit does not change a hosted database or deploy a Worker.
+> QA round 5 after the failure at `b352b6e`. B-004 stays **partial**. `done` still means an exact-SHA staging check plus the required independent verdict. Flags stay OFF. This commit does not change a hosted database or deploy a Worker.
 
 # B-004 staging state
 
@@ -15,6 +15,7 @@ No new feature in this note.
 - Full gate on `5819e26c5ca90044c7dce7a265c83ddc35ceba09`: unit 654 pass, 0 fail, 0 skip; RLS 483 pass, 0 fail, 1 UNAPPROVED `b888ccd` skip. Raw logs: [unit](gate-5819e26c5ca90044c7dce7a265c83ddc35ceba09-unit.log), [RLS](gate-5819e26c5ca90044c7dce7a265c83ddc35ceba09-rls.log). That RLS file is a new run. Its skip line says UNAPPROVED.
 - QA round 4 restores the `9ce4a168` raw log and adds tenant signed-PDF route tests through that route's GET handler: logged-out, consent refused, another organization, own-lease success, and one audit row whose reason is `signed_pdf_downloaded`. B-004 stays partial. Logged-in old-code compatibility and rollback are still unproven.
 - Full gate on `f8e8e56b2b1759799500554ec962f48e1ef1bd95`: unit 654 pass, 0 fail, 0 skip; RLS 488 pass, 0 fail, 1 UNAPPROVED `b888ccd` skip. New raw logs: [unit](gate-f8e8e56b2b1759799500554ec962f48e1ef1bd95-unit.log), [RLS](gate-f8e8e56b2b1759799500554ec962f48e1ef1bd95-rls.log).
+- QA round 5 shows signed-PDF upload time in Asia/Taipei on the tenant lease page, the tenant history page, and the staff paper panel. The old staff 404 is written in [old-code-staff-404.md](old-code-staff-404.md): old code does not read `TENANT_SIGNED_PDF_ENABLED` or `platform_settings` for that download, and new code cannot make that worker rollback compatible. The history signed route is specified in [history-signed-route.md](history-signed-route.md): pending and active are 404; an own ended lease can succeed. B-004 stays partial. Logged-in old-code compatibility and rollback are still unproven.
 
 Functional compare for CAP-M-02 and CAP-T-02: [qa-full-diff.md](qa-full-diff.md).
 

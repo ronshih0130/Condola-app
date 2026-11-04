@@ -7,6 +7,7 @@ import { tenantEndedLeaseDetail } from '@/server/tenant-lease-history';
 import { tenantPaymentHistory } from '@/server/tenant-payment-history';
 import { TenantBillSummary, TenantPaymentHistory } from '@/components/tenant-payment-history';
 import { tenantPaymentHistoryCopy } from '@/i18n/tenant-payment-history';
+import { signedPdfUploadedAt } from '@/server/paper-lease-history-time';
 
 export const dynamic = 'force-dynamic';
 export default async function TenantHistoryDetail({ params, searchParams }: { params: Promise<{ leaseId: string }>; searchParams: Promise<{ cursor?: string | string[]; reportId?: string | string[] }> }) {
@@ -27,6 +28,6 @@ export default async function TenantHistoryDetail({ params, searchParams }: { pa
     <p>{t.dates}: {result.lease.startsOn}–{result.lease.endsOn ?? t.noEnd} ({t.ended})</p>
     {(result.lease.archive.property || result.lease.archive.unit || result.lease.archive.room) && <p>{t.archived}</p>}
     {payments?.state === 'unavailable' ? <p role="status">{tenantPaymentHistoryCopy(session.locale).unavailable}</p> : payments?.state === 'ready' ? <><TenantBillSummary data={payments} locale={session.locale} /><TenantPaymentHistory data={payments} locale={session.locale} pathname={`/t/history/${leaseId}`} cursor={cursor} selectedReport={reportId} allowReport={false} /></> : null}
-    <h2>{t.papers}</h2>{result.pdfAvailability === 'unavailable' ? <p>{t.papersUnavailable}</p> : result.pdfs.length === 0 ? <p>{t.noPapers}</p> : <ul>{result.pdfs.map(pdf => <li key={pdf.id}>{pdf.current ? t.current : t.prior} — {t.uploaded}: <time dateTime={pdf.uploadedAt}>{pdf.uploadedAt}</time> — <Link href={`/t/history/${result.lease.leaseId}/signed/${pdf.id}`}>{t.download}</Link></li>)}</ul>}
+    <h2>{t.papers}</h2>{result.pdfAvailability === 'unavailable' ? <p>{t.papersUnavailable}</p> : result.pdfs.length === 0 ? <p>{t.noPapers}</p> : <ul>{result.pdfs.map(pdf => { const uploaded = signedPdfUploadedAt(pdf.uploadedAt, session.locale, session.calendar); return <li key={pdf.id}>{pdf.current ? t.current : t.prior} — {t.uploaded}: <time dateTime={pdf.uploadedAt}>{uploaded?.label ?? t.papersUnavailable}</time> — <Link href={`/t/history/${result.lease.leaseId}/signed/${pdf.id}`}>{t.download}</Link></li>; })}</ul>}
   </>}</main>;
 }
