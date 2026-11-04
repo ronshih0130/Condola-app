@@ -43,14 +43,18 @@ test("private event storage and legacy claim fence are scoped and fail closed", 
   } finally { await c.end(); }
 });
 
-test("control changes cannot wait behind a legacy row-lock holder", async () => {
+// B010-02 (QA 4a80cea): with flags OFF a legacy overdue claim must not fail or wait behind a settings row-lock holder.
+test("flags-OFF legacy overdue claim is not blocked by a settings row-lock holder", async () => {
   const held=new Client({connectionString:process.env.DATABASE_URL});
   const other=new Client({connectionString:process.env.DATABASE_URL});
   await held.connect(); await other.connect();
   try {
     await held.query("BEGIN"); await other.query("BEGIN");
     await held.query(`UPDATE platform_settings SET value=value WHERE key='rent_reminders_v2'`);
-    await assert.rejects(other.query(`INSERT INTO email_log(org_id,kind,target_id,threshold) VALUES ($1,'rent_overdue_tenant',$2,1)`,[ORG_ID,randomUUID()]),(e:unknown)=>(e as {code?:string}).code==="55P03");
+    await other.query("SET LOCAL lock_timeout='1s'");
+    const started=Date.now();
+    await other.query(`INSERT INTO email_log(org_id,kind,target_id,threshold) VALUES ($1,'rent_overdue_tenant',$2,1)`,[ORG_ID,randomUUID()]);
+    assert.ok(Date.now()-started<1000);
     await other.query("ROLLBACK"); await held.query("ROLLBACK");
   } finally { await other.end(); await held.end(); }
 });
