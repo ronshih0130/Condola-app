@@ -348,16 +348,17 @@ test('archive-first blocks live tenant signing and paper activation before any f
  assert.deepEqual(await snapshot(),before);
 });
 
-test('an archived ended imported lease retains historical paper upload and replacement',async()=>{
+test('an archived ended imported lease refuses paper upload and replacement',async()=>{
  const sid=randomUUID();await query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')`,[sid,USERS.admin,randomUUID()]);
  const s:Session={userId:USERS.admin,sessionId:sid,email:'',name:'admin',kind:'staff',role:'admin',orgId:ORG_ID,liveOrgId:ORG_ID,environment:'live',locale:'en',calendar:'gregorian',leaseId:null};
  const p=(await query<{id:string}>(`INSERT INTO properties(org_id,name,country_code,currency,timezone,archived_at) VALUES($1,$2,'TW','TWD','Asia/Taipei',now()) RETURNING id::text`,[ORG_ID,`B015 historical ${randomUUID()}`])).rows[0].id;
  const u=(await query<{id:string}>(`INSERT INTO units(org_id,property_id,label) VALUES($1,$2,'one') RETURNING id::text`,[ORG_ID,p])).rows[0].id;
  const lease=(await query<{id:string}>(`INSERT INTO leases(org_id,property_id,unit_id,target_unit_id,status,esign_status,start_date,end_date,currency,rent_amount_minor) VALUES($1,$2,$3,$3,'ended','imported','2098-01-01','2098-12-31','TWD',0) RETURNING id::text`,[ORG_ID,p,u])).rows[0].id;
  const bytes=new TextEncoder().encode('%PDF-1.4 synthetic historical file');
- assert.equal((await uploadSignedLeasePdf(s,lease,{bytes,fileName:'first.pdf',replaceReason:'Historical correction'})).activated,false);
- assert.equal((await uploadSignedLeasePdf(s,lease,{bytes:new TextEncoder().encode('%PDF-1.4 synthetic corrected file'),fileName:'second.pdf',replaceReason:'Historical correction'})).activated,false);
- const saved=await query<{status:string;pdfs:number}>(`SELECT l.status::text,(SELECT count(*)::int FROM lease_signed_pdfs d WHERE d.lease_id=l.id) pdfs FROM leases l WHERE l.id=$1`,[lease]);assert.equal(saved.rows[0].status,'ended');assert.equal(saved.rows[0].pdfs,2);
+ const refused=(error:unknown)=>error instanceof FlowError&&error.key==='errors.notFound';
+ await assert.rejects(()=>uploadSignedLeasePdf(s,lease,{bytes,fileName:'first.pdf',replaceReason:'corrected_signature'}),refused);
+ await assert.rejects(()=>uploadSignedLeasePdf(s,lease,{bytes:new TextEncoder().encode('%PDF-1.4 synthetic corrected file'),fileName:'second.pdf',replaceReason:'corrected_signature'}),refused);
+ const saved=await query<{status:string;pdfs:number;audits:number}>(`SELECT l.status::text,(SELECT count(*)::int FROM lease_signed_pdfs d WHERE d.lease_id=l.id) pdfs,(SELECT count(*)::int FROM audit_log a WHERE a.new_row->>'lease_id'=l.id::text) audits FROM leases l WHERE l.id=$1`,[lease]);assert.equal(saved.rows[0].status,'ended');assert.equal(saved.rows[0].pdfs,0);assert.equal(saved.rows[0].audits,0);
 });
 
 test('an admitted real import finishes first and its active lease blocks archive',async()=>{

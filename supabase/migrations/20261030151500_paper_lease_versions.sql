@@ -1,5 +1,9 @@
 -- Additive paper lease history. Existing INSERTs remain valid.
 -- Re-run keeps the same columns, constraints, index, function and trigger.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+
 ALTER TABLE lease_signed_pdfs
   ADD COLUMN IF NOT EXISTS uploaded_by uuid REFERENCES auth.users(id),
   ADD COLUMN IF NOT EXISTS replace_reason text,
@@ -84,3 +88,4 @@ CREATE TRIGGER audit_paper_lease_replaced
 
 -- Preserve existing RLS policies and grants, including the absence of UPDATE.
 -- files.size_bytes and both source IDs remain available through the existing FK.
+COMMIT;

@@ -1625,6 +1625,17 @@ export async function uploadSignedLeasePdf(
       [leaseId, session.orgId],
     );
     if (!lease) throw new FlowError("errors.notFound");
+    const archived = await maybe<{ archived: boolean }>(
+      client,
+      `SELECT (p.archived_at IS NOT NULL OR u.archived_at IS NOT NULL OR r.archived_at IS NOT NULL) AS archived
+         FROM leases l
+         JOIN properties p ON p.org_id = l.org_id AND p.id = l.property_id
+         JOIN units u ON u.org_id = l.org_id AND u.id = l.unit_id
+         LEFT JOIN rooms r ON r.org_id = l.org_id AND r.id = l.target_room_id
+        WHERE l.org_id = $1 AND l.id = $2`,
+      [session.orgId, leaseId],
+    );
+    if (archived?.archived) throw new FlowError("errors.notFound");
     if (target) await assertCurrentArchiveCaller(client, session);
     if((needsAdmission(lease)&&!target)||(target&&(target.property_id!==lease.property_id||target.unit_id!==lease.unit_id||target.target_room_id!==lease.target_room_id)))throw new FlowError("errors.notFound");
     if (lease.status === "draft" || lease.status === "pending_signature") validateFirstPeriodSource(lease, true);

@@ -10,6 +10,10 @@
 -- Re-run is safe. A later migration replaces this helper; running this file
 -- again before that migration restores this body, and the later file restores
 -- the final body. The policy and grants match the first apply.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+
 CREATE OR REPLACE FUNCTION app.tenant_signed_pdf_readable(p_org uuid, p_lease uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog
@@ -43,3 +47,4 @@ DROP POLICY IF EXISTS tenant_read_signed_pdf ON public.lease_signed_pdfs;
 CREATE POLICY tenant_read_signed_pdf
   ON public.lease_signed_pdfs FOR SELECT TO authenticated
   USING (app.tenant_signed_pdf_readable(org_id, lease_id));
+COMMIT;
