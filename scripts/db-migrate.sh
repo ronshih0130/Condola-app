@@ -3,6 +3,9 @@
 # Does not apply supabase/stub/supabase_stub.sql and does not seed.
 # Re-runs skip files already recorded in condola_ops.schema_migrations.
 #
+# A first-line -- condola:no-transaction marker opts out of --single-transaction.
+# Such migrations must tolerate retries after partial completion; the filename
+# is recorded only after psql succeeds.
 # Staging CI passes the Tokyo Supabase session connection (port 5432).
 # Do not point this at the Worker transaction-pooler URL (port 6543).
 # The script does not read .env.local and does not print DATABASE_URL.
@@ -62,7 +65,13 @@ SQL
     continue
   fi
   echo "applying: ${name}"
-  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 --single-transaction -f "${migration}"
+  transaction_args=(--single-transaction)
+  IFS= read -r first_line < "${migration}" || true
+  if [[ "${first_line}" == "-- condola:no-transaction" ]]; then
+    transaction_args=()
+  fi
+  # Quoted ${arr[@]+...} stays unset-safe when the array is empty on Bash before 4.4.
+  psql -X "${DATABASE_URL}" -v ON_ERROR_STOP=1 "${transaction_args[@]+"${transaction_args[@]}"}" -f "${migration}"
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -v "filename=${name}" <<'SQL'
 INSERT INTO condola_ops.schema_migrations (filename) VALUES (:'filename')
 SQL

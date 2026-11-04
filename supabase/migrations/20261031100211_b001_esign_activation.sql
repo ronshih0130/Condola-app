@@ -8,8 +8,7 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Duplicate move-in invoices require review' USING ERRCODE='23514';
   END IF;
 END $$;
-CREATE UNIQUE INDEX b001_one_live_move_in_invoice ON public.invoices(org_id,lease_id)
-  WHERE source='move_in' AND status <> 'void';
+-- Build the unique index concurrently in 20261031100216_b001_invoices_index_concurrently.sql.
 
 -- This table is written only by the migration owner through its trigger.
 -- It remembers eligibility before activation for the deferred check.

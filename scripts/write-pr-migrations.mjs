@@ -198,13 +198,17 @@ const added = {
     addOnly: false,
     reason: "Adds default-OFF private versioned handover/evidence/reply/upload-intent and durable cleanup tables with composite constraints, restricted privileges and immutable guards. No historical migration or financial/retention date rewritten.",
   },
+  "supabase/migrations/20261031100216_b001_invoices_index_concurrently.sql": {
+    addOnly: false,
+    reason: "Enforces live move-in invoice uniqueness with a concurrent partial unique index, duplicate preflight and invalid-index retry cleanup. Requires psql without a transaction wrapper; preserves an existing valid staging index.",
+  },
   "supabase/migrations/20261031100213_b001_zero_first_invoice.sql": {
     addOnly: false,
     reason: "Replaces only the deferred completion financial postcondition to support Ron-approved explicit zero-total first invoice with no ledger transaction, entries or payment allocations and actual-actor no_amount_due audit; preserves positive branch and published100211.",
   },
   "supabase/migrations/20261031100211_b001_esign_activation.sql": {
     addOnly: false,
-    reason: "Adds private transaction-only completion requirements, early parent-lock guard triggers and deferred financial/actor postcondition; restricts helper/table privileges and adds a partial unique first-invoice index with duplicate preflight. No history rewritten or legal copy changed.",
+    reason: "Adds private transaction-only completion requirements, early parent-lock guard triggers and deferred financial/actor postcondition; restricts helper/table privileges and checks duplicate first invoices. Index creation is moved to 20261031100216, applied outside a transaction; already-applied staging copies retain their index.",
   },
   "supabase/migrations/20261031100210_b008_first_period_basis.sql": {
     addOnly: false,
