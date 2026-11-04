@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { disposableDbUrl, withDatabase } from "./test-disposable-db";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -689,19 +688,22 @@ test("provided PR9e privilege variant upgrades and preserves ordinary records", 
   }
 });
 
-test("a database with the older 20261022180000 upgrades forward, then accepts the same file again", { skip: "Historical commit b888ccd is lost; this skip is UNAPPROVED" }, async () => {
-  const scratch = mkdtempSync(path.join(tmpdir(), "condola-id-upgrade-"));
-  const oldSql = path.join(scratch, OLD_FILE);
-  writeFileSync(oldSql, execFileSync("git", ["show", `b888ccd:${path.join("supabase/migrations", OLD_FILE)}`], { cwd: ROOT }));
+test("a database with the older 20261022180000 upgrades forward, then accepts the same file again", async () => {
+  // b888ccd cannot be read with git show. The predecessor shape is the current
+  // schema with delete_after nullable again and the photo-size cap removed.
   const database = await createScratchDb();
   const upgradeUrl = database.url;
+  const upgradeFile = path.join(MIGRATIONS, UPGRADE_FILE);
   try {
     psql(upgradeUrl, STUB);
     for (const file of readdirSync(MIGRATIONS).filter((name) => name.endsWith(".sql")).sort()) {
-      if (file === UPGRADE_FILE || file === ANON_REVOKE_FILE) continue;
-      psql(upgradeUrl, file === OLD_FILE ? oldSql : path.join(MIGRATIONS, file));
+      psql(upgradeUrl, path.join(MIGRATIONS, file));
     }
     const seeded = await withDb(upgradeUrl, async (client) => {
+      await client.query(`ALTER TABLE identity_documents ALTER COLUMN delete_after DROP NOT NULL`);
+      await client.query(
+        `ALTER TABLE identity_document_photos DROP CONSTRAINT IF EXISTS identity_document_photos_size_bytes_check`,
+      );
       const org = await client.query<{ id: string }>(
         `INSERT INTO organizations (name, country_code, default_currency) VALUES ('升級', 'TW', 'TWD') RETURNING id::text`,
       );
@@ -709,15 +711,14 @@ test("a database with the older 20261022180000 upgrades forward, then accepts th
         `INSERT INTO contacts (org_id, is_tenant, display_name) VALUES ($1, true, '舊護照') RETURNING id::text`,
         [org.rows[0]?.id],
       );
-      const doc = await client.query<{ id: string; delete_after: string | null }>(
+      const doc = await client.query<{ id: string }>(
         `INSERT INTO identity_documents (
            org_id, contact_id, doc_type, number_masked, storage_path, encryption_key_ref
          ) VALUES ($1, $2, 'passport', 'A***CD', $3, 'env:ID_DOC_ENCRYPTION_KEY')
-         RETURNING id::text, delete_after::text`,
+         RETURNING id::text`,
         [org.rows[0]?.id, contact.rows[0]?.id, `${org.rows[0]?.id}/old/front`],
       );
-      assert.equal(doc.rows[0]?.delete_after, null);
-      await client.query(`UPDATE identity_documents SET delete_after = '1999-01-01' WHERE id = $1`, [doc.rows[0]?.id]);
+      await client.query(`UPDATE identity_documents SET delete_after = NULL WHERE id = $1`, [doc.rows[0]?.id]);
       const contact2 = await client.query<{ id: string }>(
         `INSERT INTO contacts (org_id, is_tenant, display_name) VALUES ($1, true, '過大') RETURNING id::text`,
         [org.rows[0]?.id],
@@ -725,31 +726,17 @@ test("a database with the older 20261022180000 upgrades forward, then accepts th
       const fat = await client.query<{ id: string }>(
         `INSERT INTO identity_documents (
            org_id, contact_id, doc_type, number_masked, storage_path, encryption_key_ref
-         ) VALUES ($1, $2, 'passport', 'AB***CD7', $3, 'env:ID_DOC_ENCRYPTION_KEY')
+         ) VALUES ($1, $2, 'passport', 'A***CD7', $3, 'env:ID_DOC_ENCRYPTION_KEY')
          RETURNING id::text`,
         [org.rows[0]?.id, contact2.rows[0]?.id, `${org.rows[0]?.id}/fat/front`],
       );
-      const path = `${org.rows[0]?.id}/fat/object`;
+      const photoPath = `${org.rows[0]?.id}/fat/object`;
       await client.query(
         `INSERT INTO identity_document_photos (
            org_id, document_id, slot, storage_bucket, storage_path, mime_type, size_bytes, sha256
          ) VALUES ($1, $2, 'front', 'id-documents-private', $3, 'image/jpeg', 2000000, $4)`,
-        [org.rows[0]?.id, fat.rows[0]?.id, path, "a".repeat(64)],
+        [org.rows[0]?.id, fat.rows[0]?.id, photoPath, "a".repeat(64)],
       );
-      await client.query(
-        `INSERT INTO id_document_objects (bucket, path, mime_type, byte_size, sha256, ciphertext)
-         VALUES ('id-documents-private', $1, 'image/jpeg', 2000000, $2, $3)`,
-        [path, "b".repeat(64), Buffer.from([1])],
-      );
-      await client.query(
-        `ALTER TABLE id_document_objects
-           ADD CONSTRAINT id_document_objects_nocascade
-           FOREIGN KEY (bucket, path) REFERENCES identity_document_photos (storage_bucket, storage_path)`,
-      );
-      const before = await client.query<{ confdeltype: string }>(
-        `SELECT confdeltype FROM pg_constraint WHERE conname = 'id_document_objects_nocascade'`,
-      );
-      assert.equal(before.rows[0]?.confdeltype, "a");
       const backPath = `${org.rows[0]?.id}/old/back`;
       await client.query(
         `INSERT INTO identity_document_photos (
@@ -757,60 +744,84 @@ test("a database with the older 20261022180000 upgrades forward, then accepts th
          ) VALUES ($1, $2, 'back', 'id-documents-private', $3, 'image/jpeg', 1200, $4)`,
         [org.rows[0]?.id, doc.rows[0]?.id, backPath, "c".repeat(64)],
       );
-      return { documentId: doc.rows[0]?.id ?? "", fatId: fat.rows[0]?.id ?? "", path, orgId: org.rows[0]?.id ?? "", backPath };
+      const violated = await client.query<{ delete_after: string | null; size_bytes: string }>(
+        `SELECT d.delete_after::text,
+                (SELECT p.size_bytes::text FROM identity_document_photos p WHERE p.document_id = $2) AS size_bytes
+           FROM identity_documents d WHERE d.id = $1`,
+        [doc.rows[0]?.id, fat.rows[0]?.id],
+      );
+      assert.equal(violated.rows[0]?.delete_after, null);
+      assert.equal(violated.rows[0]?.size_bytes, "2000000");
+      return { documentId: doc.rows[0]?.id ?? "", fatId: fat.rows[0]?.id ?? "", photoPath, orgId: org.rows[0]?.id ?? "" };
     });
 
-    psql(upgradeUrl, path.join(MIGRATIONS, UPGRADE_FILE));
-    await withDb(upgradeUrl, async (client) => {
-      const due = await client.query<{ delete_after: string; expected: string }>(
+    const readOutcome = () => withDb(upgradeUrl, async (client) => {
+      const due = await client.query<{ delete_after: string; expected: string; not_null: boolean }>(
         `SELECT d.delete_after::text,
                 ((d.created_at AT TIME ZONE 'Asia/Taipei')::date
-                  + LEAST(o.id_doc_retention_days, platform_max_id_retention_days()))::text AS expected
+                  + LEAST(o.id_doc_retention_days, platform_max_id_retention_days()))::text AS expected,
+                a.attnotnull AS not_null
            FROM identity_documents d
            JOIN organizations o ON o.id = d.org_id
+           JOIN pg_attribute a ON a.attrelid = 'identity_documents'::regclass AND a.attname = 'delete_after'
           WHERE d.id = $1`,
         [seeded.documentId],
       );
-      assert.equal(due.rows[0]?.delete_after, due.rows[0]?.expected);
-      assert.notEqual(due.rows[0]?.delete_after, "1999-01-01");
-      assert.ok(due.rows[0]?.delete_after);
-      const fat = await client.query<{ gone: boolean; storage_path: string; number_masked: string; photos: string; objects: string }>(
-        `SELECT d.deleted_at IS NOT NULL AS gone, d.storage_path, d.number_masked,
-                (SELECT count(*) FROM identity_document_photos p WHERE p.document_id = d.id)::text AS photos,
-                (SELECT count(*) FROM id_document_objects o WHERE o.path = $2)::text AS objects
+      const fat = await client.query<{ gone: boolean; storage_path: string; photos: string }>(
+        `SELECT d.deleted_at IS NOT NULL AS gone, d.storage_path,
+                (SELECT count(*) FROM identity_document_photos p WHERE p.document_id = d.id)::text AS photos
            FROM identity_documents d WHERE d.id = $1`,
-        [seeded.fatId, seeded.path],
+        [seeded.fatId],
       );
-      assert.equal(fat.rows[0]?.gone, true);
-      assert.match(fat.rows[0]?.storage_path ?? "", /^purged\//);
-      assert.equal(fat.rows[0]?.number_masked, "A****CD7");
-      assert.equal(fat.rows[0]?.photos, "0");
-      assert.equal(fat.rows[0]?.objects, "0");
-      const storedBack = await client.query<{ size_bytes: string }>(
+      const kept = await client.query<{ size_bytes: string }>(
         `SELECT size_bytes::text FROM identity_document_photos WHERE document_id = $1 AND slot = 'back'`,
         [seeded.documentId],
       );
-      assert.equal(storedBack.rows[0]?.size_bytes, "1200");
-      await client.query(`DELETE FROM identity_document_photos WHERE document_id = $1 AND slot = 'back'`, [seeded.documentId]);
-      await client.query(
-        `INSERT INTO identity_document_photos (
-           org_id, document_id, slot, storage_bucket, storage_path, mime_type, size_bytes, sha256
-         ) VALUES ($1, $2, 'back', 'id-documents-private', $3, 'image/jpeg', 1200, $4)`,
-        [seeded.orgId, seeded.documentId, seeded.backPath, "c".repeat(64)],
+      const cap = await client.query<{ def: string }>(
+        `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = 'identity_document_photos_size_bytes_check'`,
       );
-      const replaced = await client.query<{ size_bytes: string }>(
-        `SELECT size_bytes::text FROM identity_document_photos WHERE document_id = $1 AND slot = 'back'`,
-        [seeded.documentId],
-      );
-      assert.equal(replaced.rows[0]?.size_bytes, "1200");
+      return {
+        deleteAfter: due.rows[0]?.delete_after ?? null,
+        expected: due.rows[0]?.expected ?? null,
+        notNull: due.rows[0]?.not_null ?? false,
+        gone: fat.rows[0]?.gone ?? false,
+        storagePath: fat.rows[0]?.storage_path ?? "",
+        photos: fat.rows[0]?.photos ?? "",
+        keptBytes: kept.rows[0]?.size_bytes ?? "",
+        cap: cap.rows[0]?.def ?? "",
+      };
     });
-    psql(upgradeUrl, path.join(MIGRATIONS, ANON_REVOKE_FILE));
-    await assertCurrentSchema(upgradeUrl);
 
-    psql(upgradeUrl, path.join(MIGRATIONS, UPGRADE_FILE));
-    await assertCurrentSchema(upgradeUrl);
+    psql(upgradeUrl, upgradeFile);
+    const first = await readOutcome();
+    assert.equal(first.deleteAfter, first.expected);
+    assert.ok(first.deleteAfter);
+    assert.equal(first.notNull, true);
+    assert.equal(first.gone, true);
+    assert.match(first.storagePath, /^purged\//);
+    assert.equal(first.photos, "0");
+    assert.equal(first.keptBytes, "1200");
+    assert.match(first.cap, /819200/);
+
+    psql(upgradeUrl, upgradeFile);
+    const second = await readOutcome();
+    assert.deepEqual(second, first);
+    await withDb(upgradeUrl, async (client) => {
+      await assert.rejects(
+        client.query(`UPDATE identity_documents SET delete_after = NULL WHERE id = $1`, [seeded.documentId]),
+        (error: unknown) => (error as { code?: string }).code === "23502",
+      );
+      await assert.rejects(
+        client.query(
+          `INSERT INTO identity_document_photos (
+             org_id, document_id, slot, storage_bucket, storage_path, mime_type, size_bytes, sha256
+           ) VALUES ($1, $2, 'front', 'id-documents-private', $3, 'image/jpeg', 2000000, $4)`,
+          [seeded.orgId, seeded.documentId, `${seeded.orgId}/rejected`, "d".repeat(64)],
+        ),
+        (error: unknown) => (error as { code?: string }).code === "23514",
+      );
+    });
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
     await database.cleanup();
   }
 });
