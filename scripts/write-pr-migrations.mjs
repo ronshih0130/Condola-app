@@ -198,6 +198,10 @@ const added = {
     addOnly: false,
     reason: "Restricts bank-match decision reasons to a fixed code set and rewrites any other stored reason to other. The append-only trigger is restored after that rewrite. Re-run keeps the same check.",
   },
+  "supabase/migrations/20261104120400_b009_bank_match_owner.sql": {
+    addOnly: false,
+    reason: "Bank-match direct-write guard trusts only the table-owner login without role switch; no table/column change; old Worker compatible.",
+  },
   "supabase/migrations/20261031100221_b013_owner_repair_override.sql": {
     addOnly: false,
     reason: "Adds restricted service-only property-override change/status/close/final-check functions using the existing public column and private immutable revision/command tables. Changes restricted privileges and the explicit authorized write path; no historical values rewritten, new tables, public workflow triggers or estimate approval/dispatch authority."

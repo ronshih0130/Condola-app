@@ -24,6 +24,7 @@ test.before(async () => {
   if (!installed) await db.query(await readFile(new URL("../../supabase/migrations/20261031100209_b009_bank_match_decisions.sql",import.meta.url),"utf8"));
   const coded = (await db.query<{present:boolean}>(`SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='b009_decisions_reason_code') AS present`)).rows[0].present;
   if (!coded) await db.query(await readFile(new URL("../../supabase/migrations/20261031100225_b009_decision_reason_codes.sql",import.meta.url),"utf8"));
+  await db.query(await readFile(new URL("../../supabase/migrations/20261104120400_b009_bank_match_owner.sql",import.meta.url),"utf8"));
   const objects = (await db.query(`SELECT to_regclass('app.b009_decisions') IS NOT NULL AS decisions,to_regprocedure('app.b009_direct_write_guard()') IS NOT NULL AS guard,
     (SELECT count(*)::int FROM pg_trigger WHERE tgname IN ('b009_import_guard','b009_transaction_guard','b009_suggestion_guard','b009_payment_insert_guard','b009_payment_guard') AND NOT tgisinternal) AS guards`)).rows[0];
   assert.deepEqual(objects,{decisions:true,guard:true,guards:5});
@@ -168,6 +169,14 @@ test("import, decisions, privilege and concurrent payment matching", async () =>
   assert.equal((await db.query(`SELECT status::text FROM payments WHERE id=$1`,[newPayment])).rows[0].status,"submitted");
   await assert.rejects(db.query(`UPDATE app.b009_decisions SET reason='changed' WHERE suggestion_id=$1`,[suggested.id]),(e:unknown)=>(e as {code?:string}).code==="42501");
   await assert.rejects(db.query(`TRUNCATE app.b009_decisions`),(e:unknown)=>(e as {code?:string}).code==="42501");
+  await db.query("BEGIN"); await db.query("SET LOCAL ROLE authenticated");
+  await db.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claim.role','authenticated',true)`,[USERS.admin]);
+  await assert.rejects(db.query(`UPDATE bank_match_suggestions SET score=score WHERE id=$1`,[suggested.id]),(e:unknown)=>{
+    const error = e as { code?: string; message?: string };
+    return error.code === "42501" && (error.message ?? "").includes("audited server path");
+  });
+  await db.query("ROLLBACK");
+  await db.query(`UPDATE bank_match_suggestions SET score=score WHERE id=$1`,[suggested.id]);
   await db.query("BEGIN"); await db.query("SET LOCAL ROLE authenticated");
   await assert.rejects(db.query(`SELECT * FROM app.b009_decisions`),(e:unknown)=>(e as {code?:string}).code==="42501"); await db.query("ROLLBACK");
   const unit2 = (await db.query<{id:string}>(`INSERT INTO units(org_id,property_id,label) VALUES ($1,$2,'B009 race') RETURNING id::text`,[ORG_ID,property])).rows[0].id;
