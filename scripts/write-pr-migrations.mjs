@@ -290,6 +290,10 @@ const added = {
     addOnly: false,
     reason: "Replaces the invitations audit trigger function; no table/column change; old Worker compatible.",
   },
+  "supabase/migrations/20261104120400_b009_bank_match_owner.sql": {
+    addOnly: false,
+    reason: "Bank-match direct-write guard trusts only the table-owner login without role switch; no table/column change; old Worker compatible.",
+  },
 };
 
 const functions = [
