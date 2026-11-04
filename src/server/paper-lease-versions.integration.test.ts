@@ -301,6 +301,7 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
     assert.equal(second.supersedes_id, firstId);
     assert.equal(second.uploaded_by, admin.userId);
     assert.equal(second.size_bytes, String(bytes.length));
+    assert.ok(second.file_id);
     assert.deepEqual(first.content, bytes);
     assert.deepEqual(second.content, bytes);
 

@@ -15,9 +15,11 @@ import { resetAndSeed } from './seed';
 import type { Session } from './types';
 
 disposableDbUrl(process.env.DATABASE_URL,process.env.CONDOLA_RLS_DISPOSABLE);
+const previousTenantPdf = process.env.TENANT_SIGNED_PDF_ENABLED;
+process.env.TENANT_SIGNED_PDF_ENABLED = "true";
 let clone:Awaited<ReturnType<typeof cloneTestDatabase>>;
 test.before(async()=>{clone=await cloneTestDatabase();const keys=['DEMO_MODE','ID_DOC_ENCRYPTION_KEY','ID_DOC_HMAC_KEY','ID_DOC_SIGNING_SECRET','CRON_SECRET'] as const;const saved=Object.fromEntries(keys.map(k=>[k,process.env[k]]));try{process.env.DEMO_MODE='true';for(const k of keys.slice(1))process.env[k]=randomBytes(32).toString('hex');await resetAndSeed();}finally{for(const k of keys){const v=saved[k];if(v===undefined)delete process.env[k];else process.env[k]=v;}}});
-test.after(async()=>{await clone?.cleanup();});
+test.after(async()=>{if(previousTenantPdf===undefined)delete process.env.TENANT_SIGNED_PDF_ENABLED;else process.env.TENANT_SIGNED_PDF_ENABLED=previousTenantPdf;await clone?.cleanup();});
 
 async function tenant(org=ORG_ID) {
  const userId=randomUUID(),sessionId=randomUUID(),consent=buildStoredConsent('signup');

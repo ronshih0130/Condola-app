@@ -30,7 +30,7 @@ GRANT EXECUTE ON FUNCTION app.tenant_signed_pdf_readable(uuid, uuid) TO authenti
 -- Normal callers cannot modify or delete individual versions. Preserve existing FK
 -- cascades only when an actual parent was deleted; database owners can bypass
 -- triggers, so this is not a claim of universal or indefinite retention.
-CREATE FUNCTION app.guard_paper_lease_version_delete() RETURNS trigger
+CREATE OR REPLACE FUNCTION app.guard_paper_lease_version_delete() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
 BEGIN
   IF TG_OP = 'DELETE' AND pg_trigger_depth() > 1 AND (
@@ -44,6 +44,7 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.guard_paper_lease_version_delete() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION app.guard_paper_lease_version_delete() TO service_role;
+DROP TRIGGER IF EXISTS guard_paper_lease_version_delete ON public.lease_signed_pdfs;
 CREATE TRIGGER guard_paper_lease_version_delete
   BEFORE UPDATE OR DELETE ON public.lease_signed_pdfs
   FOR EACH ROW EXECUTE FUNCTION app.guard_paper_lease_version_delete();

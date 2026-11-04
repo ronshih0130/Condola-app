@@ -4,15 +4,17 @@ For an independent QA review. Notes only. This file does not change product code
 
 ## Compare range
 
-Base (exclusive, and the tree diff's left side): `ecdb26cd66b23eb5d96b6d4938c86e630d308c1b`
+The range includes `ecdb26c`.
 
-Tip: `a396d033684e93329dfcc823b139a542982e28fc`
+Left (parent of `ecdb26c`): `5cb1845f6739734398f5f7e37f75c1333f0c338a`
 
-`ecdb26c` is an ancestor of `a396d03`. The base commit is CAP-M-02 paper current-version marking and replacement reason/history (`20261030151500`, staff signed-PDF route). The range is what landed after that baseline through the delivery-scope and committed-audit fix.
+Right: `a396d033684e93329dfcc823b139a542982e28fc`
+
+`ecdb26cd66b23eb5d96b6d4938c86e630d308c1b` is CAP-M-02: current-version marking, replacement reason/history, migration `20261030151500`, and the staff signed-PDF route. Later commits in the range add the tenant route, download audit, and `20261031100204`.
 
 ```
-git diff ecdb26cd66b23eb5d96b6d4938c86e630d308c1b a396d033684e93329dfcc823b139a542982e28fc -- <files below>
-git log --oneline ecdb26cd66b23eb5d96b6d4938c86e630d308c1b..a396d033684e93329dfcc823b139a542982e28fc
+git diff 5cb1845f6739734398f5f7e37f75c1333f0c338a a396d033684e93329dfcc823b139a542982e28fc -- <files below>
+git log --oneline 5cb1845f6739734398f5f7e37f75c1333f0c338a..a396d033684e93329dfcc823b139a542982e28fc
 ```
 
 ## File list
@@ -20,28 +22,29 @@ git log --oneline ecdb26cd66b23eb5d96b6d4938c86e630d308c1b..a396d033684e93329dfc
 | Status | Path |
 |---|---|
 | A | `supabase/migrations/20261030151400_tenant_signed_pdf_read.sql` |
-| M | `supabase/migrations/20261030151500_paper_lease_versions.sql` |
+| A | `supabase/migrations/20261030151500_paper_lease_versions.sql` |
 | A | `supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql` |
+| A | `src/app/m/leases/[id]/signed/[pdfId]/route.ts` |
 | A | `src/app/t/lease/signed/[pdfId]/route.ts` |
 | M | `src/app/t/lease/page.tsx` |
 | M | `src/server/queries.ts` |
 | M | `src/server/audit.ts` |
 | A | `src/server/tenant-signed-pdf-download.ts` |
 | A | `src/server/tenant-signed-pdf-rules.ts` |
-| M | `src/server/paper-lease-versions.ts` |
-| M | `src/server/paper-lease-versions-panel.tsx` |
-| M | `src/server/paper-lease-versions-rules.ts` |
+| A | `src/server/paper-lease-versions.ts` |
+| A | `src/server/paper-lease-versions-panel.tsx` |
+| A | `src/server/paper-lease-versions-rules.ts` |
 | A | `src/i18n/tenant-signed-pdf.ts` |
-| M | `src/i18n/paper-lease-versions.ts` |
+| A | `src/i18n/paper-lease-versions.ts` |
 | A | `src/server/tenant-signed-pdf.integration.test.ts` |
 | A | `src/server/tenant-signed-pdf-download.test.ts` |
 | A | `src/server/tenant-signed-pdf-download-audit.integration.test.ts` |
 | A | `src/server/tenant-signed-pdf-rules.test.ts` |
 | A | `src/server/b004-paper-delivery.integration.test.ts` |
-| M | `src/server/paper-lease-versions.integration.test.ts` |
-| M | `src/server/paper-lease-versions-rules.test.ts` |
+| A | `src/server/paper-lease-versions.integration.test.ts` |
+| A | `src/server/paper-lease-versions-rules.test.ts` |
 
-Unchanged in this range, same blob `46dd19a023dece9f4b5a20c5a5ccc335966fe4b7` at both ends: `src/app/m/leases/[id]/signed/[pdfId]/route.ts`. It is the CAP-M-02 staff route from `ecdb26c`, not a new file inside the range.
+`src/app/m/leases/[id]/signed/[pdfId]/route.ts` is added by `ecdb26c` and is inside this compare. At `73a7d398` that route still had no role allowlist and no download audit. The QA fix adds both.
 
 ## Migrations
 
@@ -61,7 +64,7 @@ Staging: all three filenames were applied on 2026-10-30. They are not pending ap
 
 `src/server/queries.ts` adds the signed-PDF list and single-file read used by that route. The read is the RLS-backed fetch the download helper requires.
 
-The staff route above is outside the diff. It remains the manager download path from `ecdb26c`.
+`src/app/m/leases/[id]/signed/[pdfId]/route.ts` is added in `ecdb26c`, which this compare includes. In that range it checks `session.kind === "staff"` and does not write a download audit. The QA fix adds the admin/manager allowlist and a `signed_pdf_downloaded` audit row.
 
 ## Audit
 
@@ -69,7 +72,7 @@ The staff route above is outside the diff. It remains the manager download path 
 
 `src/server/audit.ts` adds `writeSignedPdfDownload`. It inserts `audit_log` as `service_role` because `authenticated` cannot insert there. The row is `event_type = signed_pdf_downloaded`, `table_name = lease_signed_pdfs`, `actor_role = tenant`, with `lease_id` in `new_row` and the request id.
 
-`src/server/tenant-signed-pdf-rules.ts` keeps the app constant `TENANT_SIGNED_PDF_ENABLED = true` and still requires the organization flag `tenant_signed_pdf === true`. The deployment switch for paper versions stays `PAPER_LEASE_VERSIONS_ENABLED` exactly `true` plus `paper_lease_versions === true`. Both organization flags and the platform setting stay off unless a test turns them on. `ops/flags.yaml` keeps `PAPER_LEASE_VERSIONS_ENABLED` default false.
+In this range `src/server/tenant-signed-pdf-rules.ts` hard-codes `TENANT_SIGNED_PDF_ENABLED = true` and still requires `tenant_signed_pdf === true`. The QA fix makes that switch the exact string `true` and otherwise OFF. The deployment switch for paper versions stays `PAPER_LEASE_VERSIONS_ENABLED` exactly `true` plus `paper_lease_versions === true`. Both organization flags and the platform setting stay off unless a test turns them on. `ops/flags.yaml` keeps `PAPER_LEASE_VERSIONS_ENABLED` default false.
 
 ## 100204 and version behavior
 

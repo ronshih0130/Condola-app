@@ -8,6 +8,8 @@ import { tenantSignedLeasePdf } from "./queries";
 import { tenantSignedPdfDownload } from "./tenant-signed-pdf-download";
 import type { Session } from "./types";
 
+process.env.TENANT_SIGNED_PDF_ENABLED = "true";
+
 // Run against seeded local Postgres:
 // DATABASE_URL=postgres://... npx tsx --test --test-concurrency=1 \
 //   src/server/tenant-signed-pdf-download-audit.integration.test.ts

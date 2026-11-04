@@ -156,11 +156,11 @@ const added = {
   },
   "supabase/migrations/20261030151400_tenant_signed_pdf_read.sql": {
     addOnly: false,
-    reason: "Adds a tenant read policy and a gated helper with execution privileges restricted to selected roles.",
+    reason: "Adds a tenant read policy and a gated helper with execution privileges restricted to selected roles. Re-run keeps that policy and helper.",
   },
   "supabase/migrations/20261030151500_paper_lease_versions.sql": {
     addOnly: false,
-    reason: "Adds unique, check and foreign-key constraints to signed PDFs and restricts execution of the audit trigger helper.",
+    reason: "Adds unique, check and foreign-key constraints to signed PDFs and restricts execution of the audit trigger helper. Re-run keeps those constraints and the helper.",
   },
   "supabase/migrations/20261030151600_esign_retention_lifecycle.sql": {
     addOnly: false,
@@ -181,6 +181,10 @@ const added = {
   "supabase/migrations/20261031100218_b015_tenant_directory_edit.sql": {
     addOnly: false,
     reason: "Adds a default-OFF private hash-only contact-edit command table, scoped cascade constraints, immutable and deferred authorization guards, and fixed service-only edit/view/status/close/final-check gateways with restricted grants. No legacy contact, login identity, historical source or financial rows are rewritten.",
+  },
+  "supabase/migrations/20261031100222_b004_reason_no_pii.sql": {
+    addOnly: false,
+    reason: "Rejects email-shaped and long digit-run replacement reasons and records only a safe reason on the replacement audit. Existing safe reasons stay. No column removed.",
   },
   "supabase/migrations/20261031100221_b013_owner_repair_override.sql": {
     addOnly: false,
@@ -236,7 +240,7 @@ const added = {
   },
   "supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql": {
     addOnly: false,
-    reason: "Replaces tenant PDF visibility helper and adds immutable-version mutation guards with controlled parent-cascade exceptions and privilege changes. No historical migration or contract text is changed.",
+    reason: "Replaces tenant PDF visibility helper and adds immutable-version mutation guards with controlled parent-cascade exceptions and privilege changes. Re-run keeps that helper and guard. No historical migration or contract text is changed.",
   },
   "supabase/migrations/20261031100203_b002_retention_boundary.sql": {
     addOnly: false,

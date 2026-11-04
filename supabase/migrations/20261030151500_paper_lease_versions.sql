@@ -1,24 +1,39 @@
 -- Additive paper lease history. Existing INSERTs remain valid.
+-- Re-run keeps the same columns, constraints, index, function and trigger.
 ALTER TABLE lease_signed_pdfs
-  ADD COLUMN uploaded_by uuid REFERENCES auth.users(id),
-  ADD COLUMN replace_reason text,
-  ADD COLUMN supersedes_id uuid,
-  ADD CONSTRAINT lease_signed_pdfs_org_lease_id_key
-    UNIQUE (org_id, lease_id, id),
-  ADD CONSTRAINT lease_signed_pdfs_replace_reason_length
-    CHECK (replace_reason IS NULL OR char_length(btrim(replace_reason)) BETWEEN 1 AND 500),
-  ADD CONSTRAINT lease_signed_pdfs_supersedes_reason
-    CHECK (supersedes_id IS NULL OR replace_reason IS NOT NULL),
-  ADD CONSTRAINT lease_signed_pdfs_supersedes_fk
-    FOREIGN KEY (org_id, lease_id, supersedes_id)
-    REFERENCES lease_signed_pdfs(org_id, lease_id, id);
+  ADD COLUMN IF NOT EXISTS uploaded_by uuid REFERENCES auth.users(id),
+  ADD COLUMN IF NOT EXISTS replace_reason text,
+  ADD COLUMN IF NOT EXISTS supersedes_id uuid;
 
-CREATE INDEX lease_signed_pdfs_version_order_idx
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'lease_signed_pdfs_org_lease_id_key') THEN
+    ALTER TABLE lease_signed_pdfs
+      ADD CONSTRAINT lease_signed_pdfs_org_lease_id_key UNIQUE (org_id, lease_id, id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'lease_signed_pdfs_replace_reason_length') THEN
+    ALTER TABLE lease_signed_pdfs
+      ADD CONSTRAINT lease_signed_pdfs_replace_reason_length
+      CHECK (replace_reason IS NULL OR char_length(btrim(replace_reason)) BETWEEN 1 AND 500);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'lease_signed_pdfs_supersedes_reason') THEN
+    ALTER TABLE lease_signed_pdfs
+      ADD CONSTRAINT lease_signed_pdfs_supersedes_reason
+      CHECK (supersedes_id IS NULL OR replace_reason IS NOT NULL);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'lease_signed_pdfs_supersedes_fk') THEN
+    ALTER TABLE lease_signed_pdfs
+      ADD CONSTRAINT lease_signed_pdfs_supersedes_fk
+      FOREIGN KEY (org_id, lease_id, supersedes_id)
+      REFERENCES lease_signed_pdfs(org_id, lease_id, id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS lease_signed_pdfs_version_order_idx
   ON lease_signed_pdfs (org_id, lease_id, created_at DESC, id DESC);
 
 -- The trigger writes atomically with replacements, including direct DB inserts,
 -- without granting authenticated INSERT access to the audit ledger.
-CREATE FUNCTION app.audit_paper_lease_replaced()
+CREATE OR REPLACE FUNCTION app.audit_paper_lease_replaced()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -60,6 +75,7 @@ $$;
 REVOKE EXECUTE ON FUNCTION app.audit_paper_lease_replaced()
   FROM PUBLIC, anon, authenticated;
 
+DROP TRIGGER IF EXISTS audit_paper_lease_replaced ON public.lease_signed_pdfs;
 CREATE TRIGGER audit_paper_lease_replaced
   AFTER INSERT ON public.lease_signed_pdfs
   FOR EACH ROW

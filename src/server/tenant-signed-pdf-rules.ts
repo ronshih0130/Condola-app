@@ -1,5 +1,9 @@
-/** App-level gate on; rollout is controlled by platform_settings tenant_signed_pdf (global) + organizations.feature_flags.tenant_signed_pdf (per org), both enforced in RLS (20261030151400). */
-export const TENANT_SIGNED_PDF_ENABLED = true;
+/** Deployment switch. Default OFF unless the value is exactly the string "true". Org and platform_settings gates still apply. */
+export function tenantSignedPdfGloballyEnabled(value: unknown = process.env.TENANT_SIGNED_PDF_ENABLED): boolean {
+  return value === "true";
+}
+
+export const TENANT_SIGNED_PDF_ENABLED = tenantSignedPdfGloballyEnabled();
 
 export function tenantSignedPdfOn(killSwitch: boolean, featureFlags: unknown): boolean {
   if (

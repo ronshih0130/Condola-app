@@ -3,7 +3,7 @@ import { consentCoversCurrent } from './consent';
 import { tx } from './db';
 import { logServerError } from './errors';
 import { isUuid } from './repair-rules';
-import { TENANT_SIGNED_PDF_ENABLED } from './tenant-signed-pdf-rules';
+import { tenantSignedPdfGloballyEnabled } from './tenant-signed-pdf-rules';
 import type { Session } from './types';
 
 export type TenantEndedLeaseSummary = {
@@ -47,7 +47,7 @@ export async function tenantEndedLeaseDetail(s:Session,leaseId:string):Promise<T
  try{return await tx(s.userId,async c=>{
   const found=await c.query<SummaryRow & {pdf_readable:boolean}>(`SELECT ${summarySelect},app.tenant_signed_pdf_readable(l.org_id,l.id) AS pdf_readable ${summaryJoins} WHERE ${context} AND ${eligibleLease} AND l.id=$6::uuid`,[...args(s),leaseId]);
   const row=found.rows[0];if(!row)return unavailable;
-  if(!TENANT_SIGNED_PDF_ENABLED||row.pdf_readable!==true)return {state:'ready',lease:summary(row),pdfAvailability:'unavailable',pdfs:[]};
+  if(!tenantSignedPdfGloballyEnabled()||row.pdf_readable!==true)return {state:'ready',lease:summary(row),pdfAvailability:'unavailable',pdfs:[]};
   const files=await c.query<{id:string;current:boolean;uploaded_at:string;size_bytes:number}>(`WITH ranked AS (
    SELECT pdf.id,pdf.created_at,octet_length(pdf.content) AS size_bytes,coalesce(pdf.file_id=l.document_file_id,false) AS matches_pointer,
      bool_or(coalesce(pdf.file_id=l.document_file_id,false)) OVER () AS has_current,row_number() OVER(ORDER BY pdf.created_at DESC,pdf.id DESC) AS newest
@@ -64,7 +64,7 @@ export async function tenantEndedLeaseDetail(s:Session,leaseId:string):Promise<T
 
 /** One authenticated SELECT binds the current tenant, exact ended lease and PDF bytes. */
 export async function tenantEndedLeaseSignedPdf(s:Session,leaseId:string,pdfId:string):Promise<TenantEndedSignedPdf|null> {
- if(!valid(s)||!TENANT_SIGNED_PDF_ENABLED||typeof leaseId!=='string'||!isUuid(leaseId)||typeof pdfId!=='string'||!isUuid(pdfId))return null;
+ if(!valid(s)||!tenantSignedPdfGloballyEnabled()||typeof leaseId!=='string'||!isUuid(leaseId)||typeof pdfId!=='string'||!isUuid(pdfId))return null;
  return tx(s.userId,async c=>{
   const q=await c.query<TenantEndedSignedPdf>(`SELECT pdf.id::text,pdf.content,octet_length(pdf.content) AS size_bytes,'signed-lease-'||pdf.id::text||'.pdf' AS file_name FROM public.lease_signed_pdfs pdf JOIN public.leases l ON l.org_id=pdf.org_id AND l.id=pdf.lease_id JOIN public.organizations o ON o.id=l.org_id WHERE ${context} AND ${eligibleLease} AND l.id=$6::uuid AND pdf.id=$7::uuid AND app.tenant_signed_pdf_readable(pdf.org_id,pdf.lease_id) AND app.is_lease_tenant(pdf.lease_id)`,[...args(s),leaseId,pdfId]);return q.rows[0]??null;
  },{orgId:s.orgId,environment:s.environment},{readOnly:true});

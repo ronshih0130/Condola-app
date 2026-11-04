@@ -53,6 +53,10 @@ test("first upload needs no reason; replacements require trimmed 1..500 characte
   assert.deepEqual(validatePaperLeaseReason(true, " x "), { ok: true, value: "x" });
   assert.equal(validatePaperLeaseReason(true, ` ${"a".repeat(500)} `).ok, true);
   assert.equal(validatePaperLeaseReason(true, "a".repeat(501)).ok, false);
+  assert.equal(validatePaperLeaseReason(true, "user@example.com").ok, false);
+  assert.equal(validatePaperLeaseReason(true, "0912345678").ok, false);
+  assert.equal(validatePaperLeaseReason(true, "0912-345-678").ok, false);
+  assert.deepEqual(validatePaperLeaseReason(true, "更正簽名"), { ok: true, value: "更正簽名" });
   assert.equal(validatePaperLeaseReason(false, "a".repeat(501)).ok, false);
   assert.equal(validatePaperLeaseReason(true, "𠮷".repeat(500)).ok, true);
   assert.equal(validatePaperLeaseReason(true, "𠮷".repeat(501)).ok, false);

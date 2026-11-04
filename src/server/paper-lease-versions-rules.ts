@@ -16,11 +16,16 @@ export type PaperLeaseReason =
   | { ok: true; value: string | null }
   | { ok: false };
 
+/** Email addresses and six-or-more digit runs are rejected so they cannot be copied into audit. */
+export function paperLeaseReasonHasPii(value: string): boolean {
+  return /@/.test(value) || /[0-9](?:[^0-9]{0,3}[0-9]){5}/.test(value);
+}
+
 /** Count Unicode characters as Postgres char_length does. Store only trimmed text. */
 export function validatePaperLeaseReason(replacing: boolean, input: unknown): PaperLeaseReason {
   if (input != null && typeof input !== "string") return { ok: false };
   const value = typeof input === "string" ? input.trim() : "";
   const length = Array.from(value).length;
-  if (length > 500 || (replacing && length === 0)) return { ok: false };
+  if (length > 500 || (replacing && length === 0) || paperLeaseReasonHasPii(value)) return { ok: false };
   return { ok: true, value: value || null };
 }

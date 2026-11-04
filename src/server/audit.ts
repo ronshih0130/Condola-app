@@ -58,3 +58,25 @@ export async function writeSignedPdfDownload(event: SignedPdfDownloadAudit) {
     ],
   ));
 }
+
+/** Staff download. Reason is a fixed code. The PDF name and replacement text are not stored. */
+export async function writeStaffSignedPdfDownload(event: SignedPdfDownloadAudit & { actorRole: "admin" | "manager" }) {
+  await svc(event.userId, (client) => client.query(
+    `INSERT INTO audit_log
+       (org_id, actor_user_id, actor_role, table_name, row_id, action,
+        event_type, new_row, reason, request_id)
+     VALUES ($1, $2, $3, 'lease_signed_pdfs', $4, 'insert',
+             'signed_pdf_downloaded', $5::jsonb, 'signed_pdf_downloaded', $6)`,
+    [
+      event.orgId,
+      event.userId,
+      event.actorRole,
+      event.pdfId,
+      JSON.stringify({
+        event: "signed_pdf_downloaded",
+        lease_id: event.leaseId,
+      }),
+      event.requestId,
+    ],
+  ));
+}

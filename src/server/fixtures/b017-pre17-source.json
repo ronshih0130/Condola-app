@@ -276,11 +276,11 @@
     },
     {
       "file": "supabase/migrations/20261030151400_tenant_signed_pdf_read.sql",
-      "sha256": "3c72963324101b620e816d00f580f2abc41b32ee039be25436cddeaff41a4b62"
+      "sha256": "c714b0c59d76df7874cb559fe8ac91636d8ae6c4753326d7379d08c3fe197b55"
     },
     {
       "file": "supabase/migrations/20261030151500_paper_lease_versions.sql",
-      "sha256": "eaf3cf7f5804706f92e3043d62a6aeb06ff6024f0a911cec4435cae36a1d735e"
+      "sha256": "79170019ccd45523778085998a9231c2ce47fa0f8eb1091edcb8a17e2f8e9988"
     },
     {
       "file": "supabase/migrations/20261030151600_esign_retention_lifecycle.sql",
@@ -316,7 +316,7 @@
     },
     {
       "file": "supabase/migrations/20261031100204_b004_paper_delivery_boundary.sql",
-      "sha256": "aa3ed79c074a3640672fd9e0383e45d48dfc4c30e399b761e262ca906447837d"
+      "sha256": "131979fdfb4e658f4c7a2cf89b0dd0d36b8720ab1a5fc00a3f0f05fd3020821d"
     },
     {
       "file": "supabase/migrations/20261031100205_b007_deposit_rules.sql",

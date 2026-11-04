@@ -15,7 +15,7 @@ import {
 import { rentUtilityDueMinor, tenantBillLines } from "./money";
 import type { Session } from "./types";
 import {
-  TENANT_SIGNED_PDF_ENABLED,
+  tenantSignedPdfGloballyEnabled,
   tenantSignedPdfOn,
 } from "./tenant-signed-pdf-rules";
 
@@ -1909,14 +1909,14 @@ export async function tenantSignedLeasePdfs(
   session: Session,
   leaseId: string,
 ): Promise<(TenantSignedLeasePdfSummary & { current: boolean })[]> {
-  if (session.kind !== "tenant" || !TENANT_SIGNED_PDF_ENABLED) return [];
+  if (session.kind !== "tenant" || !tenantSignedPdfGloballyEnabled()) return [];
   return tx(session.userId, async (client) => {
     const gate = await maybe<{ enabled: boolean }>(
       client,
       `SELECT app.tenant_signed_pdf_readable($1::uuid, $2::uuid) AS enabled`,
       [session.orgId, leaseId],
     );
-    if (!tenantSignedPdfOn(TENANT_SIGNED_PDF_ENABLED, {
+    if (!tenantSignedPdfOn(tenantSignedPdfGloballyEnabled(), {
       tenant_signed_pdf: gate?.enabled,
     })) return [];
     return many<TenantSignedLeasePdfSummary & { current: boolean }>(
@@ -1932,7 +1932,7 @@ export async function tenantSignedLeasePdf(
   leaseId: string,
   pdfId: string,
 ) {
-  if (session.kind !== "tenant" || !TENANT_SIGNED_PDF_ENABLED) return null;
+  if (session.kind !== "tenant" || !tenantSignedPdfGloballyEnabled()) return null;
   return tx(session.userId, async (client) =>
     maybe<TenantSignedLeasePdfSummary & { content: Buffer; file_name: string }>(
       client,

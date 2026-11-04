@@ -7,7 +7,10 @@
 -- DB-layer one-click kill: DELETE FROM public.platform_settings
 -- WHERE key = 'tenant_signed_pdf'; an absent row means off.
 -- Scope the flag result to the supplied organization and a lease the caller owns.
-CREATE FUNCTION app.tenant_signed_pdf_readable(p_org uuid, p_lease uuid) RETURNS boolean
+-- Re-run is safe. A later migration replaces this helper; running this file
+-- again before that migration restores this body, and the later file restores
+-- the final body. The policy and grants match the first apply.
+CREATE OR REPLACE FUNCTION app.tenant_signed_pdf_readable(p_org uuid, p_lease uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog
 AS $$
@@ -36,6 +39,7 @@ REVOKE ALL ON FUNCTION app.tenant_signed_pdf_readable(uuid, uuid) FROM PUBLIC, a
 GRANT EXECUTE ON FUNCTION app.tenant_signed_pdf_readable(uuid, uuid)
   TO authenticated, service_role;
 
+DROP POLICY IF EXISTS tenant_read_signed_pdf ON public.lease_signed_pdfs;
 CREATE POLICY tenant_read_signed_pdf
   ON public.lease_signed_pdfs FOR SELECT TO authenticated
   USING (app.tenant_signed_pdf_readable(org_id, lease_id));

@@ -1,7 +1,7 @@
 import { many, tx } from "./db";
 import { FlowError } from "./errors";
 import {
-  PAPER_LEASE_VERSIONS_ENABLED,
+  paperLeaseVersionsGlobalEnabled,
   paperLeaseVersionsOn,
   validatePaperLeaseReason,
 } from "./paper-lease-versions-rules";
@@ -17,7 +17,7 @@ type PreparedVersion =
 export async function paperLeaseVersionsEnabled(
   client: Client,
   orgId: string,
-  killSwitch: boolean = PAPER_LEASE_VERSIONS_ENABLED,
+  killSwitch: boolean = paperLeaseVersionsGlobalEnabled(process.env.PAPER_LEASE_VERSIONS_ENABLED),
 ) {
   // No org query while globally disabled, including before the migration exists.
   if (killSwitch !== true) return false;
@@ -40,7 +40,7 @@ export async function preparePaperLeaseVersion(
   session: Session,
   leaseId: string,
   reason: unknown,
-  killSwitch: boolean = PAPER_LEASE_VERSIONS_ENABLED,
+  killSwitch: boolean = paperLeaseVersionsGlobalEnabled(process.env.PAPER_LEASE_VERSIONS_ENABLED),
 ): Promise<PreparedVersion> {
   if (!(await paperLeaseVersionsEnabled(client, session.orgId, killSwitch))) return { enabled: false };
   if (session.kind !== "staff" || !["admin", "manager"].includes(session.role ?? "")) {
@@ -120,7 +120,7 @@ export async function listPaperLeaseVersions(
   session: Session,
   leaseId: string,
 ): Promise<PaperLeaseVersion[] | null> {
-  if (!PAPER_LEASE_VERSIONS_ENABLED || session.kind !== "staff") return null;
+  if (!paperLeaseVersionsGlobalEnabled(process.env.PAPER_LEASE_VERSIONS_ENABLED) || session.kind !== "staff") return null;
   return tx(session.userId, async (client) => {
     if (!(await paperLeaseVersionsEnabled(client, session.orgId))) return null;
     return many<PaperLeaseVersion>(
@@ -155,7 +155,7 @@ export async function listPaperLeaseVersions(
 }
 
 export async function paperLeaseVersionPdf(session: Session, leaseId: string, pdfId: string) {
-  if (!PAPER_LEASE_VERSIONS_ENABLED || session.kind !== "staff") return null;
+  if (!paperLeaseVersionsGlobalEnabled(process.env.PAPER_LEASE_VERSIONS_ENABLED) || session.kind !== "staff") return null;
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuid.test(leaseId) || !uuid.test(pdfId)) return null;
   return tx(session.userId, async (client) => {

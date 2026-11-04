@@ -8,8 +8,10 @@ No new feature in this note.
 - Staging Worker at notes commit `3fd94e0` is `efe4a399`. This notes-fix commit does not deploy.
 - Flags stay OFF. `PAPER_LEASE_VERSIONS_ENABLED` must be absent or any value other than the string `true`. `platform_settings` key `tenant_signed_pdf` stays absent. Organization flags `paper_lease_versions` and `tenant_signed_pdf` stay unset. `ops/flags.yaml` keeps `PAPER_LEASE_VERSIONS_ENABLED` default false.
 - The `b888ccd` skip is UNAPPROVED. It is the lost identity-document upgrade of `20261022180000_tenant_id_check.sql`, not a paper-delivery result, and it is not an approved waiver.
-- Gate counts are not copied from `3fd94e0` or `75221482`. Full gate on `8c615d368216687faf92d68b7f23d58cd0623205`: unit 651 pass, 0 fail, 0 skip; RLS 476 pass, 0 fail, 1 UNAPPROVED `b888ccd` skip.
-- Still blocked: the independent Class B verdict and calling the item `done`. Production is out of scope.
+- Staff signed-PDF route at `73a7d398` had no role allowlist and no download audit. That gap is closed in the QA-fix commit: admin and manager only, and a `signed_pdf_downloaded` audit row whose reason is the fixed code.
+- `TENANT_SIGNED_PDF_ENABLED` is no longer hard-coded true. It is on only when the environment value is exactly `true`. Default is OFF.
+- Gate counts are not copied from `3fd94e0`, `75221482`, or `73a7d398`. The counts for this QA fix are written with that commit's SHA and the raw log under this directory after `scripts/gate.sh`.
+- Still blocked: old-code/rollback proof on staging, the independent Class B verdict, and calling the item `done`. Production is out of scope.
 
 Functional compare for CAP-M-02 and CAP-T-02: [qa-full-diff.md](qa-full-diff.md).
 

@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TENANT_SIGNED_PDF_ENABLED, tenantSignedPdfOn } from "./tenant-signed-pdf-rules";
+import { TENANT_SIGNED_PDF_ENABLED, tenantSignedPdfGloballyEnabled, tenantSignedPdfOn } from "./tenant-signed-pdf-rules";
 
-test("app gate on; org flag still required", () => {
-  assert.equal(TENANT_SIGNED_PDF_ENABLED, true);
-  assert.equal(tenantSignedPdfOn(TENANT_SIGNED_PDF_ENABLED, {}), false);
+test("deployment switch defaults off and still requires the org flag", () => {
+  assert.equal(tenantSignedPdfGloballyEnabled(undefined), false);
+  assert.equal(tenantSignedPdfGloballyEnabled("true"), true);
+  assert.equal(tenantSignedPdfGloballyEnabled("TRUE"), false);
+  assert.equal(TENANT_SIGNED_PDF_ENABLED, tenantSignedPdfGloballyEnabled());
+  assert.equal(tenantSignedPdfOn(false, {}), false);
   assert.equal(tenantSignedPdfOn(false, { tenant_signed_pdf: true }), false);
   assert.equal(tenantSignedPdfOn(true, { tenant_signed_pdf: true }), true);
 });
