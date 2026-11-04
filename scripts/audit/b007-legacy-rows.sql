@@ -18,9 +18,9 @@ WITH basis AS (
         coalesce(deposit_months, deposit_amount_minor::numeric / nullif(monthly, 0), 0) > 2
         AND btrim(coalesce(deposit_override_reason, '')) = ''),
       ('partial_override',
-        (btrim(coalesce(deposit_override_reason, '')) <> ''
+        (deposit_override_reason IS NOT NULL
           OR deposit_overridden_by IS NOT NULL OR deposit_overridden_at IS NOT NULL)
-        AND NOT (btrim(coalesce(deposit_override_reason, '')) <> ''
+        AND NOT (deposit_override_reason IS NOT NULL
           AND deposit_overridden_by IS NOT NULL AND deposit_overridden_at IS NOT NULL))
   ) f(finding, matches)
   WHERE f.matches

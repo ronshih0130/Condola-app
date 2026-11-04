@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { FlowError } from "./errors";
 import { Client } from "pg";
 import { USERS } from "./ids";
 import { disposableDbUrl } from "./test-disposable-db";
@@ -401,6 +403,111 @@ async function b007HeldRow(row: "setting" | "organization") {
     await Promise.all([setup.end(), holder.end(), writer.end()]);
   }
 }
+
+test("B007 fix: exhausted setting lock retries return 55P03 and createLease maps errors.busy", { timeout: 10_000 }, async () => {
+  const { session, property } = await b007DomainFixture("B007 exhausted lock fixture");
+  const holder = new Client({ connectionString: url });
+  const writer = new Client({ connectionString: url });
+  await Promise.all([holder.connect(), writer.connect()]);
+  let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+  let released = false;
+  let pending: Promise<unknown> | undefined;
+  try {
+    await writer.query("BEGIN");
+    await writer.query("SET LOCAL statement_timeout = '8s'");
+    await writer.query(`SELECT set_config('request.jwt.claim.sub',$1,true),
+      set_config('request.jwt.claim.role','authenticated',true),
+      set_config('app.active_org_id',$2,true),set_config('app.env','live',true)`,
+    [session.userId, session.orgId]);
+    await writer.query("SET LOCAL ROLE authenticated");
+    await holder.query("BEGIN");
+    await holder.query(`SELECT key FROM platform_settings WHERE key='deposit_rule_hints' FOR UPDATE`);
+    // A regression must fail within the test budget even if retries stop being bounded.
+    releaseTimer = setTimeout(() => {
+      released = true;
+      void holder.query("ROLLBACK").catch(() => {});
+    }, 8_500);
+    const started = Date.now();
+    const direct = assert.rejects(
+      writer.query(`INSERT INTO leases
+        (org_id,property_id,unit_id,target_room_id,status,start_date,currency,
+         rent_amount_minor,deposit_amount_minor,deposit_months)
+        SELECT r.org_id,u.property_id,r.unit_id,r.id,'draft','2032-01-01','USD',10000,20000,2
+        FROM rooms r JOIN units u ON u.id=r.unit_id WHERE r.id=$1`,
+      [property.roomIds[0]]),
+      (error: unknown) => (error as { code?: string }).code === "55P03",
+    );
+    const domain = assert.rejects(
+      createLease(session, {
+        roomId: property.roomIds[1], tenantName: "Busy fixture tenant",
+        tenantPhone: "0912000555", tenantEmail: "b007-busy@example.com", lineUserId: "",
+        startDate: "2032-01-01", endDate: "2032-12-31",
+        rentMajor: 100, depositMonths: 2, depositReason: "", dueDay: 5,
+        splitMethod: "even", periodStart: "2032-01-01", periodEnd: "2032-01-31",
+        billTotalMajor: null, usageKwh: null, rateMajor: null,
+        rateSource: "bill_average", overrideReason: "", subUsages: [],
+      }),
+      (error: unknown) => error instanceof FlowError && error.key === "errors.busy",
+    );
+    pending = Promise.allSettled([direct, domain]);
+    const results = await pending as PromiseSettledResult<void>[];
+    for (const result of results) {
+      if (result.status === "rejected") throw result.reason;
+    }
+    assert.equal(released, false, "both writes must fail while the holder still owns the lock");
+    assert.ok(Date.now() - started >= 6_000, "all three lock attempts must run");
+    assert.ok(Date.now() - started < 9_000, "exhausted retries must not hang");
+  } finally {
+    if (releaseTimer) clearTimeout(releaseTimer);
+    await holder.query("ROLLBACK").catch(() => {});
+    await pending?.catch(() => {});
+    await writer.query("ROLLBACK").catch(() => {});
+    await Promise.all([holder.end(), writer.end()]);
+  }
+});
+
+test("B007 fix: legacy audit SQL reports every finding category", async () => {
+  const sql = readFileSync(new URL("../../scripts/audit/b007-legacy-rows.sql", import.meta.url), "utf8");
+  await b007DirectFixture(async (client, { org, property, unit }) => {
+    await client.query(`ALTER TABLE leases DISABLE TRIGGER trg_lease_deposit_check`);
+    let ids: string[];
+    await client.query("SAVEPOINT b007_audit_fixture");
+    try {
+      ids = (await client.query<{ id: string }>(`INSERT INTO leases
+        (org_id,property_id,unit_id,target_unit_id,status,start_date,currency,
+         rent_amount_minor,deposit_amount_minor,deposit_months,
+         deposit_override_reason,deposit_overridden_by,deposit_overridden_at)
+        VALUES
+          ($1,$2,$3,$3,'draft','2026-01-01','USD',0,100,NULL,NULL,NULL,NULL),
+          ($1,$2,$3,$3,'draft','2026-01-01','USD',10000,15000,1,NULL,NULL,NULL),
+          ($1,$2,$3,$3,'draft','2026-01-01','USD',10000,30000,3,NULL,NULL,NULL),
+          ($1,$2,$3,$3,'draft','2026-01-01','USD',10000,10000,1,'x',$4,NULL)
+        RETURNING id::text`, [org, property, unit, USERS.admin])).rows.map(row => row.id);
+    } catch (error) {
+      await client.query("ROLLBACK TO SAVEPOINT b007_audit_fixture");
+      throw error;
+    } finally {
+      await client.query(`ALTER TABLE leases ENABLE TRIGGER trg_lease_deposit_check`);
+      await client.query("RELEASE SAVEPOINT b007_audit_fixture");
+    }
+    const rows = (await client.query<{
+      org_id: string; finding: string; affected_count: string; sample_ids: string[];
+    }>(sql)).rows.filter(row => row.org_id === org);
+    const expected = [
+      "zero_rent_positive_deposit",
+      "amount_months_mismatch",
+      "over_two_without_reason",
+      "partial_override",
+    ];
+    assert.deepEqual(rows.map(row => row.finding).sort(), [...expected].sort());
+    for (const [index, finding] of expected.entries()) {
+      const row = rows.find(row => row.finding === finding);
+      assert.ok(row, finding);
+      assert.equal(Number(row.affected_count), 1, finding);
+      assert.deepEqual(row.sample_ids, [ids[index]], finding);
+    }
+  });
+});
 
 test("B007 fix: platform setting FOR UPDATE holder commits after 500ms and lease write succeeds", async () => {
   await b007HeldRow("setting");

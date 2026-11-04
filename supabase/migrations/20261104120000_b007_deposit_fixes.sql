@@ -193,6 +193,15 @@ BEGIN
   IF v_outcome = 'block' AND NEW.status IN ('draft', 'pending_signature', 'active') THEN
     RAISE EXCEPTION 'deposit of % months exceeds cap of % months', round(v_months, 2), v_cap USING ERRCODE = 'check_violation';
   END IF;
+  -- Legacy overrides still record the effective rule, without evaluating its
+  -- regional cap, enforcement or payload while rollout is OFF.
+  IF NOT v_rule.regional_enabled AND v_outcome = 'overridden' THEN
+    SELECT (public.effective_rule(p.jurisdiction_id, NEW.org_id,
+      'deposit.max_months', NEW.start_date)).id
+      INTO v_rule.rule_id
+      FROM public.properties p
+     WHERE p.id = NEW.property_id AND p.org_id = NEW.org_id;
+  END IF;
   IF v_rule.rule_id IS NOT NULL THEN
     INSERT INTO public.rule_check_results
       (org_id, rule_id, entity_table, entity_id, outcome, observed, limit_value,
