@@ -38,7 +38,7 @@ BEGIN
 
       IF jsonb_typeof(j -> 'email') = 'string' THEN
         email := j ->> 'email';
-        IF email !~ '^[^@]?\*{3}(@.*)?$' THEN
+        IF email !~ '^[^@]?\*{3}@.*$' THEN
           at_position := strpos(email, '@');
           domain := CASE
             WHEN at_position > 0 THEN substr(email, at_position + 1)
@@ -47,12 +47,7 @@ BEGIN
           j := jsonb_set(
             j,
             '{email}',
-            to_jsonb(
-              CASE WHEN at_position > 0
-                THEN left(email, 1) || '***@' || domain
-                ELSE left(email, 1) || '***'
-              END
-            ),
+            to_jsonb(left(split_part(email, '@', 1), 1) || '***@' || domain),
             false
           );
         END IF;
