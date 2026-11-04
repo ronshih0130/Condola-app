@@ -1371,7 +1371,7 @@ ok 5 - provided PR9e privilege variant upgrades and preserves ordinary records
   duration_ms: 903.902312
   ...
 # Subtest: a database with the older 20261022180000 upgrades forward, then accepts the same file again
-ok 6 - a database with the older 20261022180000 upgrades forward, then accepts the same file again # SKIP Historical commit b888ccd is lost; this skip is UNAPPROVED
+ok 6 - a database with the older 20261022180000 upgrades forward, then accepts the same file again # SKIP Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29
   ---
   duration_ms: 0.183605
   ...

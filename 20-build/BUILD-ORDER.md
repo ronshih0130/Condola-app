@@ -253,6 +253,10 @@ B017 limited compiler delivery remains unparsed/unapplied/target UNVERIFIED; ful
 
 STOP POINT: bounded source review in progress; next: finish accepted safe diagnostic composition and independently freeze before one OFF-only attempt; owner: Codex/Ron.
 
+## B-004 QA round 4 — 2026-11-04
+
+B-004 stays `partial`. The raw log `gate-9ce4a168d5482ae1afb3189624ddd1b2c50fbf38-rls.log` is restored to the bytes at `4da59509`. The UNAPPROVED correction is [gate-9ce4a168-correction.md](../e2e-evidence/B-004/gate-9ce4a168-correction.md). Tenant signed-PDF downloads are tested through the route GET handler. Detail: [status](../e2e-evidence/B-004/status.md).
+
 ## B-004 QA round 3 — 2026-11-04
 
 B-004 stays `partial`. Replacement reasons are a fixed code set; audit stores the code only. The staff download route is exercised through its GET handler. That does not close the item. Logged-in old-code compatibility and rollback are still unproven. The `b888ccd` skip is UNAPPROVED. Full gate on `5819e26c5ca90044c7dce7a265c83ddc35ceba09`: unit 654 pass, 0 fail, 0 skip; RLS 483 pass, 0 fail, 1 UNAPPROVED skip. Detail: [status](../e2e-evidence/B-004/status.md).
