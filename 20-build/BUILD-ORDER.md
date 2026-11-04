@@ -255,7 +255,7 @@ STOP POINT: bounded source review in progress; next: finish accepted safe diagno
 
 ## B-004 QA round 5 — 2026-11-04
 
-B-004 stays `partial`. Signed-PDF upload times on the tenant and staff panels display in Asia/Taipei. Old staff download 404 is explained in [old-code-staff-404.md](../e2e-evidence/B-004/old-code-staff-404.md): the old worker does not consult the tenant flag or `platform_settings`, and new code cannot make that rollback succeed. `/t/history/<lease>/signed` serves an own ended lease only; pending and active are 404. [Route note](../e2e-evidence/B-004/history-signed-route.md). Full gate on `db49503b7b410b6214e62b4f416275ee98f514eb`: unit 655 pass, 0 fail, 0 skip; RLS 492 pass, 0 fail, 1 UNAPPROVED skip. Detail: [status](../e2e-evidence/B-004/status.md).
+B-004 stays `partial`. Signed-PDF upload time is formatted in Asia/Taipei on the tenant lease page and the tenant history page. The staff panel display is unverified. `wrangler rollback e6788e38` restores a secret set that predates `PAPER_LEASE_VERSIONS_ENABLED`; redeploy `1c8fd07` with that flag secret instead. [Cause](../e2e-evidence/B-004/old-code-staff-404.md). [Checklist](../ops/deploy-checklist.md). `/t/history/<lease>/signed` serves an own ended lease only; pending and active are 404. [Route note](../e2e-evidence/B-004/history-signed-route.md). Full gate on `db49503b7b410b6214e62b4f416275ee98f514eb`: unit 655 pass, 0 fail, 0 skip; RLS 492 pass, 0 fail, 1 UNAPPROVED skip. Detail: [status](../e2e-evidence/B-004/status.md).
 
 ## B-004 QA round 4 — 2026-11-04
 

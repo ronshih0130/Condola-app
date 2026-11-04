@@ -1,6 +1,8 @@
 # Old staff signed-PDF download returns 404
 
-Checked commit `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`, the commit this repo equates with staging Worker `e6788e38`. Staging was not called. This is a source reading of that commit.
+The standing cause is in [Correction: `wrangler rollback` restores the old secret set](#correction-wrangler-rollback-restores-the-old-secret-set). The sections below are the earlier source reading. They describe what the old program reads. They are not the cause of the 404 from `wrangler rollback e6788e38`.
+
+Checked commit `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`, the commit this repo equates with staging Worker `e6788e38`. The source reading below did not call staging.
 
 ## What the old staff route reads
 
@@ -29,8 +31,14 @@ Turning on the tenant platform row and the org flag `tenant_signed_pdf` therefor
 
 ## Can the new code make rollback compatible?
 
-No. The deployed worker is the old program. A change in the new source does not change that worker's module constant, and it does not make the old staff handler start reading `platform_settings`.
+The earlier conclusion in this section is withdrawn. See the correction below. New source still cannot change a worker that is already deployed, and the new staff route still does not treat the tenant platform row as its switch. That is not why `wrangler rollback e6788e38` returned 404.
 
-The new staff route still requires `PAPER_LEASE_VERSIONS_ENABLED` to be exactly `true` and the org paper flag to be boolean true. It still does not treat the tenant platform row as a staff download switch. Flags stay OFF here, so this note does not turn either switch on.
+## Correction: `wrangler rollback` restores the old secret set
 
-The new reason-code check does not run on that SELECT. It is not the cause of this 404. Rollback of the worker to `e6788e38` still 404s a staff download when only the tenant signed-PDF flags are on.
+The real cause is that `wrangler rollback e6788e38` restores that version's own secret set. That set predates `PAPER_LEASE_VERSIONS_ENABLED`, so the rolled-back worker does not have the flag secret the old program reads at module load.
+
+Redeploying `1c8fd07bc1fd78e7a86a00daff994f68e734be4f` with the secrets set, staging Worker `16b745e5`, returned 200. Staff and tenant downloads returned the same bytes. The tenant download wrote an audit row. The old code writes no staff audit. That absence is accepted.
+
+The source reading above still describes the old program: it needs `PAPER_LEASE_VERSIONS_ENABLED` in the environment, and it does not read `TENANT_SIGNED_PDF_ENABLED` or `platform_settings` for the staff download. With that flag secret present, the old program serves the file. The 404 was the missing secret restored by version rollback, not an incompatibility that new code has to patch.
+
+Flags stay OFF in this note. No secret value is recorded here. The rollback procedure is in `ops/deploy-checklist.md`.
