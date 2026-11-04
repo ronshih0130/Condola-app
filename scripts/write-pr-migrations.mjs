@@ -190,6 +190,10 @@ const added = {
     addOnly: false,
     reason: "Restricts replacement reasons to a fixed code set and records only that code on the replacement audit. A non-code row stops the migration. The zero-row update to other changes nothing. No column removed.",
   },
+  "supabase/migrations/20261104120000_b007_deposit_fixes.sql": {
+    addOnly: false,
+    reason: "Replaces resolve_deposit_rule, fn_lease_deposit_check and app.b007_lock_deposit_policy to preserve legacy deposit compatibility and bound policy lock waits. No columns or constraints changed; old Worker compatible.",
+  },
   "supabase/migrations/20261031100224_b004_archived_lease_signed_pdf.sql": {
     addOnly: false,
     reason: "Rejects a new signed PDF when the lease property, unit, or room is archived. The check runs before insert, so no version row or replacement audit is written. Re-run keeps the same guard.",

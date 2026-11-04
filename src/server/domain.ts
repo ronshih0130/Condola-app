@@ -6,7 +6,7 @@ import { maybe, many, one, svc, tx } from "./db";
 import { lockFreshLeaseTarget } from "./lease-target";
 import { admitActiveArchiveAncestry, admitFreshLeaseAncestry, admitLeaseArchiveAncestry, admitTicketArchiveAncestry } from "./record-archive-admission";
 import { assertCurrentArchiveCaller } from "./record-archive-caller";
-import { FlowError } from "./errors";
+import { FlowError, isDbTimeout } from "./errors";
 import { deliveryPlan, outboundNote, SANDBOX_NOT_SENT } from "./outbound";
 import {
   inclusiveDays,
@@ -37,6 +37,16 @@ import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSe
 import { assertTicketStatus, isUuid } from "./repair-rules";
 import { assertTeamInvitesAllowed } from "./team-invites";
 import { assertStaff, type OrgRole, type Session } from "./types";
+
+async function leaseWrite<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    const cause = error instanceof Error ? error.cause : undefined;
+    if (isDbTimeout(error) || isDbTimeout(cause)) throw new FlowError("errors.busy");
+    throw error;
+  }
+}
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -886,7 +896,7 @@ export async function createLease(session: Session, input: LeaseInput) {
   if (!idempotencyKey.ok) throw new FlowError("errors.leaseFailed");
   let result;
   try {
-    result = await tx(session.userId, async (client) => {
+    result = await leaseWrite(() => tx(session.userId, async (client) => {
     if (idempotencyKey.value) {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`lease-key:${session.orgId}:${idempotencyKey.value}`]);
     }
@@ -1307,7 +1317,7 @@ export async function createLease(session: Session, input: LeaseInput) {
       utilityKept,
       billKept,
     };
-  }, { orgId: session.orgId, environment: session.environment });
+  }, { orgId: session.orgId, environment: session.environment }));
   } catch (error) {
     if (error instanceof FlowError && error.key === "errors.generic") throw new FlowError("errors.leaseFailed");
     throw error;
@@ -1345,7 +1355,7 @@ export async function updateLease(
   if (!finiteNumber(rentMajor) || rentMajor < 0) throw new FlowError("errors.amount", { field: "i_base_rent" });
   if (!finiteNumber(depositMonths) || depositMonths < 0) throw new FlowError("errors.amount", { field: "s_8ed103e" });
   if (!input.updatedAt?.trim()) throw new FlowError("errors.required");
-  return tx(
+  return leaseWrite(() => tx(
     session.userId,
     async (client) => {
       await assertCurrentArchiveCaller(client, session);
@@ -1455,7 +1465,7 @@ export async function updateLease(
       };
     },
     { orgId: session.orgId, environment: session.environment },
-  );
+  ));
 }
 
 async function queueDemoNotice(client: Client, leaseId: string, eventType: string) {
@@ -1597,7 +1607,7 @@ async function signLeaseOn(client: Client, session: Session, input: SignLeaseInp
 export async function signLease(session: Session, input: SignLeaseInput) {
   if (!input.consent) throw new FlowError("errors.consentRequired");
   if (!input.signedName.trim()) throw new FlowError("errors.required");
-  const result = await svc(session.userId, (client) => signLeaseOn(client, session, input));
+  const result = await leaseWrite(() => svc(session.userId, (client) => signLeaseOn(client, session, input)));
   if (result.esign === "fully_signed") await markTryout(session.orgId, "lease");
   return result;
 }
