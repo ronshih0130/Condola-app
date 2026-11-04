@@ -12,7 +12,7 @@ No new feature in this note.
 - Replacement reasons are the codes `corrected_signature`, `wrong_file`, `illegible_scan`, and `other`. The form is a select. The API rejects anything else. `audit_log` for a replacement stores the code only. Migration `20261031100223_b004_reason_codes.sql` stops if a stored reason is not a code. The local disposable table had 0 `lease_signed_pdfs` rows, so the `other` update changes nothing. Hosted staging and production were not queried.
 - `TENANT_SIGNED_PDF_ENABLED` is on only when the environment value is exactly `true`. Default is OFF.
 - Logged-in old-code compatibility and rollback are still unproven. `e6788e38` is not in this clone. An earlier local run of `1c8fd07bc1fd78e7a86a00daff994f68e734be4f` paper tests is not logged-in staging proof and is not a rollback proof. The independent Class B verdict is still required. Production is out of scope.
-- Gate counts for this round are recorded with the raw logs named for the SHA that produced them. Do not reuse the `9ce4a168` counts as this round's result.
+- Full gate on `5819e26c5ca90044c7dce7a265c83ddc35ceba09`: unit 654 pass, 0 fail, 0 skip; RLS 483 pass, 0 fail, 1 UNAPPROVED `b888ccd` skip. Raw logs: [unit](gate-5819e26c5ca90044c7dce7a265c83ddc35ceba09-unit.log), [RLS](gate-5819e26c5ca90044c7dce7a265c83ddc35ceba09-rls.log). The RLS log says the skip is UNAPPROVED.
 
 Functional compare for CAP-M-02 and CAP-T-02: [qa-full-diff.md](qa-full-diff.md).
 

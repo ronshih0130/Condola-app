@@ -1,0 +1,3376 @@
+
+> condola@0.1.0 test:unit
+> tsx --test src/lib/record-archive.test.ts src/server/function-privileges.test.ts src/server/rpc-exposure.test.ts src/server/confirm-access-token.test.ts src/server/password.test.ts src/server/lockout.test.ts src/server/perms.test.ts src/server/privacy.test.ts src/server/demo.test.ts src/server/review.test.ts src/server/reset-flash.test.ts src/server/staging-config.test.ts src/server/staging-bundle.test.ts src/i18n/strings.test.ts src/server/sandbox.test.ts src/server/portfolio.test.ts src/server/lease-rules.test.ts src/components/submit-once.test.ts src/components/enter-key.test.ts src/server/list-search.test.ts src/server/billing.test.ts src/server/signup-copy.test.ts src/server/signup-consent.test.ts src/server/consent.test.ts src/server/team-invites.test.ts src/server/team-invite-allowlist.test.ts src/server/team-invite-link.test.ts src/server/signup-gotrue.test.ts src/i18n/errors.test.ts src/tenant-pick.test.ts src/server/lease-form.test.ts src/server/portal-login.test.ts src/lease-confirm.test.ts src/property-draft.test.ts src/server/audit-read.test.ts src/server/expenses.test.ts src/server/income-expense.test.ts src/server/repair.test.ts src/server/portal-invite.test.ts src/lib/idv.test.ts src/lib/id-notice.test.ts src/server/id-crypto.test.ts src/server/id-watermark-image.test.ts src/server/id-bytes.test.ts src/server/id-upload-guard.test.ts src/server/cron-auth.test.ts src/server/mail.test.ts src/server/reminders.test.ts src/server/reset-limit.test.ts src/server/ui-defaults.test.ts src/i18n/copy-guard.test.ts src/idempotency.test.ts src/server/upgrade-gate.test.ts src/server/official-lease.test.ts src/server/pdf-docs.test.ts src/lib/pdf-render.test.ts src/server/utility-post.test.ts src/lib/chunk-reload.test.ts src/app/not-found.test.ts src/app/money-display.test.ts src/server/import.test.ts src/server/legal.test.ts src/server/vendor-repair.test.ts src/server/vendor-link-rules.test.ts src/server/job-types-rules.test.ts src/server/vendor-onboarding-rules.test.ts src/server/vendor-receipt-rules.test.ts src/server/vendor-receipt-pdf.test.ts src/server/vendor-link-proxy.test.ts src/i18n/lanes/vendor-receipt.test.ts src/server/third-party-licenses.test.ts src/server/consent-entrypoints.test.ts src/server/consent-enforcement.test.ts src/server/id-purge-guard.test.ts src/server/move-out-notice.test.ts src/server/tenant-signed-pdf-rules.test.ts src/server/tenant-signed-pdf-download.test.ts src/server/signed-pdf-http.test.ts src/server/paper-lease-versions-rules.test.ts src/server/esign/copy.test.ts src/server/esign/document.test.ts src/server/esign/flow.test.ts src/server/esign/rules.test.ts src/server/esign/stamp.test.ts scripts/write-pr-migrations.test.mjs src/server/test-disposable-db.test.ts scripts/mirror-ownership.test.mjs src/server/signup-resend-provider.test.ts src/server/deposit-rules.test.ts src/server/payee-rules.test.ts src/server/payee-action-context.test.ts src/server/onboarding-progress-rules.test.ts src/server/billing-preview-rules.test.ts src/server/utility-reconciliation.test.ts src/server/bank-matching-rules.test.ts src/lib/bank-match-basis.test.ts src/server/first-invoice-plan.test.ts src/server/first-period-calculation.test.ts src/server/paper-lease-history-time.test.ts src/server/import-region.test.ts src/server/import-region-xlsx.test.ts src/server/reminder-foundation.test.ts src/server/handover-input.test.ts src/server/handover-storage.test.ts src/server/notification-center-busy.test.ts src/server/notification-center-request.test.ts src/components/notification-mark-rules.test.ts src/server/tenant-directory-edit-request.test.ts src/server/repair-owner-policy-input.test.ts src/server/request-origin.test.ts src/server/portal-resend-contract.test.ts src/server/monthly-billing-rules.test.ts src/server/monthly-rent-operation-plan.test.ts src/lib/renewal-comparison.test.ts src/server/owner-transfer-input.test.ts src/server/staff-profile-rules.test.ts src/server/staff-email-rules.test.ts src/server/staff-email-provider.test.ts src/server/tenant-payment-history-rules.test.ts
+
+TAP version 13
+# Subtest: mirror ownership accepts only the fresh exact host and supervising session
+ok 1 - mirror ownership accepts only the fresh exact host and supervising session
+  ---
+  duration_ms: 258.01812
+  ...
+# Subtest: migration manifest includes every changed SQL file and classifies unsafe changes
+ok 2 - migration manifest includes every changed SQL file and classifies unsafe changes
+  ---
+  duration_ms: 61.581311
+  ...
+# Subtest: historical migration changes examine additions and deletions before classification
+ok 3 - historical migration changes examine additions and deletions before classification
+  ---
+  duration_ms: 0.484571
+  ...
+# Subtest: signedMoney selects the brand minus sign and keeps zero unsigned
+ok 4 - signedMoney selects the brand minus sign and keeps zero unsigned
+  ---
+  duration_ms: 11.641724
+  ...
+# Subtest: statement document wraps negative row amounts only when v2 is enabled
+ok 5 - statement document wraps negative row amounts only when v2 is enabled
+  ---
+  duration_ms: 0.263336
+  ...
+# Subtest: server pages select signed money by brand, and documents use U+2212
+ok 6 - server pages select signed money by brand, and documents use U+2212
+  ---
+  duration_ms: 0.628253
+  ...
+# Subtest: TWD amounts stay NT$ when the currency code is padded, and 已收 is not payment copy
+ok 7 - TWD amounts stay NT$ when the currency code is padded, and 已收 is not payment copy
+  ---
+  duration_ms: 4.20729
+  ...
+# Subtest: the lease wizard confirm step and the saved summary render TWD as NT$
+ok 8 - the lease wizard confirm step and the saved summary render TWD as NT$
+  ---
+  duration_ms: 0.479339
+  ...
+# Subtest: statement, property, rent, and reports render TWD as NT$
+ok 9 - statement, property, rent, and reports render TWD as NT$
+  ---
+  duration_ms: 6.266153
+  ...
+# Subtest: 已確認租金 is not shown to users
+ok 10 - 已確認租金 is not shown to users
+  ---
+  duration_ms: 13.929375
+  ...
+# Subtest: rendered screens do not format amounts with a bare dollar
+ok 11 - rendered screens do not format amounts with a bare dollar
+  ---
+  duration_ms: 12.006374
+  ...
+# Subtest: the Chinese missing page is the only copy on / and /m
+ok 12 - the Chinese missing page is the only copy on / and /m
+  ---
+  duration_ms: 0.984481
+  ...
+# Subtest: dashboard money uses an NT$ prefix and the received tile says 已繳
+ok 13 - dashboard money uses an NT$ prefix and the received tile says 已繳
+  ---
+  duration_ms: 9.999613
+  ...
+# Subtest: tenant pages prefix bill amounts with NT$ and leave PayDialog alone
+ok 14 - tenant pages prefix bill amounts with NT$ and leave PayDialog alone
+  ---
+  duration_ms: 0.541203
+  ...
+# Subtest: Enter cancels text fields and submit buttons, and activates ordinary buttons
+ok 15 - Enter cancels text fields and submit buttons, and activates ordinary buttons
+  ---
+  duration_ms: 0.567847
+  ...
+# Subtest: wizard forms use the Enter split and still guard the create button
+ok 16 - wizard forms use the Enter split and still guard the create button
+  ---
+  duration_ms: 0.452322
+  ...
+# Subtest: only exact mark responses can report busy or committed success
+ok 17 - only exact mark responses can report busy or committed success
+  ---
+  duration_ms: 0.546641
+  ...
+# Subtest: vendor token extraction accepts only a single exact notification path
+ok 18 - vendor token extraction accepts only a single exact notification path
+  ---
+  duration_ms: 0.227789
+  ...
+# Subtest: busy preserves an earlier uncertain mark outcome
+ok 19 - busy preserves an earlier uncertain mark outcome
+  ---
+  duration_ms: 0.098631
+  ...
+# Subtest: a second submit in the same turn is refused until the guard is released
+ok 20 - a second submit in the same turn is refused until the guard is released
+  ---
+  duration_ms: 0.599981
+  ...
+# Subtest: a triple click claims the create guard once
+ok 21 - a triple click claims the create guard once
+  ---
+  duration_ms: 0.445698
+  ...
+# Subtest: a network failure returns the lease error and releases the submit guard
+ok 22 - a network failure returns the lease error and releases the submit guard
+  ---
+  duration_ms: 0.28909
+  ...
+# Subtest: a non-redirect server failure, including a 500, stays on the form
+ok 23 - a non-redirect server failure, including a 500, stays on the form
+  ---
+  duration_ms: 0.196115
+  ...
+# Subtest: a Next redirect still throws after the guard is released
+ok 24 - a Next redirect still throws after the guard is released
+  ---
+  duration_ms: 0.336689
+  ...
+# Subtest: a resolved server action keeps the submit guard claimed
+ok 25 - a resolved server action keeps the submit guard claimed
+  ---
+  duration_ms: 0.098319
+  ...
+# Subtest: a failed submit can be resent once and succeeds
+ok 26 - a failed submit can be resent once and succeeds
+  ---
+  duration_ms: 0.211704
+  ...
+# Subtest: the idempotency key is created once per wizard attempt
+ok 27 - the idempotency key is created once per wizard attempt
+  ---
+  duration_ms: 0.303403
+  ...
+# Subtest: the same click does not cancel the first submit, and a later click is blocked until release
+ok 28 - the same click does not cancel the first submit, and a later click is blocked until release
+  ---
+  duration_ms: 0.134558
+  ...
+# Subtest: a second submit event in the same click is not cancelled
+ok 29 - a second submit event in the same click is not cancelled
+  ---
+  duration_ms: 0.143493
+  ...
+# Subtest: a failed submit scrolls the alert into view and focuses it
+ok 30 - a failed submit scrolls the alert into view and focuses it
+  ---
+  duration_ms: 0.135152
+  ...
+# Subtest: Enter still commits a select, so the first unit choice is not discarded
+ok 31 - Enter still commits a select, so the first unit choice is not discarded
+  ---
+  duration_ms: 0.112163
+  ...
+# Subtest: rendered and i18n copy omit forbidden landlord, payment, and demo words
+ok 32 - rendered and i18n copy omit forbidden landlord, payment, and demo words
+  ---
+  duration_ms: 36.296684
+  ...
+# Subtest: retired sandbox and payment phrases stay out of rendered copy
+ok 33 - retired sandbox and payment phrases stay out of rendered copy
+  ---
+  duration_ms: 25.021151
+  ...
+# Subtest: sandbox chrome uses the sample company, the amber banner, and a native switcher
+ok 34 - sandbox chrome uses the sample company, the amber banner, and a native switcher
+  ---
+  duration_ms: 1.378204
+  ...
+# Subtest: login, an empty live company, the sidebar, and audit use the live-company wording
+ok 35 - login, an empty live company, the sidebar, and audit use the live-company wording
+  ---
+  duration_ms: 2.229084
+  ...
+# Subtest: tenant pages drop the LINE demo sentence and never say 示範, 測試模式, or 即將推出
+ok 36 - tenant pages drop the LINE demo sentence and never say 示範, 測試模式, or 即將推出
+  ---
+  duration_ms: 8.2522
+  ...
+# Subtest: the build stamps a short git SHA into the staff footer and /api/version
+ok 37 - the build stamps a short git SHA into the staff footer and /api/version
+  ---
+  duration_ms: 0.176929
+  ...
+# database failed { key: 'errors.amount', message: 'database error' }
+# database failed { key: 'errors.wholeUnit', message: 'database error' }
+# database failed { key: 'errors.utilityPeriod', message: 'database error' }
+# database failed { key: 'errors.utilityOverlap', message: 'database error' }
+# Subtest: every error key has a translation, and an empty amount uses the amount sentence
+ok 38 - every error key has a translation, and an empty amount uses the amount sentence
+  ---
+  duration_ms: 3.944855
+  ...
+# Subtest: confirmation mail uses the locked button and body
+ok 39 - confirmation mail uses the locked button and body
+  ---
+  duration_ms: 0.259804
+  ...
+# Subtest: sign-out expires every auth cookie variant and the wizard keeps amount errors inline
+ok 40 - sign-out expires every auth cookie variant and the wizard keeps amount errors inline
+  ---
+  duration_ms: 2.068873
+  ...
+# Subtest: database errors log once with safe metadata and never log arbitrary message content
+ok 41 - database errors log once with safe metadata and never log arbitrary message content
+  ---
+  duration_ms: 1.217964
+  ...
+# Subtest: plain-object tenant constraint messages preserve generic error mapping
+ok 42 - plain-object tenant constraint messages preserve generic error mapping
+  ---
+  duration_ms: 0.176421
+  ...
+# Subtest: database metadata validators omit invalid fields instead of logging their contents
+ok 43 - database metadata validators omit invalid fields instead of logging their contents
+  ---
+  duration_ms: 0.472468
+  ...
+# Subtest: the compatibility message API returns fixed safe text for every input
+ok 44 - the compatibility message API returns fixed safe text for every input
+  ---
+  duration_ms: 0.118061
+  ...
+# Subtest: sanitized causes retain only exact allowlisted application reasons
+ok 45 - sanitized causes retain only exact allowlisted application reasons
+  ---
+  duration_ms: 1.183792
+  ...
+# Subtest: the import logging boundary uses shared allowlists and preserves its source guard
+ok 46 - the import logging boundary uses shared allowlists and preserves its source guard
+  ---
+  duration_ms: 1.237354
+  ...
+# Subtest: vendor-receipt copy contains no banned terms in zh-TW or en
+ok 47 - vendor-receipt copy contains no banned terms in zh-TW or en
+  ---
+  duration_ms: 3.570513
+  ...
+# Subtest: vendor-receipt zh-TW copy uses approved terminology and labels
+ok 48 - vendor-receipt zh-TW copy uses approved terminology and labels
+  ---
+  duration_ms: 0.220356
+  ...
+# Subtest: vendor-receipt en copy mirrors all keys of zh-TW
+ok 49 - vendor-receipt en copy mirrors all keys of zh-TW
+  ---
+  duration_ms: 0.509325
+  ...
+# Subtest: shared catalog keys match the vendored prototype
+ok 50 - shared catalog keys match the vendored prototype
+  ---
+  duration_ms: 7.436943
+  ...
+# Subtest: shared keys use the prototype placeholders
+ok 51 - shared keys use the prototype placeholders
+  ---
+  duration_ms: 7.700065
+  ...
+# Subtest: 房東 is absent outside import-header aliases
+ok 52 - 房東 is absent outside import-header aliases
+  ---
+  duration_ms: 62.793431
+  ...
+# Subtest: owner statements say 已繳租金 and not 已收租金
+ok 53 - owner statements say 已繳租金 and not 已收租金
+  ---
+  duration_ms: 9.343842
+  ...
+# Subtest: legacy 房東 import headers stay aliases when the owner importer exists
+ok 54 - legacy 房東 import headers stay aliases when the owner importer exists
+  ---
+  duration_ms: 18.286848
+  ...
+# Subtest: two different property payloads both save, and a triple-click saves one
+ok 55 - two different property payloads both save, and a triple-click saves one
+  ---
+  duration_ms: 0.645869
+  ...
+# Subtest: the same token with a different payload does not replay the first property
+ok 56 - the same token with a different payload does not replay the first property
+  ---
+  duration_ms: 0.45102
+  ...
+# Subtest: the property form mints a random token per mount and the server claims org, user, and token
+ok 57 - the property form mints a random token per mount and the server claims org, user, and token
+  ---
+  duration_ms: 0.623155
+  ...
+# Subtest: the lease confirmation names the room and writes rent and deposit with units
+ok 58 - the lease confirmation names the room and writes rent and deposit with units
+  ---
+  duration_ms: 11.123249
+  ...
+# Subtest: stored basis exposes only recognized facts, without raw account digits or unknown metadata
+ok 59 - stored basis exposes only recognized facts, without raw account digits or unknown metadata
+  ---
+  duration_ms: 0.961886
+  ...
+# Subtest: non-records, inherited facts and accessors cannot supply basis
+ok 60 - non-records, inherited facts and accessors cannot supply basis
+  ---
+  duration_ms: 0.183558
+  ...
+# Subtest: malformed recognized fields are discarded independently
+ok 61 - malformed recognized fields are discarded independently
+  ---
+  duration_ms: 0.312927
+  ...
+# Subtest: detects chunk load failures and ignores ordinary errors
+ok 62 - detects chunk load failures and ignores ordinary errors
+  ---
+  duration_ms: 1.061461
+  ...
+# Subtest: reloads once per build id and then blocks
+ok 63 - reloads once per build id and then blocks
+  ---
+  duration_ms: 1.686209
+  ...
+# Subtest: window error and unhandledrejection reload once, then stop
+ok 64 - window error and unhandledrejection reload once, then stop
+  ---
+  duration_ms: 0.31479
+  ...
+# Subtest: error boundaries reuse the zh-TW page and the reload guard
+ok 65 - error boundaries reuse the zh-TW page and the reload guard
+  ---
+  duration_ms: 0.359464
+  ...
+# Subtest: a link click or history update assigns that page, and an unknown target reloads
+ok 66 - a link click or history update assigns that page, and an unknown target reloads
+  ---
+  duration_ms: 0.860206
+  ...
+# Subtest: the one-per-build guard still blocks a second destination load
+ok 67 - the one-per-build guard still blocks a second destination load
+  ---
+  duration_ms: 0.182838
+  ...
+# Subtest: click capture and history updates remember the in-app destination
+ok 68 - click capture and history updates remember the in-app destination
+  ---
+  duration_ms: 0.383439
+  ...
+# Subtest: the embedded notice matches the file, and only the three placeholders change
+ok 69 - the embedded notice matches the file, and only the three placeholders change
+  ---
+  duration_ms: 0.704947
+  ...
+# Subtest: the short text, checkbox, and full text are exact slices of the substituted file
+ok 70 - the short text, checkbox, and full text are exact slices of the substituted file
+  ---
+  duration_ms: 1.73759
+  ...
+# Subtest: the full-text page equals the file from line 19 through the end
+ok 71 - the full-text page equals the file from line 19 through the end
+  ---
+  duration_ms: 19.063371
+  ...
+# Subtest: firm contact uses the stored phone and email, then the billing owner, then the published address
+ok 72 - firm contact uses the stored phone and email, then the billing owner, then the published address
+  ---
+  duration_ms: 0.203542
+  ...
+# Subtest: a GIF is rejected from its magic bytes even when the label says JPEG
+ok 73 - a GIF is rejected from its magic bytes even when the label says JPEG
+  ---
+  duration_ms: 0.165086
+  ...
+# Subtest: masks an ID as the first character, at least three stars, and the last three
+ok 74 - masks an ID as the first character, at least three stars, and the last three
+  ---
+  duration_ms: 0.70702
+  ...
+# Subtest: accepts a Taiwan ID, a new or old ARC, and a passport number
+ok 75 - accepts a Taiwan ID, a new or old ARC, and a passport number
+  ---
+  duration_ms: 0.313523
+  ...
+# Subtest: a passport needs the photo page and a selfie; a card needs the back too
+ok 76 - a passport needs the photo page and a selfie; a card needs the back too
+  ---
+  duration_ms: 0.484126
+  ...
+# Subtest: retention is stated in days, including the 90-day default
+ok 77 - retention is stated in days, including the 90-day default
+  ---
+  duration_ms: 0.255006
+  ...
+# Subtest: glare is a warning threshold, not a hard block
+ok 78 - glare is a warning threshold, not a hard block
+  ---
+  duration_ms: 1.446701
+  ...
+# Subtest: export rows drop identity numbers and photo fields
+ok 79 - export rows drop identity numbers and photo fields
+  ---
+  duration_ms: 0.317479
+  ...
+# Subtest: id check copy never says verified and the consent notice is verbatim
+ok 80 - id check copy never says verified and the consent notice is verbatim
+  ---
+  duration_ms: 9.149224
+  ...
+# Subtest: a failed photo view is translated, and a bounced send keeps the selected photos
+ok 81 - a failed photo view is translated, and a bounced send keeps the selected photos
+  ---
+  duration_ms: 0.564619
+  ...
+# Subtest: the upload wait note appears only when the estimate is over 10 seconds
+ok 82 - the upload wait note appears only when the estimate is over 10 seconds
+  ---
+  duration_ms: 0.159023
+  ...
+# Subtest: phone compression stays off until the measured submit time exceeds 20 seconds
+ok 83 - phone compression stays off until the measured submit time exceeds 20 seconds
+  ---
+  duration_ms: 0.285258
+  ...
+# Subtest: tenant bill status is settled or partial and does not say collected
+ok 84 - tenant bill status is settled or partial and does not say collected
+  ---
+  duration_ms: 2.216336
+  ...
+# Subtest: the photo modal keeps a fixed frame per slot and reloads with a new link
+ok 85 - the photo modal keeps a fixed frame per slot and reloads with a new link
+  ---
+  duration_ms: 3.453912
+  ...
+# Subtest: an upload stores the consent notice version and the consent time
+ok 86 - an upload stores the consent notice version and the consent time
+  ---
+  duration_ms: 0.338261
+  ...
+# Subtest: the watermark is one approved sentence and never an empty viewer
+ok 87 - the watermark is one approved sentence and never an empty viewer
+  ---
+  duration_ms: 0.332181
+  ...
+# Subtest: the client PDF embeds the hash and Traditional Chinese without a server render
+ok 88 - the client PDF embeds the hash and Traditional Chinese without a server render
+  ---
+  duration_ms: 1076.497246
+  ...
+# Subtest: a statement PDF paints Traditional Chinese instead of blank glyphs
+ok 89 - a statement PDF paints Traditional Chinese instead of blank glyphs
+  ---
+  duration_ms: 661.679226
+  ...
+# Subtest: U+2212 becomes an ASCII hyphen only on the statement PDF
+ok 90 - U+2212 becomes an ASCII hyphen only on the statement PDF
+  ---
+  duration_ms: 472.102941
+  ...
+# Subtest: a glyph missing from the font rejects the PDF
+ok 91 - a glyph missing from the font rejects the PDF
+  ---
+  duration_ms: 24.365545
+  ...
+# Subtest: archive commands require a concrete target, scope, original version and meaningful bounded reason
+ok 92 - archive commands require a concrete target, scope, original version and meaningful bounded reason
+  ---
+  duration_ms: 0.731156
+  ...
+# Subtest: rendered scope changes invalidate an old tab even for the same target
+ok 93 - rendered scope changes invalidate an old tab even for the same target
+  ---
+  duration_ms: 0.142836
+  ...
+# Subtest: exact decimal parsing honors currency scale and bigint bounds
+ok 94 - exact decimal parsing honors currency scale and bigint bounds
+  ---
+  duration_ms: 0.669118
+  ...
+# Subtest: calendar boundaries and explicit terms
+ok 95 - calendar boundaries and explicit terms
+  ---
+  duration_ms: 4.442678
+  ...
+# Subtest: open-ended proposal is explicit and never inferred from blank
+ok 96 - open-ended proposal is explicit and never inferred from blank
+  ---
+  duration_ms: 0.224775
+  ...
+# Subtest: the reported meter preview is under the cap, and room labels map to stored types
+ok 97 - the reported meter preview is under the cap, and room labels map to stored types
+  ---
+  duration_ms: 0.561618
+  ...
+# Subtest: identity numbers, phones, emails, and ids are masked
+ok 98 - identity numbers, phones, emails, and ids are masked
+  ---
+  duration_ms: 1.263957
+  ...
+# Subtest: changed columns never keep sensitive names
+ok 99 - changed columns never keep sensitive names
+  ---
+  duration_ms: 0.702014
+  ...
+# Subtest: Taipei date bounds and keyset cursors stay exact
+ok 100 - Taipei date bounds and keyset cursors stay exact
+  ---
+  duration_ms: 10.579926
+  ...
+# Subtest: filters ignore unknown users, actions, and record types
+ok 101 - filters ignore unknown users, actions, and record types
+  ---
+  duration_ms: 0.198604
+  ...
+# Subtest: links go to lease, tenant, and property records and nowhere else for identity rows
+ok 102 - links go to lease, tenant, and property records and nowhere else for identity rows
+  ---
+  duration_ms: 0.243947
+  ...
+# Subtest: a presented row shows who, what, which, and when without sensitive values
+ok 103 - a presented row shows who, what, which, and when without sensitive values
+  ---
+  duration_ms: 0.900546
+  ...
+# Subtest: the page query is a keyset seek and does not read snapshots
+ok 104 - the page query is a keyset seek and does not read snapshots
+  ---
+  duration_ms: 0.297979
+  ...
+# Subtest: the screen and its record names are one statement each
+ok 105 - the screen and its record names are one statement each
+  ---
+  duration_ms: 0.266901
+  ...
+# Subtest: bank CSV validates mapped fields, quoting and exact signed amounts
+ok 106 - bank CSV validates mapped fields, quoting and exact signed amounts
+  ---
+  duration_ms: 2.194356
+  ...
+# Subtest: billing preview requires exact global enabled, org allowlist and boolean opt-in
+ok 107 - billing preview requires exact global enabled, org allowlist and boolean opt-in
+  ---
+  duration_ms: 0.554044
+  ...
+# Subtest: list prices match the published examples
+ok 108 - list prices match the published examples
+  ---
+  duration_ms: 0.599486
+  ...
+# Subtest: a partner rate applies to every billable unit
+ok 109 - a partner rate applies to every billable unit
+  ---
+  duration_ms: 9.132848
+  ...
+# Subtest: a manual per-firm rate overrides the partner snapshot
+ok 110 - a manual per-firm rate overrides the partner snapshot
+  ---
+  duration_ms: 0.154897
+  ...
+# Subtest: seat caps and firm names
+ok 111 - seat caps and firm names
+  ---
+  duration_ms: 0.197951
+  ...
+# Subtest: confirm-token clears the hash before posting the access token
+ok 112 - confirm-token clears the hash before posting the access token
+  ---
+  duration_ms: 0.569228
+  ...
+# Subtest: the confirm access token is not written to logs, funnel events, or analytics
+ok 113 - the confirm access token is not written to logs, funnel events, or analytics
+  ---
+  duration_ms: 0.554217
+  ...
+# Subtest: a confirm JWT longer than the GoTrue expiry is rejected
+ok 114 - a confirm JWT longer than the GoTrue expiry is rejected
+  ---
+  duration_ms: 0.398348
+  ...
+# Subtest: AC1 flag matrix: OFF, invalid values, strict company overrides
+ok 115 - AC1 flag matrix: OFF, invalid values, strict company overrides
+  ---
+  duration_ms: 0.646693
+  ...
+# Subtest: AC1 OFF evaluates no documents, redirects, history or extra company reads for every staff role
+ok 116 - AC1 OFF evaluates no documents, redirects, history or extra company reads for every staff role
+  ---
+  duration_ms: 1.942467
+  ...
+# Subtest: AC2 AC3 partner ON rejects admin API/actions and redirects shallow and deep pages
+ok 117 - AC2 AC3 partner ON rejects admin API/actions and redirects shallow and deep pages
+  ---
+  duration_ms: 3.368969
+  ...
+# Subtest: AC2 AC3 partner ON rejects manager API/actions and redirects shallow and deep pages
+ok 118 - AC2 AC3 partner ON rejects manager API/actions and redirects shallow and deep pages
+  ---
+  duration_ms: 4.985085
+  ...
+# Subtest: AC2 AC3 partner ON rejects accountant API/actions and redirects shallow and deep pages
+ok 119 - AC2 AC3 partner ON rejects accountant API/actions and redirects shallow and deep pages
+  ---
+  duration_ms: 0.788486
+  ...
+# Subtest: AC2 AC3 partner ON rejects maintenance API/actions and redirects shallow and deep pages
+ok 120 - AC2 AC3 partner ON rejects maintenance API/actions and redirects shallow and deep pages
+  ---
+  duration_ms: 0.584713
+  ...
+# Subtest: AC4 both boxes start unchecked; either unchecked keeps readiness false and server performs no writes
+ok 121 - AC4 both boxes start unchecked; either unchecked keeps readiness false and server performs no writes
+  ---
+  duration_ms: 4.590573
+  ...
+# Subtest: AC4 fresh active admin membership is locked; manager, suspended, removed and invited admins cannot sign
+ok 122 - AC4 fresh active admin membership is locked; manager, suspended, removed and invited admins cannot sign
+  ---
+  duration_ms: 1.786947
+  ...
+# Subtest: AC6 exact evidence versions and locale fallback; agreement pins match bundled files
+ok 123 - AC6 exact evidence versions and locale fallback; agreement pins match bundled files
+  ---
+  duration_ms: 0.891861
+  ...
+# Subtest: D privacy minimum/header failures retain an active gate, refuse signing and hide acceptance
+ok 124 - D privacy minimum/header failures retain an active gate, refuse signing and hide acceptance
+  ---
+  duration_ms: 5.110118
+  ...
+# Subtest: D same privacy header accepts v4.2-style body changes with fresh signing hash; canonical bump requires consent
+ok 125 - D same privacy header accepts v4.2-style body changes with fresh signing hash; canonical bump requires consent
+  ---
+  duration_ms: 1.072642
+  ...
+# Subtest: D check script fails specifically for minimum, header and agreement hash; body-only privacy change passes
+ok 126 - D check script fails specifically for minimum, header and agreement hash; body-only privacy change passes
+  ---
+  duration_ms: 179.431018
+  ...
+# Subtest: AC7 settings renders immutable consenter snapshot, versions and Taipei time without controls
+ok 127 - AC7 settings renders immutable consenter snapshot, versions and Taipei time without controls
+  ---
+  duration_ms: 11.495628
+  ...
+# Subtest: AC8 new UI copy avoids prohibited terms and uses company terminology
+ok 128 - AC8 new UI copy avoids prohibited terms and uses company terminology
+  ---
+  duration_ms: 0.66741
+  ...
+# Subtest: AC4 AC5 request evidence and entrypoint wiring preserve permissions and enforce both attestations
+ok 129 - AC4 AC5 request evidence and entrypoint wiring preserve permissions and enforce both attestations
+  ---
+  duration_ms: 0.867536
+  ...
+# Subtest: missing returns the exact private API denial
+ok 130 - missing returns the exact private API denial
+  ---
+  duration_ms: 0.628376
+  ...
+# Subtest: stale terms returns the exact private API denial
+ok 131 - stale terms returns the exact private API denial
+  ---
+  duration_ms: 0.455787
+  ...
+# Subtest: stale privacy returns the exact private API denial
+ok 132 - stale privacy returns the exact private API denial
+  ---
+  duration_ms: 0.406319
+  ...
+# Subtest: current table evidence permits API and action access
+ok 133 - current table evidence permits API and action access
+  ---
+  duration_ms: 0.276263
+  ...
+# Subtest: staff action redirects through the correct consent page
+ok 134 - staff action redirects through the correct consent page
+  ---
+  duration_ms: 0.252013
+  ...
+# Subtest: staff page redirects through the correct consent page
+ok 135 - staff page redirects through the correct consent page
+  ---
+  duration_ms: 0.12766
+  ...
+# Subtest: owner action redirects through the correct consent page
+ok 136 - owner action redirects through the correct consent page
+  ---
+  duration_ms: 0.086438
+  ...
+# Subtest: owner page redirects through the correct consent page
+ok 137 - owner page redirects through the correct consent page
+  ---
+  duration_ms: 0.0661
+  ...
+# Subtest: tenant action redirects through the correct consent page
+ok 138 - tenant action redirects through the correct consent page
+  ---
+  duration_ms: 0.066635
+  ...
+# Subtest: tenant page redirects through the correct consent page
+ok 139 - tenant page redirects through the correct consent page
+  ---
+  duration_ms: 0.057707
+  ...
+# Subtest: malicious and recursive next paths are rejected by the real redirect guard
+ok 140 - malicious and recursive next paths are rejected by the real redirect guard
+  ---
+  duration_ms: 0.333903
+  ...
+# Subtest: the repository selects the latest row, even when an older row matches
+ok 141 - the repository selects the latest row, even when an older row matches
+  ---
+  duration_ms: 0.420371
+  ...
+# Subtest: persistConsent cannot report success or mirror metadata after a failed INSERT
+ok 142 - persistConsent cannot report success or mirror metadata after a failed INSERT
+  ---
+  duration_ms: 0.501965
+  ...
+# Subtest: missing consents fails closed, recovers the read transaction and logs once without identifiers
+ok 143 - missing consents fails closed, recovers the read transaction and logs once without identifiers
+  ---
+  duration_ms: 0.939762
+  ...
+# Subtest: missing-table acceptance propagates the existing controlled write error
+ok 144 - missing-table acceptance propagates the existing controlled write error
+  ---
+  duration_ms: 15.98235
+  ...
+# Subtest: session fallback retries identity without the lateral consent join
+ok 145 - session fallback retries identity without the lateral consent join
+  ---
+  duration_ms: 0.282142
+  ...
+# Subtest: Class B notes allow session touching as authentication bookkeeping
+ok 146 - Class B notes allow session touching as authentication bookkeeping
+  ---
+  duration_ms: 0.187249
+  ...
+# Subtest: payee entry adapters bind fixed real authorization dependencies
+ok 147 - payee entry adapters bind fixed real authorization dependencies
+  ---
+  duration_ms: 3.299524
+  ...
+# Subtest: payee adapter classification rejects impostors and non-dominating guards
+ok 148 - payee adapter classification rejects impostors and non-dominating guards
+  ---
+  duration_ms: 1281.65546
+  ...
+# Subtest: adapter definitions reject early bypasses and wrong helpers
+ok 149 - adapter definitions reject early bypasses and wrong helpers
+  ---
+  duration_ms: 1300.685612
+  ...
+# Subtest: all runtime server exports, routes and protected pages are classified
+ok 150 - all runtime server exports, routes and protected pages are classified
+  ---
+  duration_ms: 218.592535
+  ...
+# Subtest: app_metadata consent accepts current versions and dates at or after the gate baseline
+ok 151 - app_metadata consent accepts current versions and dates at or after the gate baseline
+  ---
+  duration_ms: 1.229088
+  ...
+# Subtest: baseline and current privacy consent pass without writes
+ok 152 - baseline and current privacy consent pass without writes
+  ---
+  duration_ms: 0.377131
+  ...
+# Subtest: invalid or missing privacy consent blocks until a fresh consent is recorded
+ok 153 - invalid or missing privacy consent blocks until a fresh consent is recorded
+  ---
+  duration_ms: 0.476107
+  ...
+# Subtest: user_metadata-only consent counts as missing
+ok 154 - user_metadata-only consent counts as missing
+  ---
+  duration_ms: 0.149091
+  ...
+# Subtest: the service-role write sends app_metadata and keeps user_metadata compatible
+ok 155 - the service-role write sends app_metadata and keeps user_metadata compatible
+  ---
+  duration_ms: 1.574621
+  ...
+# Subtest: creating a company rejects a missing checkbox when app_metadata consent is absent
+ok 156 - creating a company rejects a missing checkbox when app_metadata consent is absent
+  ---
+  duration_ms: 0.341019
+  ...
+# Subtest: login re-consent rejects a missing or older checkbox tick and records a fresh one
+ok 157 - login re-consent rejects a missing or older checkbox tick and records a fresh one
+  ---
+  duration_ms: 0.27106
+  ...
+# Subtest: portal entry rejects a missing checkbox and records source portal
+ok 158 - portal entry rejects a missing checkbox and records source portal
+  ---
+  duration_ms: 0.256862
+  ...
+# Subtest: team invite rejects a missing checkbox before a user is written
+ok 159 - team invite rejects a missing checkbox before a user is written
+  ---
+  duration_ms: 0.306443
+  ...
+# Subtest: each gate calls the server helper before the protected action
+ok 160 - each gate calls the server helper before the protected action
+  ---
+  duration_ms: 0.347065
+  ...
+# Subtest: a client-supplied user id cannot choose who receives the consent write
+ok 161 - a client-supplied user id cannot choose who receives the consent write
+  ---
+  duration_ms: 0.577366
+  ...
+# Subtest: cron secrets match without a length leak, and demo-cron is local only
+ok 162 - cron secrets match without a length leak, and demo-cron is local only
+  ---
+  duration_ms: 0.893994
+  ...
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# DEMO LINE LOGIN is ON. It signs in the linked member with no password and no 2FA. It does not call LINE.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Subtest: the 123456 bypass and demo mode are rejected when DEMO_MODE is unset or the env is production
+ok 163 - the 123456 bypass and demo mode are rejected when DEMO_MODE is unset or the env is production
+  ---
+  duration_ms: 2.652336
+  ...
+# Subtest: LINE_LOGIN_ENABLED is ignored and refuses to start in production
+ok 164 - LINE_LOGIN_ENABLED is ignored and refuses to start in production
+  ---
+  duration_ms: 0.458483
+  ...
+# Subtest: a non-production demo still accepts 123456 and warns
+ok 165 - a non-production demo still accepts 123456 and warns
+  ---
+  duration_ms: 0.346491
+  ...
+# Subtest: demo LINE copy is live-hidden and shown for DEMO_MODE or a sandbox firm
+ok 166 - demo LINE copy is live-hidden and shown for DEMO_MODE or a sandbox firm
+  ---
+  duration_ms: 12.158633
+  ...
+# Subtest: live screens do not render LINE product copy, including the app footer
+ok 167 - live screens do not render LINE product copy, including the app footer
+  ---
+  duration_ms: 24.689682
+  ...
+# Subtest: deposit policy distinguishes legacy, regional warning, override and hard block
+ok 168 - deposit policy distinguishes legacy, regional warning, override and hard block
+  ---
+  duration_ms: 0.59498
+  ...
+# Subtest: deposit rounding uses the full monthly basis for quarterly and yearly rents
+ok 169 - deposit rounding uses the full monthly basis for quarterly and yearly rents
+  ---
+  duration_ms: 0.115966
+  ...
+# Subtest: deposit policy entrypoint requires current consent before resolving the session
+ok 170 - deposit policy entrypoint requires current consent before resolving the session
+  ---
+  duration_ms: 0.176076
+  ...
+# Subtest: both locales cover ES-01 through ES-09 and avoid prohibited copy
+ok 171 - both locales cover ES-01 through ES-09 and avoid prohibited copy
+  ---
+  duration_ms: 1.117806
+  ...
+# Subtest: identity completion label uses the P1 Email step wording
+ok 172 - identity completion label uses the P1 Email step wording
+  ---
+  duration_ms: 0.11566
+  ...
+# Subtest: canonical JSON sorts nested keys without whitespace and preserves arrays
+ok 173 - canonical JSON sorts nested keys without whitespace and preserves arrays
+  ---
+  duration_ms: 0.79166
+  ...
+# Subtest: known SHA-256 vector and exact PDF byte digest
+ok 174 - known SHA-256 vector and exact PDF byte digest
+  ---
+  duration_ms: 13.596367
+  ...
+# Subtest: append-only chain verifies, snapshots input and detects tampering
+ok 175 - append-only chain verifies, snapshots input and detects tampering
+  ---
+  duration_ms: 9.774107
+  ...
+# Subtest: event hash is SHA-256 of previous hash plus canonical event
+ok 176 - event hash is SHA-256 of previous hash plus canonical event
+  ---
+  duration_ms: 0.815698
+  ...
+# Subtest: default flag is false; every action operation and read stops before SQL/mail
+ok 177 - default flag is false; every action operation and read stops before SQL/mail
+  ---
+  duration_ms: 1.889232
+  ...
+# Subtest: management matrix and stale membership cannot create a case
+ok 178 - management matrix and stale membership cannot create a case
+  ---
+  duration_ms: 0.833977
+  ...
+# Subtest: typed e-sign denials survive transaction mapping with safe public keys
+ok 179 - typed e-sign denials survive transaction mapping with safe public keys
+  ---
+  duration_ms: 0.161667
+  ...
+# Subtest: Email codes bind every challenge dimension and do not contain the secret
+ok 180 - Email codes bind every challenge dimension and do not contain the secret
+  ---
+  duration_ms: 14.938338
+  ...
+# Subtest: server raster accepts handwriting and rejects empty/out-of-bounds/resource abuse
+ok 181 - server raster accepts handwriting and rejects empty/out-of-bounds/resource abuse
+  ---
+  duration_ms: 11.915435
+  ...
+# Subtest: all mounted entrypoints guard consent before flag, session and business access
+ok 182 - all mounted entrypoints guard consent before flag, session and business access
+  ---
+  duration_ms: 27.583624
+  ...
+# Subtest: 90-day purge entrypoints and their SQL functions never name e-sign tables
+ok 183 - 90-day purge entrypoints and their SQL functions never name e-sign tables
+  ---
+  duration_ms: 4.102216
+  ...
+# Subtest: mounted copy follows the lane's banned-word and guarantee rules
+ok 184 - mounted copy follows the lane's banned-word and guarantee rules
+  ---
+  duration_ms: 0.312838
+  ...
+# Subtest: direct review submission requires complete, signer/version/digest-bound delivery
+ok 185 - direct review submission requires complete, signer/version/digest-bound delivery
+  ---
+  duration_ms: 35.426509
+  ...
+# Subtest: draft, sent, signing and completed transitions are detached and lock the final PDF
+ok 186 - draft, sent, signing and completed transitions are detached and lock the final PDF
+  ---
+  duration_ms: 682.00097
+  ...
+# Subtest: illegal order, duplicate steps, actor mismatch and unknown versions throw
+ok 187 - illegal order, duplicate steps, actor mismatch and unknown versions throw
+  ---
+  duration_ms: 0.543209
+  ...
+# Subtest: presumed consent uses the supplied deadline with an inclusive boundary
+ok 188 - presumed consent uses the supplied deadline with an inclusive boundary
+  ---
+  duration_ms: 0.232528
+  ...
+# Subtest: objection halts everyone and can follow explicit consent
+ok 189 - objection halts everyone and can follow explicit consent
+  ---
+  duration_ms: 0.250996
+  ...
+# Subtest: email attempts, expiry, retry and result values
+ok 190 - email attempts, expiry, retry and result values
+  ---
+  duration_ms: 0.587749
+  ...
+# Subtest: OTP is declared but unavailable for issue and check
+ok 191 - OTP is declared but unavailable for issue and check
+  ---
+  duration_ms: 0.36325
+  ...
+# Subtest: foreign document record contains only document type, staff and time
+ok 192 - foreign document record contains only document type, staff and time
+  ---
+  duration_ms: 1.516599
+  ...
+# Subtest: review gate, empty and tiny signatures, digest binding and complete audit fields
+ok 193 - review gate, empty and tiny signatures, digest binding and complete audit fields
+  ---
+  duration_ms: 2.009624
+  ...
+# Subtest: sequential signing blocks later party until predecessor completes
+ok 194 - sequential signing blocks later party until predecessor completes
+  ---
+  duration_ms: 0.495802
+  ...
+# Subtest: incomplete versions can be voided and re-signing resets every signer step
+ok 195 - incomplete versions can be voided and re-signing resets every signer step
+  ---
+  duration_ms: 0.737387
+  ...
+# Subtest: Q8 old version remains effective until the final replacement signature
+ok 196 - Q8 old version remains effective until the final replacement signature
+  ---
+  duration_ms: 1.869745
+  ...
+# Subtest: voiding a pending replacement preserves the effective original
+ok 197 - voiding a pending replacement preserves the effective original
+  ---
+  duration_ms: 1.848976
+  ...
+# Subtest: replacement line uses Asia/Taipei completion date and is mandatory
+ok 198 - replacement line uses Asia/Taipei completion date and is mandatory
+  ---
+  duration_ms: 1.073593
+  ...
+# Subtest: replacement rejects a valid body paired with another PDF or forged proof
+ok 199 - replacement rejects a valid body paired with another PDF or forged proof
+  ---
+  duration_ms: 480.913483
+  ...
+# Subtest: role visibility matrix exposes technical data to company management
+ok 200 - role visibility matrix exposes technical data to company management
+  ---
+  duration_ms: 0.676298
+  ...
+# Subtest: Q9 calendar retention, leap day and Taipei midnight boundary
+ok 201 - Q9 calendar retention, leap day and Taipei midnight boundary
+  ---
+  duration_ms: 0.467917
+  ...
+# Subtest: ID-photo purge cannot delete any e-sign record kind
+ok 202 - ID-photo purge cannot delete any e-sign record kind
+  ---
+  duration_ms: 0.105143
+  ...
+# Subtest: signature page appends to a loadable PDF and returns the exact output digest
+ok 203 - signature page appends to a loadable PDF and returns the exact output digest
+  ---
+  duration_ms: 38.901294
+  ...
+# Subtest: Taipei stamp time includes date rollover and timezone offset
+ok 204 - Taipei stamp time includes date rollover and timezone offset
+  ---
+  duration_ms: 0.32444
+  ...
+# Subtest: reject wrong digest, empty name and Chinese name without font bytes
+ok 205 - reject wrong digest, empty name and Chinese name without font bytes
+  ---
+  duration_ms: 7.088204
+  ...
+# Subtest: CJK font embeds successfully and two stamps preserve both signatures and digests
+ok 206 - CJK font embeds successfully and two stamps preserve both signatures and digests
+  ---
+  duration_ms: 1146.055923
+  ...
+# Subtest: owner statements include only approved and posted expenses billed to the owner
+ok 207 - owner statements include only approved and posted expenses billed to the owner
+  ---
+  duration_ms: 0.6415
+  ...
+# Subtest: the statement query uses the shared status predicate
+ok 208 - the statement query uses the shared status predicate
+  ---
+  duration_ms: 0.843843
+  ...
+# Subtest: a closed month blocks that month and every earlier one
+ok 209 - a closed month blocks that month and every earlier one
+  ---
+  duration_ms: 0.104748
+  ...
+# Subtest: expense amounts and dates are checked before they are saved
+ok 210 - expense amounts and dates are checked before they are saved
+  ---
+  duration_ms: 0.764764
+  ...
+# Subtest: approving a draft posts it and leaves the repair ticket link alone
+ok 211 - approving a draft posts it and leaves the repair ticket link alone
+  ---
+  duration_ms: 1.234177
+  ...
+# Subtest: legacy source keeps rent, deposit and actual utility lines
+ok 212 - legacy source keeps rent, deposit and actual utility lines
+  ---
+  duration_ms: 0.97505
+  ...
+# Subtest: captured basis supplies the exact rent used in the invoice line
+ok 213 - captured basis supplies the exact rent used in the invoice line
+  ---
+  duration_ms: 0.894039
+  ...
+# Subtest: partial period uses inclusive days and rounds once to the existing currency unit
+ok 214 - partial period uses inclusive days and rounds once to the existing currency unit
+  ---
+  duration_ms: 1.477307
+  ...
+# Subtest: full calendar months and the explicit false choice keep full monthly rent
+ok 215 - full calendar months and the explicit false choice keep full monthly rent
+  ---
+  duration_ms: 0.278221
+  ...
+# Subtest: invalid source dates, ordering, amounts and TWD fractions fail closed
+ok 216 - invalid source dates, ordering, amounts and TWD fractions fail closed
+  ---
+  duration_ms: 0.337114
+  ...
+# Subtest: default privileges revoke future execute and do not touch existing functions
+ok 217 - default privileges revoke future execute and do not touch existing functions
+  ---
+  duration_ms: 0.701675
+  ...
+# Subtest: src does not call PostgREST RPC
+ok 218 - src does not call PostgREST RPC
+  ---
+  duration_ms: 22.110191
+  ...
+# Subtest: CI runs the local function privilege check
+ok 219 - CI runs the local function privilege check
+  ---
+  duration_ms: 0.353437
+  ...
+# Subtest: merged trigger functions lose EXECUTE only when they exist
+ok 220 - merged trigger functions lose EXECUTE only when they exist
+  ---
+  duration_ms: 0.406775
+  ...
+# Subtest: the allowlist is authenticated-only and anon is not granted
+ok 221 - the allowlist is authenticated-only and anon is not granted
+  ---
+  duration_ms: 0.19506
+  ...
+# Subtest: PUBLIC loses EXECUTE on app helper functions; authenticated and service_role keep it
+ok 222 - PUBLIC loses EXECUTE on app helper functions; authenticated and service_role keep it
+  ---
+  duration_ms: 1.984986
+  ...
+# Subtest: privilege checks reject implicit or redirected targets before any database command
+ok 223 - privilege checks reject implicit or redirected targets before any database command
+  ---
+  duration_ms: 191.94276
+  ...
+# Subtest: JSON input is bounded by actual bytes, not just its header
+ok 224 - JSON input is bounded by actual bytes, not just its header
+  ---
+  duration_ms: 17.645243
+  ...
+# Subtest: handover evidence validates content and uses verified immutable object writes
+ok 225 - handover evidence validates content and uses verified immutable object writes
+  ---
+  duration_ms: 16.40244
+  ...
+# Subtest: bytea slices stay at 24KiB so a Bind and its hex DataRow fit under 64KiB
+ok 226 - bytea slices stay at 24KiB so a Bind and its hex DataRow fit under 64KiB
+  ---
+  duration_ms: 1.660058
+  ...
+# Subtest: writeCiphertext never binds a bytea larger than 24KiB
+ok 227 - writeCiphertext never binds a bytea larger than 24KiB
+  ---
+  duration_ms: 1.097148
+  ...
+# Subtest: copySlotCiphertext never binds a bytea
+ok 228 - copySlotCiphertext never binds a bytea
+  ---
+  duration_ms: 0.404243
+  ...
+# Subtest: readCiphertext reassembles 24KiB slices from one result
+ok 229 - readCiphertext reassembles 24KiB slices from one result
+  ---
+  duration_ms: 0.324501
+  ...
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY must be exactly 32 bytes (64 hex characters, or standard base64 that decodes to 32 bytes).
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_HMAC_KEY is required outside demo mode.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_HMAC_KEY must be exactly 32 bytes (64 hex characters, or standard base64 that decodes to 32 bytes).
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_SIGNING_SECRET is required outside demo mode.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_SIGNING_SECRET must be exactly 32 bytes (64 hex characters, or standard base64 that decodes to 32 bytes).
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Subtest: ciphertext round-trips and the HMAC is not the ID number
+ok 230 - ciphertext round-trips and the HMAC is not the ID number
+  ---
+  duration_ms: 8.285787
+  ...
+# Subtest: a photo token expires and a tampered signature is rejected
+ok 231 - a photo token expires and a tampered signature is rejected
+  ---
+  duration_ms: 0.65323
+  ...
+# Subtest: photo payloads must be a JPEG within 800 KB and the long-edge cap
+ok 232 - photo payloads must be a JPEG within 800 KB and the long-edge cap
+  ---
+  duration_ms: 2.655858
+  ...
+# Subtest: a GIF is rejected from its magic bytes, and a PNG is accepted only as a PNG
+ok 233 - a GIF is rejected from its magic bytes, and a PNG is accepted only as a PNG
+  ---
+  duration_ms: 0.190761
+  ...
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Subtest: startup refuses when an ID key is missing outside demo mode
+ok 234 - startup refuses when an ID key is missing outside demo mode
+  ---
+  duration_ms: 2.985548
+  ...
+# Subtest: webcrypto opens a payload written by node aes-256-gcm
+ok 235 - webcrypto opens a payload written by node aes-256-gcm
+  ---
+  duration_ms: 0.853149
+  ...
+# Subtest: demo mode refuses a missing or empty encryption key
+ok 236 - demo mode refuses a missing or empty encryption key
+  ---
+  duration_ms: 0.691815
+  ...
+# Subtest: demo keys cannot encrypt when the environment is production
+ok 237 - demo keys cannot encrypt when the environment is production
+  ---
+  duration_ms: 0.348849
+  ...
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: ID_DOC_ENCRYPTION_KEY is required.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Subtest: ID purge accepts only private ID relative keys
+ok 238 - ID purge accepts only private ID relative keys
+  ---
+  duration_ms: 0.700407
+  ...
+# Subtest: ID purge permits only the ID photo kind
+ok 239 - ID purge permits only the ID photo kind
+  ---
+  duration_ms: 0.136737
+  ...
+# Subtest: runner clamps bounds and rolls back a whole invalid returned batch
+ok 240 - runner clamps bounds and rolls back a whole invalid returned batch
+  ---
+  duration_ms: 1.238968
+  ...
+# Subtest: dry-run calls preview once and performs no deletion
+ok 241 - dry-run calls preview once and performs no deletion
+  ---
+  duration_ms: 0.45909
+  ...
+# Subtest: global OFF, missing, invalid and read-error do no work or DB writes
+ok 242 - global OFF, missing, invalid and read-error do no work or DB writes
+  ---
+  duration_ms: 1.353318
+  ...
+# Subtest: fresh DB modes select scheduled dry-run and real purge without a bypass
+ok 243 - fresh DB modes select scheduled dry-run and real purge without a bypass
+  ---
+  duration_ms: 0.553988
+  ...
+# Subtest: an ID upload is refused from Content-Length before the body is read
+ok 244 - an ID upload is refused from Content-Length before the body is read
+  ---
+  duration_ms: 0.579996
+  ...
+# Subtest: ID uploads are limited per user
+ok 245 - ID uploads are limited per user
+  ---
+  duration_ms: 0.147354
+  ...
+# Subtest: the burned sentence is only the firm name
+ok 246 - the burned sentence is only the firm name
+  ---
+  duration_ms: 0.76698
+  ...
+# Subtest: workers receive watermark fonts from the entry's Data modules
+ok 247 - workers receive watermark fonts from the entry's Data modules
+  ---
+  duration_ms: 0.283643
+  ...
+# Subtest: the second copy is a different jpeg with a red bar
+ok 248 - the second copy is a different jpeg with a red bar
+  ---
+  duration_ms: 77.887341
+  ...
+# Subtest: actual XLSX reader rejects 1904 epoch only on guarded path and keeps sparse row numbers
+ok 249 - actual XLSX reader rejects 1904 epoch only on guarded path and keeps sparse row numbers
+  ---
+  duration_ms: 4.220186
+  ...
+# Subtest: import profile uses configured timezone across midnight, never the machine's day
+ok 250 - import profile uses configured timezone across midnight, never the machine's day
+  ---
+  duration_ms: 11.078765
+  ...
+# Subtest: unsupported or inconsistent region never falls back to TW
+ok 251 - unsupported or inconsistent region never falls back to TW
+  ---
+  duration_ms: 0.471254
+  ...
+# Subtest: spreadsheet auto-detects Big5 and round-trips xlsx text
+ok 252 - spreadsheet auto-detects Big5 and round-trips xlsx text
+  ---
+  duration_ms: 71.02923
+  ...
+# Subtest: column match accepts legacy owner headers and ignores a client org id
+ok 253 - column match accepts legacy owner headers and ignores a client org id
+  ---
+  duration_ms: 1.369138
+  ...
+# Subtest: row checks cover deposit cap, ended leases, duplicates, due day, and phone
+ok 254 - row checks cover deposit cap, ended leases, duplicates, due day, and phone
+  ---
+  duration_ms: 4.727774
+  ...
+# Subtest: an existing unit, tenant, and lease are reused and counted as already present
+ok 255 - an existing unit, tenant, and lease are reused and counted as already present
+  ---
+  duration_ms: 0.704701
+  ...
+# Subtest: a shared phone is not reused, and full-width numbers, ROC dates, and Excel phones are accepted
+ok 256 - a shared phone is not reused, and full-width numbers, ROC dates, and Excel phones are accepted
+  ---
+  duration_ms: 0.836222
+  ...
+# Subtest: ROC year 115 is 2026-01-05 for era text, separators, and full-width digits
+ok 257 - ROC year 115 is 2026-01-05 for era text, separators, and full-width digits
+  ---
+  duration_ms: 0.286665
+  ...
+# Subtest: one blocked row zeroes the commit totals and a dry run still counts the valid rows
+ok 258 - one blocked row zeroes the commit totals and a dry run still counts the valid rows
+  ---
+  duration_ms: 0.401484
+  ...
+# Subtest: over-long fields and out-of-range amounts are rejected
+ok 259 - over-long fields and out-of-range amounts are rejected
+  ---
+  duration_ms: 0.243486
+  ...
+# Subtest: ID hashes match the uploader HMAC and fail closed without a key
+ok 260 - ID hashes match the uploader HMAC and fail closed without a key
+  ---
+  duration_ms: 0.712578
+  ...
+# Subtest: import requests reject a null body, an unknown mode, and a body over the byte cap
+ok 261 - import requests reject a null body, an unknown mode, and a body over the byte cap
+  ---
+  duration_ms: 2.418243
+  ...
+# Subtest: the 2000-row cap counts parsed rows for csv and xlsx names
+ok 262 - the 2000-row cap counts parsed rows for csv and xlsx names
+  ---
+  duration_ms: 6.265347
+  ...
+# Subtest: a confirmed import is one transaction and the screen posts it once
+ok 263 - a confirmed import is one transaction and the screen posts it once
+  ---
+  duration_ms: 1.773687
+  ...
+# Subtest: active-unit billing counts include imported leases
+ok 264 - active-unit billing counts include imported leases
+  ---
+  duration_ms: 2.858535
+  ...
+# Subtest: error CSV cells neutralize formula injection
+ok 265 - error CSV cells neutralize formula injection
+  ---
+  duration_ms: 0.384923
+  ...
+# Subtest: confirm preview highlights the blank rent cell and keeps valid rows
+ok 266 - confirm preview highlights the blank rent cell and keeps valid rows
+  ---
+  duration_ms: 11.564696
+  ...
+# Subtest: bulk import migration is additive and idempotent
+ok 267 - bulk import migration is additive and idempotent
+  ---
+  duration_ms: 0.770648
+  ...
+# Subtest: zh-TW import copy uses 屋主 and 租客
+ok 268 - zh-TW import copy uses 屋主 and 租客
+  ---
+  duration_ms: 2.587173
+  ...
+# Subtest: import diagnostics preserve source lines, distinct date fields and all error sources
+ok 269 - import diagnostics preserve source lines, distinct date fields and all error sources
+  ---
+  duration_ms: 0.801113
+  ...
+# Subtest: import detail flag requires explicit global and organization opt-ins
+ok 270 - import detail flag requires explicit global and organization opt-ins
+  ---
+  duration_ms: 0.125059
+  ...
+# Subtest: real CSV and XLSX readers preserve source records through validation and error export
+ok 271 - real CSV and XLSX readers preserve source records through validation and error export
+  ---
+  duration_ms: 13.714443
+  ...
+# Subtest: a month fills the calendar, and a custom range needs both dates
+ok 272 - a month fills the calendar, and a custom range needs both dates
+  ---
+  duration_ms: 11.386397
+  ...
+# Subtest: csv quotes fields and keeps the totals the query already returned
+ok 273 - csv quotes fields and keeps the totals the query already returned
+  ---
+  duration_ms: 0.407352
+  ...
+# Subtest: csv prefixes formula text and leaves numeric cells unchanged
+ok 274 - csv prefixes formula text and leaves numeric cells unchanged
+  ---
+  duration_ms: 0.207563
+  ...
+# Subtest: the report migration is SQL, shares the statement predicate, and sorts after the expense migration
+ok 275 - the report migration is SQL, shares the statement predicate, and sorts after the expense migration
+  ---
+  duration_ms: 0.376714
+  ...
+# Subtest: DEFAULT_JOB_TYPES seeds all 10 job types from job_types_v1 §2
+ok 276 - DEFAULT_JOB_TYPES seeds all 10 job types from job_types_v1 §2
+  ---
+  duration_ms: 0.807913
+  ...
+# Subtest: validateJobTypeFields enforces required fields and numeric constraints
+ok 277 - validateJobTypeFields enforces required fields and numeric constraints
+  ---
+  duration_ms: 0.263992
+  ...
+# Subtest: validatePhasePhotoCounts checks min/max per phase
+ok 278 - validatePhasePhotoCounts checks min/max per phase
+  ---
+  duration_ms: 0.173498
+  ...
+# Subtest: completion photos enforce during photos and allow an after-photo reason
+ok 279 - completion photos enforce during photos and allow an after-photo reason
+  ---
+  duration_ms: 0.148889
+  ...
+# Subtest: validatePricingMode accepts lump_sum and configured modes
+ok 280 - validatePricingMode accepts lump_sum and configured modes
+  ---
+  duration_ms: 0.10592
+  ...
+# Subtest: item name prefix is idempotent
+ok 281 - item name prefix is idempotent
+  ---
+  duration_ms: 0.090779
+  ...
+# Subtest: explicit row amounts win and unit prices are rounded display values
+ok 282 - explicit row amounts win and unit prices are rounded display values
+  ---
+  duration_ms: 0.241899
+  ...
+# Subtest: legacy unit-price-only input is supported with safe integer validation
+ok 283 - legacy unit-price-only input is supported with safe integer validation
+  ---
+  duration_ms: 0.161408
+  ...
+# Subtest: persisted pricing overrides caller quantity/unit in every pricing mode
+ok 284 - persisted pricing overrides caller quantity/unit in every pricing mode
+  ---
+  duration_ms: 0.317798
+  ...
+# Subtest: persisted pricing supports ordered material/labor rows and custom units
+ok 285 - persisted pricing supports ordered material/labor rows and custom units
+  ---
+  duration_ms: 0.189105
+  ...
+# Subtest: absent persisted pricing rejects caller quantities and unit prices
+ok 286 - absent persisted pricing rejects caller quantities and unit prices
+  ---
+  duration_ms: 0.392169
+  ...
+# Subtest: malformed persisted pricing fails closed
+ok 287 - malformed persisted pricing fails closed
+  ---
+  duration_ms: 0.188775
+  ...
+# Subtest: split totals sum row amounts and reject unsafe totals
+ok 288 - split totals sum row amounts and reject unsafe totals
+  ---
+  duration_ms: 0.118504
+  ...
+# database failed { key: 'errors.tenantExists', message: 'database error' }
+# Subtest: the lease form keeps a new tenant and an existing contact id apart
+ok 289 - the lease form keeps a new tenant and an existing contact id apart
+  ---
+  duration_ms: 11.306944
+  ...
+# Subtest: a second tenant contact with the same email is the existing-tenant error
+ok 290 - a second tenant contact with the same email is the existing-tenant error
+  ---
+  duration_ms: 2.007208
+  ...
+# Subtest: the lease wizard can search for an existing tenant
+ok 291 - the lease wizard can search for an existing tenant
+  ---
+  duration_ms: 0.34673
+  ...
+# Subtest: a deposit over two months of rent needs a typed reason
+ok 292 - a deposit over two months of rent needs a typed reason
+  ---
+  duration_ms: 0.711102
+  ...
+# Subtest: create and edit lease screens ask for a reason with lease_deposit_over
+ok 293 - create and edit lease screens ask for a reason with lease_deposit_over
+  ---
+  duration_ms: 1.519807
+  ...
+# Subtest: a lease idempotency key is a UUID or absent
+ok 294 - a lease idempotency key is a UUID or absent
+  ---
+  duration_ms: 1.714986
+  ...
+# Subtest: the lease idempotency migration is additive and later than shared staging history
+ok 295 - the lease idempotency migration is additive and later than shared staging history
+  ---
+  duration_ms: 0.655806
+  ...
+# Subtest: a later term is allowed and an overlapping term names the existing dates
+ok 296 - a later term is allowed and an overlapping term names the existing dates
+  ---
+  duration_ms: 0.421578
+  ...
+# Subtest: a Taiwan mobile becomes +886 and an international number stays
+ok 297 - a Taiwan mobile becomes +886 and an international number stays
+  ---
+  duration_ms: 0.214854
+  ...
+# Subtest: LINE id is optional and bounded
+ok 298 - LINE id is optional and bounded
+  ---
+  duration_ms: 0.832759
+  ...
+# Subtest: only a PDF header within the size cap is a signed lease
+ok 299 - only a PDF header within the size cap is a signed lease
+  ---
+  duration_ms: 2.847541
+  ...
+# Subtest: traditional Chinese copy says 屋主
+ok 300 - traditional Chinese copy says 屋主
+  ---
+  duration_ms: 0.649074
+  ...
+# Subtest: committed legal markdown matches the v1 files
+ok 301 - committed legal markdown matches the v1 files
+  ---
+  duration_ms: 1.057361
+  ...
+# Subtest: legal pages render the markdown verbatim in zh-TW
+ok 302 - legal pages render the markdown verbatim in zh-TW
+  ---
+  duration_ms: 18.518925
+  ...
+# Subtest: legal markdown escapes raw html
+ok 303 - legal markdown escapes raw html
+  ---
+  duration_ms: 2.708567
+  ...
+# Subtest: the site footer links to the three legal pages
+ok 304 - the site footer links to the three legal pages
+  ---
+  duration_ms: 3.655598
+  ...
+# Subtest: privacy v2 (2026-10-27) is archived unchanged
+ok 305 - privacy v2 (2026-10-27) is archived unchanged
+  ---
+  duration_ms: 0.195461
+  ...
+# Subtest: search text is trimmed, capped, and ILIKE wildcards stay literal
+ok 306 - search text is trimmed, capped, and ILIKE wildcards stay literal
+  ---
+  duration_ms: 1.049663
+  ...
+# Subtest: list SQL is parameterized, org-scoped, paged, and does not read national IDs
+ok 307 - list SQL is parameterized, org-scoped, paged, and does not read national IDs
+  ---
+  duration_ms: 1.671073
+  ...
+# Subtest: the fifth failure locks the email for 15 minutes
+ok 308 - the fifth failure locks the email for 15 minutes
+  ---
+  duration_ms: 0.573874
+  ...
+# mail sent msg_cf
+# mail skipped: EMAIL binding missing
+# mail skipped: BREVO_API_KEY missing
+# mail sent <msg_brevo@smtp-relay.brevo.com>
+# mail skipped: RESEND_API_KEY missing
+# mail sent msg_re
+# Subtest: mail provider defaults to Cloudflare and backups are explicit
+ok 309 - mail provider defaults to Cloudflare and backups are explicit
+  ---
+  duration_ms: 0.54568
+  ...
+# Subtest: Cloudflare send uses the binding shape and skips when it is missing
+ok 310 - Cloudflare send uses the binding shape and skips when it is missing
+  ---
+  duration_ms: 1.222684
+  ...
+# Subtest: Brevo is the fallback and skips without an API key
+ok 311 - Brevo is the fallback and skips without an API key
+  ---
+  duration_ms: 13.292486
+  ...
+# Subtest: Resend is the backup and skips without an API key
+ok 312 - Resend is the backup and skips without an API key
+  ---
+  duration_ms: 0.521971
+  ...
+# Subtest: overdue and reset copy matches the revised file and never says 收款
+ok 313 - overdue and reset copy matches the revised file and never says 收款
+  ---
+  duration_ms: 0.875732
+  ...
+# Subtest: lease expiry copy keeps the footer, reply facts, and thousands separators
+ok 314 - lease expiry copy keeps the footer, reply facts, and thousands separators
+  ---
+  duration_ms: 0.294166
+  ...
+# Subtest: signup confirmation uses the shared disclaimer and the 60-minute copy
+ok 315 - signup confirmation uses the shared disclaimer and the 60-minute copy
+  ---
+  duration_ms: 0.18536
+  ...
+# Subtest: transactional templates share one operator footer
+ok 316 - transactional templates share one operator footer
+  ---
+  duration_ms: 0.243009
+  ...
+# Subtest: calendar and due-day boundaries
+ok 317 - calendar and due-day boundaries
+  ---
+  duration_ms: 1.615547
+  ...
+# Subtest: historical unknown, overlap and independent full-month rent
+ok 318 - historical unknown, overlap and independent full-month rent
+  ---
+  duration_ms: 0.300322
+  ...
+# Subtest: void and written-off coverage stay uncertain, and money uses app minor units
+ok 319 - void and written-off coverage stay uncertain, and money uses app minor units
+  ---
+  duration_ms: 0.26328
+  ...
+# Subtest: finite dates and utility evidence are fail-closed
+ok 320 - finite dates and utility evidence are fail-closed
+  ---
+  duration_ms: 0.215751
+  ...
+# Subtest: configured currency exponents preserve every significant fractional digit
+ok 321 - configured currency exponents preserve every significant fractional digit
+  ---
+  duration_ms: 9.928395
+  ...
+# Subtest: empty recorded rent service period remains unknown evidence
+ok 322 - empty recorded rent service period remains unknown evidence
+  ---
+  duration_ms: 0.250562
+  ...
+# Subtest: positive full-month rent binds payer, property, currency configuration and source
+ok 323 - positive full-month rent binds payer, property, currency configuration and source
+  ---
+  duration_ms: 1.978373
+  ...
+# Subtest: unsupported inputs have no operation digest
+ok 324 - unsupported inputs have no operation digest
+  ---
+  duration_ms: 0.733027
+  ...
+# Subtest: move-out notice
+    # Subtest: flag defaults off and only exact true enables
+    ok 1 - flag defaults off and only exact true enables
+      ---
+      duration_ms: 0.434151
+      ...
+    # Subtest: disabled performs no queries, even for an invalid date
+    ok 2 - disabled performs no queries, even for an invalid date
+      ---
+      duration_ms: 4.465161
+      ...
+    # Subtest: invalid dates are rejected before any query
+    ok 3 - invalid dates are rejected before any query
+      ---
+      duration_ms: 1.040176
+      ...
+    # Subtest: updates only moved_out_on, scoped by lease and org
+    ok 4 - updates only moved_out_on, scoped by lease and org
+      ---
+      duration_ms: 0.421959
+      ...
+    # Subtest: accepts leap day and preserves an explicit reason
+    ok 5 - accepts leap day and preserves an explicit reason
+      ---
+      duration_ms: 0.194882
+      ...
+    # Subtest: returns not_found and rolls back when no lease matches
+    ok 6 - returns not_found and rolls back when no lease matches
+      ---
+      duration_ms: 0.261579
+      ...
+    # Subtest: rolls back and preserves the config error
+    ok 7 - rolls back and preserves the config error
+      ---
+      duration_ms: 0.195693
+      ...
+    # Subtest: rolls back and preserves the update error
+    ok 8 - rolls back and preserves the update error
+      ---
+      duration_ms: 0.168925
+      ...
+    # Subtest: rolls back and preserves the commit error
+    ok 9 - rolls back and preserves the commit error
+      ---
+      duration_ms: 0.15704
+      ...
+    1..9
+ok 325 - move-out notice
+  ---
+  duration_ms: 9.566033
+  ...
+# Subtest: only a rolled-back lock conflict retries in a fresh transaction
+ok 326 - only a rolled-back lock conflict retries in a fresh transaction
+  ---
+  duration_ms: 2.599241
+  ...
+# Subtest: rollback or cleanup failure and commit uncertainty never become busy or success
+    # Subtest: rollback
+    ok 1 - rollback
+      ---
+      duration_ms: 1.285475
+      ...
+    # Subtest: cleanup
+    ok 2 - cleanup
+      ---
+      duration_ms: 0.570953
+      ...
+    # Subtest: commit
+    ok 3 - commit
+      ---
+      duration_ms: 0.849923
+      ...
+    # Subtest: other
+    ok 4 - other
+      ---
+      duration_ms: 0.437341
+      ...
+    # Subtest: permission
+    ok 5 - permission
+      ---
+      duration_ms: 0.344186
+      ...
+    # Subtest: begin
+    ok 6 - begin
+      ---
+      duration_ms: 0.398235
+      ...
+    1..6
+ok 327 - rollback or cleanup failure and commit uncertainty never become busy or success
+  ---
+  duration_ms: 4.822573
+  ...
+# Subtest: a delayed physical close may outlive confirmed rollback and a bounded retry
+ok 328 - a delayed physical close may outlive confirmed rollback and a bounded retry
+  ---
+  duration_ms: 252.666497
+  ...
+# Subtest: mark request accepts only exact scoped JSON and a canonical same origin
+ok 329 - mark request accepts only exact scoped JSON and a canonical same origin
+  ---
+  duration_ms: 9.339439
+  ...
+# Subtest: the bundled template hash matches the stored official text
+ok 330 - the bundled template hash matches the stored official text
+  ---
+  duration_ms: 0.757446
+  ...
+# Subtest: an empty lease leaves the official text unchanged
+ok 331 - an empty lease leaves the official text unchanged
+  ---
+  duration_ms: 1.147932
+  ...
+# Subtest: filled blanks are the only difference from the stored official text
+ok 332 - filled blanks are the only difference from the stored official text
+  ---
+  duration_ms: 2.218693
+  ...
+# Subtest: missing data and the other fee choices stay blank
+ok 333 - missing data and the other fee choices stay blank
+  ---
+  duration_ms: 1.000758
+  ...
+# Subtest: door numbers print as typed and the floor stays in its own cell
+ok 334 - door numbers print as typed and the floor stays in its own cell
+  ---
+  duration_ms: 2.781802
+  ...
+# Subtest: rent and deposit print only a whole number of dollars
+ok 335 - rent and deposit print only a whole number of dollars
+  ---
+  duration_ms: 0.554526
+  ...
+# Subtest: the lease PDF prints the official form and keeps the deposit reason outside it
+ok 336 - the lease PDF prints the official form and keeps the deposit reason outside it
+  ---
+  duration_ms: 0.666191
+  ...
+# Subtest: invitation policy requires an explicit, well-formed decision
+ok 337 - invitation policy requires an explicit, well-formed decision
+  ---
+  duration_ms: 0.617022
+  ...
+# Subtest: decimal amounts remain exact within the configured currency scale and bigint range
+ok 338 - decimal amounts remain exact within the configured currency scale and bigint range
+  ---
+  duration_ms: 0.685055
+  ...
+# Subtest: dates and immutable request fields are validated before use
+ok 339 - dates and immutable request fields are validated before use
+  ---
+  duration_ms: 0.997417
+  ...
+# Subtest: recovery distinguishes absent storage from corrupt JSON values and validates the whole shape
+ok 340 - recovery distinguishes absent storage from corrupt JSON values and validates the whole shape
+  ---
+  duration_ms: 6.967889
+  ...
+# Subtest: expected scope binds actor, selected organization, live parent and environment
+ok 341 - expected scope binds actor, selected organization, live parent and environment
+  ---
+  duration_ms: 0.986695
+  ...
+# Subtest: history time uses selected zone, Gregorian calendar, and an ISO instant
+ok 342 - history time uses selected zone, Gregorian calendar, and an ISO instant
+  ---
+  duration_ms: 12.378593
+  ...
+# Subtest: the global switch accepts only the exact configured true string
+ok 343 - the global switch accepts only the exact configured true string
+  ---
+  duration_ms: 0.521087
+  ...
+# Subtest: paper versions require the global switch and strict boolean org opt-in
+ok 344 - paper versions require the global switch and strict boolean org opt-in
+  ---
+  duration_ms: 0.177207
+  ...
+# Subtest: the default switch keeps the legacy panel path regardless of org opt-in
+ok 345 - the default switch keeps the legacy panel path regardless of org opt-in
+  ---
+  duration_ms: 0.088207
+  ...
+# Subtest: replacements accept only a reason code and first uploads store none
+ok 346 - replacements accept only a reason code and first uploads store none
+  ---
+  duration_ms: 0.604819
+  ...
+# Subtest: the paper panel offers the reason codes and does not collect free text
+ok 347 - the paper panel offers the reason codes and does not collect free text
+  ---
+  duration_ms: 0.37584
+  ...
+# Subtest: password rules reject short, non-alphanumeric, and common passwords
+ok 348 - password rules reject short, non-alphanumeric, and common passwords
+  ---
+  duration_ms: 0.961609
+  ...
+# Subtest: a consent redirect is audited before it is rethrown, with no form data
+ok 349 - a consent redirect is audited before it is rethrown, with no form data
+  ---
+  duration_ms: 1.161318
+  ...
+# Subtest: audit failure supersedes consent redirect and valid consent does not log a denial
+ok 350 - audit failure supersedes consent redirect and valid consent does not log a denial
+  ---
+  duration_ms: 0.228299
+  ...
+# Subtest: missing organization preserves the verified identity for the denial audit
+ok 351 - missing organization preserves the verified identity for the denial audit
+  ---
+  duration_ms: 0.163921
+  ...
+# Subtest: API denials are audited before returning the original consent response
+ok 352 - API denials are audited before returning the original consent response
+  ---
+  duration_ms: 23.089374
+  ...
+# Subtest: API missing session audits its verified context, and audit failure withholds denial
+ok 353 - API missing session audits its verified context, and audit failure withholds denial
+  ---
+  duration_ms: 1.062265
+  ...
+# Subtest: API infrastructure failures return a private generic denial and stop business work
+ok 354 - API infrastructure failures return a private generic denial and stop business work
+  ---
+  duration_ms: 1.817011
+  ...
+# Subtest: API successful consent returns the session without denial audit
+ok 355 - API successful consent returns the session without denial audit
+  ---
+  duration_ms: 0.374172
+  ...
+# Subtest: an audited denied tenant view uses missing guidance without swallowing failures
+ok 356 - an audited denied tenant view uses missing guidance without swallowing failures
+  ---
+  duration_ms: 1.219099
+  ...
+# Subtest: TW requires three-digit bank code and branch
+ok 357 - TW requires three-digit bank code and branch
+  ---
+  duration_ms: 0.339448
+  ...
+# Subtest: US and JP use generic bank details without TW requirements
+ok 358 - US and JP use generic bank details without TW requirements
+  ---
+  duration_ms: 0.187262
+  ...
+# Subtest: validation rejects invalid numbers, oversized holders and owner defaults
+ok 359 - validation rejects invalid numbers, oversized holders and owner defaults
+  ---
+  duration_ms: 0.178693
+  ...
+# Subtest: lease overrides company default and missing data resolves to none
+ok 360 - lease overrides company default and missing data resolves to none
+  ---
+  duration_ms: 0.112252
+  ...
+# Subtest: payment instructions show full numbers or legacy suffix only
+ok 361 - payment instructions show full numbers or legacy suffix only
+  ---
+  duration_ms: 0.088473
+  ...
+# Subtest: tenant payment page contains no sample account literal and retains disclaimer
+ok 362 - tenant payment page contains no sample account literal and retains disclaimer
+  ---
+  duration_ms: 0.253316
+  ...
+# Subtest: tenant display preserves OFF fallback and renders enabled selection or none
+ok 363 - tenant display preserves OFF fallback and renders enabled selection or none
+  ---
+  duration_ms: 0.651817
+  ...
+# Subtest: lease and statement PDFs follow the same roles as the pages
+ok 364 - lease and statement PDFs follow the same roles as the pages
+  ---
+  duration_ms: 0.657389
+  ...
+# Subtest: a lease PDF prints the official form, the deposit reason, and the stored hash
+ok 365 - a lease PDF prints the official form, the deposit reason, and the stored hash
+  ---
+  duration_ms: 1.86446
+  ...
+# Subtest: a missing hash is labeled and omitted fields stay blank
+ok 366 - a missing hash is labeled and omitted fields stay blank
+  ---
+  duration_ms: 7.992571
+  ...
+# Subtest: an English lease PDF localizes the paper note and keeps the official clauses
+ok 367 - an English lease PDF localizes the paper note and keeps the official clauses
+  ---
+  duration_ms: 0.564028
+  ...
+# Subtest: a shortfall statement says 本期淨額為負 and keeps the signed closing
+ok 368 - a shortfall statement says 本期淨額為負 and keeps the signed closing
+  ---
+  duration_ms: 13.283993
+  ...
+# Subtest: payouts stay in the same net on the chip and the formula
+ok 369 - payouts stay in the same net on the chip and the formula
+  ---
+  duration_ms: 1.507296
+  ...
+# Subtest: permission matrix matches the prototype table
+ok 370 - permission matrix matches the prototype table
+  ---
+  duration_ms: 0.868378
+  ...
+# Subtest: navigation follows the matrix
+ok 371 - navigation follows the matrix
+  ---
+  duration_ms: 0.632071
+  ...
+# Subtest: totp accepts the current code and rejects a wrong one
+ok 372 - totp accepts the current code and rejects a wrong one
+  ---
+  duration_ms: 0.83663
+  ...
+# Subtest: invite links use an allowed request host, and production stays on app.condola.app
+ok 373 - invite links use an allowed request host, and production stays on app.condola.app
+  ---
+  duration_ms: 1.089022
+  ...
+# Subtest: a clipboard rejection is not a successful copy, and a failed request is a network error
+ok 374 - a clipboard rejection is not a successful copy, and a failed request is a network error
+  ---
+  duration_ms: 1.674445
+  ...
+# Subtest: portal tokens are at least 32 bytes and minted logins stay recognizable
+ok 375 - portal tokens are at least 32 bytes and minted logins stay recognizable
+  ---
+  duration_ms: 0.480567
+  ...
+# Subtest: portal invite copy hands the link over and stays on the locked wording
+ok 376 - portal invite copy hands the link over and stays on the locked wording
+  ---
+  duration_ms: 4.016592
+  ...
+# Subtest: a person who is both tenant and owner follows the page, then the latest invite
+ok 377 - a person who is both tenant and owner follows the page, then the latest invite
+  ---
+  duration_ms: 0.184167
+  ...
+# Subtest: a sandbox firm or a taken email mints a new portal login
+ok 378 - a sandbox firm or a taken email mints a new portal login
+  ---
+  duration_ms: 0.553549
+  ...
+# Subtest: portal provision locks the lowercased email before the check and insert
+ok 379 - portal provision locks the lowercased email before the check and insert
+  ---
+  duration_ms: 0.288988
+  ...
+# Subtest: only an auth email collision counts as a taken login
+ok 380 - only an auth email collision counts as a taken login
+  ---
+  duration_ms: 0.222897
+  ...
+# Subtest: reference eligibility and final states retain simulation provenance
+ok 381 - reference eligibility and final states retain simulation provenance
+  ---
+  duration_ms: 0.867302
+  ...
+# Subtest: same request replays, conflicting request cannot claim active generation
+ok 382 - same request replays, conflicting request cannot claim active generation
+  ---
+  duration_ms: 0.59959
+  ...
+# Subtest: unknown is terminal even when a late transport resolves
+ok 383 - unknown is terminal even when a late transport resolves
+  ---
+  duration_ms: 0.273328
+  ...
+# Subtest: completed association bypasses the transport and no private material appears
+ok 384 - completed association bypasses the transport and no private material appears
+  ---
+  duration_ms: 0.289208
+  ...
+# Subtest: shared renderer escapes context and labels simulation in both locales
+ok 385 - shared renderer escapes context and labels simulation in both locales
+  ---
+  duration_ms: 5.68885
+  ...
+# Subtest: definitive rejection releases the local reservation; acceptance retains it
+ok 386 - definitive rejection releases the local reservation; acceptance retains it
+  ---
+  duration_ms: 0.396821
+  ...
+# Subtest: scoped identity is canonical and models remain independent
+ok 387 - scoped identity is canonical and models remain independent
+  ---
+  duration_ms: 0.321359
+  ...
+# Subtest: unexpected transport output becomes unknown and cannot auto retry
+ok 388 - unexpected transport output becomes unknown and cannot auto retry
+  ---
+  duration_ms: 0.14133
+  ...
+# Subtest: sample CSV becomes buildings, 屋主, and room or whole-unit spaces
+ok 389 - sample CSV becomes buildings, 屋主, and room or whole-unit spaces
+  ---
+  duration_ms: 4.715617
+  ...
+# Subtest: portfolio CSV rejects a room without a number and a whole unit with one
+ok 390 - portfolio CSV rejects a room without a number and a whole unit with one
+  ---
+  duration_ms: 0.767811
+  ...
+# Subtest: the Traditional Chinese UI names the owner role 屋主
+ok 391 - the Traditional Chinese UI names the owner role 屋主
+  ---
+  duration_ms: 0.618
+  ...
+# Subtest: owner privacy defaults to names on and phones off
+ok 392 - owner privacy defaults to names on and phones off
+  ---
+  duration_ms: 0.886371
+  ...
+# Subtest: owner, tenant, and manager screens do not bake in demo firm names
+ok 393 - owner, tenant, and manager screens do not bake in demo firm names
+  ---
+  duration_ms: 3.089559
+  ...
+# Subtest: hiding names replaces tenant names and leaves the rest of the line
+ok 394 - hiding names replaces tenant names and leaves the rest of the line
+  ---
+  duration_ms: 0.190762
+  ...
+# Subtest: uses organization calendar dates across DST and stable due-date occurrence keys
+ok 395 - uses organization calendar dates across DST and stable due-date occurrence keys
+  ---
+  duration_ms: 24.13342
+  ...
+# Subtest: paid, terminated, non-rent and invalid invoice balances cannot produce reminders
+ok 396 - paid, terminated, non-rent and invalid invoice balances cannot produce reminders
+  ---
+  duration_ms: 0.209807
+  ...
+# Subtest: bad zones, calendar dates and offset configuration fail closed
+ok 397 - bad zones, calendar dates and offset configuration fail closed
+  ---
+  duration_ms: 0.41904
+  ...
+# Subtest: Taipei 09:00 is 01:00 UTC
+ok 398 - Taipei 09:00 is 01:00 UTC
+  ---
+  duration_ms: 10.549303
+  ...
+# Subtest: lease reminders go to admins at 60, 30 and 7 days, and tenants only at 30
+ok 399 - lease reminders go to admins at 60, 30 and 7 days, and tenants only at 30
+  ---
+  duration_ms: 4.2111
+  ...
+# Subtest: overdue reminders reach admins on day 1 and 7, and tenants only on day 1
+ok 400 - overdue reminders reach admins on day 1 and 7, and tenants only on day 1
+  ---
+  duration_ms: 0.861521
+  ...
+# Subtest: a claimed reminder is not sent twice, and a skipped send releases the claim
+ok 401 - a claimed reminder is not sent twice, and a skipped send releases the claim
+  ---
+  duration_ms: 0.350648
+  ...
+# Subtest: the cron secret check rejects a missing or wrong secret
+ok 402 - the cron secret check rejects a missing or wrong secret
+  ---
+  duration_ms: 0.24261
+  ...
+# Subtest: legacy fence suppression does not hide unrelated database permissions failures
+ok 403 - legacy fence suppression does not hide unrelated database permissions failures
+  ---
+  duration_ms: 0.105663
+  ...
+# Subtest: exact major/minor conversion round-trips every supported scale and bigint boundary without rounding
+ok 404 - exact major/minor conversion round-trips every supported scale and bigint boundary without rounding
+  ---
+  duration_ms: 0.810376
+  ...
+# Subtest: blank, signs, grouping, exponent, whitespace, leading zero and excess precision have no implicit interpretation
+ok 405 - blank, signs, grouping, exponent, whitespace, leading zero and excess precision have no implicit interpretation
+  ---
+  duration_ms: 0.131599
+  ...
+# Subtest: response schemas require exact scope/request, canonical integer strings and typed source metadata
+ok 406 - response schemas require exact scope/request, canonical integer strings and typed source metadata
+  ---
+  duration_ms: 0.488144
+  ...
+# Subtest: strict same-origin parser accepts only exact view/change/status/close envelopes
+ok 407 - strict same-origin parser accepts only exact view/change/status/close envelopes
+  ---
+  duration_ms: 17.153826
+  ...
+# Subtest: cross-origin and missing origin are denied before reading body
+ok 408 - cross-origin and missing origin are denied before reading body
+  ---
+  duration_ms: 1.250754
+  ...
+# Subtest: content length and actual UTF-8 bytes are bounded independently, with malformed bytes denied
+ok 409 - content length and actual UTF-8 bytes are bounded independently, with malformed bytes denied
+  ---
+  duration_ms: 2.468179
+  ...
+# Subtest: photo GET hides expected access failures and preserves redirects and server errors
+ok 410 - photo GET hides expected access failures and preserves redirects and server errors
+  ---
+  duration_ms: 5.2442
+  ...
+# Subtest: photo rules cap size and type and never describe a re-encode
+ok 411 - photo rules cap size and type and never describe a re-encode
+  ---
+  duration_ms: 1.530015
+  ...
+# Subtest: HEIC conversion failures and server rejections show the specific HEIC message
+ok 412 - HEIC conversion failures and server rejections show the specific HEIC message
+  ---
+  duration_ms: 0.218284
+  ...
+# Subtest: HEIC decoding stays behind a browser event and is excluded from server bundles
+ok 413 - HEIC decoding stays behind a browser event and is excluded from server bundles
+  ---
+  duration_ms: 46.052841
+  ...
+# Subtest: dates, money, vendor, and the expense link stay optional
+ok 414 - dates, money, vendor, and the expense link stay optional
+  ---
+  duration_ms: 0.555247
+  ...
+# Subtest: the repair migration follows 20261023090000 and posts only a draft link
+ok 415 - the repair migration follows 20261023090000 and posts only a draft link
+  ---
+  duration_ms: 1.647764
+  ...
+# Subtest: confirm returns an attached photo and deletes only an unattached upload issued to this caller
+ok 416 - confirm returns an attached photo and deletes only an unattached upload issued to this caller
+  ---
+  duration_ms: 1.820053
+  ...
+# Subtest: RepairPhotos hides accountant photos behind one permission notice
+ok 417 - RepairPhotos hides accountant photos behind one permission notice
+  ---
+  duration_ms: 5.406942
+  ...
+# Subtest: RepairPhotos renders two admin photo previews
+ok 418 - RepairPhotos renders two admin photo previews
+  ---
+  duration_ms: 1.218867
+  ...
+# Subtest: RepairPhotos renders thumbnails for manager
+ok 419 - RepairPhotos renders thumbnails for manager
+  ---
+  duration_ms: 0.430472
+  ...
+# Subtest: RepairPhotos renders thumbnails for maintenance
+ok 420 - RepairPhotos renders thumbnails for maintenance
+  ---
+  duration_ms: 0.302697
+  ...
+# Subtest: RepairPhotos renders the empty state with canView=true
+ok 421 - RepairPhotos renders the empty state with canView=true
+  ---
+  duration_ms: 0.236849
+  ...
+# Subtest: RepairPhotos renders the empty state with canView=false
+ok 422 - RepairPhotos renders the empty state with canView=false
+  ---
+  duration_ms: 0.175127
+  ...
+# Subtest: RepairPhotos shows the English permission notice for accountants
+ok 423 - RepairPhotos shows the English permission notice for accountants
+  ---
+  duration_ms: 0.368258
+  ...
+# Subtest: repair page wires photo permissions and thread delegates photo rendering
+ok 424 - repair page wires photo permissions and thread delegates photo rendering
+  ---
+  duration_ms: 0.225302
+  ...
+# Subtest: Traditional Chinese photo permission notice has the expected translation
+ok 425 - Traditional Chinese photo permission notice has the expected translation
+  ---
+  duration_ms: 1.162105
+  ...
+# Subtest: exact origin and consistent Host accept canonical DNS, ports and ordinary URL normalization
+ok 426 - exact origin and consistent Host accept canonical DNS, ports and ordinary URL normalization
+  ---
+  duration_ms: 2.311044
+  ...
+# Subtest: installed Next loopback URL normalization cannot authorize the other transport Host
+ok 427 - installed Next loopback URL normalization cannot authorize the other transport Host
+  ---
+  duration_ms: 1.653605
+  ...
+# Subtest: missing Host and Origin, cross-site signals and noncanonical origin are denied
+ok 428 - missing Host and Origin, cross-site signals and noncanonical origin are denied
+  ---
+  duration_ms: 1.021467
+  ...
+# Subtest: malformed or visibly ambiguous Host representation never supplies replacement authority
+ok 429 - malformed or visibly ambiguous Host representation never supplies replacement authority
+  ---
+  duration_ms: 0.642196
+  ...
+# Subtest: forwarded headers do not rescue mismatching Host, origin or protocol in this helper
+ok 430 - forwarded headers do not rescue mismatching Host, origin or protocol in this helper
+  ---
+  duration_ms: 0.259233
+  ...
+# Subtest: the reset confirmation keeps the email out of every URL
+ok 431 - the reset confirmation keeps the email out of every URL
+  ---
+  duration_ms: 0.646798
+  ...
+# Subtest: reset limits count email and IP separately
+ok 432 - reset limits count email and IP separately
+  ---
+  duration_ms: 2.201975
+  ...
+# Subtest: in-memory reset limit blocks the sixth email within the hour
+ok 433 - in-memory reset limit blocks the sixth email within the hour
+  ---
+  duration_ms: 0.304532
+  ...
+# Subtest: signup send block is 60 seconds, 5 an hour, then the global brake
+ok 434 - signup send block is 60 seconds, 5 an hour, then the global brake
+  ---
+  duration_ms: 0.122255
+  ...
+# Subtest: signup mail shares the IP budget and keeps its own email key
+ok 435 - signup mail shares the IP budget and keeps its own email key
+  ---
+  duration_ms: 0.452595
+  ...
+# Subtest: sign-in times render in Asia/Taipei
+ok 436 - sign-in times render in Asia/Taipei
+  ---
+  duration_ms: 10.714343
+  ...
+# Subtest: showing backup codes asks the caller to clear the cookie
+ok 437 - showing backup codes asks the caller to clear the cookie
+  ---
+  duration_ms: 0.471632
+  ...
+# Subtest: permission labels match the prototype wording
+ok 438 - permission labels match the prototype wording
+  ---
+  duration_ms: 0.170005
+  ...
+# Subtest: invite expiry, lockout, reset, and no-access copy match the prototype
+ok 439 - invite expiry, lockout, reset, and no-access copy match the prototype
+  ---
+  duration_ms: 0.208679
+  ...
+# Subtest: error messages include a next step
+ok 440 - error messages include a next step
+  ---
+  duration_ms: 0.153011
+  ...
+# Subtest: the browser bundle has no Supabase client or RPC URL
+ok 441 - the browser bundle has no Supabase client or RPC URL
+  ---
+  duration_ms: 48.118942
+  ...
+# Subtest: the session cookie is an app token and tx pins app.active_org_id before SET ROLE
+ok 442 - the session cookie is an app token and tx pins app.active_org_id before SET ROLE
+  ---
+  duration_ms: 0.222526
+  ...
+# Subtest: the lock migration checks caller org and revokes the country trigger
+ok 443 - the lock migration checks caller org and revokes the country trigger
+  ---
+  duration_ms: 0.232577
+  ...
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Refusing to start: DEMO_MODE or LINE_LOGIN_ENABLED is true while NODE_ENV=production or CONDOLA_ENV is production, staging, or staging-real. Unset both. The TOTP bypass, demo reset, and demo LINE sign-in stay off.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Subtest: sandbox sample is bundled and loads without reading the filesystem
+ok 444 - sandbox sample is bundled and loads without reading the filesystem
+  ---
+  duration_ms: 5.704363
+  ...
+# Subtest: login and sign-up open the live org unless the user chose the sample company
+ok 445 - login and sign-up open the live org unless the user chose the sample company
+  ---
+  duration_ms: 0.128509
+  ...
+# Subtest: rentable spaces are rooms plus whole units that have no rooms
+ok 446 - rentable spaces are rooms plus whole units that have no rooms
+  ---
+  duration_ms: 0.110947
+  ...
+# Subtest: sample names stay tagged once and phones become E.164
+ok 447 - sample names stay tagged once and phones become E.164
+  ---
+  duration_ms: 0.240285
+  ...
+# Subtest: sandbox ignores the free cap and live allows four units or a plan or trial
+ok 448 - sandbox ignores the free cap and live allows four units or a plan or trial
+  ---
+  duration_ms: 0.148123
+  ...
+# Subtest: sandbox delivery is logged and never uses the live demo sender
+ok 449 - sandbox delivery is logged and never uses the live demo sender
+  ---
+  duration_ms: 0.114454
+  ...
+# Subtest: a sandbox session rewrites a retired sample avenue to the Taichung sample street
+ok 450 - a sandbox session rewrites a retired sample avenue to the Taichung sample street
+  ---
+  duration_ms: 1.320432
+  ...
+# Subtest: the demo production guard still refuses to start
+ok 451 - the demo production guard still refuses to start
+  ---
+  duration_ms: 1.28987
+  ...
+# Subtest: tenant signed-PDF HTTP refuses logged-out, missing consent, and another organization
+ok 452 - tenant signed-PDF HTTP refuses logged-out, missing consent, and another organization
+  ---
+  duration_ms: 2.078382
+  ...
+# Subtest: staff signed-PDF HTTP allows only admin or manager and writes an audit row
+ok 453 - staff signed-PDF HTTP allows only admin or manager and writes an audit row
+  ---
+  duration_ms: 1.103788
+  ...
+# Subtest: legal page effective dates are the signup consent versions
+ok 454 - legal page effective dates are the signup consent versions
+  ---
+  duration_ms: 0.91382
+  ...
+# Subtest: the signUp payload carries terms_accepted_at and both versions
+ok 455 - the signUp payload carries terms_accepted_at and both versions
+  ---
+  duration_ms: 0.497127
+  ...
+# Subtest: startSignup rejects a missing consent flag before auth or the database
+ok 456 - startSignup rejects a missing consent flag before auth or the database
+  ---
+  duration_ms: 0.428484
+  ...
+# Subtest: signup posts consent metadata and the form refuses to continue without it
+ok 457 - signup posts consent metadata and the form refuses to continue without it
+  ---
+  duration_ms: 0.298471
+  ...
+# Subtest: sign-up and pricing copy stay on the handoff wording
+ok 458 - sign-up and pricing copy stay on the handoff wording
+  ---
+  duration_ms: 1.127734
+  ...
+# Subtest: the go_live_lock row stays in the existing migration and the go-live screen is gone
+ok 459 - the go_live_lock row stays in the existing migration and the go-live screen is gone
+  ---
+  duration_ms: 0.359471
+  ...
+# mail sent msg_1
+# Subtest: GoTrue signup accepts a top-level id and a nested user id
+ok 460 - GoTrue signup accepts a top-level id and a nested user id
+  ---
+  duration_ms: 0.692135
+  ...
+# Subtest: GoTrue signup and resend put redirect_to on the query string
+ok 461 - GoTrue signup and resend put redirect_to on the query string
+  ---
+  duration_ms: 0.625456
+  ...
+# Subtest: confirmation links use the allow-listed staging or production origin
+ok 462 - confirmation links use the allow-listed staging or production origin
+  ---
+  duration_ms: 0.313396
+  ...
+# Subtest: a plus address survives trim, case, and form-urlencoded spaces
+ok 463 - a plus address survives trim, case, and form-urlencoded spaces
+  ---
+  duration_ms: 0.258272
+  ...
+# Subtest: password grant maps email_not_confirmed and leaves other GoTrue errors alone
+ok 464 - password grant maps email_not_confirmed and leaves other GoTrue errors alone
+  ---
+  duration_ms: 0.568472
+  ...
+# Subtest: confirmation verify is a POST body and GET pages do not call it
+ok 465 - confirmation verify is a POST body and GET pages do not call it
+  ---
+  duration_ms: 0.499912
+  ...
+# Subtest: a recovery link is ready only inside the 60-minute window and a page load does not verify it
+ok 466 - a recovery link is ready only inside the 60-minute window and a page load does not verify it
+  ---
+  duration_ms: 4.369193
+  ...
+# Subtest: a hash access_token is forwarded to /signup/confirm and not looped
+ok 467 - a hash access_token is forwarded to /signup/confirm and not looped
+  ---
+  duration_ms: 0.278192
+  ...
+# Subtest: signup generate_link maps email_exists, weak passwords, and a hashed token
+ok 468 - signup generate_link maps email_exists, weak passwords, and a hashed token
+  ---
+  duration_ms: 0.523951
+  ...
+# Subtest: signup confirm links keep token_hash and type on the allow-listed origin
+ok 469 - signup confirm links keep token_hash and type on the allow-listed origin
+  ---
+  duration_ms: 0.236768
+  ...
+# Subtest: signup mail defaults to the app and supabase is the kill switch
+ok 470 - signup mail defaults to the app and supabase is the kill switch
+  ---
+  duration_ms: 0.110428
+  ...
+# Subtest: generate_link keeps the hashed token and ignores a body without one
+ok 471 - generate_link keeps the hashed token and ignores a body without one
+  ---
+  duration_ms: 0.099172
+  ...
+# email_log SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string
+# mail sent msg-signup
+# Subtest: password reset asks GoTrue for a link and sends it through the mail module
+ok 472 - password reset asks GoTrue for a link and sends it through the mail module
+  ---
+  duration_ms: 36.217279
+  ...
+# Subtest: signup confirmation asks GoTrue for a link and sends it through the Cloudflare binding
+ok 473 - signup confirmation asks GoTrue for a link and sends it through the Cloudflare binding
+  ---
+  duration_ms: 4.562571
+  ...
+# Subtest: legacy resend detects provider rejection and transport failure without leaking response details
+ok 474 - legacy resend detects provider rejection and transport failure without leaking response details
+  ---
+  duration_ms: 2.50922
+  ...
+# Subtest: resend keeps unknown and confirmed users as no-ops and does not rotate on provider failure
+ok 475 - resend keeps unknown and confirmed users as no-ops and does not rotate on provider failure
+  ---
+  duration_ms: 3.716752
+  ...
+# Subtest: the action acknowledgement is identical for accepted, failed, throttled, no-op and thrown outcomes
+ok 476 - the action acknowledgement is identical for accepted, failed, throttled, no-op and thrown outcomes
+  ---
+  duration_ms: 0.283988
+  ...
+# Subtest: the acknowledgement page shows the same neutral message and no success or failure claim
+ok 477 - the acknowledgement page shows the same neutral message and no success or failure claim
+  ---
+  duration_ms: 1.17389
+  ...
+# Subtest: fresh bearer is bound to the actual /user before exactly one email-only PUT
+ok 478 - fresh bearer is bound to the actual /user before exactly one email-only PUT
+  ---
+  duration_ms: 2.18285
+  ...
+# Subtest: wrong grant, owned identity, target identity or unsupported account never writes
+ok 479 - wrong grant, owned identity, target identity or unsupported account never writes
+  ---
+  duration_ms: 1.800574
+  ...
+# Subtest: pending, unsafe configuration, failed transport and unclear mutation do not resend
+ok 480 - pending, unsafe configuration, failed transport and unclear mutation do not resend
+  ---
+  duration_ms: 0.572834
+  ...
+# Subtest: deadline covers stalled transport and stalled response body without retry
+ok 481 - deadline covers stalled transport and stalled response body without retry
+  ---
+  duration_ms: 12.934917
+  ...
+# Subtest: both proof orders retain leading zero and only yield candidate pending readback
+ok 482 - both proof orders retain leading zero and only yield candidate pending readback
+  ---
+  duration_ms: 0.679236
+  ...
+# Subtest: partial and final verification reject contradictory or malformed responses
+ok 483 - partial and final verification reject contradictory or malformed responses
+  ---
+  duration_ms: 0.373968
+  ...
+# Subtest: a possible write with stalled response is unknown, with no automatic repeat
+ok 484 - a possible write with stalled response is unknown, with no automatic repeat
+  ---
+  duration_ms: 9.984133
+  ...
+# Subtest: provider evidence does not repair spaces to plus and rejects contradictory identity email
+ok 485 - provider evidence does not repair spaces to plus and rejects contradictory identity email
+  ---
+  duration_ms: 0.843478
+  ...
+# Subtest: mixed success and provider error envelopes fail closed at every stage
+ok 486 - mixed success and provider error envelopes fail closed at every stage
+  ---
+  duration_ms: 2.618647
+  ...
+# Subtest: stored mailbox and privileged state must be canonical before any transport
+ok 487 - stored mailbox and privileged state must be canonical before any transport
+  ---
+  duration_ms: 0.458679
+  ...
+# Subtest: normalization follows current auth behavior without removing dots or plus
+ok 488 - normalization follows current auth behavior without removing dots or plus
+  ---
+  duration_ms: 0.718321
+  ...
+# Subtest: privileged addresses and pending requests do not authorize a new send
+ok 489 - privileged addresses and pending requests do not authorize a new send
+  ---
+  duration_ms: 0.210853
+  ...
+# Subtest: stored addresses and privileged exclusions cannot use form-input repair
+ok 490 - stored addresses and privileged exclusions cannot use form-input repair
+  ---
+  duration_ms: 0.095013
+  ...
+# Subtest: display names reject blank, controls and oversized input without changing ordinary names
+ok 491 - display names reject blank, controls and oversized input without changing ordinary names
+  ---
+  duration_ms: 0.639785
+  ...
+# Subtest: version binds the existing row to the authenticated actor and scope
+ok 492 - version binds the existing row to the authenticated actor and scope
+  ---
+  duration_ms: 0.333466
+  ...
+# Subtest: account page never accepts a success claim from the query string
+ok 493 - account page never accepts a success claim from the query string
+  ---
+  duration_ms: 2.519115
+  ...
+# Subtest: the staging tarball contains the scheduled worker entry and the OpenNext worker it imports
+ok 494 - the staging tarball contains the scheduled worker entry and the OpenNext worker it imports
+  ---
+  duration_ms: 522.302339
+  ...
+# Subtest: the staging wrangler env names secrets and keeps demo mode off
+ok 495 - the staging wrangler env names secrets and keeps demo mode off
+  ---
+  duration_ms: 1.234664
+  ...
+# Subtest: the production wrangler env serves app.condola.app and keeps demo mode off
+ok 496 - the production wrangler env serves app.condola.app and keeps demo mode off
+  ---
+  duration_ms: 0.259273
+  ...
+# Subtest: the worker cron calls the protected reminder route
+ok 497 - the worker cron calls the protected reminder route
+  ---
+  duration_ms: 0.268761
+  ...
+# Subtest: production redirects and cookies accept app.condola.app and condola.app
+ok 498 - production redirects and cookies accept app.condola.app and condola.app
+  ---
+  duration_ms: 0.313182
+  ...
+# Subtest: Depot deploys staging only after tests, behind a default-off variable
+ok 499 - Depot deploys staging only after tests, behind a default-off variable
+  ---
+  duration_ms: 0.820751
+  ...
+# Subtest: allowlist parsing and predicate fail closed and never imply another org
+ok 500 - allowlist parsing and predicate fail closed and never imply another org
+  ---
+  duration_ms: 1.672823
+  ...
+# Subtest: default env is read at call time
+ok 501 - default env is read at call time
+  ---
+  duration_ms: 0.221424
+  ...
+# Subtest: refused invitation org rolls back before any provisioning or writes
+ok 502 - refused invitation org rolls back before any provisioning or writes
+  ---
+  duration_ms: 0.766846
+  ...
+# Subtest: server invite functions refuse before DB access; unauthenticated API remains 400
+ok 503 - server invite functions refuse before DB access; unauthenticated API remains 400
+  ---
+  duration_ms: 4.620368
+  ...
+# invite consent SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string
+# Subtest: I-11: independent GoTrue commit survives DB rollback; retries preserve password and role
+ok 504 - I-11: independent GoTrue commit survives DB rollback; retries preserve password and role
+  ---
+  duration_ms: 14.031634
+  ...
+# invite consent SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string
+# invite consent SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string
+# Subtest: I-11: ambiguous GoTrue timeout rolls back; a remotely created account supports retry
+ok 505 - I-11: ambiguous GoTrue timeout rolls back; a remotely created account supports retry
+  ---
+  duration_ms: 5.643615
+  ...
+# Subtest: issue-link action rejects every non-admin session before issuing or reading origin
+ok 506 - issue-link action rejects every non-admin session before issuing or reading origin
+  ---
+  duration_ms: 1.326642
+  ...
+# Subtest: live link controls require staff admin, live environment and org allowlist
+ok 507 - live link controls require staff admin, live environment and org allowlist
+  ---
+  duration_ms: 0.537994
+  ...
+# Subtest: team issuance links carry the token only in the join fragment
+ok 508 - team issuance links carry the token only in the join fragment
+  ---
+  duration_ms: 0.212013
+  ...
+# Subtest: all invitation surfaces send no-referrer
+ok 509 - all invitation surfaces send no-referrer
+  ---
+  duration_ms: 0.226873
+  ...
+# Subtest: team issuance, rotation and acceptance neither mail nor audit secrets
+ok 510 - team issuance, rotation and acceptance neither mail nor audit secrets
+  ---
+  duration_ms: 0.443423
+  ...
+# Subtest: new team copy exists in both catalogs and excludes payment wording
+ok 511 - new team copy exists in both catalogs and excludes payment wording
+  ---
+  duration_ms: 3.491006
+  ...
+# Subtest: join captures and immediately removes the fragment without persisting or navigating with the token
+ok 512 - join captures and immediately removes the fragment without persisting or navigating with the token
+  ---
+  duration_ms: 0.484211
+  ...
+# Subtest: link display masks by default and reveals only after an explicit click
+ok 513 - link display masks by default and reveals only after an explicit click
+  ---
+  duration_ms: 0.205564
+  ...
+# Subtest: legacy acceptance has no team form or demo LINE button
+ok 514 - legacy acceptance has no team form or demo LINE button
+  ---
+  duration_ms: 0.26674
+  ...
+# Subtest: team invite guards use the session or invitation org at every entry point
+ok 515 - team invite guards use the session or invitation org at every entry point
+  ---
+  duration_ms: 2.238742
+  ...
+# Subtest: empty config refuses invites and unauthenticated API probes without sending mail
+ok 516 - empty config refuses invites and unauthenticated API probes without sending mail
+  ---
+  duration_ms: 3.706869
+  ...
+# Subtest: team token failures share the generic unavailable message
+ok 517 - team token failures share the generic unavailable message
+  ---
+  duration_ms: 0.407803
+  ...
+# Subtest: team login creation uses GoTrue admin and can subsequently use the password grant
+ok 518 - team login creation uses GoTrue admin and can subsequently use the password grant
+  ---
+  duration_ms: 1.952987
+  ...
+# Subtest: existing passwords must match and are never overwritten
+ok 519 - existing passwords must match and are never overwritten
+  ---
+  duration_ms: 1.148088
+  ...
+# Subtest: an existing passwordless login is updated through GoTrue
+ok 520 - an existing passwordless login is updated through GoTrue
+  ---
+  duration_ms: 0.750387
+  ...
+# Subtest: GoTrue failures roll back acceptance without SQL fallback or consuming the invite
+ok 521 - GoTrue failures roll back acceptance without SQL fallback or consuming the invite
+  ---
+  duration_ms: 1.808847
+  ...
+# Subtest: without a Supabase URL, team provisioning retains the local stub
+ok 522 - without a Supabase URL, team provisioning retains the local stub
+  ---
+  duration_ms: 0.429483
+  ...
+# Subtest: explicit same-origin edit/status/close parse with no actor or org authority
+ok 523 - explicit same-origin edit/status/close parse with no actor or org authority
+  ---
+  duration_ms: 17.130132
+  ...
+# Subtest: cross-site, forged origins and proxy headers cannot authorize a command
+ok 524 - cross-site, forged origins and proxy headers cannot authorize a command
+  ---
+  duration_ms: 1.224741
+  ...
+# Subtest: bounded actual streamed bytes and strict body fields reject malformed or oversized input
+ok 525 - bounded actual streamed bytes and strict body fields reject malformed or oversized input
+  ---
+  duration_ms: 2.071561
+  ...
+# Subtest: bill states retain overdue independently from partial and respect local date
+ok 526 - bill states retain overdue independently from partial and respect local date
+  ---
+  duration_ms: 13.107433
+  ...
+# Subtest: feature setting is strict and absence or malformed allowlists stay off
+ok 527 - feature setting is strict and absence or malformed allowlists stay off
+  ---
+  duration_ms: 0.273795
+  ...
+# Subtest: old settlement cannot mark an unpaid current invoice partial, and signed credits offset due
+ok 528 - old settlement cannot mark an unpaid current invoice partial, and signed credits offset due
+  ---
+  duration_ms: 0.58617
+  ...
+# Subtest: pending issued balances remain real while no invoice, credit and offset are distinct
+ok 529 - pending issued balances remain real while no invoice, credit and offset are distinct
+  ---
+  duration_ms: 0.591282
+  ...
+# Subtest: authorized PDF response audits exactly once with identifiers only
+ok 530 - authorized PDF response audits exactly once with identifiers only
+  ---
+  duration_ms: 15.389463
+  ...
+# Subtest: missing or RLS-hidden PDF returns 404 without auditing
+ok 531 - missing or RLS-hidden PDF returns 404 without auditing
+  ---
+  duration_ms: 0.318959
+  ...
+# Subtest: denied or failed database read never audits
+ok 532 - denied or failed database read never audits
+  ---
+  duration_ms: 0.420898
+  ...
+# Subtest: response construction must succeed before auditing
+ok 533 - response construction must succeed before auditing
+  ---
+  duration_ms: 0.263596
+  ...
+# Subtest: audit failure returns a private error without the PDF or sensitive log details
+ok 534 - audit failure returns a private error without the PDF or sensitive log details
+  ---
+  duration_ms: 0.674515
+  ...
+# Subtest: each successful request gets one event with its own request ID
+ok 535 - each successful request gets one event with its own request ID
+  ---
+  duration_ms: 0.457611
+  ...
+# Subtest: deployment switch defaults off and still requires the org flag
+ok 536 - deployment switch defaults off and still requires the org flag
+  ---
+  duration_ms: 0.594655
+  ...
+# Subtest: only the explicit JSON boolean true enables tenant signed PDFs
+ok 537 - only the explicit JSON boolean true enables tenant signed PDFs
+  ---
+  duration_ms: 0.118906
+  ...
+# Subtest: disposable database guard requires consent, explicit local port, named database and no overrides
+ok 538 - disposable database guard requires consent, explicit local port, named database and no overrides
+  ---
+  duration_ms: 0.872901
+  ...
+# Subtest: generated manifest and asset module are current
+ok 539 - generated manifest and asset module are current
+  ---
+  duration_ms: 89.450335
+  ...
+# Subtest: self-hosted brand fonts retain shipped licences and pinned provenance
+ok 540 - self-hosted brand fonts retain shipped licences and pinned provenance
+  ---
+  duration_ms: 0.629387
+  ...
+# Subtest: self-hosted font and licence hash mismatches reject manifest generation
+ok 541 - self-hosted font and licence hash mismatches reject manifest generation
+  ---
+  duration_ms: 142.888582
+  ...
+# Subtest: browser graph includes required packages and excludes server encoders and build tools
+ok 542 - browser graph includes required packages and excludes server encoders and build tools
+  ---
+  duration_ms: 4.38271
+  ...
+# Subtest: every package provides its licence and source link
+ok 543 - every package provides its licence and source link
+  ---
+  duration_ms: 0.384897
+  ...
+# Subtest: public copyleft texts and upstream COPYING retain exact bytes
+ok 544 - public copyleft texts and upstream COPYING retain exact bytes
+  ---
+  duration_ms: 0.40525
+  ...
+# Subtest: comment blocks preserve complete Peslyak, BSD-2 and MIT notices verbatim
+ok 545 - comment blocks preserve complete Peslyak, BSD-2 and MIT notices verbatim
+  ---
+  duration_ms: 0.938836
+  ...
+# Subtest: assembly runs, marker forms, whole files and unrelated comments
+ok 546 - assembly runs, marker forms, whole files and unrelated comments
+  ---
+  duration_ms: 0.43916
+  ...
+# Subtest: notice extraction deduplicates exact text and sorts paths and output deterministically
+ok 547 - notice extraction deduplicates exact text and sorts paths and output deterministically
+  ---
+  duration_ms: 0.345569
+  ...
+# Subtest: upstream notices, holders, archives and build provenance are preserved
+ok 548 - upstream notices, holders, archives and build provenance are preserved
+  ---
+  duration_ms: 3.984554
+  ...
+# Subtest: vendored provenance matches pins and rejects tampered bundle or wasm
+ok 549 - vendored provenance matches pins and rejects tampered bundle or wasm
+  ---
+  duration_ms: 66.912843
+  ...
+# Subtest: generation checks optional public decoder and --verify-bundle requires it
+ok 550 - generation checks optional public decoder and --verify-bundle requires it
+  ---
+  duration_ms: 2579.100057
+  ...
+# Subtest: --check leaves public and generated listings, bytes and mtimes unchanged
+ok 551 - --check leaves public and generated listings, bytes and mtimes unchanged
+  ---
+  duration_ms: 144.639069
+  ...
+# Subtest: verifyBundle reports exact missing and unexpected versions without mutation
+ok 552 - verifyBundle reports exact missing and unexpected versions without mutation
+  ---
+  duration_ms: 0.764975
+  ...
+# Subtest: verifyBundle ignores self-hosted fonts absent from the client bundle
+ok 553 - verifyBundle ignores self-hosted fonts absent from the client bundle
+  ---
+  duration_ms: 0.247625
+  ...
+# Subtest: direct browser imports are covered by the manifest
+ok 554 - direct browser imports are covered by the manifest
+  ---
+  duration_ms: 450.12492
+  ...
+# Subtest: browser conversion loads separate asset without runtime hash verification
+ok 555 - browser conversion loads separate asset without runtime hash verification
+  ---
+  duration_ms: 0.370902
+  ...
+# Subtest: page uses service email and renders replacement instructions and provenance
+ok 556 - page uses service email and renders replacement instructions and provenance
+  ---
+  duration_ms: 0.464486
+  ...
+# Subtest: licence copy has matching keys, CSS scope and qualified wording
+ok 557 - licence copy has matching keys, CSS scope and qualified wording
+  ---
+  duration_ms: 4.106074
+  ...
+# Subtest: footer links to licences between privacy and refunds
+ok 558 - footer links to licences between privacy and refunds
+  ---
+  duration_ms: 0.243212
+  ...
+# Subtest: example electricity rounds per room and the last room absorbs the remainder
+ok 559 - example electricity rounds per room and the last room absorbs the remainder
+  ---
+  duration_ms: 0.933
+  ...
+# Subtest: country defaults stay on Taiwan and do not overwrite an explicit setting
+ok 560 - country defaults stay on Taiwan and do not overwrite an explicit setting
+  ---
+  duration_ms: 0.189256
+  ...
+# Subtest: a partial Taiwan mobile is invalid and an empty phone is allowed
+ok 561 - a partial Taiwan mobile is invalid and an empty phone is allowed
+  ---
+  duration_ms: 0.235571
+  ...
+# Subtest: staff copy names the payments queue 待確認繳款
+ok 562 - staff copy names the payments queue 待確認繳款
+  ---
+  duration_ms: 0.167987
+  ...
+# Subtest: /m/upgrade redirects to settings and does not render the bank application
+ok 563 - /m/upgrade redirects to settings and does not render the bank application
+  ---
+  duration_ms: 0.710934
+  ...
+# Subtest: no screen links to /m/upgrade
+ok 564 - no screen links to /m/upgrade
+  ---
+  duration_ms: 5.573
+  ...
+# Subtest: a full team shows only the plan’s user cap
+ok 565 - a full team shows only the plan’s user cap
+  ---
+  duration_ms: 0.364807
+  ...
+# Subtest: an empty pending bill list is replaced by the unsigned note, and a signed lease keeps the list
+ok 566 - an empty pending bill list is replaced by the unsigned note, and a signed lease keeps the list
+  ---
+  duration_ms: 4.475786
+  ...
+# Subtest: tenant pay lists invoiced rent and electricity in NT$
+ok 567 - tenant pay lists invoiced rent and electricity in NT$
+  ---
+  duration_ms: 2.374111
+  ...
+# Subtest: a move-in bill keeps the deposit and the rows add up to the open balance
+ok 568 - a move-in bill keeps the deposit and the rows add up to the open balance
+  ---
+  duration_ms: 11.932478
+  ...
+# Subtest: a charge type that is not rent, deposit, or electricity is still a row
+ok 569 - a charge type that is not rent, deposit, or electricity is still a row
+  ---
+  duration_ms: 0.377252
+  ...
+# Subtest: a pending tenant home shows the unsigned note instead of the rent-due card
+ok 570 - a pending tenant home shows the unsigned note instead of the rent-due card
+  ---
+  duration_ms: 1.365196
+  ...
+# Subtest: electricity lines are prefixed with the billing month
+ok 571 - electricity lines are prefixed with the billing month
+  ---
+  duration_ms: 0.421274
+  ...
+# Subtest: new vacant electricity expenses use 電費（空房／未簽約） and existing rows keep 電費（空房）
+ok 572 - new vacant electricity expenses use 電費（空房／未簽約） and existing rows keep 電費（空房）
+  ---
+  duration_ms: 0.329513
+  ...
+# Subtest: electricity registration copy uses 登記 and does not say 入帳
+ok 573 - electricity registration copy uses 登記 and does not say 入帳
+  ---
+  duration_ms: 2.598865
+  ...
+# Subtest: 分表, 依電表度數, and 平均分攤 are posted
+ok 574 - 分表, 依電表度數, and 平均分攤 are posted
+  ---
+  duration_ms: 0.18688
+  ...
+# Subtest: kWh text keeps three decimal places
+ok 575 - kWh text keeps three decimal places
+  ---
+  duration_ms: 0.258124
+  ...
+# Subtest: common-area kWh splits evenly and the leftover milli goes to the first key
+ok 576 - common-area kWh splits evenly and the leftover milli goes to the first key
+  ---
+  duration_ms: 0.21487
+  ...
+# Subtest: 分表 rounds the unit total half-up and gives leftover NT$1 by largest fraction, then key
+ok 577 - 分表 rounds the unit total half-up and gives leftover NT$1 by largest fraction, then key
+  ---
+  duration_ms: 0.383821
+  ...
+# Subtest: 依電表度數 rounds each meter on its own
+ok 578 - 依電表度數 rounds each meter on its own
+  ---
+  duration_ms: 0.138305
+  ...
+# Subtest: other currencies round to cents
+ok 579 - other currencies round to cents
+  ---
+  duration_ms: 0.114412
+  ...
+# Subtest: the invoice line names the kWh and the rate in Traditional Chinese
+ok 580 - the invoice line names the kWh and the rate in Traditional Chinese
+  ---
+  duration_ms: 0.189095
+  ...
+# Subtest: the rate is stored at four decimal places
+ok 581 - the rate is stored at four decimal places
+  ---
+  duration_ms: 0.184009
+  ...
+# Subtest: current minus previous is the room usage
+ok 582 - current minus previous is the room usage
+  ---
+  duration_ms: 0.092389
+  ...
+# Subtest: turnover splits one reading by occupancy days
+ok 583 - turnover splits one reading by occupancy days
+  ---
+  duration_ms: 0.363189
+  ...
+# Subtest: reversal and audit stay inside the caller's active organization
+ok 584 - reversal and audit stay inside the caller's active organization
+  ---
+  duration_ms: 0.300575
+  ...
+# Subtest: the electricity migration fails closed on posted duplicates and unknown methods
+ok 585 - the electricity migration fails closed on posted duplicates and unknown methods
+  ---
+  duration_ms: 1.408525
+  ...
+# Subtest: a missing allocation unit is filled from the meter before the rate-cap trigger
+ok 586 - a missing allocation unit is filled from the meter before the rate-cap trigger
+  ---
+  duration_ms: 0.246216
+  ...
+# Subtest: an older draft insert reuses the open period without relaxing the unique index
+ok 587 - an older draft insert reuses the open period without relaxing the unique index
+  ---
+  duration_ms: 0.228062
+  ...
+# Subtest: the synthetic bill average is at least the charged rate
+ok 588 - the synthetic bill average is at least the charged rate
+  ---
+  duration_ms: 0.1441
+  ...
+# Subtest: 公共用電 is total kWh minus room meters and stays with the owner amount
+ok 589 - 公共用電 is total kWh minus room meters and stays with the owner amount
+  ---
+  duration_ms: 0.132788
+  ...
+# Subtest: 電費（帳單差額） is bill minus rate × total kWh and warns above 5%
+ok 590 - 電費（帳單差額） is bill minus rate × total kWh and warns above 5%
+  ---
+  duration_ms: 0.110611
+  ...
+# Subtest: 平均分攤 divides the bill across every room and leaves the remainder
+ok 591 - 平均分攤 divides the bill across every room and leaves the remainder
+  ---
+  duration_ms: 0.110344
+  ...
+# Subtest: a blank even-split total still stores a positive bill usage at least the rate
+ok 592 - a blank even-split total still stores a positive bill usage at least the rate
+  ---
+  duration_ms: 0.104581
+  ...
+# Subtest: recognized utility credits retain only unmatched original credit with provenance
+ok 593 - recognized utility credits retain only unmatched original credit with provenance
+  ---
+  duration_ms: 1.474492
+  ...
+# Subtest: utility credit matching preserves signed totals and allocation across cases
+ok 594 - utility credit matching preserves signed totals and allocation across cases
+  ---
+  duration_ms: 0.436317
+  ...
+# Subtest: unsigned residual-only utility credit does not extend payee visibility
+ok 595 - unsigned residual-only utility credit does not extend payee visibility
+  ---
+  duration_ms: 0.278918
+  ...
+# Subtest: statement calculation preserves original positive-prefixed credit attribution and residual
+ok 596 - statement calculation preserves original positive-prefixed credit attribution and residual
+  ---
+  duration_ms: 1.004626
+  ...
+# Subtest: utility conservation includes vacant, public, gap and remainder in both directions
+ok 597 - utility conservation includes vacant, public, gap and remainder in both directions
+  ---
+  duration_ms: 0.711683
+  ...
+# Subtest: proxy content types come only from supported magic bytes
+ok 598 - proxy content types come only from supported magic bytes
+  ---
+  duration_ms: 0.956035
+  ...
+# Subtest: vendor_link requires both explicit switches
+ok 599 - vendor_link requires both explicit switches
+  ---
+  duration_ms: 0.956715
+  ...
+# Subtest: capability mirrors \#55 reportable states and closes terminal states
+ok 600 - capability mirrors \#55 reportable states and closes terminal states
+  ---
+  duration_ms: 0.278422
+  ...
+# Subtest: inactive, revoked, expired and malformed links are invalid
+ok 601 - inactive, revoked, expired and malformed links are invalid
+  ---
+  duration_ms: 0.540868
+  ...
+# Subtest: safe view copies only explicit display fields, including photo fields
+ok 602 - safe view copies only explicit display fields, including photo fields
+  ---
+  duration_ms: 0.969315
+  ...
+# Subtest: per-type templates expose no fields before the job_types migration
+ok 603 - per-type templates expose no fields before the job_types migration
+  ---
+  duration_ms: 0.353527
+  ...
+# Subtest: validateTaiwanTaxId validates 8-digit tax IDs including leading zeros, 7th-digit-7 rule, and divisor 5/10
+ok 604 - validateTaiwanTaxId validates 8-digit tax IDs including leading zeros, 7th-digit-7 rule, and divisor 5/10
+  ---
+  duration_ms: 0.74625
+  ...
+# Subtest: normalizeTaiwanPhoneE164 normalizes Taiwan mobile, landline, and +886 numbers to E.164
+ok 605 - normalizeTaiwanPhoneE164 normalizes Taiwan mobile, landline, and +886 numbers to E.164
+  ---
+  duration_ms: 0.295292
+  ...
+# Subtest: validateSealImageHeader checks PNG and JPEG magic bytes and enforces maxBytes cap
+ok 606 - validateSealImageHeader checks PNG and JPEG magic bytes and enforces maxBytes cap
+  ---
+  duration_ms: 0.207952
+  ...
+# Subtest: assertNoNationalIdKeys rejects any key resembling a national ID
+ok 607 - assertNoNationalIdKeys rejects any key resembling a national ID
+  ---
+  duration_ms: 0.309891
+  ...
+# Subtest: validateVendorOnboardingInput validates business vs individual profiles and attestation
+ok 608 - validateVendorOnboardingInput validates business vs individual profiles and attestation
+  ---
+  duration_ms: 0.328131
+  ...
+# Subtest: fixed input and timestamp produce identical bytes and SHA-256
+ok 609 - fixed input and timestamp produce identical bytes and SHA-256
+  ---
+  duration_ms: 5668.007517
+  ...
+# Subtest: document models contain required copy, ticket number and rounded prices
+ok 610 - document models contain required copy, ticket number and rounded prices
+  ---
+  duration_ms: 0.788448
+  ...
+# Subtest: company buyer uses the exact PDF tax label with no other banned copy
+ok 611 - company buyer uses the exact PDF tax label with no other banned copy
+  ---
+  duration_ms: 0.470316
+  ...
+# Subtest: multi-page PDFs put the seal only on the final page and remain deterministic
+ok 612 - multi-page PDFs put the seal only on the final page and remain deterministic
+  ---
+  duration_ms: 9606.695766
+  ...
+# Subtest: PDF extraction verifies per-page identifiers and the indivisible final group
+ok 613 - PDF extraction verifies per-page identifiers and the indivisible final group
+  ---
+  duration_ms: 19065.219907
+  ...
+# Subtest: receipt rendering rejects a missing seal
+ok 614 - receipt rendering rejects a missing seal
+  ---
+  duration_ms: 0.881934
+  ...
+# Subtest: preview PDF carries the draft label
+ok 615 - preview PDF carries the draft label
+  ---
+  duration_ms: 803.907873
+  ...
+# Subtest: only an attested business with a valid tax ID gets a receipt
+ok 616 - only an attested business with a valid tax ID gets a receipt
+  ---
+  duration_ms: 0.736262
+  ...
+# Subtest: owner title is mandatory and never falls back to contact data
+ok 617 - owner title is mandatory and never falls back to contact data
+  ---
+  duration_ms: 1.000002
+  ...
+# Subtest: owner snapshots reject extra personal fields
+ok 618 - owner snapshots reject extra personal fields
+  ---
+  duration_ms: 0.429785
+  ...
+# Subtest: company buyer requires name, address and checksum-valid tax ID
+ok 619 - company buyer requires name, address and checksum-valid tax ID
+  ---
+  duration_ms: 0.312103
+  ...
+# Subtest: document numbers pad receipts and mark completion statements
+ok 620 - document numbers pad receipts and mark completion statements
+  ---
+  duration_ms: 0.195435
+  ...
+# Subtest: Chinese uppercase amounts include zero gaps
+ok 621 - Chinese uppercase amounts include zero gaps
+  ---
+  duration_ms: 0.160581
+  ...
+# Subtest: totals preserve quantities and material/labor amounts
+ok 622 - totals preserve quantities and material/labor amounts
+  ---
+  duration_ms: 0.156671
+  ...
+# Subtest: non-divisible amounts remain authoritative through issue and reissue
+ok 623 - non-divisible amounts remain authoritative through issue and reissue
+  ---
+  duration_ms: 0.620139
+  ...
+# Subtest: invalid rows, unsafe sums and total mismatches are rejected
+ok 624 - invalid rows, unsafe sums and total mismatches are rejected
+  ---
+  duration_ms: 0.454841
+  ...
+# Subtest: individual statements carry the fixed notice and omit receipt seal
+ok 625 - individual statements carry the fixed notice and omit receipt seal
+  ---
+  duration_ms: 0.145194
+  ...
+# Subtest: void is a one-way transition and preserves original content
+ok 626 - void is a one-way transition and preserves original content
+  ---
+  duration_ms: 0.201619
+  ...
+# Subtest: reissue requires a voided source and a fresh matching identity
+ok 627 - reissue requires a voided source and a fresh matching identity
+  ---
+  duration_ms: 0.229753
+  ...
+# Subtest: completion statements retain kind and notice after reissue
+ok 628 - completion statements retain kind and notice after reissue
+  ---
+  duration_ms: 0.106219
+  ...
+# Subtest: vendor dispatch is on for the sample company and beta firms, and off otherwise
+ok 629 - vendor dispatch is on for the sample company and beta firms, and off otherwise
+  ---
+  duration_ms: 0.551006
+  ...
+# Subtest: vendor links are one token, and closed links fail closed
+ok 630 - vendor links are one token, and closed links fail closed
+  ---
+  duration_ms: 0.410727
+  ...
+# Subtest: vendor name, phone, window, and cost use the existing field rules
+ok 631 - vendor name, phone, window, and cost use the existing field rules
+  ---
+  duration_ms: 0.69836
+  ...
+# Subtest: a vendor upload grant only matches that link
+ok 632 - a vendor upload grant only matches that link
+  ---
+  duration_ms: 0.445667
+  ...
+# Subtest: the vendor page reuses the repair photo upload and the migration only adds
+ok 633 - the vendor page reuses the repair photo upload and the migration only adds
+  ---
+  duration_ms: 0.451929
+  ...
+# Subtest: new vendor copy is in both catalogs and skips the banned words
+ok 634 - new vendor copy is in both catalogs and skips the banned words
+  ---
+  duration_ms: 4.754712
+  ...
+# Subtest: last cooperation is a month from past repair dates, not a stored column
+ok 635 - last cooperation is a month from past repair dates, not a stored column
+  ---
+  duration_ms: 1.043077
+  ...
+# Subtest: cancelled status, the cancel toast, and back follow the copy supplement
+ok 636 - cancelled status, the cancel toast, and back follow the copy supplement
+  ---
+  duration_ms: 2.055461
+  ...
+# Subtest: tenant search matches name, email, and a Taiwan mobile with or without +886
+ok 637 - tenant search matches name, email, and a Taiwan mobile with or without +886
+  ---
+  duration_ms: 1.043736
+  ...
+# Subtest: a pick is kept only while that tenant is still in the filtered list
+ok 638 - a pick is kept only while that tenant is still in the filtered list
+  ---
+  duration_ms: 0.153667
+  ...
+# Subtest: a duplicate tenant email matches ignoring case
+ok 639 - a duplicate tenant email matches ignoring case
+  ---
+  duration_ms: 0.108361
+  ...
+1..639
+# tests 654
+# suites 0
+# pass 654
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 72154.094298

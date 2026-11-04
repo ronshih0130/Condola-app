@@ -255,7 +255,7 @@ STOP POINT: bounded source review in progress; next: finish accepted safe diagno
 
 ## B-004 QA round 3 — 2026-11-04
 
-B-004 stays `partial`. Replacement reasons are a fixed code set; audit stores the code only. The staff download route is exercised through its GET handler. That does not close the item. Logged-in old-code compatibility and rollback are still unproven. The `b888ccd` skip is UNAPPROVED. Detail: [status](../e2e-evidence/B-004/status.md).
+B-004 stays `partial`. Replacement reasons are a fixed code set; audit stores the code only. The staff download route is exercised through its GET handler. That does not close the item. Logged-in old-code compatibility and rollback are still unproven. The `b888ccd` skip is UNAPPROVED. Full gate on `5819e26c5ca90044c7dce7a265c83ddc35ceba09`: unit 654 pass, 0 fail, 0 skip; RLS 483 pass, 0 fail, 1 UNAPPROVED skip. Detail: [status](../e2e-evidence/B-004/status.md).
 
 ## B-004 notes fix — 2026-11-03T22:10 PT
 
