@@ -95,11 +95,25 @@ cd "$root"
 common=$(git rev-parse --git-common-dir)
 case "$common" in /*) ;; *) common="$root/$common" ;; esac
 common=$(cd "$common" && pwd -P)
-remote_url=$(git remote get-url origin)
-case "$remote_url" in
-  https://origin.cursor.com/ron-shih/condola-app|https://origin.cursor.com/ron-shih/condola-app.git) ;;
-  *) [ "${CLAIM_TEST_ANY_REMOTE:-}" = "YES" ] || die "origin must target Cursor Origin ron-shih/condola-app; refusing to print its URL." ;;
-esac
+# GitHub ronshih0130/Condola-app is canonical (DECISIONS 2026-11-03/04).
+# Validate effective fetch AND push destinations (pushurl, url rewrites).
+allowed_remote() {
+  case "$1" in
+    https://github.com/ronshih0130/Condola-app|https://github.com/ronshih0130/Condola-app.git) return 0 ;;
+    git@github.com:ronshih0130/Condola-app.git|ssh://git@github.com/ronshih0130/Condola-app.git) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+fetch_url=$(git ls-remote --get-url origin)
+push_urls=$(git remote get-url --push --all origin)
+if [ "${CLAIM_TEST_ANY_REMOTE:-}" != "YES" ]; then
+  allowed_remote "$fetch_url" ||
+    die "origin fetch must target GitHub ronshih0130/Condola-app (no embedded credentials); refusing to print its URL."
+  while IFS= read -r pu; do
+    allowed_remote "$pu" ||
+      die "origin push must target GitHub ronshih0130/Condola-app (no embedded credentials); refusing to print its URL."
+  done <<<"$push_urls"
+fi
 
 session=${CONDOLA_SESSION_ID:-}
 host=$(hostname)
