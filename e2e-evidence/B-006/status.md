@@ -1,3 +1,17 @@
+> Staging-ready code, not `done`, recorded 2026-11-03T22:00 PT. Import row and field errors, correction guidance, resubmission without duplicate rows, and jurisdiction-controlled dates were already on this branch. BUILD-ORDER says `done` means an exact-SHA staging check plus the required independent verdict. Both are still blocked. This item is Class A, so that verdict is a fresh Codex review, not a new Class B gate. The import-detail switch stays OFF. No hosted database was changed.
+
+# B-006 staging apply
+
+No new feature and no migration in this note. The spec expects no schema change, and none was added. Error detail is application state behind two gates that are both off by default.
+
+- Worker: redeploy the existing staging Worker when this branch is applied. The import page and commit paths are already in the app. Do not set `IMPORT_ERROR_DETAILS_ENABLED`. Any value other than the string `true`, including unset, keeps diagnostics off and preserves the legacy compact preview.
+- Data: do not add `organizations.feature_flags.import_error_details`. Do not run `db:reset` or apply `supabase/stub/supabase_stub.sql`. There is no B-006 migration file.
+- `ops/flags.yaml` keeps `IMPORT_ERROR_DETAILS_ENABLED` default false.
+- Gate coverage already includes `src/server/import.test.ts`, `import-region.test.ts`, `import-region-xlsx.test.ts`, `import.integration.test.ts`, and `import-region.integration.test.ts`. The skipped `b888ccd` case is the lost identity-document upgrade. It does not assert import diagnostics, so it stays skipped.
+- Still blocked: an authorized de-identified customer sample or Ron’s disposition of that sample, exact staging app/version/auth/browser acceptance, and the Class A Codex verdict. Do not invent a customer file. Production is out of scope.
+
+Local synthetic proof remains candidate `9bbf04a300f073256bc9a7c887f3c6025b84c5ee`. This note does not rerun that browser.
+
 > 1103交接：**partial / STOPPED**。最後綜合應用候選 `1c8fd07bc1fd78e7a86a00daff994f68e734be4f`；局部驗證SHA保留如下。下一步由Grok Bot（CEO）依 [完整交接](../../20-build/codex-handoff-1103.md) 安排。未驗證或待PE事項不視為done。
 
 > Latest checkpoint 2026-10-30T16:48:27.896052-07:00: `9bbf04a300f073256bc9a7c887f3c6025b84c5ee` is scoped locally verified, ClassA. Gate607unit/358RLS+1priorhistoricalSKIP, builds/preflight/Worker1 and actual browser2 PASS18.1s. [Proof/limits](checkpoint-9bbf04a.md). Whole B006 pending authorized customer fixture/disposition and exact staging; no new ClassB Claude gate. Earlier records retain dated scopes. Next after publish/mirror: B007.

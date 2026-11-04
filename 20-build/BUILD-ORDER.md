@@ -256,3 +256,7 @@ STOP POINT: bounded source review in progress; next: finish accepted safe diagno
 ## B-004 staging-ready code — 2026-11-03T21:35 PT
 
 Paper lease versions, tenant downloads, and download audit are already implemented on this branch. Queue status stays `partial`. `done` still means exact-SHA staging verification and the required independent verdict, and neither has been run. Flags stay OFF. Staging later applies `20261030151400_tenant_signed_pdf_read.sql`, `20261030151500_paper_lease_versions.sql`, and `20261031100204_b004_paper_delivery_boundary.sql` through `scripts/db-migrate.sh`, then redeploys the existing Worker. No new feature, hosted database change, or production step. Detail: [status](../e2e-evidence/B-004/status.md).
+
+## B-006 staging-ready code — 2026-11-03T22:00 PT
+
+Import error detail and regional source handling are already implemented. Queue status stays `partial`. No migration. Staging later redeploys the existing Worker with `IMPORT_ERROR_DETAILS_ENABLED` unset and without an organization `import_error_details` flag. `done` still requires exact staging acceptance and a Class A Codex verdict. An authorized customer sample is not invented here. Detail: [status](../e2e-evidence/B-006/status.md).
