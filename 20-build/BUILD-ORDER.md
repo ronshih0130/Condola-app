@@ -255,7 +255,7 @@ STOP POINT: bounded source review in progress; next: finish accepted safe diagno
 
 ## B-004 notes fix — 2026-11-03T22:10 PT
 
-QA failed the notes at `3fd94e0`. Queue status stays `partial`. The three paper-delivery migrations are applied on staging (2026-10-30), not pending apply. The staging Worker at `3fd94e0` is `efe4a399`. Flags stay OFF. The `b888ccd` skip is UNAPPROVED. `done` still requires the independent verdict. Gate counts belong to the notes-fix commit only. Detail: [status](../e2e-evidence/B-004/status.md). Compare: [qa-full-diff.md](../e2e-evidence/B-004/qa-full-diff.md).
+QA failed the notes at `3fd94e0`. Queue status stays `partial`. The three paper-delivery migrations are applied on staging (2026-10-30), not pending apply. The staging Worker at `3fd94e0` is `efe4a399`. Flags stay OFF. The `b888ccd` skip is UNAPPROVED. `done` still requires the independent verdict. Full gate on `8c615d368216687faf92d68b7f23d58cd0623205`: unit 651 pass, 0 fail, 0 skip; RLS 476 pass, 0 fail, 1 UNAPPROVED b888ccd skip. Detail: [status](../e2e-evidence/B-004/status.md). Compare: [qa-full-diff.md](../e2e-evidence/B-004/qa-full-diff.md).
 
 ## B-006 staging-ready code — 2026-11-03T22:00 PT
 
