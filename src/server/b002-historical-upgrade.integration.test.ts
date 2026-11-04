@@ -14,7 +14,7 @@ const source = disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS
 const compat = "supabase/migrations/20261104120100_b002_retention_compat.sql";
 
 async function historicalFixture(
-  mode: "fixed" | "closed" | "open",
+  mode: "fixed" | "closed" | "open" | "moved-out",
   check: (fixture: {
     db: Client;
     apply: (file: string) => void;
@@ -68,6 +68,9 @@ async function historicalFixture(
       mode === "closed" ? "2025-12-01" : null,
     ])).rows[0].id;
     const doc = (await db.query<{ id: string }>(`INSERT INTO identity_documents(org_id,contact_id,lease_id,doc_type,number_masked,storage_path,encryption_key_ref) VALUES ($1,$2,$3,'passport','A***CD',$4,'fixture-key-ref') RETURNING id::text`, [org, contact, lease, `${org}/historical`])).rows[0].id;
+    if (mode === "moved-out") {
+      await db.query(`UPDATE leases SET moved_out_on='2099-11-01' WHERE id=$1`, [lease]);
+    }
     apply("supabase/migrations/20261031100203_b002_retention_boundary.sql");
     apply("supabase/migrations/20261031100206_b002_legacy_open_moveout.sql");
     await check({ db, apply, org, lease, doc });
@@ -142,6 +145,42 @@ test("legacy open lease later given an end date becomes known and viewable", asy
   await historicalFixture("open", async ({ db, apply, org, lease, doc }) => {
     apply(compat);
     assert.equal((await db.query(`SELECT id_retention_auto_end FROM leases WHERE id=$1`, [lease])).rows[0].id_retention_auto_end, null);
+    await db.query(`UPDATE leases SET end_date='2099-12-01', id_retention_auto_end=true WHERE id=$1`, [lease]);
+    const row = (await db.query(`SELECT id_retention_auto_end,
+      app.b002_retention_origin_known(id,org_id) AS known
+      FROM leases WHERE id=$1`, [lease])).rows[0];
+    assert.equal(row.id_retention_auto_end, false);
+    assert.equal(row.known, true);
+    for (const user of [USERS.admin, USERS.tenant]) {
+      assert.equal((await db.query(`SELECT 1 FROM id_photo_gate(NULL,$1,$2,$3,'live')`, [user, doc, org])).rowCount, 1);
+    }
+  });
+});
+
+test("legacy lease closed with an explicit end date becomes known and viewable", async () => {
+  for (const status of ["terminated", "ended"]) {
+    await historicalFixture("open", async ({ db, apply, org, lease, doc }) => {
+      apply(compat);
+      assert.equal((await db.query(`SELECT id_retention_auto_end FROM leases WHERE id=$1`, [lease])).rows[0].id_retention_auto_end, null);
+      await db.query(`UPDATE leases SET status=$2, end_date='2099-12-01', id_retention_auto_end=true WHERE id=$1`, [lease, status]);
+      const row = (await db.query(`SELECT end_date::text, id_retention_auto_end,
+        app.b002_retention_origin_known(id,org_id) AS known
+        FROM leases WHERE id=$1`, [lease])).rows[0];
+      assert.equal(row.end_date, "2099-12-01", status);
+      assert.equal(row.id_retention_auto_end, false, status);
+      assert.equal(row.known, true, status);
+      for (const user of [USERS.admin, USERS.tenant]) {
+        assert.equal((await db.query(`SELECT 1 FROM id_photo_gate(NULL,$1,$2,$3,'live')`, [user, doc, org])).rowCount, 1, status);
+      }
+    });
+  }
+});
+
+test("legacy active lease with a historical move-out later given an end date becomes known and viewable", async () => {
+  await historicalFixture("moved-out", async ({ db, apply, org, lease, doc }) => {
+    apply(compat);
+    const before = (await db.query(`SELECT moved_out_on::text, end_date::text, id_retention_auto_end FROM leases WHERE id=$1`, [lease])).rows[0];
+    assert.deepEqual(before, { moved_out_on: "2099-11-01", end_date: null, id_retention_auto_end: null });
     await db.query(`UPDATE leases SET end_date='2099-12-01', id_retention_auto_end=true WHERE id=$1`, [lease]);
     const row = (await db.query(`SELECT id_retention_auto_end,
       app.b002_retention_origin_known(id,org_id) AS known

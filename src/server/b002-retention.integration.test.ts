@@ -76,9 +76,7 @@ test("B002 fixed retention, photo boundaries and direct purge guard", async () =
       assert.equal((await client.query(`SELECT 1 FROM id_photo_gate(NULL,$1,$2,$3,'sandbox')`, [actor, id, org])).rowCount, 0);
       assert.equal((await client.query(`SELECT 1 FROM id_photo_gate(NULL,$1,$2,$3,'live')`, [actor, id, ORG2_ID])).rowCount, 0);
       assert.equal((await client.query(`SELECT 1 FROM id_photo_gate(NULL,$1,$2,NULL,NULL)`, [actor, id])).rowCount, 1, `legacy null gate ${actor}`);
-      if ("coastAdmin" in USERS) {
-        assert.equal((await client.query(`SELECT 1 FROM id_photo_gate(NULL,$1,$2,NULL,NULL)`, [USERS.coastAdmin, id])).rowCount, 0);
-      }
+      assert.equal((await client.query(`SELECT 1 FROM id_photo_gate(NULL,$1,$2,NULL,NULL)`, [USERS.coastAdmin, id])).rowCount, 0);
     }
     await client.query(`CREATE TEMP TABLE b002_old_caller (n integer)`);
     for (const value of [null, '"off"', '"dry_run"', 'true', '"ON"']) {

@@ -135,11 +135,14 @@ BEGIN
     IF OLD.end_date IS NULL AND NEW.end_date IS NULL AND NEW.status IN ('terminated','cancelled') THEN
       NEW.id_retention_auto_end := true;
     ELSIF OLD.id_retention_auto_end IS NULL
+      AND NEW.end_date IS NOT NULL
+      AND NEW.end_date IS DISTINCT FROM OLD.end_date THEN
+      NEW.id_retention_auto_end := false;
+    ELSIF OLD.id_retention_auto_end IS NULL
       AND OLD.status = 'active' AND NEW.status = 'active'
-      AND OLD.end_date IS NULL
+      AND OLD.end_date IS NULL AND NEW.end_date IS NULL
       AND OLD.terminated_on IS NULL AND NEW.terminated_on IS NULL
-      AND OLD.moved_out_on IS NULL
-      AND (NEW.end_date IS NOT NULL OR NEW.moved_out_on IS NOT NULL) THEN
+      AND OLD.moved_out_on IS NULL AND NEW.moved_out_on IS NOT NULL THEN
       NEW.id_retention_auto_end := false;
     END IF;
   END IF;
