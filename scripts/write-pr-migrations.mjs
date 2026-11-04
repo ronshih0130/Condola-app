@@ -204,7 +204,7 @@ const added = {
   },
   "supabase/migrations/20261031100213_b001_zero_first_invoice.sql": {
     addOnly: false,
-    reason: "Replaces only the deferred completion financial postcondition to support Ron-approved explicit zero-total first invoice with no ledger transaction, entries or payment allocations and actual-actor no_amount_due audit; preserves positive branch and published100211.",
+    reason: "Replaces only the deferred completion financial postcondition to support Ron-approved explicit zero-total first invoice with no ledger transaction, entries or payment allocations and actual-actor no_amount_due audit; preserves positive branch; has no dependency on the b001 move-in invoice index (built concurrently in 20261031100216).",
   },
   "supabase/migrations/20261031100211_b001_esign_activation.sql": {
     addOnly: false,
