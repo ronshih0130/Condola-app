@@ -186,6 +186,10 @@ const added = {
     addOnly: false,
     reason: "Rejects email-shaped and long digit-run replacement reasons and records only a safe reason on the replacement audit. Existing safe reasons stay. No column removed.",
   },
+  "supabase/migrations/20261031100223_b004_reason_codes.sql": {
+    addOnly: false,
+    reason: "Restricts replacement reasons to a fixed code set and records only that code on the replacement audit. A non-code row stops the migration. The zero-row update to other changes nothing. No column removed.",
+  },
   "supabase/migrations/20261031100221_b013_owner_repair_override.sql": {
     addOnly: false,
     reason: "Adds restricted service-only property-override change/status/close/final-check functions using the existing public column and private immutable revision/command tables. Changes restricted privileges and the explicit authorized write path; no historical values rewritten, new tables, public workflow triggers or estimate approval/dispatch authority."

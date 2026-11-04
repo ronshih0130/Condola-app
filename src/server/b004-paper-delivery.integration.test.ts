@@ -93,6 +93,35 @@ test("B004 tenant pinning, current pointer and bounded version delete guard", as
     const cascadePdf = await sample.pdf();
     await client.query(`DELETE FROM leases WHERE id=$1`, [sample.lease]);
     assert.equal((await client.query(`SELECT id FROM lease_signed_pdfs WHERE id=$1`, [cascadePdf.id])).rowCount, 0);
+    const oldPaper = await live.pdf();
+    const replacementPath = `${org}/${live.lease}/${randomUUID()}.pdf`;
+    const replacementFile = (await client.query<{ id: string }>(`INSERT INTO files(org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,uploaded_by)
+      VALUES ($1,'lease-documents-private',$2,'replacement.pdf','application/pdf',$3,$4) RETURNING id::text`, [org, replacementPath, Buffer.from("%PDF-1.4\nold").length, USERS.admin])).rows[0].id;
+    await client.query("SAVEPOINT b004_reason_code");
+    try {
+      await assert.rejects(client.query(`INSERT INTO lease_signed_pdfs(org_id,lease_id,file_id,object_path,content,replace_reason,supersedes_id)
+        VALUES ($1,$2,$3,$4,$5,'Corrected paper copy',$6)`, [org, live.lease, replacementFile, replacementPath, Buffer.from("%PDF-1.4\nnew"), oldPaper.id]),
+        (error: unknown) => (error as { code?: string; constraint?: string }).code === "23514" && (error as { constraint?: string }).constraint === "lease_signed_pdfs_replace_reason_code");
+    } finally {
+      await client.query("ROLLBACK TO SAVEPOINT b004_reason_code");
+      await client.query("RELEASE SAVEPOINT b004_reason_code");
+    }
+    const replacement = (await client.query<{ id: string }>(`INSERT INTO lease_signed_pdfs(org_id,lease_id,file_id,object_path,content,replace_reason,supersedes_id)
+      VALUES ($1,$2,$3,$4,$5,'corrected_signature',$6) RETURNING id::text`, [org, live.lease, replacementFile, replacementPath, Buffer.from("%PDF-1.4\nnew"), oldPaper.id])).rows[0].id;
+    const beforeDelete = (await client.query<{ content: Buffer }>(`SELECT content FROM lease_signed_pdfs WHERE id=$1`, [oldPaper.id])).rows[0].content;
+    for (const role of ["authenticated", "service_role"] as const) {
+      await assert.rejects(context(USERS.admin, org, "live", role, () => client.query(`DELETE FROM lease_signed_pdfs WHERE id=$1`, [oldPaper.id])), (error: unknown) => (error as { code?: string }).code === "42501");
+    }
+    const afterDelete = await client.query<{ id: string; reason: string | null; supersedes: string | null; content: Buffer }>(
+      `SELECT id::text, replace_reason AS reason, supersedes_id::text AS supersedes, content FROM lease_signed_pdfs WHERE id=ANY($1::uuid[])`,
+      [[oldPaper.id, replacement]]);
+    const keptOld = afterDelete.rows.find((row) => row.id === oldPaper.id);
+    const keptNew = afterDelete.rows.find((row) => row.id === replacement);
+    assert.ok(keptOld);
+    assert.deepEqual(keptOld.content, beforeDelete);
+    assert.equal(keptOld.reason, null);
+    assert.equal(keptNew?.supersedes, oldPaper.id);
+    assert.equal(keptNew?.reason, "corrected_signature");
     await client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"tenant_signed_pdf":false}'::jsonb WHERE id=$1`, [org]);
     assert.deepEqual(await context(USERS.tenant, org, "live", "authenticated", visible), []);
     await client.query(`UPDATE organizations SET feature_flags=feature_flags || '{"tenant_signed_pdf":true}'::jsonb WHERE id=$1`, [org]);

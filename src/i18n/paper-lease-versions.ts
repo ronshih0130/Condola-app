@@ -10,8 +10,15 @@ const messages = {
     unknownUploader: "未記錄",
     unavailable: "無法顯示",
     reason: "替換原因",
-    reasonHint: "替換現有版本時必填，去除前後空白後須為 1–500 字。",
-    reasonInvalid: "請輸入替換原因，去除前後空白後須為 1–500 字。",
+    reasonHint: "替換現有版本時請從清單選擇一個原因代碼。",
+    reasonInvalid: "請選擇一個替換原因。",
+    reasonChoose: "請選擇",
+    reasons: {
+      corrected_signature: "更正簽名",
+      wrong_file: "檔案錯誤",
+      illegible_scan: "掃描無法辨識",
+      other: "其他",
+    },
     noReason: "未記錄原因",
     pdf: "簽署 PDF",
     upload: "上傳簽署 PDF",
@@ -27,8 +34,15 @@ const messages = {
     unknownUploader: "Not recorded",
     unavailable: "Unavailable",
     reason: "Replacement reason",
-    reasonHint: "Required when replacing an existing version; 1–500 characters after trimming.",
-    reasonInvalid: "Enter a replacement reason of 1–500 characters after trimming.",
+    reasonHint: "Choose one reason code when replacing an existing version.",
+    reasonInvalid: "Choose a replacement reason.",
+    reasonChoose: "Choose one",
+    reasons: {
+      corrected_signature: "Corrected signature",
+      wrong_file: "Wrong file",
+      illegible_scan: "Illegible scan",
+      other: "Other",
+    },
     noReason: "No reason recorded",
     pdf: "Signed PDF",
     upload: "Upload signed PDF",
@@ -37,4 +51,11 @@ const messages = {
 
 export function paperLeaseCopy(locale: string) {
   return locale === "zh-TW" ? messages["zh-TW"] : messages.en;
+}
+
+/** Localized label for a stored code. Unknown text is not shown. */
+export function paperLeaseReasonLabel(locale: string, code: string | null): string | null {
+  if (!code) return null;
+  const reasons = paperLeaseCopy(locale).reasons as Record<string, string>;
+  return reasons[code] ?? null;
 }

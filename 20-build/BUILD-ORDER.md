@@ -253,6 +253,10 @@ B017 limited compiler delivery remains unparsed/unapplied/target UNVERIFIED; ful
 
 STOP POINT: bounded source review in progress; next: finish accepted safe diagnostic composition and independently freeze before one OFF-only attempt; owner: Codex/Ron.
 
+## B-004 QA round 3 — 2026-11-04
+
+B-004 stays `partial`. Replacement reasons are a fixed code set; audit stores the code only. The staff download route is exercised through its GET handler. That does not close the item. Logged-in old-code compatibility and rollback are still unproven. The `b888ccd` skip is UNAPPROVED. Detail: [status](../e2e-evidence/B-004/status.md).
+
 ## B-004 notes fix — 2026-11-03T22:10 PT
 
 QA failed the notes at `3fd94e0`. Queue status stays `partial`. The three paper-delivery migrations are applied on staging (2026-10-30), not pending apply. The staging Worker at `3fd94e0` is `efe4a399`. Flags stay OFF. The `b888ccd` skip is UNAPPROVED. `done` still requires the independent verdict. Full gate on `9ce4a168d5482ae1afb3189624ddd1b2c50fbf38`: unit 653 pass, 0 fail, 0 skip; RLS 476 pass, 0 fail, 1 UNAPPROVED b888ccd skip. Raw logs are under e2e-evidence/B-004/. Detail: [status](../e2e-evidence/B-004/status.md). Compare: [qa-full-diff.md](../e2e-evidence/B-004/qa-full-diff.md).

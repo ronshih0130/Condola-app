@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  PAPER_LEASE_REASON_CODES,
   paperLeaseVersionsGlobalEnabled,
   paperLeaseVersionsOn,
   validatePaperLeaseReason,
@@ -40,24 +42,27 @@ test("the default switch keeps the legacy panel path regardless of org opt-in", 
   }
 });
 
-test("first upload needs no reason; replacements require trimmed 1..500 characters", () => {
+test("replacements accept only a reason code and first uploads store none", () => {
   assert.deepEqual(validatePaperLeaseReason(false, undefined), { ok: true, value: null });
   assert.deepEqual(validatePaperLeaseReason(false, null), { ok: true, value: null });
   assert.deepEqual(validatePaperLeaseReason(false, " \n "), { ok: true, value: null });
-  for (const value of [undefined, null, "", " \n\t ", 1, {}]) {
+  for (const value of [undefined, null, "", " \n\t ", 1, {}, "corrected signature", "更正簽名", "user@example.com", "x".repeat(500)]) {
     assert.deepEqual(validatePaperLeaseReason(true, value), { ok: false });
   }
-  assert.deepEqual(validatePaperLeaseReason(true, "  corrected signature \n"), {
-    ok: true, value: "corrected signature",
-  });
-  assert.deepEqual(validatePaperLeaseReason(true, " x "), { ok: true, value: "x" });
-  assert.equal(validatePaperLeaseReason(true, ` ${"a".repeat(500)} `).ok, true);
-  assert.equal(validatePaperLeaseReason(true, "a".repeat(501)).ok, false);
-  assert.equal(validatePaperLeaseReason(true, "user@example.com").ok, false);
-  assert.equal(validatePaperLeaseReason(true, "0912345678").ok, false);
-  assert.equal(validatePaperLeaseReason(true, "0912-345-678").ok, false);
-  assert.deepEqual(validatePaperLeaseReason(true, "更正簽名"), { ok: true, value: "更正簽名" });
-  assert.equal(validatePaperLeaseReason(false, "a".repeat(501)).ok, false);
-  assert.equal(validatePaperLeaseReason(true, "𠮷".repeat(500)).ok, true);
-  assert.equal(validatePaperLeaseReason(true, "𠮷".repeat(501)).ok, false);
+  for (const code of PAPER_LEASE_REASON_CODES) {
+    assert.deepEqual(validatePaperLeaseReason(true, `  ${code} \n`), { ok: true, value: code });
+    assert.deepEqual(validatePaperLeaseReason(false, code), { ok: true, value: code });
+  }
+});
+
+test("the paper panel offers the reason codes and does not collect free text", () => {
+  const panel = readFileSync(new URL("./paper-lease-versions-panel.tsx", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../../supabase/migrations/20261031100223_b004_reason_codes.sql", import.meta.url), "utf8");
+  assert.match(panel, /<select/);
+  assert.doesNotMatch(panel, /<textarea/);
+  assert.match(panel, /PAPER_LEASE_REASON_CODES/);
+  assert.match(migration, /lease_signed_pdfs_replace_reason_code/);
+  assert.match(migration, /VALUES \([\s\S]*\n\s+code\n/);
+  assert.doesNotMatch(migration, /VALUES \([\s\S]*NEW\.replace_reason/);
+  for (const code of PAPER_LEASE_REASON_CODES) assert.match(migration, new RegExp(code));
 });

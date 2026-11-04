@@ -7,8 +7,6 @@ import {
 } from "./paper-lease-versions-rules";
 import type { Session } from "./types";
 
-export const REASON_MAX = 500;
-
 type Client = Parameters<typeof many>[0];
 type PreparedVersion =
   | { enabled: false }
@@ -67,9 +65,6 @@ export async function preparePaperLeaseVersion(
       LIMIT 1`,
     [session.orgId, leaseId],
   );
-  if (typeof reason === "string" && reason.trim().length > REASON_MAX) {
-    throw new FlowError("errors.required");
-  }
   const validated = validatePaperLeaseReason(previous.length > 0, reason);
   if (!validated.ok) throw new FlowError("errors.required");
   return { enabled: true, supersedesId: previous[0]?.id ?? null, reason: validated.value };

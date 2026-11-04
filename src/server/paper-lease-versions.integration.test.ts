@@ -10,7 +10,6 @@ import {
   insertPaperLeaseVersion,
   paperLeaseVersionsEnabled,
   preparePaperLeaseVersion,
-  REASON_MAX,
 } from "./paper-lease-versions";
 import type { Session } from "./types";
 import { insertTestAuthSession } from "./test-auth-session";
@@ -266,10 +265,10 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
     }, { orgId: ORG_ID });
 
     const firstId = await uploadEnabled();
-    for (const reason of [undefined, "", " \n ", "x".repeat(REASON_MAX + 1)]) {
+    for (const reason of [undefined, "", " \n ", "corrected signature", "x".repeat(501)]) {
       await assert.rejects(() => uploadEnabled(reason), requiredReason);
     }
-    const secondId = await uploadEnabled("  corrected signature \n");
+    const secondId = await uploadEnabled("  corrected_signature \n");
 
     const versions = await query<{
       id: string;
@@ -297,7 +296,7 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
     assert.equal(first.supersedes_id, null);
     assert.equal(first.current, false);
     assert.equal(second.current, true);
-    assert.equal(second.replace_reason, "corrected signature");
+    assert.equal(second.replace_reason, "corrected_signature");
     assert.equal(second.supersedes_id, firstId);
     assert.equal(second.uploaded_by, admin.userId);
     assert.equal(second.size_bytes, String(bytes.length));
@@ -317,7 +316,8 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
       [ORG_ID, leaseId, secondId],
     );
     assert.equal(audit.rows.length, 1);
-    assert.equal(audit.rows[0].reason, "corrected signature");
+    assert.equal(audit.rows[0].reason, "corrected_signature");
+    assert.equal(JSON.stringify(audit.rows[0].new_row).includes("corrected signature"), false);
     assert.equal(audit.rows[0].new_row.supersedes_id, firstId);
     assert.equal(audit.rows[0].new_row.lease_signed_pdf_id, secondId);
     assert.equal(audit.rows[0].new_row.file_id, second.file_id);
@@ -338,10 +338,10 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
       ],
     ), { orgId: ORG_ID });
 
-    for (const reason of ["", "   ", "x".repeat(REASON_MAX + 1)]) {
+    for (const reason of ["", "   ", "x".repeat(501), "corrected signature", "user@example.com"]) {
       await assert.rejects(
         () => directInsert(leaseId, reason, secondId),
-        databaseError("23514", "lease_signed_pdfs_replace_reason_length"),
+        databaseError("23514", "lease_signed_pdfs_replace_reason_code"),
       );
     }
     await assert.rejects(
@@ -349,9 +349,25 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
       databaseError("23514", "lease_signed_pdfs_supersedes_reason"),
     );
     await assert.rejects(
-      () => directInsert(otherLeaseId, "Different lease", secondId),
+      () => directInsert(otherLeaseId, "other", secondId),
       databaseError("23503", "lease_signed_pdfs_supersedes_fk"),
     );
+    await assert.rejects(
+      () => tx(admin.userId, (client) => client.query(
+        `DELETE FROM lease_signed_pdfs WHERE id = $1`,
+        [firstId],
+      ), { orgId: ORG_ID }),
+      databaseError("42501"),
+    );
+    const kept = await query<{ id: string; supersedes_id: string | null; content: Buffer }>(
+      `SELECT id::text, supersedes_id::text, content FROM lease_signed_pdfs WHERE id = $1 OR id = $2`,
+      [firstId, secondId],
+    );
+    const oldVersion = kept.rows.find((row) => row.id === firstId);
+    const replacement = kept.rows.find((row) => row.id === secondId);
+    assert.ok(oldVersion);
+    assert.deepEqual(oldVersion.content, bytes);
+    assert.equal(replacement?.supersedes_id, firstId);
 
     await tx(tenantUserIds[0], async (client) => {
       const history = await client.query(
@@ -437,8 +453,8 @@ test("paper versions preserve flag-off uploads and isolate audited, concurrent r
     );
 
     const concurrentIds = await Promise.all([
-      uploadEnabled("Concurrent replacement A"),
-      uploadEnabled("Concurrent replacement B"),
+      uploadEnabled("other"),
+      uploadEnabled("wrong_file"),
     ]);
     assert.notEqual(concurrentIds[0], concurrentIds[1]);
     const concurrent = await query<{

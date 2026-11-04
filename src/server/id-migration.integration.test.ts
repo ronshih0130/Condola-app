@@ -689,7 +689,7 @@ test("provided PR9e privilege variant upgrades and preserves ordinary records", 
   }
 });
 
-test("a database with the older 20261022180000 upgrades forward, then accepts the same file again", { skip: "Historical commit b888ccd is lost; CEO approved this single skip via Ron on 2026-10-29" }, async () => {
+test("a database with the older 20261022180000 upgrades forward, then accepts the same file again", { skip: "Historical commit b888ccd is lost; this skip is UNAPPROVED" }, async () => {
   const scratch = mkdtempSync(path.join(tmpdir(), "condola-id-upgrade-"));
   const oldSql = path.join(scratch, OLD_FILE);
   writeFileSync(oldSql, execFileSync("git", ["show", `b888ccd:${path.join("supabase/migrations", OLD_FILE)}`], { cwd: ROOT }));

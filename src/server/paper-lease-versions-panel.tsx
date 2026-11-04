@@ -1,5 +1,6 @@
-import { paperLeaseCopy } from "@/i18n/paper-lease-versions";
-import { listPaperLeaseVersions, REASON_MAX } from "./paper-lease-versions";
+import { paperLeaseCopy, paperLeaseReasonLabel } from "@/i18n/paper-lease-versions";
+import { PAPER_LEASE_REASON_CODES } from "./paper-lease-versions-rules";
+import { listPaperLeaseVersions } from "./paper-lease-versions";
 import { paperHistoryTime } from "./paper-lease-history-time";
 import type { Session } from "./types";
 
@@ -34,7 +35,7 @@ export async function paperLeaseVersionPanel(
               <dt>{copy.uploader}</dt>
               <dd>{version.uploader_name ?? copy.unavailable}</dd>
               <dt>{copy.reason}</dt>
-              <dd style={{ whiteSpace: "pre-wrap" }}>{version.replace_reason ?? copy.noReason}</dd>
+              <dd>{paperLeaseReasonLabel(session.locale, version.replace_reason) ?? copy.noReason}</dd>
             </dl>
           </li>
           );
@@ -54,15 +55,20 @@ export async function paperLeaseVersionPanel(
           {replacing ? (
             <div className="fg">
               <label className="f" htmlFor="paper-replace-reason">{copy.reason}</label>
-              <textarea
+              <select
                 className="inp"
                 id="paper-replace-reason"
                 name="replaceReason"
                 required
-                maxLength={REASON_MAX}
+                defaultValue=""
                 aria-describedby="paper-replace-reason-hint"
                 data-testid="paper-replace-reason"
-              />
+              >
+                <option value="" disabled>{copy.reasonChoose}</option>
+                {PAPER_LEASE_REASON_CODES.map((code) => (
+                  <option key={code} value={code}>{copy.reasons[code]}</option>
+                ))}
+              </select>
               <p id="paper-replace-reason-hint" className="small muted">{copy.reasonInvalid}</p>
             </div>
           ) : null}

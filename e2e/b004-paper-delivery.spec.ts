@@ -118,7 +118,7 @@ test("paper history follows the selected live or sandbox organization", async ({
     await expect(history).toBeVisible();
     await expect(history).toContainText("b004-sandbox-first.pdf");
     await page.getByTestId("signed-pdf").setInputFiles(pdf("b004-sandbox-current.pdf","SANDBOX-CURRENT"));
-    await page.getByTestId("paper-replace-reason").fill("Synthetic correction");
+    await page.getByTestId("paper-replace-reason").selectOption("corrected_signature");
     await page.getByTestId("upload-signed-pdf").click();
     await expect(history.locator("li")).toHaveCount(2);
     await expect(history.locator('[data-current="true"]')).toContainText("b004-sandbox-current.pdf");
@@ -189,16 +189,16 @@ test("paper replacement and private tenant delivery", async ({ page }, testInfo)
   await page.getByTestId("signed-pdf").setInputFiles(pdf("b004-second.pdf", "B004-SECOND"));
   await page.getByTestId("upload-signed-pdf").click();
   await expect(page.getByTestId("paper-version-history").locator("li")).toHaveCount(1);
-  await page.getByTestId("paper-replace-reason").fill("Corrected paper copy");
+  await page.getByTestId("paper-replace-reason").selectOption("corrected_signature");
   await page.getByTestId("upload-signed-pdf").click();
   await expect(page.getByTestId("paper-version-history").locator("li")).toHaveCount(2);
   await expect(page.getByTestId("paper-version-history").locator('[data-current="true"]')).toContainText("b004-second.pdf");
-  await expect(page.getByTestId("paper-version-history")).toContainText("Corrected paper copy");
+  await expect(page.getByTestId("paper-version-history")).toContainText("更正簽名");
   const versions = await db(async (client) => (await client.query<{ id: string; current: boolean; reason: string | null; supersedes: string | null }>(`SELECT p.id::text,(p.file_id=l.document_file_id) AS current,p.replace_reason AS reason,p.supersedes_id::text AS supersedes FROM lease_signed_pdfs p JOIN leases l ON l.id=p.lease_id WHERE p.lease_id=$1 ORDER BY p.created_at,p.id`, [leaseId])).rows);
   expect(versions).toHaveLength(2);
   const current = versions.find((v) => v.current)!;
   const old = versions.find((v) => !v.current)!;
-  expect(current.reason).toBe("Corrected paper copy");
+  expect(current.reason).toBe("corrected_signature");
   expect(current.supersedes).toBe(old.id);
   const metadata = await db(async (client) => (await client.query<{ uploaded_at: Date; timezone: string; name: string }>(
     `SELECT p.created_at AS uploaded_at, o.timezone, profile.display_name AS name
