@@ -72,7 +72,7 @@ test("ON bank lock first does not append utility to an invoice that became paid"
   const before=await snapshot();
   let bank:Promise<unknown>|undefined, utility:Promise<unknown>|undefined;
   try {
-    bank=decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"synthetic race"});
+    bank=decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"other"});
     const bankPid=await waitBlocked(gate.pid);
     utility=confirmUtilityRun(session,f.run);
     await waitBlocked(bankPid);
@@ -100,7 +100,7 @@ test("ON utility lock first preserves a full bank payment without partial postin
   try {
     utility=confirmUtilityRun(session,f.run);
     const utilityPid=await waitBlocked(gate.pid);
-    bank=decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"synthetic race"});
+    bank=decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"other"});
     await waitBlocked(utilityPid);
     await gate.release();
     const outcomes=await Promise.allSettled([utility,bank]);
@@ -158,7 +158,7 @@ test("manual reminder first and utility first serialize without lease inversion"
 for (const first of ["confirm","bank"] as const) test(`ON ${first} first serializes confirmation and bank link`,async()=>{
   const f=await fixture(`confirm-bank-${first}`), gate=await barrier("payment_allocations","payment_id",f.payment);
   const confirm=()=>confirmPayment(session,f.payment);
-  const bank=()=>decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"synthetic race"});
+  const bank=()=>decideBankMatch(session,{bankId:f.bank,paymentId:f.payment,decision:"match",reason:"other"});
   let left:Promise<unknown>|undefined,right:Promise<unknown>|undefined;
   try {
     left=first === "confirm" ? confirm() : bank();

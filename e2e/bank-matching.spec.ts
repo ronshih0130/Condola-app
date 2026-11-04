@@ -89,13 +89,13 @@ for (const width of [390,1280]) test(`manual bank reconciliation at ${width}px`,
       await page.screenshot({path:info.outputPath(`bank-basis-${locale}-${width}.png`),fullPage:true});
     }
     phase="reject";
-    const suggestion=line.locator("form").filter({hasText:"配對建議"}); await suggestion.locator('input[name="reason"]').fill("Synthetic rejection"); await suggestion.getByRole("button",{name:"拒絕建議"}).click();
+    const suggestion=line.locator("form").filter({hasText:"配對建議"}); await suggestion.locator('select[name="reason"]').selectOption("wrong_payment"); await suggestion.getByRole("button",{name:"拒絕建議"}).click();
     await expect(line).not.toContainText("配對建議");
     phase="manual";
-    const manual=line.locator("form").filter({hasText:"手動選擇"}); await manual.locator('select[name="paymentId"]').selectOption(payment); await manual.locator('input[name="reason"]').fill("Synthetic match");
+    const manual=line.locator("form").filter({hasText:"手動選擇"}); await manual.locator('select[name="paymentId"]').selectOption(payment); await manual.locator('select[name="reason"]').selectOption("confirmed_amount");
     await manual.getByRole("button",{name:"配對款項"}).click(); await expect(line).toHaveCount(0);
     phase="readback";
-    const checks=(await db.query(`SELECT (SELECT count(*)::int FROM app.b009_decisions WHERE org_id=$1 AND actor_id=$2 AND payment_id=$3 AND decision='match' AND reason='Synthetic match') AS matched,(SELECT count(*)::int FROM app.b009_decisions WHERE org_id=$1 AND actor_id=$2 AND payment_id=$3 AND decision='reject' AND reason='Synthetic rejection') AS rejected,(SELECT count(*)::int FROM payment_allocations WHERE payment_id=$3) AS allocations`,[ORG_ID,USERS.admin,payment])).rows[0];
+    const checks=(await db.query(`SELECT (SELECT count(*)::int FROM app.b009_decisions WHERE org_id=$1 AND actor_id=$2 AND payment_id=$3 AND decision='match' AND reason='confirmed_amount') AS matched,(SELECT count(*)::int FROM app.b009_decisions WHERE org_id=$1 AND actor_id=$2 AND payment_id=$3 AND decision='reject' AND reason='wrong_payment') AS rejected,(SELECT count(*)::int FROM payment_allocations WHERE payment_id=$3) AS allocations`,[ORG_ID,USERS.admin,payment])).rows[0];
     expect(checks).toEqual({matched:1,rejected:1,allocations:1}); expect(errors).toEqual([]);
   } catch { primary=phase; }
   if (saved) {

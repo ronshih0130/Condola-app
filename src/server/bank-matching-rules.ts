@@ -1,5 +1,23 @@
 export type BankLine = { date: string; amountMinor: bigint; last5: string | null; memo: string };
 
+/** Closed set stored on a bank-match decision. Not free text. */
+export const BANK_MATCH_REASON_CODES = [
+  "confirmed_amount",
+  "wrong_payment",
+  "duplicate",
+  "other",
+] as const;
+
+export type BankMatchReasonCode = (typeof BANK_MATCH_REASON_CODES)[number];
+
+const bankMatchReasonCodes: readonly string[] = BANK_MATCH_REASON_CODES;
+
+export function bankMatchReasonCode(input: unknown): BankMatchReasonCode | null {
+  if (typeof input !== "string") return null;
+  const value = input.trim();
+  return bankMatchReasonCodes.includes(value) ? value as BankMatchReasonCode : null;
+}
+
 /** Supported explicit comma-separated UTF-8/Big5 mapping; malformed rows fail closed. */
 export function parseBankCsv(text: string, dateFormat: "iso" | "roc" = "iso"): BankLine[] {
   if (text.length > 1_000_000) throw new Error("Invalid bank CSV");

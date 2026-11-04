@@ -22,6 +22,8 @@ test.before(async () => {
   db = new Client({connectionString:withDatabase(source,name)}); await db.connect();
   const installed = (await db.query<{installed:boolean}>(`SELECT to_regclass('app.b009_file_imports') IS NOT NULL AS installed`)).rows[0].installed;
   if (!installed) await db.query(await readFile(new URL("../../supabase/migrations/20261031100209_b009_bank_match_decisions.sql",import.meta.url),"utf8"));
+  const coded = (await db.query<{present:boolean}>(`SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='b009_decisions_reason_code') AS present`)).rows[0].present;
+  if (!coded) await db.query(await readFile(new URL("../../supabase/migrations/20261031100225_b009_decision_reason_codes.sql",import.meta.url),"utf8"));
   const objects = (await db.query(`SELECT to_regclass('app.b009_decisions') IS NOT NULL AS decisions,to_regprocedure('app.b009_direct_write_guard()') IS NOT NULL AS guard,
     (SELECT count(*)::int FROM pg_trigger WHERE tgname IN ('b009_import_guard','b009_transaction_guard','b009_suggestion_guard','b009_payment_insert_guard','b009_payment_guard') AND NOT tgisinternal) AS guards`)).rows[0];
   assert.deepEqual(objects,{decisions:true,guard:true,guards:5});
@@ -87,13 +89,13 @@ test("import, decisions, privilege and concurrent payment matching", async () =>
   const beforeMatch = await bankBoard(session); assert.ok(beforeMatch);
   assert.equal(beforeMatch.suggestions.filter(suggestion=>suggestion.payment===payment && ids.includes(suggestion.bank)).length,2);
   await assert.rejects(decideBankMatch(session,{bankId:ids[0],paymentId:payment,decision:"match",reason:""}));
-  assert.equal(await decideBankMatch({...session,userId:USERS.manager,sessionId:managerSid,role:"admin"},{bankId:ids[0],paymentId:payment,decision:"match",reason:"forged"}),null);
-  assert.equal(await decideBankMatch({...session,orgId:randomUUID()},{bankId:ids[0],paymentId:payment,decision:"match",reason:"other org"}),null);
-  await assert.rejects(decideBankMatch(session,{bankId:ids[0],paymentId:randomUUID(),decision:"match",reason:"missing payment"}));
+  assert.equal(await decideBankMatch({...session,userId:USERS.manager,sessionId:managerSid,role:"admin"},{bankId:ids[0],paymentId:payment,decision:"match",reason:"other"}),null);
+  assert.equal(await decideBankMatch({...session,orgId:randomUUID()},{bankId:ids[0],paymentId:payment,decision:"match",reason:"other"}),null);
+  await assert.rejects(decideBankMatch(session,{bankId:ids[0],paymentId:randomUUID(),decision:"match",reason:"other"}));
   await db.query("BEGIN"); await db.query(`SELECT set_config('request.jwt.claim.sub',$1,true),set_config('app.active_org_id',$2,true),set_config('app.env','live',true)`,[USERS.admin,ORG_ID]); await db.query("SET LOCAL ROLE authenticated");
   await assert.rejects(db.query(`INSERT INTO payments(org_id,property_id,lease_id,currency,amount_minor,paid_on,method,status,source,submitted_by,bank_transaction_id) VALUES ($1,$2,$3,$4,99900,current_date,'bank_transfer','submitted','tenant_portal',$5,$6)`,[ORG_ID,property,lease,account.currency,USERS.admin,ids[0]]),(e:unknown)=>(e as {code?:string}).code==="42501");
   await db.query("ROLLBACK");
-  const results = await Promise.allSettled(ids.map(bankId=>decideBankMatch(session,{bankId,paymentId:payment,decision:"match",reason:"synthetic manual decision"})));
+  const results = await Promise.allSettled(ids.map(bankId=>decideBankMatch(session,{bankId,paymentId:payment,decision:"match",reason:"other"})));
   assert.equal(results.filter(r=>r.status==="fulfilled" && r.value===true).length,1);
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM app.b009_decisions WHERE org_id=$1 AND payment_id=$2 AND decision='match'`,[ORG_ID,payment])).rows[0].n,1);
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM payment_allocations WHERE payment_id=$1 AND invoice_id=$2`,[payment,invoice])).rows[0].n,1);
@@ -153,12 +155,16 @@ test("import, decisions, privilege and concurrent payment matching", async () =>
   await db.query(`UPDATE bank_match_suggestions SET reasons=$2::jsonb WHERE id=$1`,[suggested.id,JSON.stringify(stored.reasons)]);
   await db.query(`CREATE FUNCTION app.b009_test_fail_decision() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic audit failure'; END $$`);
   await db.query(`CREATE TRIGGER b009_test_fail_decision BEFORE INSERT ON app.b009_decisions FOR EACH ROW EXECUTE FUNCTION app.b009_test_fail_decision()`);
-  await assert.rejects(decideBankMatch(session,{bankId:suggested.bank,suggestionId:suggested.id,decision:"reject",reason:"synthetic rejection"}));
+  await assert.rejects(decideBankMatch(session,{bankId:suggested.bank,suggestionId:suggested.id,decision:"reject",reason:"other"}));
   assert.equal((await db.query(`SELECT status::text FROM bank_match_suggestions WHERE id=$1`,[suggested.id])).rows[0].status,"suggested");
   await db.query(`DROP TRIGGER b009_test_fail_decision ON app.b009_decisions`);
-  assert.equal(await decideBankMatch(session,{bankId:suggested.bank,suggestionId:suggested.id,decision:"reject",reason:"synthetic rejection"}),true);
+  const beforeCodes = (await db.query<{n:number}>(`SELECT count(*)::int AS n FROM app.b009_decisions`)).rows[0].n;
+  await assert.rejects(decideBankMatch(session,{bankId:suggested.bank,suggestionId:suggested.id,decision:"reject",reason:"synthetic rejection"}));
+  await assert.rejects(db.query(`INSERT INTO app.b009_decisions(org_id,bank_transaction_id,payment_id,suggestion_id,decision,source,reason,actor_id) VALUES ($1,$2,$3,$4,'reject','suggestion','synthetic rejection',$5)`,[ORG_ID,suggested.bank,newPayment,suggested.id,USERS.admin]),(e:unknown)=>(e as {code?:string}).code==="23514");
+  assert.equal((await db.query<{n:number}>(`SELECT count(*)::int AS n FROM app.b009_decisions`)).rows[0].n,beforeCodes);
+  assert.equal(await decideBankMatch(session,{bankId:suggested.bank,suggestionId:suggested.id,decision:"reject",reason:"  other \n"}),true);
   const rejected = (await db.query(`SELECT decision,source,reason,actor_id::text FROM app.b009_decisions WHERE suggestion_id=$1`,[suggested.id])).rows[0];
-  assert.deepEqual(rejected,{decision:"reject",source:"suggestion",reason:"synthetic rejection",actor_id:USERS.admin});
+  assert.deepEqual(rejected,{decision:"reject",source:"suggestion",reason:"other",actor_id:USERS.admin});
   assert.equal((await db.query(`SELECT status::text FROM payments WHERE id=$1`,[newPayment])).rows[0].status,"submitted");
   await assert.rejects(db.query(`UPDATE app.b009_decisions SET reason='changed' WHERE suggestion_id=$1`,[suggested.id]),(e:unknown)=>(e as {code?:string}).code==="42501");
   await assert.rejects(db.query(`TRUNCATE app.b009_decisions`),(e:unknown)=>(e as {code?:string}).code==="42501");
@@ -170,7 +176,7 @@ test("import, decisions, privilege and concurrent payment matching", async () =>
   const racedPayment = (await db.query<{id:string}>(`INSERT INTO payments(org_id,property_id,lease_id,currency,amount_minor,paid_on,method,status,source,submitted_by) VALUES ($1,$2,$3,$4,11000,'2026-01-03','bank_transfer','submitted','tenant_portal',$5) RETURNING id::text`,[ORG_ID,property,lease2,account.currency,USERS.admin])).rows[0].id;
   const racedImport = await importBankFile(session,account.id,new TextEncoder().encode("date,amount,last5,memo\n2026-01-03,110.00,12345,race"),"utf-8"); assert.ok(racedImport);
   const racedLine = (await db.query<{id:string}>(`SELECT id::text FROM bank_transactions WHERE import_id=$1`,[racedImport.importId])).rows[0].id;
-  const raced = await Promise.allSettled([confirmPayment(session,racedPayment),decideBankMatch(session,{bankId:racedLine,paymentId:racedPayment,decision:"match",reason:"race"})]);
+  const raced = await Promise.allSettled([confirmPayment(session,racedPayment),decideBankMatch(session,{bankId:racedLine,paymentId:racedPayment,decision:"match",reason:"other"})]);
   assert.ok(raced.some(r=>r.status==="fulfilled"));
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM ledger_transactions WHERE source_table='payments' AND source_id=$1`,[racedPayment])).rows[0].n,1);
   const allocation = (await db.query(`SELECT count(*)::int AS n,coalesce(sum(amount_minor),0)::int AS amount FROM payment_allocations WHERE payment_id=$1`,[racedPayment])).rows[0];

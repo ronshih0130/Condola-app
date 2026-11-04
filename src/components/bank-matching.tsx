@@ -2,6 +2,7 @@ import type { Locale } from "@/i18n";
 import { bankMatchingStrings } from "@/i18n/bank-matching";
 import { actionDecideBankMatch, actionImportBankFile } from "@/server/bank-matching-actions";
 import type { bankBoard } from "@/server/bank-matching";
+import { BANK_MATCH_REASON_CODES } from "@/server/bank-matching-rules";
 import { moneyLabel } from "@/server/format";
 
 type Board = NonNullable<Awaited<ReturnType<typeof bankBoard>>>;
@@ -39,13 +40,13 @@ export function BankMatching({data,locale}:{data:Board;locale:Locale}) {
                 {suggestion.basis.dateDeltaDays !== null ? <li>{s.dateGap.replace("{days}", String(suggestion.basis.dateDeltaDays))}</li> : null}
               </ul> : <p>{s.basisUnavailable}</p>}
             </div>
-            <label>{s.reason}<input className="inp" name="reason" required maxLength={500} /></label>
+            <label>{s.reason}<select className="inp" name="reason" required defaultValue="" data-testid="bank-match-reason"><option value="" disabled>{s.reasonChoose}</option>{BANK_MATCH_REASON_CODES.map((code) => <option key={code} value={code}>{s.reasons[code]}</option>)}</select></label>
             <button className="btn" name="decision" value="match">{s.match}</button> <button className="btn" name="decision" value="reject">{s.reject}</button>
           </form>)}
           {options.length ? <form action={actionDecideBankMatch}>
             <input type="hidden" name="bankId" value={line.id} /><input type="hidden" name="decision" value="match" />
             <label>{s.manual}<select className="inp" name="paymentId" required defaultValue=""><option value="">{s.choose}</option>{options.map(p => <option value={p.id} key={p.id}>{p.name || "—"} · {p.date} · {amountLabel(p.amount,p.currency)}</option>)}</select></label>
-            <label>{s.reason}<input className="inp" name="reason" required maxLength={500} /></label><button className="btn">{s.match}</button>
+            <label>{s.reason}<select className="inp" name="reason" required defaultValue="" data-testid="bank-match-reason"><option value="" disabled>{s.reasonChoose}</option>{BANK_MATCH_REASON_CODES.map((code) => <option key={code} value={code}>{s.reasons[code]}</option>)}</select></label><button className="btn">{s.match}</button>
           </form> : null}
         </article>;
       })}
