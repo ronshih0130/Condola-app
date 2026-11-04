@@ -24,7 +24,7 @@ test("org rollout gates all personas, direct repo and a disable waiting on organ
   const caseId=randomUUID(), versionId=randomUUID();
   try {
     await setup.query(`INSERT INTO auth_sessions(id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')`,[admin.sessionId,admin.userId,randomUUID()]);
-    const lease=(await setup.query<{id:string}>(`SELECT id::text FROM leases WHERE org_id=$1 LIMIT 1`,[ORG_ID])).rows[0].id;
+    const lease=(await setup.query<{id:string}>(`SELECT l.id::text FROM leases l JOIN properties p ON p.org_id=l.org_id AND p.id=l.property_id JOIN units u ON u.org_id=l.org_id AND u.id=l.unit_id LEFT JOIN rooms r ON r.org_id=l.org_id AND r.id=l.target_room_id WHERE l.org_id=$1 AND l.status='active' AND p.archived_at IS NULL AND u.archived_at IS NULL AND (l.target_room_id IS NULL OR r.archived_at IS NULL) ORDER BY l.created_at, l.id LIMIT 1`,[ORG_ID])).rows[0].id;
     const command={type:"create" as const,leaseId:lease,pdf:new Uint8Array(),ownerId:USERS.owner,tenantId:USERS.tenant,
       ownerDocument:false,tenantDocument:false,order:"parallel" as const,deadline:""};
     const repo=new EsignRepo({check:async()=>true});
