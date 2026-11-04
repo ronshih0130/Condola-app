@@ -1,14 +1,17 @@
-> Staging-ready code, not `done`, recorded 2026-11-03T21:35 PT. Paper versions, tenant downloads, and download audit were already on this branch. BUILD-ORDER says `done` means an exact-SHA staging check plus the required independent verdict. Both are still blocked. Flags stay OFF. No hosted database was changed.
+> Notes fix after QA failed `3fd94e0`. Paper versions, tenant downloads, and download audit were already on this branch. `done` still means an exact-SHA staging check plus the required independent verdict. Flags stay OFF. This commit does not change the hosted database or deploy a Worker.
 
-# B-004 staging apply
+# B-004 staging state
 
-No new feature in this note. The implementation is the existing paper-version and tenant-download path.
+No new feature in this note.
 
-- Schema, in filename order, through `scripts/db-migrate.sh` on the Tokyo session connection (port 5432), only if that filename is not already recorded: `20261030151400_tenant_signed_pdf_read.sql`, `20261030151500_paper_lease_versions.sql`, `20261031100204_b004_paper_delivery_boundary.sql`. Do not apply `supabase/stub/supabase_stub.sql` and do not run `db:reset` on staging.
-- Worker: redeploy the existing staging Worker when this branch is applied. Routes already exist at `src/app/t/lease/signed/[pdfId]/route.ts` and `src/app/m/leases/[id]/signed/[pdfId]/route.ts`. No new binding.
+- Applied on staging, 2026-10-30, all three: `20261030151400_tenant_signed_pdf_read.sql`, `20261030151500_paper_lease_versions.sql`, `20261031100204_b004_paper_delivery_boundary.sql`. These are not pending apply.
+- Staging Worker at notes commit `3fd94e0` is `efe4a399`. This notes-fix commit does not deploy.
 - Flags stay OFF. `PAPER_LEASE_VERSIONS_ENABLED` must be absent or any value other than the string `true`. `platform_settings` key `tenant_signed_pdf` stays absent. Organization flags `paper_lease_versions` and `tenant_signed_pdf` stay unset. `ops/flags.yaml` keeps `PAPER_LEASE_VERSIONS_ENABLED` default false.
-- Gate coverage already includes the paper-version, delivery-boundary, label, and tenant signed-PDF unit and RLS tests. The skipped `b888ccd` case is the lost identity-document upgrade of `20261022180000_tenant_id_check.sql`. It does not assert paper delivery, so it stays skipped.
-- Still blocked: hosted staging catalog and apply, old-code/rollback proof on staging, and the independent Class B verdict. Production is out of scope.
+- The `b888ccd` skip is UNAPPROVED. It is the lost identity-document upgrade of `20261022180000_tenant_id_check.sql`, not a paper-delivery result, and it is not an approved waiver.
+- Gate counts are not copied from `3fd94e0` or `75221482`. The counts that belong to these notes are the `scripts/gate.sh` run on the notes-fix commit, cited with that SHA after the run.
+- Still blocked: the independent Class B verdict and calling the item `done`. Production is out of scope.
+
+Functional compare for CAP-M-02 and CAP-T-02: [qa-full-diff.md](qa-full-diff.md).
 
 Local browser evidence remains candidate `ee734857cf04f75d84c5a01eb89d433b9e89bfae`. This note does not rerun that browser.
 
@@ -20,7 +23,7 @@ Local browser evidence remains candidate `ee734857cf04f75d84c5a01eb89d433b9e89bf
 
 Updated 2026-10-30T15:22:12.689041-07:00; candidate`ee734857cf04f75d84c5a01eb89d433b9e89bfae`, branch`mode-b-repair-override-prep`, ModeB Ron/Codex. **Scoped local PASS; wholeB004 pending/INCOMPLETE; no release/activation GO.** Test/privateconfig/runner only; no application, migration, product schema or legal/contract text change.
 
-Clean pinned gate599unitPASS;359RLS total/358PASS/0FAIL/1exact prior-approved lost-historySKIP. Next17.821s/Cloudflare26.975s, unchanged originalpreflight3.288sPASS, Worker1/1; final fresh browser4/4PASS49.8s with8screens390/1280. [Manifest](http-boundary-ee73485.json), [acceptance](acceptance.md), [source reconciliation](source-reconciliation-c3138fa.md). Existing two named core89/91/92b cases alreadypassed, superseding the old pending note; no app rebuild was needed. No actual runtime failure in this B004 delta; source-review findings were resolved before execution.
+Clean pinned gate599unitPASS;359RLS total/358PASS/0FAIL/1 UNAPPROVED b888ccd skip. Next17.821s/Cloudflare26.975s, unchanged originalpreflight3.288sPASS, Worker1/1; final fresh browser4/4PASS49.8s with8screens390/1280. [Manifest](http-boundary-ee73485.json), [acceptance](acceptance.md), [source reconciliation](source-reconciliation-c3138fa.md). Existing two named core89/91/92b cases alreadypassed, superseding the old pending note; no app rebuild was needed. No actual runtime failure in this B004 delta; source-review findings were resolved before execution.
 
 Actual manager uploads/replacements preserve current/history/supersedes, required reason, uploader/time and both staff live/sandbox directions. Existing server reason rejection, ordinary-role immutability/concurrency and genuine parent-cascade boundaries are separately covered by executed full-RLS suites; browser empty-reason check is HTML required, not a direct server-bypass attempt. Tenant own download gives private/no-store/nosniff attachment/synthetic bytes and one attributable committed event. Anonymous same-origin login redirect, wrong tenant/org, bound sandbox selection, global/orgOFF deny; new malformed/unknown version404 has no PDF/attachment or current/total download audit increment. Injected owned disposable fault yields503/no attachment/Unavailable/no extra event; fixture function/trigger removed. Staff route is not claimed to write a download audit.
 
