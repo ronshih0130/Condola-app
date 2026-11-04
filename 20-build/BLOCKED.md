@@ -458,3 +458,10 @@ STOP POINT: bounded source review in progress; next: finish accepted safe diagno
 本次停止開發；20個已開始項目全部partial，19個todo，沒有整項done。逐項狀態、最後code SHA、證據、migration清單與下一步見 [codex-handoff-1103.md](codex-handoff-1103.md)。B017完整治理／B018 browser FAIL與未審查executor、各PE target／外部接受均保持blocked或未驗證。既有1c8fd07完整gate651unit/476RLS PASS、0FAIL及1先前歷史SKIP；1024source不變，未重跑、未放寬。無新B／prod／merge／migration／flags ON／外部訊息／法律文案。
 
 STOP POINT: STOPPED_FOR_GROK_CEO_HANDOFF; next: CEO讀交接並安排權責，禁止自動續作；owner: Grok Bot（CEO）。
+
+## B-004 已知差異，延後 — 2026-11-04
+
+Low priority. No code change in this note. Flags stay OFF.
+
+- 已知差異，延後: the staff paper/signed-PDF panel stays inside the signing card and is hidden while the tenant ID check blocks signing (`idBlocked`).
+- 已知差異，延後: `/t/history/<lease>/signed` and its panel serve only the tenant's own ended leases; an active lease is not served there. `pending_signature` stays 404 with no audit.
