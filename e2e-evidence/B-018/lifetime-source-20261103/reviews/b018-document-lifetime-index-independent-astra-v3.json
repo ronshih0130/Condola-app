@@ -1,0 +1,32 @@
+{
+  "verdict": "COMPONENT_SOURCE_GO_PURE_RECONCILER_ONLY",
+  "manifestSha256": "53edd0b7edf670e0f46555776bbb3778a387406361a5d5d8cb53ee9be242e622",
+  "indexSha256": "0c51de8b8284662111d53b7858182a004844d28c294c24d23aa1ede312be26f0",
+  "eventsSha256": "d05c8c1825621f3f6f5faeb98ac728742969a1d3ca968ae13b851f9e25c1df86",
+  "deltaSha256": "ea8a7b80645f760be98cf7485cb5b298b2ae04bc332b2b98013ba362ed2723e6",
+  "markdownSha256": "62e54d55041d1738431bd39918b587795db987e91d4e194bd8a3f5146e197eac",
+  "verifiedManifestGroups": {
+    "artifacts": 11,
+    "v2PackageAndIndependentReview": 8,
+    "v1RegressionDependencies": 7,
+    "designAndExternalDependencies": 9
+  },
+  "frozenTestsPassed": 50,
+  "failed": 0,
+  "skipped": 0,
+  "original41TestSourcesUnchanged": true,
+  "previousFindings": {
+    "V2-A": "CLOSED",
+    "V2-B": "CLOSED"
+  },
+  "checks": {
+    "Decision": "COMPONENT SOURCE GO for the frozen pure document-lifetime reconciler. Both v2 blocking findings are closed. No remaining blocking finding in the reviewed reducer contract. Actual collection, parent observation and integrated execution remain unapproved here.",
+    "Direct asset and normal login": "index.cjs 324\u2013344 checks the actual matched PW predecessor, CDP hop and CDP redirect callback identity on every recorded webpack request, before choosing ordinary or exceptional scope. The receipts retain the source ordinals and numeric values. The authentic main-document login redirect chain still uses its independently checked four-hop lineage. Empty strict inventories and genuinely completed direct assets remain usable. The exact native exception retains raw FAIL; ordinary enabled or later cancellations remain fatal.",
+    "HMR operation boundary": "index.cjs 419\u2013478 binds replacement or close to the owner/context and its recorded guard arm. The observed invocation precedes each PW, CDP, browser-to-server and server-to-browser terminal independently. The replacement path and actual subsequent request/commit match; teardown uses actual context close and CDP detach. The canonical parent/guard anchor and bilateral wire drain remain mandatory. The proof imposes no artificial relative order on independent terminal callbacks after invocation.",
+    "Independent checks": "I reran all 50 pure Node groups on the frozen source. All passed with zero failures, skips or cancellations. The unchanged 41-group suites and new tests reproduced the five v2 false positives on v2, rejected them on v3 and exercised one early terminal at a time in each retirement kind. Additional independent full replays checked that hop metadata matches the actual PW/CDP journal rows and every retirement receipt references the proper order on exceptional, clean-empty and clean-loaded traces. Cross-slot replacement dispatch swaps, a foreign owner and a cross-context shutdown ID were rejected. A late ordinary cancellation yielded FATAL. All final financial results stayed PENDING.",
+    "Integration requirements": "The grant assumes truthful, complete sanitized observations from a separately reviewed producer. It must acquire the actual PW predecessor, CDP hop/redirect metadata, guard handshake and wire facts, and synchronously append invocation evidence immediately before calling the real browser API. It must not synthesize zeros, external session receipts, flags, timestamps or closure events. A proxy/binary/source lock, genuine policy/cookie/coverage/actor data, authenticated physical lifecycle and fresh protected-data/financial recovery are still required from the independent parent. No socket, HTTP, browser, database, SQL parser, network or process inspection ran. No historical FAIL is relabeled."
+  },
+  "integratedRuntime": "NO_GO_PENDING_SEPARATE_PRODUCER_PARENT_RECOVERY",
+  "financialAggregate": "PENDING",
+  "runtime": "NOT_RUN"
+}

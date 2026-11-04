@@ -1,0 +1,35 @@
+{
+  "state": "SOURCE_DRAFT_NOT_INDEPENDENTLY_REVIEWED_NOT_RUNTIME_AUTHORIZED",
+  "scope": "one synthetic org2 contact timestamp plus expected trigger audit before baseline",
+  "dependencies": {
+    "recoveryV2Compare": "57af594e1983ef351e75dda2050f8653778ee7d3dd0b121a88d136000d242077",
+    "recoveryV2Integrity": "170e19d37cb274c3b293b98e6d935c4455600676fd71ec68145ce59e56546cbb"
+  },
+  "validation": "six pure synthetic validator tests; syntax only; no DB, SQL parsing, browser or network",
+  "files": {
+    "reservation.json": {
+      "sha256": "92fab06e3a4cd7a3f7580ee9cbbef633fa17b2d2630fe0079ae639a3940f610b",
+      "bytes": 139
+    },
+    "fixture.cjs": {
+      "sha256": "853666238b8052f3f0810d27650c562d1e90dc0f19c11e30ecd49e05bb1d4511",
+      "bytes": 14252
+    },
+    "fixture.d.ts": {
+      "sha256": "57ba1136a7f1e8e18ac93f23c6c7f4773dcc1d641a2dd343c573ff1c63cd1649",
+      "bytes": 332
+    },
+    "checks.cjs": {
+      "sha256": "1a6116f7b09d2b8264af11159ffb2518f73851fa51f773740e41871423acd8e7",
+      "bytes": 4330
+    },
+    "checks.test.cjs": {
+      "sha256": "acc67f265b722efa8907fac587c9e2b5507cff1d44286b10b885f4ceb3efc305",
+      "bytes": 3635
+    },
+    "README.md": {
+      "sha256": "1a017580da81af3e666fe6c3e35b989ad35cd32232b0e3e5258e03a2f7e34bde",
+      "bytes": 4561
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "decision": "COMPONENT_SOURCE_GO_FOR_INTEGRATION_AUTHORING_ONLY",
+  "scope": "v3 P1 graceful FIN and P2 prior valid owner binding",
+  "manifest_sha256": "be5a1b967b214968479b79bc422f65e5f92e510424369df71733b0cfbf168682",
+  "bindings": {
+    "README.md": {
+      "sha256": "95f32c099eb4bf24c421b89e011fae96994bfd5466a108357e889f88b4ac22a3",
+      "bytes": 4169
+    },
+    "guard.cjs": {
+      "sha256": "20210c8b09ebefbb26546c946454744f51a7cec03624232ecced296da0453a13",
+      "bytes": 24980
+    },
+    "guard.d.ts": {
+      "sha256": "94b5ed5a242bde930bda95f8d0e574f4453f5c347bc0e33e5b970187f7052236",
+      "bytes": 1770
+    },
+    "hmr-protocol.cjs": {
+      "sha256": "3a69d0a53fde41e2daed5b95d11186bef21d560e5fef894d80460d2f6fba1fcd",
+      "bytes": 3855
+    },
+    "hmr-protocol.test.cjs": {
+      "sha256": "4f12edf1218ab4fdfb48c8b741456a2f6c7b9431c16be9ee77c80cf96be9c9c2",
+      "bytes": 3982
+    },
+    "lifecycle.test.cjs": {
+      "sha256": "6e742d2e7893b798de02ee92313b7912acf845d7f731273318ddb99fa4f95617",
+      "bytes": 16479
+    },
+    "pure-tests.tap": {
+      "sha256": "a69951d94bea8219e1e532504ac69ff634035f8ee972109783f086210b344047",
+      "bytes": 9358
+    },
+    "reservation.json": {
+      "sha256": "a2a0df05293f4052b560a91a1179a5090d3a42e15b237f7f6671e93de3fdb2c6",
+      "bytes": 143
+    },
+    "target.test.cjs": {
+      "sha256": "77aafeacd1fa82b81fe984aec596075609641d89e61299bbb652737006a2f53d",
+      "bytes": 1306
+    }
+  },
+  "independent_report_md_sha256": "ac2566ba97d293e07c925c6144eb798eeef912a0a53e5bd2e34736c9deef03a8",
+  "prior_independent_md_sha256": "715ed6a921164a2fddf4ff2dce4c37a302785df658a9d14d2126146dacf9e437",
+  "author_memo_sha256": "d9be9a21ad6a6998f4acce4fa1c151fb73475cb05208fb33af1ed14744ebf117",
+  "checks": {
+    "syntax": "PASS guard.cjs and hmr-protocol.cjs",
+    "node20_pure_tests": {
+      "pass": 49,
+      "fail": 0,
+      "skip": 0,
+      "cancelled": 0
+    },
+    "additional_asymmetric_backpressure_probe": {
+      "status": "PASS",
+      "independent_wire_close_count": 2,
+      "pending_tunnels": 0,
+      "exact_bytes": true,
+      "snapshot": "PROVISIONAL"
+    }
+  },
+  "v3_findings": {
+    "half_open_writable": "CLOSED_COMPONENT_SOURCE_AND_MOCKS",
+    "unbound_owner": "CLOSED_COMPONENT_SOURCE_AND_MOCKS"
+  },
+  "parent_finalization": "UNVERIFIED_REQUIRES_NATURAL_EXIT_FULL_SEQUENCE_AND_INDEPENDENT_DOCUMENT_AND_RECOVERY_RECONCILIATION",
+  "integrated_runtime": "NOT_RUN",
+  "execution_authorization": "NONE"
+}

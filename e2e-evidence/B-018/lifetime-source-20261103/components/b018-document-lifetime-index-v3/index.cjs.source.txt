@@ -1,0 +1,566 @@
+'use strict';
+const {createHash}=require('node:crypto');
+const {clean,streams,valid}=require('./events.cjs');
+const H=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+class EvidenceError extends Error {}
+const fail=reason=>{throw new EvidenceError(reason);};
+function check(ok,reason){if(!ok)fail(reason);}
+function single(rows,reason){check(rows.length===1,reason);return rows[0];}
+function same(a,b,keys){return keys.every(k=>a[k]===b[k]);}
+const kinds=['login','landing'];
+const channelSet=streams.slice(0,4);
+const scopeFields=['cookie','sid','org','env','lease','role'];
+const fields=['method','path','url','origin'];
+function expectScope(c,tenant){
+  return c.shadow==='none'&&c.lease==='absent'&&['absent','expected'].includes(c.org)&&
+    ['absent','expected'].includes(c.env)&&(c.role==='absent'||(tenant&&c.role==='tenant'));
+}
+// Find a perfect matching with augmenting paths. A second perfect matching exists
+// iff the directed graph of unmatched alternatives contains an alternating cycle.
+function uniqueJoin(left,right,eligible,label){
+  check(left.length===right.length&&left.length<=512,label+'-cardinality');
+  const edges=left.map(a=>right.flatMap((b,i)=>eligible(a,b)?[i]:[]));
+  const inverse=Array(right.length).fill(-1);
+  function augment(i,seen){
+    for(const j of edges[i]){
+      if(seen.has(j))continue;seen.add(j);
+      if(inverse[j]===-1||augment(inverse[j],seen)){inverse[j]=i;return true;}
+    }
+    return false;
+  }
+  for(let i=0;i<left.length;i++)check(augment(i,new Set()),label+'-unmatched');
+  const color=Array(left.length).fill(0);
+  function visit(i){
+    check(color[i]!==1,label+'-ambiguous');if(color[i]===2)return;
+    color[i]=1;
+    for(const j of edges[i])if(inverse[j]!==i)visit(inverse[j]);
+    color[i]=2;
+  }
+  for(let i=0;i<left.length;i++)visit(i);
+  const pairs=new Map();
+  inverse.forEach((i,j)=>pairs.set(left[i],right[j]));
+  return pairs;
+}
+function collectNetwork(rows){
+  const group=(kind,channel)=>rows.filter(e=>e.type===kind&&e.channel===channel);
+  function streamsOf(channel,prefix){
+    const openings=group(prefix+'Open',channel), responses=group(prefix+'Response',channel), endings=group(prefix+'End',channel);
+    const key=e=>[e.ctx,e.id,channel==='CDP'?e.hop:0].join('/');
+    const index=new Map();
+    for(const open of openings){const k=key(open);check(!index.has(k),'duplicate-open');index.set(k,{...open,openSeq:open.seq});}
+    for(const [events,prop] of [[responses,'response'],[endings,'end']])for(const e of events){
+      const item=index.get(key(e));check(item&&!item[prop]&&item.seq<e.seq,'orphan-or-duplicate-terminal');item[prop]=e;
+    }
+    for(const x of index.values()){
+      check(x.end&&(!x.response||x.response.seq<x.end.seq),'network-incomplete');
+      check(!(x.response?.fromServiceWorker||x.response?.fromDiskCache||x.response?.fromPrefetchCache),'unapproved-response-source');
+      x.status=x.response?.status??null;x.location=x.response?.location??null;x.terminal=x.end.terminal;
+      check(x.origin==='owned'&&x.method!=='OTHER','foreign-or-unsupported-request');
+      check(x.terminal==='failed'||(x.status!==null&&x.status<400&&x.end.error==='none'),'http-or-terminal-error');
+      if(x.terminal==='redirect')check([301,302,303,307,308].includes(x.status),'redirect-status');
+      if(channel==='CDP'&&x.terminal!=='failed')check(!x.end.canceled&&x.end.blocked==='none','contradictory-terminal');
+    }
+    return [...index.values()];
+  }
+  const pw=streamsOf('PW','pw'),cdp=streamsOf('CDP','cdp');
+  for(const [items,protocol] of [[pw,'PW'],[cdp,'CDP']]){
+    check(items.length<=512,'request-limit');
+    for(const x of items){
+      const pred=protocol==='PW'?(x.prev?items.filter(p=>p.ctx===x.ctx&&p.id===x.prev):[]):
+        (x.hop?items.filter(p=>p.ctx===x.ctx&&p.id===x.id&&p.hop+1===x.hop):[]);
+      const hasParent=protocol==='PW'?x.prev>0:x.hop>0;
+      check(pred.length===(hasParent?1:0)&&(!hasParent||pred[0].seq<x.seq),'redirect-generation');
+      x.ancestry=hasParent?H([pred[0].ancestry,pred[0].method,pred[0].url,pred[0].status]):null;
+    }
+  }
+  // Can exclude a future document whose initiating operation had not even
+  // been invoked at this observer callback. A late callback is never assigned
+  // to the new document solely because its receipt falls after the intent.
+  const futureLoaders=new Map();
+  for(let ctx=1;ctx<=6;ctx++){
+    const intent=single(rows.filter(e=>e.type==='intent'&&e.ctx===ctx&&e.slot==='landing'),'landing-intent');
+    const arrival=single(cdp.filter(e=>e.ctx===ctx&&e.resource==='Document'&&e.method==='GET'&&
+      e.path===(ctx<=4?'tenant':'staff')&&e.status===200),'landing-network-anchor');
+    futureLoaders.set(ctx,{intent:intent.seq,loader:arrival.loader});
+  }
+  const pair=uniqueJoin(pw,cdp,(a,b)=>!(a.seq<futureLoaders.get(a.ctx).intent&&b.loader===futureLoaders.get(a.ctx).loader)&&same(a,b,[...fields,'ctx','resource','status','location','terminal','ancestry'])&&a.nav===(b.resource==='Document'),'pw-cdp');
+  // Redirect ancestry is independently supplied by the PW object graph and the CDP request ID/hop.
+  const children=new Map(),redirectEvents=new Set();
+  for(const a of pw){
+    const b=pair.get(a);check(a.main,'non-main-frame');
+    if(a.prev===0){check(b.hop===0,'orphan-redirect');continue;}
+    const p=single(pw.filter(x=>x.ctx===a.ctx&&x.id===a.prev),'redirect-parent'), prior=pair.get(p);
+    check(!children.has(p)&&p.terminal==='redirect'&&p.frame===a.frame&&p.location===a.url&&p.seq<a.seq&&
+      prior.id===b.id&&prior.hop+1===b.hop&&prior.frame===b.frame&&prior.seq<b.seq,'redirect-chain');
+    check(prior.end.terminal==='redirect'&&prior.response&&b.redirectEvent>0&&
+      prior.response.redirectEvent===b.redirectEvent&&prior.end.redirectEvent===b.redirectEvent&&
+      prior.response.sourceSeq+1===prior.end.sourceSeq&&prior.end.sourceSeq+1===b.sourceSeq&&
+      !redirectEvents.has(b.redirectEvent),'redirect-callback-lineage');
+    redirectEvents.add(b.redirectEvent);children.set(p,a);
+  }
+  for(const x of cdp){
+    check((x.hop>0)===(x.redirectEvent>0)&&
+      (x.terminal==='redirect')===(x.end.redirectEvent>0)&&
+      (x.terminal==='redirect')===((x.response?.redirectEvent||0)>0),'redirect-event-shape');
+  }
+  for(const p of pw)check((p.terminal==='redirect')===children.has(p),'orphan-redirect');
+  for(const e of group('pwBody','PW')){
+    const x=single(pw.filter(x=>x.ctx===e.ctx&&x.id===e.id),'body-owner');
+    check(!x.body&&x.response&&x.response.seq<e.seq&&(x.nav||x.path==='webpack')&&x.status===200,'body-read-binding');
+    x.body=e;
+  }
+  return {pw,cdp,pair};
+}
+function proxyRecords(rows){
+  const proxy=new Map();
+  for(const e of rows.filter(x=>x.type.startsWith('proxy'))){
+    if(e.type==='proxyOpen'){check(!proxy.has(e.id),'duplicate-proxy');proxy.set(e.id,{...e});continue;}
+    const x=proxy.get(e.id);check(x,'unknown-proxy');
+    if(e.type==='proxyResponse'){check(!x.response&&!x.end,'proxy-response-order');x.response=e;}
+    else {check(!x.end,'duplicate-proxy-end');x.end=e;}
+  }
+  for(const x of proxy.values())check(x.response&&x.end?.state==='finished','proxy-incomplete');
+  return [...proxy.values()];
+}
+function cookieJoins(rows,pw,pair){
+  const reqs=pw.filter(x=>x.response);
+  const network=new Map(reqs.map(x=>[x,single(rows.filter(e=>e.type==='pwCookie'&&e.ctx===x.ctx&&e.id===x.id),'pw-cookie')]));
+  check(rows.filter(e=>e.type==='pwCookie').length===reqs.length,'orphan-pw-cookie');
+  const proxy=proxyRecords(rows);
+  const wires=uniqueJoin(reqs,proxy,(a,b)=>{
+    const ready=rows.find(e=>e.type==='ready'&&e.ctx===a.ctx&&e.channelName==='GUARD');
+    return ready&&b.seq>ready.seq&&b.response.seq<a.response.seq&&same(a,b,fields)&&a.status===b.response.status&&a.location===b.response.location&&network.get(a).cookie===b.cookie&&b.cookie===b.forwardedCookie;
+  },'proxy');
+  const extra=rows.filter(e=>e.type==='extraCookie'),result=rows.filter(e=>e.type==='responseExtra');
+  const wanted=reqs.filter(x=>pair.get(x).response.extra);
+  const requests=uniqueJoin(wanted,extra,(p,e)=>p.ctx===e.ctx&&pair.get(p).id===e.id&&network.get(p).cookie===e.cookie,'request-extra');
+  const responses=uniqueJoin(wanted,result,(p,e)=>{
+    const g=wires.get(p).response;
+    return p.ctx===e.ctx&&pair.get(p).id===e.id&&e.status===p.status&&same(g,e,['location','setRole','sidSet','enforced','reportOnly']);
+  },'response-extra');
+  for(const p of reqs){
+    const w=wires.get(p).response;
+    check(w.enforced===w.downEnforced&&w.reportOnly===w.downReportOnly&&w.hints===0&&w.setRole===w.downRole&&w.sidSet===w.downSid,'proxy-policy-or-hints');
+    check(requests.has(p)&&responses.has(p)&&requests.get(p).shadow==='none'&&same(requests.get(p),network.get(p),scopeFields),'cookie-source-mismatch');
+  }
+  return {network,wires,requests,responses};
+}
+function activeWorld(rows,ctx,world,at){
+  let active=null;
+  for(const e of rows){
+    if(e.seq>=at)break;if(e.ctx!==ctx)continue;
+    if(e.type==='clearWorlds')active=null;
+    if(e.type==='world'&&e.world===world)active=e.state==='created'?e:null;
+  }
+  return active;
+}
+function validateWorlds(rows){
+  const active=new Map(), generations=new Set(),scripts=new Set();
+  for(const e of rows){
+    const key=e.ctx+'/'+e.world;
+    if(e.type==='clearWorlds'){for(const k of active.keys())if(k.startsWith(e.ctx+'/'))active.delete(k);}
+    if(e.type==='world'){
+      if(e.state==='created'){
+        check((e.kind!=='default'||![...active.values()].some(w=>w.ctx===e.ctx&&w.frame===e.frame&&w.kind==='default'))&&!active.has(key)&&!generations.has(e.generation),'world-generation-reuse');active.set(key,e);generations.add(e.generation);
+      }else{check(active.has(key)&&same(active.get(key),e,['generation','kind','frame']),'orphan-world-destroy');active.delete(key);}
+    }
+    if(e.type==='parsed'){const id=e.ctx+'/'+e.script;check(active.has(key)&&!scripts.has(id),'unbound-script');scripts.add(id);}
+    if(e.type==='scriptSource')check(scripts.has(e.ctx+'/'+e.script),'orphan-script-source');
+    if(e.type==='coverage')check(scripts.has(e.ctx+'/'+e.script),'orphan-coverage');
+  }
+}
+function replay(rows,config,stage){
+  const {asset,assetBytes,mapSha256,hmrUrl}=config;
+  const at=(type,ctx)=>rows.filter(e=>e.type===type&&(ctx===undefined||e.ctx===ctx));
+  const proof=[], nativeFailures=[];
+  check(at('issue').length===0&&at('policyChange').length===0,'sticky-observer-conflict');
+  const tasks=new Map();
+  for(const e of at('task')){
+    const k=[e.channel,e.ctx,e.id].join(':');
+    if(e.state==='start'){check(!tasks.has(k),'duplicate-task');tasks.set(k,'start');}
+    else{check(tasks.get(k)==='start'&&e.state==='done','task-failure');tasks.set(k,'done');}
+  }
+  check([...tasks.values()].every(s=>s==='done'),'pending-task');
+  const {pw,pair}=collectNetwork(rows);const joins=cookieJoins(rows,pw,pair);validateWorlds(rows);
+  const sessions=new Set(),sessionSid=new Map(),matchedSockets=new Set(),hmrBindings=[];
+  const commitsUsed=new Set(),parsesUsed=new Set(),assetsUsed=new Set(),hmrUsed=new Set();
+  const worldMarkers=new Set(),anchorIds=new Set(),exceptionScopes=new Set();
+  const actualIds=rows.filter(e=>e.type==='commit'||e.type==='contextClosed'||e.type==='cdpDetached').map(e=>e.eventId);
+  check(new Set(actualIds).size===actualIds.length,'lifecycle-event-id-reused');
+  check(new Set(at('closeIntent').map(e=>e.intentId)).size===at('closeIntent').length,'close-intent-reused');
+  const knownUrls=new Set([...at('declaration').map(e=>e.url),...pw.filter(p=>p.path==='webpack').map(p=>p.url)]);
+  check(pw.every(p=>!knownUrls.has(p.url)||p.path==='webpack')&&at('parsed').every(e=>!knownUrls.has(e.url)||e.assetClass==='webpack'),'known-asset-misclassified');
+  const reads=new Map(),usedReads=new Set();
+  for(const e of at('readStart')){
+    check(e.channel===(e.kind==='pwBody'?'PW':'CDP')&&!reads.has(e.read),'read-start-identity');
+    reads.set(e.read,e);
+  }
+  for(const e of rows.filter(e=>['pwBody','scriptSource','coverage'].includes(e.type))){
+    const r=reads.get(e.read);
+    check(r&&!usedReads.has(e.read)&&r.kind===e.type&&r.channel===e.channel&&r.ctx===e.ctx&&
+      r.subject===(e.type==='pwBody'?e.id:e.script)&&r.seq<e.seq,'read-completion-identity');
+    const fence=at('fence',e.ctx).filter(x=>x.doc===r.doc&&x.frame===r.frame&&x.loader===r.loader);
+    check(fence.length===2&&fence[0].side==='open'&&fence[0].seq<r.seq&&e.seq<fence[1].seq&&fence[1].side==='seal','read-outside-capture');
+    if(e.type==='pwBody'){
+      const p=single(pw.filter(x=>x.ctx===e.ctx&&x.id===e.id),'read-request');
+      check(pair.get(p).loader===r.loader&&pair.get(p).frame===r.frame&&p.response.seq<r.seq,'read-request-lifetime');
+    }else{
+      const parse=single(at('parsed',e.ctx).filter(x=>x.script===e.script),'read-script');
+      const w=activeWorld(rows,e.ctx,parse.world,parse.seq),current=activeWorld(rows,e.ctx,parse.world,r.seq);
+      check(r.seq>parse.seq&&w&&current===w&&current.frame===r.frame,'read-script-lifetime');
+    }
+    usedReads.add(e.read);
+  }
+  check(usedReads.size===reads.size,'unfinished-read');
+  for(let ctx=1;ctx<=6;ctx++){
+    const tenant=ctx<=4,enabled=ctx%2===0,home=tenant?'tenant':'staff';
+    const ready=at('ready',ctx),bar=at('barrier',ctx),closed=at('closed',ctx);
+    if(stage==='bootstrap')check(!closed.length&&!at('cdpDetached',ctx).length&&!at('closeIssued',ctx).length,'observer-closed-before-bootstrap');
+    const firstIntent=single(at('intent',ctx).filter(x=>x.slot==='login'),'login-intent');
+    const click=single(at('intent',ctx).filter(x=>x.slot==='click'),'click-intent');
+    const landing=single(at('intent',ctx).filter(x=>x.slot==='landing'),'landing-intent');
+    check(firstIntent.seq<click.seq&&(enabled?click.seq<landing.seq:landing.seq<click.seq),'intent-order');
+    for(const name of channelSet){
+      const r=single(ready.filter(e=>e.channelName===name),'missing-ready');
+      const b=single(bar.filter(e=>e.channelName===name),'missing-barrier');
+      check(r.seq<firstIntent.seq&&b.seq>landing.seq,'barrier-order');
+      const obs=rows.filter(e=>e.ctx===ctx&&e.channel===name&&!['ready','closed','barrier'].includes(e.type));
+      check(obs.every(e=>e.seq>r.seq),'observation-before-ready');
+      if(stage==='drained'){
+        const c=single(closed.filter(e=>e.channelName===name),'missing-close');
+        const teardown=single(at('closeIntent',ctx),'missing-close-intent');
+        const physical=single(at('contextClosed',ctx),'missing-physical-close');
+        const detach=single(at('cdpDetached',ctx),'missing-cdp-detach');
+        const issued=single(at('closeIssued',ctx),'missing-issued-close');
+        check(issued.intentId===teardown.intentId&&issued.seq>teardown.seq&&detach.seq>issued.seq&&physical.seq>issued.seq&&c.seq>physical.seq&&
+          c.intentId===teardown.intentId&&c.physicalEventId===physical.eventId&&
+          c.detachEventId===(name==='CDP'?detach.eventId:0)&&obs.every(e=>e.seq<c.seq)&&c.seq>b.seq,'close-order');
+        if(name==='CDP')check(obs.every(e=>e.seq<=detach.seq)&&detach.seq<c.seq,'detached-observer-active');
+      }
+    }
+    const contextCloses=at('contextClosed',ctx),closing=at('closeIntent',ctx);
+    check(!at('commit',ctx).some(e=>!e.main),'unexpected-subframe');
+    check(contextCloses.length===(stage==='drained'?1:0),'premature-or-missing-context-close');
+    check(closing.length===contextCloses.length,'missing-owned-context-close');
+    if(contextCloses.length)check(bar.every(b=>b.seq<closing[0].seq)&&closing[0].seq<contextCloses[0].seq&&
+      !rows.some(e=>e.ctx===ctx&&e.seq>closing[0].seq&&['pwOpen','cdpOpen','commit','sameDocument','parsed'].includes(e.type)),'premature-context-close');
+    const sid=single(at('session',ctx),'session-slot');
+    check(!sessions.has(sid.sid)&&sid.role===(tenant?'tenant':'absent'),'session-reuse-or-scope');
+    sessions.add(sid.sid);sessionSid.set(ctx,sid.sid);
+    const traffic=pw.filter(p=>p.ctx===ctx), posts=traffic.filter(p=>p.method==='POST'&&p.path==='login');
+    check(traffic.every(p=>p.method!=='POST'||posts.includes(p)),'unexpected-post');
+    const post=single(posts,'submit-count');check(post.seq>click.seq&&post.status===303&&post.terminal!=='failed','submit-order');
+    check(post.resource===(enabled?'Fetch':'Document'),'submit-transport');
+    const loginIntent=firstIntent, documentRequests=new Set(), docInfo={};
+    for(const doc of kinds){
+      const expected=doc==='login'?'login':home;
+      const intent=doc==='login'?loginIntent:landing;
+      const a=single(traffic.filter(x=>x.path===expected&&x.method==='GET'&&x.nav&&x.terminal==='finished'&&x.status===200),'document-request');
+      const b=pair.get(a);
+      const commit=single(at('commit',ctx).filter(x=>x.url===a.url&&x.frame===b.frame&&x.loader===b.loader&&x.main),'document-commit');
+      const arrival=single(at('pwArrival',ctx).filter(x=>x.id===a.id&&x.frame===a.frame&&x.url===a.url),'pw-document-object');
+      check(a.seq>intent.seq&&b.seq>intent.seq&&b.seq<commit.seq&&arrival.seq>a.seq&&
+        !commitsUsed.has(commit),'document-lifetime');commitsUsed.add(commit);
+      docInfo[doc]={a,b,commit,arrival};
+      let last=a;const chain=[last];
+      while(last.prev){last=single(traffic.filter(p=>p.id===last.prev),'missing-chain');chain.unshift(last);}
+      const labels=chain.map(x=>[x.method,x.path,x.status].join('/'));
+      if(doc==='login'){
+        check(labels.length===2&&/^GET\/locale\/(303|307)$/.test(labels[0]),'locale-chain');
+      }else if(!enabled){
+        check(JSON.stringify(labels)===JSON.stringify(['POST/login/303','GET/enter/307','GET/continue/307','GET/'+home+'/200'])&&chain[0]===post,'native-chain');
+        check(chain.every(p=>pair.get(p).frame===b.frame&&pair.get(p).loader===b.loader),'native-chain-loader');
+      }else check(chain.length===1,'counterpart-chain');
+      chain.forEach(p=>documentRequests.add(p));
+      const wire=joins.wires.get(a).response;
+      const hops=traffic.filter(p=>pair.get(p).loader===b.loader&&p.path==='webpack');
+      const scopeKey=[enabled?ctx-1:ctx,doc].join('/');
+      if(!enabled&&hops.some(p=>p.terminal==='failed'))exceptionScopes.add(scopeKey);
+      const exceptional=exceptionScopes.has(scopeKey);
+      const declarations=at('declaration',ctx).filter(e=>e.doc===doc);
+      const inventory=single(at('inventory',ctx).filter(e=>e.doc===doc),'missing-inventory');
+      check(joins.requests.has(a)&&joins.responses.has(a)&&inventory.navigation===a.id&&a.body&&
+        inventory.html===a.body.body&&a.body.seq<inventory.seq&&inventory.count===declarations.length&&
+        declarations.every(e=>e.navigation===a.id&&e.html===inventory.html),'incomplete-inventory');
+      const decl=exceptional?single(declarations,'declaration-count'):null;
+      if(exceptional)check(wire.enforced===0&&wire.reportOnly===0&&decl.asset===asset&&decl.mapping===mapSha256&&
+        decl.count===1&&decl.nonce===0&&decl.integrity===0&&decl.effectiveMeta===0&&decl.sourceMeta===0,'declaration-or-policy');
+      const opens=at('fence',ctx).filter(e=>e.doc===doc);
+      const fence=single(opens.filter(e=>e.side==='open'),'capture-open'), seal=single(opens.filter(e=>e.side==='seal'),'capture-seal');
+      check([fence,seal].every(e=>e.frame===b.frame&&e.loader===b.loader),'wrong-capture-lifetime');
+      const samples={};
+      for(const side of ['before','after']){
+        const filter=e=>e.doc===doc&&e.side===side;
+        const tree=single(at('treeSample',ctx).filter(filter),'tree-sample');
+        const marker=single(at('pwSample',ctx).filter(filter),'pw-sample');
+        const worldReads=at('worldSample',ctx).filter(filter);
+        check(tree.frame===b.frame&&tree.loader===b.loader&&tree.url===a.url&&marker.frame===a.frame&&marker.url===a.url,'sampling-wrong-document');
+        const ids=[tree.seq,marker.seq];let worldRead=null;
+        if(enabled||marker.marker!==null||worldReads.length){
+          worldRead=single(worldReads,'world-sample');
+          const w=activeWorld(rows,ctx,worldRead.world,worldRead.seq);
+          check(w&&w.kind==='default'&&w.frame===b.frame&&w.generation===worldRead.generation&&
+            marker.marker!==null&&marker.marker===worldRead.marker,'wrong-document-world');
+          ids.push(worldRead.seq);
+        }
+        samples[side]={ids,marker,worldRead};
+      }
+      const before=samples.before,after=samples.after;
+      check(Math.max(commit.seq,arrival.seq)<fence.seq&&fence.seq<Math.min(...before.ids)&&Math.max(...before.ids)<inventory.seq&&declarations.every(e=>e.seq>inventory.seq&&e.seq<Math.min(...after.ids))&&
+        inventory.seq<Math.min(...after.ids)&&Math.max(...after.ids)<seal.seq,'sampling-order');
+      check(bar.every(e=>e.seq>seal.seq),'barrier-before-capture');
+      const turnover=doc==='login'?landing.seq:closing[0]?.seq??Infinity;
+      check(!rows.some(e=>e.ctx===ctx&&e.seq>seal.seq&&e.seq<turnover&&
+        (e.type==='clearWorlds'||(e.type==='world'&&e.kind==='default'))),'unexpected-world-turnover');
+      check(!at('commit',ctx).some(e=>e.seq>commit.seq&&e.seq<seal.seq),'sample-replaced-document');
+      check(before.marker.marker===after.marker.marker&&before.worldRead?.generation===after.worldRead?.generation,'sampling-world-changed');
+      if(before.marker.marker!==null){
+        check(!worldMarkers.has(before.marker.marker),'document-marker-reuse');worldMarkers.add(before.marker.marker);
+      }
+      const binding={ctx,doc,document:{pw:a.seq,cdp:b.seq,commit:commit.seq,arrival:arrival.seq,body:a.body.seq},
+        namespace:'pw-document-derived-from-join',proxy:joins.wires.get(a).seq,wireResponse:wire.seq,pwCookie:joins.network.get(a).seq,
+        sessionReadback:sid.seq,requestExtra:joins.requests.get(a).seq,responseExtra:joins.responses.get(a).seq,
+        inventory:inventory.seq,before:before.ids,after:after.ids,seal:seal.seq,mode:exceptional?'exception-scope':'ordinary-strict',hops:[]};
+      for(const p of hops){
+        const cd=pair.get(p);
+        check(!assetsUsed.has(p)&&p.resource==='Script'&&p.method==='GET'&&p.frame===a.frame&&cd.frame===b.frame&&
+          p.seq>intent.seq&&cd.seq>intent.seq&&p.end.seq<fence.seq&&cd.end.seq<fence.seq,'wrong-script-hop');
+        check(p.prev===0&&cd.hop===0&&cd.redirectEvent===0,'asset-must-be-direct');
+        assetsUsed.add(p);
+        binding.hops.push({pw:p.seq,cdp:cd.seq,pwPrev:p.prev,cdpHop:cd.hop,cdpRedirectEvent:cd.redirectEvent,
+          pwTerminal:p.end.seq,cdpTerminal:cd.end.seq});
+      }
+      if(!exceptional){
+        check(hops.every(p=>p.terminal==='finished'&&p.status===200&&p.end.error==='none'&&
+          pair.get(p).end.error==='none'&&pair.get(p).end.blocked==='none'&&!pair.get(p).end.canceled),'strict-asset-terminal');
+        // Strict evidence requires no exceptional declaration or positive execution.
+        // If a known parse is actually seen, it still has to belong to one eligible hop.
+        if(enabled)for(const v of at('parsed',ctx).filter(e=>e.assetClass==='webpack')){
+          const w=activeWorld(rows,ctx,v.world,v.seq);
+          if(w?.generation!==before.worldRead.generation)continue;
+          const owners=hops.filter(p=>p.url===v.url&&pair.get(p).sourceSeq<v.sourceSeq);
+          check(owners.length===1&&w.kind==='default'&&w.sourceSeq>b.sourceSeq&&commit.sourceSeq<v.sourceSeq&&
+            v.seq<seal.seq&&!parsesUsed.has(v),'strict-parse-ownership');
+          parsesUsed.add(v);
+        }
+        proof.push(binding);continue;
+      }
+      const script=single(hops,'script-candidate-count'),c=pair.get(script);
+      check(script.url===decl.url,'wrong-script-hop');
+      const policyArm=single(at('policyArm',ctx).filter(e=>e.doc===doc),'missing-policy-arm');
+      check(policyArm.frame===b.frame&&policyArm.loader===b.loader&&policyArm.navigation===a.id&&
+        policyArm.seq>intent.seq&&policyArm.seq<Math.min(script.seq,c.seq)&&
+        (!enabled||policyArm.mechanism==='before-parser'),'policy-not-ready');
+      const matchingUrl=at('parsed',ctx).filter(e=>e.url===decl.url);
+      const candidates=enabled?matchingUrl.filter(e=>activeWorld(rows,ctx,e.world,e.seq)?.generation===before.worldRead.generation):matchingUrl;
+      Object.assign(binding,{script:binding.hops[0],policyArm:policyArm.seq,declaration:decl.seq,mapping:decl.mapping});
+      if(enabled){
+        check(script.terminal==='finished'&&script.status===200&&script.body&&script.body.body===asset&&script.body.seq<seal.seq,'enabled-script-content');
+        const v=single(candidates,'parsed-ambiguity'),source=single(at('scriptSource',ctx).filter(e=>e.script===v.script),'script-source-read'),w=activeWorld(rows,ctx,v.world,v.seq);
+        check(w&&v.sourceSeq>c.sourceSeq&&v.sourceSeq>commit.sourceSeq&&w.sourceSeq>b.sourceSeq&&w.generation===before.worldRead?.generation&&v.world===before.worldRead?.world&&source.source===asset&&source.seq>v.seq&&source.seq<seal.seq&&v.assetClass==='webpack'&&v.seq<seal.seq&&!parsesUsed.has(v),'parsed-world-or-source');
+        parsesUsed.add(v);
+        const coverage=at('coverage',ctx).filter(e=>e.script===v.script);
+        check(coverage.length>0&&coverage.some(e=>e.units>0&&e.bytes>0&&e.seq<seal.seq)&&
+          coverage.every((e,i)=>e.seq>v.seq&&e.epoch===i+1&&e.bytes<=assetBytes&&e.bytes>=e.units&&e.bytes<=4*e.units&&((e.units===0)===(e.bytes===0))),'positive-coverage');
+        binding.responseBody=script.body.seq;binding.scriptSource=source.seq;binding.parsed=v.seq;binding.coverage=coverage.map(e=>e.seq);
+      }else{
+        check(candidates.length===0&&script.terminal==='failed'&&script.status===null&&script.end.error==='csp'&&
+          c.end.blocked==='csp'&&!c.end.canceled&&c.end.error==='MISSING','native-block-shape');
+        nativeFailures.push(script.end.seq,c.end.seq);
+      }
+      proof.push(binding);
+    }
+    check(docInfo.login.commit.seq<docInfo.landing.commit.seq&&docInfo.login.b.frame===docInfo.landing.b.frame&&
+      docInfo.login.a.frame===docInfo.landing.a.frame&&docInfo.login.b.loader!==docInfo.landing.b.loader&&
+      docInfo.login.arrival.seq<click.seq,'landing-order');
+    check(traffic.filter(x=>x.nav).every(p=>documentRequests.has(p))&&at('pwArrival',ctx).length===2&&at('commit',ctx).length===2,'unplanned-document');
+    for(const p of traffic.filter(p=>!p.nav)){
+      const cd=pair.get(p);
+      check(p.frame===docInfo.login.a.frame&&cd.frame===docInfo.login.b.frame&&
+        [docInfo.login.b.loader,docInfo.landing.b.loader].includes(cd.loader),'orphan-subresource-lifetime');
+    }
+    const auth=traffic.filter(x=>x.method==='GET'&&['enter','continue',home].includes(x.path));
+    const loginCookie=joins.requests.get(docInfo.login.a), preCookie=joins.requests.get(post);
+    check(loginCookie&&preCookie&&[loginCookie,preCookie].every(c=>c.sid===null&&expectScope(c,tenant)&&c.role==='absent')&&
+      joins.wires.get(docInfo.login.a).response.sidSet===null&&joins.wires.get(post)?.response.sidSet===sid.sid,'session-creation');
+    for(const p of auth){
+      const c=joins.requests.get(p),wire=joins.wires.get(p),extra=joins.responses.get(p);
+      check(c&&wire&&extra&&c.sid===sid.sid&&expectScope(c,tenant)&&wire.response.sidSet===null&&
+        (wire.response.setRole==='none'||(tenant&&p.path===home&&wire.response.setRole==='tenant')),'landing-cookie-scope');
+      if(tenant&&p.path===home&&c.role==='absent')check(wire.response.setRole==='tenant','unproven-role-transition');
+    }
+    check(sid.seq>docInfo.landing.arrival.seq&&bar.every(e=>e.seq>sid.seq),'session-readback-order');
+    for(const p of traffic.filter(p=>p.response)){
+      const raw=joins.network.get(p), wire=joins.wires.get(p).response;
+      check(expectScope({...raw,shadow:'none'},tenant)&&(!raw.sid||raw.sid===sid.sid)&&
+        (p===post||wire.sidSet===null)&&wire.setRole!=='other','unexpected-protected-cookie');
+      if(raw.sid)check(joins.wires.get(p).seq>joins.wires.get(post).response.seq,'sid-before-issuance');
+      if(raw.role==='tenant')check(traffic.some(q=>q.response&&joins.wires.get(q).response.setRole==='tenant'&&
+        joins.wires.get(q).response.seq<joins.wires.get(p).seq),'role-before-issuance');
+      if(wire.setRole==='tenant')check(tenant&&p.method==='GET'&&p.path===home,'unexpected-role-set');
+    }
+    if(enabled){
+      if(tenant)check(joins.requests.get(docInfo.landing.a).role==='tenant','post-set-role-missing');
+      const first=auth.filter(p=>p.path===home&&p.resource==='Fetch'&&p.seq>post.seq&&p.seq<landing.seq&&p.terminal==='finished');
+      check(first.length>0&&at('sameDocument',ctx).some(e=>e.path===home&&e.url===docInfo.landing.a.url),'enabled-natural-arrival');
+      for(const n of at('sameDocument',ctx))check(n.frame===docInfo.login.b.frame&&n.seq>click.seq&&n.seq<landing.seq&&['enter','continue',home].includes(n.path),'unexpected-soft-navigation');
+      for(const doc of kinds){
+        const d=docInfo[doc],hb=at('hmrBrowser',ctx),hc=at('hmrProtocol',ctx);
+        const max=doc==='login'?docInfo.landing.commit.seq:Infinity;
+        const p=single(hb.filter(e=>e.state==='opened'&&e.seq>d.commit.seq&&e.seq<max),'hmr-browser-owner');
+        const c=single(hc.filter(e=>e.state==='opened'&&e.seq>d.commit.seq&&e.seq<max&&e.url===p.url),'hmr-protocol-owner');
+        check(p.url===hmrUrl,'unapproved-hmr-url');
+        const sent=single(hc.filter(e=>e.socket===c.socket&&e.state==='sent'&&e.url===c.url&&e.handshake!==null),'hmr-handshake-sent');
+        const accept=single(hc.filter(e=>e.socket===c.socket&&e.state==='accepted'&&e.url===c.url&&e.handshake!==null),'hmr-handshake');
+        check(c.handshake===null&&c.httpStatus===0&&sent.httpStatus===0&&accept.httpStatus===101&&sent.seq>c.seq&&accept.seq>sent.seq,'hmr-handshake-order');
+        const g=single(at('hmrPeer').filter(e=>e.state==='accepted'&&e.url===c.url&&e.handshake===sent.handshake&&e.accept===accept.handshake&&e.code===0&&e.httpStatus===101),'hmr-guard-handshake');
+        const owner=single(at('hmrOwner').filter(e=>e.id===g.id),'hmr-guard-owner');
+        check(owner.seq>g.seq&&owner.owner===H([config.run,ctx,doc,d.b.frame,d.b.loader]),'hmr-document-owner');
+        for(const e of [p,c,sent,accept,g,owner]){check(!hmrUsed.has(e.seq),'hmr-event-reuse');hmrUsed.add(e.seq);}
+        check(!matchedSockets.has(g.id)&&accept.seq>c.seq,'hmr-reused');matchedSockets.add(g.id);
+        const retirement=at('retire',ctx).filter(e=>e.doc===doc);
+        let retirementProof=null;
+        if(stage==='drained'||doc==='login'||retirement.length){
+          const retire=single(retirement,'hmr-retirement');hmrUsed.add(retire.seq);
+          const armed=single(at('hmrIntent').filter(e=>e.id===g.id),'guard-retirement-intent');
+          check(armed.owner===owner.owner&&armed.intentKey===retire.intentKey&&armed.seq>retire.seq&&retire.seq>owner.seq,'guard-retirement-intent');
+          hmrUsed.add(armed.seq);
+          const plan=doc==='login'?landing:single(at('closeIntent',ctx),'missing-close-intent');
+          const issued=single(at(doc==='login'?'replacementIssued':'closeIssued',ctx),'missing-retirement-invocation');
+          check(plan.seq<retire.seq&&armed.seq<issued.seq,'hmr-operation-order');
+          if(doc==='login'){
+            const next=docInfo.landing;
+            check(issued.exchange===g.id&&issued.owner===owner.owner&&issued.intentKey===retire.intentKey&&
+              issued.api==='page.goto'&&issued.url===next.a.url&&issued.seq<Math.min(next.a.seq,next.b.seq),
+              'replacement-invocation-binding');
+            hmrUsed.add(issued.seq);
+          }else check(issued.intentId===plan.intentId,'close-invocation-binding');
+          const record=single(at('anchorRecord',ctx).filter(e=>e.doc===doc),'retirement-anchor-record');
+          const anchor=single(at('retireAnchor').filter(e=>e.id===g.id),'retirement-guard-anchor');
+          hmrUsed.add(record.seq);hmrUsed.add(anchor.seq);
+          const actual=doc==='login'?docInfo.landing.commit:single(at('contextClosed',ctx),'missing-context-close');
+          const sourceFact=[actual.channel,actual.type,actual.ctx,actual.eventId,actual.frame??null,actual.loader??null,actual.url??null,actual.main??null];
+          const recordId=H(['b018-retirement-id-v2',config.run,actual.channel,actual.eventId]);
+          const anchored=H(['b018-retirement-record-v2',config.run,recordId,ctx,doc,g.id,owner.owner,retire.intentKey,sourceFact]);
+          check(record.recordId===recordId&&anchor.recordId===recordId&&!anchorIds.has(recordId)&&
+            record.sourceEventId===actual.eventId&&
+            record.anchor===anchored&&anchor.anchor===anchored,'retirement-anchor-source');
+          anchorIds.add(recordId);
+          check(retire.seq<actual.seq&&actual.seq<record.seq&&record.seq<anchor.seq&&
+            record.exchange===g.id&&record.owner===owner.owner&&record.intentKey===retire.intentKey&&same(record,anchor,['intentKey','owner','anchor'])&&
+            (doc==='login'?(record.source==='document-commit'&&record.frame===actual.frame&&record.loader===actual.loader):
+            (record.source==='context-close'&&record.frame===0&&record.loader===0)),'retirement-anchor-binding');
+          check(retire.exchange===g.id&&retire.intent===(doc==='login'?'replace':'close')&&Math.max(g.seq,p.seq,c.seq,sent.seq,accept.seq)<retire.seq&&
+            (doc!=='login'||retire.seq<docInfo.landing.a.seq),'hmr-retirement-binding');
+          const browserCloseIds=[];
+          for(const [events,id] of [[hb,p.socket],[hc,c.socket]]){
+            const closed=single(events.filter(e=>e.socket===id&&e.state==='closed'&&e.url===p.url),'hmr-browser-close');
+            check((events!==hc||(closed.handshake===null&&closed.httpStatus===0))&&closed.seq>issued.seq&&!hmrUsed.has(closed.seq),'early-hmr-close');
+            hmrUsed.add(closed.seq);browserCloseIds.push(closed.seq);
+          }
+          const peer=at('hmrPeer').filter(e=>e.id===g.id);
+          const closedIds=['close-client','close-server','drained'].map(s=>single(peer.filter(e=>e.state===s&&e.url===c.url&&e.handshake===g.handshake&&e.accept===g.accept&&e.httpStatus===0&&(s==='drained'?e.code===0:[null,1000,1001].includes(e.code))),'hmr-wire-close').seq);
+          closedIds.forEach(id=>hmrUsed.add(id));
+          check(closedIds[0]>issued.seq&&closedIds[1]>issued.seq&&closedIds[2]>Math.max(anchor.seq,closedIds[0],closedIds[1]),'hmr-drain-order');
+          retirementProof={plan:plan.seq,retire:retire.seq,armed:armed.seq,issued:issued.seq,pwClose:browserCloseIds[0],
+            cdpClose:browserCloseIds[1],wireClientClose:closedIds[0],wireServerClose:closedIds[1],physical:actual.seq,
+            parentAnchor:record.seq,guardAnchor:anchor.seq,wireDrain:closedIds[2]};
+        }else check(!hb.some(e=>e.socket===p.socket&&e.state==='closed')&&!hc.some(e=>e.socket===c.socket&&e.state==='closed')&&
+          at('hmrPeer').filter(e=>e.id===g.id).length===1,'unplanned-hmr-close');
+        hmrBindings.push({ctx,doc,pw:p.seq,cdp:c.seq,wire:g.seq,retirement:retirementProof});
+      }
+    }else check(!at('sameDocument',ctx).length&&!at('hmrBrowser',ctx).length&&!at('hmrProtocol',ctx).length,'unexpected-native-transport');
+  }
+  check(rows.filter(e=>e.type.startsWith('hmr')).every(e=>e.state!=='error'),'hmr-error');
+  check(rows.filter(e=>e.type.startsWith('hmr')||['retire','replacementIssued','anchorRecord','retireAnchor'].includes(e.type)).every(e=>hmrUsed.has(e.seq)),'unmatched-hmr-event');
+  check(at('parsed').filter(e=>(e.assetClass==='webpack'||knownUrls.has(e.url))).every(e=>parsesUsed.has(e)),'unmatched-webpack-parse');
+  check(at('hmrPeer').every(e=>matchedSockets.has(e.id)),'unknown-tunnel');
+  check(pw.filter(p=>p.path==='webpack').every(p=>assetsUsed.has(p)),'orphan-webpack');
+  const rawFailed=rows.filter(e=>['pwEnd','cdpEnd'].includes(e.type)&&e.terminal==='failed').map(e=>e.seq);
+  check(rawFailed.length===nativeFailures.length&&rawFailed.every(n=>nativeFailures.includes(n)),'ordinary-failure');
+  return {bindings:proof,hmrBindings,nativeFailureEventIds:nativeFailures};
+}
+
+const MAX_ROWS=30000;
+function createDocumentIndex({run,assetSha256,assetBytes,mapSha256,hmrUrl}){
+  check(typeof run==='string'&&/^[a-f0-9]{12}$/.test(run)&&[assetSha256,mapSha256,hmrUrl].every(x=>valid(x,'hash'))&&
+    Number.isSafeInteger(assetBytes)&&assetBytes>0&&assetBytes<=8388608,'invalid-source-freeze');
+  const config=Object.freeze({run,asset:assetSha256,assetBytes,mapSha256,hmrUrl});
+  const rows=[],faults=[],sequence=new Map(),openFences=new Map();
+  const revisions=new Uint32Array(7),lifetimeRevisions=new Map();let firstCut=null,postCut=null,overflow=0;
+  function poison(reason){if(!faults.includes(reason))faults.push(reason);}
+  function append(channel,sourceSequence,type,payload,sourceMicros=null){
+    if(postCut)poison('append-after-final');
+    if(rows.length>=MAX_ROWS){overflow++;poison('journal-overflow');return null;}
+    try{
+      const dto=clean(type,channel,payload);
+      check(sourceMicros===null||(Number.isSafeInteger(sourceMicros)&&sourceMicros>=0),'invalid-event');
+      const expected=(sequence.get(channel)||0)+1;check(valid(sourceSequence,'pos'),'invalid-event');
+      if(sourceSequence!==expected)poison('source-sequence-gap');
+      sequence.set(channel,sourceSequence);
+      const row=Object.freeze({...dto,channel,type,seq:rows.length+1,sourceSeq:sourceSequence,sourceMicros});
+      rows.push(row);
+      // Proxy callbacks do not have trusted browser context IDs. Any such event
+      // inside a live sample invalidates it conservatively across the whole run.
+      const competing=['pwOpen','cdpOpen','pwArrival','commit','sameDocument','parsed','world','clearWorlds','policyChange','issue',
+        'proxyOpen','proxyResponse','proxyEnd','hmrBrowser','hmrProtocol','hmrPeer','contextClosed','retireAnchor'].includes(type);
+      const life=[dto.ctx,dto.frame,dto.loader].join('/');
+      if(competing){
+        revisions[dto.ctx||0]++;
+        if(channel==='CDP'&&dto.ctx&&dto.frame&&dto.loader)lifetimeRevisions.set(life,(lifetimeRevisions.get(life)||0)+1);
+      }
+      if(type==='fence'){
+        const k=dto.ctx+'/'+dto.doc;
+        if(dto.side==='open'){
+          check(!openFences.has(k),'repeated-fence');
+          openFences.set(k,{global:revisions[0],local:revisions[dto.ctx],life,revision:lifetimeRevisions.get(life)||0,sealed:false});
+        }else{
+          const p=openFences.get(k);check(p&&!p.sealed,'missing-fence-open');
+          check(p.global===revisions[0]&&p.local===revisions[dto.ctx]&&p.life===life&&p.revision===(lifetimeRevisions.get(life)||0),'interleaved-capture-conflict');p.sealed=true;
+        }
+      }
+      return row.seq;
+    }catch(e){poison(['source-sequence-gap','repeated-fence','missing-fence-open','interleaved-capture-conflict'].includes(e.message)?e.message:'invalid-event');
+      return null;}
+  }
+  function report(stage){
+    const errorRows=rows.filter(e=>e.type==='issue'||e.type==='policyChange'||e.terminal==='failed'||e.status>=400||
+      e.state==='failed'||e.state==='error'||e.origin==='foreign');
+    const candidates=new Set(rows.filter(e=>['pwOpen','cdpOpen'].includes(e.type)&&e.ctx%2===1&&e.origin==='owned'&&
+      e.path==='webpack'&&e.resource==='Script'&&e.method==='GET').map(e=>[e.channel,e.ctx,e.id,e.hop||0].join('/')));
+    const fatal=errorRows.some(e=>(['pwEnd','cdpEnd'].includes(e.type)&&
+      !(candidates.has([e.channel,e.ctx,e.id,e.hop||0].join('/'))&&
+        (e.type==='pwEnd'?e.error==='csp':e.blocked==='csp'&&!e.canceled&&e.error==='MISSING')))||
+      e.status>=400||e.origin==='foreign'||e.state==='error'||(e.type==='issue'&&!['loss','unavailable'].includes(e.reason)));
+    const base={stage,run,rawFailureEventIds:errorRows.map(e=>e.seq),rawStrict:errorRows.length||faults.length?'FAIL':'OBSERVED_CLEAN',
+      cursor:rows.length,journalSha256:H(rows),dropped:overflow,financialAggregate:'PENDING'};
+    try{
+      check(!faults.length,faults[0]||'journal-invalid');
+      check(!fatal,'ordinary-failure');
+      if(stage==='drained')check(firstCut?.status==='MATCHED','no-matched-bootstrap-cut');
+      const result=replay(rows,config,stage);
+      if(stage==='drained'){
+        const stable=result.bindings.map(({coverage,...b})=>b);
+        check(H(stable)===firstCut.bindingHash&&H(result.nativeFailureEventIds)===firstCut.nativeHash,'bootstrap-attribution-changed');
+      }
+      return {...base,status:'MATCHED',...result};
+    }catch(e){
+      return {...base,rawStrict:'FAIL',status:fatal?'FATAL':'UNAVAILABLE',reason:e instanceof EvidenceError?e.message:'invalid-evidence'};
+    }
+  }
+  return Object.freeze({
+    append,
+    journal:()=>Object.freeze(rows.slice()),
+    bootstrapCut(){
+      if(firstCut)poison('repeated-bootstrap-cut');
+      const result=report('bootstrap');
+      firstCut={status:result.status,bindingHash:H((result.bindings||[]).map(({coverage,...b})=>b)),nativeHash:H(result.nativeFailureEventIds||[])};
+      return result;
+    },
+    afterDrain(){
+      if(postCut)poison('repeated-final-cut');
+      postCut=true;return report('drained');
+    }
+  });
+}
+module.exports={createDocumentIndex};

@@ -1,0 +1,260 @@
+TAP version 13
+# Subtest: native failed asset with genuine but indirect 302 predecessor matched v2; v3 rejects at the responsible cut
+ok 1 - native failed asset with genuine but indirect 302 predecessor matched v2; v3 rejects at the responsible cut
+  ---
+  duration_ms: 54.545959
+  ...
+# Subtest: enabled successful asset with genuine but indirect 302 predecessor matched v2; v3 rejects at the responsible cut
+ok 2 - enabled successful asset with genuine but indirect 302 predecessor matched v2; v3 rejects at the responsible cut
+  ---
+  duration_ms: 33.444875
+  ...
+# Subtest: landing browser terminals between guard arm and context.close invocation matched v2; v3 rejects at the responsible cut
+ok 3 - landing browser terminals between guard arm and context.close invocation matched v2; v3 rejects at the responsible cut
+  ---
+  duration_ms: 37.974458
+  ...
+# Subtest: landing browser terminals between retire proposal and guard arm matched v2; v3 rejects at the responsible cut
+ok 4 - landing browser terminals between retire proposal and guard arm matched v2; v3 rejects at the responsible cut
+  ---
+  duration_ms: 33.035625
+  ...
+# Subtest: login retirement adopted before replacement navigation intent matched v2; v3 rejects at the responsible cut
+ok 5 - login retirement adopted before replacement navigation intent matched v2; v3 rejects at the responsible cut
+  ---
+  duration_ms: 24.377334
+  ...
+# Subtest: direct candidate contract applies to both ordinary arms and preserves actual source fields
+ok 6 - direct candidate contract applies to both ordinary arms and preserves actual source fields
+  ---
+  duration_ms: 65.074834
+  ...
+# Subtest: every individual browser and wire terminal requires actual replacement or context-close invocation
+ok 7 - every individual browser and wire terminal requires actual replacement or context-close invocation
+  ---
+  duration_ms: 86.387167
+  ...
+# Subtest: replacement issuance must be unique and tied to the measured URL, guard owner, exchange and retirement
+ok 8 - replacement issuance must be unique and tied to the measured URL, guard owner, exchange and retirement
+  ---
+  duration_ms: 63.278375
+  ...
+# Subtest: post-invocation callback delivery permits independent PW, CDP and wire close ordering
+ok 9 - post-invocation callback delivery permits independent PW, CDP and wire close ordering
+  ---
+  duration_ms: 14.228541
+  ...
+# Subtest: I01 parse/source/coverage precede asset opening previously matched at both cuts; v2 blocks
+ok 10 - I01 parse/source/coverage precede asset opening previously matched at both cuts; v2 blocks
+  ---
+  duration_ms: 46.112625
+  ...
+# Subtest: I02 early CDP closure receipt in live context previously matched at both cuts; v2 blocks
+ok 11 - I02 early CDP closure receipt in live context previously matched at both cuts; v2 blocks
+  ---
+  duration_ms: 30.719125
+  ...
+# Subtest: I03 equal arbitrary digests attached to real nearby lifecycle event previously matched at both cuts; v2 blocks
+ok 12 - I03 equal arbitrary digests attached to real nearby lifecycle event previously matched at both cuts; v2 blocks
+  ---
+  duration_ms: 27.632667
+  ...
+# Subtest: I04a exact asset URL parsed in wrong isolated world disguised as other previously matched at both cuts; v2 blocks
+ok 13 - I04a exact asset URL parsed in wrong isolated world disguised as other previously matched at both cuts; v2 blocks
+  ---
+  duration_ms: 22.147084
+  ...
+# Subtest: I04b CDP failure contains explicit csp instead of absent error previously matched at both cuts; v2 blocks
+ok 14 - I04b CDP failure contains explicit csp instead of absent error previously matched at both cuts; v2 blocks
+  ---
+  duration_ms: 17.193
+  ...
+# Subtest: I05 native redirect child precedes prior response/terminal previously matched at both cuts; v2 blocks
+ok 15 - I05 native redirect child precedes prior response/terminal previously matched at both cuts; v2 blocks
+  ---
+  duration_ms: 20.1185
+  ...
+# Subtest: I01 parse before network loadingFinished is valid; parse before request is invalid with otherwise valid fenced reads
+ok 16 - I01 parse before network loadingFinished is valid; parse before request is invalid with otherwise valid fenced reads
+  ---
+  duration_ms: 30.172333
+  ...
+# Subtest: I01 copied read-start IDs, completion in wrong document, or async sampling outside the fence block
+ok 17 - I01 copied read-start IDs, completion in wrong document, or async sampling outside the fence block
+  ---
+  duration_ms: 31.386416
+  ...
+# Subtest: I02 disconnection remains red when closure acknowledgements are delayed until after the global cut
+ok 18 - I02 disconnection remains red when closure acknowledgements are delayed until after the global cut
+  ---
+  duration_ms: 58.841833
+  ...
+# Subtest: I03 parent and guard reference the actual lifecycle row, canonical parent ID and hash
+ok 19 - I03 parent and guard reference the actual lifecycle row, canonical parent ID and hash
+  ---
+  duration_ms: 29.646375
+  ...
+# Subtest: I04 genuine empty strict inventories and actual successful asset loads preserve a clean ledger
+ok 20 - I04 genuine empty strict inventories and actual successful asset loads preserve a clean ledger
+  ---
+  duration_ms: 29.137042
+  ...
+# Subtest: I04 no strict route through known-url contradictory network class or a clean-looking enabled abort
+ok 21 - I04 no strict route through known-url contradictory network class or a clean-looking enabled abort
+  ---
+  duration_ms: 7.991292
+  ...
+# Subtest: I05 child callback must be unique, consecutive and bound to its actual predecessor response and terminal
+ok 22 - I05 child callback must be unique, consecutive and bound to its actual predecessor response and terminal
+  ---
+  duration_ms: 13.232541
+  ...
+# Subtest: I02 a detach after a mere intent and before actual close invocation remains premature
+ok 23 - I02 a detach after a mere intent and before actual close invocation remains premature
+  ---
+  duration_ms: 12.383666
+  ...
+# Subtest: F01/F13 six slots, twelve actual-shape document bindings, genuine request/post-role distinction and clean independent tail
+ok 24 - F01/F13 six slots, twelve actual-shape document bindings, genuine request/post-role distinction and clean independent tail
+  ---
+  duration_ms: 35.755166
+  ...
+# Subtest: F02 natural redirects require ordered predecessor and exact origin/frame/loader/location
+ok 25 - F02 natural redirects require ordered predecessor and exact origin/frame/loader/location
+  ---
+  duration_ms: 35.044125
+  ...
+# Subtest: F03 ordinary enabled POST 303 and GET 200 cancellations remain fatal despite successful sibling and HMR retirement
+ok 26 - F03 ordinary enabled POST 303 and GET 200 cancellations remain fatal despite successful sibling and HMR retirement
+  ---
+  duration_ms: 3.950625
+  ...
+# Subtest: F04 duplicate graph edges on both sides or one missing source cannot resolve by timestamp
+ok 27 - F04 duplicate graph edges on both sides or one missing source cannot resolve by timestamp
+  ---
+  duration_ms: 7.65975
+  ...
+# Subtest: F05 full URL HMAC required even for the same pathname/asset body
+ok 28 - F05 full URL HMAC required even for the same pathname/asset body
+  ---
+  duration_ms: 4.028042
+  ...
+# Subtest: F06 same bytes in isolated/destroyed/reused world or stale marker never prove execution in the measured world
+ok 29 - F06 same bytes in isolated/destroyed/reused world or stale marker never prove execution in the measured world
+  ---
+  duration_ms: 44.127375
+  ...
+# Subtest: F07 executable evidence needs positive consistent byte ranges, source and response bytes and live V8 stream
+ok 30 - F07 executable evidence needs positive consistent byte ranges, source and response bytes and live V8 stream
+  ---
+  duration_ms: 43.866875
+  ...
+# Subtest: F08 same-loader script arriving during asynchronous sample invalidates capture immediately
+ok 31 - F08 same-loader script arriving during asynchronous sample invalidates capture immediately
+  ---
+  duration_ms: 3.629167
+  ...
+# Subtest: F08 a successful duplicate old-loader request after cut and extra commit remain visible at final replay
+ok 32 - F08 a successful duplicate old-loader request after cut and extra commit remain visible at final replay
+  ---
+  duration_ms: 29.3295
+  ...
+# Subtest: F09 frame-tree and separate PW arrival/marker must both identify one document, including JS-off
+ok 33 - F09 frame-tree and separate PW arrival/marker must both identify one document, including JS-off
+  ---
+  duration_ms: 25.714125
+  ...
+# Subtest: F10 post-retirement policy/meta/preload/base mutations retain IDs even for old loader
+ok 34 - F10 post-retirement policy/meta/preload/base mutations retain IDs even for old loader
+  ---
+  duration_ms: 45.435833
+  ...
+# Subtest: F11 outgoing path shadow survives a clean terminal cookie jar
+ok 35 - F11 outgoing path shadow survives a clean terminal cookie jar
+  ---
+  duration_ms: 28.675
+  ...
+# Subtest: F12 duplicate/partition/unreadable cookies, changed forwarding and incomplete or indistinguishable ExtraInfo fail
+ok 36 - F12 duplicate/partition/unreadable cookies, changed forwarding and incomplete or indistinguishable ExtraInfo fail
+  ---
+  duration_ms: 46.689917
+  ...
+# Subtest: F13 reject lost tenant role after first protected response, SID replacement and staff tenant role
+ok 37 - F13 reject lost tenant role after first protected response, SID replacement and staff tenant role
+  ---
+  duration_ms: 20.25575
+  ...
+# Subtest: F14 ExtraInfo delivered before request reconstructed by independently distinguishing fields
+ok 38 - F14 ExtraInfo delivered before request reconstructed by independently distinguishing fields
+  ---
+  duration_ms: 13.567042
+  ...
+# Subtest: F15 missing bilateral Close or retirement anchor, abnormal code, wrong handshake, unowned socket all reject
+ok 39 - F15 missing bilateral Close or retirement anchor, abnormal code, wrong handshake, unowned socket all reject
+  ---
+  duration_ms: 69.418292
+  ...
+# Subtest: F16 upstream-only CSP, 103 hints, missing private upstream response, policy before-ready gap cannot establish absence
+ok 40 - F16 upstream-only CSP, 103 hints, missing private upstream response, policy before-ready gap cannot establish absence
+  ---
+  duration_ms: 41.080167
+  ...
+# Subtest: F17 late loss, unresolved callback, premature context teardown or missing observer closure stays red
+ok 41 - F17 late loss, unresolved callback, premature context teardown or missing observer closure stays red
+  ---
+  duration_ms: 41.6065
+  ...
+# Subtest: F18 bootstrap receipt stays immutable when later evidence is fatal; aggregate always belongs to outer verifier
+ok 42 - F18 bootstrap receipt stays immutable when later evidence is fatal; aggregate always belongs to outer verifier
+  ---
+  duration_ms: 8.843584
+  ...
+# Subtest: F19 strict sanitized DTO rejects secrets/getters/unknown arrays without returning their content
+ok 43 - F19 strict sanitized DTO rejects secrets/getters/unknown arrays without returning their content
+  ---
+  duration_ms: 3.810375
+  ...
+# Subtest: F20 journal replay sequencing, immutable DTO copies and unmatched/duplicate terminal enforcement
+ok 44 - F20 journal replay sequencing, immutable DTO copies and unmatched/duplicate terminal enforcement
+  ---
+  duration_ms: 25.084625
+  ...
+# Subtest: F04/F06 same exact asset URL over two documents can resolve when earlier callback predates the next operation and V8 generations differ
+ok 45 - F04/F06 same exact asset URL over two documents can resolve when earlier callback predates the next operation and V8 generations differ
+  ---
+  duration_ms: 7.717541
+  ...
+# Subtest: F07 asynchronous body/source completions cannot be backfilled into a sealed sample
+ok 46 - F07 asynchronous body/source completions cannot be backfilled into a sealed sample
+  ---
+  duration_ms: 11.073959
+  ...
+# Subtest: F15 guard owner and per-exchange armed intent must agree with the actual committed owner
+ok 47 - F15 guard owner and per-exchange armed intent must agree with the actual committed owner
+  ---
+  duration_ms: 18.619708
+  ...
+# Subtest: F04/F09 reject cached, worker or prefetch response and wrong capture fence
+ok 48 - F04/F09 reject cached, worker or prefetch response and wrong capture fence
+  ---
+  duration_ms: 14.694125
+  ...
+# Subtest: F06/F17 unplanned late default-world turnover and unowned context closure remain unresolved
+ok 49 - F06/F17 unplanned late default-world turnover and unowned context closure remain unresolved
+  ---
+  duration_ms: 22.608125
+  ...
+# Subtest: F15 a parsed wire Close with no status is distinct from a missing frame; 101 must be observed on both protocol and wire
+ok 50 - F15 a parsed wire Close with no status is distinct from a missing frame; 101 must be observed on both protocol and wire
+  ---
+  duration_ms: 20.263542
+  ...
+1..50
+# tests 50
+# suites 0
+# pass 50
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 715.176125

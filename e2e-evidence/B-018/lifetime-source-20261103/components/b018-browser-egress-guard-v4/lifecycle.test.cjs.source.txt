@@ -1,0 +1,89 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),{EventEmitter}=require('node:events'),fs=require('node:fs'),vm=require('node:vm'),crypto=require('node:crypto');
+function harness({lifecycleOwner='d'.repeat(64),realDuplex=false}={}){
+ class Sock extends EventEmitter{constructor(){super();this.destroyed=false;}destroy(){if(!this.destroyed){this.destroyed=true;this.emit('close');}}end(){this.writableEnded=true;this.emit('finish');}pipe(){return this;}write(){return true;}pause(){}resume(){}setTimeout(){}}
+ class HalfOpenDuplex extends (require('node:stream').Duplex){constructor(){super({allowHalfOpen:true});this.writes=[];this.failWrites=false;} _read(){} _write(chunk,_encoding,done){if(this.failWrites){done(Error('synthetic write failure'));return;}this.writes.push(Buffer.from(chunk));done();} setTimeout(){} }
+ const SocketClass=realDuplex?HalfOpenDuplex:Sock;
+ class Stream extends EventEmitter{constructor(){super();this.destroyed=false;this.writableFinished=false;}pipe(){return this;}destroy(){if(!this.destroyed){this.destroyed=true;this.emit('close');}}writeHead(){}end(){this.emit('finish');}setTimeout(){}}
+ const server=new EventEmitter();server.listening=false;server.listen=(_p,_h,cb)=>{server.listening=true;cb();};server.address=()=>({port:43210});server.close=cb=>{server.listening=false;cb();};
+ const requests=[],callbacks=[];const http={createServer:cb=>{server.handler=cb;return server;},request:(_opts,cb)=>{const q=new Stream();requests.push(q);callbacks.push(cb);return q;}};
+ const wsfile=require.resolve('../mode-b-repair-override-prep/node_modules/next/dist/compiled/ws'),wsbytes=fs.readFileSync(wsfile);const bytes=Buffer.from('synthetic-browser'),fakefs={realpathSync:x=>x,lstatSync:()=>({isFile:()=>true,isSymbolicLink:()=>false,dev:1,ino:2,size:bytes.length,mtimeMs:1,ctimeMs:1}),readFileSync:x=>x===wsfile?wsbytes:bytes};
+ let tick=0;class FastDate extends Date{static now(){return tick+=1000;}}
+ const reqModule=n=>n==='node:http'?http:n==='node:fs'?fakefs:n==='node:crypto'?crypto:n===wsfile?require(wsfile):require(n);reqModule.resolve=(n,opts)=>require.resolve(n,opts);
+ const mod={exports:{}};vm.runInNewContext(fs.readFileSync(require.resolve('./guard.cjs'),'utf8'),{module:mod,exports:mod.exports,require:reqModule,Buffer,URL,Set,WeakSet,Error,Object,String,Array,JSON,Date:FastDate,setTimeout:(f,ms)=>ms===120000?{}:setTimeout(f,0),clearTimeout:id=>{if(typeof id==='object')return;clearTimeout(id);}}, {filename:'guard.cjs'});
+ const logs=[],privateEvents=[];return {server,requests,callbacks,Sock:SocketClass,Stream,logs,privateEvents,open:async()=>{const g=await mod.exports.openBrowserEgressGuard({browserExecutablePath:'/synthetic',wsModuleFile:wsfile,readLifecycleRecord:id=>id==='intent1'?{kind:'retirement-intent',id,exchangeId:'x1',ownerDocument:lifecycleOwner}:id==='anchor1'?{kind:'retirement-anchor',id,exchangeId:'x1',ownerDocument:lifecycleOwner,intentId:'intent1',sourceEvent:'document-commit',sha256:'a'.repeat(64)}:null,browserExecutableSha256:crypto.createHash('sha256').update(bytes).digest('hex'),onEvent:e=>logs.push(e)});g.observeExchanges(e=>privateEvents.push(e));return g;}};
+}
+function incoming(h){const req=new h.Stream();req.url='http://127.0.0.1:43156/login';req.method='GET';req.headers={};req.rawHeaders=[];req.socket=new h.Sock();const res=new h.Stream();h.server.handler(req,res);return {req,res,q:h.requests.at(-1)};}
+test('G01 completed request body followed by response cancellation is fatal and destroys upstream',async()=>{const h=harness(),g=await h.open(),{req,res,q}=incoming(h);req.emit('end');req.emit('close');res.emit('close');assert.equal(g.snapshot().failed,true);assert.equal(q.destroyed,true);assert.ok(h.logs.some(x=>x.reason==='client-response-incomplete'));});
+test('G02 close cannot succeed with pending request before socket assignment and late error remains fatal',async()=>{const h=harness(),g=await h.open(),{q}=incoming(h);const closing=g.close();assert.equal(g.snapshot().closed,false);q.emit('error',Error('late'));await assert.rejects(closing,/egress-quarantine/);assert.equal(g.snapshot().closed,false);assert.equal(g.snapshot().failed,true);});
+test('G02 close waits for upstream socket close even when server callback fires',async()=>{const h=harness(),g=await h.open(),{q}=incoming(h),s=new h.Sock();q.emit('socket',s);s.destroy=()=>{s.destroyed=true;};const closing=g.close();assert.equal(g.snapshot().closed,false);await assert.rejects(closing,/egress-quarantine/);assert.equal(g.snapshot().closed,false);assert.equal(g.snapshot().upstreamSockets,1);});
+test('G03 connection nominated CSP is rejected rather than removed',async()=>{const h=harness(),g=await h.open(),{res,q}=incoming(h);const reply=new h.Stream();reply.statusCode=200;reply.headers={connection:'content-security-policy','content-security-policy':"default-src 'none'"};reply.rawHeaders=['connection','content-security-policy','content-security-policy',"default-src 'none'"];h.callbacks.at(-1)(reply);assert.equal(g.snapshot().failed,true);assert.equal(reply.destroyed,true);assert.equal(q.destroyed,true);assert.equal(res.destroyed,true);});
+test('G03 informational response is fatal, not dropped',async()=>{const h=harness(),g=await h.open(),{q}=incoming(h);q.emit('information',{statusCode:103});assert.equal(g.snapshot().failed,true);assert.ok(h.logs.some(x=>x.reason==='unsupported-informational-response'));});
+
+test('private witness uses one immutable exchange ID and keeps header values out of public log',async()=>{const h=harness(),g=await h.open();const {req}=incoming(h);const event=h.privateEvents[0];assert.equal(event.type,'http-request');assert.ok(/^x[0-9]+$/.test(event.exchangeId));assert.equal(Object.isFrozen(event),true);assert.equal(Object.isFrozen(event.incomingHeaders),true);assert.equal(JSON.stringify(h.logs).includes('127.0.0.1:43156/login'),false);assert.equal(g.snapshot().failed,false);req.emit('end');});
+test('ordinary exchange requires all request and response terminals before close',async()=>{const h=harness(),g=await h.open(),{req,res,q}=incoming(h),reply=new h.Stream();reply.statusCode=200;reply.headers={'content-type':'text/html'};reply.rawHeaders=['content-type','text/html'];h.callbacks.at(-1)(reply);req.emit('end');req.emit('close');q.emit('finish');reply.emit('end');reply.emit('close');res.writableFinished=true;res.emit('finish');res.emit('close');assert.equal(g.snapshot().pendingHttp,1);q.emit('close');assert.equal(g.snapshot().pendingHttp,0);const end=await g.close();assert.equal(end.closed,true);assert.equal(end.failed,false);const x=h.privateEvents.filter(e=>e.exchangeId==='x1');assert.deepEqual(x.filter(e=>e.type!=='transport-terminal').map(e=>e.type),['http-request','http-response','http-terminal']);});
+test('late request error after close changes provisional snapshot to failure',async()=>{const h=harness(),g=await h.open(),{req,res,q}=incoming(h),reply=new h.Stream();reply.statusCode=200;reply.headers={};reply.rawHeaders=[];h.callbacks.at(-1)(reply);req.emit('end');req.emit('close');q.emit('finish');reply.emit('end');reply.emit('close');res.writableFinished=true;res.emit('finish');res.emit('close');q.emit('close');const result=await g.close();assert.equal(result.receiptStatus,'PROVISIONAL');assert.equal(result.failed,false);q.emit('error',Error('late'));assert.equal(g.snapshot().failed,true);});
+
+test('private witness binds exact cookie and ordered Set-Cookie, without public leakage',async()=>{const h=harness(),g=await h.open(),req=new h.Stream(),res=new h.Stream();req.url='http://127.0.0.1:43156/t';req.method='GET';req.headers={cookie:'synthetic=private'};req.rawHeaders=['Cookie','synthetic=private'];req.socket=new h.Sock();h.server.handler(req,res);const reply=new h.Stream();reply.statusCode=200;reply.headers={'set-cookie':['a=one','b=two']};reply.rawHeaders=['Set-Cookie','a=one','Set-Cookie','b=two'];h.callbacks.at(-1)(reply);const a=h.privateEvents[0],b=h.privateEvents[1];assert.equal(a.incomingHeaders[0][1],'synthetic=private');assert.equal(a.forwardedHeaders[0][1],'synthetic=private');assert.equal(b.upstreamHeaders.length,2);assert.equal(b.downstreamHeaders[1][1],'b=two');assert.equal(a.sequence+1,b.sequence);assert.equal(JSON.stringify(h.logs).includes('synthetic=private'),false);assert.equal(g.snapshot().failed,false);});
+test('ambiguous duplicate request cookies fail before upstream forwarding',async()=>{const h=harness(),g=await h.open(),req=new h.Stream(),res=new h.Stream();req.url='http://127.0.0.1:43156/t';req.method='GET';req.headers={cookie:'a=one; b=two'};req.rawHeaders=['Cookie','a=one','Cookie','b=two'];req.socket=new h.Sock();h.server.handler(req,res);assert.equal(g.snapshot().failed,true);assert.equal(h.requests.length,0);});
+function makeHandshake(h){const key=Buffer.alloc(16,7).toString('base64'),accept=crypto.createHash('sha1').update(key+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64'),sock=new h.Sock();const req={url:'http://127.0.0.1:43156/_next/webpack-hmr',method:'GET',httpVersion:'1.1',headers:{upgrade:'websocket',connection:'upgrade','sec-websocket-key':key,'sec-websocket-version':'13'},rawHeaders:['upgrade','websocket','connection','upgrade','sec-websocket-key',key,'sec-websocket-version','13']};h.server.emit('upgrade',req,sock,Buffer.alloc(0));const q=h.requests.at(-1),peer=new h.Sock(),reply={statusCode:101,httpVersion:'1.1',headers:{upgrade:'websocket',connection:'upgrade','sec-websocket-accept':accept},rawHeaders:['upgrade','websocket','connection','upgrade','sec-websocket-accept',accept]};q.emit('upgrade',reply,peer,Buffer.alloc(0));return {sock,q,peer};}
+test('named retirement requires independent close frames, anchors and both socket terminals',async()=>{const h=harness(),g=await h.open(),browser=new EventEmitter();browser.isConnected=()=>true;browser.newBrowserCDPSession=async()=>({send:async()=>({arguments:['/synthetic','--proxy-server='+g.proxyLaunchOptions.proxy.server,'--proxy-bypass-list=<-loopback>',...g.proxyLaunchOptions.args]}),detach:async()=>{}});browser.newContext=async()=>new EventEmitter();await g.attach(browser);await g.createContext({javaScriptEnabled:true,viewport:{width:390,height:900}});const {sock,q,peer}=makeHandshake(h);assert.equal(g.snapshot().failed,false);g.bindHmrOwner({exchangeId:'x1',ownerDocument:'d'.repeat(64)});g.armHmrRetirement({exchangeId:'x1',ownerDocument:'d'.repeat(64),intentId:'intent1'});sock.emit('data',Buffer.from([0x88,0x80,1,2,3,4]));peer.emit('data',Buffer.from([0x88,0]));g.commitHmrRetirement({exchangeId:'x1',ownerDocument:'d'.repeat(64),intentId:'intent1',anchorEventId:'anchor1',anchorSha256:'a'.repeat(64)});q.emit('close');sock.emit('end');peer.emit('end');await new Promise(resolve=>setImmediate(resolve));sock.destroy();assert.equal(g.snapshot().pendingTunnels,1);peer.destroy();assert.equal(g.snapshot().pendingTunnels,0);assert.equal(g.snapshot().failed,false);assert.ok(h.privateEvents.some(e=>e.terminal==='bilateral-close-provisional'));});
+test('unilateral EOF never produces bilateral retirement',async()=>{const h=harness(),g=await h.open(),{sock,q,peer}=makeHandshake(h);g.bindHmrOwner({exchangeId:'x1',ownerDocument:'d'.repeat(64)});g.armHmrRetirement({exchangeId:'x1',ownerDocument:'d'.repeat(64),intentId:'intent1'});sock.emit('data',Buffer.from([0x88,0x80,1,2,3,4]));q.emit('close');sock.emit('end');peer.emit('end');assert.equal(g.snapshot().failed,true);assert.equal(h.privateEvents.some(e=>e.terminal==='bilateral-close-provisional'),false);});
+
+test('wrong retirement owner is a permanent guard failure',async()=>{const h=harness(),g=await h.open();makeHandshake(h);g.bindHmrOwner({exchangeId:'x1',ownerDocument:'d'.repeat(64)});assert.throws(()=>g.armHmrRetirement({exchangeId:'x1',ownerDocument:'wrong',intentId:'intent1'}));assert.equal(g.snapshot().failed,true);});
+test('wire close before named intent is fatal',async()=>{const h=harness(),g=await h.open(),{sock}=makeHandshake(h);g.bindHmrOwner({exchangeId:'x1',ownerDocument:'d'.repeat(64)});sock.emit('data',Buffer.from([0x88,0x80,1,2,3,4]));assert.equal(g.snapshot().failed,true);assert.equal(h.privateEvents.some(e=>e.terminal==='bilateral-close-provisional'),false);});
+test('ordinary HTTP cancellation is fatal during a named HMR retirement',async()=>{const h=harness(),g=await h.open();makeHandshake(h);g.bindHmrOwner({exchangeId:'x1',ownerDocument:'d'.repeat(64)});g.armHmrRetirement({exchangeId:'x1',ownerDocument:'d'.repeat(64),intentId:'intent1'});const {req,res,q}=incoming(h);req.emit('end');req.emit('close');res.emit('close');assert.equal(g.snapshot().failed,true);assert.equal(q.destroyed,true);});
+
+test('v4 natural half-open FIN retires both peers without forced destruction',async()=>{
+ const h=harness({realDuplex:true}),g=await h.open(),{sock,q,peer}=makeHandshake(h);
+ g.bindHmrOwner({exchangeId:'x1',ownerDocument:'d'.repeat(64)});
+ g.armHmrRetirement({exchangeId:'x1',ownerDocument:'d'.repeat(64),intentId:'intent1'});
+ g.commitHmrRetirement({exchangeId:'x1',ownerDocument:'d'.repeat(64),intentId:'intent1',anchorEventId:'anchor1',anchorSha256:'a'.repeat(64)});
+ q.emit('close');
+ sock.push(Buffer.from([0x88,0x80,1,2,3,4]));peer.push(Buffer.from([0x88,0]));
+ sock.push(null);peer.push(null);
+ for(let i=0;i<10&&g.snapshot().pendingTunnels;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(sock.readableEnded,true);assert.equal(peer.readableEnded,true);
+ assert.equal(sock.writableFinished,true);assert.equal(peer.writableFinished,true);
+ assert.equal(g.snapshot().pendingTunnels,0);assert.equal(g.snapshot().failed,false);
+ assert.equal(h.privateEvents.filter(x=>x.type==='hmr-close-frame').length,2);
+ assert.equal(h.privateEvents.filter(x=>x.type==='transport-terminal'&&x.terminal==='forwarded-fin').length,2);
+});
+test('v4 matching null lifecycle owner cannot replace a genuine bind',async()=>{
+ const h=harness({lifecycleOwner:null}),g=await h.open();makeHandshake(h);
+ assert.throws(()=>g.armHmrRetirement({exchangeId:'x1',ownerDocument:null,intentId:'intent1'}));
+ assert.equal(h.privateEvents.some(x=>x.type==='hmr-owner'),false);assert.equal(g.snapshot().failed,true);
+});
+test('v4 malformed owner is rejected before binding, and never retires',async()=>{
+ const h=harness(),g=await h.open();makeHandshake(h);
+ assert.throws(()=>g.bindHmrOwner({exchangeId:'x1',ownerDocument:'doc1'}));
+ assert.equal(g.snapshot().failed,true);assert.equal(h.privateEvents.some(x=>x.terminal==='bilateral-close-provisional'),false);
+});
+test('v4 early client FIN waits for independent server Close before graceful propagation',async()=>{
+ const h=harness({realDuplex:true}),g=await h.open(),{sock,q,peer}=makeHandshake(h);
+ g.bindHmrOwner({exchangeId:'x1',ownerDocument:'d'.repeat(64)});
+ g.armHmrRetirement({exchangeId:'x1',ownerDocument:'d'.repeat(64),intentId:'intent1'});
+ g.commitHmrRetirement({exchangeId:'x1',ownerDocument:'d'.repeat(64),intentId:'intent1',anchorEventId:'anchor1',anchorSha256:'a'.repeat(64)});
+ q.emit('close');sock.push(Buffer.from([0x88,0x80,1,2,3,4]));sock.push(null);
+ await new Promise(r=>setImmediate(r));assert.equal(peer.writableEnded,false);
+ assert.equal(g.snapshot().pendingTunnels,1);assert.equal(g.snapshot().failed,false);
+ peer.push(Buffer.from([0x88,0]));peer.push(null);
+ for(let i=0;i<10&&g.snapshot().pendingTunnels;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(g.snapshot().pendingTunnels,0);assert.equal(g.snapshot().failed,false);
+ assert.deepEqual(sock.writes.at(-1),Buffer.from([0x88,0]));
+ assert.deepEqual(peer.writes.at(-1),Buffer.from([0x88,0x80,1,2,3,4]));
+});
+test('v4 forwarding write failure cannot become a clean retirement',async()=>{
+ const h=harness({realDuplex:true}),g=await h.open(),{sock,peer}=makeHandshake(h);
+ g.bindHmrOwner({exchangeId:'x1',ownerDocument:'d'.repeat(64)});
+ g.armHmrRetirement({exchangeId:'x1',ownerDocument:'d'.repeat(64),intentId:'intent1'});
+ peer.failWrites=true;sock.push(Buffer.from([0x88,0x80,1,2,3,4]));
+ await new Promise(r=>setImmediate(r));assert.equal(g.snapshot().failed,true);
+ assert.equal(h.privateEvents.some(x=>x.terminal==='bilateral-close-provisional'),false);
+});
+test('v4 a different well-formed owner cannot retire a bound exchange',async()=>{
+ const h=harness(),g=await h.open();makeHandshake(h);
+ g.bindHmrOwner({exchangeId:'x1',ownerDocument:'d'.repeat(64)});
+ assert.throws(()=>g.armHmrRetirement({exchangeId:'x1',ownerDocument:'e'.repeat(64),intentId:'intent1'}));
+ assert.equal(g.snapshot().failed,true);
+});

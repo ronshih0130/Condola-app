@@ -1,0 +1,51 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {ORG,slots,ensureControls,tag,rowFingerprint,checkSessions,auditEvidence}=require('./compare.cjs');
+const key=Buffer.alloc(32,7);
+function checks(){
+ const env=slots.map((s,i)=>{const hash=String(i+1).repeat(64);return {contextId:s.id,mode:s.mode,proxyTokenHash:hash,userAgent:'synthetic',
+  cookieScope:{org:null,environment:null,lease:null,portalRole:s.persona==='admin'?null:'tenant'},
+  verification:{sessionId:'30000000-0000-4000-8000-00000000000'+(i+1),tokenHash:hash,readbackSha256:'b'.repeat(64),userId:s.user,orgId:ORG,persona:s.persona,revokedAt:null}};});
+ const rows=env.map(x=>({row:{id:x.verification.sessionId,user_id:x.verification.userId,token_hash:x.proxyTokenHash,user_agent:'synthetic',ip:'::1',
+  revoked_at:null,created_at:'t0',last_active_at:'t1',expires_at:'t2'},created:'101',active:'125',expires:'43200000125'}));
+ return {env,rows};
+}
+test('six separate normal sessions with canonical twelve-hour touch',()=>{const {rows,env}=checks();checkSessions(rows,env,'100','150');});
+for(const [name,mutate] of Object.entries({
+ 'missing slot':(r,e)=>e.pop(),'duplicate token':(r,e)=>e[1].proxyTokenHash=e[0].proxyTokenHash,
+ 'foreigner':(r)=>r[2].row.user_id=slots[0].user,'revoked':r=>r[0].row.revoked_at='late','forged session pointer':(r,e)=>e[2].verification.sessionId=e[1].verification.sessionId,
+ 'unexpected source column':r=>r[0].row.secret='unsafe','creation before baseline':r=>r[0].created='98',
+ 'future touch':r=>r[0].active='151','remembered expiration':r=>r[0].expires='2592000000125','different UA':r=>r[0].row.user_agent='other',
+ 'unexpected IP':r=>r[0].row.ip='192.0.2.1','wrong cookie scope':(r,e)=>e[0].cookieScope.lease='unexpected'
+}))test(name,()=>{const {rows,env}=checks();mutate(rows,env);assert.throws(()=>checkSessions(rows,env,'100','150'));});
+function audits(){
+ const old={id:'9007199254740994',raw:'{"large":9007199254740997}',micros:'89'};
+ const primary=new Map(slots.map((s,i)=>[s.user,i<2?'org-foreign':ORG]));
+ const rows=[old,...slots.map((s,i)=>({id:String(i+1),micros:'125',raw:JSON.stringify({id:i+1,org_id:primary.get(s.user),occurred_at:'t1',
+   actor_user_id:s.user,actor_role:'app',table_name:'auth_events',row_id:'sign_in',action:'insert',event_type:'sign_in',old_row:null,changed_cols:null,
+   new_row:{event:'sign_in',remember:false},reason:'sign_in',request_id:null})}))];
+ return {rows,old:[{id:tag(key,'audit-id',old.id),hash:tag(key,'audit-full-row',old.raw)}],primary};
+}
+test('prior audit preserved byte for byte, normal per-user primaryOrg regardless of portal org',()=>{const a=audits();auditEvidence(a.rows,a.old,a.primary,'100','150',key);});
+for(const field of ['org_id','actor_role','table_name','action','changed_cols','old_row','new_row','event_type','row_id','request_id','reason'])test('reject noncanonical audit '+field,()=>{
+ const a=audits(),v=JSON.parse(a.rows[1].raw);v[field]='other';a.rows[1].raw=JSON.stringify(v);assert.throws(()=>auditEvidence(a.rows,a.old,a.primary,'100','150',key));
+});
+test('audit survivor removed or changed, even at unsafe JS integer precision',()=>{for(const m of [r=>r.shift(),r=>r[0].raw='{"large":9007199254740996}']){const a=audits();m(a.rows);assert.throws(()=>auditEvidence(a.rows,a.old,a.primary,'100','150',key));}});
+test('complete row multiset binds duplicates, order-independent, authenticates auth.users.updated_at and amount',()=>{
+ const run=(r)=>rowFingerprint(r,key,'auth.users');
+ assert.deepEqual(run(['a','b']),run(['b','a']));
+ for(const rows of [['a'],['a','b','b'],['a','{"updated_at":"other"}'],['a','{"amount":9007199254740997}']])assert.notDeepEqual(run(['a','b']),run(rows));
+});
+function control(){
+ const keys=['company_profile_edit','other','tenant_payment_history'],db='owned',seed={registryKeys:keys,settings:[{key:'other',value:{enabled:false,allowed_org_ids:[]}}],enabled:2,
+  orgs:[ORG,'10000000-0000-4000-8000-000000000002'].map(id=>({id,environment:'live',live_org_id:null,feature_flags:{branded_line_oa:false,line_alerts:true}}))};
+ const off=structuredClone(seed);off.enabled=0;for(const o of off.orgs)o.feature_flags.line_alerts=false;
+ return {keys,db,intent:{version:1,database:db,seed,expectedOff:off},current:structuredClone(off)};
+}
+test('exact known two-seed OFF change only',()=>{let c=control();ensureControls(c.intent,c.current,c.keys,c.db);});
+for(const [name,m] of Object.entries({'unexpected global activation':c=>c.intent.seed.settings[0].value.enabled=true,'unexpected optin':c=>c.intent.seed.settings[0].value.allowed_org_ids=['other'],'protective setting changed':c=>c.current.settings[0].description='changed','organization added':c=>c.current.orgs.push(c.current.orgs[0]),'forged intended seed':c=>c.intent.seed.orgs[0].feature_flags.unknown=true,'history key seeded':c=>c.intent.seed.settings.push({key:'tenant_payment_history',value:false})}))test(name,()=>{const c=control();m(c);assert.throws(()=>ensureControls(c.intent,c.current,c.keys,c.db));});
+
+test('greatest preserves the later expiration across differently ordered session-touch transactions',()=>{
+ const {rows,env}=checks();rows[0].expires='43200000140';checkSessions(rows,env,'100','150');
+ rows[0].expires='43200000151';assert.throws(()=>checkSessions(rows,env,'100','150'));
+});

@@ -1,0 +1,19 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {classifyProxyTarget:target}=require('./guard.cjs');
+for(const raw of ['http://evil.test/','http://127.0.0.1.evil.test:43156/','http://127.0.0.1:43157/',
+ 'http://localhost:43156/','https://127.0.0.1:43156/','ftp://127.0.0.1:43156/',
+ 'http://user@127.0.0.1:43156/','http://127.0.0.1:43156/#','http://127.0.0.1:43156/#x',
+ 'http://127.0.0.1:43156/\r\nx','http://2130706433:43156/','http://0177.0.0.1:43156/',
+ 'http://127.0.0.1:043156/','http://127.0.0.1:43156\\@evil.test/',
+ 'http://127.0.0.1:43156/a/../b','/login','//127.0.0.1:43156/login','http://[::1]:43156/']) {
+ test('rejects ambiguous or non-owned authority '+JSON.stringify(raw),()=>assert.equal(target(raw),null));
+}
+test('only fixed authority is returned as an origin-form path',()=>{
+ assert.equal(target('http://127.0.0.1:43156/login'),'/login');
+ assert.equal(target('http://127.0.0.1:43156/auth/enter?next=%2Ft'),'/auth/enter?next=%2Ft');
+ assert.equal(target('ws://127.0.0.1:43156/_next/webpack-hmr',true),'/_next/webpack-hmr');
+ assert.equal(target('ws://127.0.0.1:43156/_next/webpack-hmr'),null);
+ assert.equal(target('ws://127.0.0.1:43156/arbitrary',true),null);
+ assert.equal(target('wss://127.0.0.1:43156/_next/webpack-hmr',true),null);
+});

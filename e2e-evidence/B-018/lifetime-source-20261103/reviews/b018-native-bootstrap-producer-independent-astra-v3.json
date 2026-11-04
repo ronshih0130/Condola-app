@@ -1,0 +1,128 @@
+{
+  "verdict": "NO_GO_PRODUCER_SOURCE",
+  "integration": "NO_GO",
+  "runtime": "NOT_RUN",
+  "financialAggregate": "PENDING",
+  "historicalFailures": "UNCHANGED",
+  "ordinaryEnabledCancellation": "FATAL",
+  "freeze": {
+    "work/b018-native-bootstrap-collector-v3/manifest.json": "e671ced1027952336452e4ebfcf2bf4a59694850ac1049b6aa5783daa177dc88",
+    "work/b018-native-bootstrap-collector-v3/producer.cjs": "d25d7188977ec03542fae12ad1dfc400e842200422abf6c8802430680de1f623",
+    "work/b018-native-bootstrap-collector-source-terra-v3.md": "c2e38e9891a477886806159f6e00949f8296ef5ec4375686372437312b60cd7f",
+    "work/b018-document-lifetime-index-v3/manifest.json": "53edd0b7edf670e0f46555776bbb3778a387406361a5d5d8cb53ee9be242e622",
+    "work/b018-browser-egress-guard-v4/manifest.json": "be5a1b967b214968479b79bc422f65e5f92e510424369df71733b0cfbf168682",
+    "work/b018-webpack-server-map-v1/manifest.json": "48e06745725f62d71be5ca909bccf57c598bd634191556ae2d94fed2ccad6413",
+    "work/b018-native-bootstrap-v3/manifest.json": "e8a38c434928711ca4ae79eaf65a11d7c5ddbfc1bbd348e228f541b8a0dd8865",
+    "work/b018-native-session-verifier-v3/manifest.json": "d59ece040786ed2a841094237f7d83d74dad758a311163507d30f2022d1eeb98",
+    "work/b018-native-bootstrap-ron-decision-20261103.json": "322d8035dad725b65b1d18a42c8aac4d3ebe28109095eb830974b4bf2d03bb28"
+  },
+  "manifestMembers": {
+    "reservation.json": {
+      "sha256": "791b317761dceff44b53288c7fee45ea3d86acce30cd266338816994622823c5",
+      "bytes": 129
+    },
+    "producer.cjs": {
+      "sha256": "d25d7188977ec03542fae12ad1dfc400e842200422abf6c8802430680de1f623",
+      "bytes": 47980
+    },
+    "producer.d.ts": {
+      "sha256": "8de7b7663f2f906ab72e8c5a90ddffb210da8c97b813f9a6632add304715f2ba",
+      "bytes": 1315
+    },
+    "acquisition.test.cjs": {
+      "sha256": "17060baab80b597a5641e44e88b2a3197a34eaabd6a0a484743972345e90f3a4",
+      "bytes": 8719
+    },
+    "README.md": {
+      "sha256": "9d297cb94b0ecdfb665b868dc02d2460c5d3a9bd06ce96117f0e261fadb7553f",
+      "bytes": 5743
+    }
+  },
+  "verification": {
+    "manifestBeforeAndAfter": "MATCH",
+    "nodeSyntax": "PASS",
+    "authorPureGroupsRerun": {
+      "passed": 12,
+      "failed": 0
+    },
+    "independentEmitterObservations": [
+      "literal csp and nonmatching net::ERR_NOT_CSP_RELATED both emitted pwEnd.error=csp",
+      "failed native GET emitted pwCookie and no pwResponse",
+      "finished POST 303 Fetch without redirect child emitted no pwEnd",
+      "CDPSession close emitted zero cdpDetached",
+      "303 with root role tombstone emitted guard loss and no proxyResponse"
+    ]
+  },
+  "findings": [
+    {
+      "id": "P01",
+      "title": "A nonmatching failure becomes the approved CSP code",
+      "reference": "producer.cjs 25, 53, 63; classifier.cjs 169–177",
+      "observed": "Both a literal csp and the synthetic net::ERR_NOT_CSP_RELATED produced exactly pwEnd.error=csp in the installed listener. The sink preserves no separate exact classification. Distinct raw failures therefore become indistinguishable to downstream review.",
+      "required": "Use an exact closed error-code mapping with a separate unknown result, retain the original raw-event identity even when later correlation fails, and require the two distinct inputs to stay distinct at replay."
+    },
+    {
+      "id": "P02",
+      "title": "A blocked script emits a cookie row for an exchange that never happened",
+      "reference": "producer.cjs 48–49; index.cjs 125–129",
+      "observed": "The request handler starts allHeaders() for every request. A native response-less failed script produced pwEnd and pwCookie and no pwResponse. The index permits exactly one pwCookie per response-bearing request and rejects this extra row. A failed header read produces another fatal issue.",
+      "required": "Capture request provenance at entry. Reconcile header evidence only for the real response-bearing exchange; retain the negative script request and both failure source IDs without creating a cookie, proxy or body witness."
+    },
+    {
+      "id": "P03",
+      "title": "A finished enhanced-login POST can remain pending forever",
+      "reference": "producer.cjs 48–53, 107; index fixtures.cjs 130",
+      "observed": "flushEnd waits for redirectedTo() for every 303, even a Fetch POST that actually finished with no Location and no redirect child. The positive index fixture explicitly uses this shape. The emitter probe produced pwResponse and no pwEnd. A failed terminal following such a response can also be held out of the journal, obscuring the original failure.",
+      "required": "Journal the real terminal immediately, preserve every failed terminal as fatal, and reconcile native predecessor/child evidence only when the observed redirect facts require a child."
+    },
+    {
+      "id": "P04",
+      "title": "CDP initialization violates the accepted index readiness order",
+      "reference": "producer.cjs 69–71, 94–98; index.cjs 219–229; installed protocol.d.ts 22543–22545, 20650–20651",
+      "observed": "The page already exists when Runtime.enable reports its existing worlds. The producer appends these world rows while enabling domains, then emits all four ready rows. The index rejects every observation before its channel ready row. Debugger.enable also reports existing parsed scripts.",
+      "required": "Record the known empty setup document and activation interval explicitly. Arm observers before enabling domains, positively confirm activation before measured navigation, and reconcile setup without hiding unexpected traffic or marking unconfirmed channels ready."
+    },
+    {
+      "id": "P05",
+      "title": "The observer invalidates the page it is supposed to measure",
+      "reference": "producer.cjs 71, 83–90, 95–97; index.cjs 505–521",
+      "observed": "The before-parser init script treats any addition of a meta, base, script or link (or subtree containing one) as a fatal mutation. The normal parser adding the required declared script meets this predicate. During a capture the code also compiles evaluation expressions using PW and Runtime.evaluate with Debugger active; any resulting scriptParsed changes the captured revision and prevents sealing. The producer has no provenance for its own evals.",
+      "required": "Prove intended parser insertions against frozen HTML and order while retaining detection of injected, modified, removed or policy-bearing nodes. Preinstall and pin measurement operations or distinguish their exact debugger identities. Never discard all early DOM changes or all anonymous parses."
+    },
+    {
+      "id": "P06",
+      "title": "The teardown callback uses the wrong Playwright event",
+      "reference": "producer.cjs 54, 77, 108; installed playwright-core/types/types.d.ts 18420–18423",
+      "observed": "The pinned CDPSession emits close. The code waits for disconnected, and Inspector.detached only writes a diagnostic. A pure close event generated zero cdpDetached rows. closeSlot therefore lacks its required signal and reaches its ten-second unavailable branch even after a normal close.",
+      "required": "Use the installed session close event and retain separate planned/issued, physical context close, CDP close and guard drain records. An unplanned detach must stay fatal."
+    },
+    {
+      "id": "P07",
+      "title": "The actual login role-cookie reset is unrepresentable",
+      "reference": "producer.cjs 32–34, 65; app src/server/auth-actions.ts 100–106; index events.cjs 44, 49",
+      "observed": "Successful actionSignIn explicitly deletes PORTAL_ROLE_COOKIE after setting the SID. A same-scope role expiration in a synthetic 303 yielded guard issue/loss and no proxyResponse. The CDP parser shares this rejection. The index enum can only represent no change, tenant assignment or other.",
+      "required": "Represent the exact host-only root role deletion as its own observed transition at this login hop and corroborate original and forwarded headers and CDP. Verify subsequent outgoing absence and the real tenant role assignment. SID deletion, shadow scope and unexplained changes still fail."
+    },
+    {
+      "id": "P08",
+      "title": "Declaration evidence omits a field the existing kernel requires",
+      "reference": "producer.cjs 86–89; index events.cjs 41; classifier.cjs 135–141, 180–183",
+      "observed": "The parser admits script[src] or link[rel=preload][as=script] but stores neither the tag nor declaration kind. Its declaration digest likewise omits kind. The kernel requires the actual native and positive kinds to agree. Its input cannot be reconstructed from the sanitized events or the map receipt.",
+      "required": "Carry the exact parser-derived kind and source reference through the declaration digest and replay. Exercise a script-versus-preload mismatch and prohibit a parent constant or inferred kind."
+    },
+    {
+      "id": "P09",
+      "title": "Recovery has no independently observed proxy token hash for the matched exchange",
+      "reference": "producer.cjs 33–34, 49, 102, 111; recovery v1/v2 recovery.d.ts 4–5",
+      "observed": "observeGuard retains a cookie-string commitment in the index, but captures no private per-exchange SHA256(SID). verifySession hashes the current cookie jar, checks a set collected from any PW request, and returns that jar-derived tokenHash together with navigator.userAgent. It emits org/env=expected even when the verified inventory values were absent. Recovery expects proxyTokenHash and verification. Renaming tokenHash would misstate the source, and navigator.userAgent is not a wire header observation.",
+      "required": "Join the authenticated landing to its particular proxy exchange, PW and CDP observations. Preserve the actual private wire SID hash, actual scope and observed request UA with explicit source IDs where needed. Keep the initial and new verifier receipts separate and never persist private values."
+    },
+    {
+      "id": "P10",
+      "title": "Asset selection rejects supported clean documents and valid reuse",
+      "reference": "producer.cjs 86–90; index.cjs 281–288, 333–346; map.cjs 262–304",
+      "observed": "Zero inventory is emitted and then rejected by the unconditional items.length!==1. An enabled later document that legitimately requests the same exact URL as login sees both earlier and later PW successful responses because pwScripts scans the complete slot and requires a singleton. The source map interface also requires twelve positive endRender calls.",
+      "required": "Distinguish ordinary zero declarations using real inventory from an exceptional scope requiring one. Use the independently reconciled per-document PW/CDP lifetime to select a real response when URL is reused. Preserve ambiguity if observations cannot distinguish the requests; align map sealing with the measured branch."
+    }
+  ]
+}

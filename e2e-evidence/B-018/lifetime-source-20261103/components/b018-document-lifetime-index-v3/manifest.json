@@ -1,0 +1,197 @@
+{
+  "scope": "B018 pure document-lifetime evidence index v3",
+  "status": "SOURCE_CANDIDATE_PENDING_DIFFERENT_REVIEWER",
+  "runtime": "NOT_RUN",
+  "financialAggregate": "PENDING",
+  "node": "v20.20.2",
+  "testCommand": "node --test index.test.cjs independent-regressions.test.cjs direct-retirement.test.cjs",
+  "originalGroupsRetained": 41,
+  "newRegressionGroups": 9,
+  "pureGroupsPassed": 50,
+  "failed": 0,
+  "skipped": 0,
+  "v2FalseAcceptancesReproducedAndBlocked": 5,
+  "artifacts": [
+    {
+      "path": "README.md",
+      "bytes": 11158,
+      "sha256": "f2155b3f59993cd3eb3c500d4bec17f9f3e432a7ab2eb09856bfa53ac251429a"
+    },
+    {
+      "path": "delta-notes.md",
+      "bytes": 5973,
+      "sha256": "ea8a7b80645f760be98cf7485cb5b298b2ae04bc332b2b98013ba362ed2723e6"
+    },
+    {
+      "path": "direct-retirement.test.cjs",
+      "bytes": 7268,
+      "sha256": "c6ef8a1627484ecc4da85421a7f4d44cb5d9cbb82246c33f005d7345b487fb34"
+    },
+    {
+      "path": "event-interface.json",
+      "bytes": 78559,
+      "sha256": "b871a09ee47ab86a0f06bc8d3b73de44d45fb67fec4ba68bd6b56d40e494b3a0"
+    },
+    {
+      "path": "events.cjs",
+      "bytes": 7986,
+      "sha256": "d05c8c1825621f3f6f5faeb98ac728742969a1d3ca968ae13b851f9e25c1df86"
+    },
+    {
+      "path": "fixtures.cjs",
+      "bytes": 10522,
+      "sha256": "bd33965fddff8a6781c6d9cc1e2e49d407cdb1276a34919166bbdbd778b8ceb7"
+    },
+    {
+      "path": "independent-regressions.test.cjs",
+      "bytes": 7685,
+      "sha256": "92ef24a69fd1e5084283629cab09c5cfba90dd245abd9ed883fb9409cc6a7ed6"
+    },
+    {
+      "path": "index.cjs",
+      "bytes": 41113,
+      "sha256": "0c51de8b8284662111d53b7858182a004844d28c294c24d23aa1ede312be26f0"
+    },
+    {
+      "path": "index.test.cjs",
+      "bytes": 15991,
+      "sha256": "26366eaa4afdbafb862b1a2a2868020ecadcecf5b68e752025949c700f4a9b3d"
+    },
+    {
+      "path": "pure-tests.tap",
+      "bytes": 12901,
+      "sha256": "79f5e3df56b0ba8c8959724de820da7d2052df3a6c7933c61f6fcb6a74bfce26"
+    },
+    {
+      "path": "v2-witness-contract.md",
+      "bytes": 6564,
+      "sha256": "5a9ffe662b9b9a329a1b9fd15ddbb7f6f4e145ebef1999626a3d586c8be4546d"
+    }
+  ],
+  "v2PackageAndIndependentReview": [
+    {
+      "path": "work/b018-document-lifetime-index-v2/manifest.json",
+      "bytes": 4959,
+      "sha256": "758cd5cb98f61b372e5912037112e1823eaebac83364725dd45a346cb79dd084"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-v2/index.cjs",
+      "bytes": 39919,
+      "sha256": "aeb656c2e5e7f8088d06f8e07deed6d9d359004904e2ffd2bab868bb01a4f464"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-v2/events.cjs",
+      "bytes": 7867,
+      "sha256": "e5d387ed40838f1e5895effb2663cbca8b50f3c43b0642dad3aec25806d301a6"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-v2/fixtures.cjs",
+      "bytes": 10375,
+      "sha256": "f36e23924594a6a404f1702a5c356bf5ed2e5fd0640d1bc2c8e2fb390e5023ec"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-v2/index.test.cjs",
+      "bytes": 15991,
+      "sha256": "26366eaa4afdbafb862b1a2a2868020ecadcecf5b68e752025949c700f4a9b3d"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-v2/independent-regressions.test.cjs",
+      "bytes": 7685,
+      "sha256": "92ef24a69fd1e5084283629cab09c5cfba90dd245abd9ed883fb9409cc6a7ed6"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-independent-astra-v2.md",
+      "bytes": 4130,
+      "sha256": "7412cbfb8781ef2cb5a282d52a5302469be064ec1b90b2620f32c781d0257794"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-independent-astra-v2.json",
+      "bytes": 3886,
+      "sha256": "ce677178268c3e9cc49e8aa1e68ccc6dd7679eb93e0879fa66c3abda7e84fa12"
+    }
+  ],
+  "v1RegressionDependencies": [
+    {
+      "path": "work/b018-document-lifetime-index-v1/manifest.json",
+      "bytes": 3589,
+      "sha256": "a2de97666c6d63832cc1545c9ab46ac18539cef41ed59c0ba7da0573dd86a961"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-v1/index.cjs",
+      "bytes": 33658,
+      "sha256": "b3f2dca227d244ca32e17b86fe70c964b2a1562f5683d4ef68cce3bcbd31c4f5"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-v1/events.cjs",
+      "bytes": 7276,
+      "sha256": "ef738c507fc171313354fafb12e26630f1fdd49c6890bda3a37c751850e02e5b"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-v1/fixtures.cjs",
+      "bytes": 8296,
+      "sha256": "ce3a87eafe41ee81cde6fe6bad705bd7dd52d127fdb5db6ea15942ed5dcc5ddf"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-v1/index.test.cjs",
+      "bytes": 15991,
+      "sha256": "26366eaa4afdbafb862b1a2a2868020ecadcecf5b68e752025949c700f4a9b3d"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-independent-astra-v1.md",
+      "bytes": 6553,
+      "sha256": "ac89794c05c501438e8429192182360114d285eb7e5d73b08e33fa76a3e26252"
+    },
+    {
+      "path": "work/b018-document-lifetime-index-independent-astra-v1.json",
+      "bytes": 6710,
+      "sha256": "505b86155e4313449d48758706b2018ff9d7f69b5856cbf519c750af86f31377"
+    }
+  ],
+  "designAndExternalDependencies": [
+    {
+      "path": "work/b018-collector-document-lifetime-primary-astra-v3.md",
+      "bytes": 22106,
+      "sha256": "9f37919bc9ee03241bda11fdb41ee429d2ae544d36237d436216812be5d95ac8"
+    },
+    {
+      "path": "work/b018-collector-document-lifetime-primary-astra-v3.json",
+      "bytes": 23488,
+      "sha256": "e9f9e04eee3ac354cec5b27a29186e1873daf1fc58a40c41d88ce9612ea9880f"
+    },
+    {
+      "path": "work/b018-collector-document-lifetime-independent-astra-v3.md",
+      "bytes": 6180,
+      "sha256": "6d4602a622147d09fa87e2af96c838dfb8585a24e57375c7045ae69b0891cab1"
+    },
+    {
+      "path": "work/b018-collector-document-lifetime-independent-astra-v3-hmr-addendum.md",
+      "bytes": 4621,
+      "sha256": "98df75732610527f697fe33a20f04924a3103ea4938d3d706e1e15268c627550"
+    },
+    {
+      "path": "outputs/B018-native-bootstrap-criterion-decision-20261103.txt",
+      "bytes": 2718,
+      "sha256": "9e42d1bc0bb4a1080e8067dfd228b648022f97de559983d2e59cb02186580aec"
+    },
+    {
+      "path": "work/b018-native-bootstrap-v3/manifest.json",
+      "bytes": 1626,
+      "sha256": "e8a38c434928711ca4ae79eaf65a11d7c5ddbfc1bbd348e228f541b8a0dd8865"
+    },
+    {
+      "path": "work/b018-webpack-server-map-v1/manifest.json",
+      "bytes": 1108,
+      "sha256": "48e06745725f62d71be5ca909bccf57c598bd634191556ae2d94fed2ccad6413"
+    },
+    {
+      "path": "work/b018-native-session-verifier-v3/manifest.json",
+      "bytes": 601,
+      "sha256": "d59ece040786ed2a841094237f7d83d74dad758a311163507d30f2022d1eeb98"
+    },
+    {
+      "path": "work/b018-browser-egress-guard-v4/manifest.json",
+      "bytes": 2054,
+      "sha256": "be5a1b967b214968479b79bc422f65e5f92e510424369df71733b0cfbf168682"
+    }
+  ]
+}

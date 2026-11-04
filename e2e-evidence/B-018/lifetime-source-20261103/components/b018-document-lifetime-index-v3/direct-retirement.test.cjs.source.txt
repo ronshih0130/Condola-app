@@ -1,0 +1,119 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const v2=require('../b018-document-lifetime-index-v2/fixtures.cjs');
+const v3=require('./fixtures.cjs');
+const {hash}=v3;
+function event(rows,type,ctx,predicate=()=>true){
+  const e=rows.find(e=>e.type===type&&(ctx===undefined||e.fields.ctx===ctx)&&predicate(e.fields));
+  assert.ok(e,'fixture event '+type);return e;
+}
+function before(rows,target,moved){
+  for(const row of moved)rows.splice(rows.indexOf(row),1);
+  rows.splice(rows.indexOf(target),0,...moved);
+}
+function replay(lib,mutate,options){
+  const {data,tail}=lib.fixture(options),h=lib.harness();mutate(data,tail);
+  h.feed(data);const cut=h.index.bootstrapCut();h.feed(tail);return {cut,final:h.index.afterDrain()};
+}
+// A complete successful first hop. The independently observed PW child object,
+// CDP callback triple, 302 Location and all private wire/ExtraInfo agree.
+function redirectIntoAsset(rows,ctx){
+  const pw=event(rows,'pwOpen',ctx,p=>p.path==='webpack'),cdp=event(rows,'cdpOpen',ctx,p=>p.path==='webpack');
+  const id=80001,raw=cdp.fields.id,redirectEvent=80002,url=hash('sibling script'),location=cdp.fields.url;
+  const cookie=hash('sibling outgoing header');
+  const net={url,path:'other',method:'GET',origin:'owned'},scope={cookie,sid:null,org:'absent',env:'absent',lease:'absent',role:'absent'};
+  const make=(channel,type,fields)=>({channel,type,fields:channel==='GUARD'?fields:{ctx,...fields}});
+  const prefix=[
+    make('PW','pwOpen',{id,prev:0,frame:pw.fields.frame,main:true,nav:false,resource:'Script',...net}),
+    make('CDP','cdpOpen',{id:raw,hop:0,redirectEvent:0,frame:cdp.fields.frame,loader:cdp.fields.loader,resource:'Script',...net}),
+    make('PW','pwCookie',{id,...scope}),make('CDP','extraCookie',{id:raw,...scope,shadow:'none'}),
+    make('GUARD','proxyOpen',{id,...net,cookie,forwardedCookie:cookie}),
+    make('GUARD','proxyResponse',{id,status:302,location,enforced:0,reportOnly:0,downEnforced:0,downReportOnly:0,
+      hints:0,setRole:'none',downRole:'none',sidSet:null,downSid:null}),
+    make('CDP','responseExtra',{id:raw,status:302,location,enforced:0,reportOnly:0,setRole:'none',sidSet:null}),
+    make('PW','pwResponse',{id,status:302,location,fromServiceWorker:false}),
+    make('GUARD','proxyEnd',{id,state:'finished'}),make('PW','pwEnd',{id,terminal:'redirect',error:'none'}),
+    make('CDP','cdpResponse',{id:raw,hop:0,status:302,location,redirectEvent,extra:true,fromServiceWorker:false,fromDiskCache:false,fromPrefetchCache:false}),
+    make('CDP','cdpEnd',{id:raw,hop:0,terminal:'redirect',error:'none',blocked:'none',canceled:false,redirectEvent})
+  ];
+  for(const row of rows.filter(e=>e.channel==='CDP'&&e.fields.ctx===ctx&&e.fields.id===raw&&Object.hasOwn(e.fields,'hop')))row.fields.hop=1;
+  pw.fields.prev=id;cdp.fields.redirectEvent=redirectEvent;
+  rows.splice(rows.indexOf(pw),0,...prefix);
+}
+function closeRows(rows,ctx){
+  return ['hmrBrowser','hmrProtocol'].map(t=>event(rows,t,ctx,p=>p.state==='closed'));
+}
+function arm(rows,ctx,doc){
+  const retire=event(rows,'retire',ctx,p=>p.doc===doc);
+  return event(rows,'hmrIntent',undefined,p=>p.id===retire.fields.exchange);
+}
+const cases=[
+ ['native failed asset with genuine but indirect 302 predecessor',a=>redirectIntoAsset(a,1),'bootstrap'],
+ ['enabled successful asset with genuine but indirect 302 predecessor',a=>redirectIntoAsset(a,2),'bootstrap'],
+ ['landing browser terminals between guard arm and context.close invocation',(a,t)=>{
+    before(t,event(t,'closeIssued',2),closeRows(t,2));
+  },'drained'],
+ ['landing browser terminals between retire proposal and guard arm',(a,t)=>{
+    before(t,arm(t,2,'landing'),closeRows(t,2));
+  },'drained'],
+ ['login retirement adopted before replacement navigation intent',(a)=>{
+    before(a,event(a,'intent',2,p=>p.slot==='landing'),[event(a,'retire',2,p=>p.doc==='login'),arm(a,2,'login'),...closeRows(a,2)]);
+  },'bootstrap']
+];
+for(const [name,mutation,stage] of cases)test(name+' matched v2; v3 rejects at the responsible cut',()=>{
+  const old=replay(v2,mutation);assert.equal(old.cut.status,'MATCHED',old.cut.reason);assert.equal(old.final.status,'MATCHED',old.final.reason);
+  const r=replay(v3,mutation);
+  if(stage==='bootstrap')assert.notEqual(r.cut.status,'MATCHED');
+  else assert.equal(r.cut.status,'MATCHED',r.cut.reason);
+  assert.notEqual(r.final.status,'MATCHED');assert.equal(r.final.financialAggregate,'PENDING');
+});
+test('direct candidate contract applies to both ordinary arms and preserves actual source fields',()=>{
+  for(const ctx of [1,2]){
+    const r=replay(v3,a=>redirectIntoAsset(a,ctx),{clean:true,cleanNativeLoad:true});assert.equal(r.cut.reason,'asset-must-be-direct');
+  }
+  for(const opts of [{},{clean:true},{clean:true,cleanNativeLoad:true}]){
+    const r=replay(v3,()=>{},opts);assert.equal(r.final.status,'MATCHED');
+    for(const b of r.final.bindings)for(const h of b.hops)assert.deepEqual([h.pwPrev,h.cdpHop,h.cdpRedirectEvent],[0,0,0]);
+  }
+});
+test('every individual browser and wire terminal requires actual replacement or context-close invocation',()=>{
+  for(const doc of ['login','landing'])for(const channel of ['PW','CDP','client','server']){
+    const r=replay(v3,(a,t)=>{
+      const rows=doc==='login'?a:t,armed=arm(rows,2,doc),issued=event(rows,doc==='login'?'replacementIssued':'closeIssued',2);
+      const terminal=channel==='PW'?closeRows(rows,2)[0]:channel==='CDP'?closeRows(rows,2)[1]:
+        event(rows,'hmrPeer',undefined,p=>p.id===armed.fields.id&&p.state==='close-'+channel);
+      before(rows,issued,[terminal]);
+    });
+    assert.notEqual(r.final.status,'MATCHED',doc+'/'+channel);
+  }
+});
+test('replacement issuance must be unique and tied to the measured URL, guard owner, exchange and retirement',()=>{
+  for(const change of [
+    (rows,r)=>{rows.splice(rows.indexOf(r),1);},
+    (rows,r)=>{rows.splice(rows.indexOf(r),0,{...r,fields:{...r.fields}});},
+    (rows,r)=>{r.fields.url=hash('wrong destination');},(rows,r)=>{r.fields.owner=hash('unrelated owner');},
+    (rows,r)=>{r.fields.intentKey=hash('unrelated intent');},(rows,r)=>{r.fields.exchange+=30;},
+    (rows,r)=>{before(rows,arm(rows,2,'login'),[r]);},
+    (rows,r)=>{const n=event(rows,'pwOpen',2,x=>x.path==='tenant'&&x.nav);before(rows,r,[n]);}
+  ]){
+    const out=replay(v3,a=>change(a,event(a,'replacementIssued',2)));assert.notEqual(out.cut.status,'MATCHED');
+  }
+});
+test('post-invocation callback delivery permits independent PW, CDP and wire close ordering',()=>{
+  const r=replay(v3,(a,t)=>{
+    for(const [rows,doc] of [[a,'login'],[t,'landing']]){
+      const guard=arm(rows,2,doc);
+      const wireClient=event(rows,'hmrPeer',undefined,p=>p.id===guard.fields.id&&p.state==='close-client');
+      const wireServer=event(rows,'hmrPeer',undefined,p=>p.id===guard.fields.id&&p.state==='close-server');
+      const [pw,cdp]=closeRows(rows,2);
+      before(rows,wireClient,[cdp,wireServer,pw]);
+    }
+  });
+  assert.equal(r.final.status,'MATCHED',r.final.reason);
+  for(const b of r.final.hmrBindings){
+    const p=b.retirement;
+    assert.ok(p.plan<p.retire&&p.retire<p.armed&&p.armed<p.issued);
+    for(const id of [p.pwClose,p.cdpClose,p.wireClientClose,p.wireServerClose])assert.ok(p.issued<id);
+  }
+});

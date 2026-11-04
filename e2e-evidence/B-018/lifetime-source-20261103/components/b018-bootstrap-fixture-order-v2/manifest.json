@@ -1,0 +1,44 @@
+{
+  "state": "SOURCE_DRAFT_NOT_INDEPENDENTLY_REVIEWED_NOT_RUNTIME_AUTHORIZED",
+  "priorV1Manifest": "ca0bc03bce155ea0ac9c7ae4de387fe50bfa9e07c9bc639d0ab3e6adaa7c35d4",
+  "priorReview": "work/b018-bootstrap-fixture-order-independent-astra-v1.md",
+  "dependencies": {
+    "recoveryV2Compare": "57af594e1983ef351e75dda2050f8653778ee7d3dd0b121a88d136000d242077",
+    "recoveryV2Integrity": "170e19d37cb274c3b293b98e6d935c4455600676fd71ec68145ce59e56546cbb"
+  },
+  "validation": "original 6 pure tests preserved + 6 ported + 6 new synthetic/driver; no DB SQL parser browser or network",
+  "files": {
+    "reservation.json": {
+      "sha256": "dbe6ee6f144e7a0237d69abba97641e6140317e96141f78cf1b6ab7ca7a08714",
+      "bytes": 119
+    },
+    "fixture.cjs": {
+      "sha256": "3616be10291be6e6eff232b9586146c4194ed8ef547bed654dd0543e14001a53",
+      "bytes": 17287
+    },
+    "fixture.d.ts": {
+      "sha256": "57ba1136a7f1e8e18ac93f23c6c7f4773dcc1d641a2dd343c573ff1c63cd1649",
+      "bytes": 332
+    },
+    "checks.cjs": {
+      "sha256": "d51d6e475ed0f7847f52beb5fedbf61e6f231563775387571c50cb1fa54da255",
+      "bytes": 5214
+    },
+    "checks-v2.test.cjs": {
+      "sha256": "a5a7af62425f22c0e796b27d0730e410cc232d5673f4687cac094cfb0cf631b7",
+      "bytes": 6751
+    },
+    "original-tests/checks.cjs": {
+      "sha256": "1a6116f7b09d2b8264af11159ffb2518f73851fa51f773740e41871423acd8e7",
+      "bytes": 4330
+    },
+    "original-tests/checks.test.cjs": {
+      "sha256": "acc67f265b722efa8907fac587c9e2b5507cff1d44286b10b885f4ceb3efc305",
+      "bytes": 3635
+    },
+    "README.md": {
+      "sha256": "2b2bceb9a6fa2a5abaefde893de8f8ae6ecaddafc9721d5b41c69a9cbb698d9b",
+      "bytes": 5899
+    }
+  }
+}

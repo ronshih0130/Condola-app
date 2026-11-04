@@ -1,0 +1,76 @@
+'use strict';
+// Inactive source. Requires complete independent parent review and a fresh lock.
+// Private messages use inherited pipes; this program never logs their contents.
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const MAX=32*1024*1024;
+function demand(ok){if(!ok)throw Error('phase-unavailable');}
+function plain(x){return x!==null&&typeof x==='object'&&!Array.isArray(x);}
+function checkedFile(file,expected){
+ demand(path.isAbsolute(file)&&/^[a-f0-9]{64}$/.test(expected));
+ const st=fs.lstatSync(file);demand(st.isFile()&&!st.isSymbolicLink()&&st.uid===process.getuid()&&(st.mode&0o077)===0&&fs.realpathSync(file)===file);
+ const bytes=fs.readFileSync(file);demand(hash(bytes)===expected);return bytes;
+}
+function exactKeys(x,keys){demand(plain(x)&&Object.keys(x).sort().join('\0')===keys.slice().sort().join('\0'));}
+function readFrame(fd){
+ const size=Buffer.alloc(4);let done=0;while(done<4){const n=fs.readSync(fd,size,done,4-done,null);demand(n>0);done+=n;}
+ const length=size.readUInt32BE();demand(length>0&&length<=MAX);
+ const body=Buffer.alloc(length);done=0;while(done<length){const n=fs.readSync(fd,body,done,length-done,null);demand(n>0);done+=n;}
+ const tail=Buffer.alloc(1);demand(fs.readSync(fd,tail,0,1,null)===0);
+ return JSON.parse(body.toString('utf8'));
+}
+function writeFrame(fd,value){
+ const body=Buffer.from(JSON.stringify(value));demand(body.length>0&&body.length<=MAX);
+ const size=Buffer.alloc(4);size.writeUInt32BE(body.length);
+ for(const b of [size,body]){let done=0;while(done<b.length){const n=fs.writeSync(fd,b,done,b.length-done);demand(n>0);done+=n;}}
+}
+async function run(argv){
+ demand(argv.length===6);const [phase,planPath,planSha,lockSha,inputText,outputText]=argv;
+ demand(/^[0-9]{1,6}$/.test(inputText)&&/^[0-9]{1,6}$/.test(outputText));
+ const inputFd=Number(inputText),outputFd=Number(outputText);
+ demand(inputFd>2&&outputFd>2&&inputFd!==outputFd&&fs.fstatSync(inputFd).isFIFO()&&fs.fstatSync(outputFd).isFIFO());
+ demand(['fixture','baseline','recovery'].includes(phase));
+ const plan=JSON.parse(checkedFile(planPath,planSha));
+ exactKeys(plan,['version','run','appRoot','sourceLockFile','sourceLockSha256','databaseName','runStartedAt','cloneReceiptSha256','seedIntentSha256','offReceiptSha256','modulePins']);
+ demand(plan.version===1&&plan.sourceLockSha256===lockSha&&/^[a-f0-9]{12}$/.test(plan.run)&&plan.databaseName==='condola_b018_history_'+plan.run);
+ const lock=JSON.parse(checkedFile(plan.sourceLockFile,lockSha));
+ demand(lock.webpackMapPlan&&lock.webpackMapPlan.run===plan.run&&lock.webpackMapPlan.appRoot===plan.appRoot);
+ // This worker's exact bytes and all transitive files must also appear in the outer lock.
+ demand(plain(lock.parentSourceSha256)&&lock.parentSourceSha256[__filename]===hash(fs.readFileSync(__filename)));
+ const pins={
+  fixture:{file:path.resolve(__dirname,'../b018-bootstrap-fixture-order-v1/fixture.cjs'),sha:'853666238b8052f3f0810d27650c562d1e90dc0f19c11e30ecd49e05bb1d4511'},
+  recovery:{file:path.resolve(__dirname,'../b018-bootstrap-recovery-v2/recovery.cjs'),sha:'a7c985e6fea3f4a292eadcebb7c849b7edc014f89b859539345149418f3341b1'}
+ };
+ const selected=phase==='fixture'?pins.fixture:pins.recovery;
+ demand(plain(plan.modulePins)&&Object.entries(plan.modulePins).length>=2);
+ for(const [file,sha] of Object.entries(plan.modulePins)){
+  demand(path.isAbsolute(file)&&plain(lock.parentSourceSha256)&&lock.parentSourceSha256[file]===sha);
+  const st=fs.lstatSync(file);demand(st.isFile()&&!st.isSymbolicLink()&&fs.realpathSync(file)===file&&hash(fs.readFileSync(file))===sha);
+ }
+ demand(plan.modulePins[selected.file]===selected.sha);
+ const input=readFrame(inputFd);
+ exactKeys(input,phase==='recovery'?['keyHex','baseline','envelope']:['keyHex']);
+ demand(typeof input.keyHex==='string'&&/^[a-f0-9]{64}$/.test(input.keyHex));
+ const key=Buffer.from(input.keyHex,'hex');delete input.keyHex;
+ const options={...plan,hmacKey:key};delete options.modulePins;delete options.version;
+ let result;
+ try{
+  if(phase==='fixture')result=await require(selected.file).createFixture(options).prepare();
+  else {
+   const recovery=await require(selected.file).createBootstrapRecovery(options);
+   result=phase==='baseline'?await recovery.captureBaseline():await recovery.verifyAfter(input.baseline,async()=>input.envelope);
+  }
+  // A baseline can contain synthetic private audit commitments. The output pipe is
+  // private even for a failed recovery; never redirect it into an ordinary log.
+  writeFrame(outputFd,{version:1,phase,status:'RETURNED',result});
+ }finally{key.fill(0);}
+}
+if(require.main===module){
+ run(process.argv.slice(2)).then(()=>{process.exitCode=0;},()=>{
+  // Failure detail remains fixed and contains no input, path, SQL or credentials.
+  const fd=Number(process.argv[7]);
+  try{if(Number.isInteger(fd)&&fd>2&&fs.fstatSync(fd).isFIFO())writeFrame(fd,{version:1,status:'UNAVAILABLE'});}catch{}
+  process.exitCode=1;
+ });
+}
+module.exports={readFrame,writeFrame,run};

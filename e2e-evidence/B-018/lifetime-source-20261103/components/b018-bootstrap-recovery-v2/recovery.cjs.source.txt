@@ -1,0 +1,180 @@
+'use strict';
+// No connection, filesystem access or imported application logic at module import.
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const {createRequire}=require('node:module');
+const {ORG,slots,demand,canon,equal,hex,tag,ensureControls,rowFingerprint,checkSessions,auditEvidence}=require('./compare.cjs');
+const required=['auth.users','app.b010_source_events','app.b028_center_events','app.b028_center_recipients',
+  ...('profiles contacts org_members organizations platform_settings consents auth_sessions audit_log auth_login_attempts auth_challenges user_mfa invitations properties units rooms leases lease_parties invoices invoice_lines payments payment_allocations ledger_transactions ledger_entries notifications deliveries bank_accounts payee_account_numbers fee_rules management_agreements owner_statements owner_statement_lines meter_readings utility_bills utility_allocation_runs utility_allocation_lines'.split(' ').map(n=>'public.'+n))];
+const {CREATE_PATH,CREATE_REAL,CREATE_SHA,checkCreate,sealBaseline,readBaseline,checkExpiry,targetIdentity,wireRows,finalReceipt,checkTypes}=require('./integrity.cjs');
+const authNames=new Set(['public.auth_sessions','public.audit_log']);
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const micros=c=>"(extract(epoch FROM "+c+")*1000000)::bigint::text";
+const qi=s=>'"'+s.replaceAll('"','""')+'"';
+const fixedVerifier=path.resolve(__dirname,'../b018-native-session-verifier-v3/verifier.cjs');
+
+async function createBootstrapRecovery(input){
+ try{
+  const options=Object.freeze({...input,hmacKey:Buffer.from(input.hmacKey)});
+  const {run,databaseName:db,appRoot:root,sourceLockSha256:lockHash,sourceLockFile,hmacKey}=options;
+  demand(/^[a-f0-9]{12}$/.test(run)&&db==='condola_b018_history_'+run&&hex(lockHash)&&Buffer.isBuffer(hmacKey)&&hmacKey.length===32);
+  const key=Buffer.from(hmacKey);
+  const conn='postgres://condola:condola@127.0.0.1:55435/'+db;
+  const approved=()=>{
+   demand(process.version==='v20.20.2'&&process.env.CONDOLA_RLS_DISPOSABLE==='YES'&&process.env.DEMO_MODE==='false'&&process.env.B018_OWNED_DATABASE===db&&process.env.DATABASE_URL===conn);
+   demand(fs.realpathSync(fixedVerifier)===fixedVerifier&&hash(fs.readFileSync(fixedVerifier))==='931daca260abf4f7c54fe4099cbc2cb9aeeaca5ee06feb27d2740a5a282693c1');
+   demand(hash(fs.readFileSync(sourceLockFile))===lockHash);
+  };
+  async function newVerifier(){
+   approved();
+   // Its factory rehashes the complete private run/application source map before imports.
+   return require(fixedVerifier).createSessionVerifier({...options,hmacKey:key});
+  }
+  await newVerifier();
+  const lock=JSON.parse(fs.readFileSync(sourceLockFile,'utf8')),dir=lock.webpackMapPlan.runDir;
+  const writePathPins={
+  "src/server/auth.ts": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+  "src/server/session.ts": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+  "src/server/auth-actions.ts": "39cad3edaa1df3c8c746683a82349dc57f1f1bd7830ce5e49b9182f8054a4689",
+  "src/server/audit.ts": "27f9acf92dbcbf92f2518b8b302bea48119a18129e572fd81861145fcf88493c",
+  "ops/flags.yaml": "91702b168d80b5001674485c7c32bc95975ae6100149edbfaad38eb88b7c4908"
+};
+  for(const [name,expected] of Object.entries(writePathPins))demand(Object.hasOwn(lock.sourceBlobs,name)&&hash(fs.readFileSync(path.join(root,name)))===expected);
+  const {Client}=createRequire(path.join(root,'package.json'))('pg');
+  const registry=[...new Set([...fs.readFileSync(path.join(root,'ops/flags.yaml'),'utf8').matchAll(/^    global_kill:.*?platform_settings\.([A-Za-z0-9_]+)/gm)].map(x=>x[1]))].sort();
+  demand(registry.length>=10&&['company_profile_edit','tenant_payment_history'].every(k=>registry.includes(k)));
+  const safeRead=(name,sha)=>{
+   const file=path.join(dir,name),st=fs.lstatSync(file);
+   demand(st.isFile()&&!st.isSymbolicLink()&&fs.realpathSync(file)===file&&st.uid===process.getuid()&&!(st.mode&0o077));
+   const bytes=fs.readFileSync(file);demand(hex(sha)&&hash(bytes)===sha);return JSON.parse(bytes);
+  };
+  function lineage(){
+   const receipt=safeRead('clone-created.json',options.cloneReceiptSha256);
+   demand(fs.realpathSync(CREATE_PATH)===CREATE_REAL&&hash(fs.readFileSync(CREATE_REAL))===CREATE_SHA);
+   checkCreate(receipt,run,db,lockHash);
+   const intent=safeRead('flags-seed-validated-intent.json',options.seedIntentSha256);
+   const committedOff=safeRead('flags-off.json',options.offReceiptSha256);
+   demand(equal(committedOff,intent.expectedOff));
+   return intent;
+  }
+  async function snapshot(targetOnly=false){
+   const intent=lineage(); approved();
+   const c=new Client({connectionString:conn,application_name:'b018_bootstrap_recovery',connectionTimeoutMillis:5000,query_timeout:20000,
+    options:'-c default_transaction_read_only=on -c row_security=off -c statement_timeout=15000 -c lock_timeout=1000 -c search_path=pg_catalog'});
+   let begun=false;
+   try{
+    await c.connect();
+    await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');begun=true;
+    const e=(await c.query(`SELECT current_database() db,host(inet_server_addr()) host,inet_server_port() port,current_user actor,
+     current_setting('server_version_num')::integer ver,current_setting('transaction_read_only') ro,current_setting('transaction_isolation') iso,current_setting('row_security') rls,
+     current_setting('DateStyle') date_style,current_setting('server_encoding') encoding,current_setting('client_encoding') client_encoding,
+     ${micros('pg_postmaster_start_time()')} postmaster_us,
+     (SELECT system_identifier::text FROM pg_control_system()) cluster,(SELECT oid::text FROM pg_database WHERE datname=current_database()) db_oid,
+     (SELECT count(*)::int FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND backend_type='client backend') others`)).rows[0];
+    demand(e.db===db&&e.host==='127.0.0.1'&&e.port===55435&&e.actor==='condola'&&e.ver>=160000&&e.ver<170000&&e.ro==='on'&&e.iso==='repeatable read'&&e.rls==='off'&&e.others===0&&e.date_style.startsWith('ISO,')&&e.encoding==='UTF8'&&e.client_encoding==='UTF8');
+    if(targetOnly){
+     const witness=targetIdentity(key,e,db);
+     await c.query('COMMIT');begun=false;return witness;
+    }
+    const catalog=(await c.query(`SELECT n.nspname schema,c.relname name,c.relkind kind,c.oid::text oid,
+      (SELECT jsonb_agg(jsonb_build_array(a.attname,a.atttypid::text,a.atttypmod,a.attnotnull,a.attidentity,a.attgenerated) ORDER BY a.attnum)
+       FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped) cols
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('public','app','auth') AND c.relkind IN('r','p','m','f') ORDER BY n.nspname,c.relname`)).rows;
+    const names=catalog.map(x=>x.schema+'.'+x.name);
+    demand(required.every(x=>names.includes(x))&&catalog.every(x=>x.kind!=='f'&&/^[a-z_][a-z_0-9]*$/.test(x.name)));
+    const columnTypes=[...new Set(catalog.flatMap(t=>(t.cols||[]).map(col=>col[1])))];
+    const typeMeta=(await c.query(`WITH RECURSIVE used(oid) AS (
+       SELECT unnest($1::oid[]) UNION
+       SELECT CASE WHEN t.typtype='r' THEN r.rngsubtype ELSE t.typelem END FROM used u
+       JOIN pg_type t ON t.oid=u.oid LEFT JOIN pg_range r ON r.rngtypid=t.oid
+       WHERE (t.typtype='r' AND r.rngsubtype<>0) OR t.typelem<>0
+      ) SELECT t.oid::text oid,n.nspname schema,t.typname name,t.typtype kind,t.typelem::text element,r.rngsubtype::text subtype,
+       p.oid::text sender_oid,ns.nspname sender_schema,p.proname sender,p.prosrc internal_impl,
+       l.lanname='internal' trusted_builtin,
+       (SELECT e.extname FROM pg_depend d JOIN pg_extension e ON e.oid=d.refobjid WHERE d.classid='pg_type'::regclass AND d.objid=t.oid AND d.refclassid='pg_extension'::regclass AND d.deptype='e') ext,
+       (SELECT e.extname FROM pg_depend d JOIN pg_extension e ON e.oid=d.refobjid WHERE d.classid='pg_proc'::regclass AND d.objid=p.oid AND d.refclassid='pg_extension'::regclass AND d.deptype='e') sender_ext
+      FROM used u JOIN pg_type t ON t.oid=u.oid JOIN pg_namespace n ON n.oid=t.typnamespace
+      LEFT JOIN pg_range r ON r.rngtypid=t.oid LEFT JOIN pg_proc p ON p.oid=t.typsend
+      LEFT JOIN pg_namespace ns ON ns.oid=p.pronamespace LEFT JOIN pg_language l ON l.oid=p.prolang ORDER BY t.oid`,[columnTypes])).rows;
+    checkTypes(typeMeta,columnTypes);
+    const tables={};
+    for(const t of catalog){
+     const name=t.schema+'.'+t.name;
+     if(authNames.has(name))continue;
+     const qualified=qi(t.schema)+'.'+qi(t.name);
+     // ONLY collects each physical child once. PostgreSQL binary record includes native typed column payloads, array dimensions and bounds.
+     const records=(await c.query("SELECT pg_catalog.encode(pg_catalog.record_send(r),'hex') wire FROM ONLY "+qualified+' AS r')).rows;
+     tables[name]=wireRows(records.map(x=>x.wire),key,name);
+    }
+    const sessions=(await c.query(`SELECT pg_catalog.encode(pg_catalog.record_send(s),'hex') wire,to_jsonb(s) row,s.created_at::text created_text,
+      ${micros('s.created_at')} created,${micros('s.last_active_at')} active,${micros('s.expires_at')} expires FROM ONLY public.auth_sessions s`)).rows;
+    const audits=(await c.query(`SELECT a.id::text id,pg_catalog.encode(pg_catalog.record_send(a),'hex') wire,to_jsonb(a)::text raw,${micros('a.occurred_at')} micros FROM ONLY public.audit_log a`)).rows;
+    const orgs=(await c.query('SELECT id::text,environment::text,live_org_id::text,feature_flags FROM public.organizations ORDER BY id')).rows;
+    const settings=(await c.query('SELECT key,value,description,updated_at::text FROM public.platform_settings ORDER BY key')).rows;
+    const controls={registryKeys:registry,orgs,settings,enabled:orgs.reduce((n,o)=>n+Object.values(o.feature_flags).filter(v=>v===true).length,0)};
+    let off=true;try{ensureControls(intent,controls,registry,db);}catch{off=false;}
+    const primary=new Map();
+    for(const user of new Set(slots.map(x=>x.user))){
+     // Reproduce primaryOrg's member-first, then contact order. Fail ambiguous first-time ties.
+     const org=(await c.query(`WITH candidates AS (
+      SELECT 1 priority,created_at,org_id FROM public.org_members WHERE user_id=$1 AND status='active'
+      UNION ALL SELECT 2,created_at,org_id FROM public.contacts WHERE user_id=$1 AND archived_at IS NULL
+      ), ranked AS (SELECT org_id,dense_rank() OVER(ORDER BY priority,created_at) ranking FROM candidates)
+      SELECT DISTINCT org_id::text FROM ranked WHERE ranking=1`,[user])).rows;
+     if(org.length===1)primary.set(user,org[0].org_id);
+    }
+    const now=(await c.query('SELECT '+micros('clock_timestamp()')+' us')).rows[0].us;
+    await c.query('COMMIT');begun=false;
+    return {tables,sessions,audits,primary,now,off,controlTag:tag(key,'controls',canon(controls)),catalogTag:tag(key,'catalog-v2',[catalog,typeMeta]),targetTag:targetIdentity(key,e,db)};
+   }finally{try{if(begun)await c.query('ROLLBACK');}finally{await c.end();}}
+  }
+  const context=Object.freeze({run,lockHash,clone:options.cloneReceiptSha256,seed:options.seedIntentSha256,off:options.offReceiptSha256});
+  let started=false,verified=false;
+  async function captureBaseline(){
+   try{
+    demand(!started&&!verified);started=true;await newVerifier();
+    const s=await snapshot();demand(s.off&&s.sessions.length===0&&s.primary.size===3);
+    const oldAudit=s.audits.map(a=>({id:tag(key,'audit-id',a.id),hash:tag(key,'audit-full-row',a.raw),typed:wireRows([a.wire],key,'audit-old').digest})).sort((a,b)=>a.id.localeCompare(b.id));
+    demand(new Set(oldAudit.map(x=>x.id)).size===oldAudit.length);
+    const value={version:2,context,now:s.now,targetTag:s.targetTag,catalogTag:s.catalogTag,controlTag:s.controlTag,tables:s.tables,oldAudit};
+    await newVerifier();return sealBaseline(value,key);
+   }catch{throw Error('bootstrap-recovery-baseline-unavailable');}
+  }
+  async function verifyAfter(baseline,readPrivateEnvelope){
+   const result={status:'QUARANTINE',protectedData:'UNVERIFIED',controls:'UNVERIFIED',auth:'UNVERIFIED',proof:null,evidenceTag:null};
+   try{
+    demand(!verified);verified=true;
+    const originalBaseline=readBaseline(baseline,context,key),b=originalBaseline.value;
+    const verifier=await newVerifier();
+    const s=await snapshot();demand(s.targetTag===b.targetTag&&BigInt(s.now)>BigInt(b.now));
+    result.protectedData=equal(b.tables,s.tables)&&s.catalogTag===b.catalogTag?'UNCHANGED':'DRIFT';
+    result.controls=s.off&&s.controlTag===b.controlTag?'OFF_UNCHANGED':'DRIFT';
+    const envelope=structuredClone(await readPrivateEnvelope());
+    demand(Array.isArray(envelope.verifierLedger)&&equal(envelope.verifierLedger,slots.map(k=>({contextId:k.id,mode:k.mode,outcome:'VERIFIED_SNAPSHOT'}))));
+    const env=envelope.contexts;
+    const typedAudit=new Map(s.audits.map(a=>[tag(key,'audit-id',a.id),wireRows([a.wire],key,'audit-old').digest]));
+    demand(b.oldAudit.every(a=>typedAudit.get(a.id)===a.typed));
+    const initialTags=[],freshTags=[];
+    checkSessions(s.sessions,env,b.now,s.now);auditEvidence(s.audits,b.oldAudit,s.primary,b.now,s.now,key);
+    for(const slot of slots){
+     const x=env.find(v=>v.contextId===slot.id),v=x.verification;
+     const row=s.sessions.find(r=>r.row.id===v.sessionId);
+     const original={run,sourceLockSha256:lockHash,contextId:slot.id,mode:slot.mode,databaseName:db,actorId:slot.user,persona:slot.persona,
+      cookieScope:x.cookieScope,tokenHash:v.tokenHash,sessionId:v.sessionId,createdAt:row.created_text,expiresAt:v.expiresAt,consent:v.consent};
+     demand(crypto.createHmac('sha256',key).update(JSON.stringify(original)).digest('hex')===v.readbackSha256);
+     const fresh=await verifier.verify({contextId:slot.id,mode:slot.mode,tokenHash:x.proxyTokenHash,actorId:slot.user,orgId:ORG,persona:slot.persona,cookieScope:x.cookieScope});
+     checkExpiry(v.expiresAt,fresh.expiresAt,row.expires);initialTags.push(v.readbackSha256);freshTags.push(fresh.readbackSha256);
+     demand(fresh.sessionId===v.sessionId&&fresh.userId===v.userId&&fresh.tokenHash===v.tokenHash&&equal(fresh.consent,v.consent));
+    }
+    demand(verifier.ledger().length===6&&verifier.ledger().every(x=>x.outcome==='VERIFIED_SNAPSHOT'));
+    await newVerifier();demand(await snapshot(true)===b.targetTag);result.auth='SIX_SESSIONS_AND_SIX_AUDITS_VERIFIED';
+    const verdict={status:result.protectedData==='UNCHANGED'&&result.controls==='OFF_UNCHANGED'?'READBACK_PASS':'QUARANTINE',
+     protectedData:result.protectedData,controls:result.controls,auth:result.auth};
+    const signed=finalReceipt(key,{baselineMac:originalBaseline.mac,snapshot:s,initial:initialTags,fresh:freshTags,verdict});
+    Object.assign(result,verdict,signed);
+   }catch{/* Deliberately suppress SQL, row, identity and cookie data from the public result. */}
+   return Object.freeze(result);
+  }
+  return Object.freeze({captureBaseline,verifyAfter});
+ }catch{throw Error('bootstrap-recovery-unavailable');}
+}
+module.exports={createBootstrapRecovery};

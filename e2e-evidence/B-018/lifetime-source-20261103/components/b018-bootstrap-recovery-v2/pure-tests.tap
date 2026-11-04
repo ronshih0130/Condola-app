@@ -1,0 +1,220 @@
+TAP version 13
+# Subtest: six separate normal sessions with canonical twelve-hour touch
+ok 1 - six separate normal sessions with canonical twelve-hour touch
+  ---
+  duration_ms: 0.814916
+  ...
+# Subtest: missing slot
+ok 2 - missing slot
+  ---
+  duration_ms: 0.124083
+  ...
+# Subtest: duplicate token
+ok 3 - duplicate token
+  ---
+  duration_ms: 0.103292
+  ...
+# Subtest: foreigner
+ok 4 - foreigner
+  ---
+  duration_ms: 0.070333
+  ...
+# Subtest: revoked
+ok 5 - revoked
+  ---
+  duration_ms: 0.087541
+  ...
+# Subtest: forged session pointer
+ok 6 - forged session pointer
+  ---
+  duration_ms: 0.145167
+  ...
+# Subtest: unexpected source column
+ok 7 - unexpected source column
+  ---
+  duration_ms: 0.056042
+  ...
+# Subtest: creation before baseline
+ok 8 - creation before baseline
+  ---
+  duration_ms: 0.056167
+  ...
+# Subtest: future touch
+ok 9 - future touch
+  ---
+  duration_ms: 0.105125
+  ...
+# Subtest: remembered expiration
+ok 10 - remembered expiration
+  ---
+  duration_ms: 0.098084
+  ...
+# Subtest: different UA
+ok 11 - different UA
+  ---
+  duration_ms: 0.057792
+  ...
+# Subtest: unexpected IP
+ok 12 - unexpected IP
+  ---
+  duration_ms: 0.046417
+  ...
+# Subtest: wrong cookie scope
+ok 13 - wrong cookie scope
+  ---
+  duration_ms: 0.039666
+  ...
+# Subtest: prior audit preserved byte for byte, normal per-user primaryOrg regardless of portal org
+ok 14 - prior audit preserved byte for byte, normal per-user primaryOrg regardless of portal org
+  ---
+  duration_ms: 0.579292
+  ...
+# Subtest: reject noncanonical audit org_id
+ok 15 - reject noncanonical audit org_id
+  ---
+  duration_ms: 0.139375
+  ...
+# Subtest: reject noncanonical audit actor_role
+ok 16 - reject noncanonical audit actor_role
+  ---
+  duration_ms: 0.113459
+  ...
+# Subtest: reject noncanonical audit table_name
+ok 17 - reject noncanonical audit table_name
+  ---
+  duration_ms: 0.103417
+  ...
+# Subtest: reject noncanonical audit action
+ok 18 - reject noncanonical audit action
+  ---
+  duration_ms: 0.1375
+  ...
+# Subtest: reject noncanonical audit changed_cols
+ok 19 - reject noncanonical audit changed_cols
+  ---
+  duration_ms: 0.081292
+  ...
+# Subtest: reject noncanonical audit old_row
+ok 20 - reject noncanonical audit old_row
+  ---
+  duration_ms: 0.103583
+  ...
+# Subtest: reject noncanonical audit new_row
+ok 21 - reject noncanonical audit new_row
+  ---
+  duration_ms: 0.061542
+  ...
+# Subtest: reject noncanonical audit event_type
+ok 22 - reject noncanonical audit event_type
+  ---
+  duration_ms: 0.056042
+  ...
+# Subtest: reject noncanonical audit row_id
+ok 23 - reject noncanonical audit row_id
+  ---
+  duration_ms: 0.053333
+  ...
+# Subtest: reject noncanonical audit request_id
+ok 24 - reject noncanonical audit request_id
+  ---
+  duration_ms: 0.0555
+  ...
+# Subtest: reject noncanonical audit reason
+ok 25 - reject noncanonical audit reason
+  ---
+  duration_ms: 0.0525
+  ...
+# Subtest: audit survivor removed or changed, even at unsafe JS integer precision
+ok 26 - audit survivor removed or changed, even at unsafe JS integer precision
+  ---
+  duration_ms: 0.201459
+  ...
+# Subtest: complete row multiset binds duplicates, order-independent, authenticates auth.users.updated_at and amount
+ok 27 - complete row multiset binds duplicates, order-independent, authenticates auth.users.updated_at and amount
+  ---
+  duration_ms: 0.513375
+  ...
+# Subtest: exact known two-seed OFF change only
+ok 28 - exact known two-seed OFF change only
+  ---
+  duration_ms: 0.176833
+  ...
+# Subtest: unexpected global activation
+ok 29 - unexpected global activation
+  ---
+  duration_ms: 0.068458
+  ...
+# Subtest: unexpected optin
+ok 30 - unexpected optin
+  ---
+  duration_ms: 0.054375
+  ...
+# Subtest: protective setting changed
+ok 31 - protective setting changed
+  ---
+  duration_ms: 0.075167
+  ...
+# Subtest: organization added
+ok 32 - organization added
+  ---
+  duration_ms: 0.117542
+  ...
+# Subtest: forged intended seed
+ok 33 - forged intended seed
+  ---
+  duration_ms: 0.1
+  ...
+# Subtest: history key seeded
+ok 34 - history key seeded
+  ---
+  duration_ms: 0.054833
+  ...
+# Subtest: greatest preserves the later expiration across differently ordered session-touch transactions
+ok 35 - greatest preserves the later expiration across differently ordered session-touch transactions
+  ---
+  duration_ms: 0.074583
+  ...
+# Subtest: clone receipt binds executable identity before and after, exact invocation and target
+ok 36 - clone receipt binds executable identity before and after, exact invocation and target
+  ---
+  duration_ms: 0.673709
+  ...
+# Subtest: cluster restart in the same database changes target identity
+ok 37 - cluster restart in the same database changes target identity
+  ---
+  duration_ms: 0.321958
+  ...
+# Subtest: both directions of baseline transfer detach authority from the caller
+ok 38 - both directions of baseline transfer detach authority from the caller
+  ---
+  duration_ms: 0.515
+  ...
+# Subtest: equivalent offsets and microseconds survive checks; any real shortening or fresh divergence fails
+ok 39 - equivalent offsets and microseconds survive checks; any real shortening or fresh divergence fails
+  ---
+  duration_ms: 0.32175
+  ...
+# Subtest: typed record witnesses distinguish equal elements with different array bounds
+ok 40 - typed record witnesses distinguish equal elements with different array bounds
+  ---
+  duration_ms: 0.483459
+  ...
+# Subtest: only supported send functions and element types qualify
+ok 41 - only supported send functions and element types qualify
+  ---
+  duration_ms: 0.1515
+  ...
+# Subtest: after proof changes for differing dispositions, baselines, recovered rows and actual fresh proofs
+ok 42 - after proof changes for differing dispositions, baselines, recovered rows and actual fresh proofs
+  ---
+  duration_ms: 0.811917
+  ...
+1..42
+# tests 42
+# suites 0
+# pass 42
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 43.981458

@@ -1,0 +1,116 @@
+'use strict';
+const assert=require('node:assert/strict');
+const test=require('node:test');
+const current=require('./fixtures.cjs');
+const previous=require('../b018-document-lifetime-index-v1/fixtures.cjs');
+const find=(rows,type,ctx,predicate=()=>true)=>rows.find(e=>e.type===type&&(ctx===undefined||ctx===e.fields.ctx)&&predicate(e.fields));
+function moveBefore(rows,items,target){
+  for(const row of items){assert.ok(row);rows.splice(rows.indexOf(row),1);}
+  rows.splice(rows.indexOf(target),0,...items);
+}
+function replay(lib,edit=()=>{},options={}){
+  const f=lib.fixture(options),h=lib.harness();edit(f.data,f.tail);
+  h.feed(f.data);const cut=h.index.bootstrapCut();h.feed(f.tail);
+  return {cut,final:h.index.afterDrain()};
+}
+const six=[
+ ['I01 parse/source/coverage precede asset opening',(a)=>{
+    const before=find(a,'policyArm',2);
+    const completed=['world','parsed','scriptSource','coverage'].map(t=>find(a,t,2));
+    moveBefore(a,completed,before);
+ }],
+ ['I02 early CDP closure receipt in live context',(a,t)=>{
+    const e=find(t,'closed',1,r=>r.channelName==='CDP');t.splice(t.indexOf(e),1);a.push(e);
+ }],
+ ['I03 equal arbitrary digests attached to real nearby lifecycle event',(a)=>{
+    const r=find(a,'anchorRecord',2),g=find(a,'retireAnchor',undefined,p=>p.id===r.fields.exchange);
+    r.fields.anchor=g.fields.anchor=current.hash('invented-equal-digest');
+ }],
+ ['I04a exact asset URL parsed in wrong isolated world disguised as other',(a)=>{
+    const original=find(a,'parsed',2),world=find(a,'world',2);
+    a.splice(a.indexOf(original)+1,0,
+      {...world,fields:{...world.fields,world:501,generation:current.hash('isolated-duplicate'),kind:'isolated'}},
+      {...original,fields:{...original.fields,script:871,world:501,assetClass:'other'}});
+ }],
+ ['I04b CDP failure contains explicit csp instead of absent error',(a)=>{
+    find(a,'cdpEnd',1,p=>p.terminal==='failed').fields.error='csp';
+ }],
+ ['I05 native redirect child precedes prior response/terminal',(a)=>{
+    const child=find(a,'cdpOpen',1,p=>p.path==='continue');
+    const response=find(a,'cdpResponse',1,p=>p.id===child.fields.id&&p.hop===child.fields.hop-1);
+    moveBefore(a,[child],response);
+ }]
+];
+for(const [name,edit] of six)test(name+' previously matched at both cuts; v2 blocks',()=>{
+  const old=replay(previous,edit);assert.equal(old.cut.status,'MATCHED',old.cut.reason);
+  assert.equal(old.final.status,'MATCHED',old.final.reason);
+  const next=replay(current,edit);assert.notEqual(next.cut.status,'MATCHED');assert.notEqual(next.final.status,'MATCHED');
+  assert.equal(next.cut.rawStrict,'FAIL');assert.equal(next.final.financialAggregate,'PENDING');
+});
+test('I01 parse before network loadingFinished is valid; parse before request is invalid with otherwise valid fenced reads',()=>{
+  function two(target){
+    return (a)=>{
+      const s=find(a,'cdpOpen',2,p=>p.path==='webpack');
+      const end=find(a,'cdpEnd',2,p=>p.id===s.fields.id&&p.hop===s.fields.hop);
+      moveBefore(a,[find(a,'world',2),find(a,'parsed',2)],target==='finish'?end:s);
+    };
+  }
+  assert.equal(replay(current,two('finish')).final.status,'MATCHED');
+  assert.equal(replay(current,two('open')).cut.reason,'parsed-world-or-source');
+});
+test('I01 copied read-start IDs, completion in wrong document, or async sampling outside the fence block',()=>{
+  for(const edit of [
+    a=>{const r=find(a,'readStart',2,p=>p.kind==='coverage');r.fields.read=find(a,'readStart',2,p=>p.kind==='pwBody').fields.read;},
+    a=>{find(a,'readStart',2,p=>p.kind==='scriptSource').fields.loader=2;},
+    a=>{const e=find(a,'readStart',2,p=>p.kind==='coverage');moveBefore(a,[e],find(a,'fence',2));},
+    a=>{const r=find(a,'coverage',2);a.splice(a.indexOf(r),1);a.push(r);}
+  ])assert.notEqual(replay(current,edit).cut.status,'MATCHED');
+});
+test('I02 disconnection remains red when closure acknowledgements are delayed until after the global cut',()=>{
+  for(const channel of ['PW','CDP','GUARD','OBS']){
+    const early=replay(current,(a,t)=>{const e=find(t,'closed',1,p=>p.channelName===channel);t.splice(t.indexOf(e),1);a.push(e);});
+    assert.equal(early.cut.reason,'observer-closed-before-bootstrap');
+  }
+  const beforeIntent=replay(current,(a,t)=>moveBefore(t,[find(t,'cdpDetached',2)],find(t,'closeIntent',2)));
+  assert.equal(beforeIntent.cut.status,'MATCHED');assert.notEqual(beforeIntent.final.status,'MATCHED');
+  const cross=replay(current,(a,t)=>{find(t,'closed',2,p=>p.channelName==='CDP').fields.physicalEventId=find(t,'contextClosed',4).fields.eventId;});
+  assert.notEqual(cross.final.status,'MATCHED');
+});
+test('I03 parent and guard reference the actual lifecycle row, canonical parent ID and hash',()=>{
+  for(const edit of [
+    a=>{const r=find(a,'anchorRecord',2);r.fields.sourceEventId=find(a,'commit',4).fields.eventId;},
+    a=>{const r=find(a,'anchorRecord',2),g=find(a,'retireAnchor',undefined,p=>p.id===r.fields.exchange);r.fields.recordId=g.fields.recordId=current.hash('old record');},
+    a=>{const r=find(a,'anchorRecord',2),g=find(a,'retireAnchor',undefined,p=>p.id===r.fields.exchange);g.fields.anchor=current.hash('foreign digest');},
+    a=>{find(a,'commit',2,p=>p.loader===2).fields.eventId=find(a,'commit',4,p=>p.loader===2).fields.eventId;}
+  ])assert.notEqual(replay(current,edit).cut.status,'MATCHED');
+});
+test('I04 genuine empty strict inventories and actual successful asset loads preserve a clean ledger',()=>{
+  for(const options of [{clean:true},{clean:true,cleanNativeLoad:true}]){
+    const h=replay(current,undefined,options);assert.equal(h.cut.status,'MATCHED',h.cut.reason);
+    assert.equal(h.final.status,'MATCHED',h.final.reason);assert.equal(h.cut.rawStrict,'OBSERVED_CLEAN');
+    assert.equal(h.cut.nativeFailureEventIds.length,0);assert.equal(h.cut.bindings.length,12);
+    assert.ok(h.cut.bindings.every(b=>b.mode==='ordinary-strict'&&b.hops.length===(options.cleanNativeLoad?1:0)));
+    assert.equal(h.final.financialAggregate,'PENDING');
+  }
+});
+test('I04 no strict route through known-url contradictory network class or a clean-looking enabled abort',()=>{
+  const wrong=replay(current,a=>{
+    const p=find(a,'pwOpen',2,r=>r.path==='webpack'),c=find(a,'cdpOpen',2,r=>r.path==='webpack');
+    p.fields.path=c.fields.path='other';
+  },{clean:true,cleanNativeLoad:true});assert.notEqual(wrong.cut.status,'MATCHED');
+  const cancel=replay(current,a=>{Object.assign(find(a,'pwEnd',2).fields,{terminal:'failed',error:'aborted'});},{clean:true});
+  assert.equal(cancel.cut.status,'FATAL');
+});
+test('I05 child callback must be unique, consecutive and bound to its actual predecessor response and terminal',()=>{
+  for(const edit of [
+    a=>{find(a,'cdpOpen',1,p=>p.path==='continue').fields.redirectEvent+=1000;},
+    a=>{const x=find(a,'cdpOpen',1,p=>p.path==='continue');const p=find(a,'cdpResponse',1,q=>q.id===x.fields.id&&q.hop===x.fields.hop-1);
+      a.splice(a.indexOf(p)+1,0,{type:'task',channel:'CDP',fields:{ctx:1,id:900,state:'start'}},{type:'task',channel:'CDP',fields:{ctx:1,id:900,state:'done'}});},
+    a=>{const x=find(a,'cdpOpen',1,p=>p.path==='continue'),value=find(a,'cdpOpen',1,p=>p.path==='enter').fields.redirectEvent;
+      for(const e of a.filter(e=>['cdpResponse','cdpEnd','cdpOpen'].includes(e.type)&&e.fields.redirectEvent===x.fields.redirectEvent))e.fields.redirectEvent=value;}
+  ])assert.notEqual(replay(current,edit).cut.status,'MATCHED');
+});
+test('I02 a detach after a mere intent and before actual close invocation remains premature',()=>{
+  const r=replay(current,(a,t)=>moveBefore(t,[find(t,'cdpDetached',1)],find(t,'closeIssued',1)));
+  assert.equal(r.cut.status,'MATCHED');assert.notEqual(r.final.status,'MATCHED');
+});

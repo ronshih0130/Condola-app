@@ -1,0 +1,39 @@
+{
+  "status": "SOURCE_NO_GO",
+  "runtime": "NOT_RUN",
+  "scope": "Four reviewed primitives only; plan/test separate; full controller absent",
+  "files": {
+    "phase-worker.cjs": {
+      "sha256": "52e3ff28ae794b652e3d884829a17caf41bc2ae21d4ccc7eb65eb9d07c19c4bd",
+      "bytes": 5080
+    },
+    "owned.py": {
+      "sha256": "bde88e5007bd6651c14214828c7ff71dd2dbe295ac418eebbc962469264baf60",
+      "bytes": 6665
+    },
+    "private_ipc.py": {
+      "sha256": "05db2230eccf60e86ecce05ab3989fd7416b090e2e1ab4f81b62f1be564574e6",
+      "bytes": 4727
+    },
+    "test_parent_pure.py": {
+      "sha256": "c845ef7af914442462ccb1c04a83a675bbcd5887b903e23b4419ee66628b5a2e",
+      "bytes": 1525
+    },
+    "README.md": {
+      "sha256": "4059d4d2b951443fbec99f520a934489f804f9401169331d9a398c915b40d32d",
+      "bytes": 1581
+    },
+    "materialize.py": {
+      "sha256": "295a4fb3f681c0045d5a07dafa1185a7a8f33f0f04d36c2b39c32d3493a16097",
+      "bytes": 7779
+    },
+    "parent-plan.md": {
+      "sha256": "37e81d66e02afc22548f7014d541583b562fdb62fa75749405513b49bb3264ad",
+      "bytes": 7147
+    }
+  },
+  "review": {
+    "path": "../b018-lifetime-parent-primitives-independent-astra-v1.md",
+    "sha256": "5e77279a7510da526023ca1d66cdaac54008d3e1b9ce1a3bd0b5c1bd185a2f5a"
+  }
+}

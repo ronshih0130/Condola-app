@@ -1,0 +1,28 @@
+'use strict';
+// Pure checks only; caller keeps all raw synthetic rows in private memory.
+const crypto=require('node:crypto');
+const USER='20000000-0000-4000-8000-000000000005',ORG1='10000000-0000-4000-8000-000000000001',ORG2='10000000-0000-4000-8000-000000000002';
+const uuid=s=>typeof s==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(s);
+const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+const equal=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
+const tag=(key,domain,data)=>crypto.createHmac('sha256',key).update(JSON.stringify([domain,canonical(data)])).digest('hex');
+function demand(v){if(!v)throw Error('fixture-order-unavailable');}
+function fingerprint(key,domain,items){const rows=items.map(x=>tag(key,'row:'+domain,x)).sort();return {count:rows.length,commitment:tag(key,'rows:'+domain,rows)};}
+function before(s){
+ demand(s&&s.authCount===0&&s.activeStaff===false&&Array.isArray(s.contacts)&&s.contacts.length===2);
+ const [a,b]=[ORG1,ORG2].map(org=>s.contacts.find(x=>x.org===org));
+ demand(a&&b&&uuid(a.id)&&uuid(b.id)&&a.id!==b.id&&[a,b].every(x=>x.user===USER&&x.tenant===true&&x.owner===false&&x.vendor===false&&x.archived===null&&x.environment==='live'&&x.liveOrg===null&&typeof x.createdText==='string'&&/^-?\d+$/.test(x.createdUs)));
+ demand(a.createdUs===b.createdUs&&a.createdText===b.createdText&&a.id===a.full.id&&b.id===b.full.id&&typeof a.fullText==='string'&&typeof b.fullText==='string'&&Array.isArray(s.audit)&&s.audit.every(x=>typeof x.id==='string'&&/^[1-9][0-9]*$/.test(x.id)&&typeof x.wire==='string'&&/^(?:[a-f0-9]{2})+$/.test(x.wire))&&new Set(s.audit.map(x=>x.id)).size===s.audit.length);
+ return {first:a,second:b};
+}
+function after(beforeSnap,afterSnap,update,key){
+ const {first,second}=before(beforeSnap);demand(afterSnap&&afterSnap.authCount===0&&afterSnap.activeStaff===false&&equal(beforeSnap.target,afterSnap.target)&&equal(beforeSnap.catalog,afterSnap.catalog)&&equal(beforeSnap.controls,afterSnap.controls)&&equal(beforeSnap.tables,afterSnap.tables)&&equal(beforeSnap.contactsBusiness,afterSnap.contactsBusiness));
+ const a=afterSnap.contacts.find(x=>x.org===ORG1),b=afterSnap.contacts.find(x=>x.org===ORG2);demand(afterSnap.contacts.length===2&&a&&b&&a.id===first.id&&b.id===second.id&&a.createdUs===first.createdUs&&BigInt(b.createdUs)===BigInt(second.createdUs)+1n&&a.fullText===first.fullText&&equal(a.full,first.full));
+ const withoutTimes=x=>{const y={...x};delete y.created_at;delete y.updated_at;return y;};
+ demand(equal(withoutTimes(b.full),withoutTimes(second.full))&&equal(update.newRow,b.full)&&typeof b.fullText==='string'&&update.newRowText===b.fullText&&update.id===second.id);
+ const oldIds=new Set(beforeSnap.audit.map(x=>x.id)),newRows=afterSnap.audit.filter(x=>!oldIds.has(x.id)),retained=afterSnap.audit.filter(x=>oldIds.has(x.id));
+ demand(newRows.length===1&&/^[1-9][0-9]*$/.test(newRows[0].id)&&typeof newRows[0].wire==='string'&&/^(?:[a-f0-9]{2})+$/.test(newRows[0].wire)&&retained.length===beforeSnap.audit.length&&equal(fingerprint(key,'audit-old',retained.map(x=>x.wire)),fingerprint(key,'audit-old',beforeSnap.audit.map(x=>x.wire))));
+ const audit=newRows[0],r=audit.row;demand(audit.oldText===second.fullText&&audit.newText===b.fullText&&r&&r.org_id===ORG2&&r.table_name==='contacts'&&r.row_id===second.id&&r.action==='update'&&r.actor_user_id===null&&r.actor_role===beforeSnap.auditOwner&&r.reason===null&&r.request_id===null&&equal(r.changed_cols,['created_at'])&&equal(r.old_row,second.full)&&equal(r.new_row,b.full));
+ return Object.freeze({firstId:first.id,secondId:second.id,auditId:newRows[0].id,originalTag:tag(key,'original-time',second.createdText),newTag:tag(key,'new-time',b.createdText),targetTag:tag(key,'target',beforeSnap.target),catalogTag:tag(key,'catalog',beforeSnap.catalog),businessTag:tag(key,'business',beforeSnap.contactsBusiness),tablesTag:tag(key,'tables',beforeSnap.tables),controlsTag:tag(key,'controls',beforeSnap.controls),auditBeforeTag:fingerprint(key,'audit-old',beforeSnap.audit.map(x=>x.wire)).commitment,auditAfterTag:fingerprint(key,'audit-all',afterSnap.audit.map(x=>x.wire)).commitment});
+}
+module.exports={USER,ORG1,ORG2,canonical,equal,tag,fingerprint,before,after,demand};

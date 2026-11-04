@@ -1,0 +1,49 @@
+{
+  "verdict": "GO_AUTHOR_ONLY_WITH_BOUNDED_SEQUENCE",
+  "frozenMarkdown": "bbde6ac892121453b34c48f38ef47724f49f5f866422442ce1afafa45a058cf3",
+  "frozenJson": "33cb8fff02ff40d7b1b5cf2fdbc00c81f8db6adea0812fdd151acfc3d5e0cc7a",
+  "verifiedSourcePins": 40,
+  "runtime": "NOT_AUTHORIZED",
+  "finance": "PENDING",
+  "planDisposition": "Approve ordinary diagnostic and conditional admission design as separate authoring scopes. The full positive six-slot emitter is an admission prerequisite, not a prerequisite to seeking a fail-only diagnostic authorization.",
+  "stages": [
+    {
+      "name": "A. Author and review the ordinary-login diagnostic",
+      "work": "Use one public non-admitting entry point in the same acquisition code and the existing guard harness. Drive the unchanged ordinary tenant sign-in action and its existing UI/identity checks. Preserve every observed raw PW and CDP terminal at callback entry, structured network failures, response status, source frame/loader, unique request/guard links when available, navigation versus same-document changes, and action/Flight request markers and redirect header classes from actual headers. Keep query strings, headers and credentials private. Distinguish a finished Fetch 303 without a child, a Fetch 303 that later aborts, and a 200 home Fetch that later aborts despite a successful same-path sibling. A missing header permits an unknown request purpose. Never infer a router cancellation or response replacement from a path or source possibility. Test the actual callbacks in these three traces plus loss/cleanup.",
+      "stop": "Independent source review of this small slice and its actual safe parent entry point. Before any separately authorized execution, require an owned fresh OFF-only clone, pre-action protected baseline, source/binary/egress freeze, physical cleanup, privacy and honest recovery. Do not use rejected producer v3 or the rejected parent primitives as-is. No extra live run is authorized by this review."
+    },
+    {
+      "name": "B. First useful product observation, only under separate runtime authorization",
+      "work": "If separately authorized for a diagnostic alone, run the single predeclared ordinary enabled action. Do not add the qualification-only hard landing navigation, helper scripts or a premature teardown that can itself cancel an in-flight request. Use a finite deadline. Report cleanup-induced events and incomplete observations distinctly without waiving any failed terminal. An observed cancellation is already strict FAIL even if a unique three-source join or its cause is unavailable. Report the actual surviving event IDs and the ambiguity. If all ordinary observations succeed, record only what happened in that one arm. The diagnostic has no admission branch and cannot start finance.",
+      "stop": "Stop on ordinary failure, loss or deadline; retain the ledger through physical drain and independently compare protected data and controls. A one-arm attempt cannot satisfy six verified sessions; auth stays unverified and the full result quarantines. Do not retrofit this run into a full qualification unless the complete protocol was already independently reviewed, frozen and explicitly authorized before it began. An additional run needs a material change or specific new evidence and separate authorization."
+    },
+    {
+      "name": "C. Author the admission path only for a full gate",
+      "work": "Use a single templated authentic six-slot scenario plus local mutations, one complete consumer and one independent review. Reuse the accepted guard/map/verifier/kernel semantics. Add only the typed observations needed for an exact unique native negative and its positive counterpart, fully evidenced ordinary clean paths, exact session envelope, and post-drain replay. Preserve the existing 50 index tests. Reuse the guard stream harness and pure map controls. No need to simulate an entire browser/framework or add live per-helper calibrations. Leave unsupported shapes unavailable.",
+      "stop": "Require full assignment, policy and same-asset proof before admitting the exceptional native block. Require all six identities and the real parent gates before finance. Aggregate remains PENDING at bootstrap and requires independent post-drain recovery. Historical strict results and ordinary enhanced cancellations remain fatal and unchanged."
+    }
+  ],
+  "requiredClarifications": [
+    {
+      "topic": "Helper and document causality",
+      "rule": "Approval applies to exact observed compile/parse IDs or independently unique source + fresh operation marker + trusted world/generation + actual issuance and returned marker. An emitter can validate reducer logic but cannot establish real PW wrapper bytes or real CDP timing. A sourceURL, shared default-world source string, world name, pending call or nearby timestamp is insufficient. If an underlying command cannot be witnessed on the pinned API, keep that exceptional fence unavailable. Do not implement a general interception layer before collecting an ordinary abort."
+    },
+    {
+      "topic": "Policy and JSON",
+      "rule": "A finite original-byte inventory is suitable for a supported exception. Record the actual bound response and typed tag/attribute/order/multiplicity, guard policy headers and relevant observed DOM changes, with exact source references. MutationObserver records carry node references whose state can have changed by delivery. They do not prove who inserted a node or when its policy took effect. No synthetic JSON readiness/policy booleans, backdated marker, unobserved attr state or inferred loader. If the original bytes and observation interval cannot disambiguate a policy transition, withhold the exception. A clean post-load DOM is insufficient. No general parser or dynamic DOM replay is needed in stage A."
+    },
+    {
+      "topic": "Causal exclusion and cache",
+      "rule": "Accept the beforeDownstreamWriteHead scheduling constraint only as an optional one-way elimination for the actual matched predecessor on a single ordered journal and covered write path, including earlier send/flush/hints. It cannot assign an ExtraInfo callback delivered late. Two equal candidates remain unavailable. Preserve unreported cache flags as unreported. Only a positively joined network delivery, effective controls and absence of contradictory served-from-cache/worker evidence can support a separate derived origin finding. Neither rule is needed to record an ordinary failure."
+    },
+    {
+      "topic": "Cookie transition correction",
+      "rule": "The pinned middleware sets the tenant role on every matched /t request (src/middleware.ts 22–25). The home Fetch and later Document can both send Set-Cookie=tenant. Require the genuine login tombstone and prove the initial absent-to-tenant transition, then distinguish an exact unchanged same-scope reissue from another transition. A concurrent request may already have left before the first response. Do not require it to carry a cookie that had not yet arrived. Require the specifically later authenticated request to carry the established value, reject wrong role/SID/scope and unexplained mutations, and preserve the separate expected env tombstones."
+    },
+    {
+      "topic": "Isolation and evidence on failure",
+      "rule": "Guard capture and strict abort reporting are necessary for stage A; a passing model of twelve healthy HMR lifetimes, zero-candidate renderer terminals, complete six-slot recovery envelope, every internal helper parse and positive webpack coverage are admission work. Keep any unexpected transport/error visible in the diagnostic. Even a poisoned guard must reach the safe cleanup/quarantine path. Source explanations such as pagehide, action redirect and Next-internal response cancellation remain hypotheses until directly witnessed. No causal label is necessary for a strict failure."
+    }
+  ],
+  "historical": "No changed failures, waivers or retrospective relabeling."
+}

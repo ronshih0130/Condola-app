@@ -1,0 +1,3855 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Document-lifetime sanitized append envelope v3",
+  "description": "Top level validates one append. Config and receipt have named definitions. Schemas express shape; index.cjs enforces source identity, cross-event completeness and eligibility.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "intent"
+        },
+        "payload": {
+          "$ref": "#/$defs/intent"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "ready"
+        },
+        "payload": {
+          "$ref": "#/$defs/ready"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "barrier"
+        },
+        "payload": {
+          "$ref": "#/$defs/barrier"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "closed"
+        },
+        "payload": {
+          "$ref": "#/$defs/closed"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "enum": [
+            "PW",
+            "CDP",
+            "GUARD",
+            "OBS",
+            "PARENT"
+          ]
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "issue"
+        },
+        "payload": {
+          "$ref": "#/$defs/issue"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "enum": [
+            "PW",
+            "CDP",
+            "GUARD",
+            "OBS",
+            "PARENT"
+          ]
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "task"
+        },
+        "payload": {
+          "$ref": "#/$defs/task"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PW"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "pwOpen"
+        },
+        "payload": {
+          "$ref": "#/$defs/pwOpen"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "cdpOpen"
+        },
+        "payload": {
+          "$ref": "#/$defs/cdpOpen"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PW"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "pwResponse"
+        },
+        "payload": {
+          "$ref": "#/$defs/pwResponse"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "enum": [
+            "PW",
+            "CDP",
+            "GUARD",
+            "OBS",
+            "PARENT"
+          ]
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "readStart"
+        },
+        "payload": {
+          "$ref": "#/$defs/readStart"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PW"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "pwBody"
+        },
+        "payload": {
+          "$ref": "#/$defs/pwBody"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "cdpResponse"
+        },
+        "payload": {
+          "$ref": "#/$defs/cdpResponse"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PW"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "pwEnd"
+        },
+        "payload": {
+          "$ref": "#/$defs/pwEnd"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "cdpEnd"
+        },
+        "payload": {
+          "$ref": "#/$defs/cdpEnd"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PW"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "pwArrival"
+        },
+        "payload": {
+          "$ref": "#/$defs/pwArrival"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "commit"
+        },
+        "payload": {
+          "$ref": "#/$defs/commit"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "sameDocument"
+        },
+        "payload": {
+          "$ref": "#/$defs/sameDocument"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "world"
+        },
+        "payload": {
+          "$ref": "#/$defs/world"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "clearWorlds"
+        },
+        "payload": {
+          "$ref": "#/$defs/clearWorlds"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "parsed"
+        },
+        "payload": {
+          "$ref": "#/$defs/parsed"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "scriptSource"
+        },
+        "payload": {
+          "$ref": "#/$defs/scriptSource"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "coverage"
+        },
+        "payload": {
+          "$ref": "#/$defs/coverage"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "treeSample"
+        },
+        "payload": {
+          "$ref": "#/$defs/treeSample"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PW"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "pwSample"
+        },
+        "payload": {
+          "$ref": "#/$defs/pwSample"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "worldSample"
+        },
+        "payload": {
+          "$ref": "#/$defs/worldSample"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "OBS"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "policyArm"
+        },
+        "payload": {
+          "$ref": "#/$defs/policyArm"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "OBS"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "inventory"
+        },
+        "payload": {
+          "$ref": "#/$defs/inventory"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "OBS"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "declaration"
+        },
+        "payload": {
+          "$ref": "#/$defs/declaration"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "OBS"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "policyChange"
+        },
+        "payload": {
+          "$ref": "#/$defs/policyChange"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "GUARD"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "proxyOpen"
+        },
+        "payload": {
+          "$ref": "#/$defs/proxyOpen"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "GUARD"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "proxyResponse"
+        },
+        "payload": {
+          "$ref": "#/$defs/proxyResponse"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "GUARD"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "proxyEnd"
+        },
+        "payload": {
+          "$ref": "#/$defs/proxyEnd"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PW"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "pwCookie"
+        },
+        "payload": {
+          "$ref": "#/$defs/pwCookie"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "extraCookie"
+        },
+        "payload": {
+          "$ref": "#/$defs/extraCookie"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "responseExtra"
+        },
+        "payload": {
+          "$ref": "#/$defs/responseExtra"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "session"
+        },
+        "payload": {
+          "$ref": "#/$defs/session"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PW"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "hmrBrowser"
+        },
+        "payload": {
+          "$ref": "#/$defs/hmrBrowser"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "hmrProtocol"
+        },
+        "payload": {
+          "$ref": "#/$defs/hmrProtocol"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "GUARD"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "hmrPeer"
+        },
+        "payload": {
+          "$ref": "#/$defs/hmrPeer"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "retire"
+        },
+        "payload": {
+          "$ref": "#/$defs/retire"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PW"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "contextClosed"
+        },
+        "payload": {
+          "$ref": "#/$defs/contextClosed"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "closeIntent"
+        },
+        "payload": {
+          "$ref": "#/$defs/closeIntent"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "closeIssued"
+        },
+        "payload": {
+          "$ref": "#/$defs/closeIssued"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "CDP"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "cdpDetached"
+        },
+        "payload": {
+          "$ref": "#/$defs/cdpDetached"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "GUARD"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "hmrOwner"
+        },
+        "payload": {
+          "$ref": "#/$defs/hmrOwner"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "GUARD"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "hmrIntent"
+        },
+        "payload": {
+          "$ref": "#/$defs/hmrIntent"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "GUARD"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "retireAnchor"
+        },
+        "payload": {
+          "$ref": "#/$defs/retireAnchor"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "anchorRecord"
+        },
+        "payload": {
+          "$ref": "#/$defs/anchorRecord"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "fence"
+        },
+        "payload": {
+          "$ref": "#/$defs/fence"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "PARENT"
+        },
+        "sourceSeq": {
+          "$ref": "#/$defs/pos"
+        },
+        "type": {
+          "const": "replacementIssued"
+        },
+        "payload": {
+          "$ref": "#/$defs/replacementIssued"
+        },
+        "sourceMicros": {
+          "$ref": "#/$defs/sourceMicros"
+        }
+      },
+      "required": [
+        "channel",
+        "sourceSeq",
+        "type",
+        "payload"
+      ]
+    }
+  ],
+  "$defs": {
+    "nat": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    },
+    "pos": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "ctx": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    },
+    "globalCtx": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 6
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599
+    },
+    "bool": {
+      "type": "boolean"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "minLength": 64,
+      "maxLength": 64
+    },
+    "run": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{12}$",
+      "minLength": 12,
+      "maxLength": 12
+    },
+    "nullableHash": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceMicros": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/run"
+        },
+        "assetSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "assetBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388608
+        },
+        "mapSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "hmrUrl": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "run",
+        "assetSha256",
+        "assetBytes",
+        "mapSha256",
+        "hmrUrl"
+      ]
+    },
+    "intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "slot": {
+          "enum": [
+            "login",
+            "click",
+            "landing"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "slot"
+      ]
+    },
+    "ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "channelName": {
+          "enum": [
+            "PW",
+            "CDP",
+            "GUARD",
+            "OBS"
+          ]
+        },
+        "binding": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "channelName",
+        "binding"
+      ]
+    },
+    "barrier": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "channelName": {
+          "enum": [
+            "PW",
+            "CDP",
+            "GUARD",
+            "OBS"
+          ]
+        },
+        "binding": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "channelName",
+        "binding"
+      ]
+    },
+    "closed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "intentId": {
+          "$ref": "#/$defs/pos"
+        },
+        "physicalEventId": {
+          "$ref": "#/$defs/pos"
+        },
+        "detachEventId": {
+          "$ref": "#/$defs/nat"
+        },
+        "channelName": {
+          "enum": [
+            "PW",
+            "CDP",
+            "GUARD",
+            "OBS"
+          ]
+        },
+        "binding": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "intentId",
+        "physicalEventId",
+        "detachEventId",
+        "channelName",
+        "binding"
+      ]
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/globalCtx"
+        },
+        "reason": {
+          "enum": [
+            "console",
+            "page",
+            "http",
+            "cancel",
+            "external",
+            "loss",
+            "mutation",
+            "frame-swap",
+            "unexpected-nav",
+            "worker",
+            "transport",
+            "cache",
+            "policy",
+            "parse",
+            "unavailable"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "reason"
+      ]
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/globalCtx"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "state": {
+          "enum": [
+            "start",
+            "done",
+            "failed"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "id",
+        "state"
+      ]
+    },
+    "pwOpen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "prev": {
+          "$ref": "#/$defs/nat"
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "resource": {
+          "enum": [
+            "Document",
+            "Script",
+            "Fetch",
+            "Stylesheet",
+            "Font",
+            "Image",
+            "XHR",
+            "Other"
+          ]
+        },
+        "nav": {
+          "$ref": "#/$defs/bool"
+        },
+        "main": {
+          "$ref": "#/$defs/bool"
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "POST",
+            "HEAD",
+            "OTHER"
+          ]
+        },
+        "path": {
+          "enum": [
+            "locale",
+            "login",
+            "enter",
+            "continue",
+            "tenant",
+            "staff",
+            "webpack",
+            "hmr",
+            "other"
+          ]
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "origin": {
+          "enum": [
+            "owned",
+            "foreign"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "id",
+        "prev",
+        "frame",
+        "resource",
+        "nav",
+        "main",
+        "method",
+        "path",
+        "url",
+        "origin"
+      ]
+    },
+    "cdpOpen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "redirectEvent": {
+          "$ref": "#/$defs/nat"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "hop": {
+          "$ref": "#/$defs/nat"
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "loader": {
+          "$ref": "#/$defs/pos"
+        },
+        "resource": {
+          "enum": [
+            "Document",
+            "Script",
+            "Fetch",
+            "Stylesheet",
+            "Font",
+            "Image",
+            "XHR",
+            "Other"
+          ]
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "POST",
+            "HEAD",
+            "OTHER"
+          ]
+        },
+        "path": {
+          "enum": [
+            "locale",
+            "login",
+            "enter",
+            "continue",
+            "tenant",
+            "staff",
+            "webpack",
+            "hmr",
+            "other"
+          ]
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "origin": {
+          "enum": [
+            "owned",
+            "foreign"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "redirectEvent",
+        "id",
+        "hop",
+        "frame",
+        "loader",
+        "resource",
+        "method",
+        "path",
+        "url",
+        "origin"
+      ]
+    },
+    "pwResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "location": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "fromServiceWorker": {
+          "$ref": "#/$defs/bool"
+        }
+      },
+      "required": [
+        "ctx",
+        "id",
+        "status",
+        "location",
+        "fromServiceWorker"
+      ]
+    },
+    "pwBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "read": {
+          "$ref": "#/$defs/pos"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "body": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "read",
+        "id",
+        "body"
+      ]
+    },
+    "cdpResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "redirectEvent": {
+          "$ref": "#/$defs/nat"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "hop": {
+          "$ref": "#/$defs/nat"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "location": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "extra": {
+          "$ref": "#/$defs/bool"
+        },
+        "fromDiskCache": {
+          "$ref": "#/$defs/bool"
+        },
+        "fromPrefetchCache": {
+          "$ref": "#/$defs/bool"
+        },
+        "fromServiceWorker": {
+          "$ref": "#/$defs/bool"
+        }
+      },
+      "required": [
+        "ctx",
+        "redirectEvent",
+        "id",
+        "hop",
+        "status",
+        "location",
+        "extra",
+        "fromDiskCache",
+        "fromPrefetchCache",
+        "fromServiceWorker"
+      ]
+    },
+    "pwEnd": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "terminal": {
+          "enum": [
+            "finished",
+            "redirect",
+            "failed"
+          ]
+        },
+        "error": {
+          "enum": [
+            "none",
+            "csp",
+            "aborted",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "id",
+        "terminal",
+        "error"
+      ]
+    },
+    "cdpEnd": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "redirectEvent": {
+          "$ref": "#/$defs/nat"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "hop": {
+          "$ref": "#/$defs/nat"
+        },
+        "terminal": {
+          "enum": [
+            "finished",
+            "redirect",
+            "failed"
+          ]
+        },
+        "error": {
+          "enum": [
+            "none",
+            "csp",
+            "aborted",
+            "other",
+            "MISSING"
+          ]
+        },
+        "blocked": {
+          "enum": [
+            "none",
+            "csp",
+            "other"
+          ]
+        },
+        "canceled": {
+          "$ref": "#/$defs/bool"
+        }
+      },
+      "required": [
+        "ctx",
+        "redirectEvent",
+        "id",
+        "hop",
+        "terminal",
+        "error",
+        "blocked",
+        "canceled"
+      ]
+    },
+    "pwArrival": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "frame",
+        "id",
+        "url"
+      ]
+    },
+    "commit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "eventId": {
+          "$ref": "#/$defs/pos"
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "loader": {
+          "$ref": "#/$defs/pos"
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "main": {
+          "$ref": "#/$defs/bool"
+        }
+      },
+      "required": [
+        "ctx",
+        "eventId",
+        "frame",
+        "loader",
+        "url",
+        "main"
+      ]
+    },
+    "sameDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "path": {
+          "enum": [
+            "locale",
+            "login",
+            "enter",
+            "continue",
+            "tenant",
+            "staff",
+            "webpack",
+            "hmr",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "frame",
+        "url",
+        "path"
+      ]
+    },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "world": {
+          "$ref": "#/$defs/pos"
+        },
+        "generation": {
+          "$ref": "#/$defs/hash"
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "kind": {
+          "enum": [
+            "default",
+            "isolated"
+          ]
+        },
+        "state": {
+          "enum": [
+            "created",
+            "destroyed"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "world",
+        "generation",
+        "frame",
+        "kind",
+        "state"
+      ]
+    },
+    "clearWorlds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        }
+      },
+      "required": [
+        "ctx"
+      ]
+    },
+    "parsed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "script": {
+          "$ref": "#/$defs/pos"
+        },
+        "world": {
+          "$ref": "#/$defs/pos"
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "assetClass": {
+          "enum": [
+            "webpack",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "script",
+        "world",
+        "url",
+        "assetClass"
+      ]
+    },
+    "scriptSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "read": {
+          "$ref": "#/$defs/pos"
+        },
+        "script": {
+          "$ref": "#/$defs/pos"
+        },
+        "source": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "read",
+        "script",
+        "source"
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "read": {
+          "$ref": "#/$defs/pos"
+        },
+        "script": {
+          "$ref": "#/$defs/pos"
+        },
+        "units": {
+          "$ref": "#/$defs/nat"
+        },
+        "bytes": {
+          "$ref": "#/$defs/nat"
+        },
+        "epoch": {
+          "$ref": "#/$defs/pos"
+        }
+      },
+      "required": [
+        "ctx",
+        "read",
+        "script",
+        "units",
+        "bytes",
+        "epoch"
+      ]
+    },
+    "treeSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "side": {
+          "enum": [
+            "before",
+            "after"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "loader": {
+          "$ref": "#/$defs/pos"
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "side",
+        "frame",
+        "loader",
+        "url"
+      ]
+    },
+    "pwSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "side": {
+          "enum": [
+            "before",
+            "after"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "marker": {
+          "$ref": "#/$defs/nullableHash"
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "side",
+        "frame",
+        "url",
+        "marker"
+      ]
+    },
+    "worldSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "side": {
+          "enum": [
+            "before",
+            "after"
+          ]
+        },
+        "world": {
+          "$ref": "#/$defs/pos"
+        },
+        "generation": {
+          "$ref": "#/$defs/hash"
+        },
+        "marker": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "side",
+        "world",
+        "generation",
+        "marker"
+      ]
+    },
+    "policyArm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "loader": {
+          "$ref": "#/$defs/pos"
+        },
+        "navigation": {
+          "$ref": "#/$defs/pos"
+        },
+        "mechanism": {
+          "enum": [
+            "before-parser",
+            "native-static"
+          ]
+        },
+        "binding": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "frame",
+        "loader",
+        "navigation",
+        "mechanism",
+        "binding"
+      ]
+    },
+    "declaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "navigation": {
+          "$ref": "#/$defs/pos"
+        },
+        "html": {
+          "$ref": "#/$defs/hash"
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "asset": {
+          "$ref": "#/$defs/hash"
+        },
+        "mapping": {
+          "$ref": "#/$defs/hash"
+        },
+        "count": {
+          "$ref": "#/$defs/nat"
+        },
+        "nonce": {
+          "$ref": "#/$defs/nat"
+        },
+        "integrity": {
+          "$ref": "#/$defs/nat"
+        },
+        "effectiveMeta": {
+          "$ref": "#/$defs/nat"
+        },
+        "sourceMeta": {
+          "$ref": "#/$defs/nat"
+        },
+        "declaration": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "navigation",
+        "html",
+        "url",
+        "asset",
+        "mapping",
+        "count",
+        "nonce",
+        "integrity",
+        "effectiveMeta",
+        "sourceMeta",
+        "declaration"
+      ]
+    },
+    "policyChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "loader": {
+          "$ref": "#/$defs/pos"
+        },
+        "kind": {
+          "enum": [
+            "meta",
+            "base",
+            "script",
+            "preload",
+            "lost"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "frame",
+        "loader",
+        "kind"
+      ]
+    },
+    "proxyOpen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "POST",
+            "HEAD",
+            "OTHER"
+          ]
+        },
+        "path": {
+          "enum": [
+            "locale",
+            "login",
+            "enter",
+            "continue",
+            "tenant",
+            "staff",
+            "webpack",
+            "hmr",
+            "other"
+          ]
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "origin": {
+          "enum": [
+            "owned",
+            "foreign"
+          ]
+        },
+        "cookie": {
+          "$ref": "#/$defs/hash"
+        },
+        "forwardedCookie": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "path",
+        "url",
+        "origin",
+        "cookie",
+        "forwardedCookie"
+      ]
+    },
+    "proxyResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "location": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "enforced": {
+          "$ref": "#/$defs/nat"
+        },
+        "reportOnly": {
+          "$ref": "#/$defs/nat"
+        },
+        "hints": {
+          "$ref": "#/$defs/nat"
+        },
+        "downEnforced": {
+          "$ref": "#/$defs/nat"
+        },
+        "downReportOnly": {
+          "$ref": "#/$defs/nat"
+        },
+        "setRole": {
+          "enum": [
+            "none",
+            "tenant",
+            "other"
+          ]
+        },
+        "downRole": {
+          "enum": [
+            "none",
+            "tenant",
+            "other"
+          ]
+        },
+        "sidSet": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "downSid": {
+          "$ref": "#/$defs/nullableHash"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "location",
+        "enforced",
+        "reportOnly",
+        "hints",
+        "downEnforced",
+        "downReportOnly",
+        "setRole",
+        "downRole",
+        "sidSet",
+        "downSid"
+      ]
+    },
+    "proxyEnd": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "state": {
+          "enum": [
+            "finished",
+            "failed"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "state"
+      ]
+    },
+    "pwCookie": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "cookie": {
+          "$ref": "#/$defs/hash"
+        },
+        "sid": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "org": {
+          "enum": [
+            "absent",
+            "expected",
+            "foreign",
+            "duplicate",
+            "unknown"
+          ]
+        },
+        "env": {
+          "enum": [
+            "absent",
+            "expected",
+            "foreign",
+            "duplicate",
+            "unknown"
+          ]
+        },
+        "lease": {
+          "enum": [
+            "absent",
+            "expected",
+            "foreign",
+            "duplicate",
+            "unknown"
+          ]
+        },
+        "role": {
+          "enum": [
+            "absent",
+            "tenant",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "id",
+        "cookie",
+        "sid",
+        "org",
+        "env",
+        "lease",
+        "role"
+      ]
+    },
+    "extraCookie": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "cookie": {
+          "$ref": "#/$defs/hash"
+        },
+        "sid": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "org": {
+          "enum": [
+            "absent",
+            "expected",
+            "foreign",
+            "duplicate",
+            "unknown"
+          ]
+        },
+        "env": {
+          "enum": [
+            "absent",
+            "expected",
+            "foreign",
+            "duplicate",
+            "unknown"
+          ]
+        },
+        "lease": {
+          "enum": [
+            "absent",
+            "expected",
+            "foreign",
+            "duplicate",
+            "unknown"
+          ]
+        },
+        "role": {
+          "enum": [
+            "absent",
+            "tenant",
+            "other"
+          ]
+        },
+        "shadow": {
+          "enum": [
+            "none",
+            "present",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "id",
+        "cookie",
+        "sid",
+        "org",
+        "env",
+        "lease",
+        "role",
+        "shadow"
+      ]
+    },
+    "responseExtra": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "location": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "setRole": {
+          "enum": [
+            "none",
+            "tenant",
+            "other"
+          ]
+        },
+        "sidSet": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "enforced": {
+          "$ref": "#/$defs/nat"
+        },
+        "reportOnly": {
+          "$ref": "#/$defs/nat"
+        }
+      },
+      "required": [
+        "ctx",
+        "id",
+        "status",
+        "location",
+        "setRole",
+        "sidSet",
+        "enforced",
+        "reportOnly"
+      ]
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "sid": {
+          "$ref": "#/$defs/hash"
+        },
+        "org": {
+          "const": "expected"
+        },
+        "env": {
+          "const": "expected"
+        },
+        "lease": {
+          "const": "absent"
+        },
+        "role": {
+          "enum": [
+            "absent",
+            "tenant"
+          ]
+        },
+        "verifier": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "sid",
+        "org",
+        "env",
+        "lease",
+        "role",
+        "verifier"
+      ]
+    },
+    "hmrBrowser": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "socket": {
+          "$ref": "#/$defs/pos"
+        },
+        "state": {
+          "enum": [
+            "opened",
+            "closed",
+            "error"
+          ]
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "socket",
+        "state",
+        "url"
+      ]
+    },
+    "hmrProtocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "socket": {
+          "$ref": "#/$defs/pos"
+        },
+        "state": {
+          "enum": [
+            "opened",
+            "sent",
+            "accepted",
+            "closed",
+            "error"
+          ]
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "handshake": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "httpStatus": {
+          "$ref": "#/$defs/nat"
+        }
+      },
+      "required": [
+        "ctx",
+        "socket",
+        "state",
+        "url",
+        "handshake",
+        "httpStatus"
+      ]
+    },
+    "hmrPeer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "state": {
+          "enum": [
+            "accepted",
+            "close-client",
+            "close-server",
+            "drained",
+            "error"
+          ]
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "handshake": {
+          "$ref": "#/$defs/hash"
+        },
+        "accept": {
+          "$ref": "#/$defs/hash"
+        },
+        "code": {
+          "$ref": "#/$defs/nullableNat"
+        },
+        "httpStatus": {
+          "$ref": "#/$defs/nat"
+        }
+      },
+      "required": [
+        "id",
+        "state",
+        "url",
+        "handshake",
+        "accept",
+        "code",
+        "httpStatus"
+      ]
+    },
+    "retire": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "exchange": {
+          "$ref": "#/$defs/pos"
+        },
+        "intent": {
+          "enum": [
+            "replace",
+            "close"
+          ]
+        },
+        "intentKey": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "exchange",
+        "intent",
+        "intentKey"
+      ]
+    },
+    "contextClosed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "eventId": {
+          "$ref": "#/$defs/pos"
+        }
+      },
+      "required": [
+        "ctx",
+        "eventId"
+      ]
+    },
+    "closeIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "intentId": {
+          "$ref": "#/$defs/pos"
+        }
+      },
+      "required": [
+        "ctx",
+        "intentId"
+      ]
+    },
+    "hmrOwner": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "owner": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "id",
+        "owner"
+      ]
+    },
+    "hmrIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "owner": {
+          "$ref": "#/$defs/hash"
+        },
+        "intentKey": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "id",
+        "owner",
+        "intentKey"
+      ]
+    },
+    "retireAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pos"
+        },
+        "owner": {
+          "$ref": "#/$defs/hash"
+        },
+        "intentKey": {
+          "$ref": "#/$defs/hash"
+        },
+        "recordId": {
+          "$ref": "#/$defs/hash"
+        },
+        "anchor": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "id",
+        "owner",
+        "intentKey",
+        "recordId",
+        "anchor"
+      ]
+    },
+    "anchorRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "exchange": {
+          "$ref": "#/$defs/pos"
+        },
+        "owner": {
+          "$ref": "#/$defs/hash"
+        },
+        "intentKey": {
+          "$ref": "#/$defs/hash"
+        },
+        "recordId": {
+          "$ref": "#/$defs/hash"
+        },
+        "sourceEventId": {
+          "$ref": "#/$defs/pos"
+        },
+        "anchor": {
+          "$ref": "#/$defs/hash"
+        },
+        "source": {
+          "enum": [
+            "document-commit",
+            "context-close"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/nat"
+        },
+        "loader": {
+          "$ref": "#/$defs/nat"
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "exchange",
+        "owner",
+        "intentKey",
+        "recordId",
+        "sourceEventId",
+        "anchor",
+        "source",
+        "frame",
+        "loader"
+      ]
+    },
+    "fence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "loader": {
+          "$ref": "#/$defs/pos"
+        },
+        "side": {
+          "enum": [
+            "open",
+            "seal"
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "frame",
+        "loader",
+        "side"
+      ]
+    },
+    "ids": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pos"
+      }
+    },
+    "binding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ctx": {
+              "$ref": "#/$defs/ctx"
+            },
+            "doc": {
+              "enum": [
+                "login",
+                "landing"
+              ]
+            },
+            "document": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "pw": {
+                  "$ref": "#/$defs/pos"
+                },
+                "cdp": {
+                  "$ref": "#/$defs/pos"
+                },
+                "commit": {
+                  "$ref": "#/$defs/pos"
+                },
+                "arrival": {
+                  "$ref": "#/$defs/pos"
+                },
+                "body": {
+                  "$ref": "#/$defs/pos"
+                }
+              },
+              "required": [
+                "pw",
+                "cdp",
+                "commit",
+                "arrival",
+                "body"
+              ]
+            },
+            "namespace": {
+              "const": "pw-document-derived-from-join"
+            },
+            "proxy": {
+              "$ref": "#/$defs/pos"
+            },
+            "wireResponse": {
+              "$ref": "#/$defs/pos"
+            },
+            "pwCookie": {
+              "$ref": "#/$defs/pos"
+            },
+            "sessionReadback": {
+              "$ref": "#/$defs/pos"
+            },
+            "requestExtra": {
+              "$ref": "#/$defs/pos"
+            },
+            "responseExtra": {
+              "$ref": "#/$defs/pos"
+            },
+            "before": {
+              "$ref": "#/$defs/ids"
+            },
+            "after": {
+              "$ref": "#/$defs/ids"
+            },
+            "seal": {
+              "$ref": "#/$defs/pos"
+            },
+            "inventory": {
+              "$ref": "#/$defs/pos"
+            },
+            "hops": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "pw": {
+                    "$ref": "#/$defs/pos"
+                  },
+                  "cdp": {
+                    "$ref": "#/$defs/pos"
+                  },
+                  "pwTerminal": {
+                    "$ref": "#/$defs/pos"
+                  },
+                  "cdpTerminal": {
+                    "$ref": "#/$defs/pos"
+                  },
+                  "pwPrev": {
+                    "const": 0
+                  },
+                  "cdpHop": {
+                    "const": 0
+                  },
+                  "cdpRedirectEvent": {
+                    "const": 0
+                  }
+                },
+                "required": [
+                  "pw",
+                  "cdp",
+                  "pwTerminal",
+                  "cdpTerminal",
+                  "pwPrev",
+                  "cdpHop",
+                  "cdpRedirectEvent"
+                ]
+              }
+            },
+            "mode": {
+              "const": "ordinary-strict"
+            }
+          },
+          "required": [
+            "ctx",
+            "doc",
+            "document",
+            "namespace",
+            "proxy",
+            "wireResponse",
+            "pwCookie",
+            "sessionReadback",
+            "requestExtra",
+            "responseExtra",
+            "before",
+            "after",
+            "seal",
+            "inventory",
+            "hops",
+            "mode"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ctx": {
+              "$ref": "#/$defs/ctx"
+            },
+            "doc": {
+              "enum": [
+                "login",
+                "landing"
+              ]
+            },
+            "document": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "pw": {
+                  "$ref": "#/$defs/pos"
+                },
+                "cdp": {
+                  "$ref": "#/$defs/pos"
+                },
+                "commit": {
+                  "$ref": "#/$defs/pos"
+                },
+                "arrival": {
+                  "$ref": "#/$defs/pos"
+                },
+                "body": {
+                  "$ref": "#/$defs/pos"
+                }
+              },
+              "required": [
+                "pw",
+                "cdp",
+                "commit",
+                "arrival",
+                "body"
+              ]
+            },
+            "namespace": {
+              "const": "pw-document-derived-from-join"
+            },
+            "proxy": {
+              "$ref": "#/$defs/pos"
+            },
+            "wireResponse": {
+              "$ref": "#/$defs/pos"
+            },
+            "pwCookie": {
+              "$ref": "#/$defs/pos"
+            },
+            "sessionReadback": {
+              "$ref": "#/$defs/pos"
+            },
+            "requestExtra": {
+              "$ref": "#/$defs/pos"
+            },
+            "responseExtra": {
+              "$ref": "#/$defs/pos"
+            },
+            "before": {
+              "$ref": "#/$defs/ids"
+            },
+            "after": {
+              "$ref": "#/$defs/ids"
+            },
+            "seal": {
+              "$ref": "#/$defs/pos"
+            },
+            "inventory": {
+              "$ref": "#/$defs/pos"
+            },
+            "hops": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "pw": {
+                    "$ref": "#/$defs/pos"
+                  },
+                  "cdp": {
+                    "$ref": "#/$defs/pos"
+                  },
+                  "pwTerminal": {
+                    "$ref": "#/$defs/pos"
+                  },
+                  "cdpTerminal": {
+                    "$ref": "#/$defs/pos"
+                  },
+                  "pwPrev": {
+                    "const": 0
+                  },
+                  "cdpHop": {
+                    "const": 0
+                  },
+                  "cdpRedirectEvent": {
+                    "const": 0
+                  }
+                },
+                "required": [
+                  "pw",
+                  "cdp",
+                  "pwTerminal",
+                  "cdpTerminal",
+                  "pwPrev",
+                  "cdpHop",
+                  "cdpRedirectEvent"
+                ]
+              }
+            },
+            "script": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "pw": {
+                  "$ref": "#/$defs/pos"
+                },
+                "cdp": {
+                  "$ref": "#/$defs/pos"
+                },
+                "pwTerminal": {
+                  "$ref": "#/$defs/pos"
+                },
+                "cdpTerminal": {
+                  "$ref": "#/$defs/pos"
+                },
+                "pwPrev": {
+                  "const": 0
+                },
+                "cdpHop": {
+                  "const": 0
+                },
+                "cdpRedirectEvent": {
+                  "const": 0
+                }
+              },
+              "required": [
+                "pw",
+                "cdp",
+                "pwTerminal",
+                "cdpTerminal",
+                "pwPrev",
+                "cdpHop",
+                "cdpRedirectEvent"
+              ]
+            },
+            "policyArm": {
+              "$ref": "#/$defs/pos"
+            },
+            "declaration": {
+              "$ref": "#/$defs/pos"
+            },
+            "mapping": {
+              "$ref": "#/$defs/hash"
+            },
+            "mode": {
+              "const": "exception-scope"
+            },
+            "parsed": {
+              "$ref": "#/$defs/pos"
+            },
+            "scriptSource": {
+              "$ref": "#/$defs/pos"
+            },
+            "responseBody": {
+              "$ref": "#/$defs/pos"
+            },
+            "coverage": {
+              "$ref": "#/$defs/ids"
+            }
+          },
+          "required": [
+            "ctx",
+            "doc",
+            "document",
+            "namespace",
+            "proxy",
+            "wireResponse",
+            "pwCookie",
+            "sessionReadback",
+            "requestExtra",
+            "responseExtra",
+            "before",
+            "after",
+            "seal",
+            "inventory",
+            "hops",
+            "script",
+            "policyArm",
+            "declaration",
+            "mapping",
+            "mode"
+          ]
+        }
+      ]
+    },
+    "hmrBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "pw": {
+          "$ref": "#/$defs/pos"
+        },
+        "cdp": {
+          "$ref": "#/$defs/pos"
+        },
+        "wire": {
+          "$ref": "#/$defs/pos"
+        },
+        "retirement": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "plan": {
+                  "$ref": "#/$defs/pos"
+                },
+                "retire": {
+                  "$ref": "#/$defs/pos"
+                },
+                "armed": {
+                  "$ref": "#/$defs/pos"
+                },
+                "issued": {
+                  "$ref": "#/$defs/pos"
+                },
+                "pwClose": {
+                  "$ref": "#/$defs/pos"
+                },
+                "cdpClose": {
+                  "$ref": "#/$defs/pos"
+                },
+                "wireClientClose": {
+                  "$ref": "#/$defs/pos"
+                },
+                "wireServerClose": {
+                  "$ref": "#/$defs/pos"
+                },
+                "physical": {
+                  "$ref": "#/$defs/pos"
+                },
+                "parentAnchor": {
+                  "$ref": "#/$defs/pos"
+                },
+                "guardAnchor": {
+                  "$ref": "#/$defs/pos"
+                },
+                "wireDrain": {
+                  "$ref": "#/$defs/pos"
+                }
+              },
+              "required": [
+                "plan",
+                "retire",
+                "armed",
+                "issued",
+                "pwClose",
+                "cdpClose",
+                "wireClientClose",
+                "wireServerClose",
+                "physical",
+                "parentAnchor",
+                "guardAnchor",
+                "wireDrain"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "pw",
+        "cdp",
+        "wire",
+        "retirement"
+      ]
+    },
+    "receipt": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "stage": {
+              "enum": [
+                "bootstrap",
+                "drained"
+              ]
+            },
+            "run": {
+              "$ref": "#/$defs/run"
+            },
+            "rawFailureEventIds": {
+              "$ref": "#/$defs/ids"
+            },
+            "rawStrict": {
+              "enum": [
+                "FAIL",
+                "OBSERVED_CLEAN"
+              ]
+            },
+            "cursor": {
+              "$ref": "#/$defs/nat"
+            },
+            "journalSha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "dropped": {
+              "$ref": "#/$defs/nat"
+            },
+            "financialAggregate": {
+              "const": "PENDING"
+            },
+            "status": {
+              "const": "MATCHED"
+            },
+            "bindings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/binding"
+              },
+              "minItems": 12,
+              "maxItems": 12
+            },
+            "hmrBindings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hmrBinding"
+              },
+              "minItems": 6,
+              "maxItems": 6
+            },
+            "nativeFailureEventIds": {
+              "$ref": "#/$defs/ids"
+            }
+          },
+          "required": [
+            "stage",
+            "run",
+            "rawFailureEventIds",
+            "rawStrict",
+            "cursor",
+            "journalSha256",
+            "dropped",
+            "financialAggregate",
+            "status",
+            "bindings",
+            "hmrBindings",
+            "nativeFailureEventIds"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "stage": {
+              "enum": [
+                "bootstrap",
+                "drained"
+              ]
+            },
+            "run": {
+              "$ref": "#/$defs/run"
+            },
+            "rawFailureEventIds": {
+              "$ref": "#/$defs/ids"
+            },
+            "rawStrict": {
+              "enum": [
+                "FAIL",
+                "OBSERVED_CLEAN"
+              ]
+            },
+            "cursor": {
+              "$ref": "#/$defs/nat"
+            },
+            "journalSha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "dropped": {
+              "$ref": "#/$defs/nat"
+            },
+            "financialAggregate": {
+              "const": "PENDING"
+            },
+            "status": {
+              "enum": [
+                "FATAL",
+                "UNAVAILABLE"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            }
+          },
+          "required": [
+            "stage",
+            "run",
+            "rawFailureEventIds",
+            "rawStrict",
+            "cursor",
+            "journalSha256",
+            "dropped",
+            "financialAggregate",
+            "status",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "nullableNat": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/nat"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "readStart": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/pos"
+        },
+        "loader": {
+          "$ref": "#/$defs/pos"
+        },
+        "kind": {
+          "enum": [
+            "pwBody",
+            "scriptSource",
+            "coverage"
+          ]
+        },
+        "subject": {
+          "$ref": "#/$defs/pos"
+        },
+        "read": {
+          "$ref": "#/$defs/pos"
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "frame",
+        "loader",
+        "kind",
+        "subject",
+        "read"
+      ]
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "doc": {
+          "enum": [
+            "login",
+            "landing"
+          ]
+        },
+        "navigation": {
+          "$ref": "#/$defs/pos"
+        },
+        "html": {
+          "$ref": "#/$defs/hash"
+        },
+        "count": {
+          "$ref": "#/$defs/nat"
+        }
+      },
+      "required": [
+        "ctx",
+        "doc",
+        "navigation",
+        "html",
+        "count"
+      ]
+    },
+    "closeIssued": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "intentId": {
+          "$ref": "#/$defs/pos"
+        }
+      },
+      "required": [
+        "ctx",
+        "intentId"
+      ]
+    },
+    "cdpDetached": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "eventId": {
+          "$ref": "#/$defs/pos"
+        }
+      },
+      "required": [
+        "ctx",
+        "eventId"
+      ]
+    },
+    "replacementIssued": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ctx": {
+          "$ref": "#/$defs/ctx"
+        },
+        "exchange": {
+          "$ref": "#/$defs/pos"
+        },
+        "owner": {
+          "$ref": "#/$defs/hash"
+        },
+        "intentKey": {
+          "$ref": "#/$defs/hash"
+        },
+        "url": {
+          "$ref": "#/$defs/hash"
+        },
+        "api": {
+          "const": "page.goto"
+        }
+      },
+      "required": [
+        "ctx",
+        "exchange",
+        "owner",
+        "intentKey",
+        "url",
+        "api"
+      ]
+    }
+  }
+}

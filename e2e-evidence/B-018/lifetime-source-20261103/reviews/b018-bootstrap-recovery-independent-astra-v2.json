@@ -1,0 +1,47 @@
+{
+  "verdict": "GO_SOURCE_ONLY_BOUNDED_RECOVERY_COMPONENT",
+  "manifestSha256": "91bdcc4ae77875cadcf5e152153658798de4ffe6cc79ebdd81669e168097702b",
+  "recoverySha256": "a7c985e6fea3f4a292eadcebb7c849b7edc014f89b859539345149418f3341b1",
+  "integritySha256": "170e19d37cb274c3b293b98e6d935c4455600676fd71ec68145ce59e56546cbb",
+  "reportSha256": "e887852e071b66181bd01a1698de43b15944e3f63e214dd6ad8ac05e7b29b4b2",
+  "priorReviewSha256": "e86513131cdb4cdcb53c6e4f9f282d3a5b1309c460a1a7a9479e5c1aa9a88366",
+  "findings": {
+    "R1": "CLOSED_AT_SOURCE",
+    "R2": "CLOSED_AT_SOURCE",
+    "R3": "CLOSED_AT_SOURCE",
+    "R4": "CLOSED_AT_SOURCE",
+    "R5": "CLOSED_AT_SOURCE"
+  },
+  "readback": {
+    "packageFiles": 9,
+    "appSourcePins": 8,
+    "externalVerifierSha256": "931daca260abf4f7c54fe4099cbc2cb9aeeaca5ee06feb27d2740a5a282693c1",
+    "createdbBinarySha256": "0234fab6d8781ba4069433ee9b288df8b408da74a5664002f22f9a2b7b864e01",
+    "scalarTypeAndSenderIdentifiersCheckedInInstalledBki": 26
+  },
+  "checks": {
+    "syntaxFilesPassed": 5,
+    "pureGroupsPassed": 42,
+    "pureGroupsFailed": 0,
+    "skipped": 0,
+    "original35TestSourceUnchanged": true,
+    "independentVerifyAfterControls": {
+      "clean": "READBACK_PASS",
+      "protectedTableDrift": "SIGNED_QUARANTINE_DRIFT",
+      "callerMutationDuringAwait": "SIGNED_QUARANTINE_DRIFT",
+      "oneMicrosecondShortening": "QUARANTINE_NO_TAG",
+      "missingEnvelope": "QUARANTINE_NO_TAG",
+      "generationChangedAfterSixFreshReads": "QUARANTINE_NO_TAG",
+      "baselineAuditListTampering": "QUARANTINE_NO_TAG"
+    },
+    "independentControlInputs": "Synthetic in-memory snapshots and verifier; original verifyAfter body and actual cryptographic and data comparison functions."
+  },
+  "databaseQueries": "NOT_RUN",
+  "runtimeAuthorization": "NOT_GRANTED",
+  "financeAcceptance": "PENDING",
+  "integrationConditions": [
+    "Trusted parent supplies actual completed clone and OFF receipts, source and executable pins, private per-run key and six authentic envelopes.",
+    "Separately reviewed exact user005 synthetic contact fixture resolves deterministic selection before baseline.",
+    "Owned target and successful drain remain independent operational requirements."
+  ]
+}

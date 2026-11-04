@@ -1,0 +1,31 @@
+'use strict';
+// Pure framing/handshake functions; receives the pinned Next Receiver, never opens a socket.
+const crypto=require('node:crypto');
+const LIMIT=1024*1024,MAX_CHUNKS=4096,MAX_FRAMES=8192,MAX_MS=120000;
+function one(raw,name,required=true){if(!Array.isArray(raw)||raw.length%2)throw Error('handshake-unavailable');const v=[];for(let i=0;i<raw.length;i+=2)if(String(raw[i]).toLowerCase()===name)v.push(String(raw[i+1]));if(v.length>(1)||required&&v.length!==1)throw Error('handshake-unavailable');return v[0]??null;}
+function handshake(req,res){
+ if(req.httpVersion!=='1.1'||res.httpVersion!=='1.1'||res.statusCode!==101)throw Error('handshake-unavailable');
+ const key=one(req.rawHeaders,'sec-websocket-key'),version=one(req.rawHeaders,'sec-websocket-version');
+ if(!/^[A-Za-z0-9+/]{22}==$/.test(key)||Buffer.from(key,'base64').length!==16||Buffer.from(key,'base64').toString('base64')!==key||version!=='13')throw Error('handshake-unavailable');
+ if(one(req.rawHeaders,'upgrade').toLowerCase()!=='websocket'||one(res.rawHeaders,'upgrade').toLowerCase()!=='websocket')throw Error('handshake-unavailable');
+ for(const r of [req,res])if(!one(r.rawHeaders,'connection').split(',').map(x=>x.trim().toLowerCase()).includes('upgrade'))throw Error('handshake-unavailable');
+ one(req.rawHeaders,'sec-websocket-extensions',false);
+ if(one(req.rawHeaders,'sec-websocket-protocol',false)!==null||one(res.rawHeaders,'sec-websocket-protocol',false)!==null||one(res.rawHeaders,'sec-websocket-extensions',false)!==null)throw Error('handshake-unavailable');
+ const expected=crypto.createHash('sha1').update(key+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');if(one(res.rawHeaders,'sec-websocket-accept')!==expected)throw Error('handshake-unavailable');
+ return true;
+}
+function createTap({Receiver,isServer,onClose,onFailure,onFinished=()=>{}}){
+ if(typeof Receiver!=='function'||typeof onClose!=='function'||typeof onFailure!=='function')throw Error('tap-unavailable');
+ const receiver=new Receiver({isServer,extensions:{},maxPayload:LIMIT,skipUTF8Validation:false});let buffer=Buffer.alloc(0),chunks=0,frames=0,total=0,closed=false,ended=false,failed=false,finished=false;const start=Date.now();
+ function fail(){if(!failed){failed=true;onFailure();}return false;}
+ receiver.on('error',fail);receiver.on('finish',()=>{finished=true;onFinished();});receiver.on('conclude',(code)=>{if(closed||![1000,1001,1005].includes(code)){fail();return;}closed=true;if(onClose(code===1005?null:code)===false)fail();});
+ function feed(input){if(failed||ended||!Buffer.isBuffer(input)||++chunks>MAX_CHUNKS||Date.now()-start>MAX_MS||(total+=input.length)>LIMIT||closed&&input.length)return fail();
+  buffer=Buffer.concat([buffer,Buffer.from(input)]);if(buffer.length>LIMIT)return fail();
+  while(buffer.length>=2){if(++frames>MAX_FRAMES)return fail();let length=buffer[1]&127,offset=2;if(length===126){if(buffer.length<4){frames--;break;}length=buffer.readUInt16BE(2);offset=4;}else if(length===127){if(buffer.length<10){frames--;break;}const n=buffer.readBigUInt64BE(2);if(n>BigInt(LIMIT))return fail();length=Number(n);offset=10;}if(buffer[1]&128)offset+=4;if(length>LIMIT||offset+length>LIMIT)return fail();if(buffer.length<offset+length){frames--;break;}if(closed)return fail();const frame=Buffer.from(buffer.subarray(0,offset+length));buffer=Buffer.from(buffer.subarray(offset+length));const isClose=(frame[0]&15)===8;
+   if(!receiver.write(frame))return fail();if(failed||isClose&&!closed)return fail();if(closed&&buffer.length)return fail();
+  }return !failed;
+ }
+ function end(){if(ended)return !failed;ended=true;if(buffer.length||!closed)return fail();if(!receiver.writableEnded)receiver.end();return !failed;}
+ return Object.freeze({feed,end,state:()=>({closed,ended,failed,finished,pendingBytes:buffer.length})});
+}
+module.exports={handshake,createTap};

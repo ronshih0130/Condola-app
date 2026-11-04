@@ -1,0 +1,81 @@
+{
+  "state": "AUTHOR_FROZEN_SOURCE_ONLY_INDEPENDENT_REVIEW_PENDING",
+  "version": 2,
+  "scope": "five independently reported recovery integrity findings only",
+  "previous_manifest": "7f02019b58a7bea66e7d053a6de46824ccd5f02d64078ce8c165ed5da186c40c",
+  "previous_review": {
+    "b018-bootstrap-recovery-independent-astra-v1.json": "5566845ca5e807723b51460f4a7e8eb06df7e91f21d9b480d8d50f6282a04244",
+    "b018-bootstrap-recovery-independent-astra-v1.md": "e86513131cdb4cdcb53c6e4f9f282d3a5b1309c460a1a7a9479e5c1aa9a88366"
+  },
+  "files": {
+    "README.md": {
+      "sha256": "ff21a90ad6cc4408892b4859c9734f061427b78c820938f9d73cb2701375bfff",
+      "bytes": 10503
+    },
+    "compare.cjs": {
+      "sha256": "57af594e1983ef351e75dda2050f8653778ee7d3dd0b121a88d136000d242077",
+      "bytes": 5283
+    },
+    "compare.test.cjs": {
+      "sha256": "2887632dbfabce74eaff3f52809c9b6e8ab4afcc690f47093d7a76655c978579",
+      "bytes": 5312
+    },
+    "final-pure-tests.tap": {
+      "sha256": "ca0b626138035d3471324d8680882d07c30869898e316fa026cb2facd667d2c0",
+      "bytes": 5854
+    },
+    "integrity.cjs": {
+      "sha256": "170e19d37cb274c3b293b98e6d935c4455600676fd71ec68145ce59e56546cbb",
+      "bytes": 5527
+    },
+    "integrity.test.cjs": {
+      "sha256": "75f58d67be26f547602a7a2eadbaa9c1c249a4d547072b82e6480f1505bc994f",
+      "bytes": 4622
+    },
+    "pure-tests.tap": {
+      "sha256": "b20b5a69ef30419b93977e9a09300c7e81d1fb7e81b2b195495a91693eb0bf48",
+      "bytes": 5857
+    },
+    "recovery.cjs": {
+      "sha256": "a7c985e6fea3f4a292eadcebb7c849b7edc014f89b859539345149418f3341b1",
+      "bytes": 15072
+    },
+    "recovery.d.ts": {
+      "sha256": "673cfa88a44848e5eb405d44da3944bb4567baac0db80f1b2047869c0e20f307",
+      "bytes": 1688
+    }
+  },
+  "external_verifier_sha256": "931daca260abf4f7c54fe4099cbc2cb9aeeaca5ee06feb27d2740a5a282693c1",
+  "app_provenance": {
+    "ops/flags.yaml": "91702b168d80b5001674485c7c32bc95975ae6100149edbfaad38eb88b7c4908",
+    "src/server/auth.ts": "4267811e83eefedfe4139d2f26372efac6cba0c6782e1a97b099765831eb14a3",
+    "src/server/auth-actions.ts": "39cad3edaa1df3c8c746683a82349dc57f1f1bd7830ce5e49b9182f8054a4689",
+    "src/server/audit.ts": "27f9acf92dbcbf92f2518b8b302bea48119a18129e572fd81861145fcf88493c",
+    "src/server/session.ts": "610adf5e7ca5de94e26218167a2d945b1cd2b4f6d1d90c68b61fac8b625c4efd",
+    "src/server/consent.ts": "8cd89c4a9ae5ab6d6fd7b8820d6111d185548ed52629f88abb95839c89ca41a6",
+    "src/server/org-scope.ts": "04e49dbf59ceffa0baab23e6c1bf2fdae04a714cdd8815aeec8090d7cfd9b427",
+    "src/server/portal-role.ts": "9e6970f2ff20d95545d11924c46fd9c2c61464bba1b44821d648b1bcc362a32e"
+  },
+  "createdb": {
+    "invocation": "/opt/homebrew/opt/postgresql@16/bin/createdb",
+    "physical": "/opt/homebrew/Cellar/postgresql@16/16.15/bin/createdb",
+    "sha256": "0234fab6d8781ba4069433ee9b288df8b408da74a5664002f22f9a2b7b864e01"
+  },
+  "result": {
+    "syntax": "PASS 5 CJS files",
+    "pure_final": {
+      "pass": 42,
+      "fail": 0,
+      "skipped": 0
+    },
+    "sql_parser": "NOT_RUN",
+    "actual_database_queries": "NOT_RUN",
+    "integrated_runtime": "NOT_RUN"
+  },
+  "consumer_changes": [
+    "offReceiptSha256 and observed clone executable before/after digest",
+    "v2 signed baseline and conditional final proof",
+    "same private per-login envelope and signed verifier v3",
+    "parent deterministic fixture ordering before baseline for two same-time user005 contacts"
+  ]
+}

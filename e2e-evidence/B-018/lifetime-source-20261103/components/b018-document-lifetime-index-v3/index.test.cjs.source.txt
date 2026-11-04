@@ -1,0 +1,219 @@
+'use strict';
+const assert=require('node:assert/strict'),test=require('node:test');
+const {fixture,harness,config,hash}=require('./fixtures.cjs');
+function start(edit=()=>{}){
+  const f=fixture();edit(f.data,f.tail);const h=harness();h.feed(f.data);
+  return {...h,...f,cut:h.index.bootstrapCut()};
+}
+function no(edit){const {cut}=start(edit);assert.notEqual(cut.status,'MATCHED');return cut;}
+const find=(events,type,ctx,fn=()=>true)=>events.find(x=>x.type===type&&(ctx===undefined||x.fields.ctx===ctx)&&fn(x.fields));
+const fields=(a,t,ctx,fn)=>find(a,t,ctx,fn).fields;
+test('F01/F13 six slots, twelve actual-shape document bindings, genuine request/post-role distinction and clean independent tail',()=>{
+  const a=start();assert.equal(a.cut.status,'MATCHED',a.cut.reason);
+  assert.equal(a.cut.bindings.length,12);assert.equal(a.cut.nativeFailureEventIds.length,12);assert.equal(a.cut.rawStrict,'FAIL');
+  assert.equal(a.cut.financialAggregate,'PENDING');assert.equal(a.cut.hmrBindings.length,6);
+  a.feed(a.tail);const r=a.index.afterDrain();assert.equal(r.status,'MATCHED',r.reason);assert.equal(r.financialAggregate,'PENDING');
+});
+function remove(a,e){assert.ok(e);a.splice(a.indexOf(e),1);}
+function insertBefore(a,b,e){a.splice(a.indexOf(b),0,e);}
+function duplicate(e,changes={}){return {...e,fields:{...e.fields,...changes}};}
+function incident(ctx,reason){return {channel:'CDP',type:'issue',fields:{ctx,reason}};}
+function req(a,ctx,path,method='GET'){return fields(a,'pwOpen',ctx,p=>p.path===path&&p.method===method);}
+function cdp(a,ctx,path,method='GET'){return fields(a,'cdpOpen',ctx,p=>p.path===path&&p.method===method);}
+function from(a,type,id){return find(a,type,undefined,p=>p.id===id);}
+function checkTail(edit,expected){const h=start();assert.equal(h.cut.status,'MATCHED');edit(h.tail,h.data);h.feed(h.tail);const r=h.index.afterDrain();
+  assert.notEqual(r.status,'MATCHED');if(expected)assert.equal(r.status,expected);assert.equal(r.financialAggregate,'PENDING');return r;}
+test('F02 natural redirects require ordered predecessor and exact origin/frame/loader/location',()=>{
+  for(const change of [
+    a=>{req(a,1,'continue').prev=0;},a=>{cdp(a,1,'continue').loader++;},
+    a=>{req(a,1,'continue').frame++;},a=>{req(a,1,'continue').origin='foreign';},
+    a=>{const p=req(a,1,'continue');from(a,'pwResponse',p.id).fields.location=hash('wrong');},
+    a=>{remove(a,find(a,'cdpOpen',1,p=>p.path==='continue'));},
+    a=>{const e=find(a,'cdpOpen',1,p=>p.path==='continue');remove(a,e);insertBefore(a,find(a,'cdpOpen',1,p=>p.path==='enter'),e);}
+  ])no(change);
+});
+test('F03 ordinary enabled POST 303 and GET 200 cancellations remain fatal despite successful sibling and HMR retirement',()=>{
+  const h=start(a=>{
+    const first=fields(a,'pwOpen',2,x=>x.resource==='Fetch'&&x.method==='GET'&&x.path==='tenant');
+    const second=fields(a,'cdpOpen',2,x=>x.resource==='Fetch'&&x.method==='GET'&&x.path==='tenant');
+    const sibling=a.filter(e=>(e.channel==='PW'&&e.fields.ctx===2&&e.fields.id===first.id&&['pwOpen','pwCookie','pwResponse','pwEnd'].includes(e.type))||
+      (e.channel==='CDP'&&e.fields.ctx===2&&e.fields.id===second.id&&['cdpOpen','extraCookie','responseExtra','cdpResponse','cdpEnd'].includes(e.type))||
+      (e.channel==='GUARD'&&e.fields.id===first.id&&e.type.startsWith('proxy'))).map(e=>duplicate(e,{id:e.channel==='CDP'?40002:40001}));
+    const mark=find(a,'sameDocument',2);a.splice(a.indexOf(mark),0,...sibling);
+    for(const [method,path] of [['POST','login'],['GET','tenant']]){
+      const p=fields(a,'pwOpen',2,x=>x.method===method&&x.path===path&&x.resource==='Fetch');
+      const c=fields(a,'cdpOpen',2,x=>x.method===method&&x.path===path&&x.resource==='Fetch');
+      Object.assign(from(a,'pwEnd',p.id).fields,{terminal:'failed',error:'aborted'});
+      Object.assign(fields(a,'cdpEnd',2,x=>x.id===c.id&&x.hop===c.hop),{terminal:'failed',canceled:true,error:'aborted'});
+    }
+  });
+  assert.equal(h.cut.status,'FATAL');assert.equal(h.cut.rawFailureEventIds.length,16);
+  assert.ok(h.index.journal().some(x=>x.ctx===2&&x.type==='pwResponse'&&x.status===200));assert.ok(h.index.journal().some(x=>x.type==='retire'));
+});
+test('F04 duplicate graph edges on both sides or one missing source cannot resolve by timestamp',()=>{
+  const equal=no(a=>{
+    const p=req(a,1,'webpack'),c=cdp(a,1,'webpack');
+    for(const [type,id] of [['pwOpen',p.id],['pwEnd',p.id],['cdpOpen',c.id],['cdpEnd',c.id]])a.push(duplicate(from(a,type,id),{id:id+50000}));
+  });assert.equal(equal.reason,'pw-cdp-ambiguous');
+  no(a=>{a.push(duplicate(find(a,'pwOpen',1,x=>x.path==='webpack'),{id:765432}));});
+});
+test('F05 full URL HMAC required even for the same pathname/asset body',()=>{
+  assert.equal(no(a=>{cdp(a,1,'webpack').url=hash('another version');}).reason,'pw-cdp-unmatched');
+});
+test('F06 same bytes in isolated/destroyed/reused world or stale marker never prove execution in the measured world',()=>{
+  for(const edit of [
+    a=>{fields(a,'world',2).kind='isolated';},
+    a=>{const w=find(a,'world',2);insertBefore(a,find(a,'parsed',2),duplicate(w,{state:'destroyed'}));},
+    a=>{const w=find(a,'world',2);insertBefore(a,find(a,'parsed',2),duplicate(w));},
+    a=>{fields(a,'worldSample',2).generation=hash('stale');},
+    a=>{fields(a,'pwSample',2).marker=hash('old document');},
+    a=>{const w=find(a,'world',2);insertBefore(a,find(a,'parsed',2),duplicate(w,{world:123,generation:hash('w2')}));}
+  ])no(edit);
+});
+test('F07 executable evidence needs positive consistent byte ranges, source and response bytes and live V8 stream',()=>{
+  for(const edit of [
+    a=>{Object.assign(fields(a,'coverage',2),{units:0,bytes:0});},a=>{fields(a,'coverage',2).bytes=777;},
+    a=>{fields(a,'scriptSource',2).source=hash('changed');},
+    a=>{from(a,'pwBody',req(a,2,'webpack').id).fields.body=hash('stale');},
+    a=>{a.push(duplicate(find(a,'parsed',2),{ctx:1}));},
+    a=>{a.push(incident(2,'loss'));}
+  ])no(edit);
+});
+test('F08 same-loader script arriving during asynchronous sample invalidates capture immediately',()=>{
+  const r=no(a=>{
+    const b=find(a,'declaration',2);insertBefore(a,b,duplicate(find(a,'parsed',2),{script:990}));
+  });assert.equal(r.reason,'interleaved-capture-conflict');
+});
+test('F08 a successful duplicate old-loader request after cut and extra commit remain visible at final replay',()=>{
+  const late=checkTail((tail,a)=>{
+    const p=req(a,2,'webpack'),c=cdp(a,2,'webpack'),extraId=50201;
+    const subset=a.filter(e=>(e.channel==='PW'&&e.fields.ctx===2&&e.fields.id===p.id&&['pwOpen','pwCookie','pwResponse','pwEnd'].includes(e.type))||
+      (e.channel==='CDP'&&e.fields.ctx===2&&e.fields.id===c.id&&['cdpOpen','extraCookie','responseExtra','cdpResponse','cdpEnd'].includes(e.type))||
+      (e.channel==='GUARD'&&e.fields.id===p.id&&e.type.startsWith('proxy')));
+    tail.unshift(...subset.map(e=>duplicate(e,{id:extraId+(e.channel==='CDP'?1:0)})));
+  });assert.ok(['pw-cdp-ambiguous','script-candidate-count'].includes(late.reason),late.reason);
+  checkTail((t,a)=>t.unshift(duplicate(find(a,'commit',2),{loader:987})));
+});
+test('F09 frame-tree and separate PW arrival/marker must both identify one document, including JS-off',()=>{
+  for(const edit of [a=>{fields(a,'treeSample',1).loader++;},a=>{fields(a,'pwSample',2).marker=null;},
+    a=>{remove(a,find(a,'pwArrival',1));},a=>{fields(a,'pwArrival',1).id++;}])no(edit);
+});
+test('F10 post-retirement policy/meta/preload/base mutations retain IDs even for old loader',()=>{
+  for(const kind of ['meta','preload','base','script','lost']){
+    const r=checkTail(t=>t.unshift({type:'policyChange',channel:'OBS',fields:{ctx:2,frame:19,loader:1,kind}}));
+    assert.equal(r.reason,'sticky-observer-conflict');assert.equal(r.rawFailureEventIds.length,13);
+  }
+});
+test('F11 outgoing path shadow survives a clean terminal cookie jar',()=>{
+  for(const delta of [{sid:hash('temporary')},{lease:'expected'},{org:'foreign'},{env:'duplicate'}]){
+    no(a=>{const p=req(a,1,'continue'),c=cdp(a,1,'continue');
+      Object.assign(from(a,'pwCookie',p.id).fields,delta);
+      const raw=from(a,'pwCookie',p.id).fields.cookie;
+      Object.assign(fields(a,'extraCookie',1,e=>e.id===c.id&&e.cookie===raw),delta);});
+  }
+});
+function equalCookieHops(a){
+  const e=req(a,1,'enter'),c=req(a,1,'continue'),ec=cdp(a,1,'continue');
+  const first=from(a,'pwCookie',e.id).fields.cookie,second=from(a,'pwCookie',c.id).fields.cookie;
+  fields(a,'extraCookie',1,p=>p.id===ec.id&&p.cookie===second).cookie=first;
+  from(a,'pwCookie',c.id).fields.cookie=first;Object.assign(from(a,'proxyOpen',c.id).fields,{cookie:first,forwardedCookie:first});
+}
+test('F12 duplicate/partition/unreadable cookies, changed forwarding and incomplete or indistinguishable ExtraInfo fail',()=>{
+  for(const edit of [a=>{fields(a,'extraCookie',1).shadow='present';},a=>{fields(a,'extraCookie',1).shadow='unknown';},
+    a=>{fields(a,'extraCookie',1).lease='duplicate';},a=>{fields(a,'extraCookie',1).sid=hash('changed');},
+    a=>{from(a,'proxyOpen',req(a,1,'enter').id).fields.forwardedCookie=hash('changed');},
+    a=>{remove(a,find(a,'extraCookie',1));}])no(edit);
+  assert.equal(no(equalCookieHops).reason,'request-extra-ambiguous');
+});
+test('F13 reject lost tenant role after first protected response, SID replacement and staff tenant role',()=>{
+  no(a=>{const p=fields(a,'pwOpen',2,x=>x.path==='tenant'&&x.nav);
+    const c=fields(a,'cdpOpen',2,x=>x.path==='tenant'&&x.resource==='Document');
+    from(a,'pwCookie',p.id).fields.role='absent';fields(a,'extraCookie',2,x=>x.id===c.id).role='absent';});
+  no(a=>{fields(a,'session',1).sid=hash('replaced');});no(a=>{fields(a,'session',5).role='tenant';});
+});
+test('F14 ExtraInfo delivered before request reconstructed by independently distinguishing fields',()=>{
+  const h=start(a=>{const request=find(a,'cdpOpen',1,x=>x.path==='login'&&x.method==='POST');
+    const i=a.indexOf(request);const extras=a.filter(x=>x.type==='extraCookie'&&x.fields.ctx===1&&x.fields.id===request.fields.id);
+    extras.forEach(e=>remove(a,e));a.splice(i,0,...extras.reverse());});
+  assert.equal(h.cut.status,'MATCHED',h.cut.reason);assert.equal(no(equalCookieHops).reason,'request-extra-ambiguous');
+});
+test('F15 missing bilateral Close or retirement anchor, abnormal code, wrong handshake, unowned socket all reject',()=>{
+  for(const edit of [
+    a=>{fields(a,'hmrBrowser',2).url=hash('unapproved');},a=>{fields(a,'hmrPeer',undefined,p=>p.state==='accepted').accept=hash('wrong');},
+    a=>{fields(a,'hmrPeer',undefined,p=>p.state==='close-client').code=1006;},
+    a=>{remove(a,find(a,'hmrPeer',undefined,p=>p.state==='close-server'));},
+    a=>{remove(a,find(a,'retireAnchor'));},a=>{fields(a,'anchorRecord',2).loader=17;},
+    a=>{a.push(duplicate(find(a,'hmrBrowser',2),{socket:456}));},
+    a=>{const e=find(a,'hmrPeer',undefined,p=>p.state==='close-client');remove(a,e);insertBefore(a,find(a,'retire',2),e);},
+    a=>{a.push(duplicate(find(a,'hmrProtocol',2),{state:'error'}));}
+  ])no(edit);
+  checkTail(t=>remove(t,find(t,'hmrPeer',undefined,p=>p.state==='drained')));
+});
+test('F16 upstream-only CSP, 103 hints, missing private upstream response, policy before-ready gap cannot establish absence',()=>{
+  for(const edit of [a=>{fields(a,'proxyResponse').enforced=1;},a=>{fields(a,'proxyResponse').hints=1;},
+    a=>{remove(a,find(a,'proxyResponse'));},a=>{remove(a,find(a,'policyArm',1));},
+    a=>{fields(a,'declaration',1).effectiveMeta=1;},a=>{fields(a,'declaration',1).nonce=1;},
+    a=>{const e=find(a,'policyArm',1);remove(a,e);a.push(e);},
+    a=>{a.unshift({channel:'OBS',type:'policyChange',fields:{ctx:1,frame:19,loader:1,kind:'lost'}});}
+  ])no(edit);
+});
+test('F17 late loss, unresolved callback, premature context teardown or missing observer closure stays red',()=>{
+  checkTail(t=>t.unshift(incident(0,'loss')));
+  checkTail(t=>t.unshift({channel:'PW',type:'task',fields:{ctx:1,id:1,state:'start'}}));
+  checkTail(t=>remove(t,find(t,'closed',2,p=>p.channelName==='CDP')));
+  no(a=>a.unshift({channel:'PW',type:'contextClosed',fields:{ctx:1}}));
+  checkTail(t=>t.push(incident(0,'transport')),'FATAL');
+});
+test('F18 bootstrap receipt stays immutable when later evidence is fatal; aggregate always belongs to outer verifier',()=>{
+  const h=start();const snapshot=JSON.stringify(h.cut);
+  h.feed(h.tail);h.put(incident(1,'page'));const end=h.index.afterDrain();
+  assert.equal(end.status,'FATAL');assert.equal(end.financialAggregate,'PENDING');assert.equal(JSON.stringify(h.cut),snapshot);
+  const empty=harness();assert.equal(empty.index.afterDrain().status,'UNAVAILABLE');
+});
+test('F19 strict sanitized DTO rejects secrets/getters/unknown arrays without returning their content',()=>{
+  const f=fixture(),h=harness(),secret='sensitive-probe://user:password@host/path?token=secret-session';
+  const extra={...f.data[0].fields,headers:[secret]};
+  let ran=false;const trap={...f.data[0].fields};Object.defineProperty(trap,'binding',{get(){ran=true;return secret;}});
+  for(const value of [extra,trap,{...f.data[0].fields,binding:secret}]){
+    assert.equal(h.index.append('PARENT',1,'ready',value),null);
+  }
+  h.feed(f.data);const r=h.index.bootstrapCut();assert.equal(r.status,'UNAVAILABLE');assert.equal(r.reason,'invalid-event');
+  assert.equal(ran,false);assert.equal(JSON.stringify([h.index.journal(),r]).includes(secret),false);
+});
+test('F20 journal replay sequencing, immutable DTO copies and unmatched/duplicate terminal enforcement',()=>{
+  const f=fixture(),h=harness();const first={...f.data[0].fields};h.put(f.data[0]);f.data[0].fields.binding=hash('changed');
+  assert.equal(h.index.journal()[0].binding,first.binding);assert.ok(Object.isFrozen(h.index.journal()[0]));
+  h.index.append('PARENT',1,'ready',first);h.feed(f.data.slice(1));assert.equal(h.index.bootstrapCut().reason,'source-sequence-gap');
+  no(a=>remove(a,find(a,'pwEnd',1)));no(a=>{a.push(duplicate(find(a,'pwEnd',1)));});
+  const h1=start(),h2=start();assert.equal(h1.cut.journalSha256,h2.cut.journalSha256);
+  assert.equal(h1.index.bootstrapCut().status,'UNAVAILABLE');
+});
+test('F04/F06 same exact asset URL over two documents can resolve when earlier callback predates the next operation and V8 generations differ',()=>{
+  const h=start(a=>{
+    const login=fields(a,'declaration',2,p=>p.doc==='login').url,landing=fields(a,'declaration',2,p=>p.doc==='landing').url;
+    for(const e of a)if(e.fields.url===landing)e.fields.url=login;
+  });assert.equal(h.cut.status,'MATCHED',h.cut.reason);
+});
+test('F07 asynchronous body/source completions cannot be backfilled into a sealed sample',()=>{
+  for(const type of ['pwBody','scriptSource']){
+    no(a=>{const row=find(a,type,2);remove(a,row);a.push(row);});
+  }
+});
+test('F15 guard owner and per-exchange armed intent must agree with the actual committed owner',()=>{
+  no(a=>{fields(a,'hmrOwner').owner=hash('copied');});no(a=>{remove(a,find(a,'hmrIntent'));});
+  no(a=>{fields(a,'hmrIntent').intentKey=hash('different');});
+});
+test('F04/F09 reject cached, worker or prefetch response and wrong capture fence',()=>{
+  for(const type of ['pwResponse','cdpResponse'])no(a=>{fields(a,type,1).fromServiceWorker=true;});
+  for(const key of ['fromDiskCache','fromPrefetchCache'])no(a=>{fields(a,'cdpResponse',2)[key]=true;});
+  no(a=>{fields(a,'fence',2).loader++;});
+});
+test('F06/F17 unplanned late default-world turnover and unowned context closure remain unresolved',()=>{
+  checkTail(t=>t.unshift({type:'clearWorlds',channel:'CDP',fields:{ctx:2}}));
+  checkTail(t=>remove(t,find(t,'closeIntent',1)));
+});
+test('F15 a parsed wire Close with no status is distinct from a missing frame; 101 must be observed on both protocol and wire',()=>{
+  const h=start(a=>{fields(a,'hmrPeer',undefined,e=>e.state==='close-client').code=null;});
+  assert.equal(h.cut.status,'MATCHED',h.cut.reason);
+  for(const type of ['hmrPeer','hmrProtocol'])no(a=>{fields(a,type,undefined,e=>e.state==='accepted').httpStatus=403;});
+});

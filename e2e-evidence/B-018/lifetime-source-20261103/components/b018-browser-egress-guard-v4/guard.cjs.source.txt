@@ -1,0 +1,201 @@
+'use strict';
+// Unreviewed source-only component. Nothing listens or launches on import.
+const http=require('node:http'),fs=require('node:fs'),crypto=require('node:crypto'),path=require('node:path');
+const {handshake,createTap}=require('./hmr-protocol.cjs');
+const ORIGIN='http://127.0.0.1:43156', HOST='127.0.0.1:43156';
+const handles=new WeakSet();
+const REQUIRED_ARGS=Object.freeze(['--disable-quic','--dns-prefetch-disable',
+ '--force-webrtc-ip-handling-policy=disable_non_proxied_udp']);
+const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+function target(raw,upgrade=false){
+ if(typeof raw!=='string'||raw.length>16384||raw.includes('#')||/[\x00-\x20\x7f\\]/.test(raw))return null;
+ let u;try{u=new URL(raw);}catch{return null;}
+ if(u.username||u.password||u.hash||u.host!==HOST||
+  !(u.protocol==='http:'||upgrade&&u.protocol==='ws:'))return null;
+ const prefix=(u.protocol==='ws:'?'ws://':'http://')+HOST;
+ // Do not admit normalized host/port/authority variants.
+ if(!raw.startsWith(prefix+'/')||raw!==u.href)return null;
+ if(upgrade&&u.pathname!=='/_next/webpack-hmr')return null;
+ return u.pathname+u.search;
+}
+function statKey(file){const s=fs.lstatSync(file);if(!s.isFile()||s.isSymbolicLink())throw Error('egress-binary-unavailable');
+ return JSON.stringify([s.dev,s.ino,s.size,s.mtimeMs,s.ctimeMs]);}
+function cleanHeaders(headers,websocket=false){
+ const banned=new Set(['proxy-authorization','proxy-connection','connection','keep-alive','upgrade',
+  'forwarded','x-forwarded-host','x-forwarded-proto','x-forwarded-for']);
+ for(const x of String(headers.connection||'').split(',')){const token=x.trim().toLowerCase();if(token&&!['close','keep-alive','upgrade'].includes(token))throw Error('unsafe-connection-header');if(token)banned.add(token);}
+ const result={};for(const [k,v] of Object.entries(headers))if(!banned.has(k.toLowerCase()))result[k]=v;
+ result.host=HOST;
+ if(websocket){result.connection='Upgrade';result.upgrade='websocket';}
+ return result;
+}
+async function openBrowserEgressGuard({browserExecutablePath,browserExecutableSha256,wsModuleFile,onEvent,readLifecycleRecord}) {
+ const wsPath=fs.realpathSync(wsModuleFile);if(sha(fs.readFileSync(wsPath))!=='7b9865c26b0b6c148b4ed0d00dfc5409aff21e6a65851a2c5352b689f7351574')throw Error('ws-source-drift');
+ for(const name of ['bufferutil','utf-8-validate']){let found=false;try{require.resolve(name,{paths:[path.dirname(wsPath)]});found=true;}catch{}if(found)throw Error('unapproved-native-ws-dependency');}
+ const {Receiver}=require(wsPath);if(typeof Receiver!=='function')throw Error('ws-receiver-unavailable');
+ if(typeof onEvent!=='function'||typeof readLifecycleRecord!=='function'||!/^[a-f0-9]{64}$/.test(browserExecutableSha256||''))throw Error('egress-options-unavailable');
+ const exe=fs.realpathSync(browserExecutablePath),binaryStat=statKey(exe);
+ if(sha(fs.readFileSync(exe))!==browserExecutableSha256)throw Error('egress-binary-mismatch');
+ const sockets=new Set(),upstream=new Set(),contexts=new Set(),pending=new Set(),tunnels=new Set(),owners=new Set(),intentIds=new Set(),anchorIds=new Set();
+ let browser=null,attached=false,closing=false,closed=false,failed=false,sequence=0,denied=0,forwarded=0,exchangeSeq=0,privateSequence=0,privateObserver=null,privateSinkBroken=false;
+ function emit(event,reason){const row={sequence:++sequence,event,reason};
+  try{onEvent(row);}catch{failed=true;for(const s of [...sockets,...upstream])s.destroy();throw Error('egress-journal-unavailable');}}
+ function deny(socket,response,reason){failed=true;denied++;emit('denied',reason);
+  if(response){response.writeHead(502,{'content-type':'text/plain','cache-control':'no-store'});response.end('Blocked by local test guard');}
+  else socket.destroy();}
+ function failure(reason){failed=true;emit('failure',reason);}
+ function projectRaw(raw,allowed){if(!Array.isArray(raw)||raw.length%2)throw Error('raw-headers-unavailable');const out=[];for(let i=0;i<raw.length;i+=2){const name=String(raw[i]).toLowerCase();if(allowed.includes(name))out.push(Object.freeze([name,String(raw[i+1])]));}return Object.freeze(out);}
+ function projectObject(headers,allowed){const out=[];for(const [key,value] of Object.entries(headers)){const name=key.toLowerCase();if(!allowed.includes(name))continue;for(const item of Array.isArray(value)?value:[value])if(item!==undefined)out.push(Object.freeze([name,String(item)]));}return Object.freeze(out);}
+ const reqNames=['cookie','sec-websocket-key'],resNames=['content-security-policy','content-security-policy-report-only','link','set-cookie','location','sec-websocket-accept'];
+ function sameProjection(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+ function observePrivate(event){if(privateSinkBroken)return false;if(!privateObserver){failure('private-observer-missing');return false;}try{privateObserver(Object.freeze({sequence:++privateSequence,...event}));return true;}catch{privateSinkBroken=true;failure('private-observer-error');for(const x of pending){if(x.q)x.q.destroy();if(!x.res.destroyed)x.res.destroy();}for(const t of tunnels){t.request?.destroy();t.client.destroy();t.peer?.destroy();}return false;}}
+ function progress(exchangeId,part,terminal){observePrivate({exchangeId,type:'transport-terminal',part,terminal});}
+ function upstreamHeaders(res){
+  const h=cleanHeaders(res.headers);delete h.host;
+  // This finite proof admits only zero upstream policy headers. No security header
+  // can be removed through a connection token; unknown 1xx responses fail below.
+  if(Object.keys(res.headers).some(k=>['content-security-policy','content-security-policy-report-only'].includes(k.toLowerCase())))return null;
+  if(res.headers.location){let u;try{u=new URL(res.headers.location,ORIGIN);}catch{return null;}
+   if(u.origin!==ORIGIN||u.username||u.password)return null;}
+  return h;
+ }
+ const server=http.createServer((req,res)=>{
+  const endpoint=target(req.url);let headers;
+  try{headers=cleanHeaders(req.headers);}catch{return deny(req.socket,res,'unsafe-request-connection');}
+  if(closing||!endpoint||!['GET','POST','HEAD'].includes(req.method))return deny(req.socket,res,'http-target-or-method');
+  let incomingHeaders,forwardedHeaders;try{incomingHeaders=projectRaw(req.rawHeaders,reqNames);forwardedHeaders=projectObject(headers,reqNames);}catch{return deny(req.socket,res,'request-header-witness-unavailable');}if(!sameProjection(incomingHeaders,forwardedHeaders))return deny(req.socket,res,'request-header-transformation');
+  const exchangeId='x'+(++exchangeSeq);if(!observePrivate({exchangeId,type:'http-request',requestMethod:req.method,rawUrl:req.url,incomingHeaders,forwardedHeaders}))return deny(req.socket,res,'private-observer-unavailable');
+  forwarded++;emit('forwarded','fixed-local-http');
+  const x={exchangeId,req,res,q:null,reqEnd:false,reqClose:false,qFinish:false,qClose:false,replyEnd:false,replyClose:false,resFinish:false,resClose:false};pending.add(x);
+  function settle(){if(pending.has(x)&&x.reqEnd&&x.reqClose&&x.qFinish&&x.qClose&&x.replyEnd&&x.replyClose&&x.resFinish&&x.resClose){pending.delete(x);observePrivate({exchangeId,type:'http-terminal',terminal:'completed'});}}
+  function bad(reason){failure(reason);observePrivate({exchangeId,type:'http-terminal',terminal:'failed',reason});if(x.q)x.q.destroy();if(!res.destroyed)res.destroy();}
+  const q=x.q=http.request({hostname:'127.0.0.1',port:43156,path:endpoint,method:req.method,headers,agent:false,timeout:30000},r=>{
+   let upstreamHeadersRaw,downstreamHeaders;try{upstreamHeadersRaw=projectRaw(r.rawHeaders,resNames);downstreamHeaders=projectObject(r.headers,resNames);}catch{failure('response-header-witness-unavailable');r.destroy();q.destroy();res.destroy();return;}
+   let safe;try{safe=upstreamHeaders(r);if(!sameProjection(upstreamHeadersRaw,projectObject(safe,resNames)))safe=null;}catch{safe=null;}
+   if(!safe){observePrivate({exchangeId,type:'http-response-rejected',status:r.statusCode,upstreamHeaders:upstreamHeadersRaw});failure('unsafe-response-policy-or-headers');r.destroy();q.destroy();res.destroy();return;}
+   downstreamHeaders=projectObject(safe,resNames);res.writeHead(r.statusCode,safe);if(!observePrivate({exchangeId,type:'http-response',status:r.statusCode,upstreamHeaders:upstreamHeadersRaw,downstreamHeaders})){r.destroy();q.destroy();res.destroy();return;}emit('policy','upstream-enforced-and-report-only-absent');r.pipe(res);
+   r.on('end',()=>{progress(exchangeId,'upstream-response','end');x.replyEnd=true;settle();});r.on('close',()=>{progress(exchangeId,'upstream-response','close');x.replyClose=true;if(!x.replyEnd)bad('upstream-response-incomplete');settle();});
+   r.on('error',()=>bad('response-stream'));
+  });
+  q.on('socket',u=>{upstream.add(u);u.on('close',()=>{progress(exchangeId,'upstream-socket','close');upstream.delete(u);});u.on('error',()=>failure('upstream-socket'));});req.socket.on('close',()=>progress(exchangeId,'client-socket','close'));
+  q.on('finish',()=>{progress(exchangeId,'upstream-request','finish');x.qFinish=true;settle();});q.on('close',()=>{progress(exchangeId,'upstream-request','close');x.qClose=true;settle();});
+  q.on('information',()=>bad('unsupported-informational-response'));
+  q.on('timeout',()=>bad('upstream-timeout'));q.on('error',()=>bad('upstream-http'));
+  req.on('end',()=>{progress(exchangeId,'client-request','end');x.reqEnd=true;settle();});req.on('close',()=>{progress(exchangeId,'client-request','close');x.reqClose=true;if(!x.reqEnd)bad('request-body-incomplete');settle();});
+  req.on('aborted',()=>bad('client-abort'));req.on('error',()=>bad('client-request'));
+  res.on('finish',()=>{progress(exchangeId,'client-response','finish');x.resFinish=true;settle();});res.on('close',()=>{progress(exchangeId,'client-response','close');x.resClose=true;if(!x.resFinish||!res.writableFinished)bad('client-response-incomplete');settle();});res.on('error',()=>bad('client-response'));
+  req.pipe(q);
+ });
+ server.on('connect',(req,s)=>deny(s,null,'connect-denied'));
+ server.on('upgrade',(req,s,head)=>{
+  const endpoint=target(req.url,true);let headers;try{headers=cleanHeaders(req.headers,true);}catch{return deny(s,null,'unsafe-upgrade-connection');}
+  if(closing||req.method!=='GET'||endpoint!=='/_next/webpack-hmr'||tunnels.size>=16||String(req.headers.upgrade).toLowerCase()!=='websocket')return deny(s,null,'upgrade-target');
+  let incomingHeaders,forwardedHeaders;try{incomingHeaders=projectRaw(req.rawHeaders,reqNames);forwardedHeaders=projectObject(headers,reqNames);}catch{return deny(s,null,'hmr-header-witness-unavailable');}if(!sameProjection(incomingHeaders,forwardedHeaders))return deny(s,null,'hmr-header-transformation');
+  const exchangeId='x'+(++exchangeSeq);if(!observePrivate({exchangeId,type:'hmr-request',requestMethod:req.method,rawUrl:req.url,incomingHeaders,forwardedHeaders,handshakeIncoming:projectRaw(req.rawHeaders,['upgrade','connection','sec-websocket-version','sec-websocket-extensions','sec-websocket-protocol']),handshakeForwarded:projectObject(headers,['upgrade','connection','sec-websocket-version','sec-websocket-extensions','sec-websocket-protocol'])}))return deny(s,null,'private-observer-unavailable');
+  forwarded++;emit('forwarded','fixed-local-hmr');
+  const tunnel={exchangeId,client:s,peer:null,request:null,requestClosed:false,clientClosed:false,peerClosed:false,established:false,owner:null,ownerBound:false,intent:null,anchor:null,clientTap:null,peerTap:null,clientFin:false,peerFin:false,clientFinForwarded:false,peerFinForwarded:false};tunnels.add(tunnel);
+  function settle(){if(tunnels.has(tunnel)&&tunnel.requestClosed&&tunnel.clientClosed&&tunnel.peerClosed){const a=tunnel.clientTap?.state(),b=tunnel.peerTap?.state();if(!tunnel.ownerBound||typeof tunnel.owner!=='string'||!/^[a-f0-9]{64}$/.test(tunnel.owner)||!tunnel.intent||!a?.closed||!b?.closed||!a.ended||!b.ended||a.failed||b.failed){failure('hmr-retirement-incomplete');observePrivate({exchangeId,type:'hmr-terminal',terminal:'unavailable'});}else if(!tunnel.anchor||!a.finished||!b.finished)return;else observePrivate({exchangeId,type:'hmr-terminal',terminal:'bilateral-close-provisional',ownerDocument:tunnel.owner,intentId:tunnel.intent.intentId,anchorEventId:tunnel.anchor.anchorEventId,anchorSha256:tunnel.anchor.anchorSha256});clearTimeout(tunnel.timer);tunnels.delete(tunnel);emit('hmr','both-peers-closed');}}
+  tunnel.settle=settle;tunnel.timer=setTimeout(()=>{failure('hmr-lifetime-timeout');tunnel.request?.destroy();tunnel.client.destroy();tunnel.peer?.destroy();},120000);
+  const q=tunnel.request=http.request({hostname:'127.0.0.1',port:43156,path:endpoint,method:'GET',headers,agent:false,timeout:30000});
+  q.on('socket',u=>{upstream.add(u);u.on('close',()=>upstream.delete(u));u.on('error',()=>failure('hmr-upstream-socket'));});
+  q.on('close',()=>{progress(exchangeId,'hmr-upstream-request','close');tunnel.requestClosed=true;settle();});q.on('information',()=>{observePrivate({exchangeId,type:'hmr-terminal',terminal:'failed',reason:'unsupported-hmr-information'});failure('unsupported-hmr-information');q.destroy();s.destroy();});
+  s.on('close',()=>{progress(exchangeId,'hmr-client-socket','close');tunnel.clientClosed=true;if(!tunnel.clientTap?.end())failure('hmr-client-close-unavailable');settle();});
+  q.on('upgrade',(r,u,h)=>{
+   let upstreamHeadersRaw,downstreamHeaders;try{upstreamHeadersRaw=projectRaw(r.rawHeaders,resNames);downstreamHeaders=projectObject(r.headers,resNames);}catch{failure('hmr-response-witness-unavailable');u.destroy();s.destroy();return;}
+   let safe=true;try{cleanHeaders(r.headers,true);handshake(req,r);}catch{safe=false;}
+   if(r.statusCode!==101||!safe||!sameProjection(upstreamHeadersRaw,downstreamHeaders)||upstreamHeadersRaw.some(h=>h[0]!=='sec-websocket-accept')){observePrivate({exchangeId,type:'hmr-response-rejected',status:r.statusCode,upstreamHeaders:upstreamHeadersRaw});failure('invalid-upgrade-response');u.destroy();s.destroy();return;}
+   tunnel.established=true;tunnel.peer=u;q.setTimeout(0);u.setTimeout(0);
+   const allowed=new Set(['upgrade','connection','sec-websocket-accept','sec-websocket-protocol','sec-websocket-extensions']);let response='HTTP/1.1 101 Switching Protocols\r\n';
+   for(let i=0;i<r.rawHeaders.length;i+=2)if(allowed.has(r.rawHeaders[i].toLowerCase()))response+=r.rawHeaders[i]+': '+r.rawHeaders[i+1]+'\r\n';
+   function tapFailure(){failure('hmr-frame-unavailable');s.destroy();u.destroy();}
+   function onWireClose(direction,code){if(!tunnel.intent){failure('hmr-close-before-intent');s.destroy();u.destroy();return false;}return observePrivate({exchangeId,type:'hmr-close-frame',direction,code});}
+   tunnel.clientTap=createTap({Receiver,isServer:true,onClose:code=>onWireClose('client',code),onFailure:tapFailure,onFinished:settle});
+   tunnel.peerTap=createTap({Receiver,isServer:false,onClose:code=>onWireClose('upstream',code),onFailure:tapFailure,onFinished:settle});
+   function flushFin(){
+    const a=tunnel.clientTap.state(),b=tunnel.peerTap.state();
+    if(!a.closed||!b.closed||a.failed||b.failed||!tunnel.ownerBound||!tunnel.intent)return;
+    // These FINs propagate independently observed readable EOF after genuine Close
+    // frames. They do not create wire Close evidence or force the opposite socket shut.
+    if(tunnel.clientFin&&!tunnel.clientFinForwarded){tunnel.clientFinForwarded=true;progress(exchangeId,'hmr-upstream-writable','forwarded-fin');u.end();}
+    if(tunnel.peerFin&&!tunnel.peerFinForwarded){tunnel.peerFinForwarded=true;progress(exchangeId,'hmr-client-writable','forwarded-fin');s.end();}
+   }
+   function forward(src,dst,tap){src.on('data',chunk=>{if(!tap.feed(Buffer.from(chunk))){tapFailure();return;}if(!dst.write(chunk)){src.pause();dst.once('drain',()=>src.resume());}flushFin();});}
+   function receivedFin(which){
+    if(which==='client'){if(tunnel.clientFin)return;tunnel.clientFin=true;progress(exchangeId,'hmr-client-readable','wire-fin');if(!tunnel.clientTap.end()){tapFailure();return;}}
+    else{if(tunnel.peerFin)return;tunnel.peerFin=true;progress(exchangeId,'hmr-upstream-readable','wire-fin');if(!tunnel.peerTap.end()){tapFailure();return;}}
+    flushFin();
+   }
+   s.on('end',()=>receivedFin('client'));u.on('end',()=>receivedFin('upstream'));
+   s.write(response+'\r\n');if(!observePrivate({exchangeId,type:'hmr-response',status:r.statusCode,upstreamHeaders:upstreamHeadersRaw,downstreamHeaders,handshakeUpstream:projectRaw(r.rawHeaders,['upgrade','connection','sec-websocket-extensions','sec-websocket-protocol'])})){u.destroy();s.destroy();return;}
+   if(h.length){if(!tunnel.peerTap.feed(Buffer.from(h))){tapFailure();return;}s.write(h);}if(head.length){if(!tunnel.clientTap.feed(Buffer.from(head))){tapFailure();return;}u.write(head);}
+   forward(s,u,tunnel.clientTap);forward(u,s,tunnel.peerTap);
+   if(s.readableEnded)receivedFin('client');if(u.readableEnded)receivedFin('upstream');
+   u.on('close',()=>{progress(exchangeId,'hmr-upstream-socket','close');tunnel.peerClosed=true;if(!tunnel.peerTap?.end())failure('hmr-upstream-close-unavailable');settle();});
+   u.on('error',()=>{failure('hmr-upstream');s.destroy();});
+  });
+  q.on('response',r=>{r.destroy();failure('upgrade-refused');s.destroy();});
+  q.on('timeout',()=>{observePrivate({exchangeId,type:'hmr-terminal',terminal:'failed',reason:'hmr-timeout'});failure('hmr-timeout');q.destroy();s.destroy();});
+  q.on('error',()=>{observePrivate({exchangeId,type:'hmr-terminal',terminal:'failed',reason:'hmr-request'});failure('hmr-request');s.destroy();});q.end();
+ });
+ server.on('connection',s=>{sockets.add(s);s.on('close',()=>sockets.delete(s));s.on('error',()=>{failed=true;emit('failure','proxy-client-socket');});});
+ server.on('clientError',(_e,s)=>deny(s,null,'proxy-client-protocol'));
+ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+ server.on('error',()=>{failed=true;emit('failure','proxy-server');});
+ const address=server.address(),proxy='http://127.0.0.1:'+address.port;
+ function assertBound(expected){
+  if(!attached||browser!==expected||!browser.isConnected()||closing||closed||failed||
+   !server.listening||statKey(exe)!==binaryStat)throw Error('egress-binding-unavailable');
+  return true;
+ }
+ const api={
+  observeExchanges(observer){if(attached||closing||closed||privateObserver||typeof observer!=='function')throw Error('private-observer-unavailable');privateObserver=observer;let live=true;return ()=>{if(!live)return;failure('private-observer-detached');throw Error('private-observer-detached');};},
+  bindHmrOwner({exchangeId,ownerDocument}){const t=[...tunnels].find(x=>x.exchangeId===exchangeId);if(!t||!t.established||t.ownerBound||t.owner||owners.has(ownerDocument)||typeof ownerDocument!=='string'||!/^[a-f0-9]{64}$/.test(ownerDocument)){failure('hmr-owner-unavailable');throw Error('hmr-owner-unavailable');}t.owner=ownerDocument;owners.add(ownerDocument);if(!observePrivate({exchangeId,type:'hmr-owner',ownerDocument}))throw Error('hmr-observer-unavailable');t.ownerBound=true;},
+  armHmrRetirement({exchangeId,ownerDocument,intentId}){const t=[...tunnels].find(x=>x.exchangeId===exchangeId);if(!t||!t.established||!t.ownerBound||typeof ownerDocument!=='string'||!/^[a-f0-9]{64}$/.test(ownerDocument)||t.owner!==ownerDocument||t.intent||intentIds.has(intentId)||typeof intentId!=='string'||!/^[A-Za-z0-9_.:-]{1,128}$/.test(intentId)){failure('hmr-intent-unavailable');throw Error('hmr-intent-unavailable');}let record;try{record=readLifecycleRecord(intentId);}catch{failure('hmr-intent-record-error');throw Error('hmr-intent-record-unavailable');}if(!record||record.kind!=='retirement-intent'||record.id!==intentId||record.exchangeId!==exchangeId||record.ownerDocument!==ownerDocument){failure('hmr-intent-record-unavailable');throw Error('hmr-intent-record-unavailable');}t.intent={intentId};intentIds.add(intentId);if(!observePrivate({exchangeId,type:'hmr-intent',ownerDocument,intentId}))throw Error('hmr-observer-unavailable');},
+  commitHmrRetirement({exchangeId,ownerDocument,intentId,anchorEventId,anchorSha256}){const t=[...tunnels].find(x=>x.exchangeId===exchangeId);if(!t||!t.ownerBound||typeof ownerDocument!=='string'||!/^[a-f0-9]{64}$/.test(ownerDocument)||t.owner!==ownerDocument||t.intent?.intentId!==intentId||t.anchor||anchorIds.has(anchorEventId)||typeof anchorEventId!=='string'||!/^[A-Za-z0-9_.:-]{1,128}$/.test(anchorEventId)||!/^[a-f0-9]{64}$/.test(anchorSha256||'')){failure('hmr-anchor-unavailable');throw Error('hmr-anchor-unavailable');}let record;try{record=readLifecycleRecord(anchorEventId);}catch{failure('hmr-anchor-record-error');throw Error('hmr-anchor-record-unavailable');}if(!record||record.kind!=='retirement-anchor'||record.id!==anchorEventId||record.exchangeId!==exchangeId||record.ownerDocument!==ownerDocument||record.intentId!==intentId||record.sha256!==anchorSha256||!['document-commit','context-close','browser-close'].includes(record.sourceEvent)){failure('hmr-anchor-record-unavailable');throw Error('hmr-anchor-record-unavailable');}t.anchor={anchorEventId,anchorSha256};anchorIds.add(anchorEventId);if(!observePrivate({exchangeId,type:'hmr-anchor',ownerDocument,intentId,anchorEventId,anchorSha256}))throw Error('hmr-observer-unavailable');t.settle();},
+  proxyLaunchOptions:Object.freeze({proxy:Object.freeze({server:proxy}),args:REQUIRED_ARGS}),
+  async attach(b){
+   if(attached||closing||closed||failed||!privateObserver||!b?.isConnected())throw Error('egress-attach-unavailable');
+   const session=await b.newBrowserCDPSession();let args;
+   try{args=(await session.send('Browser.getBrowserCommandLine')).arguments;}finally{await session.detach();}
+   const exactly=(prefix,value)=>args.filter(x=>x.startsWith(prefix)).length===1&&args.includes(value);
+   if(!Array.isArray(args)||fs.realpathSync(args[0])!==exe||statKey(exe)!==binaryStat||
+    !exactly('--proxy-server=',`--proxy-server=${proxy}`)||
+    !exactly('--proxy-bypass-list=','--proxy-bypass-list=<-loopback>')||
+    REQUIRED_ARGS.some(x=>args.filter(v=>v.split('=')[0]===x.split('=')[0]).length!==1||!args.includes(x))||
+    args.some(x=>/^--(?:no-proxy-server|proxy-auto-detect|proxy-pac-url|load-extension)(?:=|$)/.test(x)))
+    throw Error('egress-launch-proof-unavailable');
+   browser=b;attached=true;b.on('disconnected',()=>{if(!closing){failed=true;emit('failure','unexpected-browser-disconnect');}});
+   emit('attached','pinned-browser-and-proxy');return api.snapshot();
+  },
+  assertBound,
+  async createContext(options){
+   assertBound(browser);
+   if(!options||Object.keys(options).some(x=>!['javaScriptEnabled','viewport'].includes(x)))throw Error('egress-context-options');
+   const ctx=await browser.newContext({...options,serviceWorkers:'block'});contexts.add(ctx);
+   ctx.on('close',()=>contexts.delete(ctx));ctx.on('serviceworker',()=>{failed=true;emit('failure','unexpected-serviceworker');});
+   return ctx;
+  },
+  snapshot(){return {receiptStatus:'PROVISIONAL',attached,failed,closed,denied,forwarded,sequence,browserExecutableSha256,
+   pendingHttp:pending.size,pendingTunnels:tunnels.size,clientSockets:sockets.size,upstreamSockets:upstream.size,proxyBound:attached&&!failed&&!closed&&server.listening};},
+  // Parent declares shutdown only after normal browser close is about to begin. The
+  // collector still owns per-page/context planned-close and complete failure ledgers.
+  beginPlannedBrowserClose(){assertBound(browser);closing=true;emit('shutdown','planned-browser-close');},
+  async close(){
+   if(closed)return api.snapshot();if(browser?.isConnected())failure('cleanup-before-browser-drained');closing=true;
+   if(pending.size||tunnels.size)failure('cleanup-with-pending-transport');
+   let serverClosed=false,serverError=false;server.close(e=>{serverClosed=true;if(e){serverError=true;failure('proxy-server-close');}});
+   for(const x of pending){if(x.q)x.q.destroy();if(!x.res.destroyed)x.res.destroy();}
+   for(const t of tunnels){t.request.destroy();t.client.destroy();if(t.peer)t.peer.destroy();}
+   for(const socket of [...sockets,...upstream])socket.destroy();
+   const deadline=Date.now()+5000;
+   while(Date.now()<deadline&&(!serverClosed||pending.size||tunnels.size||sockets.size||upstream.size))await new Promise(resolve=>setTimeout(resolve,10));
+   if(!serverClosed||serverError||pending.size||tunnels.size||sockets.size||upstream.size){failure('proxy-drain-unavailable');throw Error('egress-quarantine');}
+   // Delay only after positive close events to capture queued asynchronous errors.
+   await new Promise(resolve=>setTimeout(resolve,50));
+   if(pending.size||tunnels.size||sockets.size||upstream.size){failure('proxy-drain-changed');throw Error('egress-quarantine');}
+   closed=true;emit('closed','proxy-sockets-and-requests-drained');return api.snapshot();
+  },
+ };
+ handles.add(api);emit('opened','fixed-local-only-proxy');return Object.freeze(api);
+}
+module.exports={classifyProxyTarget:target,openBrowserEgressGuard,isBrowserEgressGuard:value=>handles.has(value)};

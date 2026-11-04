@@ -1,0 +1,94 @@
+'use strict';
+// Event payload vocabulary. Integer aliases are assigned locally per source namespace.
+const common={ctx:'ctx'};
+const net={method:['GET','POST','HEAD','OTHER'],path:['locale','login','enter','continue','tenant','staff','webpack','hmr','other'],url:'hash',origin:['owned','foreign']};
+const kinds=['Document','Script','Fetch','Stylesheet','Font','Image','XHR','Other'];
+const end=['finished','redirect','failed'];
+const err=['none','csp','aborted','other'];
+const streams=['PW','CDP','GUARD','OBS','PARENT'];
+const doc=['login','landing'];
+const scope=['absent','expected','foreign','duplicate','unknown'];
+const cookie={cookie:'hash',sid:'nullableHash',org:scope,env:scope,lease:scope,role:['absent','tenant','other'],shadow:['none','present','unknown']};
+const definitions={};
+function def(type,stream,fields){definitions[type]={stream,fields};}
+def('intent','PARENT',{...common,slot:['login','click','landing']});
+def('ready','PARENT',{...common,channelName:streams.slice(0,4),binding:'hash'});
+def('barrier','PARENT',{...common,channelName:streams.slice(0,4),binding:'hash'});
+def('closed','PARENT',{...common,intentId:'pos',physicalEventId:'pos',detachEventId:'nat',channelName:streams.slice(0,4),binding:'hash'});
+def('issue','ANY',{ctx:'globalCtx',reason:['console','page','http','cancel','external','loss','mutation','frame-swap','unexpected-nav','worker','transport','cache','policy','parse','unavailable']});
+def('task','ANY',{ctx:'globalCtx',id:'pos',state:['start','done','failed']});
+def('pwOpen','PW',{...common,id:'pos',prev:'nat',frame:'pos',resource:kinds,nav:'bool',main:'bool',...net});
+def('cdpOpen','CDP',{...common,redirectEvent:'nat',id:'pos',hop:'nat',frame:'pos',loader:'pos',resource:kinds,...net});
+def('pwResponse','PW',{...common,id:'pos',status:'status',location:'nullableHash',fromServiceWorker:'bool'});
+def('readStart','ANY',{...common,doc,frame:'pos',loader:'pos',kind:['pwBody','scriptSource','coverage'],subject:'pos',read:'pos'});
+def('pwBody','PW',{...common,read:'pos',id:'pos',body:'hash'});
+def('cdpResponse','CDP',{...common,redirectEvent:'nat',id:'pos',hop:'nat',status:'status',location:'nullableHash',extra:'bool',fromDiskCache:'bool',fromPrefetchCache:'bool',fromServiceWorker:'bool'});
+def('pwEnd','PW',{...common,id:'pos',terminal:end,error:err});
+def('cdpEnd','CDP',{...common,redirectEvent:'nat',id:'pos',hop:'nat',terminal:end,error:[...err,'MISSING'],blocked:['none','csp','other'],canceled:'bool'});
+def('pwArrival','PW',{...common,frame:'pos',id:'pos',url:'hash'});
+def('commit','CDP',{...common,eventId:'pos',frame:'pos',loader:'pos',url:'hash',main:'bool'});
+def('sameDocument','CDP',{...common,frame:'pos',url:'hash',path:net.path});
+def('world','CDP',{...common,world:'pos',generation:'hash',frame:'pos',kind:['default','isolated'],state:['created','destroyed']});
+def('clearWorlds','CDP',common);
+def('parsed','CDP',{...common,script:'pos',world:'pos',url:'hash',assetClass:['webpack','other']});
+def('scriptSource','CDP',{...common,read:'pos',script:'pos',source:'hash'});
+def('coverage','CDP',{...common,read:'pos',script:'pos',units:'nat',bytes:'nat',epoch:'pos'});
+def('treeSample','CDP',{...common,doc,side:['before','after'],frame:'pos',loader:'pos',url:'hash'});
+def('pwSample','PW',{...common,doc,side:['before','after'],frame:'pos',url:'hash',marker:'nullableHash'});
+def('worldSample','CDP',{...common,doc,side:['before','after'],world:'pos',generation:'hash',marker:'hash'});
+def('policyArm','OBS',{...common,doc,frame:'pos',loader:'pos',navigation:'pos',mechanism:['before-parser','native-static'],binding:'hash'});
+def('inventory','OBS',{...common,doc,navigation:'pos',html:'hash',count:'nat'});
+def('declaration','OBS',{...common,doc,navigation:'pos',html:'hash',url:'hash',asset:'hash',mapping:'hash',count:'nat',nonce:'nat',integrity:'nat',effectiveMeta:'nat',sourceMeta:'nat',declaration:'hash'});
+def('policyChange','OBS',{...common,frame:'pos',loader:'pos',kind:['meta','base','script','preload','lost']});
+def('proxyOpen','GUARD',{id:'pos',...net,cookie:'hash',forwardedCookie:'hash'});
+def('proxyResponse','GUARD',{id:'pos',status:'status',location:'nullableHash',enforced:'nat',reportOnly:'nat',hints:'nat',downEnforced:'nat',downReportOnly:'nat',setRole:['none','tenant','other'],downRole:['none','tenant','other'],sidSet:'nullableHash',downSid:'nullableHash'});
+def('proxyEnd','GUARD',{id:'pos',state:['finished','failed']});
+const {shadow,...headerCookie}=cookie;
+def('pwCookie','PW',{...common,id:'pos',...headerCookie});
+def('extraCookie','CDP',{...common,id:'pos',...cookie});
+def('responseExtra','CDP',{...common,id:'pos',status:'status',location:'nullableHash',setRole:['none','tenant','other'],sidSet:'nullableHash',enforced:'nat',reportOnly:'nat'});
+def('session','PARENT',{...common,sid:'hash',org:'expected',env:'expected',lease:'absent',role:['absent','tenant'],verifier:'hash'});
+def('hmrBrowser','PW',{...common,socket:'pos',state:['opened','closed','error'],url:'hash'});
+def('hmrProtocol','CDP',{...common,socket:'pos',state:['opened','sent','accepted','closed','error'],url:'hash',handshake:'nullableHash',httpStatus:'nat'});
+def('hmrPeer','GUARD',{id:'pos',state:['accepted','close-client','close-server','drained','error'],url:'hash',handshake:'hash',accept:'hash',code:'nullableNat',httpStatus:'nat'});
+def('retire','PARENT',{...common,doc,exchange:'pos',intent:['replace','close'],intentKey:'hash'});
+def('contextClosed','PW',{...common,eventId:'pos'});
+def('closeIntent','PARENT',{...common,intentId:'pos'});
+def('replacementIssued','PARENT',{...common,exchange:'pos',owner:'hash',intentKey:'hash',url:'hash',api:'page.goto'});
+def('closeIssued','PARENT',{...common,intentId:'pos'});
+def('cdpDetached','CDP',{...common,eventId:'pos'});
+def('hmrOwner','GUARD',{id:'pos',owner:'hash'});
+def('hmrIntent','GUARD',{id:'pos',owner:'hash',intentKey:'hash'});
+def('retireAnchor','GUARD',{id:'pos',owner:'hash',intentKey:'hash',recordId:'hash',anchor:'hash'});
+def('anchorRecord','PARENT',{...common,doc,exchange:'pos',owner:'hash',intentKey:'hash',recordId:'hash',sourceEventId:'pos',anchor:'hash',source:['document-commit','context-close'],frame:'nat',loader:'nat'});
+def('fence','PARENT',{...common,doc,frame:'pos',loader:'pos',side:['open','seal']});
+const hashRE=/^[a-f0-9]{64}$/;
+function valid(value,spec){
+  if(Array.isArray(spec))return spec.includes(value);
+  if(spec==='hash'||spec==='nullableHash')return (value===null&&spec==='nullableHash')||(typeof value==='string'&&value.length===64&&hashRE.test(value));
+  if(spec==='nullableNat')return value===null||valid(value,'nat');
+  if(spec==='bool')return typeof value==='boolean';
+  if(['nat','pos','ctx','globalCtx','status'].includes(spec)){
+    const [min,max]={nat:[0,2**31-1],pos:[1,2**31-1],ctx:[1,6],globalCtx:[0,6],status:[100,599]}[spec];
+    return Number.isSafeInteger(value)&&value>=min&&value<=max;
+  }
+  return value===spec;
+}
+function clean(type,channel,input){
+  if(typeof type!=='string'||typeof channel!=='string')throw Error('invalid-event');
+  const definition=Object.hasOwn(definitions,type)&&definitions[type];
+  if(!definition||!streams.includes(channel)||(definition.stream!=='ANY'&&definition.stream!==channel)||
+    !input||Object.getPrototypeOf(input)!==Object.prototype)throw Error('invalid-event');
+  const descriptors=Object.getOwnPropertyDescriptors(input), fields=definition.fields;
+  if(Reflect.ownKeys(descriptors).length!==Object.keys(fields).length)throw Error('invalid-event');
+  const result={};
+  for(const [name,spec] of Object.entries(fields)){
+    const descriptor=descriptors[name];
+    if(!descriptor||!Object.hasOwn(descriptor,'value')||!valid(descriptor.value,spec))throw Error('invalid-event');
+    result[name]=descriptor.value;
+  }
+  return result;
+}
+function freeze(x){if(x&&typeof x==='object'&&!Object.isFrozen(x)){Object.freeze(x);Object.values(x).forEach(freeze);}return x;}
+freeze(definitions);freeze(streams);
+module.exports={definitions,streams,clean,valid};

@@ -1,0 +1,255 @@
+TAP version 13
+# Subtest: validated handshake allows offer but not negotiated compression
+ok 1 - validated handshake allows offer but not negotiated compression
+  ---
+  duration_ms: 1.832167
+  ...
+# Subtest: bad accept, duplicate key and selected protocol fail closed
+ok 2 - bad accept, duplicate key and selected protocol fail closed
+  ---
+  duration_ms: 0.2345
+  ...
+# Subtest: fragmented data followed by empty close in independent heads preserves buffers
+ok 3 - fragmented data followed by empty close in independent heads preserves buffers
+  ---
+  duration_ms: 3.289709
+  ...
+# Subtest: valid independent bilateral numeric close frames
+ok 4 - valid independent bilateral numeric close frames
+  ---
+  duration_ms: 1.538625
+  ...
+# Subtest: coalesced trailing frame after close is fatal
+ok 5 - coalesced trailing frame after close is fatal
+  ---
+  duration_ms: 0.20475
+  ...
+# Subtest: wrong mask, invalid status and incomplete EOF remain fatal
+ok 6 - wrong mask, invalid status and incomplete EOF remain fatal
+  ---
+  duration_ms: 5.065916
+  ...
+# Subtest: oversized payload rejected without allocation
+ok 7 - oversized payload rejected without allocation
+  ---
+  duration_ms: 0.294959
+  ...
+# Subtest: independent partial heads are joined once, wrong-direction mask is rejected
+ok 8 - independent partial heads are joined once, wrong-direction mask is rejected
+  ---
+  duration_ms: 1.724583
+  ...
+# Subtest: duplicate head replay or further data after close fails
+ok 9 - duplicate head replay or further data after close fails
+  ---
+  duration_ms: 0.234917
+  ...
+# Subtest: G01 completed request body followed by response cancellation is fatal and destroys upstream
+ok 10 - G01 completed request body followed by response cancellation is fatal and destroys upstream
+  ---
+  duration_ms: 19.803375
+  ...
+# Subtest: G02 close cannot succeed with pending request before socket assignment and late error remains fatal
+ok 11 - G02 close cannot succeed with pending request before socket assignment and late error remains fatal
+  ---
+  duration_ms: 9.517125
+  ...
+# Subtest: G02 close waits for upstream socket close even when server callback fires
+ok 12 - G02 close waits for upstream socket close even when server callback fires
+  ---
+  duration_ms: 5.580459
+  ...
+# Subtest: G03 connection nominated CSP is rejected rather than removed
+ok 13 - G03 connection nominated CSP is rejected rather than removed
+  ---
+  duration_ms: 1.276083
+  ...
+# Subtest: G03 informational response is fatal, not dropped
+ok 14 - G03 informational response is fatal, not dropped
+  ---
+  duration_ms: 0.703167
+  ...
+# Subtest: private witness uses one immutable exchange ID and keeps header values out of public log
+ok 15 - private witness uses one immutable exchange ID and keeps header values out of public log
+  ---
+  duration_ms: 0.8055
+  ...
+# Subtest: ordinary exchange requires all request and response terminals before close
+ok 16 - ordinary exchange requires all request and response terminals before close
+  ---
+  duration_ms: 1.519333
+  ...
+# Subtest: late request error after close changes provisional snapshot to failure
+ok 17 - late request error after close changes provisional snapshot to failure
+  ---
+  duration_ms: 2.812042
+  ...
+# Subtest: private witness binds exact cookie and ordered Set-Cookie, without public leakage
+ok 18 - private witness binds exact cookie and ordered Set-Cookie, without public leakage
+  ---
+  duration_ms: 1.348459
+  ...
+# Subtest: ambiguous duplicate request cookies fail before upstream forwarding
+ok 19 - ambiguous duplicate request cookies fail before upstream forwarding
+  ---
+  duration_ms: 0.864792
+  ...
+# Subtest: named retirement requires independent close frames, anchors and both socket terminals
+ok 20 - named retirement requires independent close frames, anchors and both socket terminals
+  ---
+  duration_ms: 2.935583
+  ...
+# Subtest: unilateral EOF never produces bilateral retirement
+ok 21 - unilateral EOF never produces bilateral retirement
+  ---
+  duration_ms: 1.015166
+  ...
+# Subtest: wrong retirement owner is a permanent guard failure
+ok 22 - wrong retirement owner is a permanent guard failure
+  ---
+  duration_ms: 0.818167
+  ...
+# Subtest: wire close before named intent is fatal
+ok 23 - wire close before named intent is fatal
+  ---
+  duration_ms: 0.836708
+  ...
+# Subtest: ordinary HTTP cancellation is fatal during a named HMR retirement
+ok 24 - ordinary HTTP cancellation is fatal during a named HMR retirement
+  ---
+  duration_ms: 0.815625
+  ...
+# Subtest: v4 natural half-open FIN retires both peers without forced destruction
+ok 25 - v4 natural half-open FIN retires both peers without forced destruction
+  ---
+  duration_ms: 2.08625
+  ...
+# Subtest: v4 matching null lifecycle owner cannot replace a genuine bind
+ok 26 - v4 matching null lifecycle owner cannot replace a genuine bind
+  ---
+  duration_ms: 0.633333
+  ...
+# Subtest: v4 malformed owner is rejected before binding, and never retires
+ok 27 - v4 malformed owner is rejected before binding, and never retires
+  ---
+  duration_ms: 0.70075
+  ...
+# Subtest: v4 early client FIN waits for independent server Close before graceful propagation
+ok 28 - v4 early client FIN waits for independent server Close before graceful propagation
+  ---
+  duration_ms: 2.059292
+  ...
+# Subtest: v4 forwarding write failure cannot become a clean retirement
+ok 29 - v4 forwarding write failure cannot become a clean retirement
+  ---
+  duration_ms: 4.793459
+  ...
+# Subtest: v4 a different well-formed owner cannot retire a bound exchange
+ok 30 - v4 a different well-formed owner cannot retire a bound exchange
+  ---
+  duration_ms: 2.889959
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://evil.test/"
+ok 31 - rejects ambiguous or non-owned authority "http://evil.test/"
+  ---
+  duration_ms: 2.184167
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://127.0.0.1.evil.test:43156/"
+ok 32 - rejects ambiguous or non-owned authority "http://127.0.0.1.evil.test:43156/"
+  ---
+  duration_ms: 0.107125
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://127.0.0.1:43157/"
+ok 33 - rejects ambiguous or non-owned authority "http://127.0.0.1:43157/"
+  ---
+  duration_ms: 0.101916
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://localhost:43156/"
+ok 34 - rejects ambiguous or non-owned authority "http://localhost:43156/"
+  ---
+  duration_ms: 0.04475
+  ...
+# Subtest: rejects ambiguous or non-owned authority "https://127.0.0.1:43156/"
+ok 35 - rejects ambiguous or non-owned authority "https://127.0.0.1:43156/"
+  ---
+  duration_ms: 0.054292
+  ...
+# Subtest: rejects ambiguous or non-owned authority "ftp://127.0.0.1:43156/"
+ok 36 - rejects ambiguous or non-owned authority "ftp://127.0.0.1:43156/"
+  ---
+  duration_ms: 0.035166
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://user@127.0.0.1:43156/"
+ok 37 - rejects ambiguous or non-owned authority "http://user@127.0.0.1:43156/"
+  ---
+  duration_ms: 0.173875
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://127.0.0.1:43156/\#"
+ok 38 - rejects ambiguous or non-owned authority "http://127.0.0.1:43156/\#"
+  ---
+  duration_ms: 0.039083
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://127.0.0.1:43156/\#x"
+ok 39 - rejects ambiguous or non-owned authority "http://127.0.0.1:43156/\#x"
+  ---
+  duration_ms: 0.088542
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://127.0.0.1:43156/\\r\\nx"
+ok 40 - rejects ambiguous or non-owned authority "http://127.0.0.1:43156/\\r\\nx"
+  ---
+  duration_ms: 0.119833
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://2130706433:43156/"
+ok 41 - rejects ambiguous or non-owned authority "http://2130706433:43156/"
+  ---
+  duration_ms: 0.07275
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://0177.0.0.1:43156/"
+ok 42 - rejects ambiguous or non-owned authority "http://0177.0.0.1:43156/"
+  ---
+  duration_ms: 0.086041
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://127.0.0.1:043156/"
+ok 43 - rejects ambiguous or non-owned authority "http://127.0.0.1:043156/"
+  ---
+  duration_ms: 0.118
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://127.0.0.1:43156\\\\@evil.test/"
+ok 44 - rejects ambiguous or non-owned authority "http://127.0.0.1:43156\\\\@evil.test/"
+  ---
+  duration_ms: 0.09725
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://127.0.0.1:43156/a/../b"
+ok 45 - rejects ambiguous or non-owned authority "http://127.0.0.1:43156/a/../b"
+  ---
+  duration_ms: 0.107542
+  ...
+# Subtest: rejects ambiguous or non-owned authority "/login"
+ok 46 - rejects ambiguous or non-owned authority "/login"
+  ---
+  duration_ms: 0.1315
+  ...
+# Subtest: rejects ambiguous or non-owned authority "//127.0.0.1:43156/login"
+ok 47 - rejects ambiguous or non-owned authority "//127.0.0.1:43156/login"
+  ---
+  duration_ms: 0.04575
+  ...
+# Subtest: rejects ambiguous or non-owned authority "http://[::1]:43156/"
+ok 48 - rejects ambiguous or non-owned authority "http://[::1]:43156/"
+  ---
+  duration_ms: 0.182333
+  ...
+# Subtest: only fixed authority is returned as an origin-form path
+ok 49 - only fixed authority is returned as an origin-form path
+  ---
+  duration_ms: 0.138125
+  ...
+1..49
+# tests 49
+# suites 0
+# pass 49
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 145.24775

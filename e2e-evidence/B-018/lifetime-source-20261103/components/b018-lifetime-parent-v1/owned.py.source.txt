@@ -1,0 +1,169 @@
+"""Source-only parent I/O and owned-child primitives. Import performs no work."""
+from __future__ import annotations
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import stat
+import subprocess
+import time
+
+
+class Unavailable(RuntimeError):
+    pass
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def private_directory(path: Path) -> None:
+    s = path.lstat()
+    if not stat.S_ISDIR(s.st_mode) or path.resolve() != path or s.st_uid != os.getuid() or s.st_mode & 0o077:
+        raise Unavailable("private-directory-unavailable")
+
+
+def read_json(path: Path, expected: str) -> dict:
+    s = path.lstat()
+    if not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_mode & 0o077 or path.resolve() != path:
+        raise Unavailable("private-artifact-unavailable")
+    raw = path.read_bytes()
+    if not re.fullmatch(r"[a-f0-9]{64}", expected) or hashlib.sha256(raw).hexdigest() != expected:
+        raise Unavailable("artifact-binding-unavailable")
+    def pairs(values):
+        result = {}
+        for key, value in values:
+            if key in result:
+                raise Unavailable("ambiguous-json-key")
+            result[key] = value
+        return result
+    value = json.loads(raw, object_pairs_hook=pairs)
+    if not isinstance(value, dict):
+        raise Unavailable("artifact-object-required")
+    return value
+
+
+def write_json(directory: Path, name: str, value: dict) -> str:
+    """Publish an immutable safe DTO after fsync; callers never pass private inputs."""
+    private_directory(directory)
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,100}\.json", name):
+        raise Unavailable("artifact-name-unavailable")
+    raw = (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode()
+    temp = directory / ("." + name + "." + os.urandom(8).hex() + ".tmp")
+    destination = directory / name
+    fd = os.open(temp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(raw)
+            f.flush()
+            os.fsync(f.fileno())
+            os.fchmod(f.fileno(), 0o400)
+        os.link(temp, destination, follow_symlinks=False)
+        dfd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    finally:
+        if temp.exists():
+            temp.unlink()
+    if destination.read_bytes() != raw:
+        raise Unavailable("artifact-readback-unavailable")
+    return hashlib.sha256(raw).hexdigest()
+
+
+class OwnedChildren:
+    """Separate child sessions, finite waits, explicit normal-exit and group drain.
+
+    An abnormal detached browser is not covered by the Node group. The controller
+    must separately bind its PID/group or mark its OS ownership unknown. A normal
+    awaited browser-close receipt is a distinct fact and never an inferred PID proof.
+    """
+    def __init__(self, output: Path, cwd: Path):
+        private_directory(output)
+        private_directory(cwd)
+        self.output = output
+        self.cwd = cwd
+        self.children = []
+
+    def start(self, label: str, argv: list[str], env: dict[str, str], pass_fds=()):
+        if not re.fullmatch(r"[a-z][a-z0-9-]{0,40}", label) or not argv or not Path(argv[0]).is_absolute():
+            raise Unavailable("child-command-unavailable")
+        if any(c["label"] == label for c in self.children):
+            raise Unavailable("repeated-child-label")
+        # These logs are private. The reviewed controller supplies only source-pinned
+        # programs and sanitized errors; private payloads travel in inherited pipes.
+        log = self.output / (label + ".log")
+        fd = os.open(log, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        before = time.time_ns()
+        try:
+            p = subprocess.Popen(argv, cwd=self.cwd, env=env, stdout=fd, stderr=fd,
+                                 pass_fds=tuple(pass_fds), start_new_session=True)
+        finally:
+            os.close(fd)
+        c = {"label": label, "argv": list(argv), "pid": p.pid, "group": p.pid,
+             "launchNotBeforeNs": before, "process": p, "signals": [], "exit": None,
+             "normalExitObserved": False, "drained": False}
+        self.children.append(c)
+        return c
+
+    def members(self, child):
+        output = subprocess.check_output(["/bin/ps", "-axo", "pid=,pgid=,stat="], text=True)
+        members = []
+        for line in output.splitlines():
+            f = line.split()
+            if len(f) < 3 or f[1] != str(child["group"]) or f[2].startswith("Z"):
+                continue
+            pid = int(f[0])
+            try:
+                group, session = os.getpgid(pid), os.getsid(pid)
+            except ProcessLookupError:
+                continue
+            if group != child["group"] or session != child["group"]:
+                raise Unavailable("child-group-ownership-unknown")
+            members.append(pid)
+        return sorted(members)
+
+    def wait(self, child, timeout: float):
+        if timeout <= 0:
+            raise Unavailable("child-deadline-unavailable")
+        try:
+            child["exit"] = child["process"].wait(timeout=timeout)
+            child["normalExitObserved"] = child["exit"] >= 0
+            return child["exit"]
+        finally:
+            self.stop(child)
+
+    def stop(self, child):
+        p = child["process"]
+        for sig, seconds in [(signal.SIGINT, 10), (signal.SIGTERM, 5), (signal.SIGKILL, 5)]:
+            p.poll()
+            remaining = self.members(child)
+            if not remaining:
+                break
+            child["signals"].append({"signal": signal.Signals(sig).name, "owned": remaining})
+            try:
+                os.killpg(child["group"], sig)
+            except ProcessLookupError:
+                pass
+            until = time.monotonic() + seconds
+            while time.monotonic() < until:
+                p.poll()
+                if not self.members(child):
+                    break
+                time.sleep(.2)
+        if self.members(child):
+            raise Unavailable("child-group-not-drained")
+        child["exit"] = p.poll()
+        child["drained"] = True
+
+    def receipt(self, child):
+        p = child["process"]
+        if child["exit"] != p.poll():
+            raise Unavailable("child-exit-drift")
+        log = self.output / (child["label"] + ".log")
+        return {k: v for k, v in child.items() if k != "process"} | {
+            "logSha256": sha256(log), "logBytes": log.stat().st_size,
+            "noRemainingGroupMembers": child["drained"] and not self.members(child)}

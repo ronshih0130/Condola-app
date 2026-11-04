@@ -440,3 +440,14 @@ B018: the approved native-negative criterion has independently accepted pure ker
 Application code is unchanged from tested1c8fd07 (651unit/476RLS PASS, zero failures, sole prior historical skip). No new full gate, browser, HTTP, database, migration or staging operation ran for these prototypes. Both items stay in_progress; preserve all39 rows and finish only the20 already-started IDs. No newB, prod/main merge/operational flag/external message/legal edit.
 
 STOP POINT: inactive compiler handoff copied; B018 integration source NO-GO pending corrected lifetime approach; next: publish checkpoint/renew/mirror, continue independent source review and bounded authoring; owner: Codex/Ron.
+
+
+## B018 acquisition source checkpoint - 2026-11-03T18:30:27-08:00
+
+Ordinary enabled-login cancellations remain FAIL/unwaived; actual cause and effective app CSP remain UNVERIFIED. Guard4/index3/recovery2/contact-fixture2 have bounded source GO only. Producer3/fixture1/parent-primitives1 are SOURCE NO_GO, with rejected bytes retained. No new live browser, HTTP, DB, migration or application gate ran; tested 1c8fd07 application source is unchanged.
+
+After repeated source failures, the independently reviewed sequence prioritizes one smaller ordinary-enabled diagnostic with actual request/navigation facts and a genuine existing click. It has no bootstrap/finance admission and reports a real cancellation FAIL even without a complete join. Full six-slot exception qualification remains required before financial tests. Codex is correcting parent primitives and reviewing the new raw observer; these are Codex-owned source blockers, not a request for PE to design missing code. [Source/verdicts and exact next steps](../e2e-evidence/B-018/lifetime-source-20261103/README.md).
+
+B017 limited compiler delivery remains unparsed/unapplied/target UNVERIFIED; full governance/47 operation groups/app integration still incomplete. Unassigned-role retirement is a new inactive source candidate awaiting different Astra review. All39 queue rows retained, no new B IDs. No prod/main merge/operational flag/messaging/legal change.
+
+STOP POINT: bounded source review in progress; next: finish accepted safe diagnostic composition and independently freeze before one OFF-only attempt; owner: Codex/Ron.

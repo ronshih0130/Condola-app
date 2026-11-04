@@ -1,0 +1,52 @@
+{
+  "status": "GO_BOUNDED_COMPONENT_SOURCE",
+  "runtime": "NOT_RUN",
+  "integration": "NOT_AUTHORIZED",
+  "manifestSha256": "759c5a71bedd7736d45c937c88961757b4351beb403de4741adb62488ef73265",
+  "members": {
+    "reservation.json": {
+      "sha256": "dbe6ee6f144e7a0237d69abba97641e6140317e96141f78cf1b6ab7ca7a08714",
+      "bytes": 119
+    },
+    "fixture.cjs": {
+      "sha256": "3616be10291be6e6eff232b9586146c4194ed8ef547bed654dd0543e14001a53",
+      "bytes": 17287
+    },
+    "fixture.d.ts": {
+      "sha256": "57ba1136a7f1e8e18ac93f23c6c7f4773dcc1d641a2dd343c573ff1c63cd1649",
+      "bytes": 332
+    },
+    "checks.cjs": {
+      "sha256": "d51d6e475ed0f7847f52beb5fedbf61e6f231563775387571c50cb1fa54da255",
+      "bytes": 5214
+    },
+    "checks-v2.test.cjs": {
+      "sha256": "a5a7af62425f22c0e796b27d0730e410cc232d5673f4687cac094cfb0cf631b7",
+      "bytes": 6751
+    },
+    "original-tests/checks.cjs": {
+      "sha256": "1a6116f7b09d2b8264af11159ffb2518f73851fa51f773740e41871423acd8e7",
+      "bytes": 4330
+    },
+    "original-tests/checks.test.cjs": {
+      "sha256": "acc67f265b722efa8907fac587c9e2b5507cff1d44286b10b885f4ceb3efc305",
+      "bytes": 3635
+    },
+    "README.md": {
+      "sha256": "2b2bceb9a6fa2a5abaefde893de8f8ae6ecaddafc9721d5b41c69a9cbb698d9b",
+      "bytes": 5899
+    }
+  },
+  "dependencies": {
+    "recoveryV2Compare": "57af594e1983ef351e75dda2050f8653778ee7d3dd0b121a88d136000d242077",
+    "recoveryV2Integrity": "170e19d37cb274c3b293b98e6d935c4455600676fd71ec68145ce59e56546cbb"
+  },
+  "priorFindings": {
+    "C1": "fixture.cjs 30\u201343, 49\u201355 reads column and nested type metadata, invokes the pinned checkTypes, then projects typed record bytes. Every untouched contact includes both timestamps. The one target uses a typed ROW of every catalogued business column including id and bank_account_last5. Other physical tables retain full record_send coverage and arrays retain dimensions/lower bounds. Unrecognized serializers fail closed.",
+    "C2": "checks.cjs 24\u201329 and fixture.cjs prepare retain the staged proof and independently compare it to the fresh read-only proof. Exact audit ID, new and prior wire commitments, full column shape, explicit null event_type and exact transaction microseconds are checked. A different fresh wire with otherwise identical parsed fields failed the staged comparison.",
+    "C3": "The writer reads transaction_timestamp() in integer microseconds inside its serializable transaction. The target updated_at and new audit occurred_at must each equal it in both checks. Inputs one microsecond lower or higher respectively were denied. The separate required created_at difference remains exactly 1n using BigInt.",
+    "C4": "A failure of the writer end operation records a WRITER_CLOSE quarantine branch before creating the independent read-only client. A rejected mocked end propagated. Rejected/uncertain COMMIT still quarantines and the exclusive attempt blocks retry."
+  },
+  "validation": "18 supplied pure groups passed on Node 20.20.2 (six historical v1, six ported and six new). Both implementation files passed syntax. Five additional input mutations were denied by the current checks and a rejecting writer close propagated. Manifest plus eight members and both pinned helper modules matched. No database connection, SQL parsing, browser, network or process inspection occurred.",
+  "conditions": "Component source GO at the specified hash. The parent must pin the complete dependency and source closure, bind genuine clone/seed/OFF receipts and target ownership, serialize this writer against baseline/login and other writers, and verify normal physical exit and drain before opening its baseline. Neither path-based sentinel checks nor a client-count sample establish external exclusion."
+}

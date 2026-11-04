@@ -1,0 +1,8 @@
+export type ProtectedHeaders = readonly (readonly [string,string])[];
+export type PrivateEvent = Readonly<{sequence:number;exchangeId:string;type:string;[key:string]:unknown}>;
+export type LifecycleRecord = Readonly<{kind:'retirement-intent'|'retirement-anchor';id:string;exchangeId:string;ownerDocument:string;intentId?:string;sourceEvent?:'document-commit'|'context-close'|'browser-close';sha256?:string}>;
+export type Snapshot = {receiptStatus:'PROVISIONAL';attached:boolean;failed:boolean;closed:boolean;denied:number;forwarded:number;sequence:number;browserExecutableSha256:string;pendingHttp:number;pendingTunnels:number;clientSockets:number;upstreamSockets:number;proxyBound:boolean};
+export type Guard = {proxyLaunchOptions:unknown;observeExchanges(observer:(event:PrivateEvent)=>void):()=>void;attach(browser:unknown):Promise<Snapshot>;assertBound(browser:unknown):true;createContext(options:{javaScriptEnabled:boolean;viewport:{width:number;height:number}}):Promise<unknown>;bindHmrOwner(input:{exchangeId:string;ownerDocument:string}):void;armHmrRetirement(input:{exchangeId:string;ownerDocument:string;intentId:string}):void;commitHmrRetirement(input:{exchangeId:string;ownerDocument:string;intentId:string;anchorEventId:string;anchorSha256:string}):void;snapshot():Snapshot;beginPlannedBrowserClose():void;close():Promise<Snapshot>};
+export function classifyProxyTarget(raw:string,upgrade?:boolean):string|null;
+export function isBrowserEgressGuard(value:unknown):value is Guard;
+export function openBrowserEgressGuard(options:{browserExecutablePath:string;browserExecutableSha256:string;wsModuleFile:string;readLifecycleRecord:(id:string)=>LifecycleRecord|null;onEvent:(event:Readonly<{sequence:number;event:string;reason:string}>)=>void}):Promise<Guard>;

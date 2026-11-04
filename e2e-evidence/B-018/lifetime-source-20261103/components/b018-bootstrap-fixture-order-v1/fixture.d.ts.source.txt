@@ -1,0 +1,2 @@
+export type Fixture = {prepare():Promise<Readonly<{status:'APPLIED_VERIFIED';receiptSha256:string}>>};
+export function createFixture(input:{run:string;databaseName:string;appRoot:string;sourceLockFile:string;sourceLockSha256:string;cloneReceiptSha256:string;seedIntentSha256:string;offReceiptSha256:string;hmacKey:Buffer}):Fixture;

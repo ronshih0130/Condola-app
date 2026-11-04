@@ -1,0 +1,46 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {CREATE_PATH,CREATE_SHA,checkCreate,sealBaseline,readBaseline,timeUs,checkExpiry,targetIdentity,wireRows,finalReceipt,checkTypes}=require('./integrity.cjs');
+const key=Buffer.alloc(32,4),h=n=>n.repeat(64),ctx={run:'abcdef123456'},db='condola_b018_history_'+ctx.run;
+test('clone receipt binds executable identity before and after, exact invocation and target',()=>{
+ const rec={run:ctx.run,sourceLockSha256:h('a'),exit:0,signal:null,executableSha256Before:CREATE_SHA,executableSha256After:CREATE_SHA,argv:[CREATE_PATH,'-h','127.0.0.1','-p','55435','-U','condola','-T','condola_core93_fresh',db]};
+ checkCreate(rec,ctx.run,db,h('a'));for(const patch of [{argv:['/other/bin/createdb',...rec.argv.slice(1)]},{executableSha256After:h('a')},{executableSha256Before:h('a')},{signal:'SIGKILL'}])assert.throws(()=>checkCreate({...rec,...patch},ctx.run,db,h('a')));
+});
+test('cluster restart in the same database changes target identity',()=>{
+ const e={cluster:'33',db_oid:'42',postmaster_us:'123'};assert.notEqual(targetIdentity(key,e,db),targetIdentity(key,{...e,postmaster_us:'124'},db));assert.throws(()=>targetIdentity(key,{...e,postmaster_us:null},db));
+});
+test('both directions of baseline transfer detach authority from the caller',async()=>{
+ const v={version:2,context:ctx,tables:{a:{count:2}}};const issued=sealBaseline(v,key);
+ const pending=(async()=>{const checked=readBaseline(issued,ctx,key);await Promise.resolve();return checked.value.tables.a.count;})();
+ issued.value.tables.a.count=4;assert.equal(await pending,2);assert.equal(v.tables.a.count,2);assert.throws(()=>readBaseline(issued,ctx,key));
+});
+test('equivalent offsets and microseconds survive checks; any real shortening or fresh divergence fails',()=>{
+ const initial='2026-11-03 15:45:00.000001-08',same='2026-11-03 23:45:00.000001+00',plus='2026-11-03 23:45:00.000002+00';
+ assert.equal(timeUs(initial),timeUs(same));checkExpiry(initial,plus,timeUs(plus));
+ assert.throws(()=>checkExpiry(plus,same,timeUs(same)));assert.throws(()=>checkExpiry(initial,plus,timeUs(same)));
+ assert.throws(()=>timeUs('2026-02-30 12:00:00+00'));assert.throws(()=>timeUs('2026-11-03 15:45:00'));
+});
+function wireArray(lb){
+ // A PG16 record of one nonnull text[] column; binary array header includes its signed lower bound.
+ const int=n=>{const b=Buffer.alloc(4);b.writeInt32BE(n);return b;};
+ const a=Buffer.concat([int(1),int(0),int(25),int(1),int(lb),int(2),Buffer.from('en')]);
+ return Buffer.concat([int(1),int(1009),int(a.length),a]).toString('hex');
+}
+test('typed record witnesses distinguish equal elements with different array bounds',()=>{
+ assert.notEqual(wireRows([wireArray(1)],key,'p').digest,wireRows([wireArray(0)],key,'p').digest);
+ for(const malformed of ['',null,'abc','not-a-record'])assert.throws(()=>wireRows([malformed],key,'p'));
+});
+test('only supported send functions and element types qualify',()=>{
+ const t={schema:'pg_catalog',kind:'b',name:'text',oid:'25',sender_oid:'2415',sender:'textsend',internal_impl:'textsend',trusted_builtin:true,sender_schema:'pg_catalog'};
+ const arr={...t,name:'_text',oid:'1009',element:'25',sender:'array_send',internal_impl:'array_send'};
+ checkTypes([t,arr],['1009']);
+ for(const bad of [{...t,oid:'55443'},{...t,sender_oid:'77'},{...t,trusted_builtin:false},{...t,sender:'custom_send'},{...t,kind:'d'}])assert.throws(()=>checkTypes([bad,arr],['1009']));
+});
+test('after proof changes for differing dispositions, baselines, recovered rows and actual fresh proofs',()=>{
+ const snap={targetTag:h('a'),now:'120',catalogTag:h('b'),controlTag:h('c'),tables:{p:{count:1,digest:h('e')}},sessions:[{wire:'01'}],audits:[{wire:'02'}]};
+ const args={baselineMac:h('d'),snapshot:snap,initial:Array(6).fill(h('e')),fresh:Array(6).fill(h('f')),verdict:{status:'READBACK_PASS',protectedData:'UNCHANGED',controls:'OFF_UNCHANGED',auth:'SIX_SESSIONS_AND_SIX_AUDITS_VERIFIED'}};
+ const original=finalReceipt(key,args);
+ for(const change of [{baselineMac:h('4')},{verdict:{...args.verdict,status:'QUARANTINE',protectedData:'DRIFT'}},{snapshot:{...snap,tables:{}}},{snapshot:{...snap,sessions:[{wire:'03'}]}},{snapshot:{...snap,audits:[{wire:'04'}]}},{fresh:Array(6).fill(h('2'))}])
+   assert.notEqual(original.evidenceTag,finalReceipt(key,{...args,...change}).evidenceTag);
+ assert.deepEqual(Object.keys(original.proof).sort(),['version','baselineMac','targetTag','sampledAtUs','catalogTag','controlTag','tablesTag','sessionsTag','auditsTag','initialProofsTag','freshProofsTag','status','protectedData','controls','auth'].sort());
+});

@@ -1,0 +1,15 @@
+import type {Scope,Readback,Outcome} from '../b018-native-session-verifier-v3/verifier';
+type Options = {appRoot:string;sourceLockFile:string;sourceLockSha256:string;databaseName:string;
+  run:string;runStartedAt:string;hmacKey:Buffer;cloneReceiptSha256:string;offReceiptSha256:string;seedIntentSha256:string};
+type Slot = {contextId:'ctx1'|'ctx2'|'ctx3'|'ctx4'|'ctx5'|'ctx6';mode:'native'|'enabled';
+  proxyTokenHash:string;userAgent:string;cookieScope:Scope;verification:Readback};
+/** Trusted private parent channel only. Never serialize slots or readbacks to review artifacts. */
+type Envelope = {verifierLedger:Outcome[];contexts:Slot[]};
+type Summary = {count:number;digest:string};
+type Receipt = {value:{version:2;context:{run:string;lockHash:string;clone:string;seed:string;off:string};
+  now:string;targetTag:string;catalogTag:string;controlTag:string;tables:Record<string,Summary>;
+  oldAudit:{id:string;hash:string;typed:string}[]};mac:string};
+type Result = Readonly<{status:'QUARANTINE'|'READBACK_PASS';protectedData:'UNVERIFIED'|'UNCHANGED'|'DRIFT';
+  controls:'UNVERIFIED'|'OFF_UNCHANGED'|'DRIFT';auth:'UNVERIFIED'|'SIX_SESSIONS_AND_SIX_AUDITS_VERIFIED';proof:Readonly<{version:2;baselineMac:string;targetTag:string;sampledAtUs:string;catalogTag:string;controlTag:string;tablesTag:string;sessionsTag:string;auditsTag:string;initialProofsTag:string;freshProofsTag:string;status:string;protectedData:string;controls:string;auth:string}>|null;evidenceTag:string|null}>;
+export function createBootstrapRecovery(options:Options):Promise<Readonly<{captureBaseline():Promise<Receipt>;
+  verifyAfter(baseline:Receipt,readPrivateEnvelope:()=>Promise<Envelope>):Promise<Result>}>>;

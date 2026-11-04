@@ -1,0 +1,528 @@
+{
+  "scope": "Inactive source and independent reviews only; no app, browser, DB, migration or runtime acceptance",
+  "testedApp": "1c8fd07bc1fd78e7a86a00daff994f68e734be4f",
+  "states": {
+    "b018-browser-egress-guard-v4": {
+      "state": "BOUNDED_SOURCE_GO",
+      "manifestSha256": "be5a1b967b214968479b79bc422f65e5f92e510424369df71733b0cfbf168682",
+      "runtime": "NOT_RUN"
+    },
+    "b018-document-lifetime-index-v3": {
+      "state": "BOUNDED_SOURCE_GO",
+      "manifestSha256": "53edd0b7edf670e0f46555776bbb3778a387406361a5d5d8cb53ee9be242e622",
+      "runtime": "NOT_RUN"
+    },
+    "b018-bootstrap-recovery-v2": {
+      "state": "BOUNDED_SOURCE_GO",
+      "manifestSha256": "91bdcc4ae77875cadcf5e152153658798de4ffe6cc79ebdd81669e168097702b",
+      "runtime": "NOT_RUN"
+    },
+    "b018-bootstrap-fixture-order-v2": {
+      "state": "BOUNDED_SOURCE_GO",
+      "manifestSha256": "759c5a71bedd7736d45c937c88961757b4351beb403de4741adb62488ef73265",
+      "runtime": "NOT_RUN"
+    },
+    "b018-native-bootstrap-collector-v3": {
+      "state": "SOURCE_NO_GO",
+      "manifestSha256": "e671ced1027952336452e4ebfcf2bf4a59694850ac1049b6aa5783daa177dc88",
+      "runtime": "NOT_RUN"
+    },
+    "b018-bootstrap-fixture-order-v1": {
+      "state": "SOURCE_NO_GO",
+      "manifestSha256": "ca0bc03bce155ea0ac9c7ae4de387fe50bfa9e07c9bc639d0ab3e6adaa7c35d4",
+      "runtime": "NOT_RUN"
+    },
+    "b018-lifetime-parent-v1": {
+      "state": "SOURCE_NO_GO",
+      "runtime": "NOT_RUN",
+      "fullController": "ABSENT"
+    }
+  },
+  "files": [
+    {
+      "source": "work/b018-browser-egress-guard-v4/README.md",
+      "saved": "components/b018-browser-egress-guard-v4/README.md",
+      "bytes": 4169,
+      "sha256": "95f32c099eb4bf24c421b89e011fae96994bfd5466a108357e889f88b4ac22a3"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v4/guard.cjs",
+      "saved": "components/b018-browser-egress-guard-v4/guard.cjs.source.txt",
+      "bytes": 24980,
+      "sha256": "20210c8b09ebefbb26546c946454744f51a7cec03624232ecced296da0453a13"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v4/guard.d.ts",
+      "saved": "components/b018-browser-egress-guard-v4/guard.d.ts.source.txt",
+      "bytes": 1770,
+      "sha256": "94b5ed5a242bde930bda95f8d0e574f4453f5c347bc0e33e5b970187f7052236"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v4/hmr-protocol.cjs",
+      "saved": "components/b018-browser-egress-guard-v4/hmr-protocol.cjs.source.txt",
+      "bytes": 3855,
+      "sha256": "3a69d0a53fde41e2daed5b95d11186bef21d560e5fef894d80460d2f6fba1fcd"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v4/hmr-protocol.test.cjs",
+      "saved": "components/b018-browser-egress-guard-v4/hmr-protocol.test.cjs.source.txt",
+      "bytes": 3982,
+      "sha256": "4f12edf1218ab4fdfb48c8b741456a2f6c7b9431c16be9ee77c80cf96be9c9c2"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v4/lifecycle.test.cjs",
+      "saved": "components/b018-browser-egress-guard-v4/lifecycle.test.cjs.source.txt",
+      "bytes": 16479,
+      "sha256": "6e742d2e7893b798de02ee92313b7912acf845d7f731273318ddb99fa4f95617"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v4/pure-tests.tap",
+      "saved": "components/b018-browser-egress-guard-v4/pure-tests.tap",
+      "bytes": 9358,
+      "sha256": "a69951d94bea8219e1e532504ac69ff634035f8ee972109783f086210b344047"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v4/reservation.json",
+      "saved": "components/b018-browser-egress-guard-v4/reservation.json",
+      "bytes": 143,
+      "sha256": "a2a0df05293f4052b560a91a1179a5090d3a42e15b237f7f6671e93de3fdb2c6"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v4/target.test.cjs",
+      "saved": "components/b018-browser-egress-guard-v4/target.test.cjs.source.txt",
+      "bytes": 1306,
+      "sha256": "77aafeacd1fa82b81fe984aec596075609641d89e61299bbb652737006a2f53d"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-v4/manifest.json",
+      "saved": "components/b018-browser-egress-guard-v4/manifest.json",
+      "bytes": 2054,
+      "sha256": "be5a1b967b214968479b79bc422f65e5f92e510424369df71733b0cfbf168682"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/README.md",
+      "saved": "components/b018-document-lifetime-index-v3/README.md",
+      "bytes": 11158,
+      "sha256": "f2155b3f59993cd3eb3c500d4bec17f9f3e432a7ab2eb09856bfa53ac251429a"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/delta-notes.md",
+      "saved": "components/b018-document-lifetime-index-v3/delta-notes.md",
+      "bytes": 5973,
+      "sha256": "ea8a7b80645f760be98cf7485cb5b298b2ae04bc332b2b98013ba362ed2723e6"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/direct-retirement.test.cjs",
+      "saved": "components/b018-document-lifetime-index-v3/direct-retirement.test.cjs.source.txt",
+      "bytes": 7268,
+      "sha256": "c6ef8a1627484ecc4da85421a7f4d44cb5d9cbb82246c33f005d7345b487fb34"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/event-interface.json",
+      "saved": "components/b018-document-lifetime-index-v3/event-interface.json",
+      "bytes": 78559,
+      "sha256": "b871a09ee47ab86a0f06bc8d3b73de44d45fb67fec4ba68bd6b56d40e494b3a0"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/events.cjs",
+      "saved": "components/b018-document-lifetime-index-v3/events.cjs.source.txt",
+      "bytes": 7986,
+      "sha256": "d05c8c1825621f3f6f5faeb98ac728742969a1d3ca968ae13b851f9e25c1df86"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/fixtures.cjs",
+      "saved": "components/b018-document-lifetime-index-v3/fixtures.cjs.source.txt",
+      "bytes": 10522,
+      "sha256": "bd33965fddff8a6781c6d9cc1e2e49d407cdb1276a34919166bbdbd778b8ceb7"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/independent-regressions.test.cjs",
+      "saved": "components/b018-document-lifetime-index-v3/independent-regressions.test.cjs.source.txt",
+      "bytes": 7685,
+      "sha256": "92ef24a69fd1e5084283629cab09c5cfba90dd245abd9ed883fb9409cc6a7ed6"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/index.cjs",
+      "saved": "components/b018-document-lifetime-index-v3/index.cjs.source.txt",
+      "bytes": 41113,
+      "sha256": "0c51de8b8284662111d53b7858182a004844d28c294c24d23aa1ede312be26f0"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/index.test.cjs",
+      "saved": "components/b018-document-lifetime-index-v3/index.test.cjs.source.txt",
+      "bytes": 15991,
+      "sha256": "26366eaa4afdbafb862b1a2a2868020ecadcecf5b68e752025949c700f4a9b3d"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/pure-tests.tap",
+      "saved": "components/b018-document-lifetime-index-v3/pure-tests.tap",
+      "bytes": 12901,
+      "sha256": "79f5e3df56b0ba8c8959724de820da7d2052df3a6c7933c61f6fcb6a74bfce26"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/v2-witness-contract.md",
+      "saved": "components/b018-document-lifetime-index-v3/v2-witness-contract.md",
+      "bytes": 6564,
+      "sha256": "5a9ffe662b9b9a329a1b9fd15ddbb7f6f4e145ebef1999626a3d586c8be4546d"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-v3/manifest.json",
+      "saved": "components/b018-document-lifetime-index-v3/manifest.json",
+      "bytes": 6816,
+      "sha256": "53edd0b7edf670e0f46555776bbb3778a387406361a5d5d8cb53ee9be242e622"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/README.md",
+      "saved": "components/b018-bootstrap-recovery-v2/README.md",
+      "bytes": 10503,
+      "sha256": "ff21a90ad6cc4408892b4859c9734f061427b78c820938f9d73cb2701375bfff"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/compare.cjs",
+      "saved": "components/b018-bootstrap-recovery-v2/compare.cjs.source.txt",
+      "bytes": 5283,
+      "sha256": "57af594e1983ef351e75dda2050f8653778ee7d3dd0b121a88d136000d242077"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/compare.test.cjs",
+      "saved": "components/b018-bootstrap-recovery-v2/compare.test.cjs.source.txt",
+      "bytes": 5312,
+      "sha256": "2887632dbfabce74eaff3f52809c9b6e8ab4afcc690f47093d7a76655c978579"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/final-pure-tests.tap",
+      "saved": "components/b018-bootstrap-recovery-v2/final-pure-tests.tap",
+      "bytes": 5854,
+      "sha256": "ca0b626138035d3471324d8680882d07c30869898e316fa026cb2facd667d2c0"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/integrity.cjs",
+      "saved": "components/b018-bootstrap-recovery-v2/integrity.cjs.source.txt",
+      "bytes": 5527,
+      "sha256": "170e19d37cb274c3b293b98e6d935c4455600676fd71ec68145ce59e56546cbb"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/integrity.test.cjs",
+      "saved": "components/b018-bootstrap-recovery-v2/integrity.test.cjs.source.txt",
+      "bytes": 4622,
+      "sha256": "75f58d67be26f547602a7a2eadbaa9c1c249a4d547072b82e6480f1505bc994f"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/pure-tests.tap",
+      "saved": "components/b018-bootstrap-recovery-v2/pure-tests.tap",
+      "bytes": 5857,
+      "sha256": "b20b5a69ef30419b93977e9a09300c7e81d1fb7e81b2b195495a91693eb0bf48"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/recovery.cjs",
+      "saved": "components/b018-bootstrap-recovery-v2/recovery.cjs.source.txt",
+      "bytes": 15072,
+      "sha256": "a7c985e6fea3f4a292eadcebb7c849b7edc014f89b859539345149418f3341b1"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/recovery.d.ts",
+      "saved": "components/b018-bootstrap-recovery-v2/recovery.d.ts.source.txt",
+      "bytes": 1688,
+      "sha256": "673cfa88a44848e5eb405d44da3944bb4567baac0db80f1b2047869c0e20f307"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-v2/manifest.json",
+      "saved": "components/b018-bootstrap-recovery-v2/manifest.json",
+      "bytes": 3456,
+      "sha256": "91bdcc4ae77875cadcf5e152153658798de4ffe6cc79ebdd81669e168097702b"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v2/reservation.json",
+      "saved": "components/b018-bootstrap-fixture-order-v2/reservation.json",
+      "bytes": 119,
+      "sha256": "dbe6ee6f144e7a0237d69abba97641e6140317e96141f78cf1b6ab7ca7a08714"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v2/fixture.cjs",
+      "saved": "components/b018-bootstrap-fixture-order-v2/fixture.cjs.source.txt",
+      "bytes": 17287,
+      "sha256": "3616be10291be6e6eff232b9586146c4194ed8ef547bed654dd0543e14001a53"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v2/fixture.d.ts",
+      "saved": "components/b018-bootstrap-fixture-order-v2/fixture.d.ts.source.txt",
+      "bytes": 332,
+      "sha256": "57ba1136a7f1e8e18ac93f23c6c7f4773dcc1d641a2dd343c573ff1c63cd1649"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v2/checks.cjs",
+      "saved": "components/b018-bootstrap-fixture-order-v2/checks.cjs.source.txt",
+      "bytes": 5214,
+      "sha256": "d51d6e475ed0f7847f52beb5fedbf61e6f231563775387571c50cb1fa54da255"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v2/checks-v2.test.cjs",
+      "saved": "components/b018-bootstrap-fixture-order-v2/checks-v2.test.cjs.source.txt",
+      "bytes": 6751,
+      "sha256": "a5a7af62425f22c0e796b27d0730e410cc232d5673f4687cac094cfb0cf631b7"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v2/original-tests/checks.cjs",
+      "saved": "components/b018-bootstrap-fixture-order-v2/original-tests/checks.cjs.source.txt",
+      "bytes": 4330,
+      "sha256": "1a6116f7b09d2b8264af11159ffb2518f73851fa51f773740e41871423acd8e7"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v2/original-tests/checks.test.cjs",
+      "saved": "components/b018-bootstrap-fixture-order-v2/original-tests/checks.test.cjs.source.txt",
+      "bytes": 3635,
+      "sha256": "acc67f265b722efa8907fac587c9e2b5507cff1d44286b10b885f4ceb3efc305"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v2/README.md",
+      "saved": "components/b018-bootstrap-fixture-order-v2/README.md",
+      "bytes": 5899,
+      "sha256": "2b2bceb9a6fa2a5abaefde893de8f8ae6ecaddafc9721d5b41c69a9cbb698d9b"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v2/manifest.json",
+      "saved": "components/b018-bootstrap-fixture-order-v2/manifest.json",
+      "bytes": 1698,
+      "sha256": "759c5a71bedd7736d45c937c88961757b4351beb403de4741adb62488ef73265"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v3/reservation.json",
+      "saved": "components/b018-native-bootstrap-collector-v3/reservation.json",
+      "bytes": 129,
+      "sha256": "791b317761dceff44b53288c7fee45ea3d86acce30cd266338816994622823c5"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v3/producer.cjs",
+      "saved": "components/b018-native-bootstrap-collector-v3/producer.cjs.source.txt",
+      "bytes": 47980,
+      "sha256": "d25d7188977ec03542fae12ad1dfc400e842200422abf6c8802430680de1f623"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v3/producer.d.ts",
+      "saved": "components/b018-native-bootstrap-collector-v3/producer.d.ts.source.txt",
+      "bytes": 1315,
+      "sha256": "8de7b7663f2f906ab72e8c5a90ddffb210da8c97b813f9a6632add304715f2ba"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v3/acquisition.test.cjs",
+      "saved": "components/b018-native-bootstrap-collector-v3/acquisition.test.cjs.source.txt",
+      "bytes": 8719,
+      "sha256": "17060baab80b597a5641e44e88b2a3197a34eaabd6a0a484743972345e90f3a4"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v3/README.md",
+      "saved": "components/b018-native-bootstrap-collector-v3/README.md",
+      "bytes": 5743,
+      "sha256": "9d297cb94b0ecdfb665b868dc02d2460c5d3a9bd06ce96117f0e261fadb7553f"
+    },
+    {
+      "source": "work/b018-native-bootstrap-collector-v3/manifest.json",
+      "saved": "components/b018-native-bootstrap-collector-v3/manifest.json",
+      "bytes": 1418,
+      "sha256": "e671ced1027952336452e4ebfcf2bf4a59694850ac1049b6aa5783daa177dc88"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v1/reservation.json",
+      "saved": "components/b018-bootstrap-fixture-order-v1/reservation.json",
+      "bytes": 139,
+      "sha256": "92fab06e3a4cd7a3f7580ee9cbbef633fa17b2d2630fe0079ae639a3940f610b"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v1/fixture.cjs",
+      "saved": "components/b018-bootstrap-fixture-order-v1/fixture.cjs.source.txt",
+      "bytes": 14252,
+      "sha256": "853666238b8052f3f0810d27650c562d1e90dc0f19c11e30ecd49e05bb1d4511"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v1/fixture.d.ts",
+      "saved": "components/b018-bootstrap-fixture-order-v1/fixture.d.ts.source.txt",
+      "bytes": 332,
+      "sha256": "57ba1136a7f1e8e18ac93f23c6c7f4773dcc1d641a2dd343c573ff1c63cd1649"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v1/checks.cjs",
+      "saved": "components/b018-bootstrap-fixture-order-v1/checks.cjs.source.txt",
+      "bytes": 4330,
+      "sha256": "1a6116f7b09d2b8264af11159ffb2518f73851fa51f773740e41871423acd8e7"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v1/checks.test.cjs",
+      "saved": "components/b018-bootstrap-fixture-order-v1/checks.test.cjs.source.txt",
+      "bytes": 3635,
+      "sha256": "acc67f265b722efa8907fac587c9e2b5507cff1d44286b10b885f4ceb3efc305"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v1/README.md",
+      "saved": "components/b018-bootstrap-fixture-order-v1/README.md",
+      "bytes": 4561,
+      "sha256": "1a017580da81af3e666fe6c3e35b989ad35cd32232b0e3e5258e03a2f7e34bde"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-v1/manifest.json",
+      "saved": "components/b018-bootstrap-fixture-order-v1/manifest.json",
+      "bytes": 1309,
+      "sha256": "ca0bc03bce155ea0ac9c7ae4de387fe50bfa9e07c9bc639d0ab3e6adaa7c35d4"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-independent-astra-v4.md",
+      "saved": "reviews/b018-browser-egress-guard-independent-astra-v4.md",
+      "bytes": 2763,
+      "sha256": "ac2566ba97d293e07c925c6144eb798eeef912a0a53e5bd2e34736c9deef03a8"
+    },
+    {
+      "source": "work/b018-browser-egress-guard-independent-astra-v4.json",
+      "saved": "reviews/b018-browser-egress-guard-independent-astra-v4.json",
+      "bytes": 2490,
+      "sha256": "c3ff3d539e9e9ec00a1d4f7aed8a7037763b921b21c1729ee7101f33dce94280"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-independent-astra-v3.md",
+      "saved": "reviews/b018-document-lifetime-index-independent-astra-v3.md",
+      "bytes": 3032,
+      "sha256": "62e54d55041d1738431bd39918b587795db987e91d4e194bd8a3f5146e197eac"
+    },
+    {
+      "source": "work/b018-document-lifetime-index-independent-astra-v3.json",
+      "saved": "reviews/b018-document-lifetime-index-independent-astra-v3.json",
+      "bytes": 3820,
+      "sha256": "357313a6ea2b9512e6027dd1febc627c8b484b45721c2a9e741a0734cda3f689"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-independent-astra-v2.md",
+      "saved": "reviews/b018-bootstrap-recovery-independent-astra-v2.md",
+      "bytes": 4654,
+      "sha256": "e887852e071b66181bd01a1698de43b15944e3f63e214dd6ad8ac05e7b29b4b2"
+    },
+    {
+      "source": "work/b018-bootstrap-recovery-independent-astra-v2.json",
+      "saved": "reviews/b018-bootstrap-recovery-independent-astra-v2.json",
+      "bytes": 2232,
+      "sha256": "b700adddfbab40e4d57e38cd650a5cc33262dd1d3ec878277b59d9c63114d922"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-independent-astra-v2.md",
+      "saved": "reviews/b018-bootstrap-fixture-order-independent-astra-v2.md",
+      "bytes": 2514,
+      "sha256": "a25193a3e92224912368895ce4a081c108dd5a338fcb9178b06c3bcd4e11711b"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-independent-astra-v2.json",
+      "saved": "reviews/b018-bootstrap-fixture-order-independent-astra-v2.json",
+      "bytes": 3788,
+      "sha256": "759f3aa99b58c65f0f8d876ee9828a8f19f8bb5318f48d5dd632f9a419ba98c1"
+    },
+    {
+      "source": "work/b018-native-bootstrap-producer-independent-astra-v3.md",
+      "saved": "reviews/b018-native-bootstrap-producer-independent-astra-v3.md",
+      "bytes": 9322,
+      "sha256": "04f30d04e352295c793d956364657f95c1c97f7a4df34865c19b6a3b26673639"
+    },
+    {
+      "source": "work/b018-native-bootstrap-producer-independent-astra-v3.json",
+      "saved": "reviews/b018-native-bootstrap-producer-independent-astra-v3.json",
+      "bytes": 10912,
+      "sha256": "d4a1b2c48bc52d82ae3430ef9dfacf9db6a3f4b8d656ccd556ee82748a2977d0"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-independent-astra-v1.md",
+      "saved": "reviews/b018-bootstrap-fixture-order-independent-astra-v1.md",
+      "bytes": 6167,
+      "sha256": "f101b67ea633fc23c92575bad0b3e7b3b626de4caf885390fd010a6ec23ad03c"
+    },
+    {
+      "source": "work/b018-bootstrap-fixture-order-independent-astra-v1.json",
+      "saved": "reviews/b018-bootstrap-fixture-order-independent-astra-v1.json",
+      "bytes": 8127,
+      "sha256": "30480297b1a79eef21ed5335174874f8f1fe0e357ada68a3cbd2b8bed6370b58"
+    },
+    {
+      "source": "work/b018-lifetime-parent-primitives-independent-astra-v1.md",
+      "saved": "reviews/b018-lifetime-parent-primitives-independent-astra-v1.md",
+      "bytes": 9305,
+      "sha256": "5e77279a7510da526023ca1d66cdaac54008d3e1b9ce1a3bd0b5c1bd185a2f5a"
+    },
+    {
+      "source": "work/b018-lifetime-parent-primitives-independent-astra-v1.json",
+      "saved": "reviews/b018-lifetime-parent-primitives-independent-astra-v1.json",
+      "bytes": 9882,
+      "sha256": "e49fed29946df4472ff3b0769a213851aa20012ad107486effc94c666c9f1912"
+    },
+    {
+      "source": "work/b018-lifetime-parent-v1/phase-worker.cjs",
+      "saved": "components/b018-lifetime-parent-v1/phase-worker.cjs.source.txt",
+      "bytes": 5080,
+      "sha256": "52e3ff28ae794b652e3d884829a17caf41bc2ae21d4ccc7eb65eb9d07c19c4bd"
+    },
+    {
+      "source": "work/b018-lifetime-parent-v1/owned.py",
+      "saved": "components/b018-lifetime-parent-v1/owned.py.source.txt",
+      "bytes": 6665,
+      "sha256": "bde88e5007bd6651c14214828c7ff71dd2dbe295ac418eebbc962469264baf60"
+    },
+    {
+      "source": "work/b018-lifetime-parent-v1/private_ipc.py",
+      "saved": "components/b018-lifetime-parent-v1/private_ipc.py.source.txt",
+      "bytes": 4727,
+      "sha256": "05db2230eccf60e86ecce05ab3989fd7416b090e2e1ab4f81b62f1be564574e6"
+    },
+    {
+      "source": "work/b018-lifetime-parent-v1/test_parent_pure.py",
+      "saved": "components/b018-lifetime-parent-v1/test_parent_pure.py.source.txt",
+      "bytes": 1525,
+      "sha256": "c845ef7af914442462ccb1c04a83a675bbcd5887b903e23b4419ee66628b5a2e"
+    },
+    {
+      "source": "work/b018-lifetime-parent-v1/README.md",
+      "saved": "components/b018-lifetime-parent-v1/README.md",
+      "bytes": 1581,
+      "sha256": "4059d4d2b951443fbec99f520a934489f804f9401169331d9a398c915b40d32d"
+    },
+    {
+      "source": "work/b018-lifetime-parent-v1/materialize.py",
+      "saved": "components/b018-lifetime-parent-v1/materialize.py.source.txt",
+      "bytes": 7779,
+      "sha256": "295a4fb3f681c0045d5a07dafa1185a7a8f33f0f04d36c2b39c32d3493a16097"
+    },
+    {
+      "source": "work/b018-lifetime-parent-v1/parent-plan.md",
+      "saved": "components/b018-lifetime-parent-v1/parent-plan.md",
+      "bytes": 7147,
+      "sha256": "37e81d66e02afc22548f7014d541583b562fdb62fa75749405513b49bb3264ad"
+    },
+    {
+      "source": "work/b018-lifetime-parent-v1/manifest.json",
+      "saved": "components/b018-lifetime-parent-v1/manifest.json",
+      "bytes": 1275,
+      "sha256": "e0cb054710ee61ff3a4420a5548618ae8faaa3ad66cf09a4b485238904aadb73"
+    },
+    {
+      "source": "work/b018-acquisition-contract-primary-astra-v4.md",
+      "saved": "design/b018-acquisition-contract-primary-astra-v4.md",
+      "bytes": 20606,
+      "sha256": "bbde6ac892121453b34c48f38ef47724f49f5f866422442ce1afafa45a058cf3"
+    },
+    {
+      "source": "work/b018-acquisition-contract-primary-astra-v4.json",
+      "saved": "design/b018-acquisition-contract-primary-astra-v4.json",
+      "bytes": 16297,
+      "sha256": "33cb8fff02ff40d7b1b5cf2fdbc00c81f8db6adea0812fdd151acfc3d5e0cc7a"
+    },
+    {
+      "source": "work/b018-acquisition-contract-independent-astra-v4.md",
+      "saved": "design/b018-acquisition-contract-independent-astra-v4.md",
+      "bytes": 7776,
+      "sha256": "607ad3064da33dca4d2a114d3c9d87aa6dd35965fc8474a2741c26d82e232bc4"
+    },
+    {
+      "source": "work/b018-acquisition-contract-independent-astra-v4.json",
+      "saved": "design/b018-acquisition-contract-independent-astra-v4.json",
+      "bytes": 7991,
+      "sha256": "2643adf629510e4675c5d5bf1432b876e865c2ae8de035daad9f125b59c8e24c"
+    }
+  ],
+  "historicalFailures": "UNCHANGED_FAIL",
+  "financialRecovery": "PRIOR_RUN_UNVERIFIED_QUARANTINE",
+  "operationalFlags": "OFF",
+  "fullGate": "Existing unchanged-app code gate only; no new gate run",
+  "acquisitionPlan": "GO_AUTHOR_ONLY_WITH_BOUNDED_SEQUENCE; ordinary diagnostic can precede full six-slot admission"
+}

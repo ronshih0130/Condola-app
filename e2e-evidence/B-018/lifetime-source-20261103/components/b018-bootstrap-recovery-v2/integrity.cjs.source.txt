@@ -1,0 +1,65 @@
+'use strict';
+const {demand,canon,equal,hex,tag,rowFingerprint}=require('./compare.cjs');
+const CREATE_PATH='/opt/homebrew/opt/postgresql@16/bin/createdb';
+const CREATE_REAL='/opt/homebrew/Cellar/postgresql@16/16.15/bin/createdb';
+const CREATE_SHA='0234fab6d8781ba4069433ee9b288df8b408da74a5664002f22f9a2b7b864e01';
+function checkCreate(receipt,run,db,lock){
+ demand(receipt.run===run&&receipt.exit===0&&receipt.signal===null&&receipt.sourceLockSha256===lock&&
+   receipt.executableSha256Before===CREATE_SHA&&receipt.executableSha256After===CREATE_SHA&&
+   equal(receipt.argv,[CREATE_PATH,'-h','127.0.0.1','-p','55435','-U','condola','-T','condola_core93_fresh',db]));
+}
+function sealBaseline(value,key){
+ const copy=structuredClone(value);
+ return {value:copy,mac:tag(key,'baseline-v2',canon(copy))};
+}
+function readBaseline(input,context,key){
+ const receipt=structuredClone(input);
+ demand(receipt.value.version===2&&equal(receipt.value.context,context)&&
+   receipt.mac===tag(key,'baseline-v2',canon(receipt.value)));
+ return receipt;
+}
+function timeUs(value){
+ // ISO timestamptz text only, retaining the six PostgreSQL fractional digits and original offset.
+ const m=typeof value==='string'&&/^(20\d\d)-(\d\d)-(\d\d)[ T](\d\d):(\d\d):(\d\d)(?:\.(\d{1,6}))?([+-])(\d\d)(?::(\d\d)(?::(\d\d))?)?$/.exec(value);
+ demand(m);
+ const [y,mo,d,h,mi,s]=m.slice(1,7).map(Number);
+ const t=new Date(Date.UTC(y,mo-1,d,h,mi,s)),oh=Number(m[9]),om=Number(m[10]||0),os=Number(m[11]||0);
+ demand(t.getUTCFullYear()===y&&t.getUTCMonth()===mo-1&&t.getUTCDate()===d&&h<24&&mi<60&&s<60&&oh<=15&&om<60&&os<60);
+ const offset=(oh*3600+om*60+os)*(m[8]==='-'?-1:1);
+ return BigInt(t.getTime())*1000n+BigInt((m[7]||'').padEnd(6,'0'))-BigInt(offset)*1000000n;
+}
+function checkExpiry(original,fresh,actualUs){
+ const endpoint=BigInt(actualUs);
+ demand(timeUs(original)<=endpoint&&timeUs(fresh)===endpoint);
+}
+function targetIdentity(key,e,db){demand(/^[1-9]\d*$/.test(e.postmaster_us));return tag(key,'cluster-generation-v2',[e.cluster,e.postmaster_us,e.db_oid,db]);}
+function wireRows(rows,key,name){
+ demand(rows.every(v=>typeof v==='string'&&v.length>0&&v.length%2===0&&/^[0-9a-f]+$/.test(v)));
+ return rowFingerprint(rows,key,'pg-record-send-v2:'+name);
+}
+function finalReceipt(key,{baselineMac,snapshot,initial,fresh,verdict}){
+ const proof={version:2,baselineMac,targetTag:snapshot.targetTag,sampledAtUs:snapshot.now,catalogTag:snapshot.catalogTag,
+   controlTag:snapshot.controlTag,tablesTag:tag(key,'final-tables',canon(snapshot.tables)),
+   sessionsTag:wireRows(snapshot.sessions.map(r=>r.wire),key,'final-auth-sessions').digest,
+   auditsTag:wireRows(snapshot.audits.map(r=>r.wire),key,'final-audit-log').digest,
+   initialProofsTag:tag(key,'original-six',initial),freshProofsTag:tag(key,'fresh-six',fresh),
+   status:verdict.status,protectedData:verdict.protectedData,controls:verdict.controls,auth:verdict.auth};
+ demand([baselineMac,snapshot.targetTag,snapshot.catalogTag,snapshot.controlTag,...initial,...fresh].every(hex)&&initial.length===6&&fresh.length===6);
+ return {proof:Object.freeze(proof),evidenceTag:tag(key,'after-complete-v2',canon(proof))};
+}
+const scalar=Object.freeze({"bool":["16","2437","boolsend"],"bytea":["17","2413","byteasend"],"char":["18","2435","charsend"],"name":["19","2423","namesend"],"int8":["20","2409","int8send"],"int2":["21","2405","int2send"],"int4":["23","2407","int4send"],"text":["25","2415","textsend"],"oid":["26","2419","oidsend"],"json":["114","324","json_send"],"float4":["700","2425","float4send"],"float8":["701","2427","float8send"],"inet":["869","2497","inet_send"],"cidr":["650","2499","cidr_send"],"bpchar":["1042","2431","bpcharsend"],"varchar":["1043","2433","varcharsend"],"date":["1082","2469","date_send"],"time":["1083","2471","time_send"],"timestamp":["1114","2475","timestamp_send"],"timestamptz":["1184","2477","timestamptz_send"],"interval":["1186","2479","interval_send"],"timetz":["1266","2473","timetz_send"],"jsonb":["3802","3803","jsonb_send"],"uuid":["2950","2962","uuid_send"],"numeric":["1700","2461","numeric_send"],"pg_lsn":["3220","3239","pg_lsn_send"]});
+const ranges=new Set('daterange int4range int8range numrange tsrange tstzrange'.split(' '));
+function checkTypes(types,cols){
+ const all=new Map(types.map(t=>[t.oid,t]));
+ function supported(oid,seen=new Set()){
+  const t=all.get(oid); if(!t||seen.has(oid))return false;
+  const next=new Set([...seen,oid]);
+  if(t.schema==='pg_catalog'&&t.kind==='b'&&Object.hasOwn(scalar,t.name))return equal(scalar[t.name],[t.oid,t.sender_oid,t.sender])&&t.sender_schema==='pg_catalog'&&t.internal_impl===t.sender&&t.trusted_builtin;
+  if(t.kind==='e')return t.sender_schema==='pg_catalog'&&t.sender==='enum_send'&&t.internal_impl==='enum_send'&&t.trusted_builtin;
+  if(t.kind==='b'&&t.sender_schema==='pg_catalog'&&t.sender==='array_send'&&t.internal_impl==='array_send'&&t.trusted_builtin)return supported(t.element,next);
+  if(t.kind==='r'&&t.schema==='pg_catalog'&&ranges.has(t.name)&&t.sender_schema==='pg_catalog'&&t.sender==='range_send'&&t.internal_impl==='range_send'&&t.trusted_builtin)return supported(t.subtype,next);
+  return t.kind==='b'&&t.name==='citext'&&t.ext==='citext'&&t.sender_ext==='citext'&&t.sender_schema===t.schema&&t.sender==='citextsend'&&t.internal_impl==='textsend'&&t.trusted_builtin;
+ }
+ demand(cols.every(oid=>supported(oid)));
+}
+module.exports={CREATE_PATH,CREATE_REAL,CREATE_SHA,checkCreate,sealBaseline,readBaseline,timeUs,checkExpiry,targetIdentity,wireRows,finalReceipt,checkTypes};

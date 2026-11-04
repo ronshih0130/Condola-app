@@ -1,0 +1,19 @@
+export type Status = {status:string;[key:string]:unknown};
+export type PrivateLifecycleRecord = Readonly<{kind:'retirement-intent'|'retirement-anchor';id:string;exchangeId:string;ownerDocument:string;intentId?:string;sourceEvent?:'document-commit'|'context-close';sha256?:string}>;
+export type Producer = {
+ installGuardObserver(input:{guard:unknown}):void;
+ attachBrowser(input:{browser:unknown}):Promise<void>;
+ createSlot(input:{ctx:number}):Promise<{ctx:number;context:unknown;page:unknown;cdp:unknown}>;
+ navigateLogin(input:{ctx:number}):Promise<Status>;
+ clickLogin(input:{ctx:number}):Promise<Status>;
+ navigateEnabledLanding(input:{ctx:number}):Promise<Status>;
+ verifySession(input:{ctx:number}):Promise<Status>;
+ bootstrapCut():Status;
+ closeSlot(input:{ctx:number}):Promise<Status>;
+ afterDrain():Status;
+ readLifecycleRecord(id:string):PrivateLifecycleRecord|null;
+ getRecoveryMaterial():unknown[];
+ journal():readonly unknown[];
+ pendingCount():number;
+};
+export function createProducer(input:{run:string;assetSha256:string;assetBytes:number;mapSha256:string;hmrExpectedRaw:string;hmacKey:Buffer;journalSink:(row:Readonly<Record<string,unknown>>)=>void;mapHandle:unknown;sessionVerifier:(input:unknown)=>Promise<unknown>;credentialFor:(ctx:number)=>Promise<{email:string;password:string}>}):Producer;

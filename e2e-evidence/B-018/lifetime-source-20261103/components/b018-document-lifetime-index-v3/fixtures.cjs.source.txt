@@ -1,0 +1,155 @@
+'use strict';
+// Entirely synthetic. Distinct header commitments on consecutive redirects model
+// separately observable wire differences. They are never assumed in a real run.
+const {createHash}=require('node:crypto');
+const {definitions}=require('./events.cjs');
+const {createDocumentIndex}=require('./index.cjs');
+const hash=s=>createHash('sha256').update(String(s)).digest('hex');
+const config={run:'aa11bb22cc33',assetSha256:hash('bytes'),assetBytes:800,mapSha256:hash('map'),hmrUrl:hash('hmr')};
+function fixture({clean=false,cleanNativeLoad=false}={}){
+  const data=[],tail=[],channels=['PW','CDP','GUARD','OBS'];
+  let n=0,reading=0,life=0,redirect=0;
+  const emit=(type,fields,target=data,channel=definitions[type].stream)=>target.push({type,fields,channel});
+  for(let ctx=1;ctx<=6;ctx++){
+    const enabled=ctx%2===0,home=ctx<=4?'tenant':'staff',tenant=ctx<=4,sid=hash('sid'+ctx);
+    const e=(type,fields={},target=data)=>emit(type,{ctx,...fields},target);
+    const g=(type,fields,target=data)=>emit(type,fields,target);
+    for(const channelName of channels)e('ready',{channelName,binding:hash('ready'+ctx+channelName)});
+    e('intent',{slot:'login'});
+    let scriptNo=0,lastLifecycle=null;
+    const redirects=new Map();
+    function lifecycle(type,fields,target=data){
+      lastLifecycle={...fields,ctx,eventId:++life};
+      emit(type,lastLifecycle,target);
+    }
+    function read(type,doc,loader,id,fields){
+      const read=++reading,channel=definitions[type].stream;
+      emit('readStart',{ctx,doc,frame:19,loader,kind:type,subject:id,read},data,channel);
+      e(type,{...fields,...(type==='pwBody'?{id}:{script:id}),read});
+    }
+    function req(path,resource,method,status,loader,opt={}){
+      const id=++n,cdp=opt.cdp||id+1000,hop=opt.hop||0;
+      const url=opt.url||hash('url:'+path),net={method,path,resource,url,origin:'owned'};
+      const {resource:_,...wire}=net;
+      const terminal=opt.term||'finished';
+      e('pwOpen',{id,prev:opt.prev||0,frame:7,nav:resource==='Document',main:true,...net});
+      const previous=redirects.get(cdp);
+      if(previous){for(const ev of previous.rows)data.push(ev);redirects.delete(cdp);}
+      e('cdpOpen',{id:cdp,hop,frame:19,loader,redirectEvent:previous?.event||0,...net});
+      const redirectEvent=terminal==='redirect'?++redirect:0,rows=[];
+      if(status){
+        const cookie=hash('private-header-projection'+id);
+        const scope={cookie,sid:opt.auth?sid:null,org:'absent',env:'absent',lease:'absent',role:opt.role||'absent'};
+        const setRole=opt.setRole||'none',sidSet=opt.setSid?sid:null;
+        const location=terminal==='redirect'?hash('url:'+({locale:'login',login:'enter',enter:'continue',continue:home})[path]):null;
+        e('pwCookie',{id,...scope});e('extraCookie',{id:cdp,...scope,shadow:'none'});
+        g('proxyOpen',{id,...wire,cookie,forwardedCookie:cookie});
+        g('proxyResponse',{id,status,location,enforced:0,reportOnly:0,hints:0,downEnforced:0,downReportOnly:0,setRole,downRole:setRole,sidSet,downSid:sidSet});
+        e('responseExtra',{id:cdp,status,location,setRole,sidSet,enforced:0,reportOnly:0});
+        e('pwResponse',{id,status,location,fromServiceWorker:false});
+        e('cdpResponse',{id:cdp,hop,status,location,extra:true,fromDiskCache:false,fromPrefetchCache:false,fromServiceWorker:false,redirectEvent},redirectEvent?rows:data);
+        g('proxyEnd',{id,state:'finished'});
+      }
+      e('pwEnd',{id,terminal,error:terminal==='failed'?'csp':'none'});
+      e('cdpEnd',{id:cdp,hop,terminal,error:terminal==='failed'?'MISSING':'none',blocked:terminal==='failed'?'csp':'none',canceled:false,redirectEvent},redirectEvent?rows:data);
+      if(redirectEvent)redirects.set(cdp,{event:redirectEvent,rows});
+      return {id,cdp,hop,url,loader};
+    }
+    const sockets={};
+    function socket(doc){
+      const id=++n,handshake=hash('request-key'+id),accept=hash('response-accept'+id),url=config.hmrUrl;
+      e('hmrBrowser',{socket:id,state:'opened',url});
+      e('hmrProtocol',{socket:id+9,state:'opened',url,handshake:null,httpStatus:0});
+      e('hmrProtocol',{socket:id+9,state:'sent',url,handshake,httpStatus:0});
+      g('hmrPeer',{id,state:'accepted',url,handshake,accept,code:0,httpStatus:101});
+      e('hmrProtocol',{socket:id+9,state:'accepted',url,handshake:accept,httpStatus:101});
+      const owner=hash(JSON.stringify([config.run,ctx,doc,19,doc==='login'?1:2]));
+      g('hmrOwner',{id,owner});sockets[doc]={id,handshake,accept,url,owner};
+    }
+    function retire(doc,target){
+      const {id,handshake,accept,url}=sockets[doc];
+      e('retire',{doc,exchange:id,intent:doc==='login'?'replace':'close',intentKey:hash('intent'+id)},target);
+      g('hmrIntent',{id,owner:sockets[doc].owner,intentKey:hash('intent'+id)},target);
+      if(doc==='landing')e('closeIssued',{intentId:ctx},target);
+      else e('replacementIssued',{exchange:id,owner:sockets[doc].owner,intentKey:hash('intent'+id),url:hash('url:'+home),api:'page.goto'},target);
+      for(const state of ['close-client','close-server'])g('hmrPeer',{id,state,url,handshake,accept,code:1001,httpStatus:0},target);
+      e('hmrBrowser',{socket:id,state:'closed',url},target);
+      e('hmrProtocol',{socket:id+9,state:'closed',url,handshake:null,httpStatus:0},target);
+    }
+    function anchor(doc,target){
+      const {id,handshake,accept,url}=sockets[doc];
+      const owner=sockets[doc].owner,intentKey=hash('intent'+id),a=lastLifecycle;
+      const [channel,type]=doc==='login'?['CDP','commit']:['PW','contextClosed'];
+      const recordId=hash(JSON.stringify(['b018-retirement-id-v2',config.run,channel,a.eventId]));
+      const sourceFact=[channel,type,ctx,a.eventId,a.frame??null,a.loader??null,a.url??null,a.main??null];
+      const anchor=hash(JSON.stringify(['b018-retirement-record-v2',config.run,recordId,ctx,doc,id,owner,intentKey,sourceFact]));
+      const keys={intentKey,owner,sourceEventId:a.eventId,recordId,anchor};
+      e('anchorRecord',{doc,exchange:id,...keys,source:doc==='login'?'document-commit':'context-close',
+        frame:doc==='login'?19:0,loader:doc==='login'?2:0},target);
+      g('retireAnchor',{id,recordId,owner,intentKey,anchor},target);g('hmrPeer',{id,handshake,accept,url,state:'drained',code:0,httpStatus:0},target);
+    }
+    function document(doc,p){
+      const {url,loader,id}=p;
+      lifecycle('commit',{frame:19,loader,url,main:true});e('pwArrival',{frame:7,id,url});
+      if(enabled&&doc==='landing')anchor('login',data);
+      const assetUrl=hash('webpack query '+ctx+doc);
+      e('policyArm',{doc,frame:19,loader,navigation:id,mechanism:enabled?'before-parser':'native-static',binding:hash('policy'+id)});
+      const sc=(!clean||cleanNativeLoad)?req('webpack','Script','GET',enabled||cleanNativeLoad?200:null,loader,{url:assetUrl,auth:doc==='landing',
+        term:enabled||cleanNativeLoad?'finished':'failed',body:enabled?config.assetSha256:null}):null;
+      const world=1,generation=hash(ctx+doc+'world'),marker=hash(ctx+doc+'marker');
+      if(enabled){
+        if(doc==='landing')e('clearWorlds');
+        e('world',{world,generation,frame:19,kind:'default',state:'created'});
+        if(sc)e('parsed',{script:++scriptNo,world,url:assetUrl,assetClass:'webpack'});
+        socket(doc);
+      }
+      e('fence',{doc,frame:19,loader,side:'open'});
+      for(const side of ['before','after']){
+        e('treeSample',{doc,side,frame:19,loader,url});
+        e('pwSample',{doc,side,frame:7,url,marker:enabled?marker:null});
+        if(enabled)e('worldSample',{doc,side,world,generation,marker});
+        if(side==='before'){
+          read('pwBody',doc,loader,id,{body:hash('html'+id)});
+          if(sc&&enabled){
+            read('pwBody',doc,loader,sc.id,{body:config.assetSha256});
+            read('scriptSource',doc,loader,scriptNo,{source:config.assetSha256});
+            read('coverage',doc,loader,scriptNo,{units:2,bytes:2,epoch:1});
+          }
+          e('inventory',{doc,navigation:id,html:hash('html'+id),count:sc?1:0});
+        }
+        if(side==='before'&&sc)e('declaration',{doc,navigation:id,html:hash('html'+id),url:assetUrl,asset:config.assetSha256,mapping:config.mapSha256,
+          count:1,nonce:0,integrity:0,effectiveMeta:0,sourceMeta:0,declaration:hash('decl'+sc.id)});
+      }
+      e('fence',{doc,frame:19,loader,side:'seal'});
+    }
+    const locale=req('locale','Document','GET',307,1,{term:'redirect'});
+    const login=req('login','Document','GET',200,1,{prev:locale.id,cdp:locale.cdp,hop:1});document('login',login);
+    if(!enabled)e('intent',{slot:'landing'});e('intent',{slot:'click'});
+    let landing;
+    if(enabled){
+      req('login','Fetch','POST',303,1,{setSid:true});
+      req(home,'Fetch','GET',200,1,{auth:true,setRole:tenant?'tenant':'none'});
+      e('sameDocument',{frame:19,url:hash('url:'+home),path:home});e('intent',{slot:'landing'});retire('login',data);
+      landing=req(home,'Document','GET',200,2,{auth:true,role:tenant?'tenant':'absent',setRole:tenant?'tenant':'none'});
+    }else{
+      const post=req('login','Document','POST',303,2,{term:'redirect',setSid:true});
+      const ent=req('enter','Document','GET',307,2,{auth:true,prev:post.id,cdp:post.cdp,hop:1,term:'redirect'});
+      const cont=req('continue','Document','GET',307,2,{auth:true,prev:ent.id,cdp:post.cdp,hop:2,term:'redirect'});
+      landing=req(home,'Document','GET',200,2,{auth:true,prev:cont.id,cdp:post.cdp,hop:3,setRole:tenant?'tenant':'none'});
+    }
+    document('landing',landing);
+    e('session',{sid,org:'expected',env:'expected',lease:'absent',role:tenant?'tenant':'absent',verifier:hash('verifier'+ctx)});
+    for(const channelName of channels)e('barrier',{channelName,binding:hash('bar'+ctx+channelName)});
+    e('closeIntent',{intentId:ctx},tail);if(enabled)retire('landing',tail);else e('closeIssued',{intentId:ctx},tail);
+    const detachEventId=++life;e('cdpDetached',{eventId:detachEventId},tail);
+    lifecycle('contextClosed',{},tail);const physicalEventId=lastLifecycle.eventId;if(enabled)anchor('landing',tail);
+    for(const channelName of channels)e('closed',{channelName,intentId:ctx,physicalEventId,detachEventId:channelName==='CDP'?detachEventId:0,binding:hash('close'+ctx+channelName)},tail);
+  }
+  return {data,tail};
+}
+function harness(){
+  const index=createDocumentIndex(config),seq={};
+  function put(e){const s=e.channel;seq[s]=(seq[s]||0)+1;return index.append(s,seq[s],e.type,e.fields);}
+  return {index,put,feed:events=>events.forEach(put)};
+}
+module.exports={fixture,harness,config,hash};

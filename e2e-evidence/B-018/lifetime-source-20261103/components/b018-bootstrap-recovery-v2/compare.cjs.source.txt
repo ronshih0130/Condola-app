@@ -1,0 +1,75 @@
+'use strict';
+const crypto = require('node:crypto');
+const ORG = '10000000-0000-4000-8000-000000000001';
+const ORG2 = '10000000-0000-4000-8000-000000000002';
+const slots = [6,6,5,5,1,1].map((n,i)=>Object.freeze({
+  id:'ctx'+(i+1), user:'20000000-0000-4000-8000-00000000000'+n,
+  mode:i%2?'enabled':'native', persona:n===1?'admin':'tenant',
+}));
+function demand(ok){if(!ok)throw Error('bootstrap-recovery-unavailable');}
+const canon=v=>Array.isArray(v)?v.map(canon):v!==null&&typeof v==='object'?
+  Object.fromEntries(Object.keys(v).sort().map(k=>[k,canon(v[k])])):v;
+const equal=(a,b)=>JSON.stringify(canon(a))===JSON.stringify(canon(b));
+const hex=s=>typeof s==='string'&&/^[0-9a-f]{64}$/.test(s);
+const uuid=s=>typeof s==='string'&&/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(s);
+const tag=(key,domain,value)=>crypto.createHmac('sha256',key).update(JSON.stringify([domain,value])).digest('hex');
+function ensureControls(intent,current,keys,db){
+  demand(intent?.version===1&&intent.database===db&&equal(Object.keys(intent).sort(),['database','expectedOff','seed','version']));
+  const seed=intent.seed;
+  demand(equal(Object.keys(seed).sort(),['enabled','orgs','registryKeys','settings'])&&seed.enabled===2&&equal(seed.registryKeys,keys));
+  demand(seed.orgs.length===2&&equal(seed.orgs.map(x=>x.id),[ORG,ORG2]));
+  for(const o of seed.orgs)demand(equal(o,{id:o.id,environment:'live',live_org_id:null,feature_flags:{branded_line_oa:false,line_alerts:true}}));
+  for(const k of keys){
+    const rows=seed.settings.filter(x=>x.key===k);
+    demand(rows.length<=1);
+    if(rows.length){
+      const v=rows[0].value;
+      demand(k!=='company_profile_edit'&&k!=='tenant_payment_history'&&
+        (v===false||v!==null&&typeof v==='object'&&!Array.isArray(v)&&v.enabled===false&&(!Object.hasOwn(v,'allowed_org_ids')||equal(v.allowed_org_ids,[]))));
+    }
+  }
+  const off={...seed,enabled:0,orgs:seed.orgs.map(o=>({...o,feature_flags:{branded_line_oa:false,line_alerts:false}}))};
+  demand(equal(intent.expectedOff,off)&&equal(current,off));
+}
+function rowFingerprint(rawRows,key,name){
+  const hashes=rawRows.map(raw=>tag(key,'row:'+name,raw)).sort();
+  return {count:hashes.length,digest:tag(key,'rows:'+name,hashes)};
+}
+function checkSessions(rows,env,baselineUs,afterUs){
+  demand(Array.isArray(env)&&env.length===6&&rows.length===6);
+  const sids=new Set(),tokens=new Set();
+  for(const slot of slots){
+    const matches=env.filter(x=>x.contextId===slot.id);
+    demand(matches.length===1);
+    const item=matches[0],v=item.verification,scope=item.cookieScope;
+    demand(v&&scope&&item.mode===slot.mode&&v.userId===slot.user&&v.orgId===ORG&&v.persona===slot.persona&&v.revokedAt===null);
+    demand(equal(Object.keys(scope).sort(),['environment','lease','org','portalRole'])&&
+      [null,ORG].includes(scope.org)&&[null,'live'].includes(scope.environment)&&scope.lease===null&&scope.portalRole===(slot.persona==='admin'?null:'tenant'));
+    demand(uuid(v.sessionId)&&hex(v.tokenHash)&&hex(v.readbackSha256)&&v.tokenHash===item.proxyTokenHash&&
+      !sids.has(v.sessionId)&&!tokens.has(v.tokenHash)&&typeof item.userAgent==='string'&&item.userAgent.length>0);
+    sids.add(v.sessionId);tokens.add(v.tokenHash);
+    const found=rows.filter(s=>s.row.id===v.sessionId);demand(found.length===1);
+    const {row,created,active,expires}=found[0];
+    demand(equal(Object.keys(row).sort(),['created_at','expires_at','id','ip','last_active_at','revoked_at','token_hash','user_agent','user_id']));
+    demand(row.user_id===slot.user&&row.token_hash===v.tokenHash&&row.revoked_at===null&&row.user_agent===item.userAgent.slice(0,300)&&
+      [null,'127.0.0.1','::1','::ffff:127.0.0.1'].includes(row.ip));
+    const c=BigInt(created),a=BigInt(active),e=BigInt(expires);
+    demand(c>BigInt(baselineUs)&&c<=a&&a<=BigInt(afterUs)&&e>=a+43200000000n&&e<=BigInt(afterUs)+43200000000n&&e>BigInt(afterUs));
+  }
+}
+function auditEvidence(rows,baseline,primary,lo,hi,key){
+  const old=new Map(baseline.map(x=>[x.id,x.hash])),remaining=new Set(old.keys()),newCounts=new Map();
+  for(const {id,raw,micros} of rows){
+    const ident=tag(key,'audit-id',id),hash=tag(key,'audit-full-row',raw);
+    if(old.has(ident)){demand(remaining.delete(ident)&&old.get(ident)===hash);continue;}
+    const a=JSON.parse(raw),actor=a.actor_user_id;
+    demand(primary.has(actor)&&BigInt(micros)>BigInt(lo)&&BigInt(micros)<=BigInt(hi)&&/^[1-9][0-9]*$/.test(id));
+    // Do not parse a bigint identity into a JavaScript number for comparison.
+    demand(equal(Object.keys(a).sort(),['action','actor_role','actor_user_id','changed_cols','event_type','id','new_row','occurred_at','old_row','org_id','reason','request_id','row_id','table_name']));
+    demand(a.org_id===primary.get(actor)&&a.actor_role==='app'&&a.table_name==='auth_events'&&a.row_id==='sign_in'&&a.action==='insert'&&
+      a.event_type==='sign_in'&&equal(a.new_row,{event:'sign_in',remember:false})&&a.old_row===null&&a.changed_cols===null&&a.reason==='sign_in'&&a.request_id===null);
+    newCounts.set(actor,(newCounts.get(actor)||0)+1);
+  }
+  demand(!remaining.size&&newCounts.size===3&&slots.every(x=>newCounts.get(x.user)===2));
+}
+module.exports={ORG,slots,demand,canon,equal,hex,tag,ensureControls,rowFingerprint,checkSessions,auditEvidence};
