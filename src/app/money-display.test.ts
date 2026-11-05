@@ -185,6 +185,8 @@ test("rendered screens do not format amounts with a bare dollar", () => {
       const text = readFileSync(path, "utf8");
       if (!text.includes("formatMoney")) continue;
       if (path.endsWith(`${join("server", "format.ts")}`)) continue;
+      // Build-only regional helpers expose formatMoneyMinor; not a rendered screen.
+      if (path.endsWith(`${join("server", "regional-format-helpers.ts")}`)) continue;
       if (path.endsWith(`${join("t", "pay", "page.tsx")}`) && text.includes('moneyLabel as formatMoney')) continue;
       hits.push(path);
     }
