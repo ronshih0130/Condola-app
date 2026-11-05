@@ -1,4 +1,5 @@
 import { tx } from './db';
+import { requireOrgScope } from './org-guard';
 import { billingPreviewAuthorityOn } from './billing-preview-authority';
 import { monthlyBounds, type LeaseSource, type RentSource } from './monthly-billing-rules';
 import { planMonthlyRentOperation, type MonthlyRentParty } from './monthly-rent-operation-plan';
@@ -37,6 +38,6 @@ export async function monthlyRentPreview(session:Session,leaseId:string,month:st
     const result=planMonthlyRentOperation({orgId:session.orgId,environment:session.environment,month,lease,parties,rent,capped:parties.length>CAP||rent.length>CAP});
     if (!(await billingPreviewAuthorityOn(client,session))) return null;
     return {...result,month,asOf};
-  },{orgId:session.orgId,environment:session.environment},{isolation:'repeatable read',readOnly:true});
+  },requireOrgScope(session),{isolation:'repeatable read',readOnly:true});
 }
 export type MonthlyRentPreview=NonNullable<Awaited<ReturnType<typeof monthlyRentPreview>>>;

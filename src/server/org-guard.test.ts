@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { FlowError } from "./errors";
 import { assertSameOrg, requireOrgScope } from "./org-guard";
 import type { Session } from "./types";
@@ -61,4 +64,41 @@ for (const fixture of fixtures) {
 test("assertSameOrg rejects the live firm when the session is in its sandbox", () => {
   const sandbox = session("staff", "sandbox");
   assert.throws(() => assertSameOrg(sandbox, sandbox.liveOrgId), forbidden);
+});
+
+test("requireOrgScope rejects missing, empty, and whitespace-only org IDs", () => {
+  for (const orgId of [undefined, "", "   "]) {
+    const invalid = { ...session("staff"), orgId } as Session;
+    assert.throws(() => requireOrgScope(invalid), forbidden);
+  }
+});
+
+test("requireOrgScope rejects missing and invalid environments", () => {
+  for (const environment of ["", "prod", "LIVE", undefined]) {
+    const invalid = { ...session("staff"), environment } as Session;
+    assert.throws(() => requireOrgScope(invalid), forbidden);
+  }
+});
+
+test("close and monthly preview request transactions use requireOrgScope", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const files = [
+    { path: "../app/m/close/page.tsx", calls: 1 },
+    { path: "monthly-billing-plan.ts", calls: 2 },
+    { path: "monthly-rent-preview.ts", calls: 1 },
+  ];
+  for (const file of files) {
+    const source = readFileSync(resolve(here, file.path), "utf8");
+    assert.ok(source.includes("requireOrgScope(session)"), file.path);
+    assert.equal(
+      [...source.matchAll(/\btx\(session\.userId\b/g)].length,
+      file.calls,
+      `${file.path}: expected request transactions`,
+    );
+    assert.equal(
+      [...source.matchAll(/,\s*requireOrgScope\(session\)\s*[,)]/g)].length,
+      file.calls,
+      `${file.path}: every request transaction must pass the guard as its scope`,
+    );
+  }
 });

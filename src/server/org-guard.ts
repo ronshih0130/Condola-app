@@ -4,6 +4,13 @@ import { FlowError } from "./errors";
 import type { Session } from "./types";
 
 export function requireOrgScope(session: Session): TxScope {
+  if (
+    typeof session.orgId !== "string" ||
+    !session.orgId.trim() ||
+    (session.environment !== "live" && session.environment !== "sandbox")
+  ) {
+    throw new FlowError("errors.forbidden");
+  }
   return { orgId: session.orgId, environment: session.environment };
 }
 
