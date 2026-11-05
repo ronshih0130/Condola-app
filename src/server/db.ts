@@ -206,6 +206,8 @@ export async function tx<T>(userId: string, fn: (client: Client) => Promise<T>, 
           "live";
         await pinOrg(client, scope.orgId, environment);
       } else {
+        // Request paths must pass requireOrgScope(session) or use txForSession.
+        // This fallback is for non-request callers such as seed and cron.
         // pinOrg sets app.active_org_id. post_reversal and fn_invoice_recalc
         // compare that setting when current_user is authenticated.
         // cookies() throws outside a request; still resolve the live firm so

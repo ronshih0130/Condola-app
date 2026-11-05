@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { tx } from './db';
+import { requireOrgScope } from './org-guard';
 import { billingPreviewAuthorityOn } from './billing-preview-authority';
 import { monthlyBounds, planMonthlyRow, utilityReadiness, type LeaseSource, type RentSource, type ComponentSource } from './monthly-billing-rules';
 import type { Session } from './types';
@@ -7,7 +8,7 @@ import type { Session } from './types';
 const CAP=2000;
 /** Uses the same authority in its own read-only snapshot without scanning billing data. */
 export async function monthlyBillingAvailable(session:Session):Promise<boolean> {
-  return tx(session.userId, client=>billingPreviewAuthorityOn(client,session), {orgId:session.orgId,environment:session.environment},{isolation:'repeatable read',readOnly:true});
+  return tx(session.userId, client=>billingPreviewAuthorityOn(client,session), requireOrgScope(session),{isolation:'repeatable read',readOnly:true});
 }
 
 /** Snapshot is a read-only preview, not posting authority or a complete bill. */
@@ -40,6 +41,6 @@ export async function monthlyBillingPlan(session:Session, month:string) {
     const digest=createHash('sha256').update(JSON.stringify({version:2,org:session.orgId,environment:session.environment,month,controls,leases,rent,charges,utilities})).digest('hex');
     if (!(await billingPreviewAuthorityOn(client,session))) return null;
     return {kind:'complete' as const,month,period,asOf,rows,digest,unresolvedCount,subtotals:[...sums].sort(([a],[b])=>a.localeCompare(b)).map(([currency,x])=>({currency,currencyConfig:rows.find(row=>row.currency===currency)?.currencyConfig ?? null,amountMinor:x.amount.toString(),count:x.count}))};
-  },{orgId:session.orgId,environment:session.environment},{isolation:'repeatable read',readOnly:true});
+  },requireOrgScope(session),{isolation:'repeatable read',readOnly:true});
 }
 export type MonthlyBillingPlan=NonNullable<Awaited<ReturnType<typeof monthlyBillingPlan>>>;
