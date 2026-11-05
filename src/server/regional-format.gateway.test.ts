@@ -16,7 +16,7 @@ test("regional format stays synchronously OFF for every valid org scope", () => 
         const session = {
           orgId, environment, kind, name: "Private Person",
           email: "private@example.test", address: "Private address",
-        } as Session;
+        } as unknown as Session;
         const body = getRegionalFormatContext(session);
         assert.deepEqual(body, { enabled: false });
         assert.equal(JSON.stringify(body), '{"enabled":false}');
