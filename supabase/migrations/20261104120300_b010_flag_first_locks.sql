@@ -30,14 +30,14 @@ BEGIN
     FOR v_attempt IN 1..3 LOOP
       BEGIN
         PERFORM set_config('lock_timeout','2s',true);
-        LOCK TABLE public.platform_settings IN SHARE MODE;
-        PERFORM 1 FROM public.organizations WHERE id=NEW.org_id FOR SHARE;
+        LOCK TABLE public.platform_settings IN SHARE MODE NOWAIT;
+        PERFORM 1 FROM public.organizations WHERE id=NEW.org_id FOR SHARE NOWAIT;
         SELECT EXISTS (SELECT 1 FROM public.organizations o JOIN public.platform_settings f ON f.key='payment_results_v2'
           WHERE o.id=NEW.org_id AND o.feature_flags->'payment_results_v2'='true'::jsonb AND f.value->'enabled'='true'::jsonb
             AND jsonb_typeof(f.value->'allowed_org_ids')='array' AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)) INTO v_enabled;
         IF v_enabled THEN
           IF v_kind='unsupported' THEN RAISE EXCEPTION 'Payment transition unavailable' USING ERRCODE='23514'; END IF;
-          PERFORM 1 FROM public.leases WHERE id=NEW.lease_id AND org_id=NEW.org_id FOR SHARE;
+          PERFORM 1 FROM public.leases WHERE id=NEW.lease_id AND org_id=NEW.org_id FOR SHARE NOWAIT;
           IF NOT FOUND OR v_actor IS NULL THEN RAISE EXCEPTION 'Payment result unavailable' USING ERRCODE='42501'; END IF;
         END IF;
         EXIT;
@@ -152,12 +152,12 @@ BEGIN
     FOR v_attempt IN 1..3 LOOP
       BEGIN
         PERFORM set_config('lock_timeout','2s',true);
-        LOCK TABLE public.platform_settings IN SHARE MODE;
+        LOCK TABLE public.platform_settings IN SHARE MODE NOWAIT;
         -- Stable ordering also covers identity updates spanning two orgs.
         PERFORM 1 FROM public.organizations
           WHERE (TG_OP <> 'INSERT' AND id=OLD.org_id)
              OR (TG_OP <> 'DELETE' AND id=NEW.org_id)
-          ORDER BY id FOR SHARE;
+          ORDER BY id FOR SHARE NOWAIT;
         SELECT EXISTS (SELECT 1 FROM public.organizations o JOIN public.platform_settings p ON p.key='rent_reminders_v2'
           WHERE ((TG_OP <> 'INSERT' AND o.id=OLD.org_id AND OLD.kind IN ('rent_overdue_admin','rent_overdue_tenant'))
              OR (TG_OP <> 'DELETE' AND o.id=NEW.org_id AND NEW.kind IN ('rent_overdue_admin','rent_overdue_tenant')))
