@@ -45,21 +45,21 @@ export function formatMoneyMinor(
       typeof ctx.currency !== "string" || !/^[A-Z]{3}$/.test(ctx.currency) ||
       (amountCurrency !== undefined && amountCurrency !== ctx.currency)) invalid();
   const abs = BigInt(Math.abs(amountMinor));
-  const scale = 10n ** BigInt(ctx.minorUnit);
+  const scale = BigInt(10) ** BigInt(ctx.minorUnit);
   let whole = abs / scale;
   let frac = abs % scale;
-  const displayScale = 10n ** BigInt(ctx.displayDecimals);
+  const displayScale = BigInt(10) ** BigInt(ctx.displayDecimals);
   if (ctx.displayDecimals < ctx.minorUnit) {
-    const divisor = 10n ** BigInt(ctx.minorUnit - ctx.displayDecimals);
+    const divisor = BigInt(10) ** BigInt(ctx.minorUnit - ctx.displayDecimals);
     // Round half away from zero on the magnitude, including ties and carries.
-    frac = (frac + divisor / 2n) / divisor;
+    frac = (frac + divisor / BigInt(2)) / divisor;
     whole += frac / displayScale;
     frac %= displayScale;
   } else {
-    frac *= 10n ** BigInt(ctx.displayDecimals - ctx.minorUnit);
+    frac *= BigInt(10) ** BigInt(ctx.displayDecimals - ctx.minorUnit);
   }
   const negative = amountMinor < 0 || Object.is(amountMinor, -0);
-  const signedWhole = negative ? (whole === 0n ? -0 : -whole) : whole;
+  const signedWhole = negative ? (whole === BigInt(0) ? -0 : -whole) : whole;
   const fraction = ctx.displayDecimals === 0 ? "" : new Intl.NumberFormat(ctx.locale, {
     useGrouping: false,
     minimumIntegerDigits: ctx.displayDecimals,
