@@ -49,9 +49,11 @@ async function controls(c:Client):Promise<Controls>{
 }
 function validateSeed(v:Controls) {
  if(v.orgs.length!==2||!same(v.orgs.map(x=>x.id).sort(),[ORG_ID,ORG2_ID].sort())||v.orgs.some(x=>x.environment!=='live'||x.live_org_id!==null||!same(x.flags,seedFlags)))throw Error('Unexpected seed organizations or flags');
- const allow=new Set([...v.registry,'go_live_lock','id_documents.max_retention_days_after_close','id_documents.org_retention_locked']);
+ const allow=new Set([...v.registry,'deposit_settlement','go_live_lock','id_documents.max_retention_days_after_close','id_documents.org_retention_locked']);
  if(v.settings.some(x=>!allow.has(x.key))||v.settings.some(x=>x.key===targetKey))throw Error('Unknown setting or B018 already present');
  for(const row of v.settings.filter(x=>v.registry.includes(x.key)))if(!same(row.value,{enabled:false,allowed_org_ids:[]}))throw Error('Unexpected registry flag');
+ const settlement=v.settings.filter(x=>x.key==='deposit_settlement');
+ if(settlement.length!==1||!same(settlement[0].value,{enabled:false,allowed_org_ids:[]}))throw Error('Unexpected B011 settlement flag');
  for(const [key,value] of [['go_live_lock',false],['id_documents.max_retention_days_after_close',90],['id_documents.org_retention_locked',true]] as const){const found=v.settings.filter(x=>x.key===key);if(found.length!==1||!same(found[0].value,value))throw Error('Protective control mismatch');}
 }
 function validateFinal(before:Controls,after:Controls){
@@ -152,7 +154,7 @@ test('view modes reject status transitions and later expired or archived caller'
 
 test('mixed currencies fail closed rather than summing unlike balances',async()=>{
  const a=await tenant(),f=await fixture(a.contact);await enable();await invoice(f.p,f.lease);
- await query(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,status) VALUES($1,$2,$3,$4,'USD','2090-03-01','open')`,[ORG_ID,f.p,f.lease,randomUUID()]);
+ await query(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,status) VALUES($1,$2,$3,$4,'TWD','2090-03-01','open')`,[ORG_ID,f.p,f.lease,randomUUID()]);
  assert.equal((await tenantPaymentHistory(a.s,f.lease,{view:'current'})).state,'unavailable');
 });
 
