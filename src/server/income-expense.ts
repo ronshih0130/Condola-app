@@ -3,6 +3,7 @@ import { FlowError } from "./errors";
 import { monthBounds, taipeiToday } from "./money";
 import { assertPerm } from "./perms";
 import type { Session } from "./types";
+import { requireOrgScope } from "./org-guard";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -106,7 +107,7 @@ export async function reportFilterOptions(session: Session) {
       [session.orgId],
     );
     return { properties, owners };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function loadIncomeExpense(
@@ -126,5 +127,5 @@ export async function loadIncomeExpense(
       [session.orgId, propertyId, ownerId, input.start, input.end],
     );
     return rows;
-  });
+  }, requireOrgScope(session));
 }
