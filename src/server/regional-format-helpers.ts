@@ -44,13 +44,37 @@ export function formatMoneyMinor(
   if (!Number.isSafeInteger(amountMinor) ||
       typeof ctx.currency !== "string" || !/^[A-Z]{3}$/.test(ctx.currency) ||
       (amountCurrency !== undefined && amountCurrency !== ctx.currency)) invalid();
-  const major = amountMinor / 10 ** ctx.minorUnit;
+  const abs = BigInt(Math.abs(amountMinor));
+  const scale = 10n ** BigInt(ctx.minorUnit);
+  let whole = abs / scale;
+  let frac = abs % scale;
+  const displayScale = 10n ** BigInt(ctx.displayDecimals);
+  if (ctx.displayDecimals < ctx.minorUnit) {
+    const divisor = 10n ** BigInt(ctx.minorUnit - ctx.displayDecimals);
+    // Round half away from zero on the magnitude, including ties and carries.
+    frac = (frac + divisor / 2n) / divisor;
+    whole += frac / displayScale;
+    frac %= displayScale;
+  } else {
+    frac *= 10n ** BigInt(ctx.displayDecimals - ctx.minorUnit);
+  }
+  const negative = amountMinor < 0 || Object.is(amountMinor, -0);
+  const signedWhole = negative ? (whole === 0n ? -0 : -whole) : whole;
+  const fraction = ctx.displayDecimals === 0 ? "" : new Intl.NumberFormat(ctx.locale, {
+    useGrouping: false,
+    minimumIntegerDigits: ctx.displayDecimals,
+    maximumFractionDigits: 0,
+  }).formatToParts(frac).filter(part => part.type === "integer").map(part => part.value).join("");
+  // Intl formats the exact BigInt whole, sign, grouping and currency placement.
+  // Replace only the fraction with exact, zero-padded digits in the same locale.
   return new Intl.NumberFormat(ctx.locale, {
     style: "currency",
     currency: ctx.currency,
     minimumFractionDigits: ctx.displayDecimals,
     maximumFractionDigits: ctx.displayDecimals,
-  }).format(major);
+  }).formatToParts(signedWhole)
+    .map(part => part.type === "fraction" ? fraction : part.value)
+    .join("");
 }
 
 export function formatRegionalNumber(value: number, ctx: LocalizationContext): string {

@@ -39,6 +39,43 @@ test("money supports zero and three storage exponents, negatives, zero and local
   }), "1.234,56\u00a0€");
 });
 
+test("money preserves all safe-integer digits at two and three decimal places", () => {
+  const usd = { ...ctx, currency: "USD", minorUnit: 2, displayDecimals: 2 };
+  assert.equal(formatMoneyMinor(9007199254740991, usd), "$90,071,992,547,409.91");
+  assert.equal(formatMoneyMinor(-9007199254740991, usd), "-$90,071,992,547,409.91");
+  const three = { ...usd, minorUnit: 3, displayDecimals: 3 };
+  assert.equal(formatMoneyMinor(9007199254740991, three), "$9,007,199,254,740.991");
+  assert.equal(formatMoneyMinor(-9007199254740991, three), "-$9,007,199,254,740.991");
+});
+
+test("money rounds half away from zero with exact ties and carries", () => {
+  const usd = { ...ctx, currency: "USD", minorUnit: 3, displayDecimals: 2 };
+  for (const [amount, expected] of [
+    [1234, "$1.23"], [-1234, "-$1.23"],
+    [1235, "$1.24"], [-1235, "-$1.24"],
+    [1245, "$1.25"], [-1245, "-$1.25"],
+    [9995, "$10.00"], [-9995, "-$10.00"],
+    [5, "$0.01"], [-5, "-$0.01"],
+    [4, "$0.00"], [-4, "-$0.00"],
+  ] as const) {
+    assert.equal(formatMoneyMinor(amount, usd), expected);
+  }
+  assert.equal(formatMoneyMinor(1500, { ...usd, displayDecimals: 0 }), "$2");
+  assert.equal(formatMoneyMinor(-1500, { ...usd, displayDecimals: 0 }), "-$2");
+});
+
+test("money pads exact fractions and retains locale digits and grouping", () => {
+  const usd = { ...ctx, currency: "USD", minorUnit: 2, displayDecimals: 3 };
+  assert.equal(formatMoneyMinor(101, usd), "$1.010");
+  assert.equal(formatMoneyMinor(1, { ...usd, minorUnit: 20, displayDecimals: 20 }),
+    "$0.00000000000000000001");
+  assert.equal(formatMoneyMinor(123456, { ...usd, locale: "en-IN", minorUnit: 0 }),
+    "$1,23,456.000");
+  assert.equal(formatMoneyMinor(123456, {
+    ...usd, locale: "ar-EG", displayDecimals: 2,
+  }), "\u200f١٬٢٣٤٫٥٦\u00a0US$");
+});
+
 test("currency mismatch rejects instead of converting or relabelling", () => {
   for (const currency of ["USD", "twd", "", " TWD", null, 42]) {
     rejects(() => formatMoneyMinor(280000, ctx, currency as string));
