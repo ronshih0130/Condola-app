@@ -689,21 +689,39 @@ test("provided PR9e privilege variant upgrades and preserves ordinary records", 
 });
 
 test("a database with the older 20261022180000 upgrades forward, then accepts the same file again", async () => {
-  // b888ccd cannot be read with git show. The predecessor shape is the current
-  // schema with delete_after nullable again and the photo-size cap removed.
+  const fixture = path.join(ROOT, "src/server/fixtures/id-migration/20261022180000_tenant_id_check.b888ccd.sql");
+  const bytes = readFileSync(fixture);
+  assert.equal(
+    createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex"),
+    "c9da3e9eecff356fd3d1bf107dcc8a3994e4f4f3",
+  );
+  const migrations = readdirSync(MIGRATIONS).filter((name) => name.endsWith(".sql")).sort();
   const database = await createScratchDb();
   const upgradeUrl = database.url;
   const upgradeFile = path.join(MIGRATIONS, UPGRADE_FILE);
   try {
     psql(upgradeUrl, STUB);
-    for (const file of readdirSync(MIGRATIONS).filter((name) => name.endsWith(".sql")).sort()) {
-      psql(upgradeUrl, path.join(MIGRATIONS, file));
+    // Reproduce history before the upgrade; later migrations require its shape.
+    for (const file of migrations.filter((name) => name < UPGRADE_FILE)) {
+      psql(upgradeUrl, file === OLD_FILE ? fixture : path.join(MIGRATIONS, file));
     }
     const seeded = await withDb(upgradeUrl, async (client) => {
-      await client.query(`ALTER TABLE identity_documents ALTER COLUMN delete_after DROP NOT NULL`);
-      await client.query(
-        `ALTER TABLE identity_document_photos DROP CONSTRAINT IF EXISTS identity_document_photos_size_bytes_check`,
+      const predecessor = await client.query<{ not_null: boolean; keep_days: number }>(
+        `SELECT attnotnull AS not_null, id_document_keep_days() AS keep_days
+           FROM pg_attribute
+          WHERE attrelid = 'identity_documents'::regclass AND attname = 'delete_after'`,
       );
+      assert.deepEqual(predecessor.rows, [{ not_null: false, keep_days: 365 }]);
+      const sizeChecks = await client.query<{ def: string }>(
+        `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+          WHERE conrelid = 'identity_document_photos'::regclass
+            AND contype = 'c' AND pg_get_constraintdef(oid) ILIKE '%size_bytes%'`,
+      );
+      // The genuine fixture has a 5MB limit, but no post-upgrade 819200 cap.
+      assert.equal(sizeChecks.rows.length, 1);
+      assert.match(sizeChecks.rows[0].def, /size_bytes > 0/);
+      assert.match(sizeChecks.rows[0].def, /size_bytes <= 5000000/);
+      assert.doesNotMatch(sizeChecks.rows[0].def, /819200/);
       const org = await client.query<{ id: string }>(
         `INSERT INTO organizations (name, country_code, default_currency) VALUES ('升級', 'TW', 'TWD') RETURNING id::text`,
       );
@@ -821,6 +839,11 @@ test("a database with the older 20261022180000 upgrades forward, then accepts th
         (error: unknown) => (error as { code?: string }).code === "23514",
       );
     });
+    // Check upgrade replay before later migrations replace its retention clock.
+    for (const file of migrations.filter((name) => name > UPGRADE_FILE)) {
+      psql(upgradeUrl, path.join(MIGRATIONS, file));
+    }
+    await assertCurrentSchema(upgradeUrl);
   } finally {
     await database.cleanup();
   }

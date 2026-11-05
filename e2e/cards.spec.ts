@@ -123,6 +123,9 @@ for (const locale of locales) {
     await expect(reason).toHaveClass(/warn/);
     await expect(reason).toContainText("⚠");
     await expect(reason).toContainText("NT$2,800");
+    await expect(reason).toHaveText(locale.code === "zh-TW"
+      ? "⚠ 本期支出與撥付高於已登記租金，屋主淨額為 −NT$2,800。請和屋主確認怎麼處理。"
+      : "⚠ Expenses and payouts this period are higher than recorded rent, so the owner net is −NT$2,800. Please confirm with the owner how to handle them.");
     await page.screenshot({ path: `../e2e-artifacts/owner-owes-${locale.code}.png`, fullPage: true });
 
     await signIn(page, ACCOUNTS.owner);

@@ -247,6 +247,18 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(portal.includes('href="/forgot"'), true);
   assert.equal(portal.includes("i_portal_forgot"), true);
   assert.equal(page.includes("<PasswordFields />"), false);
+  assert.ok(page.includes('import { AcceptForm, AcceptSubmit } from "@/components/accept-form";'));
+  assert.ok(page.includes('<AcceptForm action={actionAccept} requireConsent={needsTeamConsent(invite.state, invite.kind)}>'));
+  const acceptForm = readFileSync(new URL("../components/accept-form.tsx", import.meta.url), "utf8");
+  assert.match(acceptForm, /<Claimed\.Provider value=\{claimed\}>\{children\}<\/Claimed\.Provider>/);
+  const acceptMarkup = page.match(/<AcceptForm\b[^>]*>([\s\S]*?)<\/AcceptForm>/);
+  assert.ok(acceptMarkup, "accept page renders AcceptForm");
+  const passwordInputs = [...acceptMarkup[1].matchAll(/<input\b[^>]*\btype="password"[^>]*\/>/g)];
+  assert.equal(passwordInputs.length, 1, "AcceptForm contains one password input");
+  assert.match(passwordInputs[0][0], /\bname="password"/);
+  assert.match(passwordInputs[0][0], /\bdata-testid="new-password"/);
+  // Product bug: this field also creates passwords, but currently uses
+  // autoComplete="current-password". Do not pin that behavior as correct.
   assert.equal(page.includes('data-testid="accept-name"'), false);
   const teamJoin = readFileSync(new URL("../components/team-join.tsx", import.meta.url), "utf8");
   assert.equal(teamJoin.includes("<PasswordFields />"), true);
