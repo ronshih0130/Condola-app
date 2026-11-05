@@ -116,7 +116,8 @@ for (const locale of locales) {
     expect(documentText).toContain(locale.reason);
     if (locale.code === "zh-TW") expect(documentText).not.toContain("已收租金");
     expect(documentText).toContain("NT$0");
-    expect(documentText).toContain("−NT$2,800");
+    await expect(page.getByTestId("statement-net")).toHaveText("−NT$2,800"); // spec-change #1 (Ron 2026-11-04)
+    await expect(page.getByTestId("statement-closing")).toHaveText("−NT$2,800"); // spec-change #2 (Ron 2026-11-04)
     expect(documentText).toContain(locale.code === "zh-TW" ? "期末餘額" : "Closing balance");
     const reason = page.getByTestId("owner-owes-reason");
     await expect(reason).toHaveClass(/alert/);

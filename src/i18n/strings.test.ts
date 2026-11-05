@@ -201,7 +201,9 @@ test("owner statements say 已繳租金 and not 已收租金", () => {
     if (proto[key]?.includes(oldPhrase)) hits.push(`design ${key}`);
   }
   assert.deepEqual(hits, []);
-  assert.match(read(join(root, "src/components/statement-document.tsx")), /i_stmt_negative/);
+  const statementDocument = read(join(root, "src/components/statement-document.tsx"));
+  assert.ok(statementDocument.includes('t("i_stmt_negative", { amount: signed(periodNet) })')); // spec-change #27 (Ron 2026-11-04)
+  assert.equal(statementDocument.includes("owner_owes_reason"), false); // spec-change #27 (Ron 2026-11-04)
   assert.match(read(join(root, "src/app/m/statements/page.tsx")), /owner_owes/);
   assert.match(read(join(root, "src/app/o/statements/[id]/page.tsx")), /StatementDocument/);
 });
