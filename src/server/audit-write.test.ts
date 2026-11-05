@@ -90,14 +90,14 @@ test("sanitizer masks PII by value regardless of the field name", () => {
 
 test("sanitizer masks bigint PII and preserves non-PII numeric values", () => {
   assert.deepEqual(sanitizeAuditPayload({
-    phone: 912345678n,
-    internationalPhone: 886912345678n,
-    amount: 1200n,
+    phone: BigInt(912345678),
+    internationalPhone: BigInt(886912345678),
+    amount: BigInt(1200),
     due_day: 5,
   }).newRow, {
     phone: MASK,
     internationalPhone: MASK,
-    amount: 1200n,
+    amount: BigInt(1200),
     due_day: 5,
   });
 });
