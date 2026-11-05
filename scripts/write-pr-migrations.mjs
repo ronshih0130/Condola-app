@@ -302,6 +302,10 @@ const added = {
     addOnly: false,
     reason: "Adds private deposit settlement header/line/evidence/confirmation/payment tables with RLS, restricted service_role grants and composite FKs; no flag seed; no historical rewrite.",
   },
+  "supabase/migrations/20261105140000_b011_deposit_settlement_writers.sql": {
+    addOnly: false,
+    reason: "Tightens deposit_settlement_* with same-lease charge FK, same-settlement evidence FK, payment request_id idempotency, revisions table, and deposit_settlement flag seed OFF; no historical rewrite.",
+  },
 };
 
 const functions = [
