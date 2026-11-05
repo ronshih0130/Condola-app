@@ -10,8 +10,8 @@ DECLARE
   v_login text := session_user::text;
   v_active text := coalesce(nullif(current_setting('role', true), 'none'), v_login);
   v_owner text := pg_get_userbyid((
-    SELECT c.relowner FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
+    SELECT c.relowner FROM pg_catalog.pg_class c
+    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND c.relname = 'bank_transactions'
   ));
   v_old_org uuid;
