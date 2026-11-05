@@ -298,6 +298,10 @@ const added = {
     addOnly: false,
     reason: "Bank-match direct-write guard trusts only the table-owner login without role switch; no table/column change; old Worker compatible.",
   },
+  "supabase/migrations/20261105120500_prop09_deposit_settlement.sql": {
+    addOnly: false,
+    reason: "Adds private deposit settlement header/line/evidence/confirmation/payment tables with RLS, restricted service_role grants and composite FKs; no flag seed; no historical rewrite.",
+  },
 };
 
 const functions = [
