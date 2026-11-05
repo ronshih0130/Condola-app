@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches:
       - "**"
@@ -69,5 +71,9 @@ jobs:
       - run: npm run test:rls
       - run: npm run cf:build
       - run: npm run test:worker
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Install Playwright Chromium
+        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e')) }}
+        run: npx playwright install --with-deps chromium
+      - name: Run end-to-end tests
+        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e')) }}
+        run: npm run test:e2e
