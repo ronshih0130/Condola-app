@@ -42,7 +42,7 @@ function registryKeys():string[] {
 }
 async function controls(c:Client):Promise<Controls>{
  const database=(await c.query<{database:string;version:number}>(`SELECT current_database() database,current_setting('server_version_num')::int version`)).rows[0];
- if(!childName||database.database!==childName||!/^condola_test_[0-9a-f]{32}$/.test(childName)||Math.floor(database.version/10000)!==16)throw Error('Owned child identity mismatch');
+ if(!childName||database.database!==childName||!/^condola_test_[0-9a-f]{32}$/.test(childName)||![16,17].includes(Math.floor(database.version/10000)))throw Error('Owned child identity mismatch');
  const orgs=(await c.query<OrgControl>(`SELECT id::text,environment::text,live_org_id::text,feature_flags flags FROM organizations ORDER BY id`)).rows;
  const settings=(await c.query<SettingControl>(`SELECT key,value,description,to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') updated_at FROM platform_settings ORDER BY key`)).rows;
  return {database:database.database,orgs,settings,registry:registryKeys()};
