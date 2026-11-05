@@ -64,6 +64,7 @@ import {
   type VendorLinkCapability,
 } from "./vendor-link-rules";
 import { resolveVendorIdentity } from "./vendor-identity";
+import { planVendorAttribution } from "./vendor-attribution";
 import { requireOrgScope } from "./org-guard";
 
 let vendorLinkKillSwitch: boolean = VENDOR_LINK_ENABLED;
@@ -685,6 +686,8 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
     if (!resolution || resolution.capability === "invalid" ||
         resolution.jobId !== job.job_id || resolution.orgId !== job.org_id ||
         resolution.ticketId !== job.ticket_id) return null;
+    const gateOn = enhanced;
+    void planVendorAttribution(resolution, null, new Date(), gateOn);
     const ticket = await maybe<{
       title: string;
       description: string | null;
