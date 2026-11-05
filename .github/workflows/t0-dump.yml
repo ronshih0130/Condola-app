@@ -1,0 +1,123 @@
+name: T0 database dump
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ops/t0-dump-run]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t0-dump
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 client and age
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates curl gnupg
+          curl --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | gpg --dearmor > "$RUNNER_TEMP/pgdg.gpg"
+          sudo install -m 0644 "$RUNNER_TEMP/pgdg.gpg" /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17 age
+
+      - name: Dump, verify, and encrypt
+        shell: bash
+        env:
+          PGURL: ${{ secrets.PROD_DB_URL_SESSION }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$PGURL" ]]; then
+            echo "::error::PROD_DB_URL_SESSION is empty"
+            exit 1
+          fi
+
+          plain="$RUNNER_TEMP/t0.dump"
+          toc="$RUNNER_TEMP/t0.toc"
+          trap 'shred -u -- "$plain" "$toc"' EXIT
+
+          host="$(python3 - <<'PY'
+          import os
+          import sys
+          from urllib.parse import urlparse
+          try:
+              host = urlparse(os.environ["PGURL"]).hostname
+              if not host or any(c in host for c in "\r\n|"):
+                  raise ValueError()
+          except Exception:
+              sys.exit("Invalid database URL hostname")
+          print(host)
+          PY
+          )"
+
+          recipients=()
+          shopt -s nullglob
+          for key in ops/keys/*.pub; do
+            recipients+=(-R "$key")
+          done
+          if (( ${#recipients[@]} == 0 )); then
+            echo "::error::No age recipient files found in ops/keys"
+            exit 1
+          fi
+
+          /usr/lib/postgresql/17/bin/pg_dump "$PGURL" \
+            -Fc -Z6 --no-owner --no-privileges \
+            -n public -n app -n auth -n storage \
+            -f "$plain"
+          /usr/lib/postgresql/17/bin/pg_restore --list "$plain" > "$toc"
+          toc_lines="$(wc -l < "$toc" | tr -d '[:space:]')"
+          if (( toc_lines == 0 )); then
+            echo "::error::Dump TOC is empty"
+            exit 1
+          fi
+          size="$(stat -c %s "$plain")"
+          if (( size < 100000 )); then
+            echo "::error::Dump is smaller than 100000 bytes"
+            exit 1
+          fi
+          plain_hash="$(sha256sum "$plain" | awk '{print $1}')"
+
+          timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          stamp="$(date -u -d "$timestamp" +%Y%m%dT%H%M%SZ)"
+          plain_name="condola-t0-${stamp}.dump"
+          age_name="${plain_name}.age"
+          artifact="$RUNNER_TEMP/t0-artifact"
+          mkdir -p "$artifact"
+          age "${recipients[@]}" -o "$artifact/$age_name" "$plain"
+          age_hash="$(sha256sum "$artifact/$age_name" | awk '{print $1}')"
+          printf '%s  %s\n%s  %s\n# toc_lines %s\n' \
+            "$plain_hash" "$plain_name" \
+            "$age_hash" "$age_name" "$toc_lines" > "$artifact/t0.sha256"
+
+          {
+            printf '| Field | Value |\n| --- | --- |\n'
+            printf '| Host | %s |\n' "$host"
+            printf '| Size bytes | %s |\n' "$size"
+            printf '| SHA256 plaintext | %s |\n' "$plain_hash"
+            printf '| SHA256 age | %s |\n' "$age_hash"
+            printf '| UTC timestamp ISO | %s |\n' "$timestamp"
+            printf '| TOC line count | %s |\n' "$toc_lines"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload encrypted dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: condola-t0-dump
+          path: |
+            ${{ runner.temp }}/t0-artifact/*.age
+            ${{ runner.temp }}/t0-artifact/t0.sha256
+          retention-days: 7
+          if-no-files-found: error
