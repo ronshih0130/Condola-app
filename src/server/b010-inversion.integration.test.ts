@@ -53,7 +53,7 @@ type Holder = "platform" | "org" | "live twin" | "member" | "session" | "lease";
 type Outcome = {error:unknown;elapsed:number};
 
 // Two independent contention budgets, plus scheduling/query overhead.
-const S4_TRANSACTION_BOUND_MS=14000;
+const S4_TRANSACTION_BOUND_MS=16000;
 
 type ParentFixture = {schema:string;table:string;id:string};
 const sandboxParents:ParentFixture[]=[];

@@ -7,20 +7,17 @@ umask 077
 mkdir -p "$OUT"
 command -v jq >/dev/null
 SQL=/workspace/e2e/sql.sh
+RO=/workspace/e2e/stgro.sh
 ORG=961b353f-7dac-43d9-9ff7-19eb1ceb5b84
 LIVE=161871b3-1041-44c9-aa10-e4812cc9a4c9
-# Two 6.15s call budgets, plus 2s intentional S4-A sleep and 1.7s
-# allowance for SQL/setup/scheduling overhead. See docs/b010-s4-timing.md.
 S4_TRANSACTION_BOUND_MS=16000
 failed=0
-declare -a names=() statuses=()
-declare -a jobs=()
+declare -a names=() statuses=() jobs=()
 trap 'for p in "${jobs[@]}"; do wait "$p" 2>/dev/null || true; done' EXIT
 
 now_ms() { date +%s%3N; }
 
-# Emit only sanitized SQLSTATEs and timings. HTTPS response bodies can contain
-# recipient data or session identifiers and are never printed or persisted.
+# Never print or persist raw HTTPS response bodies.
 request() {
   local sql=$1 destination=$2 started response rc=0
   started=$(now_ms)
@@ -39,8 +36,6 @@ request() {
   ' <<<"$response" >"$destination"
 }
 
-# An exception subtransaction converts database errors into SQLSTATE evidence.
-# All mutations, including the temporary session, remain inside ROLLBACK.
 wrap() {
   local body=$1
   cat <<SQL
@@ -54,6 +49,7 @@ DECLARE
   actor uuid; sess uuid:=gen_random_uuid(); actor_role text;
   payment uuid; payment_lease uuid; payment_status text;
   invoice uuid; reminder_lease uuid; event uuid; n integer;
+  gate_deadline timestamptz;
 BEGIN
   BEGIN
     $body
@@ -123,7 +119,11 @@ record() {
   fi
 }
 
-# Writer drain is read-only and precedes every scenario.
+failure() {
+  jq -n --arg code "$2" \
+    '{ok:false,code:$code,elapsed_ms:0}' >"$OUT/$1.json"
+}
+
 request "$(wrap "
 IF EXISTS (
  SELECT 1 FROM pg_stat_activity
@@ -138,21 +138,52 @@ if (( failed )); then
   exit 1
 fi
 
+# Derive property and currency from existing, FK-valid sandbox records.
+# The generated balance is total_minor-paid_minor; do not insert it directly.
+fixture="
+invoice:=gen_random_uuid();
+reminder_lease:='82cb63ae-b878-4a98-ae51-f5ac02702838'::uuid;
+INSERT INTO public.invoices(
+ id,org_id,property_id,lease_id,bill_to_contact_id,invoice_number,
+ currency,issue_date,due_date,period_start,period_end,status,
+ total_minor,paid_minor,source,created_by
+)
+SELECT invoice,l.org_id,l.property_id,l.id,c.id,
+ 'b010-accept-'||invoice::text,
+ (SELECT code FROM public.currencies ORDER BY code LIMIT 1),
+ current_date-10,current_date-5,current_date-10,current_date-1,
+ 'open',10000,0,'one_off',actor
+FROM public.leases l
+JOIN LATERAL (
+ SELECT c.id FROM public.lease_parties lp
+ JOIN public.contacts c ON c.org_id=lp.org_id AND c.id=lp.contact_id
+ WHERE lp.org_id=l.org_id AND lp.lease_id=l.id
+ AND lp.role IN ('primary','co_tenant')
+ AND c.archived_at IS NULL AND c.email IS NOT NULL
+ AND btrim(c.email::text)<>''
+ ORDER BY c.id LIMIT 1
+) c ON true
+WHERE l.org_id='$ORG' AND l.id=reminder_lease
+AND l.status='active' AND l.terminated_on IS NULL;
+GET DIAGNOSTICS n=ROW_COUNT;
+IF n<>1 THEN RAISE EXCEPTION 'Reminder lease fixture missing'; END IF;
+INSERT INTO public.invoice_lines(
+ id,org_id,invoice_id,line_no,charge_type,description,
+ quantity,unit_amount_minor,amount_minor
+) VALUES(
+ gen_random_uuid(),'$ORG',invoice,1,'rent',
+ 'b010 acceptance rollback',1,10000,10000
+);
+IF NOT EXISTS (
+ SELECT 1 FROM public.invoices i
+ JOIN public.invoice_lines il ON il.org_id=i.org_id AND il.invoice_id=i.id
+ WHERE i.id=invoice AND i.org_id='$ORG'
+ AND i.status='open' AND i.due_date<current_date
+ AND i.balance_minor>0 AND il.charge_type='rent' AND il.amount_minor>0
+) THEN RAISE EXCEPTION 'Reminder fixture ineligible'; END IF;
+"
+
 reminder="
-SELECT i.id,i.lease_id INTO STRICT invoice,reminder_lease
-FROM public.invoices i JOIN public.leases l ON l.id=i.lease_id AND l.org_id=i.org_id
-WHERE i.org_id='$ORG' AND l.status='active' AND l.terminated_on IS NULL
-AND i.status IN ('open','partially_paid') AND i.balance_minor>0
-AND EXISTS (SELECT 1 FROM public.invoice_lines il WHERE il.org_id=i.org_id
-  AND il.invoice_id=i.id AND il.charge_type='rent' AND il.amount_minor>0)
-AND EXISTS (SELECT 1 FROM public.lease_parties lp
- JOIN public.contacts c ON c.id=lp.contact_id AND c.org_id=lp.org_id
- WHERE lp.org_id=i.org_id AND lp.lease_id=i.lease_id
- AND lp.role IN ('primary','co_tenant') AND c.archived_at IS NULL
- AND c.email IS NOT NULL AND btrim(c.email::text)<>'')
-AND NOT EXISTS (SELECT 1 FROM public.email_log e WHERE e.org_id=i.org_id
- AND e.target_id=i.id AND e.kind IN ('rent_overdue_admin','rent_overdue_tenant'))
-ORDER BY i.id LIMIT 1;
 event:=app.b010_manual_reminder('$ORG','$LIVE','sandbox',sess,
  reminder_lease,invoice,gen_random_uuid());
 SELECT count(*) INTO n FROM app.b028_claim_manual('$ORG','$LIVE',
@@ -160,13 +191,17 @@ SELECT count(*) INTO n FROM app.b028_claim_manual('$ORG','$LIVE',
 IF n<1 THEN RAISE EXCEPTION 'No reminder claim'; END IF;
 "
 
-request "$(wrap "$setup $context $transition $reminder")" "$OUT/S1.json"
+request "$(wrap "$setup $context $transition $fixture $reminder")" "$OUT/S1.json"
 record S1 '.ok == true'
 
-# Prove holder readiness through pg_locks rather than assuming that an HTTPS
-# request has reached PostgreSQL after a fixed network delay.
+holder_body="
+LOCK TABLE public.platform_settings IN SHARE ROW EXCLUSIVE MODE;
+PERFORM 1 FROM public.organizations WHERE id='$ORG' FOR UPDATE;
+"
+
+# S2 retains its original holder, readiness and acceptance criteria.
 wait_holder() {
-  local tag=$1 ready
+  local tag=$1 ready attempt
   for ((attempt=0;attempt<25;attempt++)); do
     ready=$(bash "$SQL" "SELECT EXISTS (
       SELECT 1 FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid
@@ -180,95 +215,277 @@ wait_holder() {
   return 1
 }
 
-holder_body="
-LOCK TABLE public.platform_settings IN SHARE ROW EXCLUSIVE MODE;
-PERFORM 1 FROM public.organizations WHERE id='$ORG' FOR UPDATE;
-"
+tag="b010_accept_S2_$$"
+request "$(wrap "PERFORM set_config('application_name','$tag',true);
+  $holder_body PERFORM pg_sleep(8);")" "$OUT/S2-holder.json" &
+pid=$!; jobs+=("$pid")
+if wait_holder "$tag"; then
+  request "$(wrap "$setup $context $transition")" "$OUT/S2.json"
+else
+  failure S2 HOLDER_NOT_READY
+fi
+wait "$pid"
+record S2 '.ok == false and .code == "55P03"
+  and .sql_elapsed_ms >= 5900 and .sql_elapsed_ms < 7200'
+if ! jq -e '.ok == true' "$OUT/S2-holder.json" >/dev/null; then
+  statuses[${#statuses[@]}-1]=FAIL
+  failed=1
+fi
 
-for specification in S2:8 S3:2; do
-  name=${specification%:*}
-  seconds=${specification#*:}
-  tag="b010_accept_${name}_$$"
-  holder_sql=$(wrap "PERFORM set_config('application_name','$tag',true);
-    $holder_body PERFORM pg_sleep($seconds);")
-  request "$holder_sql" "$OUT/$name-holder.json" &
-  pid=$!; jobs+=("$pid")
-  if wait_holder "$tag"; then
-    request "$(wrap "$setup $context $transition")" "$OUT/$name.json"
-  else
-    jq -n '{ok:false,code:"HOLDER_NOT_READY",elapsed_ms:0}' >"$OUT/$name.json"
-  fi
-  wait "$pid"
-  if [[ $name == S2 ]]; then
-    record "$name" '.ok == false and .code == "55P03"
-      and .sql_elapsed_ms >= 5900 and .sql_elapsed_ms < 7200'
-  else
-    record "$name" '.ok == true and .sql_elapsed_ms >= 500
-      and .sql_elapsed_ms < 7000'
-  fi
-  if ! jq -e '.ok == true' "$OUT/$name-holder.json" >/dev/null; then
-    statuses[${#statuses[@]}-1]=FAIL
-    failed=1
-  fi
-done
+# Only selected monitoring fields survive sanitization. Each snapshot is a
+# single read-only statement, so activity and locks share one observation.
+monitor() {
+  local scenario=$1 tags=$2 response snapshot started
+  started=$(now_ms)
+  while [[ ! -e "$OUT/$scenario-monitor.stop" ]] &&
+        (( $(now_ms)-started < 30000 )); do
+    response=$(bash "$RO" "
+WITH a AS MATERIALIZED (
+ SELECT pid,application_name,state,wait_event_type,wait_event
+ FROM pg_stat_activity
+ WHERE datname=current_database() AND application_name IN ($tags)
+), l AS MATERIALIZED (
+ SELECT a.application_name,k.relation::regclass::text AS relation,
+        k.locktype,k.mode,k.granted
+ FROM a JOIN pg_locks k ON k.pid=a.pid
+)
+SELECT json_build_object(
+ 'b010_monitor',true,
+ 'observed_at',clock_timestamp(),
+ 'activity',COALESCE((SELECT json_agg(json_build_object(
+   'application_name',application_name,'state',state,
+   'wait_event_type',wait_event_type,'wait_event',wait_event)) FROM a),'[]'::json),
+ 'locks',COALESCE((SELECT json_agg(row_to_json(l)) FROM l),'[]'::json)
+) AS evidence;" 2>/dev/null) || response='{}'
+    snapshot=$(jq -ce '
+      [..|objects|select(.b010_monitor==true)] |
+      select(length==1) | .[0] |
+      {observed_at,activity:[.activity[] |
+        {application_name,state,wait_event_type,wait_event}],
+       locks:[.locks[] | {application_name,relation,locktype,mode,granted}]}
+    ' <<<"$response" 2>/dev/null) || snapshot=''
+    if [[ -n $snapshot ]]; then
+      jq --argjson snapshot "$snapshot" '. + [$snapshot]' \
+        "$OUT/$scenario-monitor.json" >"$OUT/$scenario-monitor.next"
+      mv "$OUT/$scenario-monitor.next" "$OUT/$scenario-monitor.json"
+    fi
+    sleep 0.2
+  done
+}
 
-# A preholds the payment tuple to force an actual inversion: B holds the
-# organization/lease, then waits for that tuple while A polls for context.
-tag="b010_accept_S4_B_$$"
-a_tag="b010_accept_S4_A_$$"
-a_body="$setup
-PERFORM set_config('application_name','$a_tag',true);
+start_monitor() {
+  local scenario=$1 tags=$2
+  rm -f "$OUT/$scenario-monitor.stop"
+  printf '[]\n' >"$OUT/$scenario-monitor.json"
+  monitor "$scenario" "$tags" &
+  monitor_pid=$!
+  jobs+=("$monitor_pid")
+}
+
+stop_monitor() {
+  touch "$OUT/$1-monitor.stop"
+  wait "$monitor_pid"
+  rm -f "$OUT/$1-monitor.stop"
+}
+
+# The most recent monitor observation must establish readiness within 10s.
+wait_monitor() {
+  local scenario=$1 predicate=$2 deadline
+  deadline=$(( $(now_ms)+10000 ))
+  while (( $(now_ms)<deadline )); do
+    if jq -e "last | select(. != null) | $predicate" \
+      "$OUT/$scenario-monitor.json" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.2
+  done
+  return 1
+}
+
+s3_ready='
+  any(.activity[]; .application_name=="b010-s3-holder" and .state=="active")
+  and any(.locks[]; .application_name=="b010-s3-holder"
+    and .granted and .relation=="platform_settings"
+    and .mode=="ShareRowExclusiveLock")
+  and any(.locks[]; .application_name=="b010-s3-holder"
+    and .granted and .relation=="organizations" and .mode=="RowShareLock")
+'
+# regclass may include the public schema depending on the monitor search_path.
+s3_ready=${s3_ready//.relation==\"platform_settings\"/(.relation|sub(\"^public\\\\.\";\"\"))==\"platform_settings\"}
+s3_ready=${s3_ready//.relation==\"organizations\"/(.relation|sub(\"^public\\\\.\";\"\"))==\"organizations\"}
+
+start_monitor S3 "'b010-s3-holder','b010-s3-contender'"
+request "$(wrap "
+PERFORM set_config('application_name','b010-s3-holder',true);
+$holder_body
+PERFORM pg_sleep(6);
+")" "$OUT/S3-holder.json" &
+pid=$!; jobs+=("$pid")
+s3_started=false
+if wait_monitor S3 "$s3_ready"; then
+  s3_started=true
+  request "$(wrap "
+PERFORM set_config('application_name','b010-s3-contender',true);
+$setup $context $transition
+")" "$OUT/S3-result.json"
+else
+  failure S3-result HOLDER_NOT_READY
+fi
+wait "$pid"
+stop_monitor S3
+jq --argjson observed "$s3_started" \
+  --slurpfile holder "$OUT/S3-holder.json" \
+  '. + {holder_active_when_contender_started:$observed,
+         holder:$holder[0]}' "$OUT/S3-result.json" >"$OUT/S3.json"
+record S3 '.ok == true and .holder.ok == true
+  and .holder_active_when_contender_started == true
+  and .sql_elapsed_ms >= 1500'
+
+# A holds the payment first. It begins context acquisition only after a
+# read-only monitor sees B holding the opposing locks and waiting on A.
+# The monitor itself supplies the gate through pg_stat_activity: its fixed
+# application_name is visible only during the qualified gate statement.
+s4_a_ready='
+ any(.activity[]; .application_name=="b010-s4-a" and .state=="active")
+ and any(.locks[]; .application_name=="b010-s4-a" and .granted
+   and (.relation|sub("^public\\.";""))=="payments" and .mode=="RowShareLock")
+'
+s4_overlap='
+ any(.activity[]; .application_name=="b010-s4-a" and .state=="active")
+ and any(.activity[]; .application_name=="b010-s4-b" and .state=="active"
+   and .wait_event_type=="Lock")
+ and all(["organizations","leases","platform_settings"][];
+   . as $relation |
+   any($snapshot.locks[]; .application_name=="b010-s4-b" and .granted
+     and (.relation|sub("^public\\.";""))==$relation
+     and (if $relation=="platform_settings"
+          then .mode=="ShareRowExclusiveLock" else .mode=="RowShareLock" end)))
+ and any(.locks[]; .application_name=="b010-s4-b"
+   and .locktype=="transactionid" and .granted==false)
+'
+# A uses B's backend state directly as its in-transaction gate. The external
+# monitor independently records the same conditions throughout acquisition.
+a_body="
+PERFORM set_config('application_name','b010-s4-a',true);
+$setup
 PERFORM 1 FROM public.payments WHERE id=payment FOR UPDATE;
 PERFORM pg_sleep(2);
+gate_deadline:=clock_timestamp()+interval '7 seconds';
+LOOP
+  PERFORM pg_stat_clear_snapshot();
+  EXIT WHEN EXISTS (
+    SELECT 1 FROM pg_stat_activity b
+    WHERE b.application_name='b010-s4-b' AND b.state='active'
+    AND b.wait_event_type='Lock'
+    AND EXISTS (SELECT 1 FROM pg_locks k WHERE k.pid=b.pid
+      AND NOT k.granted AND k.locktype='transactionid'
+      AND k.transactionid IN (
+        SELECT x.transactionid FROM pg_locks x
+        WHERE x.pid=pg_backend_pid() AND x.granted
+        AND x.locktype='transactionid' AND x.mode='ExclusiveLock'))
+    AND EXISTS (SELECT 1 FROM pg_locks k WHERE k.pid=b.pid AND k.granted
+      AND k.relation='public.platform_settings'::regclass
+      AND k.mode='ShareRowExclusiveLock')
+    AND EXISTS (SELECT 1 FROM pg_locks k WHERE k.pid=b.pid AND k.granted
+      AND k.relation='public.organizations'::regclass AND k.mode='RowShareLock')
+    AND EXISTS (SELECT 1 FROM pg_locks k WHERE k.pid=b.pid AND k.granted
+      AND k.relation='public.leases'::regclass AND k.mode='RowShareLock')
+  );
+  IF clock_timestamp()>=gate_deadline THEN
+    RAISE EXCEPTION 'B overlap gate timed out' USING ERRCODE='P0001';
+  END IF;
+  PERFORM pg_sleep(0.2);
+END LOOP;
+PERFORM set_config('application_name','b010-s4-a',true);
 $context
-$transition"
+$transition
+"
+
+start_monitor S4 "'b010-s4-a','b010-s4-b'"
 request "$(wrap "$a_body")" "$OUT/S4-A.json" &
 apid=$!; jobs+=("$apid")
-
-a_ready=false
-for ((attempt=0;attempt<25;attempt++)); do
-  response=$(bash "$SQL" "SELECT EXISTS (
-    SELECT 1 FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid
-    WHERE a.application_name='$a_tag' AND l.granted
-    AND l.relation='public.payments'::regclass
-    AND l.mode='RowShareLock') AS b010_a_ready;" 2>/dev/null) || response='{}'
-  if jq -e '[..|objects|select(.b010_a_ready==true)]|length>0' \
-    >/dev/null 2>&1 <<<"$response"; then a_ready=true; break; fi
-  sleep 0.1
-done
-
-if $a_ready; then
+s4_started=false
+if wait_monitor S4 "$s4_a_ready"; then
+  s4_started=true
   b_body="
-  PERFORM set_config('application_name','$tag',true);
-  PERFORM 1 FROM public.organizations WHERE id IN ('$ORG','$LIVE') ORDER BY id FOR UPDATE;
-  SELECT p.id,p.lease_id INTO STRICT payment,payment_lease FROM public.payments p
-    WHERE p.org_id='$ORG' AND p.status IN ('submitted','confirmed') ORDER BY p.id LIMIT 1;
-  PERFORM 1 FROM public.leases WHERE id=payment_lease AND org_id='$ORG' FOR UPDATE;
+  PERFORM set_config('application_name','b010-s4-b',true);
+  PERFORM 1 FROM public.organizations
+    WHERE id IN ('$ORG','$LIVE') ORDER BY id FOR UPDATE;
+  SELECT p.id,p.lease_id INTO STRICT payment,payment_lease
+    FROM public.payments p WHERE p.org_id='$ORG'
+    AND p.status IN ('submitted','confirmed') ORDER BY p.id LIMIT 1;
+  PERFORM 1 FROM public.leases
+    WHERE id=payment_lease AND org_id='$ORG' FOR UPDATE;
   LOCK TABLE public.platform_settings IN SHARE ROW EXCLUSIVE MODE;
+  PERFORM pg_sleep(1);
   PERFORM 1 FROM public.payments WHERE id=payment FOR UPDATE;
   "
   request "$(wrap "$b_body")" "$OUT/S4-B.json" &
   bpid=$!; jobs+=("$bpid")
   wait "$bpid"
 else
-  jq -n '{ok:false,code:"A_NOT_READY",elapsed_ms:0}' >"$OUT/S4-B.json"
+  failure S4-B A_NOT_READY
 fi
 wait "$apid"
-jq -s --argjson bound "$S4_TRANSACTION_BOUND_MS" '{
-  ok:(all(.[];
+stop_monitor S4
+
+# A's acquisition attempt is distinguished from its preliminary sleep/gate
+# by observing Lock waits or the context helper's polling sleep after B has
+# begun waiting. Require at least two qualifying observations separated by
+# 200ms, so a single handoff observation cannot establish overlap.
+jq --argjson started "$s4_started" '
+  def rel: (.relation // "" | sub("^public\\.";""));
+  [.[] |
+    select(any(.activity[]; .application_name=="b010-s4-a"
+      and .state=="active"
+      and (.wait_event_type=="Lock" or .wait_event=="PgSleep"))) |
+    select(any(.activity[]; .application_name=="b010-s4-b"
+      and .state=="active" and .wait_event_type=="Lock")) |
+    select(any(.locks[]; .application_name=="b010-s4-b"
+      and .locktype=="transactionid" and .granted==false)) |
+    select(any(.locks[]; .application_name=="b010-s4-a"
+      and .granted and rel=="payments" and .mode=="RowShareLock")) |
+    select(any(.locks[]; .application_name=="b010-s4-b"
+      and .granted and rel=="organizations" and .mode=="RowShareLock")) |
+    select(any(.locks[]; .application_name=="b010-s4-b"
+      and .granted and rel=="leases" and .mode=="RowShareLock")) |
+    select(any(.locks[]; .application_name=="b010-s4-b"
+      and .granted and rel=="platform_settings"
+      and .mode=="ShareRowExclusiveLock"))
+  ] |
+  {holder_active_when_b_started:$started,
+   qualifying_snapshots:length,
+   overlap_observed:($started and length>=2)}
+' "$OUT/S4-monitor.json" >"$OUT/S4-overlap.json"
+
+jq -s --argjson bound "$S4_TRANSACTION_BOUND_MS" \
+  --slurpfile overlap "$OUT/S4-overlap.json" '{
+  ok:($overlap[0].overlap_observed and all(.[];
     .code != "40P01"
     and (.ok == true or .code == "55P03")
     and (.sql_elapsed_ms | type) == "number"
     and .sql_elapsed_ms >= 0
     and .sql_elapsed_ms <= $bound)),
   elapsed_ms:([.[].elapsed_ms]|max),
-  a:.[0],b:.[1]
+  a:.[0],b:.[1],overlap:$overlap[0]
 }' "$OUT/S4-A.json" "$OUT/S4-B.json" >"$OUT/S4.json"
 record S4 '.ok == true and .a.code != "40P01" and .b.code != "40P01"'
 
-jq -n '{status:"DEFERRED",owner:"harness",description:"Flags-OFF verification after rollback"}' \
-  >"$OUT/S5.json"
-names+=("S5"); statuses+=("HARNESS")
+if [[ -f "$OUT/S5-off-verify.json" ]]; then
+  if jq -e 'type=="object"' "$OUT/S5-off-verify.json" >/dev/null 2>&1; then
+    jq '{ok:(.ok==true),code:(.code // null),
+         status:(if .ok==true then "VERIFIED" else "FAILED" end),
+         owner:"harness"}' "$OUT/S5-off-verify.json" >"$OUT/S5.json"
+  else
+    failure S5 INVALID_OFF_VERIFICATION
+  fi
+  record S5 '.ok == true'
+else
+  jq -n '{status:"DEFERRED",owner:"harness",
+    description:"Flags-OFF verification after rollback"}' >"$OUT/S5.json"
+  names+=("S5"); statuses+=("HARNESS")
+fi
+
 printf '%-25s %s\n' SCENARIO RESULT
 for i in "${!names[@]}"; do
   printf '%-25s %s\n' "${names[$i]}" "${statuses[$i]}"
