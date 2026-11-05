@@ -306,6 +306,10 @@ const added = {
     addOnly: false,
     reason: "Tightens deposit_settlement_* with same-lease charge FK, same-settlement evidence FK, payment request_id idempotency, revisions table, and deposit_settlement flag seed OFF; no historical rewrite.",
   },
+  "supabase/migrations/20261105160000_prop11_repair_cost_foundation.sql": {
+    addOnly: false,
+    reason: "Adds six private repair cost and tenant due component tables with RLS, service_role SELECT/INSERT plus column-level UPDATE (no DELETE), and org-scoped FKs; statement-line reference is soft with consumer org checks required; no flag seed, existing-table changes or money movement.",
+  },
 };
 
 const functions = [
