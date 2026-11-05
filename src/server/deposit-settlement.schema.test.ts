@@ -84,6 +84,8 @@ test("migration is additive, bounded and does not seed flags or rewrite history"
   assert.match(tableBody("evidence"), /handover_attachment_id uuid\s*,/);
   assert.match(tableBody("lines"), /FOREIGN KEY \(org_id, source_lease_charge_id\)\s+REFERENCES public\.lease_charges\(org_id, id\)/);
 
+});
+
 const writerSql = readFileSync(new URL(
   "../../supabase/migrations/20261105140000_b011_deposit_settlement_writers.sql",
   import.meta.url,
@@ -143,5 +145,4 @@ test("B-011 migration is bounded and seeds the flag OFF without overwriting sett
   assert.deepEqual(JSON.parse(seed[1]) as unknown, { enabled: false, allowed_org_ids: [] });
   assert.equal([...writerSql.matchAll(/\bINSERT\s+INTO\b/gi)].length, 1);
   assert.doesNotMatch(writerSql, /\b(?:UPDATE|DELETE\s+FROM)\s+(?:public|app)\./i);
-});
 });

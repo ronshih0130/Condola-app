@@ -31,6 +31,8 @@ test("deposit settlement validates org and environment before returning", () => 
     assert.throws(() => getDepositSettlementStatus(session), FlowError);
   }
 
+});
+
 const target = {
   leaseId: "20000000-0000-4000-8000-000000000001",
   settlementId: "30000000-0000-4000-8000-000000000001",
@@ -81,4 +83,3 @@ for (const [name, write] of writers) {
     }
   });
 }
-});
