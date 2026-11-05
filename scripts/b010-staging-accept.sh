@@ -49,6 +49,7 @@ DECLARE
   actor uuid; sess uuid:=gen_random_uuid(); actor_role text;
   payment uuid; payment_lease uuid; payment_status text;
   invoice uuid; reminder_lease uuid; event uuid; n integer;
+  fixture_date date;
   gate_deadline timestamptz;
 BEGIN
   BEGIN
@@ -85,6 +86,7 @@ IF NOT EXISTS (
 ) OR (SELECT count(*) FROM public.platform_settings f
   WHERE f.key IN ('payment_results_v2','rent_reminders_v2')
   AND f.value->'enabled'='true'::jsonb
+  AND jsonb_typeof(f.value->'allowed_org_ids')='array'
   AND f.value->'allowed_org_ids' @> jsonb_build_array('$ORG'))<>2 THEN
   RAISE EXCEPTION 'Flags prerequisite missing' USING ERRCODE='P0001';
 END IF;
@@ -138,11 +140,40 @@ if (( failed )); then
   exit 1
 fi
 
-# Derive property and currency from existing, FK-valid sandbox records.
-# The generated balance is total_minor-paid_minor; do not insert it directly.
+# S1-only changes stay in its rollback transaction and target this sandbox.
+# Reuse an existing rule rather than guessing undocumented required columns.
+# Do not change feature flags or platform settings.
 fixture="
+IF NOT EXISTS (
+ SELECT 1 FROM public.reminder_rules r
+ WHERE r.org_id='$ORG' AND r.event_type='rent_overdue'
+) THEN
+ RAISE EXCEPTION 'Reminder rule fixture missing' USING ERRCODE='B1001';
+END IF;
+UPDATE public.reminder_rules
+SET is_enabled=true,
+ channels=CASE WHEN 'email'=ANY(channels) THEN channels
+               ELSE array_append(channels,'email') END
+WHERE org_id='$ORG' AND event_type='rent_overdue';
+
+UPDATE public.organizations
+SET settings=jsonb_set(
+ coalesce(settings,'{}'::jsonb),
+ '{email_tenant_rent_overdue}','true'::jsonb,true)
+WHERE id='$ORG' AND environment='sandbox' AND live_org_id='$LIVE';
+GET DIAGNOSTICS n=ROW_COUNT;
+IF n<>1 THEN
+ RAISE EXCEPTION 'Reminder organization fixture missing' USING ERRCODE='B1002';
+END IF;
+
 invoice:=gen_random_uuid();
 reminder_lease:='82cb63ae-b878-4a98-ae51-f5ac02702838'::uuid;
+SELECT (clock_timestamp() AT TIME ZONE o.timezone)::date
+INTO fixture_date
+FROM public.organizations o WHERE o.id='$ORG';
+IF fixture_date IS NULL THEN
+ RAISE EXCEPTION 'Reminder local date unavailable' USING ERRCODE='B1003';
+END IF;
 INSERT INTO public.invoices(
  id,org_id,property_id,lease_id,bill_to_contact_id,invoice_number,
  currency,issue_date,due_date,period_start,period_end,status,
@@ -151,7 +182,7 @@ INSERT INTO public.invoices(
 SELECT invoice,l.org_id,l.property_id,l.id,c.id,
  'b010-accept-'||invoice::text,
  (SELECT code FROM public.currencies ORDER BY code LIMIT 1),
- current_date-10,current_date-5,current_date-10,current_date-1,
+ fixture_date-10,fixture_date-5,fixture_date-10,fixture_date-1,
  'open',10000,0,'one_off',actor
 FROM public.leases l
 JOIN LATERAL (
@@ -166,7 +197,9 @@ JOIN LATERAL (
 WHERE l.org_id='$ORG' AND l.id=reminder_lease
 AND l.status='active' AND l.terminated_on IS NULL;
 GET DIAGNOSTICS n=ROW_COUNT;
-IF n<>1 THEN RAISE EXCEPTION 'Reminder lease fixture missing'; END IF;
+IF n<>1 THEN
+ RAISE EXCEPTION 'Reminder lease/contact fixture missing' USING ERRCODE='B1004';
+END IF;
 INSERT INTO public.invoice_lines(
  id,org_id,invoice_id,line_no,charge_type,description,
  quantity,unit_amount_minor,amount_minor
@@ -174,13 +207,71 @@ INSERT INTO public.invoice_lines(
  gen_random_uuid(),'$ORG',invoice,1,'rent',
  'b010 acceptance rollback',1,10000,10000
 );
+
+-- Mirror each rejection gate before invoking the production function.
+-- Distinct SQLSTATEs identify failures without persisting messages or IDs.
+IF auth.uid() IS DISTINCT FROM actor OR actor IS NULL THEN
+ RAISE EXCEPTION 'Reminder actor fixture invalid' USING ERRCODE='B1005';
+END IF;
+IF NOT EXISTS (
+ SELECT 1 FROM public.organizations o
+ JOIN public.org_members m
+ ON m.org_id=CASE WHEN o.environment='sandbox' THEN o.live_org_id ELSE o.id END
+ JOIN public.auth_sessions s ON s.id=sess AND s.user_id=actor
+ JOIN public.platform_settings f ON f.key='rent_reminders_v2'
+ WHERE o.id='$ORG' AND o.environment='sandbox' AND o.live_org_id='$LIVE'
+ AND m.user_id=actor AND m.status='active' AND m.role IN ('admin','manager')
+ AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+ AND o.feature_flags->'rent_reminders_v2'='true'::jsonb
+ AND f.value->'enabled'='true'::jsonb
+ AND jsonb_typeof(f.value->'allowed_org_ids')='array'
+ AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)
+) THEN
+ RAISE EXCEPTION 'Reminder context fixture invalid' USING ERRCODE='B1006';
+END IF;
+IF NOT EXISTS (
+ SELECT 1 FROM public.reminder_rules r
+ WHERE r.org_id='$ORG' AND r.event_type='rent_overdue'
+ AND r.is_enabled AND 'email'=ANY(r.channels)
+) THEN
+ RAISE EXCEPTION 'Reminder rule fixture invalid' USING ERRCODE='B1007';
+END IF;
 IF NOT EXISTS (
  SELECT 1 FROM public.invoices i
- JOIN public.invoice_lines il ON il.org_id=i.org_id AND il.invoice_id=i.id
- WHERE i.id=invoice AND i.org_id='$ORG'
- AND i.status='open' AND i.due_date<current_date
- AND i.balance_minor>0 AND il.charge_type='rent' AND il.amount_minor>0
-) THEN RAISE EXCEPTION 'Reminder fixture ineligible'; END IF;
+ JOIN public.leases l ON l.org_id=i.org_id AND l.id=i.lease_id
+ JOIN public.organizations o ON o.id=l.org_id
+ WHERE i.id=invoice AND i.org_id='$ORG' AND i.lease_id=reminder_lease
+ AND l.status='active' AND l.terminated_on IS NULL
+ AND i.status IN ('open','partially_paid') AND i.balance_minor>0
+ AND i.due_date<fixture_date
+ AND (clock_timestamp() AT TIME ZONE o.timezone)::date IS NOT NULL
+ AND EXISTS (
+  SELECT 1 FROM public.invoice_lines il
+  WHERE il.org_id=i.org_id AND il.invoice_id=i.id
+  AND il.charge_type='rent' AND il.amount_minor>0)
+) THEN
+ RAISE EXCEPTION 'Reminder invoice fixture invalid' USING ERRCODE='B1008';
+END IF;
+IF EXISTS (
+ SELECT 1 FROM public.email_log e
+ WHERE e.org_id='$ORG' AND e.target_id=invoice
+ AND e.kind IN ('rent_overdue_admin','rent_overdue_tenant')
+) THEN
+ RAISE EXCEPTION 'Reminder invoice already emailed' USING ERRCODE='B1009';
+END IF;
+IF NOT EXISTS (
+ SELECT 1 FROM public.lease_parties lp
+ JOIN public.contacts c ON c.org_id=lp.org_id AND c.id=lp.contact_id
+ WHERE lp.org_id='$ORG' AND lp.lease_id=reminder_lease
+ AND lp.role IN ('primary','co_tenant')
+ AND c.archived_at IS NULL AND c.email IS NOT NULL
+ AND btrim(c.email::text)<>''
+ AND EXISTS (
+  SELECT 1 FROM public.organizations o WHERE o.id='$ORG'
+  AND coalesce(o.settings->>'email_tenant_rent_overdue','true') <> 'false')
+) THEN
+ RAISE EXCEPTION 'Reminder recipient fixture invalid' USING ERRCODE='B1010';
+END IF;
 "
 
 reminder="
@@ -302,17 +393,18 @@ wait_monitor() {
   return 1
 }
 
+# regclass may include the public schema depending on monitor search_path.
 s3_ready='
   any(.activity[]; .application_name=="b010-s3-holder" and .state=="active")
   and any(.locks[]; .application_name=="b010-s3-holder"
-    and .granted and .relation=="platform_settings"
+    and .granted
+    and ((.relation // "") | sub("^public\\.";""))=="platform_settings"
     and .mode=="ShareRowExclusiveLock")
   and any(.locks[]; .application_name=="b010-s3-holder"
-    and .granted and .relation=="organizations" and .mode=="RowShareLock")
+    and .granted
+    and ((.relation // "") | sub("^public\\.";""))=="organizations"
+    and .mode=="RowShareLock")
 '
-# regclass may include the public schema depending on the monitor search_path.
-s3_ready=${s3_ready//.relation==\"platform_settings\"/(.relation|sub(\"^public\\\\.\";\"\"))==\"platform_settings\"}
-s3_ready=${s3_ready//.relation==\"organizations\"/(.relation|sub(\"^public\\\\.\";\"\"))==\"organizations\"}
 
 start_monitor S3 "'b010-s3-holder','b010-s3-contender'"
 request "$(wrap "
@@ -341,41 +433,27 @@ record S3 '.ok == true and .holder.ok == true
   and .holder_active_when_contender_started == true
   and .sql_elapsed_ms >= 1500'
 
-# A holds the payment first. It begins context acquisition only after a
-# read-only monitor sees B holding the opposing locks and waiting on A.
-# The monitor itself supplies the gate through pg_stat_activity: its fixed
-# application_name is visible only during the qualified gate statement.
+# A holds the payment first. B starts after monitor readiness, acquires the
+# opposing locks, then waits on A's transaction. A verifies that dependency
+# directly before attempting context acquisition.
 s4_a_ready='
  any(.activity[]; .application_name=="b010-s4-a" and .state=="active")
  and any(.locks[]; .application_name=="b010-s4-a" and .granted
-   and (.relation|sub("^public\\.";""))=="payments" and .mode=="RowShareLock")
+   and ((.relation // "") | sub("^public\\.";""))=="payments"
+   and .mode=="RowShareLock")
 '
-s4_overlap='
- any(.activity[]; .application_name=="b010-s4-a" and .state=="active")
- and any(.activity[]; .application_name=="b010-s4-b" and .state=="active"
-   and .wait_event_type=="Lock")
- and all(["organizations","leases","platform_settings"][];
-   . as $relation |
-   any($snapshot.locks[]; .application_name=="b010-s4-b" and .granted
-     and (.relation|sub("^public\\.";""))==$relation
-     and (if $relation=="platform_settings"
-          then .mode=="ShareRowExclusiveLock" else .mode=="RowShareLock" end)))
- and any(.locks[]; .application_name=="b010-s4-b"
-   and .locktype=="transactionid" and .granted==false)
-'
-# A uses B's backend state directly as its in-transaction gate. The external
-# monitor independently records the same conditions throughout acquisition.
 a_body="
 PERFORM set_config('application_name','b010-s4-a',true);
 $setup
-PERFORM 1 FROM public.payments WHERE id=payment FOR UPDATE;
+PERFORM 1 FROM public.payments WHERE id=payment AND org_id='$ORG' FOR UPDATE;
 PERFORM pg_sleep(2);
 gate_deadline:=clock_timestamp()+interval '7 seconds';
 LOOP
   PERFORM pg_stat_clear_snapshot();
   EXIT WHEN EXISTS (
     SELECT 1 FROM pg_stat_activity b
-    WHERE b.application_name='b010-s4-b' AND b.state='active'
+    WHERE b.datname=current_database()
+    AND b.application_name='b010-s4-b' AND b.state='active'
     AND b.wait_event_type='Lock'
     AND EXISTS (SELECT 1 FROM pg_locks k WHERE k.pid=b.pid
       AND NOT k.granted AND k.locktype='transactionid'
@@ -396,12 +474,13 @@ LOOP
   END IF;
   PERFORM pg_sleep(0.2);
 END LOOP;
-PERFORM set_config('application_name','b010-s4-a',true);
+-- This phase marker excludes A's preliminary sleep/gate from overlap proof.
+PERFORM set_config('application_name','b010-s4-a-acquire',true);
 $context
 $transition
 "
 
-start_monitor S4 "'b010-s4-a','b010-s4-b'"
+start_monitor S4 "'b010-s4-a','b010-s4-a-acquire','b010-s4-b'"
 request "$(wrap "$a_body")" "$OUT/S4-A.json" &
 apid=$!; jobs+=("$apid")
 s4_started=false
@@ -418,7 +497,8 @@ if wait_monitor S4 "$s4_a_ready"; then
     WHERE id=payment_lease AND org_id='$ORG' FOR UPDATE;
   LOCK TABLE public.platform_settings IN SHARE ROW EXCLUSIVE MODE;
   PERFORM pg_sleep(1);
-  PERFORM 1 FROM public.payments WHERE id=payment FOR UPDATE;
+  PERFORM 1 FROM public.payments
+    WHERE id=payment AND org_id='$ORG' FOR UPDATE;
   "
   request "$(wrap "$b_body")" "$OUT/S4-B.json" &
   bpid=$!; jobs+=("$bpid")
@@ -429,21 +509,28 @@ fi
 wait "$apid"
 stop_monitor S4
 
-# A's acquisition attempt is distinguished from its preliminary sleep/gate
-# by observing Lock waits or the context helper's polling sleep after B has
-# begun waiting. Require at least two qualifying observations separated by
-# 200ms, so a single handoff observation cannot establish overlap.
+# Require two acquisition-phase observations at least 200ms apart.
+# Normalize timestamps to UTC seconds, preserving fractional precision.
 jq --argjson started "$s4_started" '
-  def rel: (.relation // "" | sub("^public\\.";""));
+  def rel: ((.relation // "") | sub("^public\\.";""));
+  def observed_seconds:
+    capture("^(?<base>[0-9T:-]{19})(?<fraction>\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") |
+    (.base + "Z" | fromdateiso8601)
+    + ((.fraction // "0") | tonumber)
+    - (if .zone=="Z" then 0 else
+         (.zone | capture("(?<sign>[+-])(?<hours>[0-9]{2}):(?<minutes>[0-9]{2})")) |
+         (((.hours | tonumber)*3600 + (.minutes | tonumber)*60)
+          * (if .sign=="-" then -1 else 1 end))
+       end);
   [.[] |
-    select(any(.activity[]; .application_name=="b010-s4-a"
+    select(any(.activity[]; .application_name=="b010-s4-a-acquire"
       and .state=="active"
       and (.wait_event_type=="Lock" or .wait_event=="PgSleep"))) |
     select(any(.activity[]; .application_name=="b010-s4-b"
       and .state=="active" and .wait_event_type=="Lock")) |
     select(any(.locks[]; .application_name=="b010-s4-b"
       and .locktype=="transactionid" and .granted==false)) |
-    select(any(.locks[]; .application_name=="b010-s4-a"
+    select(any(.locks[]; .application_name=="b010-s4-a-acquire"
       and .granted and rel=="payments" and .mode=="RowShareLock")) |
     select(any(.locks[]; .application_name=="b010-s4-b"
       and .granted and rel=="organizations" and .mode=="RowShareLock")) |
@@ -452,10 +539,14 @@ jq --argjson started "$s4_started" '
     select(any(.locks[]; .application_name=="b010-s4-b"
       and .granted and rel=="platform_settings"
       and .mode=="ShareRowExclusiveLock"))
-  ] |
+  ] as $qualified |
+  [$qualified[].observed_at | observed_seconds] as $times |
+  (if ($times|length)>=2 then (($times|max)-($times|min))*1000
+   else 0 end) as $span |
   {holder_active_when_b_started:$started,
-   qualifying_snapshots:length,
-   overlap_observed:($started and length>=2)}
+   qualifying_snapshots:($qualified|length),
+   qualifying_span_ms:$span,
+   overlap_observed:($started and ($qualified|length)>=2 and $span>=200)}
 ' "$OUT/S4-monitor.json" >"$OUT/S4-overlap.json"
 
 jq -s --argjson bound "$S4_TRANSACTION_BOUND_MS" \
