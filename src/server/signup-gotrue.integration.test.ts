@@ -21,7 +21,7 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     fetch: global.fetch,
   };
   const email = `gotrue.${Date.now().toString(36)}@example.com`;
-  const calls: { url: string; body: string }[] = [];
+  const calls: { url: string; body: string; method: string }[] = [];
   const users: string[] = [];
   process.env.CONDOLA_ENV = "staging";
   process.env.CONDOLA_SITE_URL = "https://staging.condola.app";
@@ -44,7 +44,7 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
   global.fetch = async (input, init) => {
     const url = String(input);
     const body = String(init?.body ?? "");
-    calls.push({ url, body });
+    calls.push({ url, body, method: init?.method ?? "GET" });
     if (new URL(url).pathname.startsWith("/auth/v1/admin/users")) {
       return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
     }
@@ -79,6 +79,11 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     });
     assert.equal(first.ok, true);
     if (!first.ok || first.status !== "verify") throw new Error("expected verify");
+    const userId = (await query<{ id: string }>(`SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`, [email])).rows[0].id;
+    assert.deepEqual(calls.map((call) => `${call.method} ${new URL(call.url).pathname}`), [
+      "POST /auth/v1/admin/generate_link",
+      `PUT /auth/v1/admin/users/${userId}`,
+    ]);
     assert.equal(signupCalls().length, 1);
     const called = new URL(signupCalls()[0].url);
     assert.equal(called.pathname, "/auth/v1/admin/generate_link");
@@ -100,7 +105,6 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     assert.deepEqual(mailed[0].from, CLOUDFLARE_FROM);
     assert.match(mailed[0].text, /https:\/\/staging\.condola\.app\/signup\/confirm\?token_hash=hashed-signup&type=signup/);
 
-    const userId = (await query<{ id: string }>(`SELECT id::text AS id FROM auth.users WHERE lower(email) = lower($1)`, [email])).rows[0].id;
     users.push(userId);
     const profile = await query<{ email: string }>(`SELECT email::text FROM profiles WHERE id = $1`, [userId]);
     assert.equal(profile.rows[0]?.email, email);
@@ -134,6 +138,11 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
     });
     assert.equal(retry.ok, true);
     if (!retry.ok || retry.status !== "verify") throw new Error("expected retry verify");
+    assert.deepEqual(calls.map((call) => `${call.method} ${new URL(call.url).pathname}`), [
+      "POST /auth/v1/admin/generate_link",
+      `PUT /auth/v1/admin/users/${userId}`,
+      `PUT /auth/v1/admin/users/${userId}`,
+    ]);
     assert.equal(signupCalls().length, 1, "a plain retry must not generate another signup link");
     assert.equal(resendCalls().length, 0, "a plain retry must not call GoTrue resend");
     assert.equal(mailed.length, 1, "a plain retry must not send another email");
@@ -155,6 +164,12 @@ test("a top-level GoTrue id starts the funnel, and a retry does not send another
       meta,
       consent: true,
     });
+    assert.deepEqual(calls.map((call) => `${call.method} ${new URL(call.url).pathname}`), [
+      "POST /auth/v1/admin/generate_link",
+      `PUT /auth/v1/admin/users/${userId}`,
+      `PUT /auth/v1/admin/users/${userId}`,
+      `PUT /auth/v1/admin/users/${userId}`,
+    ]);
     assert.equal(signupCalls().length, 1);
     assert.equal(resendCalls().length, 0);
     assert.equal(mailed.length, 1);

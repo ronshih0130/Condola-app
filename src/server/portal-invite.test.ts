@@ -247,6 +247,9 @@ test("portal invite copy hands the link over and stays on the locked wording", (
   assert.equal(portal.includes('href="/forgot"'), true);
   assert.equal(portal.includes("i_portal_forgot"), true);
   assert.equal(page.includes("<PasswordFields />"), false);
+  assert.ok(page.includes('import { AcceptForm, AcceptSubmit } from "@/components/accept-form";'));
+  assert.ok(page.includes('<AcceptForm action={actionAccept} requireConsent={needsTeamConsent(invite.state, invite.kind)}>'));
+  assert.ok(portal.includes('<input className="inp" name="password" type="password" data-testid="new-password" autoComplete="current-password" />'));
   assert.equal(page.includes('data-testid="accept-name"'), false);
   const teamJoin = readFileSync(new URL("../components/team-join.tsx", import.meta.url), "utf8");
   assert.equal(teamJoin.includes("<PasswordFields />"), true);

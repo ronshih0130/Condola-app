@@ -90,6 +90,9 @@ test("create and edit lease screens ask for a reason with lease_deposit_over", (
   assert.match(edit, /errors\.leaseFailed/);
   assert.match(edit, /router\.refresh\(\)/);
   assert.match(edit, /depositPolicyState/);
+  assert.ok(edit.includes('const [reason, setReason] = useState("");'));
+  assert.ok(edit.includes('const blocked = !policy || policyState === "block" || (showReason && reason.trim() === "");'));
+  assert.match(edit, /\{showReason \? \([\s\S]*?<textarea\s[^>]*name="depositReason"[^>]*data-testid="deposit-reason"[^>]*value=\{reason\}[^>]*onChange=\{\(event\) => setReason\(event\.target\.value\)\}/);
   assert.match(wizard, /actionDepositPolicy/);
   assert.match(domain, /idempotency_key/);
   assert.match(domain, /leases_org_idempotency_key_uidx/);

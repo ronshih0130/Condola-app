@@ -72,6 +72,7 @@ test("tenant pay lists invoiced rent and electricity in NT$", () => {
   assert.match(queries, /pending_signature/);
   const zh = JSON.parse(readFileSync(new URL("../i18n/zh-TW.json", import.meta.url), "utf8")) as Record<string, string>;
   const en = JSON.parse(readFileSync(new URL("../i18n/en.json", import.meta.url), "utf8")) as Record<string, string>;
+  assert.equal(zh.i_stmt_negative, "本期支出與撥付高於已登記租金，屋主淨額為 {amount}。請和屋主確認怎麼處理。");
   assert.equal(zh.i_charge_deposit, "押金");
   assert.equal(zh.i_pay_total, "應繳合計");
   assert.equal(en.i_pay_total, "Amount due");
