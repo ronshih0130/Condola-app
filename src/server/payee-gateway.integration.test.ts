@@ -43,6 +43,18 @@ test("audited payee gateway keeps disclosure, denial and isolation in one durabl
     const off = await invoke("tenant", tenantSession, USERS.tenant, org, "live", lease);
     assert.equal(off.value.ok, true); assert.equal(off.value.data.enabled, false);
     assert.equal(off.value.data.account, null);
+    // With payee details still OFF, another tenant's same-org lease is denied.
+    const otherContact = randomUUID(), otherLease = randomUUID(), otherUnit = randomUUID();
+    await client.query(`INSERT INTO contacts(id,org_id,user_id,is_tenant,display_name)
+      VALUES ($1,$2,$3,true,'Other synthetic tenant')`, [otherContact, org, USERS.tenant2]);
+    await client.query(`INSERT INTO units(id,org_id,property_id,label) VALUES ($1,$2,$3,'Other synthetic')`, [otherUnit, org, property]);
+    await client.query(`INSERT INTO leases(id,org_id,property_id,unit_id,target_unit_id,status,start_date,end_date,currency,rent_amount_minor)
+      VALUES ($1,$2,$3,$4,$4,'active',current_date-1,current_date+365,'TWD',0)`, [otherLease, org, property, otherUnit]);
+    await client.query(`INSERT INTO lease_parties(org_id,lease_id,contact_id) VALUES ($1,$2,$3)`, [org, otherLease, otherContact]);
+    const foreignLeaseOff = await invoke("tenant", tenantSession, USERS.tenant, org, "live", otherLease);
+    assert.equal(foreignLeaseOff.value.ok, false);
+    assert.ok(["forbidden", "not_found"].includes(foreignLeaseOff.value.reason));
+    assert.equal(foreignLeaseOff.value.data, null);
     const unauth = await invoke("ingress", null, null, null, null);
     assert.equal(unauth.value.reason, "unauthenticated");
     const noOrg = await invoke("ingress", tenantSession, USERS.tenant, null, null);

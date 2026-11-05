@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE } from "./auth";
 import { withClient } from "./db";
+import { requireOrgScope, txForSession } from "./org-guard";
 import { readSession, sessionTokenHash } from "./session";
 import type { Session } from "./types";
 import type { PayeeAccount, PayeeInput, TenantPayeeView } from "./payee-rules";
@@ -54,13 +55,15 @@ export async function payeeSettings(session: Session): Promise<Settings | null> 
   if (!result.ok || !data) return null;
   // Full details were authorized and audited by the gateway. Resolve only
   // same-org display labels here so the settings form does not expose UUIDs.
-  const labels = await withClient(client => client.query<{ id: string; label: string }>(
+  const scope = requireOrgScope(session) as { orgId: string; environment: "live" | "sandbox" };
+  const { orgId } = scope;
+  const labels = await txForSession(session, async (client) => client.query<{ id: string; label: string }>(
     `SELECT l.id::text, concat_ws(' · ', p.name, u.label, l.start_date::text) AS label
        FROM leases l JOIN properties p ON p.id=l.property_id AND p.org_id=l.org_id
        LEFT JOIN units u ON u.id=l.unit_id AND u.org_id=l.org_id
       WHERE l.org_id=$1 AND l.id=ANY($2::uuid[])`,
-    [session.orgId, data.leases.map(lease => lease.id)],
-  ));
+    [orgId, data.leases.map(lease => lease.id)],
+  ), { readOnly: true });
   const byId = new Map(labels.rows.map(lease => [lease.id, lease.label]));
   return { ...data, leases: data.leases.map(lease => ({...lease, label: byId.get(lease.id)})) };
 }
