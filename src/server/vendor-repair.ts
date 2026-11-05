@@ -679,15 +679,18 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
       hashVendorToken(token),
     ]);
     if (!still || still.job_id !== job.job_id) return null;
-    const resolution = await resolveVendorIdentity({
-      query: <T extends Record<string, unknown>>(query: string, params?: unknown[]) =>
-        client.query<T>(query, params),
-    }, { token, now: new Date(), linkedUserId: null });
-    if (!resolution || resolution.capability === "invalid" ||
-        resolution.jobId !== job.job_id || resolution.orgId !== job.org_id ||
-        resolution.ticketId !== job.ticket_id) return null;
-    const gateOn = enhanced;
-    void planVendorAttribution(resolution, null, new Date(), gateOn);
+    // Preserve the flag-OFF path: only enhanced loads invoke the resolver / planner.
+    if (enhanced) {
+      const resolution = await resolveVendorIdentity({
+        query: <T extends Record<string, unknown>>(query: string, params?: unknown[]) =>
+          client.query<T>(query, params),
+      }, { token, now: new Date(), linkedUserId: null });
+      if (!resolution ||
+          resolution.jobId !== job.job_id || resolution.orgId !== job.org_id ||
+          resolution.ticketId !== job.ticket_id) return null;
+      // Inert today (gateOn=true only inside enhanced; still void — no attribution writes).
+      void planVendorAttribution(resolution, null, new Date(), true);
+    }
     const ticket = await maybe<{
       title: string;
       description: string | null;
@@ -735,6 +738,14 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
         [job.ticket_id, job.org_id, job.job_id, hashVendorToken(token)],
       );
       if (!state) return null;
+      const capability = vendorLinkCapability({
+        ticketStatus: state.status,
+        active: state.active,
+        revokedAt: state.revoked_at,
+        expiresAt: state.expires_at,
+        now: new Date(),
+      });
+      if (capability === "invalid") return null;
       const sharingApproved = Boolean(state.sharing_approved_at);
       const safe = vendorLinkSafeView({
         title: "",
@@ -751,7 +762,7 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
         ...safe,
         currency: ticket.currency,
         reported: Boolean(job.reported_at),
-        vendorLink: { capability: resolution.capability, sharingApproved, typeFields: renderableTypeFields(null, null) },
+        vendorLink: { capability, sharingApproved, typeFields: renderableTypeFields(null, null) },
       };
     }
     return {
