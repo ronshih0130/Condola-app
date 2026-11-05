@@ -17,6 +17,7 @@ import {
   type Version,
 } from "./rules";
 import type { GeneratedContractProof } from "./stamp";
+import { recordAudit, svcAuditScope } from "../audit-write";
 
 export type Connection = Pick<Client, "query">;
 export type TransactionRunner = <T>(
@@ -384,10 +385,23 @@ export class EsignRepo {
             [invoiceId, actor.orgId],
           );
           requireValue(invoice.rows[0], "First invoice unavailable");
-          await client.query(`INSERT INTO audit_log (org_id,actor_user_id,actor_role,table_name,row_id,action,event_type,new_row)
-            VALUES ($1,$2,$3,'leases',$4,'update','esign_lease_activated',$5::jsonb)`,
-            [actor.orgId,actor.userId,actor.kind,lease.id,JSON.stringify({case_id:caseId,version_id:input.versionId,case_creator_id:lease.created_by,invoice_id:invoiceId,
-              no_amount_due: invoice.rows[0].total_minor === "0" && invoice.rows[0].balance_minor === "0"})]);
+          await recordAudit(
+            svcAuditScope({ orgId: actor.orgId, actorUserId: actor.userId, actorRole: actor.kind }),
+            {
+              table: "leases",
+              rowId: lease.id,
+              action: "update",
+              eventType: "esign_lease_activated",
+              newRow: {
+                case_id: caseId,
+                version_id: input.versionId,
+                case_creator_id: lease.created_by,
+                invoice_id: invoiceId,
+                no_amount_due: invoice.rows[0].total_minor === "0" && invoice.rows[0].balance_minor === "0",
+              },
+            },
+            client,
+          );
         }
       }
       await assertCurrentArchiveCaller(client,actor);

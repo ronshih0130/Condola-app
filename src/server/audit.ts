@@ -1,9 +1,8 @@
-import { query, svc } from "./db";
+import { svc } from "./db";
+import { recordAudit, svcAuditScope, type Sql } from "./audit-write";
 import type { SignedPdfDownloadAudit } from "./tenant-signed-pdf-download";
 
 /** Auth and team events. The ledger trigger still audits row changes; this records who signed in. */
-type Sql = { query: (sql: string, params?: unknown[]) => Promise<unknown> };
-
 export async function writeAudit(
   orgId: string | null,
   userId: string | null,
@@ -11,11 +10,18 @@ export async function writeAudit(
   detail: Record<string, unknown> = {},
   client?: Sql,
 ) {
-  const sql = `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row, reason)
-     VALUES ($1, $2, 'app', 'auth_events', $3, 'insert', $3, $4::jsonb, $3)`;
-  const params = [orgId, userId, event, JSON.stringify({ event, ...detail })];
-  if (client) await client.query(sql, params);
-  else await query(sql, params);
+  await recordAudit(
+    svcAuditScope({ orgId, actorUserId: userId, actorRole: "app" }),
+    {
+      table: "auth_events",
+      rowId: event,
+      action: "insert",
+      eventType: event,
+      newRow: { event, ...detail },
+      reason: event,
+    },
+    client,
+  );
 }
 
 /** A successful lease or statement PDF download. Written after the RLS read succeeds. */
@@ -27,10 +33,16 @@ export async function writePdfDownload(
   rowId: string,
   detail: Record<string, unknown> = {},
 ) {
-  await query(
-    `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row, reason)
-     VALUES ($1, $2, $3, $4, $5, 'insert', 'pdf_download', $6::jsonb, 'pdf_download')`,
-    [orgId, userId, actorRole, table, rowId, JSON.stringify({ event: "pdf_download", ...detail })],
+  await recordAudit(
+    svcAuditScope({ orgId, actorUserId: userId, actorRole }),
+    {
+      table,
+      rowId,
+      action: "insert",
+      eventType: "pdf_download",
+      newRow: { event: "pdf_download", ...detail },
+      reason: "pdf_download",
+    },
   );
 }
 
@@ -40,43 +52,48 @@ export async function writePdfDownload(
  * bypasses RLS without granting tenants audit write privileges.
  */
 export async function writeSignedPdfDownload(event: SignedPdfDownloadAudit) {
-  await svc(event.userId, (client) => client.query(
-    `INSERT INTO audit_log
-       (org_id, actor_user_id, actor_role, table_name, row_id, action,
-        event_type, new_row, reason, request_id)
-     VALUES ($1, $2, 'tenant', 'lease_signed_pdfs', $3, 'insert',
-             'signed_pdf_downloaded', $4::jsonb, 'signed_pdf_downloaded', $5)`,
-    [
-      event.orgId,
-      event.userId,
-      event.pdfId,
-      JSON.stringify({
+  await svc(event.userId, (client) => recordAudit(
+    svcAuditScope({
+      orgId: event.orgId,
+      actorUserId: event.userId,
+      actorRole: "tenant",
+    }),
+    {
+      table: "lease_signed_pdfs",
+      rowId: event.pdfId,
+      action: "insert",
+      eventType: "signed_pdf_downloaded",
+      newRow: {
         event: "signed_pdf_downloaded",
         lease_id: event.leaseId,
-      }),
-      event.requestId,
-    ],
+      },
+      reason: "signed_pdf_downloaded",
+      requestId: event.requestId,
+    },
+    client,
   ));
 }
 
 /** Staff download. Reason is a fixed code. The PDF name and replacement text are not stored. */
 export async function writeStaffSignedPdfDownload(event: SignedPdfDownloadAudit & { actorRole: "admin" | "manager" }) {
-  await svc(event.userId, (client) => client.query(
-    `INSERT INTO audit_log
-       (org_id, actor_user_id, actor_role, table_name, row_id, action,
-        event_type, new_row, reason, request_id)
-     VALUES ($1, $2, $3, 'lease_signed_pdfs', $4, 'insert',
-             'signed_pdf_downloaded', $5::jsonb, 'signed_pdf_downloaded', $6)`,
-    [
-      event.orgId,
-      event.userId,
-      event.actorRole,
-      event.pdfId,
-      JSON.stringify({
+  await svc(event.userId, (client) => recordAudit(
+    svcAuditScope({
+      orgId: event.orgId,
+      actorUserId: event.userId,
+      actorRole: event.actorRole,
+    }),
+    {
+      table: "lease_signed_pdfs",
+      rowId: event.pdfId,
+      action: "insert",
+      eventType: "signed_pdf_downloaded",
+      newRow: {
         event: "signed_pdf_downloaded",
         lease_id: event.leaseId,
-      }),
-      event.requestId,
-    ],
+      },
+      reason: "signed_pdf_downloaded",
+      requestId: event.requestId,
+    },
+    client,
   ));
 }
