@@ -382,15 +382,27 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
         await prepare(zeroVersion,owner,zeroCase); await prepare(zeroVersion,tenant,zeroCase);
         zero=await sign(zeroVersion,owner,zero,false,repo,zeroCase);
         for (const fault of ["missing-line","missing-audit-marker","fake-ledger","fake-allocation"] as const) {
+          let auditMarkerIntercepted = false;
           const tampered = new EsignRepo({check:async()=>true},(actorId,work)=>scoped("service_role",actorId,async()=>{
             const result=await work(new Proxy(client,{get(target,key){
               if(key==="query") return (...args:unknown[])=>{
                 if(typeof args[0]==="string" && args[0].includes("INSERT INTO invoice_lines") && fault==="missing-line")
                   return Promise.resolve({rows:[],rowCount:1});
                 if(typeof args[0]==="string" && args[0].includes("INSERT INTO audit_log") && fault==="missing-audit-marker") {
-                  const values=[...(args[1] as unknown[])], payload=JSON.parse(values[4] as string);
-                  delete payload.no_amount_due; values[4]=JSON.stringify(payload);
-                  return Reflect.apply(target.query,target,[args[0],values]);
+                  const values=[...(args[1] as unknown[])];
+                  for (let i = 0; i < values.length; i++) {
+                    const value = values[i];
+                    if (typeof value !== "string") continue;
+                    let payload;
+                    try { payload = JSON.parse(value); } catch { continue; }
+                    if (payload !== null && typeof payload === "object" && !Array.isArray(payload)
+                      && Object.prototype.hasOwnProperty.call(payload, "no_amount_due")) {
+                      delete payload.no_amount_due;
+                      values[i] = JSON.stringify(payload);
+                      auditMarkerIntercepted = true;
+                      return Reflect.apply(target.query,target,[args[0],values]);
+                    }
+                  }
                 }
                 return Reflect.apply(target.query,target,args);
               };
@@ -409,6 +421,7 @@ test("e-sign schema, service adapter, permissions and retained evidence", async 
             return result;
           }));
           await assert.rejects(sign(zeroVersion,tenant,zero,true,tampered,zeroCase),(error:unknown)=>(error as {code?:string}).code==="23514");
+          if (fault==="missing-audit-marker" && !auditMarkerIntercepted) throw new Error("missing-audit-marker fault did not find an audit_log parameter containing no_amount_due");
           assert.equal(await sqlStatus(zeroVersion),"partially_signed");
           assert.equal((await client.query("SELECT 1 FROM invoices WHERE lease_id=$1",[zeroLease])).rowCount,0);
         }
