@@ -113,7 +113,7 @@ IF n<>1 THEN RAISE EXCEPTION 'Payment fixture missing'; END IF;
 record() {
   local name=$1 predicate=$2
   names+=("$name")
-  if jq -e "$predicate" "$OUT/$name.json" >/dev/null; then
+  if jq -e "$predicate" "$OUT/$name.json" >/dev/null 2>&1; then
     statuses+=("PASS")
   else
     statuses+=("FAIL")
@@ -126,6 +126,62 @@ failure() {
     '{ok:false,code:$code,elapsed_ms:0}' >"$OUT/$1.json"
 }
 
+s2_pass='.ok == false and .code == "55P03"
+  and (.sql_elapsed_ms | type) == "number"
+  and .sql_elapsed_ms >= 5900 and .sql_elapsed_ms <= 7200
+  and .holder.ok == true
+  and .holder_active_when_contender_started == true
+  and .holder_active_when_contender_finished == true'
+s3_pass='.ok == true and .holder.ok == true
+  and .holder_active_when_contender_started == true
+  and .sql_elapsed_ms >= 1500'
+s4_pass='.ok == true and .a.code != "40P01" and .b.code != "40P01"'
+
+finish() {
+  local i
+  if [[ -f "$OUT/S5-off-verify.json" ]]; then
+    if jq -e 'type=="object"' "$OUT/S5-off-verify.json" >/dev/null 2>&1; then
+      jq '{ok:(.ok==true),code:(.code // null),
+           status:(if .ok==true then "VERIFIED" else "FAILED" end),
+           owner:"harness"}' "$OUT/S5-off-verify.json" >"$OUT/S5.json"
+    else
+      failure S5 INVALID_OFF_VERIFICATION
+    fi
+    record S5 '.ok == true'
+  else
+    jq -n '{status:"DEFERRED",owner:"harness",
+      description:"Flags-OFF verification after rollback"}' >"$OUT/S5.json"
+    names+=("S5"); statuses+=("HARNESS")
+  fi
+
+  {
+    for i in "${!names[@]}"; do
+      jq -nc --arg name "${names[$i]}" --arg status "${statuses[$i]}" \
+        '{key:$name,value:$status}'
+    done
+  } | jq -s --argjson bound "$S4_TRANSACTION_BOUND_MS" '{
+    scenarios:from_entries,
+    S4_TRANSACTION_BOUND_MS:$bound,
+    note:"src/server/b010-inversion.integration.test.ts uses the same constant 16000"
+  }' >"$OUT/acceptance-record.json"
+
+  printf '%-25s %s\n' SCENARIO RESULT
+  for i in "${!names[@]}"; do
+    printf '%-25s %s\n' "${names[$i]}" "${statuses[$i]}"
+  done
+}
+
+# Rebuild evidence status without making any staging requests.
+if [[ "${ONLY_RECORD:-0}" == 1 ]]; then
+  record drain '.ok == true'
+  record S1 '.ok == true'
+  record S2 "$s2_pass"
+  record S3 "$s3_pass"
+  record S4 "$s4_pass"
+  finish
+  exit "$failed"
+fi
+
 request "$(wrap "
 IF EXISTS (
  SELECT 1 FROM pg_stat_activity
@@ -136,25 +192,30 @@ IF EXISTS (
 ")" "$OUT/drain.json"
 record drain '.ok == true'
 if (( failed )); then
-  printf '%-25s %s\n' SCENARIO RESULT drain FAIL
+  for scenario in S1 S2 S3 S4; do
+    failure "$scenario" DRAIN_FAILED
+    record "$scenario" '.ok == true'
+  done
+  finish
   exit 1
 fi
 
 # S1-only changes stay in its rollback transaction and target this sandbox.
-# Reuse an existing rule rather than guessing undocumented required columns.
 # Do not change feature flags or platform settings.
 fixture="
-IF NOT EXISTS (
- SELECT 1 FROM public.reminder_rules r
- WHERE r.org_id='$ORG' AND r.event_type='rent_overdue'
-) THEN
- RAISE EXCEPTION 'Reminder rule fixture missing' USING ERRCODE='B1001';
-END IF;
-UPDATE public.reminder_rules
+INSERT INTO public.reminder_rules AS r(
+ id,org_id,event_type,is_enabled,channels,offsets_days
+) VALUES(
+ gen_random_uuid(),'$ORG','rent_overdue',true,
+ ARRAY['email']::public.channel_type[],ARRAY[1]::smallint[]
+)
+ON CONFLICT (org_id,event_type) DO UPDATE
 SET is_enabled=true,
- channels=CASE WHEN 'email'=ANY(channels) THEN channels
-               ELSE array_append(channels,'email') END
-WHERE org_id='$ORG' AND event_type='rent_overdue';
+ channels=CASE WHEN 'email'=ANY(r.channels) THEN r.channels
+               ELSE array_append(
+                 coalesce(r.channels,ARRAY[]::public.channel_type[]),
+                 'email'::public.channel_type) END,
+ offsets_days=ARRAY[1]::smallint[];
 
 UPDATE public.organizations
 SET settings=jsonb_set(
@@ -290,39 +351,6 @@ LOCK TABLE public.platform_settings IN SHARE ROW EXCLUSIVE MODE;
 PERFORM 1 FROM public.organizations WHERE id='$ORG' FOR UPDATE;
 "
 
-# S2 retains its original holder, readiness and acceptance criteria.
-wait_holder() {
-  local tag=$1 ready attempt
-  for ((attempt=0;attempt<25;attempt++)); do
-    ready=$(bash "$SQL" "SELECT EXISTS (
-      SELECT 1 FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid
-      WHERE a.application_name='$tag' AND l.granted
-      AND l.relation='public.platform_settings'::regclass
-      AND l.mode='ShareRowExclusiveLock') AS b010_holder_ready;" 2>/dev/null) || ready='{}'
-    if jq -e '[..|objects|select(.b010_holder_ready==true)]|length>0' \
-      >/dev/null 2>&1 <<<"$ready"; then return 0; fi
-    sleep 0.1
-  done
-  return 1
-}
-
-tag="b010_accept_S2_$$"
-request "$(wrap "PERFORM set_config('application_name','$tag',true);
-  $holder_body PERFORM pg_sleep(8);")" "$OUT/S2-holder.json" &
-pid=$!; jobs+=("$pid")
-if wait_holder "$tag"; then
-  request "$(wrap "$setup $context $transition")" "$OUT/S2.json"
-else
-  failure S2 HOLDER_NOT_READY
-fi
-wait "$pid"
-record S2 '.ok == false and .code == "55P03"
-  and .sql_elapsed_ms >= 5900 and .sql_elapsed_ms < 7200'
-if ! jq -e '.ok == true' "$OUT/S2-holder.json" >/dev/null; then
-  statuses[${#statuses[@]}-1]=FAIL
-  failed=1
-fi
-
 # Only selected monitoring fields survive sanitization. Each snapshot is a
 # single read-only statement, so activity and locks share one observation.
 monitor() {
@@ -393,6 +421,62 @@ wait_monitor() {
   return 1
 }
 
+s2_ready='
+  any(.activity[]; .application_name=="b010-s2-holder" and .state=="active")
+  and any(.locks[]; .application_name=="b010-s2-holder"
+    and .granted
+    and ((.relation // "") | sub("^public\\.";""))=="platform_settings"
+    and .mode=="ShareRowExclusiveLock")
+  and any(.locks[]; .application_name=="b010-s2-holder"
+    and .granted
+    and ((.relation // "") | sub("^public\\.";""))=="organizations"
+    and .mode=="RowShareLock")
+'
+
+start_monitor S2 "'b010-s2-holder','b010-s2-contender'"
+request "$(wrap "
+PERFORM set_config('application_name','b010-s2-holder',true);
+$holder_body
+PERFORM pg_sleep(15);
+")" "$OUT/S2-holder.json" &
+pid=$!; jobs+=("$pid")
+s2_started=false
+s2_finished_active=false
+if wait_monitor S2 "$s2_ready"; then
+  s2_started=true
+  request "$(wrap "
+PERFORM set_config('application_name','b010-s2-contender',true);
+$setup $context $transition
+")" "$OUT/S2-result.json"
+
+  # Discard any observation whose query could have begun before completion.
+  # Two new snapshots ensure the latter query began after contender finish.
+  s2_finish_count=$(jq 'length' "$OUT/S2-monitor.json")
+  s2_finish_deadline=$(( $(now_ms)+10000 ))
+  while (( $(now_ms)<s2_finish_deadline )); do
+    if jq -e --argjson count "$s2_finish_count" \
+      'length >= ($count + 2)' "$OUT/S2-monitor.json" >/dev/null 2>&1; then
+      if jq -e "last | select(. != null) | $s2_ready" \
+        "$OUT/S2-monitor.json" >/dev/null 2>&1; then
+        s2_finished_active=true
+      fi
+      break
+    fi
+    sleep 0.2
+  done
+else
+  failure S2-result HOLDER_NOT_READY
+fi
+wait "$pid"
+stop_monitor S2
+jq --argjson started "$s2_started" \
+  --argjson finished "$s2_finished_active" \
+  --slurpfile holder "$OUT/S2-holder.json" \
+  '. + {holder_active_when_contender_started:$started,
+         holder_active_when_contender_finished:$finished,
+         holder:$holder[0]}' "$OUT/S2-result.json" >"$OUT/S2.json"
+record S2 "$s2_pass"
+
 # regclass may include the public schema depending on monitor search_path.
 s3_ready='
   any(.activity[]; .application_name=="b010-s3-holder" and .state=="active")
@@ -429,9 +513,7 @@ jq --argjson observed "$s3_started" \
   --slurpfile holder "$OUT/S3-holder.json" \
   '. + {holder_active_when_contender_started:$observed,
          holder:$holder[0]}' "$OUT/S3-result.json" >"$OUT/S3.json"
-record S3 '.ok == true and .holder.ok == true
-  and .holder_active_when_contender_started == true
-  and .sql_elapsed_ms >= 1500'
+record S3 "$s3_pass"
 
 # A holds the payment first. B starts after monitor readiness, acquires the
 # opposing locks, then waits on A's transaction. A verifies that dependency
@@ -560,25 +642,7 @@ jq -s --argjson bound "$S4_TRANSACTION_BOUND_MS" \
   elapsed_ms:([.[].elapsed_ms]|max),
   a:.[0],b:.[1],overlap:$overlap[0]
 }' "$OUT/S4-A.json" "$OUT/S4-B.json" >"$OUT/S4.json"
-record S4 '.ok == true and .a.code != "40P01" and .b.code != "40P01"'
+record S4 "$s4_pass"
 
-if [[ -f "$OUT/S5-off-verify.json" ]]; then
-  if jq -e 'type=="object"' "$OUT/S5-off-verify.json" >/dev/null 2>&1; then
-    jq '{ok:(.ok==true),code:(.code // null),
-         status:(if .ok==true then "VERIFIED" else "FAILED" end),
-         owner:"harness"}' "$OUT/S5-off-verify.json" >"$OUT/S5.json"
-  else
-    failure S5 INVALID_OFF_VERIFICATION
-  fi
-  record S5 '.ok == true'
-else
-  jq -n '{status:"DEFERRED",owner:"harness",
-    description:"Flags-OFF verification after rollback"}' >"$OUT/S5.json"
-  names+=("S5"); statuses+=("HARNESS")
-fi
-
-printf '%-25s %s\n' SCENARIO RESULT
-for i in "${!names[@]}"; do
-  printf '%-25s %s\n' "${names[$i]}" "${statuses[$i]}"
-done
+finish
 exit "$failed"
