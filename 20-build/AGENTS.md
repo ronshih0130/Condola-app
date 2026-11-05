@@ -2,7 +2,7 @@
 
 Read `/workspace/ops/handoff/AGENTS.md` first. This pack supplements that operating contract; it does not replace repository ownership, Origin, `ops-lock`, modes A/B, QA independence or handoff rules.
 
-Mission: execute the complete `20-build/BUILD-ORDER.md` queue. Preserve full `/t`, `/v`, `/o` LINE scope. Do not cut work to claim 11/9.
+Mission: execute the complete `20-build/BUILD-ORDER.md` queue (**v2, 2026-11-05**, table row order; 設計夥伴啟動條件（Ron 2026-11-05 01:59 PT，BUILD-ORDER v2）：Wave A 判定 ＋ Wave B 硬閘 V-12＋V-13 ＋ B-001–B-005 ＋ 三端 LINE 全部 B-033–B-039（含 push B-037–B-039）). Preserve full `/t`, `/v`, `/o` LINE scope. Do not cut work to claim 11/9.
 
 ## Non-negotiable boundaries
 
@@ -27,7 +27,7 @@ Use mode A’s llm-route workflow or mode B’s desktop-app workflow as recorded
 
 ## Continuous loop
 
-1. Read `BUILD-ORDER.md` and `BLOCKED.md`.
+1. Read `BUILD-ORDER.md` (**v2**, Ron 2026-11-05 01:59 PT; execute in table row order, including PROP-* L1 foundation rows; do not reorder yourself) and `BLOCKED.md`.
 2. Select the lowest-numbered unfinished, unblocked item with satisfied dependencies. Blocked items (BLOCKED.md) are skipped immediately; never wait on them. B-007 (CAP-M-07) is not frozen; take it in queue order.
 3. Inspect current code and latest evidence. Reuse completed work; do not rebuild stale inventory.
 4. Reserve touched paths on the board. Follow RULES 7: one unshipped PR per file. Combine related overlapping work into the owning lane or wait; preserve recovery refs.
