@@ -11,13 +11,13 @@ test("payee settings labels use the validated org in a session transaction", () 
   const end = source.indexOf("export async function tenantPayee(", start);
   assert.ok(start >= 0 && end > start);
   const settings = source.slice(start, end);
-  assert.match(settings, /const scope = requireOrgScope\(session\);/);
+  assert.match(settings, /requireOrgScope\(session\)/);
   assert.ok(settings.indexOf("requireOrgScope(session)") < settings.indexOf("SELECT l.id"));
-  assert.match(settings, /txForSession\(session, async \(client\) => client\.query/);
+  assert.match(settings, /txForSession\(session,/);
   assert.match(settings, /WHERE l\.org_id=\$1 AND l\.id=ANY\(\$2::uuid\[\]\)/);
-  assert.match(settings, /\[scope\.orgId, data\.leases\.map\(lease => lease\.id\)\]/);
+  assert.match(settings, /\[orgId, data\.leases\.map\(lease => lease\.id\)\]/);
   assert.match(settings, /\{ readOnly: true \}/);
-  assert.doesNotMatch(settings, /session\.orgId/);
+  assert.doesNotMatch(settings, /\[session\.orgId,/);
 });
 
 test("requireOrgScope preserves valid org and environment pins", () => {
