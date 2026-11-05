@@ -726,6 +726,7 @@ test("PDF download follows RLS, records an audit row, and stays inside the firm"
   const ownerDoc = await statementPdfForSession(owner, statementId);
   const ownerText = JSON.stringify(ownerDoc);
   assert.match(ownerText, /本期淨額為負/);
+  assert.equal(ownerText.includes("屋主應補繳"), false); // spec-change #48 (Ron 2026-11-04)
   assert.match(ownerText, /地址：台北市信義區松仁路88號之1/);
   assert.equal(ownerText.includes("房東"), false);
   const managerStatement = await statementPdfForSession(manager, statementId);

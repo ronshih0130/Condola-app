@@ -7,7 +7,8 @@ async function openPay(page: Page) {
   await resetDemo(page);
   await signIn(page, ACCOUNTS.tenant2);
   await page.goto("/api/demo/locale?set=zh-TW&next=/t/pay");
-  await expect(page.getByRole("heading", { name: "我的帳單" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "我的帳單", exact: true })).toBeVisible(); // spec-change #13 (Ron 2026-11-04)
+  await expect(page.getByRole("heading", { name: "繳租", exact: true })).toHaveCount(0); // spec-change #13 (Ron 2026-11-04)
 }
 
 async function expectClean(page: Page) {

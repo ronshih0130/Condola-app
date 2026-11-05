@@ -226,8 +226,8 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     assert.equal(meter.rows.length, 1);
     assert.equal(meter.rows[0]?.serial ?? null, null);
 
-    const splits = await query<{ lease_id: string | null; bearer: string; split: string; room_id: string }>(
-      `SELECT line.lease_id::text, line.bearer::text, r.split_method::text AS split, line.room_id::text
+    const splits = await query<{ lease_id: string | null; bearer: string; split: string; room_id: string; amount: string }>(
+      `SELECT line.lease_id::text, line.bearer::text, r.split_method::text AS split, line.room_id::text, line.amount_minor::text AS amount
          FROM utility_allocation_lines line
          JOIN utility_allocation_runs r ON r.id = line.run_id
          JOIN meters m ON m.id = r.meter_id
@@ -238,9 +238,13 @@ test("a new tenant lease is saved in live and sandbox, including a whole unit th
     assert.equal(new Set(splits.rows.map((row) => row.split)).size, 1);
     assert.equal(splits.rows[0]?.split, "sub_meter");
     // Pending leases stay off the bill. The draft run still covers both rooms and charges the owner.
-    assert.ok(splits.rows.every((row) => row.lease_id == null && row.bearer === "owner"));
-    assert.ok(splits.rows.some((row) => row.room_id === rooms.roomIds[0]));
-    assert.ok(splits.rows.some((row) => row.room_id === rooms.roomIds[1]));
+    assert.equal(splits.rows.length, 2); // spec-change #34 (Ron 2026-11-04)
+    assert.deepEqual(splits.rows.filter((row) => row.room_id === rooms.roomIds[0]), [
+      { lease_id: null, bearer: "owner", split: "sub_meter", room_id: rooms.roomIds[0], amount: "20000" },
+    ]); // spec-change #34 (Ron 2026-11-04)
+    assert.deepEqual(splits.rows.filter((row) => row.room_id === rooms.roomIds[1]), [
+      { lease_id: null, bearer: "owner", split: "sub_meter", room_id: rooms.roomIds[1], amount: "20000" },
+    ]); // spec-change #35 (Ron 2026-11-04)
     const runCount = await query<{ n: string }>(
       `SELECT count(DISTINCT r.id)::text AS n
          FROM utility_allocation_runs r
