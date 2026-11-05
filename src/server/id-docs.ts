@@ -40,6 +40,7 @@ import {
 import { burnFixedIdCopy } from "./id-watermark-image";
 import { allowIdUpload } from "./id-upload-guard";
 import { assertStaff, type Session } from "./types";
+import { requireOrgScope } from "./org-guard";
 
 const SAMPLE_JPEG = Buffer.from(SAMPLE_JPEG_BASE64, "base64");
 
@@ -176,7 +177,7 @@ export async function loadLeaseIdCheck(session: Session, leaseId: string) {
   return tx(session.userId, async (client) => {
     const row = await maybe<CheckRow>(client, CHECK_SQL, [leaseId]);
     return row ? asCheck(row) : null;
-  });
+  }, requireOrgScope(session));
 }
 
 /**

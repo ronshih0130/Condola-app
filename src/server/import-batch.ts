@@ -31,6 +31,7 @@ import type { ArchiveRef } from "@/lib/record-archive";
 import { loadImportRegion } from "./import-region-context";
 import type { ImportRegion } from "./import-region";
 import type { Session } from "./types";
+import { requireOrgScope } from "./org-guard";
 
 export type { ImportResult };
 
@@ -225,9 +226,7 @@ function assertImport(session: Session) {
   assertPerm(session, "leases.edit");
 }
 
-function scope(session: Session) {
-  return { orgId: session.orgId, environment: session.environment };
-}
+function scope(session: Session) { return requireOrgScope(session); }
 
 function cleanName(value: string) {
   return value.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 200) || "import";

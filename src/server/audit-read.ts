@@ -1,6 +1,7 @@
 import { many, tx } from "./db";
 import { formatTaipei } from "./time";
 import type { Session } from "./types";
+import { requireOrgScope } from "./org-guard";
 
 /**
  * Admin-only read model for audit_log.
@@ -731,9 +732,7 @@ async function readPage(
   return presentPage(client, session.orgId, rows, pageSize);
 }
 
-function scope(session: Session) {
-  return { orgId: session.orgId, environment: session.environment };
-}
+function scope(session: Session) { return requireOrgScope(session); }
 
 export async function loadAuditScreen(
   session: Session,

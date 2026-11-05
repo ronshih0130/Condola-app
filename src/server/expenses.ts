@@ -5,6 +5,7 @@ import { FlowError } from "./errors";
 import { taipeiToday } from "./money";
 import { assertPerm } from "./perms";
 import type { Session } from "./types";
+import { requireOrgScope } from "./org-guard";
 
 /** Statuses the owner monthly statement includes. Keep this list in the SQL fragment below. */
 export const STATEMENT_EXPENSE_STATUSES = ["approved", "posted"] as const;
@@ -345,7 +346,7 @@ export async function expenseFormOptions(session: Session, expenseId?: string) {
       [session.orgId],
     );
     return { properties, units, vendors };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function listExpenses(
@@ -368,7 +369,7 @@ export async function listExpenses(
       [session.orgId, propertyId, unitId, status],
     );
     return rows.map((row) => mapRow(row));
-  });
+  }, requireOrgScope(session));
 }
 
 export async function getExpense(session: Session, expenseId: string): Promise<ExpenseDetail | null> {
@@ -388,7 +389,7 @@ export async function getExpense(session: Session, expenseId: string): Promise<E
       on_issued: await onIssuedStatement(client, session.orgId, expenseId),
       month_closed: monthIsClosed(mapped.incurred_on, closed),
     };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function createExpense(session: Session, input: ExpenseDraft) {
@@ -435,7 +436,7 @@ export async function createExpense(session: Session, input: ExpenseDraft) {
       amount: fields.amount,
     });
     return { expenseId: expense.id, incurred };
-  });
+  }, requireOrgScope(session));
 }
 
 type StoredExpense = {
@@ -694,7 +695,7 @@ export async function approveExpense(session: Session, expenseId: string) {
       });
     }
     return { expenseId, ticketId: current.ticket_id };
-  });
+  }, requireOrgScope(session));
 }
 
 /** Statements shortcut: receipt required, category repair, date is the first open day. */
