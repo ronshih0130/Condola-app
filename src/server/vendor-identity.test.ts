@@ -30,7 +30,7 @@ function scripted(steps: Step[]) {
       assert.ok(query.includes("FROM repair_vendor_secrets s"));
       assert.ok(query.includes("JOIN repair_vendor_jobs j ON j.id = s.job_id"));
       assert.ok(query.includes("JOIN maintenance_tickets t ON t.id = j.ticket_id AND t.org_id = j.org_id"));
-      assert.match(query, /WHERE j\.token_hash = \$1 LIMIT 1$/);
+      assert.match(query, /WHERE encode\(digest\(trim\(both from s\.token\), 'sha256'\), 'hex'\) = \$1 AND j\.token_hash = \$1 LIMIT 1$/);
       assert.equal(params.length, 1);
       assert.match(String(params[0]), /^[a-f0-9]{64}$/);
       step.check?.(query, params);
