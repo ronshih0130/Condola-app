@@ -60,3 +60,12 @@ If no items are eligible, checkpoint, write the next-action summary and wait for
 Use PT timestamps with offsets and the contract’s STOP POINT format. Record item, branch/SHA, mode, session, commands, outcomes, evidence and quota state; secret paths only.
 
 On pause/stop: start no new mutations, drain/cancel safe background work, checkpoint on a named branch, write handoff/next command, reconcile staging jobs and release claims through the contract. Do not steal or silently abandon locks.
+
+## Merge cadence (PRINCIPLES 43, Ron via CEO 2026-11-05 08:56 PT)
+
+1. Every 3–5 QA-passed items, the stack is merged into GitHub `main` with **CI only** (unit, typecheck, build — `.github/workflows/ci.yml`); no e2e and no LLM test runs for these merges.
+2. Flags stay **OFF**. `main` is **not prod**.
+3. Before the first segmented merge, `main` (2bedb89) is brought up to the prod lineage `4aff923` (fast-forward; PR "ALIGN main to prod 4aff923").
+4. Each merge into `main` waits for a **CEO merge GO**. Never push or merge `main` without it; segment branches are `seg<N>/…` and never rewrite the original `feat/*` branches.
+5. Full e2e runs **only once**, at the fresh-PG17 rehearsal before prod.
+6. Prod T+0/T+15 is a short core-path smoke. Prod needs a **CEO GO**.
