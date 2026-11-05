@@ -195,11 +195,11 @@ if [ -n "${DATABASE_URL:-}" ]; then
     });
     await client.connect();
     const r = await client.query('SHOW server_version_num');
-    if (Math.floor(Number(r.rows[0].server_version_num) / 10000) !== 16)
-      throw new Error('PostgreSQL 16 required');
-    console.log('Local PostgreSQL 16 confirmed.');
+    if (![16, 17].includes(Math.floor(Number(r.rows[0].server_version_num) / 10000)))
+      throw new Error('PostgreSQL 16 or 17 required');
+    console.log('Local PostgreSQL 16 or 17 confirmed.');
   } catch (_) {
-    console.error('Local PostgreSQL 16 validation failed; credential details withheld.');
+    console.error('Local PostgreSQL 16 or 17 validation failed; credential details withheld.');
     process.exitCode = 1;
   } finally {
     if (client) await client.end().catch(() => {});
