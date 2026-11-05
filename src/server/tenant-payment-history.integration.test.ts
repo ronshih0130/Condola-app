@@ -154,7 +154,7 @@ test('view modes reject status transitions and later expired or archived caller'
 
 test('mixed currencies fail closed rather than summing unlike balances',async()=>{
  const a=await tenant(),f=await fixture(a.contact);await enable();await invoice(f.p,f.lease);
- await query(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,status) VALUES($1,$2,$3,$4,'TWD','2090-03-01','open')`,[ORG_ID,f.p,f.lease,randomUUID()]);
+ await query(`INSERT INTO invoices(org_id,property_id,lease_id,invoice_number,currency,due_date,status) VALUES($1,$2,$3,$4,'USD','2090-03-01','open')`,[ORG_ID,f.p,f.lease,randomUUID()]);
  assert.equal((await tenantPaymentHistory(a.s,f.lease,{view:'current'})).state,'unavailable');
 });
 
