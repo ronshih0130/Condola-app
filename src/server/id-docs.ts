@@ -41,6 +41,7 @@ import { burnFixedIdCopy } from "./id-watermark-image";
 import { allowIdUpload } from "./id-upload-guard";
 import { assertStaff, type Session } from "./types";
 import { requireOrgScope } from "./org-guard";
+import { recordAudit, svcAuditScope } from "./audit-write";
 
 const SAMPLE_JPEG = Buffer.from(SAMPLE_JPEG_BASE64, "base64");
 
@@ -429,10 +430,16 @@ export async function submitTenantId(
        VALUES ($1,$2,$3,'submit')`,
       [party.org_id, documentId, session.userId],
     );
-    await client.query(
-      `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row)
-       VALUES ($1,$2,'app','identity_documents',$3,'insert','id_document_submitted',$4::jsonb)`,
-      [party.org_id, session.userId, documentId, JSON.stringify({ documentId, leaseId: input.leaseId, docType, ...notice })],
+    await recordAudit(
+      svcAuditScope({ orgId: party.org_id, actorUserId: session.userId, actorRole: "app" }),
+      {
+        table: "identity_documents",
+        rowId: documentId,
+        action: "insert",
+        eventType: "id_document_submitted",
+        newRow: { documentId, leaseId: input.leaseId, docType, ...notice },
+      },
+      client,
     );
   });
 }
@@ -709,10 +716,16 @@ async function commitTenantId(
        VALUES ($1,$2,$3,'submit')`,
       [party.org_id, documentId, session.userId],
     );
-    await client.query(
-      `INSERT INTO audit_log (org_id, actor_user_id, actor_role, table_name, row_id, action, event_type, new_row)
-       VALUES ($1,$2,'app','identity_documents',$3,'insert','id_document_submitted',$4::jsonb)`,
-      [party.org_id, session.userId, documentId, JSON.stringify({ documentId, leaseId: input.leaseId, docType, ...notice })],
+    await recordAudit(
+      svcAuditScope({ orgId: party.org_id, actorUserId: session.userId, actorRole: "app" }),
+      {
+        table: "identity_documents",
+        rowId: documentId,
+        action: "insert",
+        eventType: "id_document_submitted",
+        newRow: { documentId, leaseId: input.leaseId, docType, ...notice },
+      },
+      client,
     );
   });
 }

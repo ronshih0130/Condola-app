@@ -179,13 +179,21 @@ test("formal simulation denies with durable audit; sandbox simulation records th
           const sql = typeof args[0] === "string" ? args[0] : "";
           const params = Array.isArray(args[1]) ? args[1] as unknown[] : [];
           if (sql.includes("JOIN auth_sessions a") && params[1] === sessionId) matched.add(this);
-          if (matched.has(this) && phase === "audit" && sql.includes("INSERT INTO audit_log") && params[2] === "tenant_signature_simulated") {
+          if (matched.has(this) && phase === "audit" && sql.includes("INSERT INTO audit_log") && params.includes("tenant_signature_simulated")) {
             const actual = await Reflect.apply(original, this, [`SELECT status::text FROM lease_signatures WHERE lease_id=$1 AND signer_role='tenant'`, [target.leaseId]]) as { rows: { status: string }[] };
             assert.equal(actual.rows[0]?.status, "signed");
             injected = true;
             throw new Error("synthetic audit fault");
           }
-          if (matched.has(this) && phase === "notice" && sql.includes("INSERT INTO audit_log") && params[2] === "notice_not_sent" && typeof params[3] === "string" && params[3].includes(target.leaseId)) {
+          if (matched.has(this) && phase === "notice" && sql.includes("INSERT INTO audit_log") && params.includes("notice_not_sent") && params.some(param => {
+            if (typeof param !== "string" || !param.includes(target.leaseId)) return false;
+            try {
+              JSON.parse(param);
+              return true;
+            } catch {
+              return false;
+            }
+          })) {
             const actual = await Reflect.apply(original, this, [`SELECT
               (SELECT status::text FROM lease_signatures WHERE lease_id=$1 AND signer_role='tenant') AS signature,
               (SELECT count(*)::int FROM invoices WHERE lease_id=$1 AND source='move_in') AS invoices,
