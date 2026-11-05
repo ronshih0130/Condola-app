@@ -45,34 +45,45 @@ export function svcAuditScope(scope: AuditScope): AuditScope {
 
 const SECRET_KEYS = /token|secret|password|encrypt|storage|code_hash|token_hash/i;
 
-// Structured fields follow audit-read's FIELD_KEYS; text fields still need masking.
-const STRUCTURED_FIELDS = new Set([
-  "status",
-  "rent_amount_minor",
-  "deposit_amount_minor",
-  "deposit_months",
-  "start_date",
-  "end_date",
-  "role",
-  "due_day",
-  "currency",
-  "rental_mode",
-]);
+/** Same UUID shape audit-read uses for identifiers; only exact UUID scalars stay raw. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function sanitizeValue(value: unknown, key?: string): unknown {
+function maskScalarText(text: string): { text: string; masked: boolean } {
+  return maskAuditText(text);
+}
+
+/** Numbers drop leading zeros; restore common TW mobile shapes before pattern masking. */
+function sanitizeNumericScalar(value: number | bigint): unknown {
+  const text = String(value);
+  let result = maskScalarText(text);
+  if (result.masked) return result.text;
+  if (/^9\d{8}$/.test(text)) {
+    result = maskScalarText(`0${text}`);
+    if (result.masked) return result.text;
+  }
+  if (/^8869\d{8}$/.test(text)) {
+    result = maskScalarText(`0${text.slice(3)}`);
+    if (result.masked) return result.text;
+  }
+  return value;
+}
+
+function sanitizeValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((item) => sanitizeValue(item));
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value)
         .filter(([column]) => !SECRET_KEYS.test(column))
-        .map(([column, item]) => [column, sanitizeValue(item, column)]),
+        .map(([column, item]) => [column, sanitizeValue(item)]),
     );
   }
-  if (typeof value !== "string") return value;
-  if (key === "id" || key?.endsWith("_id") || (key && STRUCTURED_FIELDS.has(key))) {
-    return value;
+  if (typeof value === "string") {
+    return UUID.test(value) ? value : maskScalarText(value).text;
   }
-  return maskAuditText(value).text;
+  if (typeof value === "number" || typeof value === "bigint") {
+    return sanitizeNumericScalar(value);
+  }
+  return value;
 }
 
 export function sanitizeAuditPayload(

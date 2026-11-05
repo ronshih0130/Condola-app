@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   auditScope,
@@ -65,7 +66,50 @@ test("sanitizer strips secret keys recursively without mutating its input", () =
   assert.equal(input.email, "a@b.com");
 });
 
-test("sanitizer preserves identifiers, amounts, and structured fields", () => {
+test("sanitizer masks PII by value regardless of the field name", () => {
+  const { newRow } = sanitizeAuditPayload({
+    contact_id: "a@b.com",
+    status: "0912-345-678",
+    phone: 912345678,
+    nested: { contact_id: "a@b.com" },
+    items: [{ status: "0912-345-678" }, 912345678, "a@b.com"],
+  });
+  assert.deepEqual(newRow, {
+    contact_id: MASK,
+    status: MASK,
+    phone: MASK,
+    nested: { contact_id: MASK },
+    items: [{ status: MASK }, MASK, MASK],
+  });
+  assert.notEqual(newRow!.phone, 912345678);
+  const json = JSON.stringify(newRow);
+  for (const raw of ["a@b.com", "0912-345-678", "912345678"]) {
+    assert.ok(!json.includes(raw));
+  }
+});
+
+test("sanitizer masks bigint PII and preserves non-PII numeric values", () => {
+  assert.deepEqual(sanitizeAuditPayload({
+    phone: 912345678n,
+    internationalPhone: 886912345678n,
+    amount: 1200n,
+    due_day: 5,
+  }).newRow, {
+    phone: MASK,
+    internationalPhone: MASK,
+    amount: 1200n,
+    due_day: 5,
+  });
+});
+
+test("sanitizer preserves standalone UUID values under any field name", () => {
+  assert.deepEqual(sanitizeAuditPayload({ status: UUID, items: [UUID] }).newRow, {
+    status: UUID,
+    items: [UUID],
+  });
+});
+
+test("sanitizer preserves UUID identifiers and non-PII structured scalars", () => {
   const input = {
     id: UUID,
     lease_id: UUID,
@@ -152,4 +196,53 @@ test("recordAudit inserts sanitized parameters through the injected client", asy
     client,
   );
   assert.deepEqual(calls[1].params.slice(7), [null, null, null]);
+});
+
+test("service audit scopes use server/session provenance at every production call site", () => {
+  // audit.ts adapters forward orgId/userId parameters or the authenticated
+  // download event. SigningActor is trusted request context; party.org_id is
+  // selected through the session user's lease, never taken from the command.
+  const allowedPairs: Record<string, Set<string>> = {
+    "./audit.ts": new Set([
+      "orgId|userId",
+      "event.orgId|event.userId",
+    ]),
+    "./esign/repo.ts": new Set(["actor.orgId|actor.userId"]),
+    "./id-docs.ts": new Set(["party.org_id|session.userId"]),
+  };
+
+  for (const [path, allowed] of Object.entries(allowedPairs)) {
+    const source = readFileSync(new URL(path, import.meta.url), "utf8");
+    const scopes = [...source.matchAll(
+      /\bsvcAuditScope\s*\(\s*\{([^{}]*)\}\s*\)/g,
+    )];
+    const calls = [...source.matchAll(/\bsvcAuditScope\s*\(/g)];
+    const auditCalls = [...source.matchAll(
+      /\brecordAudit\s*\(\s*svcAuditScope\s*\(/g,
+    )];
+    assert.ok(scopes.length > 0, `${path}: missing scope evidence`);
+    assert.equal(scopes.length, calls.length, `${path}: unrecognized scope`);
+    assert.equal(scopes.length, auditCalls.length, `${path}: scope outside recordAudit`);
+
+    for (const [call, block] of scopes) {
+      assert.doesNotMatch(
+        call,
+        /\b(?:input|body|formData|searchParams)\b/,
+        `${path}: client input in audit scope`,
+      );
+      const fields = block.split(",").map((field) => field.trim()).filter(Boolean);
+      const expressions = new Map<string, string>();
+      for (const field of fields) {
+        const match = /^(orgId|actorUserId|actorRole)(?:\s*:\s*([\s\S]+))?$/.exec(field);
+        assert.ok(match, `${path}: unrecognized scope field: ${field}`);
+        assert.ok(!expressions.has(match[1]), `${path}: duplicate scope field`);
+        expressions.set(match[1], (match[2] ?? match[1]).replace(/\s+/g, ""));
+      }
+      assert.equal(expressions.size, 3, `${path}: incomplete scope`);
+      assert.ok(
+        allowed.has(`${expressions.get("orgId")}|${expressions.get("actorUserId")}`),
+        `${path}: untrusted org/actor provenance: ${call}`,
+      );
+    }
+  }
 });

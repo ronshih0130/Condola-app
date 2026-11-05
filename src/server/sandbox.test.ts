@@ -140,7 +140,7 @@ test("a sandbox session rewrites a retired sample avenue to the Taichung sample 
   assert.match(sandbox, /address_display LIKE '%' \|\| \$4 \|\| '%'/);
   assert.match(sandbox, /範例大道/);
   assert.match(sandbox, /sampleAddressRev/);
-  assert.match(session, /correctRetiredSampleAddresses\(client, firm\.orgId\)/);
+  assert.match(session, /correctRetiredSampleAddresses\(client, resolved\.orgId\)/);
   assert.match(session, /correctRetiredSampleAddresses\(client, sandboxId\)/);
   const building = parseSampleCsv(SANDBOX_SAMPLE_CSV).filter((row) => row.property.includes("青埔"));
   assert.ok(building.length > 0);
