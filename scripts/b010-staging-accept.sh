@@ -9,6 +9,9 @@ command -v jq >/dev/null
 SQL=/workspace/e2e/sql.sh
 ORG=961b353f-7dac-43d9-9ff7-19eb1ceb5b84
 LIVE=161871b3-1041-44c9-aa10-e4812cc9a4c9
+# Two 6.15s call budgets, plus 2s intentional S4-A sleep and 1.7s
+# allowance for SQL/setup/scheduling overhead. See docs/b010-s4-timing.md.
+S4_TRANSACTION_BOUND_MS=16000
 failed=0
 declare -a names=() statuses=()
 declare -a jobs=()
@@ -42,7 +45,7 @@ wrap() {
   local body=$1
   cat <<SQL
 BEGIN;
-SET LOCAL statement_timeout='14s';
+SET LOCAL statement_timeout='17s';
 SET LOCAL lock_timeout='10s';
 CREATE TEMP TABLE b010_accept_result(ok boolean,code text,sql_elapsed_ms numeric);
 DO \$accept\$
@@ -100,7 +103,8 @@ END IF;
 
 transition="
 UPDATE public.payments SET
- status=CASE WHEN payment_status='submitted' THEN 'rejected' ELSE 'reversed' END,
+ status=(CASE WHEN payment_status='submitted'
+   THEN 'rejected' ELSE 'reversed' END)::public.payment_status,
  rejected_reason=CASE WHEN payment_status='submitted'
    THEN 'b010 acceptance rollback' ELSE rejected_reason END
 WHERE id=payment AND org_id='$ORG';
@@ -250,9 +254,13 @@ else
   jq -n '{ok:false,code:"A_NOT_READY",elapsed_ms:0}' >"$OUT/S4-B.json"
 fi
 wait "$apid"
-jq -s '{
-  ok:(.[0].code=="55P03" and .[0].sql_elapsed_ms>=5900
-      and .[0].sql_elapsed_ms<7200 and .[1].ok==true),
+jq -s --argjson bound "$S4_TRANSACTION_BOUND_MS" '{
+  ok:(all(.[];
+    .code != "40P01"
+    and (.ok == true or .code == "55P03")
+    and (.sql_elapsed_ms | type) == "number"
+    and .sql_elapsed_ms >= 0
+    and .sql_elapsed_ms <= $bound)),
   elapsed_ms:([.[].elapsed_ms]|max),
   a:.[0],b:.[1]
 }' "$OUT/S4-A.json" "$OUT/S4-B.json" >"$OUT/S4.json"

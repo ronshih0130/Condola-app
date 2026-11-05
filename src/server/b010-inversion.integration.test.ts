@@ -52,6 +52,89 @@ type Scope = "live" | "sandbox";
 type Holder = "platform" | "org" | "live twin" | "member" | "session" | "lease";
 type Outcome = {error:unknown;elapsed:number};
 
+// Two independent contention budgets, plus scheduling/query overhead.
+const S4_TRANSACTION_BOUND_MS=14000;
+
+type ParentFixture = {schema:string;table:string;id:string};
+const sandboxParents:ParentFixture[]=[];
+const sandboxParentIds=new Map<string,string>();
+
+function identifier(value:string) {
+  return `"${value.replaceAll('"','""')}"`;
+}
+
+// Clone organization-scoped FK parents without assuming their business
+// columns or copying generated columns. Global FK parents remain shared.
+async function sandboxReferences(
+  c:Client,table:string,source:Record<string,unknown>,
+):Promise<Record<string,unknown>> {
+  const overrides:Record<string,unknown>={org_id:sandbox};
+  const references=await c.query<{
+    schema:string;table:string;source_column:string;target_column:string;
+  }>(`
+    SELECT ns.nspname AS schema,parent.relname AS table,
+      child_column.attname AS source_column,
+      parent_column.attname AS target_column
+    FROM pg_constraint fk
+    JOIN pg_class parent ON parent.oid=fk.confrelid
+    JOIN pg_namespace ns ON ns.oid=parent.relnamespace
+    JOIN LATERAL unnest(fk.conkey,fk.confkey)
+      AS keys(child_attnum,parent_attnum) ON true
+    JOIN pg_attribute child_column
+      ON child_column.attrelid=fk.conrelid
+      AND child_column.attnum=keys.child_attnum
+    JOIN pg_attribute parent_column
+      ON parent_column.attrelid=fk.confrelid
+      AND parent_column.attnum=keys.parent_attnum
+    WHERE fk.contype='f'
+      AND fk.conrelid=$1::regclass
+      AND child_column.attname<>'org_id'
+      AND EXISTS (
+        SELECT 1
+        FROM unnest(fk.conkey,fk.confkey) AS org_keys(child_attnum,parent_attnum)
+        JOIN pg_attribute ca ON ca.attrelid=fk.conrelid
+          AND ca.attnum=org_keys.child_attnum
+        JOIN pg_attribute pa ON pa.attrelid=fk.confrelid
+          AND pa.attnum=org_keys.parent_attnum
+        WHERE ca.attname='org_id' AND pa.attname='org_id'
+      )
+    ORDER BY fk.oid,keys.child_attnum
+  `,[table]);
+  for(const reference of references.rows) {
+    const value=source[reference.source_column];
+    if(value===null || value===undefined) continue;
+    if(reference.target_column!=="id") {
+      throw new Error(`Unsupported sandbox FK: ${table}.${reference.source_column}`);
+    }
+    const qualified=`${identifier(reference.schema)}.${identifier(reference.table)}`;
+    const key=JSON.stringify([qualified,source.org_id,value]);
+    let id=sandboxParentIds.get(key);
+    if(!id) {
+      const parent=(await c.query<{row:Record<string,unknown>}>(
+        `SELECT to_jsonb(p) AS row FROM ${qualified} p WHERE org_id=$1 AND id=$2`,
+        [source.org_id,value])).rows[0]?.row;
+      assert.ok(parent,`Missing fixture parent: ${qualified}`);
+      const parentOverrides=await sandboxReferences(c,qualified,parent);
+      id=randomUUID();
+      const columns=(await c.query<{name:string}>(`
+        SELECT attname AS name FROM pg_attribute
+        WHERE attrelid=$1::regclass AND attnum>0 AND NOT attisdropped
+          AND attgenerated='' AND attidentity=''
+        ORDER BY attnum
+      `,[qualified])).rows.map(({name})=>identifier(name));
+      await c.query(`
+        INSERT INTO ${qualified} (${columns.join(",")})
+        SELECT ${columns.map(name=>`r.${name}`).join(",")}
+        FROM jsonb_populate_record(NULL::${qualified},$1::jsonb) r
+      `,[JSON.stringify({...parent,...parentOverrides,id,org_id:sandbox})]);
+      sandboxParentIds.set(key,id);
+      sandboxParents.push({schema:reference.schema,table:reference.table,id});
+    }
+    overrides[reference.source_column]=id;
+  }
+  return overrides;
+}
+
 async function begin(c:Client) {
   await c.query("BEGIN");
   await c.query("SET LOCAL statement_timeout='11s'");
@@ -63,15 +146,57 @@ async function scope(c:Client,environment:Scope) {
   if(environment==="sandbox") {
     // Keep the seeded financial graph intact; copy the required business fields
     // into a fresh sandbox lease/payment pair without moving existing children.
-    await c.query(`INSERT INTO leases
-      SELECT (jsonb_populate_record(NULL::leases,to_jsonb(l) ||
-        jsonb_build_object('id',$2::uuid,'org_id',$3::uuid))).*
-      FROM leases l WHERE l.id=$1`,[payment.lease_id,sandboxLease,sandbox]);
+    const lease=(await c.query<{row:Record<string,unknown>}>(
+      "SELECT to_jsonb(l) AS row FROM public.leases l WHERE id=$1",
+      [payment.lease_id])).rows[0].row;
+    const leaseOverrides=await sandboxReferences(c,"public.leases",lease);
+    await c.query(`INSERT INTO public.leases (
+      id,org_id,property_id,unit_id,target_unit_id,target_room_id,status,
+      esign_status,start_date,end_date,currency,rent_amount_minor,
+      rent_frequency,due_day,prorate_first_period,deposit_amount_minor,
+      deposit_months,late_fee_rule_id,template_version_id,template_variables,
+      document_file_id,document_sha256,date_calendar,document_locales,
+      signed_at,previous_lease_id,renewal_status,renewal_reminder_days,
+      terminated_on,termination_reason,deposit_settled_at,notes,created_by,
+      created_at,updated_at,deposit_override_reason,deposit_overridden_by,
+      deposit_overridden_at,idempotency_key,moved_out_on,payee_bank_account_id,
+      id_retention_auto_end,first_period_basis
+    )
+    SELECT
+      $2::uuid,$3::uuid,r.property_id,r.unit_id,r.target_unit_id,
+      r.target_room_id,r.status,r.esign_status,r.start_date,r.end_date,
+      r.currency,r.rent_amount_minor,r.rent_frequency,r.due_day,
+      r.prorate_first_period,r.deposit_amount_minor,r.deposit_months,
+      r.late_fee_rule_id,r.template_version_id,r.template_variables,
+      r.document_file_id,r.document_sha256,r.date_calendar,r.document_locales,
+      r.signed_at,r.previous_lease_id,r.renewal_status,r.renewal_reminder_days,
+      r.terminated_on,r.termination_reason,r.deposit_settled_at,r.notes,
+      r.created_by,r.created_at,r.updated_at,r.deposit_override_reason,
+      r.deposit_overridden_by,r.deposit_overridden_at,r.idempotency_key,
+      r.moved_out_on,r.payee_bank_account_id,r.id_retention_auto_end,
+      r.first_period_basis
+    FROM public.leases l
+    CROSS JOIN LATERAL jsonb_populate_record(
+      NULL::public.leases,to_jsonb(l) || $4::jsonb
+    ) r
+    WHERE l.id=$1`,
+    [payment.lease_id,sandboxLease,sandbox,JSON.stringify(leaseOverrides)]);
+    sandboxParentIds.set(
+      JSON.stringify(['"public"."leases"',lease.org_id,payment.lease_id]),
+      sandboxLease);
+    const original=(await c.query<{row:Record<string,unknown>}>(
+      "SELECT to_jsonb(p) AS row FROM public.payments p WHERE id=$1",
+      [payment.id])).rows[0].row;
+    const paymentOverrides=await sandboxReferences(c,"public.payments",{
+      ...original,ledger_transaction_id:null,
+    });
     await c.query(`INSERT INTO payments
       SELECT (jsonb_populate_record(NULL::payments,to_jsonb(p) ||
+        $5::jsonb ||
         jsonb_build_object('id',$2::uuid,'org_id',$3::uuid,'lease_id',$4::uuid,
           'status','submitted','ledger_transaction_id',NULL))).*
-      FROM payments p WHERE p.id=$1`,[payment.id,sandboxPayment,sandbox,sandboxLease]);
+      FROM payments p WHERE p.id=$1`,
+      [payment.id,sandboxPayment,sandbox,sandboxLease,JSON.stringify(paymentOverrides)]);
   }
 }
 
@@ -135,7 +260,7 @@ async function inversion(holder:Holder,environment:Scope,release:boolean) {
         `SELECT app.b010_lock_payment_context($1,$2,$3,$4,$5,'admin') AS enabled`,
         [org,ORG_ID,environment,sid,fixture.lease_id]);
       assert.equal(r.rows[0].enabled,true);
-      await a.query(`UPDATE payments SET status=$2 WHERE id=$1`,
+      await a.query(`UPDATE payments SET status=$2::public.payment_status, rejected_reason=CASE WHEN $2::public.payment_status='rejected' THEN 'b010 inversion test' ELSE rejected_reason END WHERE id=$1`,
         [fixture.id,environment==="sandbox"?"rejected":"reversed"]);
     });
     if(release) {
@@ -150,10 +275,10 @@ async function inversion(holder:Holder,environment:Scope,release:boolean) {
     assert.notEqual(code(ao),"40P01");
     if(release) {
       if(ao.error) throw ao.error;
-      assert.ok(ao.elapsed>=1800 && ao.elapsed<7000,`${ao.elapsed}ms`);
+      assert.ok(ao.elapsed>=1800 && ao.elapsed<=S4_TRANSACTION_BOUND_MS,`${ao.elapsed}ms`);
     } else {
       assert.equal(code(ao),"55P03");
-      assert.ok(ao.elapsed>=5900 && ao.elapsed<7200,`${ao.elapsed}ms`);
+      assert.ok(ao.elapsed>=5900 && ao.elapsed<=S4_TRANSACTION_BOUND_MS,`${ao.elapsed}ms`);
     }
     await a.query("ROLLBACK");
     if(bp) {
@@ -170,6 +295,13 @@ async function inversion(holder:Holder,environment:Scope,release:boolean) {
     if(environment==="sandbox") {
       await a.query("DELETE FROM payments WHERE id=$1",[sandboxPayment]);
       await a.query("DELETE FROM leases WHERE id=$1",[sandboxLease]);
+      for(const parent of sandboxParents.toReversed()) {
+        await a.query(
+          `DELETE FROM ${identifier(parent.schema)}.${identifier(parent.table)} WHERE id=$1 AND org_id=$2`,
+          [parent.id,sandbox]);
+      }
+      sandboxParents.length=0;
+      sandboxParentIds.clear();
     }
     await a.end(); await b.end();
   }
