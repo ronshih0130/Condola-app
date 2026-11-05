@@ -164,6 +164,11 @@ test("synthetic absence of 100214, 100215 and optional 100217 tables remains res
   if(producer) await db.query(`DROP TABLE app.b017_center_resolutions`);
   await db.query(`DROP TABLE app.b028_center_mark_contexts,app.b028_center_cursors,app.b028_center_reads,app.b028_center_recipients,app.b028_center_events`);
   if(producer) await db.query(`DROP TABLE app.b017_old_source_transactions,app.b017_occurrences`);
+  await db.query(`DROP TABLE IF EXISTS app.deposit_settlement_payments`);
+  await db.query(`DROP TABLE IF EXISTS app.deposit_settlement_confirmations`);
+  await db.query(`DROP TABLE IF EXISTS app.deposit_settlement_evidence`);
+  await db.query(`DROP TABLE IF EXISTS app.deposit_settlement_lines`);
+  await db.query(`DROP TABLE IF EXISTS app.deposit_settlement_records`);
   await db.query(`DROP TABLE app.handover_gc_attempts,app.handover_gc_tombstones,app.handover_version_attachments,app.handover_replies,app.handover_attachments,app.handover_upload_intents,app.handover_versions,app.handover_records`);
   assert.equal((await db.query(`SELECT to_regclass('app.handover_records') IS NULL AND to_regclass('app.b028_center_events') IS NULL AS ok`)).rows[0].ok,true);
   await resetAndSeed();
