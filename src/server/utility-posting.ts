@@ -29,6 +29,7 @@ import {
   usageMilliFromText,
   utilityLineDescription,
 } from "./utility-post";
+import { requireOrgScope } from "./org-guard";
 
 /**
  * One request, one transaction, one unit. The worker only rounds the rooms in front of it
@@ -81,9 +82,7 @@ export type UtilityRunInput = {
   overrideReason: string;
 };
 
-function scope(session: Session) {
-  return { orgId: session.orgId, environment: session.environment };
-}
+function scope(session: Session) { return requireOrgScope(session); }
 
 function milliText(milli: number) {
   const abs = Math.abs(milli);

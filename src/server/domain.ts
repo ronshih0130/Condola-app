@@ -37,6 +37,7 @@ import { hashInviteToken, newInviteToken, PORTAL_INVITE_DAYS, savePortalInviteSe
 import { assertTicketStatus, isUuid } from "./repair-rules";
 import { assertTeamInvitesAllowed } from "./team-invites";
 import { assertStaff, type OrgRole, type Session } from "./types";
+import { requireOrgScope } from "./org-guard";
 
 async function leaseWrite<T>(write: () => Promise<T>): Promise<T> {
   try {
@@ -567,7 +568,7 @@ export async function setMeterSerial(session: Session, propertyId: string, seria
       [session.orgId, propertyId, unit.id, value],
     );
     await assertCurrentArchiveCaller(client,session);
-  });
+  }, requireOrgScope(session));
 }
 
 export async function setOwnerPhoneVisibility(session: Session, propertyOwnerId: string, canView: boolean) {
@@ -578,7 +579,7 @@ export async function setOwnerPhoneVisibility(session: Session, propertyOwnerId:
       [propertyOwnerId, canView, session.orgId],
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.notFound");
-  });
+  }, requireOrgScope(session));
 }
 
 export type LeaseInput = {
@@ -1713,7 +1714,7 @@ export async function uploadSignedLeasePdf(
     }
     if(target)await assertCurrentArchiveCaller(client,session);
     return { activated: false, invoiceId: null as string | null };
-  });
+  }, requireOrgScope(session));
   if (result.activated) {
     await svc(session.userId, (client) => queueDemoNotice(client, leaseId, "rent_due"));
     await markTryout(session.orgId, "lease");
@@ -1949,7 +1950,7 @@ export async function recordPayment(
         ],
       );
       return payment.id;
-    });
+    }, requireOrgScope(session));
     return { paymentId, status: "submitted" as const };
   }
 
@@ -2022,7 +2023,7 @@ export async function recordPayment(
       await client.query(`SELECT app.b010_payment_command_store($1,$2,$3,$4)`,[session.orgId,input.requestId,digest,payment.id]);
     }
     return {paymentId:payment.id,enabled};
-  });
+  }, requireOrgScope(session));
   if (!result.enabled) await svc(session.userId, async (client) => queueDemoNotice(client, input.leaseId, "payment_confirmed"));
   return { paymentId:result.paymentId, status: "confirmed" as const };
 }
@@ -2049,7 +2050,7 @@ export async function confirmPayment(session: Session, paymentId: string) {
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
     await finalizePaymentCenter(client,center,source);
     return {leaseId:payment.lease_id,enabled};
-  });
+  }, requireOrgScope(session));
   if (!result.enabled) await svc(session.userId, async (client) => queueDemoNotice(client,result.leaseId,"payment_confirmed"));
   return {paymentId,status:"confirmed" as const};
 }
@@ -2070,7 +2071,7 @@ export async function rejectPayment(session: Session, paymentId: string, reason:
     if (updated.rowCount !== 1) throw new FlowError("errors.paymentState");
     const source=enabled ? await emitPaymentResult(client,paymentId,"payment_rejected") : null;
     await finalizePaymentCenter(client,center,source);
-  });
+  }, requireOrgScope(session));
 }
 
 // Property and owner spreadsheets are parsed in the browser and committed by
@@ -2192,7 +2193,7 @@ export async function importBankCsv(session: Session, csv: string) {
       [imported.id, rows.length],
     );
     return { importId: imported.id, rows: rows.length, suggestions };
-  });
+  }, requireOrgScope(session));
 }
 
 async function suggestMatches(
@@ -2311,7 +2312,7 @@ export async function approveMatch(session: Session, suggestionId: string) {
       throw new FlowError("errors.paymentState");
     }
     return payment.lease_id;
-  });
+  }, requireOrgScope(session));
   return { leaseId };
 }
 
@@ -2567,7 +2568,7 @@ export async function createTicket(
     await client.query(`SELECT app.note_ticket_opened($1::uuid)`, [ticket.id]);
     await assertCurrentArchiveCaller(client,session);
     return { ticketId: ticket.id, tryoutOrgId: null };
-  });
+  }, requireOrgScope(session));
   if (result.tryoutOrgId) await markTryout(result.tryoutOrgId, "repair");
   return result.ticketId;
 }
@@ -2622,7 +2623,7 @@ export async function updateTicket(
       );
     }
     if (admitted) await assertCurrentArchiveCaller(client,session);
-  });
+  }, requireOrgScope(session));
 }
 
 export async function postMessage(session: Session, threadId: string, body: string) {
@@ -2658,7 +2659,7 @@ export async function postMessage(session: Session, threadId: string, body: stri
       [session.orgId, threadId, session.userId, member.id, body.trim()],
     );
     await client.query(`UPDATE message_threads SET last_message_at = now() WHERE id = $1 AND org_id = $2`, [threadId, session.orgId]);
-  });
+  }, requireOrgScope(session));
 }
 
 export async function inviteTeammate(session: Session, input: { email: string; role: OrgRole }) {
@@ -2673,7 +2674,7 @@ export async function inviteTeammate(session: Session, input: { email: string; r
        VALUES ($1,'team_member',$2::org_role,$3,$4, now() + interval '7 days', $5)`,
       [session.orgId, input.role, email, sha256(code), session.userId],
     );
-  });
+  }, requireOrgScope(session));
   const note = outboundNote(session.environment);
   if (note) await writeAudit(session.orgId, session.userId, "invite", { email, role: input.role, note });
   return { code };

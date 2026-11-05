@@ -35,6 +35,7 @@ import { appCookieOptions } from "./public-origin";
 import { privacyFromSettings, type OwnerPrivacy } from "./privacy";
 import { backupCodes, acceptSecondFactor, otpauthUrl, randomBase32 } from "./totp";
 import type { OrgRole, Session } from "./types";
+import { requireOrgScope } from "./org-guard";
 
 export const SESSION_COOKIE = "condola_session";
 export const CHALLENGE_COOKIE = "condola_challenge";
@@ -1473,7 +1474,7 @@ export async function setRequireMfa(session: Session, required: boolean) {
         WHERE id = $1`,
       [session.orgId, required],
     );
-  });
+  }, requireOrgScope(session));
   await writeAudit(session.orgId, session.userId, "require_2fa", { required });
 }
 
@@ -1497,7 +1498,7 @@ export async function setOwnerPrivacy(session: Session, input: OwnerPrivacy) {
         WHERE id = $1`,
       [session.orgId, input.showName, input.showPhone],
     );
-  });
+  }, requireOrgScope(session));
   await writeAudit(session.orgId, session.userId, "owner_privacy", input);
 }
 

@@ -63,6 +63,7 @@ import {
   vendorLinkSafeView,
   type VendorLinkCapability,
 } from "./vendor-link-rules";
+import { requireOrgScope } from "./org-guard";
 
 let vendorLinkKillSwitch: boolean = VENDOR_LINK_ENABLED;
 
@@ -335,7 +336,7 @@ export async function addVendor(
     maybe<{ id: string }>(client, `SELECT id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`, [
       ticketId,
       session.orgId,
-    ]),
+    ]), requireOrgScope(session),
   );
   if (!visible) throw new FlowError("errors.notFound");
   const contactId = await svc(session.userId, async (client) => {
@@ -370,7 +371,7 @@ export async function dispatchVendor(
     maybe<{ id: string }>(client, `SELECT id::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`, [
       ticketId,
       session.orgId,
-    ]),
+    ]), requireOrgScope(session),
   );
   if (!visible) throw new FlowError("errors.notFound");
 
@@ -587,7 +588,7 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
         ORDER BY j.created_at DESC
         LIMIT 1`,
       [ticketId, session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
   const vendors = await tx(session.userId, (client) =>
     client.query<{ id: string; name: string; trade: string | null; phone: string | null; last_on: string | null }>(
@@ -605,7 +606,7 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
         WHERE c.org_id = $1 AND c.is_vendor AND c.archived_at IS NULL
         ORDER BY c.display_name`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
   const choices: VendorChoice[] = vendors.rows.map((row) => ({
     id: row.id,

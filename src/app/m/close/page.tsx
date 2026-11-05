@@ -5,6 +5,7 @@ import { actionCloseMonth } from "@/server/auth-actions";
 import { taipeiToday } from "@/server/money";
 import { getSession } from "@/server/session";
 import { maybe, tx } from "@/server/db";
+import { requireOrgScope } from "@/server/org-guard";
 import { utilityReconciliation } from "@/server/utility-reconciliation";
 import { billingPreviewCopy } from "@/i18n/billing-preview";
 import { statementSignedMoney } from "@/server/format";
@@ -25,6 +26,7 @@ export default async function ClosePage({ searchParams }: { searchParams: Promis
       `SELECT max(period_month)::text AS period_month FROM month_closes WHERE org_id = $1`,
       [session.orgId],
     ),
+    requireOrgScope(session),
   );
   return (
     <>

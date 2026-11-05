@@ -18,6 +18,7 @@ import {
   tenantSignedPdfGloballyEnabled,
   tenantSignedPdfOn,
 } from "./tenant-signed-pdf-rules";
+import { requireOrgScope } from "./org-guard";
 
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
 
@@ -38,7 +39,7 @@ export async function loadTryout(session: Session): Promise<Tryout> {
         statement: Boolean(flags.statement),
         repair: Boolean(flags.repair),
       };
-    });
+    }, requireOrgScope(session));
   } catch {
     return EMPTY_TRYOUT;
   }
@@ -86,7 +87,7 @@ export async function loadManagerChrome(session: Session) {
         },
         badge: { pending: Number(countsRow?.pending ?? 0), tickets: Number(countsRow?.tickets ?? 0) },
       };
-    });
+    }, requireOrgScope(session));
   } catch {
     return empty;
   }
@@ -107,7 +108,7 @@ export async function loadFirm(session: Session) {
     );
     const locale = org?.default_locale === "en" ? "en" : "zh-TW";
     return { name: org?.name ?? "", bankName: bank?.bank_name ?? "", last5: bank?.account_last5 ?? "", defaultLocale: locale as "zh-TW" | "en" };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function dashboard(session: Session) {
@@ -205,7 +206,7 @@ export async function dashboard(session: Session) {
       owing,
       expiring,
     };
-  });
+  }, requireOrgScope(session));
 }
 
 type PropertyListRow = {
@@ -245,9 +246,7 @@ const PROPERTY_LIST_SQL = `SELECT p.id::text, p.name, coalesce(p.address_display
 
 const PROPERTY_LIST_ORDER = "ORDER BY p.created_at, p.id";
 
-function listScope(session: Session) {
-  return { orgId: session.orgId, environment: session.environment };
-}
+function listScope(session: Session) { return requireOrgScope(session); }
 
 async function loadList<T extends QueryResultRow>(
   client: Parameters<typeof many>[0],
@@ -375,7 +374,7 @@ export async function propertyDetail(session: Session, id: string) {
     );
     const byRoomUnits = await many<{id:string;label:string}>(client, `SELECT u.id::text,u.label FROM units u JOIN properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE u.org_id=$1 AND u.property_id=$2 AND p.archived_at IS NULL AND u.archived_at IS NULL AND u.rental_mode='by_room' ORDER BY u.label,u.id`,[session.orgId,id]);
     return { property, owner, rooms, wholes, byRoomUnits, meterSerial, repairs };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function listOwners(session: Session) {
@@ -386,7 +385,7 @@ export async function listOwners(session: Session) {
         WHERE org_id = $1 AND is_owner AND archived_at IS NULL
         ORDER BY display_name`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -753,7 +752,7 @@ export async function leaseDetail(session: Session, id: string) {
       utilityMinor: sumType("utility") + electricityCredit,
       depositMinor: sumType("deposit"),
     };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function signedLeasePdf(session: Session, leaseId: string) {
@@ -767,7 +766,7 @@ export async function signedLeasePdf(session: Session, leaseId: string) {
         ORDER BY pdf.created_at DESC
         LIMIT 1`,
       [leaseId, session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -796,7 +795,7 @@ export async function listPayments(session: Session) {
         ORDER BY p.created_at DESC
         LIMIT 40`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -822,7 +821,7 @@ export async function listMatches(session: Session) {
         WHERE s.org_id = $1 AND s.status = 'suggested'
         ORDER BY s.score DESC, s.created_at DESC`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -835,7 +834,7 @@ export async function latestUnmatchedPayment(session: Session) {
         WHERE org_id = $1 AND bank_transaction_id IS NULL AND status IN ('submitted','confirmed')
         ORDER BY created_at DESC LIMIT 1`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -867,7 +866,7 @@ export async function listStatements(session: Session) {
         WHERE s.org_id = $1 AND s.status <> 'void'
         ORDER BY s.period_start DESC, c.display_name`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -950,7 +949,7 @@ export async function statementRoster(session: Session, month: string): Promise<
       [session.orgId, `${month}-01`],
     );
     return [...issued, ...pending];
-  });
+  }, requireOrgScope(session));
 }
 
 export async function rentRoll(session: Session) {
@@ -1014,7 +1013,7 @@ export async function rentRoll(session: Session) {
           ))
         ORDER BY p.name, space_label`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1054,7 +1053,7 @@ export async function statementDetail(session: Session, id: string) {
       [id],
     );
     return { statement, lines };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function listTicketProperties(session: Session) {
@@ -1063,7 +1062,7 @@ export async function listTicketProperties(session: Session) {
       client,
       `SELECT id::text, name FROM properties WHERE org_id = $1 AND archived_at IS NULL ORDER BY name`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1087,7 +1086,7 @@ export async function listTicketFilters(session: Session) {
       [session.orgId],
     );
     return { units, rooms };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function listTickets(
@@ -1124,7 +1123,7 @@ export async function listTickets(
           AND ($4::uuid IS NULL OR t.room_id = $4)
         ORDER BY t.created_at DESC`,
       [session.orgId, filters.propertyId || null, filters.unitId || null, filters.roomId || null],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1152,7 +1151,7 @@ export async function spaceRepairs(session: Session, target: { roomId: string } 
         ORDER BY t.created_at DESC
         LIMIT 8`,
       [session.orgId, roomId, unitId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1166,7 +1165,7 @@ export async function tenantRepairs(session: Session, leaseId: string) {
         WHERE t.lease_id = $1 AND t.org_id = $2
         ORDER BY t.created_at DESC`,
       [leaseId, session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1236,7 +1235,7 @@ export async function ticketDetail(session: Session, ticketId: string) {
       [ticket.id],
     );
     return { ticket, comments, photos };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function listThreads(session: Session) {
@@ -1256,7 +1255,7 @@ export async function listThreads(session: Session) {
         WHERE t.org_id = $1
         ORDER BY t.last_message_at DESC NULLS LAST`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1267,7 +1266,7 @@ export async function threadMessages(session: Session, threadId: string) {
       `SELECT id::text, body, created_at::text AS at, (sender_user_id = $2) AS mine
          FROM messages WHERE thread_id = $1 ORDER BY created_at`,
       [threadId, session.userId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1296,7 +1295,7 @@ export async function listTeam(session: Session) {
          WHERE i.org_id = $1 AND i.kind = 'team_member' AND i.status IN ('pending', 'revoked')
          ORDER BY 3`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
   const ids = rows.map((row) => row.user_id).filter((id): id is string => Boolean(id));
   const extra = new Map<string, { mfa: boolean; last_sign_in: string | null }>();
@@ -1337,7 +1336,7 @@ export async function tenantLeases(session: Session) {
       `SELECT lease_id::text, org_id::text, firm_name, property_name, address_display, unit_label, room_label,
               lease_status::text, start_date::text, end_date::text, thread_id::text
          FROM tenant_lease_picker`,
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1418,7 +1417,7 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
       .filter((line) => line.chargeType !== "rent" && line.chargeType !== "deposit" && line.chargeType !== "utility")
       .map(asRow);
     return { lease, dueMinor, balance, paidMinor, currency: lease.currency, rentLines, depositLines, utilityLines, otherLines };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function ownerPropertyNames(session: Session) {
@@ -1429,7 +1428,7 @@ export async function ownerPropertyNames(session: Session) {
          FROM properties
         WHERE archived_at IS NULL
         ORDER BY name`,
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1454,7 +1453,7 @@ export async function ownerHome(session: Session) {
               lease_status::text AS status
          FROM owner_lease_tenants
         ORDER BY property_name, unit_label, room_label`,
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1481,7 +1480,7 @@ export async function listOwnerDirectory(session: Session) {
         WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL
         ORDER BY c.display_name`,
       [session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1509,7 +1508,7 @@ export async function ownerEditor(session: Session, id: string) {
       [id, session.orgId],
     );
     return { ...owner, propertyIds: linked.map((row) => row.property_id), invitePending: Boolean(pending) };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function propertyEditor(session: Session, id: string) {
@@ -1554,7 +1553,7 @@ export async function propertyEditor(session: Session, id: string) {
       [id, session.orgId],
     );
     return property;
-  });
+  }, requireOrgScope(session));
 }
 
 export type SpaceRow = {
@@ -1702,7 +1701,7 @@ export async function spaceEditor(session: Session, kind: "room" | "whole_unit",
         WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL AND u.archived_at IS NULL AND p.archived_at IS NULL AND u.rental_mode = 'by_room'`,
       [id, session.orgId],
     );
-  });
+  }, requireOrgScope(session));
 }
 
 export async function leasePdfSource(session: Session, id: string) {
@@ -1784,7 +1783,7 @@ export async function leasePdfSource(session: Session, id: string) {
          LEFT JOIN rooms r ON r.id = l.target_room_id
         WHERE l.id = $1`,
       [id],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -1827,7 +1826,7 @@ export async function statementPdfSource(session: Session, id: string) {
       [id],
     );
     return { statement, lines };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function counts(session: Session) {
@@ -1841,7 +1840,7 @@ export async function counts(session: Session) {
       [session.orgId],
     );
     return { pending: Number(row?.pending ?? 0), tickets: Number(row?.tickets ?? 0) };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function tenantDetail(session: Session, id: string) {

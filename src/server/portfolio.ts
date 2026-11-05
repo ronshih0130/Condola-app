@@ -9,6 +9,7 @@ import { admitActiveArchiveAncestry, admitRoomMove, lockArchiveAncestry } from "
 import { assertCurrentArchiveCaller } from "./record-archive-caller";
 import type { Session } from "./types";
 import type { Client } from "pg";
+import { requireOrgScope } from "./org-guard";
 
 export type SpaceKind = "room" | "whole_unit";
 export type ElectricityMethod = "submeter" | "by_reading" | "shared" | "tenant_direct";
@@ -396,7 +397,7 @@ export async function createOwner(
     );
     await syncOwnerProperties(client, session.orgId, contact.id, input.propertyIds);
     return contact.id;
-  });
+  }, requireOrgScope(session));
 }
 
 export async function updateOwner(
@@ -429,7 +430,7 @@ export async function updateOwner(
       [ownerId, session.orgId, input.name.trim(), email, phone],
     );
     await syncOwnerProperties(client, session.orgId, ownerId, input.propertyIds);
-  });
+  }, requireOrgScope(session));
 }
 
 export type PropertyElectricityInput = {
@@ -608,7 +609,7 @@ export async function updateProperty(
     );
     await savePropertyElectricity(client, session, propertyId, property.currency.trim(), input.electricity);
     await assertCurrentArchiveCaller(client,session);
-  });
+  }, requireOrgScope(session));
 }
 
 export type SpaceInput = {
@@ -791,7 +792,7 @@ export async function createSpace(session: Session, input: SpaceInput) {
     );
     await assertCurrentArchiveCaller(client,session);
     return { kind: "room" as const, id: room.id };
-  });
+  }, requireOrgScope(session));
 }
 
 export async function updateSpace(session: Session, kind: SpaceKind, spaceId: string, input: SpaceInput) {
@@ -877,7 +878,7 @@ export async function updateSpace(session: Session, kind: SpaceKind, spaceId: st
       ],
     );
     await assertCurrentArchiveCaller(client,session);
-  });
+  }, requireOrgScope(session));
 }
 
 async function upsertTerms(
@@ -1060,6 +1061,6 @@ export async function seedPortfolio(session: Session, csv: string) {
       }
     }
     await assertCurrentArchiveCaller(client,session);
-  });
+  }, requireOrgScope(session));
   return plan;
 }

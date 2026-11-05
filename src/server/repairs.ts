@@ -27,6 +27,7 @@ import {
   tenantCancelAllowed,
 } from "./repair-rules";
 import type { Session } from "./types";
+import { requireOrgScope } from "./org-guard";
 
 export type RepairInput = {
   status: string;
@@ -305,7 +306,7 @@ export async function saveRepairRecord(session: Session, ticketId: string, input
       session.orgId,
     ]);
     if(admitted)await assertCurrentArchiveCaller(client,session);
-  });
+  }, requireOrgScope(session));
 }
 
 export async function addTicketComment(session: Session, ticketId: string, body: string, internal: boolean) {
@@ -330,7 +331,7 @@ export async function addTicketComment(session: Session, ticketId: string, body:
       statusFrom: null,
       statusTo: null,
     });
-  });
+  }, requireOrgScope(session));
 }
 
 export async function findRepairPhoto(session: Session, ticketId: string, path: string) {
@@ -352,7 +353,7 @@ export async function findRepairPhoto(session: Session, ticketId: string, path: 
       [ticket.id, path, PHOTO_BUCKET],
     );
     return existing?.id ?? null;
-  });
+  }, requireOrgScope(session));
 }
 
 export async function repairPhotoTarget(session: Session, ticketId: string) {
@@ -366,7 +367,7 @@ export async function repairPhotoTarget(session: Session, ticketId: string) {
          FROM maintenance_tickets t
         WHERE t.id = $1 AND t.org_id = $2`,
       [ticketId, session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
 
@@ -434,7 +435,7 @@ export async function attachRepairPhoto(
       [ticket.org_id, ticket.id, fileId, session.kind === "staff" && input.internal],
     );
     return attachment.id;
-  });
+  }, requireOrgScope(session));
 }
 
 export function newPhotoFileId() {
@@ -453,7 +454,7 @@ export async function cancelTenantRepair(session: Session, ticketId: string) {
       client,
       `SELECT status::text FROM maintenance_tickets WHERE id = $1 AND org_id = $2`,
       [ticketId, session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
   if (!visible) throw new FlowError("errors.notFound");
   if (!tenantCancelAllowed(visible.status)) throw new FlowError("errors.repairCancelLocked");
@@ -488,6 +489,6 @@ export async function readRepairPhoto(session: Session, attachmentId: string) {
          JOIN files f ON f.id = a.file_id
         WHERE a.id = $1 AND a.org_id = $2`,
       [attachmentId, session.orgId],
-    ),
+    ), requireOrgScope(session),
   );
 }
