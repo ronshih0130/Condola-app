@@ -98,7 +98,11 @@ common=$(cd "$common" && pwd -P)
 remote_url=$(git remote get-url origin)
 case "$remote_url" in
   https://origin.cursor.com/ron-shih/condola-app|https://origin.cursor.com/ron-shih/condola-app.git) ;;
-  *) [ "${CLAIM_TEST_ANY_REMOTE:-}" = "YES" ] || die "origin must target Cursor Origin ron-shih/condola-app; refusing to print its URL." ;;
+  # GitHub canonical remote (BLK-MAC-02): HTTPS, scp-style SSH and ssh:// forms.
+  https://github.com/ronshih0130/Condola-app|https://github.com/ronshih0130/Condola-app.git) ;;
+  git@github.com:ronshih0130/Condola-app|git@github.com:ronshih0130/Condola-app.git) ;;
+  ssh://git@github.com/ronshih0130/Condola-app|ssh://git@github.com/ronshih0130/Condola-app.git) ;;
+  *) [ "${CLAIM_TEST_ANY_REMOTE:-}" = "YES" ] || die "origin must target GitHub ronshih0130/Condola-app or Cursor Origin ron-shih/condola-app; refusing to print its URL." ;;
 esac
 
 session=${CONDOLA_SESSION_ID:-}

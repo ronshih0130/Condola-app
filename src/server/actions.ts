@@ -333,12 +333,17 @@ export async function actionRecordPayment(formData: FormData) {
   }
 }
 
+import { readProxyOwnerConfirmed } from "./b010-proxy-confirm-rules";
+
 export async function actionConfirmPayment(formData: FormData) {
   await requireCurrentConsent();
   const id = text(formData.get("paymentId"));
   try {
     const session = await getSession();
-    await confirmPayment(session, id);
+    await confirmPayment(session, id, {
+      proxyOwnerConfirmed: readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed")),
+      source: "staff_ui",
+    });
     redirect("/m/payments");
   } catch (error) {
     bounce("/m/payments", error);

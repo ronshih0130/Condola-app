@@ -6,6 +6,7 @@ import { Client } from "pg";
 import { disposableDbUrl, withDatabase } from "./test-disposable-db";
 import { resetAndSeed } from "./seed";
 import { ORG_ID, USERS } from "./ids";
+import { approveMatch } from "./domain";
 import { decideBankMatch, importBankFile } from "./bank-matching";
 import type { Session } from "./types";
 
@@ -173,5 +174,98 @@ test("g: foreign organizations and sandbox sessions cannot import or decide", { 
     assert.equal(await decideBankMatch(denied, {
       bankId: randomUUID(), paymentId: randomUUID(), decision: "match", reason: "other",
     }), null);
+  }
+});
+
+test("h: with payment results ON, bank matching confirms only management-collected payments and records provenance", { concurrency: false }, async () => {
+  const resultFlag = async (on: boolean) => {
+    await db.query(`UPDATE organizations SET feature_flags=feature_flags || jsonb_build_object('payment_results_v2',$2::boolean) WHERE id=$1`, [ORG_ID, on]);
+    await db.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',$2::boolean,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='payment_results_v2'`, [ORG_ID, on]);
+  };
+  // The owner contact is linked to the acting admin's user, so the SQL layer alone
+  // would accept an owner_direct confirmation: only the app guard rejects these.
+  const ownerContact = (await db.query<{ id: string }>(`SELECT id::text FROM contacts WHERE org_id=$1 AND user_id=$2 LIMIT 1`, [ORG_ID, USERS.admin])).rows[0]?.id
+    ?? (await db.query<{ id: string }>(`INSERT INTO contacts(org_id,is_owner,display_name,user_id) VALUES ($1,true,'Owner linked to admin',$2) RETURNING id::text`, [ORG_ID, USERS.admin])).rows[0].id;
+  await db.query(`UPDATE contacts SET is_owner=true WHERE id=$1`, [ownerContact]);
+  const ownerCollected = async (paymentId: string) => {
+    const lease = (await db.query<{ lease_id: string }>(`SELECT lease_id::text FROM payments WHERE id=$1`, [paymentId])).rows[0].lease_id;
+    await db.query(`INSERT INTO app.b010_lease_collectors(org_id,lease_id,collector,owner_contact_id) VALUES ($1,$2,'owner',$3)`, [ORG_ID, lease, ownerContact]);
+  };
+  // Legacy approveMatch runs only while bank_matching is OFF (B-009 guard); imports need it ON.
+  const bankFlag = async (on: boolean) => {
+    await db.query(`UPDATE organizations SET feature_flags=feature_flags || jsonb_build_object('bank_matching',$2::boolean) WHERE id=$1`, [ORG_ID, on]);
+    await db.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',$2::boolean,'allowed_org_ids',jsonb_build_array($1::text)) WHERE key='bank_matching'`, [ORG_ID, on]);
+  };
+  const untouched = async (paymentId: string, bankId: string, status: string) => {
+    const row = (await db.query(`SELECT status,bank_transaction_id FROM payments WHERE id=$1`, [paymentId])).rows[0];
+    assert.deepEqual(row, { status, bank_transaction_id: null });
+    assert.equal(await count("payment_allocations", "WHERE payment_id=$1", [paymentId]), 0);
+    assert.equal(await count("app.b010_payment_confirmations", "WHERE payment_id=$1", [paymentId]), 0);
+    assert.equal(await count("app.b009_decisions", "WHERE bank_transaction_id=$1", [bankId]), 0);
+    assert.notEqual((await db.query(`SELECT status FROM bank_transactions WHERE id=$1`, [bankId])).rows[0].status, "matched");
+  };
+  // Already confirmed before payment results turn ON (legacy confirmation).
+  const confirmed = await payment(424400);
+  await db.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now() WHERE id=$1`, [confirmed, USERS.admin]);
+  await resultFlag(true);
+  try {
+    // (1) submitted owner-collected payment, manual match.
+    const owned = await payment(424200);
+    await ownerCollected(owned);
+    const ownedBank = await bankRow("owner-collected", "4242.00");
+    await assert.rejects(() => decideBankMatch(session, {
+      bankId: ownedBank.id, paymentId: owned, decision: "match", reason: "confirmed_amount", requestId: randomUUID(),
+    }));
+    await untouched(owned, ownedBank.id, "submitted");
+
+    // (2) already-confirmed owner-collected payment: linking is rejected too (manual and suggestion).
+    await ownerCollected(confirmed);
+    const confirmedBank = await bankRow("owner-confirmed", "4244.00");
+    await assert.rejects(() => decideBankMatch(session, {
+      bankId: confirmedBank.id, paymentId: confirmed, decision: "match", reason: "confirmed_amount", requestId: randomUUID(),
+    }));
+    await untouched(confirmed, confirmedBank.id, "confirmed");
+    const confirmedSuggestion = (await db.query(`SELECT id FROM bank_match_suggestions WHERE bank_transaction_id=$1 AND payment_id=$2`, [confirmedBank.id, confirmed])).rows[0];
+    if (confirmedSuggestion) {
+      await assert.rejects(() => decideBankMatch(session, {
+        bankId: confirmedBank.id, suggestionId: confirmedSuggestion.id, decision: "match", reason: "confirmed_amount", requestId: randomUUID(),
+      }));
+      await untouched(confirmed, confirmedBank.id, "confirmed");
+    }
+
+    // (3) legacy approveMatch on an owner-collected suggestion.
+    const legacy = await payment(424500);
+    await ownerCollected(legacy);
+    const legacyBank = await bankRow("owner-legacy-approve", "4245.00");
+    const legacySuggestion = (await db.query(`SELECT id FROM bank_match_suggestions WHERE bank_transaction_id=$1 AND payment_id=$2`, [legacyBank.id, legacy])).rows[0];
+    assert.ok(legacySuggestion, "a single candidate produces a suggestion");
+    await bankFlag(false);
+    try {
+      await assert.rejects(() => approveMatch(session, legacySuggestion.id), (error: unknown) => (error as { key?: string }).key === "errors.proxyOwnerConfirmRequired");
+    } finally { await bankFlag(true); }
+    await untouched(legacy, legacyBank.id, "submitted");
+    assert.equal((await db.query(`SELECT status FROM bank_match_suggestions WHERE id=$1`, [legacySuggestion.id])).rows[0].status, "suggested");
+
+    // (4) management-collected payment: bank match confirms and records provenance.
+    const managed = await payment(424300);
+    const managedBank = await bankRow("management-collected", "4243.00");
+    assert.equal(await decideBankMatch(session, {
+      bankId: managedBank.id, paymentId: managed, decision: "match", reason: "confirmed_amount", requestId: randomUUID(),
+    }), true);
+    assert.equal((await db.query(`SELECT status FROM payments WHERE id=$1`, [managed])).rows[0].status, "confirmed");
+    const rows = (await db.query(`SELECT confirmed_via,on_behalf_of_owner_contact_id,source,actor_user_id FROM app.b010_payment_confirmations WHERE payment_id=$1`, [managed])).rows;
+    assert.deepEqual(rows, [{ confirmed_via: "management", on_behalf_of_owner_contact_id: null, source: "bank_match", actor_user_id: USERS.admin }]);
+
+    // (5) management-collected legacy approveMatch records legacy_match provenance.
+    const managedLegacy = await payment(424600);
+    const managedLegacyBank = await bankRow("management-legacy-approve", "4246.00");
+    const managedSuggestion = (await db.query(`SELECT id FROM bank_match_suggestions WHERE bank_transaction_id=$1 AND payment_id=$2`, [managedLegacyBank.id, managedLegacy])).rows[0];
+    assert.ok(managedSuggestion);
+    await bankFlag(false);
+    try { await approveMatch(session, managedSuggestion.id); } finally { await bankFlag(true); }
+    const legacyRows = (await db.query(`SELECT confirmed_via,source FROM app.b010_payment_confirmations WHERE payment_id=$1`, [managedLegacy])).rows;
+    assert.deepEqual(legacyRows, [{ confirmed_via: "management", source: "legacy_match" }]);
+  } finally {
+    await resultFlag(false);
   }
 });

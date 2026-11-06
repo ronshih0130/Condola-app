@@ -129,3 +129,28 @@ test('authenticated cannot access internal tables and unauthorized sessions cann
   assert.deepEqual(await counts(),before);
  }
 });
+for(const which of ['billing_previews','monthly_rent_posting'] as const){
+ test(`${which} turned OFF while the writer waits on its lease lock stops every write`,async()=>{
+  await setFlags(true);
+  const f=await fixture();await party(f);const expectedDigest=await digest(f.lease);
+  const blocker=new Client({connectionString:withDatabase(source,name)});await blocker.connect();
+  try{
+   await blocker.query('BEGIN');
+   await blocker.query(`SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,[ORG_ID,`monthly-rent:${f.lease}`]);
+   const blockerPid=(await blocker.query<{pid:number}>(`SELECT pg_backend_pid() AS pid`)).rows[0].pid;
+   const before=await counts();
+   const pending=writeMonthlyRent(session,{leaseId:f.lease,month:'2028-02',requestId:randomUUID(),expectedDigest});
+   let waiting=false;
+   for(let i=0;i<200&&!waiting;i++){
+    waiting=(await db.query<{n:number}>(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))`,[blockerPid])).rows[0].n>0;
+    if(!waiting)await new Promise(resolve=>setTimeout(resolve,25));
+   }
+   assert.ok(waiting,'writer must be waiting on the lease lock');
+   // Only this flag turns OFF; the other stays ON.
+   await db.query(`UPDATE organizations SET feature_flags=feature_flags || jsonb_build_object($2::text,false) WHERE id=$1`,[ORG_ID,which]);
+   await blocker.query('COMMIT');
+   assert.equal((await pending).status,'rejected_disabled');
+   assert.deepEqual(await counts(),before);
+  }finally{await blocker.query('ROLLBACK').catch(()=>undefined);await blocker.end();await setFlags(false);}
+ });
+}

@@ -32,6 +32,7 @@ export const ERRORS: Record<string, string> = {
   "errors.occupied": "i_occupied",
   "errors.roomLease": "i_room_lease_exists",
   "errors.paymentState": "i_pay_state",
+  "errors.proxyOwnerConfirmRequired": "i_forbidden",
   "errors.matchState": "i_match_state",
   "errors.currency": "i_currency",
   "errors.amountTooHigh": "i_amount_high",

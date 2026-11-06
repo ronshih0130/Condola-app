@@ -9,6 +9,16 @@ export async function paymentRequestEnabled(session: Session): Promise<boolean> 
       AND jsonb_typeof(f.value->'allowed_org_ids')='array' AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)) AS enabled`, [session.orgId])).rows[0].enabled);
 }
 
+export async function ownerCollectedPaymentIds(session: Session, paymentIds: string[]): Promise<Set<string>> {
+  if (paymentIds.length === 0 || !(await paymentRequestEnabled(session))) return new Set<string>();
+  return svc(session.userId, async c => {
+    const available = await c.query<{exists:boolean}>(`SELECT to_regprocedure('app.b010_owner_collected_payments(uuid,uuid[])') IS NOT NULL AS exists`);
+    if (!available.rows[0].exists) return new Set<string>();
+    const result = await c.query<{id:string}>(`SELECT id::text FROM app.b010_owner_collected_payments($1,$2::uuid[]) AS id`, [session.orgId, paymentIds]);
+    return new Set(result.rows.map(row => row.id));
+  });
+}
+
 export async function paymentRequestStatus(session: Session, leaseId: string, requestId: string): Promise<"recorded" | "unknown"> {
   if (session.kind !== "staff" || !["admin", "manager", "accountant"].includes(session.role ?? "") || session.needsSandbox || !isUuid(leaseId) || !isUuid(requestId) || !isUuid(session.sessionId)) throw new Error("Payment status unavailable");
   return tx(session.userId, async c => {
