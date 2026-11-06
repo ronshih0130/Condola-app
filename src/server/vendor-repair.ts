@@ -63,6 +63,8 @@ import {
   vendorLinkSafeView,
   type VendorLinkCapability,
 } from "./vendor-link-rules";
+import { resolveVendorIdentity } from "./vendor-identity";
+import { planVendorAttribution } from "./vendor-attribution";
 import { requireOrgScope } from "./org-guard";
 
 let vendorLinkKillSwitch: boolean = VENDOR_LINK_ENABLED;
@@ -677,6 +679,18 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
       hashVendorToken(token),
     ]);
     if (!still || still.job_id !== job.job_id) return null;
+    // Preserve the flag-OFF path: only enhanced loads invoke the resolver / planner.
+    if (enhanced) {
+      const resolution = await resolveVendorIdentity({
+        query: <T extends Record<string, unknown>>(query: string, params?: unknown[]) =>
+          client.query<T>(query, params),
+      }, { token, now: new Date(), linkedUserId: null });
+      if (!resolution ||
+          resolution.jobId !== job.job_id || resolution.orgId !== job.org_id ||
+          resolution.ticketId !== job.ticket_id) return null;
+      // Inert today (gateOn=true only inside enhanced; still void — no attribution writes).
+      void planVendorAttribution(resolution, null, new Date(), true);
+    }
     const ticket = await maybe<{
       title: string;
       description: string | null;

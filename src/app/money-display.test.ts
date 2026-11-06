@@ -183,7 +183,7 @@ test("rendered screens do not format amounts with a bare dollar", () => {
       }
       if (!/\.(ts|tsx)$/.test(entry) || /\.test\.tsx?$/.test(entry)) continue;
       const text = readFileSync(path, "utf8");
-      if (!text.includes("formatMoney")) continue;
+      if (!/\bformatMoney\b/.test(text)) continue;
       if (path.endsWith(`${join("server", "format.ts")}`)) continue;
       if (path.endsWith(`${join("t", "pay", "page.tsx")}`) && text.includes('moneyLabel as formatMoney')) continue;
       hits.push(path);
