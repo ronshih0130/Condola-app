@@ -28,8 +28,22 @@ test("different accounts change row keys", () => {
 
 test("memo whitespace is normalized", () => {
   assert.deepEqual(
-    bankRowKeys("account",[{...row,memo:"  Payment\t received\n "}]),
-    bankRowKeys("account",[{...row,memo:"Payment received"}]),
+    bankRowKeys("account",[{...row,memo:"  payment\t received\n "}]),
+    bankRowKeys("account",[{...row,memo:"payment received"}]),
+  );
+});
+
+test("memo case is normalized", () => {
+  assert.deepEqual(
+    bankRowKeys("account",[{...row,memo:"Payment"}]),
+    bankRowKeys("account",[{...row,memo:"payment"}]),
+  );
+});
+
+test("memo fullwidth characters are NFKC normalized", () => {
+  assert.deepEqual(
+    bankRowKeys("account",[{...row,memo:"Ｐａｙｍｅｎｔ"}]),
+    bankRowKeys("account",[{...row,memo:"payment"}]),
   );
 });
 

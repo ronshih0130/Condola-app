@@ -5,7 +5,8 @@ export type BankLine = { date: string; amountMinor: bigint; last5: string | null
 export function bankRowKeys(accountId: string, rows: BankLine[]): string[] {
   const counts = new Map<string, number>();
   return rows.map(({date,amountMinor,last5,memo}) => {
-    const tuple = ["b009-row-v1",accountId,date,amountMinor.toString(),last5 ?? "",memo.trim().replace(/\s+/g," ")];
+    const normMemo = memo.normalize("NFKC").toLowerCase().trim().replace(/\s+/g," ");
+    const tuple = ["b009-row-v1",accountId,date,amountMinor.toString(),last5 ?? "",normMemo];
     const identity = JSON.stringify(tuple);
     const ordinal = counts.get(identity) ?? 0;
     counts.set(identity,ordinal+1);
