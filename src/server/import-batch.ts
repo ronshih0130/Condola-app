@@ -1,3 +1,4 @@
+import { recordUsage, usageDedupeKey } from './usage-events';
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
@@ -646,6 +647,8 @@ async function insertUnits(client: Client, session: Session, plans: RowPlan[]) {
       rows.map((plan) => (plan.row.kind === "whole_unit" ? plan.row.notes ?? "" : "")),
     ],
   );
+  for (const plan of rows) await recordUsage(client, { orgId: session.orgId, dimension: 'units', quantity: BigInt(1), occurredAt: new Date(),
+    sourceTable: 'units', sourceId: plan.unitId!, dedupeKey: usageDedupeKey('units', 'units', plan.unitId!) });
 }
 
 async function insertRooms(client: Client, session: Session, plans: RowPlan[]) {

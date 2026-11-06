@@ -1,3 +1,4 @@
+import { recordVendorDispatchUsage, recordStoredFileUsage } from './usage-events';
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { repairApprovalsEnabled } from "./repair-approval";
@@ -491,6 +492,7 @@ export async function dispatchVendor(
     await writeAudit(session.orgId, session.userId, "repair_dispatch", { ticketId: ticket.id, jobId: job.id, vendorName: vendorNameSaved }, client);
     await currentDispatchActor(client,session);
     await assertDispatchFlag(client,session.orgId);
+    await recordVendorDispatchUsage(client, session.orgId, job.id);
     return job.id;
   });
 
@@ -1042,6 +1044,7 @@ async function attachVendorPhoto(
       [job.org_id, job.ticket_id, fileId, job.job_id],
     );
     if (!attachment) throw new FlowError("errors.generic");
+    await recordStoredFileUsage(client, job.org_id, fileId);
     return attachment.id;
   });
 }

@@ -233,3 +233,12 @@ flags:
     global_kill: "platform_settings.tenant_payment_history requires strict boolean enabled and a valid allowed_org_ids array containing the selected organization; absent or malformed is OFF"
     org_override: "organizations.feature_flags.tenant_payment_history must be strict boolean true"
     activation: "Local synthetic tenant history validation only; no hosted activation, payment processing or external messages"
+
+  usage_events:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.usage_events requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.usage_events must be boolean true"
+    activation: "Local synthetic usage validation only; no hosted activation, pricing or quotas"

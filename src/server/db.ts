@@ -2,6 +2,7 @@ import { Client, type QueryResultRow } from "pg";
 import { finishAfterResponse } from "./after-response";
 import { logServerError, mapDbError } from "./errors";
 import { readEnvChoice, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
+import { withUsageTransaction } from "./usage-events";
 
 function closedSocket(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
@@ -222,7 +223,7 @@ export async function tx<T>(userId: string, fn: (client: Client) => Promise<T>, 
         if (firm) await pinOrg(client, firm.orgId, firm.environment);
       }
       await client.query("SET LOCAL ROLE authenticated");
-      const result = await fn(client);
+      const result = await withUsageTransaction(client, () => fn(client));
       await client.query("COMMIT");
       return result;
     } catch (error) {
@@ -258,7 +259,7 @@ export async function svcOn<T>(client: Client, userId: string | null, fn: (clien
       await client.query(`SELECT set_config('request.jwt.claim.role', 'service_role', true)`);
     }
     await client.query("SET LOCAL ROLE service_role");
-    const result = await fn(client);
+    const result = await withUsageTransaction(client, () => fn(client));
     await client.query("COMMIT");
     return result;
   } catch (error) {

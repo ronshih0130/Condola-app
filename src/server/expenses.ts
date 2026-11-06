@@ -1,3 +1,4 @@
+import { recordStoredFileUsage } from './usage-events';
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { maybe, many, one, tx } from "./db";
@@ -233,6 +234,7 @@ async function insertReceipt(client: Client, session: Session, name: string) {
      VALUES ($1, 'receipts', $2, $3, 'text/plain', $4, $5) RETURNING id::text`,
     [session.orgId, `demo/${randomUUID()}.txt`, name, Buffer.byteLength(name), session.userId],
   );
+  await recordStoredFileUsage(client, session.orgId, file.id);
   return file.id;
 }
 

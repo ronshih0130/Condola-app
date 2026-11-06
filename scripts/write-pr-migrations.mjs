@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106110000_b029_usage_events_flag.sql": {
+    addOnly: true,
+    reason: "Seeds default-OFF usage_events setting only; B-029 hooks use the existing PROP-07 recorder and store.",
+  },
   "supabase/migrations/20261106100000_prop07_usage_source_ids.sql": {
     addOnly: true,
     reason: "Adds private append-only app.usage_events (source table/id, dedupe key, sandbox marker), an idempotent service-role SECURITY DEFINER recorder and an admin-only formal summary excluding sandbox; no hooks or callers, no flag (PROP-07 foundation for B-029).",
