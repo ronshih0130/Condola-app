@@ -1,0 +1,83 @@
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+
+INSERT INTO public.platform_settings (key, value, description)
+VALUES ('monthly_rent_posting', '{"enabled":false,"allowed_org_ids":[]}'::jsonb,
+        'Independent global kill switch for scoped monthly rent posting; default off')
+ON CONFLICT (key) DO NOTHING;
+
+CREATE TABLE app.b008_monthly_rent_occurrences (
+  id uuid PRIMARY KEY,
+  org_id uuid NOT NULL REFERENCES public.organizations(id),
+  lease_id uuid NOT NULL,
+  month_start date NOT NULL CHECK (month_start BETWEEN DATE '0001-01-01' AND DATE '9999-11-01' AND extract(day FROM month_start) = 1),
+  kind text NOT NULL CHECK (kind = 'rent'),
+  amount_minor bigint NOT NULL CHECK (amount_minor > 0),
+  currency char(3) NOT NULL REFERENCES public.currencies(code),
+  plan_version text NOT NULL CHECK (plan_version = 'monthly-rent-operation-v1'),
+  plan_digest text NOT NULL CHECK (plan_digest ~ '^[0-9a-f]{64}$'),
+  original_issuer_user_id uuid NOT NULL,
+  original_invoice_id uuid NOT NULL,
+  original_rent_line_id uuid NOT NULL,
+  original_ledger_transaction_id uuid NOT NULL,
+  issuance_snapshot jsonb NOT NULL,
+  CONSTRAINT b008_monthly_occ_snapshot_envelope CHECK ((
+    jsonb_typeof(issuance_snapshot) = 'object'
+    AND jsonb_typeof(issuance_snapshot->'version') = 'string' AND issuance_snapshot->>'version' = 'b008-monthly-issuance-v1'
+    AND jsonb_typeof(issuance_snapshot->'orgId') = 'string' AND issuance_snapshot->>'orgId' = org_id::text
+    AND jsonb_typeof(issuance_snapshot->'leaseId') = 'string' AND issuance_snapshot->>'leaseId' = lease_id::text
+    AND jsonb_typeof(issuance_snapshot->'monthStart') = 'string' AND issuance_snapshot->>'monthStart' = to_char(month_start, 'YYYY-MM-DD')
+    AND jsonb_typeof(issuance_snapshot->'amountMinor') = 'string' AND issuance_snapshot->>'amountMinor' = amount_minor::text
+    AND jsonb_typeof(issuance_snapshot->'currency') = 'string' AND issuance_snapshot->>'currency' = currency::text
+    AND jsonb_typeof(issuance_snapshot->'planVersion') = 'string' AND issuance_snapshot->>'planVersion' = plan_version
+    AND jsonb_typeof(issuance_snapshot->'planDigest') = 'string' AND issuance_snapshot->>'planDigest' = plan_digest
+    AND jsonb_typeof(issuance_snapshot->'issuerUserId') = 'string' AND issuance_snapshot->>'issuerUserId' = original_issuer_user_id::text
+    AND jsonb_typeof(issuance_snapshot->'invoiceId') = 'string' AND issuance_snapshot->>'invoiceId' = original_invoice_id::text
+    AND jsonb_typeof(issuance_snapshot->'rentLineId') = 'string' AND issuance_snapshot->>'rentLineId' = original_rent_line_id::text
+    AND jsonb_typeof(issuance_snapshot->'ledgerTransactionId') = 'string' AND issuance_snapshot->>'ledgerTransactionId' = original_ledger_transaction_id::text
+    AND jsonb_typeof(issuance_snapshot->'source') = 'object' AND issuance_snapshot->'source' <> '{}'::jsonb
+    AND jsonb_typeof(issuance_snapshot->'invoice') = 'object' AND issuance_snapshot->'invoice' <> '{}'::jsonb
+    AND jsonb_typeof(issuance_snapshot->'rentLine') = 'object' AND issuance_snapshot->'rentLine' <> '{}'::jsonb
+    AND jsonb_typeof(issuance_snapshot->'ledgerTransaction') = 'object' AND issuance_snapshot->'ledgerTransaction' <> '{}'::jsonb
+    AND CASE WHEN jsonb_typeof(issuance_snapshot->'ledgerEntries') = 'array'
+             THEN jsonb_array_length(issuance_snapshot->'ledgerEntries') > 0 ELSE false END
+  ) IS TRUE),
+  created_at timestamptz NOT NULL DEFAULT now() CHECK (isfinite(created_at)),
+  CONSTRAINT b008_monthly_occ_org_id_key UNIQUE (org_id, id),
+  CONSTRAINT b008_monthly_occ_lease_month_kind_key UNIQUE (org_id, lease_id, month_start, kind),
+  CONSTRAINT b008_monthly_occ_lease_fk FOREIGN KEY (org_id, lease_id) REFERENCES public.leases(org_id, id)
+);
+
+CREATE TABLE app.b008_monthly_rent_commands (
+  id uuid PRIMARY KEY,
+  org_id uuid NOT NULL REFERENCES public.organizations(id),
+  actor_user_id uuid NOT NULL,
+  request_id uuid NOT NULL,
+  intent_version text NOT NULL CHECK (intent_version = 'monthly-rent-operation-v1'),
+  intent_digest text NOT NULL CHECK (intent_digest ~ '^[0-9a-f]{64}$'),
+  occurrence_id uuid NOT NULL,
+  result_kind text NOT NULL CHECK (result_kind IN ('created', 'already_issued')),
+  created_at timestamptz NOT NULL DEFAULT now() CHECK (isfinite(created_at)),
+  CONSTRAINT b008_monthly_cmd_actor_request_key UNIQUE (org_id, actor_user_id, request_id),
+  CONSTRAINT b008_monthly_cmd_occurrence_fk FOREIGN KEY (org_id, occurrence_id)
+    REFERENCES app.b008_monthly_rent_occurrences(org_id, id)
+);
+
+ALTER TABLE app.b008_monthly_rent_occurrences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.b008_monthly_rent_commands ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON app.b008_monthly_rent_occurrences, app.b008_monthly_rent_commands FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT, INSERT ON app.b008_monthly_rent_occurrences, app.b008_monthly_rent_commands TO service_role;
+
+CREATE FUNCTION app.b008_monthly_receipt_immutable() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+  RAISE EXCEPTION 'B008 monthly rent receipts are append-only';
+END;
+$$;
+REVOKE ALL ON FUNCTION app.b008_monthly_receipt_immutable() FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b008_monthly_occ_immutable BEFORE UPDATE OR DELETE ON app.b008_monthly_rent_occurrences
+  FOR EACH ROW EXECUTE FUNCTION app.b008_monthly_receipt_immutable();
+CREATE TRIGGER b008_monthly_cmd_immutable BEFORE UPDATE OR DELETE ON app.b008_monthly_rent_commands
+  FOR EACH ROW EXECUTE FUNCTION app.b008_monthly_receipt_immutable();
+COMMIT;
