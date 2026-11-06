@@ -25,6 +25,7 @@ test.before(async () => {
   const coded = (await db.query<{present:boolean}>(`SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='b009_decisions_reason_code') AS present`)).rows[0].present;
   if (!coded) await db.query(await readFile(new URL("../../supabase/migrations/20261031100225_b009_decision_reason_codes.sql",import.meta.url),"utf8"));
   await db.query(await readFile(new URL("../../supabase/migrations/20261104120400_b009_bank_match_owner.sql",import.meta.url),"utf8"));
+  await db.query(await readFile(new URL("../../supabase/migrations/20261106010000_b009_bank_match_decisions.sql",import.meta.url),"utf8"));
   const objects = (await db.query(`SELECT to_regclass('app.b009_decisions') IS NOT NULL AS decisions,to_regprocedure('app.b009_direct_write_guard()') IS NOT NULL AS guard,
     (SELECT count(*)::int FROM pg_trigger WHERE tgname IN ('b009_import_guard','b009_transaction_guard','b009_suggestion_guard','b009_payment_insert_guard','b009_payment_guard') AND NOT tgisinternal) AS guards`)).rows[0];
   assert.deepEqual(objects,{decisions:true,guard:true,guards:5});

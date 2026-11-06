@@ -302,6 +302,10 @@ const added = {
     addOnly: false,
     reason: "Adds private deposit settlement header/line/evidence/confirmation/payment tables with RLS, restricted service_role grants and composite FKs; no flag seed; no historical rewrite.",
   },
+  "supabase/migrations/20261106010000_b009_bank_match_decisions.sql": {
+    addOnly: true,
+    reason: "Adds private row-identity registry for overlapping CSV re-import dedupe, request-id replay columns and one-effective-match unique indexes on bank decisions. Additive; no backfill; bank_matching stays OFF.",
+  },
   "supabase/migrations/20261105140000_b011_deposit_settlement_writers.sql": {
     addOnly: false,
     reason: "Tightens deposit_settlement_* with same-lease charge FK, same-settlement evidence FK, payment request_id idempotency, revisions table, and deposit_settlement flag seed OFF; no historical rewrite.",
@@ -321,6 +325,10 @@ const added = {
   "supabase/migrations/20261105190000_b024_vendor_completion_reason.sql": {
     addOnly: false,
     reason: "Adds immutable appointment response_reason checks, replaces the staff signature with a trailing default, and adds a service-only token-scoped vendor gateway with replay and flag-OFF rejection; no table grants, flag seeds or ticket status changes.",
+  },
+  "supabase/migrations/20261106000000_b008_monthly_rent_operation.sql": {
+    addOnly: false,
+    reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
   "supabase/migrations/20261106020000_b010_payment_result_events.sql": {
     addOnly: true,

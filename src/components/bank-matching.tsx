@@ -30,7 +30,7 @@ export function BankMatching({data,locale}:{data:Board;locale:Locale}) {
           <strong>{line.account} · {line.date} · {amountLabel(line.amount,line.currency)}</strong><p>{line.last5 || "—"} {line.description}</p>
           {line.overlap ? <p className="hint">{s.overlap}</p> : null}
           {suggestions.map(suggestion => <form action={actionDecideBankMatch} key={suggestion.id}>
-            <input type="hidden" name="bankId" value={line.id} /><input type="hidden" name="suggestionId" value={suggestion.id} />
+            <input type="hidden" name="bankId" value={line.id} /><input type="hidden" name="requestId" value={crypto.randomUUID()} /><input type="hidden" name="suggestionId" value={suggestion.id} />
             <p>{s.suggestions}: {data.payments.find(p => p.id === suggestion.payment)?.name || "—"} · {suggestion.score}</p>
             <div data-testid="bank-suggestion-basis" className="hint">
               <p>{s.basis}</p>
@@ -44,7 +44,7 @@ export function BankMatching({data,locale}:{data:Board;locale:Locale}) {
             <button className="btn" name="decision" value="match">{s.match}</button> <button className="btn" name="decision" value="reject">{s.reject}</button>
           </form>)}
           {options.length ? <form action={actionDecideBankMatch}>
-            <input type="hidden" name="bankId" value={line.id} /><input type="hidden" name="decision" value="match" />
+            <input type="hidden" name="bankId" value={line.id} /><input type="hidden" name="requestId" value={crypto.randomUUID()} /><input type="hidden" name="decision" value="match" />
             <label>{s.manual}<select className="inp" name="paymentId" required defaultValue=""><option value="">{s.choose}</option>{options.map(p => <option value={p.id} key={p.id}>{p.name || "—"} · {p.date} · {amountLabel(p.amount,p.currency)}</option>)}</select></label>
             <label>{s.reason}<select className="inp" name="reason" required defaultValue="" data-testid="bank-match-reason"><option value="" disabled>{s.reasonChoose}</option>{BANK_MATCH_REASON_CODES.map((code) => <option key={code} value={code}>{s.reasons[code]}</option>)}</select></label><button className="btn">{s.match}</button>
           </form> : null}

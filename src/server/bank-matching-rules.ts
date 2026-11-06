@@ -1,4 +1,26 @@
+import { createHash } from "node:crypto";
+
 export type BankLine = { date: string; amountMinor: bigint; last5: string | null; memo: string };
+
+export function bankRowKeys(accountId: string, rows: BankLine[]): string[] {
+  const counts = new Map<string, number>();
+  return rows.map(({date,amountMinor,last5,memo}) => {
+    const normMemo = memo.normalize("NFKC").toLowerCase().trim().replace(/\s+/g," ");
+    const tuple = ["b009-row-v1",accountId,date,amountMinor.toString(),last5 ?? "",normMemo];
+    const identity = JSON.stringify(tuple);
+    const ordinal = counts.get(identity) ?? 0;
+    counts.set(identity,ordinal+1);
+    return createHash("sha256").update(JSON.stringify([...tuple,ordinal])).digest("hex");
+  });
+}
+
+export function bankDecisionDigest(input: {decision:string;bankId:string;paymentId?:string;suggestionId?:string;reason:string}): string {
+  return createHash("sha256").update(JSON.stringify(["b009-decision-v1",input.decision,input.bankId,input.paymentId ?? "",input.suggestionId ?? "",input.reason])).digest("hex");
+}
+
+export function isUuid(v: unknown): v is string {
+  return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+}
 
 /** Closed set stored on a bank-match decision. Not free text. */
 export const BANK_MATCH_REASON_CODES = [
