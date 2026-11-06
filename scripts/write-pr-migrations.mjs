@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106130000_b019_tenant_thread_create.sql": {
+    addOnly: true,
+    reason: "Seeds default-OFF tenant_thread_create and adds a SECURITY DEFINER RPC letting an authorized lease tenant start the lease thread idempotently (existing one-per-lease index; first message id = request id); no table or grant change beyond the RPC.",
+  },
   "supabase/migrations/20261106040000_b022_owner_title_report_replies.sql": {
     addOnly: true,
     reason: "Adds private append-only owner receipt-title revisions and report replies, authenticated SECURITY DEFINER gateways and two default-OFF settings; no existing-table schema changes or backfill. Title RPC updates only the caller owner contact receipt_title.",
