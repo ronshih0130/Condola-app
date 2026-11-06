@@ -28,6 +28,7 @@ export function RepairThread({
   canComment,
   canUpload,
   canViewPhotos,
+  hiddenPhotoCount = 0,
   allowInternal,
   returnTo,
 }: {
@@ -40,6 +41,7 @@ export function RepairThread({
   canComment: boolean;
   canUpload: boolean;
   canViewPhotos: boolean;
+  hiddenPhotoCount?: number;
   allowInternal: boolean;
   returnTo: "tenant" | "staff";
 }) {
@@ -95,7 +97,7 @@ export function RepairThread({
         </form>
       ) : null}
       <h3 style={{ marginTop: 16 }}>{t("i_repair_photos")}</h3>
-      <RepairPhotos photos={photos} canView={canViewPhotos} t={t} />
+      <RepairPhotos photos={photos} canView={canViewPhotos} hiddenCount={hiddenPhotoCount} t={t} />
       {canUpload ? (
         <TicketPhotoUpload
           ticketId={ticketId}
