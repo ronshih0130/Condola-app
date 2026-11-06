@@ -105,6 +105,7 @@ function fakeClient(options: { orgId?: string; role?: string; throwOn?: RegExp }
   const client = {
     async query(sql: string, values: unknown[] = []) {
       statements.push({ sql, values });
+      if (sql === "SELECT app.b031_session_hardening_enabled() AS enabled") return { rows: [{ enabled: false }] };
       if (throwOn?.test(sql)) {
         throwOn = undefined;
         throw new Error("injected DB failure");

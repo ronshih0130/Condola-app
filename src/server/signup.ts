@@ -5,13 +5,14 @@ import { writeAudit } from "./audit";
 import { createSession, normalizeEmail, SESSION_COOKIE, type RequestMeta } from "./auth";
 import { firmDisplayName, normalizePartnerCode } from "./billing";
 import { query, withClient } from "./db";
+import { captureCredentialEpoch, credentialsChanged, sessionHardeningEnabled, withCredentialFence } from "./session-hardening";
 import { recordFunnel } from "./funnel";
 import { previewPartnerCodeOn, redeemPartnerCode } from "./partners";
 import { countryByCode } from "@/countries";
 import { normalizePhone } from "./lease-rules";
 import { passwordAcceptable } from "./password";
 import { seedSandboxForNewFirm } from "./sandbox";
-import { writeConsent, type ConsentRepository } from "./consent";
+import { writeConsent, writeConsentSql, consentRepository, type ConsentRepository } from "./consent";
 import { passConsentGate } from "./consent-gate";
 import {
   signupPartnerDocuments, insertSignupPartnerConsentOn,
@@ -238,116 +239,134 @@ export async function startSignup(input: {
   | { ok: true; status: "firm"; token: string }
   | { ok: false; error: SignupError }
 > {
-  if (input.consent !== true) return { ok: false, error: "consent" };
-  const acceptedAt = new Date();
-  const metadata = signupConsentMetadata(acceptedAt);
-  const email = normalizeEmail(input.email);
-  const looked = await inTx(async (client) => {
-    await client.query(`SELECT crypt($1, gen_salt('bf'))`, [input.password || "placeholder"]);
-    if (!email) return { kind: "email" as const };
-    if (input.password !== input.confirm) return { kind: "mismatch" as const };
-    if (!passwordAcceptable(input.password)) return { kind: "weak" as const };
-    const existing = await findUser(client, email);
-    const code = await draftCode(client, input.partnerCode);
-    if (!existing) return { kind: "new" as const, code };
-    const matches = await passwordMatches(client, existing.id, input.password);
-    return { kind: "existing" as const, existing, matches, code };
-  });
-  if (looked.kind === "email" || !email) return { ok: false, error: "email" };
-  if (looked.kind === "mismatch") return { ok: false, error: "mismatch" };
-  if (looked.kind === "weak") return { ok: false, error: "weak" };
-
-  if (looked.kind === "existing") {
-    const { existing, matches, code } = looked;
-    if (existing.has_firm || existing.email_confirmed_at) {
-      if (existing.email_confirmed_at && matches && !existing.has_firm) {
-        await inTx((client) =>
-          client.query(
-            `INSERT INTO signup_drafts (user_id, partner_code) VALUES ($1, $2)
-             ON CONFLICT (user_id) DO UPDATE SET partner_code = EXCLUDED.partner_code`,
-            [existing.id, code],
-          ),
-        );
-        await writeConsent(existing.id, "signup", acceptedAt);
-        const token = await createSession(existing.id, true, input.meta);
-        return { ok: true, status: "firm", token };
-      }
-      return { ok: false, error: "duplicate" };
-    }
-    // Leave auth.users alone. An admin password update clears confirmation_token and
-    // confirmation_sent_at, which expires the link already in the inbox, and this path does not send a new email.
-    // Consent only after the password matches. A wrong password still returns the verify
-    // page, so knowing an unconfirmed email cannot stamp this account. That person's
-    // own first login hits the re-consent gate.
-    if (matches) await writeConsent(existing.id, "signup", acceptedAt);
-    const token = await inTx((client) => finishUnconfirmed(client, existing.id, email, code));
-    return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
-  }
-
-  const auth = supabaseAuth();
-  const appMail = Boolean(auth.url) && signupMailVia() !== "supabase";
-  let remote: { id: string; confirmed: boolean } | null = null;
-  let hashedToken: string | null = null;
-  let mail: SignupMailFlag | undefined;
-  if (!auth.url) {
-    remote = null;
-  } else if (!appMail) {
-    const legacy = await supabaseSignUp(email, input.password, input.origin, metadata);
-    if (legacy === "duplicate") return { ok: false, error: "duplicate" };
-    if (legacy === "unavailable") return { ok: false, error: "required" };
-    remote = legacy;
-  } else {
-    // Refuse before generate_link so a brake does not create a user or burn a confirmation token.
-    const gate = await gateSignupMail(null, email, input.meta.ip);
-    if (gate !== "ok") {
-      return { ok: true, status: "verify", email, devToken: null, mail: gate === "wait" ? "wait" : "failed" };
-    }
-    const issued = await createSignupLink({
-      email,
-      password: input.password,
-      data: metadata,
-      origin: input.origin,
+  try {
+    if (input.consent !== true) return { ok: false, error: "consent" };
+    const acceptedAt = new Date();
+    const metadata = signupConsentMetadata(acceptedAt);
+    const email = normalizeEmail(input.email);
+    const hardening = await sessionHardeningEnabled();
+    const looked = await inTx(async (client) => {
+      await client.query(`SELECT crypt($1, gen_salt('bf'))`, [input.password || "placeholder"]);
+      if (!email) return { kind: "email" as const };
+      if (input.password !== input.confirm) return { kind: "mismatch" as const };
+      if (!passwordAcceptable(input.password)) return { kind: "weak" as const };
+      const existing = await findUser(client, email);
+      const code = await draftCode(client, input.partnerCode);
+      if (!existing) return { kind: "new" as const, code };
+      const epoch = await captureCredentialEpoch(existing.id, client, hardening);
+      const matches = await passwordMatches(client, existing.id, input.password);
+      return { kind: "existing" as const, existing, matches, code, epoch };
     });
-    if (!issued.ok) {
-      if (issued.error === "duplicate") return { ok: false, error: "duplicate" };
-      if (issued.error === "weak") return { ok: false, error: "weak" };
-      return { ok: false, error: "required" };
+    if (looked.kind === "email" || !email) return { ok: false, error: "email" };
+    if (looked.kind === "mismatch") return { ok: false, error: "mismatch" };
+    if (looked.kind === "weak") return { ok: false, error: "weak" };
+
+    if (looked.kind === "existing") {
+      const { existing, matches, code } = looked;
+      if (existing.has_firm || existing.email_confirmed_at) {
+        if (existing.email_confirmed_at && matches && !existing.has_firm) {
+          await inTx((client) =>
+            client.query(
+              `INSERT INTO signup_drafts (user_id, partner_code) VALUES ($1, $2)
+             ON CONFLICT (user_id) DO UPDATE SET partner_code = EXCLUDED.partner_code`,
+              [existing.id, code],
+            ),
+          );
+          if (looked.epoch === null) await writeConsent(existing.id, "signup", acceptedAt);
+          const token = await withCredentialFence(existing.id, looked.epoch, async (client) => {
+            if (client) await writeConsent(existing.id, "signup", acceptedAt, {
+              ...consentRepository, write: async (id, record) => {
+                await client.query(`INSERT INTO public.consents (user_id, accepted_at, terms_version, privacy_version, source)
+                  VALUES ($1, $2, $3, $4, $5)
+                  ON CONFLICT (user_id, accepted_at, terms_version, privacy_version, source) DO NOTHING`,
+                [id, record.accepted_at, record.terms_version, record.privacy_version, record.source]);
+                await writeConsentSql(id, record, client);
+              },
+            });
+            return createSession(existing.id, true, input.meta, client);
+          });
+          return { ok: true, status: "firm", token };
+        }
+        return { ok: false, error: "duplicate" };
+      }
+      // Leave auth.users alone. An admin password update clears confirmation_token and
+      // confirmation_sent_at, which expires the link already in the inbox, and this path does not send a new email.
+      // Consent only after the password matches. A wrong password still returns the verify
+      // page, so knowing an unconfirmed email cannot stamp this account. That person's
+      // own first login hits the re-consent gate.
+      if (matches) await writeConsent(existing.id, "signup", acceptedAt);
+      const token = await inTx((client) => finishUnconfirmed(client, existing.id, email, code));
+      return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? token : null };
     }
-    remote = { id: issued.userId, confirmed: issued.confirmed };
-    hashedToken = issued.hashedToken;
-  }
-  let userId = remote?.id ?? "";
-  const confirmed = remote?.confirmed ?? false;
-  const saved = await inTx(async (client) => {
-    if (!remote) {
-      const inserted = await client.query<{ id: string }>(
-        `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
+
+    const auth = supabaseAuth();
+    const appMail = Boolean(auth.url) && signupMailVia() !== "supabase";
+    let remote: { id: string; confirmed: boolean } | null = null;
+    let hashedToken: string | null = null;
+    let mail: SignupMailFlag | undefined;
+    if (!auth.url) {
+      remote = null;
+    } else if (!appMail) {
+      const legacy = await supabaseSignUp(email, input.password, input.origin, metadata);
+      if (legacy === "duplicate") return { ok: false, error: "duplicate" };
+      if (legacy === "unavailable") return { ok: false, error: "required" };
+      remote = legacy;
+    } else {
+      // Refuse before generate_link so a brake does not create a user or burn a confirmation token.
+      const gate = await gateSignupMail(null, email, input.meta.ip);
+      if (gate !== "ok") {
+        return { ok: true, status: "verify", email, devToken: null, mail: gate === "wait" ? "wait" : "failed" };
+      }
+      const issued = await createSignupLink({
+        email,
+        password: input.password,
+        data: metadata,
+        origin: input.origin,
+      });
+      if (!issued.ok) {
+        if (issued.error === "duplicate") return { ok: false, error: "duplicate" };
+        if (issued.error === "weak") return { ok: false, error: "weak" };
+        return { ok: false, error: "required" };
+      }
+      remote = { id: issued.userId, confirmed: issued.confirmed };
+      hashedToken = issued.hashedToken;
+    }
+    let userId = remote?.id ?? "";
+    const confirmed = remote?.confirmed ?? false;
+    const saved = await inTx(async (client) => {
+      if (!remote) {
+        const inserted = await client.query<{ id: string }>(
+          `INSERT INTO auth.users (id, email, encrypted_password, raw_user_meta_data, role, aud)
          VALUES (gen_random_uuid(), $1, crypt($2, gen_salt('bf')), $3::jsonb, 'authenticated', 'authenticated')
          RETURNING id::text`,
-        [email, input.password, JSON.stringify(metadata)],
-      );
-      userId = inserted.rows[0].id;
+          [email, input.password, JSON.stringify(metadata)],
+        );
+        userId = inserted.rows[0].id;
+      }
+      const token = await finishUnconfirmed(client, userId, email, looked.code);
+      return token;
+    }).catch((error: unknown) => {
+      const code = typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
+      if (code === "23505") return "duplicate" as const;
+      throw error;
+    });
+    if (saved === "duplicate") return { ok: false, error: "duplicate" };
+    if (!userId) return { ok: false, error: "required" };
+    await writeConsent(userId, "signup", acceptedAt);
+    if (confirmed) {
+      await markConfirmed(userId, email);
+      const token = await withCredentialFence(userId, hardening ? "0" : null, (client) => createSession(userId, true, input.meta, client));
+      return { ok: true, status: "firm", token };
     }
-    const token = await finishUnconfirmed(client, userId, email, looked.code);
-    return token;
-  }).catch((error: unknown) => {
-    const code = typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
-    if (code === "23505") return "duplicate" as const;
+    if (hashedToken) {
+      const delivered = await deliverSignupMail(email, hashedToken, input.origin);
+      if (!delivered) mail = "failed";
+    }
+    return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null, ...(mail ? { mail } : {}) };
+  } catch (error) {
+    if (credentialsChanged(error)) return { ok: false, error: "duplicate" };
     throw error;
-  });
-  if (saved === "duplicate") return { ok: false, error: "duplicate" };
-  if (!userId) return { ok: false, error: "required" };
-  await writeConsent(userId, "signup", acceptedAt);
-  if (confirmed) {
-    await markConfirmed(userId, email);
-    const token = await createSession(userId, true, input.meta);
-    return { ok: true, status: "firm", token };
   }
-  if (hashedToken) {
-    const delivered = await deliverSignupMail(email, hashedToken, input.origin);
-    if (!delivered) mail = "failed";
-  }
-  return { ok: true, status: "verify", email, devToken: signupLinksExposed() ? saved : null, ...(mail ? { mail } : {}) };
 }
 
 export async function resendSignup(emailRaw: string, origin: string, ip?: string | null) {
