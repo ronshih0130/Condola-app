@@ -52,3 +52,51 @@ No lifecycle replies, messaging, profile/security/session or notification-prefer
 3. Listing writes no audit (tenant list precedent); only open/download are audited.
 4. Repair status shown to a current owner is the live ticket status (which may reflect an internal-entry change), while internal entries are never listed.
 5. `/o/files` naming chosen to match `/o/statements`, `/o/approvals`.
+
+---
+
+# Slice 2：屋主租約回覆與公司訊息
+
+> Author: Claude FALLBACK-SUBAGENT implementer (Codex unavailable), 2026-11-06 PT. Branch `feat/b-023-owner-replies-messages` on slice 1 @ 674d826. Same flag `owner_portal_extensions` (default OFF). Migration `20261107113000_b023_owner_replies_messages.sql` (additive; slice 1's migration untouched).
+
+## 能力 ID
+
+- Covered: CAP-O-10 / OWN-07–08 lifecycle replies (owner text reply to B-012 renewal-intent / non-renewal / early-termination notices; owner, tenant and company responses kept separate); CAP-O-11 company messaging (one owner ↔ company thread per property per owner, text only).
+- Not built (slice 3): profile / security / sessions, notification preferences. Also not built: staff inbox listing of owner threads, notifications on new owner messages, attachments, settlement replies (OWN-09).
+
+## Done means
+
+With `owner_portal_extensions` ON (and `lease_renewal` ON for lifecycle items), an owner with **current** authority opens `/o/lifecycle`, sees the latest version of each B-012 notice on non-draft leases of their current properties (kind, who filed it — 租客／公司／屋主, dates, term; no notice text, actors or other parties' responses), opens `/o/lifecycle/<recordId>` and sends a text reply that is stored only in `app.b023_owner_lifecycle_replies`. `/o/messages` lists one row per currently authorized property; `/o/messages/<propertyId>` shows that owner's own thread (their messages + company messages) and sends text. Flag OFF: all four routes 404, actions return `unavailable`, no nav entries, zero writes.
+
+## Reuse decisions
+
+- **Lifecycle model = B-012** (`app.b012_notice_versions`). B-012 already has an explicit owner response action (`b012_respond_notice`, party `owner`, agree/disagree/undecided). Per the rule, it is **not changed and not invoked**. A B-023 reply is a separate append-only record referencing `(record_id, notice_version)`; it carries no stance, so no consent, signature, confirmation, approval or decision can be inferred. B-012 tenant/management/owner responses are never read into, merged with or replaced by owner replies; the owner page shows only the caller's own replies (co-owners each see only their own).
+- **Thread model = `public.message_threads` / `public.messages`**. Additive enum value `thread_kind = 'owner_company'` (lease_id NULL) and a private link `app.b023_owner_threads(thread_id, property_id, owner_contact_id)` (UNIQUE per property/owner). Owners are **not** `thread_participants`, so existing portal RLS (`app.in_thread`) never admits them or tenants; owners read/write only via definer gateways. Staff read through existing `team_read`; company replies use the existing staff `postMessage` path and `messages.send` permission (no staff permission or policy changes). Existing staff/tenant queries filter `kind = 'lease'` or join leases, so owner threads do not appear in tenant views.
+- **Authority = slice 1** (`b023_owner_contact`, `b023_owner_authority`), current window only (property-local today, exclusive end). Lifecycle items additionally require the lease term to overlap the current window (successor owners do not get predecessor-period leases).
+
+## Writes, idempotency, locks
+
+- `app.b023_reply_owner_lifecycle(org, session, record, notice_version, request, body)` and `app.b023_post_owner_message(org, session, property, request, body)`: `jsonb {state}` = `recorded | replayed | conflict | stale | invalid`; every denial (flag OFF, revoked session, ended/no authority, foreign/draft/cross-org id, staff, borrowed session id) raises 42501 with zero writes. Exact replay ⇒ `replayed` with the same id (also after the notice changes); reuse with another payload ⇒ `conflict`. Lifecycle replies to an older notice version ⇒ `stale`.
+- Recent authority recheck at submit, under locks: platform_settings rows (`lease_renewal`, `owner_portal_extensions` by key) SHARE → organization SHARE → `auth_sessions` row SHARE → owner contact SHARE → caller's `property_owners` rows SHARE → (lifecycle) lease SHARE (B-012 notice writers take it FOR UPDATE) → request / thread advisory locks → re-admission through the same scope the reader uses.
+- Message idempotency ledger `app.b023_owner_message_requests` stores a SHA-256 body digest (not the body). New tables: RLS on, REVOKE ALL from PUBLIC/anon/authenticated/service_role, immutable triggers (thread link: no UPDATE; deletable only by cascade when staff delete the thread).
+- POST convention = B-022: Next server actions (`owner-replies-messages-actions.ts`, same-origin enforced by Next), `requireCurrentConsent()` first; the client keeps one request id per text and reuses it on retry.
+
+## 驗證方式
+
+`src/server/b023-owner-replies-messages.integration.test.ts` (9 tests after review r1): owners A (current P1, ended P3), A2 (co-owner P1), B (P2), C (P3 successor), D (org 2), tenant T on P1. Separation (tenant + company responses created through B-012; owner reply leaves `b012_*` tables, tenant/staff B-012 views and consent snapshot byte-identical), projection allowlists and secret-string absence, idempotent replay/conflict/invalid/stale with zero extra rows, ended authority (exclusive end today) and revoked session ⇒ denied, zero writes, foreign/cross-org/draft/staff/borrowed-session ids ⇒ 42501, private helpers not executable, thread per property/owner on `message_threads`, co-owner thread isolation, staff reply via existing path visible as 公司, no owner/tenant RLS read of owner threads, deleted messages hidden, OFF matrix (9 global/org cases + `lease_renewal` OFF) ⇒ null/unavailable, no `app.b023_` call, raw RPC 42501, zero writes. Unit `src/server/owner-replies-messages.test.ts` + `owner-nav.test.ts`. Evidence: `e2e/results/B-023/{integration-b023-owner-replies-messages.tap, unit-owner-replies-messages.tap, slice2-gates.json}`.
+
+## Assumptions / open items
+
+1. Lifecycle replies require both `owner_portal_extensions` and `lease_renewal`; B-012 items are never surfaced while B-012 is OFF.
+2. Owner pages show no notice body (may contain tenant text); kind/party/dates only. CEO may choose to show owner-filed or company-filed text later.
+3. Ended-authority owners lose read access to their past threads and replies (fail-closed; history view could be a later decision).
+4. Staff replies through the existing `postMessage` path are not request-id idempotent (existing behaviour, unchanged). Notifying staff of new owner messages is out of scope (slice 3 preferences).
+5. Text length: the client (`ownerText`, textarea `maxLength`) counts UTF-16 code units, SQL `length()` counts characters, so an astral character (e.g. emoji) counts 2 in JS and 1 in SQL. The JS check is therefore never looser than SQL: text the client accepts always fits; a few near-limit emoji-heavy texts are rejected client-side (`invalid`) although SQL would accept them.
+
+## Review r1 fixes (company visibility and message hygiene)
+
+- **Staff surfaces (read-only, existing roles only).** `app.b023_staff_owner_threads(org)` lists owner ↔ company threads (property, owner display name, last activity, preview) and is shown as a separate 屋主訊息 section on `/m/messages` (role gate `messages.send` = admin/manager, same as the inbox route); the lease-thread `listThreads` query is untouched. Staff open the thread at the existing `/m/messages/<id>` and reply through the existing `postMessage`. `app.b023_staff_owner_lifecycle_replies(org, lease)` lists owner replies (notice kind/version, owner name, text, time) on the staff lease page summary tab (`leases.edit` = admin/manager, the B-012 management roles), labelled as separate from tenant/company responses and never agreement/confirmation/approval. Both require `owner_portal_extensions` (replies also `lease_renewal`), `app.has_role(org, admin|manager)` with active-org pinning; other roles, other orgs, owners, tenants and `anon` get 42501; OFF ⇒ the TS reader returns null after one flag read, no `app.b023_` call, nothing rendered.
+- **Replay of a deleted message** (soft `deleted_at` or hard delete by staff `team_update`/`team_delete`) returns `gone`, never `replayed` with a dangling id.
+- **Edited marker.** The owner gateway returns `edited` = `edited_at` set, or (owner's own message) body no longer matches the digest recorded at send; shown as 已編輯 / Edited.
+- **Volume cap.** At most 30 owner messages per thread per rolling 24 h (counted from `public.messages`, incl. soft-deleted); further posts return `rate_limited` with zero writes and zh-TW/en copy.
+- Tests: integration now 9 (staff admin/manager see threads + replies; accountant/maintenance/other org/owner/tenant/anon denied; foreign lease denied; inbox lease query unchanged; gone/edited/cap; OFF matrix covers both staff readers).

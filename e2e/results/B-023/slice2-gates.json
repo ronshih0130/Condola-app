@@ -1,0 +1,52 @@
+{
+  "lane": "B-023 slice 2 (owner lifecycle replies + owner<->company messaging)",
+  "flag": "owner_portal_extensions (strict, reused from slice 1); lifecycle replies also require lease_renewal (B-012)",
+  "base": "feat/b-023-owner-replies-messages on 674d826 (uncommitted worktree)",
+  "migration": "supabase/migrations/20261107113000_b023_owner_replies_messages.sql",
+  "db": "local disposable PostgreSQL 16 (127.0.0.1:55432/condola_b023s2): stub + all migrations + db:reset; each integration file run alone with --test-concurrency=1",
+  "results": {
+    "typecheck": "PASS",
+    "lint": "PASS (0 errors, 15 pre-existing warnings, none in changed files)",
+    "copy:check": "PASS 6/6",
+    "test:unit": "PASS 992/992 (includes consent-entrypoints, lease-rules migration list, write-pr-migrations, owner-nav, owner-replies-messages)",
+    "src/server/b023-owner-replies-messages.integration.test.ts": "PASS 9/9",
+    "src/server/b023-owner-portal-access.integration.test.ts (slice 1)": "PASS 6/6",
+    "src/server/b022-owner-replies.integration.test.ts": "PASS 11/11",
+    "src/server/b012-durable-replacement.integration.test.ts": "PASS 36/36",
+    "src/server/b014-owner-net-ledger.integration.test.ts": "PASS 12/12 (pre-r1 run)",
+    "src/server/owner-home.integration.test.ts": "PASS 1/1 (pre-r1 run)",
+    "src/server/owner-transfers.integration.test.ts": "PASS 1/1 (pre-r1 run)",
+    "src/server/property-owner.integration.test.ts": "PASS 1/1 (pre-r1 run)",
+    "scripts/check-function-privileges.sh": "PASS (anon execute zero; allowlist matches)",
+    "src/server/id-docs.integration.test.ts (staff lease-thread messages)": "PASS 15/15",
+    "src/server/org-isolation.integration.test.ts": "PASS 3/3",
+    "B-027 inventory": "not present in this worktree"
+  },
+  "off_cases": [
+    "platform_settings row absent",
+    "enabled false (org flag true)",
+    "enabled \"true\" (string)",
+    "allowed_org_ids not an array",
+    "global value not an object",
+    "org not in allowed_org_ids",
+    "org flag false",
+    "org flag \"true\" (string)",
+    "org flag absent",
+    "lease_renewal OFF (lifecycle only; messaging unaffected)"
+  ],
+  "asserted_per_off_case": {
+    "GET /o/lifecycle, /o/lifecycle/<id>, /o/messages, /o/messages/<propertyId>": "service returns null => notFound() 404",
+    "POST reply/message server actions": "{state:'unavailable'}",
+    "nav": "no /o/lifecycle or /o/messages entries; OFF markup identical (owner-nav.test.ts)",
+    "app.b023_* gateways called by app code": "none (Client.query spy)",
+    "direct RPC as owner": "42501 for all six gateways",
+    "B-023 tables, public.messages, public.message_threads": "unchanged (zero writes)",
+    "consent/signature/confirmation/read/B-012 notice+response/audit_log snapshot": "unchanged",
+    "staff /m/messages owner section and lease-page owner replies": "reader null => nothing rendered; raw staff RPC 42501"
+  },
+  "tap": [
+    "integration-b023-owner-replies-messages.tap",
+    "unit-owner-replies-messages.tap"
+  ],
+  "review_r1": "MAJOR fixed (read-only staff owner-thread inbox section + owner replies on staff lease page, admin/manager only); MINORs fixed (replay of deleted message => gone; edited flag; 30/24h cap => rate_limited; UTF-16 vs SQL length note)"
+}
