@@ -1,5 +1,7 @@
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
+import { repairApprovalsEnabled } from "./repair-approval";
+import { assertIdentifiers } from "./repair-approval-rules";
 import { maybe, svc, tx } from "./db";
 import { insertPostedRepairExpense } from "./expenses";
 import { FlowError } from "./errors";
@@ -159,6 +161,25 @@ export async function orgVendorDispatchEnabled(orgId: string) {
     planTier: row.plan_tier,
     featureFlags: row.feature_flags,
   });
+}
+
+export async function currentRepairVersionId(client: Client, orgId: string, ticketId: string) {
+  assertIdentifiers(orgId, ticketId);
+  const row = await maybe<{ version_id: string | null }>(client,
+    "SELECT h.current_version_id::text AS version_id"
+    + " FROM app.b013_estimate_heads h WHERE h.org_id=$1::uuid AND h.ticket_id=$2::uuid",
+    [orgId, ticketId],
+  );
+  if (row?.version_id) assertIdentifiers(row.version_id);
+  return row?.version_id ?? null;
+}
+
+export async function repairDispatchAllowed(client: Client, orgId: string, versionId: string) {
+  const row = await maybe<{ r: boolean }>(client,
+    "SELECT app.b013_dispatch_allowed($1::uuid,$2::uuid) AS r",
+    [orgId, versionId],
+  );
+  return row?.r === true;
 }
 
 async function vendorLinkEnabledOn(client: Client, orgId: string) {
@@ -802,6 +823,12 @@ export async function submitVendorReport(token: string, input: { done: boolean; 
     if (job.reported_at) return;
     const ticket = lockedTicket ?? await loadTicket(client, job.ticket_id, job.org_id);
     if (!ticket || !reportableTicket(ticket.status)) throw new FlowError("errors.notFound");
+    if (await orgVendorDispatchEnabled(job.org_id) && await repairApprovalsEnabled(job.org_id)) {
+      const versionId = await currentRepairVersionId(client, job.org_id, job.ticket_id);
+      if (!versionId || !(await repairDispatchAllowed(client, job.org_id, versionId))) {
+        throw new FlowError("errors.forbidden");
+      }
+    }
     const completed = vendorCompletedOn(ticket.scheduled_on, today);
     const currency = (ticket.currency || ticket.property_currency).trim();
     const updated = await client.query(

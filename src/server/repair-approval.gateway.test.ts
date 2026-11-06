@@ -36,6 +36,7 @@ test("B-021 production callers are confined to the owner decision and scoped vie
     "app/o/approvals/decision-form.tsx",
     "app/o/approvals/page.tsx",
     "server/vendor-job.ts",
+    "server/vendor-repair.ts",
   ].sort());
 });
 
