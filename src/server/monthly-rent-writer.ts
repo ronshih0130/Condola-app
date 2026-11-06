@@ -14,6 +14,10 @@ const CAP = 2000;
 type Input = { leaseId: string; month: string; requestId: string; expectedDigest: string };
 type Receipt = { id: string; invoice_id: string; plan_digest: string; amount_minor: string };
 
+async function leaseVisible(client: Client, orgId: string, leaseId: string): Promise<boolean> {
+  return (await client.query(`SELECT 1 FROM leases WHERE org_id=$1 AND id=$2`, [orgId, leaseId])).rows.length > 0;
+}
+
 // svcOn owns a transaction normally. Map its boundaries to a savepoint here so
 // privileged receipt access cannot commit the surrounding authenticated work.
 async function receipts<T>(client: Client, session: Session, fn: (c: Client) => Promise<T>): Promise<T> {
@@ -52,12 +56,17 @@ export async function readMonthlyRentHistory(
     if (error instanceof TypeError) return { status: 'rejected_invalid' };
     throw error;
   }
-  if (session.kind !== 'staff') return { status: 'rejected_disabled' };
+  if (session.kind !== 'staff' || !['admin', 'accountant'].includes(session.role ?? ''))
+    return { status: 'rejected_disabled' };
   if (!isUuid(input.leaseId)) return { status: 'rejected_invalid' };
-  return tx(session.userId, client => receipts(client, session, async service => {
-    const row = await occurrence(service, session.orgId, input.leaseId, period.start);
-    return row ? result(row, 'already_issued') : null;
-  }), { orgId: session.orgId, environment: session.environment });
+  return tx(session.userId, async client => {
+    if (!(await billingPreviewsEnabled(client, session.orgId))) return { status: 'rejected_disabled' };
+    if (!(await leaseVisible(client, session.orgId, input.leaseId))) return null;
+    return receipts(client, session, async service => {
+      const row = await occurrence(service, session.orgId, input.leaseId, period.start);
+      return row ? result(row, 'already_issued') : null;
+    });
+  }, { orgId: session.orgId, environment: session.environment });
 }
 
 export async function writeMonthlyRent(session: Session, input: Input): Promise<IssuanceResult> {
@@ -83,6 +92,7 @@ export async function writeMonthlyRent(session: Session, input: Input): Promise<
       [session.orgId, `${session.userId}:${requestId}`]);
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
       [session.orgId, `monthly-rent:${leaseId}`]);
+    if (!(await leaseVisible(client, session.orgId, leaseId))) return { status: 'unsupported' };
     const replay = await receipts(client, session, async service => (
       await service.query<Receipt & { intent_digest: string; result_kind: 'created' | 'already_issued' }>(
         `SELECT o.id::text,o.original_invoice_id::text AS invoice_id,o.plan_digest,o.amount_minor::text,
@@ -148,7 +158,7 @@ export async function writeMonthlyRent(session: Session, input: Input): Promise<
       p.dueDate, p.periodStart, p.periodEnd, p.amountMinor, session.userId])).rows[0];
     const rentLine = (await client.query(`INSERT INTO invoice_lines
       (id,org_id,invoice_id,line_no,charge_type,description,quantity,unit_amount_minor,amount_minor,service_period)
-      VALUES ($1,$2,$3,1,'rent','rent',1,$4,$4,daterange($5::date,$6::date,'[)')) RETURNING *`,
+      VALUES ($1,$2,$3,1,'rent','rent',1,$4::numeric,$4::bigint,daterange($5::date,$6::date,'[)')) RETURNING *`,
       [rentLineId, session.orgId, invoiceId, p.amountMinor, p.periodStart, p.servicePeriodEndExclusive])).rows[0];
     const ledgerTransaction = (await client.query(`INSERT INTO ledger_transactions
       (id,org_id,property_id,lease_id,kind,currency,effective_date,description,source_table,source_id,created_by)
@@ -156,7 +166,7 @@ export async function writeMonthlyRent(session: Session, input: Input): Promise<
       [ledgerTransactionId, session.orgId, p.propertyId, leaseId, p.currency, number, invoiceId, session.userId])).rows[0];
     const ledgerEntries = (await client.query(`INSERT INTO ledger_entries
       (org_id,transaction_id,account,amount_minor,currency,contact_id,property_id,lease_id,invoice_id,memo)
-      VALUES ($1,$2,'tenant_receivable',$3,$4,$5,$6,$7,$8,'invoice'),
+      VALUES ($1,$2,'tenant_receivable',$3::bigint,$4,$5,$6,$7,$8,'invoice'),
              ($1,$2,'rental_income',-($3::bigint),$4,$5,$6,$7,$8,'rent') RETURNING *`,
       [session.orgId, ledgerTransactionId, p.amountMinor, p.currency, p.payerId, p.propertyId, leaseId, invoiceId])).rows;
     await client.query(`UPDATE invoices SET ledger_transaction_id=$2 WHERE id=$1`, [invoiceId, ledgerTransactionId]);
