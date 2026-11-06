@@ -114,13 +114,15 @@ export async function readVendorPaperScanOn(client: Client, access: Access, id: 
 export async function vendorDocumentHistoryOn(client: Client, access: Access) {
   const rows = await many<{
     id: string; status: "issued" | "voided"; snapshot: {
-      document: VendorDocument; profileVersionId: string;
+      document: VendorDocument; profileVersionId: string | null;
       issuer: { display_name: string; business_name: string | null };
-    }; version: number; sha256: string;
+    }; version: number | null; sha256: string;
   }>(client, `SELECT d.id::text,d.status,p.snapshot,v.version,d.pdf_sha256 AS sha256
     FROM vendor_documents d JOIN vendor_document_pdf_bytes p ON p.document_id=d.id AND p.org_id=d.org_id
-    JOIN vendor_profile_versions v ON v.id=d.vendor_profile_version_id AND v.org_id=d.org_id AND v.vendor_profile_id=d.vendor_profile_id
-    WHERE d.org_id=$1 AND d.ticket_id=$2 AND d.vendor_profile_id=$3 ORDER BY d.issued_at,d.id`,
+    LEFT JOIN vendor_profile_versions v ON v.id=d.vendor_profile_version_id AND v.org_id=d.org_id AND v.vendor_profile_id=d.vendor_profile_id
+    WHERE d.org_id=$1 AND d.ticket_id=$2 AND d.vendor_profile_id=$3
+      AND (d.vendor_profile_version_id IS NULL OR v.id IS NOT NULL)
+    ORDER BY d.issued_at,d.id`,
   [access.orgId, access.ticket.id, access.profile.id]);
   return Promise.all(rows.map(async (row) => ({
     id: row.id, status: row.status, docNo: row.snapshot.document.doc_no, kind: row.snapshot.document.kind,

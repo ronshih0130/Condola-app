@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106230000_b025_legacy_zero_history_seal.sql": {
+    addOnly: false,
+    reason: "Replaces the service-only legacy seal gateway so zero-history legacy business profiles read their seal from the live profile under the same grant/flag admission; versioned profiles are unchanged. No table, column, grant widening or flag activation.",
+  },
   "supabase/migrations/20261106170000_b025_vendor_document_integrity.sql": {
     addOnly: false,
     reason: "Adds private immutable paper-scan siblings with RLS and service-only grant-scoped gateways; adds snapshot-reference guards without backfill or flag activation. Existing profile versions and PDF snapshots are reused.",

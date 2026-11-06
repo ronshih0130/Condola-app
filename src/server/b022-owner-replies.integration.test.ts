@@ -268,6 +268,31 @@ test("existing vendor receipt loader blocks empty owner title and emits only kin
   assert.ok(result.bytes.length>0);
 });
 
+test("BLK-MAC-15: legacy vendor profile without version rows previews from live columns; history without the current version fails closed",async()=>{
+  const f=await fixture();
+  await db.query(`UPDATE property_owners SET effective_from=current_date WHERE owner_contact_id=$1`,[f.contact]);
+  await db.query(`UPDATE properties SET address_display='Synthetic work address' WHERE id=$1`,[f.property]);
+  assert.equal((await title("Legacy receipt title")).state,"recorded");
+  const vendor=(await db.query(`INSERT INTO contacts(org_id,is_vendor,display_name) VALUES($1,true,'Legacy vendor') RETURNING id`,[ORG_ID])).rows[0].id;
+  const profile=(await db.query(`INSERT INTO vendor_profiles(org_id,contact_id,vendor_code,kind,display_name,phone_e164)
+    VALUES($1,$2,'B022LEGACY','individual','Legacy live name','+12025550126') RETURNING id`,[ORG_ID,vendor])).rows[0].id;
+  assert.equal((await db.query(`SELECT count(*)::int n FROM vendor_profile_versions WHERE vendor_profile_id=$1`,[profile])).rows[0].n,0);
+  const ticket=(await db.query(`INSERT INTO maintenance_tickets(org_id,ticket_number,property_id,status,title,assigned_vendor_contact_id,currency,final_cost_minor,type_fields)
+    VALUES($1,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$1),$2,'closed','Legacy repair',$3,'TWD',10000,'{"pricing":{"mode":"lump_sum"}}'::jsonb) RETURNING id`,[ORG_ID,f.property,vendor])).rows[0].id;
+  const context:VendorDocumentContext={actor:staff,ticketId:ticket,vendorProfileId:profile,buyer:{kind:"owner",contactId:f.contact},
+    items:[{name:"Repair",quantity:1,unit:"job",unit_price_minor:100,amount_minor:100,category:"service"}],totalMinor:100,
+    documentDate:"2026-01-01",fontBytes:readFileSync(new URL("../../public/fonts/DroidSansFallback-subset.ttf",import.meta.url))};
+  const legacy=await previewVendorDocument(context);
+  assert.deepEqual(legacy.document.buyer,{kind:"owner",receipt_title:"Legacy receipt title"});
+  assert.equal(legacy.document.total_minor,100);
+  assert.ok(legacy.bytes.length>0);
+  // A history row exists but none for the profile's current_version: inconsistent snapshot state fails closed.
+  const current=Number((await db.query(`SELECT current_version FROM vendor_profiles WHERE id=$1`,[profile])).rows[0].current_version);
+  await db.query(`INSERT INTO vendor_profile_versions(org_id,vendor_profile_id,version,kind,display_name,phone_e164)
+    VALUES($1,$2,$3,'individual','Stale snapshot name','+12025550126')`,[ORG_ID,profile,current+7]);
+  await assert.rejects(()=>previewVendorDocument(context),{message:"errors.notFound"});
+});
+
 async function waitForBlocked(){
   const deadline=Date.now()+5000;
   while(Date.now()<deadline){

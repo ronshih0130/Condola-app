@@ -714,12 +714,19 @@ export async function issueVendorDocumentOn(
   const input = await issueInput(client, access, ctx, id, seq);
   const document = source ? applyReissueRules(source, input) : applyIssueRules(input);
   const pdf = await renderOn(client, access, ctx, document, allocation.issued_at, false);
-  const version = await one<{ id: string }>(
+  const current = await maybe<{ id: string }>(
     client,
     `SELECT id::text FROM vendor_profile_versions
       WHERE org_id = $1 AND vendor_profile_id = $2 AND version = $3`,
     [access.orgId, access.profile.id, access.profile.current_version],
   );
+  // BLK-MAC-15: a legacy profile with no version history issues with a NULL
+  // snapshot reference (the PDF snapshot below still freezes the issuer). Any
+  // history without the current row is inconsistent and fails closed.
+  if (!current && await maybe<{ one: number }>(client,
+    `SELECT 1 AS one FROM vendor_profile_versions WHERE org_id=$1 AND vendor_profile_id=$2 LIMIT 1`,
+    [access.orgId, access.profile.id])) notFound();
+  const version = { id: current?.id ?? null };
   await client.query(
     `INSERT INTO vendor_documents
        (id,org_id,vendor_profile_id,vendor_profile_version_id,ticket_id,

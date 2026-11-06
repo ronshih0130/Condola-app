@@ -47,7 +47,7 @@ async function flag(on: boolean) {
   await db.query(`UPDATE platform_settings SET value=jsonb_build_object('enabled',$1::boolean,'allowed_org_ids',jsonb_build_array($2::text)) WHERE key='vendor_documents'`, [on, ORG_ID]);
   await db.query(`UPDATE organizations SET feature_flags=feature_flags || jsonb_build_object('vendor_documents',$1::boolean) WHERE id=$2`, [on, ORG_ID]);
 }
-async function fixture(orgId = ORG_ID) {
+async function fixture(orgId = ORG_ID, versioned = true) {
   const property = (await db.query(`SELECT id FROM properties WHERE org_id=$1 AND archived_at IS NULL AND address_display IS NOT NULL LIMIT 1`, [orgId])).rows[0].id;
   const owner = (await db.query(`INSERT INTO contacts(org_id,is_owner,display_name,receipt_title,email) VALUES($1,true,'PRIVATE OWNER','Owner supplied title','private@example.invalid') RETURNING id`, [orgId])).rows[0].id;
   await db.query(`INSERT INTO property_owners(org_id,property_id,owner_contact_id,is_primary) VALUES($1,$2,$3,false)`, [orgId, property, owner]);
@@ -57,7 +57,7 @@ async function fixture(orgId = ORG_ID) {
   await db.query(`INSERT INTO files(id,org_id,storage_bucket,storage_path,file_name,mime_type,size_bytes) VALUES($1,$2,$3,$4,'seal.png','image/png',$5)`, [file, orgId, PHOTO_BUCKET, sealPath, seal.length]);
   const profile = (await db.query(`INSERT INTO vendor_profiles(org_id,contact_id,vendor_code,kind,display_name,business_name,representative_name,tax_id,phone_e164,address,qualification_attested_at,seal_file_id)
     VALUES($1,$2,'B025','business','Vendor fixture','Business','Representative','04595257','+12025550125','Address',now(),$3) RETURNING id`, [orgId, contact, file])).rows[0].id;
-  await db.query(`INSERT INTO vendor_profile_versions(org_id,vendor_profile_id,version,kind,display_name,business_name,representative_name,tax_id,phone_e164,address,qualification_attested_at,seal_file_id)
+  if (versioned) await db.query(`INSERT INTO vendor_profile_versions(org_id,vendor_profile_id,version,kind,display_name,business_name,representative_name,tax_id,phone_e164,address,qualification_attested_at,seal_file_id)
     SELECT org_id,id,1,kind,display_name,business_name,representative_name,tax_id,phone_e164,address,qualification_attested_at,seal_file_id FROM vendor_profiles WHERE id=$1`, [profile]);
   const ticket = (await db.query(`INSERT INTO maintenance_tickets(org_id,ticket_number,property_id,status,title,assigned_vendor_contact_id,currency,final_cost_minor,type_fields)
     VALUES($1,(SELECT coalesce(max(ticket_number),0)+1 FROM maintenance_tickets WHERE org_id=$1),$2,'closed','Fixture repair',$3,'TWD',120000,'{"pricing":{"mode":"lump_sum"}}') RETURNING id`, [orgId, property, contact])).rows[0].id;
@@ -361,4 +361,65 @@ test("B025 integrity: exact trade totals, version snapshots and sibling scans", 
     assert.equal((await POST(request({ token: f.token, action: "history" }))).status, 404);
     await flag(false);
   });
+});
+
+test("BLK-MAC-15: zero-history legacy business profiles preview with their live seal, issue with a NULL snapshot reference and read back", async () => {
+  await flag(true);
+  const legacy = await fixture(ORG_ID, false);
+  assert.equal((await db.query("SELECT count(*)::int n FROM vendor_profile_versions WHERE vendor_profile_id=$1", [legacy.profile])).rows[0].n, 0);
+  const before = await domainState();
+  const preview = await POST(request({ token: legacy.token, ...issueFields, action: "preview", tradeItems: trades }));
+  assert.equal(preview.status, 200);
+  assert.equal((await preview.json()).document.apply_receipt_seal, true);
+  assert.deepEqual(await domainState(), before, "preview writes nothing");
+  await recordReceived(legacy.token, { requestId: randomUUID(), amountMinor: "1200" });
+  const issued = await issue(legacy.token, { tradeItems: trades });
+  assert.equal(issued.status, 200);
+  const stored: StoredVendorDocument = await issued.json();
+  const row = (await db.query("SELECT vendor_profile_version_id FROM vendor_documents WHERE id=$1", [stored.document.id])).rows[0];
+  assert.equal(row.vendor_profile_version_id, null);
+  const snapshot = (await db.query("SELECT snapshot FROM vendor_document_pdf_bytes WHERE document_id=$1", [stored.document.id])).rows[0].snapshot;
+  assert.equal(snapshot.issuer.business_name, "Business");
+  assert.equal(snapshot.profileVersionId, null);
+  const pdf = Buffer.from(await (await PDF(request({ token: legacy.token, documentId: stored.document.id }, true))).arrayBuffer());
+  assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
+  const history = await POST(request({ action: "history", token: legacy.token }));
+  assert.equal(history.status, 200);
+  assert.ok(JSON.stringify(await history.json()).includes(stored.document.id), "legacy document appears in history");
+
+});
+
+test("BLK-MAC-15: history without the current version row fails closed after allocation with every write rolled back", async () => {
+  await flag(true);
+  // Fresh, otherwise issuable legacy fixture (fully paid, no prior document).
+  const broken = await fixture(ORG_ID, false);
+  await recordReceived(broken.token, { requestId: randomUUID(), amountMinor: "1200" });
+  const current = Number((await db.query("SELECT current_version FROM vendor_profiles WHERE id=$1", [broken.profile])).rows[0].current_version);
+  await db.query(`INSERT INTO vendor_profile_versions(org_id,vendor_profile_id,version,kind,display_name,business_name,representative_name,tax_id,phone_e164,address,qualification_attested_at,seal_file_id)
+    SELECT org_id,id,$2,kind,display_name,'Stale snapshot',representative_name,tax_id,phone_e164,address,qualification_attested_at,seal_file_id FROM vendor_profiles WHERE id=$1`, [broken.profile, current + 7]);
+  const inconsistent = await domainState();
+  const seq = (await db.query("SELECT next_seq FROM vendor_issuers WHERE tax_id='04595257'")).rows[0]?.next_seq ?? null;
+  const preview = await POST(request({ token: broken.token, ...issueFields, action: "preview", tradeItems: trades }));
+  assert.equal(preview.status, 404);
+  const issued = await issue(broken.token, { tradeItems: trades });
+  assert.equal(issued.status, 404);
+  assert.ok(!JSON.stringify(await issued.json().catch(() => ({}))).includes("Stale snapshot"));
+  assert.equal((await db.query("SELECT next_seq FROM vendor_issuers WHERE tax_id='04595257'")).rows[0]?.next_seq ?? null, seq, "allocated sequence rolled back");
+  assert.equal((await db.query("SELECT count(*)::int n FROM vendor_documents WHERE vendor_profile_id=$1", [broken.profile])).rows[0].n, 0);
+  assert.deepEqual(await domainState(), inconsistent, "failed preview/issue write nothing");
+});
+
+test("BLK-MAC-15: a versioned profile renders from its current snapshot, not the live columns", async () => {
+  await flag(true);
+  const f = await fixture();
+  await db.query("ALTER TABLE vendor_profiles DISABLE TRIGGER USER");
+  try { await db.query("UPDATE vendor_profiles SET business_name='Live drifted name' WHERE id=$1", [f.profile]); }
+  finally { await db.query("ALTER TABLE vendor_profiles ENABLE TRIGGER USER"); }
+  await recordReceived(f.token, { requestId: randomUUID(), amountMinor: "1200" });
+  const issued = await issue(f.token, { tradeItems: trades });
+  assert.equal(issued.status, 200);
+  const stored: StoredVendorDocument = await issued.json();
+  const snapshot = (await db.query("SELECT snapshot FROM vendor_document_pdf_bytes WHERE document_id=$1", [stored.document.id])).rows[0].snapshot;
+  assert.equal(snapshot.issuer.business_name, "Business");
+  assert.notEqual(snapshot.profileVersionId, null);
 });
