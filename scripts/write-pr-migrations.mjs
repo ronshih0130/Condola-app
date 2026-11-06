@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106190000_b026_vendor_estimates.sql": {
+    addOnly: false,
+    reason: "Adds private immutable vendor estimate provenance, gateways and a default-OFF setting; guards on existing tables restrict scheduling/completion when a persisted estimate lacks approval. Code rollback is compatible for legacy tickets without estimates; persisted estimates remain guarded even with flags OFF, so rollback must preserve B-013 approval handling. No backfill or existing function replacement.",
+  },
   "supabase/migrations/20261106231000_b026_closed_job_notification_read.sql": {
     addOnly: true,
     reason: "Adds a service-only sibling vendor notification gateway used only when the in-process vendor-link kill switch is ON; it delegates to app.b028_center_vendor unless the org is enhanced and the ticket closed, where reads are write-free and marks rejected. No table, column, existing function or flag change.",

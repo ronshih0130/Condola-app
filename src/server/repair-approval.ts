@@ -296,15 +296,26 @@ export function managerApprovalView(session: Session, input: { ticketId: string 
 
 /** Rendering hint only. Gateways independently recheck the registered control. */
 export async function repairApprovalsEnabled(orgId: string): Promise<boolean> {
+  return (await repairApprovalPanelPolicy(orgId)).approvals;
+}
+
+export async function repairApprovalPanelPolicy(orgId: string, includeVendorEstimates = false) {
   assertIdentifiers(orgId);
   return withClient(async (client) => {
-    const row = await maybe<{ enabled: boolean }>(client,
+    const row = await maybe<{ enabled: boolean; estimates?: boolean }>(client,
       "SELECT coalesce((SELECT o.feature_flags->'repair_approvals'='true'::jsonb"
       + " AND f.value->'enabled'='true'::jsonb"
       + " AND jsonb_typeof(f.value->'allowed_org_ids')='array'"
       + " AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)"
       + " FROM public.organizations o CROSS JOIN public.platform_settings f"
-      + " WHERE o.id=$1::uuid AND f.key='repair_approvals'),false) AS enabled", [orgId]);
-    return row?.enabled === true;
+      + " WHERE o.id=$1::uuid AND f.key='repair_approvals'),false) AS enabled"
+      + (includeVendorEstimates ? ", coalesce((SELECT o.feature_flags->'vendor_estimates'='true'::jsonb"
+        + " AND f.value->'enabled'='true'::jsonb AND jsonb_typeof(f.value->'allowed_org_ids')='array'"
+        + " AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)"
+        + " AND coalesce(o.feature_flags->>'vendor_dispatch','') IS DISTINCT FROM 'false'"
+        + " AND (o.environment='sandbox' OR o.plan_tier='beta')"
+        + " FROM public.organizations o CROSS JOIN public.platform_settings f"
+        + " WHERE o.id=$1::uuid AND f.key='vendor_estimates'),false) AS estimates" : ""), [orgId]);
+    return { approvals: row?.enabled === true, estimates: row?.enabled === true && row?.estimates === true };
   });
 }
