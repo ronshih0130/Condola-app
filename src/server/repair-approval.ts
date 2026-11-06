@@ -1,8 +1,8 @@
 /**
- * Build-only (B-013). No production caller; gateways fail closed when repair_approvals/vendor_dispatch OFF.
+ * B-013 shared state; B-021 flag-gated production readers and owner decisions.
  */
 import { createHash } from "node:crypto";
-import { maybe, svc } from "./db";
+import { maybe, svc, withClient } from "./db";
 import { FlowError } from "./errors";
 import {
   assertAppointment,
@@ -183,4 +183,79 @@ export function dispatchAllowed(session: Session, input: { versionId: string }):
       if (typeof value !== "boolean") throw new FlowError("errors.required");
       return value;
     });
+}
+
+export type ApprovalMoney = {
+  version_id: string; version_no: string; amount_minor: string;
+  currency: string; minor_unit: number; captured_threshold_minor: string;
+  submitted_at: string;
+};
+export type OwnerPendingRow = ApprovalMoney & {
+  ticket_id: string; property_id: string; threshold_source: string;
+  work_scope: string; evidence_snapshot: { id: string }[];
+  has_emergency: boolean; reminder_intent_at: string | null;
+};
+export type OwnerHistoryRow = ApprovalMoney & {
+  requires_owner_decision: boolean; decision: string | null;
+  decided_at: string | null; decision_reason: string | null;
+  emergency_category: string | null; emergency_reason: string | null;
+  emergency_photo_refs: { id: string }[];
+  emergency_notice_intent_at: string | null; is_current: boolean;
+};
+export type ManagerApprovalRow = OwnerHistoryRow & {
+  threshold_source: string; submitted_by: string; decided_by: string | null;
+  appointment_event_kind: string | null; appointment_occurred_at: string | null;
+  reminder_intent_at: string | null;
+};
+
+function approvalRows<T>(value: unknown): T[] {
+  const parsed: unknown = typeof value === "string" ? JSON.parse(value) : value;
+  if (!Array.isArray(parsed)) throw new FlowError("errors.required");
+  return parsed as T[];
+}
+
+function readApprovals<T>(
+  session: Session,
+  gateway: "b013_owner_pending" | "b013_owner_history" | "b013_manager_view",
+  ticketId?: string,
+): Promise<T[]> {
+  assertIdentifiers(session.liveOrgId);
+  if (!["live", "sandbox"].includes(session.environment)) throw new FlowError("errors.forbidden");
+  if (ticketId !== undefined) assertIdentifiers(ticketId);
+  // Decimal strings avoid JSON/JavaScript precision loss for PostgreSQL bigint.
+  const args = ticketId === undefined ? "$1::uuid,$2::uuid,$3::text,$4::uuid"
+    : "$1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid";
+  const sql = "SELECT coalesce(jsonb_agg(to_jsonb(r) || jsonb_build_object("
+    + "'version_no',r.version_no::text,'amount_minor',r.amount_minor::text,"
+    + "'captured_threshold_minor',r.captured_threshold_minor::text)"
+    + " ORDER BY r.submitted_at DESC,r.version_id),'[]'::jsonb) AS r FROM app."
+    + gateway + "(" + args + ") r";
+  const params: unknown[] = [session.orgId, session.liveOrgId, session.environment, session.sessionId];
+  if (ticketId !== undefined) params.push(ticketId);
+  return run(session, sql, params, approvalRows<T>);
+}
+
+export function ownerPending(session: Session): Promise<OwnerPendingRow[]> {
+  return readApprovals(session, "b013_owner_pending");
+}
+export function ownerHistory(session: Session, input: { ticketId: string }): Promise<OwnerHistoryRow[]> {
+  return readApprovals(session, "b013_owner_history", input.ticketId);
+}
+export function managerApprovalView(session: Session, input: { ticketId: string }): Promise<ManagerApprovalRow[]> {
+  return readApprovals(session, "b013_manager_view", input.ticketId);
+}
+
+/** Rendering hint only. Gateways independently recheck the registered control. */
+export async function repairApprovalsEnabled(orgId: string): Promise<boolean> {
+  assertIdentifiers(orgId);
+  return withClient(async (client) => {
+    const row = await maybe<{ enabled: boolean }>(client,
+      "SELECT coalesce((SELECT o.feature_flags->'repair_approvals'='true'::jsonb"
+      + " AND f.value->'enabled'='true'::jsonb"
+      + " AND jsonb_typeof(f.value->'allowed_org_ids')='array'"
+      + " AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)"
+      + " FROM public.organizations o CROSS JOIN public.platform_settings f"
+      + " WHERE o.id=$1::uuid AND f.key='repair_approvals'),false) AS enabled", [orgId]);
+    return row?.enabled === true;
+  });
 }

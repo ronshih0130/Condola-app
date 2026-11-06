@@ -188,3 +188,39 @@ export function assertAppointment(input: AppointmentTimes): void {
     throw new FlowError("errors.date");
   }
 }
+
+export function pendingClassify(input: {
+  requiresOwnerDecision: boolean; isCurrent: boolean; decision: string | null;
+}) {
+  if (!input.isCurrent) return "superseded";
+  if (DECISIONS.includes(input.decision as (typeof DECISIONS)[number])) {
+    return input.decision as (typeof DECISIONS)[number];
+  }
+  return input.requiresOwnerDecision ? "pending_approval" : "policy_qualified";
+}
+
+export function decisionLabel(decision: string | null) {
+  return DECISIONS.includes(decision as (typeof DECISIONS)[number])
+    ? decision as (typeof DECISIONS)[number] : "undecided";
+}
+
+export function intentStatusLabel(at: string | null | undefined): "intent recorded" | "—" {
+  return at ? "intent recorded" : "—";
+}
+
+export function reapprovalHint(isCurrent: boolean): string | null {
+  return isCurrent ? null : "A newer estimate requires its own decision; earlier approval does not carry forward.";
+}
+
+/** Shape only; extra fields never become displayable references. */
+export function emergencyPhotoRefShape(value: unknown): value is EvidenceRef[] {
+  return evidenceShapeOk(value) && value.length >= 1;
+}
+
+/** Exact decimal formatting, including values above Number.MAX_SAFE_INTEGER. */
+export function approvalAmount(amount: string, currency: string, scale: number): string {
+  if (!/^[0-9]+$/.test(amount) || !/^[A-Z]{3}$/.test(currency)
+    || !Number.isInteger(scale) || scale < 0 || scale > 4) throw new FlowError("errors.amount");
+  const digits = BigInt(amount).toString().padStart(scale + 1, "0");
+  return currency + " " + (scale ? digits.slice(0, -scale) + "." + digits.slice(-scale) : digits);
+}

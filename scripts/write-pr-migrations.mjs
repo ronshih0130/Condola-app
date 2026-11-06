@@ -314,6 +314,10 @@ const added = {
     addOnly: false,
     reason: "Adds seven private app.b013_* repair approval state tables (immutable history, RLS, REVOKE ALL incl. service_role) and service-only SECURITY DEFINER gateways that fail closed while repair_approvals/vendor_dispatch are OFF; no flag seed, existing-table changes or money movement.",
   },
+  "supabase/migrations/20261105180000_b021_repair_approval_reads.sql": {
+    addOnly: false,
+    reason: "Adds three service-only SECURITY DEFINER readers with org/environment/session scope and flag-OFF empty results, plus a private appointment-to-job org/ticket invariant trigger; no tables, table grants, flag seed or money movement.",
+  },
 };
 
 const functions = [

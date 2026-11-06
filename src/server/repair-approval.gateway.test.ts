@@ -13,7 +13,7 @@ function files(directory: string): string[] {
   });
 }
 
-test("B-013 has no production caller", () => {
+test("B-021 production callers are confined to the owner decision and scoped views", () => {
   const callers: string[] = [];
   for (const path of files(src)) {
     const name = basename(path);
@@ -28,11 +28,19 @@ test("B-013 has no production caller", () => {
       if (/(?:^|\/)repair-approval(?:\.[cm]?[jt]sx?)?$/.test(match[1])) callers.push(local);
     }
   }
-  assert.deepEqual(callers, [], "Build-only service must not have production callers");
+  assert.deepEqual([...new Set(callers)].sort(), [
+    "app/api/owner-repair-decision/route.ts",
+    "app/m/tickets/[id]/approval-panel.tsx",
+    "app/o/approvals/[ticketId]/page.tsx",
+    "app/o/approvals/approval-cards.tsx",
+    "app/o/approvals/page.tsx",
+  ].sort());
 });
 
-test("B-013 service references only the six contracted gateways", () => {
-  const source = readFileSync(servicePath, "utf8");
+test("B-021 service uses contracted gateways and the registered rendering control", () => {
+  const full = readFileSync(servicePath, "utf8");
+  const source = full.split("export async function repairApprovalsEnabled(")[0];
+  const resolver = full.slice(source.length);
   const allowed = [
     "b013_submit_estimate",
     "b013_decide_estimate",
@@ -50,5 +58,22 @@ test("B-013 service references only the six contracted gateways", () => {
   }
   assert.deepEqual([...seen].sort(), [...allowed].sort());
   assert.match(source, /svc\(session\.userId,/);
-  assert.match(source, /Build-only \(B-013\)\. No production caller;/);
+  assert.match(source, /B-013 shared state; B-021 flag-gated/);
+  const readerNames = [...source.matchAll(/"(b013_(?:owner_pending|owner_history|manager_view))"/g)].map(match => match[1]);
+  assert.deepEqual([...new Set(readerNames)].sort(), ["b013_manager_view", "b013_owner_history", "b013_owner_pending"]);
+  assert.match(source, /session.orgId, session.liveOrgId, session.environment, session.sessionId/);
+  assert.match(resolver, /public.organizations o CROSS JOIN public.platform_settings f/);
+  assert.match(resolver, /jsonb_typeof\(f.value->'allowed_org_ids'\)='array'/);
+  assert.match(resolver, /f.value->'allowed_org_ids' @> jsonb_build_array\(o.id::text\)/);
+  assert.match(resolver, /o.feature_flags->'repair_approvals'='true'::jsonb/);
+  assert.match(resolver, /f.value->'enabled'='true'::jsonb/);
+});
+
+test("decision route mints its request and delegates authorization to the gateway", () => {
+  const route = readFileSync(join(src, "app/api/owner-repair-decision/route.ts"), "utf8");
+  assert.match(route, /await requireCurrentConsent\(undefined, "api"\)/);
+  assert.match(route, /session.kind !== "owner"/);
+  assert.match(route, /await decideEstimate\(session, \{ \.\.\.input, requestId: crypto.randomUUID\(\) \}\)/);
+  assert.doesNotMatch(route, /app\.|public\.|requestId:\s*(?:fields|value)\./);
+  assert.match(route, /code === "40001"/);
 });
