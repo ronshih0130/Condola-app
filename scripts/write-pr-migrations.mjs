@@ -346,6 +346,10 @@ const added = {
     addOnly: true,
     reason: "Adds private lease collector reserve and append-only one-per-payment confirmation audit (CAP-M-35 proxy-owner confirm), nullable source-event dedupe/source metadata, and context-checked SECURITY DEFINER collector/record/audit functions; no table grants, backfill or flag seed; payment_results_v2 stays OFF.",
   },
+  "supabase/migrations/20261106180000_b027_partner_controls.sql": {
+    addOnly: true,
+    reason: "Adds private partner overrides and immutable events, scoped SECURITY DEFINER read/admin gateways, and two default-OFF settings; no existing grants or production allowlists change.",
+  },
 };
 
 const functions = [
