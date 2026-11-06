@@ -14,6 +14,7 @@ import { ticketDetail } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
 import { getSession } from "@/server/session";
 import { loadVendorDispatch } from "@/server/vendor-repair";
+import { ApprovalPanel } from "./approval-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -168,6 +169,7 @@ export default async function TicketDetailPage({
           />
         </div>
       </div>
+      <ApprovalPanel session={session} ticketId={ticket.id} />
       {dispatch ? (
         <VendorDispatch
           ticketId={ticket.id}

@@ -1,0 +1,37 @@
+/** Repair estimate and decision labels. */
+export function repairApprovalCopy(locale: string) {
+  return locale === "zh-TW" ? {
+    title: "修繕決定", version: "估價版本", amount: "估價金額", threshold: "核准門檻",
+    property_override: "物業設定", owner_default: "個人設定", regional_default: "地區設定",
+    scope: "工作範圍", evidence: "證據參照", submittedAt: "提交時間", history: "查看版本紀錄",
+    approved: "已核准", rejected: "已拒絕", more_information: "要求補充資料", undecided: "尚未決定",
+    approve: "核准", reject: "拒絕", requestInformation: "要求補充資料",
+    decision: "決定", reason: "原因（拒絕或要求補充時必填）", save: "記錄決定",
+    decidedAt: "決定時間", emergency: "緊急例外", photos: "照片參照",
+    water: "水務", electricity: "電力", safety: "安全",
+    notice: "通知意圖", reminder: "提醒意圖", intentRecorded: "意圖已記錄",
+    reapproval: "新版本需要獨立決定，先前核准不會沿用。", policyQualified: "符合門檻設定，無需決定",
+    empty: "目前沒有可顯示的版本。", unavailable: "目前無法取得資料，請稍後再試。",
+    recorded: "決定已記錄。", rejected_conflict: "版本或決定已變更，請重新查看。",
+    rejected_disabled: "目前無法記錄決定。", rejected_invalid: "請確認決定與原因。",
+    appointment: "約訪狀態", vendor_proposed: "已提出時段", company_confirmed: "已確認時段",
+    vendor_rejected: "未接受約訪", vendor_completion_submitted: "已提交完工資料",
+  } : {
+    title: "Repair decisions", version: "Estimate version", amount: "Estimate amount", threshold: "Approval threshold",
+    property_override: "Property setting", owner_default: "Personal setting", regional_default: "Regional setting",
+    scope: "Work scope", evidence: "Evidence references", submittedAt: "Submitted at", history: "View version history",
+    approved: "Approved", rejected: "Rejected", more_information: "More information requested", undecided: "No decision",
+    approve: "Approve", reject: "Reject", requestInformation: "Request more information",
+    decision: "Decision", reason: "Reason (required for rejection or more information)", save: "Record decision",
+    decidedAt: "Decided at", emergency: "Emergency exception", photos: "Photo references",
+    water: "Water", electricity: "Electricity", safety: "Safety",
+    notice: "Notice intent", reminder: "Reminder intent", intentRecorded: "Intent recorded",
+    reapproval: "A newer estimate requires its own decision; earlier approval does not carry forward.",
+    policyQualified: "Within the configured threshold; no decision required",
+    empty: "There are no versions to show.", unavailable: "Details are unavailable. Please try again later.",
+    recorded: "Decision recorded.", rejected_conflict: "The version or decision has changed. Please review it again.",
+    rejected_disabled: "Decisions are currently unavailable.", rejected_invalid: "Check the decision and reason.",
+    appointment: "Appointment status", vendor_proposed: "Time proposed", company_confirmed: "Time confirmed",
+    vendor_rejected: "Appointment declined", vendor_completion_submitted: "Completion details submitted",
+  };
+}
