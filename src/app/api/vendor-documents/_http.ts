@@ -13,7 +13,7 @@ export async function readBody(request: Request): Promise<Response | (Record<str
     return failure("unsupported_media_type", 415);
   }
   const text = await request.text();
-  if (new TextEncoder().encode(text).byteLength > 20000) return failure("payload_too_large", 413);
+  if (new TextEncoder().encode(text).byteLength > 7100000) return failure("payload_too_large", 413);
   let fields: Record<string, unknown>;
   try {
     const body: unknown = JSON.parse(text);

@@ -1,10 +1,11 @@
+import { admitVendorDocumentsOrgOn } from "./vendor-document-admission";
+import { tradeLineItems, type TradeLineInput } from "./vendor-document-trade-rules";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { maybe, one, svc } from "./db";
 import { FlowError } from "./errors";
 import { deriveTicketDocumentItems, type JobTypeLineItem } from "./job-types-rules";
 import { authorizeVendorStaff } from "./vendor-onboarding";
-import { PHOTO_BUCKET } from "./repair-rules";
 import { downloadRepairObject } from "./ticket-photos";
 import type { Session } from "./types";
 import { validateSealImageHeader } from "./vendor-onboarding-rules";
@@ -41,6 +42,7 @@ export interface VendorDocumentContext {
   /** Required for staff preview; token callers use the confirmed selection. */
   buyer?: VendorBuyerSelection;
   items: readonly JobTypeLineItem[];
+  tradeItems?: readonly TradeLineInput[];
   totalMinor: number;
   documentDate: string;
   /** Supply from the existing bundled font or a trusted asset binding. */
@@ -184,6 +186,13 @@ async function authorize(
     notFound();
   }
 
+  const version = await maybe<VendorPdfIssuer>(client,
+    `SELECT display_name,business_name,representative_name,tax_id,phone_e164,address
+       FROM vendor_profile_versions WHERE org_id=$1 AND vendor_profile_id=$2 AND version=$3`,
+    [orgId, profile.id, profile.current_version]);
+  if (!version) notFound();
+  Object.assign(profile, version);
+
   if (grant) {
     // Document grants have their own expiry and explicit revocation. Losing
     // collaboration access does not remove access to the issuer's documents.
@@ -312,7 +321,7 @@ async function issueInput(
     },
     seq,
     buyer: buyer as BuyerInput,
-    items: deriveTicketDocumentItems(ctx.items, access.ticket.type_fields),
+    items: ctx.tradeItems ? tradeLineItems(ctx.tradeItems) : deriveTicketDocumentItems(ctx.items, access.ticket.type_fields),
     total_minor: ctx.totalMinor,
     ticket_actual_cost_minor: actual,
     locale: "zh-TW",
@@ -326,17 +335,28 @@ async function fontOn(ctx: VendorDocumentContext) {
   return loadVendorPdfFont(origin);
 }
 
-async function sealOn(client: Client, access: Access) {
+export async function vendorProfileSealOn(client: Client, access: Access) {
   if (access.profile.kind !== "business") return undefined;
-  const file = await maybe<{ storage_path: string }>(
-    client,
-    `SELECT storage_path FROM files
-      WHERE id = $1 AND org_id = $2 AND storage_bucket = $3
-        AND size_bytes BETWEEN 1 AND 5242880
-      FOR SHARE`,
-    [access.profile.seal_file_id, access.orgId, PHOTO_BUCKET],
-  );
-  if (!file) throw new Error("missing_seal_image");
+  // This loader carries server storage credentials for legacy seal objects too.
+  // Never let a member-role SQL client turn it into a storage proxy.
+  const caller = await one<{ allowed: boolean }>(client, "SELECT current_user='service_role' AS allowed");
+  if (!caller.allowed) throw new FlowError("errors.forbidden");
+  const version = await maybe<{ snapshot: { seal?: { id: string; sha256: string } } }>(client,
+    `SELECT snapshot FROM vendor_profile_versions WHERE org_id=$1 AND vendor_profile_id=$2 AND version=$3`,
+    [access.orgId, access.profile.id, access.profile.current_version]);
+  if (version?.snapshot.seal) {
+    const stored = await one<{ bytes: Buffer; mime_type: string; sha256: string }>(client,
+      "SELECT * FROM app.b025_read_profile_seal($1,$2,$3,$4)",
+      [access.orgId, access.grantId, access.profile.id, access.profile.current_version]);
+    const bytes = new Uint8Array(stored.bytes);
+    const checked = validateSealImageHeader(bytes);
+    if (!checked.ok || checked.mimeType !== stored.mime_type || await sha256(bytes) !== stored.sha256
+      || stored.sha256 !== version.snapshot.seal.sha256) throw new Error("invalid_seal_file");
+    return { bytes, mimeType: checked.mimeType };
+  }
+  const file = await one<{ storage_path: string }>(client,
+    "SELECT app.b025_legacy_seal_path($1,$2,$3,$4) AS storage_path",
+    [access.orgId, access.grantId, access.profile.id, access.profile.current_version]);
   const bytes = await downloadRepairObject(file.storage_path);
   const checked = validateSealImageHeader(bytes);
   if (!checked.ok) throw new Error(checked.error);
@@ -367,7 +387,7 @@ async function renderOn(
       workAddress: access.ticket.work_address!,
       ticketNumber: access.ticket.ticket_number,
       preview,
-      seal: document.apply_receipt_seal ? await sealOn(client, access) : undefined,
+      seal: document.apply_receipt_seal ? await vendorProfileSealOn(client, access) : undefined,
     },
     await fontOn(ctx),
   );
@@ -564,7 +584,14 @@ export async function previewVendorDocument(ctx: VendorDocumentContext) {
     (client) => previewVendorDocumentOn(client, ctx));
 }
 
+async function admitTradeOn(client: Client, ctx: VendorDocumentContext) {
+  if (!ctx.tradeItems) return;
+  const orgId = typeof ctx.actor === "string" ? (await vendorDocumentGrantOn(client, ctx.actor)).org_id : ctx.actor.orgId;
+  await admitVendorDocumentsOrgOn(client, orgId);
+}
+
 export async function previewVendorDocumentOn(client: Client, ctx: VendorDocumentContext) {
+  await admitTradeOn(client, ctx);
   const access = await authorize(client, ctx.actor, ctx.ticketId, ctx.vendorProfileId);
   const input = await issueInput(client, access, ctx, "preview", 1);
   const checked = applyIssueRules(input);
@@ -585,6 +612,7 @@ export async function issueVendorDocumentOn(
 ): Promise<StoredVendorDocument> {
   requireVendorToken(ctx.actor);
   validKey(key);
+  await admitTradeOn(client, ctx);
   // Reissue corrects an existing issuer's document. Only fresh issuance
   // derives authority from the ticket's current assignment.
   const access = sourceId

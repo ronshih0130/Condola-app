@@ -3,9 +3,10 @@ import { useState, useTransition } from 'react';
 import { vendorDocumentsCopy } from '@/i18n/vendor-documents';
 
 export type VendorDocumentsView = {
-  ticketNumber: string; totalMinor: string; itemsUnavailable?: boolean; items: Array<{ name: string; quantity: number; unit: string; amount_minor: number }>;
+  ticketNumber: string; totalMinor: string; itemsUnavailable?: boolean; items: Array<{ name: string; quantity: number | string; unit: string; amount_minor: number | string }>;
   buyer: { kind: 'owner' | 'company'; titlePresent: boolean }; eligibleKind: 'receipt' | 'completion_statement';
   documents: Array<{ id: string; kind: 'receipt' | 'completion_statement'; doc_no: string; status: 'issued' | 'voided'; issued_at: string; reissued_from: string | null }>;
+  history?: Array<{ id: string; version: number; issuerName: string; items: Array<{ name: string; quantity: number | string; unit: string; amount_minor: number | string }>; scans: Array<{ id: string; mime_type: string }> }>;
   receivedMinor: string; marks: Array<{ amountMinor: string; createdAt: string }>;
 };
 
@@ -43,7 +44,7 @@ export function VendorDocumentsPanel({ token, initial, locale }: { token: string
     run(() => post('/api/vendor-documents', { token, action: 'issue', kind, documentDate: today(), idempotencyKey: key, ...(received ? { received } : {}) }));
   async function openPdf(res: Response) {
     if (!res.ok) { setError(t.unavailable); return; }
-    const blob = res.headers.get('content-type')?.includes('application/pdf') ? await res.blob()
+    const blob = !res.headers.get('content-type')?.includes('application/json') ? await res.blob()
       : new Blob([Uint8Array.from(atob((await res.json()).pdfBase64), (c) => c.charCodeAt(0))], { type: 'application/pdf' });
     window.open(URL.createObjectURL(blob), '_blank', 'noopener');
   }
@@ -78,6 +79,12 @@ export function VendorDocumentsPanel({ token, initial, locale }: { token: string
       {view.documents.length === 0 ? <p>{t.none}</p> : <ul>{view.documents.map((d) => <li key={d.id}>
         {d.kind === 'receipt' ? t.receipt : t.statement} {d.doc_no} · {d.status === 'voided' ? t.voided : t.issued} · {d.issued_at}
         <button type="button" className="btn" disabled={pending} onClick={() => start(async () => openPdf(await post('/api/vendor-documents/pdf', { token, documentId: d.id })))}>{t.download}</button>
+        {view.history?.filter((h) => h.id === d.id).map((h) => <div key={h.id}>
+          <p>{t.snapshotVersion} {h.version} · {h.issuerName}</p>
+          <ul>{h.items.map((item, i) => <li key={i}>{item.name} · {item.quantity} {item.unit} · {item.amount_minor}</li>)}</ul>
+          {h.scans.map((scan) => <button type="button" className="btn" key={scan.id} disabled={pending}
+            onClick={() => start(async () => openPdf(await post('/api/vendor-documents/scan', { token, scanId: scan.id })))}>{t.paperScan}</button>)}
+        </div>)}
         {d.status === 'issued' && <>
           <input className="inp" aria-label={t.voidReason} placeholder={t.voidReason} value={reasons[d.id] ?? ''} maxLength={1000} disabled={pending} onChange={(e) => setReasons((r) => ({ ...r, [d.id]: e.target.value }))} />
           <button type="button" className="btn" disabled={pending || !(reasons[d.id] ?? '').trim()} onClick={() => run(() => post('/api/vendor-documents', { token, action: 'void', documentId: d.id, reason: (reasons[d.id] ?? '').trim() }))}>{t.void}</button>

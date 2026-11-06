@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106170000_b025_vendor_document_integrity.sql": {
+    addOnly: false,
+    reason: "Adds private immutable paper-scan siblings with RLS and service-only grant-scoped gateways; adds snapshot-reference guards without backfill or flag activation. Existing profile versions and PDF snapshots are reused.",
+  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",
