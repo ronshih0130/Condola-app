@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+import { upgradeGate } from "@/server/upgrade-gate";
+import { FREE_UNITS } from "@/server/billing";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { makeT } from "@/i18n";
@@ -22,6 +25,9 @@ export default async function PricingPage() {
   const t = makeT(prefs.locale);
   const session = await readSession();
   const staff = session?.kind === "staff" ? session : null;
+  // Pricing and usage are live even while the navigation selects a sandbox.
+  const gate = staff ? await upgradeGate({ ...staff, orgId: staff.liveOrgId, environment: "live", needsSandbox: false }, FREE_UNITS) : null;
+  if (gate?.redirectTo) redirect(gate.redirectTo);
   const inputs = staff ? await loadPriceInputs(staff.liveOrgId) : null;
   const units = staff ? await countActiveUnits(staff.liveOrgId) : 30;
   const usage = staff ? await seatUsage(staff.liveOrgId) : null;
@@ -36,19 +42,21 @@ export default async function PricingPage() {
     now,
     override: inputs?.override,
     snapshot: inputs?.snapshot,
+    unitOverride: gate?.unitOverride,
   });
   const proPrice = resolveCommercialPrice({
     tier: "pro",
     now,
     override: inputs?.override,
     snapshot: inputs?.snapshot,
+    unitOverride: gate?.unitOverride,
   });
   const standardLabel =
-    standardPrice.source === "list"
+    standardPrice.source === "list" && !gate?.unitOverride
       ? t("i_price_std_amt")
       : t("i_price_from", { n: standardPrice.freeUnits + 1, price: standardPrice.rate });
   const proLabel =
-    proPrice.source === "list" ? t("i_price_pro_amt") : t("i_price_from", { n: proPrice.freeUnits + 1, price: proPrice.rate });
+    proPrice.source === "list" && !gate?.unitOverride ? t("i_price_pro_amt") : t("i_price_from", { n: proPrice.freeUnits + 1, price: proPrice.rate });
   function cta(plan: "free" | "standard" | "pro") {
     if (current === plan) {
       return (
@@ -103,6 +111,7 @@ export default async function PricingPage() {
       </div>
       <p data-testid="price-receipt">{t("i_price_receipt")}</p>
       <PricingCalculator
+        {...(gate?.unitOverride ? { unitOverride: gate.unitOverride } : {})}
         initialUnits={units}
         savedSnapshot={inputs?.snapshot ?? null}
         savedCode={inputs?.code ?? null}

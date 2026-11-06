@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import type { PartnerOverride } from "@/server/partner-controls-rules";
 import { formatNt, quoteMonthly, type PaidTier, type PriceOverride, type PriceSnapshot } from "@/server/billing";
 import { actionPreviewCode } from "@/server/signup-actions";
 import { useT } from "./locale";
 
 export function PricingCalculator({
+  unitOverride,
   initialUnits,
   savedSnapshot,
   savedCode,
@@ -13,6 +15,7 @@ export function PricingCalculator({
   lockMonths,
   override,
 }: {
+  unitOverride?: PartnerOverride | null;
   initialUnits: number;
   savedSnapshot: PriceSnapshot | null;
   savedCode: string | null;
@@ -32,6 +35,7 @@ export function PricingCalculator({
   const [bad, setBad] = useState(false);
   const snapshot = preview ?? savedSnapshot;
   const quote = quoteMonthly({
+    unitOverride,
     units,
     tier,
     cycle,
