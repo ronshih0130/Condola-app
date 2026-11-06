@@ -1,5 +1,6 @@
 import type { Client } from "pg";
 import { svc } from "./db";
+import { readLineConfig } from "./line/config";
 
 export type DeliveryChannel = "email" | "line";
 export type DeliveryStatus = "queued" | "claimed" | "captured" | "accepted" | "failed" | "unknown";
@@ -76,6 +77,27 @@ async function boundedDeliver(adapter: DeliveryAdapter, req: DeliveryRequest, ti
 export async function runDeliveryAttempts(orgId: string, adapter: DeliveryAdapter, limit: number,
   options: { adapterTimeoutMs?: number } = {}): Promise<number> {
   const timeoutMs = Math.min(options.adapterTimeoutMs ?? DELIVERY_ADAPTER_TIMEOUT_MS, DELIVERY_ADAPTER_TIMEOUT_MS);
+  // OFF keeps the original B-028 query sequence. Maintenance has its own bounded
+  // transaction: a failure rolls it back, leaves deadlines retryable, and never
+  // prevents unrelated Email claims. Log only a classified SQLSTATE, never DB text.
+  if (adapter.channel === "email" && readLineConfig().platformEnabled) {
+    let maintenanceCode: string | undefined;
+    try {
+      await deliverySvc(orgId, async client => {
+        try {
+          await client.query("SET LOCAL statement_timeout='750ms'");
+          const installed = (await client.query("SELECT to_regprocedure('app.b033_push_expire(uuid)') IS NOT NULL AS installed")).rows[0].installed;
+          if (installed) await client.query("SELECT app.b033_push_expire($1)", [orgId]);
+        } catch (error) {
+          maintenanceCode = (error as { code?: string })?.code;
+          throw error;
+        }
+      });
+    } catch (error) {
+      const code = maintenanceCode ?? (error as { code?: string })?.code;
+      console.error("b033_expiry_retry_pending", { code: typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : "unknown" });
+    }
+  }
   let processed = 0;
   for (let i = 0; i < limit; i++) {
     const claim = (await deliverySvc(orgId, async (client) => (await client.query<Claim>(

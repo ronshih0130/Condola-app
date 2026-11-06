@@ -51,6 +51,7 @@ const openPages: Record<string, Record<string, string>> = {
   "app/v/[token]/notifications/page.tsx": { default: "Exact vendor job token gateway, no human user session" },
 };
 const openRoutes: Record<string, Record<string, string>> = {
+  "api/line/webhook/route.ts": { POST: "B-033 raw-body HMAC signature and selected-OA/org flag gate; provider webhook has no human session" },
   "api/vendor-account-staff/route.ts": { GET: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope", POST: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope" },
   "api/vendor-account/route.ts": { GET: "Account cookie identity plus current consent via authorizeVendorAccountRequest; no persona or session writes", POST: "Account cookie identity plus current consent via authorizeVendorAccountRequest; strict same-origin mutation" },
   "api/vendor-estimate/route.ts": { POST: "B-026 scoped vendor token and flag gateway, no user session" },

@@ -76,6 +76,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/id-documents/finalize/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/id-documents/photo/route.ts:1 | HTTP handler executed above |
 | src/app/api/import/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/webhook/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/monthly-rent-issue/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/notification-center/mark/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/notification-center/vendor-mark/route.ts:1 | Enumerated only; outside representative selection |
@@ -91,6 +92,9 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/tickets/photos/[id]/route.ts:1 | HTTP handler executed above |
 | src/app/api/tickets/photos/confirm/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/tickets/photos/sign/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-account-staff/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-account/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/vendor-estimate/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-job-completion/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-job-response/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/vendor-jobs/[token]/photos/[id]/route.ts:1 | Enumerated only; outside representative selection |
