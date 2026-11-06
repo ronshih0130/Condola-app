@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107000000_b033_line_shared_foundation.sql": {
+    addOnly: false,
+    reason: "Additive LINE foundation with constrained private identity/flow/event/reservation tables, service-only quota usage and gateways, verified-link columns and guard, delivery dedupe, and default-OFF settings. No legacy identity backfill or live transport; constraints and privilege revokes require Class B review.",
+  },
   "supabase/migrations/20261106235000_b028_notification_delivery_claims.sql": {
     addOnly: false,
     reason: "New private durable delivery tables with NOT NULL and CHECK constraints, append-only events, service-only gateways and privilege revokes. Existing producers unchanged; rollout defaults OFF.",

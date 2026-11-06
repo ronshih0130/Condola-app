@@ -237,6 +237,7 @@ test("the lease idempotency migration is additive and later than shared staging 
     "20261106232000_b027_ticket_photo_member_read.sql",
     "20261106232500_b027_ticket_photo_write_narrowing.sql",
     "20261106235000_b028_notification_delivery_claims.sql",
+    "20261107000000_b033_line_shared_foundation.sql",
   ]);
   const sql = readFileSync(new URL(ours[0], dir), "utf8");
   assert.match(sql, /Version 20261027130000/);

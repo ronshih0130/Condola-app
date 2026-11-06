@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCaptureAdapter, type DeliveryChannel } from "./notification-delivery";
+import { Client } from "pg";
+import { createCaptureAdapter, runDeliveryAttempts, type DeliveryChannel } from "./notification-delivery";
 import { centerCopy } from "../i18n/lanes/notification-center";
 
 for (const channel of ["email", "line"] satisfies DeliveryChannel[]) {
@@ -26,4 +27,17 @@ test("delivery labels distinguish local capture and provider acceptance without 
     queued: "排隊中", claimed: "準備中", captured: "已在本機記錄（未發送）",
     accepted: "服務商已受理（不代表已送達）", failed: "失敗", unknown: "結果未確認（不會自動重試）",
   });
+});
+
+for (const value of [undefined, "false", "TRUE", ""]) test(`LINE env OFF ${String(value)} preserves zero-limit Email runner query sequence`, async t => {
+  const old = process.env.LINE_PLATFORM_ENABLED;
+  if (value === undefined) delete process.env.LINE_PLATFORM_ENABLED; else process.env.LINE_PLATFORM_ENABLED = value;
+  t.mock.method(Client.prototype, "query", () => { throw new Error("OFF added a database query"); });
+  const errors = t.mock.method(console, "error", () => {});
+  try {
+    assert.equal(await runDeliveryAttempts("unused", createCaptureAdapter("email"), 0), 0);
+    assert.equal(errors.mock.callCount(), 0);
+  } finally {
+    if (old === undefined) delete process.env.LINE_PLATFORM_ENABLED; else process.env.LINE_PLATFORM_ENABLED = old;
+  }
 });
