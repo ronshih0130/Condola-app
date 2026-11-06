@@ -31,7 +31,7 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
   try {
     const session = async (
       userId: string,
-      role: "manager" | "admin",
+      role: "manager" | "admin" | null,
       orgId = ORG_ID,
     ): Promise<Session> => {
       const sid = randomUUID();
@@ -40,11 +40,18 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
          VALUES ($1,$2,$3,clock_timestamp()+interval '1 hour')`,
         [sid, userId, randomUUID()],
       );
-      return {
-        userId, orgId, liveOrgId: orgId, sessionId: sid, kind: "staff",
-        role, environment: "live", locale: "en", calendar: "gregorian",
-        leaseId: null, email: "synthetic@example.test", name: "Synthetic",
+      const common = {
+        userId, orgId, liveOrgId: orgId, sessionId: sid,
+        environment: "live" as const,
+        locale: "en" as const,
+        calendar: "gregorian" as const,
+        leaseId: null,
+        email: "synthetic@example.test",
+        name: "Synthetic",
       };
+      return role === null
+        ? { ...common, kind: "owner", role: null }
+        : { ...common, kind: "staff", role };
     };
     const manager = await session(USERS.manager, "manager");
     const admin = await session(USERS.admin, "admin");
@@ -79,11 +86,27 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
 
     const owner = (await c.query<{ id: string }>(
       `SELECT id::text FROM contacts
-       WHERE org_id=$1 AND user_id=$2 AND is_owner
+       WHERE org_id=$1 AND user_id=$2 AND is_owner AND archived_at IS NULL
        LIMIT 1`,
       [ORG_ID, USERS.owner],
     )).rows[0];
-    assert.ok(owner, "an owner contact already linked to USERS.owner in the org is required");
+    assert.ok(owner, "an active owner contact linked to USERS.owner in the org is required");
+
+    await c.query(
+      `INSERT INTO property_owners(org_id,property_id,contact_id)
+       SELECT $1::uuid,$2::uuid,$3::uuid
+       WHERE NOT EXISTS (
+         SELECT 1 FROM property_owners
+         WHERE org_id=$1 AND property_id=$2 AND contact_id=$3
+       )`,
+      [ORG_ID, lease.property_id, owner.id],
+    );
+    const ownerSession: Session = {
+      ...await session(USERS.owner, null),
+      kind: "owner",
+      role: null,
+      leaseId: lease.id,
+    };
 
     const makeSubmitted = async () => (await c.query<{ id: string }>(
       `INSERT INTO payments(
@@ -151,6 +174,15 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
       assert.equal(rows[0].confirmed_via, "management");
       assert.equal(rows[0].on_behalf_of_owner_contact_id, null);
       assert.equal(rows[0].source, "staff_ui");
+      assert.equal(rows[0].actor_user_id, USERS.manager);
+
+      const emitted = (await events(id)).filter(
+        (event) => event.kind === "payment_confirmed",
+      );
+      assert.equal(emitted.length, 1);
+      assert.equal(emitted[0].dedupe_key, `payment:${id}:payment_confirmed`);
+      assert.equal(emitted[0].source, "payment_result");
+      assert.equal(emitted[0].triggered_by_user_id, USERS.manager);
     });
 
     await t.test("owner collector requires explicit staff proxy confirmation", async () => {
@@ -174,23 +206,148 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
       assert.deepEqual(await collectors(), before);
     });
 
+    await t.test("owner session confirms directly when the flag is ON", async () => {
+      await flag(true);
+      await ownerCollector();
+      const id = await makeSubmitted();
+      const beforeCollectors = await collectors();
+      const beforeLedger = await ledgerCount();
+
+      await confirmPayment(ownerSession, id);
+
+      assert.equal((await payment(id)).status, "confirmed");
+      const rows = await confirmations(id);
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].confirmed_via, "owner_direct");
+      assert.equal(rows[0].on_behalf_of_owner_contact_id, null);
+      assert.equal(rows[0].actor_user_id, USERS.owner);
+      assert.equal(rows[0].from_status, "submitted");
+      assert.equal(rows[0].to_status, "confirmed");
+      assert.equal(await ledgerCount(), beforeLedger + 1);
+      assert.deepEqual(await collectors(), beforeCollectors);
+
+      const emitted = (await events(id)).filter(
+        (event) => event.kind === "payment_confirmed",
+      );
+      assert.equal(emitted.length, 1);
+      assert.equal(emitted[0].dedupe_key, `payment:${id}:payment_confirmed`);
+      assert.equal(emitted[0].source, "payment_result");
+      assert.equal(emitted[0].triggered_by_user_id, USERS.owner);
+    });
+
+    await t.test("owner session cannot confirm when the flag is OFF", async () => {
+      await flag(false);
+      await ownerCollector();
+      const id = await makeSubmitted();
+      const original = await payment(id);
+      const beforeCollectors = await collectors();
+      const beforeLedger = await ledgerCount();
+
+      await assert.rejects(confirmPayment(ownerSession, id), isFlowError);
+
+      assert.deepEqual(await payment(id), original);
+      assert.equal((await confirmations(id)).length, 0);
+      assert.equal((await events(id)).length, 0);
+      assert.equal(await ledgerCount(), beforeLedger);
+      assert.deepEqual(await collectors(), beforeCollectors);
+    });
+
     await t.test("owner can read the staff proxy confirmation audit", async () => {
       await flag(true);
       await ownerCollector();
       const id = await makeSubmitted();
       await confirmPayment(manager, id, { proxyOwnerConfirmed: true });
+
       await c.query("BEGIN");
       try {
-        await c.query(`SELECT set_config('request.jwt.claim.sub',$1,true)`, [USERS.owner]);
+        await c.query(
+          `SELECT set_config('request.jwt.claim.sub',$1,true),
+                  set_config('app.active_org_id',$2,true),
+                  set_config('app.env','live',true)`,
+          [USERS.owner, ORG_ID],
+        );
         await c.query("SET LOCAL ROLE authenticated");
         const audit = await c.query<{ confirmed_via: string }>(
-          `SELECT * FROM app.b010_confirmation_audit($1)`, [id],
+          `SELECT * FROM app.b010_confirmation_audit($1::uuid,$2::uuid,$3::text)`,
+          [id, ORG_ID, "live"],
         );
         assert.equal(audit.rows.length, 1);
         assert.equal(audit.rows[0].confirmed_via, "staff_proxy");
       } finally {
         await c.query("ROLLBACK");
       }
+    });
+
+    await t.test("audit denies missing, cross-org, and cross-environment settings", async () => {
+      await flag(true);
+      await ownerCollector();
+      const id = await makeSubmitted();
+      await confirmPayment(manager, id, { proxyOwnerConfirmed: true });
+
+      for (const actor of [USERS.owner, USERS.manager]) {
+        for (const scope of [
+          { label: "missing settings", orgId: null, environment: null },
+          { label: "another organization", orgId: ORG2_ID, environment: "live" },
+          { label: "another environment", orgId: ORG_ID, environment: "sandbox" },
+        ]) {
+          await c.query("BEGIN");
+          try {
+            await c.query(
+              `SELECT set_config('request.jwt.claim.sub',$1,true)`,
+              [actor],
+            );
+            if (scope.orgId !== null && scope.environment !== null) {
+              await c.query(
+                `SELECT set_config('app.active_org_id',$1,true),
+                        set_config('app.env',$2,true)`,
+                [scope.orgId, scope.environment],
+              );
+            }
+            await c.query("SET LOCAL ROLE authenticated");
+            const audit = await c.query(
+              `SELECT * FROM app.b010_confirmation_audit($1::uuid,$2::uuid,$3::text)`,
+              [id, ORG_ID, "live"],
+            );
+            assert.equal(audit.rows.length, 0, `${actor}: ${scope.label}`);
+          } finally {
+            await c.query("ROLLBACK");
+          }
+        }
+      }
+    });
+
+    await t.test("direct SQL confirmation without a payment context is denied", async () => {
+      await flag(true);
+      await clearCollector();
+      const id = await makeSubmitted();
+      const original = await payment(id);
+      const beforeLedger = await ledgerCount();
+
+      await c.query("BEGIN");
+      try {
+        await c.query(
+          `SELECT set_config('request.jwt.claim.sub',$1,true),
+                  set_config('app.active_org_id',$2,true),
+                  set_config('app.env','live',true)`,
+          [USERS.manager, ORG_ID],
+        );
+        await c.query("SET LOCAL ROLE authenticated");
+        await assert.rejects(
+          c.query(
+            `SELECT app.b010_record_confirmation($1::uuid,$2::boolean,$3::text)`,
+            [id, false, "staff_ui"],
+          ),
+          (error: unknown) =>
+            error instanceof Error && "code" in error && error.code === "42501",
+        );
+      } finally {
+        await c.query("ROLLBACK");
+      }
+
+      assert.deepEqual(await payment(id), original);
+      assert.equal((await confirmations(id)).length, 0);
+      assert.equal((await events(id)).length, 0);
+      assert.equal(await ledgerCount(), beforeLedger);
     });
 
     await t.test("concurrent confirmation posts once and sequential replay is a no-op", async () => {
@@ -220,6 +377,26 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
       assert.equal((await payment(id)).status, "confirmed");
     });
 
+    await t.test("confirmed_via rejects NULL even for superuser inserts", async () => {
+      await flag(true);
+      await clearCollector();
+      const id = await makeSubmitted();
+
+      await assert.rejects(
+        c.query(
+          `INSERT INTO app.b010_payment_confirmations(
+             org_id,payment_id,confirmed_via,on_behalf_of_owner_contact_id,
+             source,actor_user_id,from_status,to_status
+           ) VALUES ($1,$2,NULL,NULL,'staff_ui',$3,'submitted','confirmed')`,
+          [ORG_ID, id, USERS.manager],
+        ),
+        (error: unknown) =>
+          error instanceof Error && "code" in error && error.code === "23502",
+      );
+      assert.equal((await confirmations(id)).length, 0);
+      assert.equal((await payment(id)).status, "submitted");
+    });
+
     await t.test("confirmations enforce uniqueness and reject updates and deletes", async () => {
       await flag(true);
       await clearCollector();
@@ -239,12 +416,66 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
       await assert.rejects(c.query(
         `UPDATE app.b010_payment_confirmations SET source=source
          WHERE org_id=$1 AND payment_id=$2`, [ORG_ID, id],
-      ));
+      ), (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "55000");
       await assert.rejects(c.query(
         `DELETE FROM app.b010_payment_confirmations WHERE org_id=$1 AND payment_id=$2`,
         [ORG_ID, id],
-      ));
+      ), (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "55000");
+
+      for (const sql of [
+        `UPDATE app.b010_payment_confirmations SET source=source
+         WHERE org_id=$1 AND payment_id=$2`,
+        `DELETE FROM app.b010_payment_confirmations
+         WHERE org_id=$1 AND payment_id=$2`,
+      ]) {
+        await c.query("BEGIN");
+        try {
+          await c.query(
+            `SELECT set_config('request.jwt.claim.sub',$1,true),
+                    set_config('app.active_org_id',$2,true),
+                    set_config('app.env','live',true)`,
+            [USERS.manager, ORG_ID],
+          );
+          await c.query("SET LOCAL ROLE authenticated");
+          await assert.rejects(
+            c.query(sql, [ORG_ID, id]),
+            (error: unknown) =>
+              error instanceof Error && "code" in error && error.code === "42501",
+          );
+        } finally {
+          await c.query("ROLLBACK");
+        }
+      }
       assert.deepEqual(await confirmations(id), before);
+    });
+
+    await t.test("superuser replica-mode seed wipe can delete confirmations", async () => {
+      await flag(true);
+      await clearCollector();
+      const id = await makeSubmitted();
+      await confirmPayment(manager, id);
+      const before = await confirmations(id);
+      assert.equal(before.length, 1);
+
+      await c.query("BEGIN");
+      try {
+        await c.query("SET LOCAL session_replication_role=replica");
+        const deleted = await c.query(
+          `DELETE FROM app.b010_payment_confirmations`,
+        );
+        assert.ok(deleted.rowCount !== null && deleted.rowCount > 0);
+        const remaining = await c.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM app.b010_payment_confirmations`,
+        );
+        assert.equal(remaining.rows[0].n, 0);
+      } finally {
+        await c.query("ROLLBACK");
+      }
+
+      assert.deepEqual(await confirmations(id), before);
+      assert.equal((await payment(id)).status, "confirmed");
     });
 
     await t.test("rejection requires a reason and only admin can reverse", async () => {

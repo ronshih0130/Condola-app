@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS app.b010_payment_confirmations (
     (confirmed_via IN ('owner_direct','management') AND on_behalf_of_owner_contact_id IS NULL))
 );
 
+ALTER TABLE app.b010_payment_confirmations ALTER COLUMN confirmed_via SET NOT NULL;
 ALTER TABLE app.b010_payment_confirmations ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON app.b010_payment_confirmations FROM PUBLIC,anon,authenticated,service_role;
 
@@ -289,6 +290,8 @@ GRANT EXECUTE ON FUNCTION app.b010_record_confirmation(uuid,boolean,text) TO aut
 
 DROP FUNCTION IF EXISTS app.b010_confirmation_audit(uuid);
 
+DROP FUNCTION IF EXISTS app.b010_confirmation_audit(uuid,uuid,text);
+
 CREATE OR REPLACE FUNCTION app.b010_confirmation_audit(
   p_payment uuid,
   p_org uuid,
@@ -316,6 +319,8 @@ BEGIN
       AND p.org_id=p_org
       AND o.id=p_org
       AND o.environment::text=p_environment
+      AND p_org::text=current_setting('app.active_org_id',true)
+      AND p_environment=current_setting('app.env',true)
       AND (
         EXISTS (
           SELECT 1
@@ -344,5 +349,60 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION app.b010_confirmation_audit(uuid,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION app.b010_confirmation_audit(uuid,uuid,text) TO authenticated,service_role;
+
+CREATE OR REPLACE FUNCTION app.b010_emit_payment_event(p_payment uuid,p_kind text) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,app AS $$
+DECLARE
+  v_requirement app.b010_payment_requirements;
+  v_event uuid;
+  v_dedupe_key text;
+BEGIN
+  SELECT * INTO v_requirement FROM app.b010_payment_requirements
+    WHERE tx_id=txid_current() AND payment_id=p_payment AND kind=p_kind AND actor_id=auth.uid();
+
+  IF NOT FOUND OR NOT EXISTS (SELECT 1 FROM app.b010_payment_contexts ctx
+    JOIN public.auth_sessions s ON s.id=ctx.session_id AND s.user_id=ctx.actor_id
+    WHERE ctx.tx_id=txid_current() AND ctx.org_id=v_requirement.org_id AND ctx.lease_id=v_requirement.lease_id
+      AND ctx.actor_id=auth.uid() AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()) THEN
+    RAISE EXCEPTION 'Payment result unavailable' USING ERRCODE='42501';
+  END IF;
+
+  v_dedupe_key := 'payment:' || v_requirement.payment_id::text || ':' || v_requirement.kind;
+
+  INSERT INTO app.b010_source_events(
+    org_id,lease_id,payment_id,kind,occurrence_key,actor_id,
+    dedupe_key,source,triggered_by_user_id
+  )
+    VALUES(
+      v_requirement.org_id,v_requirement.lease_id,v_requirement.payment_id,
+      v_requirement.kind,v_requirement.kind,v_requirement.actor_id,
+      v_dedupe_key,'payment_result',v_requirement.actor_id
+    )
+    ON CONFLICT (org_id,dedupe_key) WHERE dedupe_key IS NOT NULL
+    DO NOTHING
+    RETURNING id INTO v_event;
+
+  IF NOT FOUND THEN
+    SELECT e.id INTO v_event
+      FROM app.b010_source_events e
+      WHERE e.org_id=v_requirement.org_id
+        AND e.dedupe_key=v_dedupe_key
+        AND e.payment_id=v_requirement.payment_id
+        AND e.kind=v_requirement.kind
+        AND e.lease_id IS NOT DISTINCT FROM v_requirement.lease_id;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Payment result unavailable' USING ERRCODE='42501';
+    END IF;
+  END IF;
+
+  UPDATE app.b010_payment_requirements SET event_id=v_event
+    WHERE tx_id=txid_current() AND payment_id=p_payment AND kind=p_kind AND actor_id=auth.uid();
+
+  RETURN v_event;
+END $$;
+
+REVOKE ALL ON FUNCTION app.b010_emit_payment_event(uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION app.b010_emit_payment_event(uuid,text) TO authenticated,service_role;
 
 COMMIT;
