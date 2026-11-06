@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Client } from 'pg';
-import { recordUsage, usageDedupeKey, usageEventsOn, withUsageTransaction } from './usage-events';
+import { recordUsage, recordVendorDispatchUsage, usageDedupeKey, usageEventsOn, withUsageTransaction } from './usage-events';
 
 test('usage flag requires strict booleans and selected org allowlist', () => {
   const good = { enabled: true, allowed_org_ids: ['org'] };
@@ -69,4 +69,35 @@ test('flag cache is per client, org and transaction, including rollback cleanup'
   enabled = false;
   await withUsageTransaction(client, async () => assert.equal((await recordUsage(client, input)).state, 'off'));
   assert.equal(calls.filter(sql => sql.includes('platform_settings')).length, 4);
+});
+
+test('dispatch admission OFF falls back to B-029; invalid source stays empty; stable OFF preserves query order', async () => {
+  const history = { id: 'first-job', ticket: 'ticket', vendor: 'vendor', at: '2026-11-01T00:00:00Z' };
+  for (const mode of ['off', 'toggle', 'invalid'] as const) {
+    const calls: string[] = [];
+    const client = { query: async (sql: string, values?: unknown[]) => {
+      calls.push(sql);
+      if (sql.includes("current_setting('role')")) return { rows: [{ role: 'authenticated', claim: 'authenticated' }] };
+      if (sql.includes('platform_settings')) return { rows: [{ value: { enabled: !sql.includes("key='usage_subscriptions'") || mode !== 'off', allowed_org_ids: ['org'] }, feature_flags: { usage_events: true, usage_subscriptions: true } }] };
+      if (sql.includes('b030_vendor_dispatch_source')) return { rows: mode === 'toggle' ? [{ state: 'off' }] : [] };
+      if (sql.includes('WITH history')) return { rows: [history] };
+      if (sql.includes('prop07_record_usage')) {
+        assert.equal(values?.[5], history.id);
+        assert.equal(values?.[6], 'vendor_jobs:repair_vendor_jobs:first-job:ticket:vendor');
+        return { rows: [{ id: 'usage' }] };
+      }
+      return { rows: [] };
+    } } as unknown as Client;
+    assert.equal((await recordVendorDispatchUsage(client, 'org', 'job')).state, mode === 'invalid' ? 'empty' : 'recorded');
+    assert.equal(calls.some(sql => sql.includes('WITH history')), mode !== 'invalid');
+    if (mode === 'off') assert.deepEqual(calls.map(sql => sql.trim().split('\n')[0]), [
+      'SAVEPOINT usage_event',
+      "SELECT (SELECT value FROM platform_settings WHERE key='usage_events') AS value, feature_flags FROM organizations WHERE id=$1",
+      "SELECT current_setting('role') AS role, current_setting('request.jwt.claim.role',true) AS claim",
+      'SET LOCAL ROLE service_role', "SELECT set_config('request.jwt.claim.role','service_role',true)",
+      "SELECT (SELECT value FROM platform_settings WHERE key='usage_subscriptions') AS value, feature_flags FROM organizations WHERE id=$1",
+      'WITH history AS (', 'SELECT app.prop07_record_usage($1,$2,$3::bigint,$4::timestamptz,$5,$6,$7)::text AS id',
+      "SELECT set_config('role',$1,true),set_config('request.jwt.claim.role',$2,true)", 'RELEASE SAVEPOINT usage_event',
+    ]);
+  }
 });

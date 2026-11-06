@@ -1,5 +1,6 @@
 import type { Client } from 'pg';
 import { logServerError, safeDbCode } from './errors';
+import { usageSubscriptionsOn } from './b030-subscription-rules';
 
 type Connection = Pick<Client, 'query'>;
 const transactionFlags = new WeakMap<Connection, Map<string, boolean>>();
@@ -127,6 +128,19 @@ export async function recordHandoverAttachmentUsage(client: Connection, orgId: s
  * created_at) orders replaced links; the current active job is always last. */
 export async function recordVendorDispatchUsage(client: Connection, orgId: string, jobId: string): Promise<UsageResult> {
   return metered(client, orgId, async () => {
+    const flag = (await client.query<{ value: unknown; feature_flags: unknown }>(
+      `SELECT (SELECT value FROM platform_settings WHERE key='usage_subscriptions') AS value, feature_flags FROM organizations WHERE id=$1`, [orgId],
+    )).rows[0];
+    if (usageSubscriptionsOn(flag?.value, flag?.feature_flags, orgId)) {
+      const source = (await client.query<{ state: 'off' | 'ready'; id: string; ticket: string; vendor: string; at: string }>(
+        `SELECT * FROM app.b030_vendor_dispatch_source($1,$2)`, [orgId, jobId],
+      )).rows[0];
+      if (!source) return null;
+      // Only an explicit admission OFF falls through; invalid sources remain empty.
+      if (source.state !== 'off') return { orgId, dimension: 'vendor_jobs', quantity: BigInt(1), occurredAt: source.at,
+        sourceTable: 'repair_vendor_jobs', sourceId: source.id,
+        dedupeKey: usageDedupeKey('vendor_jobs', 'repair_vendor_jobs', source.id, `${source.ticket}:${source.vendor}`) };
+    }
     const row = (await client.query<{ id: string; ticket: string; vendor: string; at: string }>(
       `WITH history AS (
          SELECT j.*,row_number() OVER (ORDER BY j.active,coalesce(j.revoked_at,j.created_at),j.id) AS seq

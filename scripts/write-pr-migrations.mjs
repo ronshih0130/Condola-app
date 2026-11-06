@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261107070000_b030_usage_subscription_state.sql": {
+    addOnly: false,
+    reason: "Adds private plan/subscription/event/assignment tables with CHECK, foreign-key and uniqueness constraints, RLS and privilege revokes; grants role-specific gateway EXECUTE and installs an isolated assignment trigger on maintenance_tickets with audit-based recovery. Strict usage_subscriptions OFF; no real provider or restrictions.",
+  },
   "supabase/migrations/20261106110000_b029_usage_events_flag.sql": {
     addOnly: true,
     reason: "Seeds default-OFF usage_events setting only; B-029 hooks use the existing PROP-07 recorder and store.",
