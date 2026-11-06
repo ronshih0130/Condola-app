@@ -162,3 +162,54 @@ privilege/config catalog (incl. no NOWAIT/LOCK in the producer), renewal-deferre
 held org `FOR UPDATE` for 2.5 s → no error, action succeeds after release) and a rollback test (failure injected after
 the producer → zero event/recipient/attempt rows and no handover version).
 `notification-event-templates.test.ts` (unit) renders every kind in both locales.
+
+## Package 4 — Inherited B-013 repair authorization/integrity (FALLBACK-SUBAGENT, local only)
+
+Branch `feat/b-028-repair-integrity`, stacked on package 2. Gap-plan item 4 / Reserves 1–3. No new table, column,
+flag or product behaviour; `repair_approvals` semantics unchanged. Non-additive migration (drops and recreates the four B-013 session mutators with the environment tuple; `addOnly:false`)
+`20261107120000_b028_repair_context_integrity.sql` (lock_timeout 5s, statement_timeout 60s, atomic).
+
+- **Reserve 1 — environment/principal binding.** Private SECURITY DEFINER `app.b028_repair_actor(p_org, p_live,
+  p_env, p_session)` (no EXECUTE for any API role) applies the exact B-021 reader tuple predicate (`p_env ∈
+  {live,sandbox}`; live org is `environment='live' AND live_org_id IS NULL`; live ⇒ `org = live`; sandbox ⇒
+  `org.live_org_id = live`), then the unchanged `app.b013_actor`, then requires `auth.uid()` (set by `svc()` from
+  `Session.userId`) to equal the session's user. `b013_submit_estimate`, `b013_decide_estimate`,
+  `b013_authorize_emergency` and `b013_record_appointment` are DROPped and recreated with `(p_org, p_live, p_env,
+  p_session, …)`: CREATE OR REPLACE cannot add parameters, and keeping the old overloads would leave an unbound path
+  (B-024 precedent). Bodies are identical apart from the actor call (start and final recheck) and the photo call;
+  grants, SECURITY DEFINER and `search_path` (`pg_catalog,app` for record_appointment) preserved. The tuple is a
+  function of the org, so replay identity is unchanged. `repair-approval.ts` passes
+  `[orgId, liveOrgId, environment, sessionId]` via `sessionContext()` (rejects non live/sandbox before I/O).
+  Readers, `b013_record_vendor_appointment` (token capability, no session), `b013_emit_reminder` and
+  `b013_dispatch_allowed` are unchanged.
+- **OFF.** The context check runs before replay and the flag check, as in the readers. A valid context with
+  `repair_approvals` OFF still records exactly one `rejected_disabled` command (documented exception, preserved and
+  re-asserted); an invalid context raises `42501` and writes nothing, ON or OFF.
+- **Reserve 2 — photos.** Private `app.b028_repair_photo_refs(p_org, p_ticket, p_refs, p_min)` keeps the existing
+  shape check, then requires every ref id to be a UUID naming a `ticket_attachments` row of the same org and ticket,
+  joined to a `files` row of the same org in `ticket-photos-private`, and `NOT is_internal`; rows are pinned
+  `FOR SHARE OF a, f`. Any failing ref rejects the whole command (`rejected_invalid`; no strip — no caller relies on
+  stripping). The schema has no revocation/deletion column: deleted = row absent; "revoked" is modelled as
+  `is_internal` (hidden from the owner who reads the refs). Readers still project `{id}` only.
+- **Reserve 3 — appointment/job.** The B-021 insert guard did not cover parent updates: a referenced job's
+  `ticket_id`/`org_id` could be reassigned (the test's negative control drops the new FK and the UPDATE succeeds).
+  Added `b028_appointment_job_scope_fkey`: `(org_id, ticket_id, repair_vendor_job_id) → repair_vendor_jobs(org_id,
+  ticket_id, id)` on the existing `b028_vendor_job_scope_unique` index, `NOT VALID` then `VALIDATE`. Reassignment now
+  fails `23503`; non-scope updates (revocation) still work.
+
+**Tests.** New `b028-repair-integrity.integration.test.ts` (registered in `test:rls`, 8 tests): valid live and sandbox
+contexts record all four mutators; 80 denials (4 mutators × live/sandbox × swapped env, unknown env, live-org mismatch,
+live = sandbox, wrong principal, missing principal, another user's session, no session, revoked, expired), each `42501`
+with full-row snapshots of all seven B-013 tables + repair audit unchanged; replay under a swapped/foreign context
+denied; OFF contract; photos (foreign ticket, foreign org, sandbox of the same live org, missing, deleted, internal,
+moved out of the private bucket, non-UUID, mixed) rejected for evidence and emergency with zero domain/outbox writes and
+only the `rejected_invalid` ledger rows; authorized refs accepted and readers never expose storage keys/URLs; wrong-org
+appointment insert/gateway and parent reassignment rejected with references preserved; catalog (old signatures gone,
+helpers private, FK validated); real TS wrapper denials (swapped env, live-org, userId mismatch) with zero writes.
+Negative control: with both helpers weakened to the old behaviour, 5/8 tests fail. Existing repair suites, the
+decision-route mock and the repair family test now pass the tuple/principal and use real photo rows instead of the
+synthetic ids `"photo"`, `"evidence"`, `"fixture-photo"`, `"synthetic-photo"`.
+
+**Open.** Readers still use `b013_actor` without the principal (`auth.uid()`) check (tuple already enforced); the
+photo `FOR SHARE` pin is not exercised under concurrency; hosted roles/`auth.uid()` behaviour unproven (staging is PE);
+Reserve 4 (T0 parent-FK lock timing) untouched.
