@@ -350,3 +350,12 @@ flags:
     global_kill: "platform_settings.line_owner_portal requires enabled=true and organization allowlist; LINE_PLATFORM_ENABLED and line_platform also required; absent or malformed is OFF"
     org_override: "organizations.feature_flags.line_platform and line_owner_portal must both be strict true"
     activation: "Local token verification and captured OAuth exchange only; no hosted activation."
+
+  line_dispatch_push:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.line_dispatch_push requires strict boolean enabled and allowed_org_ids array containing the organization; LINE_PLATFORM_ENABLED, line_platform, line_push, notification_delivery_v2 and line_vendor_portal also required; absent or malformed is OFF"
+    org_override: "organizations.feature_flags.line_dispatch_push must be strict boolean true, together with line_platform, line_push and line_vendor_portal"
+    activation: "Local captured transport only. Vendor assigned/rescheduled/cancelled pushes reuse the B-033 quota guard, retry key and deduplicated Email fallback. No hosted activation."

@@ -68,6 +68,7 @@ import {
 import { resolveVendorIdentity } from "./vendor-identity";
 import { planVendorAttribution } from "./vendor-attribution";
 import { requireOrgScope } from "./org-guard";
+import { recordVendorDispatchEvent } from "./line/dispatch-events";
 
 let vendorLinkKillSwitch: boolean = VENDOR_LINK_ENABLED;
 
@@ -544,6 +545,7 @@ export async function revokeVendorJob(session: Session, ticketId: string, jobId:
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.notFound");
     await writeAudit(session.orgId, session.userId, "repair_dispatch_revoke", { ticketId, jobId }, client);
+    await recordVendorDispatchEvent(client, session.orgId, ticketId, jobId, "revoked");
   });
 }
 
@@ -605,6 +607,7 @@ export async function approveVendorSharing(
     );
     await writeAudit(session.orgId, session.userId, "repair_vendor_sharing_approve",
       { ticketId, jobId, attachmentIds: ids }, client);
+    await recordVendorDispatchEvent(client, session.orgId, ticketId, jobId, "shared");
   });
 }
 
