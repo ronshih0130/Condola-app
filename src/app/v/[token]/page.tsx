@@ -6,7 +6,9 @@ import { ErrorBanner } from "@/components/ui";
 import { actionVendorReport } from "@/server/actions";
 import { brandV2Enabled } from "@/server/brand-v2";
 import { loadVendorJob } from "@/server/vendor-repair";
+import { resolveVendorJobState } from "@/server/vendor-job";
 import { requestPrefs } from "@/server/session";
+import { VendorJobControls } from "./vendor-job-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,7 @@ export default async function VendorJobPage({
       </div>
     );
   }
+  const vendorState = await resolveVendorJobState(token);
   const photoMessages = {
     size: t("i_photo_size"),
     type: t("i_photo_type"),
@@ -85,6 +88,62 @@ export default async function VendorJobPage({
       </>
     );
   }
+  function renderVendorJobControls() {
+    if (vendorState === null) return null;
+    if (vendorState.locked) {
+      return <p data-testid="vendor-pending-approval">{t("i_vendor_pending_owner_approval")}</p>;
+    }
+    if (job!.vendorLink && (!job!.vendorLink.sharingApproved || job!.vendorLink.capability !== "write")) return null;
+    return (
+      <VendorJobControls key={vendorState.requestId}
+        copy={{ reported: t("i_vendor_reported_awaiting_company"), unavailable: t("i_generic") }}>
+        {vendorState.currentEvent === "vendor_completion_submitted"
+          ? <p>{t("i_vendor_reported_awaiting_company")}</p> : null}
+        <form action="/api/vendor-job-response" method="post">
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="requestId" value={vendorState.requestId} />
+          <input type="hidden" name="versionId" value={vendorState.versionId} />
+          <input type="hidden" name="action" value="propose" />
+          <fieldset>
+            <legend>{t("i_vendor_propose_time")}</legend>
+            <label>{t("i_vendor_window")} (1)
+              <input className="inp" type="datetime-local" name="proposedStart" required />
+            </label>
+            <label>{t("i_vendor_window")} (2)
+              <input className="inp" type="datetime-local" name="proposedEnd" required />
+            </label>
+          </fieldset>
+          <button className="btn pri" type="submit" style={{ minHeight: 44, minWidth: 44 }} data-testid="vendor-propose">
+            {t("i_vendor_propose_time")}
+          </button>
+        </form>
+        <form action="/api/vendor-job-response" method="post">
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="requestId" value={vendorState.requestId} />
+          <input type="hidden" name="versionId" value={vendorState.versionId} />
+          <input type="hidden" name="action" value="reject" />
+          <label>{t("i_vendor_reject_reason")}
+            <textarea className="inp" name="reason" required maxLength={4000} />
+          </label>
+          <button className="btn" type="submit" style={{ minHeight: 44, minWidth: 44 }} data-testid="vendor-reject">
+            {t("i_vendor_reject")}
+          </button>
+        </form>
+        <form action="/api/vendor-job-completion" method="post">
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="requestId" value={vendorState.requestId} />
+          <input type="hidden" name="versionId" value={vendorState.versionId} />
+          <input type="hidden" name="action" value="complete" />
+          <label>{t("i_vendor_completion_reason")}
+            <textarea className="inp" name="reason" required={job!.donePhotos.length === 0} maxLength={4000} />
+          </label>
+          <button className="btn pri" type="submit" style={{ minHeight: 44, minWidth: 44 }} data-testid="vendor-complete">
+            {t("i_vendor_complete")}
+          </button>
+        </form>
+      </VendorJobControls>
+    );
+  }
   if (job.vendorLink !== undefined) {
     return (
       <VendorLinkDetails
@@ -96,7 +155,8 @@ export default async function VendorJobPage({
       >
         <ErrorBanner t={t} error={query.error} />
         <VendorNotificationCenterEntry token={token} locale={prefs.locale} />
-        {job.vendorLink.sharingApproved && job.vendorLink.capability === "write" ? renderReportControls(true) : null}
+        {(vendorState === null || !vendorState.locked) && job.vendorLink.sharingApproved && job.vendorLink.capability === "write" ? renderReportControls(true) : null}
+        {renderVendorJobControls()}
       </VendorLinkDetails>
     );
   }
@@ -133,7 +193,8 @@ export default async function VendorJobPage({
           </div>
         </>
       ) : null}
-      {renderReportControls()}
+      {vendorState === null || !vendorState.locked ? renderReportControls() : null}
+      {renderVendorJobControls()}
     </div>
   );
 }

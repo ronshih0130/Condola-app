@@ -164,6 +164,7 @@ export function assertEstimate(input: {
 }
 
 export type AppointmentTimes = {
+  reason?: string | null;
   eventKind: string;
   proposedStart?: Time | null;
   proposedEnd?: Time | null;
@@ -172,6 +173,8 @@ export type AppointmentTimes = {
 };
 
 export function assertAppointment(input: AppointmentTimes): void {
+  if (input.reason != null) assertText(input.reason, 4000);
+  if (input.eventKind === "vendor_rejected") assertText(input.reason, 4000);
   if (!APPOINTMENT_EVENTS.includes(input.eventKind as (typeof APPOINTMENT_EVENTS)[number])) {
     throw new FlowError("errors.required");
   }

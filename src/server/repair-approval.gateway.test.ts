@@ -35,6 +35,8 @@ test("B-021 production callers are confined to the owner decision and scoped vie
     "app/o/approvals/approval-cards.tsx",
     "app/o/approvals/decision-form.tsx",
     "app/o/approvals/page.tsx",
+    "server/vendor-job.ts",
+    "server/vendor-repair.ts",
   ].sort());
 });
 
@@ -47,6 +49,7 @@ test("B-021 service uses contracted gateways and the registered rendering contro
     "b013_decide_estimate",
     "b013_authorize_emergency",
     "b013_record_appointment",
+    "b013_record_vendor_appointment",
     "b013_emit_reminder",
     "b013_dispatch_allowed",
   ];

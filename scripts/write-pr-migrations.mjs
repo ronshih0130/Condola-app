@@ -318,6 +318,10 @@ const added = {
     addOnly: false,
     reason: "Adds three service-only SECURITY DEFINER readers with org/environment/session scope and flag-OFF empty results, plus a private appointment-to-job org/ticket invariant trigger; no tables, table grants, flag seed or money movement.",
   },
+  "supabase/migrations/20261105190000_b024_vendor_completion_reason.sql": {
+    addOnly: false,
+    reason: "Adds immutable appointment response_reason checks, replaces the staff signature with a trailing default, and adds a service-only token-scoped vendor gateway with replay and flag-OFF rejection; no table grants, flag seeds or ticket status changes.",
+  },
 };
 
 const functions = [

@@ -17,6 +17,7 @@ import {
   type Minor,
   type Time,
 } from "./repair-approval-rules";
+import { hashVendorToken, vendorTokenAcceptable } from "./vendor-repair-rules";
 import type { Session } from "./types";
 
 export type ApprovalResult = { status: string; [key: string]: unknown };
@@ -153,13 +154,58 @@ export function recordAppointment(session: Session, input: RecordAppointmentInpu
     proposedEnd: input.proposedEnd == null ? null : timestamp(input.proposedEnd),
     confirmedStart: input.confirmedStart == null ? null : timestamp(input.confirmedStart),
     confirmedEnd: input.confirmedEnd == null ? null : timestamp(input.confirmedEnd),
+    ...(input.reason == null ? {} : { reason: input.reason.trim() }),
   };
   return run(session,
-    "SELECT app.b013_record_appointment($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::text,$7::timestamptz,$8::timestamptz,$9::timestamptz,$10::timestamptz,$11::bytea) AS r",
+    "SELECT app.b013_record_appointment($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::text,$7::timestamptz,$8::timestamptz,$9::timestamptz,$10::timestamptz,$11::bytea,$12::text) AS r",
     [session.orgId, session.sessionId, input.requestId, payload.versionId, payload.vendorJobId,
       payload.eventKind, payload.proposedStart, payload.proposedEnd, payload.confirmedStart,
-      payload.confirmedEnd, payloadHash(session, "appointment", payload)],
+      payload.confirmedEnd, payloadHash(session, "appointment", payload), payload.reason ?? null],
     jsonResult);
+}
+
+export type VendorAppointmentInput = RecordAppointmentInput & { orgId: string };
+export type VendorAppointmentCredential = { token: string } | { tokenHash: string };
+
+/** Server-only capability caller. The gateway validates every supplied scope ID. */
+export function recordVendorAppointment(
+  credential: VendorAppointmentCredential,
+  input: VendorAppointmentInput,
+): Promise<ApprovalResult> {
+  assertIdentifiers(input.orgId, input.requestId, input.versionId, input.vendorJobId);
+  assertAppointment(input);
+  if (input.eventKind === "company_confirmed") throw new FlowError("errors.forbidden");
+  let tokenHash: string;
+  if ("token" in credential) {
+    if (!vendorTokenAcceptable(credential.token)) throw new FlowError("errors.forbidden");
+    tokenHash = hashVendorToken(credential.token);
+  } else {
+    tokenHash = credential.tokenHash;
+    if (!/^[0-9a-f]{64}$/.test(tokenHash)) throw new FlowError("errors.forbidden");
+  }
+  const payload = {
+    orgId: input.orgId,
+    vendorJobId: input.vendorJobId,
+    versionId: input.versionId,
+    eventKind: input.eventKind,
+    proposedStart: input.proposedStart == null ? null : timestamp(input.proposedStart),
+    proposedEnd: input.proposedEnd == null ? null : timestamp(input.proposedEnd),
+    confirmedStart: input.confirmedStart == null ? null : timestamp(input.confirmedStart),
+    confirmedEnd: input.confirmedEnd == null ? null : timestamp(input.confirmedEnd),
+    reason: input.reason == null ? null : input.reason.trim(),
+  };
+  const digest = createHash("sha256").update(stableJson({
+    operation: "appointment", principal: "vendor", payload,
+  }), "utf8").digest();
+  return svc(null, async (client) => {
+    const row = await maybe<{ r: unknown }>(client,
+      "SELECT app.b013_record_vendor_appointment($1::uuid,$2::uuid,$3::text,$4::uuid,$5::uuid,$6::text,$7::timestamptz,$8::timestamptz,$9::timestamptz,$10::timestamptz,$11::text,$12::bytea) AS r",
+      [payload.orgId, payload.vendorJobId, tokenHash, input.requestId, payload.versionId,
+        payload.eventKind, payload.proposedStart, payload.proposedEnd, payload.confirmedStart,
+        payload.confirmedEnd, payload.reason, digest]);
+    if (!row) throw new FlowError("errors.notFound");
+    return jsonResult(row.r);
+  });
 }
 
 /** Trusted scheduler entrypoint; the gateway owns due checks and deduplication. */
