@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: multi-property isolation: current owner, other owner, ended owner sees only their authority period
+ok 1 - multi-property isolation: current owner, other owner, ended owner sees only their authority period
+  ---
+  duration_ms: 314.32125
+  ...
+# Subtest: gap period and re-acquisition: only content dated inside the owner's own windows
+ok 2 - gap period and re-acquisition: only content dated inside the owner's own windows
+  ---
+  duration_ms: 122.365958
+  ...
+# Subtest: cross-org, staff and foreign file ids are denied with no access row
+ok 3 - cross-org, staff and foreign file ids are denied with no access row
+  ---
+  duration_ms: 148.494917
+  ...
+# Subtest: download and view write exactly one access row each and never change consent or confirmation state
+ok 4 - download and view write exactly one access row each and never change consent or confirmation state
+  ---
+  duration_ms: 110.609125
+  ...
+# Subtest: repair list/detail isolation, history clipping and owner-safe fields
+ok 5 - repair list/detail isolation, history clipping and owner-safe fields
+  ---
+  duration_ms: 126.096583
+  ...
+# Subtest: OFF matrix: absent/false/malformed global, org not allowed, org flag false ⇒ null/404, no gateway call, zero writes
+ok 6 - OFF matrix: absent/false/malformed global, org not allowed, org flag false ⇒ null/404, no gateway call, zero writes
+  ---
+  duration_ms: 434.73
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1666.516125

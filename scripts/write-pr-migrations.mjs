@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107110000_b023_owner_portal_access.sql": {
+    addOnly: true,
+    reason: "Adds a private append-only owner document access log with RLS and revokes, authenticated SECURITY DEFINER owner document/repair read gateways and one default-OFF platform setting; no existing-table schema, policy or function changes or backfill.",
+  },
   "supabase/migrations/20261107040000_b012_durable_replacement.sql": {
     addOnly: false,
     reason: "New private replacement and append-only notice/response tables, constraints, RLS and authenticated gateways. New triggers freeze replaced predecessors and their parties; privileges are explicitly revoked. No existing row rewrite; lease_renewal defaults OFF.",

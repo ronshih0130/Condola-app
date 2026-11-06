@@ -4,6 +4,7 @@ import { ownerRepairPolicyEntryIds } from "@/server/repair-owner-policy";
 import { OwnerNav } from "@/components/owner-nav";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { requireCurrentConsent } from "@/server/consent-gate";
+import { ownerPortalExtensionsOn } from "@/server/owner-portal-access";
 import { ownerPropertyNames } from "@/server/queries";
 import { getSession } from "@/server/session";
 
@@ -17,5 +18,7 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
   await requireCurrentConsent(session, "page", path || "/o");
   const properties = await ownerPropertyNames(session);
   const repairPolicyIds = await ownerRepairPolicyEntryIds(session, properties.map(property => property.id));
-  return <OwnerNav properties={properties} repairPolicyIds={repairPolicyIds} {...(v2 ? { v2: true } : {})}>{children}</OwnerNav>;
+  // B-023: nav entries only when owner_portal_extensions is ON (read-only flag check).
+  const extensions = await ownerPortalExtensionsOn(session);
+  return <OwnerNav properties={properties} repairPolicyIds={repairPolicyIds} {...(v2 ? { v2: true } : {})} {...(extensions ? { extensions: true } : {})}>{children}</OwnerNav>;
 }
