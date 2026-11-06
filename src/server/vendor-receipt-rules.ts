@@ -219,6 +219,8 @@ export interface VendorDocument {
 }
 
 export interface IssueVendorDocumentInput {
+  /** Explicit completion statements are allowed; receipts still require qualification. */
+  kind?: VendorDocumentKind;
   id: string;
   vendor_profile_id: string;
   ticket_id: string;
@@ -240,7 +242,9 @@ export function issueVendorDocument(input: IssueVendorDocumentInput): VendorDocu
   ) {
     fail("invalidDocumentCode");
   }
-  const kind = decideDocumentKind(input.vendor);
+  const eligibleKind = decideDocumentKind(input.vendor);
+  if (input.kind === "receipt" && eligibleKind !== "receipt") fail("invalidDocumentCode");
+  const kind = input.kind ?? eligibleKind;
   const docNo = formatDocumentNo(input.vendor_code, input.seq, kind);
   const buyer = validateBuyer(input.buyer);
   validateDocumentTotals(input.items, input.total_minor, input.ticket_actual_cost_minor);
