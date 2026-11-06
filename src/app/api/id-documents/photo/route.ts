@@ -1,3 +1,5 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+import { canReviewId } from "@/server/id-docs";
 import { ConsentRequiredError, consentRequiredResponse, requireCurrentConsent } from "@/server/consent-gate";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -14,7 +16,7 @@ const SLOTS = new Set(["front", "back", "selfie"]);
 
 /** One photo. Encryption happens here, off the Workers CPU budget, before finalize. */
 export async function POST(request: Request) {
-  const session = await readSession();
+  const session = await guardEffectiveSession(await readSession(), "leases.edit");
   if (!session) return NextResponse.json({ error: "errors.forbidden" }, { status: 401 });
   const blocked = await requireCurrentConsent(session, "api");
   if (blocked) return blocked;
@@ -65,9 +67,10 @@ export async function GET(request: Request) {
   let photo;
   try {
     photo = await serveSignedPhoto(input, async (client) => {
-      const { session } = await readSessionOn(client, { touch: false });
-      if (!session || session.userId !== parsed.u) throw new Error("Invalid photo session");
+      let { session } = await readSessionOn(client, { touch: false });
+      if (!session || (session.kind === "staff" && !canReviewId(session)) || session.userId !== parsed.u) throw new Error("Invalid photo session");
       if (await requireCurrentConsent(session, "api")) throw new ConsentRequiredError();
+      session = await guardEffectiveSession(session, "leases.edit");
       input.preferredOrg = session.liveOrgId;
       input.env = session.environment;
     });

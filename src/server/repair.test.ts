@@ -561,7 +561,8 @@ test("RepairPhotos shows the English permission notice for accountants", () => {
 
 test("repair page wires photo permissions and thread delegates photo rendering", () => {
   const page = readFileSync(new URL("../app/m/tickets/[id]/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /canViewPhotos=\{can\(session\.role, "tickets\.update"\)\}/);
+  assert.match(page, /canViewPhotos=\{canTicketPhotos\(session\)\}/);
+  assert.match(page, /canUpload=\{canTicketPhotos\(session\)\}/);
 
   const thread = readFileSync(new URL("../components/repair-thread.tsx", import.meta.url), "utf8");
   assert.ok(thread.includes("<RepairPhotos"));

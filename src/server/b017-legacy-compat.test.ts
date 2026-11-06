@@ -8,7 +8,7 @@ import ts from "typescript";
 import { RepairPhotos } from "@/components/repair-photos";
 import { makeT } from "@/i18n";
 import { loadAuditHistory, loadAuditScreen } from "./audit-read";
-import { PERMS, ROLE_KEYS, can, navCount, noPermHref, roleHome, visibleNav, type PermKey } from "./perms";
+import { PERMS, ROLE_KEYS, can, assertPerm, navCount, noPermHref, roleHome, visibleNav, type PermKey } from "./perms";
 import type { OrgRole, Session } from "./types";
 
 // Literal oracle transcribed from d374bb695d0e97fad72d00449d6a57450a61a9b1,
@@ -42,6 +42,14 @@ for (const [key, expected] of BASELINE) {
   ROLES.forEach((role, column) => {
     test(`d374bb6 native/OFF ${role ?? "null"} ${key} = ${expected[column]}`, () => {
       assert.equal(can(role, key), expected[column]);
+      const session: Session = {
+        userId: "native-user", sessionId: "native-session", orgId: "native-org", liveOrgId: "native-org",
+        email: "native@example.invalid", name: "Native", kind: "staff", role,
+        environment: "live", locale: "en", calendar: "gregorian", leaseId: null,
+      };
+      assert.equal(can(session, key), expected[column]);
+      if (expected[column]) assert.doesNotThrow(() => assertPerm(session, key));
+      else assert.throws(() => assertPerm(session, key), /forbidden/);
     });
   });
 }
@@ -119,7 +127,7 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
-test("B-017 preparation is disconnected from app/server runtime imports, including barrels and dynamic imports", () => {
+test("B-017 policy runtime imports are confined to the trusted governance adapter", () => {
   const policy = path.resolve("src/server/b017-custom-role-policy.ts");
   const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
   assert.equal(config.error, undefined);
@@ -129,7 +137,7 @@ test("B-017 preparation is disconnected from app/server runtime imports, includi
   // Scan ALL production src, stronger than just app/server: a component/lib barrel
   // importing the policy would otherwise create an indirect runtime dependency.
   for (const file of sourceFiles("src")) {
-    if (/\.(test|spec)\.[cm]?[jt]sx?$/.test(file) || path.resolve(file) === policy) continue;
+    if (/\.(test|spec)\.[cm]?[jt]sx?$/.test(file) || path.resolve(file) === policy || file === "src/server/b017-custom-role-governance.ts") continue;
     const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
     function visit(node: ts.Node) {
       let specifier: ts.Node | undefined;
@@ -148,5 +156,5 @@ test("B-017 preparation is disconnected from app/server runtime imports, includi
     }
     visit(source);
   }
-  assert.deepEqual(violations, [], "preparation modules must have no production importers");
+  assert.deepEqual(violations, [], "only the trusted adapter may import the policy");
 });

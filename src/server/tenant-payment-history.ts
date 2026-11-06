@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { tx } from './db';
 import { consentCoversCurrent, type StoredConsent } from './consent';
 import { logServerError } from './errors';
@@ -22,8 +23,9 @@ const personal=`p.org_id=$1::uuid AND p.lease_id=$3::uuid AND p.source='tenant_p
 function encodeCursor(id:string):string { return id; }
 /** Only selected-lease UUIDs and an own-report cursor or exact own report are accepted. */
 export async function tenantPaymentHistory(s:Session,leaseId:string,options:{view:'current'|'ended';cursor?:string;reportId?:string}):Promise<TenantPaymentHistory> {
+  s = await guardEffectiveSession(s, null);
  if(!valid(s)||!options||!['current','ended'].includes(options.view)||!isUuid(leaseId)||(options?.cursor!==undefined&&!isUuid(options.cursor))||(options?.reportId!==undefined&&!isUuid(options.reportId))||(options?.cursor&&options?.reportId))return unavailable;
- try{return await tx(s.userId,async c=>{
+ try{return await tx(s.userId,async c=>withEffectiveAuthority(c, s, null, async () => {
   const args=[s.orgId,s.userId,s.sessionId,s.liveOrgId,s.environment,leaseId];
   // OFF is decided before lease/report lookup so the existing page remains authoritative.
   const controls=await c.query<{flags:unknown;global:unknown}>(`SELECT o.feature_flags flags,(SELECT value FROM public.platform_settings WHERE key='tenant_payment_history') AS global FROM public.organizations o WHERE ${ctx}`,[s.orgId,s.userId,s.sessionId,s.liveOrgId,s.environment]);
@@ -67,5 +69,5 @@ export async function tenantPaymentHistory(s:Session,leaseId:string,options:{vie
    return {id:p.id,status:p.status,current:{amountMinor:safeMinor(p.amount),currency:p.currency,paidOn:p.paid_on},submittedAt:p.submitted_at,confirmedAt:p.confirmed_at,rejectionReason:p.status==='rejected'?p.rejected_reason:null,reversalReason:'unavailable',original:evidence};
   });
   return {state:'ready',lease:{id:leaseId,status:lease.status,currency:lease.currency,canReport:options.view==='current'&&['active','pending_signature'].includes(lease.status)&&bill.balanceMinor>0,legacyPayeeVisible:options.view==='current'&&tenantPayeeVisible(lease.status,lines.length===0,lines)},bill:{...bill,pending:pendingResult.rows[0]?.pending===true,currency:lease.currency,lines},reports:result,nextCursor:reports.rows.length>50?encodeCursor(selected[selected.length-1].id):null};
- },{orgId:s.orgId,environment:s.environment},{isolation:'repeatable read',readOnly:true});}catch(error){logServerError('tenant_payment_history',error);return unavailable;}
+ }),{orgId:s.orgId,environment:s.environment},{isolation:'repeatable read',readOnly:true});}catch(error){logServerError('tenant_payment_history',error);return unavailable;}
 }

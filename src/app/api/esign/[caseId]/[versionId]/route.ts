@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { notFound } from "next/navigation";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
@@ -10,7 +11,7 @@ export async function GET(request: Request, context: { params: Promise<{ caseId:
   const denied = await requireCurrentConsent(undefined, "api");
   if (denied) return denied;
   if (!esignEnabled()) notFound();
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "leases.edit");
   if (!(await esignAvailableFor(session))) notFound();
   const { caseId, versionId } = await context.params;
   const url = new URL(request.url);

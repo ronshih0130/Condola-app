@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { requireCurrentConsent } from "./consent-gate";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -13,7 +15,7 @@ export async function actionApproveVendorSharing(formData: FormData) {
   const ticketId = String(formData.get("ticketId") ?? "");
   const back = isUuid(ticketId) ? `/m/tickets/${ticketId}` : "/m/tickets";
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     await approveVendorSharing(session, ticketId, String(formData.get("jobId") ?? ""), {
       description: String(formData.get("description") ?? ""),
       attachmentIds: formData.getAll("attachmentIds").map(String),

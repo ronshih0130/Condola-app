@@ -8,7 +8,7 @@ import { VendorDispatch } from "@/components/vendor-dispatch";
 import { ErrorBanner, PageHeader, statusKey } from "@/components/ui";
 import { COST_BEARER_KEY, REPAIR_CAT_KEY, REPAIR_STATUSES } from "@/lib/repair-labels";
 import { actionSaveRepair } from "@/server/actions";
-import { can } from "@/server/perms";
+import { canTicketPhotos, can } from "@/server/perms";
 import { isUuid, minorToInput } from "@/server/repair-rules";
 import { ticketDetail } from "@/server/queries";
 import { displaySampleName } from "@/server/sandbox-data";
@@ -33,8 +33,8 @@ export default async function TicketDetailPage({
   const query = await searchParams;
   const detail = await ticketDetail(session, id);
   if (!detail) notFound();
-  const canWrite = can(session.role, "tickets.update");
-  const canPost = can(session.role, "exp.add");
+  const canWrite = can(session, "tickets.update");
+  const canPost = can(session, "exp.add");
   const headerList = await headers();
   const host = headerList.get("x-forwarded-host") || headerList.get("host") || "";
   const proto = headerList.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
@@ -162,8 +162,8 @@ export default async function TicketDetailPage({
             locale={session.locale}
             calendar={session.calendar}
             canComment={canWrite}
-            canUpload={canWrite}
-            canViewPhotos={can(session.role, "tickets.update")}
+            canUpload={canTicketPhotos(session)}
+            canViewPhotos={canTicketPhotos(session)}
             allowInternal={canWrite}
             returnTo="staff"
           />

@@ -186,7 +186,7 @@ test("a failed photo view is translated, and a bounced send keeps the selected p
   const viewFn = view.slice(0, view.indexOf("export async function actionMarkIdChecked"));
   assert.match(viewFn, /issuePhotoUrlsForToken/);
   assert.match(viewFn, /sessionTokenHash/);
-  assert.match(viewFn, /const session = await getSession\(\)/);
+  assert.match(viewFn, /const session = await guardEffectiveSession\(await getSession\(\), "leases.edit"\)/);
   assert.match(viewFn, /userId: session\.userId/);
   assert.match(viewFn, /preferredOrg: session\.liveOrgId/);
   assert.match(viewFn, /env: session\.environment/);
@@ -283,7 +283,7 @@ test("the photo modal keeps a fixed frame per slot and reloads with a new link",
   // The consent lookup reuses the photo connection, after fast token rejection.
   assert.ok(get.indexOf("readPhotoToken(token)") < get.indexOf("serveSignedPhoto(input,"));
   assert.ok(get.indexOf("if (!sessionCookie)") < get.indexOf("serveSignedPhoto(input,"));
-  assert.match(get, /async \(client\) => \{\s*const \{ session \} = await readSessionOn\(client, \{ touch: false \}\)/);
+  assert.match(get, /async \(client\) => \{\s*let \{ session \} = await readSessionOn\(client, \{ touch: false \}\)/);
   assert.match(get, /await requireCurrentConsent\(session, "api"\)/);
   assert.match(get, /session\.userId !== parsed\.u/);
   assert.match(get, /input\.preferredOrg = session\.liveOrgId/);

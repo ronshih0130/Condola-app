@@ -1,3 +1,6 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+import { can } from "@/server/perms";
+import { FlowError } from "@/server/errors";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { getSession } from "@/server/session";
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
   if (session.kind !== "staff") return new Response(null, { status: 403, headers });
   const denied = await requireCurrentConsent(session, "api");
   if (denied) return denied;
-  if (!["admin", "accountant"].includes(session.role ?? "")) {
+  if (!can(session, "stmt.generate")) {
     return new Response(null, { status: 403, headers });
   }
 
@@ -54,6 +57,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    session = await guardEffectiveSession(session, "stmt.generate");
     const result = await writeMonthlyRent(session, input);
     return NextResponse.json(result, { status: monthlyRentHttpStatus(result.status), headers });
   } catch (error) {
@@ -63,7 +67,7 @@ export async function POST(request: Request) {
     if (code === "40001") {
       return NextResponse.json({ status: "rejected_conflict" }, { status: 409, headers });
     }
-    if (code === "42501") {
+    if (code === "42501" || (error instanceof FlowError && error.key === "errors.forbidden")) {
       return new Response(null, { status: 403, headers });
     }
     throw error;

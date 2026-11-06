@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
 import { decideEstimate } from "@/server/repair-approval";
@@ -11,7 +12,7 @@ const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
 export async function POST(request: Request) {
   const denied = await requireCurrentConsent(undefined, "api");
   if (denied) return denied;
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "tickets.update");
   if (session.kind !== "owner") return new Response(null, { status: 403, headers });
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return new Response(null, { status: 403, headers });

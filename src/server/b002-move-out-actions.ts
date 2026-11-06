@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { requireCurrentConsent } from "./consent-gate";
 import { withClient } from "./db";
 import { recordMoveOutNotice } from "./move-out-notice";
@@ -10,8 +12,8 @@ import { getSession } from "./session";
 /** The existing notice flag stays default off; org and actor are session-derived. */
 export async function actionRecordMoveOut(leaseId: string, movedOutOn: string, reason = "") {
   await requireCurrentConsent();
-  const session = await getSession();
-  if (session.kind !== "staff" || !can(session.role, "leases.edit") || session.needsSandbox) {
+  const session = await guardEffectiveSession(await getSession(), "leases.edit");
+  if (session.kind !== "staff" || !can(session, "leases.edit") || session.needsSandbox) {
     return { ok: false as const, reason: "forbidden" as const };
   }
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(leaseId) ||

@@ -16,7 +16,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const query = await searchParams;
   const session = await getSession();
   const t = makeT(session.locale);
-  const mail = can(session.role, "settings.edit") ? await orgMailSettings(session.orgId) : null;
+  const mail = can(session, "settings.edit") ? await orgMailSettings(session.orgId) : null;
   return (
     <>
       <PageHeader title={t("i_nav_settings")} />

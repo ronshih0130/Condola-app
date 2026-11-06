@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { getSession } from "@/server/session";
 import { discardHandoverUpload, finalizeHandoverUpload, prepareHandoverUpload, uploadHandoverBytes } from "@/server/handover";
@@ -10,7 +11,7 @@ const denied = () => Response.json({ ok: false }, { status: 404, headers });
 export async function POST(request: Request, context: { params: Promise<{ leaseId: string }> }) {
   const blocked = await requireCurrentConsent(undefined, "api");
   if (blocked) return blocked;
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "leases.edit");
   const { leaseId } = await context.params;
   try {
     const body = await readHandoverJson(request);
@@ -26,7 +27,7 @@ export async function POST(request: Request, context: { params: Promise<{ leaseI
 export async function PUT(request: Request, context: { params: Promise<{ leaseId: string }> }) {
   const blocked = await requireCurrentConsent(undefined, "api");
   if (blocked) return blocked;
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "leases.edit");
   const { leaseId } = await context.params;
   try {
     const intent = new URL(request.url).searchParams.get("intent") ?? "";

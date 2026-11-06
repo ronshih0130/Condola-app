@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { FlowError } from "@/server/errors";
@@ -14,7 +15,7 @@ function jsonError(error: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const session = await readSession();
+    const session = await guardEffectiveSession(await readSession(), "tickets.update");
     if (!session) return NextResponse.json({ ok: false, error: "errors.forbidden" }, { status: 401 });
     const blocked = await requireCurrentConsent(session, "api");
     if (blocked) return blocked;

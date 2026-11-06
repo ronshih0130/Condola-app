@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { NextResponse } from "next/server";
 import { statementPdfForSession } from "@/server/pdf-download";
@@ -10,7 +11,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   if (!UUID.test(id)) return new NextResponse("Not found", { status: 404 });
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "stmt.view");
   const blocked = await requireCurrentConsent(session, "api");
   if (blocked) return blocked;
   const doc = await statementPdfForSession(session, id);

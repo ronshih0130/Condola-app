@@ -20,7 +20,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
   const result = await searchSpaces(session, raw);
   const { rows, q, page, hasNext, total, from, to } = result;
   const summary = listSummary(t, result);
-  const editable = can(session.role, "props.edit");
+  const editable = can(session, "props.edit");
   const roomTypeKey: Record<string, string> = {
     whole_home: "i_whole_home",
     suite: "i_room_split",

@@ -1,3 +1,6 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { customRolesAdmitted, customRolesEnabledOn, customAuthorityAllowsOn, requireEffectivePerm, maskContactFields, resolveCustomRoleSession } from "./b017-custom-role-governance";
+import { assertPerm, can, canTicketPhotos, type PermKey } from "./perms";
 import type { TenantOption } from "@/tenant-pick";
 import type { QueryResultRow } from "pg";
 import { query, maybe, many, tx } from "./db";
@@ -20,13 +23,23 @@ import {
 } from "./tenant-signed-pdf-rules";
 import { requireOrgScope } from "./org-guard";
 
+/** Layouts and pages render concurrently; every reader owns its admission. */
+async function admitCustomRead(session: Session, key: PermKey) {
+  if (session.kind !== "staff") return;
+  if (session.customRole || customRolesAdmitted(session.orgId)) {
+    const current = customRolesAdmitted(session.orgId) ? await resolveCustomRoleSession(session) : session;
+    if (current.customRole) assertPerm(current, key);
+  }
+}
+
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
 
 const EMPTY_TRYOUT: Tryout = { property: false, lease: false, statement: false, repair: false };
 
 export async function loadTryout(session: Session): Promise<Tryout> {
+  session = await guardEffectiveSession(session, null);
   try {
-    return await tx(session.userId, async (client) => {
+    return await tx(session.userId, async (client) => withEffectiveAuthority(client, session, null, async () => {
       const row = await maybe<{ settings: { tryout?: Partial<Tryout> } }>(
         client,
         `SELECT settings FROM organizations WHERE id = $1`,
@@ -39,7 +52,7 @@ export async function loadTryout(session: Session): Promise<Tryout> {
         statement: Boolean(flags.statement),
         repair: Boolean(flags.repair),
       };
-    }, requireOrgScope(session));
+    }), requireOrgScope(session));
   } catch {
     return EMPTY_TRYOUT;
   }
@@ -51,21 +64,25 @@ export async function loadManagerChrome(session: Session) {
     firm: { name: "", bankName: "", last5: "", defaultLocale: "zh-TW" as const },
     badge: { pending: 0, tickets: 0 },
   };
+  if (session.customRole) return empty;
   try {
-    return await tx(session.userId, async (client) => {
+    return await tx(session.userId, async (client) => withEffectiveAuthority(client, session, null, async () => {
       const row = await maybe<{ settings: { tryout?: Partial<Tryout> }; name: string; default_locale: string }>(
         client,
         `SELECT settings, name, default_locale FROM organizations WHERE id = $1`,
         [session.orgId],
       );
       const flags = row?.settings?.tryout ?? {};
-      const bank = await maybe<{ bank_name: string; account_last5: string }>(
+      const bank = session.customRole && !can(session, "bank.reconcile") ? null : await maybe<{ bank_name: string; account_last5: string }>(
         client,
         `SELECT bank_name, account_last5 FROM bank_accounts
           WHERE org_id = $1 AND archived_at IS NULL AND show_to_tenants ORDER BY created_at LIMIT 1`,
         [session.orgId],
       );
-      const countsRow = await maybe<{ pending: string; tickets: string }>(
+      const countsRow = session.customRole ? {
+        pending: can(session, "pay.record") ? (await many<{ n: string }>(client, "SELECT count(*)::text AS n FROM payments WHERE org_id=$1 AND status='submitted'", [session.orgId]))[0].n : "0",
+        tickets: can(session, "tickets.update") ? (await many<{ n: string }>(client, "SELECT count(*)::text AS n FROM maintenance_tickets WHERE org_id=$1 AND status NOT IN ('resolved','closed','cancelled')", [session.orgId]))[0].n : "0",
+      } : await maybe<{ pending: string; tickets: string }>(
         client,
         `SELECT
            (SELECT count(*)::text FROM payments WHERE org_id = $1 AND status = 'submitted') AS pending,
@@ -87,14 +104,15 @@ export async function loadManagerChrome(session: Session) {
         },
         badge: { pending: Number(countsRow?.pending ?? 0), tickets: Number(countsRow?.tickets ?? 0) },
       };
-    }, requireOrgScope(session));
+    }), requireOrgScope(session));
   } catch {
     return empty;
   }
 }
 
 export async function loadFirm(session: Session) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, null);
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, null, async () => {
     const org = await maybe<{ name: string; default_locale: string }>(
       client,
       `SELECT name, default_locale FROM organizations WHERE id = $1`,
@@ -108,11 +126,13 @@ export async function loadFirm(session: Session) {
     );
     const locale = org?.default_locale === "en" ? "en" : "zh-TW";
     return { name: org?.name ?? "", bankName: bank?.bank_name ?? "", last5: bank?.account_last5 ?? "", defaultLocale: locale as "zh-TW" | "en" };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function dashboard(session: Session) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "dash.view");
+  await admitCustomRead(session, "dash.view");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "dash.view", async () => {
     const money = await maybe<{ received: string; outstanding: string; owing: string }>(
       client,
       `SELECT
@@ -206,7 +226,7 @@ export async function dashboard(session: Session) {
       owing,
       expiring,
     };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 type PropertyListRow = {
@@ -267,27 +287,42 @@ async function loadList<T extends QueryResultRow>(
   return slicePage(rows, bound.limit, total, bound.page);
 }
 
+async function loadContactList<T extends QueryResultRow>(client: import("pg").Client, session: Session, sql: string, order: string, bound: ReturnType<typeof bindList>) {
+  if (session.kind !== "staff" || (!session.customRole && (!customRolesAdmitted(session.orgId) || !await customRolesEnabledOn(client, session.orgId)))) return loadList<T>(client,sql,order,bound);
+  await requireEffectivePerm(client,session,"props.view");
+  const contact = await customAuthorityAllowsOn(client,session,"tenants.contact");
+  const source = contact ? sql : sql.replace(/app\.has_role\([^)]*'\{admin,manager,maintenance\}'\)/g,"false");
+  const result = await loadList<T>(client,source,order,bound);
+  return contact ? result : maskContactFields(result);
+}
+
 async function queryProperties(session: Session, opts?: ListOpts) {
   const bound = bindList(session.orgId, opts);
   return tx(
     session.userId,
-    (client) => loadList<PropertyListRow>(client, PROPERTY_LIST_SQL, PROPERTY_LIST_ORDER, bound),
+    (client) => loadContactList<PropertyListRow>(client, session, PROPERTY_LIST_SQL, PROPERTY_LIST_ORDER, bound),
     listScope(session),
   );
 }
 
 export async function listProperties(session: Session) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   return (await queryProperties(session)).rows;
 }
 
 export async function searchProperties(session: Session, raw?: { q?: string; page?: string | number; limit?: number }) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   const parsed = parseListQuery(raw);
   const result = await queryProperties(session, { q: parsed.q, page: parsed.page, limit: raw?.limit ?? LIST_PAGE_SIZE });
   return { ...result, q: parsed.q, page: parsed.page };
 }
 
 export async function propertyDetail(session: Session, id: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.view", async () => {
     const property = await maybe<{
       id: string;
       name: string;
@@ -374,34 +409,38 @@ export async function propertyDetail(session: Session, id: string) {
     );
     const byRoomUnits = await many<{id:string;label:string}>(client, `SELECT u.id::text,u.label FROM units u JOIN properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE u.org_id=$1 AND u.property_id=$2 AND p.archived_at IS NULL AND u.archived_at IS NULL AND u.rental_mode='by_room' ORDER BY u.label,u.id`,[session.orgId,id]);
     return { property, owner, rooms, wholes, byRoomUnits, meterSerial, repairs };
-  }, requireOrgScope(session));
+  }, true), requireOrgScope(session));
 }
 
 export async function listOwners(session: Session) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   return tx(session.userId, async (client) =>
-    many<{ id: string; name: string }>(
+    withEffectiveAuthority(client, session, "props.view", async () => many<{ id: string; name: string }>(
       client,
       `SELECT id::text, display_name AS name FROM contacts
         WHERE org_id = $1 AND is_owner AND archived_at IS NULL
         ORDER BY display_name`,
       [session.orgId],
-    ), requireOrgScope(session),
+    ), true), requireOrgScope(session),
   );
 }
 
 /** Active 租客 contacts in the signed-in firm. RLS hides every other firm. */
 export async function listTenants(session: Session): Promise<TenantOption[]> {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   return tx(
     session.userId,
     async (client) =>
-      many<TenantOption>(
+      withEffectiveAuthority(client, session, "props.view", async () => many<TenantOption>(
         client,
         `SELECT id::text, display_name AS name, phone_e164 AS phone, email::text AS email
            FROM contacts
           WHERE org_id = $1 AND is_tenant AND archived_at IS NULL
           ORDER BY display_name, id`,
         [session.orgId],
-      ),
+      ), true),
     { orgId: session.orgId, environment: session.environment },
   );
 }
@@ -442,12 +481,14 @@ async function queryTenants(session: Session, opts?: ListOpts) {
   const bound = bindList(session.orgId, opts);
   return tx(
     session.userId,
-    (client) => loadList<TenantListRow>(client, TENANT_LIST_SQL, TENANT_LIST_ORDER, bound),
+    (client) => loadContactList<TenantListRow>(client, session, TENANT_LIST_SQL, TENANT_LIST_ORDER, bound),
     listScope(session),
   );
 }
 
 export async function searchTenants(session: Session, raw?: { q?: string; page?: string | number; limit?: number }) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   const parsed = parseListQuery(raw);
   const result = await queryTenants(session, { q: parsed.q, page: parsed.page, limit: raw?.limit ?? LIST_PAGE_SIZE });
   return { ...result, q: parsed.q, page: parsed.page };
@@ -467,7 +508,9 @@ export type RoomOption = {
 };
 
 export async function vacantRooms(session: Session): Promise<RoomOption[]> {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "leases.edit");
+  await admitCustomRead(session, "leases.edit");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "leases.edit", async () => {
     const rows = await many<{
       id: string;
       label: string;
@@ -560,7 +603,7 @@ export async function vacantRooms(session: Session): Promise<RoomOption[]> {
         )
         .map((lease) => ({ start: lease.start_date, end: lease.end_date })),
     }));
-  }, { orgId: session.orgId, environment: session.environment });
+  }), { orgId: session.orgId, environment: session.environment });
 }
 
 type LeaseListRow = {
@@ -627,23 +670,29 @@ async function queryLeases(session: Session, opts?: ListOpts) {
   const bound = bindList(session.orgId, opts);
   return tx(
     session.userId,
-    (client) => loadList<LeaseListRow>(client, LEASE_LIST_SQL, LEASE_LIST_ORDER, bound),
+    (client) => loadContactList<LeaseListRow>(client, session, LEASE_LIST_SQL, LEASE_LIST_ORDER, bound),
     listScope(session),
   );
 }
 
 export async function listLeases(session: Session) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   return (await queryLeases(session)).rows;
 }
 
 export async function searchLeases(session: Session, raw?: { q?: string; page?: string | number; limit?: number }) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   const parsed = parseListQuery(raw);
   const result = await queryLeases(session, { q: parsed.q, page: parsed.page, limit: raw?.limit ?? LIST_PAGE_SIZE });
   return { ...result, q: parsed.q, page: parsed.page };
 }
 
 export async function leaseDetail(session: Session, id: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.view", async () => {
     const lease = await maybe<{
       id: string;
       status: string;
@@ -752,12 +801,14 @@ export async function leaseDetail(session: Session, id: string) {
       utilityMinor: sumType("utility") + electricityCredit,
       depositMinor: sumType("deposit"),
     };
-  }, requireOrgScope(session));
+  }, true), requireOrgScope(session));
 }
 
 export async function signedLeasePdf(session: Session, leaseId: string) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   return tx(session.userId, async (client) =>
-    maybe<{ file_name: string; content: Buffer }>(
+    withEffectiveAuthority(client, session, "props.view", async () => maybe<{ file_name: string; content: Buffer }>(
       client,
       `SELECT f.file_name, pdf.content
          FROM lease_signed_pdfs pdf
@@ -766,13 +817,15 @@ export async function signedLeasePdf(session: Session, leaseId: string) {
         ORDER BY pdf.created_at DESC
         LIMIT 1`,
       [leaseId, session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function listPayments(session: Session) {
+  session = await guardEffectiveSession(session, "pay.record");
+  await admitCustomRead(session, "pay.record");
   return tx(session.userId, async (client) =>
-    many<{
+    withEffectiveAuthority(client, session, "pay.record", async () => many<{
       id: string;
       status: string;
       amount: string;
@@ -795,13 +848,15 @@ export async function listPayments(session: Session) {
         ORDER BY p.created_at DESC
         LIMIT 40`,
       [session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function listMatches(session: Session) {
+  session = await guardEffectiveSession(session, "bank.reconcile");
+  await admitCustomRead(session, "bank.reconcile");
   return tx(session.userId, async (client) =>
-    many<{
+    withEffectiveAuthority(client, session, "bank.reconcile", async () => many<{
       id: string;
       score: string;
       amount: string;
@@ -821,26 +876,30 @@ export async function listMatches(session: Session) {
         WHERE s.org_id = $1 AND s.status = 'suggested'
         ORDER BY s.score DESC, s.created_at DESC`,
       [session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function latestUnmatchedPayment(session: Session) {
+  session = await guardEffectiveSession(session, "bank.reconcile");
+  await admitCustomRead(session, "bank.reconcile");
   return tx(session.userId, async (client) =>
-    maybe<{ paid_on: string; amount_minor: string; last5: string | null; currency: string }>(
+    withEffectiveAuthority(client, session, "bank.reconcile", async () => maybe<{ paid_on: string; amount_minor: string; last5: string | null; currency: string }>(
       client,
       `SELECT paid_on::text, amount_minor::text, payer_account_last5 AS last5, currency
          FROM payments
         WHERE org_id = $1 AND bank_transaction_id IS NULL AND status IN ('submitted','confirmed')
         ORDER BY created_at DESC LIMIT 1`,
       [session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function listStatements(session: Session) {
+  session = await guardEffectiveSession(session, "stmt.view");
+  await admitCustomRead(session, "stmt.view");
   return tx(session.userId, async (client) =>
-    many<{
+    withEffectiveAuthority(client, session, "stmt.view", async () => many<{
       id: string;
       owner_id: string;
       owner_name: string;
@@ -866,7 +925,7 @@ export async function listStatements(session: Session) {
         WHERE s.org_id = $1 AND s.status <> 'void'
         ORDER BY s.period_start DESC, c.display_name`,
       [session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
@@ -889,7 +948,9 @@ export type RosterRow = {
 };
 
 export async function statementRoster(session: Session, month: string): Promise<RosterRow[]> {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "stmt.view");
+  await admitCustomRead(session, "stmt.view");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "stmt.view", async () => {
     const issued = await many<RosterRow>(
       client,
       `SELECT s.id::text, s.owner_contact_id::text AS owner_id, c.display_name AS owner_name,
@@ -949,12 +1010,14 @@ export async function statementRoster(session: Session, month: string): Promise<
       [session.orgId, `${month}-01`],
     );
     return [...issued, ...pending];
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function rentRoll(session: Session) {
+  session = await guardEffectiveSession(session, "stmt.view");
+  await admitCustomRead(session, "stmt.view");
   return tx(session.userId, async (client) =>
-    many<{
+    withEffectiveAuthority(client, session, "stmt.view", async () => many<{
       property_id: string;
       property_name: string;
       currency: string;
@@ -1013,12 +1076,14 @@ export async function rentRoll(session: Session) {
           ))
         ORDER BY p.name, space_label`,
       [session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function statementDetail(session: Session, id: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "stmt.view");
+  await admitCustomRead(session, "stmt.view");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "stmt.view", async () => {
     const statement = await maybe<{
       id: string;
       owner_name: string;
@@ -1053,21 +1118,25 @@ export async function statementDetail(session: Session, id: string) {
       [id],
     );
     return { statement, lines };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function listTicketProperties(session: Session) {
+  session = await guardEffectiveSession(session, "tickets.update");
+  await admitCustomRead(session, "tickets.update");
   return tx(session.userId, async (client) =>
-    many<{ id: string; name: string }>(
+    withEffectiveAuthority(client, session, "tickets.update", async () => many<{ id: string; name: string }>(
       client,
       `SELECT id::text, name FROM properties WHERE org_id = $1 AND archived_at IS NULL ORDER BY name`,
       [session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function listTicketFilters(session: Session) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  await admitCustomRead(session, "tickets.update");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     const units = await many<{ id: string; property_id: string; label: string }>(
       client,
       `SELECT u.id::text, u.property_id::text, u.label
@@ -1086,15 +1155,17 @@ export async function listTicketFilters(session: Session) {
       [session.orgId],
     );
     return { units, rooms };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function listTickets(
   session: Session,
   filters: { propertyId?: string | null; unitId?: string | null; roomId?: string | null } = {},
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
+  await admitCustomRead(session, "tickets.update");
   return tx(session.userId, async (client) =>
-    many<{
+    withEffectiveAuthority(client, session, "tickets.update", async () => many<{
       id: string;
       number: string;
       title: string;
@@ -1123,16 +1194,18 @@ export async function listTickets(
           AND ($4::uuid IS NULL OR t.room_id = $4)
         ORDER BY t.created_at DESC`,
       [session.orgId, filters.propertyId || null, filters.unitId || null, filters.roomId || null],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 /** Recent repairs for one room, or for a whole unit that has no rooms. */
 export async function spaceRepairs(session: Session, target: { roomId: string } | { unitId: string }) {
+  session = await guardEffectiveSession(session, "tickets.update");
+  await admitCustomRead(session, "tickets.update");
   const roomId = "roomId" in target ? target.roomId : null;
   const unitId = "unitId" in target ? target.unitId : null;
   return tx(session.userId, async (client) =>
-    many<{
+    withEffectiveAuthority(client, session, "tickets.update", async () => many<{
       id: string;
       number: string;
       title: string;
@@ -1151,13 +1224,14 @@ export async function spaceRepairs(session: Session, target: { roomId: string } 
         ORDER BY t.created_at DESC
         LIMIT 8`,
       [session.orgId, roomId, unitId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function tenantRepairs(session: Session, leaseId: string) {
+  session = await guardEffectiveSession(session, null);
   return tx(session.userId, async (client) =>
-    many<{ id: string; number: string; title: string; status: string; category: string; created_at: string }>(
+    withEffectiveAuthority(client, session, null, async () => many<{ id: string; number: string; title: string; status: string; category: string; created_at: string }>(
       client,
       `SELECT t.id::text, t.ticket_number::text AS number, t.title, t.status::text, t.category::text,
               t.created_at::text
@@ -1165,12 +1239,14 @@ export async function tenantRepairs(session: Session, leaseId: string) {
         WHERE t.lease_id = $1 AND t.org_id = $2
         ORDER BY t.created_at DESC`,
       [leaseId, session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function ticketDetail(session: Session, ticketId: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "tickets.update");
+  await admitCustomRead(session, "tickets.update");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     const ticket = await maybe<{
       id: string;
       number: string;
@@ -1225,7 +1301,7 @@ export async function ticketDetail(session: Session, ticketId: string) {
         ORDER BY c.created_at, c.id`,
       [ticket.id],
     );
-    const photos = await many<{ id: string; name: string; path: string; mime: string | null; internal: boolean }>(
+    const photos = session.customRole && session.kind === "staff" && !canTicketPhotos(session) ? [] : await many<{ id: string; name: string; path: string; mime: string | null; internal: boolean }>(
       client,
       `SELECT a.id::text, f.file_name AS name, f.storage_path AS path, f.mime_type AS mime, a.is_internal AS internal
          FROM ticket_attachments a
@@ -1235,12 +1311,14 @@ export async function ticketDetail(session: Session, ticketId: string) {
       [ticket.id],
     );
     return { ticket, comments, photos };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function listThreads(session: Session) {
+  session = await guardEffectiveSession(session, "messages.send");
+  await admitCustomRead(session, "messages.send");
   return tx(session.userId, async (client) =>
-    many<{ id: string; place: string; tenant: string; preview: string | null }>(
+    withEffectiveAuthority(client, session, "messages.send", async () => many<{ id: string; place: string; tenant: string; preview: string | null }>(
       client,
       `SELECT t.id::text,
               p.name || coalesce(' ' || r.label, '') AS place,
@@ -1255,24 +1333,28 @@ export async function listThreads(session: Session) {
         WHERE t.org_id = $1
         ORDER BY t.last_message_at DESC NULLS LAST`,
       [session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function threadMessages(session: Session, threadId: string) {
+  session = await guardEffectiveSession(session, "messages.send");
+  await admitCustomRead(session, "messages.send");
   return tx(session.userId, async (client) =>
-    many<{ id: string; body: string; at: string; mine: boolean }>(
+    withEffectiveAuthority(client, session, "messages.send", async () => many<{ id: string; body: string; at: string; mine: boolean }>(
       client,
       `SELECT id::text, body, created_at::text AS at, (sender_user_id = $2) AS mine
          FROM messages WHERE thread_id = $1 ORDER BY created_at`,
       [threadId, session.userId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function listTeam(session: Session) {
+  session = await guardEffectiveSession(session, "team.manage");
+  await admitCustomRead(session, "team.manage");
   const rows = await tx(session.userId, async (client) =>
-    many<{
+    withEffectiveAuthority(client, session, "team.manage", async () => many<{
       member_id: string | null;
       invitation_id: string | null;
       name: string;
@@ -1295,7 +1377,7 @@ export async function listTeam(session: Session) {
          WHERE i.org_id = $1 AND i.kind = 'team_member' AND i.status IN ('pending', 'revoked')
          ORDER BY 3`,
       [session.orgId],
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
   const ids = rows.map((row) => row.user_id).filter((id): id is string => Boolean(id));
   const extra = new Map<string, { mfa: boolean; last_sign_in: string | null }>();
@@ -1318,8 +1400,9 @@ export async function listTeam(session: Session) {
 }
 
 export async function tenantLeases(session: Session) {
+  session = await guardEffectiveSession(session, null);
   return tx(session.userId, async (client) =>
-    many<{
+    withEffectiveAuthority(client, session, null, async () => many<{
       lease_id: string;
       org_id: string;
       firm_name: string;
@@ -1336,12 +1419,13 @@ export async function tenantLeases(session: Session) {
       `SELECT lease_id::text, org_id::text, firm_name, property_name, address_display, unit_label, room_label,
               lease_status::text, start_date::text, end_date::text, thread_id::text
          FROM tenant_lease_picker`,
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function tenantLeaseMoney(session: Session, leaseId: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, null);
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, null, async () => {
     const lease = await maybe<{
       id: string;
       currency: string;
@@ -1417,24 +1501,26 @@ export async function tenantLeaseMoney(session: Session, leaseId: string) {
       .filter((line) => line.chargeType !== "rent" && line.chargeType !== "deposit" && line.chargeType !== "utility")
       .map(asRow);
     return { lease, dueMinor, balance, paidMinor, currency: lease.currency, rentLines, depositLines, utilityLines, otherLines };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function ownerPropertyNames(session: Session) {
+  session = await guardEffectiveSession(session, null);
   return tx(session.userId, async (client) =>
-    many<{ id: string; name: string }>(
+    withEffectiveAuthority(client, session, null, async () => many<{ id: string; name: string }>(
       client,
       `SELECT id::text, name
          FROM properties
         WHERE archived_at IS NULL
         ORDER BY name`,
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
 export async function ownerHome(session: Session) {
+  session = await guardEffectiveSession(session, null);
   return tx(session.userId, async (client) =>
-    many<{
+    withEffectiveAuthority(client, session, null, async () => many<{
       lease_id: string;
       property_name: string;
       unit_label: string;
@@ -1453,7 +1539,7 @@ export async function ownerHome(session: Session) {
               lease_status::text AS status
          FROM owner_lease_tenants
         ORDER BY property_name, unit_label, room_label`,
-    ), requireOrgScope(session),
+    )), requireOrgScope(session),
   );
 }
 
@@ -1466,8 +1552,10 @@ export type OwnerRow = {
 };
 
 export async function listOwnerDirectory(session: Session) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   return tx(session.userId, async (client) =>
-    many<OwnerRow>(
+    withEffectiveAuthority(client, session, "props.view", async () => many<OwnerRow>(
       client,
       `SELECT c.id::text, c.display_name AS name, c.email::text AS email, c.phone_e164 AS phone,
               coalesce((
@@ -1480,12 +1568,14 @@ export async function listOwnerDirectory(session: Session) {
         WHERE c.org_id = $1 AND c.is_owner AND c.archived_at IS NULL
         ORDER BY c.display_name`,
       [session.orgId],
-    ), requireOrgScope(session),
+    ), true), requireOrgScope(session),
   );
 }
 
 export async function ownerEditor(session: Session, id: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "props.edit");
+  await admitCustomRead(session, "props.edit");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
     const owner = await maybe<{ id: string; name: string; email: string | null; phone: string | null; user_id: string | null }>(
       client,
       `SELECT id::text, display_name AS name, email::text, phone_e164 AS phone, user_id::text AS user_id
@@ -1508,11 +1598,13 @@ export async function ownerEditor(session: Session, id: string) {
       [id, session.orgId],
     );
     return { ...owner, propertyIds: linked.map((row) => row.property_id), invitePending: Boolean(pending) };
-  }, requireOrgScope(session));
+  }, true), requireOrgScope(session));
 }
 
 export async function propertyEditor(session: Session, id: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "props.edit");
+  await admitCustomRead(session, "props.edit");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
     const property = await maybe<{
       id: string;
       name: string;
@@ -1553,7 +1645,7 @@ export async function propertyEditor(session: Session, id: string) {
       [id, session.orgId],
     );
     return property;
-  }, requireOrgScope(session));
+  }, true), requireOrgScope(session));
 }
 
 export type SpaceRow = {
@@ -1626,16 +1718,20 @@ async function querySpaces(session: Session, opts?: ListOpts) {
   const bound = bindList(session.orgId, opts);
   return tx(
     session.userId,
-    (client) => loadList<SpaceRow>(client, SPACE_LIST_SQL, SPACE_LIST_ORDER, bound),
+    (client) => loadContactList<SpaceRow>(client, session, SPACE_LIST_SQL, SPACE_LIST_ORDER, bound),
     listScope(session),
   );
 }
 
 export async function listSpaces(session: Session) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   return (await querySpaces(session)).rows;
 }
 
 export async function searchSpaces(session: Session, raw?: { q?: string; page?: string | number; limit?: number }) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   const parsed = parseListQuery(raw);
   const result = await querySpaces(session, { q: parsed.q, page: parsed.page, limit: raw?.limit ?? LIST_PAGE_SIZE });
   return { ...result, q: parsed.q, page: parsed.page };
@@ -1661,7 +1757,9 @@ export type SpaceEditor = {
 };
 
 export async function spaceEditor(session: Session, kind: "room" | "whole_unit", id: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "props.edit");
+  await admitCustomRead(session, "props.edit");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "props.edit", async () => {
     if (kind === "whole_unit") {
       return maybe<SpaceEditor>(
         client,
@@ -1701,12 +1799,14 @@ export async function spaceEditor(session: Session, kind: "room" | "whole_unit",
         WHERE r.id = $1 AND r.org_id = $2 AND r.archived_at IS NULL AND u.archived_at IS NULL AND p.archived_at IS NULL AND u.rental_mode = 'by_room'`,
       [id, session.orgId],
     );
-  }, requireOrgScope(session));
+  }, true), requireOrgScope(session));
 }
 
 export async function leasePdfSource(session: Session, id: string) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   return tx(session.userId, async (client) =>
-    maybe<{
+    withEffectiveAuthority(client, session, "props.view", async () => maybe<{
       id: string;
       orgId: string;
       documentSha256: string | null;
@@ -1783,12 +1883,14 @@ export async function leasePdfSource(session: Session, id: string) {
          LEFT JOIN rooms r ON r.id = l.target_room_id
         WHERE l.id = $1`,
       [id],
-    ), requireOrgScope(session),
+    ), true), requireOrgScope(session),
   );
 }
 
 export async function statementPdfSource(session: Session, id: string) {
-  return tx(session.userId, async (client) => {
+  session = await guardEffectiveSession(session, "stmt.view");
+  await admitCustomRead(session, "stmt.view");
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "stmt.view", async () => {
     const statement = await maybe<{
       id: string;
       orgId: string;
@@ -1826,12 +1928,14 @@ export async function statementPdfSource(session: Session, id: string) {
       [id],
     );
     return { statement, lines };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function counts(session: Session) {
+  session = await guardEffectiveSession(session, "dash.view");
+  await admitCustomRead(session, "dash.view");
   if (session.kind !== "staff") return { pending: 0, tickets: 0 };
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, "dash.view", async () => {
     const row = await maybe<{ pending: string; tickets: string }>(
       client,
       `SELECT
@@ -1840,13 +1944,15 @@ export async function counts(session: Session) {
       [session.orgId],
     );
     return { pending: Number(row?.pending ?? 0), tickets: Number(row?.tickets ?? 0) };
-  }, requireOrgScope(session));
+  }), requireOrgScope(session));
 }
 
 export async function tenantDetail(session: Session, id: string) {
+  session = await guardEffectiveSession(session, "props.view");
+  await admitCustomRead(session, "props.view");
   return tx(
     session.userId,
-    async (client) => {
+    async (client) => withEffectiveAuthority(client, session, "props.view", async () => {
       const tenant = await maybe<{ id: string; name: string }>(
         client,
         `SELECT id::text, display_name AS name
@@ -1869,7 +1975,7 @@ export async function tenantDetail(session: Session, id: string) {
         [id, session.orgId],
       );
       return { tenant, leases };
-    },
+    }),
     { orgId: session.orgId, environment: session.environment },
   );
 }
@@ -1908,8 +2014,9 @@ export async function tenantSignedLeasePdfs(
   session: Session,
   leaseId: string,
 ): Promise<(TenantSignedLeasePdfSummary & { current: boolean })[]> {
+  session = await guardEffectiveSession(session, null);
   if (session.kind !== "tenant" || !tenantSignedPdfGloballyEnabled()) return [];
-  return tx(session.userId, async (client) => {
+  return tx(session.userId, async (client) => withEffectiveAuthority(client, session, null, async () => {
     const gate = await maybe<{ enabled: boolean }>(
       client,
       `SELECT app.tenant_signed_pdf_readable($1::uuid, $2::uuid) AS enabled`,
@@ -1923,7 +2030,7 @@ export async function tenantSignedLeasePdfs(
       TENANT_SIGNED_PDFS_QUERY,
       [session.orgId, leaseId],
     );
-  }, { orgId: session.orgId, environment: session.environment });
+  }), { orgId: session.orgId, environment: session.environment });
 }
 
 export async function tenantSignedLeasePdf(
@@ -1931,9 +2038,10 @@ export async function tenantSignedLeasePdf(
   leaseId: string,
   pdfId: string,
 ) {
+  session = await guardEffectiveSession(session, null);
   if (session.kind !== "tenant" || !tenantSignedPdfGloballyEnabled()) return null;
   return tx(session.userId, async (client) =>
-    maybe<TenantSignedLeasePdfSummary & { content: Buffer; file_name: string }>(
+    withEffectiveAuthority(client, session, null, async () => maybe<TenantSignedLeasePdfSummary & { content: Buffer; file_name: string }>(
       client,
       `SELECT pdf.id, pdf.id AS source_pdf_id, pdf.created_at,
               octet_length(pdf.content) AS size_bytes, pdf.content,
@@ -1943,7 +2051,7 @@ export async function tenantSignedLeasePdf(
           AND app.tenant_signed_pdf_readable(pdf.org_id, pdf.lease_id)
           AND app.is_lease_tenant(pdf.lease_id)`,
       [session.orgId, leaseId, pdfId],
-    ),
+    )),
     { orgId: session.orgId, environment: session.environment },
   );
 }

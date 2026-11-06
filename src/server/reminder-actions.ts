@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { redirect } from "next/navigation";
 import { requireCurrentConsent } from "./consent-gate";
 import { queueManualReminder } from "./manual-reminders";
@@ -10,7 +12,7 @@ import { saveTenantDuePreference } from "./tenant-reminder-preferences";
 
 export async function actionQueueManualReminder(data: FormData) {
   await requireCurrentConsent();
-  const session=await getSession();
+  const session=await guardEffectiveSession(await getSession(), "tenants.contact");
   const lease=String(data.get("leaseId") ?? ""), invoice=String(data.get("invoiceId") ?? ""), request=String(data.get("requestId") ?? "");
   if (!isUuid(lease) || !isUuid(invoice) || !isUuid(request)) redirect("/m/rent");
   let event: string;
@@ -22,7 +24,7 @@ export async function actionQueueManualReminder(data: FormData) {
 
 export async function actionRetryLocalReminder(data: FormData) {
   await requireCurrentConsent();
-  const session=await getSession();
+  const session=await guardEffectiveSession(await getSession(), "tenants.contact");
   const lease=String(data.get("leaseId") ?? ""), event=String(data.get("eventId") ?? "");
   if (!isUuid(lease) || !isUuid(event)) redirect("/m/rent");
   try { await captureManualReminders(session,lease,event); }
@@ -32,7 +34,7 @@ export async function actionRetryLocalReminder(data: FormData) {
 
 export async function actionTenantDuePreference(data:FormData) {
   await requireCurrentConsent();
-  const session=await getSession(), lease=String(data.get("leaseId") ?? ""), value=String(data.get("enabled") ?? "");
+  const session=await guardEffectiveSession(await getSession(), null), lease=String(data.get("leaseId") ?? ""), value=String(data.get("enabled") ?? "");
   if (!isUuid(lease) || !["true","false"].includes(value)) redirect("/t");
   try { await saveTenantDuePreference(session,lease,value === "true"); }
   catch { redirect(`/t/reminders/${lease}?error=unavailable`); }

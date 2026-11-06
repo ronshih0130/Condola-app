@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { tx } from "./db";
 import { requireCurrentConsent } from "./consent-gate";
 import { resolveDepositPolicy, type DepositPolicy } from "./deposit-rules";
@@ -10,8 +12,8 @@ import { getSession } from "./session";
 /** Only resolve a property already visible to this staff session. */
 export async function actionDepositPolicy(input: { spaceId?: string; leaseId?: string; startDate?: string }): Promise<DepositPolicy | null> {
   await requireCurrentConsent();
-  const session = await getSession();
-  if (session.kind !== "staff" || !can(session.role, "leases.edit") || session.needsSandbox) return null;
+  const session = await guardEffectiveSession(await getSession(), "settings.edit");
+  if (session.kind !== "staff" || !can(session, "leases.edit") || session.needsSandbox) return null;
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const id = input.leaseId ?? input.spaceId ?? "";
   if (!uuid.test(id)) return null;

@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { signedLeasePdf } from "@/server/queries";
 import { getSession } from "@/server/session";
@@ -6,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "props.view");
   if (session.kind !== "staff") return new Response("Not found", { status: 404 });
   const blocked = await requireCurrentConsent(session, "api");
   if (blocked) return blocked;

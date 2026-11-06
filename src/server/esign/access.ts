@@ -1,3 +1,5 @@
+import { assertCustomAuthorityOn } from "../b017-custom-role-governance";
+import { can } from "../perms";
 import { consentCoversCurrent } from "../consent";
 import { svc } from "../db";
 import { FlowError } from "../errors";
@@ -25,6 +27,7 @@ export function requireEsign(session: Session, enabled = esignEnabled()) {
 /** Writes pin the rollout row before any lease/case lock, fencing disable races. */
 export async function requireEsignOrganization(c: Connection, actor: SigningActor, lock: boolean, enabled = esignEnabled()) {
   if (!enabled) throw new EsignUnavailable("E-sign unavailable");
+  await assertCustomAuthorityOn(c, actor, "leases.edit");
   const row = await c.query(
     `SELECT id FROM organizations WHERE id=$1 AND environment::text=$2
        AND coalesce(live_org_id,id)=$3 AND feature_flags->'esign'='true'::jsonb
@@ -49,7 +52,7 @@ export async function esignAvailableFor(session: Session) {
 // TODO decision: "which Condola roles = 管理團隊".
 // M3 mapping: admin -> company_admin; manager -> company_staff.
 export function management(session: Session) {
-  return session.kind === "staff" && (session.role === "admin" || session.role === "manager");
+  return session.kind === "staff" && (session.role === "admin" || session.role === "manager") && (!session.customRole || can(session, "leases.edit"));
 }
 
 export function requireManagement(session: Session, adminOnly = false) {

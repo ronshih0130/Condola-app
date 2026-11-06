@@ -51,7 +51,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
           </tbody>
         </table>
       </div>
-      {can(session.role, "settings.edit") ? (
+      {can(session, "settings.edit") ? (
         <form className="card pad" action={actionOwnerPrivacy} style={{ marginTop: 16, maxWidth: 640 }}>
           <h3>{t("i_owner_privacy")}</h3>
           <label className="row">

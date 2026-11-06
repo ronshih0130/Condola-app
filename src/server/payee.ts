@@ -1,3 +1,4 @@
+import { requireEffectivePerm } from "./b017-custom-role-governance";
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE } from "./auth";
@@ -36,6 +37,7 @@ async function gateway<T>(session: PayeeContext | null, op: "settings" | "tenant
           `SELECT app.payee_gateway($1::uuid,$2::uuid,$3::uuid,$4::text,$5::uuid,$6::text,$7::uuid,$8::jsonb) AS result`,
           [session?.sessionId ?? null, session?.userId ?? null, session?.orgId ?? null, session?.environment ?? null, randomUUID(), op, target, JSON.stringify(input)],
         );
+        if (op !== "ingress" && session && "kind" in session) await requireEffectivePerm(client, session as Session, op === "tenant" ? "stmt.view" : "settings.edit");
         await client.query("COMMIT");
         return row.rows[0].result;
       } catch {

@@ -35,13 +35,13 @@ test("v1 supports exactly the recognized 18 minus data.export", () => {
 });
 
 for (const key of B017_SUPPORTED_KEYS) {
-  test(`accept and grant supported key ${key} without a target native ceiling`, () => {
+  test(`accept and grant supported key ${key} within each target native ceiling`, () => {
     assert.deepEqual(validateB017Keys([key]), { ok: true, keys: [key] });
     assert.equal(evaluateB017Grant(native("admin"), [key], ON), "allow");
     for (const role of ROLE_KEYS) {
       const subject = assigned(role, [key]);
       for (const [candidate] of PERMS) {
-        assert.equal(evaluateB017Permission(subject, candidate), candidate === key ? "allow" : "deny", `${role}:${candidate}`);
+        assert.equal(evaluateB017Permission(subject, candidate), candidate === key && can(role, key) ? "allow" : "deny", `${role}:${candidate}`);
       }
     }
     assert.deepEqual(validateB017Keys([key, key]), { ok: false, reason: "duplicate-key" });
@@ -70,10 +70,10 @@ test("validation copies its input; later caller mutation cannot change the valid
   if (validated.ok) assert.equal(Object.isFrozen(validated.keys), true);
 });
 
-test("Admin can grant bank reconciliation across native bases, but cannot grant absent actor rights", () => {
+test("Admin grant ceiling and target native ceiling both apply", () => {
   assert.equal(can("manager", "bank.reconcile"), false);
   assert.equal(evaluateB017Grant(native("admin"), ["bank.reconcile"], ON), "allow");
-  assert.equal(evaluateB017Permission(assigned("manager", ["bank.reconcile"]), "bank.reconcile"), "allow");
+  assert.equal(evaluateB017Permission(assigned("manager", ["bank.reconcile"]), "bank.reconcile"), "deny");
   const restrictedAdmin = assigned("admin", ["team.manage"]);
   assert.equal(evaluateB017Governance(restrictedAdmin, ON), "allow");
   assert.equal(evaluateB017Grant(restrictedAdmin, ["bank.reconcile"], ON), "deny");
@@ -81,12 +81,12 @@ test("Admin can grant bank reconciliation across native bases, but cannot grant 
   assert.equal(evaluateB017Governance(assigned("admin", ["settings.edit"]), ON), "deny");
 });
 
-test("Accountant tickets.update enables text, never photo; native identity still controls audit/governance", () => {
+test("Accountant tickets.update cannot grant text or photo; native identity still controls audit/governance", () => {
   for (const role of ROLE_KEYS) {
     const subject = assigned(role, ["tickets.update", "team.manage", "settings.edit"]);
-    assert.equal(evaluateB017Permission(subject, "tickets.update"), "allow");
-    assert.equal(evaluateB017Permission(subject, "team.manage"), "allow");
-    assert.equal(evaluateB017Permission(subject, "settings.edit"), "allow");
+    assert.equal(evaluateB017Permission(subject, "tickets.update"), can(role, "tickets.update") ? "allow" : "deny");
+    assert.equal(evaluateB017Permission(subject, "team.manage"), can(role, "team.manage") ? "allow" : "deny");
+    assert.equal(evaluateB017Permission(subject, "settings.edit"), can(role, "settings.edit") ? "allow" : "deny");
     assert.equal(evaluateB017Photo(subject), role === "accountant" ? "deny" : "allow");
     assert.equal(evaluateB017CompanyAudit(subject), role === "admin" ? "allow" : "deny");
     assert.equal(evaluateB017Governance(subject, ON), role === "admin" ? "allow" : "deny");
@@ -157,7 +157,7 @@ test("management requires literal true at both gates and an exact well-formed or
   }
 });
 
-test("management OFF preserves existing assignment restrictions and cross-base rights but denies governance", () => {
+test("management OFF preserves existing assignment restrictions and native ceilings but denies governance", () => {
   const actor = assigned("admin", ["team.manage", "bank.reconcile"]);
   assert.equal(evaluateB017Governance(actor, ON), "allow");
   for (const gate of [OFF, { ...ON, organizationFlags: { custom_roles: false } }, { platformSettings: null, organizationFlags: null }]) {
@@ -166,7 +166,7 @@ test("management OFF preserves existing assignment restrictions and cross-base r
     assert.equal(evaluateB017Permission(actor, "bank.reconcile"), "allow");
     assert.equal(evaluateB017Permission(actor, "settings.edit"), "deny");
     assert.equal(evaluateB017Permission(actor, "data.export"), "deny");
-    assert.equal(evaluateB017Permission(assigned("manager", ["bank.reconcile"]), "bank.reconcile"), "allow");
+    assert.equal(evaluateB017Permission(assigned("manager", ["bank.reconcile"]), "bank.reconcile"), "deny");
     assert.equal(evaluateB017Photo(assigned("accountant", ["tickets.update"])), "deny");
   }
   for (const [key] of PERMS) assert.equal(evaluateB017Permission(assigned("admin", []), key), "deny");

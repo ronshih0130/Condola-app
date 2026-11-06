@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { createHash } from "node:crypto";
 import type { Client } from "pg";
 import type { ArchiveCommandInput, ArchiveItem, ArchiveList, ArchiveObserved, ArchiveOutcome, ArchiveRef, ArchiveView, RenderedArchiveScope } from "@/lib/record-archive";
@@ -12,7 +13,7 @@ type Row = { property_id:string; unit_id:string|null; room_id:string|null; mode:
 const utc = (column:string) => `to_char(${column} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 const unavailable = {state:"unavailable" as const};
 export function archiveScope(s:Session):RenderedArchiveScope { return {actorId:s.userId,orgId:s.orgId,liveOrgId:s.liveOrgId,environment:s.environment}; }
-function eligible(s:Session) { return s.kind==='staff' && !s.needsSandbox && can(s.role,'props.view') && [s.userId,s.sessionId,s.orgId,s.liveOrgId].every(isUuid) && ['live','sandbox'].includes(s.environment); }
+function eligible(s:Session) { return s.kind==='staff' && !s.needsSandbox && can(s,'props.view') && [s.userId,s.sessionId,s.orgId,s.liveOrgId].every(isUuid) && ['live','sandbox'].includes(s.environment); }
 async function current(c:Client,s:Session) {
  if (!eligible(s)) return false;
  const q=await c.query(`SELECT 1 FROM public.organizations o JOIN public.org_members m ON m.org_id=$2 AND m.user_id=$3 AND m.status='active' AND m.role::text=$4 JOIN public.auth_sessions a ON a.id=$5 AND a.user_id=$3 WHERE o.id=$1 AND o.environment::text=$6 AND ((o.environment='live' AND o.id=$2 AND o.live_org_id IS NULL) OR (o.environment='sandbox' AND o.live_org_id=$2)) AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()`,[s.orgId,s.liveOrgId,s.userId,s.role,s.sessionId,s.environment]);
@@ -83,19 +84,22 @@ function factItems(f:Facts, ref:ArchiveRef) {
 }
 /** Dependency queries in the view are advisory; the command repeats them under locks. */
 export async function archiveView(s:Session,ref:ArchiveRef):Promise<ArchiveView> {
+  s = await guardEffectiveSession(s, "props.edit");
  if(!eligible(s)||!isArchiveRef(ref))return unavailable;
- try {return await tx(s.userId,async c=>{if(!await current(c,s))return unavailable;const observed=await observe(c,s,ref);if(!observed)return unavailable;const found=await facts(c,s,observed);const writeEnabled=can(s.role,'props.edit') && await enabled(c,s);if(!await current(c,s))return unavailable;const items=factItems(found,ref);return {state:'ready',observed,writeEnabled,canArchive:writeEnabled && !observed.archivedAtUtc && items.blockers.length===0,canRestore:writeEnabled && Boolean(observed.archivedAtUtc) && observed.inherited.length===0 && (ref.kind!=='room'||observed.mode==='by_room'),...items,coverage:(['leases','signing','repairs','dispatch','utilities','finance','invitations'] as const).map(category=>({category,state:category==='signing'&&!can(s.role,'props.edit')?'unknown' as const:'verified' as const}))};},{orgId:s.orgId,environment:s.environment});} catch {return unavailable;}
+ try {return await tx(s.userId,async c=>withEffectiveAuthority(c, s, "props.edit", async () => {if(!await current(c,s))return unavailable;const observed=await observe(c,s,ref);if(!observed)return unavailable;const found=await facts(c,s,observed);const writeEnabled=can(s,'props.edit') && await enabled(c,s);if(!await current(c,s))return unavailable;const items=factItems(found,ref);return {state:'ready',observed,writeEnabled,canArchive:writeEnabled && !observed.archivedAtUtc && items.blockers.length===0,canRestore:writeEnabled && Boolean(observed.archivedAtUtc) && observed.inherited.length===0 && (ref.kind!=='room'||observed.mode==='by_room'),...items,coverage:(['leases','signing','repairs','dispatch','utilities','finance','invitations'] as const).map(category=>({category,state:category==='signing'&&!can(s,'props.edit')?'unknown' as const:'verified' as const}))};}),{orgId:s.orgId,environment:s.environment});} catch {return unavailable;}
 }
 export async function archiveList(s:Session,after?:string):Promise<ArchiveList> {
+  s = await guardEffectiveSession(s, "props.edit");
  if(!eligible(s))return unavailable;
  if(after!==undefined&&typeof after!=='string')return unavailable;
  const match=after===undefined?null:/^(property|unit|room):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(after);
  if(after!==undefined&&!match)return unavailable;
- try {return await tx(s.userId,async c=>{if(!await current(c,s))return unavailable;const ids=(await c.query<ArchiveRef>(`SELECT kind,id FROM (SELECT 'property'::text kind,p.id::text id FROM public.properties p WHERE p.org_id=$1 AND p.archived_at IS NOT NULL UNION ALL SELECT 'unit',u.id::text FROM public.units u JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE u.org_id=$1 AND (u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL) UNION ALL SELECT 'room',r.id::text FROM public.rooms r JOIN public.units u ON u.org_id=r.org_id AND u.id=r.unit_id JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE r.org_id=$1 AND (r.archived_at IS NOT NULL OR u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL)) x WHERE ($2::text IS NULL OR (kind,id)>($2::text,$3::text)) ORDER BY kind,id LIMIT 201`,[s.orgId,match?.[1]??null,match?.[2]??null])).rows;const rows:ArchiveObserved[]=[];for(const ref of ids.slice(0,200)){const item=await observe(c,s,ref);if(!item)return unavailable;rows.push(item);}if(!await current(c,s))return unavailable;const hasMore=ids.length>200,last=rows.at(-1);return {state:'ready',rows,hasMore,nextCursor:hasMore&&last?`${last.ref.kind}:${last.ref.id}`:null};},{orgId:s.orgId,environment:s.environment});} catch{return unavailable;}
+ try {return await tx(s.userId,async c=>withEffectiveAuthority(c, s, "props.edit", async () => {if(!await current(c,s))return unavailable;const ids=(await c.query<ArchiveRef>(`SELECT kind,id FROM (SELECT 'property'::text kind,p.id::text id FROM public.properties p WHERE p.org_id=$1 AND p.archived_at IS NOT NULL UNION ALL SELECT 'unit',u.id::text FROM public.units u JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE u.org_id=$1 AND (u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL) UNION ALL SELECT 'room',r.id::text FROM public.rooms r JOIN public.units u ON u.org_id=r.org_id AND u.id=r.unit_id JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE r.org_id=$1 AND (r.archived_at IS NOT NULL OR u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL)) x WHERE ($2::text IS NULL OR (kind,id)>($2::text,$3::text)) ORDER BY kind,id LIMIT 201`,[s.orgId,match?.[1]??null,match?.[2]??null])).rows;const rows:ArchiveObserved[]=[];for(const ref of ids.slice(0,200)){const item=await observe(c,s,ref);if(!item)return unavailable;rows.push(item);}if(!await current(c,s))return unavailable;const hasMore=ids.length>200,last=rows.at(-1);return {state:'ready',rows,hasMore,nextCursor:hasMore&&last?`${last.ref.kind}:${last.ref.id}`:null};}),{orgId:s.orgId,environment:s.environment});} catch{return unavailable;}
 }
 export async function archiveCommand(s:Session,input:ArchiveCommandInput):Promise<ArchiveOutcome> {
- if(!isArchiveCommand(input)||!eligible(s)||!can(s.role,'props.edit')||!sameArchiveScope(input.renderedScope,archiveScope(s)))return {state:'forbidden'};
- try{return await tx<ArchiveOutcome>(s.userId,async c=>{
+  s = await guardEffectiveSession(s, "props.edit");
+ if(!isArchiveCommand(input)||!eligible(s)||!can(s,'props.edit')||!sameArchiveScope(input.renderedScope,archiveScope(s)))return {state:'forbidden'};
+ try{return await tx<ArchiveOutcome>(s.userId,async c=>withEffectiveAuthority(c, s, "props.edit", async () => {
   if(!await current(c,s))return {state:'forbidden'};
   if(!await enabled(c,s))return {state:'disabled'};
   await c.query(`SELECT set_config('lock_timeout','5s',true)`);
@@ -119,5 +123,5 @@ export async function archiveCommand(s:Session,input:ArchiveCommandInput):Promis
   await c.query('SET CONSTRAINTS ALL IMMEDIATE');
   if(!await current(c,s)||!await enabled(c,s))throw new Error('Archive authorization changed');
   return {state:'changed'};
- },{orgId:s.orgId,environment:s.environment});}catch(error){const code=(error as {cause?:{code?:string}})?.cause?.code;if(code==='23505')return {state:'conflict'};if(code==='55P03')return {state:'busy'};return {state:'unknown'};}
+ }),{orgId:s.orgId,environment:s.environment});}catch(error){const code=(error as {cause?:{code?:string}})?.cause?.code;if(code==='23505')return {state:'conflict'};if(code==='55P03')return {state:'busy'};return {state:'unknown'};}
 }

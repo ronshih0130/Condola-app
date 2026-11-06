@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -23,7 +25,7 @@ function refresh(leaseId: string) {
 export async function actionEsignCreate(form: FormData) {
   await requireCurrentConsent();
   if (!esignEnabled()) notFound();
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "leases.edit");
   if (!(await esignAvailableFor(session))) notFound();
   const leaseId = text(form, "leaseId");
   let failed = false;
@@ -45,7 +47,7 @@ export async function actionEsignCreate(form: FormData) {
 export async function actionEsignStep(form: FormData) {
   await requireCurrentConsent();
   if (!esignEnabled()) notFound();
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "leases.edit");
   if (!(await esignAvailableFor(session))) notFound();
   let leaseId = "";
   let failed = false;
@@ -79,7 +81,7 @@ export async function actionEsignStep(form: FormData) {
 export async function actionEsignProgress(leaseId: string) {
   await requireCurrentConsent();
   if (!esignEnabled()) notFound();
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "leases.edit");
   if (!(await esignAvailableFor(session))) notFound();
   try { return await esignFlow.list(session, leaseId); }
   catch (error) { if (error instanceof EsignUnavailable) notFound(); throw error; }
@@ -90,7 +92,7 @@ export async function actionEsignSign(input: {
 }) {
   await requireCurrentConsent();
   if (!esignEnabled()) notFound();
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "leases.edit");
   if (!(await esignAvailableFor(session))) notFound();
   const h = await headers();
   // Cloudflare overwrites cf-connecting-ip. Local development accepts loopback.

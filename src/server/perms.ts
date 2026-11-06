@@ -36,12 +36,21 @@ const PERM_ROLES = Object.fromEntries(PERMS.map(([key, , roles]) => [key, roles]
   readonly OrgRole[]
 >;
 
-export function can(role: OrgRole | null | undefined, key: PermKey) {
+export function can(subject: OrgRole | null | undefined | Session, key: PermKey): boolean {
+  if (typeof subject === "object" && subject !== null) {
+    if (subject.customRole) return subject.kind === "staff" && validCustomRoleScope(subject) && can(subject.role, key) && subject.customRole.keys?.includes(key) === true;
+    return can(subject.role, key);
+  }
+  const role = subject;
   if (!role) return false;
   return PERM_ROLES[key].includes(role);
 }
 
 export function assertPerm(session: Session, key: PermKey) {
+  if (session.customRole) {
+    if (!can(session, key)) throw new FlowError("errors.forbidden");
+    return;
+  }
   if (session.kind !== "staff" || !can(session.role, key)) throw new FlowError("errors.forbidden");
 }
 
@@ -116,10 +125,17 @@ export function requiresAdmin(pathname: string) {
  * Prototype routes use their permission key (`props.edit`, `settings.edit`).
  * 操作紀錄 is not the settings screen, so it names the admin role instead.
  */
-export function noPermHref(pathname: string, role: OrgRole | null) {
+export function noPermHref(pathname: string, subject: OrgRole | null | Session) {
+  const session = typeof subject === "object" && subject !== null ? subject : null;
+  const role = session ? session.role : subject;
+  if (session?.customRole) {
+    if (requiresAdmin(pathname)) return validCustomRoleScope(session) && session.customRole.audit ? null : "/m/noperm?need=admin";
+    if (pathname === "/m/tickets" || pathname.startsWith("/m/tickets/"))
+      return can(session, "tickets.update") ? null : "/m/noperm?need=tickets.update";
+  }
   if (requiresAdmin(pathname)) return role === "admin" ? null : "/m/noperm?need=admin";
   const perm = permForPath(pathname);
-  if (perm && !can(role, perm)) return `/m/noperm?need=${perm}`;
+  if (perm && !can(subject, perm)) return `/m/noperm?need=${perm}`;
   return null;
 }
 
@@ -174,4 +190,15 @@ export function permForPath(pathname: string): PermKey | null {
     if (path === route.prefix || path.startsWith(`${route.prefix}/`)) return route.perm;
   }
   return null;
+}
+
+/** Photo access remains separate from ticket text permission. */
+export function canTicketPhotos(session: Session) {
+  return session.customRole ? validCustomRoleScope(session) && session.role !== "accountant" && session.customRole.photos : can(session.role, "tickets.update");
+}
+
+export function validCustomRoleScope(session: Session) {
+  const policy = session.customRole;
+  return !!policy && policy.orgId === session.orgId && policy.userId === session.userId &&
+    policy.sessionId === session.sessionId && policy.nativeRole === session.role;
 }

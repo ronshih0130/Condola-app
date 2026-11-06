@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { requireCurrentConsent } from "./consent-gate";
 
 import { redirect } from "next/navigation";
@@ -13,7 +15,7 @@ export async function actionImportCsv(formData: FormData) {
   if (!(file instanceof File) || file.size === 0) redirect("/m/import?error=required");
   const csv = await file.text();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "props.edit");
     await seedPortfolio(session, csv);
   } catch (error) {
     if (isRedirectError(error)) throw error;

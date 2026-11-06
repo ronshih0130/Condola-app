@@ -82,11 +82,11 @@ grep -qx './pr-migrations/MANIFEST.md' "$members"
 grep -qx './pr-migrations/PERMISSIONS.md' "$members"
 rm -f "$members"
 entry="$(tar -xOf "$OUT" ./custom-worker.mjs)"
-printf '%s\n' "$entry" | grep -q 'scheduled'
-printf '%s\n' "$entry" | grep -q 'open-next/worker.js'
-printf '%s\n' "$entry" | grep -q 'cron/reminders'
-printf '%s\n' "$entry" | grep -q 'cron/purge-id-documents'
-if printf '%s\n' "$entry" | grep -q 'from "pg"\|purge_due_identity_documents\|require("events")\|id-purge-cron'; then
+grep -q 'scheduled' <<< "$entry"
+grep -q 'open-next/worker.js' <<< "$entry"
+grep -q 'cron/reminders' <<< "$entry"
+grep -q 'cron/purge-id-documents' <<< "$entry"
+if grep -q 'from "pg"\|purge_due_identity_documents\|require("events")\|id-purge-cron' <<< "$entry"; then
   echo "packed custom-worker.mjs still contains the database driver" >&2
   exit 1
 fi

@@ -1,3 +1,5 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
 import type { Client } from "pg";
 import { writeAudit } from "./audit";
 import { repairApprovalsEnabled } from "./repair-approval";
@@ -6,7 +8,7 @@ import { maybe, svc, tx } from "./db";
 import { insertPostedRepairExpense } from "./expenses";
 import { FlowError } from "./errors";
 import { loadOrgCountry } from "./org-country";
-import { assertPerm, can } from "./perms";
+import { assertPerm, can, canTicketPhotos } from "./perms";
 import { admitTicketArchiveAncestry } from "./record-archive-admission";
 import { portalInviteOrigin } from "./portal-invite";
 import { taipeiToday } from "./money";
@@ -35,7 +37,8 @@ import {
 import type { Session } from "./types";
 
 async function currentDispatchActor(client:Client,session:Session) {
-  if(session.kind!=='staff'||session.needsSandbox||!can(session.role,'tickets.update')||![session.userId,session.sessionId,session.orgId,session.liveOrgId].every(isUuid))throw new FlowError('errors.forbidden');
+  await assertCustomAuthorityOn(client, session, "tickets.update", true);
+  if(session.kind!=='staff'||session.needsSandbox||!can(session,'tickets.update')||![session.userId,session.sessionId,session.orgId,session.liveOrgId].every(isUuid))throw new FlowError('errors.forbidden');
   const result=await client.query(`SELECT 1 FROM organizations o JOIN org_members m ON m.org_id=$2 AND m.user_id=$3 AND m.status='active' AND m.role::text=$4 JOIN auth_sessions a ON a.id=$5 AND a.user_id=$3 WHERE o.id=$1 AND o.environment::text=$6 AND ((o.environment='live' AND o.id=$2 AND o.live_org_id IS NULL) OR (o.environment='sandbox' AND o.live_org_id=$2)) AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()`,[session.orgId,session.liveOrgId,session.userId,session.role,session.sessionId,session.environment]);
   if(result.rowCount!==1)throw new FlowError('errors.forbidden');
 }
@@ -347,6 +350,7 @@ export async function addVendor(
   ticketId: string,
   input: { name: string; phone: string; trade: string },
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertStaff(session);
   assertPerm(session, "tickets.update");
   if (!isUuid(ticketId)) throw new FlowError("errors.notFound");
@@ -362,10 +366,10 @@ export async function addVendor(
     ]), requireOrgScope(session),
   );
   if (!visible) throw new FlowError("errors.notFound");
-  const contactId = await svc(session.userId, async (client) => {
+  const contactId = await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     await assertDispatchFlag(client, session.orgId);
     return vendorContact(client, session.orgId, name, phone, trade);
-  });
+  }));
   if (!contactId) throw new FlowError("errors.generic");
   return contactId;
 }
@@ -376,8 +380,10 @@ export async function dispatchVendor(
   input: { vendorId?: string; vendorName: string; vendorPhone: string; vendorTrade?: string; contactWindow: string },
   origin: string,
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertStaff(session);
   assertPerm(session, "tickets.update");
+  if (session.customRole && !canTicketPhotos(session)) throw new FlowError("errors.forbidden");
   if (!isUuid(ticketId)) throw new FlowError("errors.notFound");
   if (!(await orgVendorDispatchEnabled(session.orgId))) throw new FlowError("errors.forbidden");
   const country = await loadOrgCountry(session.orgId);
@@ -398,7 +404,7 @@ export async function dispatchVendor(
   );
   if (!visible) throw new FlowError("errors.notFound");
 
-  const jobId = await svc(session.userId, async (client) => {
+  const jobId = await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     await currentDispatchActor(client,session);
     await assertDispatchFlag(client, session.orgId);
     await admitTicketArchiveAncestry(client, session.orgId, ticketId);
@@ -492,21 +498,23 @@ export async function dispatchVendor(
     await currentDispatchActor(client,session);
     await assertDispatchFlag(client,session.orgId);
     return job.id;
-  });
+  }));
 
   return { jobId, url: vendorJobUrl(origin, token) };
 }
 
 export async function revokeVendorJob(session: Session, ticketId: string, jobId: string) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertStaff(session);
   assertPerm(session, "tickets.update");
   if (!isUuid(ticketId) || !isUuid(jobId)) throw new FlowError("errors.notFound");
   if (!(await orgVendorDispatchEnabled(session.orgId))) throw new FlowError("errors.forbidden");
-  await svc(session.userId, async (client) => {
+  await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     await assertDispatchFlag(client, session.orgId);
     if (await vendorLinkEnabledOn(client, session.orgId)) {
       await lockTicketThenJobs(client, session.orgId, ticketId);
     }
+    await assertCustomAuthorityOn(client, session, "tickets.update");
     const updated = await client.query(
       `UPDATE repair_vendor_jobs
           SET revoked_at = now(), active = false
@@ -516,7 +524,7 @@ export async function revokeVendorJob(session: Session, ticketId: string, jobId:
     );
     if (updated.rowCount !== 1) throw new FlowError("errors.notFound");
     await writeAudit(session.orgId, session.userId, "repair_dispatch_revoke", { ticketId, jobId }, client);
-  });
+  }));
 }
 
 export async function approveVendorSharing(
@@ -525,8 +533,10 @@ export async function approveVendorSharing(
   jobId: string,
   input: { description: string; attachmentIds: string[] },
 ) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertStaff(session);
   assertPerm(session, "tickets.update");
+  if (session.customRole && !canTicketPhotos(session)) throw new FlowError("errors.forbidden");
   if (!isUuid(ticketId) || !isUuid(jobId)) throw new FlowError("errors.notFound");
   if (typeof input.description !== "string" || input.description.length > 10000 ||
       !Array.isArray(input.attachmentIds) || input.attachmentIds.length > PHOTO_LIMIT ||
@@ -534,7 +544,7 @@ export async function approveVendorSharing(
     throw new FlowError("errors.required");
   }
   const ids = [...new Set(input.attachmentIds)];
-  await svc(session.userId, async (client) => {
+  await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     await assertDispatchFlag(client, session.orgId);
     if (!(await vendorLinkEnabledOn(client, session.orgId))) throw new FlowError("errors.forbidden");
     await lockTicketThenJobs(client, session.orgId, ticketId);
@@ -559,6 +569,7 @@ export async function approveVendorSharing(
       [session.orgId, ticketId, ids, jobId],
     );
     if (photos.rows.length !== ids.length) throw new FlowError("errors.notFound");
+    await assertCustomAuthorityOn(client, session, "tickets.update", true);
     await client.query(
       "DELETE FROM repair_vendor_job_shared_photos WHERE org_id = $1 AND job_id = $2",
       [session.orgId, jobId],
@@ -577,10 +588,11 @@ export async function approveVendorSharing(
     );
     await writeAudit(session.orgId, session.userId, "repair_vendor_sharing_approve",
       { ticketId, jobId, attachmentIds: ids }, client);
-  });
+  }));
 }
 
 export async function loadVendorDispatch(session: Session, ticketId: string, origin: string) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertStaff(session);
   if (!isUuid(ticketId)) return null;
   if (!(await orgVendorDispatchEnabled(session.orgId))) return null;
@@ -640,7 +652,7 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
   }));
   if (!job) return { job: null as VendorDispatchView | null, vendors: choices };
   let link = "";
-  if (can(session.role, "tickets.update") && job.link_open) {
+  if (canTicketPhotos(session) && job.link_open) {
     const secret = await svc(session.userId, (client) =>
       maybe<{ token: string }>(
         client,
@@ -654,8 +666,8 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
     );
     if (secret?.token) link = vendorJobUrl(origin, secret.token);
   }
-  const sharing = can(session.role, "tickets.update")
-    ? await svc(session.userId, async (client) => {
+  const sharing = canTicketPhotos(session)
+    ? await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
       if (!(await vendorLinkEnabledOn(client, session.orgId))) return undefined;
       const state = await maybe<{ approved: boolean }>(client,
         `SELECT sharing_approved_at IS NOT NULL AS approved FROM repair_vendor_jobs
@@ -668,7 +680,7 @@ export async function loadVendorDispatch(session: Session, ticketId: string, ori
             AND (a.vendor_job_id IS NULL OR a.vendor_job_id = $3)
           ORDER BY a.created_at`, [ticketId, session.orgId, job.id]);
       return { approved: Boolean(state?.approved), photos: photos.rows };
-    })
+    }))
     : undefined;
   return {
     job: {
@@ -862,12 +874,13 @@ export async function submitVendorReport(token: string, input: { done: boolean; 
 }
 
 export async function confirmVendorCost(session: Session, ticketId: string, jobId: string) {
+  session = await guardEffectiveSession(session, "tickets.update");
   assertStaff(session);
   assertPerm(session, "tickets.update");
   assertPerm(session, "exp.add");
   if (!isUuid(ticketId) || !isUuid(jobId)) throw new FlowError("errors.notFound");
   if (!(await orgVendorDispatchEnabled(session.orgId))) throw new FlowError("errors.forbidden");
-  await svc(session.userId, async (client) => {
+  await svc(session.userId, async (client) => withEffectiveAuthority(client, session, "tickets.update", async () => {
     await assertDispatchFlag(client, session.orgId);
     if (await vendorLinkEnabledOn(client, session.orgId)) {
       await lockTicketThenJobs(client, session.orgId, ticketId);
@@ -940,7 +953,7 @@ export async function confirmVendorCost(session: Session, ticketId: string, jobI
       { ticketId: ticket.id, jobId: job.id, expenseId: posted.expenseId, costMinor: amount },
       client,
     );
-  });
+  }));
 }
 
 async function photoCount(ticketId: string, orgId: string) {

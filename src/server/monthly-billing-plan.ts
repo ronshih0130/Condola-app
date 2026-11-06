@@ -1,3 +1,4 @@
+import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
 import { createHash } from 'node:crypto';
 import { tx } from './db';
 import { requireOrgScope } from './org-guard';
@@ -8,13 +9,15 @@ import type { Session } from './types';
 const CAP=2000;
 /** Uses the same authority in its own read-only snapshot without scanning billing data. */
 export async function monthlyBillingAvailable(session:Session):Promise<boolean> {
+  session = await guardEffectiveSession(session, "stmt.view");
   return tx(session.userId, client=>billingPreviewAuthorityOn(client,session), requireOrgScope(session),{isolation:'repeatable read',readOnly:true});
 }
 
 /** Snapshot is a read-only preview, not posting authority or a complete bill. */
 export async function monthlyBillingPlan(session:Session, month:string) {
+  session = await guardEffectiveSession(session, "stmt.view");
   const period=monthlyBounds(month);
-  return tx(session.userId,async client=>{
+  return tx(session.userId,async client=>withEffectiveAuthority(client, session, "stmt.view", async () => {
     if (!(await billingPreviewAuthorityOn(client,session))) return null;
     const controls=(await client.query(`SELECT (SELECT value FROM platform_settings WHERE key='billing_previews') AS global_value,feature_flags FROM organizations WHERE id=$1`,[session.orgId])).rows;
     const asOf=(await client.query<{value:string}>(`SELECT clock_timestamp()::text AS value`)).rows[0].value;
@@ -41,6 +44,6 @@ export async function monthlyBillingPlan(session:Session, month:string) {
     const digest=createHash('sha256').update(JSON.stringify({version:2,org:session.orgId,environment:session.environment,month,controls,leases,rent,charges,utilities})).digest('hex');
     if (!(await billingPreviewAuthorityOn(client,session))) return null;
     return {kind:'complete' as const,month,period,asOf,rows,digest,unresolvedCount,subtotals:[...sums].sort(([a],[b])=>a.localeCompare(b)).map(([currency,x])=>({currency,currencyConfig:rows.find(row=>row.currency===currency)?.currencyConfig ?? null,amountMinor:x.amount.toString(),count:x.count}))};
-  },requireOrgScope(session),{isolation:'repeatable read',readOnly:true});
+  }),requireOrgScope(session),{isolation:'repeatable read',readOnly:true});
 }
 export type MonthlyBillingPlan=NonNullable<Awaited<ReturnType<typeof monthlyBillingPlan>>>;

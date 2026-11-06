@@ -1,0 +1,174 @@
+{
+  "src/app/api/cron/purge-id-documents/route.ts#POST": {
+    "reason": "Cron secret; retention operation without member session",
+    "sha256": "b8a7f34810a2c792ae7421432a0a3ce2385387fe2e4909383853bab7dfb31668"
+  },
+  "src/app/api/cron/reminders/route.ts#POST": {
+    "reason": "Cron secret; scheduled operation without member session",
+    "sha256": "4c1398e268822005ea9153fefc3a255b70f7745dcc954f23974b518cf860b9ac"
+  },
+  "src/app/api/demo/locale/route.ts#GET": {
+    "reason": "Public locale cookie only",
+    "sha256": "6dd6c8b9a6e6cb05190c9d64ce37523a7f810ac685a13f64eb0a9849e6c16587"
+  },
+  "src/app/api/demo/mode/route.ts#GET": {
+    "reason": "Removed endpoint, fixed 404",
+    "sha256": "601efd8b6b6cdd2d068cb89f19a9a1fa583121c84735c79f24e40d4ba118f3d5"
+  },
+  "src/app/api/demo/persona/route.ts#GET": {
+    "reason": "Removed endpoint, fixed 404",
+    "sha256": "601efd8b6b6cdd2d068cb89f19a9a1fa583121c84735c79f24e40d4ba118f3d5"
+  },
+  "src/app/api/demo/tryout/route.ts#GET": {
+    "reason": "Public preference cookie only",
+    "sha256": "479d61c903d10e6243cdfadc59e787f3a6d9a75efb08c3c4e1d58fe5749089d1"
+  },
+  "src/app/api/reset-flash/route.ts#POST": {
+    "reason": "Recovery feedback cookie only",
+    "sha256": "6bcfaa78d6fb71dd8c59597249f72b60585a63123dbb26d591862f6f57aeb025"
+  },
+  "src/app/api/version/route.ts#GET": {
+    "reason": "Public build version only",
+    "sha256": "c3c80c41feb3694edd880c54505531953f2c115eca78491f4e1462d6dcebcea9"
+  },
+  "src/server/actions.ts#actionVendorReport": {
+    "reason": "Vendor bearer authority; no member session",
+    "sha256": "c68a6c05e1dd6adf89a1960343b4b73c7d9696caa4b95cb3eebf197298bc9078"
+  },
+  "src/server/notification-center-actions.ts#markVendorCenterRead": {
+    "reason": "Vendor bearer authority; no member session",
+    "sha256": "153114826eaeaec3ffd40389dfd8ae03597d61555a6243cc3a9bedfe8bfdfb6e"
+  },
+  "src/server/auth-actions.ts#actionSignIn": {
+    "reason": "Establish identity",
+    "sha256": "3388a6248817e47f867092c601df63960c529c9c9e8f62c5adba21b437c6e707"
+  },
+  "src/server/auth-actions.ts#actionLineLogin": {
+    "reason": "Establish identity",
+    "sha256": "51a754ac7dd5b0f8ad04edeafdc4819cab48f1d7f97d497d095c84c655193a60"
+  },
+  "src/server/auth-actions.ts#actionSecondFactor": {
+    "reason": "Establish identity",
+    "sha256": "58a941e1f8f440083480eee5b04ddcff391cbc0e972f145e41dad45f7e3a9e5b"
+  },
+  "src/server/auth-actions.ts#actionForgot": {
+    "reason": "Recover identity",
+    "sha256": "ba2ea78571ee374b8e1a07279a27f35229fab085c870e19099a259fce72c4c19"
+  },
+  "src/server/auth-actions.ts#actionReset": {
+    "reason": "Recover identity",
+    "sha256": "d1bf0ac91381155dd2bef28f7bfbe0d1c9a4ad495c20acbe92d5d1bf708682f6"
+  },
+  "src/server/auth-actions.ts#actionClearBackup": {
+    "reason": "Recovery cookie only",
+    "sha256": "6b9911114b54f64aca043460e6c0885d2ef30c397969cd3c71869f1f1bf57abd"
+  },
+  "src/server/audit-read.ts#loadAuditScreen": {
+    "reason": "Reserved native Admin audit floor plus restrictive b017_company_audit_floor RLS",
+    "sha256": "ac4572e256fa085cd00298cfb8de38b003da220680cc854968e12d4237df5b54"
+  },
+  "src/server/audit-read.ts#loadAuditHistory": {
+    "reason": "Reserved native Admin audit floor plus restrictive b017_company_audit_floor RLS",
+    "sha256": "d29da15320a63e3ab5e69bbb36448b21ce58a3718740a3b420279d999cb07901"
+  },
+  "src/server/onboarding-progress.ts#readOnboarding": {
+    "reason": "Own onboarding preferences only; action has default-deny custom guard",
+    "sha256": "e25818504d20996c5f9d51c8f685cec37ab6e1639df73c62a53baefeabc4ff92"
+  },
+  "src/server/onboarding-progress.ts#saveOnboarding": {
+    "reason": "Own onboarding preferences only; action has default-deny custom guard",
+    "sha256": "8e0d7f7bd05f265cd19c45472bfd86cab5c1fe1d9893cfe558ec6992b4ef632f"
+  },
+  "src/server/partner-consent.ts#readPartnerState": {
+    "reason": "Consent admission infrastructure; no feature permission can bypass consent",
+    "sha256": "25a1101f5316b6d7bf3cca73ae07158dc95f71522167afca3bbcd112db530fd9"
+  },
+  "src/server/partner-consent.ts#partnerConsentHistory": {
+    "reason": "Own consent history only",
+    "sha256": "df532d8d0b2e5c78c7c206e8e7ef9d9ae1d270a704a46a51d7b271703737763e"
+  },
+  "src/server/partners.ts#requestUpgrade": {
+    "reason": "Account upgrade request; action has default-deny custom guard",
+    "sha256": "13024e1cb45622cfa2b227a2b313d8aea243d8ddf4a6ae4ab2510935761e1b32"
+  },
+  "src/server/sandbox.ts#ensureSandbox": {
+    "reason": "Session provisioning infrastructure, before feature entry authority",
+    "sha256": "abbf362f90783171fe1a572b89e1ff8acd5f421565cda7ff81562984bcf0c051"
+  },
+  "src/server/sandbox.ts#ensureSampleLoaded": {
+    "reason": "Session provisioning infrastructure, before feature entry authority",
+    "sha256": "7d7e218c4262f63adf0a83ccc96fee8510ccf6d63f9a59884847411895bd3357"
+  },
+  "src/server/session.ts#completeSession": {
+    "reason": "Session provisioning infrastructure, before feature entry authority",
+    "sha256": "026903fff74dbfcdfa22dcdfc9b3e01b04c109d659279dd283e57b9b0fd09863"
+  },
+  "src/server/staff-profile.ts#staffProfileView": {
+    "reason": "Own profile only; actor ID fixed in SQL",
+    "sha256": "d6f12559d86762b7fb9d1f01c5cf69773ad18e83dd2527da39c27f900d80515e"
+  },
+  "src/server/staff-profile.ts#saveStaffProfile": {
+    "reason": "Own profile only; action has default-deny custom guard",
+    "sha256": "6aec5c012d5c464a08838ff5106066db39b0d6a087d1e2f813ebf98cb325a518"
+  },
+  "src/server/tenant-reminder-preferences.ts#tenantDuePreference": {
+    "reason": "Tenant portal only, no staff authority",
+    "sha256": "d52ee9135a6987b1dcb38f34790549c774c6af2a86e22ab721cdcd8bb230aa24"
+  },
+  "src/app/api/notification-center/vendor-mark/route.ts#POST": {
+    "reason": "Vendor bearer authority; no member session",
+    "sha256": "5f1471263cd13b1f7bd6b7a57266ab14585d77a76afe4a3638e0cd83f91a9d47"
+  },
+  "src/app/api/vendor-job-completion/route.ts#POST": {
+    "reason": "Vendor bearer authority; no member session",
+    "sha256": "fb689bf610a99c3455cfcd55f2c2918c627e39ce8789aa6ae31c5d955abd1570"
+  },
+  "src/app/api/vendor-job-response/route.ts#POST": {
+    "reason": "Vendor bearer authority; no member session",
+    "sha256": "7dc484afb7c9cfe464076263bfab2759106bdcc4cbcb62edc4935aa2155d65b6"
+  },
+  "src/app/api/vendor-jobs/photos/confirm/route.ts#POST": {
+    "reason": "Vendor bearer authority; no member session",
+    "sha256": "760809988a08b8c6346878e9b63d29fc31e059633178f8d9b665fd74fce1c3a2"
+  },
+  "src/app/api/vendor-jobs/photos/sign/route.ts#POST": {
+    "reason": "Vendor bearer authority; no member session",
+    "sha256": "3d0943f49552231a3b86d32318ed933a9cd0e37afddfa338c5f4348639b850a2"
+  },
+  "src/app/api/vendor-jobs/[token]/photos/[id]/route.ts#GET": {
+    "reason": "Vendor bearer authority; no member session",
+    "sha256": "2872f5ab5a2afe2cd2d35cf6d5fff7236f0dfbdd9de7fb1ca08596ae63d3ce4b"
+  },
+  "src/server/signup-actions.ts#actionPreviewCode": {
+    "reason": "Public signup or firm creation before staff membership exists",
+    "sha256": "c9dd2a3f86ffb206f8a7042fe3c1f5eeb82f3c8fcbaf74855a783e8fec1ef090"
+  },
+  "src/server/signup-actions.ts#actionStartSignup": {
+    "reason": "Public signup or firm creation before staff membership exists",
+    "sha256": "6ac77d8b5b8d1ee18b3cbd9bf6920422dbc47c4eaf963068bdd57951453d4b4d"
+  },
+  "src/server/signup-actions.ts#actionResendSignup": {
+    "reason": "Public signup or firm creation before staff membership exists",
+    "sha256": "aa1aefb2f4b82e003599627dc6e8093ca29e8f38f10404494ec3516463c597c1"
+  },
+  "src/server/signup-actions.ts#actionChangeSignupEmail": {
+    "reason": "Public signup or firm creation before staff membership exists",
+    "sha256": "c451b384b97ef755a21df16b71dfc9a01df8c4ae68ab227d4ccfa15f925968ec"
+  },
+  "src/server/signup-actions.ts#actionConfirmToken": {
+    "reason": "Public signup or firm creation before staff membership exists",
+    "sha256": "f902d31b8a3b2092c1d008e4e27c4f6db5ae07ab36879721c17641559f1be522"
+  },
+  "src/server/signup-actions.ts#actionConfirmSupabaseHash": {
+    "reason": "Public signup or firm creation before staff membership exists",
+    "sha256": "285a995bbe7c8926e2281dbe9fb116f8259602027a8e52482d58f6aebb108dc1"
+  },
+  "src/server/signup-actions.ts#actionConfirmSupabase": {
+    "reason": "Public signup or firm creation before staff membership exists",
+    "sha256": "415930d50549a9ff0ce0f5d939dcdaef9d0b9a29bfe49b181c42a0eb4d6e6d99"
+  },
+  "src/server/signup-actions.ts#actionCreateFirm": {
+    "reason": "Public signup or firm creation before staff membership exists",
+    "sha256": "7c308e08a85ce39f0a5e205f6b4231e820e2b87c1e682be33936b62b6ff3477d"
+  }
+}

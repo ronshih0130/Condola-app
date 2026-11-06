@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import type { Client } from "pg";
 import { maybe, one } from "./db";
 import { FlowError } from "./errors";
@@ -47,6 +48,7 @@ export async function syncVacantOwnerExpense(
     description?: string;
   },
 ) {
+  session = await guardEffectiveSession(session, "leases.edit");
   const description = input.description ?? VACANT_ELECTRICITY_DESCRIPTION;
   const amount = input.amountMinor;
   if (!Number.isSafeInteger(amount)) throw new FlowError("errors.amount");

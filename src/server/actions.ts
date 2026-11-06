@@ -1,5 +1,7 @@
 "use server";
 
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
+
 import { requireCurrentConsent } from "./consent-gate";
 
 import { revalidatePath } from "next/cache";
@@ -205,7 +207,7 @@ export async function actionCreateProperty(prev: ActionState = EMPTY_ACTION, for
   await requireCurrentConsent();
   void prev;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "props.edit");
     const input = propertyInput(formData);
     if (!text(formData.get("currency"))) {
       const country = await loadOrgCountry(session.orgId);
@@ -223,7 +225,7 @@ export async function actionCreateLease(prev: ActionState = EMPTY_ACTION, formDa
   await requireCurrentConsent();
   void prev;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     const created = await createLeaseFromForm(session, formData);
     const jar = await cookies();
     jar.set("condola_tenant_focus", created.tenantUserId, appCookieOptions({ httpOnly: false }));
@@ -244,7 +246,7 @@ export async function actionUpdateLease(prev: ActionState = EMPTY_ACTION, formDa
   void prev;
   const leaseId = text(formData.get("leaseId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     const firstPeriodChoice = formData.get("firstPeriodProrate");
     if (firstPeriodChoice !== null && firstPeriodChoice !== "true" && firstPeriodChoice !== "false") throw new FlowError("errors.required");
     await updateLease(session, {
@@ -267,7 +269,7 @@ export async function actionSimulateSign(formData: FormData) {
   const leaseId = text(formData.get("leaseId"));
   const back = `/m/leases/${leaseId}?tab=sign`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     const result = await simulateTenantSignature(session, leaseId);
     redirect(result.invoiceId ? `/m/leases/${leaseId}?tab=ledger` : back);
   } catch (error) {
@@ -280,7 +282,7 @@ export async function actionUploadSignedPdf(formData: FormData) {
   const leaseId = text(formData.get("leaseId"));
   const back = `/m/leases/${leaseId}?tab=sign`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     const file = formData.get("signedPdf");
     if (!(file instanceof File) || file.size === 0) throw new FlowError("errors.pdf");
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -300,7 +302,7 @@ export async function actionSign(formData: FormData) {
   const leaseId = text(formData.get("leaseId"));
   const back = `/m/leases/${leaseId}?tab=sign`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     const result = await signLease(session, {
       leaseId,
       signedName: text(formData.get("signedName")),
@@ -318,7 +320,7 @@ export async function actionRecordPayment(formData: FormData) {
   const staff = text(formData.get("returnTo")) !== "tenant";
   const back = staff ? `/m/leases/${leaseId}?tab=ledger` : "/t/pay";
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "pay.record");
     await recordPayment(session, {
       leaseId,
       amountMajor: num(formData.get("amount")),
@@ -339,7 +341,7 @@ export async function actionConfirmPayment(formData: FormData) {
   await requireCurrentConsent();
   const id = text(formData.get("paymentId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "pay.record");
     await confirmPayment(session, id, {
       proxyOwnerConfirmed: readProxyOwnerConfirmed(formData.get("proxyOwnerConfirmed")),
       source: "staff_ui",
@@ -354,7 +356,7 @@ export async function actionRejectPayment(formData: FormData) {
   await requireCurrentConsent();
   const id = text(formData.get("paymentId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "pay.record");
     await rejectPayment(session, id, text(formData.get("reason")));
     redirect("/m/payments");
   } catch (error) {
@@ -365,7 +367,7 @@ export async function actionRejectPayment(formData: FormData) {
 export async function actionImportCsv(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "bank.reconcile");
     await importBankCsv(session, text(formData.get("csv")));
     redirect("/m/bank");
   } catch (error) {
@@ -376,7 +378,7 @@ export async function actionImportCsv(formData: FormData) {
 export async function actionApproveMatch(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "bank.reconcile");
     await approveMatch(session, text(formData.get("suggestionId")));
     redirect("/m/bank");
   } catch (error) {
@@ -387,7 +389,7 @@ export async function actionApproveMatch(formData: FormData) {
 export async function actionStatement(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "stmt.generate");
     const result = await generateStatement(session, {
       ownerContactId: text(formData.get("ownerContactId")),
       month: text(formData.get("month")),
@@ -411,7 +413,7 @@ export async function actionTicket(formData: FormData) {
   const leaseId = text(formData.get("leaseId"));
   const back = text(formData.get("returnTo")) === "staff" ? "/m/tickets" : "/t/repair";
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     const id = await createTicket(session, {
       leaseId,
       category: text(formData.get("category")) || "other",
@@ -430,7 +432,7 @@ export async function actionSaveRepair(formData: FormData) {
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     await saveRepairRecord(session, ticketId, {
       status: text(formData.get("status")),
       note: text(formData.get("note")),
@@ -454,7 +456,7 @@ export async function actionCancelRepair(formData: FormData) {
   const ticketId = text(formData.get("ticketId"));
   const back = `/t/repair?id=${ticketId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     await cancelTenantRepair(session, ticketId);
     redirect(`${back}&cancelled=1`);
   } catch (error) {
@@ -467,7 +469,7 @@ export async function actionTicketComment(formData: FormData) {
   const ticketId = text(formData.get("ticketId"));
   const back = text(formData.get("returnTo")) === "tenant" ? `/t/repair?id=${ticketId}` : `/m/tickets/${ticketId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     await addTicketComment(session, ticketId, text(formData.get("body")), formData.get("internal") === "on");
     redirect(back);
   } catch (error) {
@@ -487,7 +489,7 @@ export async function actionAddVendor(formData: FormData) {
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     const vendorId = await addVendor(session, ticketId, {
       name: text(formData.get("vendorName")),
       phone: text(formData.get("vendorPhone")),
@@ -504,7 +506,7 @@ export async function actionDispatchVendor(formData: FormData) {
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     await dispatchVendor(
       session,
       ticketId,
@@ -528,7 +530,7 @@ export async function actionRevokeVendor(formData: FormData) {
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     await revokeVendorJob(session, ticketId, text(formData.get("jobId")));
     redirect(back);
   } catch (error) {
@@ -541,7 +543,7 @@ export async function actionConfirmVendor(formData: FormData) {
   const ticketId = text(formData.get("ticketId"));
   const back = `/m/tickets/${ticketId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     await confirmVendorCost(session, ticketId, text(formData.get("jobId")));
     redirect(back);
   } catch (error) {
@@ -563,7 +565,7 @@ export async function actionVendorReport(formData: FormData) {
 export async function actionUpdateTicket(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "tickets.update");
     await updateTicket(session, text(formData.get("ticketId")), {
       status: text(formData.get("status")) || undefined,
       note: text(formData.get("note")),
@@ -579,7 +581,7 @@ export async function actionMessage(formData: FormData) {
   const threadId = text(formData.get("threadId"));
   const back = text(formData.get("returnTo")) === "tenant" ? "/t/messages" : `/m/messages/${threadId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "messages.send");
     await postMessage(session, threadId, text(formData.get("body")));
     redirect(back);
   } catch (error) {
@@ -590,7 +592,7 @@ export async function actionMessage(formData: FormData) {
 export async function actionInvite(formData: FormData) {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "team.manage");
     assertTeamInvitesAllowed(session.orgId);
     const role = text(formData.get("role")) as OrgRole;
     const result = await inviteTeammate(session, { email: text(formData.get("email")), role });
@@ -605,7 +607,7 @@ export async function actionSetMeter(formData: FormData) {
   const propertyId = text(formData.get("propertyId"));
   const back = `/m/properties/${propertyId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "props.edit");
     await setMeterSerial(session, propertyId, text(formData.get("serial")));
     redirect(back);
   } catch (error) {
@@ -617,7 +619,7 @@ export async function actionPhoneVisibility(formData: FormData) {
   await requireCurrentConsent();
   const propertyId = text(formData.get("propertyId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "settings.edit");
     await setOwnerPhoneVisibility(session, text(formData.get("propertyOwnerId")), formData.get("canView") === "on");
     redirect(`/m/properties/${propertyId}`);
   } catch (error) {
@@ -629,7 +631,7 @@ export async function actionCreateOwner(formData: FormData) {
   await requireCurrentConsent();
   const back = "/m/owners/new";
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "props.edit");
     await createOwner(session, {
       name: text(formData.get("name")),
       email: text(formData.get("email")),
@@ -647,7 +649,7 @@ export async function actionUpdateOwner(formData: FormData) {
   const ownerId = text(formData.get("ownerId"));
   const back = `/m/owners/${ownerId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "props.edit");
     await updateOwner(session, ownerId, {
       name: text(formData.get("name")),
       email: text(formData.get("email")),
@@ -665,7 +667,7 @@ export async function actionUpdateProperty(formData: FormData) {
   const propertyId = text(formData.get("propertyId"));
   const back = `/m/properties/${propertyId}/edit`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "props.edit");
     await updateProperty(session, propertyId, {
       name: text(formData.get("name")),
       city: text(formData.get("city")),
@@ -690,7 +692,7 @@ export async function actionCreateSpace(formData: FormData) {
   await requireCurrentConsent();
   const back = "/m/units/new";
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "props.edit");
     await createSpace(session, spaceInput(formData));
     redirect("/m/units");
   } catch (error) {
@@ -704,7 +706,7 @@ export async function actionUpdateSpace(formData: FormData) {
   const spaceId = text(formData.get("spaceId"));
   const back = kind === "whole_unit" ? `/m/units/whole/${spaceId}` : `/m/units/room/${spaceId}`;
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "props.edit");
     await updateSpace(session, kind satisfies SpaceKind, spaceId, spaceInput(formData));
     redirect("/m/units");
   } catch (error) {
@@ -715,7 +717,7 @@ export async function actionUpdateSpace(formData: FormData) {
 export async function actionFinalizeId(formData: FormData): Promise<{ error: string } | void> {
   await requireCurrentConsent();
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     await finalizeTenantId(session, {
       leaseId: text(formData.get("leaseId")),
       docType: text(formData.get("docType")),
@@ -736,7 +738,7 @@ export async function actionViewIdPhotos(documentId: string) {
     const jar = await cookies();
     const token = jar.get(SESSION_COOKIE)?.value;
     if (!token) redirect("/login");
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     return await issuePhotoUrlsForToken(
       {
         tokenHash: sessionTokenHash(token),
@@ -756,7 +758,7 @@ export async function actionMarkIdChecked(formData: FormData): Promise<{ error: 
   await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     await reviewIdCheck(session, text(formData.get("documentId")), "checked");
     revalidatePath(`/m/leases/${leaseId}`);
   } catch (error) {
@@ -769,7 +771,7 @@ export async function actionReturnId(formData: FormData): Promise<{ error: strin
   await requireCurrentConsent();
   const leaseId = text(formData.get("leaseId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     await reviewIdCheck(session, text(formData.get("documentId")), "returned", text(formData.get("reason")));
     revalidatePath(`/m/leases/${leaseId}`);
   } catch (error) {
@@ -835,7 +837,7 @@ export async function actionPrepareUtility(formData: FormData) {
   const month = text(formData.get("periodStart")).slice(0, 7);
   const back = utilityBack(formData);
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     const result = await prepareUtilityRun(session, utilityInput(formData));
     redirect(`/m/rent/utilities?run=${result.runId}&unit=${encodeURIComponent(unitId)}&month=${encodeURIComponent(month)}`);
   } catch (error) {
@@ -852,7 +854,7 @@ export async function actionConfirmUtility(formData: FormData) {
   if (/^\d{4}-\d{2}$/.test(month)) next.set("month", month);
   if (unitId) next.set("unit", unitId);
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     await confirmUtilityRun(session, runId);
     revalidatePath("/m/rent/utilities");
     revalidatePath("/m/expenses");
@@ -868,7 +870,7 @@ export async function actionVoidUtility(formData: FormData) {
   await requireCurrentConsent();
   const runId = text(formData.get("runId"));
   try {
-    const session = await getSession();
+    const session = await guardEffectiveSession(await getSession(), "leases.edit");
     await voidUtilityRun(session, runId, text(formData.get("reason")));
     redirect(`/m/rent/utilities?run=${runId}&saved=void`);
   } catch (error) {
@@ -878,6 +880,7 @@ export async function actionVoidUtility(formData: FormData) {
 
 export async function actionPickLease(formData: FormData) {
   await requireCurrentConsent();
+  await guardEffectiveSession(await getSession(), null);
   const leaseId = text(formData.get("leaseId"));
   const jar = await cookies();
   jar.set("condola_lease", leaseId, appCookieOptions({ httpOnly: false }));

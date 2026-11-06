@@ -14,7 +14,7 @@ export default async function ImportPage() {
   await requireCurrentConsent(undefined, "page");
   const session = await getSession();
   const t = makeT(session.locale);
-  if (!can(session.role, "props.edit")) {
+  if (!can(session, "props.edit")) {
     return (
       <div className="alert bad" data-testid="forbidden">
         {t("i_forbidden")}
