@@ -190,8 +190,17 @@ async function authorize(
     `SELECT display_name,business_name,representative_name,tax_id,phone_e164,address
        FROM vendor_profile_versions WHERE org_id=$1 AND vendor_profile_id=$2 AND version=$3`,
     [orgId, profile.id, profile.current_version]);
-  if (!version) notFound();
-  Object.assign(profile, version);
+  // Profiles created before B-025 slice 2 (or by older writers) may have no
+  // version row: keep the legacy behaviour and use the live profile columns.
+  // Versioned profiles render from their snapshot (BLK-MAC-15).
+  if (version) Object.assign(profile, version);
+  else {
+    // A profile WITH version history but no current row is inconsistent: fail closed.
+    const history = await maybe<{ one: number }>(client,
+      `SELECT 1 AS one FROM vendor_profile_versions WHERE org_id=$1 AND vendor_profile_id=$2 LIMIT 1`,
+      [orgId, profile.id]);
+    if (history) notFound();
+  }
 
   if (grant) {
     // Document grants have their own expiry and explicit revocation. Losing
