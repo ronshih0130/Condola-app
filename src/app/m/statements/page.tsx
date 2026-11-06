@@ -25,7 +25,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
   const params = await searchParams;
   const month = params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : taipeiToday().slice(0, 7);
   const [owners, statements, roster, properties] = await Promise.all([
-    listOwners(session),
+    listOwners(session, true),
     listStatements(session),
     statementRoster(session, month),
     listProperties(session),

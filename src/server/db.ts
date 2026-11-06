@@ -1,4 +1,5 @@
 import { Client, type QueryResultRow } from "pg";
+import { archiveWriteError } from "./record-archive-errors";
 import { finishAfterResponse } from "./after-response";
 import { logServerError, mapDbError } from "./errors";
 import { readEnvChoice, resolveStaffOrg, type OrgEnvironment } from "./org-scope";
@@ -237,7 +238,7 @@ async function rollBack(client: Client, error: unknown): Promise<never> {
   } catch (rollbackError) {
     logServerError("rollback", rollbackError);
   }
-  throw mapDbError(error);
+  throw mapDbError(archiveWriteError(error));
 }
 
 /**

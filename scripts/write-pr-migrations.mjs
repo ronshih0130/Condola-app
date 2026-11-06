@@ -250,6 +250,10 @@ const added = {
     addOnly: false,
     reason: "Adds private typed-source/provenance/resolution tables, extends the exact center source constraint and replaces guards/read predicates with backward-compatible typed branches; changes owner-only functions and grants no new application source authority. Existing source bytes unchanged; no backfill or production activation.",
   },
+  "supabase/migrations/20261107010000_b015_archive_db_invariants.sql": {
+    addOnly: false,
+    reason: "Adds nullable owner-only archive metadata, default-OFF API-role marker/admission triggers, ordered parent locks and a restricted service-only archive gateway. Changes enabled-org DML semantics without backfill or activation; trusted service/definer paths retain authority.",
+  },
   "supabase/migrations/20261031100218_b015_tenant_directory_edit.sql": {
     addOnly: false,
     reason: "Adds a default-OFF private hash-only contact-edit command table, scoped cascade constraints, immutable and deferred authorization guards, and fixed service-only edit/view/status/close/final-check gateways with restricted grants. No legacy contact, login identity, historical source or financial rows are rewritten.",

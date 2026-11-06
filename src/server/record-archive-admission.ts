@@ -9,7 +9,7 @@ export type ArchiveAncestry = { propertyId:string; unitId:string|null; roomId:st
 
 /** Discovery is under the caller's existing RLS. No client-supplied parent is authority. */
 export async function archiveAncestry(c:Connection,orgId:string,ref:ArchiveRef):Promise<ArchiveAncestry> {
-  if(!isUuid(orgId)||!isArchiveRef(ref))throw new FlowError("errors.notFound");
+  if(!isUuid(orgId)||(!isArchiveRef(ref)||ref.kind==="owner"))throw new FlowError("errors.notFound");
   const sql=ref.kind==="property"
     ? `SELECT p.id::text AS "propertyId",NULL::text AS "unitId",NULL::text AS "roomId",p.archived_at IS NOT NULL AS "propertyArchived",false AS "unitArchived",false AS "roomArchived",NULL::text AS mode FROM public.properties p WHERE p.org_id=$1 AND p.id=$2`
     : ref.kind==="unit"

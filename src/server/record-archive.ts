@@ -1,3 +1,4 @@
+import { isDbContention } from "./record-archive-errors";
 import { createHash } from "node:crypto";
 import type { Client } from "pg";
 import type { ArchiveCommandInput, ArchiveItem, ArchiveList, ArchiveObserved, ArchiveOutcome, ArchiveRef, ArchiveView, RenderedArchiveScope } from "@/lib/record-archive";
@@ -24,7 +25,16 @@ async function enabled(c:Client,s:Session) {
 export async function recordArchiveEnabledFor(c:Client,orgId:string):Promise<boolean> {
  const q=await c.query(`SELECT 1 FROM public.organizations o JOIN public.platform_settings f ON f.key='record_archive' WHERE o.id=$1 AND o.feature_flags->'record_archive'='true'::jsonb AND f.value->'enabled'='true'::jsonb AND CASE WHEN jsonb_typeof(f.value->'allowed_org_ids')='array' THEN NOT EXISTS (SELECT 1 FROM jsonb_array_elements(f.value->'allowed_org_ids') AS item(value) WHERE jsonb_typeof(item.value)<>'string' OR (item.value #>> '{}') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') ELSE false END AND f.value->'allowed_org_ids' @> jsonb_build_array(o.id::text)`,[orgId]);return q.rowCount===1;
 }
+export async function recordArchiveEnabled(s:Session):Promise<boolean> {
+ if(!eligible(s))return false;
+ try {return await tx(s.userId,c=>recordArchiveEnabledFor(c,s.orgId),{orgId:s.orgId,environment:s.environment});}catch{return false;}
+}
 async function observe(c:Client,s:Session,ref:ArchiveRef):Promise<ArchiveObserved|null> {
+ if(ref.kind==='owner') {
+  const row=(await c.query<{id:string;name:string;archived:string|null;x:string;updated:string}>(`SELECT id::text,display_name name,${utc('owner_archived_at')} archived,xmin::text x,${utc('updated_at')} updated FROM public.contacts WHERE org_id=$1 AND id=$2 AND is_owner`,[s.orgId,ref.id])).rows[0];
+  if(!row)return null;
+  return {ref,propertyId:null,unitId:null,roomId:null,mode:null,name:row.name,propertyName:'',unitLabel:null,roomLabel:null,archivedAtUtc:row.archived,inherited:[],version:createHash('sha256').update(JSON.stringify(row)).digest('hex')};
+ }
  const joins=ref.kind==='property' ? `FROM public.properties p` : ref.kind==='unit' ? `FROM public.units u JOIN public.properties p ON p.id=u.property_id AND p.org_id=u.org_id` : `FROM public.rooms r JOIN public.units u ON u.id=r.unit_id AND u.org_id=r.org_id JOIN public.properties p ON p.id=u.property_id AND p.org_id=u.org_id`;
  const u=ref.kind==='property' ? null : 'u'; const r=ref.kind==='room' ? 'r' : null;
  const opt=(alias:string|null, expression:string, fallback='NULL::text')=>alias ? expression : fallback;
@@ -36,8 +46,12 @@ async function observe(c:Client,s:Session,ref:ArchiveRef):Promise<ArchiveObserve
  if(ref.kind==='room' && row.unit_archived) inherited.push({ref:{kind:'unit',id:row.unit_id!},archivedAtUtc:row.unit_archived});
  return {ref:{kind:ref.kind,id},propertyId:row.property_id,unitId:row.unit_id,roomId:row.room_id,mode:row.mode,name:ref.kind==='property'?row.property_name:ref.kind==='unit'?row.unit_label!:row.room_label!,propertyName:row.property_name,unitLabel:row.unit_label,roomLabel:row.room_label,archivedAtUtc:ref.kind==='property'?row.property_archived:ref.kind==='unit'?row.unit_archived:row.room_archived,inherited,version:createHash('sha256').update(JSON.stringify(row)).digest('hex')};
 }
-type Facts={lease_active:boolean;signing_active:boolean;repair_active:boolean;dispatch_active:boolean;utility_active:boolean;finance_outstanding:boolean;invite_pending:boolean;lease_history:boolean;repair_history:boolean;utility_history:boolean;finance_history:boolean;lease_active_id:string|null;signing_lease_id:string|null;repair_active_id:string|null;dispatch_ticket_id:string|null;lease_history_id:string|null;repair_history_id:string|null;expense_history_id:string|null};
+type Facts={owner_active?:boolean;owner_history?:boolean;lease_active:boolean;signing_active:boolean;repair_active:boolean;dispatch_active:boolean;utility_active:boolean;finance_outstanding:boolean;invite_pending:boolean;lease_history:boolean;repair_history:boolean;utility_history:boolean;finance_history:boolean;lease_active_id:string|null;signing_lease_id:string|null;repair_active_id:string|null;dispatch_ticket_id:string|null;lease_history_id:string|null;repair_history_id:string|null;expense_history_id:string|null};
 async function facts(c:Client,s:Session,o:ArchiveObserved):Promise<Facts> {
+ if(o.ref.kind==='owner') {
+  const row=(await c.query<{active:boolean;history:boolean}>(`SELECT EXISTS(SELECT 1 FROM property_owners po JOIN properties p ON p.org_id=po.org_id AND p.id=po.property_id WHERE po.org_id=$1 AND po.owner_contact_id=$2 AND (po.effective_to IS NULL OR po.effective_to>=current_date) AND p.archived_at IS NULL) active,EXISTS(SELECT 1 FROM property_owners WHERE org_id=$1 AND owner_contact_id=$2) history`,[s.orgId,o.ref.id])).rows[0];
+  return {owner_active:row.active,owner_history:row.history,lease_active:false,signing_active:false,repair_active:false,dispatch_active:false,utility_active:false,finance_outstanding:false,invite_pending:false,lease_history:false,repair_history:false,utility_history:false,finance_history:false,lease_active_id:null,signing_lease_id:null,repair_active_id:null,dispatch_ticket_id:null,lease_history_id:null,repair_history_id:null,expense_history_id:null};
+ }
  const leaseScope=`l.org_id=$1 AND l.property_id=$2 AND ($3::text='property' OR ($3='unit' AND l.unit_id=$4::uuid) OR ($3='room' AND (l.target_room_id=$5::uuid OR l.target_unit_id=$4::uuid)))`;
  const ticketScope=`t.org_id=$1 AND t.property_id=$2 AND ($3::text='property' OR ($3='unit' AND t.unit_id=$4::uuid) OR ($3='room' AND t.room_id=$5::uuid))`;
  const utilityScope=`ur.org_id=$1 AND (
@@ -68,6 +82,8 @@ async function facts(c:Client,s:Session,o:ArchiveObserved):Promise<Facts> {
 }
 function factItems(f:Facts, ref:ArchiveRef) {
  const blockers:ArchiveItem[]=[];const warnings:ArchiveItem[]=[];const history:ArchiveItem[]=[];
+ if(f.owner_active)blockers.push({category:'owners',label:'owner_active',href:`/m/owners/${ref.id}`});
+ if(f.owner_history)history.push({category:'owners',label:'owner_history',href:`/m/owners/${ref.id}`});
  if(f.lease_active)blockers.push({category:'leases',label:'lease_active',href:f.lease_active_id?`/m/leases/${f.lease_active_id}`:'/m/leases'});
  if(f.signing_active)blockers.push({category:'signing',label:'signing_active',href:f.signing_lease_id?`/m/leases/${f.signing_lease_id}`:'/m/leases'});
  if(f.repair_active)blockers.push({category:'repairs',label:'repair_active',href:f.repair_active_id?`/m/tickets/${f.repair_active_id}`:'/m/tickets'});
@@ -84,26 +100,32 @@ function factItems(f:Facts, ref:ArchiveRef) {
 /** Dependency queries in the view are advisory; the command repeats them under locks. */
 export async function archiveView(s:Session,ref:ArchiveRef):Promise<ArchiveView> {
  if(!eligible(s)||!isArchiveRef(ref))return unavailable;
- try {return await tx(s.userId,async c=>{if(!await current(c,s))return unavailable;const observed=await observe(c,s,ref);if(!observed)return unavailable;const found=await facts(c,s,observed);const writeEnabled=can(s.role,'props.edit') && await enabled(c,s);if(!await current(c,s))return unavailable;const items=factItems(found,ref);return {state:'ready',observed,writeEnabled,canArchive:writeEnabled && !observed.archivedAtUtc && items.blockers.length===0,canRestore:writeEnabled && Boolean(observed.archivedAtUtc) && observed.inherited.length===0 && (ref.kind!=='room'||observed.mode==='by_room'),...items,coverage:(['leases','signing','repairs','dispatch','utilities','finance','invitations'] as const).map(category=>({category,state:category==='signing'&&!can(s.role,'props.edit')?'unknown' as const:'verified' as const}))};},{orgId:s.orgId,environment:s.environment});} catch {return unavailable;}
+ try {return await tx(s.userId,async c=>{if(!await current(c,s))return unavailable;const observed=await observe(c,s,ref);if(!observed)return unavailable;const found=await facts(c,s,observed);const writeEnabled=can(s.role,'props.edit') && await enabled(c,s);if(!await current(c,s))return unavailable;const items=factItems(found,ref);return {state:'ready',observed,writeEnabled,canArchive:writeEnabled && !observed.archivedAtUtc && items.blockers.length===0,canRestore:writeEnabled && Boolean(observed.archivedAtUtc) && observed.inherited.length===0 && (ref.kind!=='room'||observed.mode==='by_room'),...items,coverage:(ref.kind==='owner'?(['owners'] as const):(['leases','signing','repairs','dispatch','utilities','finance','invitations'] as const)).map(category=>({category,state:category==='signing'&&!can(s.role,'props.edit')?'unknown' as const:'verified' as const}))};},{orgId:s.orgId,environment:s.environment});} catch {return unavailable;}
 }
 export async function archiveList(s:Session,after?:string):Promise<ArchiveList> {
  if(!eligible(s))return unavailable;
  if(after!==undefined&&typeof after!=='string')return unavailable;
- const match=after===undefined?null:/^(property|unit|room):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(after);
+ const match=after===undefined?null:/^(property|unit|room|owner):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(after);
  if(after!==undefined&&!match)return unavailable;
- try {return await tx(s.userId,async c=>{if(!await current(c,s))return unavailable;const ids=(await c.query<ArchiveRef>(`SELECT kind,id FROM (SELECT 'property'::text kind,p.id::text id FROM public.properties p WHERE p.org_id=$1 AND p.archived_at IS NOT NULL UNION ALL SELECT 'unit',u.id::text FROM public.units u JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE u.org_id=$1 AND (u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL) UNION ALL SELECT 'room',r.id::text FROM public.rooms r JOIN public.units u ON u.org_id=r.org_id AND u.id=r.unit_id JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE r.org_id=$1 AND (r.archived_at IS NOT NULL OR u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL)) x WHERE ($2::text IS NULL OR (kind,id)>($2::text,$3::text)) ORDER BY kind,id LIMIT 201`,[s.orgId,match?.[1]??null,match?.[2]??null])).rows;const rows:ArchiveObserved[]=[];for(const ref of ids.slice(0,200)){const item=await observe(c,s,ref);if(!item)return unavailable;rows.push(item);}if(!await current(c,s))return unavailable;const hasMore=ids.length>200,last=rows.at(-1);return {state:'ready',rows,hasMore,nextCursor:hasMore&&last?`${last.ref.kind}:${last.ref.id}`:null};},{orgId:s.orgId,environment:s.environment});} catch{return unavailable;}
+ try {return await tx(s.userId,async c=>{if(!await current(c,s))return unavailable;const ids=(await c.query<ArchiveRef>(`SELECT kind,id FROM (SELECT 'owner'::text kind,c.id::text id FROM public.contacts c WHERE c.org_id=$1 AND c.is_owner AND c.owner_archived_at IS NOT NULL AND app.b015_archive_enabled(c.org_id) IS TRUE UNION ALL SELECT 'property'::text kind,p.id::text id FROM public.properties p WHERE p.org_id=$1 AND p.archived_at IS NOT NULL UNION ALL SELECT 'unit',u.id::text FROM public.units u JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE u.org_id=$1 AND (u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL) UNION ALL SELECT 'room',r.id::text FROM public.rooms r JOIN public.units u ON u.org_id=r.org_id AND u.id=r.unit_id JOIN public.properties p ON p.org_id=u.org_id AND p.id=u.property_id WHERE r.org_id=$1 AND (r.archived_at IS NOT NULL OR u.archived_at IS NOT NULL OR p.archived_at IS NOT NULL)) x WHERE ($2::text IS NULL OR (kind,id)>($2::text,$3::text)) ORDER BY kind,id LIMIT 201`,[s.orgId,match?.[1]??null,match?.[2]??null])).rows;const rows:ArchiveObserved[]=[];for(const ref of ids.slice(0,200)){const item=await observe(c,s,ref);if(!item)return unavailable;rows.push(item);}if(!await current(c,s))return unavailable;const hasMore=ids.length>200,last=rows.at(-1);return {state:'ready',rows,hasMore,nextCursor:hasMore&&last?`${last.ref.kind}:${last.ref.id}`:null};},{orgId:s.orgId,environment:s.environment});} catch{return unavailable;}
 }
 export async function archiveCommand(s:Session,input:ArchiveCommandInput):Promise<ArchiveOutcome> {
  if(!isArchiveCommand(input)||!eligible(s)||!can(s.role,'props.edit')||!sameArchiveScope(input.renderedScope,archiveScope(s)))return {state:'forbidden'};
+ let archiveEnabled=false;
  try{return await tx<ArchiveOutcome>(s.userId,async c=>{
   if(!await current(c,s))return {state:'forbidden'};
   if(!await enabled(c,s))return {state:'disabled'};
+  archiveEnabled=true;
   await c.query(`SELECT set_config('lock_timeout','5s',true)`);
-  await lockArchiveAncestry(c,s.orgId,input.ref,true);
+  if(input.ref.kind!=='owner')await lockArchiveAncestry(c,s.orgId,input.ref,true);
   if(!await current(c,s))return {state:'forbidden'};
   if(!await enabled(c,s))return {state:'disabled'};
-  const table=input.ref.kind==='property'?'properties':input.ref.kind==='unit'?'units':'rooms';
-  const locked=await c.query(`SELECT id FROM public.${table} WHERE org_id=$1 AND id=$2 FOR UPDATE`,[s.orgId,input.ref.id]);
+  const path=await observe(c,s,input.ref);if(!path)return {state:'forbidden'};
+  await c.query('SELECT app.b015_archive_lock_path($1,$2,$3,$4,$5,false)',[s.orgId,path.propertyId,path.unitId,path.roomId,input.ref.kind==='owner'?input.ref.id:null]);
+  if(!await current(c,s))return {state:'forbidden'};
+  if(!await enabled(c,s))return {state:'disabled'};
+  const table=input.ref.kind==='property'?'properties':input.ref.kind==='unit'?'units':input.ref.kind==='room'?'rooms':'contacts';
+  const locked=await c.query(`SELECT id,xmin::text x FROM public.${table} WHERE org_id=$1 AND id=$2 FOR NO KEY UPDATE`,[s.orgId,input.ref.id]);
   if(locked.rowCount!==1)return {state:'forbidden'};
   if(!await current(c,s))return {state:'forbidden'};
   if(!await enabled(c,s))return {state:'disabled'};
@@ -113,11 +135,14 @@ export async function archiveCommand(s:Session,input:ArchiveCommandInput):Promis
   if(archived===(input.desired==='archived'))return {state:'already_in_desired_state'};
   if(input.desired==='active' && (observed.inherited.length>0 || (input.ref.kind==='room' && observed.mode!=='by_room')))return {state:'blocked'};
   if(input.desired==='archived' && factItems(await facts(c,s,observed),input.ref).blockers.length)return {state:'blocked'};
-  await c.query(`SELECT set_config('app.change_reason',$1,true),set_config('app.request_id',$2,true)`,[input.reason,input.requestId]);
-  const updated=await c.query(`UPDATE public.${table} SET archived_at=CASE WHEN $3::boolean THEN clock_timestamp() ELSE NULL END WHERE org_id=$1 AND id=$2`,[s.orgId,input.ref.id,input.desired==='archived']);
-  if(updated.rowCount!==1)throw new Error('Archive unavailable');
+  // Only the trusted server connection can select service_role. Raw API roles
+  // cannot execute this gateway, even with spoofed request/session GUCs.
+  await c.query('SET LOCAL ROLE service_role');
+  const result=(await c.query<{state:ArchiveOutcome['state']}>(`SELECT app.b015_archive_record($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) state`,[s.orgId,s.liveOrgId,s.environment,s.sessionId,input.ref.kind,input.ref.id,input.desired==='archived',locked.rows[0].x,input.reason,input.requestId])).rows[0];
+  await c.query('SET LOCAL ROLE authenticated');
+  if(result.state!=='changed')return {state:result.state};
   await c.query('SET CONSTRAINTS ALL IMMEDIATE');
   if(!await current(c,s)||!await enabled(c,s))throw new Error('Archive authorization changed');
   return {state:'changed'};
- },{orgId:s.orgId,environment:s.environment});}catch(error){const code=(error as {cause?:{code?:string}})?.cause?.code;if(code==='23505')return {state:'conflict'};if(code==='55P03')return {state:'busy'};return {state:'unknown'};}
+ },{orgId:s.orgId,environment:s.environment});}catch(error){const code=(error as {cause?:{code?:string}})?.cause?.code;if(code==='23505')return {state:'conflict'};if(archiveEnabled&&isDbContention(error))return {state:'busy'};return {state:'unknown'};}
 }

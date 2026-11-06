@@ -1,6 +1,7 @@
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { notFound } from "next/navigation";
 import { makeT } from "@/i18n";
+import { ArchiveEntry } from "@/components/record-archive-entry";
 import { OwnerForm } from "@/components/owner-form";
 import { PortalInviteButton } from "@/components/portal-invite-button";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -8,6 +9,7 @@ import { actionUpdateOwner } from "@/server/actions";
 import { portalLoginReady } from "@/server/portal-invite";
 import { listProperties, ownerEditor } from "@/server/queries";
 import { isUuid } from "@/server/repair-rules";
+import { recordArchiveEnabled } from "@/server/record-archive";
 import { getSession } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +27,7 @@ export default async function EditOwnerPage({
   const query = await searchParams;
   const session = await getSession();
   const t = makeT(session.locale);
-  const [owner, properties] = await Promise.all([ownerEditor(session, id), listProperties(session)]);
+  const [owner, properties, archiveEnabled] = await Promise.all([ownerEditor(session, id), listProperties(session), recordArchiveEnabled(session)]);
   if (!owner) notFound();
   const ready = session.role === "admin" || session.role === "manager" ? await portalLoginReady(owner.user_id) : false;
   const activated = ready && !owner.invitePending;
@@ -33,6 +35,7 @@ export default async function EditOwnerPage({
     <>
       <PageHeader title={t("i_owner_edit")} crumb={t("i_owners_title")} />
       <ErrorBanner t={t} error={query.error} />
+      {archiveEnabled && <ArchiveEntry locale={session.locale} refValue={{kind:"owner",id:owner.id}} />}
       <div key={owner.id} data-owner-page={owner.id}>
         {session.role === "admin" || session.role === "manager" ? (
           <PortalInviteButton key={owner.id} kind="owner" contactId={owner.id} activated={activated} />
