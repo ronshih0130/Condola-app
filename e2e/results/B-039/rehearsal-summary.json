@@ -1,0 +1,196 @@
+{
+ "scope": "local disposable clone; hosted staging pending",
+ "journeys": [
+  "J1 /t /o /v binding, LINE sign-in, scope denials",
+  "J3 tenant/owner captured pushes, quota-full Email fallback, Reply-only webhook",
+  "J5 vendor dispatch push, B-035 open/read/report, reschedule, cancel, old link denied",
+  "unlink/revoke routes later events to Email"
+ ],
+ "handlerCalls": 44,
+ "byStatus": {
+  "200": 29,
+  "201": 8,
+  "401": 1,
+  "404": 6
+ },
+ "fiveHundreds": 0,
+ "networkCalls": 0,
+ "calls": [
+  {
+   "label": "/t/liff",
+   "status": 200
+  },
+  {
+   "label": "/o/liff",
+   "status": 200
+  },
+  {
+   "label": "/v/liff",
+   "status": 200
+  },
+  {
+   "label": "tenant invite flow",
+   "status": 201
+  },
+  {
+   "label": "tenant invite accept",
+   "status": 200
+  },
+  {
+   "label": "owner reauth",
+   "status": 200
+  },
+  {
+   "label": "owner bind flow",
+   "status": 201
+  },
+  {
+   "label": "owner bind",
+   "status": 200
+  },
+  {
+   "label": "vendor reauth",
+   "status": 200
+  },
+  {
+   "label": "vendor bind flow",
+   "status": 201
+  },
+  {
+   "label": "vendor bind",
+   "status": 200
+  },
+  {
+   "label": "webhook follow",
+   "status": 200
+  },
+  {
+   "label": "webhook follow",
+   "status": 200
+  },
+  {
+   "label": "webhook follow",
+   "status": 200
+  },
+  {
+   "label": "tenant login flow",
+   "status": 201
+  },
+  {
+   "label": "tenant LINE session",
+   "status": 200
+  },
+  {
+   "label": "owner login flow",
+   "status": 201
+  },
+  {
+   "label": "owner LINE session",
+   "status": 200
+  },
+  {
+   "label": "vendor login flow",
+   "status": 201
+  },
+  {
+   "label": "vendor LINE session",
+   "status": 200
+  },
+  {
+   "label": "tenant reauth",
+   "status": 200
+  },
+  {
+   "label": "foreign tenant contact",
+   "status": 404
+  },
+  {
+   "label": "cross-org bind",
+   "status": 404
+  },
+  {
+   "label": "owner as vendor",
+   "status": 404
+  },
+  {
+   "label": "owner links",
+   "status": 200
+  },
+  {
+   "label": "webhook message at full quota",
+   "status": 200
+  },
+  {
+   "label": "vendor entry proof",
+   "status": 200
+  },
+  {
+   "label": "vendor job flow",
+   "status": 201
+  },
+  {
+   "label": "vendor job exchange",
+   "status": 200
+  },
+  {
+   "label": "vendor job page",
+   "status": 200
+  },
+  {
+   "label": "vendor job read",
+   "status": 200
+  },
+  {
+   "label": "vendor job without claim",
+   "status": 401
+  },
+  {
+   "label": "old link entry",
+   "status": 404
+  },
+  {
+   "label": "old claim read",
+   "status": 404
+  },
+  {
+   "label": "new link entry",
+   "status": 200
+  },
+  {
+   "label": "new job flow",
+   "status": 201
+  },
+  {
+   "label": "new job exchange",
+   "status": 200
+  },
+  {
+   "label": "vendor report",
+   "status": 200
+  },
+  {
+   "label": "cancelled link entry",
+   "status": 404
+  },
+  {
+   "label": "tenant reauth",
+   "status": 200
+  },
+  {
+   "label": "tenant unlink",
+   "status": 200
+  },
+  {
+   "label": "owner global revoke",
+   "status": 200
+  },
+  {
+   "label": "vendor unlink",
+   "status": 200
+  },
+  {
+   "label": "webhook follow",
+   "status": 200
+  }
+ ]
+}

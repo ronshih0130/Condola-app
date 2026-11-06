@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107105000_b039_line_dispatch_pushes.sql": {
+    addOnly: false,
+    reason: "Additive private dispatch-event outbox (claim, announcement dependency, backoff) with constraints, RLS, six service-only pinned definer gateways plus an ungranted internal replay classifier (L2 decision pending Class B review); a validated CHECK on notifications constrains only the new vendor dispatch event types; default-OFF line_dispatch_push setting. No backfill or activation.",
+  },
   "supabase/migrations/20261107085000_b035_line_vendor_claim.sql": {
     addOnly: false,
     reason: "Additive private job-flow extension with constraints, RLS, pinned definer guard and service-only grants; no existing identity/account data rewrite or activation.",
