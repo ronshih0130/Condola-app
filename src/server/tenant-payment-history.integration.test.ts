@@ -51,7 +51,9 @@ function validateSeed(v:Controls) {
  if(v.orgs.length!==2||!same(v.orgs.map(x=>x.id).sort(),[ORG_ID,ORG2_ID].sort())||v.orgs.some(x=>x.environment!=='live'||x.live_org_id!==null||!same(x.flags,seedFlags)))throw Error('Unexpected seed organizations or flags');
  const allow=new Set([...v.registry,'deposit_settlement','go_live_lock','id_documents.max_retention_days_after_close','id_documents.org_retention_locked']);
  if(v.settings.some(x=>!allow.has(x.key))||v.settings.some(x=>x.key===targetKey))throw Error('Unknown setting or B018 already present');
- for(const row of v.settings.filter(x=>v.registry.includes(x.key)))if(!same(row.value,{enabled:false,allowed_org_ids:[]}))throw Error('Unexpected registry flag');
+ // Global-only flags (no org allowlist), e.g. B-031 session_hardening, are OFF as {enabled:false}.
+ const globalOnly=new Set(['session_hardening']);
+ for(const row of v.settings.filter(x=>v.registry.includes(x.key)))if(!same(row.value,globalOnly.has(row.key)?{enabled:false}:{enabled:false,allowed_org_ids:[]}))throw Error('Unexpected registry flag');
  const settlement=v.settings.filter(x=>x.key==='deposit_settlement');
  if(settlement.length!==1||!same(settlement[0].value,{enabled:false,allowed_org_ids:[]}))throw Error('Unexpected B011 settlement flag');
  for(const [key,value] of [['go_live_lock',false],['id_documents.max_retention_days_after_close',90],['id_documents.org_retention_locked',true]] as const){const found=v.settings.filter(x=>x.key===key);if(found.length!==1||!same(found[0].value,value))throw Error('Protective control mismatch');}
