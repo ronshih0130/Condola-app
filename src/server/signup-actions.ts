@@ -20,6 +20,8 @@ import { appCookieOptions } from "./public-origin";
 import { getSession, requestPrefs } from "./session";
 import { partnerRequestMeta } from "./partner-consent";
 import { sessionEntryPath } from "./sign-out";
+import { readUnitQrContext, readUnitQrContinuation, unitQrFormMatches, UNIT_QR_COOKIE } from "./unit-qr-signup";
+import { clearUnitQrCookie, invalidateUnitQrCookie } from "./unit-qr-cookie";
 import { signupVerifyType } from "./signup-gotrue";
 import {
   changeSignupEmail,
@@ -74,7 +76,16 @@ export async function actionPreviewCode(code: string) {
 }
 
 export async function actionStartSignup(formData: FormData) {
+  const handle = (await cookies()).get(UNIT_QR_COOKIE)?.value;
+  const qr = await readUnitQrContinuation(handle);
+  const formId = text(formData.get("unitQrContinuation"));
+  if (qr.state === "invalid" || (qr.state === "absent" && formId)
+    || (qr.state === "active" && (!handle || !await unitQrFormMatches(formId, handle)))) {
+    invalidateUnitQrCookie(await cookies());
+    redirect("/signup?error=required");
+  }
   const result = await startSignup({
+    ...(qr.state === "active" && handle ? { unitQrHandle: handle } : {}),
     email: text(formData.get("email")),
     password: String(formData.get("password") ?? ""),
     confirm: String(formData.get("confirm") ?? ""),
@@ -83,7 +94,11 @@ export async function actionStartSignup(formData: FormData) {
     meta: await meta(),
     consent: formData.get("consent") === "on",
   });
-  if (!result.ok) redirect(`/signup?error=${result.error}`);
+  if (!result.ok) {
+    if (qr.state === "active" && result.error === "required") invalidateUnitQrCookie(await cookies());
+    redirect(`/signup?error=${result.error}`);
+  }
+  if (result.unitQrBound) clearUnitQrCookie(await cookies());
   if (result.status === "firm") {
     await setSession(result.token);
     redirect(sessionEntryPath("/signup/firm"));
@@ -152,6 +167,7 @@ export async function actionCreateFirm(formData: FormData) {
   const identity = await readSignupIdentity();
   if (!identity) redirect("/signup");
   if (!identity.confirmed) redirect(`/signup/verify?email=${encodeURIComponent(identity.email)}`);
+  if (await readUnitQrContext(null, identity.user_id)) redirect("/signup/firm");
   if (identity.org_id) redirect("/m");
   try {
     const created = await createFirm({
