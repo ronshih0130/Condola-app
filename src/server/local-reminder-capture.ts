@@ -1,3 +1,4 @@
+import { recordUsage, usageDedupeKey } from './usage-events';
 import { createHash } from "node:crypto";
 import type { Session } from "./types";
 import { svc } from "./db";
@@ -37,6 +38,8 @@ export async function captureManualReminders(session: Session, leaseId: string, 
         digest=createHash("sha256").update(JSON.stringify(message)).digest("hex");
       } catch { /* Record the local failure without storing the content. */ }
       await c.query(`SELECT app.b028_finish_manual($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[...args,row.claim_id,row.claim_token,digest]);
+      if (digest) await recordUsage(c, { orgId: session.orgId, dimension: 'notifications', quantity: BigInt(1), occurredAt: new Date(),
+        sourceTable: 'b028_recipient_claims', sourceId: row.claim_id, dedupeKey: usageDedupeKey('notifications', 'b028_recipient_claims', row.claim_id) });
       return {state:digest ? "captured" as const : "failed" as const, claimId:row.claim_id};
     });
     if (outcome.state === "empty") break;
@@ -58,6 +61,8 @@ export async function captureScheduledReminders(orgId:string,eventId:string,at:D
       let digest:string | null=null;
       try { const message=renderLocalReminder(row); capture(message); digest=createHash("sha256").update(JSON.stringify(message)).digest("hex"); } catch { /* Keep failure scoped to this recipient. */ }
       await c.query(`SELECT app.b028_finish_scheduled($1,$2,$3,$4)`,[orgId,row.claim_id,row.claim_token,digest]);
+      if (digest) await recordUsage(c, { orgId: orgId, dimension: 'notifications', quantity: BigInt(1), occurredAt: new Date(),
+        sourceTable: 'b028_recipient_claims', sourceId: row.claim_id, dedupeKey: usageDedupeKey('notifications', 'b028_recipient_claims', row.claim_id) });
       return {state:digest ? "captured" as const : "failed" as const,claimId:row.claim_id};
     });
     if (outcome.state === "empty") break;

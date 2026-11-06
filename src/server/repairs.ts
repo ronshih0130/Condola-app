@@ -1,3 +1,4 @@
+import { recordStoredFileUsage } from './usage-events';
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { maybe, one, svc, tx } from "./db";
@@ -434,6 +435,7 @@ export async function attachRepairPhoto(
        VALUES ($1,$2,$3,$4) RETURNING id::text`,
       [ticket.org_id, ticket.id, fileId, session.kind === "staff" && input.internal],
     );
+    await recordStoredFileUsage(client, ticket.org_id, fileId);
     return attachment.id;
   }, requireOrgScope(session));
 }
