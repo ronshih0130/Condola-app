@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106234000_b031_session_hardening.sql": {
+    addOnly: false,
+    reason: "Adds private credential/challenge epochs and explicit LINE challenge exemptions with constraints, RLS, restricted SECURITY DEFINER functions and a default-OFF session hardening flag.",
+  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",

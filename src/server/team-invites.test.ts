@@ -197,6 +197,7 @@ function inviteClient(account?: { id: string; has_password: boolean; matches: bo
   const client = {
     async query(sql: string) {
       statements.push(sql);
+      if (sql === "SELECT app.b031_session_hardening_enabled() AS enabled") return { rows: [{ enabled: false }] };
       if (sql.includes("FROM organizations") && sql.includes("FOR UPDATE")) {
         return { rows: [{ environment: "live", plan_tier: "standard", settings: {} }] };
       }
