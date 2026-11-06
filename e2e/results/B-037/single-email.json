@@ -1,0 +1,61 @@
+[
+ {
+  "path": "rent_due with B-010 Email claim",
+  "reason": "line_unlinked",
+  "b010Claims": 1,
+  "lineFallbackEmails": 0,
+  "total": 1
+ },
+ {
+  "path": "rent_due with B-010 Email claim",
+  "reason": "line_unfollowed",
+  "b010Claims": 1,
+  "lineFallbackEmails": 0,
+  "total": 1
+ },
+ {
+  "path": "rent_due with B-010 Email claim",
+  "reason": "line_opt_out",
+  "b010Claims": 1,
+  "lineFallbackEmails": 0,
+  "total": 1
+ },
+ {
+  "path": "rent_due with B-010 Email claim",
+  "reason": "line_quota",
+  "b010Claims": 1,
+  "lineFallbackEmails": 0,
+  "total": 1
+ },
+ {
+  "path": "rent_due with B-010 Email claim",
+  "reason": "line_guard",
+  "b010Claims": 1,
+  "lineFallbackEmails": 0,
+  "total": 1
+ },
+ {
+  "path": "payment result without B-010 Email claim",
+  "reason": "line_unlinked",
+  "b010Claims": 0,
+  "lineFallbackEmails": 1,
+  "total": 1
+ },
+ {
+  "path": "payment result without B-010 Email claim",
+  "reason": "line_quota",
+  "b010Claims": 0,
+  "lineFallbackEmails": 1,
+  "total": 1
+ },
+ {
+  "path": "rent unknown result expired",
+  "reason": "line_unknown_possible_duplicate",
+  "total": 1
+ },
+ {
+  "path": "payment unknown result expired",
+  "reason": "line_unknown_possible_duplicate",
+  "total": 1
+ }
+]

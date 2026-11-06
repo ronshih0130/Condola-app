@@ -1,0 +1,14 @@
+{
+ "zh-TW": {
+  "rent_due": "【松信住宅管理】租金提醒：本期租金 NT$12,000，應繳日為 2026年11月3日。查看帳單與匯款資訊：https://liff.line.me/local-tenant?org=10000000-0000-4000-8000-000000000001",
+  "rent_overdue": "【松信住宅管理】本期租金 NT$12,000 已超過應繳日 2026年11月3日。如已匯款請忽略此訊息。查看帳單：https://liff.line.me/local-tenant?org=10000000-0000-4000-8000-000000000001",
+  "payment_confirmed": "【松信住宅管理】您回報的繳款 NT$10,000 已完成對帳確認。查看紀錄：https://liff.line.me/local-tenant?org=10000000-0000-4000-8000-000000000001",
+  "payment_rejected": "【松信住宅管理】您回報的繳款 NT$50 未能完成對帳，請開啟連結查看說明並與管理公司聯繫：https://liff.line.me/local-tenant?org=10000000-0000-4000-8000-000000000001"
+ },
+ "en": {
+  "rent_due": "[松信住宅管理] Rent reminder: NT$12,000 is due on 2026-11-03. View the bill and transfer details: https://liff.line.me/local-tenant?org=10000000-0000-4000-8000-000000000001",
+  "rent_overdue": "[松信住宅管理] Your rent of NT$12,000 was due on 2026-11-03. If you have already transferred it, please ignore this message. View the bill: https://liff.line.me/local-tenant?org=10000000-0000-4000-8000-000000000001",
+  "payment_confirmed": "[松信住宅管理] Your reported payment of NT$10,000 has been reconciled and confirmed. View your records: https://liff.line.me/local-tenant?org=10000000-0000-4000-8000-000000000001",
+  "payment_rejected": "[松信住宅管理] Your reported payment of NT$50 could not be reconciled. Open the link for details and contact the management company: https://liff.line.me/local-tenant?org=10000000-0000-4000-8000-000000000001"
+ }
+}

@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107090000_b037_line_rent_pushes.sql": {
+    addOnly: false,
+    reason: "Adds private RLS/REVOKE ALL rent-push claim and evaluated-event tables with composite FKs and CHECK/UNIQUE constraints, seven service-only SECURITY DEFINER gateways plus four ungranted helpers, a same-body replacement of app.b033_push_expire (single-Email and suppression rules for B-037 claims) and a default-OFF line_rent_push setting. No backfill and no change to B-010 producers, B-028 claims or legacy email_log reminders; constraints, privilege revokes and the function replacement require Class B review.",
+  },
   "supabase/migrations/20261107050000_b033_line_login_link.sql": {
     addOnly: false,
     reason: "Additive one-time flows, session provenance, private limits, portal gates and service-only LIFF/link gateways. Trusted links no longer require raw provider ids; configuration and privilege changes require Class B review.",
