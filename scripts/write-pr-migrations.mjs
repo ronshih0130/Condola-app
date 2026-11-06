@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106120000_prop06_recipient_channels.sql": {
+    addOnly: true,
+    reason: "Adds a staff-only, pinned-scope SECURITY DEFINER read reporting a recipient contact's portal kind and channel availability (e-mail, in-app, LINE bound/friend) without addresses or LINE ids; no writes, flag or callers (PROP-06 foundation).",
+  },
   "supabase/migrations/20261106040000_b022_owner_title_report_replies.sql": {
     addOnly: true,
     reason: "Adds private append-only owner receipt-title revisions and report replies, authenticated SECURITY DEFINER gateways and two default-OFF settings; no existing-table schema changes or backfill. Title RPC updates only the caller owner contact receipt_title.",
