@@ -9,6 +9,9 @@ import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { maskTenantNames } from "@/server/privacy";
 import { statementDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
+import { OwnerNetLedgerPanel } from "@/components/owner-net-ledger-panel";
+import { ownerNetLedgerView } from "@/server/owner-net-ledger";
+import { ledgerPanelView } from "@/server/owner-net-ledger-presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +31,7 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
     description: line.description && !privacy.showName ? maskTenantNames(line.description, names, hidden) : line.description,
   }));
   const row = detail.statement;
+  const ledger = await ownerNetLedgerView(session, id);
   return (
     <div>
       <p>
@@ -51,6 +55,7 @@ export default async function OwnerStatementPage({ params }: { params: Promise<{
         lines={lines}
         note={<p className="small">{t("i_actor")}</p>}
       />
+      {ledger && <OwnerNetLedgerPanel view={ledgerPanelView(ledger, { statementId: id, locale: session.locale })} locale={session.locale} negativeLabel={t("owner_owes")} />}
     </div>
   );
 }

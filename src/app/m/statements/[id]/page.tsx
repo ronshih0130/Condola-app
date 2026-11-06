@@ -8,6 +8,9 @@ import { PageHeader } from "@/components/ui";
 import { brandV2EnabledForOrg } from "@/server/brand-v2";
 import { statementDetail } from "@/server/queries";
 import { getSession } from "@/server/session";
+import { OwnerNetLedgerPanel } from "@/components/owner-net-ledger-panel";
+import { ownerNetLedgerView } from "@/server/owner-net-ledger";
+import { ledgerPanelView } from "@/server/owner-net-ledger-presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +23,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
   const detail = await statementDetail(session, id);
   if (!detail) notFound();
   const row = detail.statement;
+  const ledger = await ownerNetLedgerView(session, id);
   return (
     <>
       <PageHeader
@@ -51,6 +55,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
           </>
         }
       />
+      {ledger && <OwnerNetLedgerPanel view={ledgerPanelView(ledger, { statementId: id, locale: session.locale })} locale={session.locale} negativeLabel={t("owner_owes")} />}
     </>
   );
 }
