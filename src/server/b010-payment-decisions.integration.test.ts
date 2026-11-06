@@ -11,7 +11,7 @@ import type { Session } from "./types";
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
 let clone: Awaited<ReturnType<typeof cloneTestDatabase>>;
 test.before(async () => { clone = await cloneTestDatabase(); });
-test.after(async () => { await clone.cleanup(); });
+test.after(async () => { await clone?.cleanup(); });
 
 type Confirmation = {
   confirmed_via: string;
@@ -93,11 +93,13 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
     assert.ok(owner, "an active owner contact linked to USERS.owner in the org is required");
 
     await c.query(
-      `INSERT INTO property_owners(org_id,property_id,contact_id)
-       SELECT $1::uuid,$2::uuid,$3::uuid
+      `INSERT INTO property_owners(
+         org_id,property_id,owner_contact_id,ownership_bp,is_primary
+       )
+       SELECT $1::uuid,$2::uuid,$3::uuid,10000,false
        WHERE NOT EXISTS (
          SELECT 1 FROM property_owners
-         WHERE org_id=$1 AND property_id=$2 AND contact_id=$3
+         WHERE org_id=$1 AND property_id=$2 AND owner_contact_id=$3
        )`,
       [ORG_ID, lease.property_id, owner.id],
     );
@@ -332,13 +334,15 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
           [USERS.manager, ORG_ID],
         );
         await c.query("SET LOCAL ROLE authenticated");
+        // This helper runs after the domain's submitted -> confirmed UPDATE.
+        // A submitted fixture fails its transition guard with SQLSTATE 23514.
         await assert.rejects(
           c.query(
             `SELECT app.b010_record_confirmation($1::uuid,$2::boolean,$3::text)`,
             [id, false, "staff_ui"],
           ),
           (error: unknown) =>
-            error instanceof Error && "code" in error && error.code === "42501",
+            error instanceof Error && "code" in error && error.code === "23514",
         );
       } finally {
         await c.query("ROLLBACK");
