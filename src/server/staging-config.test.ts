@@ -149,6 +149,10 @@ test("production redirects and cookies accept app.condola.app and condola.app", 
   assert.equal(sameAppPath("https://condola.app/login"), "/login");
   assert.equal(sameAppPath("https://evil.example/m"), "");
   assert.equal(sameAppPath("http://condola.app/m"), "");
+  assert.equal(sameAppPath("/vendor-account?tab=history"), "/vendor-account?tab=history");
+  for (const unsafe of ["https://condola.app//evil.example", "//evil.example", "/\\evil.example", "/\tevil.example", "/\nevil.example"]) {
+    assert.equal(sameAppPath(unsafe), "");
+  }
   const previous = process.env.CONDOLA_ENV;
   try {
     process.env.CONDOLA_ENV = "production";

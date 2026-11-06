@@ -46,9 +46,9 @@ const INVITE_DAYS = 7;
 export type RequestMeta = { ua: string | null; ip: string | null };
 
 export type SignInResult =
-  | { ok: true; token: string; remember: boolean; destination?: "firm" }
+  | { ok: true; token: string; remember: boolean; destination?: "firm" | "vendor" }
   | { ok: false; error: "invalid" | "locked" | "disabled" | "unconfirmed" | "unavailable" }
-  | { ok: false; step: "2fa" | "enroll"; challengeId: string; secret?: string; otpauth?: string };
+  | { ok: false; step: "2fa" | "enroll"; challengeId: string; secret?: string; otpauth?: string; destination?: "vendor" };
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -231,11 +231,17 @@ async function accessState(userId: string) {
   const suspended = members.rows.some((row) => row.status === "suspended");
   if (activeMember) return "active" as const;
   if (suspended) return "disabled" as const;
-  const portal = await query(
-    `SELECT 1 FROM contacts WHERE user_id = $1 AND archived_at IS NULL AND (is_tenant OR is_owner) LIMIT 1`,
+  // Reuse the existing access lookup: OFF adds no connection/transaction and
+  // never references a B-026 function (including before its migration exists).
+  const portal = await query<{ portal: boolean; vendor_enabled: boolean }>(
+    `SELECT EXISTS(SELECT 1 FROM contacts WHERE user_id = $1 AND archived_at IS NULL AND (is_tenant OR is_owner)) AS portal,
+            coalesce((SELECT value->'enabled'='true'::jsonb AND jsonb_typeof(value->'allowed_org_ids')='array'
+                      AND jsonb_array_length(CASE WHEN jsonb_typeof(value->'allowed_org_ids')='array'
+                        THEN value->'allowed_org_ids' ELSE '[]'::jsonb END)>0
+                      FROM platform_settings WHERE key='vendor_account'),false) AS vendor_enabled`,
     [userId],
   );
-  return portal.rows[0] ? ("portal" as const) : ("none" as const);
+  return portal.rows[0]?.portal ? "portal" as const : portal.rows[0]?.vendor_enabled ? "vendor_candidate" as const : "none" as const;
 }
 
 async function firmRequiresMfa(userId: string) {
@@ -301,9 +307,11 @@ export async function signIn(emailRaw: string, password: string, remember: boole
 }
 
 async function continueSignIn(userId: string, email: string, remember: boolean, meta: RequestMeta): Promise<SignInResult> {
-  const access = await accessState(userId);
+  const state = await accessState(userId);
+  const access = state === "vendor_candidate" ? "none" : state;
   if (access === "disabled") return { ok: false, error: "disabled" };
-  if (access === "none") {
+  const vendor = state === "vendor_candidate" && await (await import("./vendor-accounts")).vendorAccountLoginAccess(userId);
+  if (access === "none" && !vendor) {
     const row = await query<{ email: string; email_confirmed_at: Date | null }>(
       `SELECT email, email_confirmed_at FROM auth.users WHERE id = $1`,
       [userId],
@@ -322,7 +330,7 @@ async function continueSignIn(userId: string, email: string, remember: boolean, 
   const factor = await mfaRow(userId);
   if (factor?.enabled && factor.totp_secret) {
     const challengeId = await openChallenge(userId, "2fa", remember);
-    return { ok: false, step: "2fa", challengeId };
+    return { ok: false, step: "2fa", challengeId, ...(vendor ? { destination: "vendor" as const } : {}) };
   }
   if (await firmRequiresMfa(userId)) {
     const secret = randomBase32();
@@ -337,7 +345,7 @@ async function continueSignIn(userId: string, email: string, remember: boolean, 
     };
   }
   const token = await createSession(userId, remember, meta);
-  return { ok: true, token, remember };
+  return { ok: true, token, remember, ...(vendor ? { destination: "vendor" as const } : {}) };
 }
 
 /** Demo LINE Login: signs in the linked member. Does not call LINE. */

@@ -14,6 +14,18 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106220000_b026_vendor_accounts.sql": {
+    addOnly: true,
+    reason: "Adds private vendor account invitations, links and immutable correction events, service-only gateways and default-OFF vendor_account setting. No backfill, public table/schema changes or existing function replacement.",
+  },
+  "supabase/migrations/20261106190000_b026_vendor_estimates.sql": {
+    addOnly: false,
+    reason: "Adds private immutable vendor estimate provenance, gateways and a default-OFF setting; guards on existing tables restrict scheduling/completion when a persisted estimate lacks approval. Code rollback is compatible for legacy tickets without estimates; persisted estimates remain guarded even with flags OFF, so rollback must preserve B-013 approval handling. No backfill or existing function replacement.",
+  },
+  "supabase/migrations/20261106231000_b026_closed_job_notification_read.sql": {
+    addOnly: true,
+    reason: "Adds a service-only sibling vendor notification gateway used only when the in-process vendor-link kill switch is ON; it delegates to app.b028_center_vendor unless the org is enhanced and the ticket closed, where reads are write-free and marks rejected. No table, column, existing function or flag change.",
+  },
   "supabase/migrations/20261106070000_prop05_platform_settings_audit.sql": {
     addOnly: true,
     reason: "Adds an AFTER INSERT/UPDATE/DELETE audit trigger on platform_settings writing key/value/description changes to audit_log (PROP-05 override audit); no value, grant or behaviour change.",

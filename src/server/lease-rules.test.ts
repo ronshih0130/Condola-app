@@ -230,7 +230,10 @@ test("the lease idempotency migration is additive and later than shared staging 
     "20261106120000_prop06_recipient_channels.sql",
     "20261106160000_b028_legacy_claim_invoice_fence.sql",
     "20261106180000_b027_partner_controls.sql",
+    "20261106190000_b026_vendor_estimates.sql",
     "20261106200000_b027_partner_consent_gate.sql",
+    "20261106220000_b026_vendor_accounts.sql",
+    "20261106231000_b026_closed_job_notification_read.sql",
     "20261106232000_b027_ticket_photo_member_read.sql",
     "20261106232500_b027_ticket_photo_write_narrowing.sql",
   ]);
