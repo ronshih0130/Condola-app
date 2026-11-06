@@ -96,14 +96,15 @@ export async function actionSignIn(formData: FormData) {
   const email = normalizeEmail(text(formData.get("email"))) || text(formData.get("email")).trim();
   const result = await signIn(text(formData.get("email")), text(formData.get("password")), formData.get("remember") === "on", await meta());
   const jar = await cookies();
-  const nextQuery = next ? `&next=${encodeURIComponent(next)}` : "";
+  const accountNext = "destination" in result && result.destination === "vendor" ? "/vendor-account" : next;
+  const nextQuery = accountNext ? `&next=${encodeURIComponent(accountNext)}` : "";
   if (result.ok) {
     const cookie = sessionCookie(result.token, result.remember);
     jar.set(cookie.name, cookie.value, cookie.options);
     jar.delete(CHALLENGE_COOKIE);
     clearStoredEnvChoice(jar);
     jar.delete(PORTAL_ROLE_COOKIE);
-    redirect(sessionEntryPath(result.destination === "firm" ? "/signup/firm" : next || "/auth/continue"));
+    redirect(sessionEntryPath(result.destination === "firm" ? "/signup/firm" : result.destination === "vendor" ? "/vendor-account" : next || "/auth/continue"));
   }
   if ("step" in result) {
     const cookie = challengeCookie(result.challengeId);
