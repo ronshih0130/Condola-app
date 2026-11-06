@@ -51,6 +51,8 @@ const openPages: Record<string, Record<string, string>> = {
   "app/v/[token]/notifications/page.tsx": { default: "Exact vendor job token gateway, no human user session" },
 };
 const openRoutes: Record<string, Record<string, string>> = {
+  "api/line/vendor-job/route.ts": { GET: "B-035 browser-bound single-job claim and strict LINE gates; no account session", POST: "B-035 same-origin CSRF and original locked vendor job capability; no account session" },
+  "(line)/v/liff/job/route.ts": { GET: "B-035 browser-bound single-job claim; no human account authority" },
   "api/line/reauth/route.ts": { POST: "B-033 explicit password/MFA step-up only; session-bound evidence, portal gates, browser proof and same-origin CSRF; never writes legal consent" },
   "api/line/flows/route.ts": { POST: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
   "api/line/session/route.ts": { POST: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
@@ -62,7 +64,7 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/line/links/[id]/route.ts": { DELETE: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
   "api/line/identity/route.ts": { DELETE: "B-033 identity establishment or revocation; browser proof, same-origin CSRF, portal gate and scoped invitation/credential consent inside lineHandlers" },
   "(line)/t/liff/route.ts": { GET: "Public B-033 bootstrap outside protected layouts; OFF Email fallback; read-only configuration" },
-  "(line)/v/liff/route.ts": { GET: "Public B-033 bootstrap outside protected layouts; OFF Email fallback; read-only configuration" },
+  "(line)/v/liff/route.ts": { GET: "Public B-033 bootstrap outside protected layouts; OFF Email fallback; read-only configuration", POST: "B-035 same-origin job-entry browser proof; strict vendor LINE gates, token only in the body, no database writes or account session" },
   "(line)/o/liff/route.ts": { GET: "Public B-033 bootstrap outside protected layouts; OFF Email fallback; read-only configuration" },
   "api/line/webhook/route.ts": { POST: "B-033 raw-body HMAC signature and selected-OA/org flag gate; provider webhook has no human session" },
   "api/vendor-account-staff/route.ts": { GET: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope", POST: "Read-only cookie auth, current consent and partner gate via authorizeVendorAccountStaffRequest; SQL revalidates staff scope" },

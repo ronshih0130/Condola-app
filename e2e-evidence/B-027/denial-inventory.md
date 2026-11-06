@@ -58,6 +58,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 |---|---|
 | src/app/(line)/o/liff/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/(line)/t/liff/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/(line)/v/liff/job/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/(line)/v/liff/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/auth/enter/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/auth/sign-out/route.ts:1 | Enumerated only; outside representative selection |
@@ -89,6 +90,7 @@ Every current `src/app/**/route.ts` is listed below. Selected read routes execut
 | src/app/api/line/login/start/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/reauth/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/session/route.ts:1 | Enumerated only; outside representative selection |
+| src/app/api/line/vendor-job/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/line/webhook/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/monthly-rent-issue/route.ts:1 | Enumerated only; outside representative selection |
 | src/app/api/notification-center/mark/route.ts:1 | Enumerated only; outside representative selection |
