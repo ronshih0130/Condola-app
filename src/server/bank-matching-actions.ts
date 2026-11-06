@@ -21,8 +21,9 @@ export async function actionDecideBankMatch(form: FormData) {
   const session = await getSession();
   try {
     const decision = form.get("decision"), bankId = form.get("bankId"), reason = form.get("reason"), payment = form.get("paymentId"), suggestion = form.get("suggestionId");
+    const requestId = form.get("requestId");
     if ((decision !== "match" && decision !== "reject") || typeof bankId !== "string" || typeof reason !== "string") throw new Error("Invalid input");
-    const result = await decideBankMatch(session,{decision,bankId,reason,paymentId:typeof payment === "string" && payment ? payment : undefined,suggestionId:typeof suggestion === "string" && suggestion ? suggestion : undefined});
+    const result = await decideBankMatch(session,{decision,bankId,reason,paymentId:typeof payment === "string" && payment ? payment : undefined,suggestionId:typeof suggestion === "string" && suggestion ? suggestion : undefined,requestId:typeof requestId === "string" && requestId ? requestId : undefined});
     if (!result) throw new Error("Unavailable");
   } catch { redirect("/m/bank?error=errors.generic"); }
   revalidatePath("/m/bank");

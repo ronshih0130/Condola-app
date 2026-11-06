@@ -302,6 +302,10 @@ const added = {
     addOnly: false,
     reason: "Adds private deposit settlement header/line/evidence/confirmation/payment tables with RLS, restricted service_role grants and composite FKs; no flag seed; no historical rewrite.",
   },
+  "supabase/migrations/20261106010000_b009_bank_match_decisions.sql": {
+    addOnly: true,
+    reason: "Adds private row-identity registry for overlapping CSV re-import dedupe, request-id replay columns and one-effective-match unique indexes on bank decisions. Additive; no backfill; bank_matching stays OFF.",
+  },
   "supabase/migrations/20261105140000_b011_deposit_settlement_writers.sql": {
     addOnly: false,
     reason: "Tightens deposit_settlement_* with same-lease charge FK, same-settlement evidence FK, payment request_id idempotency, revisions table, and deposit_settlement flag seed OFF; no historical rewrite.",
