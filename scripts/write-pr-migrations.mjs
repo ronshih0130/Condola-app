@@ -342,6 +342,10 @@ const added = {
     addOnly: true,
     reason: "Adds private append-only statement versions and mock report delivery events, authenticated SECURITY DEFINER gateways and two default-OFF platform settings; no existing-table schema or function changes.",
   },
+  "supabase/migrations/20261106160000_b028_legacy_claim_invoice_fence.sql": {
+    addOnly: false,
+    reason: "Replaces only the legacy email_log fence trigger function to take a leading invoice FOR KEY SHARE lock on rent-overdue claims (any rollout state), serializing them with the new-owner paths that lock the invoice FOR UPDATE; no table, column, grant, flag or data change; old Worker compatible.",
+  },
   "supabase/migrations/20261106020000_b010_payment_result_events.sql": {
     addOnly: true,
     reason: "Adds private lease collector reserve and append-only one-per-payment confirmation audit (CAP-M-35 proxy-owner confirm), nullable source-event dedupe/source metadata, and context-checked SECURITY DEFINER collector/record/audit functions; no table grants, backfill or flag seed; payment_results_v2 stays OFF.",
