@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106060000_b001_id_sign_gate_flag.sql": {
+    addOnly: true,
+    reason: "Seeds the default-OFF platform setting id_sign_gate_v2 for the two-level ID switches (B-001 / PROP-US-v03-01); no table, function or grant change; flag OFF keeps the existing ID hard gate.",
+  },
   "supabase/migrations/20261106040000_b022_owner_title_report_replies.sql": {
     addOnly: true,
     reason: "Adds private append-only owner receipt-title revisions and report replies, authenticated SECURITY DEFINER gateways and two default-OFF settings; no existing-table schema changes or backfill. Title RPC updates only the caller owner contact receipt_title.",
