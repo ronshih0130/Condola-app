@@ -171,6 +171,15 @@ flags:
     org_override: "organizations.feature_flags.owner_receipt_title must be boolean true"
     activation: "local synthetic validation only; no hosted activation"
 
+  id_sign_gate_v2:
+    owner: Ron
+    expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
+    default: false
+    ring: internal
+    global_kill: "platform_settings.id_sign_gate_v2 requires boolean true enabled and an allowed_org_ids array containing the selected organization; missing or malformed is OFF"
+    org_override: "organizations.feature_flags.id_sign_gate_v2 must be boolean true; then organizations.settings.collect_id (default true) and require_id_before_sign (default false) apply; only both true blocks signing"
+    activation: "OFF keeps the existing ID hard gate; Ron decides activation (B-001); local synthetic validation only"
+
   owner_report_replies:
     owner: Ron
     expires_at: "2026-11-10T18:00:00-08:00 PT (America/Los_Angeles)"
