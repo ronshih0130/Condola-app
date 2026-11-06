@@ -1,4 +1,4 @@
-import { billingPreviewsEnabled } from "./billing-preview-rules";
+import { billingPreviewsEnabled, monthlyRentPostingEnabled } from "./billing-preview-rules";
 import { svcOn, tx } from "./db";
 import type { PeriodDueComponentLine } from "./monthly-bill-types";
 import { requireOrgScope } from "./org-guard";
@@ -13,7 +13,10 @@ export async function recordPeriodDueComponent(
   },
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   return tx(session.userId, async (client) => {
-    if (!(await billingPreviewsEnabled(client, session.orgId))) {
+    if (
+      !(await billingPreviewsEnabled(client, session.orgId)) ||
+      !(await monthlyRentPostingEnabled(client, session.orgId))
+    ) {
       return { ok: false as const, reason: "disabled" };
     }
     await svcOn(client, session.userId, async (serviceClient) => {
