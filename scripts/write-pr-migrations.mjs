@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261106235000_b028_notification_delivery_claims.sql": {
+    addOnly: false,
+    reason: "New private durable delivery tables with NOT NULL and CHECK constraints, append-only events, service-only gateways and privilege revokes. Existing producers unchanged; rollout defaults OFF.",
+  },
   "supabase/migrations/20261021150000_revoke_purge_execute.sql": {
     addOnly: false,
     reason: "REVOKE EXECUTE on purge_due_identity_documents. No column or constraint. service_role keeps EXECUTE.",
