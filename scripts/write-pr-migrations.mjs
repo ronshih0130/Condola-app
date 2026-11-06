@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106210000_b020_tenant_profile.sql": {
+    addOnly: true,
+    reason: "Adds private tenant account profiles and a bounded per-user mutation counter, plus service-only profile/password gateways (password change keeps the stored bcrypt cost floor, compares fixed-length digests, revokes the user's other sessions and deletes that user's pending auth_challenges). No existing table/column/flag-default change; login path untouched; tenant_account_settings stays OFF.",
+  },
   "supabase/migrations/20261106140000_b020_tenant_account.sql": {
     addOnly: true,
     reason: "Seeds default-OFF tenant_account_settings; adds private app.b020_data_requests (one open request per kind) and tenant-scoped SECURITY DEFINER session list/revoke and data-request RPCs deriving user/org from auth.uid() and the pin; no existing-table change.",
