@@ -32,7 +32,7 @@ const handlers: Record<string, Handler> = {
   simulateTenantSignature: (session, body) => simulateTenantSignature(session, String(body.leaseId ?? "")),
   signLease: (session, body) => signLease(session, body as never),
   recordPayment: (session, body) => recordPayment(session, body as never),
-  confirmPayment: (session, body) => confirmPayment(session, String(body.paymentId ?? "")),
+  confirmPayment: (session, body) => confirmPayment(session, String(body.paymentId ?? ""), {proxyOwnerConfirmed: body.proxyOwnerConfirmed === (true as never), source:"api"}),
   rejectPayment: (session, body) => rejectPayment(session, String(body.paymentId ?? ""), String(body.reason ?? "")),
   importBankCsv: (session, body) => importBankCsv(session, String(body.csv ?? "")),
   approveMatch: (session, body) => approveMatch(session, String(body.suggestionId ?? "")),

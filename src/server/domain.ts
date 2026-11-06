@@ -25,6 +25,7 @@ import { calculateStatement } from "./statement-calculation";
 import { ensureThread, issueMoveInInvoice, validateFirstPeriodSource, type FirstPeriodLeaseSource } from "./move-in-invoice";
 import { billingPreviewsEnabled } from "./billing-preview-rules";
 import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
+import { decideConfirmation } from "./b010-proxy-confirm-rules";
 import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
 import { syncVacantOwnerExpense } from "./utility-expense";
 import { depositMinorForFrequency, depositPolicyState, resolveDepositPolicy, type DepositPolicy } from "./deposit-rules";
@@ -2028,7 +2029,7 @@ export async function recordPayment(
   return { paymentId:result.paymentId, status: "confirmed" as const };
 }
 
-export async function confirmPayment(session: Session, paymentId: string) {
+export async function confirmPayment(session: Session, paymentId: string, options: {proxyOwnerConfirmed?: boolean; source?: string} = {}) {
   assertStaff(session, ["admin", "manager", "accountant"]);
   const result = await tx(session.userId, async (client) => {
     const initial=await maybe<{lease_id:string}>(client,`SELECT lease_id::text FROM payments WHERE id=$1 AND org_id=$2`,[paymentId,session.orgId]);
@@ -2043,10 +2044,35 @@ export async function confirmPayment(session: Session, paymentId: string) {
     if (payment.status !== "submitted") throw new FlowError("errors.paymentState");
     const invoices=await lockAllocationInvoices(client,session.orgId,payment.lease_id);
     if (enabled && !await lockPaymentResultContext(client,session,payment.lease_id)) throw new FlowError("errors.generic");
+    let decision: ReturnType<typeof decideConfirmation> | null = null;
+    if (enabled) {
+      const collector = await maybe<{collector:"management"|"owner";owner_contact_id:string|null}>(
+        client,
+        `SELECT collector,owner_contact_id FROM app.b010_payment_collector($1)`,
+        [payment.id],
+      );
+      if (!collector) throw new FlowError("errors.forbidden");
+      decision = decideConfirmation({
+        collector: collector.collector,
+        ownerContactId: collector.owner_contact_id,
+        actor: {kind:"staff",role:session.role,userId:session.userId},
+        proxyOwnerConfirmed: options.proxyOwnerConfirmed === true,
+        paymentStatus: payment.status,
+      });
+      if (!decision.ok) {
+        throw new FlowError(decision.code === "proxy_confirmation_required" ? "errors.proxyOwnerConfirmRequired" : "errors.forbidden");
+      }
+    }
     const balance=invoices.reduce((sum,invoice)=>sum+Number(invoice.balance_minor),0);
     if (Number(payment.amount_minor)>balance) throw new FlowError("errors.amountTooHigh");
     await client.query(`UPDATE payments SET status='confirmed',confirmed_by=$2,confirmed_at=now() WHERE id=$1`,[payment.id,session.userId]);
     await allocateAndLedger(client,payment,session.userId,invoices);
+    if (decision?.ok) {
+      await client.query(
+        `SELECT app.b010_record_confirmation($1,$2,$3,$4,'submitted','confirmed')`,
+        [payment.id,decision.confirmedVia,decision.onBehalfOfOwnerContactId,options.source ?? "staff_ui"],
+      );
+    }
     const source=enabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
     await finalizePaymentCenter(client,center,source);
     return {leaseId:payment.lease_id,enabled};
