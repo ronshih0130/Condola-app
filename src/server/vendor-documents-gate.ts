@@ -1,3 +1,7 @@
+import { admitVendorDocumentsOrgOn } from "./vendor-document-admission";
+export { vendorDocumentsEnabled } from "./vendor-document-admission";
+import { attachVendorPaperScanOn, readVendorPaperScanOn, updateVendorFixedDataOn, vendorDocumentHistoryOn, type FixedDataUpdate } from "./vendor-document-integrity";
+import { isTradeLine, tradeLineItems, tradeTotal, type TradeLineInput, type TradeLineItem } from "./vendor-document-trade-rules";
 import type { Client } from "pg";
 import { many, maybe, one, svc } from "./db";
 import { FlowError } from "./errors";
@@ -9,21 +13,10 @@ import {
 } from "./vendor-receipt";
 import { decideDocumentKind, type VendorDocumentKind } from "./vendor-receipt-rules";
 
-/** Strict TS mirror of app.b025_flag_on; malformed settings fail closed. */
-export async function vendorDocumentsEnabled(client: Client, orgId: string) {
-  const row = await maybe<{ value: { enabled?: unknown; allowed_org_ids?: unknown }; feature_flags: Record<string, unknown> }>(client,
-    `SELECT f.value,o.feature_flags FROM platform_settings f JOIN organizations o ON o.id=$1
-      WHERE f.key='vendor_documents'`, [orgId]);
-  return row?.value?.enabled === true && Array.isArray(row.value.allowed_org_ids)
-    && row.value.allowed_org_ids.includes(orgId) && row.feature_flags?.vendor_documents === true;
-}
-
 async function admitted(client: Client, token: string) {
   const grant = await vendorDocumentGrantOn(client, token);
   // Hold admission through the entire operation, including PDF persistence.
-  await client.query("SELECT key FROM platform_settings WHERE key='vendor_documents' FOR SHARE");
-  await client.query("SELECT id FROM organizations WHERE id=$1 FOR SHARE", [grant.org_id]);
-  if (!await vendorDocumentsEnabled(client, grant.org_id)) throw new FlowError("errors.notFound");
+  await admitVendorDocumentsOrgOn(client, grant.org_id);
   return resolveVendorDocumentToken(client, token);
 }
 
@@ -62,16 +55,16 @@ async function contextOn(client: Client, access: Access) {
   const totalMinor = (BigInt(cents) / BigInt(100)).toString();
   // Existing tickets have a final cost and persisted pricing. Use the work-order
   // title as the default single service row; issued snapshots retain their rows.
-  const prior = await maybe<{ items: JobTypeLineItem[] }>(client,
+  const prior = await maybe<{ items: (JobTypeLineItem | TradeLineItem)[] }>(client,
     `SELECT items FROM vendor_documents WHERE org_id=$1 AND ticket_id=$2 AND vendor_profile_id=$3
       ORDER BY issued_at DESC,id DESC LIMIT 1`, [access.orgId, access.ticket.id, access.profile.id]);
   const total = Number(totalMinor);
   if (!Number.isSafeInteger(total)) throw new FlowError("errors.amount");
   // Multi-row work-order pricing has no authoritative per-row names/amounts on the
   // ticket; the token surface then fails closed (issuance needs a staff-built document).
-  let items: JobTypeLineItem[] = [], itemsUnavailable = false;
+  let items: (JobTypeLineItem | TradeLineItem)[] = [], itemsUnavailable = false;
   try {
-    items = deriveTicketDocumentItems(prior?.items ?? [{
+    items = prior?.items.length && prior.items.every(isTradeLine) ? tradeLineItems(prior.items) : deriveTicketDocumentItems((prior?.items as JobTypeLineItem[] | undefined) ?? [{
       name: access.ticket.title, quantity: 1, unit: "", unit_price_minor: total,
       amount_minor: total, category: "service",
     }], access.ticket.type_fields);
@@ -101,7 +94,7 @@ async function contextOn(client: Client, access: Access) {
     buyer: { kind: selection.kind, titlePresent },
     eligibleKind: decideDocumentKind({ kind: access.profile.kind, tax_id: access.profile.tax_id,
       qualification_attested: access.profile.qualification_attested_at !== null }),
-    documents, ...await summaryOn(client, access),
+    documents, history: await vendorDocumentHistoryOn(client, access), profileVersion: access.profile.current_version, ...await summaryOn(client, access),
   };
 }
 
@@ -116,10 +109,13 @@ export async function vendorDocumentContext(token: string) {
 
 export type VendorDocumentAction =
   | { action: "context" }
+  | { action: "history" }
+  | { action: "update_fixed_data"; update: FixedDataUpdate }
+  | { action: "attach_scan"; documentId: string; requestId: string; mimeType: string; base64: string }
   | { action: "mark_received"; requestId: string; amountMinor: string }
   | { action: "void"; documentId: string; reason: string }
   | { action: "preview" | "issue" | "reissue"; kind: VendorDocumentKind; documentDate: string;
-      idempotencyKey?: string; documentId?: string;
+      idempotencyKey?: string; documentId?: string; tradeItems?: readonly TradeLineInput[];
       received?: { requestId: string; amountMinor: string } };
 
 /** One-step mark+issue is one transaction; a failed issue leaves no mark. */
@@ -127,13 +123,19 @@ export async function vendorDocumentAction(token: string, input: VendorDocumentA
   return svc(null, async (client) => {
     const access = await admitted(client, token);
     if (input.action === "context") return contextOn(client, access);
+    if (input.action === "history") return vendorDocumentHistoryOn(client, access);
+    if (input.action === "update_fixed_data") return updateVendorFixedDataOn(client, access, input.update);
+    if (input.action === "attach_scan") return attachVendorPaperScanOn(client, access, input);
     if (input.action === "mark_received") return markOn(client, access, input);
     if (input.action === "void") return voidVendorDocumentOn(client, token, input.documentId, input.reason);
     const context = await contextOn(client, access);
-    if (context.itemsUnavailable) throw new FlowError("errors.vendorDocumentItemsUnavailable");
+    if (context.itemsUnavailable && !input.tradeItems) throw new FlowError("errors.vendorDocumentItemsUnavailable");
+    const exactItems = input.tradeItems ? tradeLineItems(input.tradeItems)
+      : context.items.length && context.items.every(isTradeLine) ? tradeLineItems(context.items) : undefined;
+    if (exactItems && tradeTotal(exactItems) !== BigInt(context.totalMinor)) throw new FlowError("errors.amount");
     const ctx: VendorDocumentContext = {
       actor: token, ticketId: access.ticket.id, vendorProfileId: access.profile.id,
-      items: context.items, totalMinor: Number(context.totalMinor),
+      items: exactItems ? [] : context.items as JobTypeLineItem[], tradeItems: exactItems, totalMinor: Number(context.totalMinor),
       kind: input.kind, documentDate: input.documentDate,
     };
     if (input.action === "preview") {
@@ -165,4 +167,12 @@ export async function vendorDocumentAvailable(token: string) {
     if (error instanceof FlowError && error.key === "errors.notFound") return false;
     throw error;
   }
+}
+
+export async function vendorDocumentHistory(token: string) {
+  return svc(null, async (client) => vendorDocumentHistoryOn(client, await admitted(client, token)));
+}
+
+export async function vendorPaperScan(token: string, id: string) {
+  return svc(null, async (client) => readVendorPaperScanOn(client, await admitted(client, token), id));
 }

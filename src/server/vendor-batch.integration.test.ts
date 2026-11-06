@@ -132,11 +132,8 @@ test(
               )`,
             [ticketIds],
           );
-          await cleanup.query(
-            `UPDATE vendor_documents SET reissued_from = NULL
-              WHERE ticket_id = ANY($1::uuid[])`,
-            [ticketIds],
-          );
+          // Delete the whole fixture chain in one statement; reissue links are
+          // immutable and the self-FK is satisfied when all siblings are removed.
           await cleanup.query(
             `DELETE FROM vendor_documents WHERE ticket_id = ANY($1::uuid[])`,
             [ticketIds],

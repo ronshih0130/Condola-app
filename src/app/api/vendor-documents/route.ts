@@ -1,3 +1,5 @@
+import { tradeLineItems } from "@/server/vendor-document-trade-rules";
+import type { FixedDataUpdate } from "@/server/vendor-document-integrity";
 import { vendorDocumentAction, type VendorDocumentAction } from "@/server/vendor-documents-gate";
 import { failure, handleError, headers, isUuid, readBody } from "./_http";
 
@@ -8,7 +10,14 @@ export async function POST(request: Request) {
     const fields = await readBody(request);
     if (fields instanceof Response) return fields;
     let input: VendorDocumentAction;
-    if (fields.action === "context") input = { action: "context" };
+    if (fields.action === "context" || fields.action === "history") input = { action: fields.action };
+    else if (fields.action === "update_fixed_data") {
+      if (!fields.update || typeof fields.update !== "object" || Array.isArray(fields.update)) return failure("invalid_request", 400);
+      input = { action: "update_fixed_data", update: fields.update as FixedDataUpdate };
+    } else if (fields.action === "attach_scan") {
+      if (!isUuid(fields.documentId) || !isUuid(fields.requestId) || typeof fields.mimeType !== "string" || typeof fields.base64 !== "string") return failure("invalid_request", 400);
+      input = { action: "attach_scan", documentId: fields.documentId, requestId: fields.requestId, mimeType: fields.mimeType, base64: fields.base64 };
+    }
     else if (fields.action === "mark_received") {
       if (!isUuid(fields.requestId) || typeof fields.amountMinor !== "string") return failure("invalid_request", 400);
       input = { action: "mark_received", requestId: fields.requestId, amountMinor: fields.amountMinor };
@@ -28,7 +37,8 @@ export async function POST(request: Request) {
         received = { requestId: mark.requestId, amountMinor: mark.amountMinor };
       }
       input = { action: fields.action, kind: fields.kind, documentDate: fields.documentDate,
-        idempotencyKey: fields.idempotencyKey as string | undefined, documentId: fields.documentId as string | undefined, received };
+        idempotencyKey: fields.idempotencyKey as string | undefined, documentId: fields.documentId as string | undefined, received,
+        tradeItems: fields.tradeItems === undefined ? undefined : tradeLineItems(fields.tradeItems) };
     } else return failure("invalid_request", 400);
     return Response.json(await vendorDocumentAction(fields.token, input), { headers });
   } catch (error) { return handleError(error); }

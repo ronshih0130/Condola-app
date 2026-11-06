@@ -2,6 +2,7 @@ import * as fontkitModule from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import type { PdfBlock, PdfDocument } from "../lib/pdf-document";
 import { renderPdf } from "../lib/pdf-render";
+import { isTradeLine } from "./vendor-document-trade-rules";
 import type { VendorDocument } from "./vendor-receipt-rules";
 
 export interface VendorPdfIssuer {
@@ -88,7 +89,7 @@ export function buildVendorReceiptPdf(input: VendorReceiptPdfInput): PdfDocument
         lines: document.items.map(
           (item) =>
             `${item.name}　${item.quantity}　${item.unit}　` +
-            `NT$${Math.round(item.amount_minor / item.quantity)}　NT$${item.amount_minor}`,
+            `NT$${(isTradeLine(item) ? item.unit_price_minor : Math.round(item.amount_minor / item.quantity))}　NT$${item.amount_minor}`,
         ),
       },
       {
