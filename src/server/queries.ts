@@ -19,6 +19,7 @@ import {
   tenantSignedPdfOn,
 } from "./tenant-signed-pdf-rules";
 import { requireOrgScope } from "./org-guard";
+import { can } from "./perms";
 
 export type Tryout = { property: boolean; lease: boolean; statement: boolean; repair: boolean };
 
@@ -1225,16 +1226,24 @@ export async function ticketDetail(session: Session, ticketId: string) {
         ORDER BY c.created_at, c.id`,
       [ticket.id],
     );
-    const photos = await many<{ id: string; name: string; path: string; mime: string | null; internal: boolean }>(
-      client,
-      `SELECT a.id::text, f.file_name AS name, f.storage_path AS path, f.mime_type AS mime, a.is_internal AS internal
-         FROM ticket_attachments a
-         JOIN files f ON f.id = a.file_id
-        WHERE a.ticket_id = $1
-        ORDER BY a.created_at`,
-      [ticket.id],
-    );
-    return { ticket, comments, photos };
+    // B-027 GAP-03: staff without photo permission (Accountant) get no photo
+    // metadata at all (names, storage paths, MIME, ids) in the page payload —
+    // only a count, so the no-permission notice still renders.
+    const photoAccess = session.kind !== "staff" || can(session.role, "tickets.update");
+    const photos = photoAccess
+      ? await many<{ id: string; name: string; path: string; mime: string | null; internal: boolean }>(
+        client,
+        `SELECT a.id::text, f.file_name AS name, f.storage_path AS path, f.mime_type AS mime, a.is_internal AS internal
+           FROM ticket_attachments a
+           JOIN files f ON f.id = a.file_id
+          WHERE a.ticket_id = $1
+          ORDER BY a.created_at`,
+        [ticket.id],
+      )
+      : [];
+    const hiddenPhotoCount = photoAccess ? 0 : Number((await maybe<{ n: string }>(client,
+      `SELECT count(*)::text AS n FROM ticket_attachments a WHERE a.ticket_id = $1`, [ticket.id]))?.n ?? 0);
+    return { ticket, comments, photos, hiddenPhotoCount };
   }, requireOrgScope(session));
 }
 
