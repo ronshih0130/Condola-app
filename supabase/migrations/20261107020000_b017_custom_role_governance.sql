@@ -102,7 +102,7 @@ CREATE FUNCTION app.b017_lock(p_org uuid) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, app AS $$
 BEGIN
  PERFORM 1 FROM public.platform_settings WHERE key='custom_roles' FOR SHARE;
- PERFORM 1 FROM public.organizations WHERE id=p_org FOR UPDATE;
+ PERFORM 1 FROM public.organizations WHERE id=p_org FOR NO KEY UPDATE;
  IF NOT app.b017_enabled(p_org) THEN RAISE EXCEPTION 'B017 disabled' USING ERRCODE='42501'; END IF;
  PERFORM 1 FROM public.org_members WHERE org_id=p_org ORDER BY (role='admin') DESC,id FOR UPDATE;
  PERFORM 1 FROM app.b017_roles WHERE org_id=p_org ORDER BY id FOR UPDATE;
@@ -131,6 +131,7 @@ CREATE FUNCTION public.b017_resolve(p_org uuid,p_user uuid,p_session uuid) RETUR
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, app AS $$
 DECLARE keys text[]; native text;
 BEGIN
+ SELECT coalesce(live_org_id,id) INTO p_org FROM public.organizations WHERE id=p_org;
  IF NOT app.b017_enabled(p_org) THEN
    SELECT m.role::text INTO native FROM public.organizations o JOIN public.org_members m
     ON m.org_id=CASE WHEN o.environment='sandbox' THEN o.live_org_id ELSE o.id END
@@ -149,12 +150,14 @@ BEGIN
 END $$;
 
 -- Called only inside an existing server transaction, after business-row waits.
--- NOWAIT fences reverse lock order; failures roll back the whole operation.
+-- Shared org fence is compatible with FK KEY SHARE; only actor authority rows
+-- participate. NOWAIT maps an actual authority change to whole-operation denial.
 -- Lock the session as well: logout/revocation cannot race the final write.
 CREATE FUNCTION public.b017_authorize(p_org uuid,p_user uuid,p_session uuid,p_key text,p_photos boolean) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, app AS $$
 DECLARE keys text[]; native text;
 BEGIN
+ SELECT coalesce(live_org_id,id) INTO p_org FROM public.organizations WHERE id=p_org;
  -- A queued custom actor must not carry an added grant across durable disable.
  -- Ordinary deployment-OFF callers never invoke this gateway.
  IF NOT app.b017_enabled(p_org) THEN
@@ -170,10 +173,11 @@ BEGIN
    RETURN;
  END IF;
  PERFORM 1 FROM public.platform_settings WHERE key='custom_roles' FOR SHARE NOWAIT;
- PERFORM 1 FROM public.organizations WHERE id=p_org FOR UPDATE NOWAIT;
- PERFORM 1 FROM public.org_members WHERE org_id=p_org ORDER BY (role='admin') DESC,id FOR UPDATE NOWAIT;
- PERFORM 1 FROM app.b017_roles WHERE org_id=p_org ORDER BY id FOR UPDATE NOWAIT;
- PERFORM 1 FROM app.b017_assignments WHERE org_id=p_org ORDER BY user_id FOR UPDATE NOWAIT;
+ PERFORM 1 FROM public.organizations WHERE id=p_org FOR SHARE NOWAIT;
+ PERFORM 1 FROM public.org_members WHERE org_id=p_org AND user_id=p_user FOR SHARE NOWAIT;
+ PERFORM 1 FROM app.b017_assignments WHERE org_id=p_org AND user_id=p_user FOR SHARE NOWAIT;
+ PERFORM 1 FROM app.b017_roles r WHERE r.org_id=p_org AND r.id IN
+   (SELECT role_id FROM app.b017_assignments WHERE org_id=p_org AND user_id=p_user) FOR SHARE NOWAIT;
  PERFORM 1 FROM public.auth_sessions WHERE id=p_session AND user_id=p_user FOR SHARE;
  IF NOT app.b017_enabled(p_org) THEN RAISE EXCEPTION 'B017 admission changed' USING ERRCODE='42501'; END IF;
  IF NOT app.b017_session(p_org,p_user,p_session) THEN RAISE EXCEPTION 'B017 session' USING ERRCODE='42501'; END IF;
@@ -382,10 +386,11 @@ BEGIN
  PERFORM 1 FROM public.org_members WHERE org_id=NEW.org_id ORDER BY (role='admin') DESC,id FOR UPDATE NOWAIT;
  PERFORM 1 FROM app.b017_roles WHERE org_id=NEW.org_id ORDER BY id FOR UPDATE NOWAIT;
  PERFORM 1 FROM app.b017_assignments WHERE org_id=NEW.org_id ORDER BY user_id FOR UPDATE NOWAIT;
- IF auth.uid() IS NOT NULL AND
+ IF NEW.status='pending' AND (auth.uid() IS NULL OR
    (NOT EXISTS(SELECT 1 FROM public.org_members WHERE org_id=NEW.org_id AND user_id=auth.uid() AND role='admin' AND status='active')
     OR NOT coalesce(app.b017_effective(NEW.org_id,auth.uid()) @> ARRAY['team.manage'],false)
     OR NOT coalesce(app.b017_native(NEW.role::text) <@ app.b017_effective(NEW.org_id,auth.uid()),false))
+)
  THEN RAISE EXCEPTION 'B017 invitation actor ceiling' USING ERRCODE='42501'; END IF;
  ceiling:=app.b017_effective(NEW.org_id,NEW.invited_by);
  IF NOT EXISTS(SELECT 1 FROM public.org_members WHERE org_id=NEW.org_id AND user_id=NEW.invited_by AND role='admin' AND status='active')
@@ -402,40 +407,45 @@ END $$;
 CREATE TRIGGER b017_invite_guard BEFORE INSERT OR UPDATE ON public.invitations
  FOR EACH ROW EXECUTE FUNCTION app.b017_invite_guard();
 
--- Restrictive policy intersects existing RLS: genuine portal grants remain as
--- before. Native Accountant cannot use a ticket grant to inspect photo metadata.
-CREATE FUNCTION app.b017_photo_allowed(p_org uuid) RETURNS boolean
+-- One statement-scoped initplan, limited to the caller's own live memberships.
+-- No arbitrary organization parameter / cross-tenant flag or membership oracle.
+-- OFF rows pay only an array comparison, never a per-row SECURITY DEFINER call.
+CREATE FUNCTION app.b017_denied_orgs(p_floor text) RETURNS uuid[]
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, app AS $$
- SELECT NOT app.b017_enabled(p_org) OR NOT EXISTS
- (SELECT 1 FROM public.org_members m WHERE m.org_id=p_org AND m.user_id=auth.uid()) OR EXISTS
- (SELECT 1 FROM public.org_members m WHERE m.org_id=p_org AND m.user_id=auth.uid() AND m.status='active'
-  AND m.role<>'accountant' AND 'tickets.update'=ANY(app.b017_effective(p_org,auth.uid())))
+ SELECT coalesce(array_agg(o.id),ARRAY[]::uuid[])
+ FROM public.org_members m JOIN public.organizations o
+ ON m.org_id=CASE WHEN o.environment='sandbox' THEN o.live_org_id ELSE o.id END
+ WHERE m.user_id=auth.uid() AND app.b017_enabled(m.org_id)
+ AND CASE p_floor
+ WHEN 'photo' THEN NOT coalesce(m.status='active' AND m.role<>'accountant'
+   AND 'tickets.update'=ANY(app.b017_effective(m.org_id,m.user_id)),false)
+ WHEN 'audit' THEN NOT coalesce(m.status='active' AND m.role='admin'
+   AND app.b017_effective(m.org_id,m.user_id) IS NOT NULL,false)
+ ELSE true END
+$$;
+CREATE FUNCTION app.b017_denied_photo_files() RETURNS uuid[]
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, app AS $$
+ SELECT coalesce(array_agg(file_id),ARRAY[]::uuid[]) FROM public.ticket_attachments
+ WHERE org_id=ANY(app.b017_denied_orgs('photo'))
 $$;
 CREATE POLICY b017_ticket_photo_floor ON public.ticket_attachments AS RESTRICTIVE TO authenticated
- USING (app.b017_photo_allowed(org_id)) WITH CHECK (app.b017_photo_allowed(org_id));
-CREATE FUNCTION app.b017_file_allowed(p_org uuid,p_file uuid,p_bucket text) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, app AS $$
- SELECT NOT app.b017_enabled(p_org) OR
-  (p_bucket<>'ticket-photos-private' AND NOT EXISTS(SELECT 1 FROM public.ticket_attachments WHERE org_id=p_org AND file_id=p_file))
-  OR app.b017_photo_allowed(p_org)
-$$;
+ USING (NOT (org_id=ANY((SELECT app.b017_denied_orgs('photo'))::uuid[])))
+ WITH CHECK (NOT (org_id=ANY((SELECT app.b017_denied_orgs('photo'))::uuid[])));
 CREATE POLICY b017_file_photo_floor ON public.files AS RESTRICTIVE TO authenticated
- USING (app.b017_file_allowed(org_id,id,storage_bucket))
- WITH CHECK (app.b017_file_allowed(org_id,id,storage_bucket));
-CREATE FUNCTION app.b017_audit_allowed(p_org uuid) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, app AS $$
- SELECT NOT app.b017_enabled(p_org) OR EXISTS(SELECT 1 FROM public.org_members m
- WHERE m.org_id=p_org AND m.user_id=auth.uid() AND m.role='admin' AND m.status='active'
- AND app.b017_effective(p_org,m.user_id) IS NOT NULL)
-$$;
+ USING (CASE WHEN org_id=ANY((SELECT app.b017_denied_orgs('photo'))::uuid[])
+   THEN storage_bucket<>'ticket-photos-private' AND NOT (id=ANY((SELECT app.b017_denied_photo_files())::uuid[]))
+   ELSE true END)
+ WITH CHECK (CASE WHEN org_id=ANY((SELECT app.b017_denied_orgs('photo'))::uuid[])
+   THEN storage_bucket<>'ticket-photos-private' AND NOT (id=ANY((SELECT app.b017_denied_photo_files())::uuid[]))
+   ELSE true END);
 CREATE POLICY b017_company_audit_floor ON public.audit_log AS RESTRICTIVE FOR SELECT TO authenticated
- USING (app.b017_audit_allowed(org_id));
+ USING (NOT (org_id=ANY((SELECT app.b017_denied_orgs('audit'))::uuid[])));
 
 -- db.ts svc()/svcOn() run as service_role. Browser/JWT authenticated users have
 -- no EXECUTE on gateways or resolver and no access to the private authority.
 DO $$ DECLARE f record; BEGIN
  FOR f IN SELECT p.oid::regprocedure AS sig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
- WHERE n.nspname IN ('app','public') AND p.proname = ANY(ARRAY['b017_authorize','b017_enabled','b017_native','b017_effective','b017_immutable','b017_lock','b017_session','b017_preserve_admin','b017_resolve','b017_govern','b017_create_role','b017_revise_role','b017_retire_role','b017_assign_role','b017_unassign_role','b017_assignment_grants','b017_change_member','b017_member_admission','b017_member_guard','b017_invite_guard','b017_photo_allowed','b017_file_allowed','b017_audit_allowed'])
+ WHERE n.nspname IN ('app','public') AND p.proname = ANY(ARRAY['b017_authorize','b017_enabled','b017_native','b017_effective','b017_immutable','b017_lock','b017_session','b017_preserve_admin','b017_resolve','b017_govern','b017_create_role','b017_revise_role','b017_retire_role','b017_assign_role','b017_unassign_role','b017_assignment_grants','b017_change_member','b017_member_admission','b017_member_guard','b017_invite_guard','b017_denied_orgs','b017_denied_photo_files'])
  LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,anon,authenticated,service_role',f.sig); END LOOP;
 END $$;
 GRANT EXECUTE ON FUNCTION public.b017_authorize(uuid,uuid,uuid,text,boolean), public.b017_resolve(uuid,uuid,uuid),
@@ -443,5 +453,5 @@ GRANT EXECUTE ON FUNCTION public.b017_authorize(uuid,uuid,uuid,text,boolean), pu
  public.b017_retire_role(uuid,uuid,uuid,uuid,uuid), public.b017_assign_role(uuid,uuid,uuid,uuid,uuid,uuid),
  public.b017_unassign_role(uuid,uuid,uuid,uuid,uuid), public.b017_assignment_grants(uuid,uuid,uuid,uuid,uuid),
  public.b017_change_member(uuid,uuid,uuid,uuid,text,text) TO service_role;
-GRANT EXECUTE ON FUNCTION app.b017_photo_allowed(uuid),app.b017_file_allowed(uuid,uuid,text),app.b017_audit_allowed(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION app.b017_denied_orgs(text),app.b017_denied_photo_files() TO authenticated;
 COMMIT;

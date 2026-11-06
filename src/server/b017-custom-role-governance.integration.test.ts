@@ -772,3 +772,104 @@ test("R3 an unmapped entry fails closed only for current custom assignments",asy
   assert.equal((await guardEffectiveSession(manager,null)).customRole?.assigned,false);
   await svc(manager.userId,c=>assertCustomAuthorityOn(c,manager,null));
 });
+
+import { resendInvite, revokeInvite } from './auth';
+import { actionIssueTeamInviteLink } from './auth-actions';
+import { dashboard, loadManagerChrome } from './queries';
+import { withEffectiveReadAuthority, effectiveReadOptions } from './b017-custom-role-governance';
+import { resolveStaffOrg } from './org-scope';
+import { centerSessionItems } from './notification-center';
+import { saveOrgMailSettings } from './mail-settings';
+import { actionDepositPolicy } from './deposit-rules-actions';
+import ClosePage from '@/app/m/close/page';
+
+test('R4 resend uses the actual actor ceiling, including action and NULL-actor raw SQL',async()=>{
+  const previous=process.env.TEAM_INVITES_ORG_ALLOWLIST;process.env.TEAM_INVITES_ORG_ALLOWLIST=ORG_ID;
+  try {
+    await flag(false);
+    await db.query("UPDATE org_members SET role='admin' WHERE org_id=$1 AND user_id=$2",[ORG_ID,manager.userId]);manager.role='admin';
+    await flag(true);
+    const invitation=await inviteMember(admin,{email:`r4-${randomUUID()}@example.invalid`,name:'Fixture',role:'admin'});
+    await assign(await create(['team.manage']),manager);
+    const before=(await db.query('SELECT code_hash,expires_at FROM invitations WHERE id=$1',[invitation.invitationId])).rows[0];
+    await assert.rejects(resendInvite(manager,invitation.invitationId),denied);
+    cookie=tokens.get(manager.userId)!;
+    await db.query("INSERT INTO consents(user_id,accepted_at,terms_version,privacy_version,source) VALUES($1,now(),$2,$3,'signup')",[manager.userId,buildStoredConsent('signup').terms_version,buildStoredConsent('signup').privacy_version]);
+    const action=await actionIssueTeamInviteLink({invitationId:invitation.invitationId});
+    assert.equal(action.ok,false);assert.equal('url' in action,false);
+    await assert.rejects(raw(manager,"UPDATE invitations SET code_hash='denied' WHERE id=$1",[invitation.invitationId]),denied);
+    await assert.rejects(db.query("UPDATE invitations SET code_hash='null-actor' WHERE id=$1",[invitation.invitationId]),/invitation actor ceiling/);
+    assert.deepEqual((await db.query('SELECT code_hash,expires_at FROM invitations WHERE id=$1',[invitation.invitationId])).rows[0],before);
+    const positive=await resendInvite(admin,invitation.invitationId);assert.ok(positive.token);
+  } finally {if(previous===undefined)delete process.env.TEAM_INVITES_ORG_ALLOWLIST;else process.env.TEAM_INVITES_ORG_ALLOWLIST=previous;}
+});
+
+test('R4 authority fences coexist with FK inserts and other actors; readers hold no authority tuple locks',async()=>{
+  await assign(await create(['dash.view','props.view']),manager);
+  const actor=await resolveCustomRoleSession(manager),holder=new Client({connectionString:clone.url}),peer=new Client({connectionString:clone.url});
+  await holder.connect();await peer.connect();
+  try {
+    await holder.query('BEGIN');
+    await holder.query('SELECT 1 FROM organizations WHERE id=$1 FOR KEY SHARE',[ORG_ID]);
+    await peer.query('BEGIN');
+    await peer.query('SELECT public.b017_authorize($1,$2,$3,$4,false)',[ORG_ID,manager.userId,manager.sessionId,'props.view']);
+    // A third unrelated actor can fence concurrently (the old org FOR UPDATE NOWAIT failed here).
+    await raw(admin,'SELECT public.b017_authorize($1,$2,$3,$4,false)',[ORG_ID,admin.userId,admin.sessionId,'props.view']);
+    await holder.query("SET LOCAL lock_timeout='300ms'");
+    await holder.query("INSERT INTO properties(org_id,name,country_code,currency,timezone) VALUES($1,'r4_fk_probe','TW','TWD','Asia/Taipei')",[ORG_ID]);
+    await peer.query('ROLLBACK');await holder.query('ROLLBACK');
+    await holder.query('BEGIN');await holder.query('SELECT 1 FROM organizations WHERE id=$1 FOR NO KEY UPDATE',[ORG_ID]);
+    // Reads must succeed even while governance owns the organization.
+    await dashboard(actor);await loadManagerChrome(admin);
+    await svc(actor.userId,c=>withEffectiveReadAuthority(c,actor,'props.view',async()=>{
+      assert.equal((await c.query('SHOW transaction_read_only')).rows[0].transaction_read_only,'on');
+      assert.equal((await c.query('SHOW transaction_isolation')).rows[0].transaction_isolation,'repeatable read');
+      return null;
+    }),effectiveReadOptions(actor));
+  } finally {await holder.query('ROLLBACK');await peer.query('ROLLBACK');await holder.end();await peer.end();}
+});
+
+test('R4 sandbox resolves live-parent restriction; DB-on/env-off and cached admission drift deny',async()=>{
+  await flag(false);const sandboxId=await ensureSandbox(admin);await flag(true);
+  await assign(await create([]),manager);
+  const sandbox={...manager,orgId:sandboxId,environment:'sandbox' as const};
+  const resolved=await resolveCustomRoleSession(sandbox);
+  assert.deepEqual(resolved.customRole?.keys,[]);assert.equal(can(resolved,'props.view'),false);
+  await assert.rejects(guardEffectiveSession(sandbox,'props.view'),denied);
+  const sql=await svc(manager.userId,c=>c.query('SELECT public.b017_resolve($1,$2,$3) a',[sandboxId,manager.userId,manager.sessionId]));assert.deepEqual(sql.rows[0].a.keys,[]);
+  process.env.CUSTOM_ROLES_ORG_ALLOWLIST='[]';
+  await assert.rejects(resolveStaffOrg(db,manager.userId,ORG_ID,'sandbox'),denied);
+  await assert.rejects(resolveCustomRoleSession(resolved),denied);
+  cookie=tokens.get(manager.userId)!;await assert.rejects(readSessionOn(db,{touch:false}),denied);
+});
+
+test('R4 unguarded autocommit/helper/page entry regressions and lease-key positive control',async()=>{
+  await assign(await create([]),manager);const restricted=await resolveCustomRoleSession(manager);
+  await assert.rejects(revokeInvite(restricted,randomUUID()),denied);
+  await assert.rejects(saveOrgMailSettings(restricted,{tenantLease:true,tenantOverdue:true,contactEmail:'r4@example.invalid',contactPhone:''}),denied);
+  await assert.rejects(centerSessionItems(restricted),denied);
+  cookie=tokens.get(manager.userId)!;
+  const consent=buildStoredConsent('signup');
+  await db.query("INSERT INTO consents(user_id,accepted_at,terms_version,privacy_version,source) VALUES($1,now(),$2,$3,'signup')",[manager.userId,consent.terms_version,consent.privacy_version]);
+  await assert.rejects(ClosePage({searchParams:Promise.resolve({})}),denied);
+  await assert.rejects(actionDepositPolicy({spaceId:randomUUID(),startDate:'2026-11-01'}),denied);
+  await assign(await create(['leases.edit']),manager);
+  // Native Manager has no settings.edit: this passed path proves the semantic key is leases.edit.
+  assert.equal(await actionDepositPolicy({spaceId:randomUUID(),startDate:'2026-11-01'}),null);
+});
+
+test('R4 restrictive floors use statement initplans and expose no arbitrary-org oracle; OFF scan measured',async t=>{
+  const old=(await db.query("SELECT proname FROM pg_proc WHERE proname IN ('b017_photo_allowed','b017_file_allowed','b017_audit_allowed')")).rows;assert.deepEqual(old,[]);
+  const ids=await raw(manager,"SELECT app.b017_denied_orgs('audit') ids",[],db,'authenticated');assert.ok(!ids.rows[0].ids.includes(ORG2_ID));
+  const policies=(await db.query("SELECT qual,with_check FROM pg_policies WHERE policyname LIKE 'b017_%'")).rows;
+  assert.ok(policies.length===3);for(const p of policies)assert.match(p.qual,/SELECT[\s\S]*b017_denied_orgs/);
+  await flag(false);
+  await db.query("INSERT INTO audit_log(org_id,actor_user_id,action,table_name,row_id) SELECT $1,$2,'insert','organizations',n::text FROM generate_series(1,1200) n",[ORG_ID,admin.userId]);
+  const plan=await raw(admin,'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id FROM audit_log WHERE org_id=$1',[ORG_ID],db,'authenticated');
+  const report=plan.rows[0]['QUERY PLAN'][0];
+  function plans(p:Record<string,unknown>):Record<string,unknown>[] {return [p,...((p.Plans??[]) as Record<string,unknown>[]).flatMap(plans)];}
+  const init=plans(report.Plan).filter(p=>String(p['Subplan Name']).startsWith('InitPlan')&&JSON.stringify(p).includes('b017')===false);
+  assert.ok(init.length>0);assert.ok(init.every(p=>Number(p['Actual Loops'])<=1));
+  assert.ok(Number(report.Plan['Actual Rows'])>=1200);
+  t.diagnostic(`OFF audit rows=${report.Plan['Actual Rows']}; execution_ms=${report['Execution Time']}; initplan_loops=${init.map(p=>p['Actual Loops']).join(',')}`);
+});

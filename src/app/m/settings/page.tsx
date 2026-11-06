@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
   await requireCurrentConsent(undefined, "page");
   const query = await searchParams;
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "settings.edit");
   const t = makeT(session.locale);
   const mail = can(session, "settings.edit") ? await orgMailSettings(session.orgId) : null;
   return (

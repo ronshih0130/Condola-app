@@ -22,6 +22,7 @@ async function run(session:Session,contactId:string,requestId:string,mode:Mode,i
  if(session.kind!=='staff' || session.needsSandbox || ![session.userId,session.orgId,session.liveOrgId,session.sessionId,contactId,requestId].every(isUuid) || !['live','sandbox'].includes(session.environment))return {status:'unavailable'};
  if(mode==='edit' && (!intent || [intent.expected,intent.name,intent.email,intent.phone].some(v=>typeof v!=='string' || v.length>1024)))return {status:'unavailable'};
  try {
+  session = await guardEffectiveSession(session, "tenants.contact");
   return await withClient(async client=>{
    try {
     await client.query('BEGIN');

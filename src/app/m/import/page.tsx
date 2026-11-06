@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ImportWizard } from "@/components/import-wizard";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ImportPage() {
   await requireCurrentConsent(undefined, "page");
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "props.edit");
   const t = makeT(session.locale);
   if (!can(session, "props.edit")) {
     return (

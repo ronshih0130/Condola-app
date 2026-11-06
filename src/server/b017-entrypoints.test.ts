@@ -12,11 +12,14 @@ const files=walk("src").filter(f=>/\.tsx?$/.test(f)&&! /\.(test|spec)\./.test(f)
 const config=ts.readConfigFile("tsconfig.json",ts.sys.readFile);
 const options=ts.parseJsonConfigFileContent(config.config,ts.sys,process.cwd()).options;
 const program=ts.createProgram(files,options),checker=program.getTypeChecker();
-const guards=new Set(["guardEffectiveSession","requireEffectivePerm","assertCustomAuthorityOn","customAuthorityAllowsOn","withEffectiveAuthority"]);
 function nodes(node:ts.Node):ts.Node[]{const all:ts.Node[]=[];function visit(n:ts.Node){all.push(n);ts.forEachChild(n,visit);}visit(node);return all;}
 function declaration(call:ts.CallExpression) {
   let symbol=checker.getSymbolAtLocation(call.expression);if(symbol?.flags && symbol.flags & ts.SymbolFlags.Alias) symbol=checker.getAliasedSymbol(symbol);
   return symbol?.valueDeclaration;
+}
+function idOf(node:ts.Node) {
+  const named=node as ts.FunctionDeclaration;
+  return `${path.relative(process.cwd(),node.getSourceFile().fileName)}#${named.name?.getText() ?? (ts.isVariableDeclaration(node.parent) ? node.parent.name.getText() : 'default')}`;
 }
 function separateBoundary(file: string, name: string, fn: ts.Node) {
   const boundary = (boundaries as Record<string,{reason:string;sha256:string}>)[`${file}#${name}`];
@@ -25,59 +28,123 @@ function separateBoundary(file: string, name: string, fn: ts.Node) {
   assert.equal(createHash("sha256").update(fn.getText()).digest("hex"),boundary.sha256,`${file}#${name}: review changed non-feature boundary`);
   return true;
 }
-function guarded(node:ts.Node,seen=new Set<ts.Node>(), key?: string | null):boolean {
-  if(seen.has(node))return false;seen.add(node);
-  return nodes(node).filter(ts.isCallExpression).some(call=>{
-    const target=declaration(call);if(!target)return false;
-    if(target.getSourceFile().fileName.endsWith("/b017-custom-role-governance.ts")&&guards.has(call.expression.getText())) {
-      const argument=call.arguments[call.expression.getText()==="guardEffectiveSession"?1:2];
-      return key===undefined || (key===null ? argument?.kind===ts.SyntaxKind.NullKeyword : !!argument && ts.isStringLiteral(argument) && argument.text===key);
+const guardNames = new Set(['guardEffectiveSession','requireEffectivePerm','assertCustomAuthorityOn','withEffectiveReadAuthority']);
+// These establish identity/consent, not business-data authority. Their own implementations
+// remain separately inventoried. No arbitrary helper is excluded by name alone.
+const bootstrap = new Set(['src/server/session.ts#getSession','src/server/session.ts#readSession','src/server/session.ts#readSessionOn',
+  'src/server/consent-gate.ts#requireCurrentConsent','src/server/consent-gate.ts#requireApiConsent']);
+type State = { keys:Set<string>; violations:string[]; db:boolean; guards:Set<string> };
+function inspect(fn:ts.Node, expected?:string|null, resolve:(call:ts.CallExpression)=>ts.Node|undefined=declaration):State {
+  const state:State={keys:new Set(),violations:[],db:false,guards:new Set()};
+  const active=new Set<ts.Node>();
+  function visit(n:ts.Node,s:State) {
+    if(ts.isFunctionLike(n) && n!==fn) return; // Definitions do not execute at declaration time.
+    if(ts.isIfStatement(n)) {
+      visit(n.expression,s);
+      const yes={...s,keys:new Set(s.keys)},no={...s,keys:new Set(s.keys)};
+      visit(n.thenStatement,yes);if(n.elseStatement)visit(n.elseStatement,no);
+      s.db ||= yes.db || no.db;
+      s.keys=new Set([...yes.keys].filter(k=>no.keys.has(k)));return;
     }
-    if(target.getSourceFile().fileName.includes("node_modules"))return false;
-    return (ts.isFunctionDeclaration(target)||ts.isVariableDeclaration(target)||ts.isArrowFunction(target))&&guarded(target,seen,key);
-  });
+    if(ts.isForStatement(n)||ts.isForOfStatement(n)||ts.isForInStatement(n)||ts.isWhileStatement(n)||ts.isDoStatement(n)) {
+      ts.forEachChild(n,c=>visit(c,{...s,keys:new Set(s.keys)}));return;
+    }
+    if(ts.isTryStatement(n)) {
+      const yes={...s,keys:new Set(s.keys)},no={...s,keys:new Set(s.keys)};
+      visit(n.tryBlock,yes);if(n.catchClause)visit(n.catchClause.block,no);
+      s.keys=n.catchClause?new Set([...yes.keys].filter(k=>no.keys.has(k))):yes.keys;
+      if(n.finallyBlock)visit(n.finallyBlock,s);return;
+    }
+    if(ts.isCallExpression(n)) {
+      if(n.expression.getText()==='Promise.all' || n.expression.getText()==='Promise.allSettled') {
+        for(const arg of n.arguments) if(ts.isArrayLiteralExpression(arg)) for(const item of arg.elements)visit(item,{...s,keys:new Set(s.keys)});
+        return;
+      }
+      // JS evaluates argument expressions before invoking a guard/helper.
+      for(const arg of n.arguments) if(!ts.isFunctionLike(arg)) visit(arg,s);
+      const target=resolve(n),id=target?idOf(target):'';
+      const name=n.expression.getText();
+      if(bootstrap.has(id))return;
+      if(target && target.getSourceFile().fileName.endsWith('/b017-custom-role-governance.ts') && guardNames.has(name)) {
+        const arg=n.arguments[name==='guardEffectiveSession'?1:2];
+        const key=arg?.kind===ts.SyntaxKind.NullKeyword?'null':arg&&ts.isStringLiteral(arg)?arg.text:undefined;
+        if(key){s.keys.add(key);s.guards.add(key);}
+        for(const arg of n.arguments) if(ts.isArrowFunction(arg)||ts.isFunctionExpression(arg))visit(arg.body,s);
+        return;
+      }
+      const dbCall=(target && /\/db\.ts$/.test(target.getSourceFile().fileName) && ['tx','svc','withClient','svcOn','query','many','one','maybe','withDeferredClient'].includes(name)) || /\.query$/.test(name);
+      if(dbCall) {
+        s.db=true;
+        if(!s.keys.size || (expected!==undefined && !s.keys.has(String(expected))))s.violations.push(`${name}@${n.getSourceFile().fileName}:${n.getSourceFile().getLineAndCharacterOfPosition(n.getStart()).line+1}`);
+        return;
+      }
+      if(target && !target.getSourceFile().fileName.includes('node_modules') && !active.has(target)) {
+        if(ts.isFunctionDeclaration(target)&&target.body) {
+          const [file,nm]=id.split('#');
+          if(separateBoundary(file,nm,target) && !(boundaries as Record<string,{reason:string}>)[id].reason.startsWith('Internal:'))return;
+          active.add(target);visit(target.body,s);active.delete(target);
+        } else if(ts.isVariableDeclaration(target)&&target.initializer&&(ts.isArrowFunction(target.initializer)||ts.isFunctionExpression(target.initializer))) {
+          active.add(target);visit(target.initializer.body,s);active.delete(target);
+        }
+      }
+      // Callback bodies may run without a sibling callback or a later guard.
+      for(const arg of n.arguments) if(ts.isArrowFunction(arg)||ts.isFunctionExpression(arg))visit(arg.body,{...s,keys:new Set(s.keys)});
+      return;
+    }
+    if(ts.isConditionalExpression(n)) {
+      visit(n.condition,s);visit(n.whenTrue,{...s,keys:new Set(s.keys)});visit(n.whenFalse,{...s,keys:new Set(s.keys)});return;
+    }
+    ts.forEachChild(n,c=>visit(c,s));
+  }
+  active.add(fn);
+  if(ts.isFunctionDeclaration(fn)&&fn.body)visit(fn.body,state);
+  else if(ts.isVariableDeclaration(fn)&&fn.initializer&&(ts.isArrowFunction(fn.initializer)||ts.isFunctionExpression(fn.initializer)))visit(fn.initializer.body,state);
+  else if(ts.isArrowFunction(fn)||ts.isFunctionExpression(fn))visit(fn.body,state);
+  return state;
 }
 
-test("B017 every mapped exported operation has a central guard; new mappings require explicit review",()=>{
+test('B017 mapped guards precede the first DB call, including null mappings',()=>{
+  const failures:string[]=[];
   for(const [id,key] of Object.entries(permissions)) {
-    const [file,name]=id.split("#"),source=program.getSourceFile(file);assert.ok(source,id);
-    const fn=source.statements.find((n):n is ts.FunctionDeclaration=>ts.isFunctionDeclaration(n)&&n.name?.text===name);assert.ok(fn,id);
-    // Public/token/account entry exclusions are separately exhaustively inventoried below.
-    if(key!==null)assert.ok(guarded(fn,new Set(),key),`${id}: mapped key lacks its explicit central guard`);
+    const [file,name]=id.split('#'),source=program.getSourceFile(file);assert.ok(source,id);
+    const fn=source.statements.find(n=>(ts.isFunctionDeclaration(n)||ts.isVariableStatement(n))&&nodes(n).some(x=>ts.isIdentifier(x)&&x.text===name));assert.ok(fn,id);
+    if(separateBoundary(file,name,fn))continue;
+    const result=inspect(fn,key);
+    if(result.violations.length || !result.guards.has(String(key)))failures.push(`${id} [${key}]: ${result.violations.slice(0,3).join(', ') || 'missing matching guard'}`);
   }
+  assert.deepEqual(failures,[]);
 });
 
-test("B017 enumerate all routes, use-server actions, and their exported Session writers",()=>{
-  const missing:string[]=[];
+test('B017 every server module, TS/TSX route, page, layout and inline server action is scanned',()=>{
+  const failures:string[]=[];
   for(const file of files) {
     const source=program.getSourceFile(file)!;
-    const entry=file.endsWith('/route.ts')||source.statements.some(n=>ts.isExpressionStatement(n)&&ts.isStringLiteral(n.expression)&&n.expression.text==='use server');
-    if(!entry)continue;
-    const moduleSymbol=checker.getSymbolAtLocation(source);if(!moduleSymbol)continue;
-    for(const symbol of checker.getExportsOfModule(moduleSymbol)) {
-      if(!/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(symbol.name)&&file.endsWith('/route.ts'))continue;
-      const fn=symbol.valueDeclaration;
-      if(!fn && !(symbol.flags & (ts.SymbolFlags.Value | ts.SymbolFlags.Alias))) continue; // type-only exports
-      if(!fn||!ts.isFunctionDeclaration(fn)) { missing.push(`${file}#${symbol.name}: review non-function export or re-export`); continue; }
-      if(!separateBoundary(file,symbol.name,fn)&&(!Object.hasOwn(permissions,`${file}#${symbol.name}`)||!guarded(fn)))missing.push(`${file}#${symbol.name}`);
+    if(source.statements.some(n=>ts.isExpressionStatement(n)&&ts.isStringLiteral(n.expression)&&n.expression.text==='use client'))continue;
+    const isEntry=/\/(page|layout|route)\.tsx?$/.test(file)||source.statements.some(n=>ts.isExpressionStatement(n)&&ts.isStringLiteral(n.expression)&&n.expression.text==='use server');
+    for(const fn of nodes(source).filter((n):n is ts.FunctionDeclaration|ts.ArrowFunction|ts.FunctionExpression=>ts.isFunctionDeclaration(n)||ts.isArrowFunction(n)||ts.isFunctionExpression(n))) {
+      const inline=!!fn.body&&nodes(fn.body).some(n=>ts.isExpressionStatement(n)&&ts.isStringLiteral(n.expression)&&n.expression.text==='use server');
+      const variable=ts.isVariableDeclaration(fn.parent)?fn.parent:undefined;
+      const exported=ts.isFunctionDeclaration(fn)?fn.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)
+        : variable&&ts.isVariableStatement(variable.parent.parent)&&variable.parent.parent.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword);
+      const session=fn.parameters.some(p=>p.type?.getText().includes('Session'));
+      if(!inline && !(exported && (isEntry || ((file.startsWith('src/server/') || file.startsWith('src/components/')) && session))))continue;
+      if(file==='src/server/b017-custom-role-governance.ts')continue; // guard implementation; integration tested
+      const id=idOf(fn),[f,name]=id.split('#');
+      if(separateBoundary(f,name,fn))continue;
+      const result=inspect(fn);
+      if(result.violations.length)failures.push(`${id}: ${result.violations.slice(0,3).join(', ')}`);
     }
   }
-  assert.deepEqual(missing,[],"unmapped entry must explicitly deny custom-role staff or declare a non-staff boundary");
+  assert.deepEqual(failures,[]);
 });
 
-test("B017 exported transaction writers with a Session cannot omit the central guard",()=>{
-  const missing:string[]=[];
-  for(const file of files.filter(f=>f.startsWith('src/server/'))) {
-    if(['/db.ts','/org-guard.ts','/b017-custom-role-governance.ts','/partner-consent-submit.ts'].some(s=>file.endsWith(s)))continue;
-    const source=program.getSourceFile(file)!;
-    for(const fn of source.statements.filter(ts.isFunctionDeclaration)) {
-      if(!fn.body||!fn.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)||!fn.parameters.some(p=>p.type?.getText().includes('Session')))continue;
-      const calls=nodes(fn.body).filter(ts.isCallExpression);
-      if(!calls.some(c=>['tx','svc','withClient','svcOn','txForSession'].includes(c.expression.getText())))continue;
-      if(!separateBoundary(file,fn.name!.text,fn)&&!guarded(fn))missing.push(`${file}#${fn.name?.text}`);
-    }
-  }
-  assert.deepEqual(missing,[]);
+// Independent semantic oracle: changing both the implementation and its inventory
+// must not bless a settings-only key for a lease operation.
+test('R4 deposit-policy key matches its native lease permission',()=>{
+  assert.equal(permissions['src/server/deposit-rules-actions.ts#actionDepositPolicy'],'leases.edit');
+  const source=program.getSourceFile('src/server/deposit-rules-actions.ts')!;
+  assert.match(source.text,/guardEffectiveSession\(await getSession\(\), "leases.edit"\)/);
+  assert.match(source.text,/can\(session, "leases.edit"\)/);
 });
 
 import { customAuthorityAllowsOn } from "./b017-custom-role-governance";
@@ -98,4 +165,50 @@ test("R3 native staff checks require an explicit mapped key for a restricted ass
   assert.throws(()=>assertStaff(restricted,['manager'],'leases.edit'),/forbidden/);
   assert.doesNotThrow(()=>assertStaff(native,['manager']));
   assert.doesNotThrow(()=>assertStaff({...restricted,customRole:{...restricted.customRole,keys:['leases.edit']}},['manager'],'leases.edit'));
+});
+
+test('R4 inventory rejects late, conditional, wrong/null, indirect and callback-only guards',()=>{
+  function fixture(body:string, expected:string|null='props.view') {
+    const source=ts.createSourceFile('src/app/example/page.tsx',`async function helper(){await db.query('SELECT secret')} export async function Page(){${body}}`,ts.ScriptTarget.Latest,true);
+    const fn=source.statements[1];
+    const resolve=(call:ts.CallExpression)=>call.expression.getText()==='guardEffectiveSession'
+      ? program.getSourceFile('src/server/b017-custom-role-governance.ts')!.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='guardEffectiveSession')
+      : call.expression.getText()==='helper'?source.statements[0]:undefined;
+    return inspect(fn,expected,resolve);
+  }
+  assert.equal(fixture(`await guardEffectiveSession(s,'props.view'); await helper();`).violations.length,0);
+  for(const body of [
+    `await helper(); await guardEffectiveSession(s,'props.view');`,
+    `if (condition) await guardEffectiveSession(s,'props.view'); await helper();`,
+    `const later=()=>guardEffectiveSession(s,'props.view'); await helper();`,
+    `await guardEffectiveSession(s,'settings.edit'); await helper();`,
+    `for(const x of xs) await guardEffectiveSession(s,'props.view'); await helper();`,
+    `try {await guardEffectiveSession(s,'props.view')} catch {} await helper();`,
+    `await Promise.all([guardEffectiveSession(s,'props.view'),helper()]);`,
+  ])assert.ok(fixture(body).violations.length,body);
+  assert.ok(fixture(`await guardEffectiveSession(s,'props.view'); await helper();`,null).violations.length);
+  assert.equal(fixture(`await guardEffectiveSession(s,null); await helper();`,null).violations.length,0);
+});
+
+test('R4 reviewed dynamic dispatcher and photo callback retain ordering and semantic keys',()=>{
+  const flow=program.getSourceFile('src/app/api/flows/[action]/route.ts')!.text;
+  const expected={createProperty:'props.edit',createLease:'leases.edit',updateLease:'leases.edit',simulateTenantSignature:'leases.edit',signLease:'leases.edit',recordPayment:'pay.record',confirmPayment:'pay.record',rejectPayment:'pay.record',importBankCsv:'bank.reconcile',approveMatch:'bank.reconcile',generateStatement:'stmt.generate',createTicket:'tickets.update',updateTicket:'tickets.update',postMessage:'messages.send',inviteTeammate:'team.manage',setOwnerPhoneVisibility:'settings.edit'};
+  for(const [op,key] of Object.entries(expected)) assert.match(flow,new RegExp(`${op}:\\s*"${key.replace('.','\\.')}"`));
+  assert.ok(flow.indexOf('await guardEffectiveSession')<flow.indexOf('await handler('));
+  const photo=program.getSourceFile('src/server/id-docs.ts')!.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='serveSignedPhoto')!.getText();
+  assert.ok(photo.indexOf('await authorize?.(client)')<photo.indexOf('await client.query'));
+});
+
+import { customRolesAdmitted, assertCustomRoleAdmission } from './b017-admission';
+test('R4 malformed allowlist entry cannot disable another admitted organization; missing admission denies',()=>{
+  const previous=process.env.CUSTOM_ROLES_ORG_ALLOWLIST;
+  const org='00000000-0000-4000-8000-000000000001';
+  try {
+    process.env.CUSTOM_ROLES_ORG_ALLOWLIST=JSON.stringify([org,'bad-id',null]);
+    assert.equal(customRolesAdmitted(org),true);
+    assert.doesNotThrow(()=>assertCustomRoleAdmission(org,true));
+    process.env.CUSTOM_ROLES_ORG_ALLOWLIST='[]';
+    assert.throws(()=>assertCustomRoleAdmission(org,true),/forbidden/);
+    assert.doesNotThrow(()=>assertCustomRoleAdmission(org,false));
+  } finally {if(previous===undefined)delete process.env.CUSTOM_ROLES_ORG_ALLOWLIST;else process.env.CUSTOM_ROLES_ORG_ALLOWLIST=previous;}
 });

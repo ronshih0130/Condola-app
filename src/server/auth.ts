@@ -702,6 +702,7 @@ export async function inviteMember(session: Session, input: { email: string; nam
   const issued = await withClient(async (client) => {
     await client.query("BEGIN");
     try {
+      if (session.customRole) await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [session.userId]);
       const organization = await lockSeatOrganization(client, session.orgId);
       if (session.environment !== "live" || organization.environment !== "live") {
         throw new FlowError("errors.teamInvitesSoon");
@@ -745,6 +746,7 @@ export async function resendInvite(session: Session, invitationId: string) {
   const issued = await withClient(async (client) => {
     await client.query("BEGIN");
     try {
+      if (session.customRole) await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [session.userId]);
       const organization = await lockSeatOrganization(client, session.orgId);
       if (session.environment !== "live" || organization.environment !== "live") {
         throw new FlowError("errors.teamInvitesSoon");
@@ -764,6 +766,7 @@ export async function resendInvite(session: Session, invitationId: string) {
       if (!row || row.kind !== "team_member" || row.status !== "pending" || !row.unexpired) {
         throw new FlowError("errors.teamInviteUnavailable");
       }
+      if (session.customRole && PERMS.some(([key]) => can(row.role, key) && !can(session, key))) throw new FlowError("errors.forbidden");
       const updated = await client.query<{ expires_at: Date }>(
         `UPDATE invitations SET code_hash = $2, expires_at = now() + make_interval(days => $3)
           WHERE id::text = $1 RETURNING expires_at`,
@@ -795,6 +798,7 @@ export async function revokeInvite(session: Session, invitationId: string) {
 }
 
 export async function setMemberRole(session: Session, memberId: string, role: OrgRole) {
+  session = await guardEffectiveSession(session, "team.manage");
   assertPerm(session, "team.manage");
   if (!TEAM_ROLES.has(role)) throw new FlowError("errors.required");
   if (await changeCustomRoleMember(session, memberId, { role })) {

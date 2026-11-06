@@ -12,7 +12,7 @@ import { getSession } from "./session";
 /** Only resolve a property already visible to this staff session. */
 export async function actionDepositPolicy(input: { spaceId?: string; leaseId?: string; startDate?: string }): Promise<DepositPolicy | null> {
   await requireCurrentConsent();
-  const session = await guardEffectiveSession(await getSession(), "settings.edit");
+  const session = await guardEffectiveSession(await getSession(), "leases.edit");
   if (session.kind !== "staff" || !can(session, "leases.edit") || session.needsSandbox) return null;
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const id = input.leaseId ?? input.spaceId ?? "";

@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { requireCurrentConsent } from "@/server/consent-gate";
 import { makeT } from "@/i18n";
 import { ErrorBanner, PageHeader } from "@/components/ui";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ClosePage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; month?: string }> }) {
   await requireCurrentConsent(undefined, "page");
-  const session = await getSession();
+  const session = await guardEffectiveSession(await getSession(), "month.close");
   const t = makeT(session.locale);
   const params = await searchParams;
   const month = params.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(params.month) ? params.month : taipeiToday().slice(0, 7);

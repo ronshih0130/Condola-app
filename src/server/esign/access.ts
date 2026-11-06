@@ -1,3 +1,4 @@
+import { guardEffectiveSession } from "@/server/b017-custom-role-governance";
 import { assertCustomAuthorityOn } from "../b017-custom-role-governance";
 import { can } from "../perms";
 import { consentCoversCurrent } from "../consent";
@@ -39,6 +40,7 @@ export async function requireEsignOrganization(c: Connection, actor: SigningActo
 }
 
 export async function esignAvailableFor(session: Session) {
+  session = await guardEffectiveSession(session, "leases.edit");
   if (!esignEnabled()) return false;
   try {
     await svc(session.userId, c => requireEsignOrganization(c, session, false));

@@ -1,4 +1,4 @@
-import { guardEffectiveSession, withEffectiveAuthority } from "@/server/b017-custom-role-governance";
+import { effectiveReadOptions, guardEffectiveSession, withEffectiveAuthority, withEffectiveReadAuthority, customAuthorityAllowsOn } from "@/server/b017-custom-role-governance";
 import { assertCustomAuthorityOn } from "./b017-custom-role-governance";
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
@@ -18,8 +18,10 @@ function noteValue(value: string, max: number) { const note = value.trim(); if (
  * Write lock order: rollout setting, org, session, relationship, lease, record/version.
  * The caller must provide the Session produced by getSession/readSessionOn, never form data.
  */
-async function authorize(client: Client, session: Session, leaseId: string, write: boolean) {
-  await assertCustomAuthorityOn(client, session, write ? "leases.edit" : "props.view");
+async function authorize(client: Client, session: Session, leaseId: string, write: boolean, snapshot = false) {
+  if (snapshot) {
+    if (!await customAuthorityAllowsOn(client, session, "leases.edit")) throw new FlowError("errors.forbidden");
+  } else await assertCustomAuthorityOn(client, session, write ? "leases.edit" : "props.view");
   validId(leaseId);
   if (session.needsSandbox || !["staff", "tenant"].includes(session.kind)) throw new FlowError("errors.notFound");
   if (session.kind === "tenant" && session.leaseId !== leaseId) throw new FlowError("errors.notFound");
@@ -108,8 +110,8 @@ export async function replyHandover(session: Session, leaseId: string, versionId
 }
 export async function readHandover(session: Session, leaseId: string) {
   session = await guardEffectiveSession(session, "leases.edit");
-  return svc(session.userId, async client => withEffectiveAuthority(client, session, "leases.edit", async () => {
-    await authorize(client, session, leaseId, true);
+  return svc(session.userId, async client => withEffectiveReadAuthority(client, session, "leases.edit", async () => {
+    await authorize(client, session, leaseId, !session.customRole, !!session.customRole);
     const records = await client.query(`SELECT r.id,r.phase,v.id AS version_id,v.revision,v.note,v.created_at,nullif(btrim(p.display_name),'') AS author_name
       FROM app.handover_records r JOIN app.handover_versions v ON v.record_id=r.id LEFT JOIN public.profiles p ON p.id=v.created_by
       WHERE r.org_id=$1 AND r.lease_id=$2 ORDER BY r.phase,v.revision DESC`, [session.orgId, leaseId]);
@@ -118,7 +120,7 @@ export async function readHandover(session: Session, leaseId: string) {
     const intents = await client.query(`SELECT id,version_id,file_name,mime,size_bytes,status,expires_at,(session_id=$4 AND status='pending' AND expires_at>clock_timestamp()) AS can_resume FROM app.handover_upload_intents WHERE org_id=$1 AND lease_id=$2 AND actor_id=$3 AND status IN ('pending','discarded','attached') ORDER BY created_at DESC`, [session.orgId, leaseId, session.userId, session.sessionId]);
     await recheckSessionDeadline(client, session);
     return { versions: records.rows, attachments: attachments.rows, replies: replies.rows, intents: intents.rows };
-  }));
+  }), effectiveReadOptions(session));
 }
 
 export async function prepareHandoverUpload(session: Session, leaseId: string, versionId: string, input: { fileName: string; mime: string; size: number }) {
