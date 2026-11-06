@@ -52,6 +52,7 @@ const openRoutes: Record<string, Record<string, string>> = {
   "api/auth/enter/route.ts": { GET: "Authentication continuation checks consent" },
   "api/auth/sign-out/route.ts": { POST: "Always permit leaving" },
   "api/cron/reminders/route.ts": { POST: "Cron secret, no human identity" },
+  "api/mock-subscription/route.ts": { POST: "Loopback-only signed local mock provider fixture; environment switch and HMAC, no human identity" },
   "api/cron/purge-id-documents/route.ts": { POST: "Retention must continue" },
   "api/demo/locale/route.ts": { GET: "Public preference" },
   "api/demo/mode/route.ts": { GET: "Removed, always 404" },
