@@ -472,4 +472,25 @@ END $$;
 REVOKE ALL ON FUNCTION app.b010_authorize_owner_payment_confirm(uuid,uuid,text,uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION app.b010_authorize_owner_payment_confirm(uuid,uuid,text,uuid) TO authenticated,service_role;
 
+CREATE OR REPLACE FUNCTION app.b010_owner_collected_payments(p_org uuid, p_payment_ids uuid[])
+RETURNS SETOF uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path=pg_catalog,public,app
+AS $$
+  SELECT p.id
+  FROM public.payments p
+  JOIN app.b010_lease_collectors lc
+    ON lc.org_id=p.org_id AND lc.lease_id=p.lease_id
+  WHERE p.org_id=p_org
+    AND p.id=ANY(p_payment_ids)
+    AND lc.collector='owner'
+$$;
+
+REVOKE ALL ON FUNCTION app.b010_owner_collected_payments(uuid,uuid[])
+  FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION app.b010_owner_collected_payments(uuid,uuid[])
+  TO service_role;
+
 COMMIT;

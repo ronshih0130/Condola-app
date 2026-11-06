@@ -6,6 +6,7 @@ import { ORG_ID, ORG2_ID, USERS } from "./ids";
 import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
 import { confirmPayment, rejectPayment, reversePayment } from "./domain";
+import { ownerCollectedPaymentIds } from "./payment-request-status";
 import type { Session } from "./types";
 
 disposableDbUrl(process.env.DATABASE_URL, process.env.CONDOLA_RLS_DISPOSABLE);
@@ -208,6 +209,19 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
       assert.deepEqual(await collectors(), before);
     });
 
+    await t.test("flag ON owner-collected reader works", async () => {
+      await flag(true);
+      await ownerCollector();
+      const id = await makeSubmitted();
+
+      const ids = await ownerCollectedPaymentIds(manager, [id]);
+      assert.ok(ids.has(id));
+
+      await flag(false);
+      const disabledIds = await ownerCollectedPaymentIds(manager, [id]);
+      assert.equal(disabledIds.size, 0);
+    });
+
     await t.test("owner session confirms directly when the flag is ON", async () => {
       await flag(true);
       await ownerCollector();
@@ -235,6 +249,71 @@ test("B-010 payment decisions", { concurrency: false }, async (t) => {
       assert.equal(emitted[0].dedupe_key, `payment:${id}:payment_confirmed`);
       assert.equal(emitted[0].source, "payment_result");
       assert.equal(emitted[0].triggered_by_user_id, USERS.owner);
+    });
+
+    await t.test("owner context cannot reject or reverse", async () => {
+      await flag(true);
+      await ownerCollector();
+      const id = await makeSubmitted();
+      const original = await payment(id);
+
+      await assert.rejects(rejectPayment(ownerSession, id, "x"), isFlowError);
+
+      assert.deepEqual(await payment(id), original);
+      assert.equal((await payment(id)).status, "submitted");
+      assert.equal((await confirmations(id)).length, 0);
+
+      await confirmPayment(ownerSession, id);
+      const confirmed = await payment(id);
+      const audit = await confirmations(id);
+      assert.equal(confirmed.status, "confirmed");
+      assert.equal(audit.length, 1);
+      assert.equal(audit[0].confirmed_via, "owner_direct");
+
+      await assert.rejects(reversePayment(ownerSession, id, "x"), isFlowError);
+
+      assert.deepEqual(await payment(id), confirmed);
+      assert.deepEqual(await confirmations(id), audit);
+    });
+
+    await t.test("role restored after owner elevation", async () => {
+      await flag(true);
+
+      for (const outcome of ["successful", "failing"] as const) {
+        await ownerCollector();
+        const id = await makeSubmitted();
+
+        if (outcome === "successful") {
+          await confirmPayment(ownerSession, id);
+          assert.equal((await payment(id)).status, "confirmed");
+          const rows = await confirmations(id);
+          assert.equal(rows.length, 1);
+          assert.equal(rows[0].confirmed_via, "owner_direct");
+        } else {
+          await rejectPayment(manager, id, "Synthetic rejection");
+          assert.equal((await payment(id)).status, "rejected");
+
+          await assert.rejects(confirmPayment(ownerSession, id), isFlowError);
+
+          assert.equal((await payment(id)).status, "rejected");
+          assert.equal((await confirmations(id)).length, 0);
+        }
+
+        await clearCollector();
+        const newSubmittedId = await makeSubmitted();
+        await confirmPayment(manager, newSubmittedId);
+
+        assert.equal((await payment(newSubmittedId)).status, "confirmed");
+        const rows = await confirmations(newSubmittedId);
+        assert.equal(rows.length, 1);
+        assert.equal(
+          rows[0].confirmed_via,
+          "management",
+          `staff confirmation after ${outcome} owner confirmation`,
+        );
+        assert.equal(rows[0].actor_user_id, USERS.manager);
+        assert.equal(rows[0].on_behalf_of_owner_contact_id, null);
+      }
     });
 
     await t.test("owner session cannot confirm when the flag is OFF", async () => {

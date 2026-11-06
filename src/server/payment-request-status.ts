@@ -12,11 +12,9 @@ export async function paymentRequestEnabled(session: Session): Promise<boolean> 
 export async function ownerCollectedPaymentIds(session: Session, paymentIds: string[]): Promise<Set<string>> {
   if (paymentIds.length === 0 || !(await paymentRequestEnabled(session))) return new Set<string>();
   return svc(session.userId, async c => {
-    const available = await c.query<{exists:boolean}>(`SELECT to_regclass('app.b010_lease_collectors') IS NOT NULL AS exists`);
+    const available = await c.query<{exists:boolean}>(`SELECT to_regprocedure('app.b010_owner_collected_payments(uuid,uuid[])') IS NOT NULL AS exists`);
     if (!available.rows[0].exists) return new Set<string>();
-    const result = await c.query<{id:string}>(`SELECT p.id::text FROM payments p
-      JOIN app.b010_lease_collectors lc ON lc.org_id=p.org_id AND lc.lease_id=p.lease_id
-      WHERE p.org_id=$1 AND p.id = ANY($2::uuid[]) AND lc.collector='owner'`, [session.orgId, paymentIds]);
+    const result = await c.query<{id:string}>(`SELECT id::text FROM app.b010_owner_collected_payments($1,$2::uuid[]) AS id`, [session.orgId, paymentIds]);
     return new Set(result.rows.map(row => row.id));
   });
 }
