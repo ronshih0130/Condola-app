@@ -141,7 +141,14 @@ test("B-026 vendor estimate submission and manager comparison", async t => {
         assert.equal(JSON.stringify(await loadVendorJob(job.token)), legacy);
       }
       const file = "src/app/v/[token]/page.tsx";
-      assert.equal(readFileSync(file, "utf8"), execFileSync("git", ["show", `4c3f3f7:${file}`], { encoding: "utf8" }));
+      // B-035 (#83) adds a strictly flag-gated "Continue in LINE" entry to this page. Strip exactly
+      // those reviewed additions; everything else must still equal the B-026 baseline byte for byte.
+      const withoutB035 = (source: string) => source
+        .replace('import { vendorLineEntryEnabled } from "@/server/line/vendor-entry";\n', "")
+        .replace('import { VendorLineEntry } from "./vendor-line-entry";\n', "")
+        .replace(/  \/\/ B-035: only while[^\n]*\n  const showLine = [^\n]*\n  const lineEntry = showLine\n[^\n]*\n[^\n]*\n/, "")
+        .replace(/\{lineEntry \? <><VendorNotificationCenterEntry token=\{token\} locale=\{prefs\.locale\} \/>\{lineEntry\}<\/>\n\s*: (<VendorNotificationCenterEntry token=\{token\} locale=\{prefs\.locale\} \/>)\}/g, "$1");
+      assert.equal(withoutB035(readFileSync(file, "utf8")), execFileSync("git", ["show", `4c3f3f7:${file}`], { encoding: "utf8" }));
       await on();
     });
     await t.test("manager page estimate OFF retains baseline query count and transactions", async () => {
