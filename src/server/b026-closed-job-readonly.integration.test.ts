@@ -200,6 +200,12 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
       const notifications = await centerVendorItems(job.token);
       assert.ok(notifications.items.length > 0);
       assert.equal(notifications.readOnly, undefined);
+      // A populated open-job page through the B-026 sibling equals the unchanged B-028 gateway.
+      __setVendorLinkKillSwitchForTests(false);
+      const legacyPage = await centerVendorItems(job.token);
+      __setVendorLinkKillSwitchForTests(true);
+      assert.equal(JSON.stringify(notifications), JSON.stringify(legacyPage));
+      assert.deepEqual(Object.keys(notifications.items[0]).sort(), ["continuation", "kind", "occurred_at", "read_at", "recipient_id"], "no read_only key leaks into items");
       const recipientId = notifications.items[0].recipient_id;
       assert.equal((await markNotification(request("/api/notification-center/vendor-mark", { token: job.token, recipientId }))).status, 200);
       await withClient(client => client.query("DELETE FROM app.b028_center_reads WHERE recipient_id=$1", [recipientId]));
@@ -218,6 +224,12 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
         } finally { await client.query("ROLLBACK"); }
       });
       await approvals(true);
+      // An expired cursor the B-028 gateway would delete, plus a live one for the
+      // read-only pagination lookup: a closed-job read must leave both untouched.
+      const expiredCursor = (await withClient(client => client.query(`INSERT INTO app.b028_center_cursors(org_id,job_id,after_time,after_id,expires_at)
+        VALUES($1,$2,now()-interval '1 day',$3,now()-interval '1 hour') RETURNING id::text`, [ORG_ID, job.jobId, randomUUID()]))).rows[0].id;
+      const liveCursor = (await withClient(client => client.query(`INSERT INTO app.b028_center_cursors(org_id,job_id,after_time,after_id)
+        VALUES($1,$2,'-infinity',$3) RETURNING id::text`, [ORG_ID, job.jobId, "00000000-0000-0000-0000-000000000000"]))).rows[0].id;
       const before = await snapshot();
       const view = await loadVendorJob(job.token);
       assert.equal(view?.vendorLink?.capability, "read_only");
@@ -234,8 +246,27 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
         assert.equal(response.status, 200);
         assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes);
       }
-      const closedNotifications = await centerVendorItems(job.token);
+      const closedTrace = await trace(() => centerVendorItems(job.token));
+      const closedNotifications = closedTrace.value;
       assert.equal(closedNotifications.readOnly, true);
+      assert.equal(closedTrace.sql.length, 5, "closed-job read is one gateway call (no extra policy query)");
+      assert.ok(closedTrace.sql.some(sql => sql.includes("FROM app.b026_center_vendor(")));
+      assert.ok(!closedTrace.sql.some(sql => sql.includes("app.b028_center_vendor(")));
+      const paged = await centerVendorItems(job.token, null, liveCursor);
+      assert.equal(paged.readOnly, true);
+      assert.deepEqual(paged.items.map(item => item.recipient_id), closedNotifications.items.map(item => item.recipient_id));
+      // A live cursor at the last item's exact (occurred_at, recipient_id) boundary yields
+      // an empty read-only page (sentinel row), no continuation, and no writes.
+      const lastItem = closedNotifications.items.at(-1)!;
+      const boundaryCursor = (await withClient(client => client.query(`INSERT INTO app.b028_center_cursors(org_id,job_id,after_time,after_id)
+        VALUES($1,$2,$3::timestamptz,$4) RETURNING id::text`, [ORG_ID, job.jobId, lastItem.occurred_at, lastItem.recipient_id]))).rows[0].id;
+      const boundaryBefore = await snapshot();
+      const boundary = await centerVendorItems(job.token, null, boundaryCursor);
+      assert.deepEqual(boundary, { items: [], continuation: null, readOnly: true });
+      assert.deepEqual(await snapshot(), boundaryBefore);
+      await withClient(client => client.query("DELETE FROM app.b028_center_cursors WHERE id=$1", [boundaryCursor]));
+      await assert.rejects(centerVendorItems(job.token, null, expiredCursor));
+      assert.equal((await withClient(client => client.query("SELECT count(*)::int n FROM app.b028_center_cursors WHERE id = ANY($1::uuid[])", [[expiredCursor, liveCursor]]))).rows[0].n, 2);
       const html = renderToStaticMarkup(createElement(NotificationCenter, { page: closedNotifications, locale: "en", kind: "vendor" }));
       assert.ok(!html.includes("notification-mark"));
       assert.ok(!html.includes("<button"));
@@ -312,6 +343,7 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
       const input = { orgId: ORG_ID, vendorJobId: job.jobId, versionId, requestId: randomUUID(),
         eventKind: "vendor_rejected" as const, reason: "Unavailable" };
       const traces: string[][][] = [];
+      const notifications: string[] = [];
       for (const [kill, org] of [[false, true], [true, false]]) {
         __setVendorLinkKillSwitchForTests(kill);
         await withClient(client => client.query("UPDATE organizations SET feature_flags=feature_flags||jsonb_build_object('vendor_link',$2::boolean) WHERE id=$1", [ORG_ID, org]));
@@ -320,6 +352,21 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
         const policy = await orgVendorDispatchPolicy(ORG_ID);
         assert.equal(policy.enhanced, false);
         const gateway = await trace(() => recordVendorAppointment({ token: job.token, enhanced: policy.enhanced }, input));
+        const notes = await trace(() => centerVendorItems(job.token).then(page => ({ page }), (error: unknown) => ({ error: (error as Error).constructor.name })));
+        assert.equal(notes.sql.length, 5, "notification read: BEGIN, claim, role, one gateway call, end");
+        // Kill ON uses the B-026 sibling gateway (it delegates to B-028 when the org is not
+        // enhanced); apart from that one name/column, the statement sequence is identical.
+        const normalized = (t: typeof notes) => JSON.stringify({ value: t.value, sql: t.sql.map(sql =>
+          sql.replace(",read_only FROM app.b026_center_vendor(", " FROM app.b028_center_vendor(")) });
+        if (kill) {
+          // Same org state through the unchanged B-028 gateway (kill OFF) is the legacy baseline.
+          __setVendorLinkKillSwitchForTests(false);
+          const baseline = await trace(() => centerVendorItems(job.token).then(page => ({ page }), (error: unknown) => ({ error: (error as Error).constructor.name })));
+          __setVendorLinkKillSwitchForTests(true);
+          assert.equal(normalized(notes), normalized(baseline), "kill ON + org OFF notification read equals the B-028 baseline");
+          assert.ok(notes.sql.some(sql => sql.includes("FROM app.b026_center_vendor(")));
+        }
+        notifications.push(normalized(notes));
         assert.equal(response.value.status, 403); // baseline B-024 reader privilege failure
         assert.equal(completion.value.status, 403);
         assert.equal(gateway.value.status, "recorded");
@@ -341,6 +388,7 @@ test("B-026 closed enhanced jobs are read-only with explicitly shared photos; le
         traces.push([response.raw, completion.raw, gateway.raw]);
       }
       assert.deepEqual(traces[0], traces[1], "OFF SQL text and transaction boundaries must match byte for byte");
+      assert.equal(notifications.length, 2);
       await withClient(client => client.query("UPDATE organizations SET feature_flags=feature_flags||'{\"vendor_link\":true}'::jsonb WHERE id=$1", [ORG_ID]));
       __setVendorLinkKillSwitchForTests(true);
       await approvals(false);
