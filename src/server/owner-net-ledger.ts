@@ -4,6 +4,7 @@ import { can } from "./perms";
 import { isUuid } from "./repair-rules";
 import { calculateStatement } from "./statement-calculation";
 import { currentOwnerTransferStaff } from "./owner-transfer-period-lock";
+import { produceNotificationEvent } from "./notification-event-producers";
 import { attributePaymentBig, buildSnapshot, managementFeeBig, reconcileSnapshot, type OwnerNetSnapshot } from "./owner-net-ledger-rules";
 import { MockReportDeliveryAdapter, type ReportDeliveryInput, type ReportDeliveryResult } from "./report-delivery-adapter";
 import type { Session } from "./types";
@@ -121,6 +122,7 @@ export async function recordStatementVersion(session: Session, input: RecordStat
         if (!reconcileSnapshot(snapshot)) return {state:"unchanged_identity_error" as const};
         const result = await client.query<{id:string}>(`SELECT app.b014_record_statement_version($1,$2,$3,$4::jsonb)::text AS id`,
           [statement.id,input.requestId,input.reason,JSON.stringify(snapshot)]);
+        await produceNotificationEvent(client,session.orgId,"statement_version",result.rows[0].id);
         return {state:"recorded" as const,versionId:result.rows[0].id};
       },{orgId:session.orgId,environment:session.environment},{isolation:"repeatable read"});
     } catch (error) {

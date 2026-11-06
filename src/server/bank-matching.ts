@@ -3,7 +3,7 @@ import type { Client } from "pg";
 import { withClient } from "./db";
 import { allocateAndLedger, lockAllocationInvoices } from "./domain";
 import { emitPaymentResult, lockPaymentResultContext } from "./payment-result-events";
-import { beginPaymentCenter, finalizePaymentCenter } from "./payment-center-events";
+import { beginPaymentCenter, finalizePaymentCenter, producePaymentResultEvent } from "./payment-center-events";
 import { scoreMatch } from "./money";
 import { bankDecisionDigest, bankMatchReasonCode, bankRowKeys, isUuid, parseBankCsv } from "./bank-matching-rules";
 import { bankMatchBasis } from "../lib/bank-match-basis";
@@ -150,6 +150,7 @@ export async function decideBankMatch(session: Session, input: {bankId:string;pa
       await allocateAndLedger(client,payment,session.userId,invoices);
       const source=resultEnabled ? await emitPaymentResult(client,payment.id,"payment_confirmed") : null;
       await finalizePaymentCenter(client,center,source);
+      await producePaymentResultEvent(client,session,payment.id);
     } else await client.query(`UPDATE payments SET bank_transaction_id=$2 WHERE id=$1 AND org_id=$3`,[payment.id,input.bankId,session.orgId]);
     if (suggestion) await client.query(`UPDATE bank_match_suggestions SET status='approved',decided_by=$2,decided_at=now() WHERE id=$1`,[suggestion.id,session.userId]);
     await client.query(`UPDATE bank_match_suggestions SET status='superseded',decided_by=$3,decided_at=now() WHERE org_id=$1 AND bank_transaction_id=$2 AND status='suggested'`,[session.orgId,input.bankId,session.userId]);

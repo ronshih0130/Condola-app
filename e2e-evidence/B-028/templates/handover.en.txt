@@ -1,0 +1,6 @@
+# B-028 package 2 template capture: handover (en)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[handover_published -> tenant]
+Subject: Handover
+張雅文, 松信住宅管理: Move-in version 1 was published. Review and reply in the tenant portal.

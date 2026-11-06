@@ -1,0 +1,14 @@
+# B-028 package 2 template capture: payment (zh-TW)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[payment_confirmed -> tenant]
+Subject: 付款紀錄已確認
+張雅文，松信住宅管理：付款紀錄已確認，金額 NT$1。請至租客頁查看繳款紀錄。
+
+[payment_rejected -> tenant]
+Subject: 付款回報已退回
+張雅文，松信住宅管理：付款回報已退回，金額 NT$1。請至租客頁查看繳款紀錄。
+
+[payment_reversed -> tenant]
+Subject: 付款紀錄已撤銷
+張雅文，松信住宅管理：付款紀錄已撤銷，金額 NT$1。請至租客頁查看繳款紀錄。

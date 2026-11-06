@@ -4,6 +4,7 @@
 import { createHash } from "node:crypto";
 import { maybe, svc, withClient } from "./db";
 import { FlowError } from "./errors";
+import { produceNotificationEvent, type NotificationSourceKind } from "./notification-event-producers";
 import {
   assertAppointment,
   assertDecision,
@@ -45,14 +46,21 @@ function run<T>(
   sql: string,
   params: unknown[],
   parse: (value: unknown) => T,
+  notify?: (result: T) => [NotificationSourceKind, unknown] | null,
 ): Promise<T> {
   assertIdentifiers(session.userId, session.orgId, session.sessionId);
   return svc(session.userId, async (client) => {
     const row = await maybe<{ r: unknown }>(client, sql, params);
     if (!row) throw new FlowError("errors.notFound");
-    return parse(row.r);
+    const result = parse(row.r);
+    // B-028 package 2: the recorded repair source as a durable event on this transaction.
+    const source = notify?.(result);
+    if (source && typeof source[1] === "string") await produceNotificationEvent(client, session.orgId, source[0], source[1]);
+    return result;
   });
 }
+const recorded = (kind: NotificationSourceKind, key: string) => (result: ApprovalResult): [NotificationSourceKind, unknown] | null =>
+  result.status === "recorded" ? [kind, result[key]] : null;
 
 export type SubmitEstimateInput = {
   requestId: string;
@@ -83,7 +91,7 @@ export function submitEstimate(session: Session, input: SubmitEstimateInput): Pr
     [session.orgId, session.sessionId, input.requestId, payload.ticketId, payload.expectedHeadId,
       payload.amountMinor, payload.currency, payload.minorUnit, payload.workScope,
       stableJson(payload.evidence), payloadHash(session, "submit", payload)],
-    jsonResult);
+    jsonResult, (result) => (result.requires_owner_decision === true ? recorded("repair_estimate_version", "version_id")(result) : null));
 }
 
 export type DecideEstimateInput = {
@@ -105,7 +113,7 @@ export function decideEstimate(session: Session, input: DecideEstimateInput): Pr
     "SELECT app.b013_decide_estimate($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::text,$6::text,$7::bytea) AS r",
     [session.orgId, session.sessionId, input.requestId, payload.versionId, payload.decision,
       payload.reason, payloadHash(session, "decision", payload)],
-    jsonResult);
+    jsonResult, recorded("repair_decision", "decision_id"));
 }
 
 export type AuthorizeEmergencyInput = {
@@ -134,7 +142,7 @@ export function authorizeEmergency(session: Session, input: AuthorizeEmergencyIn
     "SELECT app.b013_authorize_emergency($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::text,$6::text,$7::jsonb,$8::bytea) AS r",
     [session.orgId, session.sessionId, input.requestId, payload.versionId, payload.category,
       payload.reason, stableJson(payload.photos), payloadHash(session, "emergency", payload)],
-    jsonResult);
+    jsonResult, recorded("repair_outbox", "event_id"));
 }
 
 export type RecordAppointmentInput = AppointmentTimes & {

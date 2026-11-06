@@ -14,6 +14,10 @@ const base = "2bedb895306726310252aac26f742baeaa6f3ea9";
 
 /** Added files. Modified files are classified from their diff. */
 const added = {
+  "supabase/migrations/20261107080000_b028_notification_event_producers.sql": {
+    addOnly: false,
+    reason: "New private notification event and recipient tables with NOT NULL, CHECK and composite org foreign keys, immutable triggers, service-only producer/message gateways, an internal shared delivery row write, an OFF->ON transition ledger with AFTER triggers on platform_settings/organizations (write only on delivery-flag ON transitions), CREATE OR REPLACE of b028_delivery_enqueue (same body, shared row write) and b028_delivery_claim (same body plus a stale producer-attempt sweep), and privilege revokes. Rollout defaults OFF.",
+  },
   "supabase/migrations/20261106235000_b028_notification_delivery_claims.sql": {
     addOnly: false,
     reason: "New private durable delivery tables with NOT NULL and CHECK constraints, append-only events, service-only gateways and privilege revokes. Existing producers unchanged; rollout defaults OFF.",

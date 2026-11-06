@@ -1,0 +1,6 @@
+# B-028 package 2 template capture: report (en)
+# Rendered from committed local events on synthetic seed data; captured locally, nothing was sent.
+
+[report_version_recorded -> owner]
+Subject: Net ledger and report versions
+B028 owner, 松信住宅管理: the monthly statement for 2095-01-01 to 2095-01-31 now has Version 2. View it in the owner portal.
