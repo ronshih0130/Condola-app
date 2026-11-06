@@ -428,9 +428,13 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, app A
  SELECT coalesce(array_agg(file_id),ARRAY[]::uuid[]) FROM public.ticket_attachments
  WHERE org_id=ANY(app.b017_denied_orgs('photo'))
 $$;
+-- No sublink here: a policy sublink on ticket_attachments makes PostgreSQL treat the
+-- relation as mid-expansion, and the existing portal policies (ticket_attachments
+-- INSERT check -> files -> portal_ticket_photo_read -> ticket_attachments) then raise
+-- 42P17 infinite recursion on photo uploads. The STABLE definer call is per row.
 CREATE POLICY b017_ticket_photo_floor ON public.ticket_attachments AS RESTRICTIVE TO authenticated
- USING (NOT (org_id=ANY((SELECT app.b017_denied_orgs('photo'))::uuid[])))
- WITH CHECK (NOT (org_id=ANY((SELECT app.b017_denied_orgs('photo'))::uuid[])));
+ USING (NOT (org_id = ANY(app.b017_denied_orgs('photo'))))
+ WITH CHECK (NOT (org_id = ANY(app.b017_denied_orgs('photo'))));
 CREATE POLICY b017_file_photo_floor ON public.files AS RESTRICTIVE TO authenticated
  USING (CASE WHEN org_id=ANY((SELECT app.b017_denied_orgs('photo'))::uuid[])
    THEN storage_bucket<>'ticket-photos-private' AND NOT (id=ANY((SELECT app.b017_denied_photo_files())::uuid[]))

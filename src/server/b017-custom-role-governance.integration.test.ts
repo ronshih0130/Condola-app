@@ -861,8 +861,11 @@ test('R4 unguarded autocommit/helper/page entry regressions and lease-key positi
 test('R4 restrictive floors use statement initplans and expose no arbitrary-org oracle; OFF scan measured',async t=>{
   const old=(await db.query("SELECT proname FROM pg_proc WHERE proname IN ('b017_photo_allowed','b017_file_allowed','b017_audit_allowed')")).rows;assert.deepEqual(old,[]);
   const ids=await raw(manager,"SELECT app.b017_denied_orgs('audit') ids",[],db,'authenticated');assert.ok(!ids.rows[0].ids.includes(ORG2_ID));
-  const policies=(await db.query("SELECT qual,with_check FROM pg_policies WHERE policyname LIKE 'b017_%'")).rows;
-  assert.ok(policies.length===3);for(const p of policies)assert.match(p.qual,/SELECT[\s\S]*b017_denied_orgs/);
+  const policies=(await db.query("SELECT policyname,qual,with_check FROM pg_policies WHERE policyname LIKE 'b017_%'")).rows;
+  assert.ok(policies.length===3);
+  // ticket_attachments must not contain a sublink (42P17 with the existing portal photo
+  // policies); it calls the stable definer directly. files/audit_log keep statement initplans.
+  for(const p of policies)assert.match(p.qual,p.policyname==='b017_ticket_photo_floor'?/^\(NOT \(org_id = ANY \(app\.b017_denied_orgs\('photo'::text\)\)\)\)$/:/SELECT[\s\S]*b017_denied_orgs/);
   await flag(false);
   await db.query("INSERT INTO audit_log(org_id,actor_user_id,action,table_name,row_id) SELECT $1,$2,'insert','organizations',n::text FROM generate_series(1,1200) n",[ORG_ID,admin.userId]);
   const plan=await raw(admin,'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id FROM audit_log WHERE org_id=$1',[ORG_ID],db,'authenticated');
