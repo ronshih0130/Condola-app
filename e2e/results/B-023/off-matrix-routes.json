@@ -1,0 +1,37 @@
+{
+  "lane": "B-023 slice 1",
+  "flag": "owner_portal_extensions",
+  "base": "feat/b-012-durable-replacement @ 74de464 (uncommitted worktree)",
+  "db": "local disposable PostgreSQL 16, fresh stub + all migrations + db:reset",
+  "source_test": "src/server/b023-owner-portal-access.integration.test.ts :: 'OFF matrix ...' (ok 6) and 'download and view ...' (ok 4, HEAD ON); nav: src/components/owner-nav.test.ts",
+  "tap": ["integration-b023-owner-portal-access.tap", "unit-owner-portal-access.tap"],
+  "off_cases": [
+    "platform_settings row absent",
+    "enabled false (org flag true)",
+    "enabled \"true\" (string)",
+    "allowed_org_ids not an array",
+    "global value not an object",
+    "org not in allowed_org_ids",
+    "organizations.feature_flags.owner_portal_extensions false",
+    "organizations.feature_flags.owner_portal_extensions \"true\" (string)",
+    "organizations.feature_flags.owner_portal_extensions absent"
+  ],
+  "asserted_per_case": {
+    "GET /o/files (ownerDocuments)": "null => notFound() 404",
+    "GET /o/files/<id> (ownerDocumentHttp)": "404",
+    "HEAD /o/files/<id> (ownerDocumentHeadHttp)": "404",
+    "GET /o/repairs (ownerRepairs)": "null => notFound() 404",
+    "GET /o/repairs/<id> (ownerRepairDetail)": "null => notFound() 404",
+    "nav (ownerPortalExtensionsOn)": "false => no /o/files or /o/repairs entries; OFF markup identical to pre-B-023",
+    "app.b023_* gateways called by app code": "none (Client.query spy)",
+    "direct RPC as owner": "42501 for all four gateways",
+    "app.b023_owner_document_access_events rows": "unchanged (zero writes)",
+    "consent/signature/confirmation/read/audit_log snapshot": "unchanged"
+  },
+  "on_controls": {
+    "HEAD /o/files/<id>": "405 Allow: GET, no access row",
+    "GET /o/files/<id>": "200, Cache-Control private no-store, X-Content-Type-Options nosniff, Content-Security-Policy sandbox, X-Frame-Options DENY",
+    "after OFF matrix": "flag ON restores document list (positive control)"
+  },
+  "result": "PASS (6/6 integration, 5/5 unit)"
+}

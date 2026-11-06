@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: OwnerNav: B-023 entries only when extensions is ON; OFF markup is unchanged
+ok 1 - OwnerNav: B-023 entries only when extensions is ON; OFF markup is unchanged
+  ---
+  duration_ms: 31.391583
+  ...
+# Subtest: owner_portal_extensions is strict: global object, boolean true, allowlist array and org boolean true
+ok 2 - owner_portal_extensions is strict: global object, boolean true, allowlist array and org boolean true
+  ---
+  duration_ms: 0.373792
+  ...
+# Subtest: document HTTP: invalid id or null open is 404 without calling a second time; view is inline
+ok 3 - document HTTP: invalid id or null open is 404 without calling a second time; view is inline
+  ---
+  duration_ms: 1.657625
+  ...
+# Subtest: copy: 屋主 wording, no consent language implied by views, both locales have the same keys
+ok 4 - copy: 屋主 wording, no consent language implied by views, both locales have the same keys
+  ---
+  duration_ms: 0.156208
+  ...
+# Subtest: migration: RLS on, revokes on every function, grants only to authenticated on public gateways
+ok 5 - migration: RLS on, revokes on every function, grants only to authenticated on public gateways
+  ---
+  duration_ms: 0.291416
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 254.874917

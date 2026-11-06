@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ownerRepairCopy } from "@/i18n/lanes/repair-owner-policy";
+import { ownerPortalCopy } from "@/i18n/owner-portal-access";
 import { usePathname } from "next/navigation";
 import { BrandImage } from "./brand";
 import { useLocale, useT } from "./locale";
@@ -11,11 +12,14 @@ export function OwnerNav({
   properties = [],
   v2,
   repairPolicyIds = [],
+  extensions,
 }: {
   children: React.ReactNode;
   properties?: { id: string; name: string }[];
   v2?: boolean;
   repairPolicyIds?: string[];
+  /** B-023 owner_portal_extensions ON: adds document center and repair progress entries. */
+  extensions?: boolean;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -25,6 +29,8 @@ export function OwnerNav({
     ["/o/statements", "i_owner_nav_stmt"],
     ["/o/approvals", "i_approvals"],
   ] as const;
+  const portal = extensions ? ownerPortalCopy(locale) : null;
+  const extra = portal ? [["/o/files", portal.navFiles], ["/o/repairs", portal.navRepairs]] as const : [];
   return (
     <div className="stage">
       <div className="phone">
@@ -53,6 +59,11 @@ export function OwnerNav({
             {items.map(([href, key]) => (
               <Link key={href} href={href} className={path === href ? "on" : ""}>
                 {t(key)}
+              </Link>
+            ))}
+            {extra.map(([href, label]) => (
+              <Link key={href} href={href} className={path === href || path.startsWith(`${href}/`) ? "on" : ""} data-testid={`owner-nav-${href.slice(3)}`}>
+                {label}
               </Link>
             ))}
             <form action="/api/auth/sign-out" method="post">
