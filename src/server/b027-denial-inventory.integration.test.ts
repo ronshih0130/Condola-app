@@ -22,6 +22,7 @@ import { propertyDetail, leaseDetail, tenantDetail, statementDetail, ticketDetai
 import { readRepairPhoto } from "./repairs";
 import { PHOTO_BUCKET, ticketPhotoPath } from "./repair-rules";
 import { sessionTokenHash } from "./session";
+import { resetAndSeed } from "./seed";
 import { cloneTestDatabase } from "./test-database-clone";
 import { disposableDbUrl } from "./test-disposable-db";
 import { openTicketPhoto } from "./ticket-photos";
@@ -78,6 +79,9 @@ function inventory(entry: Entry, run: () => Promise<void>, gap = false) {
 
 test.before(async () => {
   clone = await cloneTestDatabase();
+  // Earlier test:rls suites mutate the shared source DB (e.g. id-purge, statements);
+  // reseed inside the owned clone so fixtures never depend on suite order.
+  await resetAndSeed();
   mock.method(nextHeaders, "cookies", async () => ({ get: (name: string) => name === SESSION_COOKIE && cookie ? { value: cookie } : undefined }));
   mock.method(nextHeaders, "headers", async () => new Headers());
   // Private-object transport is a localhost fixture; real readers, SQL and guards remain intact.
