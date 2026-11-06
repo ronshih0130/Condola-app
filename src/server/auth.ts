@@ -1115,11 +1115,12 @@ async function acceptPortalInvite(
         await client.query("BEGIN");
         await client.query(`SET LOCAL statement_timeout = '8s'`);
         await client.query(`SET LOCAL lock_timeout = '3s'`);
-        const invite = await client.query(
-          `SELECT id FROM invitations WHERE id = $1 AND status = 'pending' AND expires_at > now() FOR UPDATE`,
+        const invite = await client.query<{ contact_id: string | null; org_id: string }>(
+          `SELECT contact_id::text, org_id::text FROM invitations WHERE id = $1 AND status = 'pending' AND expires_at > now() FOR UPDATE`,
           [row.id],
         );
-        if (!invite.rows[0]) {
+        // PROP-13: the locked invitation must still target the contact/org that was described.
+        if (!invite.rows[0] || invite.rows[0].contact_id !== row.contact_id || invite.rows[0].org_id !== row.org_id) {
           await client.query("ROLLBACK");
           return null;
         }
@@ -1147,6 +1148,13 @@ async function acceptPortalInvite(
             [userId, target, password],
           );
           await client.query(`UPDATE profiles SET email = $2 WHERE id = $1`, [userId, target]);
+        }
+        // PROP-13 (BLK-MAC-04): a staff login (any org_members row, any org/status) is
+        // never bound to a portal contact through invitation acceptance.
+        const staffLogin = await client.query(`SELECT 1 FROM org_members WHERE user_id = $1 LIMIT 1`, [userId]);
+        if (staffLogin.rowCount) {
+          await client.query("ROLLBACK");
+          return null;
         }
         const bound = await client.query(
           `UPDATE contacts

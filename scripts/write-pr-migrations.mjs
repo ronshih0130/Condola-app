@@ -330,6 +330,10 @@ const added = {
     addOnly: false,
     reason: "Adds private app.b008 monthly rent occurrence/command tables with RLS, revokes and service-only access; seeds a default-OFF platform setting, no feature-flag seed or existing-table schema changes; writer stays dual-gated OFF.",
   },
+  "supabase/migrations/20261106233000_prop13_owner_contact_link.sql": {
+    addOnly: false,
+    reason: "Adds an API-role guard trigger on contacts (user_id/is_owner): staff can no longer bind, rebind or clear a contact login or bind owner contacts directly; fresh provisioned tenant logins still bind. Adds an admin-only flag-gated SECURITY DEFINER linking RPC and a default-OFF setting. An old app writing contacts.user_id outside those shapes now fails with 42501.",
+  },
   "supabase/migrations/20261106040000_b022_owner_title_report_replies.sql": {
     addOnly: true,
     reason: "Adds private append-only owner receipt-title revisions and report replies, authenticated SECURITY DEFINER gateways and two default-OFF settings; no existing-table schema changes or backfill. Title RPC updates only the caller owner contact receipt_title.",
