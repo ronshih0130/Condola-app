@@ -676,3 +676,25 @@ test("authorize lock contention defers without writes or Email; the row is pushe
   await run(t);
   assert.equal(pushes(t).length, 1);
 });
+
+test("an authorize failure other than lock contention sends neither LINE nor Email and keeps the row for a later run", async () => {
+  await saveRepairRecord(admin, ticket, repair("in_progress"));
+  const t = transport();
+  const original = (await db.query("SELECT pg_get_functiondef('app.b038_tenant_authorized(uuid,uuid,uuid)'::regprocedure) def")).rows[0].def;
+  // Synthetic non-lock failure inside the dispatch-time re-authorization only (e.g. a statement timeout):
+  // swapped in after enqueue and the context check, right before dispatch.
+  const fail = async () => { await db.query(`CREATE OR REPLACE FUNCTION app.b038_tenant_authorized(p_org uuid, p_ticket uuid, p_contact uuid) RETURNS boolean
+    LANGUAGE plpgsql SET search_path=pg_catalog,public,app,pg_temp AS $$BEGIN RAISE EXCEPTION 'synthetic authorize failure' USING ERRCODE='57014'; END$$`); };
+  try {
+    const result = await runLineRepairPushes(ORG_ID, { transport: t, resolveTarget, env, beforeDispatch: fail });
+    assert.deepEqual(result.results.map(r => r.status), ["unknown"]);
+  } finally { await db.query(original); }
+  assert.equal(t.calls.length, 0);
+  const id = await only("ticket_status");
+  assert.equal((await rows("SELECT state FROM app.b038_repair_pushes WHERE notification_id=$1", [id]))[0].state, "queued");
+  assert.deepEqual(await deliveries(id), []);
+  assert.equal(await n("SELECT count(*) n FROM app.b028_delivery_attempts"), 0);
+  assert.equal(await n("SELECT count(*) n FROM app.b033_push_fallbacks"), 0);
+  await run(t);
+  assert.equal(pushes(t).length, 1);
+});

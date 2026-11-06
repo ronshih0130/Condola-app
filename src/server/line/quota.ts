@@ -76,6 +76,8 @@ export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransp
   const config = readLineConfig(env), owner = randomUUID();
   let ctx: Context | undefined;
   let reservation: Reservation | undefined;
+  // Set when the business re-authorization itself throws; such a failure must never fall back to Email.
+  let authorizeFailed = false;
   let state: string | undefined;
   let fallbackResult: Awaited<ReturnType<typeof fallback>> | undefined;
   async function fallback(c: Client, why: string, dispatchOwner: string | null = null) {
@@ -103,7 +105,9 @@ export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransp
       if (prior?.status === "settled") { state = "settled"; return; }
       if (prior?.status === "expired") { fallbackResult = await fallback(c, "line_unknown_possible_duplicate"); return; }
       if (options.authorize) {
-        const decision = await options.authorize.check(c);
+        let decision: "allow" | "deny" | "skip";
+        try { decision = await options.authorize.check(c); }
+        catch (error) { authorizeFailed = true; throw error; }
         if (decision === "skip") { state = "deferred"; return; }
         if (decision !== "allow") { fallbackResult = await fallback(c, options.authorize.deniedReason); return; }
       }
@@ -135,6 +139,7 @@ export async function dispatchLinePush(req: LinePush, transport: Pick<LineTransp
     // Counter failures may fall back only after a new transaction rechecks flags and
     // durable claim ownership. Failed/uncertain authorization never permits writes.
     state = undefined; fallbackResult = undefined;
+    if (authorizeFailed) return { status: "unknown" };
     if (!config.platformEnabled) return { status: "skipped", reason: "line_guard" };
     try { return await svc(null, c => fallback(c, "line_guard")); }
     catch { return { status: "unknown" }; }
