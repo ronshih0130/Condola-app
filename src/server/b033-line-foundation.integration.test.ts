@@ -301,10 +301,10 @@ test("privilege catalog: RLS, no client grants, service-only pinned gateways; qu
     has_function_privilege('anon',p.oid,'EXECUTE') a,has_function_privilege('authenticated',p.oid,'EXECUTE') u,
     EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') public
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname LIKE 'b033_%'`)).rows;
-  assert.equal(functions.length, 17);
+  assert.equal(functions.length, 22);
   for (const f of functions) {
-    assert.equal(f.prosecdef, f.proname !== "b033_channel_verified_guard"); assert.ok(f.proconfig.includes("search_path=pg_catalog, public, app"));
-    assert.equal(f.a || f.u || f.public, false); assert.equal(f.s, !["b033_link_verified_guard", "b033_line_audit", "b033_channel_verified_guard"].includes(f.proname));
+    assert.equal(f.prosecdef, !["b033_channel_verified_guard", "b033_liff_config_guard"].includes(f.proname)); assert.ok(f.proconfig.includes("search_path=pg_catalog, public, app"));
+    assert.equal(f.a || f.u || f.public, false); assert.equal(f.s, !["b033_link_verified_guard", "b033_line_audit", "b033_channel_verified_guard", "b033_liff_config_guard"].includes(f.proname));
   }
   const definition = (await db.query("SELECT pg_get_functiondef('app.b033_line_enabled(uuid)'::regprocedure) AS def")).rows[0].def as string;
   assert.ok(definition.indexOf("LOCK TABLE public.platform_settings IN SHARE MODE NOWAIT") < definition.indexOf("FOR SHARE NOWAIT"));
@@ -581,7 +581,13 @@ test("authenticated admin cannot forge verification on INSERT/UPDATE or call its
   assert.ok((await db.query("SELECT tenant_config_verified_at FROM line_channels WHERE id=$1", [ch])).rows[0].tenant_config_verified_at);
   for (const field of ["liff_id_tenant", "liff_id_owner", "liff_id_vendor", "line_provider_id", "messaging_channel_id", "messaging_channel_secret_ref", "messaging_access_token_ref", "login_channel_id", "login_channel_secret_ref", "liff_app_id", "webhook_url"]) {
     await svc(null, c => c.query("SELECT app.b033_channel_verify($1)", [ch]));
-    await admin(c => c.query(`UPDATE line_channels SET ${field}=$2 WHERE id=$1`, [ch, `local-${randomUUID()}`]));
+    if (["liff_id_tenant", "liff_id_owner", "liff_id_vendor"].includes(field)) {
+      await assert.rejects(admin(c => c.query(`UPDATE line_channels SET ${field}=$2 WHERE id=$1`, [ch, `local-${randomUUID()}`])));
+      const values = ["liff_id_tenant", "liff_id_vendor", "liff_id_owner"].map(key => key === field ? `local-${randomUUID()}` : null);
+      await svc(null, c => c.query("SELECT app.b033_liff_configure($1,$2,$3,$4)", [ch, ...values]));
+    } else {
+      await admin(c => c.query(`UPDATE line_channels SET ${field}=$2 WHERE id=$1`, [ch, `local-${randomUUID()}`]));
+    }
     assert.equal((await db.query("SELECT tenant_config_verified_at FROM line_channels WHERE id=$1", [ch])).rows[0].tenant_config_verified_at, null, field);
   }
 });

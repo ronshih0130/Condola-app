@@ -262,14 +262,19 @@ async function mfaRow(userId: string) {
   return row.rows[0] ?? null;
 }
 
-export async function createSession(userId: string, remember: boolean, meta: RequestMeta) {
+/** Existing cookie session insertion, optionally participating in an invitation transaction. */
+export async function createSessionOn(client: Pick<Client, "query">, userId: string, remember: boolean, meta: RequestMeta) {
   const token = newToken();
-  const hours = remember ? 24 * 30 : 12;
-  await query(
+  await client.query(
     `INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip, expires_at)
      VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5))`,
-    [userId, sha256(token), meta.ua?.slice(0, 300) ?? null, meta.ip, hours],
+    [userId, sha256(token), meta.ua?.slice(0, 300) ?? null, meta.ip, remember ? 24 * 30 : 12],
   );
+  return token;
+}
+
+export async function createSession(userId: string, remember: boolean, meta: RequestMeta) {
+  const token = await withClient(client => createSessionOn(client, userId, remember, meta));
   await writeAudit(await primaryOrg(userId), userId, "sign_in", { remember });
   return token;
 }
@@ -1027,7 +1032,7 @@ function portalBindError(error: unknown) {
 }
 
 /** Create the login and set its password inside one savepoint so a taken email rolls both back. */
-async function provisionAcceptedLogin(
+export async function provisionAcceptedLogin(
   client: Client,
   input: { email: string; name: string; phone: string | null; password: string },
 ) {
