@@ -701,16 +701,15 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
     ]);
     if (!still || still.job_id !== job.job_id) return null;
     // Preserve the flag-OFF path: only enhanced loads invoke the resolver / planner.
+    let resolution: Awaited<ReturnType<typeof resolveVendorIdentity>> = null;
     if (enhanced) {
-      const resolution = await resolveVendorIdentity({
+      resolution = await resolveVendorIdentity({
         query: <T extends Record<string, unknown>>(query: string, params?: unknown[]) =>
           client.query<T>(query, params),
       }, { token, now: new Date(), linkedUserId: null });
       if (!resolution ||
           resolution.jobId !== job.job_id || resolution.orgId !== job.org_id ||
           resolution.ticketId !== job.ticket_id) return null;
-      // Inert today (gateOn=true only inside enhanced; still void — no attribution writes).
-      void planVendorAttribution(resolution, null, new Date(), true);
     }
     const ticket = await maybe<{
       title: string;
@@ -767,6 +766,9 @@ export async function loadVendorJob(token: string): Promise<VendorJobPage | null
         now: new Date(),
       });
       if (capability === "invalid") return null;
+      // PROP-10 r2 / V-13 ordering: plan attribution only after the post-state capability
+      // recompute succeeds, so expiry during the read yields no plan. Still inert (void; no writes).
+      if (resolution) void planVendorAttribution(resolution, null, new Date(), true);
       const sharingApproved = Boolean(state.sharing_approved_at);
       const safe = vendorLinkSafeView({
         title: "",
