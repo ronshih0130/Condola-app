@@ -193,12 +193,12 @@ export async function setUserPassword(userId: string, password: string, email?: 
 }
 
 /** Hardened writes must never fall back from a configured hosted provider to SQL. */
-function assertPasswordProviderConfigured() {
+export function assertPasswordProviderConfigured() {
   if (supabaseUrl() && !process.env.SUPABASE_SERVICE_ROLE_KEY) throw new FlowError("errors.generic");
 }
 
 /** Absolute phase-1 deadline includes connection waits, pauses, headers and body. */
-export async function writeHardenedPassword(change: CredentialChange, password: string, email?: string): Promise<CredentialChangeState> {
+export async function writeHardenedPassword(change: CredentialChange, password: string, email?: string, preserveBcryptCost = false): Promise<CredentialChangeState> {
   assertPasswordProviderConfigured();
   const userId = change.userId;
   const deadline = change.startedAt + 90_000;
@@ -215,7 +215,16 @@ export async function writeHardenedPassword(change: CredentialChange, password: 
           await client.query(`SELECT set_config('statement_timeout', $1, true),
             set_config('idle_in_transaction_session_timeout', $1, true)`, [`${budget}ms`]);
           if (!remaining()) throw new Error("credential provider deadline");
-          const result = await setUserPassword(userId, password, email, client);
+          // Tenant settings retain #65's cost floor without changing any legacy writer.
+          let result: "ok" | "emailTaken";
+          if (preserveBcryptCost && !email) {
+            await client.query(`UPDATE auth.users SET encrypted_password = public.crypt($2,
+                public.gen_salt('bf', greatest(coalesce(substring(encrypted_password FROM '^\\$2[aby]\\$([0-9]{2})\\$')::int, 10), 10))),
+                updated_at = clock_timestamp() WHERE id = $1`, [userId, password]);
+            result = "ok";
+          } else {
+            result = await setUserPassword(userId, password, email, client);
+          }
           // Server-side deadline check and COMMIT in one dispatch: an application
           // pause after UPDATE must not allow a late local commit. Only an internally
           // derived finite epoch number is interpolated, never input or a credential.
