@@ -1,3 +1,5 @@
+import { tenantLineEntryEnabled } from "@/server/line/tenant-entry";
+import { lineTenantCopy } from "@/i18n/line-tenant";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -17,6 +19,7 @@ export default async function TenantLayout({ children }: { children: React.React
   const t = makeT(session.locale);
   const path = (await headers()).get("x-pathname") || "";
   await requireCurrentConsent(session, "page", path || "/t");
+  const lineEnabled = await tenantLineEntryEnabled(session.orgId);
   const task = path === "/t/id" || path.startsWith("/t/id/");
   const backHref = path === "/t/id/notice" || path.startsWith("/t/id/notice/") ? "/t/id" : "/t";
   const tiles = [
@@ -46,6 +49,7 @@ export default async function TenantLayout({ children }: { children: React.React
               </div>
             ) : null}
             <p><Link href="/t/history" data-testid="tenant-history-link">{tenantLeaseHistoryCopy(session.locale).link}</Link></p>
+            {lineEnabled ? <p><Link href={`/t/liff?org=${encodeURIComponent(session.orgId)}&mode=manage`}>{lineTenantCopy(session.locale).manage}</Link></p> : null}
             {children}
           </div>
           {task ? null : (

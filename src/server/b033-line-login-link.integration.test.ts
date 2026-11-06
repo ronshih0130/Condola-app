@@ -235,7 +235,7 @@ for (const persona of ["tenant", "owner", "vendor"] as const) {
  test(`${persona} public bootstrap is outside protected layouts, OFF has Email fallback and no writes/cookies`, async () => {
   await enabled(persona, false); const before = await snapshot();
   const result = await entries[persona](req(`/${persona[0]}/liff?org=${ORG_ID}`));
-  assert.equal(result.status, 200); assert.match(await result.text(), /href="\/login"/); assert.equal(result.headers.get("set-cookie"), null);
+  assert.equal(result.status, 404); assert.match(await result.text(), /href="\/login"/); assert.equal(result.headers.get("set-cookie"), null);
   assert.deepEqual(await snapshot(), before);
  });
  test(`${persona} portal OFF flow/session/start/callback/bind/accept routes write zero rows`, async () => {

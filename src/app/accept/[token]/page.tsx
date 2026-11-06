@@ -1,3 +1,5 @@
+import { LineInviteEntry } from "@/components/line-invite-entry";
+import { tenantLineInviteOrg } from "@/server/line/tenant-entry";
 import { headers } from "next/headers";
 import { makeT } from "@/i18n";
 import { AcceptForm, AcceptSubmit } from "@/components/accept-form";
@@ -43,6 +45,8 @@ export default async function AcceptPage({
     invite.email !== "" &&
     (session?.email ?? "").trim() !== "" &&
     (session?.email ?? "").trim().toLowerCase() !== invite.email.trim().toLowerCase();
+  const lineOrg = invite.state === "ready" && invite.kind === "tenant" && !otherAccount
+    ? await tenantLineInviteOrg(token) : null;
   const invitesOpen = false;
   const stateKey = inviteStateMessageKey(invite.kind, invite.state, invitesOpen);
   const stateMessage = stateKey ? t(stateKey) : "";
@@ -122,6 +126,7 @@ export default async function AcceptPage({
         ) : null}
       </AcceptForm>
       )}
+      {lineOrg ? <LineInviteEntry token={token} orgId={lineOrg} locale={prefs.locale} /> : null}
     </div>
   );
 }

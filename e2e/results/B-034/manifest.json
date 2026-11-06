@@ -1,0 +1,145 @@
+{
+  "validatedAt": "2026-11-06T13:37:40-08:00",
+  "typecheck": {
+    "path": "/private/tmp/b034-cont-typecheck.log",
+    "sha256": "31811f73c689302da9dec45337d7bc263c8275836ec3a4b12582a14f9632977e",
+    "bytes": 43,
+    "exitCode": 0
+  },
+  "lint": {
+    "path": "/private/tmp/b034-cont-lint.log",
+    "sha256": "9c2556ae1c13a34063c0dcdd4841e31a3c1093d0418a3f06016f69194a253bbf",
+    "bytes": 3483,
+    "exitCode": 0
+  },
+  "copy": {
+    "path": "/private/tmp/b034-cont-copy-check.log",
+    "sha256": "80c31b8f8b6d3bd56a24d796c9be024c48d5f7738f2e69144c56fe8a223fa662",
+    "bytes": 1436,
+    "exitCode": 0,
+    "tests": 6,
+    "pass": 6,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "unit": {
+    "path": "/private/tmp/b034-cont-test-unit.log",
+    "sha256": "d65d76eb35b59d2e31cb0f2d738374406ca2a87d96573cb3c42fe52a98cce3b1",
+    "bytes": 205874,
+    "exitCode": 0,
+    "tests": 1035,
+    "pass": 1035,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "B-034": {
+    "path": "/private/tmp/b034-cont-tenant.log",
+    "sha256": "0dcca60983548bc0de36b1ee7c95a273401e4535341d32d3b4a3883a46fc457d",
+    "bytes": 8356,
+    "exitCode": 0,
+    "tests": 41,
+    "pass": 41,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "B-033 login/link": {
+    "path": "/private/tmp/b034-cont-login.log",
+    "sha256": "dbde78d630aa76d794c36d44c1e5f613f65ec0d21124725178c33a6172edf1a4",
+    "bytes": 16172,
+    "exitCode": 0,
+    "tests": 79,
+    "pass": 79,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "B-033 foundation": {
+    "path": "/private/tmp/b034-cont-foundation.log",
+    "sha256": "1bec7d4f031a97560666b3331e6879921daa6b71dd6c748a7b3fd5a631c85bf4",
+    "bytes": 20522,
+    "exitCode": 0,
+    "tests": 94,
+    "pass": 94,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "B-027 denial inventory": {
+    "path": "/private/tmp/b034-cont-denial.log",
+    "sha256": "8c3d05b98d618503bd7a5a4e760d1860dd2c7f5ee469535f016d69accbdfbe44",
+    "bytes": 4242,
+    "exitCode": 0,
+    "tests": 28,
+    "pass": 28,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "database setup": {
+    "path": "/private/tmp/b034-cont-db.log",
+    "sha256": "c4fb6713e3ffd90ab9e7f6b0d14a93aacb63c5ea023b442a382a886083c0d73c",
+    "bytes": 17162,
+    "exitCode": 0
+  },
+  "sourceFiles": {
+    "20-build/specs/B-034-design.md": {
+      "sha256": "989d6776419626653a48f0edee3fde32c4bb7954ef547b243620ba5f2fed1b4f",
+      "bytes": 5744
+    },
+    "package.json": {
+      "sha256": "d7bdeaccde4c8ce3bc12e2644607c269222bb16c8ccf5c96811f29e4b9fd027f",
+      "bytes": 18358
+    },
+    "public/line-bootstrap.css": {
+      "sha256": "c5c765f54b47cc8d6081abdee074dde757ca7aa5537eed0a1349a79407103068",
+      "bytes": 1323
+    },
+    "public/line-bootstrap.js": {
+      "sha256": "e31f280aacd2d10fff503a095a2cc0f57b0bfb08ae9790eff87f8a3577c6545b",
+      "bytes": 5174
+    },
+    "src/app/accept/[token]/page.tsx": {
+      "sha256": "2f0f4ac04bb1fd81827d210516f8eef5b4ea05040ad852fcce5cfdf1f91a862a",
+      "bytes": 6169
+    },
+    "src/app/t/layout.tsx": {
+      "sha256": "29d552a93c71131818beff0f089b6c09cc9fa56679ab13e1c88dadbd9cfb4bbc",
+      "bytes": 3069
+    },
+    "src/components/line-invite-entry.tsx": {
+      "sha256": "0b5a04bd35cd3a7fbf528e0d48e03aca052826688661f385e54727e5ffeb1530",
+      "bytes": 1545
+    },
+    "src/i18n/line-tenant.ts": {
+      "sha256": "2ed0a1fb25f8ad03b64c23404e722b607b88c4f145ad4ce577eb89ca6e459651",
+      "bytes": 788
+    },
+    "src/server/b033-line-login-link.integration.test.ts": {
+      "sha256": "ed1ec8926c78532d5330d9e2cd5d0e0d2b2ef4eaace8de212e9e60a345807333",
+      "bytes": 54995
+    },
+    "src/server/b034-tenant-liff.integration.test.ts": {
+      "sha256": "54ff1a8d66c400c7a2a99092ec600482d6c144587f1488dc4dbef19beccdbc7f",
+      "bytes": 35505
+    },
+    "src/server/line/bootstrap.test.ts": {
+      "sha256": "0d79f5307bdf6252864c78788f6141f441423c88e0f028f6a3f72e300b662cf0",
+      "bytes": 3491
+    },
+    "src/server/line/bootstrap.ts": {
+      "sha256": "fdf7f6ed0a6f662934be29915204c55c8c395548a064e7c8d7a3074babe820ea",
+      "bytes": 5868
+    },
+    "src/server/line/login-link.ts": {
+      "sha256": "13356d617088e31280e0a96c408264f183da70be4756e9fc77badd0e848a8c24",
+      "bytes": 30037
+    },
+    "src/server/line/tenant-entry.ts": {
+      "sha256": "f76e3313296dedb4284e5867649aa666a7ff0ecdb3cc1f6eb41ace2ce4102b15",
+      "bytes": 933
+    }
+  }
+}
