@@ -94,6 +94,9 @@ async function contextOn(client: Client, access: Access) {
     buyer: { kind: selection.kind, titlePresent },
     eligibleKind: decideDocumentKind({ kind: access.profile.kind, tax_id: access.profile.tax_id,
       qualification_attested: access.profile.qualification_attested_at !== null }),
+    profile: { kind: access.profile.kind, display_name: access.profile.display_name,
+      business_name: access.profile.business_name, representative_name: access.profile.representative_name,
+      phone_e164: access.profile.phone_e164, address: access.profile.address },
     documents, history: await vendorDocumentHistoryOn(client, access), profileVersion: access.profile.current_version, ...await summaryOn(client, access),
   };
 }

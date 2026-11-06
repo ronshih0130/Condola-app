@@ -385,7 +385,15 @@ test("BLK-MAC-15: zero-history legacy business profiles preview with their live 
   assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
   const history = await POST(request({ action: "history", token: legacy.token }));
   assert.equal(history.status, 200);
-  assert.ok(JSON.stringify(await history.json()).includes(stored.document.id), "legacy document appears in history");
+  const historical = (await history.json()).find((entry: { id: string }) => entry.id === stored.document.id);
+  assert.equal(historical.version, null);
+  assert.equal(historical.sealPresent, true, "legacy seal comes from the immutable issuance snapshot");
+  assert.ok(snapshot.sealFileId);
+  // Later live profile changes must not change historical seal metadata.
+  await db.query("UPDATE vendor_profiles SET seal_file_id=NULL WHERE id=$1", [legacy.profile]);
+  const laterHistory = await vendorDocumentHistory(legacy.token);
+  assert.equal(laterHistory.find((entry) => entry.id === stored.document.id)?.sealPresent, true);
+  assert.deepEqual(Buffer.from(await (await PDF(request({ token: legacy.token, documentId: stored.document.id }, true))).arrayBuffer()), pdf);
 
 });
 

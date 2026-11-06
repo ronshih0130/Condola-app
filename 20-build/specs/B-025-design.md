@@ -99,3 +99,75 @@ Independent Claude QA remains pending; these local fixes do not supersede its FA
 - Final logs: `/private/tmp/b025s2-r1-final-{migrations,reset,typecheck,lint,copy,unit,integration,privileges}.log` (eight separate files). Only the existing additive migration was changed for schema work. No claim/git mutation/hosted operation was run by this delegate.
 
 STOP POINT: LOCAL_R1_FIXES_VERIFIED_CLAUDE_QA_PENDING; next: independent Claude QA re-review of R1 diff and the final local evidence, including untracked slice-2 files; owner: Claude@ron-mac (sole committer). Flags OFF; browser/staging/release and whole-B-025 acceptance remain pending.
+
+## Slice 3 — document UIs (delegated local implementation, 2026-11-06 PT)
+
+Completes the document-invitation, fixed-data/seal, paper-scan and trade-item UI follow-ups recorded above. No migration, flag activation, remote database operation, deployment, git mutation or external provider call is added/performed. Claude remains architect and sole committer. This slice does not add a new vendor identity/qualification onboarding flow: it invites the assigned, already-onboarded vendor through the existing document gateway, as delegated.
+
+### Entry points and boundaries
+
+- `/m/tickets/[id]`: a new layout appends `VendorDocumentInvites` only when the existing strict `vendor_documents` global boolean, org allowlist and org boolean all admit the org, and the staff role can update tickets. OFF returns the **same children object**. The existing ticket `page.tsx` remains byte-for-byte unchanged (SHA-256 `8255de8c1c492cffe9c28f9521f0d2611f4b478545ecc40fa5d1161a83901f56`). No staff page markup, old dispatch flow or existing API route is rewritten.
+- Staff can create an assigned vendor's document invitation, choose an active property owner or company buyer, see active/expired/revoked status, revoke, and copy the newly issued link. Raw capabilities are held only in transient client state and copied by an explicit clipboard action; they never enter rendered hrefs, input fields, query strings, logs or browser storage. Only safe invitation metadata is reloaded. After leaving/reloading, a replacement invitation is required to obtain another link; creating one revokes the prior invitation for that issuer.
+- New server actions await current consent, resolve the real session, call `requireOrgScope`, and invoke `createVendorDocumentInvite` / `revokeVendorDocumentInvite`. A `documentUi` option performs strict admission **inside** those gateways' existing transactions before ticket/profile locks; the existing non-UI call signature/behavior remains compatible. Backend `authorizeVendorStaff` still checks both session permission and live DB membership: admin/manager/maintenance allowed, accountant/portal/foreign-org denied.
+- `/v/documents/[token]`: current name/contact/address and business-only business/representative/seal fields use `update_fixed_data` with `expectedVersion`; PNG/JPEG seals are bounded to 5 MiB. Historical details and seal-presence metadata come from `vendorDocumentHistoryOn`'s immutable issued snapshot/version, with original PDF download retained. No seal bytes, tax identity, owner prepay or company internal settlement are added to the context/history projection.
+- Each receipt has a PNG/JPEG/PDF paper-scan form (5 MiB), posting to the existing `/api/vendor-documents` `attach_scan` action. The existing `/api/vendor-documents/scan` POST downloads the sibling. Retry request IDs persist for the selected file until successful attachment; no electronic artifact/payment/charge is overwritten or duplicated.
+- Quantity/unit/item/category editing feeds the existing preview, issue, one-step receipt and reissue gateways. Quantity and `unit_price_minor` stay strings; the shared slice-2 rules compute BigInt line rounding and total equality. Inputs use text + inputMode, never floating-point parsing/arithmetic. Invalid/incomplete rows cannot enable issuance. Multi-row tickets can now provide explicit trade rows; `itemsUnavailable` copy explains this path.
+- Shared UI contracts live in `src/lib/vendor-document-ui.ts` to avoid server dependency traversal from client components. Vendor route flag-OFF behavior stays 404. Receipt-not-tax-invoice wording remains visible even while editing an incomplete trade draft.
+
+**Reserves preserved:** PROP-MF-B025 / UC4 and PROP-US-v03-05 / CAP-V-14 remain unchanged: full-payment gate cannot be overridden; partial vendor marks only accumulate; one-step and completion-statement-first paths remain available; a paper scan is a sibling in the same receipt group, with no original-delivery tracking or duplicate charge. Management payment entry does not substitute for the vendor's own marks. The pre-existing company-buyer PDF label under BLK-MAC-05 is untouched. Flags stay OFF; no default-path or per-org product decision is made here.
+
+### Copy inventory
+
+Existing `src/i18n/vendor-documents.ts` has matching zh-TW + en entries for 45 new keys:
+
+- Invitation: `invites`, `inviteNote`, `inviteNotReady`, `companyName`, `buyerTaxId`, `createInvite`, `revokeInvite`, `copyInvite`, `copied`, `copyFailed`, `copyOnce`, `active`, `expired`, `revoked`.
+- Fixed data/history: `fixedData`, `versionNote`, `display_name`, `business_name`, `representative_name`, `phone_e164`, `address`, `sealUpload`, `fileLimit`, `saveFixedData`, `sealPresent`, `sealAbsent`, `historicalDetails`.
+- Paper scan: `scanUpload`, `scanNote`, `attachScan`.
+- Trade editing: `editTrades`, `tradeItems`, `tradeNote`, `name`, `quantity`, `unit`, `unit_price_minor`, `category`, `service`, `labor`, `material`, `addItem`, `removeItem`, `invalidTrade`, `tradeMismatch`.
+
+Existing `itemsUnavailable` is updated in both languages to describe the now-available trade-entry path. No base dictionaries, legal/consent text or PDF labels changed.
+
+### Local verification
+
+Fresh local PostgreSQL database `condola_b025impl` on `127.0.0.1:55432`: DROP/CREATE, Supabase stub, every existing migration in filename order, then `npm run db:reset`. Integration tests clone that designated disposable database; all asset fetches use loopback servers. No full `test:rls` run.
+
+- `typecheck`: PASS.
+- `lint`: PASS; 0 errors, 15 existing warnings.
+- `copy:check`: 6/6 PASS.
+- `test:unit`: 991/991 PASS, including 7 new UI render/input tests.
+- New `b025-document-ui.integration.test.ts`: 11/11 PASS. Real session + consent + server actions (only Next request cookies/headers substituted); strict OFF/malformed gate and unchanged rendered-child checks; allowed/denied staff roles and foreign org; replacement/expiry/revoke; exact decimal and beyond-safe-integer prices; full-payment gate; fixed-data/seal version attribution; sibling upload/download/idempotency; unchanged electronic PDF bytes; actual history rendering without token hrefs/query strings.
+- Existing `b025-document-integrity.integration.test.ts`: 12/12 PASS.
+- Existing `b025-vendor-document-gate.integration.test.ts`: 8/8 PASS.
+- Existing `b022-owner-replies.integration.test.ts`: 12/12 PASS.
+- All four integration files executed separately with `--test-concurrency=1`; total 43/43. New tests registered in `test:unit` and `test:rls`.
+- Base DB readback: `vendor_documents={enabled:false,allowed_org_ids:[]}`, zero enabled orgs, zero paper scans. ON fixtures stay on disposable clones.
+
+Initial failures retained: wrong disposable-test acknowledgement (`1` instead of required `YES`); a fixture sequence query assumed a nonexistent org column; business fixtures initially omitted the required legacy onboarding seal reference; a new negative-copy test itself triggered the existing source-wide owner-term guard; and the static client graph followed type imports into server-only modules. Fixed the test fixtures/negative assertion and moved UI contracts to a pure shared module. No guard was disabled and no migration/backend business rule was relaxed.
+
+Evidence: `/private/tmp/b025s3-db.log`, `b025s3-typecheck-final.log`, `b025s3-lint-final.log`, `b025s3-copy-final.log`, `b025s3-unit-final.log`, `b025s3-ui-integration-final.log`, `b025s3-integrity.log`, `b025s3-gate.log`, `b025s3-owner-replies.log` (all prefixed `/private/tmp/`). Earlier `b025s3-*` logs retain failed attempts.
+
+STOP POINT: LOCAL_SLICE3_VERIFIED_CLAUDE_QA_PENDING; next: Claude reviews the complete working-tree diff including new files and local evidence, then owns any commit; owner: Claude (architect/sole committer). Browser interaction acceptance, independent Claude QA, staging/release and whole-B-025 acceptance remain pending. No further B item started.
+
+## Slice 3 — fix round 2 (2026-11-06, Mode 2 / local delegated implementation)
+
+All three independent QA findings are addressed in the existing working tree; Claude remains architect and sole git committer.
+
+- **MAJOR — issuance key reuse:** `VendorDocumentsPanel` disables fresh issuance for a kind as soon as any document of that kind exists, including voided documents; corrections use void/reissue. Successful issuance also records a local completion guard before context refresh, so a failed refresh cannot re-enable issuance. A voided predecessor with an existing successor cannot be reissued again. Each issuance/reissue attempt stores a detached, exact request body with its date, UUID and optional payment request ID. Unchanged retries reuse that body; changed trade rows, profile version or payment mode/amount are rejected locally with guidance to restore the original details or refresh and reconcile. This deliberately avoids assigning a new key after an uncertain response, which could create a second document if the first request committed. Preview remains available and does not allocate a number.
+- **MINOR — legacy seal metadata:** when the issued document has a null profile-version reference, history derives `sealPresent` from the immutable PDF issuance snapshot's `sealFileId`. Versioned history retains its original version-reference calculation. No current-profile lookup or new query is added. The zero-history legacy receipt regression now checks the seal flag, changes the live profile seal reference, and verifies both historical seal presence and original PDF bytes remain unchanged.
+- **MINOR — optional address clearing:** the UI sends `address: null` for an individual's cleared/whitespace-only optional address. The shared contract and existing ON-only update gateway explicitly accept that clear operation only for individuals. Omitting the field would silently retain the old address, so the gateway contract is extended narrowly instead. Business addresses and all other required fields still reject null/empty values. The form validates required values, lengths/control characters and international phone syntax before submission, with localized field-specific errors linked by `aria-describedby`/`aria-invalid`. Clearing an address and editing another field succeeds atomically in a new version; prior versions retain their original address.
+
+### Regression and final local verification
+
+- `npm run typecheck`: PASS.
+- `npm run lint`: PASS, 0 errors / 15 existing warnings.
+- `npm run copy:check`: 6/6 PASS; matching English/Chinese copy keys.
+- `npm run test:unit`: **1000/1000 PASS**. The existing UI test file now also mounts real React components in locally installed headless Chromium with all page network requests intercepted. Eight interaction subtests cover receipt/statement issue-edit-void-reissue, unchanged/changed retries for ordinary receipts/one-step receipts/reissues, refresh failure, individual address clearing with another edit and phone validation, and required business-address validation. No live application or DB is used by these interaction tests. The unit suite now requires the already-installed Playwright Chromium runtime; this Mac requires the browser process to launch outside the filesystem sandbox.
+- Fresh local PG16 base `condola_b025impl` at `127.0.0.1:55432`: DROP/CREATE, Supabase stub, every migration in filename order, then `npm run db:reset` using the delegated local environment. Each integration file ran in its own separate command with `--test-concurrency=1`, using its disposable clone:
+  - `src/server/b025-document-ui.integration.test.ts`: **12/12 PASS**, including combined optional-address clear/name update, immutable earlier version and rejection/rollback of invalid values/business address clearing.
+  - `src/server/b025-document-integrity.integration.test.ts`: **12/12 PASS**, including legacy receipt seal history after a live seal change.
+  - `src/server/b025-vendor-document-gate.integration.test.ts`: **8/8 PASS**.
+- Integration total: **32/32 PASS**. Full `test:rls` was not run.
+- Byte comparison against the start-of-round working tree confirms all `src/app` route/page/layout files, admission/invite/document gates, receipt issuance backend, `ops/flags.yaml` and every migration are unchanged. OFF route output/copy/query sequence is preserved; the existing OFF regression tests pass. This round adds no migration.
+- Local logs: `/private/tmp/b025-r2-{typecheck,lint,copy,unit,db,integration-ui,integration-integrity,integration-gate}.log`. Initial failures: sandbox Chromium launch was denied by macOS Mach-port isolation and succeeded with the authorized local launch outside the sandbox; interaction tests exposed validation text changing an input's accessible label, fixed by placing errors outside the label; the new individual DB fixture initially retained a business tax field, corrected to respect the existing individual-profile constraint. Final required commands all pass.
+
+STOP POINT: LOCAL_SLICE3_R2_VERIFIED_CLAUDE_QA_PENDING; next: Claude independently reviews this working-tree diff and regression evidence, then owns any git commit; owner: Claude (architect/sole committer). No git write, external network call, remote DB operation, deployment or further B item. Mocked-transport browser interaction regressions are verified; full application browser acceptance, independent QA, staging/release and whole-B-025 acceptance remain pending.
